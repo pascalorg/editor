@@ -16,6 +16,7 @@ import {
   CursorSphere,
   getSegmentGridStep,
   markToolCancelConsumed,
+  snapBuildingLocalToWorldGrid,
   snapScalarToGrid,
   triggerSFX,
   useEditor,
@@ -85,12 +86,14 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
     const onGridMove = (event: GridEvent) => {
       const snapStep = getSegmentGridStep()
-      const localX = shiftPressedRef.current
-        ? event.localPosition[0]
-        : snapScalarToGrid(event.localPosition[0], snapStep)
-      const localZ = shiftPressedRef.current
-        ? event.localPosition[2]
-        : snapScalarToGrid(event.localPosition[2], snapStep)
+      // Snap the cursor on the WORLD XZ grid (still in building-local
+      // coords for the rest of the math) so a rotated building doesn't
+      // pull the curve handle off the visible grid lines.
+      const [snappedLocalX, snappedLocalZ] = shiftPressedRef.current
+        ? [event.localPosition[0], event.localPosition[2]]
+        : snapBuildingLocalToWorldGrid([event.localPosition[0], event.localPosition[2]], snapStep)
+      const localX = snappedLocalX
+      const localZ = snappedLocalZ
 
       const offsetFromMidpoint = -(
         (localX - chord.midpoint.x) * chord.normal.x +

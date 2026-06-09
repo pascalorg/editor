@@ -18,6 +18,7 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { RIDGE_LIFT, resolveRidgeSnap } from '../shared/ridge-snap'
 import { getSurfaceY } from '../shared/roof-surface'
 import { buildRidgeVentGeometry } from './geometry'
 
@@ -66,11 +67,26 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
     ? ({ ...storeNode, ...overrides } as RidgeVentNode)
     : storeNode
 
-  const segment = useScene((state) =>
+  const segmentStore = useScene((state) =>
     node.roofSegmentId
       ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
       : undefined,
   )
+  // Subscribe to the segment's live overrides too — when the user drags a
+  // segment handle (width / depth / wallHeight / pitch / rotation), the
+  // dimensions stream through `useLiveNodeOverrides` and don't hit the
+  // store until release. Merging them lets the ridge ride the segment in
+  // real time instead of snapping into place on commit.
+  const segmentOverrides = useLiveNodeOverrides((s) =>
+    node.roofSegmentId
+      ? (s.get(node.roofSegmentId as AnyNodeId) as Partial<RoofSegmentNode> | undefined)
+      : undefined,
+  )
+  const segment: RoofSegmentNode | undefined = segmentStore
+    ? segmentOverrides
+      ? ({ ...segmentStore, ...segmentOverrides } as RoofSegmentNode)
+      : segmentStore
+    : undefined
 
   const geometry = useMemo(
     () => buildRidgeVentGeometry(node),
@@ -109,18 +125,26 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
   const segPos = segment.position ?? [0, 0, 0]
   const segRotY = segment.rotation ?? 0
 
-  // Seat the vent on the ridge by DERIVING its Y from the segment's current
-  // surface rather than the stored `position[1]`. The ridge height comes from
-  // the segment's pitch (`getActiveRoofHeight`), so when the roof is lowered
-  // the segment updates, this renderer re-runs, and the vent rides the ridge
-  // down automatically — no stale floating cap. X/Z stay as authored (the vent
-  // straddles the ridge line at localZ≈0).
-  const ridgeY = getSurfaceY(node.position[0] ?? 0, node.position[2] ?? 0, segment)
+  // Lock the BASE position to the ridge so the vent always starts on the
+  // slope top; treat `position[1]` and `position[2]` as user-tunable OFFSETS
+  // off that base (Y above ridge lift, Z away from ridge centerline). So
+  // after placement the inspector's Y / Z sliders nudge the vent off the
+  // locked ridge without losing the slope-tracking base. X is the position
+  // along the ridge — the snap re-clamps it to the segment's ridge span.
+  const snap = resolveRidgeSnap(segment, node.position[0] ?? 0, 0)
+  const ridgeX = snap ? snap.localX : (node.position[0] ?? 0)
+  const baseZ = snap ? snap.localZ : 0
+  const baseY = getSurfaceY(ridgeX, baseZ, segment) + RIDGE_LIFT
+  // Clamp legacy stored Y (absolute peak height from earlier versions) so the
+  // vent doesn't fly off when the field was an absolute Y instead of offset.
+  const yOffset = Math.max(-2, Math.min(2, node.position[1] ?? 0))
+  const ridgeY = baseY + yOffset
+  const ridgeZ = baseZ + (node.position[2] ?? 0)
 
   return (
     <group position={segPos} rotation-y={segRotY}>
       <group
-        position={[node.position[0] ?? 0, ridgeY, node.position[2] ?? 0]}
+        position={[ridgeX, ridgeY, ridgeZ]}
         ref={ref}
         rotation-y={node.rotation ?? 0}
         visible={node.visible}

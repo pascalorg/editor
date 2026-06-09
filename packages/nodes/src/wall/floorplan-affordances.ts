@@ -14,10 +14,12 @@ import {
   alignFloorplanDraftPoint,
   getSegmentGridStep,
   isSegmentLongEnough,
+  snapBuildingLocalToWorldGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
   useAlignmentGuides,
   WALL_FINE_GRID_STEP,
+  WALL_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 
@@ -111,8 +113,11 @@ export const wallCurveAffordance: FloorplanAffordance<WallNode> = {
       affectedIds: [node.id],
       apply({ planPoint, modifiers }) {
         const snapStep = getSegmentGridStep()
-        const x = modifiers.shiftKey ? planPoint[0] : snapScalarToGrid(planPoint[0], snapStep)
-        const y = modifiers.shiftKey ? planPoint[1] : snapScalarToGrid(planPoint[1], snapStep)
+        // World-grid snap so a rotated building doesn't drag the curve
+        // handle off the visible grid.
+        const [x, y] = modifiers.shiftKey
+          ? [planPoint[0], planPoint[1]]
+          : snapBuildingLocalToWorldGrid([planPoint[0], planPoint[1]], snapStep)
 
         // Signed projection of (snappedPoint - chord midpoint) onto the
         // chord normal. Legacy negates because the SVG y-axis flips
@@ -186,11 +191,13 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         // the angle snap is for initial draft only. Shift switches to
         // the fine grid step for precision, matching the 3D
         // `MoveWallEndpointTool`.
+        const worldStep = modifiers.shiftKey ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
         const snapped = snapWallDraftPoint({
           point: planPoint as WallPlanPoint,
           walls,
           ignoreWallIds: [node.id],
           step: modifiers.shiftKey ? WALL_FINE_GRID_STEP : undefined,
+          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, worldStep),
         })
         // Figma-style alignment on the dragged corner — snaps it onto another
         // object's edge / wall face and publishes a guide. The dragged wall

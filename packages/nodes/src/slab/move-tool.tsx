@@ -8,7 +8,6 @@ import {
   type GridEvent,
   type LevelNode,
   polygonAnchors,
-  resolveAlignment,
   type SlabNode,
   sceneRegistry,
   useLiveTransforms,
@@ -17,7 +16,10 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  getSegmentGridStep,
   markToolCancelConsumed,
+  resolveAlignmentForActiveBuilding,
+  snapBuildingLocalToWorldGrid,
   snapFenceDraftPoint,
   triggerSFX,
   useAlignmentGuides,
@@ -164,10 +166,12 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
 
     const onGridMove = (event: GridEvent) => {
       if (isFloorplanSourcedEvent(event)) return
+      const gridStep = getSegmentGridStep()
       const [localX, localZ] = snapFenceDraftPoint({
         point: [event.localPosition[0], event.localPosition[2]],
         walls: levelWalls,
         fences: levelFences,
+        gridSnap: (p) => snapBuildingLocalToWorldGrid(p, gridStep),
       })
 
       if (
@@ -189,7 +193,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       // publish a guide. Alt bypasses.
       const bypass = event.nativeEvent?.altKey === true
       if (!bypass && alignmentCandidates.length > 0) {
-        const result = resolveAlignment({
+        const result = resolveAlignmentForActiveBuilding({
           moving: polygonAnchors(slabId, translatePolygon(originalPolygon, deltaX, deltaZ)),
           candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,

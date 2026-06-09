@@ -1,10 +1,10 @@
 'use client'
 
-import { type AnyNodeId, emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
+import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { GRID_LAYER, getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MathUtils, type Mesh, PlaneGeometry, Vector2, Vector3 } from 'three'
+import { MathUtils, type Mesh, PlaneGeometry, Vector2 } from 'three'
 import { color, float, fract, fwidth, mix, positionLocal, uniform } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useCeilingEvents } from '../../hooks/use-ceiling-events'
@@ -143,23 +143,11 @@ export const Grid = ({
     }
   }, [])
 
-  const worldPosScratch = useMemo(() => new Vector3(), [])
   useFrame((_, delta) => {
-    const { levelId, buildingId } = useViewer.getState().selection
-    // Align the grid's XZ origin to the active building so its visible cell
-    // lines pass through building-local snap points (walls snap in
-    // building-local coords; a building placed at world (0.25, 0.25) would
-    // otherwise leave snapped wall endpoints stranded between grid lines).
-    let targetX = 0
-    let targetZ = 0
-    if (buildingId) {
-      const buildingMesh = sceneRegistry.nodes.get(buildingId as AnyNodeId)
-      if (buildingMesh) {
-        buildingMesh.getWorldPosition(worldPosScratch)
-        targetX = worldPosScratch.x
-        targetZ = worldPosScratch.z
-      }
-    }
+    const { levelId } = useViewer.getState().selection
+    // Grid stays anchored to world XZ (0, 0) — never chases the active
+    // building. The Y origin still lerps to the active level so the grid
+    // sits at floor height when a level is open.
     let targetY = 0
     if (levelId) {
       const levelMesh = sceneRegistry.nodes.get(levelId)
@@ -167,22 +155,16 @@ export const Grid = ({
         targetY = levelMesh.position.y
       }
     }
-    const t = 12 * delta
-    gridRef.current.position.x = MathUtils.lerp(gridRef.current.position.x, targetX, t)
-    gridRef.current.position.z = MathUtils.lerp(gridRef.current.position.z, targetZ, t)
-    const newY = MathUtils.lerp(gridRef.current.position.y, targetY, t)
+    const newY = MathUtils.lerp(gridRef.current.position.y, targetY, 12 * delta)
     gridRef.current.position.y = newY
     setGridY(newY)
 
-    // Re-derive the local-frame cursor uniform after the grid's XZ has
-    // lerped this frame, so the reveal ring stays locked under the world
-    // cursor even when the grid origin is mid-transition.
+    // Grid XZ is fixed at world origin, so the local-frame cursor uniform
+    // is just the world cursor (mirrored on Z to match the -π/2 X-rotation
+    // of the plane).
     const world = lastWorldCursorRef.current
     if (world) {
-      cursorPositionRef.current.set(
-        world.x - gridRef.current.position.x,
-        -(world.z - gridRef.current.position.z),
-      )
+      cursorPositionRef.current.set(world.x, -world.z)
     }
   })
 

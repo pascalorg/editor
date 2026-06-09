@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { EDITOR_LAYER } from './../../../lib/constants'
 import { sfxEmitter } from './../../../lib/sfx-bus'
+import { snapWorldXZForActiveBuilding } from './../../../lib/world-grid-snap'
 import useEditor from './../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
@@ -178,9 +179,13 @@ export const ZoneTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
 
-      // Snap to 0.5 grid
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      // World-grid snap projected into building-local; rotated buildings
+      // used to pull the snap off the visible grid lines.
+      const [gridX, gridZ] = snapWorldXZForActiveBuilding(
+        event.position[0],
+        event.position[2],
+        0.5,
+      ).local
       cursorPosition = [gridX, gridZ]
       levelYRef.current = event.localPosition[1]
 
@@ -209,8 +214,11 @@ export const ZoneTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!currentLevelId) return
 
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const [gridX, gridZ] = snapWorldXZForActiveBuilding(
+        event.position[0],
+        event.position[2],
+        0.5,
+      ).local
       let clickPoint: [number, number] = [gridX, gridZ]
 
       // Snap to axis from last point

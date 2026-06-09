@@ -68,17 +68,24 @@ export function snapPointTo45Degrees(
   cursor: WallPlanPoint,
   step = WALL_GRID_STEP,
   angleStep = DEFAULT_WALL_ANGLE_SNAP_STEP,
+  /**
+   * Optional grid-snap callback. Lets the caller route the final
+   * snap through a world-XZ grid (or any other axis system) instead
+   * of the local-axis grid `snapPointToGrid` uses. When omitted,
+   * falls back to the local-axis snap at `step`.
+   */
+  gridSnap?: (point: WallPlanPoint) => WallPlanPoint,
 ): WallPlanPoint {
   const dx = cursor[0] - start[0]
   const dz = cursor[1] - start[1]
   const angle = Math.atan2(dz, dx)
   const snappedAngle = Math.round(angle / angleStep) * angleStep
   const distance = Math.sqrt(dx * dx + dz * dz)
-
-  return snapPointToGrid(
-    [start[0] + Math.cos(snappedAngle) * distance, start[1] + Math.sin(snappedAngle) * distance],
-    step,
-  )
+  const point: WallPlanPoint = [
+    start[0] + Math.cos(snappedAngle) * distance,
+    start[1] + Math.sin(snappedAngle) * distance,
+  ]
+  return gridSnap ? gridSnap(point) : snapPointToGrid(point, step)
 }
 
 export function getWallAngleSnapStep(step = getSegmentGridStep()): number {
@@ -331,6 +338,13 @@ type SnapWallDraftArgs = {
    * keep the prior behaviour.
    */
   magnetic?: boolean
+  /**
+   * Optional grid-snap override. Lets the caller route grid snapping
+   * through a world-XZ aligned snap (so a rotated building's draft
+   * lands on the visible grid). When omitted, falls back to the
+   * local-axis grid at `step`.
+   */
+  gridSnap?: (point: WallPlanPoint) => WallPlanPoint
 }
 
 export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSnapResult {
@@ -342,6 +356,7 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
     ignoreWallIds,
     step: overrideStep,
     magnetic = true,
+    gridSnap,
   } = args
 
   // Discrete special points (corner / midpoint / crossing) are taken from the
@@ -356,8 +371,10 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
   const angleStep = getWallAngleSnapStep(step)
   const basePoint =
     start && angleSnap
-      ? snapPointTo45Degrees(start, point, step, angleStep)
-      : snapPointToGrid(point, step)
+      ? snapPointTo45Degrees(start, point, step, angleStep, gridSnap)
+      : gridSnap
+        ? gridSnap(point)
+        : snapPointToGrid(point, step)
 
   if (magnetic) {
     const wallSnap = findWallSnapTarget(basePoint, walls, { ignoreWallIds })

@@ -16,10 +16,12 @@ import {
   type FencePlanPoint,
   getSegmentGridStep,
   isSegmentLongEnough,
+  snapBuildingLocalToWorldGrid,
   snapFenceDraftPoint,
   snapScalarToGrid,
   useAlignmentGuides,
   WALL_FINE_GRID_STEP,
+  WALL_GRID_STEP,
 } from '@pascal-app/editor'
 
 /**
@@ -159,12 +161,14 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
         // Endpoint move = grid snap only; the 45°-from-start angle
         // snap is draft-only. Shift switches to the fine grid step for
         // precision, matching the 3D fence endpoint action.
+        const worldStep = modifiers.shiftKey ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
         const snapped = snapFenceDraftPoint({
           point: planPoint as FencePlanPoint,
           walls: nextWalls,
           fences: nextFences,
           ignoreFenceIds: [node.id],
           step: modifiers.shiftKey ? WALL_FINE_GRID_STEP : undefined,
+          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, worldStep) as FencePlanPoint,
         })
         // Figma-style alignment on the dragged endpoint — snaps it onto
         // another object's edge / wall face and publishes a guide, matching

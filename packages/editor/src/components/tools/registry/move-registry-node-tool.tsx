@@ -28,6 +28,7 @@ import { resolvePlanarCursorPosition } from '../../../lib/planar-cursor-placemen
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
+import { DragBoundingBox } from '../shared/drag-bounding-box'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import { useFreshPlacementVisibility } from '../shared/fresh-placement-visibility'
 import { PlacementBox } from '../shared/placement-box'
@@ -561,6 +562,18 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     useAbsoluteCursorPlacement,
   ])
 
+  // Snapshot the scene once at drag-start — bounds depend on `node` (locked
+  // for the lifetime of this tool) and any sibling state the kind reads. If a
+  // future kind needs live sibling state mid-drag, switch to a subscribed
+  // selector; for v1 (elevator shaft height from level set) start-time is
+  // correct and avoids subscribing the whole `nodes` map.
+  const dragBounds = useMemo(
+    () =>
+      nodeRegistry.get(node.type)?.capabilities?.dragBounds?.(node, useScene.getState().nodes) ??
+      null,
+    [node],
+  )
+
   if (!previewVisible) return null
 
   if (boxDimensions) {
@@ -574,5 +587,16 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     )
   }
 
-  return <CursorSphere color="#a78bfa" height={2.5} position={cursorPosition} />
+  return (
+    <>
+      <CursorSphere color="#a78bfa" height={2.5} position={cursorPosition} />
+      <DragBoundingBox
+        centerY={dragBounds?.centerY}
+        nodeId={node.id}
+        position={cursorPosition}
+        rotationY={cursorRotationY}
+        size={dragBounds?.size}
+      />
+    </>
+  )
 }

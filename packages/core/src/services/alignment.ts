@@ -75,15 +75,108 @@ export type ResolveAlignmentResult = {
 
 const EMPTY: ResolveAlignmentResult = { guides: [], snap: null }
 
+/** Forward rotation: local XZ → world XZ for a node whose parent has
+ *  position `bx,_,bz` and rotation-Y `rotY` (radians). Matches the
+ *  transform used throughout the editor's tools / floor-plan. */
+function localToWorld(
+  x: number,
+  z: number,
+  bx: number,
+  bz: number,
+  cos: number,
+  sin: number,
+): { x: number; z: number } {
+  return {
+    x: bx + x * cos + z * sin,
+    z: bz - x * sin + z * cos,
+  }
+}
+
+function transformAnchorToWorld(
+  anchor: AlignmentAnchor,
+  bx: number,
+  bz: number,
+  cos: number,
+  sin: number,
+): AlignmentAnchor {
+  const w = localToWorld(anchor.x, anchor.z, bx, bz, cos, sin)
+  return { nodeId: anchor.nodeId, kind: anchor.kind, x: w.x, z: w.z }
+}
+
+export type BuildingPose = {
+  position: readonly [number, number, number]
+  rotationY: number
+}
+
+export type ResolveAlignmentInBuildingResult = {
+  /** Guides in WORLD coordinates. Renderers must be in a world-space group. */
+  guides: AlignmentGuide[]
+  /** Snap delta in the BUILDING-LOCAL frame, ready to add to a local position. */
+  snap: { dx: number; dz: number } | null
+}
+
+/**
+ * Resolve alignment in WORLD space while accepting BUILDING-LOCAL anchors.
+ *
+ * Why this exists: the floor-plan grid lives in world XZ (rendered outside
+ * the rotated scene group), so alignment must follow the same axes —
+ * otherwise rotating a building drags the alignment guides off the visible
+ * grid and onto the rotated wall's local axes (the bug the user hit). The
+ * resolver itself is frame-agnostic; this wrapper just transforms anchors
+ * to world, resolves, then rotates the snap delta back into building-local
+ * so callers can add it to a local position without further math.
+ *
+ * `pose === null` → resolve in the caller's frame as-is (no transform).
+ */
+export function resolveAlignmentInBuildingWorld(input: {
+  moving: readonly AlignmentAnchor[]
+  candidates: readonly AlignmentAnchor[]
+  threshold: number
+  pose: BuildingPose | null
+}): ResolveAlignmentInBuildingResult {
+  const { moving, candidates, threshold, pose } = input
+  if (!pose) {
+    return resolveAlignment({ moving, candidates, threshold })
+  }
+  const cos = Math.cos(pose.rotationY)
+  const sin = Math.sin(pose.rotationY)
+  const bx = pose.position[0]
+  const bz = pose.position[2]
+  const movingWorld = moving.map((a) => transformAnchorToWorld(a, bx, bz, cos, sin))
+  const candidatesWorld = candidates.map((a) => transformAnchorToWorld(a, bx, bz, cos, sin))
+  const result = resolveAlignment({
+    moving: movingWorld,
+    candidates: candidatesWorld,
+    threshold,
+  })
+  if (!result.snap) return { guides: result.guides, snap: null }
+  // World → local rotation (orthogonal matrix → transpose). The inverse of
+  // `localToWorld` above maps (dx_world, dz_world) → (dx_local, dz_local).
+  const dxW = result.snap.dx
+  const dzW = result.snap.dz
+  const dxL = dxW * cos - dzW * sin
+  const dzL = dxW * sin + dzW * cos
+  return { guides: result.guides, snap: { dx: dxL, dz: dzL } }
+}
+
 export function resolveAlignment(input: ResolveAlignmentInput): ResolveAlignmentResult {
   const { moving, candidates, threshold } = input
   if (threshold <= 0 || moving.length === 0 || candidates.length === 0) return EMPTY
 
-  // Best match per axis: smallest |Δ| on the matched axis (tightest
-  // alignment), then — crucially — tie-break to the candidate anchor NEAREST
-  // on the perpendicular axis. Anchors are real points (corners / endpoints /
-  // midpoints), so the guide always connects to the closest actual point of
-  // the candidate, never a far one that merely shares the same coordinate.
+  // Best match per axis: among all candidate anchors within `threshold` of
+  // the moving anchor on the matched axis, pick the one CLOSEST in the
+  // perpendicular direction — so the guide always connects to the visually
+  // nearest actual point of the candidate. Primary delta only breaks perp
+  // ties.
+  //
+  // Why perp-first: a wall pre-rotation contributes anchors that share an
+  // exact X (vertical wall) or Z (horizontal wall), so primary deltas tie
+  // and perp picks the nearer endpoint. Post-rotation, the same wall's
+  // anchors are at slightly-different world coordinates after a float
+  // rotation — primary deltas differ by tiny amounts and a primary-first
+  // tie-break would lock onto whichever happens to be marginally tighter,
+  // often the far endpoint. Perp-first keeps the "closest point of
+  // reference" behaviour stable through rotation.
   type Best = {
     delta: number
     primary: number
@@ -102,13 +195,13 @@ export function resolveAlignment(input: ResolveAlignmentInput): ResolveAlignment
       const adz = Math.abs(dz)
       if (
         adx <= threshold &&
-        (bestX === null || adx < bestX.primary || (adx === bestX.primary && adz < bestX.perp))
+        (bestX === null || adz < bestX.perp || (adz === bestX.perp && adx < bestX.primary))
       ) {
         bestX = { delta: dx, primary: adx, perp: adz, m, c }
       }
       if (
         adz <= threshold &&
-        (bestZ === null || adz < bestZ.primary || (adz === bestZ.primary && adx < bestZ.perp))
+        (bestZ === null || adx < bestZ.perp || (adx === bestZ.perp && adz < bestZ.primary))
       ) {
         bestZ = { delta: dz, primary: adz, perp: adx, m, c }
       }

@@ -77,6 +77,7 @@ import { guideEmitter } from '../../lib/guide-events'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
 import { cn } from '../../lib/utils'
+import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
 import useEditor, { selectSiteFloorplanContext } from '../../store/use-editor'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
@@ -3243,20 +3244,20 @@ const FloorplanGridLayer = memo(function FloorplanGridLayer({
       <path
         d={minorGridPath}
         fill="none"
-        opacity={palette.majorGridOpacity}
+        opacity={palette.minorGridOpacity}
         shapeRendering="crispEdges"
-        stroke={palette.majorGrid}
-        strokeWidth={FLOORPLAN_MAJOR_GRID_STROKE_WIDTH}
+        stroke={palette.minorGrid}
+        strokeWidth={FLOORPLAN_MINOR_GRID_STROKE_WIDTH}
         vectorEffect="non-scaling-stroke"
       />
 
       <path
         d={majorGridPath}
         fill="none"
-        opacity={palette.minorGridOpacity}
+        opacity={palette.majorGridOpacity}
         shapeRendering="crispEdges"
-        stroke={palette.minorGrid}
-        strokeWidth={FLOORPLAN_MINOR_GRID_STROKE_WIDTH}
+        stroke={palette.majorGrid}
+        strokeWidth={FLOORPLAN_MAJOR_GRID_STROKE_WIDTH}
         vectorEffect="non-scaling-stroke"
       />
     </>
@@ -8831,7 +8832,7 @@ export function FloorplanPanel() {
   )
 
   const handleWallPlacementPoint = useCallback(
-    (point: WallPlanPoint) => {
+    (point: WallPlanPoint, options?: { singleWall?: boolean }) => {
       if (!draftStart) {
         setDraftStart(point)
         setDraftEnd(point)
@@ -8859,6 +8860,16 @@ export function FloorplanPanel() {
       // clearing it (the previous behaviour caused the 2nd-segment
       // draft to silently break after click 2).
       const createdWall = createWallOnCurrentLevel(draftStart, point)
+
+      // Alt commits a single wall: drop the draft so the next click
+      // starts a fresh segment instead of chaining off this endpoint.
+      if (options?.singleWall) {
+        setDraftStart(null)
+        setDraftEnd(null)
+        setCursorPoint(null)
+        return
+      }
+
       const nextStart: WallPlanPoint = createdWall
         ? [createdWall.end[0], createdWall.end[1]]
         : point
@@ -8934,6 +8945,11 @@ export function FloorplanPanel() {
     snapWallDraftPoint: snapWallDraftPointMagnetic,
     toPoint2D,
     walls,
+    // World-axis grid snap so drafts land on the visible grid even
+    // when the active building is rotated. The helper resolves the
+    // active building's pose internally; this hook stays oblivious to
+    // building rotation / position.
+    worldGridSnap: snapBuildingLocalToWorldGrid,
   })
 
   const handleBackgroundClick = useCallback(
