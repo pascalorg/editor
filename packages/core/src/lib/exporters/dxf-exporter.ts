@@ -352,15 +352,15 @@ export function exportSceneToDxf(nodes: Record<AnyNodeId, AnyNode>): string {
     entities += dxfLine('PASCAL_DOOR',
       hingeX, hingeZ,
       cx + ux * width / 2, cy + uz * width / 2, nextH(), modelSpaceRecH)
-    // Edge 2: 90° swing arc. Pascal angles (wallAngleDeg → wallAngleDeg+90) open toward +Z
-    // (room side). dxfArc maps (s,e) → DXF CCW from −e to −s, yielding DXF −90° → 0° for a
-    // horizontal wall — matching the standard architectural floor-plan door symbol.
+    // Edge 2: 90° swing arc opening toward the exterior (−Z normal side).
+    // Pascal angles (wallAngleDeg−90 → wallAngleDeg). dxfArc maps (s,e) → DXF CCW from −e to −s,
+    // yielding DXF 0° → 90° for a horizontal wall.
     entities += dxfArc('PASCAL_DOOR',
       hingeX, hingeZ, width,
-      wallAngleDeg, wallAngleDeg + 90, nextH(), modelSpaceRecH)
+      wallAngleDeg - 90, wallAngleDeg, nextH(), modelSpaceRecH)
     // Edge 3: open-door line — closes the sector (from free end at open position back to hinge)
     entities += dxfLine('PASCAL_DOOR',
-      hingeX - uz * width, hingeZ + ux * width,
+      hingeX + uz * width, hingeZ - ux * width,
       hingeX, hingeZ, nextH(), modelSpaceRecH)
   }
 
