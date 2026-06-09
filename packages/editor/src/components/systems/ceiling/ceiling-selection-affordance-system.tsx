@@ -18,9 +18,9 @@ const BRACKET_THICKNESS = 0.04
 const BRACKET_HEIGHT = 0.04
 const BRACKET_Y_OFFSET = 0.035
 const HIT_BOX_SIZE: [number, number, number] = [0.28, 0.08, 0.28]
-// Draw the corner handles after everything else and with depth testing
-// off (see materials below) so they stay visible — and clickable — even
-// when a wall, roof, or the ceiling itself would otherwise occlude them.
+// Draw the corner handles after the ceiling surface so they read cleanly
+// when unobstructed, while material depth testing still lets other scene
+// geometry hide them.
 const CORNER_RENDER_ORDER = 1000
 
 type CornerBracketData = {
@@ -189,7 +189,7 @@ const CornerBracket = ({
         <boxGeometry args={HIT_BOX_SIZE} />
         <meshBasicMaterial
           color={cubeColor}
-          depthTest={false}
+          depthTest
           depthWrite={false}
           opacity={cubeOpacity}
           transparent
@@ -227,13 +227,7 @@ const BracketLeg = ({
       rotation={[0, angle, 0]}
     >
       <boxGeometry args={[length, BRACKET_HEIGHT, BRACKET_THICKNESS]} />
-      <meshBasicMaterial
-        color={color}
-        depthTest={false}
-        depthWrite={false}
-        opacity={opacity}
-        transparent
-      />
+      <meshBasicMaterial color={color} depthTest depthWrite={false} opacity={opacity} transparent />
     </mesh>
   )
 }

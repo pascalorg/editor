@@ -38,6 +38,7 @@ const SITE_FLAG_HALO_COLOR = '#6366f1'
 
 type TintableMaterial = {
   color?: Color
+  depthTest: boolean
   depthWrite: boolean
   opacity: number
   needsUpdate: boolean
@@ -69,10 +70,9 @@ function SiteFlagModel({
         mesh.frustumCulled = false
         mesh.raycast = NO_RAYCAST
         mesh.receiveShadow = false
-        mesh.renderOrder = 1010
         mesh.material = new MeshBasicNodeMaterial({
           color: new Color(ARROW_COLOR),
-          depthTest: false,
+          depthTest: true,
           depthWrite: opacity >= 0.999,
           opacity,
           transparent: opacity < 0.999,
@@ -93,6 +93,7 @@ function SiteFlagModel({
 
         for (const material of materials as Array<MeshBasicNodeMaterial & TintableMaterial>) {
           material.color?.copy(color)
+          material.depthTest = true
           material.opacity = opacity
           material.transparent = opacity < 0.999
           material.depthWrite = opacity >= 0.999
@@ -217,11 +218,23 @@ function SiteFlagFallback({
     <group position={[0, SITE_FLAG_BASE_Y + (active ? SITE_FLAG_ACTIVE_LIFT : 0), 0]}>
       <mesh layers={SCENE_LAYER} position={[0, 0.16, 0]} raycast={NO_RAYCAST}>
         <cylinderGeometry args={[0.11, 0.16, 0.32, 24]} />
-        <meshBasicMaterial color={color} depthTest={false} opacity={opacity} transparent />
+        <meshBasicMaterial
+          color={color}
+          depthTest
+          depthWrite={opacity >= 0.999}
+          opacity={opacity}
+          transparent={opacity < 0.999}
+        />
       </mesh>
       <mesh layers={SCENE_LAYER} position={[0, 0.34, 0]} raycast={NO_RAYCAST}>
         <cylinderGeometry args={[0.04, 0.11, 0.14, 24]} />
-        <meshBasicMaterial color={color} depthTest={false} opacity={opacity} transparent />
+        <meshBasicMaterial
+          color={color}
+          depthTest
+          depthWrite={opacity >= 0.999}
+          opacity={opacity}
+          transparent={opacity < 0.999}
+        />
       </mesh>
     </group>
   )

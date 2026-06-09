@@ -6,6 +6,7 @@ import {
   BufferGeometry,
   Color,
   CylinderGeometry,
+  DoubleSide,
   ExtrudeGeometry,
   Float32BufferAttribute,
   type Line,
@@ -20,7 +21,6 @@ import {
   ARROW_COLOR as EDGE_ARROW_COLOR,
   ARROW_HOVER_COLOR as EDGE_ARROW_HOVER_COLOR,
   ARROW_SCALE as EDGE_ARROW_SCALE,
-  useArrowMaterial,
   useInvisibleHitAreaMaterial,
 } from '../../editor/node-arrow-handles'
 import { snapToHalf } from '../item/placement-math'
@@ -181,7 +181,7 @@ function usePolygonNodeMaterial(color: string, opacity = 1): MeshBasicNodeMateri
     () =>
       new MeshBasicNodeMaterial({
         color: new Color('#ffffff'),
-        depthTest: false,
+        depthTest: true,
         depthWrite: true,
         opacity: 1,
         transparent: true,
@@ -198,11 +198,24 @@ function usePolygonNodeMaterial(color: string, opacity = 1): MeshBasicNodeMateri
   return material
 }
 
+function usePolygonArrowMaterial(): MeshBasicNodeMaterial {
+  return useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(EDGE_ARROW_COLOR),
+        depthTest: true,
+        depthWrite: true,
+        opacity: 1,
+        side: DoubleSide,
+        transparent: true,
+      }),
+    [],
+  )
+}
+
 // One mesh per handle: lives on SCENE_LAYER with a node material so the
-// post-processing ink-edge pass outlines it, and carries the pointer handlers
-// directly so it stays grabbable — matching the registry arrow gizmos in
-// node-arrow-handles.tsx. No paired hit mesh is needed; the R3F event
-// raycaster picks SCENE_LAYER meshes too.
+// post-processing ink-edge pass outlines it. The visual material still
+// depth-tests, so walls/items in front can occlude it.
 function OutlinedCylinderHandle({
   radius,
   height,
@@ -290,7 +303,7 @@ function OutlinedEdgeArrowHandle({
   rotationY: number
   scale: number
 } & PolygonHandleHandlers) {
-  const material = useArrowMaterial()
+  const material = usePolygonArrowMaterial()
   useEffect(() => {
     material.color.set(color)
   }, [color, material])
@@ -741,9 +754,9 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const handleHeight = Math.max(MIN_HANDLE_HEIGHT, surfaceHeight + 0.02)
   const edgeHandleY = editY + handleHeight - EDGE_HANDLE_HEIGHT / 2
 
-  // Interactive handles are single SCENE_LAYER node-material meshes (like the
-  // registry arrow gizmos) so the ink-edge pass outlines them while they stay
-  // grabbable. The edge BAR and border line stay on EDITOR_LAYER, visual-only
+  // Interactive handles are SCENE_LAYER node-material meshes so the ink-edge
+  // pass outlines them while normal scene depth can hide them. The edge BAR and
+  // border line stay on EDITOR_LAYER, visual-only
   // (raycast disabled) so they never steal clicks from the vertex/midpoint
   // handles overlapping them — edge dragging starts from the chevron arrow
   // outside the polygon edge.
