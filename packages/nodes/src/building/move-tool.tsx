@@ -17,6 +17,7 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0)
 
 export function MoveBuildingContent({ node }: { node: BuildingNode }) {
   const previousGridPosRef = useRef<[number, number] | null>(null)
+  const dragAnchorRef = useRef<[number, number] | null>(null)
 
   // Stable refs so the effect never needs node in its dependency array
   const nodeIdRef = useRef(node.id)
@@ -29,9 +30,8 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
   const pendingRotationRef = useRef<number>(node.rotation[1] ?? 0)
 
   // Local-space offset from the building's origin to its bbox center. The
-  // floating drag button anchors at the bbox center, so we pin that point to
-  // the cursor during the drag — otherwise the raw origin (often nowhere near
-  // the visual center) would snap to the cursor and the building would jump.
+  // move preview preserves the first pointer-to-center delta, then uses this
+  // offset to write the origin while keeping rotation around the visual center.
   const centerOffsetLocalRef = useRef<THREE.Vector3>(new THREE.Vector3())
 
   const [cursorWorldPos, setCursorWorldPos] = useState<[number, number, number]>(() => {
@@ -66,8 +66,15 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
     const offsetWork = new THREE.Vector3()
     const offsetAt = (rotationY: number) =>
       offsetWork.copy(centerOffsetLocalRef.current).applyAxisAngle(Y_AXIS, rotationY)
+    const originalCenterOffset = offsetAt(originalRotationRef.current).clone()
+    const originalCenter: [number, number] = [
+      originalPosition[0] + originalCenterOffset.x,
+      originalPosition[2] + originalCenterOffset.z,
+    ]
 
     useScene.temporal.getState().pause()
+    dragAnchorRef.current = null
+    previousGridPosRef.current = null
 
     // Publish the building's current pose to useLiveTransforms so the
     // floor-plan (and any other live consumers) can follow per-frame
@@ -114,8 +121,12 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const gridX = Math.round(event.position[0] * 2) / 2
-      const gridZ = Math.round(event.position[2] * 2) / 2
+      const rawX = Math.round(event.position[0] * 2) / 2
+      const rawZ = Math.round(event.position[2] * 2) / 2
+      const anchor = dragAnchorRef.current ?? [rawX, rawZ]
+      dragAnchorRef.current = anchor
+      const gridX = originalCenter[0] + (rawX - anchor[0])
+      const gridZ = originalCenter[1] + (rawZ - anchor[1])
 
       if (
         previousGridPosRef.current &&
@@ -138,8 +149,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
     }
 
     const onGridClick = (event: GridEvent) => {
-      const gridX = Math.round(event.position[0] * 2) / 2
-      const gridZ = Math.round(event.position[2] * 2) / 2
+      const [gridX, gridZ] = previousGridPosRef.current ?? originalCenter
 
       wasCommitted = true
 

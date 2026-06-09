@@ -1,4 +1,5 @@
 import {
+  type AnyNode,
   getScaledDimensions,
   type HandleDescriptor,
   type ItemNode as ItemNodeType,
@@ -220,6 +221,39 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
         return { dimensions: getScaledDimensions(item), rotation: item.rotation }
       },
       applies: (node) => !(node as ItemNodeType).asset.attachTo,
+    },
+    // Recessed ceiling fixtures cut a hole in their host ceiling. The viewer's
+    // CeilingSystem queries this capability on each child of a ceiling so it
+    // never needs to branch on `node.type`.
+    ceilingCut: {
+      buildCeilingHole(rawNode: AnyNode): Array<[number, number]> | null {
+        const node = rawNode as ItemNodeType
+        if (!node.asset.recessed || node.asset.attachTo !== 'ceiling') return null
+
+        // Inset slightly so the fixture's trim (widest part, sitting in the
+        // ceiling plane) overlaps the solid ceiling around the opening and hides
+        // the cut edge. Same constant the old ceiling-system used.
+        const INSET = 0.82
+        const [width, , depth] = getScaledDimensions(node)
+        const halfW = (width / 2) * INSET
+        const halfD = (depth / 2) * INSET
+        const cx = node.position[0]
+        const cz = node.position[2]
+        const yaw = node.rotation?.[1] ?? 0
+        const cos = Math.cos(yaw)
+        const sin = Math.sin(yaw)
+
+        // Rotate the (inset) footprint corners about Y and translate to the
+        // item's plan position. Y-rotation of (dx, dz): (dx·cos + dz·sin, −dx·sin + dz·cos).
+        return (
+          [
+            [-halfW, -halfD],
+            [halfW, -halfD],
+            [halfW, halfD],
+            [-halfW, halfD],
+          ] as Array<[number, number]>
+        ).map(([dx, dz]) => [cx + dx * cos + dz * sin, cz - dx * sin + dz * cos])
+      },
     },
   },
 

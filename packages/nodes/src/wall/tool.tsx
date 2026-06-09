@@ -7,7 +7,6 @@ import {
   type LevelNode,
   type Point2D,
   resolveAlignment,
-  useAlignmentGuides,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -22,9 +21,11 @@ import {
   getSegmentAngleReferenceAtPoint,
   markToolCancelConsumed,
   type SegmentAngleReference,
-  snapWallDraftPoint,
+  snapWallDraftPointDetailed,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
+  useWallSnapIndicator,
   WALL_FINE_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
@@ -540,6 +541,7 @@ export const WallTool: React.FC = () => {
       setDraftMeasurement(null)
       setAxisGuide(null)
       useAlignmentGuides.getState().clear()
+      useWallSnapIndicator.getState().clear()
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -554,7 +556,22 @@ export const WallTool: React.FC = () => {
       // a grid intersection.
       const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
       const bypassAlign = event.nativeEvent?.altKey === true
-      gridPosition = alignPoint(snapWallDraftPoint({ point: localPoint, walls, step }), bypassAlign)
+      const snapResult = snapWallDraftPointDetailed({
+        point: localPoint,
+        walls,
+        step,
+        magnetic: useEditor.getState().magneticSnap,
+      })
+      gridPosition = alignPoint(snapResult.point, bypassAlign)
+      // Stand the magnetic beacon at the endpoint when it locked onto an
+      // existing wall corner / wall point; clear it for plain grid/angle moves.
+      useWallSnapIndicator
+        .getState()
+        .set(
+          snapResult.snap
+            ? { x: gridPosition[0], z: gridPosition[1], kind: snapResult.snap }
+            : null,
+        )
 
       if (buildingState.current === 1) {
         const snappedLocal = gridPosition
@@ -617,7 +634,12 @@ export const WallTool: React.FC = () => {
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
-          snapWallDraftPoint({ point: localClick, walls, step: clickStep }),
+          snapWallDraftPointDetailed({
+            point: localClick,
+            walls,
+            step: clickStep,
+            magnetic: useEditor.getState().magneticSnap,
+          }).point,
           bypassAlign,
         )
         gridPosition = snappedStart
@@ -640,7 +662,12 @@ export const WallTool: React.FC = () => {
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
         const snappedEnd = alignPoint(
-          snapWallDraftPoint({ point: localClick, walls, step: clickStep }),
+          snapWallDraftPointDetailed({
+            point: localClick,
+            walls,
+            step: clickStep,
+            magnetic: useEditor.getState().magneticSnap,
+          }).point,
           bypassAlign,
         )
         const dx = snappedEnd[0] - startingPoint.current.x
@@ -657,6 +684,7 @@ export const WallTool: React.FC = () => {
         // for the next segment, and drop the just-shown guide.
         refreshAlignmentCandidates()
         useAlignmentGuides.getState().clear()
+        useWallSnapIndicator.getState().clear()
 
         const nextStart = createdWall.end
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
@@ -706,6 +734,7 @@ export const WallTool: React.FC = () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       useAlignmentGuides.getState().clear()
+      useWallSnapIndicator.getState().clear()
     }
   }, [unit])
 

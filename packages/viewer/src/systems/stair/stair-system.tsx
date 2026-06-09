@@ -65,11 +65,9 @@ export const StairSystem = () => {
           } else if (isVisible) {
             return // Over budget — keep dirty, process next frame
           } else if (mesh.geometry.type === 'BoxGeometry') {
-            // Replace BoxGeometry placeholder with empty geometry
+            // Replace BoxGeometry placeholder with a non-drawing degenerate one.
             mesh.geometry.dispose()
-            const placeholder = new THREE.BufferGeometry()
-            placeholder.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
-            mesh.geometry = placeholder
+            mesh.geometry = createEmptyGeometry()
           }
           clearDirty(id as AnyNodeId)
         } else {
@@ -528,7 +526,11 @@ function rotateXZ(x: number, z: number, angle: number): [number, number] {
 
 function createEmptyGeometry(): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+  // Three zero-vertices (one degenerate, invisible triangle), not an empty
+  // attribute: an empty position (count 0) leaves WebGPU vertex buffer slot 0
+  // unbound and the draw is rejected ("Vertex buffer slot 0 … was not set"),
+  // poisoning the command encoder. The count-0 groups keep nothing drawn.
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
   geometry.addGroup(0, 0, STAIR_TREAD_MATERIAL_INDEX)
   geometry.addGroup(0, 0, STAIR_SIDE_MATERIAL_INDEX)
   return geometry

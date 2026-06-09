@@ -152,6 +152,61 @@ export function movingFootprintAnchors(
   return bboxCornerAnchors(node.id, aabb.minX, aabb.minZ, aabb.maxX, aabb.maxZ)
 }
 
+function relocatedPlanNode(node: AnyNode, x: number, z: number, rotationY?: number): AnyNode {
+  const position = (node as { position?: unknown }).position
+  const y = Array.isArray(position) && typeof position[1] === 'number' ? position[1] : 0
+  const relocated: Record<string, unknown> = {
+    ...(node as Record<string, unknown>),
+    position: [x, y, z],
+  }
+
+  if (rotationY !== undefined && 'rotation' in node) {
+    const rotation = (node as { rotation?: unknown }).rotation
+    relocated.rotation = Array.isArray(rotation)
+      ? [rotation[0] ?? 0, rotationY, rotation[2] ?? 0]
+      : rotationY
+  }
+
+  return relocated as AnyNode
+}
+
+/**
+ * Corner anchors for a moving node relocated to the proposed plan position.
+ * Covers both the centred-box path (`floorPlaced.footprint` /
+ * `alignmentFootprint: box`) and explicit AABB footprints such as stairs,
+ * whose occupied plan bounds depend on children or curved/spiral geometry.
+ */
+export function movingAlignmentAnchors(
+  node: AnyNode,
+  nodes: Readonly<Record<string, AnyNode>> | undefined,
+  x: number,
+  z: number,
+  rotationY?: number,
+): AlignmentAnchor[] {
+  const box = footprintAABBAt(node, x, z, rotationY)
+  if (box) return bboxCornerAnchors(node.id, box.minX, box.minZ, box.maxX, box.maxZ)
+
+  const alignment = nodeRegistry
+    .get(node.type)
+    ?.capabilities?.alignmentFootprint?.(relocatedPlanNode(node, x, z, rotationY), nodes)
+
+  if (alignment?.shape === 'box') {
+    const aabb = footprintAABBFrom([x, 0, z], alignment.dimensions, alignment.rotation[1] ?? 0)
+    return bboxCornerAnchors(node.id, aabb.minX, aabb.minZ, aabb.maxX, aabb.maxZ)
+  }
+  if (alignment?.shape === 'aabb') {
+    return bboxCornerAnchors(
+      node.id,
+      alignment.minX,
+      alignment.minZ,
+      alignment.maxX,
+      alignment.maxZ,
+    )
+  }
+
+  return []
+}
+
 /**
  * Alignment anchors for a wall segment: the two centerline endpoints + chord
  * midpoint, plus — when `thickness` is known — four **face** corner anchors,

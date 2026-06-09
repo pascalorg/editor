@@ -23,6 +23,6 @@ export const tools: ToolConfig[] = [
   { id: 'slab', iconSrc: '/icons/floor.png', label: 'Slab' },
   { id: 'ceiling', iconSrc: '/icons/ceiling.png', label: 'Ceiling' },
   { id: 'zone', iconSrc: '/icons/zone.png', label: 'Zone' },
-  { id: 'spawn', iconSrc: '/icons/site.png', label: 'Spawn Point' },
+  { id: 'spawn', iconSrc: '/icons/spawn-point.png', label: 'Spawn Point' },
   { id: 'shelf', iconSrc: '/icons/shelf.png', label: 'Shelf' },
 ]

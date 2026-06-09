@@ -61,6 +61,7 @@ export {
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
 export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'
+export { useFreshPlacementVisibility } from './components/tools/shared/fresh-placement-visibility'
 // Phase 5 Stage D — PolygonEditor for slab/ceiling boundary + hole editors.
 export {
   PolygonEditor,
@@ -101,7 +102,10 @@ export {
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
+  snapWallDraftPointDetailed,
   WALL_FINE_GRID_STEP,
+  type WallDraftSnapKind,
+  type WallDraftSnapResult,
   type WallPlanPoint,
 } from './components/tools/wall/wall-drafting'
 // `ToolbarLeft` / `ToolbarRight` are the headless-spec aliases for the
@@ -195,6 +199,7 @@ export {
   type FloorplanStairSegmentEntry,
   getFloorplanWallThickness,
 } from './lib/floorplan'
+export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
 export {
   buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
@@ -204,6 +209,17 @@ export {
   getActivePaintMaterialLabel,
   hasActivePaintMaterial,
 } from './lib/material-paint'
+export {
+  addFreshPlacementMetadata,
+  getPlacementMetadataRecord,
+  isFreshPlacementMetadata,
+  stripPlacementMetadataFlags,
+} from './lib/placement-metadata'
+export {
+  type PlanarCursorPlacementMode,
+  type PlanarPoint,
+  resolvePlanarCursorPosition,
+} from './lib/planar-cursor-placement'
 export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
@@ -221,6 +237,7 @@ export {
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
 export { cn } from './lib/utils'
+export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type {
@@ -242,3 +259,8 @@ export {
 export { default as usePlacementPreview } from './store/use-placement-preview'
 export { useUploadStore } from './store/use-upload'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
+export {
+  default as useWallSnapIndicator,
+  type WallSnapKind,
+  type WallSnapPoint,
+} from './store/use-wall-snap-indicator'

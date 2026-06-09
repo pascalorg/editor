@@ -4,16 +4,24 @@ import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import { Box3, type Camera, type Object3D, Vector3 } from 'three'
 import useEditor from '../../../store/use-editor'
-import { clearBoxSelectHandled, markBoxSelectHandled } from './box-select-state'
+import {
+  clearBoxSelectHandled,
+  isBoxSelectPointerSuppressed,
+  markBoxSelectHandled,
+} from './box-select-state'
 import { PlaneBoxSelectTool } from './plane-box-select-tool'
+import {
+  createScreenRectangleSelectionElement,
+  hideScreenRectangleSelectionElement,
+  intersectScreenRects,
+  normalizeScreenRect,
+  SCREEN_RECTANGLE_SELECTION_DRAG_THRESHOLD_PX,
+  type ScreenRect,
+  screenRectFromDomRect,
+  screenRectsIntersect,
+  updateScreenRectangleSelectionElement,
+} from './screen-rectangle-selection'
 import { collectSelectableCandidateIds } from './select-candidates'
-
-type ScreenRect = { minX: number; minY: number; maxX: number; maxY: number }
-
-const BOX_SELECT_FILL_COLOR = 'rgba(129, 140, 248, 0.14)'
-const BOX_SELECT_BORDER_COLOR = 'rgba(129, 140, 248, 0.9)'
-const BOX_SELECT_SHADOW_COLOR = 'rgba(129, 140, 248, 0.28)'
-const DRAG_THRESHOLD_PX = 4
 
 const tempBox = new Box3()
 const tempWorldPoint = new Vector3()
@@ -34,76 +42,6 @@ function haveSameIds(currentIds: string[], nextIds: string[]): boolean {
     currentIds.length === nextIds.length &&
     currentIds.every((currentId, index) => currentId === nextIds[index])
   )
-}
-
-function createSelectionElement(): HTMLDivElement {
-  const element = document.createElement('div')
-  element.style.position = 'fixed'
-  element.style.display = 'none'
-  element.style.pointerEvents = 'none'
-  element.style.zIndex = '2147483647'
-  element.style.border = `1px solid ${BOX_SELECT_BORDER_COLOR}`
-  element.style.background = BOX_SELECT_FILL_COLOR
-  element.style.boxShadow = `0 0 0 1px ${BOX_SELECT_SHADOW_COLOR} inset`
-  element.style.contain = 'layout paint style'
-  return element
-}
-
-function normalizeScreenRect(
-  startX: number,
-  startY: number,
-  endX: number,
-  endY: number,
-): ScreenRect {
-  return {
-    minX: Math.min(startX, endX),
-    minY: Math.min(startY, endY),
-    maxX: Math.max(startX, endX),
-    maxY: Math.max(startY, endY),
-  }
-}
-
-function updateSelectionElement(element: HTMLDivElement, rect: ScreenRect) {
-  element.style.display = 'block'
-  element.style.left = `${rect.minX}px`
-  element.style.top = `${rect.minY}px`
-  element.style.width = `${Math.max(0, rect.maxX - rect.minX)}px`
-  element.style.height = `${Math.max(0, rect.maxY - rect.minY)}px`
-}
-
-function hideSelectionElement(element: HTMLDivElement | null) {
-  if (!element) return
-  element.style.display = 'none'
-  element.style.width = '0px'
-  element.style.height = '0px'
-}
-
-function screenRectsIntersect(a: ScreenRect, b: ScreenRect): boolean {
-  return !(b.maxX < a.minX || b.minX > a.maxX || b.maxY < a.minY || b.minY > a.maxY)
-}
-
-function screenRectFromDomRect(rect: DOMRect): ScreenRect {
-  return {
-    minX: rect.left,
-    minY: rect.top,
-    maxX: rect.right,
-    maxY: rect.bottom,
-  }
-}
-
-function intersectScreenRects(a: ScreenRect, b: ScreenRect): ScreenRect | null {
-  const rect = {
-    minX: Math.max(a.minX, b.minX),
-    minY: Math.max(a.minY, b.minY),
-    maxX: Math.min(a.maxX, b.maxX),
-    maxY: Math.min(a.maxY, b.maxY),
-  }
-
-  if (rect.maxX <= rect.minX || rect.maxY <= rect.minY) {
-    return null
-  }
-
-  return rect
 }
 
 function projectWorldPointToScreen(
@@ -268,7 +206,7 @@ const ScreenRectangleSelectTool: React.FC = () => {
     pointerDownRef.current = false
     isDraggingRef.current = false
     pointerIdRef.current = null
-    hideSelectionElement(elementRef.current)
+    hideScreenRectangleSelectionElement(elementRef.current)
     syncPreviewSelectedIds([])
 
     if (ownsInputDraggingRef.current) {
@@ -278,7 +216,7 @@ const ScreenRectangleSelectTool: React.FC = () => {
   }, [syncPreviewSelectedIds])
 
   useEffect(() => {
-    const element = createSelectionElement()
+    const element = createScreenRectangleSelectionElement()
     document.body.appendChild(element)
     elementRef.current = element
 
@@ -331,6 +269,7 @@ const ScreenRectangleSelectTool: React.FC = () => {
 
       const viewer = useViewer.getState()
       if (
+        isBoxSelectPointerSuppressed(event) ||
         spaceDownRef.current ||
         viewer.cameraDragging ||
         (viewer.inputDragging && !ownsInputDraggingRef.current)
@@ -348,7 +287,7 @@ const ScreenRectangleSelectTool: React.FC = () => {
         currentClientYRef.current - startClientYRef.current,
       )
 
-      if (!isDraggingRef.current && dragDistance >= DRAG_THRESHOLD_PX) {
+      if (!isDraggingRef.current && dragDistance >= SCREEN_RECTANGLE_SELECTION_DRAG_THRESHOLD_PX) {
         isDraggingRef.current = true
         ownsInputDraggingRef.current = true
         useViewer.getState().setInputDragging(true)
@@ -372,12 +311,12 @@ const ScreenRectangleSelectTool: React.FC = () => {
         screenRectFromDomRect(canvas.getBoundingClientRect()),
       )
       if (!clampedRect) {
-        hideSelectionElement(elementRef.current)
+        hideScreenRectangleSelectionElement(elementRef.current)
         syncPreviewSelectedIds([])
         return
       }
 
-      updateSelectionElement(elementRef.current!, clampedRect)
+      updateScreenRectangleSelectionElement(elementRef.current!, clampedRect)
       syncPreviewSelectedIds(collectNodeIdsInScreenRect(clampedRect, camera, canvas))
     }
 
@@ -385,7 +324,10 @@ const ScreenRectangleSelectTool: React.FC = () => {
       if (!pointerDownRef.current) return
       if (pointerIdRef.current !== null && event.pointerId !== pointerIdRef.current) return
 
-      if (useViewer.getState().inputDragging && !ownsInputDraggingRef.current) {
+      if (
+        isBoxSelectPointerSuppressed(event) ||
+        (useViewer.getState().inputDragging && !ownsInputDraggingRef.current)
+      ) {
         markBoxSelectHandled()
         resetDrag()
         return
@@ -420,6 +362,7 @@ const ScreenRectangleSelectTool: React.FC = () => {
     const onCanvasPointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return
       if (spaceDownRef.current) return
+      if (isBoxSelectPointerSuppressed(event)) return
 
       const viewer = useViewer.getState()
       if (viewer.cameraDragging || viewer.inputDragging) return

@@ -13,7 +13,11 @@ import * as THREE from 'three'
 // recomputation per segment when the user actually wants it back.
 function makeEmptySegmentGeometry(): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry()
-  g.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+  // Three zero-vertices (one degenerate, invisible triangle), not an empty
+  // attribute: in accessory-reveal mode the segments-wrapper is shown, so these
+  // meshes are drawn. An empty position (count 0) leaves WebGPU vertex buffer
+  // slot 0 unbound and the draw is rejected, poisoning the command encoder.
+  g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
   // Match the four material slots the roof-segment renderer's material
   // array expects (0=top, 1=side, 2=interior, 3=shingle). Without these
   // groups, mesh.material is a single-material lookup that mismatches

@@ -3,9 +3,9 @@ import {
   type AlignmentGuide,
   collectAlignmentAnchors,
   resolveAlignment,
-  useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 
 /**
  * Fixed Figma-style alignment threshold (meters) for floor-plan placement /

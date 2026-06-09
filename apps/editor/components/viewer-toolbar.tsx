@@ -32,6 +32,7 @@ import {
   EyeOff,
   Footprints,
   Grid2X2,
+  Magnet,
   PenLine,
   SlidersHorizontal,
   Sparkles,
@@ -270,6 +271,8 @@ function DisplayMenu() {
   const setEdges = useViewer((state) => state.setEdges)
   const shadows = useViewer((state) => state.shadows)
   const setShadows = useViewer((state) => state.setShadows)
+  const magneticSnap = useEditor((state) => state.magneticSnap)
+  const setMagneticSnap = useEditor((state) => state.setMagneticSnap)
 
   const activeShading =
     SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
@@ -310,6 +313,13 @@ function DisplayMenu() {
           ) : (
             <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
           )}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setMagneticSnap(!magneticSnap))}>
+          <Magnet className="h-4 w-4" />
+          <span>Magnetic snap</span>
+          <span className="ml-auto text-muted-foreground text-xs">
+            {magneticSnap ? 'On' : 'Off'}
+          </span>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShadows(!shadows))}>
           <Contrast className="h-4 w-4" />

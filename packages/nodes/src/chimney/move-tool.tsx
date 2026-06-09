@@ -6,7 +6,6 @@ import {
   ChimneyNode as ChimneyNodeSchema,
   emitter,
   type RoofEvent,
-  type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
   useScene,
@@ -15,7 +14,7 @@ import { triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { createRelativeRoofDrag, type RelativeRoofDragTarget } from '../shared/relative-roof-drag'
 import ChimneyPreview from './preview'
 
 const tmpMatrix = new THREE.Matrix4()
@@ -84,38 +83,36 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
       }
     }
 
-    const updatePreview = (event: RoofEvent) => {
-      const wx = event.position[0]
-      const wy = event.position[1]
-      const wz = event.position[2]
+    let lastTarget: RelativeRoofDragTarget | null = null
+    const roofDrag = createRelativeRoofDrag({
+      position: [...node.position] as [number, number, number],
+      roofSegmentId: node.roofSegmentId,
+    })
 
-      const sx = Math.round(wx * 20) / 20
-      const sz = Math.round(wz * 20) / 20
+    const updatePreview = (event: RoofEvent) => {
+      const target = roofDrag.resolve(event)
+      if (!target) return
+      lastTarget = target
+
+      const sx = Math.round(target.localX * 20) / 20
+      const sz = Math.round(target.localZ * 20) / 20
       const prev = lastSnapRef.current
       if (!prev || prev[0] !== sx || prev[1] !== sz) {
         triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
 
-      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
-      if (!hit) return
-
-      const xform = computeSegmentXform(hit.segment.id)
+      const xform = computeSegmentXform(target.segment.id)
       if (!xform) return
       setSegmentXform(xform)
-      setHitLocal([hit.localX, hit.localY, hit.localZ])
-      setPreviewSegment(hit.segment)
+      setHitLocal([target.localX, target.localY, target.localZ])
+      setPreviewSegment(target.segment)
       event.stopPropagation()
     }
 
     const onClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
-      if (!hit) return
+      const target = lastTarget ?? roofDrag.resolve(event)
+      if (!target) return
       const state = useScene.getState()
 
       // Strip the `isNew` flag — only used to mark a duplicate clone
@@ -135,23 +132,23 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
         const committed = ChimneyNodeSchema.parse({
           ...node,
           id: undefined as never,
-          roofSegmentId: hit.segment.id,
-          position: [hit.localX, hit.localY, hit.localZ],
+          roofSegmentId: target.segment.id,
+          position: [target.localX, target.localY, target.localZ],
           metadata: cleanedMeta,
         })
-        state.createNode(committed, hit.segment.id as AnyNodeId)
-        state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+        state.createNode(committed, target.segment.id as AnyNodeId)
+        state.dirtyNodes.add(target.segment.id as AnyNodeId)
         setSelection({ selectedIds: [committed.id] })
       } else {
         const prevSegmentId = node.roofSegmentId as AnyNodeId | undefined
         state.updateNode(node.id as AnyNodeId, {
-          roofSegmentId: hit.segment.id,
-          parentId: hit.segment.id,
-          position: [hit.localX, hit.localY, hit.localZ],
+          roofSegmentId: target.segment.id,
+          parentId: target.segment.id,
+          position: [target.localX, target.localY, target.localZ],
           metadata: cleanedMeta,
         })
         if (prevSegmentId) state.dirtyNodes.add(prevSegmentId)
-        state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+        state.dirtyNodes.add(target.segment.id as AnyNodeId)
         setSelection({ selectedIds: [node.id] })
       }
       setMovingNode(null)

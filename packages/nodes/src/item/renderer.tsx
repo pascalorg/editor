@@ -156,7 +156,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
 
   useEffect(() => {
     if (!node.parentId) return
-    useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
+    useScene.getState().markDirty(node.parentId as AnyNodeId)
   }, [node.parentId])
 
   useEffect(() => {

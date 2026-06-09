@@ -1569,7 +1569,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                   'h-5 w-5 object-contain transition-all',
                   phase !== 'site' && 'opacity-60 grayscale',
                 )}
-                src="/icons/site.png"
+                src="/icons/site-flag.png"
               />
               <span className="font-medium text-sm">{siteNode.name || 'Site'}</span>
             </div>

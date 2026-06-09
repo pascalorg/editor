@@ -1,6 +1,6 @@
 'use client'
 
-import { useAlignmentGuides } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { memo } from 'react'
 import { formatMeasurement } from '../editor/measurement-pill'

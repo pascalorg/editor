@@ -341,6 +341,7 @@ const EDITOR_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   {
     action: 'Pan',
     keys: [{ value: 'Space' }, { value: 'Left click' }],
+    alternativeKeys: [{ value: 'Middle click' }],
   },
   { action: 'Rotate', keys: [{ value: 'Right click' }] },
   { action: 'Zoom', keys: [{ value: 'Scroll' }] },
@@ -815,6 +816,8 @@ const ViewerCanvas = memo(function ViewerCanvas({
   isStudioMode,
   hasLoadedInitialScene,
   showLoader,
+  sceneReadyKey,
+  onSceneReadyChange,
   onThumbnailCapture,
 }: {
   isVersionPreviewMode: boolean
@@ -823,6 +826,8 @@ const ViewerCanvas = memo(function ViewerCanvas({
   isStudioMode: boolean
   hasLoadedInitialScene: boolean
   showLoader: boolean
+  sceneReadyKey: number
+  onSceneReadyChange: (ready: boolean) => void
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }) {
   const viewMode = useEditor((s) => s.viewMode)
@@ -926,12 +931,14 @@ const ViewerCanvas = memo(function ViewerCanvas({
           <Viewer
             defaultRender={EDITOR_DEFAULT_RENDER}
             hoverStyles={EDITOR_HOVER_STYLES}
+            onSceneReadyChange={onSceneReadyChange}
             renderContext="editor"
+            sceneReadyKey={sceneReadyKey}
             selectionManager={isFirstPersonMode ? 'default' : 'custom'}
           >
             <ViewerSceneContent
               isFirstPersonMode={isFirstPersonMode}
-              isLoading={isLoading}
+              isLoading={showLoader}
               isStudioMode={isStudioMode}
               isVersionPreviewMode={isVersionPreviewMode}
               onThumbnailCapture={onThumbnailCapture}
@@ -939,7 +946,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           </Viewer>
         </div>
       </div>
-      {!(isLoading || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
+      {!(showLoader || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
     </ErrorBoundary>
   )
 })
@@ -983,6 +990,8 @@ export default function Editor({
 
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
+  const [sceneReadyKey, setSceneReadyKey] = useState(0)
+  const [isViewerSceneReady, setIsViewerSceneReady] = useState(false)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
 
@@ -1009,15 +1018,24 @@ export default function Editor({
     async function load() {
       isLoadingSceneRef.current = true
       setHasLoadedInitialScene(false)
+      setIsViewerSceneReady(false)
       setIsSceneLoading(true)
+      useScene.getState().unloadScene()
+      useViewer.getState().resetSelection()
 
       try {
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
         if (!cancelled) {
           applySceneGraphToEditor(sceneGraph)
+          setIsViewerSceneReady(false)
+          setSceneReadyKey((key) => key + 1)
         }
       } catch {
-        if (!cancelled) applySceneGraphToEditor(null)
+        if (!cancelled) {
+          applySceneGraphToEditor(null)
+          setIsViewerSceneReady(false)
+          setSceneReadyKey((key) => key + 1)
+        }
       } finally {
         if (!cancelled) {
           setIsSceneLoading(false)
@@ -1061,7 +1079,11 @@ export default function Editor({
     }
   }, [])
 
-  const showLoader = isLoading || isSceneLoading
+  const handleSceneReadyChange = useCallback((ready: boolean) => {
+    setIsViewerSceneReady(ready)
+  }, [])
+
+  const showLoader = isLoading || isSceneLoading || !hasLoadedInitialScene || !isViewerSceneReady
 
   const firstPersonPreviousLevelRef = useRef(useViewer.getState().selection.levelId)
   const wasFirstPersonModeRef = useRef(isFirstPersonMode)
@@ -1124,7 +1146,9 @@ export default function Editor({
       isLoading={isLoading}
       isStudioMode={isStudioMode}
       isVersionPreviewMode={isVersionPreviewMode}
+      onSceneReadyChange={handleSceneReadyChange}
       onThumbnailCapture={onThumbnailCapture}
+      sceneReadyKey={sceneReadyKey}
       showLoader={showLoader}
     />
   )
@@ -1161,7 +1185,7 @@ export default function Editor({
       <>
         {showLoader && (
           <div className="fixed inset-0 z-60">
-            <SceneLoader />
+            <SceneLoader className="bg-background" />
           </div>
         )}
 
@@ -1226,7 +1250,7 @@ export default function Editor({
     <div className="dark flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
       {showLoader && (
         <div className="fixed inset-0 z-60">
-          <SceneLoader />
+          <SceneLoader className="bg-background" />
         </div>
       )}
 

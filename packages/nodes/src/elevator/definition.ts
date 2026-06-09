@@ -17,6 +17,7 @@ import { ElevatorNode } from './schema'
 
 const SIDE_HANDLE_OFFSET = 0.22
 const HEIGHT_HANDLE_OFFSET = 0.3
+const MOVE_FRONT_OFFSET = 0.35
 const MIN_ELEVATOR_DIM = 0.6
 const MIN_CAB_HEIGHT = 1.4
 const ROTATE_CORNER_OFFSET = 0.4
@@ -81,6 +82,16 @@ function elevatorCabHeightHandle(): HandleDescriptor<ElevatorNodeType> {
   }
 }
 
+function elevatorOuterHalfExtents(n: ElevatorNodeType): { halfX: number; halfZ: number } {
+  const cabWidth = getElevatorCabWidth(n)
+  const cabDepth = getElevatorCabDepth(n)
+  const wallThickness = getElevatorShaftWallThickness(n)
+  return {
+    halfX: getElevatorShaftWidth(n, cabWidth) / 2 + wallThickness,
+    halfZ: getElevatorShaftDepth(n, cabDepth) / 2 + wallThickness,
+  }
+}
+
 // Rotation handle — sits at the front-right corner of the shaft
 // footprint. `arc-resize` does the angular drag math (raycasts a
 // horizontal plane at the arrow's Y, measures cursor angle around the
@@ -103,11 +114,7 @@ function elevatorRotateHandle(): HandleDescriptor<ElevatorNodeType> {
       // shaft rather than diagonally at the corner — matches the column's
       // one-direction rotate placement.
       position: (n) => {
-        const cabWidth = getElevatorCabWidth(n)
-        const cabDepth = getElevatorCabDepth(n)
-        const wallThickness = getElevatorShaftWallThickness(n)
-        const halfX = getElevatorShaftWidth(n, cabWidth) / 2 + wallThickness
-        const halfZ = getElevatorShaftDepth(n, cabDepth) / 2 + wallThickness
+        const { halfX, halfZ } = elevatorOuterHalfExtents(n)
         const yMid = Math.max(n.cabHeight, MIN_CAB_HEIGHT) / 2
         return [halfX, yMid, halfZ + ROTATE_CORNER_OFFSET]
       },
@@ -120,14 +127,30 @@ function elevatorRotateHandle(): HandleDescriptor<ElevatorNodeType> {
       // Bounding circle through the shaft corners — drawn slightly larger
       // so it sits outside the visible shell.
       radius: (n) => {
-        const cabWidth = getElevatorCabWidth(n)
-        const cabDepth = getElevatorCabDepth(n)
-        const wallThickness = getElevatorShaftWallThickness(n)
-        const halfX = getElevatorShaftWidth(n, cabWidth) / 2 + wallThickness
-        const halfZ = getElevatorShaftDepth(n, cabDepth) / 2 + wallThickness
+        const { halfX, halfZ } = elevatorOuterHalfExtents(n)
         return Math.hypot(halfX, halfZ) + ROTATE_RING_OFFSET
       },
       y: (n) => Math.max(n.cabHeight, MIN_CAB_HEIGHT) / 2,
+    },
+  }
+}
+
+function elevatorMoveHandle(): HandleDescriptor<ElevatorNodeType> {
+  return {
+    kind: 'translate',
+    placement: {
+      position: (n) => {
+        const { halfZ } = elevatorOuterHalfExtents(n)
+        return [0, 0.02, halfZ + MOVE_FRONT_OFFSET]
+      },
+    },
+    apply: (_n, pos) => ({ position: [pos[0], pos[1], pos[2]] }),
+    snapExtents: (n) => {
+      const { halfX, halfZ } = elevatorOuterHalfExtents(n)
+      const dimX = Math.max(halfX * 2, MIN_ELEVATOR_DIM)
+      const dimZ = Math.max(halfZ * 2, MIN_ELEVATOR_DIM)
+      const swap = Math.abs(Math.sin(n.rotation ?? 0)) > 0.9
+      return [swap ? dimZ : dimX, swap ? dimX : dimZ]
     },
   }
 }
@@ -137,6 +160,7 @@ const elevatorHandles: HandleDescriptor<ElevatorNodeType>[] = [
   elevatorAxisHandle('z'),
   elevatorCabHeightHandle(),
   elevatorRotateHandle(),
+  elevatorMoveHandle(),
 ]
 
 /**
@@ -174,10 +198,10 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
     // bridge relocates this same footprint to the drag point.
     alignmentFootprint: (node) => {
       const e = node as ElevatorNodeType
-      const wall = getElevatorShaftWallThickness(e)
+      const { halfX, halfZ } = elevatorOuterHalfExtents(e)
       return {
         shape: 'box',
-        dimensions: [getElevatorShaftWidth(e) + wall * 2, 1, getElevatorShaftDepth(e) + wall * 2],
+        dimensions: [halfX * 2, 1, halfZ * 2],
         rotation: [0, e.rotation ?? 0, 0],
       }
     },

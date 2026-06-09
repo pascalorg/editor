@@ -7,6 +7,7 @@ import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
 import { DoorNode as DoorNodeSchema } from '../schema/nodes/door'
+import { ElevatorNode as ElevatorNodeSchema } from '../schema/nodes/elevator'
 import { LevelNode } from '../schema/nodes/level'
 import {
   getPitchFromActiveRoofHeight,
@@ -147,6 +148,84 @@ function normalizeShelfNode(node: Record<string, unknown>) {
 
   const parsed = ShelfNodeSchema.safeParse(sanitized)
   return parsed.success ? parsed.data : null
+}
+
+function normalizeElevatorNode(node: Record<string, unknown>) {
+  const sanitized = {
+    ...node,
+    position: getVector3(node.position, [0, 0, 0]),
+    rotation: getFiniteNumber(node.rotation, 0),
+    width: getFiniteNumber(node.width, 1.84),
+    depth: getFiniteNumber(node.depth, 1.84),
+    shaftWidth: node.shaftWidth === undefined ? undefined : getFiniteNumber(node.shaftWidth, 1.84),
+    shaftDepth: node.shaftDepth === undefined ? undefined : getFiniteNumber(node.shaftDepth, 1.84),
+    shaftWallThickness: getFiniteNumber(node.shaftWallThickness, 0.09),
+    cabHeight: getFiniteNumber(node.cabHeight, 2.35),
+    doorWidth: getFiniteNumber(node.doorWidth, 0.95),
+    doorHeight: getFiniteNumber(node.doorHeight, 2.1),
+    fromLevelId: getNullableString(node.fromLevelId),
+    toLevelId: getNullableString(node.toLevelId),
+    servedLevelIds:
+      node.servedLevelIds === undefined ? undefined : getStringArray(node.servedLevelIds),
+    disabledLevelIds: getStringArray(node.disabledLevelIds),
+    serviceOnlyLevelIds: getStringArray(node.serviceOnlyLevelIds),
+    defaultLevelId: getNullableString(node.defaultLevelId),
+    speed: getFiniteNumber(node.speed, 2.2),
+    doorDurationMs: getFiniteNumber(node.doorDurationMs, 900),
+    dwellMs: getFiniteNumber(node.dwellMs, 1400),
+  }
+
+  const parsed = ElevatorNodeSchema.safeParse(sanitized)
+  return parsed.success ? parsed.data : null
+}
+
+function findBuildingIdForLevel(levelId: string, nodes: Record<string, any>): string | null {
+  const level = nodes[levelId]
+  const directBuildingId = typeof level?.parentId === 'string' ? level.parentId : null
+  if (directBuildingId && nodes[directBuildingId]?.type === 'building') {
+    return directBuildingId
+  }
+
+  for (const [candidateId, candidate] of Object.entries(nodes)) {
+    if (candidate?.type !== 'building') continue
+    if (getStringArray(candidate.children).includes(levelId)) {
+      return candidateId
+    }
+  }
+
+  return null
+}
+
+function migrateElevatorParent(
+  id: string,
+  node: Record<string, unknown>,
+  nodes: Record<string, any>,
+) {
+  const parentId = typeof node.parentId === 'string' ? node.parentId : null
+  if (!parentId) return node
+  const parent = parentId ? nodes[parentId] : null
+  if (parent?.type !== 'level') return node
+
+  const buildingId = findBuildingIdForLevel(parentId, nodes)
+  if (!buildingId) return node
+  const building = buildingId ? nodes[buildingId] : null
+  if (building?.type !== 'building') return node
+
+  nodes[parentId] = {
+    ...parent,
+    children: getStringArray(parent.children).filter((childId) => childId !== id),
+  }
+
+  const buildingChildren = getStringArray(building.children)
+  nodes[buildingId] = {
+    ...building,
+    children: buildingChildren.includes(id) ? buildingChildren : [...buildingChildren, id],
+  }
+
+  return {
+    ...node,
+    parentId: buildingId,
+  }
 }
 
 function migrateWallSurfaceMaterials(node: Record<string, any>) {
@@ -435,6 +514,14 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
 
     if (node.type === 'shelf') {
       const normalized = normalizeShelfNode(node)
+      if (normalized) {
+        patchedNodes[id] = normalized
+      }
+    }
+
+    if (node.type === 'elevator') {
+      const parentMigrated = migrateElevatorParent(id, node, patchedNodes)
+      const normalized = normalizeElevatorNode(parentMigrated)
       if (normalized) {
         patchedNodes[id] = normalized
       }

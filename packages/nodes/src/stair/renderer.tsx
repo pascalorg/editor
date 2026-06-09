@@ -22,6 +22,7 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 
 type SegmentTransform = {
   position: [number, number, number]
@@ -106,13 +107,8 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
     [node, shading, textures, colorPreset],
   )
 
-  const straightPlaceholderGeometry = useMemo(() => {
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
-    geometry.addGroup(0, 0, 0)
-    geometry.addGroup(0, 0, 1)
-    return geometry
-  }, [])
+  // 2 groups map 1:1 to the stair body's 2-material array (body + tread).
+  const straightPlaceholderGeometry = useMemo(() => createPlaceholderGeometry(2), [])
 
   useEffect(() => {
     return () => {

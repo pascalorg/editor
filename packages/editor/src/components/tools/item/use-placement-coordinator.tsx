@@ -14,13 +14,13 @@ import {
   resolveLevelId,
   type ShelfEvent,
   sceneRegistry,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
   useSpatialQuery,
   type WallEvent,
   type WallNode,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -195,6 +195,8 @@ export interface PlacementCoordinatorConfig {
   initialState?: PlacementState
   /** Scale to use when lazily creating a draft (e.g. for wall/ceiling duplicates). Defaults to [1,1,1]. */
   defaultScale?: [number, number, number]
+  /** Move-mode sessions for floor items keep the grabbed item offset from the first floor-plane hit. */
+  preserveFloorDragOffset?: boolean
 }
 
 export function usePlacementCoordinator(config: PlacementCoordinatorConfig): React.ReactNode {
@@ -405,6 +407,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // building-local, matching the draft's grid position and the guide
     // layer's frame.
     let alignmentCandidates: AlignmentAnchor[] | null = null
+    let floorDragAnchor: [number, number] | null = null
 
     // Reset placement state
     placementState.current = configRef.current.initialState ?? {
@@ -526,6 +529,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Init draft ----
     configRef.current.initDraft(gridPosition.current)
+    const preserveFloorDragOffset =
+      configRef.current.preserveFloorDragOffset === true &&
+      placementState.current.surface === 'floor' &&
+      !asset.attachTo
+    const relativeFloorStart = preserveFloorDragOffset ? gridPosition.current.clone() : null
 
     // Sync cursor to the draft mesh's world position and rotation
     if (draftNode.current) {
@@ -649,9 +657,31 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         detachItemSurfaceToFloor(event as unknown as ItemEvent)
       }
 
-      lastRawPos.current.set(event.localPosition[0], event.localPosition[1], event.localPosition[2])
+      const floorEvent =
+        relativeFloorStart !== null
+          ? (() => {
+              const rawX = event.localPosition[0]
+              const rawZ = event.localPosition[2]
+              const anchor = floorDragAnchor ?? [rawX, rawZ]
+              floorDragAnchor = anchor
+              return {
+                ...event,
+                localPosition: [
+                  relativeFloorStart.x + (rawX - anchor[0]),
+                  event.localPosition[1],
+                  relativeFloorStart.z + (rawZ - anchor[1]),
+                ] as [number, number, number],
+              }
+            })()
+          : event
+
+      lastRawPos.current.set(
+        floorEvent.localPosition[0],
+        floorEvent.localPosition[1],
+        floorEvent.localPosition[2],
+      )
       if (!cursorGroupRef.current) return
-      const result = floorStrategy.move(getContext(), event)
+      const result = floorStrategy.move(getContext(), floorEvent)
       if (!result) return
 
       // Figma-style alignment snap layered on top of the floor strategy's
@@ -663,7 +693,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const draft = draftNode.current
       let alignX = 0
       let alignZ = 0
-      const bypassAlign = event.nativeEvent?.altKey === true
+      const bypassAlign = floorEvent.nativeEvent?.altKey === true
       if (!bypassAlign && draft) {
         alignmentCandidates ??= collectAlignmentAnchors(
           useScene.getState().nodes,

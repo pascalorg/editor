@@ -49,6 +49,17 @@ export type WallHit = {
   itemRotation: number
 }
 
+export function projectWallLocalPointToPlan(
+  wall: WallNode,
+  localX: number,
+  localZ = 0,
+): [number, number] {
+  const angle = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+  const c = Math.cos(angle)
+  const s = Math.sin(angle)
+  return [wall.start[0] + localX * c + localZ * s, wall.start[1] - localX * s + localZ * c]
+}
+
 /**
  * Walk every wall under `parentLevelId` and return the closest one to
  * `planPoint`, or `null` if no wall is within `WALL_SNAP_DISTANCE_M`.

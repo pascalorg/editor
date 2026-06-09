@@ -11,7 +11,6 @@ import {
   resolveAlignment,
   type SlabNode,
   sceneRegistry,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
   type WallNode,
@@ -21,6 +20,7 @@ import {
   markToolCancelConsumed,
   snapFenceDraftPoint,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'

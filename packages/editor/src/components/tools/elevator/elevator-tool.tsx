@@ -7,9 +7,9 @@ import {
   type GridEvent,
   type LevelNode,
   resolveAlignment,
-  useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { resolveCurrentBuildingId, resolveElevatorSupportY } from '../../../lib/elevator-support'

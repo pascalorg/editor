@@ -120,7 +120,7 @@ const SpawnTool = () => {
 
   if (!activeLevelId) return null
 
-  return <CursorSphere color="#60a5fa" height={2.2} ref={cursorRef} />
+  return <CursorSphere color="#818cf8" height={2.2} ref={cursorRef} />
 }
 
 export default SpawnTool
