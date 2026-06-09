@@ -231,6 +231,7 @@ type FloorplanViewport = {
 
 type FloorplanNavigationViewOptions = {
   smooth?: boolean
+  clampViewWidth?: boolean
 }
 
 type FloorplanViewAnimationTarget = {
@@ -830,6 +831,26 @@ const oppositeGuideCorner: Record<GuideCorner, GuideCorner> = {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
+}
+
+function resolveFloorplanViewWidth(
+  requestedWidth: number,
+  currentWidth: number,
+  fittedViewport: FloorplanViewport | null,
+  clampViewWidth: boolean,
+) {
+  if (!(Number.isFinite(requestedWidth) && requestedWidth > 0)) {
+    return currentWidth
+  }
+
+  if (!clampViewWidth || !fittedViewport) {
+    return Math.max(0.001, requestedWidth)
+  }
+
+  const minWidth = fittedViewport.width * MIN_VIEWPORT_WIDTH_RATIO
+  const maxWidth = fittedViewport.width * MAX_VIEWPORT_WIDTH_RATIO
+
+  return clamp(requestedWidth, Math.min(minWidth, currentWidth), Math.max(maxWidth, currentWidth))
 }
 
 function roundPlanMeters(value: number) {
@@ -6046,9 +6067,12 @@ export function FloorplanPanel() {
         FLOORPLAN_VIEW_ROTATION_DEG + userRotationDeg - buildingRotationDeg
       const centerSvg = rotateSvgPoint(localCenter, nextSceneRotationDeg)
       const fitted = latestFittedViewportRef.current
-      const minWidth = fitted ? fitted.width * MIN_VIEWPORT_WIDTH_RATIO : 0.001
-      const maxWidth = fitted ? fitted.width * MAX_VIEWPORT_WIDTH_RATIO : Number.POSITIVE_INFINITY
-      const nextWidth = clamp(viewWidth ?? currentViewport.width, minWidth, maxWidth)
+      const nextWidth = resolveFloorplanViewWidth(
+        viewWidth ?? currentViewport.width,
+        currentViewport.width,
+        fitted,
+        options?.clampViewWidth !== false,
+      )
 
       const nextViewport = {
         centerX: centerSvg.x,
@@ -6101,7 +6125,9 @@ export function FloorplanPanel() {
         buildingRotationY,
       )
 
-      applyFloorplanNavigationView(localCenter, nextUserRotationDeg, pose.viewWidth)
+      applyFloorplanNavigationView(localCenter, nextUserRotationDeg, pose.viewWidth, {
+        clampViewWidth: false,
+      })
     },
     [applyFloorplanNavigationView, buildingPosition, buildingRotationY],
   )
@@ -6386,9 +6412,6 @@ export function FloorplanPanel() {
     surfaceSize.width,
     viewBox,
   ])
-
-  const minViewportWidth = fittedViewport.width * MIN_VIEWPORT_WIDTH_RATIO
-  const maxViewportWidth = fittedViewport.width * MAX_VIEWPORT_WIDTH_RATIO
 
   const palette = useMemo(
     () =>
@@ -7089,10 +7112,11 @@ export function FloorplanPanel() {
 
       const currentViewport = viewport ?? fittedViewport
       const currentViewBox = viewBox
-      const nextWidth = clamp(
+      const nextWidth = resolveFloorplanViewWidth(
         currentViewport.width * widthFactor,
-        minViewportWidth,
-        maxViewportWidth,
+        currentViewport.width,
+        fittedViewport,
+        true,
       )
       const nextHeight = nextWidth / svgAspectRatio
       const normalizedX = (svgPoint.x - currentViewBox.minX) / currentViewBox.width
@@ -7121,8 +7145,6 @@ export function FloorplanPanel() {
       fittedViewport,
       floorplanSceneRotationDeg,
       getSvgPointFromClientPoint,
-      maxViewportWidth,
-      minViewportWidth,
       publishFloorplanNavigationPose,
       smoothFloorplanNavigationView,
       svgAspectRatio,
