@@ -8831,7 +8831,7 @@ export function FloorplanPanel() {
   )
 
   const handleWallPlacementPoint = useCallback(
-    (point: WallPlanPoint) => {
+    (point: WallPlanPoint, options?: { singleWall?: boolean }) => {
       if (!draftStart) {
         setDraftStart(point)
         setDraftEnd(point)
@@ -8859,6 +8859,16 @@ export function FloorplanPanel() {
       // clearing it (the previous behaviour caused the 2nd-segment
       // draft to silently break after click 2).
       const createdWall = createWallOnCurrentLevel(draftStart, point)
+
+      // Alt commits a single wall: drop the draft so the next click
+      // starts a fresh segment instead of chaining off this endpoint.
+      if (options?.singleWall) {
+        setDraftStart(null)
+        setDraftEnd(null)
+        setCursorPoint(null)
+        return
+      }
+
       const nextStart: WallPlanPoint = createdWall
         ? [createdWall.end[0], createdWall.end[1]]
         : point
