@@ -17,6 +17,7 @@ export type {
 export {
   discoverPlugins,
   getHostRefFields,
+  getRoofAccessoryKinds,
   getSelectableKinds,
   isDrawnViaTool,
   isDrawnViaToolKind,
