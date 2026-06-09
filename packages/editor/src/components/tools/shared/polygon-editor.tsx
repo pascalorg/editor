@@ -3,6 +3,7 @@ import { SCENE_LAYER, useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent } from '@react-three/fiber'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  BoxGeometry,
   BufferGeometry,
   Color,
   CylinderGeometry,
@@ -24,6 +25,7 @@ import {
   useInvisibleHitAreaMaterial,
 } from '../../editor/node-arrow-handles'
 import { snapToHalf } from '../item/placement-math'
+import { suppressBoxSelectForPointer } from '../select/box-select-state'
 
 const Y_OFFSET = 0.02
 // Per-side resize arrows: indigo chevrons that match the registry arrow
@@ -104,6 +106,8 @@ export interface PolygonEditorProps {
   onVertexHoverChange?: (vertexIndex: number | null) => void
   /** Called when a midpoint add-vertex handle enters or leaves hover. */
   onMidpointHoverChange?: (edgeIndex: number | null) => void
+  /** Called when an edge move handle enters or leaves hover. */
+  onEdgeHoverChange?: (edgeIndex: number | null) => void
   /** Called when any polygon drag starts or ends. */
   onDragStateChange?: (isDragging: boolean) => void
   /** Called once when a polygon drag starts. */
@@ -114,6 +118,8 @@ export interface PolygonEditorProps {
   showBorderLine?: boolean
   /** Whether midpoint handles can add new vertices. */
   showMidpointHandles?: boolean
+  /** Whether hovering a handle should also tint its connected edges and endpoint handles. */
+  highlightConnectedHandles?: boolean
   /** Optional vertex handle renderer for host-specific affordances. */
   renderVertexHandle?: PolygonVertexHandleRenderer
   /** Optional midpoint handle renderer for host-specific add-vertex affordances. */
@@ -127,6 +133,7 @@ export interface PolygonEditorProps {
 const MIN_HANDLE_HEIGHT = 0.15
 const EDGE_HANDLE_HEIGHT = 0.06
 const EDGE_HANDLE_THICKNESS = 0.12
+const EDGE_HANDLE_GEOMETRY = new BoxGeometry(1, 1, 1)
 
 function getEdgeNormal(start: [number, number], end: [number, number]): [number, number] | null {
   const dx = end[0] - start[0]
@@ -135,6 +142,11 @@ function getEdgeNormal(start: [number, number], end: [number, number]): [number,
   if (length < 1e-6) return null
 
   return [-dz / length, dx / length]
+}
+
+function stopHandlePointerDown(event: ThreeEvent<PointerEvent>) {
+  event.stopPropagation()
+  suppressBoxSelectForPointer(event, { markHandled: false })
 }
 
 type HandleClickHandler = (event: ThreeEvent<MouseEvent>) => void
@@ -324,6 +336,47 @@ function OutlinedEdgeArrowHandle({
   )
 }
 
+function HighlightedEdgeSegment({
+  end,
+  start,
+  y,
+}: {
+  end: [number, number]
+  start: [number, number]
+  y: number
+}) {
+  const geometry = useMemo(() => {
+    const nextGeometry = new BufferGeometry()
+    nextGeometry.setAttribute(
+      'position',
+      new Float32BufferAttribute([start[0], y, start[1], end[0], y, end[1]], 3),
+    )
+    return nextGeometry
+  }, [end, start, y])
+
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  return (
+    <line
+      // @ts-expect-error R3F <line> element conflicts with SVG <line> type
+      frustumCulled={false}
+      geometry={geometry}
+      layers={EDITOR_LAYER}
+      raycast={NO_RAYCAST}
+      renderOrder={12}
+    >
+      <lineBasicNodeMaterial
+        color={EDGE_ARROW_HOVER_COLOR}
+        depthTest
+        depthWrite={false}
+        linewidth={4}
+        opacity={0.95}
+        transparent
+      />
+    </line>
+  )
+}
+
 export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   polygon,
   color = '#3b82f6',
@@ -337,11 +390,13 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   onBeforeVertexDrag,
   onVertexHoverChange,
   onMidpointHoverChange,
+  onEdgeHoverChange,
   onDragStateChange,
   onDragStart,
   onDragCommit,
   showBorderLine = true,
   showMidpointHandles = true,
+  highlightConnectedHandles = false,
   renderMidpointHandle,
   renderVertexHandle,
 }) => {
@@ -441,6 +496,12 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   }, [hoveredMidpoint, onMidpointHoverChange])
 
   useEffect(() => () => onMidpointHoverChange?.(null), [onMidpointHoverChange])
+
+  useEffect(() => {
+    onEdgeHoverChange?.(hoveredEdge)
+  }, [hoveredEdge, onEdgeHoverChange])
+
+  useEffect(() => () => onEdgeHoverChange?.(null), [onEdgeHoverChange])
 
   const lineRef = useRef<Line>(null!)
   const previousPositionRef = useRef<[number, number] | null>(null)
@@ -568,6 +629,47 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       ]
     })
   }, [displayPolygon])
+
+  const activeVertexIndex = dragState?.mode === 'vertex' ? dragState.vertexIndex : hoveredVertex
+  const activeEdgeIndex = dragState?.mode === 'edge' ? dragState.edgeIndex : hoveredEdge
+
+  const highlightedEdgeIndices = useMemo(() => {
+    const next = new Set<number>()
+    const edgeCount = displayPolygon.length
+    if (!highlightConnectedHandles || edgeCount < 2) return next
+
+    if (activeVertexIndex !== null && activeVertexIndex !== undefined) {
+      next.add(activeVertexIndex)
+      next.add((activeVertexIndex - 1 + edgeCount) % edgeCount)
+    }
+    if (hoveredMidpoint !== null) {
+      next.add(hoveredMidpoint)
+    }
+    if (activeEdgeIndex !== null && activeEdgeIndex !== undefined) {
+      next.add(activeEdgeIndex)
+    }
+
+    return next
+  }, [
+    activeEdgeIndex,
+    activeVertexIndex,
+    displayPolygon.length,
+    highlightConnectedHandles,
+    hoveredMidpoint,
+  ])
+
+  const isVertexLinkedHighlighted = useCallback(
+    (index: number) => {
+      if (!highlightConnectedHandles || highlightedEdgeIndices.size === 0) return false
+      const edgeCount = displayPolygon.length
+      if (edgeCount < 2) return false
+      return (
+        highlightedEdgeIndices.has(index) ||
+        highlightedEdgeIndices.has((index - 1 + edgeCount) % edgeCount)
+      )
+    },
+    [displayPolygon.length, highlightConnectedHandles, highlightedEdgeIndices],
+  )
 
   const arrowGeometry = useMemo(() => createEdgeArrowGeometry(), [])
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
@@ -784,10 +886,28 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         </line>
       )}
 
+      {highlightConnectedHandles &&
+        highlightedEdgeIndices.size > 0 &&
+        Array.from(highlightedEdgeIndices).map((edgeIndex) => {
+          const start = displayPolygon[edgeIndex]
+          const end = displayPolygon[(edgeIndex + 1) % displayPolygon.length]
+          if (!(start && end)) return null
+          return (
+            <HighlightedEdgeSegment
+              end={end}
+              key={`highlight-edge-${edgeIndex}`}
+              start={start}
+              y={edgeHandleY}
+            />
+          )
+        })}
+
       {/* Vertex handles - blue cylinders that match surface height */}
       {displayPolygon.map(([x, z], index) => {
         const isHovered = hoveredVertex === index
         const isDragging = dragState?.mode === 'vertex' && dragState.vertexIndex === index
+        const isLinkedHighlighted = isVertexLinkedHighlighted(index)
+        const isHighlighted = isDragging || isHovered || isLinkedHighlighted
         const radius = 0.1
         const height = handleHeight
         const point: [number, number] = [x!, z!]
@@ -806,7 +926,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
           },
           onPointerDown: (e) => {
             if (e.button !== 0) return
-            e.stopPropagation()
+            stopHandlePointerDown(e)
             setHoveredEdge(null)
             onBeforeVertexDrag?.(index, point)
             startDrag({
@@ -848,7 +968,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
         return (
           <OutlinedCylinderHandle
-            color={isDragging || isHovered ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
+            color={isHighlighted ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
             height={height}
             key={`vertex-${index}`}
             {...handleProps}
@@ -867,7 +987,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
           }}
           onPointerDown={(e) => {
             if (e.button !== 0) return
-            e.stopPropagation()
+            stopHandlePointerDown(e)
             setHoveredEdge(null)
             startDrag({
               isDragging: true,
@@ -886,6 +1006,8 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         edgeHandles.map(({ index, length, midpoint, rotationY, outwardNormal, outwardAngle }) => {
           const isHovered = hoveredEdge === index
           const isDragging = dragState?.mode === 'edge' && dragState.edgeIndex === index
+          const isLinkedHighlighted = highlightedEdgeIndices.has(index)
+          const isHighlighted = isDragging || isHovered || isLinkedHighlighted
           const arrowX = midpoint[0] + outwardNormal[0] * EDGE_ARROW_OFFSET
           const arrowZ = midpoint[1] + outwardNormal[1] * EDGE_ARROW_OFFSET
 
@@ -919,15 +1041,16 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                   which sits outside the polygon and never overlaps a
                   vertex/midpoint handle. */}
               <mesh
+                geometry={EDGE_HANDLE_GEOMETRY}
                 layers={EDITOR_LAYER}
                 position={[midpoint[0], edgeHandleY, midpoint[1]]}
                 raycast={NO_RAYCAST}
                 rotation={[0, rotationY, 0]}
+                scale={[length, EDGE_HANDLE_HEIGHT, EDGE_HANDLE_THICKNESS]}
               >
-                <boxGeometry args={[length, EDGE_HANDLE_HEIGHT, EDGE_HANDLE_THICKNESS]} />
                 <meshBasicMaterial
-                  color={isDragging ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
-                  opacity={isDragging ? 0.5 : isHovered ? 0.38 : 0.14}
+                  color={isHighlighted ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
+                  opacity={isDragging ? 0.5 : isHighlighted ? 0.38 : 0.14}
                   transparent
                 />
               </mesh>
@@ -935,7 +1058,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                   Points outward from the edge; dragging it translates only this
                   edge's two vertices along the outward normal. */}
               <OutlinedEdgeArrowHandle
-                color={isDragging || isHovered ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
+                color={isHighlighted ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
                 geometry={arrowGeometry}
                 onClick={(e) => {
                   if (e.button !== 0) return
@@ -943,7 +1066,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                 }}
                 onPointerDown={(e) => {
                   if (e.button !== 0) return
-                  e.stopPropagation()
+                  stopHandlePointerDown(e)
                   beginEdgeDrag(e)
                 }}
                 onPointerEnter={(e) => {
@@ -967,6 +1090,8 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         !dragState &&
         midpoints.map(([x, z], index) => {
           const isHovered = hoveredMidpoint === index
+          const isLinkedHighlighted = highlightedEdgeIndices.has(index)
+          const isHighlighted = isHovered || isLinkedHighlighted
           const radius = 0.06
           const height = handleHeight
           const point: [number, number] = [x!, z!]
@@ -978,7 +1103,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             },
             onPointerDown: (e) => {
               if (e.button !== 0) return
-              e.stopPropagation()
+              stopHandlePointerDown(e)
               onBeforeVertexDrag?.(index + 1, point)
               const insertedVertex = handleAddVertex(index, point)
               if (insertedVertex.vertexIndex >= 0) {
@@ -1021,11 +1146,11 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
           return (
             <OutlinedCylinderHandle
-              color={isHovered ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
+              color={isHighlighted ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
               height={height}
               key={`midpoint-${index}`}
               {...handleProps}
-              opacity={isHovered ? 1 : 0.7}
+              opacity={isHighlighted ? 1 : 0.7}
               position={position}
               radius={radius}
             />

@@ -152,6 +152,14 @@ export const RoofSystem = () => {
                 'position',
                 new THREE.Float32BufferAttribute(new Float32Array(9), 3),
               )
+              placeholder.setAttribute(
+                'normal',
+                new THREE.Float32BufferAttribute(new Float32Array(9), 3),
+              )
+              placeholder.setAttribute(
+                'uv',
+                new THREE.Float32BufferAttribute(new Float32Array(6), 2),
+              )
               computeGeometryBoundsTree(placeholder)
               mesh.geometry = placeholder
             }
