@@ -525,6 +525,8 @@
         let uploadedCoverFile = null;
         let activeDropdownId = null;
         let projectToDeleteId = null; 
+        let isProjectFormSubmitting = false;
+        let isDeleteSubmitting = false;
         const AUTH_KEY = 'measurenavi_auth';
         const USER_KEY = 'measurenavi_user';
 
@@ -1215,6 +1217,36 @@
             document.getElementById("modalSubmitBtn").innerText = copy.btn;
         }
 
+        function getMessage(key, fallback) {
+            return (dictionary[currentLang] && dictionary[currentLang][key])
+                || (dictionary.en && dictionary.en[key])
+                || fallback;
+        }
+
+        function setButtonBusy(button, busy, busyText, idleText) {
+            if (!button) return;
+            button.disabled = busy;
+            button.innerText = busy ? busyText : idleText;
+            button.classList.toggle("opacity-60", busy);
+            button.classList.toggle("cursor-not-allowed", busy);
+        }
+
+        function setProjectFormSubmitting(submitting, isEdit) {
+            const submitBtn = document.getElementById("modalSubmitBtn");
+            const idleCopy = modalCopy[isEdit ? 'edit' : 'create'][currentLang] || modalCopy[isEdit ? 'edit' : 'create'].en;
+            setButtonBusy(
+                submitBtn,
+                submitting,
+                isEdit ? "Saving..." : "Creating...",
+                idleCopy.btn
+            );
+        }
+
+        function setDeleteSubmitting(submitting) {
+            const deleteBtn = document.getElementById("confirmDeleteBtn");
+            setButtonBusy(deleteBtn, submitting, "Deleting...", getMessage("menuDelete", "Delete File"));
+        }
+
         // 新建模态框
         function openCreateModal() {
             document.getElementById("editProjectId").value = "";
@@ -1226,13 +1258,18 @@
             document.getElementById("createModal").classList.remove("hidden");
         }
 
-        function closeCreateModal() {
+        function closeCreateModal(force = false) {
+            if (isProjectFormSubmitting && !force) {
+                showToast("Please wait for the current action to finish.", "info");
+                return;
+            }
             document.getElementById("createModal").classList.add("hidden");
             document.getElementById("projectForm").reset();
             document.getElementById("editProjectId").value = "";
             selectedCoverIndex = 0;
             clearUploadedCover();
             renderPresetCovers();
+            setProjectFormSubmitting(false, false);
         }
 
         // 编辑项目 — 复用新建弹窗，预填内容
@@ -1295,29 +1332,61 @@
             document.getElementById("deleteConfirmModal").classList.remove("hidden");
         }
 
-        function closeDeleteConfirmModal() {
+        function closeDeleteConfirmModal(force = false) {
+            if (isDeleteSubmitting && !force) {
+                showToast("Please wait for the delete action to finish.", "info");
+                return;
+            }
             document.getElementById("deleteConfirmModal").classList.add("hidden");
             projectToDeleteId = null;
+            setDeleteSubmitting(false);
         }
 
-        function executeDeleteProject() {
-            if (!projectToDeleteId) return;
+        async function executeDeleteProject() {
+            if (!projectToDeleteId || isDeleteSubmitting) return;
 
-            projects = projects.filter(p => p.id !== projectToDeleteId);
-            saveToLocalStorage();
-            handleSearch();
-            closeDeleteConfirmModal();
+            const deleteId = projectToDeleteId;
+            isDeleteSubmitting = true;
+            setDeleteSubmitting(true);
+            showToast("Deleting project...", "info");
 
-            showToast(dictionary[currentLang].toastDeleted, "info");
+            try {
+                const response = await fetch(`/api/scenes/${encodeURIComponent(deleteId)}`, {
+                    method: 'DELETE'
+                });
+                if (!response.ok && response.status !== 404) {
+                    throw new Error(`Project delete failed (${response.status})`);
+                }
+
+                projects = projects.filter(p => p.id !== deleteId);
+                saveToLocalStorage();
+                handleSearch();
+                closeDeleteConfirmModal(true);
+                showToast(dictionary[currentLang].toastDeleted, "success");
+            } catch (error) {
+                console.error('[MeasureNavi] Project delete failed.', error);
+                showToast("Project deletion failed. Please try again.", "error");
+            } finally {
+                isDeleteSubmitting = false;
+                setDeleteSubmitting(false);
+            }
         }
 
         // 新建 / 编辑 — 统一提交处理
         async function submitProjectForm(e) {
             e.preventDefault();
+            if (isProjectFormSubmitting) return;
 
             const nameInput = document.getElementById("projectName").value.trim();
             const titleInput = document.getElementById("projectTitle").value.trim();
             const editId = document.getElementById("editProjectId").value;
+            const isEdit = !!editId;
+
+            isProjectFormSubmitting = true;
+            setProjectFormSubmitting(true, isEdit);
+            showToast(isEdit ? "Saving project..." : "Creating project...", "info");
+
+            try {
 
             let finalCover = "";
             let coverType = "gradient";
@@ -1388,7 +1457,7 @@
                 }
                 saveToLocalStorage();
                 handleSearch();
-                closeCreateModal();
+                closeCreateModal(true);
                 showToast(dictionary[currentLang].toastRenamed, "success");
             } else {
                 // 新建模式
@@ -1404,8 +1473,15 @@
                 projects.unshift(newProject);
                 saveToLocalStorage();
                 handleSearch();
-                closeCreateModal();
+                closeCreateModal(true);
                 showToast(dictionary[currentLang].toastCreated, "success");
+            }
+            } catch (error) {
+                console.error('[MeasureNavi] Project save failed.', error);
+                showToast(isEdit ? "Project update failed. Please try again." : "Project creation failed. Please try again.", "error");
+            } finally {
+                isProjectFormSubmitting = false;
+                setProjectFormSubmitting(false, isEdit);
             }
         }
 
@@ -1430,12 +1506,15 @@
             if (type === 'info') {
                 iconClass = "fa-solid fa-circle-info text-blue-500";
                 bgBorder = "bg-white border-l-4 border-blue-500";
+            } else if (type === 'error') {
+                iconClass = "fa-solid fa-circle-exclamation text-rose-500";
+                bgBorder = "bg-white border-l-4 border-rose-500";
             }
 
             toast.className = `${bgBorder} flex items-center gap-3 px-4 py-3 rounded-lg shadow-xl border border-slate-100 max-w-sm transform translate-y-2 opacity-0 transition-all duration-300 ease-out`;
             toast.innerHTML = `
                 <i class="${iconClass}"></i>
-                <span class="text-xs font-semibold text-slate-700">${message}</span>
+                <span class="text-xs font-semibold text-slate-700">${escapeHTML(String(message))}</span>
             `;
 
             container.appendChild(toast);
@@ -1459,6 +1538,7 @@
             if (!modal || !frame) return;
             frame.src = "/import-dxf";
             modal.classList.remove("hidden");
+            showToast("Import DXF opened.", "info");
         }
 
         function closeImportDxfModal() {
@@ -1477,6 +1557,7 @@
             }
             if (data.type !== "pascal:dxf-import-complete" || !data.target) return;
             closeImportDxfModal();
+            showToast("DXF import completed.", "success");
             window.location.href = data.target;
         });
 
