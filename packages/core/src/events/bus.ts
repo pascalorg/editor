@@ -220,6 +220,14 @@ type AIChatEvents = {
   }
 }
 
+export interface RoomPresetCreateEvent {
+  zoneId: ZoneNode['id']
+}
+
+type RoomPresetEvents = {
+  'room-preset:create': RoomPresetCreateEvent
+}
+
 type EditorEvents = GridEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
@@ -260,6 +268,7 @@ type EditorEvents = GridEvents &
   WindowAnimationEvents &
   ThumbnailEvents &
   SnapshotEvents &
-  AIChatEvents
+  AIChatEvents &
+  RoomPresetEvents
 
 export const emitter = mitt<EditorEvents>()

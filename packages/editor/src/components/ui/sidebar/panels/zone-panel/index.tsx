@@ -1,6 +1,6 @@
 import { emitter, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Camera, Hexagon, Trash2 } from 'lucide-react'
+import { Camera, Hexagon, Save, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
@@ -125,6 +125,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
 export function ZonePanel() {
   const nodes = useScene((state) => state.nodes)
   const currentLevelId = useViewer((state) => state.selection.levelId)
+  const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const setPhase = useEditor((state) => state.setPhase)
   const setMode = useEditor((state) => state.setMode)
   const setTool = useEditor((state) => state.setTool)
@@ -133,6 +134,7 @@ export function ZonePanel() {
   const levelZones = Object.values(nodes).filter(
     (node): node is ZoneNode => node.type === 'zone' && node.parentId === currentLevelId,
   )
+  const selectedZone = levelZones.find((zone) => zone.id === selectedZoneId)
 
   const handleAddZone = () => {
     if (currentLevelId) {
@@ -162,6 +164,18 @@ export function ZonePanel() {
       ) : (
         levelZones.map((zone) => <ZoneItem key={zone.id} zone={zone} />)
       )}
+      {selectedZone ? (
+        <div className="px-2 pt-2">
+          <button
+            className="flex h-8 w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 font-medium text-foreground text-xs shadow-xs transition-colors hover:bg-accent"
+            onClick={() => emitter.emit('room-preset:create', { zoneId: selectedZone.id })}
+            type="button"
+          >
+            <Save className="h-3.5 w-3.5" />
+            Save to catalog
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }
