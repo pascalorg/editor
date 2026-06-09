@@ -19,6 +19,7 @@
     "@pascal-app/mcp": "*",
     "@pascal-app/nodes": "*",
     "@pascal-app/viewer": "*",
+    "@photo-sphere-viewer/core": "^5.14.1",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",

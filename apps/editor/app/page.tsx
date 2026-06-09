@@ -1,12 +1,13 @@
 'use client'
 
 import { AddCatalogPanel, Editor, ItemsPanel } from '@pascal-app/editor'
-import { Bot, Layers, Package, Plus, Settings } from 'lucide-react'
+import { Bot, Images, Layers, Package, Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AiAssistantPanel } from '@/components/ai-assistant-bubble'
+import { PanoramaWalkthroughPanel } from '@/components/panorama-walkthrough-panel'
 import { ImportDxfTool } from '@/components/tools/ImportDxfTool'
 import {
   CommunityViewerToolbarLeft,
@@ -14,6 +15,13 @@ import {
 } from '@/components/viewer-toolbar'
 
 const SIDEBAR_TABS = [
+  {
+    id: 'ai-assistant',
+    label: 'AI',
+    component: AiAssistantPanel,
+    mobileDefaultSnap: 0.8,
+    mobileIcon: <Bot className="h-5 w-5" />,
+  },
   {
     id: 'site',
     label: 'Scene',
@@ -36,11 +44,11 @@ const SIDEBAR_TABS = [
     mobileIcon: <Plus className="h-5 w-5" />,
   },
   {
-    id: 'ai-assistant',
-    label: 'AI',
-    component: AiAssistantPanel,
-    mobileDefaultSnap: 0.8,
-    mobileIcon: <Bot className="h-5 w-5" />,
+    id: 'panorama',
+    label: 'Panorama',
+    component: PanoramaWalkthroughPanel,
+    mobileDefaultSnap: 0.7,
+    mobileIcon: <Images className="h-5 w-5" />,
   },
   {
     id: 'settings',

@@ -11,12 +11,13 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
-import { Bot, Layers, Package, Plus, Settings } from 'lucide-react'
+import { Bot, Images, Layers, Package, Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AiAssistantPanel } from './ai-assistant-bubble'
+import { PanoramaWalkthroughPanel } from './panorama-walkthrough-panel'
 import { ImportDxfTool } from './tools/ImportDxfTool'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
@@ -34,6 +35,13 @@ export interface SceneMeta {
 }
 
 const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
+  {
+    id: 'ai-assistant',
+    label: 'AI',
+    component: AiAssistantPanel,
+    mobileDefaultSnap: 0.8,
+    mobileIcon: <Bot className="h-5 w-5" />,
+  },
   {
     id: 'site',
     label: 'Scene',
@@ -56,11 +64,11 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
     mobileIcon: <Plus className="h-5 w-5" />,
   },
   {
-    id: 'ai-assistant',
-    label: 'AI',
-    component: AiAssistantPanel,
-    mobileDefaultSnap: 0.8,
-    mobileIcon: <Bot className="h-5 w-5" />,
+    id: 'panorama',
+    label: 'Panorama',
+    component: PanoramaWalkthroughPanel,
+    mobileDefaultSnap: 0.7,
+    mobileIcon: <Images className="h-5 w-5" />,
   },
   {
     id: 'settings',
@@ -105,6 +113,15 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [dxfOpen, setDxfOpen] = useState(false)
+  const sidebarTabs = useMemo(
+    () =>
+      SIDEBAR_TABS.map((tab) =>
+        tab.id === 'panorama'
+          ? { ...tab, component: () => <PanoramaWalkthroughPanel sceneId={meta.id} /> }
+          : tab,
+      ),
+    [meta.id],
+  )
 
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
@@ -285,7 +302,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         onSave={handleSave}
         onThumbnailCapture={handleThumb}
         projectId={meta.projectId ?? 'default'}
-        sidebarTabs={SIDEBAR_TABS}
+        sidebarTabs={sidebarTabs}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
       />

@@ -3,6 +3,7 @@ import { GeistPixelSquare } from 'geist/font/pixel'
 import { Barlow } from 'next/font/google'
 import localFont from 'next/font/local'
 import { ClientBootstrap } from './client-bootstrap'
+import '@photo-sphere-viewer/core/index.css'
 import './globals.css'
 
 const geistSans = localFont({
