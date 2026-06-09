@@ -3030,20 +3030,20 @@ const FloorplanGridLayer = memo(function FloorplanGridLayer({
       <path
         d={minorGridPath}
         fill="none"
-        opacity={palette.majorGridOpacity}
+        opacity={palette.minorGridOpacity}
         shapeRendering="crispEdges"
-        stroke={palette.majorGrid}
-        strokeWidth={FLOORPLAN_MAJOR_GRID_STROKE_WIDTH}
+        stroke={palette.minorGrid}
+        strokeWidth={FLOORPLAN_MINOR_GRID_STROKE_WIDTH}
         vectorEffect="non-scaling-stroke"
       />
 
       <path
         d={majorGridPath}
         fill="none"
-        opacity={palette.minorGridOpacity}
+        opacity={palette.majorGridOpacity}
         shapeRendering="crispEdges"
-        stroke={palette.minorGrid}
-        strokeWidth={FLOORPLAN_MINOR_GRID_STROKE_WIDTH}
+        stroke={palette.majorGrid}
+        strokeWidth={FLOORPLAN_MAJOR_GRID_STROKE_WIDTH}
         vectorEffect="non-scaling-stroke"
       />
     </>
@@ -4183,6 +4183,7 @@ export function FloorplanPanel() {
   const updateNode = useScene((state) => state.updateNode)
   const {
     buildingPosition,
+    committedBuildingPosition,
     buildingRotationY,
     ceilings,
     currentBuildingId,
@@ -4238,6 +4239,17 @@ export function FloorplanPanel() {
   )
   const buildingRotationDeg = (buildingRotationY * 180) / Math.PI
   const floorplanSceneRotationDeg = FLOORPLAN_VIEW_ROTATION_DEG - buildingRotationDeg
+  // Live-translate the SVG scene group when a 3D building move is in
+  // progress. The world→SVG mapping in this panel is `SVG_x = bz - worldZ,
+  // SVG_y = worldX - bx`, so the delta from committed → live position
+  // becomes `(bz_committed - bz_live, x_live - x_committed)` in SVG units.
+  // Building-local content is otherwise rendered relative to the committed
+  // origin, so without this translate the 2D plan stays put while the 3D
+  // mesh slides around.
+  const floorplanSceneTranslateX = committedBuildingPosition[2] - buildingPosition[2]
+  const floorplanSceneTranslateY = buildingPosition[0] - committedBuildingPosition[0]
+  const floorplanSceneHasTranslate =
+    floorplanSceneTranslateX !== 0 || floorplanSceneTranslateY !== 0
 
   const [draftStart, setDraftStart] = useState<WallPlanPoint | null>(null)
   const [draftEnd, setDraftEnd] = useState<WallPlanPoint | null>(null)
@@ -7738,6 +7750,7 @@ export function FloorplanPanel() {
         angleSnap: !!draftStart && !shiftPressed,
         step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
         gridSnap: worldGridSnap,
+        buildingRotationY,
       })
       const gridBase = worldGridSnap(planPoint)
       const lockedToWall = wallSnapped[0] !== gridBase[0] || wallSnapped[1] !== gridBase[1]
@@ -7745,7 +7758,7 @@ export function FloorplanPanel() {
       if (lockedToWall) {
         useAlignmentGuides.getState().clear()
       } else {
-        snappedPoint = alignFloorplanDraftPoint(wallSnapped, { bypass: event.altKey })
+        snappedPoint = alignFloorplanDraftPoint(wallSnapped, { bypass: false })
       }
 
       // Emit `grid:move` so the registry-driven wall tool's 3D preview
@@ -7947,7 +7960,7 @@ export function FloorplanPanel() {
   )
 
   const handleWallPlacementPoint = useCallback(
-    (point: WallPlanPoint) => {
+    (point: WallPlanPoint, options?: { singleWall?: boolean }) => {
       if (!draftStart) {
         setDraftStart(point)
         setDraftEnd(point)
@@ -7960,24 +7973,22 @@ export function FloorplanPanel() {
       }
 
       // The 3D wall tool's `grid:click` listener
-      // (`packages/nodes/src/wall/tool.tsx`) owns the wall-create
-      // call. `emitFloorplanGridEvent('click', …)` in
-      // `useFloorplanBackgroundPlacement` fires it synchronously
-      // just before this callback runs, so by the time we get here
-      // the wall already exists in the scene.
-      //
-      // We still attempt the create as a fallback in case the 3D
-      // tool isn't mounted (unusual — both views are always
-      // mounted today, but defensive). When the wall already
-      // exists `createWallOnCurrentLevel` returns null via its
-      // duplicate-detection branch; we treat that as "the 3D side
-      // committed" and chain the draft state forward instead of
-      // clearing it (the previous behaviour caused the 2nd-segment
-      // draft to silently break after click 2).
-      const createdWall = createWallOnCurrentLevel(draftStart, point)
-      const nextStart: WallPlanPoint = createdWall
-        ? [createdWall.end[0], createdWall.end[1]]
-        : point
+      // (`packages/nodes/src/wall/tool.tsx`) is the sole authority for
+      // wall creation. `emitFloorplanGridEvent('click', …)` fires it
+      // synchronously just before this callback runs. We only chain
+      // the 2D draft state forward; calling `createWallOnCurrentLevel`
+      // here caused duplicate walls when the 3D path's re-snap landed
+      // on a different point than the 2D-aligned endpoint.
+      const nextStart: WallPlanPoint = point
+
+      // Alt-click commits one wall and exits the chain (parity with 3D).
+      if (options?.singleWall) {
+        setDraftStart(null)
+        setDraftEnd(null)
+        setCursorPoint(nextStart)
+        return
+      }
+
       setDraftStart(nextStart)
       setDraftEnd(nextStart)
       setCursorPoint(nextStart)
@@ -9197,9 +9208,18 @@ export function FloorplanPanel() {
             <g
               data-floorplan-scene=""
               ref={floorplanSceneRef}
-              transform={
-                floorplanSceneRotationDeg !== 0 ? `rotate(${floorplanSceneRotationDeg})` : undefined
-              }
+              transform={(() => {
+                const parts: string[] = []
+                if (floorplanSceneHasTranslate) {
+                  parts.push(
+                    `translate(${floorplanSceneTranslateX} ${floorplanSceneTranslateY})`,
+                  )
+                }
+                if (floorplanSceneRotationDeg !== 0) {
+                  parts.push(`rotate(${floorplanSceneRotationDeg})`)
+                }
+                return parts.length > 0 ? parts.join(' ') : undefined
+              })()}
             >
               <FloorplanReferenceFloorLayer
                 data={referenceFloorData}
@@ -9450,8 +9470,13 @@ export function FloorplanPanel() {
                 world → SVG via a fixed 90° rotation around the
                 building's world position, which keeps lines parallel
                 to the world-axis grid regardless of building rotation. */}
+            {/* World→SVG projection is anchored to the committed building
+                position so guides stay locked to their world XZ coords
+                while the building slides past them mid-drag. The scene
+                group's live translate (above) handles the building's own
+                motion. */}
             <FloorplanAlignmentGuideLayer
-              buildingWorldPos={buildingPosition}
+              buildingWorldPos={committedBuildingPosition}
               unitsPerPixel={floorplanUnitsPerPixel}
             />
           </svg>

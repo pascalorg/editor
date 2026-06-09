@@ -163,11 +163,20 @@ export function resolveAlignment(input: ResolveAlignmentInput): ResolveAlignment
   const { moving, candidates, threshold } = input
   if (threshold <= 0 || moving.length === 0 || candidates.length === 0) return EMPTY
 
-  // Best match per axis: smallest |Δ| on the matched axis (tightest
-  // alignment), then — crucially — tie-break to the candidate anchor NEAREST
-  // on the perpendicular axis. Anchors are real points (corners / endpoints /
-  // midpoints), so the guide always connects to the closest actual point of
-  // the candidate, never a far one that merely shares the same coordinate.
+  // Best match per axis: among all candidate anchors within `threshold` of
+  // the moving anchor on the matched axis, pick the one CLOSEST in the
+  // perpendicular direction — so the guide always connects to the visually
+  // nearest actual point of the candidate. Primary delta only breaks perp
+  // ties.
+  //
+  // Why perp-first: a wall pre-rotation contributes anchors that share an
+  // exact X (vertical wall) or Z (horizontal wall), so primary deltas tie
+  // and perp picks the nearer endpoint. Post-rotation, the same wall's
+  // anchors are at slightly-different world coordinates after a float
+  // rotation — primary deltas differ by tiny amounts and a primary-first
+  // tie-break would lock onto whichever happens to be marginally tighter,
+  // often the far endpoint. Perp-first keeps the "closest point of
+  // reference" behaviour stable through rotation.
   type Best = {
     delta: number
     primary: number
@@ -186,13 +195,13 @@ export function resolveAlignment(input: ResolveAlignmentInput): ResolveAlignment
       const adz = Math.abs(dz)
       if (
         adx <= threshold &&
-        (bestX === null || adx < bestX.primary || (adx === bestX.primary && adz < bestX.perp))
+        (bestX === null || adz < bestX.perp || (adz === bestX.perp && adx < bestX.primary))
       ) {
         bestX = { delta: dx, primary: adx, perp: adz, m, c }
       }
       if (
         adz <= threshold &&
-        (bestZ === null || adz < bestZ.primary || (adz === bestZ.primary && adx < bestZ.perp))
+        (bestZ === null || adx < bestZ.perp || (adx === bestZ.perp && adz < bestZ.primary))
       ) {
         bestZ = { delta: dz, primary: adz, perp: adx, m, c }
       }

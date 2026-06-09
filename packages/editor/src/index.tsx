@@ -168,6 +168,7 @@ export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
 export { markToolCancelConsumed } from './hooks/use-keyboard'
 export { type Selection, useSelection } from './hooks/use-selection'
+export { getBuildingLocalBboxCenter } from './lib/building-pivot'
 export { EDITOR_LAYER } from './lib/constants'
 // Helper libs used by the kind-owned roof / stair / elevator panels.
 export {

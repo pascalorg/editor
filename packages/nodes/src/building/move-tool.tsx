@@ -8,7 +8,13 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { CursorSphere, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  getBuildingLocalBboxCenter,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -37,17 +43,22 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
   const [cursorWorldPos, setCursorWorldPos] = useState<[number, number, number]>(() => {
     const obj = sceneRegistry.nodes.get(node.id)
     if (obj) {
-      const box = new THREE.Box3().setFromObject(obj)
-      if (!box.isEmpty()) {
-        const center = box.getCenter(new THREE.Vector3())
+      // Use the rotation-INVARIANT local bbox center, not the world AABB
+      // center. Walk descendants and union their geometry bounds in the
+      // building's local frame so the pivot point is the same regardless
+      // of which rotation the building happens to be at right now.
+      const localCenter = getBuildingLocalBboxCenter(obj)
+      if (localCenter) {
+        centerOffsetLocalRef.current.copy(localCenter)
+        const originalRotation = node.rotation[1] ?? 0
+        const cos = Math.cos(originalRotation)
+        const sin = Math.sin(originalRotation)
         const originWorld = new THREE.Vector3()
         obj.getWorldPosition(originWorld)
-        const originalRotation = node.rotation[1] ?? 0
-        centerOffsetLocalRef.current = center
-          .clone()
-          .sub(originWorld)
-          .applyAxisAngle(Y_AXIS, -originalRotation)
-        return [center.x, 0, center.z]
+        // World position of the local-centroid at the current rotation.
+        const wx = originWorld.x + localCenter.x * cos + localCenter.z * sin
+        const wz = originWorld.z - localCenter.x * sin + localCenter.z * cos
+        return [wx, 0, wz]
       }
       const pos = new THREE.Vector3()
       obj.getWorldPosition(pos)
@@ -94,21 +105,25 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
       if (rotationDelta !== 0) {
         event.preventDefault()
         triggerSFX('sfx:item-rotate')
-        pendingRotationRef.current += rotationDelta
+        const oldRotation = pendingRotationRef.current
+        const newRotation = oldRotation + rotationDelta
+        pendingRotationRef.current = newRotation
 
         const mesh = sceneRegistry.nodes.get(nodeId)
         if (mesh) {
-          mesh.rotation.y = pendingRotationRef.current
-          // Keep the bbox center pinned to the cursor through rotation.
-          if (previousGridPosRef.current) {
-            const [gridX, gridZ] = previousGridPosRef.current
-            const off = offsetAt(pendingRotationRef.current)
-            mesh.position.x = gridX - off.x
-            mesh.position.z = gridZ - off.z
-            publishLive(mesh.position.x, mesh.position.z, pendingRotationRef.current)
-          } else {
-            publishLive(mesh.position.x, mesh.position.z, pendingRotationRef.current)
-          }
+          // Always pivot around the building's current world bbox center —
+          // never around the origin. Capture the pivot from the mesh's
+          // current pose (origin + offset rotated by the old rotation),
+          // then re-anchor so that same world point stays fixed through
+          // the rotation.
+          const offOld = offsetAt(oldRotation)
+          const pivotX = mesh.position.x + offOld.x
+          const pivotZ = mesh.position.z + offOld.z
+          const offNew = offsetAt(newRotation)
+          mesh.rotation.y = newRotation
+          mesh.position.x = pivotX - offNew.x
+          mesh.position.z = pivotZ - offNew.z
+          publishLive(mesh.position.x, mesh.position.z, newRotation)
         }
       }
     }
@@ -138,15 +153,20 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
     }
 
     const onGridClick = (event: GridEvent) => {
-      const gridX = Math.round(event.position[0] * 2) / 2
-      const gridZ = Math.round(event.position[2] * 2) / 2
-
       wasCommitted = true
 
-      const off = offsetAt(pendingRotationRef.current)
+      // Commit the exact pose the mesh is showing right now. Recomputing
+      // `gridX - off.x` from the click event would diverge from the last
+      // `onGridMove`/`onKeyDown` write whenever the click event's cursor
+      // position rounds to a different cell — visible snap on release.
+      const mesh = sceneRegistry.nodes.get(nodeId)
+      const finalPos: [number, number, number] = mesh
+        ? [mesh.position.x, originalPosition[1], mesh.position.z]
+        : [originalPosition[0], originalPosition[1], originalPosition[2]]
+
       useScene.temporal.getState().resume()
       useScene.getState().updateNode(nodeId, {
-        position: [gridX - off.x, originalPosition[1], gridZ - off.z],
+        position: finalPos,
         rotation: [0, pendingRotationRef.current, 0],
       })
       useScene.temporal.getState().pause()
