@@ -42,7 +42,6 @@ type CornerBracketData = {
   outgoingDirection: [number, number]
   incomingLength: number
   outgoingLength: number
-  cornerStrength: number
 }
 
 type CornerDragState = {
@@ -135,6 +134,13 @@ const CeilingSelectionAffordance = ({
   levelId: string
 }) => {
   const { camera, gl } = useThree()
+  const liveOverride = useLiveNodeOverrides(
+    (state) => state.overrides.get(ceiling.id) as Partial<CeilingNode> | undefined,
+  )
+  const effectiveCeiling = useMemo(
+    () => (liveOverride ? ({ ...ceiling, ...liveOverride } as CeilingNode) : ceiling),
+    [ceiling, liveOverride],
+  )
   const [levelObject, setLevelObject] = useState<Object3D | null>(
     () => sceneRegistry.nodes.get(levelId) ?? null,
   )
@@ -151,7 +157,7 @@ const CeilingSelectionAffordance = ({
   const intersectionRef = useRef(new Vector3())
   const localIntersectionRef = useRef(new Vector3())
 
-  const displayPolygon = previewPolygon ?? ceiling.polygon
+  const displayPolygon = previewPolygon ?? effectiveCeiling.polygon
   const activeCornerIndex = draggedCornerIndex ?? hoveredCornerIndex
   const corners = useMemo(() => buildCornerBrackets(displayPolygon), [displayPolygon])
   const highlightedEdgeIndices = useMemo(() => {
@@ -173,13 +179,13 @@ const CeilingSelectionAffordance = ({
   useEffect(() => {
     if (activeCornerIndex === null) return
 
-    useViewer.getState().setHoveredId(ceiling.id)
+    useViewer.getState().setHoveredId(effectiveCeiling.id)
     return () => {
-      if (useViewer.getState().hoveredId === ceiling.id) {
+      if (useViewer.getState().hoveredId === effectiveCeiling.id) {
         useViewer.getState().setHoveredId(null)
       }
     }
-  }, [activeCornerIndex, ceiling.id])
+  }, [activeCornerIndex, effectiveCeiling.id])
 
   const selectCeilingForEdit = useCallback(() => {
     const editor = useEditor.getState()
@@ -188,8 +194,8 @@ const CeilingSelectionAffordance = ({
     editor.setCurvingWall(null)
     editor.setEditingHole(null)
     editor.setMode('select')
-    useViewer.getState().setSelection({ selectedIds: [ceiling.id] })
-  }, [ceiling.id])
+    useViewer.getState().setSelection({ selectedIds: [effectiveCeiling.id] })
+  }, [effectiveCeiling.id])
 
   const getHandlePlanePoint = useCallback(
     (event: MouseEvent | PointerEvent): [number, number] | null => {
@@ -202,7 +208,7 @@ const CeilingSelectionAffordance = ({
       )
       raycasterRef.current.setFromCamera(ndcRef.current, camera)
 
-      planePointRef.current.set(0, (ceiling.height ?? 2.5) + BRACKET_Y_OFFSET, 0)
+      planePointRef.current.set(0, (effectiveCeiling.height ?? 2.5) + BRACKET_Y_OFFSET, 0)
       levelObject.localToWorld(planePointRef.current)
 
       planeOriginRef.current.set(0, 0, 0)
@@ -219,7 +225,7 @@ const CeilingSelectionAffordance = ({
       levelObject.worldToLocal(localIntersectionRef.current)
       return [localIntersectionRef.current.x, localIntersectionRef.current.z]
     },
-    [camera, ceiling.height, gl.domElement, levelObject],
+    [camera, effectiveCeiling.height, gl.domElement, levelObject],
   )
 
   const handleCornerPointerDown = useCallback(
@@ -229,14 +235,14 @@ const CeilingSelectionAffordance = ({
 
       const startPlanePosition = getHandlePlanePoint(event.nativeEvent)
       if (!startPlanePosition) return
-      const initialCorner = ceiling.polygon[corner.index]
+      const initialCorner = effectiveCeiling.polygon[corner.index]
       if (!initialCorner) return
 
       dragRef.current = {
-        ceilingId: ceiling.id,
+        ceilingId: effectiveCeiling.id,
         cornerIndex: corner.index,
         didDrag: false,
-        initialPolygon: ceiling.polygon.map(([x, z]) => [x, z] as [number, number]),
+        initialPolygon: effectiveCeiling.polygon.map(([x, z]) => [x, z] as [number, number]),
         inputDraggingSet: false,
         pointerId: event.pointerId,
         previewPolygon: null,
@@ -247,13 +253,13 @@ const CeilingSelectionAffordance = ({
         startPlanePosition,
       }
     },
-    [ceiling.id, ceiling.polygon, getHandlePlanePoint],
+    [effectiveCeiling.id, effectiveCeiling.polygon, getHandlePlanePoint],
   )
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
       const drag = dragRef.current
-      if (!drag || drag.ceilingId !== ceiling.id) return
+      if (!drag || drag.ceilingId !== effectiveCeiling.id) return
       if (event.pointerId !== drag.pointerId) return
 
       const dragDistance = Math.hypot(
@@ -344,11 +350,11 @@ const CeilingSelectionAffordance = ({
       window.removeEventListener('pointercancel', cancelDrag, true)
 
       const drag = dragRef.current
-      if (!drag || drag.ceilingId !== ceiling.id) return
+      if (!drag || drag.ceilingId !== effectiveCeiling.id) return
       dragRef.current = null
       clearCornerDragPreview(drag)
     }
-  }, [ceiling.id, getHandlePlanePoint, selectCeilingForEdit])
+  }, [effectiveCeiling.id, getHandlePlanePoint, selectCeilingForEdit])
 
   useEffect(() => {
     let frameId = 0
@@ -379,10 +385,10 @@ const CeilingSelectionAffordance = ({
   if (!levelObject || corners.length === 0) return null
 
   return createPortal(
-    <group position={[0, (ceiling.height ?? 2.5) + BRACKET_Y_OFFSET, 0]}>
+    <group position={[0, (effectiveCeiling.height ?? 2.5) + BRACKET_Y_OFFSET, 0]}>
       {corners.map((corner, index) => (
         <CornerBracket
-          ceiling={ceiling}
+          ceiling={effectiveCeiling}
           corner={corner}
           highlightIncoming={highlightedEdgeIndices.has(corner.incomingEdgeIndex)}
           highlightOutgoing={highlightedEdgeIndices.has(corner.outgoingEdgeIndex)}
@@ -514,7 +520,7 @@ const BracketLeg = ({
   onHoverChange: (hovered: boolean) => void
   onPointerDown: (event: ThreeEvent<PointerEvent>) => void
 }) => {
-  const angle = Math.atan2(direction[1], direction[0])
+  const angle = -Math.atan2(direction[1], direction[0])
   const position: [number, number, number] = [
     direction[0] * (length / 2),
     0,
@@ -553,7 +559,7 @@ const BracketLeg = ({
 function buildCornerBrackets(polygon: Array<[number, number]>): CornerBracketData[] {
   if (polygon.length < 3) return []
 
-  const allCorners = polygon.map((corner, index) => {
+  return polygon.map((corner, index) => {
     const previous = polygon[(index - 1 + polygon.length) % polygon.length]!
     const next = polygon[(index + 1) % polygon.length]!
     const incomingVector = [previous[0] - corner[0], previous[1] - corner[1]] as [number, number]
@@ -563,11 +569,6 @@ function buildCornerBrackets(polygon: Array<[number, number]>): CornerBracketDat
 
     const incomingLength = Math.hypot(incomingVector[0], incomingVector[1])
     const outgoingLength = Math.hypot(outgoingVector[0], outgoingVector[1])
-    const cornerStrength =
-      1 -
-      Math.abs(
-        incomingDirection[0] * outgoingDirection[0] + incomingDirection[1] * outgoingDirection[1],
-      )
 
     return {
       corner,
@@ -578,23 +579,8 @@ function buildCornerBrackets(polygon: Array<[number, number]>): CornerBracketDat
       outgoingDirection,
       incomingLength: getBracketLength(incomingLength),
       outgoingLength: getBracketLength(outgoingLength),
-      cornerStrength,
     }
   })
-
-  if (allCorners.length <= 4) {
-    return allCorners
-  }
-
-  const selectedIndices = new Set(
-    allCorners
-      .map((corner, index) => ({ index, strength: corner.cornerStrength }))
-      .sort((a, b) => b.strength - a.strength)
-      .slice(0, 4)
-      .map(({ index }) => index),
-  )
-
-  return allCorners.filter((_, index) => selectedIndices.has(index))
 }
 
 function normalize2D(vector: [number, number]): [number, number] {
