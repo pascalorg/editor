@@ -65,6 +65,7 @@ interface PanelWrapperProps {
   footer?: React.ReactNode
   className?: string
   width?: number | string
+  defaultCollapsed?: boolean
 }
 
 export function PanelWrapper({
@@ -77,6 +78,7 @@ export function PanelWrapper({
   footer,
   className,
   width = 320, // default width
+  defaultCollapsed = true,
 }: PanelWrapperProps) {
   const isMobile = useIsMobile()
   const contextFooter = useContext(InspectorFooterContext)
@@ -86,7 +88,7 @@ export function PanelWrapper({
 
   // The whole panel is collapsed to just its header by default; the chevron
   // expands it to reveal the inspector body.
-  const [collapsed, setCollapsed] = useState(true)
+  const [collapsed, setCollapsed] = useState(defaultCollapsed)
 
   // Drag-to-reposition from the header. `offset` is a translation applied on
   // top of the default `top-20 right-4` anchor; null until first dragged.
