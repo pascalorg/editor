@@ -17,26 +17,20 @@ import {
   type SlabNode,
   type StairNode,
   type StairSegmentNode,
-  emitter,
   useScene,
   type WallNode,
   type WindowNode,
-  type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Save } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
-import { ActionButton } from '../controls/action-button'
-import { PanelSection } from '../controls/panel-section'
 import { MobilePanelSheet } from './mobile-panel-sheet'
 import { MobileSelectionBar } from './mobile-selection-bar'
 import { getNodeDisplay } from './node-display'
 import { PaintPanel } from './paint-panel'
 import { ParametricInspector } from './parametric-inspector'
-import { PanelWrapper } from './panel-wrapper'
 import { ReferencePanel } from './reference-panel'
 
 type MovableNode =
@@ -91,37 +85,6 @@ function panelForType(type: string | null, footer?: React.ReactNode) {
   // reference scale, paint mode); leave the function shape intact.
   void type
   return <ParametricInspector footer={footer} />
-}
-
-function ZoneInspectorPanel({ zoneId }: { zoneId: ZoneNode['id'] }) {
-  const zone = useScene((s) => s.nodes[zoneId as AnyNodeId] as ZoneNode | undefined)
-  const setSelection = useViewer((s) => s.setSelection)
-
-  const handleClose = useCallback(() => {
-    setSelection({ zoneId: null })
-  }, [setSelection])
-
-  if (!zone) return null
-
-  return (
-    <PanelWrapper
-      defaultCollapsed={false}
-      icon="/icons/kitchen.png"
-      onClose={handleClose}
-      title={zone.name || 'Zone'}
-      width={320}
-    >
-      <PanelSection title="Actions">
-        <ActionButton
-          className="w-full"
-          icon={<Save className="h-4 w-4" />}
-          label="Save room as preset"
-          onClick={() => emitter.emit('room-preset:create', { zoneId: zone.id })}
-          type="button"
-        />
-      </PanelSection>
-    </PanelWrapper>
-  )
 }
 
 function MobilePanelLayer({
@@ -209,6 +172,7 @@ export function PanelManager({ inspectorFooter }: { inspectorFooter?: React.Reac
   const isMobile = useIsMobile()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const selectedZoneId = useViewer((s) => s.selection.zoneId)
+  const setSelection = useViewer((s) => s.setSelection)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const isPaintPanelOpen = useEditor((s) => s.isPaintPanelOpen)
   const mode = useEditor((s) => s.mode)
@@ -254,7 +218,14 @@ export function PanelManager({ inspectorFooter }: { inspectorFooter?: React.Reac
   }
 
   if (selectedZoneId && selectedIds.length === 0) {
-    return <ZoneInspectorPanel key={selectedZoneId} zoneId={selectedZoneId} />
+    return (
+      <ParametricInspector
+        footer={inspectorFooter}
+        key={selectedZoneId}
+        nodeId={selectedZoneId as AnyNodeId}
+        onClose={() => setSelection({ zoneId: null })}
+      />
+    )
   }
 
   return panelForType(selectedNodeType, inspectorFooter)

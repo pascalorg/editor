@@ -38,8 +38,15 @@ import { InspectorFooterContext, PanelWrapper } from './panel-wrapper'
  * `parametrics.customPanel?` escape hatch for kinds whose parametric editor
  * can't be auto-generated (topology editors etc.).
  */
-export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {}) {
-  const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
+export function ParametricInspector({
+  footer,
+  nodeId,
+  onClose,
+}: { footer?: React.ReactNode; nodeId?: AnyNodeId; onClose?: () => void } = {}) {
+  const selectedIdFromSelection = useViewer((s) => s.selection.selectedIds[0]) as
+    | AnyNodeId
+    | undefined
+  const selectedId = nodeId ?? selectedIdFromSelection
   const setSelection = useViewer((s) => s.setSelection)
   // Subscribe only to the *type* — a string primitive that doesn't change
   // when slider values change. Without this, every updateNode tick during
@@ -58,9 +65,13 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
     [selectedId],
   )
 
-  const handleClose = useCallback(() => {
+  const clearSelection = useCallback(() => {
+    if (onClose) {
+      onClose()
+      return
+    }
     setSelection({ selectedIds: [] })
-  }, [setSelection])
+  }, [onClose, setSelection])
 
   const handleMove = useCallback(() => {
     if (!selectedId) return
@@ -68,15 +79,15 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
     if (!node) return
     sfxEmitter.emit('sfx:item-pick')
     useEditor.getState().setMovingNode(node as any)
-    setSelection({ selectedIds: [] })
-  }, [selectedId, setSelection])
+    clearSelection()
+  }, [selectedId, clearSelection])
 
   const handleDelete = useCallback(() => {
     if (!selectedId) return
     sfxEmitter.emit('sfx:structure-delete')
     useScene.getState().deleteNode(selectedId)
-    setSelection({ selectedIds: [] })
-  }, [selectedId, setSelection])
+    clearSelection()
+  }, [selectedId, clearSelection])
 
   if (!selectedId || !def || !parametrics) return null
 
@@ -110,7 +121,13 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
     : null
 
   return (
-    <PanelWrapper footer={footer} icon={iconNode} onClose={handleClose} title={title} width={320}>
+    <PanelWrapper
+      footer={footer}
+      icon={iconNode}
+      onClose={clearSelection}
+      title={title}
+      width={320}
+    >
       {parametrics.groups.map((group, gi) => (
         <PanelSection key={`group-${gi}`} title={group.label}>
           {group.fields.map((field, fi) => (
