@@ -19,7 +19,6 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import {
   memo,
@@ -31,6 +30,7 @@ import {
   useState,
 } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useEditor from '../../../store/use-editor'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
@@ -603,6 +603,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         }
         drag.session.commit()
         sfxEmitter.emit('sfx:structure-build')
+        clearSurfacePlanSnapFeedback()
         dragRef.current = null
         setActiveDragId(null)
         setRotationOverlay(null)
@@ -654,6 +655,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         for (const id of drag.session.affectedIds) overrides.clear(id)
       }
 
+      clearSurfacePlanSnapFeedback()
       dragRef.current = null
       setActiveDragId(null)
       setRotationOverlay(null)
@@ -672,7 +674,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       // Affordances that publish Figma alignment guides during `apply`
       // (fence endpoint) leave them in the store on cancel — `canCommit`
       // (the pointer-up clear) never runs on a cancel.
-      useAlignmentGuides.getState().clear()
+      clearSurfacePlanSnapFeedback()
       // Drop any live overrides the session may have published. No-op
       // for affordances whose `apply()` writes straight to scene; the
       // override-routed sessions (wall endpoint, wall curve) rely on
@@ -707,7 +709,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         dragRef.current = null
       }
       // Clear any alignment guide a session left behind on mid-drag unmount.
-      useAlignmentGuides.getState().clear()
+      clearSurfacePlanSnapFeedback()
     }
   }, [])
 

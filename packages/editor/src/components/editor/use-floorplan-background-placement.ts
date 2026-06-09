@@ -4,6 +4,7 @@ import { emitter, type FenceNode, isCurvedWall, type WallNode } from '@pascal-ap
 import { type MouseEvent as ReactMouseEvent, useCallback } from 'react'
 import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
+import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import {
   WALL_FINE_GRID_STEP,
@@ -50,6 +51,7 @@ type UseFloorplanBackgroundPlacementArgs = {
   isOpeningPlacementActive: boolean
   isPolygonBuildActive: boolean
   isRoofBuildActive: boolean
+  isSlabBuildActive: boolean
   isWallBuildActive: boolean
   isZoneBuildActive: boolean
   levelId: string | null
@@ -107,6 +109,7 @@ export function useFloorplanBackgroundPlacement({
   isOpeningPlacementActive,
   isPolygonBuildActive,
   isRoofBuildActive,
+  isSlabBuildActive,
   isWallBuildActive,
   isZoneBuildActive,
   levelId,
@@ -233,13 +236,22 @@ export function useFloorplanBackgroundPlacement({
       // the 2D draft polygon invisible while the 3D tool builds fine).
       if (isPolygonBuildActive) {
         const angleSnap = activePolygonDraftPoints.length > 0 && !shiftPressed
-        let snappedPoint = snapPolygonDraftPoint({
+        const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
           angleSnap,
         })
-        if (!angleSnap) {
-          snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
+        let snappedPoint = fallbackPoint
+        if (isSlabBuildActive) {
+          snappedPoint = resolveSlabPlanPointSnap({
+            rawPoint: planPoint,
+            fallbackPoint,
+            levelId,
+            altKey: event.altKey,
+            align: !angleSnap,
+          }).point
+        } else if (!angleSnap) {
+          snappedPoint = alignFloorplanDraftPoint(fallbackPoint, { bypass: event.altKey })
         }
 
         // Emit the grid event so the registry-driven slab tool also
@@ -328,6 +340,7 @@ export function useFloorplanBackgroundPlacement({
       isOpeningPlacementActive,
       isPolygonBuildActive,
       isRoofBuildActive,
+      isSlabBuildActive,
       isWallBuildActive,
       isZoneBuildActive,
       levelId,

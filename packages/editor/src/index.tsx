@@ -234,6 +234,13 @@ export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-dup
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { triggerSFX } from './lib/sfx-bus'
+export {
+  clearSlabSnapFeedback,
+  resolveSlabPlanPointSnap,
+  SLAB_ALIGNMENT_THRESHOLD_M,
+  type SlabPlanSnapInput,
+  type SlabPlanSnapResult,
+} from './lib/slab-plan-snap'
 export { duplicateStairSubtree } from './lib/stair-duplication'
 export {
   getBuildingLevelsForLevel,
@@ -243,6 +250,13 @@ export {
   resolveStairPlacementLevelId,
   resolveStairToLevelId,
 } from './lib/stair-levels'
+export {
+  clearSurfacePlanSnapFeedback,
+  resolveSurfacePlanPointSnap,
+  SURFACE_ALIGNMENT_THRESHOLD_M,
+  type SurfacePlanSnapInput,
+  type SurfacePlanSnapResult,
+} from './lib/surface-plan-snap'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.

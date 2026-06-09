@@ -77,6 +77,7 @@ import {
 import { guideEmitter } from '../../lib/guide-events'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
+import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import { cn } from '../../lib/utils'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
@@ -8507,13 +8508,25 @@ export function FloorplanPanel() {
       // moves (the catch-all would otherwise swallow the move event).
       if (isPolygonBuildActive) {
         const angleSnap = activePolygonDraftPoints.length > 0 && !shiftPressed
-        let snappedPoint = snapPolygonDraftPoint({
+        const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
           angleSnap,
         })
-        if (angleSnap) useAlignmentGuides.getState().clear()
-        else snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
+        let snappedPoint = fallbackPoint
+        if (isSlabBuildActive) {
+          snappedPoint = resolveSlabPlanPointSnap({
+            rawPoint: planPoint,
+            fallbackPoint,
+            levelId,
+            altKey: event.altKey,
+            align: !angleSnap,
+          }).point
+        } else if (angleSnap) {
+          useAlignmentGuides.getState().clear()
+        } else {
+          snappedPoint = alignFloorplanDraftPoint(fallbackPoint, { bypass: event.altKey })
+        }
 
         // Emit `grid:move` so the registry-driven slab tool also tracks
         // the cursor (its 3D preview needs it).
@@ -8681,6 +8694,7 @@ export function FloorplanPanel() {
       isOpeningPlacementActive,
       isPolygonBuildActive,
       isRoofBuildActive,
+      isSlabBuildActive,
       isWallBuildActive,
       levelId,
       publishFloorplanNavigationPose,
@@ -8939,6 +8953,7 @@ export function FloorplanPanel() {
     isOpeningPlacementActive,
     isPolygonBuildActive,
     isRoofBuildActive,
+    isSlabBuildActive,
     isWallBuildActive,
     isZoneBuildActive,
     levelId,
@@ -9141,10 +9156,17 @@ export function FloorplanPanel() {
       if (isZoneBuildActive) {
         handleZonePlacementConfirm(fallbackPoint)
       } else {
+        const snappedPoint = resolveSlabPlanPointSnap({
+          rawPoint: planPoint,
+          fallbackPoint,
+          levelId,
+          altKey: event.altKey,
+          align: !angleSnap,
+        }).point
         // Slab is registry-driven: forward the double-click so the 3D tool
         // commits the node (zone has no registry tool, so it commits locally).
-        emitFloorplanGridEvent('double-click', planPoint, event)
-        handleSlabPlacementConfirm(fallbackPoint)
+        emitFloorplanGridEvent('double-click', snappedPoint, event)
+        handleSlabPlacementConfirm(snappedPoint)
       }
     },
     [
