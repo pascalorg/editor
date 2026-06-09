@@ -72,6 +72,7 @@ const PAINT_CURSOR_BADGE_COLOR = '#818cf8'
 const PAINT_CURSOR_BADGE_DISABLED_COLOR = '#94a3b8'
 const PAINT_CURSOR_BADGE_OFFSET_X = 14
 const PAINT_CURSOR_BADGE_OFFSET_Y = 14
+const SCENE_READY_FALLBACK_MS = 8000
 const EDITOR_HOVER_STYLES: HoverStyles = {
   default: { visibleColor: 0x00_aa_ff, hiddenColor: 0xf3_ff_47, strength: 5, pulse: true },
   delete: { visibleColor: 0xef_44_44, hiddenColor: 0x99_1b_1b, strength: 6, pulse: false },
@@ -1058,6 +1059,19 @@ export default function Editor({
   const handleSceneReadyChange = useCallback((ready: boolean) => {
     setIsViewerSceneReady(ready)
   }, [])
+
+  useEffect(() => {
+    if (isLoading || isSceneLoading || !hasLoadedInitialScene || isViewerSceneReady) return
+
+    const timer = window.setTimeout(() => {
+      console.warn('[editor] viewer scene readiness timed out; showing editor shell anyway', {
+        sceneReadyKey,
+      })
+      setIsViewerSceneReady(true)
+    }, SCENE_READY_FALLBACK_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
 
   const showLoader = isLoading || isSceneLoading || !hasLoadedInitialScene || !isViewerSceneReady
 
