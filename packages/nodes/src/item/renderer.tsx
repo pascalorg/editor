@@ -3,6 +3,7 @@
 import {
   type AnimationEffect,
   type AnyNodeId,
+  getScaledDimensions,
   type Interactive,
   type ItemNode,
   type LightEffect,
@@ -91,17 +92,25 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
     () => (liveOverrides ? ({ ...storeNode, ...liveOverrides } as ItemNode) : storeNode),
     [storeNode, liveOverrides],
   )
+  const roomClearPreview =
+    (node as ItemNode & { roomClearPreview?: unknown }).roomClearPreview === true
 
   return (
     <group position={node.position} ref={ref} rotation={node.rotation} visible={node.visible}>
-      <ErrorBoundary fallback={<BrokenItemFallback node={node} />}>
-        <Suspense fallback={<PreviewModel node={node} />}>
-          <ModelRenderer node={node} />
-        </Suspense>
-      </ErrorBoundary>
-      {node.children?.map((childId) => (
-        <NodeRenderer key={childId} nodeId={childId} />
-      ))}
+      {roomClearPreview ? (
+        <ClearPreviewModel node={node} />
+      ) : (
+        <>
+          <ErrorBoundary fallback={<BrokenItemFallback node={node} />}>
+            <Suspense fallback={<PreviewModel node={node} />}>
+              <ModelRenderer node={node} />
+            </Suspense>
+          </ErrorBoundary>
+          {node.children?.map((childId) => (
+            <NodeRenderer key={childId} nodeId={childId} />
+          ))}
+        </>
+      )}
     </group>
   )
 }
@@ -129,6 +138,26 @@ const PreviewModel = ({ node }: { node: ItemNode }) => {
       <boxGeometry
         args={[node.asset.dimensions[0], node.asset.dimensions[1], node.asset.dimensions[2]]}
       />
+    </mesh>
+  )
+}
+
+const ClearPreviewModel = ({ node }: { node: ItemNode }) => {
+  const shading = useViewer((s) => s.shading)
+  const [w, h, d] = getScaledDimensions(node)
+  const material = useMemo(() => {
+    const next = createDefaultMaterial('#ef4444', 1, shading) as MutableMaterial
+    next.depthTest = false
+    next.opacity = 0.35
+    next.transparent = true
+    next.wireframe = true
+    next.needsUpdate = true
+    return next
+  }, [shading])
+
+  return (
+    <mesh material={material} position-y={h / 2}>
+      <boxGeometry args={[w, h, d]} />
     </mesh>
   )
 }

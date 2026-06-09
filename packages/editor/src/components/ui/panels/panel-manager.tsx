@@ -171,6 +171,8 @@ function MobilePanelLayer({
 export function PanelManager({ inspectorFooter }: { inspectorFooter?: React.ReactNode }) {
   const isMobile = useIsMobile()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedZoneId = useViewer((s) => s.selection.zoneId)
+  const setSelection = useViewer((s) => s.setSelection)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const isPaintPanelOpen = useEditor((s) => s.isPaintPanelOpen)
   const mode = useEditor((s) => s.mode)
@@ -213,6 +215,17 @@ export function PanelManager({ inspectorFooter }: { inspectorFooter?: React.Reac
     !activePaintMaterial.materialPreset
   ) {
     return <PaintPanel />
+  }
+
+  if (selectedZoneId && selectedIds.length === 0) {
+    return (
+      <ParametricInspector
+        footer={inspectorFooter}
+        key={selectedZoneId}
+        nodeId={selectedZoneId as AnyNodeId}
+        onClose={() => setSelection({ zoneId: null })}
+      />
+    )
   }
 
   return panelForType(selectedNodeType, inspectorFooter)

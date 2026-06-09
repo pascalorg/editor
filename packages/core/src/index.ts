@@ -20,6 +20,7 @@ export type {
   RidgeVentEvent,
   RoofEvent,
   RoofSegmentEvent,
+  RoomPresetCreateEvent,
   ScanEvent,
   ShelfEvent,
   SiteEvent,

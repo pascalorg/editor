@@ -948,10 +948,21 @@ export const CustomCameraControls = () => {
       const sub = new Box3().setFromObject(obj)
       if (!sub.isEmpty()) tempBox.union(sub)
     }
-    if (tempBox.isEmpty()) return
+    if (captureMode.framingBounds) {
+      const { center, max, min, size } = captureMode.framingBounds
+      const fallbackHeight = Math.max(Math.max(size[0], size[1]) * 0.35, 2.5)
+      const minY = tempBox.isEmpty() ? 0 : tempBox.min.y
+      const maxY = tempBox.isEmpty() ? fallbackHeight : tempBox.max.y
+      tempBox.min.set(min[0], minY, min[1])
+      tempBox.max.set(max[0], Math.max(maxY, minY + 0.1), max[1])
+      tempCenter.set(center[0], (tempBox.min.y + tempBox.max.y) / 2, center[1])
+      tempSize.set(size[0], tempBox.max.y - tempBox.min.y, size[1])
+    } else {
+      if (tempBox.isEmpty()) return
 
-    tempBox.getCenter(tempCenter)
-    tempBox.getSize(tempSize)
+      tempBox.getCenter(tempCenter)
+      tempBox.getSize(tempSize)
+    }
 
     // Distance heuristic: fit the subject inside the 75%-of-shorter-
     // side square crop with comfortable padding. Multiplier 2.4 leaves
