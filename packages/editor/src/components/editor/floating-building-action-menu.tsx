@@ -6,7 +6,6 @@ import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useRef } from 'react'
 import * as THREE from 'three'
-import { getBuildingLocalBboxCenter } from '../../lib/building-pivot'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { NodeActionMenu } from './node-action-menu'
@@ -47,56 +46,6 @@ export function FloatingBuildingActionMenu() {
     [buildingId, setMovingNode, setSelection],
   )
 
-  // 90° CW step. Pivots around the building's world bbox center, so the
-  // building spins in place instead of orbiting its (often off-centre)
-  // origin — same offset compensation `MoveBuildingContent` uses while
-  // R/T-rotating during a drag.
-  const handleRotate = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (!buildingId) return
-      const node = useScene.getState().nodes[buildingId]
-      if (!node || node.type !== 'building') return
-      const building = node as BuildingNode
-      const mesh = sceneRegistry.nodes.get(buildingId)
-      if (!mesh) return
-
-      // Rotation-INVARIANT local centroid — derived from descendants'
-      // bounds in the building's local frame, not the current world AABB.
-      // Using the world AABB would re-anchor to a different point on
-      // every click (AABB center shifts as the building rotates), which
-      // makes the building drift over a few rotations.
-      const centerOffsetLocal = getBuildingLocalBboxCenter(mesh)
-      if (!centerOffsetLocal) return
-
-      const currentRotY = building.rotation[1] ?? 0
-      const nextRotY = currentRotY - Math.PI / 12 // 15° CW in three.js Y handedness
-
-      const originWorld = new THREE.Vector3()
-      mesh.getWorldPosition(originWorld)
-      const Y_AXIS = new THREE.Vector3(0, 1, 0)
-      const offAtCurrent = centerOffsetLocal.clone().applyAxisAngle(Y_AXIS, currentRotY)
-      const center = new THREE.Vector3(
-        originWorld.x + offAtCurrent.x,
-        originWorld.y,
-        originWorld.z + offAtCurrent.z,
-      )
-      const offAtNext = centerOffsetLocal.clone().applyAxisAngle(Y_AXIS, nextRotY)
-      const nextPos: [number, number, number] = [
-        center.x - offAtNext.x,
-        building.position[1],
-        center.z - offAtNext.z,
-      ]
-
-      sfxEmitter.emit('sfx:item-rotate')
-      useScene.getState().updateNode(buildingId, {
-        position: nextPos,
-        rotation: [building.rotation[0], nextRotY, building.rotation[2]],
-      })
-    },
-    [buildingId],
-  )
-
   // Only show when a building is selected without a level
   if (!buildingId || levelId) return null
 
@@ -112,7 +61,6 @@ export function FloatingBuildingActionMenu() {
       >
         <NodeActionMenu
           onMove={handleMove}
-          onRotate={handleRotate}
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
         />
