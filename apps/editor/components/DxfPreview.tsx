@@ -10,15 +10,15 @@ export type DxfCategory = 'wall' | 'door' | 'window' | 'furniture' | 'zone' | 'l
 
 export const CATEGORY_CONFIG: Record<
   DxfCategory,
-  { color: string; lineWidth: number; zh: string }
+  { color: string; lineWidth: number; ja: string }
 > = {
-  wall:      { color: '#e2e8f0', lineWidth: 1.5, zh: '墙体' },
-  door:      { color: '#fb923c', lineWidth: 1,   zh: '门'   },
-  window:    { color: '#38bdf8', lineWidth: 1,   zh: '窗'   },
-  furniture: { color: '#f472b6', lineWidth: 0.8, zh: '家具' },
-  zone:      { color: '#4ade80', lineWidth: 1,   zh: '房间' },
-  label:     { color: '#a78bfa', lineWidth: 0.8, zh: '标注' },
-  other:     { color: '#475569', lineWidth: 0.8, zh: '其他' },
+  wall:      { color: '#e2e8f0', lineWidth: 1.5, ja: '壁'    },
+  door:      { color: '#fb923c', lineWidth: 1,   ja: 'ドア'  },
+  window:    { color: '#38bdf8', lineWidth: 1,   ja: '窓'    },
+  furniture: { color: '#f472b6', lineWidth: 0.8, ja: '家具'  },
+  zone:      { color: '#4ade80', lineWidth: 1,   ja: '部屋'  },
+  label:     { color: '#a78bfa', lineWidth: 0.8, ja: '注記'  },
+  other:     { color: '#475569', lineWidth: 0.8, ja: 'その他' },
 }
 
 const RENDER_ORDER: DxfCategory[] = ['other', 'zone', 'furniture', 'window', 'door', 'wall', 'label']
@@ -294,7 +294,7 @@ function CategoryBadges({ present }: { present: Set<DxfCategory> }) {
             background: `${CATEGORY_CONFIG[cat].color}10`,
           }}
         >
-          {CATEGORY_CONFIG[cat].zh}
+          {CATEGORY_CONFIG[cat].ja}
         </span>
       ))}
     </div>
@@ -375,14 +375,14 @@ export const DxfPreview = forwardRef<HTMLCanvasElement, DxfPreviewProps>(
             height={288}
             width={560}
           />
-          <CategoryBadges present={presentCategories} />
+          {/* <CategoryBadges present={presentCategories} /> */}
           {downsampled && (
             <span className="pointer-events-none absolute left-1.5 top-1.5 rounded bg-background/80 px-1.5 py-0.5 text-[10px] text-muted-foreground backdrop-blur-sm">
-              已降采样 ({entityCount.toLocaleString()} 实体)
+              ダウンサンプル済み ({entityCount.toLocaleString()} エンティティ)
             </span>
           )}
         </div>
-        <LayerList layers={layers} />
+        {/* <LayerList layers={layers} /> */}
       </div>
     )
   },
