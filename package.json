@@ -36,7 +36,8 @@
   "overrides": {
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "@types/three": "0.184.1"
+    "@types/three": "0.184.1",
+    "three": "0.184.0"
   },
   "optionalDependencies": {
     "@tailwindcss/oxide-darwin-arm64": "4.3.0",
