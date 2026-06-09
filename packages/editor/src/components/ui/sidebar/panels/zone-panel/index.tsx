@@ -1,7 +1,14 @@
-import { emitter, useScene, type ZoneNode } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  useScene,
+  type ZoneNode,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Camera, Hexagon, Save, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { sfxEmitter } from './../../../../../lib/sfx-bus'
+import { collectZoneContentIds } from './../../../../../lib/zone-content'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
   Popover,
@@ -10,6 +17,8 @@ import {
 } from './../../../../../components/ui/primitives/popover'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
+import { ActionButton } from '../../../controls/action-button'
+import { PanelSection } from '../../../controls/panel-section'
 
 function ZoneItem({ zone }: { zone: ZoneNode }) {
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
@@ -26,6 +35,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
+    sfxEmitter.emit('sfx:structure-delete')
     deleteNode(zone.id)
     if (isSelected) {
       setSelection({ zoneId: null })
@@ -126,6 +136,7 @@ export function ZonePanel() {
   const nodes = useScene((state) => state.nodes)
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
+  const setSelection = useViewer((state) => state.setSelection)
   const setPhase = useEditor((state) => state.setPhase)
   const setMode = useEditor((state) => state.setMode)
   const setTool = useEditor((state) => state.setTool)
@@ -142,6 +153,17 @@ export function ZonePanel() {
       setMode('build')
       setTool('zone')
     }
+  }
+
+  const deleteSelectedZone = (withContent: boolean) => {
+    if (!selectedZone) return
+    const scene = useScene.getState()
+    const ids = withContent
+      ? [selectedZone.id as AnyNodeId, ...collectZoneContentIds(scene.nodes, selectedZone)]
+      : [selectedZone.id as AnyNodeId]
+    sfxEmitter.emit('sfx:structure-delete')
+    scene.deleteNodes(Array.from(new Set(ids)))
+    setSelection({ selectedIds: [], zoneId: null })
   }
 
   if (!currentLevelId) {
@@ -165,16 +187,29 @@ export function ZonePanel() {
         levelZones.map((zone) => <ZoneItem key={zone.id} zone={zone} />)
       )}
       {selectedZone ? (
-        <div className="px-2 pt-2">
-          <button
-            className="flex h-8 w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 font-medium text-foreground text-xs shadow-xs transition-colors hover:bg-accent"
+        <PanelSection className="mt-2 border-t" title="Actions">
+          <ActionButton
+            className="w-full flex-none"
+            icon={<Save className="h-4 w-4" />}
+            label="Save to catalog"
             onClick={() => emitter.emit('room-preset:create', { zoneId: selectedZone.id })}
             type="button"
-          >
-            <Save className="h-3.5 w-3.5" />
-            Save to catalog
-          </button>
-        </div>
+          />
+          <ActionButton
+            className="w-full flex-none"
+            icon={<Trash2 className="h-4 w-4 text-red-400" />}
+            label="Delete"
+            onClick={() => deleteSelectedZone(false)}
+            type="button"
+          />
+          <ActionButton
+            className="w-full flex-none"
+            icon={<Trash2 className="h-4 w-4 text-red-400" />}
+            label="Delete with contents"
+            onClick={() => deleteSelectedZone(true)}
+            type="button"
+          />
+        </PanelSection>
       ) : null}
     </div>
   )

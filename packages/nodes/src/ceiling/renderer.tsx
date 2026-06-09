@@ -4,6 +4,7 @@ import {
   type CeilingNode,
   getMaterialPresetByRef,
   resolveMaterial,
+  useLiveTransforms,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -79,6 +80,13 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const liveTransform = useLiveTransforms((s) => s.get(node.id))
+  const ceilingY = (node.height ?? 2.5) - 0.01 + (liveTransform?.position[1] ?? 0)
+  const position: [number, number, number] = [
+    liveTransform?.position[0] ?? 0,
+    ceilingY,
+    liveTransform?.position[2] ?? 0,
+  ]
 
   useEffect(
     () => () => {
@@ -124,7 +132,12 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   ])
 
   return (
-    <mesh geometry={placeholderGeometry} material={materials.bottomMaterial} ref={ref}>
+    <mesh
+      geometry={placeholderGeometry}
+      material={materials.bottomMaterial}
+      position={position}
+      ref={ref}
+    >
       <mesh
         geometry={gridPlaceholderGeometry}
         material={materials.topMaterial}

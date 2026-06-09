@@ -8,12 +8,14 @@ import {
   type ParamAction,
   type ParamField,
   useScene,
+  type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Icon } from '@iconify/react'
 import { Move, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { collectZoneContentIds } from '../../../lib/zone-content'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
@@ -82,12 +84,24 @@ export function ParametricInspector({
     clearSelection()
   }, [selectedId, clearSelection])
 
-  const handleDelete = useCallback(() => {
-    if (!selectedId) return
-    sfxEmitter.emit('sfx:structure-delete')
-    useScene.getState().deleteNode(selectedId)
-    clearSelection()
-  }, [selectedId, clearSelection])
+  const handleDelete = useCallback(
+    (withZoneContent = false) => {
+      if (!selectedId) return
+      const scene = useScene.getState()
+      const node = scene.nodes[selectedId]
+      if (!node) return
+
+      const ids =
+        withZoneContent && node.type === 'zone'
+          ? [selectedId, ...collectZoneContentIds(scene.nodes, node as ZoneNode)]
+          : [selectedId]
+
+      sfxEmitter.emit('sfx:structure-delete')
+      scene.deleteNodes(Array.from(new Set(ids)))
+      clearSelection()
+    },
+    [selectedId, clearSelection],
+  )
 
   if (!selectedId || !def || !parametrics) return null
 
@@ -115,6 +129,7 @@ export function ParametricInspector({
   const iconNode = renderIcon(presentation?.icon)
   const canMove = !!def.capabilities.movable
   const canDelete = def.capabilities.deletable !== false
+  const isZone = nodeType === 'zone'
 
   const TrailingSection = parametrics.trailingSection
     ? resolveCustomPanel(parametrics.trailingSection)
@@ -147,21 +162,37 @@ export function ParametricInspector({
       )}
       {(canMove || canDelete || (parametrics.actions && parametrics.actions.length > 0)) && (
         <PanelSection title="Actions">
-          <ActionGroup>
+          <ActionGroup className={isZone ? 'flex-col' : undefined}>
             {canMove && (
               <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
             )}
             {parametrics.actions?.map((action, i) => (
               <ParamActionButton action={action} key={`paramaction-${i}`} nodeId={selectedId} />
             ))}
-            {canDelete && (
-              <ActionButton
-                className="border-red-500/40 text-red-200 hover:bg-red-500/15"
-                icon={<Trash2 className="h-4 w-4" />}
-                label="Delete"
-                onClick={handleDelete}
-              />
-            )}
+            {canDelete &&
+              (isZone ? (
+                <>
+                  <ActionButton
+                    className="w-full flex-none"
+                    icon={<Trash2 className="h-4 w-4 text-red-400" />}
+                    label="Delete"
+                    onClick={() => handleDelete(false)}
+                  />
+                  <ActionButton
+                    className="w-full flex-none"
+                    icon={<Trash2 className="h-4 w-4 text-red-400" />}
+                    label="Delete with contents"
+                    onClick={() => handleDelete(true)}
+                  />
+                </>
+              ) : (
+                <ActionButton
+                  className="border-red-500/40 text-red-200 hover:bg-red-500/15"
+                  icon={<Trash2 className="h-4 w-4" />}
+                  label="Delete"
+                  onClick={() => handleDelete()}
+                />
+              ))}
           </ActionGroup>
         </PanelSection>
       )}

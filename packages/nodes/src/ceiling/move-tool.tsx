@@ -126,9 +126,8 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       deltaRef.current = [deltaX, deltaZ]
       setMeshOffset(ceilingId as AnyNodeId, deltaX, deltaZ, height)
       // Aligned with slab/fence: the delta matches the direct mesh
-      // mutation. CeilingRenderer doesn't bind position via React, so
-      // this entry isn't consumed for rendering, but kept consistent
-      // in case other systems read it.
+      // mutation. CeilingRenderer also consumes this store so external
+      // movers can preview ceilings without rebuilding the polygon.
       useLiveTransforms.getState().set(ceilingId, {
         position: [deltaX, 0, deltaZ],
         rotation: 0,
