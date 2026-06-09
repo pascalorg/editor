@@ -562,6 +562,20 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     useAbsoluteCursorPlacement,
   ])
 
+  // Snapshot the scene once at drag-start — bounds depend on `node` (locked
+  // for the lifetime of this tool) and any sibling state the kind reads. If a
+  // future kind needs live sibling state mid-drag, switch to a subscribed
+  // selector; for v1 (elevator shaft height from level set) start-time is
+  // correct and avoids subscribing the whole `nodes` map.
+  const dragBounds = useMemo(
+    () =>
+      nodeRegistry.get(node.type)?.capabilities?.dragBounds?.(
+        node,
+        useScene.getState().nodes,
+      ) ?? null,
+    [node],
+  )
+
   if (!previewVisible) return null
 
   if (boxDimensions) {
@@ -574,9 +588,6 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       />
     )
   }
-
-  const dragBounds =
-    nodeRegistry.get(node.type)?.capabilities?.dragBounds?.(node, useScene.getState().nodes) ?? null
 
   return (
     <>
