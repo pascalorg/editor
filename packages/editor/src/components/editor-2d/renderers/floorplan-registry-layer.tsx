@@ -1602,10 +1602,7 @@ function InteractiveGeometry({
         // horizontally on screen even when the floor-plan view is
         // rotated (default `sceneRotationDeg` is 90°).
         return (
-          <g
-            key={keyHint}
-            transform={`translate(${g.x} ${g.y}) rotate(${-sceneRotationDeg})`}
-          >
+          <g key={keyHint} transform={`translate(${g.x} ${g.y}) rotate(${-sceneRotationDeg})`}>
             <text
               dominantBaseline={g.dominantBaseline ?? 'middle'}
               fill={g.fill ?? '#171717'}

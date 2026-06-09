@@ -18,12 +18,12 @@ import {
   CursorSphere,
   getSegmentGridStep,
   markToolCancelConsumed,
+  resolveAlignmentForActiveBuilding,
   snapBuildingLocalToWorldGrid,
   snapFenceDraftPoint,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
-  resolveAlignmentForActiveBuilding,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'

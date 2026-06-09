@@ -569,10 +569,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // correct and avoids subscribing the whole `nodes` map.
   const dragBounds = useMemo(
     () =>
-      nodeRegistry.get(node.type)?.capabilities?.dragBounds?.(
-        node,
-        useScene.getState().nodes,
-      ) ?? null,
+      nodeRegistry.get(node.type)?.capabilities?.dragBounds?.(node, useScene.getState().nodes) ??
+      null,
     [node],
   )
 

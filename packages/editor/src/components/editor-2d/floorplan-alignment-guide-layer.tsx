@@ -2,8 +2,8 @@
 
 import { useViewer } from '@pascal-app/viewer'
 import { memo } from 'react'
-import { formatMeasurement } from '../editor/measurement-pill'
 import useAlignmentGuides from '../../store/use-alignment-guides'
+import { formatMeasurement } from '../editor/measurement-pill'
 import { useFloorplanRender } from './floorplan-render-context'
 
 /**

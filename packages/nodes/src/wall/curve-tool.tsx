@@ -91,10 +91,7 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // pull the curve handle off the visible grid lines.
       const [snappedLocalX, snappedLocalZ] = shiftPressedRef.current
         ? [event.localPosition[0], event.localPosition[2]]
-        : snapBuildingLocalToWorldGrid(
-            [event.localPosition[0], event.localPosition[2]],
-            snapStep,
-          )
+        : snapBuildingLocalToWorldGrid([event.localPosition[0], event.localPosition[2]], snapStep)
       const localX = snappedLocalX
       const localZ = snappedLocalZ
 

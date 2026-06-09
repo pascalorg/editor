@@ -109,12 +109,6 @@ export {
   type WallDraftSnapResult,
   type WallPlanPoint,
 } from './components/tools/wall/wall-drafting'
-export {
-  getActiveBuildingPose,
-  resolveAlignmentForActiveBuilding,
-  snapBuildingLocalToWorldGrid,
-  snapWorldXZForActiveBuilding,
-} from './lib/world-grid-snap'
 // `ToolbarLeft` / `ToolbarRight` are the headless-spec aliases for the
 // existing `ViewerToolbarLeft` / `ViewerToolbarRight` exports — the
 // underlying components are the same; the alias just matches the names
@@ -244,6 +238,12 @@ export {
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
 export { cn } from './lib/utils'
+export {
+  getActiveBuildingPose,
+  resolveAlignmentForActiveBuilding,
+  snapBuildingLocalToWorldGrid,
+  snapWorldXZForActiveBuilding,
+} from './lib/world-grid-snap'
 export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
