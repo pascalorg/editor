@@ -5,18 +5,16 @@ import {
   collectAlignmentAnchors,
   type DragAction,
   type FenceNode,
-  useAlignmentGuides,
+  resolveAlignment,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
 import {
   type FencePlanPoint,
   isSegmentLongEnough,
-  snapBuildingLocalToWorldGrid,
   snapFenceDraftPoint,
+  useAlignmentGuides,
   WALL_FINE_GRID_STEP,
-  WALL_GRID_STEP,
-  resolveAlignmentForActiveBuilding,
 } from '@pascal-app/editor'
 
 /**
@@ -169,14 +167,12 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
       // Endpoint move = grid snap only; the 45°-from-start angle snap
       // is draft-only. Shift switches to the fine grid step for
       // precision, mirroring the wall convention.
-      const worldStep = modifiers.shift ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
       const snapped = snapFenceDraftPoint({
         point: planPoint,
         walls: ctx.levelWalls,
         fences: ctx.levelFences,
         ignoreFenceIds: [ctx.fenceId as string],
         step: modifiers.shift ? WALL_FINE_GRID_STEP : undefined,
-        gridSnap: (p) => snapBuildingLocalToWorldGrid(p, worldStep) as FencePlanPoint,
       })
 
       // Figma-style alignment: nudge the dragged endpoint onto another wall /
@@ -185,7 +181,7 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
       // always sits on an actual point. Alt is reserved for detach.
       let aligned = snapped
       if (ctx.alignCandidates.length > 0) {
-        const ar = resolveAlignmentForActiveBuilding({
+        const ar = resolveAlignment({
           moving: [{ nodeId: ctx.fenceId as string, kind: 'corner', x: snapped[0], z: snapped[1] }],
           candidates: ctx.alignCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,

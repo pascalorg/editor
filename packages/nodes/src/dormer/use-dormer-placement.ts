@@ -10,6 +10,7 @@ import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { createRelativeRoofDrag } from '../shared/relative-roof-drag'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
 import { DORMER_PLACEMENT_ROTATION_STEP, DORMER_PLACEMENT_SNAP_M } from './geometry'
 
@@ -50,6 +51,10 @@ export type DormerPlacementHit = {
  */
 export function useDormerPlacement(opts: {
   initialRotation?: number
+  relativeStart?: {
+    position: [number, number, number]
+    roofSegmentId?: string
+  }
   onCommit: (hit: DormerPlacementHit, rotation: number) => void
 }): {
   activeBuildingId: string | undefined
@@ -66,6 +71,7 @@ export function useDormerPlacement(opts: {
   // Mirror of `ghostRotation` so the click handler (registered once
   // inside useEffect) can read the latest value at commit time.
   const ghostRotationRef = useRef(opts.initialRotation ?? 0)
+  const relativeStartRef = useRef(opts.relativeStart)
   // Latest commit callback, captured via ref so the useEffect doesn't
   // need it in its dep list (we don't want to re-register listeners
   // every time the parent rerenders).
@@ -90,9 +96,23 @@ export function useDormerPlacement(opts: {
       }
     }
 
+    const roofDrag = relativeStartRef.current
+      ? createRelativeRoofDrag(relativeStartRef.current)
+      : null
+    let lastRelativeHit: DormerPlacementHit | null = null
+
+    const resolvePlacementHit = (event: RoofEvent): DormerPlacementHit | null => {
+      if (roofDrag) return roofDrag.resolve(event)
+      return resolveRoofSegmentHit(
+        event.node as RoofNode,
+        event.position[0],
+        event.position[1],
+        event.position[2],
+      )
+    }
+
     const updatePreview = (event: RoofEvent) => {
       const wx = event.position[0]
-      const wy = event.position[1]
       const wz = event.position[2]
 
       const sx = Math.round(wx / DORMER_PLACEMENT_SNAP_M) * DORMER_PLACEMENT_SNAP_M
@@ -103,8 +123,9 @@ export function useDormerPlacement(opts: {
         lastSnapRef.current = [sx, sz]
       }
 
-      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
+      const hit = resolvePlacementHit(event)
       if (!hit) return
+      if (roofDrag) lastRelativeHit = hit
       const xform = computeSegmentXform(hit.segment.id)
       if (!xform) return
       setSegmentXform(xform)
@@ -118,12 +139,9 @@ export function useDormerPlacement(opts: {
     }
 
     const onClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
+      const hit = roofDrag
+        ? (lastRelativeHit ?? resolvePlacementHit(event))
+        : resolvePlacementHit(event)
       if (!hit) return
       onCommitRef.current(hit, ghostRotationRef.current)
       triggerSFX('sfx:item-place')

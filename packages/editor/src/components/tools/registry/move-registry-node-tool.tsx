@@ -12,23 +12,24 @@ import {
   movingFootprintAnchors,
   type NodeEvent,
   nodeRegistry,
+  resolveAlignment,
   sceneRegistry,
   spatialGridManager,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
+import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement'
+import { stripPlacementMetadataFlags } from '../../../lib/placement-metadata'
+import { resolvePlanarCursorPosition } from '../../../lib/planar-cursor-placement'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import {
-  resolveAlignmentForActiveBuilding,
-  snapWorldXZForActiveBuilding,
-} from '../../../lib/world-grid-snap'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
+import { useFreshPlacementVisibility } from '../shared/fresh-placement-visibility'
 import { PlacementBox } from '../shared/placement-box'
 
 /** Snap a world-plan coordinate to the editor's active grid step (0.5 / 0.25
@@ -128,6 +129,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
    * commit position consistent with the visible cursor.
    */
   const lastCursorRef = useRef<[number, number, number]>(originalPosition)
+  const dragAnchorRef = useRef<[number, number] | null>(null)
   /**
    * Becomes true on the first `grid:move` after this move arms. Commits are
    * ignored until then so a click that *armed* this move (e.g. the trailing
@@ -157,6 +159,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   )
   const [valid, setValid] = useState(true)
   const [cursorRotationY, setCursorRotationY] = useState(originalRotationY)
+  const { isFreshPlacement, previewVisible, revealFreshPlacement, useAbsoluteCursorPlacement } =
+    useFreshPlacementVisibility({ node })
   // Mirrors of `valid` / Shift for the event handlers inside the effect, which
   // can't read React state without stale closures.
   const validRef = useRef(true)
@@ -169,6 +173,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   useEffect(() => {
     useScene.temporal.getState().pause()
     previousSnapRef.current = null
+    dragAnchorRef.current = null
     hasMovedRef.current = false
     rotationRef.current = originalRotationY
     shiftRef.current = false
@@ -181,6 +186,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     setCursorRotationY(originalRotationY)
     lastCursorRef.current = originalPosition
     let committed = false
+    const isNew = isFreshPlacement
 
     const baseRotation = (node as { rotation?: unknown }).rotation
     const toCommitRotation = (y: number): number | [number, number, number] =>
@@ -270,15 +276,19 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     )
 
     const onGridMove = (event: GridEvent) => {
-      // World-grid snap projected back into building-local for storage —
-      // rotated buildings used to drag the snap off the visible grid.
-      const snapped = snapWorldXZForActiveBuilding(
-        event.position[0],
-        event.position[2],
-        useEditor.getState().gridSnapStep,
-      ).local
-      let x = snapped[0]
-      let z = snapped[1]
+      const rawX = event.localPosition[0]
+      const rawZ = event.localPosition[2]
+      revealFreshPlacement()
+
+      const resolved = resolvePlanarCursorPosition({
+        cursor: [rawX, rawZ],
+        original: [originalPosition[0], originalPosition[2]],
+        anchor: dragAnchorRef.current,
+        mode: useAbsoluteCursorPlacement ? 'absolute' : 'relative',
+        snap: snapToGridStep,
+      })
+      dragAnchorRef.current = resolved.anchor
+      let [x, z] = resolved.point
 
       // Figma-style alignment snap layered on top of grid snap: when the
       // moving item's edge lines up (on X or Z) with another item's edge,
@@ -287,7 +297,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // on an actual point. Alt bypasses.
       const bypass = event.nativeEvent?.altKey === true
       if (!bypass && alignmentCandidates.length > 0) {
-        const result = resolveAlignmentForActiveBuilding({
+        const result = resolveAlignment({
           moving: movingFootprintAnchors(node, x, z, rotationRef.current),
           candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,
@@ -361,12 +371,32 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
       const rotation = toCommitRotation(rotationRef.current)
       const visualPosition = getVisualPosition(position)
+      let committedId = node.id as AnyNodeId
 
       if (useScene.getState().nodes[node.id]) {
-        useScene.temporal.getState().resume()
-        useScene.getState().updateNode(node.id, { position, rotation } as Partial<AnyNode>)
-        useScene.temporal.getState().pause()
-        committed = true
+        const data = {
+          position,
+          rotation,
+          ...(isNew
+            ? {
+                metadata: stripPlacementMetadataFlags(node.metadata),
+                visible: true,
+              }
+            : null),
+        } as Partial<AnyNode>
+
+        if (isNew) {
+          const finalId = commitFreshPlacementSubtree(node.id as AnyNodeId, data)
+          if (finalId) {
+            committed = true
+            committedId = finalId
+          }
+        } else {
+          useScene.temporal.getState().resume()
+          useScene.getState().updateNode(node.id, data)
+          useScene.temporal.getState().pause()
+          committed = true
+        }
       } else if (node.parentId) {
         // Orphan re-create path: re-parse via the registry's schema.
         const def = nodeRegistry.get(node.type)
@@ -396,8 +426,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       }
 
       useAlignmentGuides.getState().clear()
+      if (isNew && committed) {
+        useViewer.getState().setSelection({ selectedIds: [committedId] })
+      }
 
       sfxEmitter.emit('sfx:item-place')
+      useEditor.getState().setMovingNodeOrigin('3d')
       exitMoveMode()
 
       // Stop further propagation so other listeners (e.g. a selection
@@ -473,13 +507,17 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
     const onCancel = () => {
       useLiveTransforms.getState().clear(node.id)
-      const m = sceneRegistry.nodes.get(node.id)
-      if (m) {
-        m.position.set(...getVisualPosition(originalPosition, originalRotationY))
-        m.rotation.y = originalRotationY
+      if (isNew) {
+        useScene.getState().deleteNode(node.id as AnyNodeId)
+      } else {
+        const m = sceneRegistry.nodes.get(node.id)
+        if (m) {
+          m.position.set(...getVisualPosition(originalPosition, originalRotationY))
+          m.rotation.y = originalRotationY
+        }
+        markMovedNodeDirty()
       }
       useAlignmentGuides.getState().clear()
-      markMovedNodeDirty()
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
       exitMoveMode()
@@ -502,16 +540,28 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // Drop any alignment guides this drag published — covers Esc / mid-drag
       // unmount / commit paths uniformly.
       useAlignmentGuides.getState().clear()
-      if (!committed) {
+      const finalisedBy2D = useEditor.getState().movingNodeOrigin === '2d'
+      if (!(committed || isNew || finalisedBy2D)) {
         useLiveTransforms.getState().clear(node.id)
         sceneRegistry.nodes
           .get(node.id)
           ?.position.set(...getVisualPosition(originalPosition, originalRotationY))
         markMovedNodeDirty()
-        useScene.temporal.getState().resume()
       }
+      useScene.temporal.getState().resume()
     }
-  }, [boxDimensions, exitMoveMode, node, originalPosition, originalRotationY])
+  }, [
+    boxDimensions,
+    exitMoveMode,
+    isFreshPlacement,
+    node,
+    originalPosition,
+    originalRotationY,
+    revealFreshPlacement,
+    useAbsoluteCursorPlacement,
+  ])
+
+  if (!previewVisible) return null
 
   if (boxDimensions) {
     return (

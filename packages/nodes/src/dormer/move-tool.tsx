@@ -51,6 +51,7 @@ const MoveDormerTool = ({ node }: { node: DormerNode }) => {
   const originalRotation = node.rotation ?? 0
   const originalMetadata = node.metadata
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: capture-on-mount; meta is intentionally not re-read on changes.
   useEffect(() => {
     if (!isNew) {
       useScene.getState().updateNode(node.id as AnyNodeId, {
@@ -71,11 +72,14 @@ const MoveDormerTool = ({ node }: { node: DormerNode }) => {
         })
       }
     }
-    // biome-ignore lint/correctness/useExhaustiveDependencies: capture-on-mount; meta is intentionally not re-read on changes.
   }, [node.id, isNew])
 
   const { activeBuildingId, segmentXform, hitLocal, ghostRotation } = useDormerPlacement({
     initialRotation: originalRotation,
+    relativeStart: {
+      position: [...node.position] as [number, number, number],
+      roofSegmentId: node.roofSegmentId,
+    },
     onCommit: (hit, rotation) => {
       const state = useScene.getState()
 

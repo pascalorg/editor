@@ -10,7 +10,6 @@ import {
   polygonAnchors,
   type SlabNode,
   sceneRegistry,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
   type WallNode,
@@ -22,6 +21,7 @@ import {
   snapBuildingLocalToWorldGrid,
   snapFenceDraftPoint,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
   resolveAlignmentForActiveBuilding,
 } from '@pascal-app/editor'

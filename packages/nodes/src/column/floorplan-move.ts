@@ -10,10 +10,11 @@ import {
 } from '@pascal-app/core'
 import {
   applyFloorplanAlignment,
-  snapBuildingLocalToWorldGrid,
   triggerSFX,
+  useEditor,
   type WallPlanPoint,
 } from '@pascal-app/editor'
+import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 
 /**
  * 2D floor-plan move handler for column — mirrors `itemFloorplanMoveTarget`:
@@ -39,12 +40,14 @@ import {
  * Column stores rotation as a scalar (not a tuple); position is `[x, y, z]`.
  */
 
-const GRID_STEP = 0.5
-
 export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ node, nodes }) => {
   const columnId = node.id as AnyNodeId
   const originalPosition: [number, number, number] = [...node.position] as [number, number, number]
   const rotationY = node.rotation ?? 0
+  const resolveCursor = createFloorplanCursorResolver({
+    original: [originalPosition[0], originalPosition[2]],
+    metadata: node.metadata,
+  })
   let lastPosition: [number, number, number] = originalPosition
   let lastSnapKey: string | null = null
 
@@ -54,12 +57,12 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
   const session: FloorplanMoveTargetSession = {
     affectedIds: [columnId],
     apply({ planPoint, modifiers }) {
-      const gridSnapped: WallPlanPoint = modifiers.shiftKey
-        ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : (snapBuildingLocalToWorldGrid(
-            [planPoint[0], planPoint[1]] as WallPlanPoint,
-            GRID_STEP,
-          ) as WallPlanPoint)
+      const snap = (value: number) => {
+        if (modifiers.shiftKey) return value
+        const step = useEditor.getState().gridSnapStep
+        return Math.round(value / step) * step
+      }
+      const gridSnapped = resolveCursor(planPoint, { snap }) as WallPlanPoint
       // Figma-style alignment layered on the grid snap (Alt bypasses).
       const { point: snapped } = applyFloorplanAlignment(
         gridSnapped,

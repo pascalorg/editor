@@ -9,7 +9,7 @@ import {
   getWallMiterBoundaryPoints,
   type LevelNode,
   type Point2D,
-  useAlignmentGuides,
+  resolveAlignment,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -25,13 +25,11 @@ import {
   getSegmentAngleReferenceAtPoint,
   markToolCancelConsumed,
   type SegmentAngleReference,
-  snapBuildingLocalToWorldGrid,
   snapFenceDraftPoint,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
   WALL_FINE_GRID_STEP,
-  WALL_GRID_STEP,
-  resolveAlignmentForActiveBuilding,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -484,7 +482,7 @@ export const FenceTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
         return point
       }
-      const ar = resolveAlignmentForActiveBuilding({
+      const ar = resolveAlignment({
         moving: [{ nodeId: '__fence-draft__', kind: 'corner', x: point[0], z: point[1] }],
         candidates: alignmentCandidates,
         threshold: ALIGNMENT_THRESHOLD_M,
@@ -507,13 +505,11 @@ export const FenceTool: React.FC = () => {
       // Default = active grid step; Shift switches to the fine step
       // (0.05m). No 45° angle snap — see `wall/tool.tsx` for rationale.
       const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
-      const worldStep = shiftPressed.current ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
-      const gridSnap = (p: FencePlanPoint) => snapBuildingLocalToWorldGrid(p, worldStep)
       const bypassAlign = event.nativeEvent?.altKey === true
 
       if (buildingState.current === 1) {
         const snappedLocal = alignPoint(
-          snapFenceDraftPoint({ point: localPoint, walls, fences, step, gridSnap }),
+          snapFenceDraftPoint({ point: localPoint, walls, fences, step }),
           bypassAlign,
         )
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
@@ -546,7 +542,7 @@ export const FenceTool: React.FC = () => {
         )
       } else {
         const snappedPoint = alignPoint(
-          snapFenceDraftPoint({ point: localPoint, walls, fences, step, gridSnap }),
+          snapFenceDraftPoint({ point: localPoint, walls, fences, step }),
           bypassAlign,
         )
         cursorRef.current.position.set(snappedPoint[0], event.localPosition[1], snappedPoint[1])
@@ -563,20 +559,11 @@ export const FenceTool: React.FC = () => {
       const { walls, fences } = getCurrentLevelElements()
       const localClick: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
       const clickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
-      const worldClickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
-      const clickGridSnap = (p: FencePlanPoint) =>
-        snapBuildingLocalToWorldGrid(p, worldClickStep)
       const bypassAlign = event.nativeEvent?.altKey === true
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
-          snapFenceDraftPoint({
-            point: localClick,
-            walls,
-            fences,
-            step: clickStep,
-            gridSnap: clickGridSnap,
-          }),
+          snapFenceDraftPoint({ point: localClick, walls, fences, step: clickStep }),
           bypassAlign,
         )
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
@@ -587,13 +574,7 @@ export const FenceTool: React.FC = () => {
         setDraftMeasurement(null)
       } else {
         const snappedEnd = alignPoint(
-          snapFenceDraftPoint({
-            point: localClick,
-            walls,
-            fences,
-            step: clickStep,
-            gridSnap: clickGridSnap,
-          }),
+          snapFenceDraftPoint({ point: localClick, walls, fences, step: clickStep }),
           bypassAlign,
         )
         const dx = snappedEnd[0] - startingPoint.current.x

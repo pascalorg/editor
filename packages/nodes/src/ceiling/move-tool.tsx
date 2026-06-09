@@ -7,12 +7,18 @@ import {
   emitter,
   type GridEvent,
   polygonAnchors,
+  resolveAlignment,
   sceneRegistry,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { CursorSphere, markToolCancelConsumed, resolveAlignmentForActiveBuilding, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  markToolCancelConsumed,
+  triggerSFX,
+  useAlignmentGuides,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
@@ -164,7 +170,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       // publish a guide. Alt bypasses.
       const bypass = event.nativeEvent?.altKey === true
       if (!bypass && alignmentCandidates.length > 0) {
-        const result = resolveAlignmentForActiveBuilding({
+        const result = resolveAlignment({
           moving: polygonAnchors(ceilingId, translatePolygon(originalPolygon, deltaX, deltaZ)),
           candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,

@@ -1,12 +1,6 @@
 'use client'
 
-import {
-  type FenceNode,
-  getWallCurveLength,
-  useAlignmentGuides,
-  useScene,
-  type WallNode,
-} from '@pascal-app/core'
+import { type FenceNode, getWallCurveLength, useScene, type WallNode } from '@pascal-app/core'
 import {
   CursorSphere,
   type FencePlanPoint,
@@ -16,6 +10,7 @@ import {
   MeasurementPill,
   type MovingFenceEndpoint,
   triggerSFX,
+  useAlignmentGuides,
   useDragAction,
   useEditor,
 } from '@pascal-app/editor'

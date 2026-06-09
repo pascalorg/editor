@@ -9,8 +9,8 @@ import {
   getWallCurveLength,
   getWallThickness,
   pauseSceneHistory,
+  resolveAlignment,
   resumeSceneHistory,
-  useAlignmentGuides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -23,14 +23,13 @@ import {
   MeasurementPill,
   type MovingWallEndpoint,
   markToolCancelConsumed,
-  snapBuildingLocalToWorldGrid,
-  snapWallDraftPoint,
+  snapWallDraftPointDetailed,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
+  useWallSnapIndicator,
   WALL_FINE_GRID_STEP,
-  WALL_GRID_STEP,
   type WallPlanPoint,
-  resolveAlignmentForActiveBuilding,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -293,14 +292,14 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       // for precision placement, so it can land on positions the
       // active grid would skip (e.g. 0.05m increments when the active
       // grid is 0.5m). It does NOT bypass snap.
-      const worldStep = shiftPressedRef.current ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
-      const snappedPoint = snapWallDraftPoint({
+      const snapResult = snapWallDraftPointDetailed({
         point: planPoint,
         walls: levelWalls,
         ignoreWallIds: [nodeId],
         step: shiftPressedRef.current ? WALL_FINE_GRID_STEP : undefined,
-        gridSnap: (p) => snapBuildingLocalToWorldGrid(p, worldStep),
+        magnetic: useEditor.getState().magneticSnap,
       })
+      const snappedPoint = snapResult.point
 
       // Figma-style alignment: nudge the dragged endpoint onto another wall /
       // fence endpoint or midpoint axis when within threshold, and publish a
@@ -310,7 +309,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       // grid + corner snap above; Alt is reserved for corner-detach here.
       let alignedPoint = snappedPoint
       if (wallAlignmentCandidates.length > 0) {
-        const ar = resolveAlignmentForActiveBuilding({
+        const ar = resolveAlignment({
           moving: [{ nodeId, kind: 'corner', x: snappedPoint[0], z: snappedPoint[1] }],
           candidates: wallAlignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,
@@ -331,11 +330,22 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       previousGridPosRef.current = alignedPoint
       hasDraggedRef.current = true
 
+      // Stand the magnetic beacon at the endpoint when it locked onto existing
+      // wall geometry (corner / midpoint / crossing / wall body).
+      useWallSnapIndicator
+        .getState()
+        .set(
+          snapResult.snap
+            ? { x: alignedPoint[0], z: alignedPoint[1], kind: snapResult.snap }
+            : null,
+        )
+
       applyPreview(alignedPoint, event.nativeEvent.altKey)
     }
 
     const onPointerUp = () => {
       useAlignmentGuides.getState().clear()
+      useWallSnapIndicator.getState().clear()
       // Press-release without drag: dismiss the tool without committing.
       if (!hasDraggedRef.current) {
         useViewer.getState().setSelection({ selectedIds: [nodeId] })
@@ -383,6 +393,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
 
     const onCancel = () => {
       useAlignmentGuides.getState().clear()
+      useWallSnapIndicator.getState().clear()
       restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
       resumeSceneHistory(useScene)
@@ -429,6 +440,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
 
     return () => {
       useAlignmentGuides.getState().clear()
+      useWallSnapIndicator.getState().clear()
       if (!wasCommitted) {
         restoreOriginal(false)
       }

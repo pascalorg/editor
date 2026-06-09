@@ -14,12 +14,12 @@ import {
   pauseSceneHistory,
   resolveBuildingForLevel,
   resumeSceneHistory,
-  useAlignmentGuides,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import {
   memo,
@@ -187,11 +187,20 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const editorPhase = useEditor((s) => s.phase)
   const editorMode = useEditor((s) => s.mode)
   const editorTool = useEditor((s) => s.tool)
+  const structureLayer = useEditor((s) => s.structureLayer)
+  const floorplanSelectionTool = useEditor((s) => s.floorplanSelectionTool)
+  const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
   const isOpeningPlacementActive =
     (editorPhase === 'structure' &&
       editorMode === 'build' &&
       (editorTool === 'door' || editorTool === 'window')) ||
     (movingNode != null && !!nodeRegistry.get(movingNode.type)?.capabilities?.wallOpeningPlacement)
+  const isMarqueeSelectionActive =
+    editorMode === 'select' &&
+    floorplanSelectionTool === 'marquee' &&
+    structureLayer !== 'zones' &&
+    !movingNode &&
+    !movingFenceEndpoint
   // Subscribe to the live-transforms map ref so the layer re-renders
   // whenever a 3D mover publishes a per-frame position (see
   // `usePlacementCoordinator`). Without this the 2D floor plan only
@@ -260,6 +269,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // tree the builder returns. Builders don't need to know about the
   // partition.
   const entries = useMemo(() => {
+    // Some builders read elevator runtime state imperatively; this keeps the memo subscribed.
+    void interactiveElevators
+
     if (!levelId) return []
     const out: {
       id: AnyNodeId
@@ -273,6 +285,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     const visit = (id: AnyNodeId) => {
       const node = nodes[id]
       if (!node) return
+      if ((node as { visible?: boolean }).visible === false) return
       const def = nodeRegistry.get(node.type)
       const builder = def?.floorplan
       if (builder) {
@@ -373,6 +386,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const buildingScopedKindSet = new Set(buildingScopedKinds)
       for (const [id, node] of Object.entries(nodes)) {
         if (!node || !buildingScopedKindSet.has(node.type)) continue
+        if ((node as { visible?: boolean }).visible === false) continue
         const parentId = (node as { parentId?: AnyNodeId | null }).parentId
         if (parentId !== activeBuildingId) continue
         const cid = id as AnyNodeId
@@ -383,8 +397,22 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         const highlighted = highlightedIdSet.has(cid)
         const hovered = hoveredId === cid
         const moving = movingNode?.id === cid
+        const live = liveTransforms.get(cid)
+        const hasPosition = Array.isArray((node as { position?: unknown }).position)
+        let effectiveNode: AnyNode =
+          live && hasPosition ? applyPositionLiveTransform(node, live) : node
+        const contextNodes = def?.floorplanSiblingOverrides
+          ? def.floorplanSiblingOverrides({ nodeId: cid, nodes, liveOverrides })
+          : nodes
+        if (contextNodes !== nodes) {
+          const merged = contextNodes[cid]
+          if (merged) {
+            effectiveNode = live && hasPosition ? applyPositionLiveTransform(merged, live) : merged
+          }
+        }
         const ctx: GeometryContext = {
-          resolve: <N = AnyNode>(rid: AnyNodeId): N | undefined => nodes[rid] as N | undefined,
+          resolve: <N = AnyNode>(rid: AnyNodeId): N | undefined =>
+            contextNodes[rid] as N | undefined,
           children: [],
           siblings: [],
           parent: activeLevelNode,
@@ -399,12 +427,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             : undefined,
         }
         const geometry = (builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null)(
-          node,
+          effectiveNode,
           ctx,
         )
         if (geometry) {
           const { base, overlay } = splitFloorplanOverlay(geometry)
-          out.push({ id: cid, node, base, overlay, selected, highlighted })
+          out.push({ id: cid, node: effectiveNode, base, overlay, selected, highlighted })
         }
       }
     }
@@ -693,8 +721,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       className="floorplan-registry-entry"
       data-node-id={id}
       key={key}
-      onClick={isOpeningPlacementActive ? undefined : handleClickStop}
-      onPointerDown={isOpeningPlacementActive ? undefined : (e) => handleSelect(id, e)}
+      onClick={isOpeningPlacementActive || isMarqueeSelectionActive ? undefined : handleClickStop}
+      onPointerDown={
+        isOpeningPlacementActive || isMarqueeSelectionActive
+          ? undefined
+          : (e) => handleSelect(id, e)
+      }
       // Mirror the sidebar tree nodes' hover wiring — `useViewer.
       // hoveredId` drives the highlight halo in 3D as well as the
       // wall / fence floor-plan hover stroke. Setting it on
@@ -716,6 +748,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         geometry={geometry}
         hatchPatternId={renderCtx?.hatchPatternId}
         hoveredHandleId={hoveredHandleId}
+        isMarqueeSelectionActive={isMarqueeSelectionActive}
         nodeId={id}
         onHandleHoverChange={setHoveredHandleId}
         onHandlePointerDown={(affordance, payload, event, rotationPivot) =>
@@ -807,6 +840,7 @@ function InteractiveGeometry({
   hatchPatternId,
   hoveredHandleId,
   activeDragId,
+  isMarqueeSelectionActive,
   nodeId,
   sceneRotationDeg,
   onHandleHoverChange,
@@ -819,6 +853,7 @@ function InteractiveGeometry({
   hatchPatternId: string | undefined
   hoveredHandleId: string | null
   activeDragId: string | null
+  isMarqueeSelectionActive: boolean
   nodeId: AnyNodeId
   sceneRotationDeg: number
   onHandleHoverChange: (id: string | null) => void
@@ -860,7 +895,7 @@ function InteractiveGeometry({
         return (
           <line
             key={keyHint}
-            pointerEvents={g.pointerEvents ?? 'stroke'}
+            pointerEvents={isMarqueeSelectionActive ? 'none' : (g.pointerEvents ?? 'stroke')}
             stroke="transparent"
             strokeLinecap="round"
             strokeWidth={g.strokeWidthPx * unitsPerPixel}
@@ -1593,7 +1628,13 @@ function InteractiveGeometry({
         )
       }
       default:
-        return <FloorplanGeometryRenderer geometry={g} key={keyHint} />
+        return (
+          <FloorplanGeometryRenderer
+            geometry={g}
+            key={keyHint}
+            pointerEventsOverride={isMarqueeSelectionActive ? 'none' : undefined}
+          />
+        )
     }
   }
 }

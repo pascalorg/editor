@@ -2,10 +2,10 @@ import {
   type AlignmentAnchor,
   type AlignmentGuide,
   collectAlignmentAnchors,
-  useAlignmentGuides,
+  resolveAlignment,
   useScene,
 } from '@pascal-app/core'
-import { resolveAlignmentForActiveBuilding } from '../world-grid-snap'
+import { useAlignmentGuides } from '@pascal-app/editor'
 
 /**
  * Fixed Figma-style alignment threshold (meters) for floor-plan placement /
@@ -49,17 +49,7 @@ export function applyFloorplanAlignment(
     return { point: [point[0], point[1]], snapped: false, guides: [] }
   }
 
-  // Resolve in the WORLD frame so 2D and 3D paths share the same guide
-  // coordinate system in the shared `useAlignmentGuides` store. Without
-  // this, the 3D tools (wall draft / item placement / etc.) write
-  // world-frame guides while 2D wrote local-frame guides, and the
-  // FloorplanAlignmentGuideLayer would render whichever side wrote last
-  // — guides drifted off-axis whenever the building was rotated and a
-  // 3D tool was active. The helper transforms local anchors → world,
-  // runs the resolver, returns guides in world coords, and projects the
-  // snap delta back to building-local so callers add it to a local
-  // position unchanged.
-  const result = resolveAlignmentForActiveBuilding({
+  const result = resolveAlignment({
     moving: movingAnchors,
     candidates,
     threshold: opts?.threshold ?? FLOORPLAN_ALIGNMENT_THRESHOLD_M,

@@ -10,11 +10,8 @@ import {
   movingFootprintAnchors,
   useScene,
 } from '@pascal-app/core'
-import {
-  applyFloorplanAlignment,
-  snapBuildingLocalToWorldGrid,
-  type WallPlanPoint,
-} from '@pascal-app/editor'
+import { applyFloorplanAlignment, useEditor, type WallPlanPoint } from '@pascal-app/editor'
+import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import { findClosestWallInPlan, snapLocalXToNeighbors } from '../shared/wall-attach-target'
 
 /**
@@ -38,7 +35,95 @@ import { findClosestWallInPlan, snapLocalXToNeighbors } from '../shared/wall-att
  * the item's current attach family.
  */
 
-const GRID_STEP = 0.5
+type ItemPlanTransform = {
+  point: [number, number]
+  rotation: number
+}
+
+function rotateVec(x: number, z: number, rotationY: number): [number, number] {
+  const c = Math.cos(rotationY)
+  const s = Math.sin(rotationY)
+  return [x * c + z * s, -x * s + z * c]
+}
+
+function resolveItemPlanTransform(
+  item: ItemNode,
+  nodes: Record<AnyNodeId, AnyNode>,
+  cache = new Map<AnyNodeId, ItemPlanTransform>(),
+): ItemPlanTransform {
+  const cached = cache.get(item.id as AnyNodeId)
+  if (cached) return cached
+
+  const localRotation = item.rotation[1] ?? 0
+  let result: ItemPlanTransform = {
+    point: [item.position[0], item.position[2]],
+    rotation: localRotation,
+  }
+  const parent = item.parentId ? nodes[item.parentId as AnyNodeId] : null
+  if (parent?.type === 'wall') {
+    const wallRotation = -Math.atan2(
+      parent.end[1] - parent.start[1],
+      parent.end[0] - parent.start[0],
+    )
+    const wallLocalZ =
+      item.asset.attachTo === 'wall-side'
+        ? ((parent.thickness ?? 0.1) / 2) * (item.side === 'back' ? -1 : 1)
+        : item.position[2]
+    const [offsetX, offsetZ] = rotateVec(item.position[0], wallLocalZ, wallRotation)
+    result = {
+      point: [parent.start[0] + offsetX, parent.start[1] + offsetZ],
+      rotation: wallRotation + localRotation,
+    }
+  } else if (parent?.type === 'shelf') {
+    const shelf = parent as AnyNode & {
+      position: [number, number, number]
+      rotation: [number, number, number]
+    }
+    const [offsetX, offsetZ] = rotateVec(item.position[0], item.position[2], shelf.rotation[1] ?? 0)
+    result = {
+      point: [shelf.position[0] + offsetX, shelf.position[2] + offsetZ],
+      rotation: (shelf.rotation[1] ?? 0) + localRotation,
+    }
+  } else if (parent?.type === 'item') {
+    const parentTransform = resolveItemPlanTransform(parent as ItemNode, nodes, cache)
+    const [offsetX, offsetZ] = rotateVec(
+      item.position[0],
+      item.position[2],
+      parentTransform.rotation,
+    )
+    result = {
+      point: [parentTransform.point[0] + offsetX, parentTransform.point[1] + offsetZ],
+      rotation: parentTransform.rotation + localRotation,
+    }
+  }
+
+  cache.set(item.id as AnyNodeId, result)
+  return result
+}
+
+function resolveItemPlanPoint(
+  item: ItemNode,
+  nodes: Record<AnyNodeId, AnyNode>,
+  cache = new Map<AnyNodeId, ItemPlanTransform>(),
+): [number, number] {
+  return resolveItemPlanTransform(item, nodes, cache).point
+}
+
+function createPlanarMovePointResolver(originalPlanPoint: [number, number], node: ItemNode) {
+  const resolveCursor = createFloorplanCursorResolver({
+    original: originalPlanPoint,
+    metadata: node.metadata,
+  })
+
+  return (planPoint: readonly [number, number], shiftKey: boolean): WallPlanPoint => {
+    const snap = (value: number) => {
+      if (shiftKey) return value
+      const step = useEditor.getState().gridSnapStep
+      return Math.round(value / step) * step
+    }
+    return resolveCursor(planPoint, { snap }) as WallPlanPoint
+  }
+}
 
 export const itemFloorplanMoveTarget: FloorplanMoveTarget<ItemNode> = ({ node, nodes }) => {
   const attachTo = node.asset.attachTo
@@ -81,12 +166,17 @@ function buildWallItemSession(
   // local-Y carries over from the source item's position (2D can't
   // express vertical movement).
   const startLocalY = node.position[1]
+  const resolveCursor = createFloorplanCursorResolver({
+    original: resolveItemPlanPoint(node, useScene.getState().nodes),
+    metadata: node.metadata,
+  })
 
   return {
     affectedIds: [node.id as AnyNodeId],
     apply({ planPoint, modifiers }) {
       const nodes = useScene.getState().nodes
-      const hit = findClosestWallInPlan(planPoint, nodes, startLevelId)
+      const resolvedPlanPoint = resolveCursor(planPoint)
+      const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)
       if (!hit) return
 
       const [width] = getScaledDimensions(node)
@@ -103,9 +193,9 @@ function buildWallItemSession(
             selfId: node.id as AnyNodeId,
             nodes,
           })
+      const step = useEditor.getState().gridSnapStep
       const snappedLocalX =
-        neighborX ??
-        (modifiers.shiftKey ? hit.localX : Math.round(hit.localX / GRID_STEP) * GRID_STEP)
+        neighborX ?? (modifiers.shiftKey ? hit.localX : Math.round(hit.localX / step) * step)
 
       const halfW = width / 2
       const clampedX = Math.max(halfW, Math.min(hit.wallLength - halfW, snappedLocalX))
@@ -147,17 +237,13 @@ function buildFloorItemSession(
   nodes: Record<AnyNodeId, AnyNode>,
 ): FloorplanMoveTargetSession {
   const rotationY = node.rotation[1] ?? 0
+  const resolvePlanPoint = createPlanarMovePointResolver(resolveItemPlanPoint(node, nodes), node)
   // Alignment candidates gathered once — scene is stable during the drag.
   const candidates = collectAlignmentAnchors(nodes, node.id)
   return {
     affectedIds: [node.id as AnyNodeId],
     apply({ planPoint, modifiers }) {
-      const gridSnapped: WallPlanPoint = modifiers.shiftKey
-        ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : (snapBuildingLocalToWorldGrid(
-            [planPoint[0], planPoint[1]] as WallPlanPoint,
-            GRID_STEP,
-          ) as WallPlanPoint)
+      const gridSnapped = resolvePlanPoint(planPoint, modifiers.shiftKey)
       // Figma-style alignment layered on the grid snap (Alt bypasses).
       const { point: snapped } = applyFloorplanAlignment(
         gridSnapped,
@@ -207,16 +293,15 @@ function buildSurfaceItemSession(
   startLevelId: AnyNodeId | null,
   targetKind: 'ceiling',
 ): FloorplanMoveTargetSession {
+  const resolvePlanPoint = createPlanarMovePointResolver(
+    resolveItemPlanPoint(node, useScene.getState().nodes),
+    node,
+  )
   return {
     affectedIds: [node.id as AnyNodeId],
     apply({ planPoint, modifiers }) {
       const nodes = useScene.getState().nodes
-      const snapped: WallPlanPoint = modifiers.shiftKey
-        ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : (snapBuildingLocalToWorldGrid(
-            [planPoint[0], planPoint[1]] as WallPlanPoint,
-            GRID_STEP,
-          ) as WallPlanPoint)
+      const snapped = resolvePlanPoint(planPoint, modifiers.shiftKey)
 
       const surface = findContainingSurface(snapped, nodes, startLevelId, targetKind)
 

@@ -1,10 +1,36 @@
 import type { HandleDescriptor, NodeDefinition, SpawnNode as SpawnNodeType } from '@pascal-app/core'
 import { buildSpawnFloorplan } from './floorplan'
+import { spawnRotateAffordance } from './floorplan-affordances'
 import { spawnParametrics } from './parametrics'
 import { SpawnNode } from './schema'
 
 const SPAWN_FOOTPRINT = 0.6
+const SPAWN_HANDLE_HEIGHT = 0.46
 const MOVE_FRONT_OFFSET = 0.35
+const ROTATE_CORNER_OFFSET = 0.32
+const ROTATE_RING_OFFSET = 0.04
+
+function spawnRotateHandle(): HandleDescriptor<SpawnNodeType> {
+  return {
+    kind: 'arc-resize',
+    axis: 'angular',
+    shape: 'rotate',
+    apply: (initial, delta) => ({ rotation: (initial.rotation ?? 0) - delta }),
+    placement: {
+      position: () => [
+        SPAWN_FOOTPRINT / 2,
+        SPAWN_HANDLE_HEIGHT,
+        SPAWN_FOOTPRINT / 2 + ROTATE_CORNER_OFFSET,
+      ],
+      rotationY: () => -Math.PI / 4,
+    },
+    decoration: {
+      kind: 'ring',
+      radius: () => Math.hypot(SPAWN_FOOTPRINT / 2, SPAWN_FOOTPRINT / 2) + ROTATE_RING_OFFSET,
+      y: () => SPAWN_HANDLE_HEIGHT,
+    },
+  }
+}
 
 function spawnMoveHandle(): HandleDescriptor<SpawnNodeType> {
   return {
@@ -52,7 +78,7 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
   },
 
   parametrics: spawnParametrics,
-  handles: [spawnMoveHandle()],
+  handles: [spawnRotateHandle(), spawnMoveHandle()],
 
   renderer: {
     kind: 'parametric',
@@ -66,6 +92,9 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
   // delete. Legacy spawn click handlers in FloorplanNodeLayer become
   // dead code once Phase 6 cleanup removes the [] entries path.
   floorplan: buildSpawnFloorplan,
+  floorplanAffordances: {
+    'spawn-rotate': spawnRotateAffordance,
+  },
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Left click', label: 'Place spawn point' },
@@ -75,7 +104,7 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
   presentation: {
     label: 'Spawn Point',
     description: 'Player or camera origin within a level. One per level.',
-    icon: { kind: 'url', src: '/icons/site.png' },
+    icon: { kind: 'url', src: '/icons/spawn-point.png' },
     paletteSection: 'structure',
     paletteOrder: 90, // bottom of structure list — matches legacy palette order
   },

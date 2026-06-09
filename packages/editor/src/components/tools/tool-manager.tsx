@@ -10,6 +10,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
+import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
 import { RoofTool } from './roof/roof-tool'
@@ -89,8 +90,9 @@ export const ToolManager: React.FC = () => {
     | CeilingNode['id']
     | undefined
 
-  // Show site boundary editor when in site phase (toggle controls entry/exit)
-  const showSiteBoundaryEditor = phase === 'site'
+  // Keep the site vertex flags available in select mode; the editor component
+  // switches to full polygon editing only after a flag activates site mode.
+  const showSiteBoundaryEditor = phase === 'site' || mode === 'select'
 
   // Show slab boundary editor when in structure/select mode with a slab selected (but not editing a hole)
   const showSlabBoundaryEditor =
@@ -277,12 +279,13 @@ export const ToolManager: React.FC = () => {
           />
         )}
         {!movingNode && BuildToolComponent && tool !== 'elevator' ? <BuildToolComponent /> : null}
+        {/* Figma-style alignment guides published by the move / placement
+            tools above. Lives inside the building-local group so the
+            building-local guide coords render at the right world position. */}
+        <Alignment3DGuideLayer />
+        {/* "Magnetic" beacon at the active wall-draft snap point. */}
+        <WallSnapBeaconLayer />
       </group>
-      {/* Figma-style alignment guides — rendered OUTSIDE the building-local
-          group so guide coords are interpreted as world-frame, matching the
-          world-axis grid. Tools now publish world-frame guides via the
-          `resolveAlignmentForActiveBuilding` wrapper. */}
-      <Alignment3DGuideLayer />
     </>
   )
 }

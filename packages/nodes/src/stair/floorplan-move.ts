@@ -3,24 +3,22 @@ import {
   collectAlignmentAnchors,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  movingAlignmentAnchors,
   type StairNode,
   snapScalar,
   useScene,
 } from '@pascal-app/core'
 import { applyFloorplanAlignment, getSegmentGridStep } from '@pascal-app/editor'
+import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 
 /**
  * 2D floor-plan move handler for stair.
  *
- * **Pivot semantics.** The stair's ORIGIN (its `position`) follows the
- * snapped cursor — the same pivot the 3D move tool (`shared/move-roof-tool`)
- * uses: it positions the stair by its origin at the grid-snapped, aligned
- * cursor, NOT by the grab offset under the mouse. This replaces the old
- * grab-relative delta so dragging in 2D tracks the same point as 3D.
+ * Existing stairs preserve the cursor grab offset, matching the 3D move
+ * tools; fresh catalog placement follows the cursor absolutely.
  *
- * Figma alignment is layered on the origin point (single anchor), matching
- * `move-roof-tool`'s "align by origin" behaviour; Alt bypasses. Guides are
- * cleared by `FloorplanRegistryMoveOverlay`'s Path 1 teardown.
+ * Figma alignment is layered on the stair footprint edges; Alt bypasses.
+ * Guides are cleared by `FloorplanRegistryMoveOverlay`'s Path 1 teardown.
  *
  * The position is written straight to scene each tick (the stair has a real
  * `position` field, unlike polygon kinds) and re-applied atomically via
@@ -29,6 +27,10 @@ import { applyFloorplanAlignment, getSegmentGridStep } from '@pascal-app/editor'
  */
 export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node, nodes }) => {
   const startY = node.position[1]
+  const resolveCursor = createFloorplanCursorResolver({
+    original: [node.position[0], node.position[2]],
+    metadata: node.metadata,
+  })
   // Alignment candidates gathered once — the scene is stable during the drag.
   const candidates = collectAlignmentAnchors(nodes, node.id)
   let lastValid: { position: [number, number, number] } | null = null
@@ -39,13 +41,16 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
       // Snap the origin to the editor's current grid step (driven by
       // `useEditor.gridSnapStep`). Shift bypasses the grid snap.
       const step = getSegmentGridStep()
-      const gx = modifiers.shiftKey ? planPoint[0] : snapScalar(planPoint[0], step)
-      const gz = modifiers.shiftKey ? planPoint[1] : snapScalar(planPoint[1], step)
-      // Figma alignment on the origin point (Alt bypasses), matching the 3D
-      // move tool. Publishes guides via `useAlignmentGuides`.
+      const snap = (value: number) => (modifiers.shiftKey ? value : snapScalar(value, step))
+      const [gx, gz] = resolveCursor(planPoint, { snap })
+      // Figma alignment on the actual stair footprint (Alt bypasses),
+      // matching the 3D move tool. Publishes guides via `useAlignmentGuides`.
+      const movingAnchors = movingAlignmentAnchors(node, nodes, gx, gz, node.rotation ?? 0)
       const { point: aligned } = applyFloorplanAlignment(
         [gx, gz],
-        [{ nodeId: node.id, kind: 'corner', x: gx, z: gz }],
+        movingAnchors.length > 0
+          ? movingAnchors
+          : [{ nodeId: node.id, kind: 'corner', x: gx, z: gz }],
         candidates,
         { bypass: modifiers.altKey },
       )

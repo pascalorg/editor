@@ -4,22 +4,21 @@ import {
   collectAlignmentAnchors,
   type FloorplanMoveTargetSession,
   polygonAnchors,
+  resolveAlignment,
   sceneRegistry,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { resolveAlignmentForActiveBuilding, snapBuildingLocalToWorldGrid, type WallPlanPoint } from '@pascal-app/editor'
+import { getSegmentGridStep, useAlignmentGuides, type WallPlanPoint } from '@pascal-app/editor'
 import type * as THREE from 'three'
+import { createFloorplanCursorResolver } from './floorplan-cursor'
 
 /**
  * Shared 2D floor-plan move for polygon-based kinds (slab / ceiling / zone).
  *
- * **Pivot semantics.** The move uses the polygon's **centroid** as the pivot:
- * the centroid snaps to the (grid-snapped, then Figma-aligned) cursor — the
- * same way a regular item's origin snaps to the cursor in both 3D and 2D.
- * This replaces the old grab-relative delta ("drag from wherever you first
- * touched"), so polygon kinds move consistently with every other item.
+ * Existing polygon kinds preserve the cursor grab offset; fresh catalog
+ * placement uses the polygon centroid as the cursor-following pivot. This
+ * matches the generic 3D move tool while keeping polygon geometry in vertices.
  *
  * **Why a delta in `useLiveTransforms`** (see `wiki/architecture/tools.md`):
  * polygon kinds carry their position in their vertices, not a `position`
@@ -34,8 +33,6 @@ import type * as THREE from 'three'
  * ceiling: `height − 0.01`) so the 3D mesh doesn't teleport vertically in a
  * split view during the drag.
  */
-const GRID_STEP = 0.5
-
 /** Figma-style alignment threshold (meters) — parity with the 3D move tools. */
 const ALIGNMENT_THRESHOLD_M = 0.08
 
@@ -65,6 +62,7 @@ export function createPolygonCentroidMoveTarget(args: {
     type: string
     polygon: Array<[number, number]>
     holes?: Array<Array<[number, number]>>
+    metadata?: unknown
   }
   nodes: Record<AnyNodeId, AnyNode>
   /** 3D mesh Y the kind's system parks the group at on rebuild. */
@@ -79,6 +77,10 @@ export function createPolygonCentroidMoveTarget(args: {
     hole.map(([x, z]) => [x, z] as [number, number]),
   )
   const originalCenter = polygonCentroid(originalPolygon)
+  const resolveCursor = createFloorplanCursorResolver({
+    original: originalCenter,
+    metadata: node.metadata,
+  })
   // Alignment candidates gathered once — the scene is stable during the drag.
   const candidates = collectAlignmentAnchors(nodes, id)
   let lastDelta: [number, number] = [0, 0]
@@ -89,17 +91,14 @@ export function createPolygonCentroidMoveTarget(args: {
       // Centroid → snapped cursor. Grid-snap the target centroid (Shift
       // drops the grid snap), then layer Figma alignment on the translated
       // polygon's vertices and fold its snap into the delta. Alt bypasses.
-      const target: WallPlanPoint = modifiers.shiftKey
-        ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : (snapBuildingLocalToWorldGrid(
-            [planPoint[0], planPoint[1]] as WallPlanPoint,
-            GRID_STEP,
-          ) as WallPlanPoint)
+      const step = getSegmentGridStep()
+      const snap = (value: number) => (modifiers.shiftKey ? value : Math.round(value / step) * step)
+      const target = resolveCursor(planPoint, { snap }) as WallPlanPoint
       let dx = target[0] - originalCenter[0]
       let dz = target[1] - originalCenter[1]
 
       if (!modifiers.altKey && candidates.length > 0) {
-        const result = resolveAlignmentForActiveBuilding({
+        const result = resolveAlignment({
           moving: polygonAnchors(id, translatePolygon(originalPolygon, dx, dz)),
           candidates,
           threshold: ALIGNMENT_THRESHOLD_M,

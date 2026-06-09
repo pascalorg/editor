@@ -1,18 +1,26 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  useLiveNodeOverrides,
+  useLiveTransforms,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrthographicCamera, Plane, Vector2, Vector3 } from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import {
   CORNER_OFFSET,
   classifyParticipant,
   collectParticipants,
   computeGroupBox,
   expandToComponent,
+  levelFrame,
   type Vec2,
 } from './group-transform-shared'
 import {
@@ -41,7 +49,10 @@ export function GroupMoveHandle() {
   const nodes = useScene((s) => s.nodes)
 
   const participantIds = useMemo(
-    () => selectedIds.filter((id) => classifyParticipant(nodes[id as AnyNodeId], levelId) !== null),
+    () =>
+      selectedIds.filter(
+        (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
+      ),
     [selectedIds, levelId, nodes],
   )
 
@@ -103,19 +114,23 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
 
   const activate = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
     frozenCorner.current = rest.corner.clone()
     const planeY = rest.baseY
 
     // Snapshot selected participants + connected wall/fence neighbours.
-    const { starts, links } = collectParticipants(
-      ids,
-      useScene.getState().nodes,
-      useViewer.getState().selection.levelId,
-    )
+    const levelId = useViewer.getState().selection.levelId
+    const { starts, links } = collectParticipants(ids, useScene.getState().nodes, levelId)
     if (starts.length === 0) return
 
-    // Horizontal drag plane at the group's base; delta measured in world XZ
-    // (= level-local XZ on an axis-aligned level).
+    // Placements are stored in the level frame, so convert each world-space
+    // ground-plane hit into that frame before measuring the delta. Frozen at
+    // drag-start; `frameOrigin` lets us map the local delta back to world for
+    // the gizmo's own travel (it's portalled to the scene root).
+    const { matrix: frame, inverse: frameInv } = levelFrame(levelId)
+    const frameOrigin = new Vector3().applyMatrix4(frame)
+
+    // Horizontal drag plane at the group's base.
     const plane = new Plane(new Vector3(0, 1, 0), -planeY)
     const ndc = new Vector2()
     const setNDC = (clientX: number, clientY: number) => {
@@ -130,7 +145,7 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
     raycaster.setFromCamera(ndc, camera)
     const hit = new Vector3()
     if (!raycaster.ray.intersectPlane(plane, hit)) return
-    const startHit = hit.clone()
+    const startLocal = hit.clone().applyMatrix4(frameInv)
 
     document.body.style.cursor = 'grabbing'
     sfxEmitter.emit('sfx:item-pick')
@@ -149,9 +164,14 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
       raycaster.setFromCamera(ndc, camera)
       const moveHit = new Vector3()
       if (!raycaster.ray.intersectPlane(plane, moveHit)) return
+      const moveLocal = moveHit.applyMatrix4(frameInv)
       const snap = !e.shiftKey && step > 0
-      const dx = snap ? Math.round((moveHit.x - startHit.x) / step) * step : moveHit.x - startHit.x
-      const dz = snap ? Math.round((moveHit.z - startHit.z) / step) * step : moveHit.z - startHit.z
+      const dx = snap
+        ? Math.round((moveLocal.x - startLocal.x) / step) * step
+        : moveLocal.x - startLocal.x
+      const dz = snap
+        ? Math.round((moveLocal.z - startLocal.z) / step) * step
+        : moveLocal.z - startLocal.z
 
       // Ticker on each grid-cell crossing, like single-item placement.
       if (snap && (!lastSnap || lastSnap[0] !== dx || lastSnap[1] !== dz)) {
@@ -159,18 +179,28 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
         lastSnap = [dx, dz]
       }
 
-      const overrides = useLiveNodeOverrides.getState()
+      const overrideEntries: Array<readonly [string, Record<string, unknown>]> = []
+      const liveTransforms = useLiveTransforms.getState()
       for (const s of starts) {
         if (s.kind === 'endpoint') {
-          overrides.set(s.id, {
-            start: [s.start[0] + dx, s.start[1] + dz],
-            end: [s.end[0] + dx, s.end[1] + dz],
-          })
+          overrideEntries.push([
+            s.id,
+            {
+              start: [s.start[0] + dx, s.start[1] + dz],
+              end: [s.end[0] + dx, s.end[1] + dz],
+            },
+          ])
         } else {
           // Slide on the floor: XZ shift, Y and rotation untouched.
-          overrides.set(s.id, {
-            position: [s.position[0] + dx, s.position[1], s.position[2] + dz],
-          })
+          const position: [number, number, number] = [
+            s.position[0] + dx,
+            s.position[1],
+            s.position[2] + dz,
+          ]
+          overrideEntries.push([s.id, { position }])
+          if (s.kind === 'scalar') {
+            liveTransforms.set(s.id, { position, rotation: s.rotation })
+          }
         }
         useScene.getState().markDirty(s.id)
       }
@@ -178,14 +208,31 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
       // Shared endpoints of connected neighbours follow by the same delta so
       // the junction stays welded; the far end stays put.
       for (const l of links) {
-        overrides.set(l.id, {
-          start: l.startLinked ? [l.start[0] + dx, l.start[1] + dz] : l.start,
-          end: l.endLinked ? [l.end[0] + dx, l.end[1] + dz] : l.end,
-        })
+        overrideEntries.push([
+          l.id,
+          {
+            start: l.startLinked ? [l.start[0] + dx, l.start[1] + dz] : l.start,
+            end: l.endLinked ? [l.end[0] + dx, l.end[1] + dz] : l.end,
+          },
+        ])
         useScene.getState().markDirty(l.id)
       }
+      useLiveNodeOverrides.getState().setMany(overrideEntries)
 
-      setLiveDelta([dx, dz])
+      // Gizmo rides the group in world space; map the level-frame delta back out.
+      const worldDelta = new Vector3(dx, 0, dz).applyMatrix4(frame).sub(frameOrigin)
+      setLiveDelta([worldDelta.x, worldDelta.z])
+    }
+
+    const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
+    const clearLivePreviews = () => {
+      const overrides = useLiveNodeOverrides.getState()
+      const liveTransforms = useLiveTransforms.getState()
+      for (const id of affectedIds) {
+        overrides.clear(id)
+        liveTransforms.clear(id)
+        useScene.getState().markDirty(id)
+      }
     }
 
     const cleanup = () => {
@@ -200,8 +247,6 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
       frozenCorner.current = null
       dragCleanupRef.current = null
     }
-
-    const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
 
     const commitFromOverrides = () => {
       const overrides = useLiveNodeOverrides.getState()
@@ -223,22 +268,22 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
       // tracked set — collapsing the whole group move into one undo.
       useScene.temporal.getState().resume()
       if (updates.length > 0) useScene.getState().updateNodes(updates)
-      for (const id of affectedIds) {
-        useLiveNodeOverrides.getState().clear(id)
-        useScene.getState().markDirty(id)
-      }
+      clearLivePreviews()
       cleanup()
     }
 
     const onCancel = () => {
-      for (const id of affectedIds) {
-        useLiveNodeOverrides.getState().clear(id)
-        useScene.getState().markDirty(id)
-      }
+      clearLivePreviews()
       cleanup()
     }
 
-    dragCleanupRef.current = cleanup
+    dragCleanupRef.current = () => {
+      clearLivePreviews()
+      cleanup()
+    }
+    for (const id of affectedIds) {
+      useLiveTransforms.getState().clear(id)
+    }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)

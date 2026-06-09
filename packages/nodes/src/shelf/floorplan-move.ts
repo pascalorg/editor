@@ -11,10 +11,11 @@ import {
 import {
   applyFloorplanAlignment,
   getFloorStackPreviewPosition,
-  snapPointToGrid,
   triggerSFX,
+  useEditor,
   type WallPlanPoint,
 } from '@pascal-app/editor'
+import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 
 /**
  * 2D floor-plan move handler for shelf — mirrors `itemFloorplanMoveTarget`,
@@ -38,12 +39,14 @@ import {
  * live transform — the 2D SVG moved but the 3D mesh stayed put. Writing the
  * scene directly removes that second source of truth entirely.
  */
-const GRID_STEP = 0.5
-
 export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node, nodes }) => {
   const shelfId = node.id as AnyNodeId
   const originalPosition: [number, number, number] = [...node.position] as [number, number, number]
   const originalRotationY = node.rotation[1] ?? 0
+  const resolveCursor = createFloorplanCursorResolver({
+    original: [originalPosition[0], originalPosition[2]],
+    metadata: node.metadata,
+  })
   let lastPosition: [number, number, number] = originalPosition
   let lastSnapKey: string | null = null
 
@@ -55,9 +58,12 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
   const session: FloorplanMoveTargetSession = {
     affectedIds: [shelfId],
     apply({ planPoint, modifiers }) {
-      const gridSnapped: WallPlanPoint = modifiers.shiftKey
-        ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)
+      const snap = (value: number) => {
+        if (modifiers.shiftKey) return value
+        const step = useEditor.getState().gridSnapStep
+        return Math.round(value / step) * step
+      }
+      const gridSnapped = resolveCursor(planPoint, { snap }) as WallPlanPoint
       // Figma-style alignment layered on the grid snap — the shelf footprint
       // edges snap to neighbours / wall faces and a guide is published. Alt
       // bypasses (matches placement tools' "No snap").

@@ -8,20 +8,25 @@ import {
   emitter,
   type GridEvent,
   movingFootprintAnchors,
+  resolveAlignment,
   sceneRegistry,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  commitFreshPlacementSubtree,
   DragBoundingBox,
   getFloorStackPreviewPosition,
   markToolCancelConsumed,
+  resolvePlanarCursorPosition,
+  stripPlacementMetadataFlags,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
-  resolveAlignmentForActiveBuilding,
+  useFreshPlacementVisibility,
 } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useState } from 'react'
 
 /**
@@ -54,6 +59,8 @@ const ALIGNMENT_THRESHOLD_M = 0.08
 function MoveColumnTool({ node }: { node: ColumnNode }) {
   const [previewPosition, setPreviewPosition] = useState<[number, number, number]>(node.position)
   const [previewRotation, setPreviewRotation] = useState<number>(node.rotation)
+  const { isFreshPlacement, previewVisible, revealFreshPlacement, useAbsoluteCursorPlacement } =
+    useFreshPlacementVisibility({ node })
 
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
@@ -70,11 +77,8 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
     let rotationY = node.rotation
     // Latest previewed position, so an R/T press can re-apply at the spot.
     let lastPosition: [number, number, number] = node.position
-    const meta =
-      typeof node.metadata === 'object' && node.metadata !== null
-        ? (node.metadata as Record<string, unknown>)
-        : {}
-    const isNew = !!meta.isNew
+    let dragAnchor: [number, number] | null = null
+    const isNew = isFreshPlacement
     const getVisualPosition = (
       position: [number, number, number],
       rotation = rotationY,
@@ -111,15 +115,26 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
 
     const onGridMove = (event: GridEvent) => {
       hasMoved = true
-      let x = snapToGridStep(event.localPosition[0])
-      let z = snapToGridStep(event.localPosition[2])
+      const rawX = event.localPosition[0]
+      const rawZ = event.localPosition[2]
+      revealFreshPlacement()
+
+      const resolved = resolvePlanarCursorPosition({
+        cursor: [rawX, rawZ],
+        original: [node.position[0], node.position[2]],
+        anchor: dragAnchor,
+        mode: useAbsoluteCursorPlacement ? 'absolute' : 'relative',
+        snap: snapToGridStep,
+      })
+      dragAnchor = resolved.anchor
+      let [x, z] = resolved.point
 
       // Figma-style alignment snap on top of grid snap; Alt bypasses. The
       // guide connects to the candidate's nearest real anchor (resolver
       // tie-break), so the dot always sits on an actual point.
       const bypass = event.nativeEvent?.altKey === true
       if (!bypass && alignmentCandidates.length > 0) {
-        const result = resolveAlignmentForActiveBuilding({
+        const result = resolveAlignment({
           moving: movingFootprintAnchors(node, x, z, rotationY),
           candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,
@@ -157,13 +172,30 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
       // click to the grid.
       const position: [number, number, number] = [...lastPosition]
       const nodeId = (node as { id?: ColumnNode['id'] }).id
+      let committedId = node.id as AnyNodeId
 
       if (nodeId && useScene.getState().nodes[nodeId]) {
-        committed = true
-        useScene.temporal.getState().resume()
-        useScene
-          .getState()
-          .updateNode(nodeId, { position, rotation: rotationY, ...(isNew ? { metadata: {} } : {}) })
+        const data = {
+          position,
+          rotation: rotationY,
+          ...(isNew
+            ? {
+                metadata: stripPlacementMetadataFlags(node.metadata) as ColumnNode['metadata'],
+                visible: true,
+              }
+            : null),
+        }
+        if (isNew) {
+          const finalId = commitFreshPlacementSubtree(nodeId as AnyNodeId, data)
+          if (finalId) {
+            committed = true
+            committedId = finalId
+          }
+        } else {
+          committed = true
+          useScene.temporal.getState().resume()
+          useScene.getState().updateNode(nodeId, data)
+        }
         useLiveTransforms.getState().clear(nodeId)
         const m = sceneRegistry.nodes.get(nodeId)
         if (m) {
@@ -184,7 +216,11 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
       }
 
       useLiveTransforms.getState().clear(node.id)
+      if (isNew && committed) {
+        useViewer.getState().setSelection({ selectedIds: [committedId] })
+      }
       triggerSFX('sfx:item-place')
+      useEditor.getState().setMovingNodeOrigin('3d')
       exitMoveMode()
       event.nativeEvent?.stopPropagation?.()
     }
@@ -192,12 +228,16 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
     const onCancel = () => {
       useLiveTransforms.getState().clear(node.id)
       useAlignmentGuides.getState().clear()
-      const m = sceneRegistry.nodes.get(node.id)
-      if (m) {
-        m.position.set(...getVisualPosition(node.position, node.rotation))
-        m.rotation.y = node.rotation
+      if (isNew) {
+        useScene.getState().deleteNode(node.id as AnyNodeId)
+      } else {
+        const m = sceneRegistry.nodes.get(node.id)
+        if (m) {
+          m.position.set(...getVisualPosition(node.position, node.rotation))
+          m.rotation.y = node.rotation
+        }
+        useScene.getState().markDirty(node.id as AnyNodeId)
       }
-      useScene.getState().markDirty(node.id as AnyNodeId)
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
       exitMoveMode()
@@ -215,17 +255,20 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
       emitter.off('tool:cancel', onCancel)
       useLiveTransforms.getState().clear(node.id)
       useAlignmentGuides.getState().clear()
-      if (!committed) {
+      const finalisedBy2D = useEditor.getState().movingNodeOrigin === '2d'
+      if (!(committed || isNew || finalisedBy2D)) {
         const m = sceneRegistry.nodes.get(node.id)
         if (m) {
           m.position.set(...getVisualPosition(node.position, node.rotation))
           m.rotation.y = node.rotation
         }
         useScene.getState().markDirty(node.id as AnyNodeId)
-        useScene.temporal.getState().resume()
       }
+      useScene.temporal.getState().resume()
     }
-  }, [exitMoveMode, node])
+  }, [exitMoveMode, isFreshPlacement, node, revealFreshPlacement, useAbsoluteCursorPlacement])
+
+  if (!previewVisible) return null
 
   return (
     <>

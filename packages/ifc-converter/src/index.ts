@@ -16,6 +16,12 @@ import {
 } from '@pascal-app/core'
 import { customAlphabet } from 'nanoid'
 import * as WebIFC from 'web-ifc'
+import { type IfcConversionSimplificationOptions, simplifyConvertedSceneGraph } from './cleanup'
+
+export type {
+  IfcConversionSimplificationOptions,
+  IfcConversionSimplificationStats,
+} from './cleanup'
 
 export type PascalNode = AnyNode
 
@@ -636,6 +642,7 @@ export interface ConversionOptions {
   swapYZ?: boolean
   extrusionDepthIsHeight?: boolean
   swapProfileDimensions?: boolean
+  simplify?: boolean | IfcConversionSimplificationOptions
   label?: string
 }
 
@@ -664,6 +671,12 @@ export async function convertIfcToPascal(
     extrusionDepthIsHeight: options?.extrusionDepthIsHeight ?? true,
     swapProfileDimensions: options?.swapProfileDimensions ?? false,
   }
+  const simplificationOptions =
+    options?.simplify === false
+      ? { enabled: false }
+      : typeof options?.simplify === 'object'
+        ? options.simplify
+        : undefined
 
   const progress = (msg: string, pct: number) => {
     console.log(`[IFC→Pascal] ${msg} (${pct}%)`)
@@ -2047,6 +2060,16 @@ export async function convertIfcToPascal(
     }
   } catch {
     /* no type rels */
+  }
+
+  progress('Simplifying converted scene...', 94)
+  const simplificationStats = simplifyConvertedSceneGraph(nodes, simplificationOptions)
+  if (
+    simplificationStats.removedTinyWalls > 0 ||
+    simplificationStats.removedMergedWalls > 0 ||
+    simplificationStats.removedDuplicateOpenings > 0
+  ) {
+    console.log('[IFC→Pascal] Simplification:', simplificationStats)
   }
 
   ifcApi.CloseModel(modelID)

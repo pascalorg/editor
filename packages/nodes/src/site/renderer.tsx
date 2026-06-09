@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   type SiteNode,
   type SlabNode,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -51,6 +52,10 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   useRegistry(node.id, 'site', ref)
 
   const bgColor = useViewer((state) => getSceneTheme(state.sceneTheme).ground)
+  const livePolygon = useLiveNodeOverrides(
+    (state) => (state.overrides.get(node.id)?.polygon as SiteNode['polygon'] | undefined) ?? null,
+  )
+  const polygonPoints = livePolygon?.points ?? node.polygon?.points
 
   // Lit (not Basic) so the site ground receives the directional shadow — Basic
   // is unlit, which is why shadows used to stop dead at the slab edge. polygonOffset
@@ -102,9 +107,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   // Ground shape: site polygon with slab footprints punched as holes
   const groundShape = useMemo(() => {
-    if (!node?.polygon?.points || node.polygon.points.length < 3) return null
+    if (!polygonPoints || polygonPoints.length < 3) return null
 
-    const pts = node.polygon.points
+    const pts = polygonPoints
     const shape = new Shape()
     shape.moveTo(pts[0]![0], -pts[0]![1])
     for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i]![0], -pts[i]![1])
@@ -122,13 +127,13 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     }
 
     return shape
-  }, [node?.polygon?.points, slabPolygons])
+  }, [polygonPoints, slabPolygons])
 
   // Create boundary line geometry
   const lineGeometry = useMemo(() => {
-    if (!node?.polygon?.points || node.polygon.points.length < 2) return null
-    return createBoundaryLineGeometry(node.polygon.points)
-  }, [node?.polygon?.points])
+    if (!polygonPoints || polygonPoints.length < 2) return null
+    return createBoundaryLineGeometry(polygonPoints)
+  }, [polygonPoints])
 
   const handlers = useNodeEvents(node, 'site')
 

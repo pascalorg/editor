@@ -46,6 +46,7 @@ export {
 } from './hooks/spatial-grid/floor-placed-elevation'
 export { pointInPolygon, spatialGridManager } from './hooks/spatial-grid/spatial-grid-manager'
 export {
+  findLevelAncestorId,
   initSpatialGridSync,
   resolveBuildingForLevel,
   resolveLevelId,
@@ -111,7 +112,6 @@ export {
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
 } from './store/history-control'
-export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export {
   type ControlValue,
   type DoorAnimationState,

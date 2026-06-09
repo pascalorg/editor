@@ -5,17 +5,16 @@ import {
   emitter,
   type GridEvent,
   type LevelNode,
-  useAlignmentGuides,
+  resolveAlignment,
   useScene,
 } from '@pascal-app/core'
 import {
   CursorSphere,
   EDITOR_LAYER,
   markToolCancelConsumed,
-  snapWorldXZForActiveBuilding,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
-  resolveAlignmentForActiveBuilding,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -119,7 +118,7 @@ export const SlabTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
         return fallback
       }
-      const ar = resolveAlignmentForActiveBuilding({
+      const ar = resolveAlignment({
         moving: [{ nodeId: '__slab-draft__', kind: 'corner', x: raw[0], z: raw[1] }],
         candidates: alignmentCandidates,
         threshold: ALIGNMENT_THRESHOLD_M,
@@ -140,14 +139,9 @@ export const SlabTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
       const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
-      // Snap on the world XZ grid (the grid the editor renders), then
-      // store in building-local coords. Rotated buildings used to pull
-      // every vertex off the visible grid.
-      const gridPosition = snapWorldXZForActiveBuilding(
-        event.position[0],
-        event.position[2],
-        0.5,
-      ).local
+      const gridX = Math.round(rawPoint[0] * 2) / 2
+      const gridZ = Math.round(rawPoint[1] * 2) / 2
+      const gridPosition: [number, number] = [gridX, gridZ]
       setCursorPosition(gridPosition)
       setLevelY(event.localPosition[1])
       const lastPoint = points[points.length - 1]

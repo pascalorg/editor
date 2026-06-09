@@ -37,7 +37,6 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       { keys: ['1'], action: 'Switch to Site phase' },
       { keys: ['2'], action: 'Switch to Structure phase' },
       { keys: ['3'], action: 'Switch to Furnish phase' },
-      { keys: ['S'], action: 'Switch to Structure layer' },
       { keys: ['F'], action: 'Switch to Furnish layer' },
       { keys: ['Z'], action: 'Switch to Zones layer' },
       {
@@ -56,6 +55,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     shortcuts: [
       { keys: ['V'], action: 'Switch to Select mode' },
       { keys: ['B'], action: 'Switch to Build mode' },
+      { keys: ['X'], action: 'Switch to Delete mode' },
       {
         keys: ['Esc'],
         action: 'Cancel the active tool and return to Select mode',
@@ -100,6 +100,11 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
     title: 'Camera',
     shortcuts: [
+      {
+        keys: ['W', 'A', 'S', 'D'],
+        action: 'Pan camera',
+        note: 'Moves in screen space, similar to dragging the camera view.',
+      },
       {
         keys: ['Middle click'],
         action: 'Pan camera',

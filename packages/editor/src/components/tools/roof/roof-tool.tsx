@@ -9,9 +9,9 @@ import {
   RoofSegmentNode,
   sceneRegistry,
   snapScalar,
-  useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'

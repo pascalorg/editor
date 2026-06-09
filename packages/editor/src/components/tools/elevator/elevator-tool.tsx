@@ -6,14 +6,14 @@ import {
   emitter,
   type GridEvent,
   type LevelNode,
-  useAlignmentGuides,
+  resolveAlignment,
   useScene,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { resolveCurrentBuildingId, resolveElevatorSupportY } from '../../../lib/elevator-support'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import { resolveAlignmentForActiveBuilding } from '../../../lib/world-grid-snap'
 import usePlacementPreview from '../../../store/use-placement-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
 import {
@@ -175,7 +175,7 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
         useAlignmentGuides.getState().clear()
         return [gridX, gridZ]
       }
-      const ar = resolveAlignmentForActiveBuilding({
+      const ar = resolveAlignment({
         moving: [{ nodeId: '__elevator-draft__', kind: 'corner', x: rawX, z: rawZ }],
         candidates: alignmentCandidates,
         threshold: ALIGNMENT_THRESHOLD_M,

@@ -7,6 +7,8 @@ import {
   snapScalar,
   useScene,
 } from '@pascal-app/core'
+import { getSegmentGridStep } from '@pascal-app/editor'
+import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 
 const MIN_ROOF_DIM = 1
 
@@ -148,11 +150,15 @@ export const roofSegmentRotateAffordance: FloorplanAffordance<RoofSegmentNode> =
 export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ node, nodes }) => {
   const segmentId = node.id as AnyNodeId
   const initialY = node.position[1]
-  const { roofRot, cosRoof, sinRoof } = resolveSegmentFrame(node, nodes)
+  const { cx, cz, roofRot, cosRoof, sinRoof } = resolveSegmentFrame(node, nodes)
   const roofId = (node as unknown as { parentId?: AnyNodeId | null }).parentId
   const roof = roofId ? (nodes[roofId] as RoofNode | undefined) : undefined
   const roofPosX = roof?.position[0] ?? 0
   const roofPosZ = roof?.position[2] ?? 0
+  const resolveCursor = createFloorplanCursorResolver({
+    original: [cx, cz],
+    metadata: node.metadata,
+  })
   // Inverse of the forward transform `[cosRoof, -sinRoof; sinRoof, cosRoof]`
   // is `[cosRoof, sinRoof; -sinRoof, cosRoof]`. Used to project world cursor
   // back into roof-local coords.
@@ -162,17 +168,13 @@ export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ no
   return {
     affectedIds: [segmentId],
     apply({ planPoint, modifiers }) {
-      const dx = planPoint[0] - roofPosX
-      const dz = planPoint[1] - roofPosZ
+      const step = getSegmentGridStep()
+      const snap = (value: number) => (modifiers.shiftKey ? value : snapScalar(value, step))
+      const worldPoint = resolveCursor(planPoint, { snap })
+      const dx = worldPoint[0] - roofPosX
+      const dz = worldPoint[1] - roofPosZ
       let localX = dx * cosRoof + dz * sinRoof
       let localZ = -dx * sinRoof + dz * cosRoof
-      // 0.5m grid snap (alt held disables). Mirrors the generic Path 2
-      // fallback's `snapPointToGrid` step so floor-plan moves feel
-      // consistent across kinds.
-      if (!modifiers.altKey) {
-        localX = Math.round(localX * 2) / 2
-        localZ = Math.round(localZ * 2) / 2
-      }
       lastLocal = [localX, initialY, localZ]
       useScene.getState().updateNode(segmentId, { position: lastLocal })
     },

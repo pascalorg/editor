@@ -13,6 +13,7 @@ import {
   collectAlignmentAnchors,
   footprintAABB,
   footprintAABBFrom,
+  movingAlignmentAnchors,
   movingFootprintAnchors,
   polygonAnchors,
   wallSegmentAnchors,
@@ -193,6 +194,71 @@ describe('movingFootprintAnchors', () => {
     expect(
       movingFootprintAnchors(node({ id: 'w', type: 'wall', position: [0, 0, 0] }), 1, 1),
     ).toEqual([])
+  })
+})
+
+describe('movingAlignmentAnchors', () => {
+  beforeEach(() => nodeRegistry._reset())
+
+  test('relocates a straight stair by its segment-chain footprint', () => {
+    registerNode(stairDef())
+    const nodes = {
+      st: node({
+        id: 'st',
+        type: 'stair',
+        position: [0, 0, 0],
+        rotation: 0,
+        stairType: 'straight',
+        width: 1,
+        children: ['seg'],
+      }),
+      seg: node({
+        id: 'seg',
+        type: 'stair-segment',
+        parentId: 'st',
+        width: 1,
+        length: 3,
+        height: 2.5,
+        attachmentSide: 'front',
+      }),
+    }
+
+    const anchors = movingAlignmentAnchors(nodes.st, nodes, 10, 20, 0)
+    expect(anchors).toHaveLength(4)
+    expect(new Set(anchors.map((a) => a.x))).toEqual(new Set([9.5, 10.5]))
+    expect(new Set(anchors.map((a) => a.z))).toEqual(new Set([20, 23]))
+  })
+
+  test('rotation override drives a moving straight stair footprint', () => {
+    registerNode(stairDef())
+    const nodes = {
+      st: node({
+        id: 'st',
+        type: 'stair',
+        position: [0, 0, 0],
+        rotation: 0,
+        stairType: 'straight',
+        width: 1,
+        children: ['seg'],
+      }),
+      seg: node({
+        id: 'seg',
+        type: 'stair-segment',
+        parentId: 'st',
+        width: 1,
+        length: 3,
+        height: 2.5,
+        attachmentSide: 'front',
+      }),
+    }
+
+    const anchors = movingAlignmentAnchors(nodes.st, nodes, 10, 20, Math.PI / 2)
+    const xs = anchors.map((a) => a.x)
+    const zs = anchors.map((a) => a.z)
+    expect(Math.min(...xs)).toBeCloseTo(10, 10)
+    expect(Math.max(...xs)).toBeCloseTo(13, 10)
+    expect(Math.min(...zs)).toBeCloseTo(19.5, 10)
+    expect(Math.max(...zs)).toBeCloseTo(20.5, 10)
   })
 })
 

@@ -6,13 +6,15 @@ import {
   emitter,
   type GridEvent,
   type LevelNode,
+  movingAlignmentAnchors,
   type NodeEvent,
+  resolveAlignment,
   StairNode,
   StairSegmentNode,
   syncAutoStairOpenings,
-  useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -21,10 +23,6 @@ import {
   resolveStairDestinationLevel,
   resolveStairPlacementLevelId,
 } from '../../../lib/stair-levels'
-import {
-  resolveAlignmentForActiveBuilding,
-  snapWorldXZForActiveBuilding,
-} from '../../../lib/world-grid-snap'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
@@ -298,14 +296,30 @@ export const StairTool: React.FC = () => {
     }
 
     // Alignment candidates — anchors of every alignable object; refreshed
-    // after each placement. The stair aligns by its ORIGIN point.
+    // after each placement. The moving stair aligns by its footprint edges so
+    // users can snap the run side against walls, slabs, elevators, or another
+    // stair instead of only lining up the invisible origin point.
     let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
-    // Snap the stair origin onto another object's nearest real anchor and
-    // publish the guide. The probe is the RAW cursor, NOT the 0.5m-grid-snapped
-    // point: resolving against the grid point would only ever catch anchors
-    // that happen to sit on a grid line, so off-grid items (furniture, angled
-    // walls) would never surface a guide. The matched axis locks exactly to the
-    // candidate's coordinate; the other axis keeps its grid snap. Alt bypasses.
+    const resolveStairFootprintAlignment = (
+      x: number,
+      z: number,
+      rotation: number,
+    ): ReturnType<typeof resolveAlignment> | null => {
+      const preview = buildPreviewScene([x, 0, z], rotation)
+      const moving = preview
+        ? movingAlignmentAnchors(preview.stair, preview.previewNodes, x, z, rotation)
+        : []
+      if (moving.length === 0) return null
+      return resolveAlignment({
+        moving,
+        candidates: alignmentCandidates,
+        threshold: ALIGNMENT_THRESHOLD_M,
+      })
+    }
+    // The probe is the RAW cursor, not the grid-snapped point: resolving
+    // against the grid point would only catch anchors that happen to sit near
+    // a grid line. Matched axes use the raw probe + snap delta; unmatched axes
+    // keep the normal grid snap. Alt bypasses.
     const alignPoint = (
       gridX: number,
       gridZ: number,
@@ -317,32 +331,26 @@ export const StairTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
         return [gridX, gridZ]
       }
-      const ar = resolveAlignmentForActiveBuilding({
-        moving: [{ nodeId: '__stair-draft__', kind: 'corner', x: rawX, z: rawZ }],
-        candidates: alignmentCandidates,
-        threshold: ALIGNMENT_THRESHOLD_M,
-      })
-      if (ar.guides.length === 0) {
+      const ar = resolveStairFootprintAlignment(rawX, rawZ, rotationRef.current)
+      if (!ar || ar.guides.length === 0) {
         useAlignmentGuides.getState().clear()
         return [gridX, gridZ]
       }
-      useAlignmentGuides.getState().set(ar.guides)
       let x = gridX
       let z = gridZ
-      for (const guide of ar.guides) {
-        if (guide.axis === 'x') x = guide.coord
-        else z = guide.coord
+      if (ar.snap) {
+        if (ar.guides.some((guide) => guide.axis === 'x')) x = rawX + ar.snap.dx
+        if (ar.guides.some((guide) => guide.axis === 'z')) z = rawZ + ar.snap.dz
       }
+      const finalAlignment = resolveStairFootprintAlignment(x, z, rotationRef.current)
+      useAlignmentGuides.getState().set(finalAlignment?.guides ?? ar.guides)
       return [x, z]
     }
 
     const onGridMove = (event: GridEvent) => {
-      // World-grid snap projected into building-local; rotated buildings
-      // used to drag the snap off the visible grid.
-      const snapped = snapWorldXZForActiveBuilding(event.position[0], event.position[2], 0.5).local
       const [gridX, gridZ] = alignPoint(
-        snapped[0],
-        snapped[1],
+        Math.round(event.localPosition[0] * 2) / 2,
+        Math.round(event.localPosition[2] * 2) / 2,
         event.localPosition[0],
         event.localPosition[2],
         event.nativeEvent?.altKey === true,
@@ -362,10 +370,9 @@ export const StairTool: React.FC = () => {
     }
 
     const getAlignedGridPosition = (event: GridEvent): [number, number, number] => {
-      const snapped = snapWorldXZForActiveBuilding(event.position[0], event.position[2], 0.5).local
       const [gridX, gridZ] = alignPoint(
-        snapped[0],
-        snapped[1],
+        Math.round(event.localPosition[0] * 2) / 2,
+        Math.round(event.localPosition[2] * 2) / 2,
         event.localPosition[0],
         event.localPosition[2],
         event.nativeEvent?.altKey === true,

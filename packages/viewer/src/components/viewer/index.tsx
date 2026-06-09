@@ -1,9 +1,16 @@
 'use client'
 
-import { type AnyNodeId, StairOpeningSystem } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  nodeRegistry,
+  StairOpeningSystem,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import * as THREE from 'three/webgpu'
+import { hasDrawableGeometry } from '../../lib/drawable-geometry'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
@@ -43,6 +50,75 @@ extend(THREE as any)
 // concurrent configure() calls await the same init instead of creating two
 // renderers in parallel and only caching the second.
 const WEBGPU_RENDERER_CACHE = new WeakMap<HTMLCanvasElement, Promise<THREE.WebGPURenderer>>()
+const SCENE_READY_SETTLED_FRAMES = 2
+const SCENE_READY_MAX_WAIT_FRAMES = 180
+const DIRTY_BUILD_KINDS = new Set([
+  'ceiling',
+  'door',
+  'item',
+  'roof',
+  'roof-segment',
+  'stair',
+  'stair-segment',
+  'wall',
+  'window',
+])
+
+const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakSet<object>()
+
+/**
+ * Renderer-level safety net against the empty-vertex-buffer crash.
+ *
+ * Wraps the per-object render function so any draw whose geometry has a count-0
+ * `position` attribute is skipped instead of submitted. One such draw leaves
+ * WebGPU vertex buffer slot 0 unbound, which the validator rejects and which
+ * poisons the *whole* command encoder — so a single stray empty mesh (e.g. a
+ * transient placeholder, or a derived edge/outline geometry) flickers the entire
+ * canvas, not just itself. See `hasDrawableGeometry`.
+ *
+ * The custom render-object function is the documented three.js hook for this
+ * (`Renderer.setRenderObjectFunction`); it must call `renderObject()` for
+ * everything it keeps. `MergedOutlineNode` captures and restores this function
+ * around its passes, so the guard survives outline rendering (its own passes
+ * carry the same check inline).
+ */
+function installEmptyDrawGuard(renderer: THREE.WebGPURenderer) {
+  renderer.setRenderObjectFunction(
+    (
+      object: any,
+      scene: any,
+      camera: any,
+      geometry: any,
+      material: any,
+      group: any,
+      lightsNode: any,
+      clippingContext: any,
+      passId: any,
+    ) => {
+      if (!hasDrawableGeometry(geometry)) {
+        if (warnedEmptyDraw && !warnedEmptyDraw.has(geometry ?? object)) {
+          warnedEmptyDraw.add(geometry ?? object)
+          console.warn(
+            '[viewer] skipped a draw with an empty position buffer (would poison the WebGPU command encoder)',
+            { name: object?.name, type: object?.type, material: material?.name },
+          )
+        }
+        return
+      }
+      ;(renderer as any).renderObject(
+        object,
+        scene,
+        camera,
+        geometry,
+        material,
+        group,
+        lightsNode,
+        clippingContext,
+        passId,
+      )
+    },
+  )
+}
 
 /**
  * Monitors the WebGPU device for loss / uncaptured errors and logs them.
@@ -119,6 +195,73 @@ function ToneMappingExposure() {
   return null
 }
 
+function hasPendingSceneBuildWork() {
+  const { dirtyNodes, nodes } = useScene.getState()
+
+  for (const id of dirtyNodes) {
+    const node = nodes[id]
+    if (!node) continue
+    const def = nodeRegistry.get(node.type)
+    if (def?.geometry || def?.capabilities?.floorPlaced || DIRTY_BUILD_KINDS.has(node.type)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function hasCommittedSceneRoot() {
+  const { nodes, rootNodeIds } = useScene.getState()
+  if (rootNodeIds.length === 0) return Object.keys(nodes).length === 0
+  return rootNodeIds.some((id) => sceneRegistry.nodes.has(id))
+}
+
+function SceneReadyTracker({
+  onSceneReadyChange,
+  sceneReadyKey,
+}: {
+  onSceneReadyChange?: (ready: boolean) => void
+  sceneReadyKey?: string | number | null
+}) {
+  const readyRef = useRef(false)
+  const settledFramesRef = useRef(0)
+  const waitedFramesRef = useRef(0)
+  const onSceneReadyChangeRef = useRef(onSceneReadyChange)
+
+  useEffect(() => {
+    onSceneReadyChangeRef.current = onSceneReadyChange
+  }, [onSceneReadyChange])
+
+  useEffect(() => {
+    void sceneReadyKey
+    readyRef.current = false
+    settledFramesRef.current = 0
+    waitedFramesRef.current = 0
+    onSceneReadyChangeRef.current?.(false)
+  }, [sceneReadyKey])
+
+  useFrame(() => {
+    if (!(onSceneReadyChangeRef.current && !readyRef.current)) return
+
+    waitedFramesRef.current += 1
+    if (
+      waitedFramesRef.current < SCENE_READY_MAX_WAIT_FRAMES &&
+      (!hasCommittedSceneRoot() || hasPendingSceneBuildWork())
+    ) {
+      settledFramesRef.current = 0
+      return
+    }
+
+    settledFramesRef.current += 1
+    if (settledFramesRef.current < SCENE_READY_SETTLED_FRAMES) return
+
+    readyRef.current = true
+    onSceneReadyChangeRef.current(true)
+  }, 10)
+
+  return null
+}
+
 interface ViewerProps {
   children?: React.ReactNode
   hoverStyles?: HoverStyles
@@ -140,6 +283,14 @@ interface ViewerProps {
    * for a future focus-mode UX.
    */
   isolate?: AnyNodeId[] | null
+  /**
+   * Host-controlled key for scene readiness. Change it whenever a new scene
+   * graph is being loaded; the viewer will report not-ready until the graph is
+   * mounted, build systems have had a frame to settle, and one rendered frame
+   * has presented the new content.
+   */
+  sceneReadyKey?: string | number | null
+  onSceneReadyChange?: (ready: boolean) => void
 }
 
 /** Imperative handle exposed via `ref` on `<Viewer>`. */
@@ -163,6 +314,8 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     renderContext = 'editor',
     defaultRender,
     isolate,
+    sceneReadyKey,
+    onSceneReadyChange,
   },
   ref,
 ) {
@@ -189,13 +342,17 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   }, [isolate])
 
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  const defaultShading = defaultRender?.shading
+  const defaultTextures = defaultRender?.textures
+  const defaultColorPreset = defaultRender?.colorPreset
+  const hasDefaultRender = defaultRender != null
   useEffect(() => {
     const ctx = renderContext
     useViewer.getState().setRenderContext(ctx)
     const { shading, shadingByContext, setShading } = useViewer.getState()
-    setShading(shadingByContext[ctx] ?? defaultRender?.shading ?? shading)
+    setShading(shadingByContext[ctx] ?? defaultShading ?? shading)
 
-    if (!defaultRender || typeof window === 'undefined') return
+    if (!hasDefaultRender || typeof window === 'undefined') return
 
     let persistedState: Record<string, unknown> = {}
     const rawPreferences = window.localStorage.getItem('viewer-preferences')
@@ -213,13 +370,13 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
       } catch {}
     }
 
-    if (defaultRender.textures !== undefined && !('textures' in persistedState)) {
-      useViewer.getState().setTextures(defaultRender.textures)
+    if (defaultTextures !== undefined && !('textures' in persistedState)) {
+      useViewer.getState().setTextures(defaultTextures)
     }
-    if (defaultRender.colorPreset && !('colorPreset' in persistedState)) {
-      useViewer.getState().setColorPreset(defaultRender.colorPreset)
+    if (defaultColorPreset && !('colorPreset' in persistedState)) {
+      useViewer.getState().setColorPreset(defaultColorPreset)
     }
-  }, [])
+  }, [defaultColorPreset, defaultShading, defaultTextures, hasDefaultRender, renderContext])
 
   // Coarse-pointer devices (phones/tablets) get a tighter DPR ceiling to keep
   // fragment-shader cost down — saves another ~30% over 1.5x on high-DPI mobile.
@@ -245,6 +402,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                 useViewer.getState().sceneTheme,
               ).toneMappingExposure
               await renderer.init()
+              installEmptyDrawGuard(renderer)
               return renderer
             } catch (err) {
               // Drop the failed promise from the cache so a future Canvas
@@ -271,6 +429,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
       <ViewerCamera />
       <GPUDeviceWatcher />
       <ToneMappingExposure />
+      <SceneReadyTracker onSceneReadyChange={onSceneReadyChange} sceneReadyKey={sceneReadyKey} />
 
       <ErrorBoundary fallback={null} scope="viewer-scene">
         {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow

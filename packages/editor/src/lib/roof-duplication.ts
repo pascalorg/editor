@@ -175,7 +175,7 @@ export function duplicateRoofSubtree(
 
 export function clearRoofDuplicateMetadata(
   roofId: AnyNodeId,
-  updates: Partial<Pick<RoofNode, 'position' | 'rotation' | 'metadata'>> = {},
+  updates: Partial<Pick<RoofNode, 'position' | 'rotation' | 'metadata' | 'visible'>> = {},
 ) {
   const scene = useScene.getState()
   const roofNode = scene.nodes[roofId]

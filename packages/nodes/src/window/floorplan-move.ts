@@ -3,10 +3,16 @@ import {
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
   useScene,
+  type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
 import { snapToHalf } from '@pascal-app/editor'
-import { findClosestWallInPlan, snapLocalXToNeighbors } from '../shared/wall-attach-target'
+import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
+import {
+  findClosestWallInPlan,
+  projectWallLocalPointToPlan,
+  snapLocalXToNeighbors,
+} from '../shared/wall-attach-target'
 import { clampToWall, hasWallChildOverlap } from './window-math'
 
 /**
@@ -26,6 +32,16 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     const wall = useScene.getState().nodes[node.parentId as AnyNodeId]
     return wall ? (wall.parentId as AnyNodeId | null) : null
   })()
+  const originalWall = node.parentId
+    ? (useScene.getState().nodes[node.parentId as AnyNodeId] as WallNode | undefined)
+    : undefined
+  const resolveCursor = createFloorplanCursorResolver({
+    original:
+      originalWall?.type === 'wall'
+        ? projectWallLocalPointToPlan(originalWall, node.position[0])
+        : [node.position[0], 0],
+    metadata: node.metadata,
+  })
 
   // Preserve the source window's local Y — 2D move doesn't have a way
   // to express vertical motion, so we keep whatever vertical position
@@ -46,7 +62,8 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     affectedIds: [node.id as AnyNodeId],
     apply({ planPoint, modifiers }) {
       const nodes = useScene.getState().nodes
-      const hit = findClosestWallInPlan(planPoint, nodes, startLevelId)
+      const resolvedPlanPoint = resolveCursor(planPoint)
+      const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)
       if (!hit) return
 
       // Figma-style along-wall alignment first (edge-to-edge with other

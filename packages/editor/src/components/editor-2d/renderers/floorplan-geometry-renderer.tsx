@@ -23,13 +23,18 @@ import { memo, useEffect, useState } from 'react'
  */
 export const FloorplanGeometryRenderer = memo(function FloorplanGeometryRenderer({
   geometry,
+  pointerEventsOverride,
 }: {
   geometry: FloorplanGeometry
+  pointerEventsOverride?: string
 }) {
-  return renderNode(geometry, 0)
+  return renderNode(geometry, 0, pointerEventsOverride)
 })
 
-function styleAttrs(g: FloorplanGeometry & { kind: Exclude<FloorplanGeometry['kind'], 'group'> }) {
+function styleAttrs(
+  g: FloorplanGeometry & { kind: Exclude<FloorplanGeometry['kind'], 'group'> },
+  pointerEventsOverride?: string,
+) {
   // Shared SVG attribute mapping for any styled primitive. Keeps the per-
   // primitive switch arms terse and ensures new style fields land
   // everywhere at once. `as any` avoids re-asserting every variant
@@ -60,21 +65,37 @@ function styleAttrs(g: FloorplanGeometry & { kind: Exclude<FloorplanGeometry['ki
     strokeOpacity: s.strokeOpacity,
     opacity: s.opacity,
     vectorEffect: s.vectorEffect,
-    pointerEvents: s.pointerEvents,
+    pointerEvents: pointerEventsOverride ?? s.pointerEvents,
     style: s.cursor ? { cursor: s.cursor } : undefined,
   }
 }
 
-function renderNode(g: FloorplanGeometry, keyHint: number): React.ReactElement | null {
+function renderNode(
+  g: FloorplanGeometry,
+  keyHint: number,
+  pointerEventsOverride?: string,
+): React.ReactElement | null {
   switch (g.kind) {
     case 'path':
-      return <path d={g.d} key={keyHint} {...styleAttrs(g)} />
+      return <path d={g.d} key={keyHint} {...styleAttrs(g, pointerEventsOverride)} />
 
     case 'polygon':
-      return <polygon key={keyHint} points={pointsToAttr(g.points)} {...styleAttrs(g)} />
+      return (
+        <polygon
+          key={keyHint}
+          points={pointsToAttr(g.points)}
+          {...styleAttrs(g, pointerEventsOverride)}
+        />
+      )
 
     case 'polyline':
-      return <polyline key={keyHint} points={pointsToAttr(g.points)} {...styleAttrs(g)} />
+      return (
+        <polyline
+          key={keyHint}
+          points={pointsToAttr(g.points)}
+          {...styleAttrs(g, pointerEventsOverride)}
+        />
+      )
 
     case 'rect':
       return (
@@ -86,15 +107,32 @@ function renderNode(g: FloorplanGeometry, keyHint: number): React.ReactElement |
           width={g.width}
           x={g.x}
           y={g.y}
-          {...styleAttrs(g)}
+          {...styleAttrs(g, pointerEventsOverride)}
         />
       )
 
     case 'circle':
-      return <circle cx={g.cx} cy={g.cy} key={keyHint} r={g.r} {...styleAttrs(g)} />
+      return (
+        <circle
+          cx={g.cx}
+          cy={g.cy}
+          key={keyHint}
+          r={g.r}
+          {...styleAttrs(g, pointerEventsOverride)}
+        />
+      )
 
     case 'line':
-      return <line key={keyHint} x1={g.x1} x2={g.x2} y1={g.y1} y2={g.y2} {...styleAttrs(g)} />
+      return (
+        <line
+          key={keyHint}
+          x1={g.x1}
+          x2={g.x2}
+          y1={g.y1}
+          y2={g.y2}
+          {...styleAttrs(g, pointerEventsOverride)}
+        />
+      )
 
     case 'text':
       return (
@@ -112,6 +150,7 @@ function renderNode(g: FloorplanGeometry, keyHint: number): React.ReactElement |
           strokeLinejoin={g.stroke ? 'round' : undefined}
           strokeWidth={g.strokeWidth}
           textAnchor={g.textAnchor ?? 'start'}
+          pointerEvents={pointerEventsOverride}
           x={g.x}
           y={g.y}
         >
@@ -137,7 +176,7 @@ function renderNode(g: FloorplanGeometry, keyHint: number): React.ReactElement |
       const transform = formatTransform(g.transform)
       return (
         <g key={keyHint} transform={transform}>
-          {g.children.map((child, i) => renderNode(child, i))}
+          {g.children.map((child, i) => renderNode(child, i, pointerEventsOverride))}
         </g>
       )
     }
