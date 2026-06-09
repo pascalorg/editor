@@ -10,19 +10,19 @@ import {
   type FloorplanMoveTargetSession,
   nodeRegistry,
   pauseSceneHistory,
+  resolveAlignment,
   resumeSceneHistory,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { commitFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
 import { isFreshPlacementMetadata, stripPlacementMetadataFlags } from '../../lib/placement-metadata'
 import { resolvePlanarCursorPosition } from '../../lib/planar-cursor-placement'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import { resolveAlignmentForActiveBuilding } from '../../lib/world-grid-snap'
+import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor from '../../store/use-editor'
 import { useWallMoveGhosts } from '../../store/use-wall-move-ghosts'
 
@@ -464,11 +464,12 @@ export function FloorplanRegistryMoveOverlay() {
           movingLocalBBox.x + movingLocalBBox.width + dxProposed,
           movingLocalBBox.y + movingLocalBBox.height + dzProposed,
         )
-        // World-frame resolve so the shared `useAlignmentGuides` store
-        // carries one consistent coordinate system across 2D and 3D —
-        // see the matching note in apply-alignment.ts. Snap delta is
-        // returned in building-local for direct add to `originalPosition`.
-        const result = resolveAlignmentForActiveBuilding({
+        // Local-frame resolve (anchors come from the building-local
+        // SVG `getBBox()`). Guides land in the editor-local alignment
+        // store, which the 2D FloorplanAlignmentGuideLayer renders
+        // inside the rotated scene <g>. The 3D pipeline uses a
+        // separate store, so frames stay isolated per surface.
+        const result = resolveAlignment({
           moving: movingAnchors,
           candidates: candidateAnchors,
           threshold: ALIGNMENT_THRESHOLD_M,

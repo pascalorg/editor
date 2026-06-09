@@ -104,10 +104,17 @@ export {
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   WALL_FINE_GRID_STEP,
+  WALL_GRID_STEP,
   type WallDraftSnapKind,
   type WallDraftSnapResult,
   type WallPlanPoint,
 } from './components/tools/wall/wall-drafting'
+export {
+  getActiveBuildingPose,
+  resolveAlignmentForActiveBuilding,
+  snapBuildingLocalToWorldGrid,
+  snapWorldXZForActiveBuilding,
+} from './lib/world-grid-snap'
 // `ToolbarLeft` / `ToolbarRight` are the headless-spec aliases for the
 // existing `ViewerToolbarLeft` / `ViewerToolbarRight` exports — the
 // underlying components are the same; the alias just matches the names

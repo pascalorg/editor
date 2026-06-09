@@ -140,6 +140,7 @@ import {
   WALL_GRID_STEP,
   type WallPlanPoint,
 } from '../tools/wall/wall-drafting'
+import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 
 import { PALETTE_COLORS } from '../ui/primitives/color-dot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
@@ -3243,20 +3244,20 @@ const FloorplanGridLayer = memo(function FloorplanGridLayer({
       <path
         d={minorGridPath}
         fill="none"
-        opacity={palette.majorGridOpacity}
+        opacity={palette.minorGridOpacity}
         shapeRendering="crispEdges"
-        stroke={palette.majorGrid}
-        strokeWidth={FLOORPLAN_MAJOR_GRID_STROKE_WIDTH}
+        stroke={palette.minorGrid}
+        strokeWidth={FLOORPLAN_MINOR_GRID_STROKE_WIDTH}
         vectorEffect="non-scaling-stroke"
       />
 
       <path
         d={majorGridPath}
         fill="none"
-        opacity={palette.minorGridOpacity}
+        opacity={palette.majorGridOpacity}
         shapeRendering="crispEdges"
-        stroke={palette.minorGrid}
-        strokeWidth={FLOORPLAN_MINOR_GRID_STROKE_WIDTH}
+        stroke={palette.majorGrid}
+        strokeWidth={FLOORPLAN_MAJOR_GRID_STROKE_WIDTH}
         vectorEffect="non-scaling-stroke"
       />
     </>
@@ -8944,6 +8945,11 @@ export function FloorplanPanel() {
     snapWallDraftPoint: snapWallDraftPointMagnetic,
     toPoint2D,
     walls,
+    // World-axis grid snap so drafts land on the visible grid even
+    // when the active building is rotated. The helper resolves the
+    // active building's pose internally; this hook stays oblivious to
+    // building rotation / position.
+    worldGridSnap: snapBuildingLocalToWorldGrid,
   })
 
   const handleBackgroundClick = useCallback(
