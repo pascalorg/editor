@@ -51,9 +51,9 @@ function extendPoint(
  *   - `position`     → building/item/door/window position; uses [x, z] only.
  *
  * Site-node polygons are intentionally excluded when they are the default
- * 30×30 bootstrap polygon — otherwise a brand-new empty scene would frame
+ * 100×100 bootstrap polygon — otherwise a brand-new empty scene would frame
  * an empty square around the origin. We still include site polygons that
- * look intentional (> 4 points, or any point outside the ±15 m default).
+ * look intentional (> 4 points, or any point outside the ±50 m default).
  *
  * Returns `null` if no usable geometry was found.
  */
@@ -97,7 +97,7 @@ export function computeSceneBoundsXZ(
       Array.isArray((polygon as { points?: unknown }).points)
     ) {
       // Site nodes only: skip the default bootstrap square so a blank scene
-      // isn't auto-framed around an empty ±15 m box. Include any other site
+      // isn't auto-framed around an empty ±50 m box. Include any other site
       // polygon (more than 4 points, or any coordinate beyond the default).
       const points = (polygon as { points: unknown[] }).points
       if (node.type === 'site' && isDefaultSitePolygon(points)) {
@@ -148,16 +148,16 @@ export function computeSceneBoundsXZ(
 
 /**
  * Matches the `SiteNode` bootstrap polygon defined in
- * `packages/core/src/schema/nodes/site.ts` (a 30×30 square at the origin).
+ * `packages/core/src/schema/nodes/site.ts` (a 100×100 square at the origin).
  * We ignore it so the default scene doesn't "auto-frame" onto an empty box.
  */
 function isDefaultSitePolygon(points: unknown[]): boolean {
   if (points.length !== 4) return false
   const expected: [number, number][] = [
-    [-15, -15],
-    [15, -15],
-    [15, 15],
-    [-15, 15],
+    [-50, -50],
+    [50, -50],
+    [50, 50],
+    [-50, 50],
   ]
   for (let i = 0; i < 4; i++) {
     const p = points[i]

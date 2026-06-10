@@ -1,8 +1,8 @@
-import { emitter, useScene, validateBuildJson } from '@pascal-app/core'
+import { emitter, type AnyNode, type AnyNodeId, useScene, validateBuildJson } from '@pascal-app/core'
 import { exportSceneToDxf } from '@pascal-app/core/exporters/dxf'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
-import { Camera, Download, Save, Trash2, Upload } from 'lucide-react'
+import { Camera, Download, Move, Save, Trash2, Upload } from 'lucide-react'
 import {
   type KeyboardEvent,
   type SyntheticEvent,
@@ -30,6 +30,134 @@ type SceneNode = Record<string, unknown> & {
   name?: unknown
   parentId?: unknown
   children?: unknown
+}
+
+type CenterBounds = {
+  minX: number
+  minZ: number
+  maxX: number
+  maxZ: number
+  hasPoint: boolean
+}
+
+const CENTER_LAYOUT_EPSILON = 0.001
+
+function isPlanPoint(value: unknown): value is [number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    typeof value[0] === 'number' &&
+    typeof value[1] === 'number' &&
+    Number.isFinite(value[0]) &&
+    Number.isFinite(value[1])
+  )
+}
+
+function isVec3(value: unknown): value is [number, number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length >= 3 &&
+    typeof value[0] === 'number' &&
+    typeof value[1] === 'number' &&
+    typeof value[2] === 'number' &&
+    Number.isFinite(value[0]) &&
+    Number.isFinite(value[1]) &&
+    Number.isFinite(value[2])
+  )
+}
+
+function extendCenterBounds(bounds: CenterBounds, point: [number, number]) {
+  bounds.minX = Math.min(bounds.minX, point[0])
+  bounds.minZ = Math.min(bounds.minZ, point[1])
+  bounds.maxX = Math.max(bounds.maxX, point[0])
+  bounds.maxZ = Math.max(bounds.maxZ, point[1])
+  bounds.hasPoint = true
+}
+
+function shouldCenterNode(node: AnyNode): boolean {
+  return node.type !== 'site' && node.type !== 'building' && node.type !== 'level'
+}
+
+function hasPlanPositionInLayoutSpace(node: AnyNode, nodes: Record<string, AnyNode>): boolean {
+  if (!node.parentId) return true
+
+  const parent = nodes[node.parentId]
+  return parent?.type === 'site' || parent?.type === 'building' || parent?.type === 'level'
+}
+
+function computeCenterableBounds(nodes: Record<string, AnyNode>): CenterBounds {
+  const bounds: CenterBounds = {
+    minX: Number.POSITIVE_INFINITY,
+    minZ: Number.POSITIVE_INFINITY,
+    maxX: Number.NEGATIVE_INFINITY,
+    maxZ: Number.NEGATIVE_INFINITY,
+    hasPoint: false,
+  }
+
+  for (const node of Object.values(nodes)) {
+    if (!shouldCenterNode(node)) continue
+    const record = node as unknown as Record<string, unknown>
+
+    if (isPlanPoint(record.start)) {
+      extendCenterBounds(bounds, record.start)
+    }
+    if (isPlanPoint(record.end)) {
+      extendCenterBounds(bounds, record.end)
+    }
+
+    if (Array.isArray(record.polygon)) {
+      for (const point of record.polygon) {
+        if (isPlanPoint(point)) extendCenterBounds(bounds, point)
+      }
+    }
+
+    if (isVec3(record.position) && hasPlanPositionInLayoutSpace(node, nodes)) {
+      extendCenterBounds(bounds, [record.position[0], record.position[2]])
+    }
+  }
+
+  return bounds
+}
+
+function translatePlanPoint(point: [number, number], dx: number, dz: number): [number, number] {
+  return [point[0] + dx, point[1] + dz]
+}
+
+function translateVec3(point: [number, number, number], dx: number, dz: number): [number, number, number] {
+  return [point[0] + dx, point[1], point[2] + dz]
+}
+
+function buildCenterLayoutUpdates(
+  nodes: Record<string, AnyNode>,
+  dx: number,
+  dz: number,
+): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
+
+  for (const node of Object.values(nodes)) {
+    if (!shouldCenterNode(node)) continue
+    const record = node as unknown as Record<string, unknown>
+    const data: Record<string, unknown> = {}
+
+    if (isPlanPoint(record.start)) {
+      data.start = translatePlanPoint(record.start, dx, dz)
+    }
+    if (isPlanPoint(record.end)) {
+      data.end = translatePlanPoint(record.end, dx, dz)
+    }
+    if (Array.isArray(record.polygon) && record.polygon.every(isPlanPoint)) {
+      data.polygon = record.polygon.map((point) => translatePlanPoint(point, dx, dz))
+    }
+    if (isVec3(record.position) && hasPlanPositionInLayoutSpace(node, nodes)) {
+      data.position = translateVec3(record.position, dx, dz)
+    }
+
+    if (Object.keys(data).length > 0) {
+      updates.push({ id: node.id as AnyNodeId, data: data as Partial<AnyNode> })
+    }
+  }
+
+  return updates
 }
 
 type SceneGraphNode = {
@@ -182,6 +310,7 @@ export function SettingsPanel({
   const rootNodeIds = useScene((state) => state.rootNodeIds)
   const setScene = useScene((state) => state.setScene)
   const clearScene = useScene((state) => state.clearScene)
+  const updateNodes = useScene((state) => state.updateNodes)
   const resetSelection = useViewer((state) => state.resetSelection)
   const exportScene = useViewer((state) => state.exportScene)
   const showGrid = useViewer((state) => state.showGrid)
@@ -189,6 +318,7 @@ export function SettingsPanel({
   const setPhase = useEditor((state) => state.setPhase)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
+  const [centerLayoutStatus, setCenterLayoutStatus] = useState<string | null>(null)
   const sceneGraphValue = useMemo(
     () => buildSceneGraphValue(nodes as Record<string, SceneNode>, rootNodeIds),
     [nodes, rootNodeIds],
@@ -299,6 +429,35 @@ export function SettingsPanel({
     setTimeout(() => setIsGeneratingThumbnail(false), 3000)
   }
 
+  const handleCenterLayout = useCallback(() => {
+    const bounds = computeCenterableBounds(nodes as Record<string, AnyNode>)
+    if (!bounds.hasPoint) {
+      setCenterLayoutStatus('No layout geometry found.')
+      return
+    }
+
+    const centerX = (bounds.minX + bounds.maxX) / 2
+    const centerZ = (bounds.minZ + bounds.maxZ) / 2
+    const dx = -centerX
+    const dz = -centerZ
+
+    if (Math.abs(dx) < CENTER_LAYOUT_EPSILON && Math.abs(dz) < CENTER_LAYOUT_EPSILON) {
+      setCenterLayoutStatus('Layout is already centered.')
+      return
+    }
+
+    const updates = buildCenterLayoutUpdates(nodes as Record<string, AnyNode>, dx, dz)
+    if (updates.length === 0) {
+      setCenterLayoutStatus('No movable layout nodes found.')
+      return
+    }
+
+    updateNodes(updates)
+    setCenterLayoutStatus(
+      `Centered ${updates.length} nodes by ${dx.toFixed(2)}m, ${dz.toFixed(2)}m.`,
+    )
+  }, [nodes, updateNodes])
+
   const handleVisibilityChange = async (
     field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
     value: boolean,
@@ -402,6 +561,20 @@ export function SettingsPanel({
           <Download className="size-4" />
           Export DXF
         </Button>
+      </div>
+
+      {/* Layout Section */}
+      <div className="space-y-2">
+        <label className="font-medium text-muted-foreground text-xs uppercase">Layout</label>
+        <Button className="w-full justify-start gap-2" onClick={handleCenterLayout} variant="outline">
+          <Move className="size-4" />
+          Center Layout
+        </Button>
+        {centerLayoutStatus ? (
+          <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-muted-foreground text-xs">
+            {centerLayoutStatus}
+          </div>
+        ) : null}
       </div>
 
       {/* Thumbnail Section (only for cloud projects) */}
