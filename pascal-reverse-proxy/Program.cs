@@ -17,6 +17,7 @@ var frontLogo = Path.Combine(frontRoot, "logo.svg");
 var proxyDatabaseOptions = app.Services.GetRequiredService<IOptions<ProxyDatabaseOptions>>().Value;
 var proxyDatabasePath = ResolveProxyDatabasePath(app.Environment.ContentRootPath, proxyDatabaseOptions);
 var coverRoot = Path.Combine(Path.GetDirectoryName(proxyDatabasePath) ?? app.Environment.ContentRootPath, "covers");
+var proxyDatabaseWriteLock = new SemaphoreSlim(1, 1);
 InitializeProxyDatabase(proxyDatabasePath);
 
 app.UseWebSockets();
@@ -141,7 +142,6 @@ app.MapPost("/proxy/scenes/{id}/cover", async (
     }
 
     var dbPath = ResolveProxyDatabasePath(app.Environment.ContentRootPath, proxyOptions.Value);
-    InitializeProxyDatabase(dbPath);
     var localCoverRoot = Path.Combine(Path.GetDirectoryName(dbPath) ?? app.Environment.ContentRootPath, "covers");
     Directory.CreateDirectory(localCoverRoot);
     DeleteExistingSceneCovers(localCoverRoot, id);
@@ -154,7 +154,17 @@ app.MapPost("/proxy/scenes/{id}/cover", async (
     }
     var relativePath = Path.Combine("covers", fileName).Replace('\\', '/');
     var coverUrl = BuildSceneCoverUrl(fileName, File.GetLastWriteTimeUtc(path));
-    await UpsertProjectCover(dbPath, id, coverUrl, relativePath, file.ContentType, file.Length, cancellationToken);
+
+    await proxyDatabaseWriteLock.WaitAsync(cancellationToken);
+    try
+    {
+        InitializeProxyDatabase(dbPath);
+        await UpsertProjectCover(dbPath, id, coverUrl, relativePath, file.ContentType, file.Length, cancellationToken);
+    }
+    finally
+    {
+        proxyDatabaseWriteLock.Release();
+    }
 
     return Results.Ok(new
     {
@@ -174,16 +184,24 @@ app.MapPut("/proxy/scenes/{id}/metadata", async (
     }
 
     var dbPath = ResolveProxyDatabasePath(app.Environment.ContentRootPath, proxyOptions.Value);
-    InitializeProxyDatabase(dbPath);
 
-    await UpsertProjectOverride(
-        dbPath,
-        id,
-        request.Name,
-        request.Description,
-        request.CoverType,
-        request.CoverValue,
-        cancellationToken);
+    await proxyDatabaseWriteLock.WaitAsync(cancellationToken);
+    try
+    {
+        InitializeProxyDatabase(dbPath);
+        await UpsertProjectOverride(
+            dbPath,
+            id,
+            request.Name,
+            request.Description,
+            request.CoverType,
+            request.CoverValue,
+            cancellationToken);
+    }
+    finally
+    {
+        proxyDatabaseWriteLock.Release();
+    }
 
     return Results.Ok(new { status = "ok" });
 });
@@ -322,6 +340,20 @@ static string? ReadNullableString(SqliteDataReader reader, int ordinal)
     return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
 }
 
+static void SetSqliteBusyTimeout(SqliteConnection connection)
+{
+    using var command = connection.CreateCommand();
+    command.CommandText = "PRAGMA busy_timeout = 5000";
+    command.ExecuteNonQuery();
+}
+
+static async Task SetSqliteBusyTimeoutAsync(SqliteConnection connection, CancellationToken cancellationToken)
+{
+    await using var command = connection.CreateCommand();
+    command.CommandText = "PRAGMA busy_timeout = 5000";
+    await command.ExecuteNonQueryAsync(cancellationToken);
+}
+
 static string? FindSceneCoverUrl(string databasePath, string sceneId)
 {
     if (!File.Exists(databasePath)) return null;
@@ -332,6 +364,7 @@ static string? FindSceneCoverUrl(string databasePath, string sceneId)
         Cache = SqliteCacheMode.Shared,
     }.ToString());
     connection.Open();
+    SetSqliteBusyTimeout(connection);
 
     using var command = connection.CreateCommand();
     command.CommandText = """
@@ -450,6 +483,7 @@ static void InitializeProxyDatabase(string databasePath)
         Cache = SqliteCacheMode.Shared,
     }.ToString());
     connection.Open();
+    SetSqliteBusyTimeout(connection);
 
     using var command = connection.CreateCommand();
     command.CommandText = """
@@ -488,6 +522,7 @@ static ProjectOverride? FindProjectOverride(string databasePath, string sceneId)
         Cache = SqliteCacheMode.Shared,
     }.ToString());
     connection.Open();
+    SetSqliteBusyTimeout(connection);
 
     using var command = connection.CreateCommand();
     command.CommandText = """
@@ -521,6 +556,7 @@ static async Task UpsertProjectCover(
         Cache = SqliteCacheMode.Shared,
     }.ToString());
     await connection.OpenAsync(cancellationToken);
+    await SetSqliteBusyTimeoutAsync(connection, cancellationToken);
 
     var now = DateTimeOffset.UtcNow.ToString("O");
     await using var command = connection.CreateCommand();
@@ -561,6 +597,7 @@ static async Task UpsertProjectOverride(
         Cache = SqliteCacheMode.Shared,
     }.ToString());
     await connection.OpenAsync(cancellationToken);
+    await SetSqliteBusyTimeoutAsync(connection, cancellationToken);
 
     var now = DateTimeOffset.UtcNow.ToString("O");
     await using var command = connection.CreateCommand();
