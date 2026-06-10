@@ -152,12 +152,12 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
     wallOpeningPlacement: true,
     // Windows also host on roof-segment wall faces (base walls under the
     // roof, gable ends) — same wiring as door; see the door capability
-    // for why `cascadesViaHostSegment` is required.
+    // for why `dirtyHandledByOwnSystem` is required.
     roofAccessory: {
       buildCut: (node, hostSegment) =>
         buildRoofWallOpeningCut(node as WindowNodeType, hostSegment as RoofSegmentNode),
       cutScope: 'wall',
-      cascadesViaHostSegment: true,
+      dirtyHandledByOwnSystem: true,
     },
     // `wallId` / `roofSegmentId` are re-derived from the surface under
     // the cursor at preset placement time — see door for the pattern.

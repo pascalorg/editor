@@ -363,7 +363,7 @@ type RoofWallTarget = {
   segment: RoofSegmentNode
   faceId: RoofWallFaceId
   faceYaw: number
-  /** Stored node position: segment-local, y = bottom edge. */
+  /** Stored node position: FACE-LOCAL, y = bottom edge. */
   position: [number, number, number]
   /** Face-coord center of the placed rect (for the overlap guard). */
   centerU: number

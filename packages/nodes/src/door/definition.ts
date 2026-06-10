@@ -160,14 +160,14 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     wallOpeningPlacement: true,
     // Doors also host on roof-segment wall faces (base walls under the
     // roof, gable ends). `buildCut` punches the opening into the
-    // segment's wall brush; `cascadesViaHostSegment` keeps the roof-merge
+    // segment's wall brush; `dirtyHandledByOwnSystem` keeps the roof-merge
     // loop from consuming door dirty marks (DoorSystem owns them and
     // already cascades to the host via parentId).
     roofAccessory: {
       buildCut: (node, hostSegment) =>
         buildRoofWallOpeningCut(node as DoorNodeType, hostSegment as RoofSegmentNode),
       cutScope: 'wall',
-      cascadesViaHostSegment: true,
+      dirtyHandledByOwnSystem: true,
     },
     // `wallId` / `roofSegmentId` tie the door to its host and are
     // re-derived from the surface under the cursor when a preset is

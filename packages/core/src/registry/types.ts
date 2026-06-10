@@ -1214,14 +1214,14 @@ export type RoofAccessoryConfig = {
    */
   cutScope?: 'all' | 'wall'
   /**
-   * Set when the kind runs its own dirty-driven geometry system that
-   * already cascades to the host segment (door / window via the
-   * DoorSystem / WindowSystem `parentId` cascade). The roof-merge loop
-   * must then leave the kind's dirty marks alone — consuming them here
-   * would starve that system whenever it defers a rebuild (mesh not
-   * mounted yet, per-frame rebuild budget exhausted).
+   * The kind's own dirty-driven geometry system consumes its dirty
+   * marks (door / window via DoorSystem / WindowSystem, which already
+   * cascade to the host segment through `parentId`). The roof-merge
+   * loop must then leave those marks alone — consuming them would
+   * starve that system whenever it defers a rebuild (mesh not mounted
+   * yet, per-frame rebuild budget exhausted).
    */
-  cascadesViaHostSegment?: boolean
+  dirtyHandledByOwnSystem?: boolean
 }
 
 /**

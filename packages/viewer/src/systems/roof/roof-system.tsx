@@ -110,12 +110,12 @@ export const RoofSystem = () => {
       // previous cut shape (stale CSG) once the user exits segment
       // edit mode. Registry-driven so the viewer stays kind-agnostic.
       const def = nodeRegistry.get(node.type)
-      // Kinds with `cascadesViaHostSegment` (door / window) reach the roof
+      // Kinds with `dirtyHandledByOwnSystem` (door / window) reach the roof
       // through their own geometry system's parentId cascade instead —
       // their dirty marks belong to that system, not to this loop.
       if (
         def?.capabilities?.roofAccessory &&
-        !def.capabilities.roofAccessory.cascadesViaHostSegment
+        !def.capabilities.roofAccessory.dirtyHandledByOwnSystem
       ) {
         const segId = (node as { roofSegmentId?: string }).roofSegmentId
         const seg = segId ? (nodes[segId as AnyNodeId] as RoofSegmentNode | undefined) : undefined

@@ -55,6 +55,7 @@ import {
   NO_RAYCAST,
 } from './handles/handle-arrow'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
+
 // Pooled scratch for the handle rig's world-relative pose mapping.
 const _rigRelative = new Matrix4()
 const _rigScratchScale = new Vector3()

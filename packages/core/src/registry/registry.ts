@@ -115,28 +115,6 @@ export function isRegistrySelectable(kind: string): boolean {
 }
 
 /**
- * Kinds whose definition declares the `roofAccessory` capability — the roof
- * accessories (dormer, chimney, vents, gutter, …) that mount onto a roof
- * segment via their own attach tool. Lets host UIs surface a "Features" group
- * under the roof category without hardcoding the kind list (the standalone
- * editor's Build tab; the roof inspector's add menu). Returned in builtin
- * registration order (`packages/nodes/src/index.ts`), which is deterministic.
- *
- * Call at render time, not module-import time: the registry is populated by
- * the host's bootstrap (`loadPlugin`), so a top-level `const` would race it
- * and see an empty registry.
- */
-export function getRoofAccessoryKinds(): string[] {
-  const result: string[] = []
-  for (const [kind, def] of nodeRegistry.entries()) {
-    if (def.capabilities.roofAccessory !== undefined) {
-      result.push(kind)
-    }
-  }
-  return result
-}
-
-/**
  * Kinds whose `def.floorplanScope` matches the requested scope. Used by
  * `FloorplanRegistryLayer` to discover building-scoped kinds (e.g.
  * elevator) without hardcoding kind names in the editor layer. `'level'`

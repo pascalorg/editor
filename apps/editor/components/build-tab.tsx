@@ -1,6 +1,6 @@
 'use client'
 
-import { getRoofAccessoryKinds, nodeRegistry } from '@pascal-app/core'
+import { nodeRegistry } from '@pascal-app/core'
 import { MaterialPaintPanel, triggerSFX, useEditor } from '@pascal-app/editor'
 import Image from 'next/image'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -87,9 +87,10 @@ const ROOF_FEATURE_FALLBACK_ICON = '/icons/roof.png'
 /**
  * Roof accessories surfaced under the Roof tile (a "Features" group). Unlike
  * the community editor these aren't DB presets — each is a registry kind with
- * `capabilities.roofAccessory`, discovered via `getRoofAccessoryKinds()` and
- * activated like any structure tool (the kind's tool attaches it to the roof
- * segment under the cursor). Label + icon come from the registry's
+ * `capabilities.roofAccessory`, enumerated from the registry at render time
+ * (it is populated by the app bootstrap — a module-scope const would race it)
+ * and activated like any structure tool (the kind's tool attaches it to the
+ * roof segment under the cursor). Label + icon come from the registry's
  * `presentation`; non-url icons fall back to the roof icon.
  */
 function activateRoofFeatureTool(kind: string): void {
@@ -116,23 +117,23 @@ export function BuildTab() {
 
   // Read at render time (not module scope): the registry is populated by the
   // app bootstrap, so enumerating earlier would race it and see no kinds.
-  const roofFeatures = useMemo<RoofFeature[]>(
-    () =>
-      getRoofAccessoryKinds()
-        // Door / window declare `roofAccessory` for the wall-face cut but
-        // already have their own Build tiles — listing them here too
-        // would duplicate the entry under Roof → Features.
-        .filter((kind) => !nodeRegistry.get(kind)?.capabilities?.wallOpeningPlacement)
-        .map((kind) => {
-          const icon = nodeRegistry.get(kind)?.presentation?.icon
-          return {
-            kind,
-            label: nodeRegistry.get(kind)?.presentation?.label ?? kind,
-            iconSrc: icon?.kind === 'url' ? icon.src : ROOF_FEATURE_FALLBACK_ICON,
-          }
-        }),
-    [],
-  )
+  const roofFeatures = useMemo<RoofFeature[]>(() => {
+    const features: RoofFeature[] = []
+    for (const [kind, def] of nodeRegistry.entries()) {
+      if (def.capabilities.roofAccessory === undefined) continue
+      // Door / window declare `roofAccessory` for the wall-face cut but
+      // already have their own Build tiles — listing them here too
+      // would duplicate the entry under Roof → Features.
+      if (def.capabilities.wallOpeningPlacement) continue
+      const icon = def.presentation?.icon
+      features.push({
+        kind,
+        label: def.presentation?.label ?? kind,
+        iconSrc: icon?.kind === 'url' ? icon.src : ROOF_FEATURE_FALLBACK_ICON,
+      })
+    }
+    return features
+  }, [])
 
   const isTypeActive = (type: BuildType) =>
     type.mode === 'material-paint' ? mode === 'material-paint' : selectedTypeId === type.id

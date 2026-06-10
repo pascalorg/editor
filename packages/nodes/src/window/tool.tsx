@@ -1,12 +1,10 @@
 import {
   type AnyNodeId,
-  clampRectToRoofWallFace,
   collectAlignmentAnchors,
   emitter,
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
-  roofFacePointToSegment,
   sceneRegistry,
   spatialGridManager,
   useScene,
@@ -18,17 +16,20 @@ import {
   calculateItemRotation,
   EDITOR_LAYER,
   getSideFromNormal,
-  hasRoofFaceChildOverlap,
   isValidWallSideFace,
-  resolveRoofWallHit,
   snapToHalf,
   triggerSFX,
   useAlignmentGuides,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
-import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
+import { BoxGeometry, EdgesGeometry, type Group, type LineSegments } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import {
+  getRoofWallOpeningCursorPose,
+  resolveRoofWallOpeningTarget,
+  type RoofWallOpeningTarget,
+} from '../shared/roof-wall-opening-placement'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
 
@@ -40,7 +41,6 @@ const edgeMaterial = new LineBasicNodeMaterial({
   depthWrite: false,
 })
 
-const roofCursorPoint = new Vector3()
 
 /**
  * Window tool — places WindowNodes on walls and on roof-segment wall
@@ -68,8 +68,8 @@ const WindowTool: React.FC = () => {
         wallEvent.node.end,
       )
 
-    const markWallDirty = (wallId: string) => {
-      useScene.getState().dirtyNodes.add(wallId as AnyNodeId)
+    const markHostDirty = (hostId: string) => {
+      useScene.getState().dirtyNodes.add(hostId as AnyNodeId)
     }
 
     const destroyDraft = () => {
@@ -78,7 +78,7 @@ const WindowTool: React.FC = () => {
       useScene.getState().deleteNode(draftRef.current.id)
       draftRef.current = null
       // Rebuild wall so it removes the cutout from the deleted draft
-      if (wallId) markWallDirty(wallId)
+      if (wallId) markHostDirty(wallId)
     }
 
     const hideCursor = () => {
@@ -225,7 +225,7 @@ const WindowTool: React.FC = () => {
             rotation: [0, itemRotation, 0],
             side,
           })
-          markWallDirty(event.node.id)
+          markHostDirty(event.node.id)
         } else {
           useScene.getState().updateNode(draftRef.current.id, {
             position: [clampedX, clampedY, 0],
@@ -362,65 +362,18 @@ const WindowTool: React.FC = () => {
     // so a window can sit anywhere inside the face profile — including
     // the gable pediment triangle.
 
-    const worldToBuildingLocal = (point: Vector3): [number, number, number] => {
-      // The tool's cursor group renders in the building's local frame —
-      // same conversion as the roof accessory tools (e.g. SkylightTool).
-      const buildingId = useViewer.getState().selection.buildingId
-      const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : undefined
-      if (buildingObj) buildingObj.worldToLocal(point)
-      return [point.x, point.y, point.z]
-    }
+    const resolveRoofTarget = (event: RoofEvent) =>
+      resolveRoofWallOpeningTarget({
+        event,
+        width: draftRef.current?.width ?? 1.5,
+        height: draftRef.current?.height ?? 1.5,
+        ignoreId: draftRef.current?.id,
+        vertical: { kind: 'free', snap: snapToHalf },
+      })
 
-    const resolveRoofTarget = (event: RoofEvent) => {
-      const hit = resolveRoofWallHit(
-        event.node as RoofNode,
-        event.position,
-        event.normal,
-        event.object,
-      )
-      if (!hit) return null
-      const width = draftRef.current?.width ?? 1.5
-      const height = draftRef.current?.height ?? 1.5
-      // Free vertical placement (snapped to the 0.5m grid like walls);
-      // the clamp projects the window inside the face profile, sliding
-      // it down under the gable slopes when needed.
-      const clamped = clampRectToRoofWallFace(hit.face, hit.u, snapToHalf(hit.v), width, height)
-      if (!clamped) return null
-      // FACE-LOCAL storage (u, v, z = 0 → wall mid-plane): the renderer
-      // mounts the node inside the live face frame, so it tracks segment
-      // resizes without any re-anchoring.
-      const position: [number, number, number] = [clamped.u, clamped.v, 0]
-      const valid = !hasRoofFaceChildOverlap(
-        hit.segment,
-        hit.face.id,
-        clamped.u,
-        clamped.v,
-        width,
-        height,
-        draftRef.current?.id,
-      )
-      return { hit, position, valid }
-    }
-
-    const updateRoofCursor = (
-      target: NonNullable<ReturnType<typeof resolveRoofTarget>>,
-      roof: RoofNode,
-    ) => {
-      const segObj = sceneRegistry.nodes.get(target.hit.segment.id as AnyNodeId)
-      if (!segObj) return
-      segObj.updateWorldMatrix(true, false)
-      const segLocal = roofFacePointToSegment(
-        target.hit.segment,
-        target.hit.face.id,
-        target.position,
-      )
-      roofCursorPoint.set(segLocal[0], segLocal[1], segLocal[2])
-      segObj.localToWorld(roofCursorPoint)
-      updateCursor(
-        worldToBuildingLocal(roofCursorPoint),
-        (roof.rotation ?? 0) + (target.hit.segment.rotation ?? 0) + target.hit.face.yaw,
-        target.valid,
-      )
+    const updateRoofCursor = (target: RoofWallOpeningTarget, roof: RoofNode) => {
+      const pose = getRoofWallOpeningCursorPose(target, roof)
+      if (pose) updateCursor(pose.position, pose.rotationY, target.valid)
     }
 
     const onRoofHover = (event: RoofEvent) => {
@@ -434,26 +387,26 @@ const WindowTool: React.FC = () => {
         }
         return
       }
-      const { hit, position } = target
+      const { segment, face, position } = target
 
-      if (draftRef.current && draftRef.current.parentId !== hit.segment.id) destroyDraft()
+      if (draftRef.current && draftRef.current.parentId !== segment.id) destroyDraft()
       if (draftRef.current) {
         useScene.getState().updateNode(draftRef.current.id, {
           position,
           rotation: [0, 0, 0],
-          roofFace: hit.face.id,
+          roofFace: face.id,
         })
       } else {
         const node = WindowNode.parse({
           position,
           rotation: [0, 0, 0],
           side: 'front',
-          roofSegmentId: hit.segment.id,
-          roofFace: hit.face.id,
-          parentId: hit.segment.id,
+          roofSegmentId: segment.id,
+          roofFace: face.id,
+          parentId: segment.id,
           metadata: { isTransient: true },
         })
-        useScene.getState().createNode(node, hit.segment.id as AnyNodeId)
+        useScene.getState().createNode(node, segment.id as AnyNodeId)
         draftRef.current = node
       }
       updateRoofCursor(target, event.node as RoofNode)
@@ -464,7 +417,7 @@ const WindowTool: React.FC = () => {
       if (!draftRef.current?.roofSegmentId) return
       const target = resolveRoofTarget(event)
       if (!target?.valid) return
-      const { hit, position } = target
+      const { segment, face, position } = target
 
       const draft = draftRef.current
       draftRef.current = null
@@ -482,9 +435,9 @@ const WindowTool: React.FC = () => {
         position,
         rotation: [0, 0, 0],
         side: 'front',
-        roofSegmentId: hit.segment.id,
-        roofFace: hit.face.id,
-        parentId: hit.segment.id,
+        roofSegmentId: segment.id,
+        roofFace: face.id,
+        parentId: segment.id,
         width: draft.width,
         height: draft.height,
         windowType: draft.windowType,
@@ -503,10 +456,10 @@ const WindowTool: React.FC = () => {
         sillThickness: draft.sillThickness,
       })
 
-      useScene.getState().createNode(node, hit.segment.id as AnyNodeId)
+      useScene.getState().createNode(node, segment.id as AnyNodeId)
       // Rebuild the segment (and the merged roof) so the wall brush
       // picks up the new opening cut.
-      useScene.getState().dirtyNodes.add(hit.segment.id as AnyNodeId)
+      useScene.getState().dirtyNodes.add(segment.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
       useScene.temporal.getState().pause()
       triggerSFX('sfx:structure-build')

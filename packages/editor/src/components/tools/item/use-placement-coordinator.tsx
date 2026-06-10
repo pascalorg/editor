@@ -1062,9 +1062,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           // push (z = thickness/2 off the face frame's mid-plane) so the
           // drag preview doesn't sink into the wall until commit.
           if (asset.attachTo === 'wall-side' && placementState.current.roofSegmentId) {
-            const segment = useScene.getState().nodes[
-              placementState.current.roofSegmentId as AnyNodeId
-            ]
+            const segment =
+              useScene.getState().nodes[placementState.current.roofSegmentId as AnyNodeId]
             if (segment?.type === 'roof-segment') {
               mesh.position.z = (segment.wallThickness ?? 0.1) / 2
             }
