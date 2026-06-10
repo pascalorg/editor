@@ -41,6 +41,7 @@ import {
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import { formatLinearMeasurement } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveAlignmentForActiveBuilding } from '../../../lib/world-grid-snap'
 import useEditor from '../../../store/use-editor'
@@ -69,17 +70,6 @@ const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 /** Figma-style alignment-snap threshold (meters), matching the 2D
  *  floor-plan overlay and the 3D registry move tool. */
 const ALIGNMENT_THRESHOLD_M = 0.08
-
-function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
-  if (unit === 'imperial') {
-    const feet = value * 3.280_84
-    const wholeFeet = Math.floor(feet)
-    const inches = Math.round((feet - wholeFeet) * 12)
-    if (inches === 12) return `${wholeFeet + 1}'0"`
-    return `${wholeFeet}'${inches}"`
-  }
-  return `${Number.parseFloat(value.toFixed(2))}m`
-}
 
 /**
  * Expand `bounds` outward so each axis is rounded up to the active grid step.
@@ -2025,9 +2015,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const initialDepthGuideGeometry = useMemo(() => createLineGeometry(), [])
   const initialHeightGuideGeometry = useMemo(() => createLineGeometry(), [])
   const currentDimensionBounds = dimensionBounds ?? initialDimensionBounds
-  const widthLabel = formatMeasurement(currentDimensionBounds.dimensions[0], unit)
-  const depthLabel = formatMeasurement(currentDimensionBounds.dimensions[2], unit)
-  const heightLabel = formatMeasurement(currentDimensionBounds.dimensions[1], unit)
+  const widthLabel = formatLinearMeasurement(currentDimensionBounds.dimensions[0], unit)
+  const depthLabel = formatLinearMeasurement(currentDimensionBounds.dimensions[2], unit)
+  const heightLabel = formatLinearMeasurement(currentDimensionBounds.dimensions[1], unit)
   const widthLabelPosition: [number, number, number] = [
     currentDimensionBounds.center[0],
     0.04,

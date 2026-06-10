@@ -8,12 +8,14 @@ import {
   type ParamAction,
   type ParamField,
   useScene,
+  type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Icon } from '@iconify/react'
 import { Move, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { collectZoneContentIds } from '../../../lib/zone-content'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
@@ -38,8 +40,15 @@ import { InspectorFooterContext, PanelWrapper } from './panel-wrapper'
  * `parametrics.customPanel?` escape hatch for kinds whose parametric editor
  * can't be auto-generated (topology editors etc.).
  */
-export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {}) {
-  const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
+export function ParametricInspector({
+  footer,
+  nodeId,
+  onClose,
+}: { footer?: React.ReactNode; nodeId?: AnyNodeId; onClose?: () => void } = {}) {
+  const selectedIdFromSelection = useViewer((s) => s.selection.selectedIds[0]) as
+    | AnyNodeId
+    | undefined
+  const selectedId = nodeId ?? selectedIdFromSelection
   const setSelection = useViewer((s) => s.setSelection)
   // Subscribe only to the *type* — a string primitive that doesn't change
   // when slider values change. Without this, every updateNode tick during
@@ -58,9 +67,13 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
     [selectedId],
   )
 
-  const handleClose = useCallback(() => {
+  const clearSelection = useCallback(() => {
+    if (onClose) {
+      onClose()
+      return
+    }
     setSelection({ selectedIds: [] })
-  }, [setSelection])
+  }, [onClose, setSelection])
 
   const handleMove = useCallback(() => {
     if (!selectedId) return
@@ -68,15 +81,27 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
     if (!node) return
     sfxEmitter.emit('sfx:item-pick')
     useEditor.getState().setMovingNode(node as any)
-    setSelection({ selectedIds: [] })
-  }, [selectedId, setSelection])
+    clearSelection()
+  }, [selectedId, clearSelection])
 
-  const handleDelete = useCallback(() => {
-    if (!selectedId) return
-    sfxEmitter.emit('sfx:structure-delete')
-    useScene.getState().deleteNode(selectedId)
-    setSelection({ selectedIds: [] })
-  }, [selectedId, setSelection])
+  const handleDelete = useCallback(
+    (withZoneContent = false) => {
+      if (!selectedId) return
+      const scene = useScene.getState()
+      const node = scene.nodes[selectedId]
+      if (!node) return
+
+      const ids =
+        withZoneContent && node.type === 'zone'
+          ? [selectedId, ...collectZoneContentIds(scene.nodes, node as ZoneNode)]
+          : [selectedId]
+
+      sfxEmitter.emit('sfx:structure-delete')
+      scene.deleteNodes(Array.from(new Set(ids)))
+      clearSelection()
+    },
+    [selectedId, clearSelection],
+  )
 
   if (!selectedId || !def || !parametrics) return null
 
@@ -104,13 +129,20 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
   const iconNode = renderIcon(presentation?.icon)
   const canMove = !!def.capabilities.movable
   const canDelete = def.capabilities.deletable !== false
+  const isZone = nodeType === 'zone'
 
   const TrailingSection = parametrics.trailingSection
     ? resolveCustomPanel(parametrics.trailingSection)
     : null
 
   return (
-    <PanelWrapper footer={footer} icon={iconNode} onClose={handleClose} title={title} width={320}>
+    <PanelWrapper
+      footer={footer}
+      icon={iconNode}
+      onClose={clearSelection}
+      title={title}
+      width={320}
+    >
       {parametrics.groups.map((group, gi) => (
         <PanelSection key={`group-${gi}`} title={group.label}>
           {group.fields.map((field, fi) => (
@@ -130,21 +162,37 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
       )}
       {(canMove || canDelete || (parametrics.actions && parametrics.actions.length > 0)) && (
         <PanelSection title="Actions">
-          <ActionGroup>
+          <ActionGroup className={isZone ? 'flex-col' : undefined}>
             {canMove && (
               <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
             )}
             {parametrics.actions?.map((action, i) => (
               <ParamActionButton action={action} key={`paramaction-${i}`} nodeId={selectedId} />
             ))}
-            {canDelete && (
-              <ActionButton
-                className="border-red-500/40 text-red-200 hover:bg-red-500/15"
-                icon={<Trash2 className="h-4 w-4" />}
-                label="Delete"
-                onClick={handleDelete}
-              />
-            )}
+            {canDelete &&
+              (isZone ? (
+                <>
+                  <ActionButton
+                    className="w-full flex-none"
+                    icon={<Trash2 className="h-4 w-4 text-red-400" />}
+                    label="Delete"
+                    onClick={() => handleDelete(false)}
+                  />
+                  <ActionButton
+                    className="w-full flex-none"
+                    icon={<Trash2 className="h-4 w-4 text-red-400" />}
+                    label="Delete with contents"
+                    onClick={() => handleDelete(true)}
+                  />
+                </>
+              ) : (
+                <ActionButton
+                  className="border-red-500/40 text-red-200 hover:bg-red-500/15"
+                  icon={<Trash2 className="h-4 w-4" />}
+                  label="Delete"
+                  onClick={() => handleDelete()}
+                />
+              ))}
           </ActionGroup>
         </PanelSection>
       )}

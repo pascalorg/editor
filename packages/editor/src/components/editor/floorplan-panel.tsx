@@ -75,6 +75,7 @@ import {
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
 } from '../../lib/floorplan'
 import { guideEmitter } from '../../lib/guide-events'
+import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
@@ -2616,14 +2617,7 @@ function formatMeasurement(
   metersPerUnit: number | null = null,
 ) {
   const measuredValue = metersPerUnit && metersPerUnit > 0 ? value * metersPerUnit : value
-  if (unit === 'imperial') {
-    const feet = measuredValue * 3.280_84
-    const wholeFeet = Math.floor(feet)
-    const inches = Math.round((feet - wholeFeet) * 12)
-    if (inches === 12) return `${wholeFeet + 1}'0"`
-    return `${wholeFeet}'${inches}"`
-  }
-  return `${Number.parseFloat(measuredValue.toFixed(2))}m`
+  return formatLinearMeasurement(measuredValue, unit)
 }
 
 function formatNumber(value: number, fractionDigits = 2) {
@@ -2635,7 +2629,7 @@ function convertReferenceLengthToMeters(value: number, unit: ReferenceScaleUnit)
     case 'centimeters':
       return value / 100
     case 'feet':
-      return value * 0.3048
+      return linearUnitToMeters(value, 'imperial')
     case 'inches':
       return value * 0.0254
     default:
@@ -4527,7 +4521,17 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
   )
 })
 
-export function FloorplanPanel() {
+export function FloorplanPanel({
+  /**
+   * Element to portal the compass button into. The 2D/3D navigation poses stay
+   * in sync (`navigationSyncPose`), so hosting the compass on the always-visible
+   * viewer-area container keeps it correct — needle and align-to-north alike —
+   * in 2d, 3d, and split modes, while this panel itself may be display:none.
+   */
+  compassHost,
+}: {
+  compassHost?: HTMLElement | null
+}) {
   const viewportHostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const floorplanSceneRef = useRef<SVGGElement>(null)
@@ -10180,12 +10184,21 @@ export function FloorplanPanel() {
             only action menu the floor plan mounts. */}
         <FloorplanRegistryActionMenu />
 
-        {(levelNode?.type === 'level' || hasAmbientBuildingLevel) && (
-          <FloorplanCompassButton
-            northRotationDeg={-floorplanUserRotationDeg}
-            onAlignNorth={alignFloorplanViewToNorth}
-          />
-        )}
+        {(levelNode?.type === 'level' || hasAmbientBuildingLevel) &&
+          (compassHost ? (
+            createPortal(
+              <FloorplanCompassButton
+                northRotationDeg={-floorplanUserRotationDeg}
+                onAlignNorth={alignFloorplanViewToNorth}
+              />,
+              compassHost,
+            )
+          ) : (
+            <FloorplanCompassButton
+              northRotationDeg={-floorplanUserRotationDeg}
+              onAlignNorth={alignFloorplanViewToNorth}
+            />
+          ))}
 
         {referenceScaleDraft && (
           <div className="pointer-events-none absolute top-3 left-1/2 z-30 -translate-x-1/2 rounded-md border bg-background/95 px-3 py-2 text-center text-sm shadow-sm">

@@ -4,6 +4,7 @@ import {
   getEffectiveNode,
   nodeRegistry,
   sceneRegistry,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
@@ -104,9 +105,10 @@ function updateCeilingGeometry(
   // canonical position after the rebuild. Matches the pattern used by
   // FenceSystem.updateFenceGeometry / GeometrySystem (both fully reset
   // position+rotation after rebuild).
-  mesh.position.x = 0
-  mesh.position.z = 0
-  mesh.position.y = (node.height ?? 2.5) - 0.01 // Slight offset to avoid z-fighting with upper-level slabs
+  const liveTransform = useLiveTransforms.getState().get(node.id)
+  mesh.position.x = liveTransform?.position[0] ?? 0
+  mesh.position.z = liveTransform?.position[2] ?? 0
+  mesh.position.y = (node.height ?? 2.5) - 0.01 + (liveTransform?.position[1] ?? 0) // Slight offset to avoid z-fighting with upper-level slabs
 }
 
 /**

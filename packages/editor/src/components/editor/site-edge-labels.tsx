@@ -7,9 +7,9 @@ import { Html } from '@react-three/drei'
 import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { type Camera, type Object3D, Vector3 } from 'three'
+import { formatLinearMeasurement } from '../../lib/measurements'
 import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
 import useEditor from '../../store/use-editor'
-import { formatMeasurement } from './measurement-pill'
 
 type ViewportSize = {
   width: number
@@ -110,7 +110,7 @@ export function SiteEdgeLabels() {
               textShadow: `-1.5px -1.5px 0 ${shadowColor}, 1.5px -1.5px 0 ${shadowColor}, -1.5px 1.5px 0 ${shadowColor}, 1.5px 1.5px 0 ${shadowColor}, 0 0 4px ${shadowColor}, 0 0 4px ${shadowColor}`,
             }}
           >
-            {formatMeasurement(edge.dist, unit)}
+            {formatLinearMeasurement(edge.dist, unit)}
           </div>
         </Html>
       ))}

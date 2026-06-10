@@ -220,6 +220,14 @@ export {
   hasActivePaintMaterial,
 } from './lib/material-paint'
 export {
+  formatLinearMeasurement,
+  getLinearUnitLabel,
+  type LinearUnit,
+  linearControlValueToMeters,
+  linearUnitToMeters,
+  metersToLinearUnit,
+} from './lib/measurements'
+export {
   addFreshPlacementMetadata,
   getPlacementMetadataRecord,
   isFreshPlacementMetadata,

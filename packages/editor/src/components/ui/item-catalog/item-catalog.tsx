@@ -1,7 +1,7 @@
 'use client'
 
 import type { AssetInput } from '@pascal-app/core'
-import { resolveCdnUrl } from '@pascal-app/viewer'
+import { resolveCdnUrl, useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { useEffect } from 'react'
 import {
@@ -96,6 +96,10 @@ export function ItemCatalog({
             key={index}
             onClick={() => {
               triggerSFX('sfx:menu-click')
+              // Drop the current selection before arming placement — keeping
+              // it would route shortcuts (rotate & co) to both the ghost and
+              // the selected node.
+              useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
               setSelectedItem(item)
               setTool('item')
               setMode('build')

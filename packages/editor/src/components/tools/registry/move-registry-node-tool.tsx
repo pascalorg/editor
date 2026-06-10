@@ -360,6 +360,15 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
      *  AND scene updated) — never the original.
      */
     const commitAtCursor = (event: ClickTriggerEvent) => {
+      // One physical click can reach here twice: node clicks (`slab:click`,
+      // `item:click`, …) are synthesized on *pointerup* (`use-node-events`),
+      // while `grid:click` rides the browser's native *click* event from a
+      // canvas DOM listener (`use-grid-events`) that deliberately ignores
+      // stopPropagation — and this effect stays subscribed until React
+      // re-renders after `exitMoveMode`. Without this guard the second pass
+      // finds the fresh draft already deleted and takes the orphan re-create
+      // path below, minting a hidden ghost copy and replaying the SFX.
+      if (committed) return
       // Ignore a commit that fires before the cursor has moved into place —
       // it's the stray trailing click of whatever armed this move, not a
       // deliberate drop. Prevents preset re-arm from double-placing.

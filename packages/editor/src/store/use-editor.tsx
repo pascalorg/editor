@@ -62,7 +62,16 @@ export type WorkspaceMode = 'edit' | 'studio'
 export type CaptureMode =
   | { mode: 'idle' }
   | { mode: 'standard' }
-  | { mode: 'preset'; isolated: AnyNodeId[] }
+  | {
+      mode: 'preset'
+      isolated: AnyNodeId[]
+      framingBounds?: {
+        min: [number, number]
+        max: [number, number]
+        center: [number, number]
+        size: [number, number]
+      }
+    }
 
 export type Phase = 'site' | 'structure' | 'furnish'
 
