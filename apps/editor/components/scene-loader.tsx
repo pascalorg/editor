@@ -11,13 +11,13 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
-import { Bot, Images, Layers, Package, Plus, Settings } from 'lucide-react'
+import { Bot, Images, Layers, Package, Plus, Settings, Video } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AiAssistantPanel } from './ai-assistant-bubble'
-import { PanoramaWalkthroughPanel } from './panorama-walkthrough-panel'
+import { PanoramaPhotoPanel, WalkthroughVideoPanel } from './panorama-walkthrough-panel'
 import { ImportDxfTool } from './tools/ImportDxfTool'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
@@ -65,10 +65,17 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
   },
   {
     id: 'panorama',
-    label: 'Panorama',
-    component: PanoramaWalkthroughPanel,
+    label: '360',
+    component: PanoramaPhotoPanel,
     mobileDefaultSnap: 0.7,
     mobileIcon: <Images className="h-5 w-5" />,
+  },
+  {
+    id: 'walkthrough',
+    label: 'Walkthrough',
+    component: WalkthroughVideoPanel,
+    mobileDefaultSnap: 0.7,
+    mobileIcon: <Video className="h-5 w-5" />,
   },
   {
     id: 'settings',
@@ -115,11 +122,15 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const [dxfOpen, setDxfOpen] = useState(false)
   const sidebarTabs = useMemo(
     () =>
-      SIDEBAR_TABS.map((tab) =>
-        tab.id === 'panorama'
-          ? { ...tab, component: () => <PanoramaWalkthroughPanel sceneId={meta.id} /> }
-          : tab,
-      ),
+      SIDEBAR_TABS.map((tab) => {
+        if (tab.id === 'panorama') {
+          return { ...tab, component: () => <PanoramaPhotoPanel sceneId={meta.id} /> }
+        }
+        if (tab.id === 'walkthrough') {
+          return { ...tab, component: () => <WalkthroughVideoPanel sceneId={meta.id} /> }
+        }
+        return tab
+      }),
     [meta.id],
   )
 

@@ -27,6 +27,7 @@
     "clsx": "^2.1.1",
     "dxf-parser": "^1.1.2",
     "geist": "^1.7.0",
+    "html-to-image": "^1.11.13",
     "lucide-react": "^1.7.0",
     "next": "16.2.1",
     "postcss": "^8.5.6",

@@ -1,13 +1,16 @@
 'use client'
 
 import { useScene } from '@pascal-app/core'
-import { CheckCircle2, ImageIcon, Play, Video } from 'lucide-react'
+import { useEditor } from '@pascal-app/editor'
+import { CheckCircle2, ImageIcon, Play, Video, X } from 'lucide-react'
 import type React from 'react'
 import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { PanoramaViewerModal } from './panorama-viewer-modal'
 
 type ActionState = 'idle' | 'running' | 'done'
 type GenerateMode = 'panorama' | 'walkthrough'
+type PanelMode = GenerateMode | 'both'
 type PlanPoint = { x: number; y: number }
 type PlanWall = { start: [number, number]; end: [number, number] }
 type PlanZone = { polygon: [number, number][]; color?: string }
@@ -67,12 +70,61 @@ function isZoneNode(node: unknown): node is PlanZone & { type: 'zone' } {
   )
 }
 
+function CameraMarker({ x, y }: PlanPoint) {
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      <path
+        d="M -2.6 -1.6 H 1.8 C 2.4 -1.6 2.8 -1.2 2.8 -0.6 V 1.8 C 2.8 2.4 2.4 2.8 1.8 2.8 H -2.6 C -3.2 2.8 -3.6 2.4 -3.6 1.8 V -0.6 C -3.6 -1.2 -3.2 -1.6 -2.6 -1.6 Z"
+        fill="#22c55e"
+        stroke="#052e16"
+        strokeWidth="0.45"
+      />
+      <path d="M -1.8 -1.6 L -1.2 -2.7 H 0.9 L 1.5 -1.6 Z" fill="#22c55e" />
+      <circle cx="-0.4" cy="0.6" fill="#052e16" r="1.05" stroke="white" strokeWidth="0.25" />
+      <circle cx="2" cy="-0.6" fill="#052e16" r="0.35" />
+    </g>
+  )
+}
+
+function FootprintMarker({ index, x, y }: PlanPoint & { index: number }) {
+  return (
+    <g transform={`translate(${x} ${y}) rotate(${index % 2 === 0 ? -8 : 8})`}>
+      <g transform="translate(-1.35 -0.2) rotate(-18)">
+        <path
+          d="M -0.55 -1.65 C -0.95 -1.15 -1.02 -0.25 -0.88 0.7 C -0.72 1.75 -0.3 2.35 0.2 2.25 C 0.78 2.12 0.96 1.2 0.86 0.12 C 0.76 -0.98 0.32 -1.72 -0.18 -1.86 C -0.32 -1.9 -0.45 -1.82 -0.55 -1.65 Z"
+          fill="#22c55e"
+          stroke="#052e16"
+          strokeWidth="0.2"
+        />
+      </g>
+      <g transform="translate(1.35 0.95) rotate(18)">
+        <path
+          d="M 0.55 -1.65 C 0.95 -1.15 1.02 -0.25 0.88 0.7 C 0.72 1.75 0.3 2.35 -0.2 2.25 C -0.78 2.12 -0.96 1.2 -0.86 0.12 C -0.76 -0.98 -0.32 -1.72 0.18 -1.86 C 0.32 -1.9 0.45 -1.82 0.55 -1.65 Z"
+          fill="#22c55e"
+          stroke="#052e16"
+          strokeWidth="0.2"
+        />
+      </g>
+    </g>
+  )
+}
+
+function PointMarker({ index, mode, point }: { index: number; mode: GenerateMode; point: PlanPoint }) {
+  if (mode === 'panorama') {
+    return <CameraMarker x={point.x} y={point.y} />
+  }
+
+  return <FootprintMarker index={index} x={point.x} y={point.y} />
+}
+
 function PointSelectionModal({
   mode,
+  floorplanImageUrl,
   onClose,
   onConfirm,
 }: {
   mode: GenerateMode
+  floorplanImageUrl: string | null
   onClose: () => void
   onConfirm: (points: PlanPoint[]) => void
 }) {
@@ -132,16 +184,18 @@ function PointSelectionModal({
   const requiredPoints = mode === 'panorama' ? 1 : 2
   const canGenerate = points.length >= requiredPoints
 
-  const handlePlanClick = (event: React.MouseEvent<SVGSVGElement>) => {
+  const handlePointPick = (event: React.MouseEvent<SVGSVGElement | HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
     const next = {
       x: ((event.clientX - rect.left) / rect.width) * 100,
-      y: ((event.clientY - rect.top) / rect.height) * 70,
+      y: ((event.clientY - rect.top) / rect.height) * 100,
     }
     setPoints((current) => (mode === 'panorama' ? [next] : [...current, next]))
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
       <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-md border border-border bg-background shadow-2xl">
         <header className="flex h-12 shrink-0 items-center justify-between border-border border-b px-4">
@@ -158,81 +212,104 @@ function PointSelectionModal({
             </p>
           </div>
           <button
-            className="rounded-md px-2 py-1 text-muted-foreground text-sm hover:bg-accent hover:text-foreground"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
             onClick={onClose}
             type="button"
           >
-            Close
+            <X className="h-4 w-4" aria-hidden />
+            <span className="sr-only">Close</span>
           </button>
         </header>
 
         <div className="min-h-0 flex-1 p-4">
-          <button
-            className="block w-full overflow-hidden rounded-md border border-border bg-muted/20 text-left"
-            type="button"
-          >
-            <svg
-              aria-label="2D floor plan point selector"
-              className="block aspect-[10/7] w-full"
-              onClick={handlePlanClick}
-              role="img"
-              viewBox="0 0 100 70"
+          {floorplanImageUrl ? (
+            <button
+              className="relative block aspect-[10/7] w-full overflow-hidden rounded-md border border-border bg-muted/20"
+              onClick={handlePointPick}
+              type="button"
             >
-              <defs>
-                <pattern height="5" id="plan-grid" patternUnits="userSpaceOnUse" width="5">
-                  <path d="M 5 0 L 0 0 0 5" fill="none" stroke="#cbd5e1" strokeWidth="0.12" />
-                </pattern>
-              </defs>
-              <rect fill="#f8fafc" height="70" width="100" />
-              <rect fill="url(#plan-grid)" height="70" width="100" />
-              {plan.zones.map((zone, index) => (
-                <polygon
-                  fill={zone.color ?? '#3b82f6'}
-                  key={`zone-${index}`}
-                  opacity="0.12"
-                  points={zone.polygon.map(([x, y]) => `${x},${y}`).join(' ')}
-                  stroke={zone.color ?? '#3b82f6'}
-                  strokeWidth="0.35"
-                />
-              ))}
-              {plan.walls.map((wall, index) => (
-                <line
-                  key={`wall-${index}`}
-                  stroke="#0f172a"
-                  strokeLinecap="round"
-                  strokeWidth="1.45"
-                  x1={wall.start[0]}
-                  x2={wall.end[0]}
-                  y1={wall.start[1]}
-                  y2={wall.end[1]}
-                />
-              ))}
-              {mode === 'walkthrough' && points.length > 1 ? (
-                <polyline
-                  fill="none"
-                  points={points.map((point) => `${point.x},${point.y}`).join(' ')}
-                  stroke="#22c55e"
-                  strokeDasharray="1.2 1.2"
-                  strokeWidth="0.75"
-                />
-              ) : null}
-              {points.map((point, index) => (
-                <g key={`point-${index}`}>
-                  <circle cx={point.x} cy={point.y} fill="#22c55e" r="1.7" />
-                  <text
-                    fill="white"
-                    fontSize="2.2"
-                    fontWeight="700"
-                    textAnchor="middle"
-                    x={point.x}
-                    y={point.y + 0.8}
-                  >
-                    {index + 1}
-                  </text>
-                </g>
-              ))}
-            </svg>
-          </button>
+              <img
+                alt="Captured 2D floor plan"
+                className="h-full w-full object-contain"
+                draggable={false}
+                src={floorplanImageUrl}
+              />
+              <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100">
+                {mode === 'walkthrough' && points.length > 1 ? (
+                  <polyline
+                    fill="none"
+                    points={points.map((point) => `${point.x},${point.y}`).join(' ')}
+                    stroke="#22c55e"
+                    strokeDasharray="1.8 1.2"
+                    strokeWidth="0.9"
+                  />
+                ) : null}
+                {points.map((point, index) => (
+                  <PointMarker index={index} key={`point-${index}`} mode={mode} point={point} />
+                ))}
+              </svg>
+            </button>
+          ) : (
+            <button
+              className="block w-full overflow-hidden rounded-md border border-border bg-muted/20 text-left"
+              type="button"
+            >
+              <svg
+                aria-label="2D floor plan point selector"
+                className="block aspect-[10/7] w-full"
+                onClick={handlePointPick}
+                role="img"
+                viewBox="0 0 100 70"
+              >
+                <defs>
+                  <pattern height="5" id="plan-grid" patternUnits="userSpaceOnUse" width="5">
+                    <path d="M 5 0 L 0 0 0 5" fill="none" stroke="#cbd5e1" strokeWidth="0.12" />
+                  </pattern>
+                </defs>
+                <rect fill="#f8fafc" height="70" width="100" />
+                <rect fill="url(#plan-grid)" height="70" width="100" />
+                {plan.zones.map((zone, index) => (
+                  <polygon
+                    fill={zone.color ?? '#3b82f6'}
+                    key={`zone-${index}`}
+                    opacity="0.12"
+                    points={zone.polygon.map(([x, y]) => `${x},${y}`).join(' ')}
+                    stroke={zone.color ?? '#3b82f6'}
+                    strokeWidth="0.35"
+                  />
+                ))}
+                {plan.walls.map((wall, index) => (
+                  <line
+                    key={`wall-${index}`}
+                    stroke="#0f172a"
+                    strokeLinecap="round"
+                    strokeWidth="1.45"
+                    x1={wall.start[0]}
+                    x2={wall.end[0]}
+                    y1={wall.start[1]}
+                    y2={wall.end[1]}
+                  />
+                ))}
+                {mode === 'walkthrough' && points.length > 1 ? (
+                  <polyline
+                    fill="none"
+                    points={points.map((point) => `${point.x},${point.y * 0.7}`).join(' ')}
+                    stroke="#22c55e"
+                    strokeDasharray="1.2 1.2"
+                    strokeWidth="0.75"
+                  />
+                ) : null}
+                {points.map((point, index) => (
+                  <PointMarker
+                    index={index}
+                    key={`point-${index}`}
+                    mode={mode}
+                    point={{ x: point.x, y: point.y * 0.7 }}
+                  />
+                ))}
+              </svg>
+            </button>
+          )}
         </div>
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-border border-t px-4 py-3">
@@ -258,15 +335,23 @@ function PointSelectionModal({
           </div>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
-export function PanoramaWalkthroughPanel({ sceneId }: { sceneId?: string }) {
+export function PanoramaWalkthroughPanel({
+  sceneId,
+  mode = 'both',
+}: {
+  sceneId?: string
+  mode?: PanelMode
+}) {
   const resolvedSceneId = useMemo(() => sceneId ?? readSceneIdFromPath(), [sceneId])
+  const viewMode = useEditor((state) => state.viewMode)
+  const setViewMode = useEditor((state) => state.setViewMode)
   const [panoramaState, setPanoramaState] = useState<ActionState>('idle')
   const [videoState, setVideoState] = useState<ActionState>('idle')
-  const [lastMessage, setLastMessage] = useState('Ready to generate from the current scene.')
   const [panoramaMissing, setPanoramaMissing] = useState(false)
   const [videoMissing, setVideoMissing] = useState(false)
   const [showPanorama, setShowPanorama] = useState(false)
@@ -275,6 +360,7 @@ export function PanoramaWalkthroughPanel({ sceneId }: { sceneId?: string }) {
   const [videoRevision, setVideoRevision] = useState(0)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [selectionMode, setSelectionMode] = useState<GenerateMode | null>(null)
+  const [floorplanImageUrl, setFloorplanImageUrl] = useState<string | null>(null)
 
   const panoramaUrl = resolvedSceneId
     ? `/api/pascal-function-static/${encodeURIComponent(resolvedSceneId)}/panorama.jpg?v=${panoramaRevision}`
@@ -282,18 +368,25 @@ export function PanoramaWalkthroughPanel({ sceneId }: { sceneId?: string }) {
   const walkthroughUrl = resolvedSceneId
     ? `/api/pascal-function-static/${encodeURIComponent(resolvedSceneId)}/walkthrough.mp4?v=${videoRevision}`
     : null
+  const showPanoramaSection = mode === 'both' || mode === 'panorama'
+  const showWalkthroughSection = mode === 'both' || mode === 'walkthrough'
+  const title = mode === 'walkthrough' ? 'Walkthrough' : '360'
+  const headerIcon =
+    mode === 'walkthrough' ? <Video className="h-4 w-4 shrink-0" aria-hidden /> : <ImageIcon className="h-4 w-4 shrink-0" aria-hidden />
+
+  const notify = (message: string) => {
+    window.alert(message)
+  }
 
   const runFakeAction = (
     setState: React.Dispatch<React.SetStateAction<ActionState>>,
-    runningMessage: string,
-    doneMessage: string,
+    _runningMessage: string,
+    _doneMessage: string,
     onDone?: () => void,
   ) => {
     setState('running')
-    setLastMessage(runningMessage)
     window.setTimeout(() => {
       setState('done')
-      setLastMessage(doneMessage)
       onDone?.()
     }, 700)
   }
@@ -326,99 +419,136 @@ export function PanoramaWalkthroughPanel({ sceneId }: { sceneId?: string }) {
     )
   }
 
+  const openPointSelection = async (mode: GenerateMode) => {
+    if (!(viewMode === '2d' || viewMode === 'split')) {
+      notify('Open 2D or Split view before selecting positions.')
+      return
+    }
+
+    try {
+      const floorplanElement = document.querySelector<HTMLElement>('[data-pascal-floorplan-capture]')
+      if (!floorplanElement) {
+        throw new Error('2D view was not found.')
+      }
+
+      const { toPng } = await import('html-to-image')
+      const dataUrl = await toPng(floorplanElement, {
+        cacheBust: true,
+        pixelRatio: 1,
+      })
+      setFloorplanImageUrl(dataUrl)
+      setSelectionMode(mode)
+    } catch {
+      setFloorplanImageUrl(null)
+      setSelectionMode(mode)
+      notify('Could not capture the 2D view. Using fallback plan.')
+    }
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
       <header className="flex h-11 shrink-0 items-center gap-2 border-border/70 border-b px-3">
-        <ImageIcon className="h-4 w-4 shrink-0" aria-hidden />
-        <span className="truncate font-medium text-sm">Panorama</span>
+        {headerIcon}
+        <span className="truncate font-medium text-sm">{title}</span>
       </header>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
-        <section className="space-y-2">
-          <h2 className="font-medium text-sm">Panorama Photo</h2>
-          <div className="flex aspect-video items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-muted/30">
-            {showPanorama && panoramaUrl && !panoramaMissing ? (
-              <button
-                className="group relative h-full w-full overflow-hidden"
-                onClick={() => setViewerOpen(true)}
-                type="button"
-              >
-                <img
-                  alt="Generated panorama preview"
-                  className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
-                  onError={() => setPanoramaMissing(true)}
-                  src={panoramaUrl}
-                />
-                <span className="absolute inset-x-0 bottom-0 bg-black/55 px-3 py-2 text-left text-white text-xs opacity-0 transition-opacity group-hover:opacity-100">
-                  Open 360 viewer
-                </span>
-              </button>
-            ) : (
-              <div className="flex flex-col items-center gap-2 text-muted-foreground text-sm">
-                <ImageIcon className="h-8 w-8" aria-hidden />
-                <span>
-                  {resolvedSceneId
-                    ? showPanorama
-                      ? 'No panorama found'
-                      : 'Generate panorama to preview'
-                    : 'No scene selected'}
-                </span>
-              </div>
-            )}
-          </div>
-          <StatusButton
-            doneLabel="Panorama generated"
-            icon={<ImageIcon className="h-4 w-4" />}
-            label="Generate panorama"
-            onClick={() => setSelectionMode('panorama')}
-            runningLabel="Generating..."
-            state={panoramaState}
-          />
-        </section>
+        {showPanoramaSection ? (
+          <section className="space-y-2">
+            <h2 className="font-medium text-sm">360 Photo</h2>
+            <div className="flex aspect-video items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-muted/30">
+              {showPanorama && panoramaUrl && !panoramaMissing ? (
+                <button
+                  className="group relative h-full w-full overflow-hidden"
+                  onClick={() => setViewerOpen(true)}
+                  type="button"
+                >
+                  <img
+                    alt="Generated 360 preview"
+                    className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+                    onError={() => setPanoramaMissing(true)}
+                    src={panoramaUrl}
+                  />
+                  <span className="absolute inset-x-0 bottom-0 bg-black/55 px-3 py-2 text-left text-white text-xs opacity-0 transition-opacity group-hover:opacity-100">
+                    Open 360 viewer
+                  </span>
+                </button>
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-muted-foreground text-sm">
+                  <ImageIcon className="h-8 w-8" aria-hidden />
+                  <span>
+                    {resolvedSceneId
+                      ? showPanorama
+                        ? 'No 360 image found'
+                        : 'Generate 360 to preview'
+                      : 'No scene selected'}
+                  </span>
+                </div>
+              )}
+            </div>
+            <StatusButton
+              doneLabel="360 generated"
+              icon={<ImageIcon className="h-4 w-4" />}
+              label="Generate 360"
+              onClick={() => void openPointSelection('panorama')}
+              runningLabel="Generating..."
+              state={panoramaState}
+            />
+          </section>
+        ) : null}
 
-        <section className="space-y-2">
-          <h2 className="font-medium text-sm">Walkthrough Video</h2>
-          <div className="flex aspect-video items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-muted/30">
-            {showVideo && walkthroughUrl && !videoMissing ? (
-              <video
-                className="h-full w-full object-cover"
-                controls
-                onError={() => setVideoMissing(true)}
-                src={walkthroughUrl}
-              >
-                <track kind="captions" label="No captions" srcLang="en" />
-              </video>
-            ) : (
-              <div className="flex flex-col items-center gap-2 text-muted-foreground text-sm">
-                <Video className="h-8 w-8" aria-hidden />
-                <span>
-                  {resolvedSceneId
-                    ? showVideo
-                      ? 'No walkthrough video found'
-                      : 'Generate walkthrough to preview'
-                    : 'No scene selected'}
-                </span>
-              </div>
-            )}
-          </div>
-          <StatusButton
-            doneLabel="Video generated"
-            icon={<Play className="h-4 w-4" />}
-            label="Generate walkthrough"
-            onClick={() => setSelectionMode('walkthrough')}
-            runningLabel="Rendering..."
-            state={videoState}
-          />
-          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-muted-foreground text-sm">
-            {lastMessage}
-          </div>
-        </section>
+        {showWalkthroughSection ? (
+          <section className="space-y-2">
+            <h2 className="font-medium text-sm">Walkthrough Video</h2>
+            <div className="flex aspect-video items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-muted/30">
+              {showVideo && walkthroughUrl && !videoMissing ? (
+                <video
+                  className="h-full w-full object-cover"
+                  controls
+                  onError={() => setVideoMissing(true)}
+                  src={walkthroughUrl}
+                >
+                  <track kind="captions" label="No captions" srcLang="en" />
+                </video>
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-muted-foreground text-sm">
+                  <Video className="h-8 w-8" aria-hidden />
+                  <span>
+                    {resolvedSceneId
+                      ? showVideo
+                        ? 'No walkthrough video found'
+                        : 'Generate walkthrough to preview'
+                      : 'No scene selected'}
+                  </span>
+                </div>
+              )}
+            </div>
+            <StatusButton
+              doneLabel="Video generated"
+              icon={<Play className="h-4 w-4" />}
+              label="Generate walkthrough"
+              onClick={() => void openPointSelection('walkthrough')}
+              runningLabel="Rendering..."
+              state={videoState}
+            />
+          </section>
+        ) : null}
+        {!(viewMode === '2d' || viewMode === 'split') ? (
+          <button
+            className="w-full rounded-md border border-border bg-background px-3 py-2 font-medium text-sm hover:bg-accent"
+            onClick={() => setViewMode('split')}
+            type="button"
+          >
+            Open 2D view
+          </button>
+        ) : null}
       </div>
       {viewerOpen && panoramaUrl ? (
         <PanoramaViewerModal imageUrl={panoramaUrl} onClose={() => setViewerOpen(false)} />
       ) : null}
       {selectionMode ? (
         <PointSelectionModal
+          floorplanImageUrl={floorplanImageUrl}
           mode={selectionMode}
           onClose={() => setSelectionMode(null)}
           onConfirm={(points) => handleGenerateFromPoints(selectionMode, points)}
@@ -426,4 +556,12 @@ export function PanoramaWalkthroughPanel({ sceneId }: { sceneId?: string }) {
       ) : null}
     </div>
   )
+}
+
+export function PanoramaPhotoPanel({ sceneId }: { sceneId?: string }) {
+  return <PanoramaWalkthroughPanel mode="panorama" sceneId={sceneId} />
+}
+
+export function WalkthroughVideoPanel({ sceneId }: { sceneId?: string }) {
+  return <PanoramaWalkthroughPanel mode="walkthrough" sceneId={sceneId} />
 }

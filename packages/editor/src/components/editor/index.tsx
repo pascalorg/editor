@@ -871,6 +871,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
         {/* 2D floorplan — always mounted once shown, hidden via CSS to preserve state */}
         <div
           className="relative h-full flex-shrink-0"
+          data-pascal-floorplan-capture
           style={{
             width: viewMode === '2d' ? '100%' : `${floorplanPaneRatio * 100}%`,
             display: show2d ? undefined : 'none',
