@@ -127,6 +127,12 @@ export interface SpatialValidators {
   ) => { valid: boolean }
 }
 
+export const BYPASS_SPATIAL_VALIDATORS: SpatialValidators = {
+  canPlaceOnFloor: () => ({ valid: true }),
+  canPlaceOnWall: () => ({ valid: true }),
+  canPlaceOnCeiling: () => ({ valid: true }),
+}
+
 /**
  * Resolver function type for finding a node's level.
  */

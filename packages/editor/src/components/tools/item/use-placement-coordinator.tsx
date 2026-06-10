@@ -33,7 +33,7 @@ import {
 } from 'three'
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
-import { EDITOR_LAYER } from '../../../lib/constants'
+import { EDITOR_LAYER, ITEM_PLACEMENT_COLLISION_ENABLED } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { getGridAlignedDimensions, snapToGrid, snapUpToGridStep } from './placement-math'
@@ -45,7 +45,11 @@ import {
   shelfSurfaceStrategy,
   wallStrategy,
 } from './placement-strategies'
-import type { PlacementState, TransitionResult } from './placement-types'
+import {
+  BYPASS_SPATIAL_VALIDATORS,
+  type PlacementState,
+  type TransitionResult,
+} from './placement-types'
 import type { DraftNodeHandle } from './use-draft-node'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
@@ -471,16 +475,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     })
 
     const getActiveValidators = () =>
-      shiftFreeRef.current
-        ? {
-            canPlaceOnFloor: () => ({ valid: true }),
-            canPlaceOnWall: () => ({ valid: true }),
-            canPlaceOnCeiling: () => ({ valid: true }),
-          }
+      !ITEM_PLACEMENT_COLLISION_ENABLED || shiftFreeRef.current
+        ? BYPASS_SPATIAL_VALIDATORS
         : validators
 
     const revalidate = (): boolean => {
-      const placeable = shiftFreeRef.current || checkCanPlace(getContext(), validators)
+      const placeable =
+        !ITEM_PLACEMENT_COLLISION_ENABLED ||
+        shiftFreeRef.current ||
+        checkCanPlace(getContext(), validators)
       const color = placeable ? 0x22_c5_5e : 0xef_44_44 // green-500 : red-500
       edgeMaterial.color.setHex(color)
       basePlaneMaterial.color.setHex(color)
@@ -761,7 +764,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       const placeable = revalidate()
 
-      if (draft && placeable) {
+      if (draft && (placeable || !ITEM_PLACEMENT_COLLISION_ENABLED)) {
         draft.position = result.gridPosition
         const mesh = sceneRegistry.nodes.get(draft.id)
         if (mesh) {
