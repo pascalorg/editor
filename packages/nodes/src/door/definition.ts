@@ -173,7 +173,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     // re-derived from the surface under the cursor when a preset is
     // placed. Host apps strip these at preset-save time via
     // `getHostRefFields(def)`.
-    hostRefFields: ['wallId', 'roofSegmentId'],
+    hostRefFields: ['wallId', 'roofSegmentId', 'roofFace'],
   },
 
   parametrics: doorParametrics,

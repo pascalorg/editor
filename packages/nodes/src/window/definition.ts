@@ -161,7 +161,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
     },
     // `wallId` / `roofSegmentId` are re-derived from the surface under
     // the cursor at preset placement time — see door for the pattern.
-    hostRefFields: ['wallId', 'roofSegmentId'],
+    hostRefFields: ['wallId', 'roofSegmentId', 'roofFace'],
   },
 
   parametrics: windowParametrics,

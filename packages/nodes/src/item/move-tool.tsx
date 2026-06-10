@@ -38,9 +38,20 @@ import { Vector3 } from 'three'
 function getInitialState(node: ItemNode): PlacementState {
   const attachTo = node.asset.attachTo
   if (attachTo === 'wall' || attachTo === 'wall-side') {
+    if (node.roofSegmentId) {
+      return {
+        surface: 'roof-wall',
+        wallId: null,
+        roofSegmentId: node.roofSegmentId,
+        ceilingId: null,
+        surfaceItemId: null,
+        shelfId: null,
+      }
+    }
     return {
       surface: 'wall',
       wallId: node.parentId,
+      roofSegmentId: null,
       ceilingId: null,
       surfaceItemId: null,
       shelfId: null,
@@ -50,6 +61,7 @@ function getInitialState(node: ItemNode): PlacementState {
     return {
       surface: 'ceiling',
       wallId: null,
+      roofSegmentId: null,
       ceilingId: node.parentId,
       surfaceItemId: null,
       shelfId: null,
@@ -58,6 +70,7 @@ function getInitialState(node: ItemNode): PlacementState {
   return {
     surface: 'floor',
     wallId: null,
+    roofSegmentId: null,
     ceilingId: null,
     surfaceItemId: null,
     shelfId: null,
@@ -81,6 +94,7 @@ export function MoveItemTool({ node }: { node: ItemNode }) {
       ? {
           surface: 'floor',
           wallId: null,
+          roofSegmentId: null,
           ceilingId: null,
           surfaceItemId: null,
           shelfId: null,

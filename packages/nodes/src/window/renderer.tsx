@@ -1,12 +1,6 @@
 'use client'
 
-import {
-  type AnyNodeId,
-  type RoofSegmentNode,
-  useRegistry,
-  useScene,
-  type WindowNode,
-} from '@pascal-app/core'
+import { useRegistry, useScene, type WindowNode } from '@pascal-app/core'
 import {
   createMaterial,
   DEFAULT_WINDOW_MATERIAL,
@@ -15,6 +9,7 @@ import {
 } from '@pascal-app/viewer'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
+import { RoofFaceHostFrame } from '../shared/roof-face-host'
 
 export const WindowRenderer = ({ node }: { node: WindowNode }) => {
   const ref = useRef<Mesh>(null!)
@@ -39,16 +34,6 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
     node.material?.texture,
   ])
 
-  // Roof-hosted windows mount under the roof's `roof-elements` group (roof
-  // frame), so the host segment's transform is applied here — wall-hosted
-  // windows get it for free from the wall mesh they're nested in.
-  const segment = useScene((state) =>
-    node.roofSegmentId
-      ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
-      : undefined,
-  )
-  if (node.roofSegmentId && segment?.type !== 'roof-segment') return null
-
   const mesh = (
     <mesh
       material={material}
@@ -62,11 +47,11 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
     </mesh>
   )
 
-  if (!segment) return mesh
+  if (!node.roofSegmentId) return mesh
   return (
-    <group position={segment.position} rotation-y={segment.rotation}>
+    <RoofFaceHostFrame roofFace={node.roofFace} roofSegmentId={node.roofSegmentId}>
       {mesh}
-    </group>
+    </RoofFaceHostFrame>
   )
 }
 

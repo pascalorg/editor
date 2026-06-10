@@ -1,9 +1,12 @@
 import {
   type AnyNodeId,
   getRoofSegmentWallFaces,
+  getScaledDimensions,
+  type ItemNode,
   type RoofNode,
   type RoofSegmentNode,
   type RoofSegmentWallFace,
+  type RoofWallFaceId,
   sceneRegistry,
   segmentPointToRoofWallFace,
   useScene,
@@ -42,6 +45,10 @@ const MAX_NORMAL_Y = 0.4
  * merged-roof mesh (roof-local frame) or a painted segment mesh
  * (segment-local frame), so the normal is normalised through world space
  * here instead of trusting the event frame.
+ *
+ * Lives in `@pascal-app/editor` because both the kind-owned door/window
+ * tools (in `@pascal-app/nodes`, which depends on editor) and the item
+ * placement coordinator (in editor itself) consume it.
  */
 export function resolveRoofWallHit(
   roof: RoofNode,
@@ -100,14 +107,15 @@ export function resolveRoofWallHit(
 }
 
 /**
- * Overlap guard for openings sharing a roof-segment wall face — the
- * roof-host analogue of `hasWallChildOverlap`. Only door / window
- * siblings on the same face are compared (other accessories live on the
- * sloped surfaces).
+ * Overlap guard for nodes sharing a roof-segment wall face — the
+ * roof-host analogue of `hasWallChildOverlap`. Hosted children store
+ * FACE-LOCAL coords + an explicit `roofFace`, so siblings compare
+ * directly: doors/windows are center-anchored in v, wall items
+ * bottom-anchored.
  */
 export function hasRoofFaceChildOverlap(
   segment: RoofSegmentNode,
-  face: RoofSegmentWallFace,
+  faceId: RoofWallFaceId,
   u: number,
   v: number,
   width: number,
@@ -119,33 +127,37 @@ export function hasRoofFaceChildOverlap(
   const newRight = u + width / 2
   const newBottom = v - height / 2
   const newTop = v + height / 2
-  // Sibling openings store their center at the wall mid-plane (inset by
-  // wallThickness / 2 from the outer plane this face measures from).
-  const sameFaceTolerance = (segment.wallThickness ?? 0.1) / 2 + PLANE_TOLERANCE
 
   for (const childId of segment.children ?? []) {
     if (childId === ignoreId) continue
     const child = nodes[childId as AnyNodeId]
-    if (!child || (child.type !== 'door' && child.type !== 'window')) continue
-    const opening = child as {
-      position: [number, number, number]
-      rotation: [number, number, number]
-      width: number
-      height: number
+    if (!child) continue
+    if ((child as { roofFace?: RoofWallFaceId }).roofFace !== faceId) continue
+    const position = (child as { position?: [number, number, number] }).position
+    if (!position) continue
+
+    let childW: number
+    let childBottom: number
+    let childTop: number
+    if (child.type === 'door' || child.type === 'window') {
+      const opening = child as { width: number; height: number }
+      childW = opening.width
+      childBottom = position[1] - opening.height / 2
+      childTop = position[1] + opening.height / 2
+    } else if (child.type === 'item') {
+      const item = child as ItemNode
+      if (item.asset.attachTo !== 'wall' && item.asset.attachTo !== 'wall-side') continue
+      const [w, h] = getScaledDimensions(item)
+      childW = w
+      // Items anchor position[1] at their bottom edge.
+      childBottom = position[1]
+      childTop = position[1] + h
+    } else {
+      continue
     }
-    const {
-      u: childU,
-      v: childV,
-      dist,
-    } = segmentPointToRoofWallFace(segment, face.id, [
-      opening.position[0],
-      opening.position[1],
-      opening.position[2],
-    ])
-    // Same face = the opening's mid-plane center sits near this face.
-    if (Math.abs(dist) > sameFaceTolerance) continue
-    const xOverlap = newLeft < childU + opening.width / 2 && newRight > childU - opening.width / 2
-    const yOverlap = newBottom < childV + opening.height / 2 && newTop > childV - opening.height / 2
+
+    const xOverlap = newLeft < position[0] + childW / 2 && newRight > position[0] - childW / 2
+    const yOverlap = newBottom < childTop && newTop > childBottom
     if (xOverlap && yOverlap) return true
   }
   return false

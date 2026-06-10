@@ -231,6 +231,10 @@ export {
   resolvePlanarCursorPosition,
 } from './lib/planar-cursor-placement'
 export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
+// Roof wall-face hit resolution + overlap guard — shared by the
+// kind-owned door / window tools in `@pascal-app/nodes` and the item
+// placement coordinator's roof-wall strategy.
+export { hasRoofFaceChildOverlap, type RoofWallHit, resolveRoofWallHit } from './lib/roof-wall-hit'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { triggerSFX } from './lib/sfx-bus'

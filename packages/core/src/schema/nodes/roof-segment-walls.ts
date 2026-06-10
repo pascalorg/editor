@@ -207,32 +207,6 @@ export function getRoofSegmentWallFaces(node: SegmentWallInputs): RoofSegmentWal
 }
 
 /**
- * Face coords → segment-local point on the outer wall plane. `inset`
- * pushes the point inward along the face normal — openings store their
- * center at the wall mid-plane (`inset = wallThickness / 2`) so the
- * frame assembly centers inside the wall like on a regular wall host.
- */
-export function roofWallFaceLocalToSegment(
-  node: SegmentWallInputs,
-  id: RoofWallFaceId,
-  u: number,
-  v: number,
-  inset = 0,
-): [number, number, number] {
-  const { wV, dV } = getWallVolumeFrame(node)
-  switch (id) {
-    case 'front':
-      return [u - wV / 2, v, dV / 2 - inset]
-    case 'back':
-      return [wV / 2 - u, v, -dV / 2 + inset]
-    case 'right':
-      return [wV / 2 - inset, v, dV / 2 - u]
-    case 'left':
-      return [-wV / 2 + inset, v, u - dV / 2]
-  }
-}
-
-/**
  * Segment-local point → face coords. `dist` is the signed offset off the
  * outer wall plane along the face normal (0 = on the plane, positive =
  * outside the volume).
@@ -301,16 +275,47 @@ function getRectCenterConstraints(
   }))
 }
 
-/** Face id for an opening's stored yaw (`rotation[1]`), or null. */
-export function getRoofWallFaceIdFromYaw(yaw: number): RoofWallFaceId | null {
-  const tau = Math.PI * 2
-  const normalized = ((yaw % tau) + tau) % tau
-  const eps = 1e-3
-  if (normalized < eps || tau - normalized < eps) return 'front'
-  if (Math.abs(normalized - Math.PI) < eps) return 'back'
-  if (Math.abs(normalized - Math.PI / 2) < eps) return 'right'
-  if (Math.abs(normalized - (3 * Math.PI) / 2) < eps) return 'left'
-  return null
+/**
+ * The face's render frame in segment-local space: a group placed at
+ * `origin` and yawed by `yaw` maps face coords to segment space —
+ * frame X = U (along the face), frame Y = V (height), frame Z = the
+ * outward normal, with z = 0 on the WALL MID-PLANE. The mid-plane of
+ * the generated wall volume lands exactly on the nominal footprint
+ * (`±width/2` / `±depth/2`), so hosted children use the same position
+ * conventions as wall children (openings at z = 0, wall-side items
+ * pushed +thickness/2 at render time). Renderers derive this from the
+ * live-override-merged segment, which is what makes hosted children
+ * track segment edits live instead of jumping on commit.
+ */
+export function getRoofWallFaceFrame(
+  node: SegmentWallInputs,
+  id: RoofWallFaceId,
+): { origin: [number, number, number]; yaw: number } {
+  const { wV, dV } = getWallVolumeFrame(node)
+  switch (id) {
+    case 'front':
+      return { origin: [-wV / 2, 0, node.depth / 2], yaw: FACE_YAWS.front }
+    case 'back':
+      return { origin: [wV / 2, 0, -node.depth / 2], yaw: FACE_YAWS.back }
+    case 'right':
+      return { origin: [node.width / 2, 0, dV / 2], yaw: FACE_YAWS.right }
+    case 'left':
+      return { origin: [-node.width / 2, 0, -dV / 2], yaw: FACE_YAWS.left }
+  }
+}
+
+/** Face-frame point ([u, v, z-from-mid-plane]) → segment-local point. */
+export function roofFacePointToSegment(
+  node: SegmentWallInputs,
+  id: RoofWallFaceId,
+  point: [number, number, number],
+): [number, number, number] {
+  const { origin, yaw } = getRoofWallFaceFrame(node, id)
+  const cos = Math.cos(yaw)
+  const sin = Math.sin(yaw)
+  const [u, v, z] = point
+  // rotation-y: +x → (cos, 0, -sin), +z → (sin, 0, cos)
+  return [origin[0] + u * cos + z * sin, origin[1] + v, origin[2] - u * sin + z * cos]
 }
 
 /**

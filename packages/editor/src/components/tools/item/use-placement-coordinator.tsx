@@ -10,6 +10,7 @@ import {
   getScaledDimensions,
   type ItemEvent,
   movingFootprintAnchors,
+  type RoofEvent,
   resolveLevelId,
   type ShelfEvent,
   sceneRegistry,
@@ -56,6 +57,7 @@ import {
   checkCanPlace,
   floorStrategy,
   itemSurfaceStrategy,
+  roofWallStrategy,
   shelfSurfaceStrategy,
   wallStrategy,
 } from './placement-strategies'
@@ -213,6 +215,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     config.initialState ?? {
       surface: 'floor',
       wallId: null,
+      roofSegmentId: null,
       ceilingId: null,
       surfaceItemId: null,
       shelfId: null,
@@ -413,6 +416,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     placementState.current = configRef.current.initialState ?? {
       surface: 'floor',
       wallId: null,
+      roofSegmentId: null,
       ceilingId: null,
       surfaceItemId: null,
       shelfId: null,
@@ -987,6 +991,146 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     }
 
+    // ---- Roof Wall Handlers ----
+    // Wall-attach items also host on the vertical wall faces a roof
+    // segment generates (base walls + coplanar gable ends). Unlike walls,
+    // crossing between segments inside ONE roof never re-fires
+    // `roof:enter` (events come from the roof group), so the move handler
+    // re-enters whenever the strategy reports a segment change.
+
+    const enterRoofWall = (event: RoofEvent): boolean => {
+      const result = roofWallStrategy.enter(getContext(), event, shiftFreeRef.current)
+      if (!result) return false
+
+      event.stopPropagation()
+      applyTransition(result)
+
+      if (!draftNode.current) {
+        ensureDraft(result)
+      } else if (result.nodeUpdate.parentId) {
+        // Existing draft (move mode): reparent to the segment
+        useScene.getState().updateNode(draftNode.current.id, result.nodeUpdate)
+      }
+      return true
+    }
+
+    const onRoofWallEnter = (event: RoofEvent) => {
+      has3DPointerDrivenMoveRef.current = true
+      enterRoofWall(event)
+    }
+
+    const onRoofWallMove = (event: RoofEvent) => {
+      releaseCommit = () => onRoofWallClick(event)
+      has3DPointerDrivenMoveRef.current = true
+      if (!cursorGroupRef.current) return
+      const ctx = getContext()
+
+      if (ctx.state.surface !== 'roof-wall' || !draftNode.current) {
+        enterRoofWall(event)
+        return
+      }
+
+      const result = roofWallStrategy.move(ctx, event, shiftFreeRef.current)
+      if (!result) {
+        // Different segment under the pointer (or no placeable face) —
+        // try a fresh enter; a null resolve leaves the draft where it is.
+        enterRoofWall(event)
+        return
+      }
+
+      event.stopPropagation()
+
+      const posChanged =
+        gridPosition.current.x !== result.gridPosition[0] ||
+        gridPosition.current.y !== result.gridPosition[1] ||
+        gridPosition.current.z !== result.gridPosition[2]
+
+      if (posChanged) {
+        sfxEmitter.emit('sfx:grid-snap')
+      }
+
+      gridPosition.current.set(...result.gridPosition)
+      const wc = worldToBuildingLocal(...result.cursorPosition)
+      cursorGroupRef.current.position.set(wc.x, wc.y, wc.z)
+      cursorGroupRef.current.rotation.y = result.cursorRotationY
+
+      const draft = draftNode.current
+      if (draft && result.nodeUpdate) {
+        if ('side' in result.nodeUpdate) draft.side = result.nodeUpdate.side
+        if ('rotation' in result.nodeUpdate)
+          draft.rotation = result.nodeUpdate.rotation as [number, number, number]
+      }
+
+      const placeable = revalidate()
+
+      if (draft && placeable) {
+        draft.position = result.gridPosition
+        const mesh = sceneRegistry.nodes.get(draft.id)
+        if (mesh) {
+          mesh.position.copy(gridPosition.current)
+          // Wall-side items sit on the outer surface: mirror ItemSystem's
+          // push (z = thickness/2 off the face frame's mid-plane) so the
+          // drag preview doesn't sink into the wall until commit.
+          if (asset.attachTo === 'wall-side' && placementState.current.roofSegmentId) {
+            const segment = useScene.getState().nodes[
+              placementState.current.roofSegmentId as AnyNodeId
+            ]
+            if (segment?.type === 'roof-segment') {
+              mesh.position.z = (segment.wallThickness ?? 0.1) / 2
+            }
+          }
+          const rot = result.nodeUpdate?.rotation
+          if (rot) mesh.rotation.y = rot[1]
+        }
+        // The 2D floor-plan live frame is wall-local; a segment-local
+        // value would render garbage — clear instead of publishing.
+        useLiveTransforms.getState().clear(draft.id)
+      }
+    }
+
+    const onRoofWallClick = (event: RoofEvent) => {
+      const result = roofWallStrategy.click(getContext(), event, shiftFreeRef.current)
+      if (!result) return
+
+      event.stopPropagation()
+      if (draftNode.current) {
+        useLiveTransforms.getState().clear(draftNode.current.id)
+      }
+      draftNode.commit(result.nodeUpdate)
+
+      if (configRef.current.onCommitted()) {
+        const enterResult = roofWallStrategy.enter(getContext(), event, shiftFreeRef.current)
+        if (enterResult) {
+          applyTransition(enterResult)
+        } else {
+          revalidate()
+        }
+      }
+    }
+
+    const onRoofWallLeave = (event: RoofEvent) => {
+      const result = roofWallStrategy.leave(getContext())
+      if (!result) return
+
+      event.stopPropagation()
+
+      if (draftNode.isAdopted) {
+        // Move mode: keep draft alive, reparent to level
+        applyTransition(result)
+        const draft = draftNode.current
+        if (draft) {
+          useScene.getState().updateNode(draft.id, {
+            parentId: result.nodeUpdate.parentId as string,
+            roofSegmentId: undefined,
+          })
+        }
+      } else {
+        // Create mode: destroy transient and reset state
+        draftNode.destroy()
+        Object.assign(placementState.current, result.stateUpdate)
+      }
+    }
+
     // ---- Item Surface Handlers ----
 
     const detachItemSurfaceToFloor = (event: ItemEvent) => {
@@ -1499,6 +1643,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const draft = draftNode.current
       if (!draft) return
 
+      // Roof-wall drafts live flat in the host face frame (yaw 0) —
+      // manual rotation would skew them off the wall plane.
+      if (placementState.current.surface === 'roof-wall') return
+
       let rotationDelta = 0
       if ((event.key === 'r' || event.key === 'R') && !event.metaKey && !event.ctrlKey)
         rotationDelta = ROTATION_STEP
@@ -1673,6 +1821,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('wall:move', onWallMove)
     emitter.on('wall:click', onWallClick)
     emitter.on('wall:leave', onWallLeave)
+    emitter.on('roof:enter', onRoofWallEnter)
+    emitter.on('roof:move', onRoofWallMove)
+    emitter.on('roof:click', onRoofWallClick)
+    emitter.on('roof:leave', onRoofWallLeave)
     emitter.on('ceiling:enter', onCeilingEnter)
     emitter.on('ceiling:move', onCeilingMove)
     emitter.on('ceiling:click', onCeilingClick)
@@ -1704,6 +1856,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('wall:move', onWallMove)
       emitter.off('wall:click', onWallClick)
       emitter.off('wall:leave', onWallLeave)
+      emitter.off('roof:enter', onRoofWallEnter)
+      emitter.off('roof:move', onRoofWallMove)
+      emitter.off('roof:click', onRoofWallClick)
+      emitter.off('roof:leave', onRoofWallLeave)
       emitter.off('ceiling:enter', onCeilingEnter)
       emitter.off('ceiling:move', onCeilingMove)
       emitter.off('ceiling:click', onCeilingClick)

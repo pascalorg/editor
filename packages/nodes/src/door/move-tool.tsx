@@ -7,7 +7,7 @@ import {
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
-  roofWallFaceLocalToSegment,
+  roofFacePointToSegment,
   sceneRegistry,
   spatialGridManager,
   useLiveTransforms,
@@ -19,7 +19,9 @@ import {
   calculateItemRotation,
   EDITOR_LAYER,
   getSideFromNormal,
+  hasRoofFaceChildOverlap,
   isValidWallSideFace,
+  resolveRoofWallHit,
   stripPlacementMetadataFlags,
   triggerSFX,
   useAlignmentGuides,
@@ -29,7 +31,6 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
-import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../shared/roof-wall-hit'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
 
@@ -68,6 +69,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       // wall re-anchors as wall-hosted (roofSegmentId cleared); reverts
       // must restore the roof host.
       roofSegmentId: movingDoorNode.roofSegmentId,
+      roofFace: movingDoorNode.roofFace,
       metadata: movingDoorNode.metadata,
     }
 
@@ -219,6 +221,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           parentId: target.wallId,
           wallId: target.wallId,
           roofSegmentId: undefined,
+          roofFace: undefined,
         })
         markWallDirty(currentWallId)
         currentWallId = target.wallId
@@ -297,6 +300,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           wallId: target.wallId,
           parentId: target.wallId,
           roofSegmentId: undefined,
+          roofFace: undefined,
         })
         useScene.getState().createNode(node, target.wallId as AnyNodeId)
         placedId = node.id
@@ -308,6 +312,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           parentId: original.parentId,
           wallId: original.wallId,
           roofSegmentId: original.roofSegmentId,
+          roofFace: original.roofFace,
           metadata: original.metadata,
         })
         useScene.temporal.getState().resume()
@@ -356,6 +361,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         parentId: original.parentId,
         wallId: original.wallId,
         roofSegmentId: original.roofSegmentId,
+        roofFace: original.roofFace,
       })
       if (original.parentId) markWallDirty(original.parentId)
     }
@@ -390,34 +396,36 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         { lockV: true },
       )
       if (!clamped) return null
-      const position = roofWallFaceLocalToSegment(
-        hit.segment,
-        hit.face.id,
-        clamped.u,
-        clamped.v,
-        (hit.segment.wallThickness ?? 0.1) / 2,
-      )
+      // FACE-LOCAL storage (u, v, z = 0 → wall mid-plane): the renderer
+      // mounts the node inside the live face frame, so it tracks segment
+      // resizes without any re-anchoring.
+      const position: [number, number, number] = [clamped.u, clamped.v, 0]
       const valid = !hasRoofFaceChildOverlap(
         hit.segment,
-        hit.face,
+        hit.face.id,
         clamped.u,
         clamped.v,
         movingDoorNode.width,
         movingDoorNode.height,
         movingDoorNode.id,
       )
-      return { hit, position, yaw: hit.face.yaw, valid, roof: event.node as RoofNode }
+      return { hit, position, valid, roof: event.node as RoofNode }
     }
 
     const updateRoofCursor = (target: NonNullable<ReturnType<typeof resolveRoofMoveTarget>>) => {
       const segObj = sceneRegistry.nodes.get(target.hit.segment.id as AnyNodeId)
       if (!segObj) return
       segObj.updateWorldMatrix(true, false)
-      roofCursorPoint.set(target.position[0], target.position[1], target.position[2])
+      const segLocal = roofFacePointToSegment(
+        target.hit.segment,
+        target.hit.face.id,
+        target.position,
+      )
+      roofCursorPoint.set(segLocal[0], segLocal[1], segLocal[2])
       segObj.localToWorld(roofCursorPoint)
       updateCursor(
         worldToBuildingLocal(roofCursorPoint),
-        (target.roof.rotation ?? 0) + (target.hit.segment.rotation ?? 0) + target.yaw,
+        (target.roof.rotation ?? 0) + (target.hit.segment.rotation ?? 0) + target.hit.face.yaw,
         target.valid,
       )
     }
@@ -432,18 +440,20 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       if (currentWallId !== target.hit.segment.id) {
         useScene.getState().updateNode(movingDoorNode.id, {
           position: target.position,
-          rotation: [0, target.yaw, 0],
+          rotation: [0, 0, 0],
           side: 'front',
           parentId: target.hit.segment.id,
           wallId: undefined,
           roofSegmentId: target.hit.segment.id,
+          roofFace: target.hit.face.id,
         })
         markWallDirty(currentWallId)
         currentWallId = target.hit.segment.id
       } else {
         useScene.getState().updateNode(movingDoorNode.id, {
           position: target.position,
-          rotation: [0, target.yaw, 0],
+          rotation: [0, 0, 0],
+          roofFace: target.hit.face.id,
         })
       }
       updateRoofCursor(target)
@@ -467,10 +477,11 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         const node = DoorNode.parse({
           ...cloned,
           position: target.position,
-          rotation: [0, target.yaw, 0],
+          rotation: [0, 0, 0],
           side: 'front',
           wallId: undefined,
           roofSegmentId: segmentId,
+          roofFace: target.hit.face.id,
           parentId: segmentId,
         })
         useScene.getState().createNode(node, segmentId as AnyNodeId)
@@ -483,17 +494,19 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           parentId: original.parentId,
           wallId: original.wallId,
           roofSegmentId: original.roofSegmentId,
+          roofFace: original.roofFace,
           metadata: original.metadata,
         })
         useScene.temporal.getState().resume()
 
         useScene.getState().updateNode(movingDoorNode.id, {
           position: target.position,
-          rotation: [0, target.yaw, 0],
+          rotation: [0, 0, 0],
           side: 'front',
           parentId: segmentId,
           wallId: undefined,
           roofSegmentId: segmentId,
+          roofFace: target.hit.face.id,
           metadata: {},
         })
 
@@ -531,6 +544,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         parentId: original.parentId,
         wallId: original.wallId,
         roofSegmentId: original.roofSegmentId,
+        roofFace: original.roofFace,
       })
       if (original.parentId) markWallDirty(original.parentId)
     }
@@ -548,6 +562,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           parentId: original.parentId,
           wallId: original.wallId,
           roofSegmentId: original.roofSegmentId,
+          roofFace: original.roofFace,
           metadata: original.metadata,
         })
         if (original.parentId) markWallDirty(original.parentId)
@@ -584,6 +599,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
             parentId: original.parentId,
             wallId: original.wallId,
             roofSegmentId: original.roofSegmentId,
+            roofFace: original.roofFace,
             metadata: original.metadata,
           })
           if (original.parentId) markWallDirty(original.parentId)

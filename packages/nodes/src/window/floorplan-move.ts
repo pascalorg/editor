@@ -48,10 +48,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     original:
       originalWall?.type === 'wall'
         ? projectWallLocalPointToPlan(originalWall, node.position[0])
-        : (getRoofHostedOpeningPlanPoint(node, useScene.getState().nodes) ?? [
-            node.position[0],
-            0,
-          ]),
+        : (getRoofHostedOpeningPlanPoint(node, useScene.getState().nodes) ?? [node.position[0], 0]),
     metadata: node.metadata,
   })
 
@@ -69,6 +66,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     parentId: string
     wallId: string
     roofSegmentId: undefined
+    roofFace: undefined
   } | null = null
 
   const session: FloorplanMoveTargetSession = {
@@ -109,6 +107,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         // Re-anchoring to a wall ends any roof-segment hosting; the
         // overlay's snapshot restores it if the move is reverted.
         roofSegmentId: undefined,
+        roofFace: undefined,
       }
 
       useScene.getState().updateNodes([

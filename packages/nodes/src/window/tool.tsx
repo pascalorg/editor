@@ -6,7 +6,7 @@ import {
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
-  roofWallFaceLocalToSegment,
+  roofFacePointToSegment,
   sceneRegistry,
   spatialGridManager,
   useScene,
@@ -18,7 +18,9 @@ import {
   calculateItemRotation,
   EDITOR_LAYER,
   getSideFromNormal,
+  hasRoofFaceChildOverlap,
   isValidWallSideFace,
+  resolveRoofWallHit,
   snapToHalf,
   triggerSFX,
   useAlignmentGuides,
@@ -27,7 +29,6 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
-import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../shared/roof-wall-hit'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
 
@@ -234,6 +235,7 @@ const WindowTool: React.FC = () => {
             wallId: event.node.id,
             // The draft may arrive from a roof-segment face hover.
             roofSegmentId: undefined,
+            roofFace: undefined,
           })
         }
       }
@@ -384,23 +386,20 @@ const WindowTool: React.FC = () => {
       // it down under the gable slopes when needed.
       const clamped = clampRectToRoofWallFace(hit.face, hit.u, snapToHalf(hit.v), width, height)
       if (!clamped) return null
-      const position = roofWallFaceLocalToSegment(
-        hit.segment,
-        hit.face.id,
-        clamped.u,
-        clamped.v,
-        (hit.segment.wallThickness ?? 0.1) / 2,
-      )
+      // FACE-LOCAL storage (u, v, z = 0 → wall mid-plane): the renderer
+      // mounts the node inside the live face frame, so it tracks segment
+      // resizes without any re-anchoring.
+      const position: [number, number, number] = [clamped.u, clamped.v, 0]
       const valid = !hasRoofFaceChildOverlap(
         hit.segment,
-        hit.face,
+        hit.face.id,
         clamped.u,
         clamped.v,
         width,
         height,
         draftRef.current?.id,
       )
-      return { hit, position, yaw: hit.face.yaw, valid }
+      return { hit, position, valid }
     }
 
     const updateRoofCursor = (
@@ -410,11 +409,16 @@ const WindowTool: React.FC = () => {
       const segObj = sceneRegistry.nodes.get(target.hit.segment.id as AnyNodeId)
       if (!segObj) return
       segObj.updateWorldMatrix(true, false)
-      roofCursorPoint.set(target.position[0], target.position[1], target.position[2])
+      const segLocal = roofFacePointToSegment(
+        target.hit.segment,
+        target.hit.face.id,
+        target.position,
+      )
+      roofCursorPoint.set(segLocal[0], segLocal[1], segLocal[2])
       segObj.localToWorld(roofCursorPoint)
       updateCursor(
         worldToBuildingLocal(roofCursorPoint),
-        (roof.rotation ?? 0) + (target.hit.segment.rotation ?? 0) + target.yaw,
+        (roof.rotation ?? 0) + (target.hit.segment.rotation ?? 0) + target.hit.face.yaw,
         target.valid,
       )
     }
@@ -430,20 +434,22 @@ const WindowTool: React.FC = () => {
         }
         return
       }
-      const { hit, position, yaw } = target
+      const { hit, position } = target
 
       if (draftRef.current && draftRef.current.parentId !== hit.segment.id) destroyDraft()
       if (draftRef.current) {
         useScene.getState().updateNode(draftRef.current.id, {
           position,
-          rotation: [0, yaw, 0],
+          rotation: [0, 0, 0],
+          roofFace: hit.face.id,
         })
       } else {
         const node = WindowNode.parse({
           position,
-          rotation: [0, yaw, 0],
+          rotation: [0, 0, 0],
           side: 'front',
           roofSegmentId: hit.segment.id,
+          roofFace: hit.face.id,
           parentId: hit.segment.id,
           metadata: { isTransient: true },
         })
@@ -458,7 +464,7 @@ const WindowTool: React.FC = () => {
       if (!draftRef.current?.roofSegmentId) return
       const target = resolveRoofTarget(event)
       if (!target?.valid) return
-      const { hit, position, yaw } = target
+      const { hit, position } = target
 
       const draft = draftRef.current
       draftRef.current = null
@@ -474,9 +480,10 @@ const WindowTool: React.FC = () => {
       const node = WindowNode.parse({
         name: `Window ${windowCount + 1}`,
         position,
-        rotation: [0, yaw, 0],
+        rotation: [0, 0, 0],
         side: 'front',
         roofSegmentId: hit.segment.id,
+        roofFace: hit.face.id,
         parentId: hit.segment.id,
         width: draft.width,
         height: draft.height,

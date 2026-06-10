@@ -33,6 +33,7 @@ import { Suspense, useEffect, useMemo, useRef } from 'react'
 import type { AnimationAction, Group, Material, Mesh } from 'three'
 import { MathUtils } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
+import { RoofFaceHostFrame } from '../shared/roof-face-host'
 
 type MutableMaterial = Material & {
   depthTest?: boolean
@@ -92,7 +93,7 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
     [storeNode, liveOverrides],
   )
 
-  return (
+  const content = (
     <group position={node.position} ref={ref} rotation={node.rotation} visible={node.visible}>
       <ErrorBoundary fallback={<BrokenItemFallback node={node} />}>
         <Suspense fallback={<PreviewModel node={node} />}>
@@ -103,6 +104,13 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
         <NodeRenderer key={childId} nodeId={childId} />
       ))}
     </group>
+  )
+
+  if (!node.roofSegmentId) return content
+  return (
+    <RoofFaceHostFrame roofFace={node.roofFace} roofSegmentId={node.roofSegmentId}>
+      {content}
+    </RoofFaceHostFrame>
   )
 }
 

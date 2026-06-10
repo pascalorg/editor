@@ -12,7 +12,13 @@ import type { Vector3 } from 'three'
 // PLACEMENT STATE
 // ============================================================================
 
-export type SurfaceType = 'floor' | 'wall' | 'ceiling' | 'item-surface' | 'shelf-surface'
+export type SurfaceType =
+  | 'floor'
+  | 'wall'
+  | 'roof-wall'
+  | 'ceiling'
+  | 'item-surface'
+  | 'shelf-surface'
 
 /**
  * Tracks which surface the draft item is currently on.
@@ -21,6 +27,12 @@ export type SurfaceType = 'floor' | 'wall' | 'ceiling' | 'item-surface' | 'shelf
 export interface PlacementState {
   surface: SurfaceType
   wallId: string | null
+  /**
+   * Active roof-segment when `surface === 'roof-wall'` — wall-attach
+   * items also host on the vertical wall faces a roof segment generates
+   * (base walls + coplanar gable ends).
+   */
+  roofSegmentId: string | null
   ceilingId: string | null
   surfaceItemId: string | null
   /**

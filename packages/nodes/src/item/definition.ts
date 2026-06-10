@@ -206,12 +206,13 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     // siblings of GLB items inside the unified `items` table.
     //
     // Items can be hosted on walls (assets with `attachTo: 'wall'`)
-    // via `wallId` + `wallT`. When a composition that includes a
-    // wall-hosted item is saved as a preset (a sconce, a hanging
-    // shelf, etc.), the host app strips these via `getHostRefFields(def)`
-    // so the descendant re-attaches against the new wall geometry at
+    // via `wallId` + `wallT`, or on a roof-segment wall face via
+    // `roofSegmentId`. When a composition that includes a wall-hosted
+    // item is saved as a preset (a sconce, a hanging shelf, etc.), the
+    // host app strips these via `getHostRefFields(def)` so the
+    // descendant re-attaches against the new host geometry at
     // placement time.
-    hostRefFields: ['wallId', 'wallT'],
+    hostRefFields: ['wallId', 'wallT', 'roofSegmentId', 'roofFace'],
     // Floor items get lifted by slabs underneath via the generic
     // `<FloorElevationSystem>`. Wall- / ceiling-attached items live in
     // their parent's local frame and skip the lift via `applies`.

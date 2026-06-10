@@ -38,6 +38,7 @@ import {
   Vector3,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { createEditorApi } from '../../lib/editor-api'
@@ -54,6 +55,9 @@ import {
   NO_RAYCAST,
 } from './handles/handle-arrow'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
+// Pooled scratch for the handle rig's world-relative pose mapping.
+const _rigRelative = new Matrix4()
+const _rigScratchScale = new Vector3()
 
 export {
   ARROW_COLOR,
@@ -276,13 +280,31 @@ function NodeArrowHandlesForNode({
   // exclusion the wall arrow also goes without.
 
   useFrame(() => {
+    if (innerRef.current && innerRide && portalObject) {
+      // Grandparent mode: pose the rig by mapping the node's WORLD pose
+      // into the portal target's frame. Copying the parent + node
+      // registry poses (the previous approach) assumed the node mesh is
+      // a DIRECT child of the parent's registered object — roof-hosted
+      // openings break that with an intermediate face-frame group, which
+      // the world-relative mapping absorbs for free. For wall children
+      // the result is identical (portal⁻¹ ∘ node = wall.local ∘ node.local).
+      if (outerRef.current) {
+        outerRef.current.position.set(0, 0, 0)
+        outerRef.current.quaternion.identity()
+      }
+      portalObject.updateWorldMatrix(true, false)
+      innerRide.updateWorldMatrix(true, false)
+      _rigRelative.copy(portalObject.matrixWorld).invert().multiply(innerRide.matrixWorld)
+      _rigRelative.decompose(
+        innerRef.current.position,
+        innerRef.current.quaternion,
+        _rigScratchScale,
+      )
+      return
+    }
     if (outerRef.current && outerRide) {
       outerRef.current.position.copy(outerRide.position)
       outerRef.current.quaternion.copy(outerRide.quaternion)
-    }
-    if (innerRef.current && innerRide) {
-      innerRef.current.position.copy(innerRide.position)
-      innerRef.current.quaternion.copy(innerRide.quaternion)
     }
   })
 

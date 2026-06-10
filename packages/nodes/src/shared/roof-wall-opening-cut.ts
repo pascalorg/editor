@@ -1,28 +1,29 @@
-import type { RoofSegmentNode } from '@pascal-app/core'
+import type { RoofSegmentNode, RoofWallFaceId } from '@pascal-app/core'
+import { getRoofWallFaceFrame, roofFacePointToSegment } from '@pascal-app/core'
 import * as THREE from 'three'
 
 type RoofWallOpening = {
   roofSegmentId?: string
+  roofFace?: RoofWallFaceId
   position: [number, number, number]
-  rotation: [number, number, number]
   width: number
   height: number
 }
 
 /**
  * CSG cut for a door / window hosted on a roof-segment wall face
- * (`capabilities.roofAccessory.buildCut`). A box through the wall plane,
- * oriented by the opening's face yaw, in segment-local coords — the
- * roof-merge loop subtracts it from the segment's wall brush.
+ * (`capabilities.roofAccessory.buildCut`). A box through the wall
+ * mid-plane, derived from the CURRENT host geometry (the opening stores
+ * face-local coords), so the hole follows segment resizes for free.
  *
- * Returns null for wall-hosted openings (no `roofSegmentId`): their cut
- * is handled by the wall system's own cutout pipeline.
+ * Returns null for wall-hosted openings: their cut is handled by the
+ * wall system's own cutout pipeline.
  */
 export function buildRoofWallOpeningCut(
   node: RoofWallOpening,
   hostSegment: RoofSegmentNode,
 ): THREE.BufferGeometry | null {
-  if (!node.roofSegmentId) return null
+  if (!node.roofSegmentId || !node.roofFace) return null
 
   const wallThickness = hostSegment.wallThickness ?? 0.1
   // Through the wall both ways, but well short of the rake/eave overhang
@@ -34,9 +35,16 @@ export function buildRoofWallOpeningCut(
   const bottom = node.position[1] - node.height / 2
   const bottomPad = bottom < 0.005 ? 0.02 : 0
 
+  const center = roofFacePointToSegment(hostSegment, node.roofFace, [
+    node.position[0],
+    node.position[1],
+    0,
+  ])
+  const { yaw } = getRoofWallFaceFrame(hostSegment, node.roofFace)
+
   const geo = new THREE.BoxGeometry(node.width, node.height + bottomPad, depth)
   geo.translate(0, -bottomPad / 2, 0)
-  geo.rotateY(node.rotation[1] ?? 0)
-  geo.translate(node.position[0], node.position[1], node.position[2])
+  geo.rotateY(yaw)
+  geo.translate(center[0], center[1], center[2])
   return geo
 }

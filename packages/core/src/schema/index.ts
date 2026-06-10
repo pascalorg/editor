@@ -115,8 +115,8 @@ export {
   getMaxRoofRectWidthFromAnchor,
   getRoofSegmentWallFace,
   getRoofSegmentWallFaces,
-  getRoofWallFaceIdFromYaw,
-  roofWallFaceLocalToSegment,
+  getRoofWallFaceFrame,
+  roofFacePointToSegment,
   segmentPointToRoofWallFace,
 } from './nodes/roof-segment-walls'
 export { ScanNode } from './nodes/scan'
