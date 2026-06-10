@@ -27,6 +27,7 @@ const OPERATION_DOOR_COLLIDER_OPEN_THRESHOLD = 0.85
 const LEVEL_FALLBACK_FLOOR_THICKNESS = 0.08
 const LEVEL_FALLBACK_FLOOR_PADDING = 2
 const LEVEL_FALLBACK_FLOOR_MIN_SIZE = 30
+const SITE_GROUND_COLLIDER_MIN_SIZE = 2000
 
 export const FIRST_PERSON_SPAWN_EYE_HEIGHT = SPAWN_EYE_HEIGHT
 
@@ -129,8 +130,10 @@ function collectLevelFallbackFloorGeometries(nodes: SceneNodes) {
 // a dedicated collider, a spawn on the bare ground (no slab, or not parented to
 // a level that triggers the per-level fallback) has no floor to stand on and the
 // walkthrough player falls through. Derive a thin ground slab from node data (not
-// the rendered mesh) so it exists regardless of geometry-mount timing, sized to
-// cover the whole scene footprint at the site's ground plane.
+// the rendered mesh) so it exists regardless of geometry-mount timing. The slab
+// is effectively unbounded (not sized to the site polygon): the ground plane must
+// keep holding the player up even after they step past the site boundary,
+// otherwise they fall below the ground plane into the void.
 function createSiteGroundColliderGeometry(site: SiteNode, nodes: SceneNodes) {
   if (site.visible === false) return null
 
@@ -142,11 +145,11 @@ function createSiteGroundColliderGeometry(site: SiteNode, nodes: SceneNodes) {
   const [boundsWidth, boundsDepth] = bounds?.size ?? [0, 0]
   const width = Math.max(
     boundsWidth + LEVEL_FALLBACK_FLOOR_PADDING * 2,
-    LEVEL_FALLBACK_FLOOR_MIN_SIZE,
+    SITE_GROUND_COLLIDER_MIN_SIZE,
   )
   const depth = Math.max(
     boundsDepth + LEVEL_FALLBACK_FLOOR_PADDING * 2,
-    LEVEL_FALLBACK_FLOOR_MIN_SIZE,
+    SITE_GROUND_COLLIDER_MIN_SIZE,
   )
 
   const geometry = createBoxColliderGeometry(width, LEVEL_FALLBACK_FLOOR_THICKNESS, depth)

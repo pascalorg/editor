@@ -78,6 +78,7 @@ const ELEVATOR_COLLIDER_FLOOR_THICKNESS = 0.08
 const ELEVATOR_COLLIDER_DOOR_DEPTH = 0.12
 const ELEVATOR_ENTRY_DOOR_OPEN_THRESHOLD = 0.72
 const DEFAULT_ELEVATOR_LEVEL_HEIGHT = 2.5
+const VOID_FALL_RESPAWN_DEPTH = 12
 const keyboardMap = [
   { name: 'forward', keys: ['ArrowUp', 'KeyW'] },
   { name: 'backward', keys: ['ArrowDown', 'KeyS'] },
@@ -1217,6 +1218,29 @@ export const FirstPersonControls = () => {
     if (!controllerRef.current?.group) return
 
     const group = controllerRef.current.group
+
+    // The site ground collider is effectively unbounded, but scenes without a
+    // site node only have finite fallback floors — if the controller still ends
+    // up below every collider it can never land, so put it back at the spawn.
+    // Prefer the live spawn node over the mount-time start position so a spawn
+    // moved mid-walkthrough doesn't respawn the player at stale coordinates.
+    const worldBounds = worldRef.current?.bounds
+    if (worldBounds && group.position.y < worldBounds.min.y - VOID_FALL_RESPAWN_DEPTH) {
+      const respawnPosition = placedSpawn
+        ? [
+            placedSpawn.position[0],
+            placedSpawn.position[1] - CONTROLLER_CENTER_FROM_EYE,
+            placedSpawn.position[2],
+          ]
+        : controllerStart?.position
+      if (respawnPosition) {
+        group.position.set(respawnPosition[0]!, respawnPosition[1]!, respawnPosition[2]!)
+        controllerRef.current.resetLinVel()
+        ridingElevatorRef.current = null
+        setElevatorRideLocked(false)
+      }
+    }
+
     group.rotation.y = 0
     camera.position.copy(group.position).add(cameraOffset)
     cameraEuler.set(pitchRef.current, yawRef.current, 0, 'YXZ')

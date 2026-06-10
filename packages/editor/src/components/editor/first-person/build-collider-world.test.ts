@@ -141,9 +141,12 @@ describe('buildFirstPersonColliderWorldFromRegistry', () => {
     // Ground slab sits just below the site ground plane (y = 0).
     expect(world?.bounds?.min.y).toBeCloseTo(-0.08)
     expect(world?.bounds?.max.y).toBeCloseTo(0)
-    // Default site footprint falls back to the 30 m minimum size.
-    expect(world?.bounds?.min.x).toBeCloseTo(-15)
-    expect(world?.bounds?.max.x).toBeCloseTo(15)
+    // The ground collider extends far past the site polygon so stepping out of
+    // the site boundary never drops the player below the ground plane.
+    expect(world?.bounds?.min.x).toBeCloseTo(-1000)
+    expect(world?.bounds?.max.x).toBeCloseTo(1000)
+    expect(world?.bounds?.min.z).toBeCloseTo(-1000)
+    expect(world?.bounds?.max.z).toBeCloseTo(1000)
     world?.dispose()
   })
 })
