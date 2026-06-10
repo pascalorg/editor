@@ -61,6 +61,7 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
+export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
 export {
   type Point2D as PolygonPoint2D,
   pointInPolygon as pointInPolygon2D,
