@@ -280,6 +280,30 @@ app.MapGet("/proxy/covers/{fileName}", (string fileName, IOptions<ProxyDatabaseO
     return Results.File(path, GetCoverContentType(Path.GetExtension(path)));
 });
 
+app.MapGet("/api/pascal-function-static/{**relativePath}", (string relativePath) =>
+{
+    var pathParts = relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+    if (pathParts.Length < 2 || !IsSafeSceneId(pathParts[0]))
+    {
+        return Results.NotFound();
+    }
+
+    if (pathParts.Any(part => part is "." or ".." || Path.GetFileName(part) != part))
+    {
+        return Results.NotFound();
+    }
+
+    var staticRoot = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "pascal-function-statuc"));
+    var filePath = Path.GetFullPath(Path.Combine(new[] { staticRoot }.Concat(pathParts).ToArray()));
+    if (!filePath.StartsWith(staticRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+        !File.Exists(filePath))
+    {
+        return Results.NotFound();
+    }
+
+    return Results.File(filePath, GetStaticContentType(Path.GetExtension(filePath)), enableRangeProcessing: true);
+});
+
 if (Directory.Exists(frontRoot))
 {
     app.UseStaticFiles(new StaticFileOptions
@@ -354,6 +378,24 @@ static string GetCoverContentType(string extension)
         ".png" => "image/png",
         ".webp" => "image/webp",
         ".gif" => "image/gif",
+        _ => "application/octet-stream",
+    };
+}
+
+static string GetStaticContentType(string extension)
+{
+    return extension.ToLowerInvariant() switch
+    {
+        ".jpg" or ".jpeg" => "image/jpeg",
+        ".png" => "image/png",
+        ".webp" => "image/webp",
+        ".gif" => "image/gif",
+        ".mp4" => "video/mp4",
+        ".webm" => "video/webm",
+        ".mov" => "video/quicktime",
+        ".json" => "application/json",
+        ".txt" => "text/plain; charset=utf-8",
+        ".vtt" => "text/vtt; charset=utf-8",
         _ => "application/octet-stream",
     };
 }
