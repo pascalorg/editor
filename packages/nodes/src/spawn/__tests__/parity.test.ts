@@ -31,6 +31,7 @@ describe('spawn definition', () => {
     expect(spawnDefinition.schemaVersion).toBe(1)
     expect(spawnDefinition.category).toBe('site')
     expect(spawnDefinition.schema).toBe(SpawnNode)
+    expect(typeof spawnDefinition.floorplanMoveTarget).toBe('function')
   })
 
   test('defaults() returns a value that the schema accepts', () => {
@@ -111,6 +112,7 @@ describe('spawn definition', () => {
 
     const flat = flattenFloorplan(geometry)
     expect(flat.some((entry) => entry.kind === 'path' && entry.stroke === '#818cf8')).toBe(true)
+    expect(flat.some((entry) => entry.kind === 'move-handle')).toBe(true)
     expect(flat.some((entry) => entry.kind === 'rotate-arrow')).toBe(true)
   })
 
