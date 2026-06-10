@@ -8,15 +8,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { type HoverStyles, InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
-import {
-  memo,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react'
+import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
@@ -76,7 +68,7 @@ const CAMERA_CONTROLS_HINT_DISMISSED_STORAGE_KEY = 'editor-camera-controls-hint-
 const DELETE_CURSOR_BADGE_COLOR = '#ef4444'
 const DELETE_CURSOR_BADGE_OFFSET_X = 14
 const DELETE_CURSOR_BADGE_OFFSET_Y = 14
-const PAINT_CURSOR_BADGE_COLOR = '#f59e0b'
+const PAINT_CURSOR_BADGE_COLOR = '#818cf8'
 const PAINT_CURSOR_BADGE_DISABLED_COLOR = '#94a3b8'
 const PAINT_CURSOR_BADGE_OFFSET_X = 14
 const PAINT_CURSOR_BADGE_OFFSET_Y = 14
@@ -536,43 +528,46 @@ function DeleteCursorBadge({ position }: { position: { x: number; y: number } })
 
 function PaintCursorBadge({
   position,
-  label,
   disabled,
-  icon,
 }: {
   position: { x: number; y: number }
-  label: string
   disabled: boolean
-  icon: string
 }) {
   const accentColor = disabled ? PAINT_CURSOR_BADGE_DISABLED_COLOR : PAINT_CURSOR_BADGE_COLOR
+  const lineHeight = 18
 
   return (
     <div
       aria-hidden="true"
       className="pointer-events-none absolute z-40"
       style={{
-        left: position.x + PAINT_CURSOR_BADGE_OFFSET_X,
-        top: position.y + PAINT_CURSOR_BADGE_OFFSET_Y,
+        left: position.x,
+        top: position.y,
       }}
     >
       <div
-        className="flex items-center gap-2 rounded-xl border border-white/5 bg-zinc-900/95 px-3 py-2 shadow-[0_8px_16px_-4px_rgba(0,0,0,0.3),0_4px_8px_-4px_rgba(0,0,0,0.2)]"
+        className="-translate-x-1/2 -translate-y-full absolute top-0 left-1/2"
+        style={{
+          backgroundColor: accentColor,
+          boxShadow: `0 0 12px ${accentColor}cc`,
+          height: lineHeight,
+          width: 2,
+        }}
+      />
+      <div
+        className="absolute top-0 left-1/2 flex h-8 w-8 items-center justify-center rounded-xl border border-white/5 bg-zinc-900/95 shadow-[0_8px_16px_-4px_rgba(0,0,0,0.3),0_4px_8px_-4px_rgba(0,0,0,0.2)]"
         style={{
           boxShadow: `0 8px 16px -4px rgba(0,0,0,0.3), 0 4px 8px -4px rgba(0,0,0,0.2), 0 0 18px ${accentColor}22`,
+          transform: `translate(-50%, calc(-100% - ${lineHeight}px))`,
         }}
       >
-        <Icon
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          alt=""
           aria-hidden="true"
-          className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-          color={accentColor}
-          height={16}
-          icon={icon}
-          width={16}
+          className="h-5 w-5 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
+          src="/icons/paint.png"
         />
-        <span className="font-medium text-[11px]" style={{ color: accentColor }}>
-          {label}
-        </span>
       </div>
     </div>
   )
@@ -702,7 +697,7 @@ function DeleteCursorLayer({
 
   return (
     <div
-      className="pointer-events-none"
+      className="pointer-events-none z-40"
       ref={badgeRef}
       style={{ display: 'none', position: 'absolute', left: 0, top: 0 }}
     >
@@ -720,15 +715,12 @@ function PaintCursorLayer({
 }) {
   const mode = useEditor((s) => s.mode)
   const activePaintMaterial = useEditor((s) => s.activePaintMaterial)
-  const activePaintTarget = useEditor((s) => s.activePaintTarget)
-  const badgeRef = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
   const active = mode === 'material-paint' && !isVersionPreviewMode
 
   useEffect(() => {
     if (!active) {
-      if (badgeRef.current) {
-        badgeRef.current.style.display = 'none'
-      }
+      setPosition(null)
       return
     }
     const el = containerRef.current
@@ -736,20 +728,16 @@ function PaintCursorLayer({
     let frame = 0
     let nextX = 0
     let nextY = 0
-    const badge = badgeRef.current
 
     const flushPosition = () => {
       frame = 0
-      if (!badge) return
-      badge.style.display = 'block'
-      badge.style.transform = `translate(${nextX + PAINT_CURSOR_BADGE_OFFSET_X}px, ${nextY + PAINT_CURSOR_BADGE_OFFSET_Y}px)`
+      setPosition({ x: nextX, y: nextY })
     }
 
-    const onMove = (e: PointerEvent) => {
+    const updateFromEvent = (e: PointerEvent) => {
       const rect = el.getBoundingClientRect()
       nextX = e.clientX - rect.left
       nextY = e.clientY - rect.top
-
       if (frame === 0) {
         frame = window.requestAnimationFrame(flushPosition)
       }
@@ -759,17 +747,19 @@ function PaintCursorLayer({
         window.cancelAnimationFrame(frame)
         frame = 0
       }
-      if (badge) {
-        badge.style.display = 'none'
-      }
+      setPosition(null)
     }
-    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointermove', updateFromEvent)
+    el.addEventListener('pointerenter', updateFromEvent)
+    el.addEventListener('pointerdown', updateFromEvent)
     el.addEventListener('pointerleave', onLeave)
     return () => {
       if (frame !== 0) {
         window.cancelAnimationFrame(frame)
       }
-      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointermove', updateFromEvent)
+      el.removeEventListener('pointerenter', updateFromEvent)
+      el.removeEventListener('pointerdown', updateFromEvent)
       el.removeEventListener('pointerleave', onLeave)
     }
   }, [active, containerRef])
@@ -779,29 +769,15 @@ function PaintCursorLayer({
       (activePaintMaterial.material !== undefined ||
         activePaintMaterial.materialPreset !== undefined),
   )
-  const label = hasMaterial ? `Paint ${activePaintTarget}` : 'Choose material'
-  const icon = 'mdi:format-color-fill'
 
-  useLayoutEffect(() => {
-    if (!active && badgeRef.current) {
-      badgeRef.current.style.display = 'none'
-    }
-  }, [active])
-
-  if (!active) return null
+  if (!active || !position) return null
 
   return (
     <div
-      className="pointer-events-none"
-      ref={badgeRef}
-      style={{ display: 'none', position: 'absolute', left: 0, top: 0 }}
+      className="pointer-events-none absolute z-40"
+      style={{ left: 0, top: 0, transform: `translate(${position.x}px, ${position.y}px)` }}
     >
-      <PaintCursorBadge
-        disabled={!hasMaterial}
-        icon={icon}
-        label={label}
-        position={{ x: 0, y: 0 }}
-      />
+      <PaintCursorBadge disabled={!hasMaterial} position={{ x: 0, y: 0 }} />
     </div>
   )
 }

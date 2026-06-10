@@ -226,12 +226,22 @@ export function cloneLevelSubtree(
   return { clonedNodes, newLevelId, idMap }
 }
 
+export type ForkSceneGraphOptions = {
+  preserveScans?: boolean
+}
+
 /**
- * Forks a scene graph for use as a new project: clones with new IDs and strips
- * scan and guide nodes (and their references) since those contain user-uploaded
- * imagery that shouldn't carry over to a forked project.
+ * Forks a scene graph for use as a new project: clones with new IDs and, by
+ * default, strips scan and guide nodes since they contain user-uploaded imagery.
  */
-export function forkSceneGraph(sceneGraph: SceneGraph): SceneGraph {
+export function forkSceneGraph(
+  sceneGraph: SceneGraph,
+  options: ForkSceneGraphOptions = {},
+): SceneGraph {
+  if (options.preserveScans) {
+    return cloneSceneGraph(sceneGraph)
+  }
+
   const { nodes, rootNodeIds, collections } = sceneGraph
 
   // First, identify scan and guide node IDs to exclude (user-uploaded imagery)

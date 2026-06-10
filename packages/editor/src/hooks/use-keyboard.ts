@@ -298,15 +298,6 @@ export const useKeyboard = ({
           }
         }
 
-        // Delete selected zone
-        const selectedZoneId = useViewer.getState().selection.zoneId
-        if (selectedZoneId) {
-          sfxEmitter.emit('sfx:structure-delete')
-          useScene.getState().deleteNode(selectedZoneId as AnyNodeId)
-          useViewer.getState().setSelection({ zoneId: null })
-          return
-        }
-
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
 
         if (selectedNodeIds.length > 0) {
@@ -328,6 +319,15 @@ export const useKeyboard = ({
           }
 
           useScene.getState().deleteNodes(selectedNodeIds)
+          return
+        }
+
+        // Delete selected zone when no explicit element selection is active.
+        const selectedZoneId = useViewer.getState().selection.zoneId
+        if (selectedZoneId) {
+          sfxEmitter.emit('sfx:structure-delete')
+          useScene.getState().deleteNode(selectedZoneId as AnyNodeId)
+          useViewer.getState().setSelection({ zoneId: null })
         }
       }
     }

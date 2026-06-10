@@ -104,6 +104,7 @@ export {
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   WALL_FINE_GRID_STEP,
+  WALL_GRID_STEP,
   type WallDraftSnapKind,
   type WallDraftSnapResult,
   type WallPlanPoint,
@@ -237,6 +238,12 @@ export {
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
 export { cn } from './lib/utils'
+export {
+  getActiveBuildingPose,
+  resolveAlignmentForActiveBuilding,
+  snapBuildingLocalToWorldGrid,
+  snapWorldXZForActiveBuilding,
+} from './lib/world-grid-snap'
 export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'

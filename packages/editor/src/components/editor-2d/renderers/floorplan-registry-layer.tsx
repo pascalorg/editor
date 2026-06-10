@@ -1596,6 +1596,34 @@ function InteractiveGeometry({
           </g>
         )
       }
+      case 'text': {
+        if (!g.upright) return <FloorplanGeometryRenderer geometry={g} key={keyHint} />
+        // Counter-rotate by the scene rotation so the label reads
+        // horizontally on screen even when the floor-plan view is
+        // rotated (default `sceneRotationDeg` is 90°).
+        return (
+          <g key={keyHint} transform={`translate(${g.x} ${g.y}) rotate(${-sceneRotationDeg})`}>
+            <text
+              dominantBaseline={g.dominantBaseline ?? 'middle'}
+              fill={g.fill ?? '#171717'}
+              fontFamily={g.fontFamily}
+              fontSize={g.fontSize}
+              fontWeight={g.fontWeight}
+              opacity={g.opacity}
+              paintOrder={g.paintOrder}
+              stroke={g.stroke}
+              strokeLinecap={g.stroke ? 'round' : undefined}
+              strokeLinejoin={g.stroke ? 'round' : undefined}
+              strokeWidth={g.strokeWidth}
+              textAnchor={g.textAnchor ?? 'start'}
+              x={0}
+              y={0}
+            >
+              {g.text}
+            </text>
+          </g>
+        )
+      }
       default:
         return (
           <FloorplanGeometryRenderer

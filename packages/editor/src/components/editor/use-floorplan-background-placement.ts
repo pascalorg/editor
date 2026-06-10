@@ -5,7 +5,6 @@ import { type MouseEvent as ReactMouseEvent, useCallback } from 'react'
 import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import {
-  snapPointToGrid as snapWallPointToGrid,
   WALL_FINE_GRID_STEP,
   WALL_GRID_STEP,
   type WallPlanPoint,
@@ -41,7 +40,7 @@ type UseFloorplanBackgroundPlacementArgs = {
   ) => boolean
   handleCeilingPlacementPoint: (point: WallPlanPoint) => void
   handleSlabPlacementPoint: (point: WallPlanPoint) => void
-  handleWallPlacementPoint: (point: WallPlanPoint) => void
+  handleWallPlacementPoint: (point: WallPlanPoint, options?: { singleWall?: boolean }) => void
   handleZonePlacementPoint: (point: WallPlanPoint) => void
   isCeilingBuildActive: boolean
   isCeilingItemPlacementActive: boolean
@@ -65,6 +64,7 @@ type UseFloorplanBackgroundPlacementArgs = {
     start?: WallPlanPoint
     angleSnap?: boolean
     step?: number
+    gridSnap?: (point: WallPlanPoint) => WallPlanPoint
   }) => WallPlanPoint
   snapPolygonDraftPoint: (args: {
     point: WallPlanPoint
@@ -73,6 +73,13 @@ type UseFloorplanBackgroundPlacementArgs = {
   }) => WallPlanPoint
   toPoint2D: (point: WallPlanPoint) => { x: number; y: number }
   walls: WallNode[]
+  /**
+   * Snap a building-local plan point to the world XZ grid at `step`.
+   * Injected so the hook doesn't have to know the building's rotation
+   * or position — used by wall / fence branches that snap at variable
+   * step (Shift = fine).
+   */
+  worldGridSnap: (point: WallPlanPoint, step: number) => WallPlanPoint
 }
 
 export function useFloorplanBackgroundPlacement({
@@ -111,6 +118,7 @@ export function useFloorplanBackgroundPlacement({
   snapPolygonDraftPoint,
   toPoint2D,
   walls,
+  worldGridSnap,
 }: UseFloorplanBackgroundPlacementArgs) {
   const handleBackgroundPlacementClick = useCallback(
     (
@@ -177,16 +185,17 @@ export function useFloorplanBackgroundPlacement({
       if (isFenceBuildActive) {
         // Fence draft: grid snap (+ existing-wall/fence endpoint snap), then
         // Figma alignment — endpoint snap wins (same precedence as move).
+        // `gridSnap` keeps the snap on the world XZ grid even when the
+        // building is rotated.
+        const fenceStep = shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
         const fenceSnapped = snapFenceDraftPoint({
           point: planPoint,
           walls,
           fences,
           step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
+          gridSnap: (p) => worldGridSnap(p, fenceStep),
         })
-        const fenceGridBase = snapWallPointToGrid(
-          planPoint,
-          shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP,
-        )
+        const fenceGridBase = worldGridSnap(planPoint, fenceStep)
         const fenceLocked =
           fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
         const snappedPoint = fenceLocked
@@ -249,22 +258,23 @@ export function useFloorplanBackgroundPlacement({
         // Wall draft: grid snap (+ existing-wall endpoint/join snap), then
         // Figma alignment — endpoint/join snap wins (same precedence as the
         // move-preview branch), so committing onto a corner still works.
+        // `gridSnap` keeps the snap on the world XZ grid even when the
+        // building is rotated.
+        const wallStep = shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
         const wallSnapped = snapWallDraftPoint({
           point: planPoint,
           walls,
           step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
+          gridSnap: (p) => worldGridSnap(p, wallStep),
         })
-        const wallGridBase = snapWallPointToGrid(
-          planPoint,
-          shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP,
-        )
+        const wallGridBase = worldGridSnap(planPoint, wallStep)
         const wallLocked = wallSnapped[0] !== wallGridBase[0] || wallSnapped[1] !== wallGridBase[1]
         const snappedPoint = wallLocked
           ? wallSnapped
-          : alignFloorplanDraftPoint(wallSnapped, { bypass: event.altKey })
+          : alignFloorplanDraftPoint(wallSnapped, { bypass: false })
 
         emitFloorplanGridEvent('click', snappedPoint, event)
-        handleWallPlacementPoint(snappedPoint)
+        handleWallPlacementPoint(snappedPoint, { singleWall: event.altKey })
         return true
       }
 
@@ -324,6 +334,7 @@ export function useFloorplanBackgroundPlacement({
       toPoint2D,
       walls,
       handleWallPlacementPoint,
+      worldGridSnap,
     ],
   )
 

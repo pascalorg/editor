@@ -67,8 +67,15 @@ export function createPolygonCentroidMoveTarget(args: {
   nodes: Record<AnyNodeId, AnyNode>
   /** 3D mesh Y the kind's system parks the group at on rebuild. */
   meshY: number
+  /**
+   * Extra fields merged into the commit payload. Use for kind-specific flags
+   * that a manual drag should clear — e.g. slab `autoFromWalls: false`, so the
+   * space-detection sync stops re-deriving the polygon from walls and
+   * snapping the slab back to its original position.
+   */
+  extraCommitData?: Record<string, unknown>
 }): FloorplanMoveTargetSession {
-  const { node, nodes, meshY } = args
+  const { node, nodes, meshY, extraCommitData } = args
   const id = node.id as AnyNodeId
   const typeGuard = node.type
   const originalPolygon = node.polygon.map(([x, z]) => [x, z] as [number, number])
@@ -129,11 +136,18 @@ export function createPolygonCentroidMoveTarget(args: {
       // so the React render and the kind's geometry rebuild land in the same
       // paint (no original-position blink). Only write `holes` for kinds that
       // have them (zone has none).
-      const data: { polygon: Array<[number, number]>; holes?: Array<Array<[number, number]>> } = {
+      const data: {
+        polygon: Array<[number, number]>
+        holes?: Array<Array<[number, number]>>
+        [key: string]: unknown
+      } = {
         polygon: translatePolygon(originalPolygon, dx, dz),
       }
       if (hasHoles) {
         data.holes = originalHoles.map((h) => translatePolygon(h, dx, dz))
+      }
+      if (extraCommitData) {
+        Object.assign(data, extraCommitData)
       }
       useScene.getState().updateNodes([{ id, data }])
       useScene.getState().markDirty(id)

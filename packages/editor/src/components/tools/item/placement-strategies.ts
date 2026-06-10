@@ -19,6 +19,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
+import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
 import {
   calculateCursorRotation,
   calculateItemRotation,
@@ -99,10 +100,15 @@ export const floorStrategy = {
     const [dimX, , dimZ] = dims
     const rotY = ctx.draftItem?.rotation?.[1] ?? 0
     const swapDims = Math.abs(Math.sin(rotY)) > 0.9
-    // event.localPosition is building-local; the coordinator cursor group is inside the
-    // building-local ToolManager group, so local coords are correct for both data and visuals.
-    const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
-    const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
+    // Snap on the world XZ grid (the grid the editor renders) so the
+    // item edges land on the visible grid even when the active building
+    // is rotated; then project the world point back into building-local
+    // for storage. Without this, a rotated building drags placement off
+    // the world grid.
+    const snappedWorldX = snapToGrid(event.position[0], swapDims ? dimZ : dimX)
+    const snappedWorldZ = snapToGrid(event.position[2], swapDims ? dimX : dimZ)
+    const { local } = snapWorldXZForActiveBuilding(snappedWorldX, snappedWorldZ, 0)
+    const [x, z] = local
     const y = ctx.gridPosition.y
 
     return {

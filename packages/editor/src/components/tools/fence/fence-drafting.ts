@@ -134,14 +134,23 @@ export function snapFenceDraftPoint(args: {
   ignoreFenceIds?: string[]
   /** Override the grid step (e.g. `WALL_FINE_GRID_STEP` for precision mode). */
   step?: number
+  /**
+   * Optional grid-snap function. When provided, replaces the default
+   * local-axis snap — lets the 2D floor-plan keep snapping to the
+   * world XZ grid even when the building is rotated. Wall / fence
+   * endpoint snap precedence is preserved.
+   */
+  gridSnap?: (point: FencePlanPoint) => FencePlanPoint
 }): FencePlanPoint {
-  const { point, walls, fences, start, angleSnap = false, ignoreFenceIds, step } = args
+  const { point, walls, fences, start, angleSnap = false, ignoreFenceIds, step, gridSnap } = args
   const gridStep = step ?? getSegmentGridStep()
   const angleStep = getWallAngleSnapStep(gridStep)
   const basePoint =
     start && angleSnap
-      ? snapPointTo45Degrees(start, point, gridStep, angleStep)
-      : snapPointToGrid(point, gridStep)
+      ? snapPointTo45Degrees(start, point, gridStep, angleStep, gridSnap)
+      : gridSnap
+        ? gridSnap(point)
+        : snapPointToGrid(point, gridStep)
   const fenceSnapTarget = findFenceSnapTarget(basePoint, fences, ignoreFenceIds)
 
   return fenceSnapTarget ?? findWallSnapTarget(basePoint, walls) ?? basePoint

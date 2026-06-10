@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/ifc-converter",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "IFC → Pascal scene-graph conversion. Pure logic — no DOM, no React.",
   "type": "module",
   "main": "./dist/index.js",
@@ -29,7 +29,7 @@
   "devDependencies": {
     "@pascal/typescript-config": "*",
     "@types/bun": "^1.3.0",
-    "typescript": "6.0.2"
+    "typescript": "6.0.3"
   },
   "repository": {
     "type": "git",

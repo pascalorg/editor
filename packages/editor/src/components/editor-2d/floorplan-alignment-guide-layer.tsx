@@ -1,27 +1,29 @@
 'use client'
 
-import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { memo } from 'react'
+import useAlignmentGuides from '../../store/use-alignment-guides'
 import { formatMeasurement } from '../editor/measurement-pill'
 import { useFloorplanRender } from './floorplan-render-context'
 
 /**
  * Figma-style alignment guides for the 2D floor plan.
  *
- * Subscribes to `useAlignmentGuides` — populated by
- * `FloorplanRegistryMoveOverlay` (Path 2) during a generic free-translate
- * drag. Each guide renders as a red line between the moving and matched
- * candidate anchors with small `×` end-caps. A distance pill is drawn at
- * the line's midpoint when the perpendicular gap is non-zero.
+ * Subscribes to the editor-local `useAlignmentGuides` store (separate
+ * from the core store the 3D layer reads). Guides come in
+ * building-local meters, so the layer is mounted INSIDE the rotated
+ * `<g data-floorplan-scene>` — the SVG transform that takes the rest
+ * of the floor-plan geometry from local → screen carries the guide
+ * lines too. Pill labels are counter-rotated by `sceneRotationDeg`
+ * (from `FloorplanRenderProvider`) so they stay upright even when the
+ * scene `<g>` is rotated by building rotation.
+ *
+ * Each guide renders as a red line between the moving and matched
+ * candidate anchors with small `×` end-caps. A distance pill is drawn
+ * at the midpoint when the perpendicular gap is non-zero.
  *
  * Stroke widths and handle radii are scaled by `unitsPerPixel` so they
- * stay a constant size on screen no matter the zoom. Text labels are
- * counter-rotated by `sceneRotationDeg` so they read upright even when
- * the building rotation rotates the scene `<g>`.
- *
- * Mounted inside the `data-floorplan-scene` group so coordinates match
- * world meters 1:1 with the rest of the floor plan.
+ * stay a constant size on screen no matter the zoom.
  */
 export const FloorplanAlignmentGuideLayer = memo(function FloorplanAlignmentGuideLayer() {
   const guides = useAlignmentGuides((s) => s.guides)

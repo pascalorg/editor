@@ -29,6 +29,7 @@ import {
   getSegmentGridStep,
   isSegmentLongEnough,
   markToolCancelConsumed,
+  snapBuildingLocalToWorldGrid,
   snapScalarToGrid,
   triggerSFX,
   useEditor,
@@ -470,9 +471,21 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         const perpDelta = snappedProj - originalProj
         deltaX = axis[0] * perpDelta
         deltaZ = axis[1] * perpDelta
+      } else if (shiftPressedRef.current) {
+        deltaX = rawDeltaX
+        deltaZ = rawDeltaZ
       } else {
-        deltaX = shiftPressedRef.current ? rawDeltaX : snapScalarToGrid(rawDeltaX, snapStep)
-        deltaZ = shiftPressedRef.current ? rawDeltaZ : snapScalarToGrid(rawDeltaZ, snapStep)
+        // Snap the resulting wall center to the WORLD XZ grid (projected
+        // back into building-local), then express the result as a delta
+        // from the original centre. Without this, a rotated building
+        // dragged the wall along its local axes instead of world ones.
+        const targetLocal: [number, number] = [
+          originalCenter[0] + rawDeltaX,
+          originalCenter[1] + rawDeltaZ,
+        ]
+        const snappedLocal = snapBuildingLocalToWorldGrid(targetLocal, snapStep)
+        deltaX = snappedLocal[0] - originalCenter[0]
+        deltaZ = snappedLocal[1] - originalCenter[1]
       }
 
       const constrainedGridPos: [number, number] = [anchor[0] + deltaX, anchor[1] + deltaZ]

@@ -686,6 +686,13 @@ export const WallTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
         useWallSnapIndicator.getState().clear()
 
+        // Alt commits a single wall — stop drafting instead of chaining
+        // so the next click starts a fresh start point.
+        if (event.nativeEvent?.altKey === true) {
+          stopDrafting()
+          return
+        }
+
         const nextStart = createdWall.end
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
         endingPoint.current.copy(startingPoint.current)

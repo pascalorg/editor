@@ -3,11 +3,14 @@ export {
   type AlignmentGuide,
   type AlignmentGuideAxis,
   type AnchorKind,
+  type BuildingPose,
   bboxAnchors,
   bboxCornerAnchors,
+  type ResolveAlignmentInBuildingResult,
   type ResolveAlignmentInput,
   type ResolveAlignmentResult,
   resolveAlignment,
+  resolveAlignmentInBuildingWorld,
 } from './alignment'
 export {
   collectAlignmentAnchors,
@@ -56,4 +59,5 @@ export {
   snapScalar,
   snapServices,
   snapVec3ToGrid,
+  snapWorldXZToBuildingLocal,
 } from './snap'

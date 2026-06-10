@@ -7,7 +7,6 @@ import {
   type LevelNode,
   RoofNode,
   RoofSegmentNode,
-  resolveAlignment,
   sceneRegistry,
   snapScalar,
   useScene,
@@ -20,6 +19,10 @@ import { BufferGeometry, DoubleSide, type Group, type Line, Vector3 } from 'thre
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import {
+  resolveAlignmentForActiveBuilding,
+  snapWorldXZForActiveBuilding,
+} from '../../../lib/world-grid-snap'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
@@ -196,7 +199,7 @@ export const RoofTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
         return [gridX, gridZ]
       }
-      const ar = resolveAlignment({
+      const ar = resolveAlignmentForActiveBuilding({
         moving: [{ nodeId: '__roof-draft__', kind: 'corner', x: rawX, z: rawZ }],
         candidates: alignmentCandidates,
         threshold: ALIGNMENT_THRESHOLD_M,
@@ -237,9 +240,16 @@ export const RoofTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
 
+      // World-grid snap projected into building-local; rotated buildings
+      // used to drag every roof corner off the visible grid.
+      const snapped = snapWorldXZForActiveBuilding(
+        event.position[0],
+        event.position[2],
+        useEditor.getState().gridSnapStep,
+      ).local
       const [gridX, gridZ] = alignPoint(
-        snapToActiveGrid(event.localPosition[0]),
-        snapToActiveGrid(event.localPosition[2]),
+        snapped[0],
+        snapped[1],
         event.localPosition[0],
         event.localPosition[2],
         event.nativeEvent?.altKey === true,
@@ -275,9 +285,16 @@ export const RoofTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!currentLevelId) return
 
+      // World-grid snap projected into building-local; rotated buildings
+      // used to drag every roof corner off the visible grid.
+      const snapped = snapWorldXZForActiveBuilding(
+        event.position[0],
+        event.position[2],
+        useEditor.getState().gridSnapStep,
+      ).local
       const [gridX, gridZ] = alignPoint(
-        snapToActiveGrid(event.localPosition[0]),
-        snapToActiveGrid(event.localPosition[2]),
+        snapped[0],
+        snapped[1],
         event.localPosition[0],
         event.localPosition[2],
         event.nativeEvent?.altKey === true,
