@@ -8,6 +8,7 @@ import {
   type CeilingNode,
   type ColumnNode,
   calculateLevelMiters,
+  DEFAULT_ANGLE_STEP,
   type DoorNode,
   type ElevatorNode,
   emitter,
@@ -38,6 +39,7 @@ import {
   StairSegmentNode as StairSegmentNodeSchema,
   sampleWallCenterline,
   sceneRegistry,
+  snapPointAlongAngleRay,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -47,7 +49,7 @@ import {
   ZoneNode as ZoneNodeSchema,
   type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
-import { useAlignmentGuides, useWallSnapIndicator } from '@pascal-app/editor'
+import { useAlignmentGuides, useSegmentDraftChain, useWallSnapIndicator } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Command, Ruler } from 'lucide-react'
 import {
@@ -135,7 +137,6 @@ import {
   DEFAULT_STAIR_WIDTH,
 } from '../tools/stair/stair-defaults'
 import {
-  createWallOnCurrentLevel,
   isSegmentLongEnough,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
@@ -2174,33 +2175,6 @@ function isPointNearPlanPoint(a: WallPlanPoint, b: WallPlanPoint, threshold = 0.
   return Math.abs(a[0] - b[0]) < threshold && Math.abs(a[1] - b[1]) < threshold
 }
 
-function calculatePolygonSnapPoint(
-  lastPoint: WallPlanPoint,
-  currentPoint: WallPlanPoint,
-): WallPlanPoint {
-  const [x1, y1] = lastPoint
-  const [x, y] = currentPoint
-  const dx = x - x1
-  const dy = y - y1
-  const absDx = Math.abs(dx)
-  const absDy = Math.abs(dy)
-  const horizontalDist = absDy
-  const verticalDist = absDx
-  const diagonalDist = Math.abs(absDx - absDy)
-  const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
-
-  if (minDist === diagonalDist) {
-    const diagonalLength = Math.min(absDx, absDy)
-    return [x1 + Math.sign(dx) * diagonalLength, y1 + Math.sign(dy) * diagonalLength]
-  }
-
-  if (minDist === horizontalDist) {
-    return [x, y1]
-  }
-
-  return [x1, y]
-}
-
 function snapPolygonDraftPoint({
   point,
   start,
@@ -2210,13 +2184,16 @@ function snapPolygonDraftPoint({
   start?: WallPlanPoint
   angleSnap: boolean
 }): WallPlanPoint {
-  const snappedPoint: WallPlanPoint = [snapToHalf(point[0]), snapToHalf(point[1])]
-
   if (!(start && angleSnap)) {
-    return snappedPoint
+    return [snapToHalf(point[0]), snapToHalf(point[1])]
   }
 
-  return calculatePolygonSnapPoint(start, snappedPoint)
+  // 15° angle snap from the raw point, with the distance snapped along the
+  // ray to the grid step — grid-snapping the point itself would pull the
+  // vertex off non-axis rays (and matches the 3D slab / ceiling tools).
+  return [
+    ...snapPointAlongAngleRay(start, point, DEFAULT_ANGLE_STEP, useEditor.getState().gridSnapStep),
+  ]
 }
 
 function pointMatchesWallPlanPoint(
@@ -8176,25 +8153,26 @@ export function FloorplanPanel({
       stopPropagation: () => {},
     } as any)
   }, [])
+  // Emits `planPoint` unchanged — callers own snapping. Re-quantizing here
+  // (the old behaviour) destroyed magnetic corner / midpoint snaps the draft
+  // branches had already resolved, desyncing the 2D pipeline from the 3D
+  // tools that subscribe to these grid events.
   const emitFloorplanGridEvent = useCallback(
     (
       eventType: 'move' | 'click' | 'double-click',
       planPoint: WallPlanPoint,
       nativeEvent: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>,
     ) => {
-      const snappedPoint = getSnappedFloorplanPoint(planPoint)
       const cos = Math.cos(buildingRotationY)
       const sin = Math.sin(buildingRotationY)
-      const worldX = buildingPosition[0] + snappedPoint[0] * cos + snappedPoint[1] * sin
-      const worldZ = buildingPosition[2] - snappedPoint[0] * sin + snappedPoint[1] * cos
+      const worldX = buildingPosition[0] + planPoint[0] * cos + planPoint[1] * sin
+      const worldZ = buildingPosition[2] - planPoint[0] * sin + planPoint[1] * cos
 
       emitter.emit(`grid:${eventType}` as any, {
         nativeEvent: nativeEvent.nativeEvent as any,
         position: [worldX, floorplanGridWorldY, worldZ],
-        localPosition: [snappedPoint[0], floorplanGridLocalY, snappedPoint[1]],
+        localPosition: [planPoint[0], floorplanGridLocalY, planPoint[1]],
       })
-
-      return snappedPoint
     },
     [buildingPosition, buildingRotationY, floorplanGridLocalY, floorplanGridWorldY],
   )
@@ -8413,7 +8391,7 @@ export function FloorplanPanel({
       }
 
       if (referenceScaleDraft) {
-        emitFloorplanGridEvent('move', planPoint, event)
+        emitFloorplanGridEvent('move', getSnappedFloorplanPoint(planPoint), event)
 
         setCursorPoint((previousPoint) =>
           previousPoint && pointsEqual(previousPoint, planPoint) ? previousPoint : planPoint,
@@ -8430,8 +8408,8 @@ export function FloorplanPanel({
       }
 
       if (isCeilingBuildActive) {
-        // Polygon vertex: grid (snapToHalf) + optional 45° angle snap from
-        // the previous vertex. Wall magnetic snap may still win, while
+        // Polygon vertex: grid (snapToHalf) or 15° angle snap from the
+        // previous vertex. Wall magnetic snap may still win, while
         // generic alignment runs only when angle snap is OFF (first vertex,
         // or Shift held) so it does not pull a locked angle sideways.
         const angleSnap = ceilingDraftPoints.length > 0 && !shiftPressed
@@ -8476,10 +8454,16 @@ export function FloorplanPanel({
       if (isFenceBuildActive) {
         // Fence draft: grid snap (+ existing-wall/fence endpoint snap), then
         // Figma alignment — same endpoint-wins precedence as the wall branch.
+        // While a draft is open the segment locks to 15° rays from its start
+        // (Shift = free angle); alignment is skipped when either the endpoint
+        // snap or the angle lock owns the point.
+        const fenceAngleSnap = fenceDraftStart !== null && !shiftPressed
         const fenceSnapped = snapFenceDraftPoint({
           point: planPoint,
           walls,
           fences,
+          start: fenceDraftStart ?? undefined,
+          angleSnap: fenceAngleSnap,
           step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
         })
         const fenceGridBase = snapWallPointToGrid(
@@ -8489,7 +8473,7 @@ export function FloorplanPanel({
         const fenceLocked =
           fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
         let snappedPoint = fenceSnapped
-        if (fenceLocked) useAlignmentGuides.getState().clear()
+        if (fenceLocked || fenceAngleSnap) useAlignmentGuides.getState().clear()
         else snappedPoint = alignFloorplanDraftPoint(fenceSnapped, { bypass: event.altKey })
 
         emitFloorplanGridEvent('move', snappedPoint, event)
@@ -8608,7 +8592,8 @@ export function FloorplanPanel({
       // comment there). Wall build skips this so its own branch below
       // updates local `draftEnd` state alongside the registry tool.
       if (!isWallBuildActive && isFloorplanGridInteractionActive) {
-        const snappedPoint = emitFloorplanGridEvent('move', planPoint, event)
+        const snappedPoint = getSnappedFloorplanPoint(planPoint)
+        emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
           previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
         )
@@ -8630,15 +8615,19 @@ export function FloorplanPanel({
         return
       }
 
-      // Wall draft: grid snap (orthogonal walls follow naturally from a
-      // grid-aligned start; Shift = fine 0.05m step), then Figma-style
-      // alignment layered on top. An existing wall endpoint / join snap
-      // wins outright — never pull the cursor off a corner the user is
-      // closing onto — so alignment runs ONLY when the wall snap left the
-      // point on the plain grid. Alt bypasses alignment.
+      // Wall draft: grid snap (Shift = fine 0.05m step), then Figma-style
+      // alignment layered on top. While a draft is open the segment locks
+      // to 15° rays from its start (Shift = free angle). An existing wall
+      // endpoint / join snap wins outright — never pull the cursor off a
+      // corner the user is closing onto — so alignment runs ONLY when
+      // neither the wall snap nor the angle lock owns the point. Alt
+      // bypasses alignment.
+      const wallAngleSnap = draftStart !== null && !shiftPressed
       const wallSnap = snapWallDraftPointDetailed({
         point: planPoint,
         walls,
+        start: draftStart ?? undefined,
+        angleSnap: wallAngleSnap,
         step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
         magnetic: useEditor.getState().magneticSnap,
       })
@@ -8647,7 +8636,7 @@ export function FloorplanPanel({
       // that snap wins, so skip Figma alignment and stand the beacon there.
       const lockedToWall = wallSnap.snap !== null
       let snappedPoint = wallSnapped
-      if (lockedToWall) {
+      if (lockedToWall || wallAngleSnap) {
         useAlignmentGuides.getState().clear()
       } else {
         snappedPoint = alignFloorplanDraftPoint(wallSnapped, { bypass: event.altKey })
@@ -8874,17 +8863,10 @@ export function FloorplanPanel({
       // call. `emitFloorplanGridEvent('click', …)` in
       // `useFloorplanBackgroundPlacement` fires it synchronously
       // just before this callback runs, so by the time we get here
-      // the wall already exists in the scene.
-      //
-      // We still attempt the create as a fallback in case the 3D
-      // tool isn't mounted (unusual — both views are always
-      // mounted today, but defensive). When the wall already
-      // exists `createWallOnCurrentLevel` returns null via its
-      // duplicate-detection branch; we treat that as "the 3D side
-      // committed" and chain the draft state forward instead of
-      // clearing it (the previous behaviour caused the 2nd-segment
-      // draft to silently break after click 2).
-      const createdWall = createWallOnCurrentLevel(draftStart, point)
+      // the wall already exists in the scene. Committing here as
+      // well used to double-create walls whenever the two snap
+      // pipelines resolved endpoints ≥1e-6 apart (the duplicate
+      // check compares exact endpoints).
 
       // Alt commits a single wall: drop the draft so the next click
       // starts a fresh segment instead of chaining off this endpoint.
@@ -8895,9 +8877,10 @@ export function FloorplanPanel({
         return
       }
 
-      const nextStart: WallPlanPoint = createdWall
-        ? [createdWall.end[0], createdWall.end[1]]
-        : point
+      // Chain the next segment from the 3D tool's resolved commit
+      // point (it may have corner-snapped or split-adjusted the
+      // endpoint) so both views draft from the same start.
+      const nextStart: WallPlanPoint = useSegmentDraftChain.getState().wall ?? point
       setDraftStart(nextStart)
       setDraftEnd(nextStart)
       setCursorPoint(nextStart)
@@ -8939,6 +8922,7 @@ export function FloorplanPanel({
     ceilingDraftPoints,
     clearFencePlacementDraft,
     clearRoofPlacementDraft,
+    clearWallPlacementDraft,
     emitFloorplanGridEvent,
     fenceDraftStart,
     fences,
@@ -8994,7 +8978,7 @@ export function FloorplanPanel({
         event.preventDefault()
         event.stopPropagation()
 
-        emitFloorplanGridEvent('click', planPoint, event)
+        emitFloorplanGridEvent('click', getSnappedFloorplanPoint(planPoint), event)
 
         if (!referenceScaleDraft.start) {
           setReferenceScaleDraft({

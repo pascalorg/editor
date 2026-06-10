@@ -40,8 +40,8 @@ const snapToGridStep = (value: number) => {
   return Math.round(value / step) * step
 }
 
-/** 90° steps, matching the GLB item placement rotation. */
-const ROTATION_STEP = Math.PI / 2
+/** 45° steps, matching the GLB item placement rotation. */
+const ROTATION_STEP = Math.PI / 4
 
 /** Figma-style alignment-snap threshold (meters), matching the 2D
  *  floor-plan overlay's `ALIGNMENT_THRESHOLD_M`. 8 cm gives a magnetic pull
@@ -457,7 +457,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       if (typeof direct === 'function') direct.call(event)
     }
 
-    // R / T rotate the dragged node about Y in 90° steps — matching the GLB
+    // R / T rotate the dragged node about Y in 45° steps — matching the GLB
     // item placement keys (and the "Rotate" hints the move HUD shows). Applied
     // imperatively + mirrored to the live transform; committed on drop.
     const onKeyDown = (e: KeyboardEvent) => {

@@ -1,7 +1,7 @@
 import {
   type DormerNode,
-  getActiveRoofHeight,
   getPitchFromActiveRoofHeight,
+  getRoofSegmentSurfaceY,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
 } from '@pascal-app/core'
@@ -191,73 +191,61 @@ function createDormerWindowCutGeometry(
   return new THREE.BoxGeometry(w, h, depth)
 }
 
+// Exposure datum: a face shows its window when the window CENTER clears
+// the host's structural surface line (≥ half the window visible).
+// Gating on the window BOTTOM suppressed the default window on the
+// default 40° roof (break-even ≈ 36.7° pitch) and across the whole
+// lower-slope/overhang band. A partially buried window reads as a
+// window meeting the roof line: the host shingle shell occludes the
+// buried frame from outside (the dormer roof cut only clears the inner
+// cavity, 5cm short of the gable face), and the glass panes span the
+// full opening so the wall cut never reads as a see-through hole. The
+// margin only absorbs float noise at the grazing boundary — suppress
+// only when the window is truly unplaceable.
+const WINDOW_CENTER_MIN_CLEARANCE = 0.01
+
 /**
- * Which gable faces of a dormer have a *fully visible window opening*
- * (not clipped by the host roof slope). "front" = mesh-local +Z,
- * "back" = mesh-local −Z (after the +π/2 yaw bake for non-shed roofs).
+ * Which gable faces of a dormer have a visible window opening.
+ * "front" = mesh-local +Z, "back" = mesh-local −Z (after the +π/2 yaw
+ * bake for non-shed roofs).
  *
- * The criterion is window-bottom-above-slope, not wall-top-above-slope:
- * the dormer wall extends well below the window into the skirt that's
- * buried inside the roof, so checking just "does any wall poke above
- * the slope" is far too lenient — a dormer whose eave barely clears
- * the roof would pass even though the entire window (which sits inside
- * the skirt, well below the eave) is buried. Switching to the window
- * bottom collapses both the CSG window-cut decision (which calls into
- * this function in `generateDormerGeometry`) and the live render gate
- * (window-assembly.tsx) onto the right line: the window only renders
- * where it's actually visible from outside.
+ * Each face centre is lifted into segment-local X *and* Z (the yaw
+ * matters, and on hip hosts the end slopes fall along X) and compared
+ * against the host's canonical per-type surface line via
+ * `getRoofSegmentSurfaceY`, which extrapolates past the structural
+ * eave instead of plateauing at the wall top — a face hanging in free
+ * air past the eave keeps dropping. Gates both the CSG window-cut
+ * decision (`generateDormerGeometry`) and the live render
+ * (window-assembly.tsx).
  */
 export function getDormerExposedFaces(
   dormer: DormerNode,
   hostSegment: RoofSegmentNode,
 ): { front: boolean; back: boolean } {
   const halfDepth = dormer.depth / 2
-  const dormerZ = dormer.position[2] ?? 0
+  const dormerX = dormer.position[0] ?? 0
   const dormerY = dormer.position[1] ?? 0
+  const dormerZ = dormer.position[2] ?? 0
   const rot = dormer.rotation ?? 0
 
-  // Gable-face centres in segment-local Z (accounts for dormer yaw).
-  const frontZ = dormerZ + halfDepth * Math.cos(rot)
-  const backZ = dormerZ - halfDepth * Math.cos(rot)
+  // Gable-face centres in segment-local X/Z (accounts for dormer yaw).
+  const faceDX = halfDepth * Math.sin(rot)
+  const faceDZ = halfDepth * Math.cos(rot)
 
-  // Window bottom in dormer-local Y. Mirrors `getDormerSkirtWindowDims`
-  // so both functions read the same window position. The window sits
-  // in the skirt below the eave (dormer-local Y=0), so `centerY` is
-  // typically negative; subtracting half the window height lands us at
-  // the bottom edge.
+  // Window centre in segment-local Y. Mirrors `getDormerSkirtWindowDims`
+  // so both functions read the same window position: dormer-local Y=0
+  // sits at `dormer.position[1]` and the window centre sits in the
+  // skirt at -(skirtH / 2) + windowOffsetY.
   const skirtH = dormerSkirtHeight(dormer)
-  const winH = Math.max(0, dormer.windowHeight ?? 0)
-  const winOffsetY = dormer.windowOffsetY ?? 0
-  const windowCenterDormerY = -(skirtH / 2) + winOffsetY
-  const windowBottomDormerY = windowCenterDormerY - winH / 2
-  // Lift into segment-local Y: dormer-local Y=0 sits at `dormer.position[1]`.
-  const windowBottomSegY = dormerY + windowBottomDormerY
+  const windowCenterSegY = dormerY - skirtH / 2 + (dormer.windowOffsetY ?? 0)
 
-  const hostWh = hostSegment.wallHeight ?? 0.5
-  const hostRh = getActiveRoofHeight(hostSegment)
-  const hostDepth = hostSegment.depth ?? 4
+  const clears = (faceX: number, faceZ: number): boolean =>
+    windowCenterSegY - getRoofSegmentSurfaceY(hostSegment, faceX, faceZ) >
+    WINDOW_CENTER_MIN_CLEARANCE
 
-  const roofHeightAtZ = (segZ: number): number => {
-    const hostType = hostSegment.roofType ?? 'gable'
-    if (hostType === 'flat') return hostWh
-    if (hostType === 'shed') {
-      const t = Math.max(0, Math.min(1, (segZ + hostDepth / 2) / Math.max(hostDepth, 0.01)))
-      return hostWh + hostRh * (1 - t)
-    }
-    const halfD = Math.max(hostDepth / 2, 0.01)
-    const t = Math.max(0, Math.min(1, Math.abs(segZ) / halfD))
-    return hostWh + hostRh * (1 - t)
-  }
-
-  // A face is "exposed" only if the *window bottom* clears the host
-  // slope at that face's Z by a meaningful amount — borderline cases
-  // (slope grazing the window bottom) suppress the window so we don't
-  // render a partially-clipped frame poking out of the roof. 5cm
-  // matches the threshold the prior wall-top check used.
-  const minPokeOut = 0.05
   return {
-    front: windowBottomSegY - roofHeightAtZ(frontZ) > minPokeOut,
-    back: windowBottomSegY - roofHeightAtZ(backZ) > minPokeOut,
+    front: clears(dormerX + faceDX, dormerZ + faceDZ),
+    back: clears(dormerX - faceDX, dormerZ - faceDZ),
   }
 }
 
@@ -557,7 +545,7 @@ export function buildDormerCutShape(
     // ends up along mesh-(-Z) and the extrusion ends up along mesh-X.
     //
     // `getRoofSegmentBrushes`'s shed slope puts the peak at z=-d/2
-    // and the eave at z=+d/2 (matching the `roofHeightAtZ` helper).
+    // and the eave at z=+d/2 (matching `getRoofSegmentSurfaceY`).
     // After the +π/2 rotation, shape-X=+hd → mesh-Z=-hd, so place the
     // PEAK at shape-X=+hd and the EAVE at shape-X=-hd to keep the cut
     // aligned with the dormer body's actual slope direction.

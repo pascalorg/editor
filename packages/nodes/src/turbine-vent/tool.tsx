@@ -14,7 +14,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import { getAnalyticalNormal, getDownSlopeYaw, surfaceQuatFromNormal } from '../shared/roof-surface'
 import { turbineVentDefinition } from './definition'
 import TurbineVentPreview from './preview'
 
@@ -33,6 +33,7 @@ const TurbineVentTool = () => {
   const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
   const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
   const [previewYaw, setPreviewYaw] = useState(0)
+  const [previewRotation, setPreviewRotation] = useState(0)
   const lastSnapRef = useRef<[number, number] | null>(null)
 
   const previewNode = useMemo(
@@ -41,9 +42,9 @@ const TurbineVentTool = () => {
         ...turbineVentDefinition.defaults(),
         name: 'Turbine Vent',
         position: [0, 0, 0],
-        rotation: 0,
+        rotation: previewRotation,
       }),
-    [],
+    [previewRotation],
   )
 
   useEffect(() => {
@@ -76,6 +77,7 @@ const TurbineVentTool = () => {
       const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
       setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
+      setPreviewRotation(getDownSlopeYaw(hit.localX, hit.localZ, hit.segment))
       setPreviewPos(worldToBuildingLocal(wx, wy, wz))
       event.stopPropagation()
     }
@@ -95,7 +97,7 @@ const TurbineVentTool = () => {
         name: 'Turbine Vent',
         roofSegmentId: hit.segment.id,
         position: [hit.localX, hit.localY, hit.localZ],
-        rotation: 0,
+        rotation: getDownSlopeYaw(hit.localX, hit.localZ, hit.segment),
       })
       state.createNode(vent, hit.segment.id as AnyNodeId)
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)

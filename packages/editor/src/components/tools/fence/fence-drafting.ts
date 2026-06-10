@@ -1,8 +1,10 @@
 import {
+  DEFAULT_ANGLE_STEP,
   FenceNode,
   getWallCurveFrameAt,
   getWallCurveLength,
   isCurvedWall,
+  snapPointAlongAngleRay,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -12,9 +14,7 @@ import useEditor from '../../../store/use-editor'
 import {
   findWallSnapTarget,
   getSegmentGridStep,
-  getWallAngleSnapStep,
   isSegmentLongEnough,
-  snapPointTo45Degrees,
   snapPointToGrid,
   type WallPlanPoint,
 } from '../wall/wall-drafting'
@@ -144,10 +144,23 @@ export function snapFenceDraftPoint(args: {
 }): FencePlanPoint {
   const { point, walls, fences, start, angleSnap = false, ignoreFenceIds, step, gridSnap } = args
   const gridStep = step ?? getSegmentGridStep()
-  const angleStep = getWallAngleSnapStep(gridStep)
-  const basePoint =
+
+  // Magnetic endpoint snap must beat the angle lock, and the lock can pull
+  // the cursor far enough off an endpoint that probing the locked point
+  // would never engage — so under the lock, probe from the RAW cursor
+  // first (mirrors `snapWallDraftPointDetailed`'s special-point pre-pass).
+  if (start && angleSnap) {
+    const rawTarget =
+      findFenceSnapTarget(point, fences, ignoreFenceIds) ?? findWallSnapTarget(point, walls)
+    if (rawTarget) return rawTarget
+  }
+
+  // The angle path snaps the distance ALONG the 15° ray — a scalar, the
+  // same in world and local frames — so the `gridSnap` world-grid override
+  // only applies when the angle lock is off.
+  const basePoint: FencePlanPoint =
     start && angleSnap
-      ? snapPointTo45Degrees(start, point, gridStep, angleStep, gridSnap)
+      ? [...snapPointAlongAngleRay(start, point, DEFAULT_ANGLE_STEP, gridStep)]
       : gridSnap
         ? gridSnap(point)
         : snapPointToGrid(point, gridStep)

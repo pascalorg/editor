@@ -202,12 +202,14 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           restoreLevels = snapLevelsToTruePositions()
         }
 
-        // Hide scan and guide nodes directly so they are excluded from the
-        // thumbnail regardless of whether ScanSystem/GuideSystem listeners are
-        // registered. Returns a function that restores the original visibility.
+        // Hide scan, guide, and spawn nodes directly so they are excluded from
+        // the thumbnail regardless of whether ScanSystem/GuideSystem listeners
+        // are registered. Spawn renders on SCENE_LAYER for occlusion, so the
+        // thumbnail camera's layer mask can't filter it either. Returns a
+        // function that restores the original visibility.
         const restoreNodeVisibility = (() => {
           const saved = new Map<THREE.Object3D, boolean>()
-          for (const type of ['scan', 'guide'] as const) {
+          for (const type of ['scan', 'guide', 'spawn'] as const) {
             const ids = sceneRegistry.byType[type]!
             ids.forEach((id) => {
               const node = sceneRegistry.nodes.get(id)
@@ -238,18 +240,21 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
 
           // Notify other systems (wall cutouts, selection manager) to restore
           // their overrides before capture and re-apply them after.
-          emitter.emit('thumbnail:before-capture', undefined)
-          ;(renderer as any).setClearAlpha(0)
-          renderer.setRenderTarget(rt)
-          pipelineRef.current.render()
-          renderer.setRenderTarget(null)
-          emitter.emit('thumbnail:after-capture', undefined)
-
-          // Restore level positions, levelMode, and node visibility immediately after the
-          // render — before the async GPU readback.
-          restoreLevels()
-          restoreLevelMode?.()
-          restoreNodeVisibility()
+          try {
+            emitter.emit('thumbnail:before-capture', undefined)
+            ;(renderer as any).setClearAlpha(0)
+            renderer.setRenderTarget(rt)
+            pipelineRef.current.render()
+          } finally {
+            // Restore level positions, levelMode, and node visibility immediately
+            // after the render — before the async GPU readback. Runs in `finally`
+            // so a render failure can't leave helpers permanently hidden.
+            renderer.setRenderTarget(null)
+            emitter.emit('thumbnail:after-capture', undefined)
+            restoreLevels()
+            restoreLevelMode?.()
+            restoreNodeVisibility()
+          }
 
           // Read pixels from the RT asynchronously.
           // WebGPU copyTextureToBuffer aligns each row to 256 bytes, so we must
@@ -364,12 +369,15 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           cameraData.resolution = { w: outW, h: outH }
         } else {
           // Fallback: plain render directly to the canvas
-          emitter.emit('thumbnail:before-capture', undefined)
-          gl.render(scene, thumbnailCamera)
-          emitter.emit('thumbnail:after-capture', undefined)
-          restoreLevels()
-          restoreLevelMode?.()
-          restoreNodeVisibility()
+          try {
+            emitter.emit('thumbnail:before-capture', undefined)
+            gl.render(scene, thumbnailCamera)
+          } finally {
+            emitter.emit('thumbnail:after-capture', undefined)
+            restoreLevels()
+            restoreLevelMode?.()
+            restoreNodeVisibility()
+          }
 
           let outW: number
           let outH: number

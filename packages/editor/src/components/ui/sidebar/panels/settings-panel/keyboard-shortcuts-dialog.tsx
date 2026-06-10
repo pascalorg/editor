@@ -80,8 +80,13 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     shortcuts: [
       {
         keys: ['Shift'],
-        action: 'Temporarily disable angle snapping while drawing walls, slabs, and ceilings',
-        note: 'Hold while drawing.',
+        action: 'Draw at any angle, bypassing the default 15° angle snap',
+        note: 'Hold while drawing walls, fences, slabs, ceilings, and zones.',
+      },
+      {
+        keys: ['Shift'],
+        action: 'Rotate freely, bypassing the default 15° rotation snap',
+        note: 'Hold while dragging a rotate handle.',
       },
     ],
   },

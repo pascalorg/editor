@@ -6,6 +6,7 @@ import {
   type ArcResizeHandle,
   type Cursor,
   createSceneApi,
+  DEFAULT_ANGLE_STEP,
   type HandleDescriptor,
   type HandlePortal,
   type LinearResizeHandle,
@@ -1096,9 +1097,8 @@ function ArcArrow({
           while (delta > Math.PI) delta -= 2 * Math.PI
           while (delta < -Math.PI) delta += 2 * Math.PI
 
-          if (moveEvent.shiftKey && descriptor.shape === 'rotate') {
-            const step = Math.PI / 12
-            delta = Math.round(delta / step) * step
+          if (!moveEvent.shiftKey && descriptor.shape === 'rotate') {
+            delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
           }
 
           if (isRotateShape && !isNodeNormalRot) {

@@ -26,6 +26,7 @@ import {
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  useSegmentDraftChain,
   useWallSnapIndicator,
   WALL_FINE_GRID_STEP,
   type WallPlanPoint,
@@ -532,6 +533,7 @@ export const WallTool: React.FC = () => {
       setAxisGuide(null)
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
+      useSegmentDraftChain.getState().clear('wall')
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -540,19 +542,23 @@ export const WallTool: React.FC = () => {
       const walls = getCurrentLevelWalls()
       const localPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
       // Default to the active grid step; Shift switches to the fine
-      // step (0.05m) for precision. No 45° angle snap — we want the
-      // cursor to track grid lines in every direction. Orthogonal
-      // walls fall out of grid snap naturally when the start sits on
-      // a grid intersection.
+      // step (0.05m) for precision. While drafting, the segment locks
+      // to 15° rays from its start (Shift = free angle); magnetic
+      // corner/midpoint snap still beats the angle lock, and Figma
+      // alignment is skipped while the lock owns the point so it
+      // can't pull the cursor off the ray.
       const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
+      const angleLocked = buildingState.current === 1 && !shiftPressed.current
       const bypassAlign = event.nativeEvent?.altKey === true
       const snapResult = snapWallDraftPointDetailed({
         point: localPoint,
         walls,
+        start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+        angleSnap: angleLocked,
         step,
         magnetic: useEditor.getState().magneticSnap,
       })
-      gridPosition = alignPoint(snapResult.point, bypassAlign)
+      gridPosition = alignPoint(snapResult.point, bypassAlign || angleLocked)
       // Stand the magnetic beacon at the endpoint when it locked onto an
       // existing wall corner / wall point; clear it for plain grid/angle moves.
       useWallSnapIndicator
@@ -651,14 +657,17 @@ export const WallTool: React.FC = () => {
         // `onGridMove` writes a real BoxGeometry skips that frame.
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
+        const angleLocked = !shiftPressed.current
         const snappedEnd = alignPoint(
           snapWallDraftPointDetailed({
             point: localClick,
             walls,
+            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+            angleSnap: angleLocked,
             step: clickStep,
             magnetic: useEditor.getState().magneticSnap,
           }).point,
-          bypassAlign,
+          bypassAlign || angleLocked,
         )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
@@ -684,6 +693,10 @@ export const WallTool: React.FC = () => {
         }
 
         const nextStart = createdWall.end
+        // Publish the resolved chain start so the 2D floor-plan draft
+        // chains its next segment from the same point (its own snap
+        // pipeline can resolve a slightly different endpoint).
+        useSegmentDraftChain.getState().setChainStart('wall', [nextStart[0], nextStart[1]])
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
         endingPoint.current.copy(startingPoint.current)
         cursorRef.current?.position.copy(startingPoint.current)
@@ -711,6 +724,12 @@ export const WallTool: React.FC = () => {
       if (e.key === 'Shift') shiftPressed.current = false
     }
 
+    // Cmd-tabbing away mid-draft never delivers the keyup — reset so the
+    // angle lock isn't stuck off when focus returns.
+    const onBlur = () => {
+      shiftPressed.current = false
+    }
+
     const onCancel = () => {
       if (buildingState.current === 1) {
         markToolCancelConsumed()
@@ -723,6 +742,7 @@ export const WallTool: React.FC = () => {
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
 
     return () => {
       emitter.off('grid:move', onGridMove)
@@ -730,8 +750,10 @@ export const WallTool: React.FC = () => {
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
+      useSegmentDraftChain.getState().clear('wall')
     }
   }, [unit])
 

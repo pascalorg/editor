@@ -1,9 +1,11 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  DEFAULT_ANGLE_STEP,
   type DoorNode,
   getScaledDimensions,
   type ItemNode,
+  snapPointAlongAngleRay,
   useScene,
   type WallNode,
   WallNode as WallSchema,
@@ -39,17 +41,15 @@ export const WALL_GRID_STEP = 0.5
 // drag) so a drag can land on values the regular grid skips.
 export const WALL_FINE_GRID_STEP = 0.05
 export const WALL_MIN_LENGTH = 0.01
-const DEFAULT_WALL_ANGLE_SNAP_STEP = Math.PI / 4
-
-const WALL_ANGLE_SNAP_BY_GRID_STEP: Record<number, number> = {
-  0.5: Math.PI / 4,
-  0.25: Math.PI / 8,
-  0.1: Math.PI / 12,
-  0.05: Math.PI / 36,
-}
+// An endpoint projecting within this distance of an existing wall's corner
+// resolves to the corner without splitting — splitting there would mint a
+// sliver segment a hair longer than `WALL_MIN_LENGTH` that no snap radius
+// can ever target again.
+const WALL_SPLIT_ENDPOINT_EPSILON = 0.02
 
 type WallSplitIntersection = {
-  wallId: WallNode['id']
+  /** `null` = snap-only outcome: resolve to `point` but split no wall. */
+  wallId: WallNode['id'] | null
   point: WallPlanPoint
 }
 
@@ -63,35 +63,6 @@ export function snapScalarToGrid(value: number, step = WALL_GRID_STEP): number {
 
 export function snapPointToGrid(point: WallPlanPoint, step = WALL_GRID_STEP): WallPlanPoint {
   return [snapScalarToGrid(point[0], step), snapScalarToGrid(point[1], step)]
-}
-
-export function snapPointTo45Degrees(
-  start: WallPlanPoint,
-  cursor: WallPlanPoint,
-  step = WALL_GRID_STEP,
-  angleStep = DEFAULT_WALL_ANGLE_SNAP_STEP,
-  /**
-   * Optional grid-snap callback. Lets the caller route the final
-   * snap through a world-XZ grid (or any other axis system) instead
-   * of the local-axis grid `snapPointToGrid` uses. When omitted,
-   * falls back to the local-axis snap at `step`.
-   */
-  gridSnap?: (point: WallPlanPoint) => WallPlanPoint,
-): WallPlanPoint {
-  const dx = cursor[0] - start[0]
-  const dz = cursor[1] - start[1]
-  const angle = Math.atan2(dz, dx)
-  const snappedAngle = Math.round(angle / angleStep) * angleStep
-  const distance = Math.sqrt(dx * dx + dz * dz)
-  const point: WallPlanPoint = [
-    start[0] + Math.cos(snappedAngle) * distance,
-    start[1] + Math.sin(snappedAngle) * distance,
-  ]
-  return gridSnap ? gridSnap(point) : snapPointToGrid(point, step)
-}
-
-export function getWallAngleSnapStep(step = getSegmentGridStep()): number {
-  return WALL_ANGLE_SNAP_BY_GRID_STEP[step] ?? DEFAULT_WALL_ANGLE_SNAP_STEP
 }
 
 function splitWallAtPoint(wall: WallNode, splitPoint: WallPlanPoint): [WallNode, WallNode] {
@@ -140,7 +111,14 @@ function findWallIntersection(
       continue
     }
 
-    best = { wallId: wall.id, point: projected }
+    const nearCorner = ([wall.start, wall.end] as WallPlanPoint[]).find(
+      (corner) =>
+        distanceSquared(projected, corner) <=
+        WALL_SPLIT_ENDPOINT_EPSILON * WALL_SPLIT_ENDPOINT_EPSILON,
+    )
+    best = nearCorner
+      ? { wallId: null, point: [nearCorner[0], nearCorner[1]] }
+      : { wallId: wall.id, point: projected }
     bestDistanceSquared = candidateDistanceSquared
   }
 
@@ -292,6 +270,10 @@ function splitWallIfNeeded(
 ): { walls: WallNode[]; point: WallPlanPoint } | null {
   if (!intersection) return null
 
+  if (!intersection.wallId) {
+    return { walls, point: intersection.point }
+  }
+
   const wallToSplit = walls.find((wall) => wall.id === intersection.wallId)
   if (!wallToSplit) {
     return { walls, point: intersection.point }
@@ -373,10 +355,12 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
   }
 
   const step = overrideStep ?? getSegmentGridStep()
-  const angleStep = getWallAngleSnapStep(step)
-  const basePoint =
+  // The angle path snaps the distance ALONG the 15° ray — a scalar, the
+  // same in world and local frames — so the `gridSnap` world-grid override
+  // only applies when the angle lock is off.
+  const basePoint: WallPlanPoint =
     start && angleSnap
-      ? snapPointTo45Degrees(start, point, step, angleStep, gridSnap)
+      ? [...snapPointAlongAngleRay(start, point, DEFAULT_ANGLE_STEP, step)]
       : gridSnap
         ? gridSnap(point)
         : snapPointToGrid(point, step)

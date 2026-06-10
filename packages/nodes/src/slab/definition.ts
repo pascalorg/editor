@@ -166,7 +166,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   handles: slabHandles,
 
   // Stage D: kind-owned placement tool. Multi-click polygon drawing
-  // with axis/45° snap (Shift to defeat).
+  // with 15° angle snap (Shift to defeat).
   tool: () => import('./tool'),
 
   // Stage D — all four slab drag-affordances live in this folder.

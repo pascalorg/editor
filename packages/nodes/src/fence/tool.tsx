@@ -30,6 +30,7 @@ import {
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  useSegmentDraftChain,
   WALL_FINE_GRID_STEP,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -485,6 +486,7 @@ export const FenceTool: React.FC = () => {
       buildingState.current = 0
       previewRef.current.visible = false
       setDraftMeasurement(null)
+      useSegmentDraftChain.getState().clear('fence')
       useAlignmentGuides.getState().clear()
     }
 
@@ -493,14 +495,24 @@ export const FenceTool: React.FC = () => {
       const { walls, fences } = getCurrentLevelElements()
       const localPoint: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
       // Default = active grid step; Shift switches to the fine step
-      // (0.05m). No 45° angle snap — see `wall/tool.tsx` for rationale.
+      // (0.05m). While drafting, the segment locks to 15° rays from
+      // its start (Shift = free angle); endpoint snap still beats the
+      // lock, and alignment is skipped while the lock owns the point.
       const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
       const bypassAlign = event.nativeEvent?.altKey === true
 
       if (buildingState.current === 1) {
+        const angleLocked = !shiftPressed.current
         const snappedLocal = alignPoint(
-          snapFenceDraftPoint({ point: localPoint, walls, fences, step }),
-          bypassAlign,
+          snapFenceDraftPoint({
+            point: localPoint,
+            walls,
+            fences,
+            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+            angleSnap: angleLocked,
+            step,
+          }),
+          bypassAlign || angleLocked,
         )
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
         cursorRef.current.position.copy(endingPoint.current)
@@ -563,9 +575,17 @@ export const FenceTool: React.FC = () => {
         previewRef.current.visible = true
         setDraftMeasurement(null)
       } else {
+        const angleLocked = !shiftPressed.current
         const snappedEnd = alignPoint(
-          snapFenceDraftPoint({ point: localClick, walls, fences, step: clickStep }),
-          bypassAlign,
+          snapFenceDraftPoint({
+            point: localClick,
+            walls,
+            fences,
+            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+            angleSnap: angleLocked,
+            step: clickStep,
+          }),
+          bypassAlign || angleLocked,
         )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
@@ -582,6 +602,10 @@ export const FenceTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
 
         const nextStart = createdFence.end
+        // Publish the resolved chain start so the 2D floor-plan draft
+        // chains its next segment from the same point (its own snap
+        // pipeline can resolve a slightly different endpoint).
+        useSegmentDraftChain.getState().setChainStart('fence', [nextStart[0], nextStart[1]])
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
         endingPoint.current.copy(startingPoint.current)
         cursorRef.current?.position.copy(startingPoint.current)
@@ -599,6 +623,12 @@ export const FenceTool: React.FC = () => {
       if (e.key === 'Shift') shiftPressed.current = false
     }
 
+    // Cmd-tabbing away mid-draft never delivers the keyup — reset so the
+    // angle lock isn't stuck off when focus returns.
+    const onBlur = () => {
+      shiftPressed.current = false
+    }
+
     const onCancel = () => {
       if (buildingState.current === 1) {
         markToolCancelConsumed()
@@ -611,6 +641,7 @@ export const FenceTool: React.FC = () => {
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
 
     return () => {
       emitter.off('grid:move', onGridMove)
@@ -618,6 +649,8 @@ export const FenceTool: React.FC = () => {
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+      useSegmentDraftChain.getState().clear('fence')
       useAlignmentGuides.getState().clear()
     }
   }, [unit])
