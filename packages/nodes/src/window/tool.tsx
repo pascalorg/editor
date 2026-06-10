@@ -27,8 +27,8 @@ import { BoxGeometry, EdgesGeometry, type Group, type LineSegments } from 'three
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
   getRoofWallOpeningCursorPose,
-  resolveRoofWallOpeningTarget,
   type RoofWallOpeningTarget,
+  resolveRoofWallOpeningTarget,
 } from '../shared/roof-wall-opening-placement'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
@@ -40,7 +40,6 @@ const edgeMaterial = new LineBasicNodeMaterial({
   depthTest: false,
   depthWrite: false,
 })
-
 
 /**
  * Window tool — places WindowNodes on walls and on roof-segment wall

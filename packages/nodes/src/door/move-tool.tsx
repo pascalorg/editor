@@ -29,8 +29,8 @@ import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
   getRoofWallOpeningCursorPose,
-  resolveRoofWallOpeningTarget,
   type RoofWallOpeningTarget,
+  resolveRoofWallOpeningTarget,
 } from '../shared/roof-wall-opening-placement'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
@@ -41,7 +41,6 @@ const edgeMaterial = new LineBasicNodeMaterial({
   depthTest: false,
   depthWrite: false,
 })
-
 
 const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) => {
   const cursorGroupRef = useRef<Group>(null!)
