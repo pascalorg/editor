@@ -10,6 +10,8 @@ import {
   ElevatorNode,
   FenceNode,
   generateId,
+  getActiveRoofHeight,
+  getEffectiveNode,
   getWallCurveLength,
   getWallThickness,
   ItemNode,
@@ -111,6 +113,49 @@ function getMenuYOffset(node: AnyNode | null): number {
   return (MENU_Y_OFFSETS[node.type] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
 }
 
+function getAttributeVersion(
+  attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | null | undefined,
+): number {
+  return attribute && 'version' in attribute && typeof attribute.version === 'number'
+    ? attribute.version
+    : 0
+}
+
+function getObjectGeometryKey(object: THREE.Object3D): string {
+  const parts: string[] = []
+  object.traverse((child) => {
+    const geometry = (child as Partial<THREE.Mesh>).geometry
+    if (!geometry) return
+
+    parts.push(
+      [
+        geometry.id,
+        getAttributeVersion(geometry.getAttribute('position')),
+        getAttributeVersion(geometry.getIndex()),
+      ].join(':'),
+    )
+  })
+  return parts.join('|')
+}
+
+function setNodeDerivedMenuAnchor(
+  node: AnyNode,
+  object: THREE.Object3D,
+  target: THREE.Vector3,
+): boolean {
+  if (node.type !== 'roof-segment') return false
+
+  const visualTop =
+    node.wallHeight +
+    getActiveRoofHeight(node) +
+    Math.max(0, node.deckThickness ?? 0) +
+    Math.max(0, node.shingleThickness ?? 0)
+
+  target.set(0, visualTop, 0).applyMatrix4(object.matrixWorld)
+  target.y += getMenuYOffset(node)
+  return true
+}
+
 // Fence schema defaults — mirror packages/nodes/src/fence/definition.ts so the
 // pill reads sensibly before an explicit height / thickness is set.
 const FENCE_DEFAULT_HEIGHT = 1.8
@@ -171,9 +216,14 @@ export function FloatingActionMenu() {
   const anchorRef = useRef(new THREE.Vector3())
   const hasAnchorRef = useRef(false)
   const lastMatrixRef = useRef(new THREE.Matrix4())
-  const lastAnchorKeyRef = useRef<{ id: string | null; node: AnyNode | null }>({
+  const lastAnchorKeyRef = useRef<{
+    id: string | null
+    node: AnyNode | null
+    geometryKey: string | null
+  }>({
     id: null,
     node: null,
+    geometryKey: null,
   })
 
   // Only show for single selection of specific types
@@ -218,7 +268,7 @@ export function FloatingActionMenu() {
   })
 
   useFrame((state) => {
-    if (!(selectedId && isValidType && groupRef.current)) return
+    if (!(selectedId && node && isValidType && groupRef.current)) return
 
     // Scale the HTML menu with camera zoom (ortho) or inverse distance
     // (perspective) so it feels anchored to the world, clamped on both ends
@@ -253,6 +303,8 @@ export function FloatingActionMenu() {
 
     const obj = sceneRegistry.nodes.get(selectedId)
     if (obj) {
+      obj.updateWorldMatrix(true, false)
+
       // Recompute the anchor only when the object genuinely changes —
       // reselected, moved (its own world matrix changed), or resized
       // (a fresh store node on commit, or a live override / handle drag
@@ -261,21 +313,28 @@ export function FloatingActionMenu() {
       // holds still.
       const overrideActive = useLiveNodeOverrides.getState().overrides.get(selectedId) != null
       const dragActive = activeHandleDrag?.nodeId === selectedId
+      const effectiveNode = getEffectiveNode(node)
+      const geometryKey = getObjectGeometryKey(obj)
       const selectionChanged =
         lastAnchorKeyRef.current.id !== selectedId || lastAnchorKeyRef.current.node !== node
       const matrixChanged = !lastMatrixRef.current.equals(obj.matrixWorld)
+      const geometryChanged = lastAnchorKeyRef.current.geometryKey !== geometryKey
 
-      if (selectionChanged || matrixChanged || overrideActive || dragActive) {
-        const box = new THREE.Box3().setFromObject(obj)
-        if (!box.isEmpty()) {
-          const center = box.getCenter(new THREE.Vector3())
-          // Position above the object. Per-type offsets clear each kind's
-          // in-world chrome (height-resize arrows, measurement labels).
-          anchorRef.current.set(center.x, box.max.y + getMenuYOffset(node), center.z)
+      if (selectionChanged || matrixChanged || geometryChanged || overrideActive || dragActive) {
+        if (!setNodeDerivedMenuAnchor(effectiveNode, obj, anchorRef.current)) {
+          const box = new THREE.Box3().setFromObject(obj)
+          if (!box.isEmpty()) {
+            const center = box.getCenter(new THREE.Vector3())
+            // Position above the object. Per-type offsets clear each kind's
+            // in-world chrome (height-resize arrows, measurement labels).
+            anchorRef.current.set(center.x, box.max.y + getMenuYOffset(effectiveNode), center.z)
+            hasAnchorRef.current = true
+          }
+        } else {
           hasAnchorRef.current = true
         }
         lastMatrixRef.current.copy(obj.matrixWorld)
-        lastAnchorKeyRef.current = { id: selectedId, node }
+        lastAnchorKeyRef.current = { id: selectedId, node, geometryKey }
       }
 
       if (hasAnchorRef.current) {
