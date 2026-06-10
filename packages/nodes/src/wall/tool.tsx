@@ -621,6 +621,11 @@ export const WallTool: React.FC = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      // A mitt-emitted `grid:click` can arrive after the preview
+      // `<mesh>` unmounts (e.g. the user switches tool mid-draft),
+      // leaving the ref null — same guard as `onGridMove`.
+      if (!wallPreviewRef.current) return
+
       if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
         stopDrafting()
         return
