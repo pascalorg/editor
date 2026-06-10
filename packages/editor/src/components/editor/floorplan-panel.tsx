@@ -74,6 +74,7 @@ import {
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
 } from '../../lib/floorplan'
 import { guideEmitter } from '../../lib/guide-events'
+import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
 import { cn } from '../../lib/utils'
@@ -2614,14 +2615,7 @@ function formatMeasurement(
   metersPerUnit: number | null = null,
 ) {
   const measuredValue = metersPerUnit && metersPerUnit > 0 ? value * metersPerUnit : value
-  if (unit === 'imperial') {
-    const feet = measuredValue * 3.280_84
-    const wholeFeet = Math.floor(feet)
-    const inches = Math.round((feet - wholeFeet) * 12)
-    if (inches === 12) return `${wholeFeet + 1}'0"`
-    return `${wholeFeet}'${inches}"`
-  }
-  return `${Number.parseFloat(measuredValue.toFixed(2))}m`
+  return formatLinearMeasurement(measuredValue, unit)
 }
 
 function formatNumber(value: number, fractionDigits = 2) {
@@ -2633,7 +2627,7 @@ function convertReferenceLengthToMeters(value: number, unit: ReferenceScaleUnit)
     case 'centimeters':
       return value / 100
     case 'feet':
-      return value * 0.3048
+      return linearUnitToMeters(value, 'imperial')
     case 'inches':
       return value * 0.0254
     default:

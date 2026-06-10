@@ -23,6 +23,7 @@ import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useMemo, useState } from 'react'
 import * as THREE from 'three'
+import { formatLinearMeasurement } from '../../lib/measurements'
 
 const GUIDE_Y_OFFSET = 0.08
 const LABEL_LIFT = 0.08
@@ -60,17 +61,6 @@ type MeasurementGuide = {
 type WallFaceLine = {
   start: Point2D
   end: Point2D
-}
-
-function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
-  if (unit === 'imperial') {
-    const feet = value * 3.280_84
-    const wholeFeet = Math.floor(feet)
-    const inches = Math.round((feet - wholeFeet) * 12)
-    if (inches === 12) return `${wholeFeet + 1}'0"`
-    return `${wholeFeet}'${inches}"`
-  }
-  return `${Number.parseFloat(value.toFixed(2))}m`
 }
 
 export function WallMeasurementLabel() {
@@ -547,8 +537,8 @@ function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
     }
     return total
   }, [guide, wall])
-  const label = formatMeasurement(length, unit)
-  const heightLabel = `H ${formatMeasurement(wall.height ?? DEFAULT_WALL_HEIGHT, unit)}`
+  const label = formatLinearMeasurement(length, unit)
+  const heightLabel = `H ${formatLinearMeasurement(wall.height ?? DEFAULT_WALL_HEIGHT, unit)}`
 
   if (!(guide && Number.isFinite(length) && length >= 0.01)) return null
 
