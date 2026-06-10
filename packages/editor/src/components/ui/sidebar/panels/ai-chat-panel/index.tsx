@@ -15,7 +15,10 @@ import {
   type GeometryToolExecutionResult,
 } from '../../../../../lib/ai-geometry-tool-executor'
 import {
+  buildGeometryAnalysisContext,
   buildGeometryHarnessContext,
+  buildPrimitiveRepairStopMessage,
+  isLikelyGeometryRevisionRequest,
   latestGeneratedGeometryArtifact,
 } from '../../../../../lib/ai-chat-harness'
 import {
@@ -33,6 +36,7 @@ import { Icon } from '@iconify/react'
 import { OrbitControls, useGLTF } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import * as THREE from 'three'
 import { t } from '../../../../../i18n'
 import {
@@ -96,7 +100,7 @@ const COMPOSE_PRIMITIVE_TOOL = {
   function: {
     name: 'compose_primitive',
     description:
-      'Create editable primitive shapes in the 3D scene. Choose the primitive that matches each surface type: boxes/panels, cylinders/tubes, cones/frustums, hemispheres, torus rings, wedges/trapezoids, capsules, half-cylinders, lathes, extrusions, or swept tubes. Use attachTo/anchor/childAnchor for connected parts instead of hand-computing offsets.',
+      'Create editable primitive shapes in the 3D scene. Choose the primitive that matches each surface type: boxes/panels, cylinders/tubes, cones/frustums, hemispheres, torus rings, wedges/trapezoids, capsules, half-cylinders, lathes, extrusions, swept tubes, repeated arrays, or beveled extrusions with holes. Use attachTo/anchor/childAnchor for connected parts instead of hand-computing offsets.',
     parameters: {
       type: 'object',
       properties: {
@@ -269,6 +273,21 @@ const COMPOSE_PRIMITIVE_TOOL = {
                 type: 'boolean',
                 description: 'Sweep only. true closes the tube path into a loop.',
               },
+              array: {
+                type: 'object',
+                description: 'Repeat this primitive before validation. Use for grilles, screw rows, louvers, fins, legs, ribs, and repeated appliance details. Linear: {count, step:[x,y,z]} or {count, axis, spacing}. Grid: {columns, rows, layers, spacing:[x,y,z]}.',
+                properties: {
+                  count: { type: 'number', description: 'Linear repeat count including the original shape.' },
+                  columns: { type: 'number', description: 'Grid columns along local/world X step.' },
+                  rows: { type: 'number', description: 'Grid rows along local/world Z step.' },
+                  layers: { type: 'number', description: 'Grid layers along local/world Y step.' },
+                  step: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3, description: 'Linear repeat offset [dx,dy,dz] in meters.' },
+                  spacing: { description: 'Grid spacing [dx,dy,dz] or scalar linear spacing.' },
+                  axis: { type: 'string', enum: ['x', 'y', 'z'], description: 'Linear repeat axis when using scalar spacing.' },
+                },
+              },
+              arrayCount: { type: 'number', description: 'Compatibility shortcut for array.count.' },
+              arrayStep: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3, description: 'Compatibility shortcut for array.step.' },
               material: {
                 type: 'object',
                 description:
@@ -327,7 +346,7 @@ const COMPOSE_RECIPE_TOOL = {
   function: {
     name: 'compose_recipe',
     description:
-      'Create an editable primitive object from a built-in deterministic recipe pack. Prefer this for supported high-friction families so the model selects a recipe and fills compact params instead of hand-authoring a large compose_parts schema. Supported recipeId values: vehicle.sedan, vehicle.suv, vehicle.sports, vehicle.van, vehicle.truck, valve.gate, valve.ball, robotArm.threeAxis.',
+      'Create an editable primitive object from a small closed-form deterministic recipe pack. Use only when the object is a professional standard part with stable geometry, such as gear.spur, sprocket.chain, pipe.flange/elbow90, fastener.hexBolt, bearing.pillowBlock, coupling.flexible, plate.perforated, valve.gate/ball, robotArm.threeAxis, motor.servo, or mixer.impeller. Do not use recipes for open-ended vehicles, outdoor AC units, machine tools, pumps, conveyors, fans, tanks, towers, reactors, compressors, grate coolers, or broad factory equipment; use compose_assembly for those so hard dimensions/colors drive the generic part layout.',
     parameters: {
       type: 'object',
       properties: {
@@ -335,17 +354,21 @@ const COMPOSE_RECIPE_TOOL = {
           type: 'string',
           enum: [
             'gear.spur',
-            'vehicle.sedan',
-            'vehicle.suv',
-            'vehicle.sports',
-            'vehicle.van',
-            'vehicle.truck',
+            'sprocket.chain',
+            'pipe.flange',
+            'pipe.elbow90',
+            'fastener.hexBolt',
+            'bearing.pillowBlock',
+            'coupling.flexible',
+            'plate.perforated',
             'valve.gate',
             'valve.ball',
             'robotArm.threeAxis',
+            'motor.servo',
+            'mixer.impeller',
           ],
           description:
-            'Built-in primitive recipe id. Use gear.spur for toothed spur gears, vehicle.sedan for normal small cars, valve.ball for ball valves, valve.gate for gate valves, and robotArm.threeAxis for 3-axis robot arms.',
+            'Built-in primitive recipe id. Use gear.spur for spur gears, sprocket.chain for roller-chain sprockets, pipe.flange for standard flanges, pipe.elbow90 for standard elbows, fastener.hexBolt for hex-head bolts, bearing.pillowBlock for mounted bearings, coupling.flexible for shaft couplings, plate.perforated for perforated/sieve plates, valve.ball/gate for standard valves, robotArm.threeAxis for 3-axis robot arms, motor.servo for servo motors, and mixer.impeller only for a simple shaft+hub+blade mixer part. Use compose_assembly for open-ended vehicles, outdoor AC units, machine tools, pumps, conveyors, fans, tanks, towers, reactors, compressors, grate coolers, and factory equipment.',
         },
         name: { type: 'string', description: 'Optional generated object name.' },
         geometryBrief: GEOMETRY_BRIEF_SCHEMA,
@@ -364,7 +387,7 @@ const COMPOSE_RECIPE_TOOL = {
             size: {
               type: 'string',
               enum: ['tiny', 'small', 'medium', 'large'],
-              description: 'Coarse size. Use small for ???/small car when exact dimensions are omitted.',
+              description: 'Recipe size preset.',
             },
             sizeScale: { type: 'number', description: 'Overall recipe scale multiplier.' },
             length: { type: 'number', description: 'Optional length/reach in meters.' },
@@ -376,11 +399,6 @@ const COMPOSE_RECIPE_TOOL = {
               description: 'When true, request smoother/stylized high-fidelity primitive details inside the recipe.',
             },
             enhanceVisualDetails: { type: 'boolean', description: 'Alias for highFidelity.' },
-            vehicleStyle: {
-              type: 'string',
-              enum: ['sedan', 'suv', 'sports', 'van', 'truck'],
-              description: 'Vehicle style hint; normally implied by recipeId.',
-            },
             valveStyle: {
               type: 'string',
               enum: ['gate', 'ball'],
@@ -391,7 +409,7 @@ const COMPOSE_RECIPE_TOOL = {
             baseShape: {
               type: 'string',
               enum: ['round', 'square', 'pedestal'],
-              description: 'Robot arm base shape. Use round for ????.',
+              description: 'Robot arm base shape. Use round for circular base.',
             },
             endEffector: {
               type: 'string',
@@ -406,13 +424,43 @@ const COMPOSE_RECIPE_TOOL = {
             reach: { type: 'number', description: 'Robot arm reach in meters.' },
             teeth: { type: 'number', description: 'gear.spur tooth count.' },
             module: { type: 'number', description: 'gear.spur module in millimeters, e.g. 4.5.' },
-            outerDiameter: { type: 'number', description: 'gear.spur outside/tip diameter in meters.' },
+            outerDiameter: {
+              type: 'number',
+              description:
+                'gear.spur/sprocket.chain outside/tip diameter, pipe.flange outside diameter, or coupling.flexible outside diameter in meters.',
+            },
+            nominalDiameter: {
+              type: 'number',
+              description:
+                'pipe flange/elbow nominal diameter, fastener.hexBolt nominal shank diameter, bearing/coupling shaft diameter, or plate hole nominal diameter in meters.',
+            },
+            boltCircleDiameter: { type: 'number', description: 'pipe.flange bolt circle diameter in meters.' },
+            boltCount: { type: 'number', description: 'pipe.flange bolt hole count.' },
+            bendRadius: { type: 'number', description: 'pipe.elbow90 bend centerline radius in meters.' },
+            angle: { type: 'number', description: 'pipe.elbow90 bend angle in degrees; default 90.' },
+            jawCount: { type: 'number', description: 'coupling.flexible elastomer jaw/spider count.' },
+            rows: { type: 'number', description: 'plate.perforated hole grid row count.' },
+            columns: { type: 'number', description: 'plate.perforated hole grid column count.' },
+            holeCount: { type: 'number', description: 'plate.perforated column/count hint when rows are omitted.' },
+            holeDiameter: { type: 'number', description: 'plate.perforated circular hole diameter in meters.' },
+            boltSpacing: { type: 'number', description: 'bearing.pillowBlock mounting hole spacing in meters.' },
+            headHeight: { type: 'number', description: 'fastener.hexBolt head height in meters.' },
+            headDiameter: { type: 'number', description: 'fastener.hexBolt across-corner head diameter in meters.' },
+            shankLength: { type: 'number', description: 'fastener.hexBolt shank length in meters.' },
+            threadLength: { type: 'number', description: 'fastener.hexBolt threaded length in meters.' },
             pitchDiameter: { type: 'number', description: 'gear.spur pitch diameter in meters.' },
             rootDiameter: { type: 'number', description: 'gear.spur root diameter in meters.' },
-            thickness: { type: 'number', description: 'gear.spur axial thickness in meters.' },
-            boreDiameter: { type: 'number', description: 'gear.spur center bore diameter in meters.' },
+            thickness: { type: 'number', description: 'gear/sprocket/plate/flange axial thickness in meters.' },
+            boreDiameter: { type: 'number', description: 'gear/sprocket/bearing/coupling bore diameter in meters.' },
             keywayWidth: { type: 'number', description: 'gear.spur keyway width in meters.' },
             keywayDepth: { type: 'number', description: 'gear.spur keyway radial depth in meters.' },
+            bladeCount: { type: 'number', description: 'mixer.impeller blade count; default 3.' },
+            bladeLength: { type: 'number', description: 'mixer.impeller blade radial length in meters.' },
+            bladeWidth: { type: 'number', description: 'mixer.impeller blade width in meters.' },
+            bladeThickness: { type: 'number', description: 'mixer.impeller blade thickness in meters.' },
+            bladeTilt: { type: 'number', description: 'mixer.impeller blade tilt in degrees; default 0. Use compose_parts + propeller_blade_set for new mixer/agitator blade requests.' },
+            shaftDiameter: { type: 'number', description: 'mixer.impeller vertical shaft diameter in meters.' },
+            shaftLength: { type: 'number', description: 'mixer.impeller vertical shaft length in meters.' },
             position: {
               type: 'array',
               items: { type: 'number' },
@@ -428,12 +476,39 @@ const COMPOSE_RECIPE_TOOL = {
   },
 }
 
+const COMPOSE_ASSEMBLY_TOOL = {
+  type: 'function' as const,
+  function: {
+    name: 'compose_assembly',
+    description:
+      'Create one editable object through the constraint-first automatic instruction-sheet generator. Prefer this only for supported open-ended families: vehicles, outdoor AC units, machine tools (lathe/milling/grinder/planer/drill/CNC), industrial robot arms, pumps, belt conveyors, fans, tanks, distillation/chemical towers or columns, reactors, compressors, grate coolers, electrical cabinets, and factory equipment. Plain chimneys/smokestacks are not assembly towers; use compose_parts with chimney_stack. If the requested family is unsupported, do not retry assembly; switch to compose_parts and build from generic reusable parts. Pass hard constraints such as length, width/diameter, height, primaryColor. Use compose_recipe only for closed-form standard instruction sheets such as gears/sprockets, flanges/elbows, fasteners, bearings, couplings, perforated plates, standard valves, robotArm.threeAxis, mixer.impeller, and servo motors.',
+    parameters: {
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        family: {
+          type: 'string',
+          enum: ['vehicle', 'fan', 'pump', 'conveyor', 'machine_tool', 'outdoor_ac', 'tank', 'distillation_tower', 'reactor', 'compressor', 'grate_cooler', 'electrical', 'robot_arm'],
+        },
+        object: { type: 'string' },
+        style: { type: 'string' },
+        length: { type: 'number' },
+        width: { type: 'number' },
+        diameter: { type: 'number', description: 'Cylindrical diameter in meters; for towers/columns this maps to width.' },
+        height: { type: 'number' },
+        primaryColor: { type: 'string' },
+        color: { type: 'string' },
+      },
+    },
+  },
+}
+
 const COMPOSE_PARTS_TOOL = {
   type: 'function' as const,
   function: {
     name: 'compose_parts',
     description:
-      'Create one editable object from reusable procedural parts. Use this when raw primitives are too low-level but a full object template is not appropriate. Good for factory/mechanical equipment, office desks, electrical cabinets, cable trays, process pipes, bicycles, cars, pumps, blowers, industrial fans, motors, conveyors, tanks, valves, pipe ports, flanges, skid bases, control boxes, vents, grilles, fan heads, poles, brackets, knobs, and slatted panels.',
+      'Create one editable object from the reusable building-block library. Parts are generic kernels; assign semanticRole to give context-specific meaning. Use this for explicit reusable part blueprints, subassemblies, and any object family not supported by compose_assembly. Recipes are instruction sheets that reference parts; assembly is the automatic instruction-sheet generator.',
     parameters: {
       type: 'object',
       properties: {
@@ -473,7 +548,7 @@ const COMPOSE_PARTS_TOOL = {
         parts: {
           type: 'array',
           description:
-            'Reusable parts to procedurally expand into primitives. For a standing fan use circular_base + vertical_pole + support_bracket + motor_housing + radial_blades + protective_grill + optional control_knob. For desks with visible drawers use desk_top + leg_set + drawer_stack. For electrical/control cabinets use electrical_cabinet + cable_tray + nameplate/warning details. For pipe systems use pipe_run + pipe_elbow + flange_ring/valve_body. For a bicycle use bicycle_wheels exactly once (it is a front+rear two-wheel wheelset) + bicycle_frame + bicycle_fork + handlebar + saddle + chain_loop. For a car use vehicle_body + vehicle_wheels + vehicle_windows + headlights + bumper. For a water pump / centrifugal blower use skid_base + ribbed_motor_body or rounded_machine_body + volute_casing + inlet_port + outlet_port + flange_ring + optional impeller_blades + control_box. For conveyors use conveyor_frame + roller_array + belt_surface. For tanks use cylindrical_tank plus pipe/flange details. For valves use valve_body plus optional handwheel; set valveStyle/handleStyle for variants such as ball valves instead of inventing internal parts. For factory scenes use gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, platform_ladder, electrical_cabinet, cable_tray, pipe_run, and pipe_elbow.',
+            'Reusable parts to procedurally expand into primitives. For a standing fan use circular_base + vertical_pole + support_bracket + motor_housing + radial_blades + protective_grill + optional control_knob. For shaft + hub + propeller/impeller/mud-mixer blades use cylinder-like support parts plus propeller_blade_set; do not create a new recipe. For chimneys/smokestacks use chimney_stack with height/radius and warningStripes:true for red-white bands. For desks with visible drawers use desk_top + leg_set + drawer_stack. For electrical/control cabinets use electrical_cabinet + cable_tray + nameplate/warning details. For pipe systems use pipe_run + pipe_elbow + flange_ring/valve_body. For a bicycle use wheel_set count:2 semanticRole:bicycle_tire + tube_frame semanticRole:bicycle_frame + fork semanticRole:bicycle_fork + handlebar + saddle + chain_loop; legacy bicycle_wheels/bicycle_frame/bicycle_fork aliases remain accepted. For a car use body_shell semanticRole:vehicle_body + wheel_set count:4 semanticRole:vehicle_tire + window_strip semanticRole:vehicle_window variant:vehicle_glasshouse + light_pair + bar_pair; legacy vehicle_* aliases remain accepted. For complete aircraft/airplanes/airliners, use one aircraft_fuselage part with top-level length/primaryColor and let defaults add wings, engines, T-tail, windows, and landing gear; do not hand-place generic airfoil_blade/streamlined_body/wheel_set parts for complete aircraft. For a water pump / centrifugal blower use skid_base + ribbed_motor_body or rounded_machine_body + volute_casing + inlet_port + outlet_port + flange_ring + optional impeller_blades + control_box. For conveyors use conveyor_frame + roller_array + belt_surface. For tanks use cylindrical_tank plus pipe/flange details. For valves use valve_body plus optional handwheel; set valveStyle/handleStyle for variants such as ball valves instead of inventing internal parts. For factory scenes use gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, platform_ladder, electrical_cabinet, cable_tray, pipe_run, and pipe_elbow.',
           items: {
             type: 'object',
             properties: {
@@ -485,13 +560,16 @@ const COMPOSE_PARTS_TOOL = {
                   'motor_housing',
                   'radial_blades',
                   'protective_grill',
+                  'pyramid',
                   'support_bracket',
                   'control_knob',
                   'vent_slats',
+                  'vent_grill',
                   'skid_base',
                   'rounded_machine_body',
                   'volute_casing',
                   'impeller_blades',
+                  'propeller_blade_set',
                   'pipe_port',
                   'inlet_port',
                   'outlet_port',
@@ -503,8 +581,18 @@ const COMPOSE_PARTS_TOOL = {
                   'roller_array',
                   'belt_surface',
                   'cylindrical_tank',
+                  'chimney_stack',
                   'valve_body',
                   'handwheel',
+                  'wheel',
+                  'wheel_set',
+                  'window_panel',
+                  'window_strip',
+                  'body_shell',
+                  'tube_frame',
+                  'fork',
+                  'light_pair',
+                  'bar_pair',
                   'bicycle_wheels',
                   'bicycle_frame',
                   'bicycle_fork',
@@ -532,9 +620,15 @@ const COMPOSE_PARTS_TOOL = {
                   'nameplate',
                   'warning_label',
                   'seam_ring',
+                  'airfoil_blade',
+                  'ellipsoid_shell',
+                  'curved_lens_panel',
+                  'ergonomic_shell',
+                  'streamlined_body',
+                  'lofted_panel',
                 ],
                 description:
-                  'Reusable procedural part. protective_grill creates a shallow domed fan cage; radial_blades creates airfoil-like fan blades; desk_top/leg_set/drawer_stack build office desks; electrical_cabinet/cable_tray build power/control cabinets and tray routes; pipe_run/pipe_elbow build process piping; bicycle_wheels is one complete front+rear wheelset and should not be duplicated for a normal bicycle; bicycle_* parts build frames/wheels/forks/chain; vehicle_* parts build car bodies/wheels/windows/lights; volute_casing creates pump/blower scroll casing; impeller_blades creates pump/turbine vanes; pipe/inlet/outlet/flange/bolt parts create industrial connection details; ribbed_motor_body, conveyor_frame, roller_array, belt_surface, cylindrical_tank, valve_body, handwheel, gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, and platform_ladder cover common factory equipment.',
+                  'Reusable procedural part. aircraft_fuselage creates a coherent complete aircraft default when used as the only aircraft part, adding wings, engines, T-tail, windows, and landing gear from top-level length/primaryColor. chimney_stack creates a tall tapered industrial chimney with base, rim, lift seams, access door, and optional red-white warning bands. pyramid creates a four-sided pyramid from length/width/height; set truncated:true or topScale/topRadius to make a flat-top truncated pyramid/frustum. vent_grill creates framed grille/louver panels; bolt_pattern creates screws/fasteners; leg_set creates support feet; nameplate creates rating plates; pipe_port/inlet_port/outlet_port create nozzles. propeller_blade_set creates count-based radial propeller/impeller/mixer paddle sets, including taiji-half circular-cropped blades with longitudinal curve; airfoil_blade creates continuous swept/tapered aircraft/turbine-like blades for local blade details, not complete aircraft layout; curved_lens_panel creates tinted non-rectangular lenses/visors; ergonomic_shell creates smooth mouse/controller/appliance shells; streamlined_body creates aerodynamic fuselage/car/train/appliance bodies; lofted_panel creates section-to-section transition fairings/panels. protective_grill creates a shallow domed fan cage; radial_blades creates airfoil-like fan blades; desk_top/leg_set/drawer_stack build office desks; electrical_cabinet/cable_tray build power/control cabinets and tray routes; pipe_run/pipe_elbow build process piping; wheel/wheel_set/window_panel/window_strip/body_shell/tube_frame/fork/light_pair/bar_pair are generic building blocks whose meaning comes from semanticRole; bicycle_* and vehicle_* aliases remain accepted but new calls should prefer generic parts; volute_casing creates pump/blower scroll casing; impeller_blades creates pump/turbine vanes; pipe/inlet/outlet/flange/bolt parts create industrial connection details; ribbed_motor_body, conveyor_frame, roller_array, belt_surface, cylindrical_tank, valve_body, handwheel, gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, and platform_ladder cover common factory equipment.',
               },
               partType: {
                 type: 'string',
@@ -566,7 +660,7 @@ const COMPOSE_PARTS_TOOL = {
               valveStyle: {
                 type: 'string',
                 description:
-                  'valve_body style hint. Use "ball" for ball valves / 球阀 / quarter-turn valves; omit for the default gate-valve-like body.',
+                  'valve_body style hint. Use "ball" for ball valves / 鐞冮榾 / quarter-turn valves; omit for the default gate-valve-like body.',
               },
               handleStyle: {
                 type: 'string',
@@ -591,6 +685,93 @@ const COMPOSE_PARTS_TOOL = {
                 type: 'string',
                 description:
                   'Semantic connection point on this child part. Examples: flange back/front, pipe base/open. Prefer connectPoint/childPoint over manual position for mechanical attachments.',
+              },
+              centeredOn: {
+                description:
+                  'Optional part id, name, kind, or prior part index. Align this part center on the referenced part in X/Z while keeping its own natural height. Use before manual position for centered modules.',
+              },
+              alignAbove: {
+                description:
+                  'Optional part id, name, kind, or prior part index. Stack this part on top of the referenced part by matching parent top to child bottom and centering X/Z.',
+              },
+              alignBeside: {
+                description:
+                  'Optional part id, name, kind, or prior part index. Place this part beside the referenced part; set side left/right/front/back to choose direction.',
+              },
+              offsetFrom: {
+                description:
+                  'Optional part id, name, kind, or prior part index. Like alignBeside, but intended for controlled offsets from a parent boundary; set offsetDirection and offsetDistance.',
+              },
+              offsetDirection: {
+                type: 'string',
+                enum: ['left', 'right', 'front', 'back', 'top', 'bottom'],
+                description:
+                  'Direction used by offsetFrom. Use front/back/left/right for ports, manifolds, labels, and external modules.',
+              },
+              offsetDistance: {
+                type: 'number',
+                description:
+                  'Extra clearance in meters beyond parent/child extents when offsetFrom is used.',
+              },
+              around: {
+                description:
+                  'Optional part id, name, kind, or prior part index. Place this part around the referenced part on a circular distribution. Use with aroundCount for evenly spaced repeated supports, small fixtures, or decorative modules.',
+              },
+              aroundCount: {
+                type: 'number',
+                description:
+                  'When around is set, duplicate this part into this many evenly spaced copies. Example: around:"tank", aroundCount:4, aroundRadius:0.5 for four feet around a vessel.',
+              },
+              aroundIndex: {
+                type: 'number',
+                description:
+                  'Optional zero-based index when manually defining one element in an around distribution. Usually omit when using aroundCount.',
+              },
+              aroundRadius: {
+                type: 'number',
+                description:
+                  'Optional radius in meters for around placement. Omit to use parent/child extents plus relationGap.',
+              },
+              aroundAngle: {
+                type: 'number',
+                description:
+                  'Optional absolute angle in radians for a single around-placed part. Prefer aroundCount for evenly spaced copies.',
+              },
+              aroundStartAngle: {
+                type: 'number',
+                description:
+                  'Optional start angle in radians for aroundCount distributions. Use when the first item should start front/back/diagonal.',
+              },
+              aroundAxis: {
+                type: 'string',
+                enum: ['x', 'y', 'z'],
+                description:
+                  'Axis to distribute around. Default y means horizontal X/Z circle around a vertical object.',
+              },
+              cornerPattern: {
+                type: 'boolean',
+                description:
+                  'When true with around, place repeated parts at rectangular parent corners instead of a circular distribution. Use for four feet/supports on a base.',
+              },
+              cornerInset: {
+                type: 'number',
+                description:
+                  'Inset in meters from the parent corner when cornerPattern is true.',
+              },
+              array: {
+                type: 'object',
+                description:
+                  'Linear repetition for one part after relationship placement. Use for evenly spaced cylinders, ribs, vents, bolts, and fins without hand-written positions.',
+                properties: {
+                  count: { type: 'number', description: 'Number of repeated copies.' },
+                  axis: { type: 'string', enum: ['x', 'y', 'z'], description: 'Repeat axis.' },
+                  spacing: { type: 'number', description: 'Center-to-center spacing in meters.' },
+                },
+              },
+              relationGap: {
+                type: 'number',
+                description:
+                  'Optional clearance in meters used by alignAbove/alignBeside. Usually omit or use a small value such as 0.01-0.05.',
               },
               anchor: {
                 type: 'string',
@@ -641,6 +822,31 @@ const COMPOSE_PARTS_TOOL = {
               depth: { type: 'number', description: 'Depth along Z, grille cage depth, or motor depth. For protective_grill this is the front-to-back cage thickness.' },
               domeDepth: { type: 'number', description: 'protective_grill front dome bulge along Z. Use 0.06-0.14 for a shallow half-round fan cage.' },
               length: { type: 'number', description: 'Length alias used by some parts. For vehicle_body this is the front-back body length along X.' },
+              truncated: {
+                type: 'boolean',
+                description:
+                  'For pyramid, true removes the pointed tip and creates a flat-top truncated pyramid/frustum.',
+              },
+              topScale: {
+                type: 'number',
+                description:
+                  'For pyramid, top footprint scale relative to the base. Use 0.3-0.6 for a flat top instead of a sharp point.',
+              },
+              topRadius: {
+                type: 'number',
+                description:
+                  'For pyramid, explicit top radius/half-width for a flat-top truncated pyramid. Usually prefer topScale.',
+              },
+              topLength: {
+                type: 'number',
+                description:
+                  'For pyramid, desired top length in meters for a flat top. Usually prefer topScale.',
+              },
+              topWidth: {
+                type: 'number',
+                description:
+                  'For pyramid, desired top width in meters for a flat top. Usually prefer topScale.',
+              },
               sizeScale: {
                 type: 'number',
                 description:
@@ -650,6 +856,20 @@ const COMPOSE_PARTS_TOOL = {
               ringCount: { type: 'number', description: 'protective_grill curved concentric ring count. Use 4-5 for a fan guard.' },
               spokeCount: { type: 'number', description: 'protective_grill radial spoke count. Use 12-24 for a fan guard.' },
               wireRadius: { type: 'number', description: 'protective_grill wire thickness.' },
+              warningStripes: {
+                type: 'boolean',
+                description:
+                  'For chimney_stack, true adds red-white warning bands near the top like industrial smokestacks.',
+              },
+              stripeCount: {
+                type: 'number',
+                description: 'For chimney_stack, number of red-white warning bands. Use 4-7.',
+              },
+              stripeHeight: {
+                type: 'number',
+                description:
+                  'For chimney_stack, vertical height in meters occupied by the warning band zone.',
+              },
               wheelRadius: { type: 'number', description: 'vehicle_wheels/bicycle wheel radius alias.' },
               wheelWidth: { type: 'number', description: 'vehicle_wheels tire thickness along the axle.' },
               frontX: { type: 'number', description: 'vehicle_wheels optional front axle offset along the vehicle length axis.' },
@@ -677,10 +897,59 @@ const COMPOSE_PARTS_TOOL = {
                 type: 'number',
                 description: 'vehicle_body optional Z-only cabin top scale; prefer cabinTopScale unless the user asks for asymmetric proportions.',
               },
-              bladeRadius: { type: 'number', description: 'radial_blades outer blade reach.' },
-              bladeWidth: { type: 'number', description: 'radial_blades max blade chord width. Use about 20-30% of bladeRadius.' },
-              bladePitch: { type: 'number', description: 'radial_blades blade pitch/twist hint in radians. Use 0.18-0.32 for visible real-fan tilt.' },
-              bladeSweep: { type: 'number', description: 'radial_blades tangential sweep/curvature amount. Positive values make the tips sweep back like real fan blades.' },
+              bladeRadius: { type: 'number', description: 'radial_blades/propeller_blade_set outer blade reach.' },
+              bladeWidth: { type: 'number', description: 'radial_blades/propeller_blade_set/airfoil_blade max blade chord width. Use about 20-30% of bladeRadius or length.' },
+              bladePitch: { type: 'number', description: 'radial_blades/propeller_blade_set/airfoil_blade blade pitch/twist hint in radians. Use 0.18-0.55 for visible real-fan, mixer, or propeller tilt.' },
+              bladeSweep: { type: 'number', description: 'radial_blades/airfoil_blade tangential sweep/curvature amount. Positive values make the tips sweep back like real fan blades.' },
+              bladeShape: {
+                type: 'string',
+                enum: ['taiji_half', 'airfoil'],
+                description:
+                  'propeller_blade_set shape. Use taiji_half for mud mixer/agitator/impeller paddles cut from a circular disk; use airfoil for aircraft/turbine propeller blades.',
+              },
+              verticalCurve: {
+                type: 'number',
+                description:
+                  'propeller_blade_set longitudinal curve along the blade length in meters. Use 0.04-0.10 for mixer paddles so the blade bends along its radial spine, not just across its width.',
+              },
+              rootWidth: { type: 'number', description: 'airfoil_blade root chord width in meters; use wider roots for propeller/turbine/engine blades.' },
+              tipWidth: { type: 'number', description: 'airfoil_blade tip chord width in meters; should be smaller than rootWidth for tapered blades.' },
+              twist: { type: 'number', description: 'airfoil_blade twist hint in radians. Use 0.15-0.45 for propellers/engine fans.' },
+              camber: { type: 'number', description: 'airfoil_blade/lens curvature amount in meters; gives a bent aerodynamic profile.' },
+              pitch: { type: 'number', description: 'airfoil_blade pitch angle in radians. Use about 0.3-0.5 for visible propeller tilt.' },
+              lensShape: {
+                type: 'string',
+                enum: ['frog', 'aviator', 'teardrop', 'rounded-rectangle'],
+                description:
+                  'curved_lens_panel outline style. Use frog for 蛤蟆墨镜 / oversized sunglasses lenses, aviator/teardrop for drop-shaped lenses.',
+              },
+              curvature: {
+                type: 'number',
+                description:
+                  'curved_lens_panel visible bend/curvature in radians. Use 0.06-0.16 for sunglasses, goggles, visors, or curved observation windows.',
+              },
+              noseSlope: { type: 'number', description: 'ergonomic_shell front/nose slope amount, 0-1. Use 0.35-0.55 for mouse-like shells.' },
+              tailSlope: { type: 'number', description: 'ergonomic_shell rear/tail taper amount, 0-1.' },
+              sideTaper: { type: 'number', description: 'ergonomic_shell side narrowing amount, 0-0.6. Use for mouse/controller streamlined sides.' },
+              noseRoundness: { type: 'number', description: 'streamlined_body nose roundness, 0-1. Higher values create a softer aircraft/train/car nose.' },
+              tailTaper: { type: 'number', description: 'streamlined_body tail taper amount, 0-0.9. Use for fuselages, sports bodies, train noses, and tapered appliance shells.' },
+              roofArc: { type: 'number', description: 'streamlined_body roof/canopy arc hint, 0-0.8. Use for car rooflines, airplane canopies, and smooth upper highlights.' },
+              sections: {
+                type: 'array',
+                description:
+                  'lofted_panel section list for section-to-section transitions. Each section may include x, y, z, width, height. Use 3-5 sections for fairings, curved covers, ducts, and tapered panels.',
+                items: {
+                  type: 'object',
+                  properties: {
+                    x: { type: 'number' },
+                    y: { type: 'number' },
+                    z: { type: 'number' },
+                    width: { type: 'number' },
+                    height: { type: 'number' },
+                    length: { type: 'number', description: 'Compatibility alias for section width.' },
+                  },
+                },
+              },
               slatCount: { type: 'number', description: 'vent_slats count.' },
               boltCount: { type: 'number', description: 'flange_ring/bolt_pattern bolt count. Use 4-8 for pump flanges.' },
               includeBolts: {
@@ -805,7 +1074,7 @@ const COMPOSE_OBJECT_TOOL = {
         },
         model: {
           type: 'string',
-          description: 'Requested model or product name, e.g. "Tesla Model Y", "air conditioner outdoor unit", "空调外机", or "写字桌".',
+          description: 'Requested model or product name, e.g. "Tesla Model Y", "air conditioner outdoor unit", "绌鸿皟澶栨満", or "鍐欏瓧妗?.',
         },
         style: {
           type: 'string',
@@ -880,6 +1149,11 @@ const REVISION_SHAPE_SCHEMA = {
     semanticGroup: { type: 'string' },
     sourcePartKind: { type: 'string' },
     sourcePartId: { type: 'string' },
+    editableHints: {
+      type: 'object',
+      description:
+        'Optional semantic edit contract for later revisions, e.g. {primaryDimension:"length", canScale:["length","width","height"]}.',
+    },
     position: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3 },
     rotation: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3 },
     scale: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3 },
@@ -933,7 +1207,7 @@ const REVISE_GEOMETRY_TOOL = {
   function: {
     name: 'revise_geometry',
     description:
-      'Patch the previous generated geometry artifact in response to user feedback. Prefer this for follow-up revision requests such as "roof looks wrong", "windows are detached", "make it smoother", "adjust proportions", or "keep the body but change the cabin". It preserves existing shapes unless operations remove/replace them.',
+      'Patch the previous generated geometry artifact in response to user feedback. Prefer this for follow-up revision requests such as "roof looks wrong", "windows are detached", "make it smoother", "adjust proportions", or "keep the body but change the cabin". It preserves existing shapes unless operations remove/replace them. For simple color/material changes, use setMaterial with selectors by semanticRole; do not use replace or materialFrom.',
     parameters: {
       type: 'object',
       properties: {
@@ -960,13 +1234,23 @@ const REVISE_GEOMETRY_TOOL = {
         operations: {
           type: 'array',
           description:
-            'Local edit operations. Use selectors by semanticRole/sourcePartKind/nameIncludes. For A/B/C pillars, add body-color pillars then use materialFrom from vehicle_body.',
+            'Local edit operations. Use selectors by semanticRole/semanticGroup/sourcePartKind/nameIncludes. For color-only edits use setMaterial with color, e.g. belt_surface yellow and conveyor_frame/support_leg/drive_motor white. For "make blades/ports/feet longer/larger" prefer scaleSemantic with dimension:"primary" or "length" and factor such as 1.25.',
           items: {
             type: 'object',
             properties: {
               op: {
                 type: 'string',
-                enum: ['add', 'remove', 'replace', 'transform', 'resize', 'materialFrom', 'align'],
+                enum: [
+                  'add',
+                  'remove',
+                  'replace',
+                  'transform',
+                  'resize',
+                  'scaleSemantic',
+                  'materialFrom',
+                  'setMaterial',
+                  'align',
+                ],
               },
               selector: REVISION_SELECTOR_SCHEMA,
               from: REVISION_SELECTOR_SCHEMA,
@@ -984,6 +1268,29 @@ const REVISE_GEOMETRY_TOOL = {
               delta: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3 },
               rotation: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3 },
               scale: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3 },
+              factor: {
+                type: 'number',
+                description: 'scaleSemantic multiplier, e.g. 1.25 to enlarge selected semantic parts by 25%.',
+              },
+              dimension: {
+                type: 'string',
+                enum: [
+                  'primary',
+                  'uniform',
+                  'length',
+                  'width',
+                  'height',
+                  'depth',
+                  'thickness',
+                  'radius',
+                  'diameter',
+                  'majorRadius',
+                  'tubeRadius',
+                  'axisLength',
+                  'profileX',
+                  'profileY',
+                ],
+              },
               length: { type: 'number' },
               width: { type: 'number' },
               height: { type: 'number' },
@@ -994,6 +1301,16 @@ const REVISE_GEOMETRY_TOOL = {
               radiusBottom: { type: 'number' },
               majorRadius: { type: 'number' },
               tubeRadius: { type: 'number' },
+              color: {
+                type: 'string',
+                description: 'Direct material color for setMaterial, e.g. "#FFFFFF" or "#f5c842".',
+              },
+              materialPreset: { type: 'string' },
+              material: {
+                type: 'object',
+                description:
+                  'Full PrimitiveMaterialInput for setMaterial. Prefer color for simple recoloring.',
+              },
               shapes: { type: 'array', items: REVISION_SHAPE_SCHEMA },
             },
             required: ['op'],
@@ -1005,7 +1322,7 @@ const REVISE_GEOMETRY_TOOL = {
   },
 }
 
-type ComposeTool = typeof COMPOSE_OBJECT_TOOL | typeof COMPOSE_RECIPE_TOOL | typeof COMPOSE_PARTS_TOOL | typeof COMPOSE_ROBOT_ARM_TOOL | typeof COMPOSE_PRIMITIVE_TOOL | typeof REVISE_GEOMETRY_TOOL
+type ComposeTool = typeof COMPOSE_OBJECT_TOOL | typeof COMPOSE_RECIPE_TOOL | typeof COMPOSE_ASSEMBLY_TOOL | typeof COMPOSE_PARTS_TOOL | typeof COMPOSE_ROBOT_ARM_TOOL | typeof COMPOSE_PRIMITIVE_TOOL | typeof REVISE_GEOMETRY_TOOL
 
 const GEOMETRY_REPAIR_COMPRESSION_INTERVAL = 4
 const GEOMETRY_REPAIR_STAGNATION_LIMIT = 4
@@ -1038,170 +1355,27 @@ function compactGeometryRepairMemory(attempt: number, content: string) {
 function formatVisibleGeometryResults(results: string[]) {
   if (results.length <= GEOMETRY_VISIBLE_RESULT_TAIL + 1) return results.join('\n')
   return [
-    `已自动修复 ${results.length} 次；以下保留最近 ${GEOMETRY_VISIBLE_RESULT_TAIL} 条压缩上下文。`,
+    `Auto-repaired ${results.length} times; keeping latest ${GEOMETRY_VISIBLE_RESULT_TAIL} compressed context entries.`,
     ...results.slice(-GEOMETRY_VISIBLE_RESULT_TAIL),
   ].join('\n')
 }
 
-const BASE_RULES = `You are the 3D modeling assistant inside the Pascal editor. You work in 2 stages: analyze, generate.
-
-Available tools:
-- compose_object(...): Create stable editable low-poly whole objects from simple category templates. Prefer for chair/stool, sofa, outdoor AC unit, keyboard, monitor/display, table/desk, shelf/rack, cabinet. Do not use it as the default for cars/vehicles; use compose_recipe or compose_parts vehicle parts.
-- compose_recipe(...): Create one editable object from a built-in deterministic recipe pack. Prefer for gear.spur, vehicle.sedan/suv/sports/van/truck, valve.gate/ball, and robotArm.threeAxis; pass recipeId plus compact params instead of hand-writing a large schema. Vehicle recipes create an integrated glasshouse, body-color pillars/roof rails, wheels, lights, bumpers, and body shaping by default.
-- compose_parts(...): Create one editable object from reusable procedural parts. Use one part entry per semantic module unless that part exposes an explicit count field; do not duplicate wheelset-style parts to express visual count.
-- compose_primitive(shapes): Create custom box, rounded-panel, cylinder, hollow-cylinder, cone, frustum, hemisphere, torus, wedge, trapezoid-prism, capsule, half-cylinder, sphere, lathe, extrude, or sweep shapes for unsupported categories or user-specified individual parts.
-- compose_robot_arm(...): Create editable robot arm drafts. Prefer for robot/cobot/FANUC/manipulator requests; set axisCount/baseShape/endEffector from the user instead of hand-building robot arms from raw primitives.
-- revise_geometry(...): Patch the previous generated artifact for follow-up customer feedback. Prefer this when a revision context is present and the user says something looks wrong, asks to adjust proportions/materials/details, or wants one part changed while preserving the rest.
-
-===== COORDINATE SYSTEM =====
-+X = left/right width, +Y = up, +Z = depth/front-back. y=0 is the ground plane.
-Position [x,y,z] is always the geometric center of the shape.
-Rotation [rx,ry,rz] is Euler angles in radians.
-
-===== REALITY GUARD =====
-Before generating, maintain an internal geometry brief: category, units, coordinate convention, expected dimensions, required semantic roles, validation targets, and assumptions. In the final tool call include geometryBrief for compose_parts or compose_primitive; compose_recipe supplies a recipe brief automatically unless an override is needed. For hand-built compose_primitive objects, add semanticRole to validation-critical shapes so the tool can reject unrealistic geometry instead of saving it.
-
-===== PRIMITIVE CAPABILITIES =====
-BOX = rectangular block with flat faces; set cornerRadius for rounded corners. Use sharp boxes for construction panels and rounded boxes for vehicle bodies, appliance shells, plastic/metal housings, cabinets, furniture, and softened manufactured parts.
-CYLINDER = solid round bar/rod/disc. Use for rods, fans, vents, solid legs, columns. HOLLOW-CYLINDER = tube/pipe with wall thickness for cups, ducts, barrels, tire-like rings when torus is not appropriate.
-CONE = circular cone. Use for traffic cones, pointed tips, lamp shades, roof caps. FRUSTUM = truncated cone/circular taper. Use for cups, flower pots, tapered legs, lamp bases, industrial fittings.
-HEMISPHERE = closed half-sphere/dome. Use for buttons, camera covers, lamp covers, domes, rounded appliance caps. TORUS = ring/donut tube. Use for tires, steering wheels, seals, fan rims, handles, rings.
-WEDGE = sloped triangular prism. Use for ramps, car hoods, keyboard side profiles, angled backs. TRAPEZOID-PRISM = tapered rectangular block. Use for trapezoid shells, plinths, tapered cushions, appliance bodies.
-CAPSULE = cylinder with hemispherical ends. Use for soft bolsters, sofa arms, pillows, rounded handles, rails, grips, and organic rounded bars.
-HALF-CYLINDER = semicircular extrusion with one flat cut face. Use for fenders, arched covers, half pipes, rounded roof caps, and protective shells.
-ROUNDED-PANEL = thin bevelled rounded rectangle. Use for screens, keycaps, cushions, control panels, appliance front plates, and device faces.
-SPHERE = full ball/ellipsoid. Use sparingly for domes/canopies only; a scaled sphere is still a blob with rounded edges.
-LATHE = vertical radial profile. Use for vases, bowls, lamps, bells, turned parts.
-EXTRUDE = closed custom 2D profile with depth. Use for non-rectangular plates, handles, logos, brackets, silhouettes, and shaped vents.
-EXTRUDE holes = optional inner cutout loops for bores/slots/keyways. Use profile for the outer outline and holes for internal cutouts. Do not describe the profile in text only; the tool call must include numeric profile arrays.
-SWEEP = circular tube along a 3D path. Use for cables, hoses, curved handles, rails, bumper arcs, and pipes with bends.
-
-===== TEMPLATE-FIRST RULE =====
-If the requested object matches a supported compose_object category, use compose_object instead of hand-building raw primitives. Cars/vehicles are intentionally excluded because they should be assembled from reusable parts, not a one-off object template:
-- chair/stool/椅子/板凳 -> compose_object({category:"chair"})
-- air conditioner outdoor unit / AC condenser / 空调外机 / 空调外置机 -> compose_object({category:"outdoor-ac"})
-- sofa/couch/沙发 -> compose_object({category:"sofa"})
-- keyboard/键盘 -> compose_object({category:"keyboard"})
-- monitor/display/screen/显示器/屏幕 -> compose_object({category:"monitor"})
-- table/desk/桌子/写字桌/书桌 -> compose_object({category:"table"})
-- shelf/rack/架子/货架 -> compose_object({category:"shelf"})
-- cabinet/cupboard/柜子/橱柜 -> compose_object({category:"cabinet"})
-Use compose_object only when the template category satisfies the complete request. If the user asks for extra structural features not guaranteed by the template (drawers, doors, shelves, compartments, special handles, asymmetry, exact count of subparts), build the whole object with ONE compose_parts call when reusable parts cover it, otherwise ONE compose_primitive call.
-
-===== PART-FIRST RULE =====
-Use compose_recipe first when the object matches a built-in recipe: normal cars/SUVs/sports cars/vans/trucks, gate valves, ball valves, or 3-axis robot arms. Use compose_parts when the object is best described as reusable procedural parts but no built-in recipe fits. For standing fan / electric fan / floor fan requests, call compose_parts once with these parts: circular_base, vertical_pole, support_bracket, motor_housing, radial_blades(count:3), protective_grill(ringCount:4-5, spokeCount:18-24, depth:0.10-0.14, domeDepth:0.07-0.12), and optional control_knob. This is not a hard-coded fan template; it is a reusable mechanical part blueprint.
-For factory equipment such as water pumps, centrifugal blowers, industrial fans, conveyors, tanks, valves, and motorized pipe equipment, call compose_parts once with a mechanical blueprint. For pumps/blowers use skid_base, ribbed_motor_body or rounded_machine_body, volute_casing, inlet_port, outlet_port, flange_ring, optional impeller_blades, control_box, and vent_slats. Do not approximate pumps/blowers as plain boxes; include a scroll/volute casing plus pipe ports and flanges. flange_ring already includes bolts by default, so add separate bolt_pattern only for extra casing bolts.
-Use part-level direction controls when realism depends on orientation: side for pipe/flange open ends, outletAngle for volute discharge direction, rotation for rotated motors/conveyors/tanks, and includeBolts:false when a plain flange or separate bolt_pattern is needed.
-Use connectTo + connectPoint + childPoint when one part should snap to another instead of manually guessing offsets. Example: give a pipe_port id:"outlet", then create flange_ring with connectTo:"outlet", connectPoint:"open", childPoint:"back" so the flange attaches to the pipe end. For volute_casing use connectPoint:"inlet" or "outlet"; for motors use "shaft"; for valves use "inlet"/"outlet". Legacy anchor/childAnchor still works for simple top/front/back/left/right snapping.
-For office desks that need visible structure beyond the table template, use desk_top + leg_set and add drawer_stack for drawers. Keep explicit user length/width/height in meters: desk_top.length is X, desk_top.width is Z depth, leg_set should use the same footprint, and leg height should bring the top to the requested height.
-For electrical/control cabinets, use electrical_cabinet with cable_tray plus nameplate/warning_label/vent details when realism is requested. For process piping or pipe corridors, use pipe_run for straight spans, pipe_elbow for 90-degree bends, and flange_ring/valve_body for connection details.
-For bicycles, use bicycle_wheels exactly once (front+rear two-wheel wheelset) + bicycle_frame + bicycle_fork + handlebar + saddle + chain_loop. Do not output bicycle_wheels twice, even if the analysis says the bicycle has two wheels. The chain_loop part creates an elongated chain run, front chainring, and rear sprocket; do not replace it with a circular torus. In geometryBrief.requiredRoles use bicycle_tire + bicycle_frame + bicycle_fork + handlebar + saddle + chain_loop, not bicycle_wheels. For cars/vehicles/汽车/小轿车, call compose_parts once with reusable parts vehicle_body + vehicle_wheels + vehicle_windows + headlights + bumper; set top-level primaryColor or vehicle_body.primaryColor/color from the user's requested color (e.g. 红色 -> #cc0000). Put the requested overall vehicle dimensions, vehicleStyle, and optional sizeScale on vehicle_body (sedan/suv/sports/van/truck; use sizeScale:0.8 for a small car when exact dimensions are omitted); then keep vehicle_wheels, vehicle_windows, headlights, and bumper mostly semantic (usually no manual position or rotation) so compose_parts can align axles, glass, lights, and bumpers from the body. Use kind/name, not partType/partName, in new calls. Use vehicleStyle:"sedan" for normal cars, "suv" for SUV/off-road, "sports" for sports/racing cars, "van" for vans/MPVs, and "truck" for pickup/trucks. When the user asks for roof corners that are not 90 degrees, an 85-degree roof, sloped pillars, or a more car-like roofline, set vehicle_body.roofCornerAngle around 85 or cabinTopScale around 0.85 so compose_parts uses a tapered trapezoid cabin instead of a rectangular cabin box.
-For follow-up requests like "make the car smoother / 线条再丝滑点", revise the previous compose_parts vehicle call instead of switching to hand-built compose_primitive. Increase vehicle_body cornerRadius/cornerSegments, set detail:"high" and enhanceVisualDetails:true, and for non-90-degree roof corners set vehicle_body.roofCornerAngle:85 or cabinTopScale:0.85. Keep vehicle_wheels semantic so wheel thickness/axles remain valid.
-For other factory equipment, use conveyor_frame + roller_array + belt_surface for belt conveyors, cylindrical_tank for tanks/vessels, ribbed_motor_body for electric motors, gearbox_body for reducers, filter_vessel for filters, heat_exchanger for shell-and-tube exchangers, agitator_tank for mixing tanks, pipe_rack for pipe corridors, platform_ladder for access platforms, and valve_body + handwheel for valves. For gate valves and ball valves, prefer compose_recipe with recipeId "valve.gate" or "valve.ball". For custom valves in compose_parts, do not list internal generated roles such as stem, bonnet, yoke, gate_wedge, bonnet_bolts, seat_ring, or flange_inlet/flange_outlet as separate parts. Use valve_body once, handwheel only when you need an explicit handle override, and let compose_parts auto-complete inlet/outlet flange_ring attachments. For ball valves / 球阀 / quarter-turn valves, set valve_body.valveStyle:"ball" and handwheel.handleStyle:"lever" if you include the handle explicitly; otherwise the ball-valve request can infer these defaults. Prefer style/variant fields over inventing unsupported tiny part kinds. Add nameplate, warning_label, seam_ring, vent_slats, flange bolts, and pipe ports for visual detail. Keep autoComplete omitted unless you explicitly need a minimal standalone subpart; omitted autoComplete lets compose_parts run family self-check and add missing required structure for recognized fan/pump/conveyor/bicycle/car/valve/desk/electrical/pipe blueprints. It does not add every optional visual detail automatically, so include requested details explicitly.
-When the user asks for "realistic", "detailed", "\u771f\u5b9e", "\u7ec6\u8282", or similar, set enhanceVisualDetails:true on compose_parts. This may add non-essential visual details such as pump impellers, nameplates, warning labels, fan control knobs, conveyor drive motors, vehicle seam/nameplate details, desk drawers, pipe elbows/flanges, and electrical cabinet trays/labels.
-Use protective_grill instead of a single torus whenever the user asks for a cage/guard/protective grille: it creates a shallow half-round cage with curved concentric rings, radial spokes, side ribs, and rear outer ring. The grill should not be a flat plane; set depth and optional domeDepth for a bowl/half-dome silhouette.
-Use radial_blades instead of hand-made rectangles whenever the user asks for fan blades: it creates swept extruded leaf/airfoil blades with narrow roots, wider curved tips, root collars, pitch, and a hub. For realistic fan blades, set count:3, bladeWidth about 0.06-0.09, bladePitch about 0.22-0.30, and optional bladeSweep about 0.02-0.04.
-Use volute_casing for centrifugal pump/blower housings; pair it with inlet_port/outlet_port and flange_ring so the object reads as factory equipment rather than furniture.
-
-===== GEOMETRY RULES =====
-- If the prompt contains a previous generated geometry summary, treat the user message as a customer revision. Use revise_geometry by default, not a full regeneration. Preserve approved traits such as body color, wheels, scale, lights, and existing semantic roles unless the user explicitly asks to change them.
-- In revise_geometry, explain the local edit through intent/userVisiblePlan, then provide concrete operations. Use replace for one subassembly, transform/resize/align for proportional fixes, materialFrom to inherit user-defined colors/materials, and add/remove for details. For a car cabin/roof/window complaint, a good generic strategy is: keep body/wheels/lights, replace the cabin area with an integrated glasshouse, add A/B/C pillars and roof frame, then materialFrom those pillars/frame from vehicle_body. Never hard-code red for pillars; inherit the body material.
-- Build a recognizable silhouette first: main volume + 2-8 distinctive features.
-- Preserve explicit user dimensions. Convert mm/cm/m to meters. For furniture such as desks/tables, user "长/length" maps to X footprint width and user "宽/width" maps to Z front-back depth; "高/height" maps to Y height. Example: 写字桌长120cm宽60cm高75cm => compose_object({category:"table", width:1.2, depth:0.6, height:0.75}).
-- Field names are strict: box/rounded-panel use length=X left-right, width=Z front-back depth, height=Y vertical. If you think "width/depth/height", output length=width and width=depth. Never omit length for drawer faces, handles, desks, or panels.
-- Cylinder/capsule/half-cylinder use height as the distance along axis. Table legs must include height, e.g. cylinder axis="y", radius=0.025, height=0.7.
-- Materials are strict: use material:{properties:{color:"#C4956A", roughness:0.6, metalness:0}} or materialPreset:"wood". For wood-colored objects, set the material on every visible wood part, not only in analysis text.
-- Output exactly ONE geometry tool call for the final object. Do not call compose_object/compose_parts/compose_primitive in separate calls to add details.
-- A multi-part tool call is saved as ONE selectable assembly in the scene. Put every part of the same object in the same call so the user can move, rotate, select, and delete the whole object together.
-- attachTo indexes are local to the shapes array inside the same compose_primitive call only. Parent must appear before child. Never reference shapes from a previous tool call.
-- Never set attachTo by itself. If a part must be under/on/front/back/side of another part, include explicit anchors: under desktop -> attachTo desktop, anchor="bottom", childAnchor="top"; on top -> anchor="top", childAnchor="bottom"; front face handle -> anchor="front", childAnchor="back". If you already computed an absolute world position and do not need snapping, omit attachTo.
-- Support stack rule: lower support's top connects to upper part's bottom. Example: a seat on legs uses parent leg anchor="top", childAnchor="bottom"; a hanging drawer under a desktop uses parent desktop anchor="bottom", childAnchor="top".
-- Use cornerRadius on boxes that should not read like sharp shipping containers: cars, appliances, electronics, molded furniture, machine housings.
-- Do not default to sphere. Sphere is not a curved panel; it becomes a blob if too tall or too large.
-- For broad curved rectangular surfaces, prefer a rounded box for the main mass plus a shallow sphere/ellipsoid only for domes or glass canopies.
-- For cylinders, use axis ("x"/"y"/"z") rather than manual rotation.
-- For hand-built compose_primitive vehicles only: keep a consistent front-back axis and use torus/cylinder wheel axes perpendicular to the car side. For normal car requests, prefer compose_parts vehicle parts instead of manually building raw primitives.
-- Chair/table legs are vertical cylinders with axis="y".
-- Outdoor AC units: rectangular case, dark front grille panel, circular fan grille, vent slats, base feet.
-- Sofas: rounded cushions, capsule arms/bolsters, recessed shadow base.
-- Keyboards: bevelled base tray, repeated rounded-panel keycaps, long spacebar, optional sweep cable.
-- Monitors: rounded screen/bezel panels, capsule stand, bevelled foot, optional sweep cable.
-- LIMIT: 4-16 parts max. Skip anything <15cm. Prefer stable low-poly abstraction over tiny details.
-
-`
-
-const STAGE1_ANALYST = `${BASE_RULES}
-
-===== STAGE 1: ANALYZE =====
-Analyze the user's request and produce a structured decomposition plan. Output TEXT ONLY. Do NOT call any tools.
-
-Start with a concise Geometry brief covering: model/category, units, coordinate convention, overall dimensions, required semantic roles, validation targets, and assumptions.
-
-First decide whether the request matches a compose_object category. If yes, say the chosen category and key visual traits.
-If the request matches a built-in recipe, choose compose_recipe and list recipeId plus compact params. If the request is a mechanical/appliance object made from reusable parts but no recipe fits, choose compose_parts and list the part blueprint. List semantic part entries, not raw visual counts; for example bicycle_wheels is one front+rear wheelset entry, not two entries.
-If the request includes extra structural features beyond a template category, choose compose_primitive instead and decompose the whole object yourself.
-If not, decompose into reusable parts or primitives. For each part specify:
-1. Name
-2. Primitive kind (box/rounded-panel/cylinder/hollow-cylinder/cone/frustum/hemisphere/torus/wedge/trapezoid-prism/capsule/half-cylinder/sphere/lathe/extrude/sweep)
-3. Key dimensions in meters; for box or panel parts, whether they need cornerRadius/bevel and why
-4. World-space position [x, y, z]
-5. Why this primitive matches the surface
-`
-
-const STAGE1_REVISION_ANALYST = `You are revising an existing generated primitive geometry artifact in Pascal editor.
-The user message includes a compact summary of the previous artifact.
-
-Analyze the customer's feedback in Chinese. Output TEXT ONLY. Do not call tools.
-
-Your analysis must be concise:
-1. Identify the specific visual/structural problem.
-2. State what must be preserved from the current artifact.
-3. State the local revision strategy.
-4. Prefer revise_geometry unless the user explicitly asks for a completely new object.
-
-For car cabin/roof/window complaints, a good generic strategy is: preserve body/wheels/lights/scale/material intent, replace or adjust only the cabin/roof/window subassembly, use integrated glasshouse if useful, add A/B/C pillars or roof frame if useful, and inherit body material via materialFrom instead of hard-coding a color.
-`
-
-const STAGE2_GENERATOR = `${BASE_RULES}
-
-===== STAGE 2: GENERATE =====
-Based on the analysis, call compose_object, compose_recipe, compose_parts, compose_robot_arm, or compose_primitive to create the geometry.
-
-- If the user request includes previous generated geometry context, call revise_geometry unless a full replacement is explicitly requested. The revision should preserve current approved traits and patch only the complained-about subassembly/details.
-- For common simple whole objects (chair, sofa, outdoor AC unit, keyboard, monitor, table/desk, shelf, cabinet), call compose_object once only when the template fully covers the request.
-- For built-in primitive recipes, call compose_recipe once: gear.spur for spur gears, vehicle.sedan/suv/sports/van/truck for cars, valve.gate/ball for those valve families, and robotArm.threeAxis for 3-axis robot arms.
-- For other reusable mechanical/appliance/factory/vehicle part blueprints such as standing fans, bicycles, water pumps, blowers, industrial fans, motors, conveyors, tanks, valves, gearboxes, filters, heat exchangers, agitator tanks, pipe racks, platforms, office desks with drawers, electrical cabinets, cable trays, pipe runs/elbows, fan grilles, radial blades, volute casings, pipe ports, flanges, bolts, skid bases, vents, poles, bases, and brackets, call compose_parts once.
-- If the user requested extra structural features or exact subpart counts not expressible by compose_recipe or compose_parts, do not mix tools; call compose_primitive once with the complete object.
-- For robot arms not covered by robotArm.threeAxis, call compose_robot_arm once. Set axisCount:3 for "3-axis / three-axis", baseShape:"round" for round/circular base, pose:"work-ready" for a readable bent silhouette, and endEffector:"gripper" unless the user asks otherwise.
-- Otherwise call compose_primitive once with all shapes. Parent before child.
-- Include geometryBrief as a top-level argument in compose_parts or compose_primitive, not inside metadata. For compose_recipe, omit geometryBrief unless you need to override the recipe brief. For compose_primitive vehicles/bicycles/mechanical objects, label critical shapes with semanticRole so validation can count and position them.
-- For cylinders, use axis instead of manual rotation.
-- Every box/rounded-panel/wedge/trapezoid-prism must include length, width, and height/thickness explicitly. Every cylinder/hollow-cylinder/cone/frustum/capsule/half-cylinder must include radius or radiusTop/radiusBottom and height explicitly. Torus needs majorRadius and tubeRadius. Hemisphere needs radius.
-- Every extrude must include a concrete profile array with at least 3 numeric [x,y] points; complex gears may use 80-160 points. Use holes for inner bore/keyway cutouts instead of inventing unsupported subtractive boxes.
-- For box housings and bodies, include cornerRadius/cornerSegments when the real object has rounded manufactured edges.
-- Tool arguments must be strict JSON only. Use double-quoted property names/strings, numeric literals only, no comments, no formulas, no trailing commas, no markdown, and no text outside the function call.
-`
-
-const STAGE2_REVISION_GENERATOR = `You are revising an existing generated primitive geometry artifact.
-Call exactly one revise_geometry tool.
-
-Rules:
-- Use the target artifact id from the revision context.
-- Preserve approved traits: body color, wheels, lights, scale, and existing semantic roles unless the feedback explicitly changes them.
-- Use semantic selectors first: semanticRole, sourcePartKind, nameIncludes.
-- Use replace for a local subassembly, resize/transform/align for proportion or attachment fixes, materialFrom to inherit existing material, and add/remove for details.
-- For overall size requests such as "make it bigger" or "diameter 1m", use resize with concrete dimensions when possible, or transform with selector:{} and uniform scale for all shapes. For exact diameter, compute the scale from the current radius/diameter in the revision summary.
-- Do not hard-code red/body colors for pillars or frames; use materialFrom from semanticRole:"vehicle_body".
-- For car cabin/roof/window complaints, prefer replacing the current cabin/roof/window area with an integrated glasshouse plus A/B/C pillars/roof frame when that matches the feedback.
-- Keep the operation count small and robust.
-- Tool arguments must be strict JSON only. Use double-quoted property names/strings, numeric literals only, no comments, no formulas, no trailing commas, no markdown, and no text outside the function call.
-`
-
+function formatPrimitiveRunMessage(analysis: string | undefined, generate: string) {
+  const trimmedAnalysis = analysis?.trim()
+  return trimmedAnalysis
+    ? `**Analysis:**\n${trimmedAnalysis}\n\n**Generate:**\n${generate}`
+    : `**Generate:**\n${generate}`
+}
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   image?: ChatImageAttachment
+  generationRun?: {
+    id: string
+    mode: 'articraft' | 'image-to-3d' | 'primitive'
+    status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+  }
   articraftResult?: ArticraftResult
   imageTo3dResult?: ImageTo3DResult
   geometryArtifact?: GeneratedGeometryArtifact
@@ -1218,20 +1392,13 @@ interface ChatMessage {
 type GeneratedModelArtifact = {
   id: string
   title: string
-  sourceTool: 'image-to-3d' | 'text-to-cad'
+  sourceTool: 'image-to-3d' | 'articraft'
   provider: string
   asset: AssetInput
   userPrompt: string
   createdAt: string
   placedAt?: string
   savedAt?: string
-  cad?: {
-    sourceCadUrl?: string
-    stepUrl?: string
-    logUrl?: string
-    metadataUrl?: string
-  }
-  warnings?: string[]
 }
 
 type ChatImageAttachment = {
@@ -1252,7 +1419,7 @@ type ApiMessage = {
   tool_calls?: unknown
 }
 
-type AiGenerationMode = 'primitive' | 'articraft' | 'image-to-3d' | 'text-to-cad'
+type AiGenerationMode = 'primitive' | 'articraft' | 'image-to-3d'
 
 const AI_GENERATION_MODES: Array<{
   id: AiGenerationMode
@@ -1273,12 +1440,6 @@ const AI_GENERATION_MODES: Array<{
     description: '\u4e0a\u4f20\u56fe\u7247\u8c03\u7528\u56fe\u751f 3D \u670d\u52a1\uff0c\u4fdd\u5b58\u4e3a\u7269\u54c1\u5e93\u6a21\u578b\u3002',
   },
   {
-    id: 'text-to-cad',
-    label: '\u6587\u751f CAD',
-    tech: 'CAD',
-    description: '\u5728\u51e0\u4f55\u642d\u5efa\u4e0b\u751f\u6210\u5de5\u7a0b CAD \u6a21\u578b\uff0c\u8f93\u51fa GLB/STEP\uff0c\u9002\u5408\u652f\u67b6\u3001\u6cd5\u5170\u3001\u58f3\u4f53\u548c\u673a\u68b0\u96f6\u4ef6\u3002',
-  },
-  {
     id: 'articraft',
     label: '\u5173\u8282\u8d44\u4ea7',
     tech: 'Articraft',
@@ -1295,6 +1456,9 @@ interface ArticraftResult {
   partCount: number
   jointCount: number
   assetId?: string
+  asset?: AssetInput & { id: string; source: 'mine' }
+  savedAt?: string
+  previewError?: string
   links: ArticraftLink[]
   joints: ArticraftJoint[]
   data: ArticraftModelData
@@ -1309,6 +1473,9 @@ interface ImageTo3DResult {
 const ARTICRAFT_PROGRESS_LINE_LIMIT = 12
 const AI_IMAGE_MAX_BYTES = 8 * 1024 * 1024
 const AI_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
+const AI_CHAT_DEFAULT_CONVERSATION_ID = 'default'
+const AI_CHAT_STORAGE_KEY = 'pascal-ai-chat-panel-state:v1'
+const CONVERSATION_HISTORY_PAGE_SIZE = 15
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -1320,22 +1487,6 @@ function readFileAsDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error('Could not read image file'))
     reader.readAsDataURL(file)
   })
-}
-
-function chatImageAttachmentToFile(image: ChatImageAttachment) {
-  const commaIndex = image.dataUrl.indexOf(',')
-  if (commaIndex < 0) throw new Error('Invalid image attachment data URL')
-
-  const header = image.dataUrl.slice(0, commaIndex)
-  const base64 = image.dataUrl.slice(commaIndex + 1)
-  const mime = header.match(/^data:([^;]+)/)?.[1] ?? image.type ?? 'image/png'
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index)
-  }
-
-  return new File([bytes], image.name || 'image.png', { type: mime })
 }
 
 function imageAttachmentBaseName(image: ChatImageAttachment) {
@@ -1353,19 +1504,8 @@ function isImageTo3DAsset(value: unknown): value is AssetInput & { id: string; s
   )
 }
 
-function parseTextToCadLinks(value: unknown): GeneratedModelArtifact['cad'] | undefined {
-  if (!isRecord(value)) return undefined
-  const cad: NonNullable<GeneratedModelArtifact['cad']> = {}
-  for (const key of ['sourceCadUrl', 'stepUrl', 'logUrl', 'metadataUrl'] as const) {
-    if (typeof value[key] === 'string') cad[key] = value[key]
-  }
-  return Object.keys(cad).length > 0 ? cad : undefined
-}
-
-function parseWarnings(value: unknown) {
-  if (!Array.isArray(value)) return undefined
-  const warnings = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-  return warnings.length > 0 ? warnings : undefined
+function isMineAsset(value: unknown): value is AssetInput & { id: string; source: 'mine' } {
+  return isImageTo3DAsset(value)
 }
 
 function isAbortError(error: unknown) {
@@ -1374,6 +1514,16 @@ function isAbortError(error: unknown) {
 
 function throwIfAborted(signal?: AbortSignal) {
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+}
+
+function isTerminalGenerationStatus(status: NonNullable<ChatMessage['generationRun']>['status']) {
+  return status === 'succeeded' || status === 'failed' || status === 'cancelled'
+}
+
+function isActiveGenerationRun(
+  run: ChatMessage['generationRun'] | undefined,
+): run is NonNullable<ChatMessage['generationRun']> {
+  return Boolean(run && !isTerminalGenerationStatus(run.status))
 }
 
 function buildMultimodalContent(text: string, image?: ChatImageAttachment): string | ApiContentPart[] {
@@ -1394,6 +1544,32 @@ function formatArticraftProgressMessage(header: string, lines: string[]) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function safeParseJson(value: string) {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+function findPendingPrimitiveRunMessageIndex(messages: readonly ChatMessage[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (
+      message?.role === 'assistant' &&
+      !message.generationRun &&
+      !message.geometryArtifact &&
+      !message.modelArtifact &&
+      !message.imageTo3dResult &&
+      !message.articraftResult &&
+      message.content.startsWith('**Generate:**')
+    ) {
+      return index
+    }
+  }
+  return -1
 }
 
 function normalizeToolArgumentsSource(raw: string) {
@@ -2046,6 +2222,21 @@ function GeneratedModelPreview({ artifact }: { artifact: GeneratedModelArtifact 
   )
 }
 
+function articraftResultToModelArtifact(result: ArticraftResult): GeneratedModelArtifact | null {
+  if (!result.asset) return null
+  return {
+    id: `articraft-${result.recordId}`,
+    title: result.name,
+    sourceTool: 'articraft',
+    provider: 'Articraft',
+    asset: result.asset,
+    userPrompt: result.prompt,
+    createdAt: result.savedAt ?? new Date().toISOString(),
+    placedAt: result.status === 'imported' ? result.savedAt : undefined,
+    savedAt: result.savedAt,
+  }
+}
+
 function GeneratedModelCard({
   artifact,
   disabled,
@@ -2058,8 +2249,7 @@ function GeneratedModelCard({
   onSave: (artifact: GeneratedModelArtifact) => void
 }) {
   const canSave = !artifact.savedAt
-  const toolLabel = artifact.sourceTool === 'text-to-cad' ? 'Text to CAD' : 'Image to 3D'
-  const cadLinks = artifact.cad
+  const toolLabel = 'Image to 3D'
 
   return (
     <GeneratedArtifactCardShell
@@ -2085,32 +2275,9 @@ function GeneratedModelCard({
               {artifact.savedAt ? '\u5df2\u4fdd\u5b58' : '\u5b58\u5230\u8d44\u6599\u5e93'}
             </button>
           </div>
-          {cadLinks ? (
-            <div className="flex flex-wrap gap-1">
-              {cadLinks.stepUrl ? (
-                <a className="rounded border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-[#a684ff]/50 hover:text-[#c8b6ff]" href={cadLinks.stepUrl} target="_blank" rel="noreferrer">
-                  STEP
-                </a>
-              ) : null}
-              {cadLinks.sourceCadUrl ? (
-                <a className="rounded border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-[#a684ff]/50 hover:text-[#c8b6ff]" href={cadLinks.sourceCadUrl} target="_blank" rel="noreferrer">
-                  CAD source
-                </a>
-              ) : null}
-              {cadLinks.logUrl ? (
-                <a className="rounded border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-[#a684ff]/50 hover:text-[#c8b6ff]" href={cadLinks.logUrl} target="_blank" rel="noreferrer">
-                  Log
-                </a>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       }
-      hint={
-        artifact.sourceTool === 'text-to-cad'
-          ? '\u6587\u751f CAD \u4f1a\u540c\u65f6\u8fd4\u56de GLB \u9884\u89c8\u548c CAD/STEP \u9644\u4ef6\uff1b\u590d\u6742\u7269\u4f53\u4f18\u5148\u7528\u8fd9\u6761\u94fe\u8def\u3002'
-          : '\u56fe\u751f\u5efa\u6a21\u7ed3\u679c\u590d\u7528\u51e0\u4f55\u642d\u5efa\u7684\u751f\u6210\u5361\u7247\u6d41\u7a0b\uff1a\u5148\u5728\u5bf9\u8bdd\u91cc\u9884\u89c8\uff0c\u518d\u9009\u62e9\u653e\u5230\u753b\u5e03\u6216\u5b58\u5230\u8d44\u6599\u5e93\u3002'
-      }
+      hint={'??????????????????????????????????????????'}
       meta={`${toolLabel} \u00b7 ${artifact.asset.category ?? 'equipment'}`}
       preview={<GeneratedModelPreview artifact={artifact} />}
       status={getModelArtifactStatus(artifact)}
@@ -2148,6 +2315,7 @@ function toSceneJointMetadata(jointMetadata: BridgeJointMetadata) {
 }
 
 type AiChatPanelStateSnapshot = {
+  conversationId: string
   messages: ChatMessage[]
   input: string
   generationMode: AiGenerationMode
@@ -2155,7 +2323,58 @@ type AiChatPanelStateSnapshot = {
   imageAttachment?: ChatImageAttachment
 }
 
+function readPersistedAiChatPanelState(): AiChatPanelStateSnapshot | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(AI_CHAT_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<AiChatPanelStateSnapshot>
+    return {
+      conversationId:
+        typeof parsed.conversationId === 'string'
+          ? parsed.conversationId
+          : AI_CHAT_DEFAULT_CONVERSATION_ID,
+      messages: Array.isArray(parsed.messages) ? (parsed.messages as ChatMessage[]) : [],
+      input: typeof parsed.input === 'string' ? parsed.input : '',
+      generationMode:
+        parsed.generationMode === 'articraft' || parsed.generationMode === 'image-to-3d'
+          ? parsed.generationMode
+          : 'primitive',
+      inputExpanded: parsed.inputExpanded === true,
+      imageAttachment: parsed.imageAttachment,
+    }
+  } catch {
+    return null
+  }
+}
+
+type AiConversationSummary = {
+  id: string
+  title: string
+  messageCount: number
+  activeRunCount: number
+  updatedAt: string
+}
+
+function buildArticraftResultFromJobData(prompt: string, resultData: Record<string, unknown>) {
+  const resultLinks = (resultData.links as Array<Record<string, unknown>>) ?? []
+  const resultJoints = (resultData.joints as Array<Record<string, unknown>>) ?? []
+  return {
+    prompt,
+    status: 'ready' as const,
+    recordId: String(resultData.recordId ?? ''),
+    recordPath: String(resultData.recordPath ?? ''),
+    name: String(resultData.name ?? resultData.recordId ?? 'Articraft asset'),
+    partCount: resultLinks.length,
+    jointCount: resultJoints.length,
+    links: resultLinks as unknown as ArticraftLink[],
+    joints: resultJoints as unknown as ArticraftJoint[],
+    data: resultData as unknown as ArticraftModelData,
+  }
+}
+
 const aiChatPanelState: AiChatPanelStateSnapshot = {
+  conversationId: AI_CHAT_DEFAULT_CONVERSATION_ID,
   messages: [],
   input: '',
   generationMode: 'primitive',
@@ -2166,6 +2385,15 @@ export function AiChatPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>(aiChatPanelState.messages)
   const [input, setInput] = useState(aiChatPanelState.input)
   const [loading, setLoading] = useState(false)
+  const [articraftViewerModal, setArticraftViewerModal] = useState<{
+    url: string
+    title: string
+  } | null>(null)
+  const [conversationId, setConversationId] = useState(aiChatPanelState.conversationId)
+  const [panelHydrated, setPanelHydrated] = useState(false)
+  const [conversationHistoryOpen, setConversationHistoryOpen] = useState(false)
+  const [conversationHistory, setConversationHistory] = useState<AiConversationSummary[]>([])
+  const [conversationHistoryLoading, setConversationHistoryLoading] = useState(false)
   const [generationMode, setGenerationMode] = useState<AiGenerationMode>(
     aiChatPanelState.generationMode,
   )
@@ -2178,6 +2406,10 @@ export function AiChatPanel() {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const activeAbortControllerRef = useRef<AbortController | null>(null)
+  const activeRunEventSourcesRef = useRef<Map<string, EventSource>>(new Map())
+  const primitiveRunAnalysisRef = useRef<Map<string, string>>(new Map())
+  const conversationHistoryNextCursorRef = useRef<string | null>(null)
+  const conversationHistoryLoadingRef = useRef(false)
   const latestGeometryArtifactRef = useRef<GeneratedGeometryArtifact | null>(
     latestGeneratedGeometryArtifact(aiChatPanelState.messages),
   )
@@ -2189,6 +2421,20 @@ export function AiChatPanel() {
   const articraftViewerUrl = process.env.NEXT_PUBLIC_ARTICRAFT_VIEWER_URL ?? 'http://127.0.0.1:8765'
 
   useEffect(() => {
+    const persisted = readPersistedAiChatPanelState()
+    if (persisted) {
+      setConversationId(persisted.conversationId)
+      setMessages(persisted.messages)
+      setInput(persisted.input)
+      setGenerationMode(persisted.generationMode)
+      setInputExpanded(persisted.inputExpanded)
+      setImageAttachment(persisted.imageAttachment)
+      latestGeometryArtifactRef.current = latestGeneratedGeometryArtifact(persisted.messages)
+    }
+    setPanelHydrated(true)
+  }, [])
+
+  useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     aiChatPanelState.messages = messages
     latestGeometryArtifactRef.current =
@@ -2196,8 +2442,54 @@ export function AiChatPanel() {
   }, [messages])
 
   useEffect(() => {
+    if (!panelHydrated) return
+    if (typeof window === 'undefined') return
+    const snapshot: AiChatPanelStateSnapshot & { updatedAt: string } = {
+      conversationId,
+      messages,
+      input,
+      generationMode,
+      inputExpanded,
+      imageAttachment,
+      updatedAt: new Date().toISOString(),
+    }
+    window.localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(snapshot))
+  }, [conversationId, generationMode, imageAttachment, input, inputExpanded, messages, panelHydrated])
+
+  useEffect(() => {
+    if (!panelHydrated) return
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => {
+      void fetch(`/api/ai-harness/conversations/${encodeURIComponent(conversationId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages,
+          activeRunIds: messages
+            .map((message) => message.generationRun)
+            .filter(
+              (job): job is NonNullable<ChatMessage['generationRun']> =>
+                job != null && !['succeeded', 'failed', 'cancelled'].includes(job.status),
+            )
+            .map((job) => job.id),
+        }),
+        signal: controller.signal,
+      }).catch(() => {})
+    }, 1000)
+
+    return () => {
+      controller.abort()
+      window.clearTimeout(timeoutId)
+    }
+  }, [conversationId, messages, panelHydrated])
+
+  useEffect(() => {
     aiChatPanelState.input = input
   }, [input])
+
+  useEffect(() => {
+    aiChatPanelState.conversationId = conversationId
+  }, [conversationId])
 
   useEffect(() => {
     aiChatPanelState.generationMode = generationMode
@@ -2222,9 +2514,21 @@ export function AiChatPanel() {
 
   const markGenerationStopped = useCallback((content = '已停止生成。') => {
     setMessages((prev) => {
-      const updated = [...prev]
-      const lastIdx = updated.length - 1
-      const last = updated[lastIdx]
+      let stoppedActiveRun = false
+      const updated = prev.map((message) => {
+        if (!isActiveGenerationRun(message.generationRun)) return message
+        stoppedActiveRun = true
+        return {
+          ...message,
+          content,
+          generationRun: { ...message.generationRun!, status: 'cancelled' as const },
+        }
+      })
+      if (stoppedActiveRun) return updated
+
+      const next = [...prev]
+      const lastIdx = next.length - 1
+      const last = next[lastIdx]
       if (
         last?.role === 'assistant' &&
         !last.geometryArtifact &&
@@ -2232,19 +2536,36 @@ export function AiChatPanel() {
         !last.modelArtifact &&
         !last.articraftResult
       ) {
-        updated[lastIdx] = { ...last, content }
-        return updated
+        next[lastIdx] = { ...last, content }
+        return next
       }
-      return [...updated, { role: 'assistant', content }]
+      return [...next, { role: 'assistant', content }]
     })
   }, [])
 
   const handleStopGeneration = useCallback(() => {
     activeAbortControllerRef.current?.abort()
     activeAbortControllerRef.current = null
+    const activeRunIds = new Set<string>()
+    for (const message of messages) {
+      const run = message.generationRun
+      if (isActiveGenerationRun(run)) activeRunIds.add(run.id)
+    }
+    for (const runId of activeRunEventSourcesRef.current.keys()) {
+      activeRunIds.add(runId)
+    }
+    for (const [runId, source] of activeRunEventSourcesRef.current.entries()) {
+      source.close()
+      activeRunEventSourcesRef.current.delete(runId)
+    }
+    for (const runId of activeRunIds) {
+      void fetch(`/api/ai-harness/runs/${encodeURIComponent(runId)}`, {
+        method: 'DELETE',
+      }).catch(() => {})
+    }
     setLoading(false)
     markGenerationStopped()
-  }, [markGenerationStopped])
+  }, [markGenerationStopped, messages])
 
   const updateGeometryArtifact = useCallback((
     artifactId: string,
@@ -2495,6 +2816,25 @@ export function AiChatPanel() {
     const levelId = useViewer.getState().selection.levelId
     const scene = useScene.getState()
 
+    if (result.asset) {
+      const item = ItemNode.parse({
+        name: result.name,
+        asset: result.asset,
+        position: [0, 0, 0],
+        metadata: {
+          articraft: {
+            ...getArticraftMetadata(result, result.name),
+            modelData: result.data,
+            joints: result.joints,
+            prompt: result.prompt,
+          },
+        },
+      })
+      scene.createNode(item, levelId ?? undefined)
+      useViewer.getState().setSelection({ selectedIds: [item.id] })
+      return 1
+    }
+
     const created = createModelNodes(
       result.data,
       (node, parentId) => {
@@ -2521,7 +2861,10 @@ export function AiChatPanel() {
             parentLink: jointMetadata.parentLink,
             childLink: jointMetadata.childLink,
           }
-        : getArticraftMetadata(result, node.name ?? id)
+        : {
+            ...getArticraftMetadata(result, node.name ?? id),
+            ...(created.rootNodeIds.includes(id) ? { modelData: result.data, joints: result.joints, prompt: result.prompt } : {}),
+          }
 
       return [
         {
@@ -2555,8 +2898,31 @@ export function AiChatPanel() {
   }, [articraftViewerUrl])
 
   const openArticraftViewer = useCallback((recordId: string, tab?: string) => {
-    window.open(getArticraftViewerUrl(recordId, tab), '_blank', 'noopener,noreferrer')
+    const resolvedTab = tab ?? 'inspect'
+    setArticraftViewerModal({
+      url: getArticraftViewerUrl(recordId, resolvedTab),
+      title: resolvedTab === 'code' ? 'Articraft 源记录' : 'Articraft Viewer',
+    })
   }, [getArticraftViewerUrl])
+
+  const closeArticraftViewerModal = useCallback(() => {
+    setArticraftViewerModal(null)
+  }, [])
+
+  useEffect(() => {
+    if (!articraftViewerModal) {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeArticraftViewerModal()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [articraftViewerModal, closeArticraftViewerModal])
 
   const markArticraftImported = useCallback((recordId: string) => {
     setMessages((prev) =>
@@ -2583,47 +2949,780 @@ export function AiChatPanel() {
     ])
   }, [importArticraftResult, markArticraftImported])
 
-  const handleSaveArticraftAsset = useCallback(async (result: ArticraftResult) => {
-    try {
-      const res = await fetch('/api/articraft/assets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          recordId: result.recordId,
-          recordPath: result.recordPath,
-          prompt: result.prompt,
-          joints: result.joints,
-          name: result.name,
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(isRecord(data) && typeof data.error === 'string' ? data.error : res.statusText)
+  const exportArticraftAsset = useCallback(async (result: ArticraftResult, save: boolean) => {
+    const res = await fetch('/api/articraft/assets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recordId: result.recordId,
+        recordPath: result.recordPath,
+        prompt: result.prompt,
+        joints: result.joints,
+        name: result.name,
+        data: result.data,
+        save,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(isRecord(data) && typeof data.error === 'string' ? data.error : res.statusText)
+    }
+    if (!isRecord(data) || !isMineAsset(data.asset)) {
+      throw new Error('Articraft export did not return a usable asset')
+    }
+    return {
+      asset: data.asset,
+      savedAt: typeof data.savedAt === 'string' ? data.savedAt : save ? new Date().toISOString() : undefined,
+    }
+  }, [])
+
+  const completeArticraftRun = useCallback(
+    async (runId: string, prompt: string, resultData: Record<string, unknown>) => {
+      const result: ArticraftResult = buildArticraftResultFromJobData(prompt, resultData)
+
+      try {
+        const { asset } = await exportArticraftAsset(result, false)
+        result.asset = asset
+        result.assetId = asset.id
+      } catch (error) {
+        result.previewError = error instanceof Error ? error.message : String(error)
       }
 
-      const assetId = isRecord(data) && isRecord(data.asset) && typeof data.asset.id === 'string'
-        ? data.asset.id
+      setMessages((prev) => {
+        const updated = [...prev]
+        const jobMessageIndex = updated.findIndex((message) => message.generationRun?.id === runId)
+        const resultMessage: ChatMessage = {
+          role: 'assistant',
+          content: t('aiChat.articraftReady', 'Articraft 生成完成，可以查看或导入。'),
+          generationRun: { id: runId, mode: 'articraft', status: 'succeeded' },
+          articraftResult: result,
+        }
+        if (jobMessageIndex >= 0) {
+          updated[jobMessageIndex] = resultMessage
+          return updated
+        }
+        return [...updated, resultMessage]
+      })
+    },
+    [exportArticraftAsset],
+  )
+
+  const completeImageTo3DRun = useCallback(
+    (runId: string, prompt: string, image: ChatImageAttachment | undefined, resultData: unknown) => {
+      const asset = isRecord(resultData) ? resultData.asset : undefined
+      if (!isImageTo3DAsset(asset)) {
+        throw new Error('图生建模完成，但接口没有返回有效的物品资产。')
+      }
+
+      const provider =
+        asset.tags?.find((tag) => !['floor', 'generated', 'image-to-3d'].includes(tag)) ??
+        'image-to-3d'
+      const artifact: GeneratedModelArtifact = {
+        id: asset.id,
+        title: asset.name ?? asset.id,
+        sourceTool: 'image-to-3d',
+        provider,
+        asset,
+        userPrompt: prompt,
+        createdAt: new Date().toISOString(),
+      }
+
+      setMessages((prev) => {
+        const updated = [...prev]
+        const runMessageIndex = updated.findIndex((message) => message.generationRun?.id === runId)
+        const resultMessage: ChatMessage = {
+          role: 'assistant',
+          content: `图生建模完成：${asset.name ?? asset.id}`,
+          image,
+          generationRun: { id: runId, mode: 'image-to-3d', status: 'succeeded' },
+          modelArtifact: artifact,
+        }
+        if (runMessageIndex >= 0) {
+          updated[runMessageIndex] = resultMessage
+          return updated
+        }
+        return [...updated, resultMessage]
+      })
+    },
+    [],
+  )
+
+  const closeRunEventSource = useCallback((runId: string) => {
+    activeRunEventSourcesRef.current.get(runId)?.close()
+    activeRunEventSourcesRef.current.delete(runId)
+    if (activeRunEventSourcesRef.current.size === 0) setLoading(false)
+  }, [])
+
+  const markRunCancelledFromServer = useCallback((runId: string, content = '已停止生成。') => {
+    closeRunEventSource(runId)
+    setMessages((prev) =>
+      prev.map((messageItem) =>
+        messageItem.generationRun?.id === runId
+          ? {
+              ...messageItem,
+              content,
+              generationRun: { ...messageItem.generationRun!, status: 'cancelled' as const },
+            }
+          : messageItem,
+      ),
+    )
+  }, [closeRunEventSource])
+
+  const subscribeImageTo3DRun = useCallback(
+    (run: { id: string; prompt: string; status?: string; image?: ChatImageAttachment }) => {
+      if (activeRunEventSourcesRef.current.has(run.id)) return
+      setLoading(true)
+
+      const progressHeader = '正在使用图生建模生成 3D 模型，完成后会保存到物品库...'
+      setMessages((prev) => {
+        if (prev.some((message) => message.generationRun?.id === run.id)) return prev
+        return [
+          ...prev,
+          {
+            role: 'assistant',
+            content: progressHeader,
+            image: run.image,
+            generationRun: {
+              id: run.id,
+              mode: 'image-to-3d',
+              status: run.status === 'queued' ? 'queued' : 'running',
+            },
+          },
+        ]
+      })
+
+      const progressLines: string[] = []
+      const source = new EventSource(`/api/ai-harness/runs/${encodeURIComponent(run.id)}/events`)
+      activeRunEventSourcesRef.current.set(run.id, source)
+
+      source.addEventListener('progress', (event) => {
+        const parsed = JSON.parse(event.data) as { message?: string }
+        const message = String(parsed.message ?? '').trim()
+        if (message) {
+          progressLines.push(message)
+          if (progressLines.length > ARTICRAFT_PROGRESS_LINE_LIMIT) {
+            progressLines.splice(0, progressLines.length - ARTICRAFT_PROGRESS_LINE_LIMIT)
+          }
+        }
+        setMessages((prev) =>
+          prev.map((messageItem) =>
+            messageItem.generationRun?.id === run.id
+              ? {
+                  ...messageItem,
+                  content: formatArticraftProgressMessage(progressHeader, progressLines),
+                  generationRun: { id: run.id, mode: 'image-to-3d', status: 'running' },
+                }
+              : messageItem,
+          ),
+        )
+      })
+
+      source.addEventListener('result', (event) => {
+        const parsed = JSON.parse(event.data) as { data?: unknown }
+        closeRunEventSource(run.id)
+        try {
+          completeImageTo3DRun(run.id, run.prompt, run.image, parsed.data)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          setMessages((prev) =>
+            prev.map((messageItem) =>
+              messageItem.generationRun?.id === run.id
+                ? {
+                    role: 'assistant',
+                    content: `图生建模失败：${message}`,
+                    generationRun: { id: run.id, mode: 'image-to-3d', status: 'failed' },
+                  }
+                : messageItem,
+            ),
+          )
+          return
+        }
+      })
+
+      source.addEventListener('error', (event) => {
+        const parsed = event instanceof MessageEvent ? safeParseJson(event.data) : null
+        if (!parsed || !isRecord(parsed) || typeof parsed.message !== 'string') return
+        closeRunEventSource(run.id)
+        setMessages((prev) =>
+          prev.map((messageItem) =>
+            messageItem.generationRun?.id === run.id
+              ? {
+                  role: 'assistant',
+                  content: `图生建模失败：${String(parsed.message)}`,
+                  generationRun: { id: run.id, mode: 'image-to-3d', status: 'failed' },
+                }
+              : messageItem,
+          ),
+        )
+      })
+
+      source.addEventListener('status', (event) => {
+        const parsed = event instanceof MessageEvent ? safeParseJson(event.data) : null
+        const status =
+          isRecord(parsed) && isRecord(parsed.data) && typeof parsed.data.status === 'string'
+            ? parsed.data.status
+            : undefined
+        if (status === 'cancelled') {
+          markRunCancelledFromServer(run.id, '已停止图生建模。')
+        }
+      })
+    },
+    [closeRunEventSource, completeImageTo3DRun, markRunCancelledFromServer],
+  )
+
+  const subscribeArticraftRun = useCallback(
+    (job: { id: string; prompt: string; status?: string }) => {
+      if (activeRunEventSourcesRef.current.has(job.id)) return
+      setLoading(true)
+
+      setMessages((prev) => {
+        if (prev.some((message) => message.generationRun?.id === job.id)) return prev
+        return [
+          ...prev,
+          {
+            role: 'assistant',
+            content: formatArticraftProgressMessage(
+              t('aiChat.articraftGenerating', '正在使用 Articraft 生成...'),
+              ['已恢复后台生成任务，正在继续读取进度...'],
+            ),
+            generationRun: {
+              id: job.id,
+              mode: 'articraft',
+              status: job.status === 'queued' ? 'queued' : 'running',
+            },
+          },
+        ]
+      })
+
+      const progressHeader = t('aiChat.articraftGenerating', '正在使用 Articraft 生成...')
+      const progressLines: string[] = []
+      const source = new EventSource(`/api/ai-harness/runs/${encodeURIComponent(job.id)}/events`)
+      activeRunEventSourcesRef.current.set(job.id, source)
+
+      source.addEventListener('progress', (event) => {
+        const parsed = JSON.parse(event.data) as { message?: string }
+        const message = String(parsed.message ?? '').trim()
+        if (message) {
+          progressLines.push(message)
+          if (progressLines.length > ARTICRAFT_PROGRESS_LINE_LIMIT) {
+            progressLines.splice(0, progressLines.length - ARTICRAFT_PROGRESS_LINE_LIMIT)
+          }
+        }
+        setMessages((prev) =>
+          prev.map((messageItem) =>
+            messageItem.generationRun?.id === job.id
+              ? {
+                  ...messageItem,
+                  content: formatArticraftProgressMessage(progressHeader, progressLines),
+                  generationRun: { id: job.id, mode: 'articraft', status: 'running' },
+                }
+              : messageItem,
+          ),
+        )
+      })
+
+      source.addEventListener('result', (event) => {
+        const parsed = JSON.parse(event.data) as { data?: Record<string, unknown> }
+        closeRunEventSource(job.id)
+        void completeArticraftRun(job.id, job.prompt, parsed.data ?? {})
+      })
+
+      source.addEventListener('error', (event) => {
+        const parsed = event instanceof MessageEvent ? safeParseJson(event.data) : null
+        if (parsed && isRecord(parsed) && typeof parsed.message === 'string') {
+          closeRunEventSource(job.id)
+          setMessages((prev) =>
+            prev.map((messageItem) =>
+              messageItem.generationRun?.id === job.id
+                ? {
+                    role: 'assistant',
+                    content: t('aiChat.error', {
+                      fallback: '错误：{message}',
+                      params: { message: String(parsed.message) },
+                    }),
+                    generationRun: { id: job.id, mode: 'articraft', status: 'failed' },
+                  }
+                : messageItem,
+            ),
+          )
+          return
+        }
+      })
+
+      source.addEventListener('status', (event) => {
+        const parsed = event instanceof MessageEvent ? safeParseJson(event.data) : null
+        const status =
+          isRecord(parsed) && isRecord(parsed.data) && typeof parsed.data.status === 'string'
+            ? parsed.data.status
+            : undefined
+        if (status === 'cancelled') {
+          markRunCancelledFromServer(job.id, '已停止 Articraft 生成。')
+        }
+      })
+    },
+    [closeRunEventSource, completeArticraftRun, markRunCancelledFromServer],
+  )
+
+  const completePrimitiveRun = useCallback(
+    (runId: string, resultData: unknown) => {
+      const data = isRecord(resultData) ? resultData : {}
+      const artifact = isRecord(data.artifact)
+        ? (data.artifact as unknown as GeneratedGeometryArtifact)
         : undefined
-      setMessages((prev) =>
-        prev.map((message) =>
-          message.articraftResult?.recordId === result.recordId
-            ? { ...message, articraftResult: { ...message.articraftResult, assetId } }
-            : message,
-        ),
-      )
+      const results = Array.isArray(data.results)
+        ? data.results.map((item) => String(item)).filter(Boolean)
+        : []
+      const lastContent = typeof data.lastContent === 'string' ? data.lastContent : ''
+      const analysis =
+        typeof data.analysis === 'string' ? data.analysis : primitiveRunAnalysisRef.current.get(runId)
+
+      setMessages((prev) => {
+        const updated = [...prev]
+        const runMessageIndex = updated.findIndex((message) => message.generationRun?.id === runId)
+        const generate =
+          results.length > 0
+            ? formatVisibleGeometryResults(results)
+            : lastContent || '(no output)'
+        const content = formatPrimitiveRunMessage(analysis, generate)
+        const resultMessage: ChatMessage = {
+          role: 'assistant',
+          content,
+          generationRun: { id: runId, mode: 'primitive', status: 'succeeded' },
+          ...(artifact ? { geometryArtifact: artifact } : {}),
+        }
+        if (runMessageIndex >= 0) {
+          updated[runMessageIndex] = resultMessage
+        } else {
+          updated.push(resultMessage)
+        }
+        if (artifact) {
+          latestGeometryArtifactRef.current = artifact
+          const revisionOf = artifact.revisionOf
+          if (revisionOf) {
+            for (let i = 0; i < updated.length; i += 1) {
+              const message = updated[i]
+              if (message?.geometryArtifact?.id === revisionOf) {
+                updated[i] = {
+                  ...message,
+                  geometryArtifact: { ...message.geometryArtifact, supersededBy: artifact.id },
+                }
+              }
+            }
+          }
+        }
+        primitiveRunAnalysisRef.current.delete(runId)
+        return updated
+      })
+    },
+    [],
+  )
+
+  const subscribePrimitiveRun = useCallback(
+    (run: { id: string; prompt: string; status?: string }) => {
+      if (activeRunEventSourcesRef.current.has(run.id)) {
+        return
+      }
+      setLoading(true)
+
+      const progressLines: string[] = []
+      setMessages((prev) => {
+        if (prev.some((message) => message.generationRun?.id === run.id)) return prev
+        const pendingIndex = findPendingPrimitiveRunMessageIndex(prev)
+        if (pendingIndex >= 0) {
+          const next = [...prev]
+          next[pendingIndex] = {
+            ...next[pendingIndex]!,
+            generationRun: {
+              id: run.id,
+              mode: 'primitive',
+              status: run.status === 'queued' ? 'queued' : 'running',
+            },
+          }
+          return next
+        }
+        return [
+          ...prev,
+          {
+            role: 'assistant',
+            content: '**Generate:**\n_恢复后台几何体生成任务，正在读取进度..._',
+            generationRun: {
+              id: run.id,
+              mode: 'primitive',
+              status: run.status === 'queued' ? 'queued' : 'running',
+            },
+          },
+        ]
+      })
+
+      const source = new EventSource(`/api/ai-harness/runs/${encodeURIComponent(run.id)}/events`)
+      activeRunEventSourcesRef.current.set(run.id, source)
+
+      source.addEventListener('progress', (event) => {
+        const parsed = JSON.parse(event.data) as { message?: string }
+        const message = String(parsed.message ?? '').trim()
+        if (message) {
+          progressLines.push(message)
+          if (progressLines.length > ARTICRAFT_PROGRESS_LINE_LIMIT) {
+            progressLines.splice(0, progressLines.length - ARTICRAFT_PROGRESS_LINE_LIMIT)
+          }
+        }
+        setMessages((prev) =>
+          prev.map((messageItem) =>
+            messageItem.generationRun?.id === run.id
+              ? {
+                  ...messageItem,
+                  content: formatPrimitiveRunMessage(
+                    primitiveRunAnalysisRef.current.get(run.id),
+                    formatArticraftProgressMessage('', progressLines).trim(),
+                  ),
+                  generationRun: { id: run.id, mode: 'primitive', status: 'running' },
+                }
+              : messageItem,
+          ),
+        )
+      })
+
+      source.addEventListener('message', (event) => {
+        const parsed = safeParseJson(event.data)
+        if (!isRecord(parsed) || !isRecord(parsed.data) || parsed.data.stage !== 'analysis') return
+        const analysis = typeof parsed.message === 'string' ? parsed.message : ''
+        primitiveRunAnalysisRef.current.set(run.id, analysis)
+        setMessages((prev) =>
+          prev.map((messageItem) =>
+            messageItem.generationRun?.id === run.id
+              ? {
+                  ...messageItem,
+                  content: formatPrimitiveRunMessage(analysis, '_Generating..._'),
+                  generationRun: { id: run.id, mode: 'primitive', status: 'running' },
+                }
+              : messageItem,
+          ),
+        )
+      })
+
+      source.addEventListener('tool-result', (event) => {
+        const parsed = safeParseJson(event.data)
+        if (!isRecord(parsed)) return
+        const message = typeof parsed.message === 'string' ? parsed.message : ''
+        if (!message) return
+        setMessages((prev) =>
+          prev.map((messageItem) =>
+            messageItem.generationRun?.id === run.id
+              ? {
+                  ...messageItem,
+                  content: formatPrimitiveRunMessage(
+                    primitiveRunAnalysisRef.current.get(run.id),
+                    message,
+                  ),
+                  generationRun: { id: run.id, mode: 'primitive', status: 'running' },
+                }
+              : messageItem,
+          ),
+        )
+      })
+
+      source.addEventListener('result', (event) => {
+        const parsed = JSON.parse(event.data) as { data?: unknown }
+        closeRunEventSource(run.id)
+        completePrimitiveRun(run.id, parsed.data)
+      })
+
+      source.addEventListener('error', (event) => {
+        const parsed = event instanceof MessageEvent ? safeParseJson(event.data) : null
+        if (parsed && isRecord(parsed) && typeof parsed.message === 'string') {
+          closeRunEventSource(run.id)
+          setMessages((prev) =>
+            prev.map((messageItem) =>
+              messageItem.generationRun?.id === run.id
+                ? {
+                    role: 'assistant',
+                    content: t('aiChat.error', {
+                      fallback: '错误：{message}',
+                      params: { message: String(parsed.message) },
+                    }),
+                    generationRun: { id: run.id, mode: 'primitive', status: 'failed' },
+                  }
+                : messageItem,
+            ),
+          )
+          return
+        }
+        void fetch(`/api/ai-harness/runs/${encodeURIComponent(run.id)}`, { cache: 'no-store' })
+          .then((response) => (response.ok ? response.json() : null))
+          .then((data) => {
+            const currentRun = isRecord(data) && isRecord(data.run) ? data.run : null
+            const status =
+              currentRun && typeof currentRun.status === 'string' ? currentRun.status : undefined
+            if (status === 'succeeded' && currentRun) {
+              closeRunEventSource(run.id)
+              completePrimitiveRun(run.id, currentRun.result)
+              return
+            }
+            if (status !== 'failed' && status !== 'cancelled') return
+            closeRunEventSource(run.id)
+            const message =
+              currentRun && typeof currentRun.error === 'string'
+                ? currentRun.error
+                : status === 'cancelled'
+                  ? '??????'
+                  : '??????????'
+            setMessages((prev) =>
+              prev.map((messageItem) =>
+                messageItem.generationRun?.id === run.id
+                  ? {
+                      role: 'assistant',
+                      content:
+                        status === 'cancelled'
+                          ? message
+                          : t('aiChat.error', {
+                              fallback: '???{message}',
+                              params: { message },
+                            }),
+                      generationRun: {
+                        id: run.id,
+                        mode: 'primitive',
+                        status: status as 'failed' | 'cancelled',
+                      },
+                    }
+                  : messageItem,
+              ),
+            )
+          })
+          .catch(() => {})
+      })
+
+      source.addEventListener('status', (event) => {
+        const parsed = event instanceof MessageEvent ? safeParseJson(event.data) : null
+        const status =
+          isRecord(parsed) && isRecord(parsed.data) && typeof parsed.data.status === 'string'
+            ? parsed.data.status
+            : undefined
+        if (status === 'cancelled') {
+          markRunCancelledFromServer(run.id)
+        }
+      })
+    },
+    [closeRunEventSource, completePrimitiveRun, markRunCancelledFromServer],
+  )
+
+  useEffect(() => {
+    if (!panelHydrated) return
+    const controller = new AbortController()
+    void fetch(`/api/ai-harness/conversations/${encodeURIComponent(conversationId)}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!data || controller.signal.aborted) return
+        const conversationMessages = Array.isArray(data.conversation?.messages)
+          ? (data.conversation.messages as ChatMessage[])
+          : []
+        if (conversationMessages.length > 0) {
+          setMessages((current) =>
+            current.length >= conversationMessages.length ? current : conversationMessages,
+          )
+        }
+        const activeRuns = Array.isArray(data.activeRuns) ? data.activeRuns : []
+        for (const activeRun of activeRuns) {
+          if (!isRecord(activeRun) || typeof activeRun.id !== 'string') continue
+          if (activeRun.mode === 'articraft' && typeof activeRun.prompt === 'string') {
+            subscribeArticraftRun({
+              id: activeRun.id,
+              prompt: activeRun.prompt,
+              status: typeof activeRun.status === 'string' ? activeRun.status : undefined,
+            })
+          } else if (activeRun.mode === 'image-to-3d') {
+            subscribeImageTo3DRun({
+              id: activeRun.id,
+              prompt: typeof activeRun.prompt === 'string' ? activeRun.prompt : 'Image to 3D asset',
+              status: typeof activeRun.status === 'string' ? activeRun.status : undefined,
+            })
+          } else if (activeRun.mode === 'primitive') {
+            subscribePrimitiveRun({
+              id: activeRun.id,
+              prompt: typeof activeRun.prompt === 'string' ? activeRun.prompt : 'Geometry object',
+              status: typeof activeRun.status === 'string' ? activeRun.status : undefined,
+            })
+          }
+        }
+      })
+      .catch(() => {})
+
+    return () => controller.abort()
+  }, [conversationId, panelHydrated, subscribeArticraftRun, subscribeImageTo3DRun, subscribePrimitiveRun])
+
+  useEffect(() => {
+    return () => {
+      for (const source of activeRunEventSourcesRef.current.values()) {
+        source.close()
+      }
+      activeRunEventSourcesRef.current.clear()
+    }
+  }, [])
+
+  const refreshConversationHistory = useCallback(async (options?: { append?: boolean }) => {
+    const append = options?.append === true
+    if (
+      append &&
+      (!conversationHistoryNextCursorRef.current || conversationHistoryLoadingRef.current)
+    )
+      return
+    const cursor = append ? conversationHistoryNextCursorRef.current : null
+    if (!append) conversationHistoryNextCursorRef.current = null
+    conversationHistoryLoadingRef.current = true
+    setConversationHistoryLoading(true)
+    try {
+      const params = new URLSearchParams({
+        limit: String(CONVERSATION_HISTORY_PAGE_SIZE),
+      })
+      if (cursor) params.set('cursor', cursor)
+      const response = await fetch(`/api/ai-harness/conversations?${params}`, {
+        cache: 'no-store',
+      })
+      const data = await response.json().catch(() => ({}))
+      const conversations =
+        isRecord(data) && Array.isArray(data.conversations)
+          ? (data.conversations as AiConversationSummary[])
+          : []
+      const nextCursor =
+        isRecord(data) && typeof data.nextCursor === 'string' ? data.nextCursor : null
+      setConversationHistory((prev) => {
+        if (!append) return conversations
+        const byId = new Map(prev.map((conversation) => [conversation.id, conversation]))
+        for (const conversation of conversations) byId.set(conversation.id, conversation)
+        return Array.from(byId.values())
+      })
+      conversationHistoryNextCursorRef.current = nextCursor
+    } catch {
+      if (!append) {
+        setConversationHistory([])
+        conversationHistoryNextCursorRef.current = null
+      }
+    } finally {
+      conversationHistoryLoadingRef.current = false
+      setConversationHistoryLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!panelHydrated) return
+    void refreshConversationHistory()
+  }, [conversationId, panelHydrated, refreshConversationHistory])
+
+  const closeActiveRunSources = useCallback(() => {
+    for (const source of activeRunEventSourcesRef.current.values()) {
+      source.close()
+    }
+    activeRunEventSourcesRef.current.clear()
+    setLoading(false)
+  }, [])
+
+  const switchConversation = useCallback(
+    (nextConversationId: string) => {
+      if (!nextConversationId || nextConversationId === conversationId) {
+        setConversationHistoryOpen(false)
+        return
+      }
+      closeActiveRunSources()
+      setConversationId(nextConversationId)
+      setMessages([])
+      setInput('')
+      setImageAttachment(undefined)
+      latestGeometryArtifactRef.current = null
+      setConversationHistoryOpen(false)
+    },
+    [closeActiveRunSources, conversationId],
+  )
+
+  const createNewConversation = useCallback(async () => {
+    try {
+      const response = await fetch('/api/ai-harness/conversations', { method: 'POST' })
+      const data = await response.json().catch(() => ({}))
+      const nextConversationId =
+        isRecord(data) && typeof data.conversationId === 'string' ? data.conversationId : ''
+      if (!nextConversationId) throw new Error('missing conversationId')
+      closeActiveRunSources()
+      setConversationId(nextConversationId)
+      setMessages([])
+      setInput('')
+      setImageAttachment(undefined)
+      latestGeometryArtifactRef.current = null
+      setConversationHistoryOpen(false)
+      void refreshConversationHistory()
+    } catch {
+      setMessages((prev) => [...prev, { role: 'assistant', content: '新会话创建失败。' }])
+    }
+  }, [closeActiveRunSources, refreshConversationHistory])
+
+  const deleteConversation = useCallback(
+    async (targetConversationId: string) => {
+      try {
+        const response = await fetch(
+          `/api/ai-harness/conversations/${encodeURIComponent(targetConversationId)}`,
+          { method: 'DELETE' },
+        )
+        if (!response.ok) throw new Error('delete failed')
+        setConversationHistory((prev) =>
+          prev.filter((conversation) => conversation.id !== targetConversationId),
+        )
+        if (targetConversationId !== conversationId) return
+
+        const nextResponse = await fetch('/api/ai-harness/conversations', { method: 'POST' })
+        const data = await nextResponse.json().catch(() => ({}))
+        const nextConversationId =
+          isRecord(data) && typeof data.conversationId === 'string' ? data.conversationId : ''
+        if (!nextConversationId) throw new Error('missing conversationId')
+        closeActiveRunSources()
+        setConversationId(nextConversationId)
+        setMessages([])
+        setInput('')
+        setImageAttachment(undefined)
+        latestGeometryArtifactRef.current = null
+        void refreshConversationHistory()
+      } catch {
+        setMessages((prev) => [...prev, { role: 'assistant', content: '删除历史记录失败。' }])
+      }
+    },
+    [closeActiveRunSources, conversationId, refreshConversationHistory],
+  )
+
+  const updateArticraftResult = useCallback((
+    recordId: string,
+    updater: (result: ArticraftResult) => ArticraftResult,
+  ) => {
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.articraftResult?.recordId === recordId
+          ? { ...message, articraftResult: updater(message.articraftResult) }
+          : message,
+      ),
+    )
+  }, [])
+
+  const handleSaveArticraftAsset = useCallback(async (result: ArticraftResult) => {
+    try {
+      const { asset, savedAt } = await exportArticraftAsset(result, true)
+      updateArticraftResult(result.recordId, (current) => ({
+        ...current,
+        asset,
+        assetId: asset.id,
+        savedAt,
+        previewError: undefined,
+      }))
       window.dispatchEvent(new Event('articraft:assets-updated'))
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content: assetId ? `已保存到素材库：${assetId}` : '已保存到素材库。',
+          content: asset.id ? `????????${asset.id}` : '????????',
         },
       ])
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      setMessages((prev) => [...prev, { role: 'assistant', content: `保存到素材库失败：${message}` }])
+      setMessages((prev) => [...prev, { role: 'assistant', content: `?????????${message}` }])
     }
-  }, [])
+  }, [exportArticraftAsset, updateArticraftResult])
 
   const handleApplyArticraftPose = useCallback(async (result: ArticraftResult) => {
     let pose = parseArticraftPose(window.location.href, result.recordId)
@@ -2711,16 +3810,20 @@ export function AiChatPanel() {
     setLoading(true)
 
     try {
-      const form = new FormData()
-      form.set('image', chatImageAttachmentToFile(image))
-      form.set('prompt', prompt)
-      form.set('name', assetName)
-      form.set('category', 'equipment')
-      form.set('save', 'false')
-
-      const res = await fetch('/api/image-to-3d/generate', {
+      const res = await fetch('/api/ai-harness/runs', {
         method: 'POST',
-        body: form,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: conversationId,
+          mode: 'image-to-3d',
+          prompt,
+          image,
+          params: {
+            displayName: assetName,
+            category: 'equipment',
+            save: false,
+          },
+        }),
         signal: controller.signal,
       })
       throwIfAborted(controller.signal)
@@ -2729,44 +3832,28 @@ export function AiChatPanel() {
       if (!res.ok) {
         throw new Error(isRecord(data) && typeof data.error === 'string' ? data.error : res.statusText)
       }
-      const asset = isRecord(data) ? data.asset : undefined
-      if (!isImageTo3DAsset(asset)) {
-        throw new Error('\u56fe\u751f\u5efa\u6a21\u5b8c\u6210\uff0c\u4f46\u63a5\u53e3\u6ca1\u6709\u8fd4\u56de\u6709\u6548\u7684\u7269\u54c1\u8d44\u4ea7\u3002')
-      }
-
-      const provider =
-        asset.tags?.find((tag) => !['floor', 'generated', 'image-to-3d'].includes(tag)) ??
-        'image-to-3d'
-      const artifact: GeneratedModelArtifact = {
-        id: asset.id,
-        title: asset.name ?? asset.id,
-        sourceTool: 'image-to-3d',
-        provider,
-        asset,
-        userPrompt: prompt,
-        createdAt: new Date().toISOString(),
-      }
+      const runId = isRecord(data) && typeof data.runId === 'string' ? data.runId : ''
+      if (!runId) throw new Error('Image-to-3D run was not created')
 
       setMessages((prev) => {
         const updated = [...prev]
         const lastIdx = updated.length - 1
-        const result: ChatMessage = {
-          role: 'assistant',
-          content: `\u56fe\u751f\u5efa\u6a21\u5b8c\u6210\uff1a${asset.name ?? asset.id}`,
-          image,
-          modelArtifact: artifact,
-        }
         if (
           lastIdx >= 0 &&
           updated[lastIdx]?.role === 'assistant' &&
           !updated[lastIdx]?.imageTo3dResult &&
           !updated[lastIdx]?.modelArtifact
         ) {
-          updated[lastIdx] = result
+          updated[lastIdx] = {
+            ...updated[lastIdx]!,
+            content: formatArticraftProgressMessage(progressMsg.content, ['后台任务已创建，正在等待生成日志...']),
+            generationRun: { id: runId, mode: 'image-to-3d', status: 'queued' },
+          }
           return updated
         }
-        return [...updated, result]
+        return updated
       })
+      subscribeImageTo3DRun({ id: runId, prompt, status: 'queued', image })
     } catch (err) {
       if (isAbortError(err)) {
         markGenerationStopped('\u5df2\u505c\u6b62\u56fe\u751f\u5efa\u6a21\u3002')
@@ -2777,7 +3864,11 @@ export function AiChatPanel() {
         const updated = [...prev]
         const lastIdx = updated.length - 1
         const result: ChatMessage = { role: 'assistant', content: `\u56fe\u751f\u5efa\u6a21\u5931\u8d25\uff1a${message}` }
-        if (lastIdx >= 0 && updated[lastIdx]?.role === 'assistant' && !updated[lastIdx]?.imageTo3dResult) {
+        if (
+          lastIdx >= 0 &&
+          updated[lastIdx]?.role === 'assistant' &&
+          !updated[lastIdx]?.imageTo3dResult
+        ) {
           updated[lastIdx] = result
           return updated
         }
@@ -2786,44 +3877,36 @@ export function AiChatPanel() {
     } finally {
       if (activeAbortControllerRef.current === controller) {
         activeAbortControllerRef.current = null
-        setLoading(false)
+        if (activeRunEventSourcesRef.current.size === 0) setLoading(false)
       }
     }
-  }, [markGenerationStopped])
+  }, [conversationId, markGenerationStopped, subscribeImageTo3DRun])
 
-  const sendTextToCadMessage = useCallback(async (text: string) => {
-    const prompt = text.trim()
-    if (!prompt) {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: '\u8bf7\u5148\u63cf\u8ff0\u8981\u751f\u6210\u7684 CAD \u5de5\u7a0b\u6a21\u578b\u3002' },
-      ])
-      return
-    }
-
+  const sendArticraftMessage = useCallback(async (text: string, image?: ChatImageAttachment) => {
     const controller = new AbortController()
     activeAbortControllerRef.current = controller
     setInput('')
     setImageAttachment(undefined)
-
-    const assetName = prompt.slice(0, 48) || 'Text to CAD asset'
-    const userMsg: ChatMessage = { role: 'user', content: prompt }
+    const prompt = text.trim() || '?????????????? 3D ???'
+    const userMsg: ChatMessage = { role: 'user', content: prompt, image }
+    const progressHeader = t('aiChat.articraftGenerating', '???? Articraft ??...')
     const progressMsg: ChatMessage = {
       role: 'assistant',
-      content: '\u6b63\u5728\u751f\u6210 CAD \u6a21\u578b\uff0c\u5b8c\u6210\u540e\u4f1a\u8fd4\u56de GLB \u9884\u89c8\u548c STEP/CAD \u6587\u4ef6\u3002',
+      content: progressHeader,
     }
     setMessages((prev) => [...prev, userMsg, progressMsg])
     setLoading(true)
 
     try {
-      const res = await fetch('/api/text-to-cad/generate', {
+      const res = await fetch('/api/ai-harness/runs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          conversationId: conversationId,
+          mode: 'articraft',
           prompt,
-          name: assetName,
-          category: 'equipment',
-          save: true,
+          articraftMode: 'articulated',
+          ...(image ? { image } : {}),
         }),
         signal: controller.signal,
       })
@@ -2833,201 +3916,39 @@ export function AiChatPanel() {
       if (!res.ok) {
         throw new Error(isRecord(data) && typeof data.error === 'string' ? data.error : res.statusText)
       }
-      const asset = isRecord(data) ? data.asset : undefined
-      if (!isImageTo3DAsset(asset)) {
-        throw new Error('\u6587\u751f CAD \u5b8c\u6210\uff0c\u4f46\u63a5\u53e3\u6ca1\u6709\u8fd4\u56de\u6709\u6548\u7684\u7269\u54c1\u8d44\u4ea7\u3002')
-      }
-
-      const savedAt = isRecord(data) && data.saved === true ? new Date().toISOString() : undefined
-      const artifact: GeneratedModelArtifact = {
-        id: asset.id,
-        title: asset.name ?? asset.id,
-        sourceTool: 'text-to-cad',
-        provider: 'text-to-cad',
-        asset,
-        userPrompt: prompt,
-        createdAt: new Date().toISOString(),
-        savedAt,
-        cad: isRecord(data) ? parseTextToCadLinks(data.cad) : undefined,
-        warnings: isRecord(data) ? parseWarnings(data.warnings) : undefined,
-      }
-
-      if (savedAt) window.dispatchEvent(new Event('generated-assets:updated'))
+      const runId = isRecord(data) && typeof data.runId === 'string' ? data.runId : ''
+      if (!runId) throw new Error('Articraft job was not created')
 
       setMessages((prev) => {
         const updated = [...prev]
         const lastIdx = updated.length - 1
-        const warningSuffix = artifact.warnings?.length ? `\n\nWarnings:\n- ${artifact.warnings.join('\n- ')}` : ''
-        const result: ChatMessage = {
-          role: 'assistant',
-          content: `\u6587\u751f CAD \u751f\u6210\u5b8c\u6210\uff1a${asset.name ?? asset.id}${warningSuffix}`,
-          modelArtifact: artifact,
-        }
-        if (
-          lastIdx >= 0 &&
-          updated[lastIdx]?.role === 'assistant' &&
-          !updated[lastIdx]?.imageTo3dResult &&
-          !updated[lastIdx]?.modelArtifact
-        ) {
-          updated[lastIdx] = result
-          return updated
-        }
-        return [...updated, result]
-      })
-    } catch (err) {
-      if (isAbortError(err)) {
-        markGenerationStopped('\u5df2\u505c\u6b62\u6587\u751f CAD \u751f\u6210\u3002')
-        return
-      }
-      const message = err instanceof Error ? err.message : String(err)
-      setMessages((prev) => {
-        const updated = [...prev]
-        const lastIdx = updated.length - 1
-        const result: ChatMessage = { role: 'assistant', content: `\u6587\u751f CAD \u751f\u6210\u5931\u8d25\uff1a${message}` }
-        if (lastIdx >= 0 && updated[lastIdx]?.role === 'assistant' && !updated[lastIdx]?.modelArtifact) {
-          updated[lastIdx] = result
-          return updated
-        }
-        return [...updated, result]
-      })
-    } finally {
-      if (activeAbortControllerRef.current === controller) {
-        activeAbortControllerRef.current = null
-        setLoading(false)
-      }
-    }
-  }, [markGenerationStopped])
-
-  const sendArticraftMessage = useCallback(async (text: string, image?: ChatImageAttachment) => {
-    const controller = new AbortController()
-    activeAbortControllerRef.current = controller
-    setInput('')
-    setImageAttachment(undefined)
-    const prompt = text.trim() || '请根据这张参考图生成一个可动 3D 模型。'
-    const userMsg: ChatMessage = { role: 'user', content: prompt, image }
-    const progressHeader = t('aiChat.articraftGenerating', '正在使用 Articraft 生成...')
-    const progressLines: string[] = []
-    const progressMsg: ChatMessage = {
-      role: 'assistant',
-      content: progressHeader,
-    }
-    setMessages((prev) => [...prev, userMsg, progressMsg])
-    setLoading(true)
-
-    try {
-      const res = await fetch('/api/articraft/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          mode: 'articulated',
-          ...(image ? { image } : {}),
-        }),
-        signal: controller.signal,
-      })
-      throwIfAborted(controller.signal)
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({ error: res.statusText }))
-        throw new Error((errData as { error?: string }).error ?? res.statusText)
-      }
-
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('No response body')
-
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let resultData: Record<string, unknown> | null = null
-
-      while (true) {
-        throwIfAborted(controller.signal)
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const jsonStr = line.slice(6)
-          try {
-            const event = JSON.parse(jsonStr)
-            if (event.type === 'progress') {
-              const message = String(event.message ?? '').trim()
-              if (message) {
-                progressLines.push(message)
-                if (progressLines.length > ARTICRAFT_PROGRESS_LINE_LIMIT) {
-                  progressLines.splice(0, progressLines.length - ARTICRAFT_PROGRESS_LINE_LIMIT)
-                }
-              }
-              setMessages((prev) => {
-                const updated = [...prev]
-                const lastIdx = updated.length - 1
-                if (lastIdx >= 0 && updated[lastIdx]?.role === 'assistant' && !updated[lastIdx]?.isToolResult) {
-                  updated[lastIdx] = {
-                    ...updated[lastIdx]!,
-                    content: formatArticraftProgressMessage(progressHeader, progressLines),
-                  }
-                }
-                return updated
-              })
-            } else if (event.type === 'result') {
-              resultData = event.data as Record<string, unknown>
-            } else if (event.type === 'error') {
-              throw new Error(event.message as string)
-            }
-          } catch (parseErr) {
-            if (parseErr instanceof SyntaxError) continue
-            throw parseErr
+        if (lastIdx >= 0 && updated[lastIdx]?.role === 'assistant') {
+          updated[lastIdx] = {
+            ...updated[lastIdx]!,
+            content: formatArticraftProgressMessage(progressHeader, ['????????????????...']),
+            generationRun: { id: runId, mode: 'articraft', status: 'queued' },
           }
         }
-      }
-
-      throwIfAborted(controller.signal)
-      if (!resultData) throw new Error('No result data from articraft')
-
-      const resultLinks = (resultData.links as Array<Record<string, unknown>>) ?? []
-      const resultJoints = (resultData.joints as Array<Record<string, unknown>>) ?? []
-      const result: ArticraftResult = {
-        prompt,
-        status: 'ready',
-        recordId: String(resultData.recordId ?? ''),
-        recordPath: String(resultData.recordPath ?? ''),
-        name: String(resultData.name ?? resultData.recordId ?? 'Articraft asset'),
-        partCount: resultLinks.length,
-        jointCount: resultJoints.length,
-        links: resultLinks as unknown as ArticraftLink[],
-        joints: resultJoints as unknown as ArticraftJoint[],
-        data: resultData as unknown as ArticraftModelData,
-      }
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: t('aiChat.articraftReady', 'Articraft 生成完成，可以查看或导入。'),
-          articraftResult: result,
-        },
-      ])
-      return
+        return updated
+      })
+      subscribeArticraftRun({ id: runId, prompt, status: 'queued' })
     } catch (err) {
       if (isAbortError(err)) {
-        markGenerationStopped('已停止 Articraft 生成。')
+        markGenerationStopped('??? Articraft ???')
         return
       }
-      const errorMsg = err instanceof Error ? err.message : String(err)
+      const errorMsg = String((err as { message?: unknown } | null)?.message ?? err)
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: t('aiChat.error', { fallback: '错误：{message}', params: { message: errorMsg } }) },
+        { role: 'assistant', content: t('aiChat.error', { fallback: '???{message}', params: { message: errorMsg } }) },
       ])
     } finally {
       if (activeAbortControllerRef.current === controller) {
         activeAbortControllerRef.current = null
-        setLoading(false)
+        if (activeRunEventSourcesRef.current.size === 0) setLoading(false)
       }
     }
-  }, [markGenerationStopped])
+  }, [conversationId, markGenerationStopped, subscribeArticraftRun])
 
   // Helper: execute tool_calls from an API response, return result strings.
   // Updates chat messages in-place via setMessages callback.
@@ -3058,6 +3979,7 @@ export function AiChatPanel() {
         const geometryToolCalls = currentResponse.tool_calls.filter((tc) =>
           tc.function.name === 'compose_primitive' ||
           tc.function.name === 'compose_recipe' ||
+          tc.function.name === 'compose_assembly' ||
           tc.function.name === 'compose_parts' ||
           tc.function.name === 'compose_object' ||
           tc.function.name === 'compose_robot_arm' ||
@@ -3069,7 +3991,7 @@ export function AiChatPanel() {
             const result = [
               'Invalid generation plan. Nothing was created.',
               'Call exactly ONE geometry tool for the complete object.',
-              'Do not split one object across compose_object + compose_recipe + compose_parts + compose_primitive, because attachTo indexes are local to a single tool call.',
+              'Do not split one object across compose_assembly + compose_object + compose_recipe + compose_parts + compose_primitive, because attachTo indexes are local to a single tool call.',
             ].join('\n')
             toolResultApiMsgs.push({ role: 'tool', tool_call_id: tc.id, content: result })
             allResults.push(result)
@@ -3188,12 +4110,11 @@ export function AiChatPanel() {
 
         if (stagnantAttempts >= GEOMETRY_REPAIR_STAGNATION_LIMIT) {
           allResults.push(
-            [
-              `生成已停止：修复 harness 已连续 ${GEOMETRY_REPAIR_STAGNATION_LIMIT} 轮没有减少校验问题。`,
-              '原因：继续自动对话会反复消耗请求，但仍可能创建错误模型；场景保持不变。',
-              '已保留压缩修复记忆：可用最近失败点重新发起完整蓝图生成。',
-              '下一步方案：请重试一个受支持的完整蓝图。阀门可使用 valve_body + handwheel + inlet/outlet flanges + bonnet/stem/yoke；也可以先生成简化阀门，再一次只调整一个特征。',
-            ].join('\n'),
+            buildPrimitiveRepairStopMessage({
+              failureContent: roundFailureContent,
+              stagnantLimit: GEOMETRY_REPAIR_STAGNATION_LIMIT,
+              compressedMemoryKept: true,
+            }),
           )
           setMessages((prev) => {
             const updated = [...prev]
@@ -3203,7 +4124,7 @@ export function AiChatPanel() {
             }
             return updated
           })
-            break
+          break
         }
 
         if (repairAttempt % GEOMETRY_REPAIR_COMPRESSION_INTERVAL === 0) {
@@ -3218,7 +4139,7 @@ export function AiChatPanel() {
                 ...repairMemory.slice(-GEOMETRY_REPAIR_COMPRESSION_INTERVAL),
                 '',
                 'Use this memory to produce one complete replacement geometry tool call.',
-                'Do not repeat a missing semantic role; add the required part, switch to compose_recipe when a built-in recipe covers it, or switch to the supported compose_parts blueprint.',
+                'Do not repeat a missing semantic role; add the required part, switch to compose_assembly for open-ended complete objects, or switch to the supported compose_parts blueprint for explicit reusable parts.',
               ].join('\n'),
             },
           )
@@ -3235,7 +4156,7 @@ export function AiChatPanel() {
 
   const sendMessage = useCallback(async () => {
     const text = input.trim()
-    const attachedImage = generationMode === 'primitive' || generationMode === 'text-to-cad' ? undefined : imageAttachment
+    const attachedImage = generationMode === 'primitive' ? undefined : imageAttachment
     if (loading) return
     if (generationMode === 'image-to-3d' && !attachedImage) {
       await sendImageTo3DMessage(text, attachedImage)
@@ -3248,25 +4169,8 @@ export function AiChatPanel() {
       return
     }
 
-    if (generationMode === 'text-to-cad') {
-      await sendTextToCadMessage(text)
-      return
-    }
-
     if (generationMode === 'articraft') {
       await sendArticraftMessage(text, attachedImage)
-      return
-    }
-
-
-    if (!(aiProxyUrl || (baseUrl && apiKey))) {
-      setMessages((prev) => [
-      ...prev,
-      {
-        role: 'assistant',
-        content: t('aiChat.noConfig', '请在 .env.local 中设置 NEXT_PUBLIC_AI_BASE_URL 和 NEXT_PUBLIC_AI_API_KEY。'),
-      },
-    ])
       return
     }
 
@@ -3275,74 +4179,84 @@ export function AiChatPanel() {
     setInput('')
     setImageAttachment(undefined)
     const userContent =
-      text || '请根据这张图片生成一个可编辑的 3D 几何对象，并尽量保留主要形状、比例和材质。'
-    const latestGeometryArtifact =
+      text || '请生成一个可编辑的 3D 几何对象，并尽量保留主要形状、比例和材质。'
+    const latestGeometryArtifactCandidate =
       latestGeneratedGeometryArtifact(messages) ?? latestGeometryArtifactRef.current
-    if (latestGeometryArtifact) latestGeometryArtifactRef.current = latestGeometryArtifact
+    if (latestGeometryArtifactCandidate) {
+      latestGeometryArtifactRef.current = latestGeometryArtifactCandidate
+    }
+    const latestGeometryArtifact = isLikelyGeometryRevisionRequest(
+      userContent,
+      latestGeometryArtifactCandidate,
+    )
+      ? latestGeometryArtifactCandidate
+      : null
     const modelUserContent = buildGeometryHarnessContext({
       messages,
       latestArtifact: latestGeometryArtifact,
       userRequest: userContent,
     })
-    setMessages((prev) => [...prev, { role: 'user', content: userContent, image: attachedImage }])
+    const analysisContext = buildGeometryAnalysisContext({
+      messages,
+      latestArtifact: latestGeometryArtifact,
+      userRequest: userContent,
+    })
+    const userMsg: ChatMessage = { role: 'user', content: userContent }
+    const progressMsg: ChatMessage = {
+      role: 'assistant',
+      content: '**Generate:**\n_后台几何体生成任务已创建，正在等待分析..._',
+    }
+    setMessages((prev) => [...prev, userMsg, progressMsg])
     setLoading(true)
 
     try {
-      setMessages((prev) => [...prev, { role: 'assistant', content: '**Analysis:**\n_Thinking..._' }])
-
-      const analysisResponse = await callApi(
-        [
-          { role: 'system', content: STAGE1_ANALYST },
-          { role: 'user', content: buildMultimodalContent(modelUserContent, attachedImage) },
-        ],
-        [],
-        controller.signal,
-      )
+      const res = await fetch('/api/ai-harness/runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: conversationId,
+          mode: 'primitive',
+          prompt: userContent,
+          context: {
+            analysisContext,
+            harnessContext: modelUserContent,
+            latestArtifact: latestGeometryArtifact,
+            recentMessages: messages,
+          },
+        }),
+        signal: controller.signal,
+      })
       throwIfAborted(controller.signal)
-      const analysis = analysisResponse.content ?? ''
-
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(isRecord(data) && typeof data.error === 'string' ? data.error : res.statusText)
+      }
+      const runId = isRecord(data) && typeof data.runId === 'string' ? data.runId : ''
+      if (!runId) throw new Error('Primitive run was not created')
       setMessages((prev) => {
         const updated = [...prev]
-        updated[updated.length - 1] = { role: 'assistant', content: `**Analysis:**\n${analysis}` }
+        const pendingIndex = findPendingPrimitiveRunMessageIndex(updated)
+        const targetIndex =
+          pendingIndex >= 0
+            ? pendingIndex
+            : updated.length > 0 && updated[updated.length - 1]?.role === 'assistant'
+              ? updated.length - 1
+              : -1
+        if (targetIndex >= 0) {
+          updated[targetIndex] = {
+            ...updated[targetIndex]!,
+            generationRun: { id: runId, mode: 'primitive', status: 'queued' },
+          }
+        }
         return updated
       })
-
-      setMessages((prev) => [...prev, { role: 'assistant', content: '**Generate:**\n_Generating..._' }])
-
-      const genMessages: ApiMessage[] = [
-        { role: 'system', content: STAGE2_GENERATOR },
-        {
-          role: 'user',
-          content: `User request: ${modelUserContent}\n\nAnalysis:\n${analysis}\n\nNow call the best available tool based on this analysis. If a previous generated geometry summary is present, prefer revise_geometry for local customer feedback and preserve existing approved traits. Otherwise prefer compose_object for supported whole-object categories, compose_recipe for built-in vehicle/valve/3-axis robot recipes, compose_parts for reusable mechanical/appliance part blueprints, compose_robot_arm for other robot arms, otherwise compose_primitive. Output exactly one tool call. Include geometryBrief for compose_parts or compose_primitive so validation can check the intended geometry; compose_recipe supplies its own brief.`,
-        },
-      ]
-
-      const generationTools: ComposeTool[] = latestGeometryArtifact
-        ? [REVISE_GEOMETRY_TOOL, COMPOSE_OBJECT_TOOL, COMPOSE_RECIPE_TOOL, COMPOSE_PARTS_TOOL, COMPOSE_ROBOT_ARM_TOOL, COMPOSE_PRIMITIVE_TOOL]
-        : [COMPOSE_OBJECT_TOOL, COMPOSE_RECIPE_TOOL, COMPOSE_PARTS_TOOL, COMPOSE_ROBOT_ARM_TOOL, COMPOSE_PRIMITIVE_TOOL]
-      const genResponse = await callApi(genMessages, generationTools, controller.signal)
-      throwIfAborted(controller.signal)
-      const genResult = await processToolCalls(genResponse, genMessages, generationTools, 'Generate', {
-        prompt: userContent,
-        revisionTarget: latestGeometryArtifact,
-      }, controller.signal)
-
-      // If no tool calls were made, show the text response
-      if (genResult.results.length === 0) {
-        throwIfAborted(controller.signal)
-        setMessages((prev) => {
-          const updated = [...prev]
-          updated[updated.length - 1] = { role: 'assistant', content: `**Generate:**\n${genResult.lastContent || '(no output)'}` }
-          return updated
-        })
-      }
-
+      subscribePrimitiveRun({ id: runId, prompt: userContent, status: 'queued' })
     } catch (err) {
       if (isAbortError(err)) {
         markGenerationStopped()
         return
       }
-      const errorMsg = err instanceof Error ? err.message : String(err)
+      const errorMsg = String((err as { message?: unknown } | null)?.message ?? err)
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', content: t('aiChat.error', { fallback: '错误：{message}', params: { message: errorMsg } }) },
@@ -3350,10 +4264,11 @@ export function AiChatPanel() {
     } finally {
       if (activeAbortControllerRef.current === controller) {
         activeAbortControllerRef.current = null
-        setLoading(false)
+        if (activeRunEventSourcesRef.current.size === 0) setLoading(false)
       }
     }
-  }, [input, imageAttachment, messages, loading, generationMode, baseUrl, apiKey, sendImageTo3DMessage, sendTextToCadMessage, sendArticraftMessage, callApi, processToolCalls, markGenerationStopped])
+    return
+  }, [conversationId, input, messages, loading, generationMode, sendImageTo3DMessage, sendArticraftMessage, subscribePrimitiveRun, markGenerationStopped])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -3372,17 +4287,15 @@ export function AiChatPanel() {
     !loading &&
     (generationMode === 'image-to-3d'
       ? true
-      : generationMode === 'primitive' || generationMode === 'text-to-cad'
+      : generationMode === 'primitive'
         ? Boolean(input.trim())
         : Boolean(input.trim() || imageAttachment))
   const inputPlaceholder =
     generationMode === 'primitive'
       ? '\u63cf\u8ff0\u8981\u642d\u5efa\u7684\u51e0\u4f55\u4f53...'
       : generationMode === 'image-to-3d'
-        ? '\u4e0a\u4f20\u56fe\u7247\uff0c\u53ef\u8865\u5145\u5efa\u6a21\u63cf\u8ff0...'
-        : generationMode === 'text-to-cad'
-          ? '\u63cf\u8ff0 CAD \u5de5\u7a0b\u6a21\u578b\uff0c\u4f8b\u5982\u5e26\u5b89\u88c5\u5b54\u7684\u7535\u673a\u652f\u67b6...'
-          : '\u63cf\u8ff0\u5173\u8282\u8d44\u4ea7\uff0c\u6216\u4e0a\u4f20\u53c2\u8003\u56fe...'
+        ? '????????????...'
+        : '?????????????...'
   const latestVisibleGeometryArtifactId = [...messages]
     .reverse()
     .find((message) => message.geometryArtifact && !message.geometryArtifact.supersededBy)
@@ -3390,16 +4303,137 @@ export function AiChatPanel() {
 
 
 
+  const articraftViewerModalElement =
+    articraftViewerModal && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            aria-label={articraftViewerModal.title}
+            aria-modal="true"
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/62 backdrop-blur-sm"
+            role="dialog"
+          >
+            <div className="relative h-[99vh] w-[99vw] overflow-hidden rounded-2xl border border-white/12 bg-[#09090b] shadow-2xl shadow-black/50">
+              <iframe
+                className="h-full w-full border-0 bg-[#09090b]"
+                src={articraftViewerModal.url}
+                title={articraftViewerModal.title}
+              />
+              <button
+                aria-label="关闭 Articraft Viewer"
+                className="absolute top-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-black text-white shadow-lg shadow-black/35 ring-1 ring-white/20 transition-transform hover:scale-105 hover:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-white/70"
+                onClick={closeArticraftViewerModal}
+                type="button"
+              >
+                <Icon className="size-5" icon="mdi:close" />
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-1.5 border-border/50 border-b px-3 py-2.5">
-        <Icon className="size-4 shrink-0 text-muted-foreground" icon="mdi:robot-outline" />
-        <span className="text-xs font-medium">{t('aiChat.title', 'AI 助手')}</span>
+      {articraftViewerModalElement}
+      <div className="relative flex items-center justify-end gap-1.5 border-border/50 border-b px-3 py-2.5">
+        <button
+          aria-expanded={conversationHistoryOpen}
+          aria-haspopup="menu"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-accent/25 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff]"
+          onClick={() => {
+            setConversationHistoryOpen((open) => !open)
+            void refreshConversationHistory()
+          }}
+          type="button"
+        >
+          <Icon className="size-3.5" icon="mdi:history" />
+          {t('aiChat.conversationHistory', '历史记录')}
+          <Icon
+            className={cn('size-3.5 transition-transform', conversationHistoryOpen && 'rotate-180')}
+            icon="mdi:chevron-down"
+          />
+        </button>
+        <button
+          aria-label={t('aiChat.newConversation', '新会话')}
+          className="inline-flex size-7 items-center justify-center rounded-md border border-border/60 bg-accent/25 text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff]"
+          onClick={() => void createNewConversation()}
+          type="button"
+        >
+          <Icon className="size-4" icon="mdi:plus" />
+        </button>
         {!primitiveHasConfig && generationMode === 'primitive' && (
-          <span className="ml-auto text-[10px] text-orange-400">
+          <span className="text-[10px] text-orange-400">
             {t('aiChat.notConfigured', '未配置')}
           </span>
         )}
+        {conversationHistoryOpen ? (
+          <div className="absolute top-full right-3 z-30 mt-1.5 w-[min(22rem,calc(100%-1.5rem))] rounded-xl border border-border/70 bg-background/95 p-1.5 shadow-xl backdrop-blur">
+            {conversationHistory.length === 0 ? (
+              <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">
+                {t('aiChat.noConversationHistory', '暂无历史记录')}
+              </div>
+            ) : (
+              <div
+                className="max-h-[27rem] overflow-y-auto [scrollbar-color:#3a3a3d_#050505] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-button]:hidden [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3d] [&::-webkit-scrollbar-track]:bg-[#050505]"
+                onScroll={(event) => {
+                  const target = event.currentTarget
+                  const distanceToBottom =
+                    target.scrollHeight - target.scrollTop - target.clientHeight
+                  if (distanceToBottom < 24) void refreshConversationHistory({ append: true })
+                }}
+              >
+                {conversationHistory.map((conversation) => {
+                  const active = conversation.id === conversationId
+                  return (
+                    <div
+                      className={cn(
+                        'flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent/50',
+                        active && 'bg-[#a684ff]/10 text-[#a684ff]',
+                      )}
+                      key={conversation.id}
+                    >
+                      <button
+                        className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                        onClick={() => switchConversation(conversation.id)}
+                        type="button"
+                      >
+                        <Icon
+                          className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                          icon={conversation.activeRunCount > 0 ? 'mdi:progress-clock' : 'mdi:chat-outline'}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[11px] font-medium">
+                            {conversation.title || t('aiChat.newConversation', '新会话')}
+                          </span>
+                          <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
+                            {conversation.messageCount} {t('aiChat.messageCountLabel', '条消息')} ·{' '}
+                            {new Date(conversation.updatedAt).toLocaleString()}
+                          </span>
+                        </span>
+                      </button>
+                      <button
+                        aria-label={t('aiChat.deleteConversation', '删除历史记录')}
+                        className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-70 transition-colors hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void deleteConversation(conversation.id)
+                        }}
+                        type="button"
+                      >
+                        <Icon className="size-3.5" icon="mdi:trash-can-outline" />
+                      </button>
+                    </div>
+                  )
+                })}
+                {conversationHistoryLoading ? (
+                  <div className="px-2 py-2 text-center text-[10px] text-muted-foreground">
+                    {t('aiChat.loadingConversationHistory', '正在加载历史记录...')}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div
@@ -3552,6 +4586,22 @@ export function AiChatPanel() {
                     </div>
                   </div>
                 </div>
+                {(() => {
+                  const artifact = articraftResultToModelArtifact(msg.articraftResult!)
+                  if (artifact) return <GeneratedModelPreview artifact={artifact} />
+                  if (msg.articraftResult!.previewError) {
+                    return (
+                      <div className="rounded border border-amber-400/30 bg-amber-400/10 px-2 py-1.5 text-[11px] text-amber-200">
+                        预览导出失败：{msg.articraftResult!.previewError}
+                      </div>
+                    )
+                  }
+                  return (
+                    <div className="rounded border border-border/50 bg-accent/20 px-2 py-3 text-center text-[11px] text-muted-foreground">
+                      正在准备 3D 预览，或点击“存到资料库”生成 GLB。
+                    </div>
+                  )
+                })()}
                 <div className="flex flex-wrap gap-1.5">
                   <button
                     className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
@@ -3579,17 +4629,27 @@ export function AiChatPanel() {
                     type="button"
                   >
                     <Icon className="size-3.5" icon="mdi:import" />
-                    导入场景
+                    {msg.articraftResult.asset ? '放到画布' : '放到画布（可动）'}
                   </button>
                   <button
                     className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-amber-400/50 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!msg.articraftResult.recordId}
+                    disabled={!msg.articraftResult.recordId || !!msg.articraftResult.savedAt}
                     onClick={() => handleSaveArticraftAsset(msg.articraftResult!)}
                     type="button"
                   >
                     <Icon className="size-3.5" icon="mdi:archive-plus-outline" />
-                    保存到素材库
+                    {msg.articraftResult.savedAt ? '已存资料库' : '存到资料库'}
                   </button>
+                  {msg.articraftResult.asset ? (
+                    <button
+                      className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => handleSelectImageTo3DAsset(msg.articraftResult!.asset!)}
+                      type="button"
+                    >
+                      <Icon className="size-3.5" icon="mdi:package-variant-closed" />
+                      在物品库中使用
+                    </button>
+                  ) : null}
                   <button
                     className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-cyan-400/50 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!msg.articraftResult.recordId}
@@ -3667,7 +4727,7 @@ export function AiChatPanel() {
                     key={mode.id}
                     onClick={() => {
                       setGenerationMode(mode.id)
-                      if (mode.id === 'primitive' || mode.id === 'text-to-cad') setImageAttachment(undefined)
+                      if (mode.id === 'primitive') setImageAttachment(undefined)
                       setModeMenuOpen(false)
                     }}
                     role="option"
