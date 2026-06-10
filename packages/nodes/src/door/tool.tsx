@@ -1,9 +1,13 @@
 import {
   type AnyNodeId,
+  clampRectToRoofWallFace,
   collectAlignmentAnchors,
   DoorNode,
   emitter,
   isCurvedWall,
+  type RoofEvent,
+  type RoofNode,
+  roofWallFaceLocalToSegment,
   sceneRegistry,
   spatialGridManager,
   useScene,
@@ -20,8 +24,9 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
-import { BoxGeometry, EdgesGeometry, type Group, type LineSegments } from 'three'
+import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../shared/roof-wall-hit'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
 
@@ -32,9 +37,13 @@ const edgeMaterial = new LineBasicNodeMaterial({
   depthWrite: false,
 })
 
+const roofCursorPoint = new Vector3()
+
 /**
- * Door tool — places DoorNodes on walls only.
- * Doors always sit at floor level (clampedY = height/2).
+ * Door tool — places DoorNodes on walls and on roof-segment wall faces
+ * (the generated base walls under a roof, including coplanar gable ends).
+ * Doors always sit at floor level (clampedY = height/2 — segment base for
+ * roof-hosted doors).
  */
 const DoorTool: React.FC = () => {
   const draftRef = useRef<DoorNode | null>(null)
@@ -215,6 +224,8 @@ const DoorTool: React.FC = () => {
             side,
             parentId: event.node.id,
             wallId: event.node.id,
+            // The draft may arrive from a roof-segment face hover.
+            roofSegmentId: undefined,
           })
         }
       }
@@ -335,6 +346,168 @@ const DoorTool: React.FC = () => {
       hideCursor()
     }
 
+    // ── Roof-segment wall faces ─────────────────────────────────────
+    // The merged roof mesh emits `roof:*`; hits are resolved against the
+    // segments' vertical wall faces (base walls + coplanar gable ends).
+
+    const worldToBuildingLocal = (point: Vector3): [number, number, number] => {
+      // The tool's cursor group renders in the building's local frame —
+      // same conversion as the roof accessory tools (e.g. SkylightTool).
+      const buildingId = useViewer.getState().selection.buildingId
+      const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : undefined
+      if (buildingObj) buildingObj.worldToLocal(point)
+      return [point.x, point.y, point.z]
+    }
+
+    const resolveRoofTarget = (event: RoofEvent) => {
+      const hit = resolveRoofWallHit(
+        event.node as RoofNode,
+        event.position,
+        event.normal,
+        event.object,
+      )
+      if (!hit) return null
+      const width = draftRef.current?.width ?? 0.9
+      const height = draftRef.current?.height ?? 2.1
+      // Doors sit on the segment base: v locked to height/2, only u slides.
+      const clamped = clampRectToRoofWallFace(hit.face, hit.u, height / 2, width, height, {
+        lockV: true,
+      })
+      if (!clamped) return null
+      const position = roofWallFaceLocalToSegment(
+        hit.segment,
+        hit.face.id,
+        clamped.u,
+        clamped.v,
+        (hit.segment.wallThickness ?? 0.1) / 2,
+      )
+      const valid = !hasRoofFaceChildOverlap(
+        hit.segment,
+        hit.face,
+        clamped.u,
+        clamped.v,
+        width,
+        height,
+        draftRef.current?.id,
+      )
+      return { hit, position, yaw: hit.face.yaw, valid }
+    }
+
+    const updateRoofCursor = (
+      target: NonNullable<ReturnType<typeof resolveRoofTarget>>,
+      roof: RoofNode,
+    ) => {
+      const segObj = sceneRegistry.nodes.get(target.hit.segment.id as AnyNodeId)
+      if (!segObj) return
+      segObj.updateWorldMatrix(true, false)
+      roofCursorPoint.set(target.position[0], target.position[1], target.position[2])
+      segObj.localToWorld(roofCursorPoint)
+      updateCursor(
+        worldToBuildingLocal(roofCursorPoint),
+        (roof.rotation ?? 0) + (target.hit.segment.rotation ?? 0) + target.yaw,
+        target.valid,
+      )
+    }
+
+    const onRoofHover = (event: RoofEvent) => {
+      const target = resolveRoofTarget(event)
+      if (!target) {
+        // On the roof but not over a placeable wall face (slope, soffit,
+        // or a face the door cannot fit on).
+        if (draftRef.current?.roofSegmentId) {
+          destroyDraft()
+          hideCursor()
+        }
+        return
+      }
+      const { hit, position, yaw } = target
+
+      if (draftRef.current && draftRef.current.parentId !== hit.segment.id) destroyDraft()
+      if (draftRef.current) {
+        useScene.getState().updateNode(draftRef.current.id, {
+          position,
+          rotation: [0, yaw, 0],
+        })
+      } else {
+        const node = DoorNode.parse({
+          position,
+          rotation: [0, yaw, 0],
+          side: 'front',
+          roofSegmentId: hit.segment.id,
+          parentId: hit.segment.id,
+          metadata: { isTransient: true },
+        })
+        useScene.getState().createNode(node, hit.segment.id as AnyNodeId)
+        draftRef.current = node
+      }
+      updateRoofCursor(target, event.node as RoofNode)
+      event.stopPropagation()
+    }
+
+    const onRoofClick = (event: RoofEvent) => {
+      if (!draftRef.current?.roofSegmentId) return
+      const target = resolveRoofTarget(event)
+      if (!target?.valid) return
+      const { hit, position, yaw } = target
+
+      const draft = draftRef.current
+      draftRef.current = null
+
+      useScene.getState().deleteNode(draft.id)
+      useScene.temporal.getState().resume()
+
+      const state = useScene.getState()
+      const doorCount = Object.values(state.nodes).filter(
+        (n) => n.type === 'door' && (n as DoorNode).roofSegmentId !== undefined,
+      ).length
+
+      const node = DoorNode.parse({
+        name: `Door ${doorCount + 1}`,
+        position,
+        rotation: [0, yaw, 0],
+        side: 'front',
+        roofSegmentId: hit.segment.id,
+        parentId: hit.segment.id,
+        width: draft.width,
+        height: draft.height,
+        doorCategory: draft.doorCategory,
+        doorType: draft.doorType,
+        leafCount: draft.leafCount,
+        operationState: draft.operationState,
+        slideDirection: draft.slideDirection,
+        trackStyle: draft.trackStyle,
+        garagePanelCount: draft.garagePanelCount,
+        frameThickness: draft.frameThickness,
+        frameDepth: draft.frameDepth,
+        threshold: draft.threshold,
+        thresholdHeight: draft.thresholdHeight,
+        hingesSide: draft.hingesSide,
+        swingDirection: draft.swingDirection,
+        segments: draft.segments,
+        handle: draft.handle,
+        handleHeight: draft.handleHeight,
+        handleSide: draft.handleSide,
+        doorCloser: draft.doorCloser,
+        panicBar: draft.panicBar,
+        panicBarHeight: draft.panicBarHeight,
+      })
+
+      useScene.getState().createNode(node, hit.segment.id as AnyNodeId)
+      // Rebuild the segment (and the merged roof) so the wall brush
+      // picks up the new opening cut.
+      useScene.getState().dirtyNodes.add(hit.segment.id as AnyNodeId)
+      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      useScene.temporal.getState().pause()
+      triggerSFX('sfx:structure-build')
+      event.stopPropagation()
+    }
+
+    const onRoofLeave = () => {
+      if (!draftRef.current?.roofSegmentId) return
+      destroyDraft()
+      hideCursor()
+    }
+
     const onCancel = () => {
       destroyDraft()
       hideCursor()
@@ -344,6 +517,10 @@ const DoorTool: React.FC = () => {
     emitter.on('wall:move', onWallMove)
     emitter.on('wall:click', onWallClick)
     emitter.on('wall:leave', onWallLeave)
+    emitter.on('roof:enter', onRoofHover)
+    emitter.on('roof:move', onRoofHover)
+    emitter.on('roof:click', onRoofClick)
+    emitter.on('roof:leave', onRoofLeave)
     emitter.on('tool:cancel', onCancel)
 
     return () => {
@@ -355,6 +532,10 @@ const DoorTool: React.FC = () => {
       emitter.off('wall:move', onWallMove)
       emitter.off('wall:click', onWallClick)
       emitter.off('wall:leave', onWallLeave)
+      emitter.off('roof:enter', onRoofHover)
+      emitter.off('roof:move', onRoofHover)
+      emitter.off('roof:click', onRoofClick)
+      emitter.off('roof:leave', onRoofLeave)
       emitter.off('tool:cancel', onCancel)
     }
   }, [])

@@ -108,6 +108,17 @@ export {
   RoofSegmentNode,
   RoofType,
 } from './nodes/roof-segment'
+export type { RoofSegmentWallFace, RoofWallFaceId } from './nodes/roof-segment-walls'
+export {
+  clampRectToRoofWallFace,
+  getMaxRoofRectHeightFromAnchor,
+  getMaxRoofRectWidthFromAnchor,
+  getRoofSegmentWallFace,
+  getRoofSegmentWallFaces,
+  getRoofWallFaceIdFromYaw,
+  roofWallFaceLocalToSegment,
+  segmentPointToRoofWallFace,
+} from './nodes/roof-segment-walls'
 export { ScanNode } from './nodes/scan'
 export { ShelfNode } from './nodes/shelf'
 export { SiteNode } from './nodes/site'

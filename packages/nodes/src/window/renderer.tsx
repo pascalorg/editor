@@ -1,6 +1,12 @@
 'use client'
 
-import { useRegistry, useScene, type WindowNode } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type RoofSegmentNode,
+  useRegistry,
+  useScene,
+  type WindowNode,
+} from '@pascal-app/core'
 import {
   createMaterial,
   DEFAULT_WINDOW_MATERIAL,
@@ -33,7 +39,17 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
     node.material?.texture,
   ])
 
-  return (
+  // Roof-hosted windows mount under the roof's `roof-elements` group (roof
+  // frame), so the host segment's transform is applied here — wall-hosted
+  // windows get it for free from the wall mesh they're nested in.
+  const segment = useScene((state) =>
+    node.roofSegmentId
+      ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
+      : undefined,
+  )
+  if (node.roofSegmentId && segment?.type !== 'roof-segment') return null
+
+  const mesh = (
     <mesh
       material={material}
       position={node.position}
@@ -44,6 +60,13 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
     >
       <boxGeometry args={[0, 0, 0]} />
     </mesh>
+  )
+
+  if (!segment) return mesh
+  return (
+    <group position={segment.position} rotation-y={segment.rotation}>
+      {mesh}
+    </group>
   )
 }
 

@@ -46,6 +46,11 @@ export const DoorNode = BaseNode.extend({
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   side: z.enum(['front', 'back']).optional(),
   wallId: z.string().optional(),
+  // Alternative host: a roof-segment's generated wall face (base wall
+  // under the roof or a coplanar gable end). When set, `position` is the
+  // opening center in SEGMENT-LOCAL coords on the outer wall plane and
+  // `rotation[1]` is the face yaw — see `roof-segment-walls.ts`.
+  roofSegmentId: z.string().optional(),
 
   // Overall dimensions
   width: z.number().default(0.9),

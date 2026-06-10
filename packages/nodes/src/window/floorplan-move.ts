@@ -9,6 +9,10 @@ import {
 import { snapToHalf } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import {
+  getRoofHostedOpeningLevelId,
+  getRoofHostedOpeningPlanPoint,
+} from '../shared/roof-opening-host'
+import {
   findClosestWallInPlan,
   projectWallLocalPointToPlan,
   snapLocalXToNeighbors,
@@ -29,7 +33,12 @@ import { clampToWall, hasWallChildOverlap } from './window-math'
 
 export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ node }) => {
   const startLevelId = (() => {
-    const wall = useScene.getState().nodes[node.parentId as AnyNodeId]
+    // Wall-hosted: the wall's parent is the level. Roof-hosted: walk
+    // segment → roof → level.
+    const nodes = useScene.getState().nodes
+    const roofLevelId = getRoofHostedOpeningLevelId(node, nodes)
+    if (roofLevelId) return roofLevelId
+    const wall = nodes[node.parentId as AnyNodeId]
     return wall ? (wall.parentId as AnyNodeId | null) : null
   })()
   const originalWall = node.parentId
@@ -39,7 +48,10 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     original:
       originalWall?.type === 'wall'
         ? projectWallLocalPointToPlan(originalWall, node.position[0])
-        : [node.position[0], 0],
+        : (getRoofHostedOpeningPlanPoint(node, useScene.getState().nodes) ?? [
+            node.position[0],
+            0,
+          ]),
     metadata: node.metadata,
   })
 
@@ -56,6 +68,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     side: WindowNode['side']
     parentId: string
     wallId: string
+    roofSegmentId: undefined
   } | null = null
 
   const session: FloorplanMoveTargetSession = {
@@ -93,6 +106,9 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         side: hit.side,
         parentId: hit.wall.id,
         wallId: hit.wall.id,
+        // Re-anchoring to a wall ends any roof-segment hosting; the
+        // overlay's snapshot restores it if the move is reverted.
+        roofSegmentId: undefined,
       }
 
       useScene.getState().updateNodes([

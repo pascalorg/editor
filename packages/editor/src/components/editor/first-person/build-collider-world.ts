@@ -50,6 +50,22 @@ function isMesh(object: THREE.Object3D): object is THREE.Mesh {
   return 'isMesh' in object && (object as THREE.Mesh).isMesh
 }
 
+// Renderer-effective visibility: an invisible ancestor hides the whole
+// subtree at render time even when the object's own flag is true. The
+// collider world must match what's rendered — the roof keeps stale,
+// UNCUT per-segment CSG inside its hidden `segments-wrapper` (full-edit
+// exit hides the wrapper without stripping geometry), and cloning those
+// meshes would block the walkthrough player at openings the visible
+// merged shell has cut through.
+function isEffectivelyVisible(object: THREE.Object3D) {
+  let current: THREE.Object3D | null = object
+  while (current) {
+    if (!current.visible) return false
+    current = current.parent
+  }
+  return true
+}
+
 function isColliderMaterialVisible(material: THREE.Material | THREE.Material[]) {
   return Array.isArray(material) ? material.some((entry) => entry.visible) : material.visible
 }
@@ -319,9 +335,12 @@ function collectColliderGeometriesFromNode(
     if (visitedMeshes.has(object)) return
     visitedMeshes.add(object)
 
+    // Prune hidden subtrees — children of an invisible group never render,
+    // so they must not collide either (see isEffectivelyVisible).
+    if (!object.visible) return
+
     if (
       isMesh(object) &&
-      object.visible &&
       isColliderMaterialVisible(object.material) &&
       !SKIPPED_MESH_NAMES.has(object.name)
     ) {
@@ -363,6 +382,11 @@ export function buildFirstPersonColliderWorldFromRegistry(): FirstPersonCollider
 
     const root = sceneRegistry.nodes.get(nodeId)
     if (!root) continue
+
+    // Registered objects can sit inside a hidden wrapper (roof segments
+    // under `segments-wrapper`) — the per-node traversal starts AT the
+    // object, so the ancestor chain must be checked here.
+    if (!isEffectivelyVisible(root)) continue
 
     if (node.type === 'door') {
       const doorGeometry = createDoorLeafColliderGeometry(root, node)

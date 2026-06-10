@@ -110,7 +110,10 @@ export const RoofSystem = () => {
       // previous cut shape (stale CSG) once the user exits segment
       // edit mode. Registry-driven so the viewer stays kind-agnostic.
       const def = nodeRegistry.get(node.type)
-      if (def?.capabilities?.roofAccessory) {
+      // Kinds with `cascadesViaHostSegment` (door / window) reach the roof
+      // through their own geometry system's parentId cascade instead —
+      // their dirty marks belong to that system, not to this loop.
+      if (def?.capabilities?.roofAccessory && !def.capabilities.roofAccessory.cascadesViaHostSegment) {
         const segId = (node as { roofSegmentId?: string }).roofSegmentId
         const seg = segId ? (nodes[segId as AnyNodeId] as RoofSegmentNode | undefined) : undefined
         if (seg?.parentId) {
@@ -131,10 +134,20 @@ export const RoofSystem = () => {
           // Only compute expensive individual CSG when the segment is actually rendered
           // (its parent group is visible = the roof is selected for editing)
           const isVisible = mesh.parent?.visible !== false
-          if (isVisible && segmentsProcessed < MAX_SEGMENTS_PER_FRAME) {
+          // Accessory-reveal mode (RoofEditSystem): the wrapper is shown so
+          // portaled handles render, but the merged shell stays visible and
+          // the segment meshes are stripped to empty placeholders. Rebuilding
+          // per-segment CSG here would draw UNCUT geometry on top of the
+          // merged shell — hiding a freshly cut opening (door / window /
+          // skylight) until the next deselect. Full edit mode hides the
+          // merged mesh, so gate the rebuild on its visibility.
+          const revealOnly =
+            mesh.parent?.name === 'segments-wrapper' &&
+            mesh.parent?.parent?.getObjectByName('merged-roof')?.visible === true
+          if (isVisible && !revealOnly && segmentsProcessed < MAX_SEGMENTS_PER_FRAME) {
             updateRoofSegmentGeometry(effectiveSegment, mesh)
             segmentsProcessed++
-          } else if (isVisible) {
+          } else if (isVisible && !revealOnly) {
             return // Over budget — keep dirty, process next frame
           } else {
             // Just sync transform, skip CSG — the merged roof handles visuals.
@@ -313,16 +326,19 @@ function updateMergedRoofGeometry(
       const cut = new Brush(welded, dummyMats[0])
       cut.updateMatrixWorld()
 
+      const cutScope = childDef?.capabilities?.roofAccessory?.cutScope ?? 'all'
       try {
-        const nextShin = csgEvaluator.evaluate(workingShin, cut, SUBTRACTION) as Brush
-        workingShin.geometry.dispose()
-        prepareBrushForCSG(nextShin)
-        workingShin = nextShin
+        if (cutScope !== 'wall') {
+          const nextShin = csgEvaluator.evaluate(workingShin, cut, SUBTRACTION) as Brush
+          workingShin.geometry.dispose()
+          prepareBrushForCSG(nextShin)
+          workingShin = nextShin
 
-        const nextDeck = csgEvaluator.evaluate(workingDeck, cut, SUBTRACTION) as Brush
-        workingDeck.geometry.dispose()
-        prepareBrushForCSG(nextDeck)
-        workingDeck = nextDeck
+          const nextDeck = csgEvaluator.evaluate(workingDeck, cut, SUBTRACTION) as Brush
+          workingDeck.geometry.dispose()
+          prepareBrushForCSG(nextDeck)
+          workingDeck = nextDeck
+        }
 
         const nextWall = csgEvaluator.evaluate(workingWall, cut, SUBTRACTION) as Brush
         workingWall.geometry.dispose()

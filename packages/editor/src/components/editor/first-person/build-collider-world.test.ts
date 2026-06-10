@@ -105,6 +105,36 @@ describe('buildFirstPersonColliderWorldFromRegistry', () => {
     world?.dispose()
   })
 
+  test('skips meshes hidden by an invisible ancestor (stale roof segment CSG)', () => {
+    registerColliderDefinition('column', ColumnNode, 'structure')
+
+    // Mirror the roof's segments-wrapper shape: the registered mesh's own
+    // visible flag stays true while a hidden wrapper hides it at render
+    // time. The collider must match the render, not the own-flag.
+    const column = ColumnNode.parse({ id: 'column_test' })
+    const visibleColumn = ColumnNode.parse({ id: 'column_visible', position: [3, 0, 0] })
+    setSceneNodes([column, visibleColumn])
+
+    const wrapper = new Group()
+    wrapper.visible = false
+    const hiddenMesh = new Mesh(new BoxGeometry(10, 2, 10), new MeshBasicMaterial())
+    wrapper.add(hiddenMesh)
+    wrapper.updateMatrixWorld(true)
+    sceneRegistry.nodes.set(column.id, hiddenMesh)
+    sceneRegistry.byType[column.type]!.add(column.id)
+
+    mountNode(visibleColumn, [1, 2, 1], [3, 1, 0])
+
+    const world = buildFirstPersonColliderWorldFromRegistry()
+
+    expect(world).not.toBeNull()
+    // Bounds reflect only the visible 1×1 column at x = 3; the 10×10 mesh
+    // under the hidden wrapper contributed no geometry.
+    expect(world?.bounds?.min.x).toBeCloseTo(2.5)
+    expect(world?.bounds?.max.x).toBeCloseTo(3.5)
+    world?.dispose()
+  })
+
   test('leaves elevators to their dedicated dynamic collider meshes', () => {
     registerColliderDefinition('elevator', ElevatorNode, 'structure')
 

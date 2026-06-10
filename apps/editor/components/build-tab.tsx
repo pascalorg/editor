@@ -118,14 +118,19 @@ export function BuildTab() {
   // app bootstrap, so enumerating earlier would race it and see no kinds.
   const roofFeatures = useMemo<RoofFeature[]>(
     () =>
-      getRoofAccessoryKinds().map((kind) => {
-        const icon = nodeRegistry.get(kind)?.presentation?.icon
-        return {
-          kind,
-          label: nodeRegistry.get(kind)?.presentation?.label ?? kind,
-          iconSrc: icon?.kind === 'url' ? icon.src : ROOF_FEATURE_FALLBACK_ICON,
-        }
-      }),
+      getRoofAccessoryKinds()
+        // Door / window declare `roofAccessory` for the wall-face cut but
+        // already have their own Build tiles — listing them here too
+        // would duplicate the entry under Roof → Features.
+        .filter((kind) => !nodeRegistry.get(kind)?.capabilities?.wallOpeningPlacement)
+        .map((kind) => {
+          const icon = nodeRegistry.get(kind)?.presentation?.icon
+          return {
+            kind,
+            label: nodeRegistry.get(kind)?.presentation?.label ?? kind,
+            iconSrc: icon?.kind === 'url' ? icon.src : ROOF_FEATURE_FALLBACK_ICON,
+          }
+        }),
     [],
   )
 

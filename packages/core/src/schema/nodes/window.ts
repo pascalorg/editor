@@ -28,6 +28,11 @@ export const WindowNode = BaseNode.extend({
 
   // Wall reference
   wallId: z.string().optional(),
+  // Alternative host: a roof-segment's generated wall face (base wall
+  // under the roof or a coplanar gable end). When set, `position` is the
+  // opening center in SEGMENT-LOCAL coords on the outer wall plane and
+  // `rotation[1]` is the face yaw — see `roof-segment-walls.ts`.
+  roofSegmentId: z.string().optional(),
 
   // Overall dimensions
   width: z.number().default(1.5),

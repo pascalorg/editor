@@ -1,8 +1,12 @@
 import {
   type AnyNodeId,
+  clampRectToRoofWallFace,
   collectAlignmentAnchors,
   emitter,
   isCurvedWall,
+  type RoofEvent,
+  type RoofNode,
+  roofWallFaceLocalToSegment,
   sceneRegistry,
   spatialGridManager,
   useLiveTransforms,
@@ -23,8 +27,9 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { BoxGeometry, EdgesGeometry, type Group } from 'three'
+import { BoxGeometry, EdgesGeometry, type Group, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../shared/roof-wall-hit'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
 
@@ -34,6 +39,8 @@ const edgeMaterial = new LineBasicNodeMaterial({
   depthTest: false,
   depthWrite: false,
 })
+
+const roofCursorPoint = new Vector3()
 
 /**
  * Move/duplicate tool for WindowNodes — wall-only, same guardrails as WindowTool.
@@ -70,6 +77,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       side: movingWindowNode.side,
       parentId: movingWindowNode.parentId,
       wallId: movingWindowNode.wallId,
+      // Windows can be hosted on a roof-segment wall face. Moving onto a
+      // wall re-anchors as wall-hosted (roofSegmentId cleared); reverts
+      // must restore the roof host.
+      roofSegmentId: movingWindowNode.roofSegmentId,
       metadata: movingWindowNode.metadata,
     }
 
@@ -230,6 +241,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           side: target.side,
           parentId: target.wallId,
           wallId: target.wallId,
+          roofSegmentId: undefined,
         })
         markWallDirty(currentWallId)
         currentWallId = target.wallId
@@ -315,6 +327,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           side: target.side,
           wallId: target.wallId,
           parentId: target.wallId,
+          roofSegmentId: undefined,
         })
         useScene.getState().createNode(node, target.wallId as AnyNodeId)
         placedId = node.id
@@ -327,6 +340,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           side: original.side,
           parentId: original.parentId,
           wallId: original.wallId,
+          roofSegmentId: original.roofSegmentId,
           metadata: original.metadata,
         })
         useScene.temporal.getState().resume()
@@ -337,6 +351,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           side: target.side,
           parentId: target.wallId,
           wallId: target.wallId,
+          roofSegmentId: undefined,
           metadata: {},
         })
 
@@ -374,6 +389,188 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         side: original.side,
         parentId: original.parentId,
         wallId: original.wallId,
+        roofSegmentId: original.roofSegmentId,
+      })
+      if (original.parentId) markWallDirty(original.parentId)
+    }
+
+    // ── Roof-segment wall faces ─────────────────────────────────────
+    // Mirrors the wall flow for the segments' vertical wall faces (base
+    // walls under the roof + coplanar gable ends — a window can sit in
+    // the gable pediment). This is also the placement path preset tiles
+    // take (`metadata.isNew` clones).
+
+    const worldToBuildingLocal = (point: Vector3): [number, number, number] => {
+      const buildingId = useViewer.getState().selection.buildingId
+      const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : undefined
+      if (buildingObj) buildingObj.worldToLocal(point)
+      return [point.x, point.y, point.z]
+    }
+
+    const resolveRoofMoveTarget = (event: RoofEvent) => {
+      const hit = resolveRoofWallHit(
+        event.node as RoofNode,
+        event.position,
+        event.normal,
+        event.object,
+      )
+      if (!hit) return null
+      // Free vertical placement (0.5m grid like walls); the clamp
+      // projects the window inside the face profile, sliding it down
+      // under the gable slopes when needed.
+      const clamped = clampRectToRoofWallFace(
+        hit.face,
+        hit.u,
+        snapToHalf(hit.v),
+        movingWindowNode.width,
+        movingWindowNode.height,
+      )
+      if (!clamped) return null
+      const position = roofWallFaceLocalToSegment(
+        hit.segment,
+        hit.face.id,
+        clamped.u,
+        clamped.v,
+        (hit.segment.wallThickness ?? 0.1) / 2,
+      )
+      const valid = !hasRoofFaceChildOverlap(
+        hit.segment,
+        hit.face,
+        clamped.u,
+        clamped.v,
+        movingWindowNode.width,
+        movingWindowNode.height,
+        movingWindowNode.id,
+      )
+      return { hit, position, yaw: hit.face.yaw, valid, roof: event.node as RoofNode }
+    }
+
+    const updateRoofCursor = (target: NonNullable<ReturnType<typeof resolveRoofMoveTarget>>) => {
+      const segObj = sceneRegistry.nodes.get(target.hit.segment.id as AnyNodeId)
+      if (!segObj) return
+      segObj.updateWorldMatrix(true, false)
+      roofCursorPoint.set(target.position[0], target.position[1], target.position[2])
+      segObj.localToWorld(roofCursorPoint)
+      updateCursor(
+        worldToBuildingLocal(roofCursorPoint),
+        (target.roof.rotation ?? 0) + (target.hit.segment.rotation ?? 0) + target.yaw,
+        target.valid,
+      )
+    }
+
+    const onRoofHover = (event: RoofEvent) => {
+      const target = resolveRoofMoveTarget(event)
+      if (!target) return
+      // Wall-frame drag anchor / live transform don't apply on a roof face.
+      dragAnchor = null
+      lastTarget = null
+      useLiveTransforms.getState().clear(movingWindowNode.id)
+      if (currentWallId !== target.hit.segment.id) {
+        useScene.getState().updateNode(movingWindowNode.id, {
+          position: target.position,
+          rotation: [0, target.yaw, 0],
+          side: 'front',
+          parentId: target.hit.segment.id,
+          wallId: undefined,
+          roofSegmentId: target.hit.segment.id,
+        })
+        markWallDirty(currentWallId)
+        currentWallId = target.hit.segment.id
+      } else {
+        useScene.getState().updateNode(movingWindowNode.id, {
+          position: target.position,
+          rotation: [0, target.yaw, 0],
+        })
+      }
+      updateRoofCursor(target)
+      event.stopPropagation()
+    }
+
+    const onRoofClick = (event: RoofEvent) => {
+      const target = resolveRoofMoveTarget(event)
+      if (!target?.valid) return
+      const segmentId = target.hit.segment.id
+
+      let placedId: string
+
+      if (isNew) {
+        useScene.getState().deleteNode(movingWindowNode.id)
+        useScene.temporal.getState().resume()
+
+        const cloned = structuredClone(movingWindowNode) as any
+        delete cloned.id
+        if (cloned.metadata && typeof cloned.metadata === 'object') {
+          delete cloned.metadata.isNew
+          delete cloned.metadata.isTransient
+        }
+
+        const node = WindowNode.parse({
+          ...cloned,
+          position: target.position,
+          rotation: [0, target.yaw, 0],
+          side: 'front',
+          wallId: undefined,
+          roofSegmentId: segmentId,
+          parentId: segmentId,
+        })
+        useScene.getState().createNode(node, segmentId as AnyNodeId)
+        placedId = node.id
+      } else {
+        useScene.getState().updateNode(movingWindowNode.id, {
+          position: original.position,
+          rotation: original.rotation,
+          side: original.side,
+          parentId: original.parentId,
+          wallId: original.wallId,
+          roofSegmentId: original.roofSegmentId,
+          metadata: original.metadata,
+        })
+        useScene.temporal.getState().resume()
+
+        useScene.getState().updateNode(movingWindowNode.id, {
+          position: target.position,
+          rotation: [0, target.yaw, 0],
+          side: 'front',
+          parentId: segmentId,
+          wallId: undefined,
+          roofSegmentId: segmentId,
+          metadata: {},
+        })
+
+        if (original.parentId && original.parentId !== segmentId) {
+          markWallDirty(original.parentId)
+        }
+        placedId = movingWindowNode.id
+      }
+
+      markWallDirty(segmentId)
+      useLiveTransforms.getState().clear(movingWindowNode.id)
+      useScene.temporal.getState().pause()
+
+      triggerSFX('sfx:structure-build')
+      hideCursor()
+      useViewer.getState().setSelection({ selectedIds: [placedId] })
+      exitMoveMode()
+      event.stopPropagation()
+    }
+
+    const onRoofLeave = () => {
+      hideCursor()
+      useLiveTransforms.getState().clear(movingWindowNode.id)
+      dragAnchor = null
+      lastTarget = null
+      if (isNew) return
+      if (currentWallId && currentWallId !== original.parentId) {
+        markWallDirty(currentWallId)
+      }
+      currentWallId = original.parentId
+      useScene.getState().updateNode(movingWindowNode.id, {
+        position: original.position,
+        rotation: original.rotation,
+        side: original.side,
+        parentId: original.parentId,
+        wallId: original.wallId,
+        roofSegmentId: original.roofSegmentId,
       })
       if (original.parentId) markWallDirty(original.parentId)
     }
@@ -390,6 +587,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           side: original.side,
           parentId: original.parentId,
           wallId: original.wallId,
+          roofSegmentId: original.roofSegmentId,
           metadata: original.metadata,
         })
         if (original.parentId) markWallDirty(original.parentId)
@@ -403,6 +601,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     emitter.on('wall:move', onWallMove)
     emitter.on('wall:click', onWallClick)
     emitter.on('wall:leave', onWallLeave)
+    emitter.on('roof:enter', onRoofHover)
+    emitter.on('roof:move', onRoofHover)
+    emitter.on('roof:click', onRoofClick)
+    emitter.on('roof:leave', onRoofLeave)
     emitter.on('tool:cancel', onCancel)
 
     return () => {
@@ -422,6 +624,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             side: original.side,
             parentId: original.parentId,
             wallId: original.wallId,
+            roofSegmentId: original.roofSegmentId,
             metadata: original.metadata,
           })
           if (original.parentId) markWallDirty(original.parentId)
@@ -434,6 +637,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       emitter.off('wall:move', onWallMove)
       emitter.off('wall:click', onWallClick)
       emitter.off('wall:leave', onWallLeave)
+      emitter.off('roof:enter', onRoofHover)
+      emitter.off('roof:move', onRoofHover)
+      emitter.off('roof:click', onRoofClick)
+      emitter.off('roof:leave', onRoofLeave)
       emitter.off('tool:cancel', onCancel)
     }
   }, [movingWindowNode, exitMoveMode])
