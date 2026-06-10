@@ -1,15 +1,13 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { type LevelNode, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import { type LucideIcon, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import { cn } from './../../../lib/utils'
-import useEditor, { selectSiteFloorplanContext } from './../../../store/use-editor'
+import useEditor from './../../../store/use-editor'
 import { ActionButton } from './action-button'
 
-type ControlId = 'select' | 'box-select' | 'site-edit' | 'zone' | 'delete'
+type ControlId = 'select' | 'box-select' | 'zone' | 'delete'
 
 type ControlConfig = {
   id: ControlId
@@ -31,13 +29,6 @@ const controls: ControlConfig[] = [
     shortcut: 'V',
     color: 'hover:bg-blue-500/20 hover:text-blue-400',
     activeColor: 'bg-blue-500/20 text-blue-400',
-  },
-  {
-    id: 'site-edit',
-    imageSrc: '/icons/site-flag.png',
-    label: 'Edit site',
-    color: 'hover:bg-white/5',
-    activeColor: 'bg-white/10 hover:bg-white/10',
   },
   {
     id: 'zone',
@@ -65,47 +56,20 @@ export function ControlModes() {
   const setPhase = useEditor((state) => state.setPhase)
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setSelectionTool = useEditor((state) => state.setFloorplanSelectionTool)
-  const levelId = useViewer((s) => s.selection.levelId)
-
-  // Only subscribe to the primitive `level` number — when walls are added to
-  // this level the object ref changes but this number doesn't, so Object.is
-  // dedupes and we avoid a re-render.
-  const levelIndex = useScene((state) => {
-    if (!levelId) return null
-    const node = state.nodes[levelId]
-    return node?.type === 'level' ? (node as LevelNode).level : null
-  })
 
   const isSiteEditing = phase === 'site'
-  const isGroundFloor = levelIndex === 0
-  const canEnterSiteEdit = isGroundFloor || isSiteEditing
 
   const structureLayer = useEditor((state) => state.structureLayer)
 
   const getIsActive = (id: ControlId): boolean => {
-    if (isSiteEditing) return id === 'site-edit'
     if (id === 'select') return mode === 'select' && selectionTool === 'click'
     if (id === 'box-select') return mode === 'select' && selectionTool === 'marquee'
-    if (id === 'site-edit') return false
     if (id === 'zone')
       return mode === 'build' && phase === 'structure' && structureLayer === 'zones'
     return mode === id
   }
 
   const handleClick = (id: ControlId) => {
-    if (id === 'site-edit') {
-      if (isSiteEditing) {
-        // Toggle off → back to structure/select
-        setPhase('structure')
-        setMode('select')
-        setStructureLayer('elements')
-      } else if (isGroundFloor) {
-        useEditor.setState({ phase: 'site', mode: 'select', tool: null, catalogCategory: null })
-        selectSiteFloorplanContext()
-      }
-      return
-    }
-
     // Exit site editing first if needed
     if (isSiteEditing) {
       setPhase('structure')
@@ -136,36 +100,19 @@ export function ControlModes() {
       {controls.map((c) => {
         const ModeIcon = c.icon
         const isImageMode = Boolean(c.imageSrc)
-        const isSiteButton = c.id === 'site-edit'
         const isActive = getIsActive(c.id)
-        const isDisabled = isSiteButton && !canEnterSiteEdit
 
         return (
           <ActionButton
             className={cn(
               'group text-muted-foreground',
-              isSiteButton
-                ? isActive
-                  ? c.activeColor
-                  : canEnterSiteEdit
-                    ? 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0'
-                    : 'cursor-not-allowed opacity-35 grayscale'
-                : !(isImageMode || isActive) && c.color,
-              !(isSiteButton || isImageMode) && isActive && c.activeColor,
-              !isSiteButton && isImageMode && isActive && 'bg-white/10 hover:bg-white/10',
-              !isSiteButton && isImageMode && !isActive && 'hover:bg-white/5',
+              !(isImageMode || isActive) && c.color,
+              !isImageMode && isActive && c.activeColor,
+              isImageMode && isActive && 'bg-white/10 hover:bg-white/10',
+              isImageMode && !isActive && 'hover:bg-white/5',
             )}
-            disabled={isDisabled}
             key={c.id}
-            label={
-              isSiteButton
-                ? isActive
-                  ? 'Exit site editing'
-                  : canEnterSiteEdit
-                    ? 'Edit site'
-                    : 'Site editing (ground level only)'
-                : c.label
-            }
+            label={c.label}
             onClick={() => handleClick(c.id)}
             shortcut={c.shortcut}
             size="icon"
@@ -176,13 +123,9 @@ export function ControlModes() {
                 alt={c.label}
                 className={cn(
                   'h-[28px] w-[28px] object-contain transition-[opacity,filter] duration-200',
-                  isSiteButton
-                    ? isActive
-                      ? 'opacity-100 grayscale-0'
-                      : ''
-                    : isActive
-                      ? 'opacity-100 grayscale-0'
-                      : 'opacity-60 grayscale group-hover:opacity-100 group-hover:grayscale-0',
+                  isActive
+                    ? 'opacity-100 grayscale-0'
+                    : 'opacity-60 grayscale group-hover:opacity-100 group-hover:grayscale-0',
                 )}
                 height={28}
                 src={c.imageSrc}

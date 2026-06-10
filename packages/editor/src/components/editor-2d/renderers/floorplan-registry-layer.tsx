@@ -32,6 +32,7 @@ import {
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useEditor from '../../../store/use-editor'
+import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 
@@ -493,6 +494,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
       event.preventDefault()
       event.stopPropagation()
+      suppressBoxSelectForPointer(event)
 
       const session = handler.start({
         node,
@@ -769,6 +771,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           if (!node) return
           event.preventDefault()
           event.stopPropagation()
+          suppressBoxSelectForPointer(event)
           sfxEmitter.emit('sfx:item-pick')
           setMovingNode(node as never)
         }}

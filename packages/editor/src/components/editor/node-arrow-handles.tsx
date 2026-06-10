@@ -43,6 +43,7 @@ import { EDITOR_LAYER } from '../../lib/constants'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { formatAngleRadians } from '../tools/shared/segment-angle'
 import {
   ARROW_COLOR,
@@ -1169,6 +1170,7 @@ function TranslateArrow({
   // 3D translate gizmo and the floating Move button behave identically.
   const activate = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
     sfxEmitter.emit('sfx:item-pick')
     useEditor.getState().setMovingNode(node as never)
     useViewer.getState().setSelection({ selectedIds: [] })
