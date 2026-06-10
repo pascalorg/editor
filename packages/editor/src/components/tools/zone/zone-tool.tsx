@@ -184,7 +184,7 @@ export const ZoneTool: React.FC = () => {
       const [gridX, gridZ] = snapWorldXZForActiveBuilding(
         event.position[0],
         event.position[2],
-        0.5,
+        useEditor.getState().gridSnapStep,
       ).local
       cursorPosition = [gridX, gridZ]
       levelYRef.current = event.localPosition[1]
@@ -217,7 +217,7 @@ export const ZoneTool: React.FC = () => {
       const [gridX, gridZ] = snapWorldXZForActiveBuilding(
         event.position[0],
         event.position[2],
-        0.5,
+        useEditor.getState().gridSnapStep,
       ).local
       let clickPoint: [number, number] = [gridX, gridZ]
 
