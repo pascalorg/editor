@@ -64,6 +64,7 @@ import {
 import { createPortal } from 'react-dom'
 import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import {
   alignFloorplanDraftPoint,
   buildFloorplanItemEntry,
@@ -77,6 +78,7 @@ import { guideEmitter } from '../../lib/guide-events'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
+import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import { cn } from '../../lib/utils'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
@@ -8429,17 +8431,22 @@ export function FloorplanPanel({
 
       if (isCeilingBuildActive) {
         // Polygon vertex: grid (snapToHalf) + optional 45° angle snap from
-        // the previous vertex. Alignment runs only when angle snap is OFF
-        // (first vertex, or Shift held) — when the angle is being locked,
-        // pulling the vertex sideways would break it.
+        // the previous vertex. Wall magnetic snap may still win, while
+        // generic alignment runs only when angle snap is OFF (first vertex,
+        // or Shift held) so it does not pull a locked angle sideways.
         const angleSnap = ceilingDraftPoints.length > 0 && !shiftPressed
-        let snappedPoint = snapPolygonDraftPoint({
+        const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: ceilingDraftPoints[ceilingDraftPoints.length - 1],
           angleSnap,
         })
-        if (angleSnap) useAlignmentGuides.getState().clear()
-        else snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
+        const snappedPoint = resolveCeilingPlanPointSnap({
+          rawPoint: planPoint,
+          fallbackPoint,
+          levelId,
+          altKey: event.altKey,
+          align: !angleSnap,
+        }).point
 
         emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
@@ -8505,13 +8512,25 @@ export function FloorplanPanel({
       // moves (the catch-all would otherwise swallow the move event).
       if (isPolygonBuildActive) {
         const angleSnap = activePolygonDraftPoints.length > 0 && !shiftPressed
-        let snappedPoint = snapPolygonDraftPoint({
+        const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
           angleSnap,
         })
-        if (angleSnap) useAlignmentGuides.getState().clear()
-        else snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
+        let snappedPoint = fallbackPoint
+        if (isSlabBuildActive) {
+          snappedPoint = resolveSlabPlanPointSnap({
+            rawPoint: planPoint,
+            fallbackPoint,
+            levelId,
+            altKey: event.altKey,
+            align: !angleSnap,
+          }).point
+        } else if (angleSnap) {
+          useAlignmentGuides.getState().clear()
+        } else {
+          snappedPoint = alignFloorplanDraftPoint(fallbackPoint, { bypass: event.altKey })
+        }
 
         // Emit `grid:move` so the registry-driven slab tool also tracks
         // the cursor (its 3D preview needs it).
@@ -8679,7 +8698,9 @@ export function FloorplanPanel({
       isOpeningPlacementActive,
       isPolygonBuildActive,
       isRoofBuildActive,
+      isSlabBuildActive,
       isWallBuildActive,
+      levelId,
       publishFloorplanNavigationPose,
       smoothFloorplanNavigationView,
       referenceScaleDraft,
@@ -8936,8 +8957,10 @@ export function FloorplanPanel({
     isOpeningPlacementActive,
     isPolygonBuildActive,
     isRoofBuildActive,
+    isSlabBuildActive,
     isWallBuildActive,
     isZoneBuildActive,
+    levelId,
     roofDraftStart,
     setCursorPoint,
     setFenceDraftEnd,
@@ -9114,24 +9137,39 @@ export function FloorplanPanel({
         return
       }
 
-      const snappedPoint = snapPolygonDraftPoint({
+      const angleSnap = activePolygonDraftPoints.length > 0 && !shiftPressed
+      const fallbackPoint = snapPolygonDraftPoint({
         point: planPoint,
         start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
-        angleSnap: activePolygonDraftPoints.length > 0 && !shiftPressed,
+        angleSnap,
       })
 
       if (isCeilingBuildActive) {
-        emitFloorplanGridEvent('double-click', planPoint, event)
+        const snappedPoint = resolveCeilingPlanPointSnap({
+          rawPoint: planPoint,
+          fallbackPoint,
+          levelId,
+          altKey: event.altKey,
+          align: !angleSnap,
+        }).point
+        emitFloorplanGridEvent('double-click', snappedPoint, event)
         handleCeilingPlacementConfirm(snappedPoint)
         return
       }
 
       if (isZoneBuildActive) {
-        handleZonePlacementConfirm(snappedPoint)
+        handleZonePlacementConfirm(fallbackPoint)
       } else {
+        const snappedPoint = resolveSlabPlanPointSnap({
+          rawPoint: planPoint,
+          fallbackPoint,
+          levelId,
+          altKey: event.altKey,
+          align: !angleSnap,
+        }).point
         // Slab is registry-driven: forward the double-click so the 3D tool
         // commits the node (zone has no registry tool, so it commits locally).
-        emitFloorplanGridEvent('double-click', planPoint, event)
+        emitFloorplanGridEvent('double-click', snappedPoint, event)
         handleSlabPlacementConfirm(snappedPoint)
       }
     },
@@ -9146,6 +9184,7 @@ export function FloorplanPanel({
       isPolygonDraftBuildActive,
       isRoofBuildActive,
       isZoneBuildActive,
+      levelId,
       shiftPressed,
     ],
   )

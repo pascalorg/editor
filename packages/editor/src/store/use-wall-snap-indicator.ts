@@ -15,6 +15,8 @@ export type WallSnapPoint = {
   x: number
   z: number
   kind: WallSnapKind
+  /** Optional wall ids whose geometry produced this snap. */
+  wallIds?: string[]
 }
 
 type WallSnapIndicatorState = {

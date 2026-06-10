@@ -71,7 +71,7 @@ export function resolveSurfaceColor(
   // The active scene theme may tint individual roles (e.g. Mediterranean's blue
   // roof); fall back to the chosen colour preset's palette when it doesn't.
   const tints = sceneThemeId ? getSceneTheme(sceneThemeId).clayTints : undefined
-  return tints?.[role] ?? PRESET_PALETTES[preset][role]
+  return tints?.[role] ?? (PRESET_PALETTES[preset] ?? CLAY_PALETTE)[role]
 }
 
 // DoubleSide on any NodeMaterial inside the MRT scenePass (SSGI's output /

@@ -4,6 +4,8 @@ import {
   DoorNode,
   emitter,
   isCurvedWall,
+  type RoofEvent,
+  type RoofNode,
   sceneRegistry,
   spatialGridManager,
   useLiveTransforms,
@@ -25,6 +27,11 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import {
+  getRoofWallOpeningCursorPose,
+  type RoofWallOpeningTarget,
+  resolveRoofWallOpeningTarget,
+} from '../shared/roof-wall-opening-placement'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
 
@@ -57,6 +64,11 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       side: movingDoorNode.side,
       parentId: movingDoorNode.parentId,
       wallId: movingDoorNode.wallId,
+      // Doors can be hosted on a roof-segment wall face. Moving onto a
+      // wall re-anchors as wall-hosted (roofSegmentId cleared); reverts
+      // must restore the roof host.
+      roofSegmentId: movingDoorNode.roofSegmentId,
+      roofFace: movingDoorNode.roofFace,
       metadata: movingDoorNode.metadata,
     }
 
@@ -66,7 +78,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       })
     }
 
-    let currentWallId: string | null = movingDoorNode.parentId
+    let currentHostId: string | null = movingDoorNode.parentId
     let dragAnchor: { wallId: string; rawX: number; startX: number } | null = null
     let lastTarget: {
       wallNode: WallEvent['node']
@@ -80,18 +92,18 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       event: WallEvent
     } | null = null
 
-    const markWallDirty = (wallId: string | null) => {
-      if (wallId) useScene.getState().dirtyNodes.add(wallId as AnyNodeId)
+    const markHostDirty = (hostId: string | null) => {
+      if (hostId) useScene.getState().dirtyNodes.add(hostId as AnyNodeId)
     }
-    const lastWallDirtyAt = new Map<string, number>()
-    const markWallDirtyThrottled = (wallId: string | null) => {
-      if (!wallId) return
+    const lastHostDirtyAt = new Map<string, number>()
+    const markHostDirtyThrottled = (hostId: string | null) => {
+      if (!hostId) return
       const now = globalThis.performance?.now?.() ?? Date.now()
-      const last = lastWallDirtyAt.get(wallId) ?? 0
+      const last = lastHostDirtyAt.get(hostId) ?? 0
       // Wall rebuilds can trigger expensive CSG; throttle live previews to avoid FPS collapse.
       if (now - last > 120) {
-        lastWallDirtyAt.set(wallId, now)
-        markWallDirty(wallId)
+        lastHostDirtyAt.set(hostId, now)
+        markHostDirty(hostId)
       }
     }
 
@@ -200,16 +212,18 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     const applyPreview = (target: NonNullable<typeof lastTarget>) => {
-      if (currentWallId !== target.wallId) {
+      if (currentHostId !== target.wallId) {
         useScene.getState().updateNode(movingDoorNode.id, {
           position: [target.clampedX, target.clampedY, 0],
           rotation: [0, target.itemRotation, 0],
           side: target.side,
           parentId: target.wallId,
           wallId: target.wallId,
+          roofSegmentId: undefined,
+          roofFace: undefined,
         })
-        markWallDirty(currentWallId)
-        currentWallId = target.wallId
+        markHostDirty(currentHostId)
+        currentHostId = target.wallId
       } else {
         const doorMesh = sceneRegistry.nodes.get(movingDoorNode.id as AnyNodeId)
         if (doorMesh) {
@@ -222,7 +236,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         position: [target.clampedX, target.clampedY, 0],
         rotation: target.itemRotation,
       })
-      markWallDirtyThrottled(target.wallId)
+      markHostDirtyThrottled(target.wallId)
 
       updateCursor(
         wallLocalToWorld(
@@ -284,6 +298,8 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           side: target.side,
           wallId: target.wallId,
           parentId: target.wallId,
+          roofSegmentId: undefined,
+          roofFace: undefined,
         })
         useScene.getState().createNode(node, target.wallId as AnyNodeId)
         placedId = node.id
@@ -294,6 +310,8 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           side: original.side,
           parentId: original.parentId,
           wallId: original.wallId,
+          roofSegmentId: original.roofSegmentId,
+          roofFace: original.roofFace,
           metadata: original.metadata,
         })
         useScene.temporal.getState().resume()
@@ -304,16 +322,17 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           side: target.side,
           parentId: target.wallId,
           wallId: target.wallId,
+          roofSegmentId: undefined,
           metadata: {},
         })
 
         if (original.parentId && original.parentId !== target.wallId) {
-          markWallDirty(original.parentId)
+          markHostDirty(original.parentId)
         }
         placedId = movingDoorNode.id
       }
 
-      markWallDirty(target.wallId)
+      markHostDirty(target.wallId)
       useLiveTransforms.getState().clear(movingDoorNode.id)
       useScene.temporal.getState().pause()
 
@@ -330,25 +349,97 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       dragAnchor = null
       lastTarget = null
       if (isNew) return
-      if (currentWallId && currentWallId !== original.parentId) {
-        markWallDirty(currentWallId)
+      if (currentHostId && currentHostId !== original.parentId) {
+        markHostDirty(currentHostId)
       }
-      currentWallId = original.parentId
+      currentHostId = original.parentId
       useScene.getState().updateNode(movingDoorNode.id, {
         position: original.position,
         rotation: original.rotation,
         side: original.side,
         parentId: original.parentId,
         wallId: original.wallId,
+        roofSegmentId: original.roofSegmentId,
+        roofFace: original.roofFace,
       })
-      if (original.parentId) markWallDirty(original.parentId)
+      if (original.parentId) markHostDirty(original.parentId)
     }
 
-    const onCancel = () => {
+    // ── Roof-segment wall faces ─────────────────────────────────────
+    // Mirrors the wall flow for the segments' vertical wall faces (base
+    // walls under the roof + coplanar gable ends). This is also the
+    // placement path preset tiles take (`metadata.isNew` clones).
+
+    const resolveRoofMoveTarget = (event: RoofEvent) =>
+      resolveRoofWallOpeningTarget({
+        event,
+        width: movingDoorNode.width,
+        height: movingDoorNode.height,
+        ignoreId: movingDoorNode.id,
+        vertical: { kind: 'bottom-locked' },
+      })
+
+    const updateRoofCursor = (target: RoofWallOpeningTarget, roof: RoofNode) => {
+      const pose = getRoofWallOpeningCursorPose(target, roof)
+      if (pose) updateCursor(pose.position, pose.rotationY, target.valid)
+    }
+
+    const onRoofHover = (event: RoofEvent) => {
+      const target = resolveRoofMoveTarget(event)
+      if (!target) return
+      // Wall-frame drag anchor / live transform don't apply on a roof face.
+      dragAnchor = null
+      lastTarget = null
       useLiveTransforms.getState().clear(movingDoorNode.id)
+      if (currentHostId !== target.segment.id) {
+        useScene.getState().updateNode(movingDoorNode.id, {
+          position: target.position,
+          rotation: [0, 0, 0],
+          side: 'front',
+          parentId: target.segment.id,
+          wallId: undefined,
+          roofSegmentId: target.segment.id,
+          roofFace: target.face.id,
+        })
+        markHostDirty(currentHostId)
+        currentHostId = target.segment.id
+      } else {
+        useScene.getState().updateNode(movingDoorNode.id, {
+          position: target.position,
+          rotation: [0, 0, 0],
+          roofFace: target.face.id,
+        })
+      }
+      updateRoofCursor(target, event.node as RoofNode)
+      event.stopPropagation()
+    }
+
+    const onRoofClick = (event: RoofEvent) => {
+      const target = resolveRoofMoveTarget(event)
+      if (!target?.valid) return
+      const segmentId = target.segment.id
+
+      let placedId: string
+
       if (isNew) {
         useScene.getState().deleteNode(movingDoorNode.id)
-        if (currentWallId) markWallDirty(currentWallId)
+        useScene.temporal.getState().resume()
+
+        const cloned = structuredClone(movingDoorNode) as any
+        delete cloned.id
+        cloned.metadata = stripPlacementMetadataFlags(cloned.metadata)
+        const node = DoorNode.parse({
+          ...cloned,
+          position: target.position,
+          rotation: [0, 0, 0],
+          side: 'front',
+          wallId: undefined,
+          roofSegmentId: segmentId,
+          roofFace: target.face.id,
+          parentId: segmentId,
+        })
+        useScene.getState().createNode(node, segmentId as AnyNodeId)
+        placedId = node.id
       } else {
         useScene.getState().updateNode(movingDoorNode.id, {
           position: original.position,
@@ -356,9 +447,79 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           side: original.side,
           parentId: original.parentId,
           wallId: original.wallId,
+          roofSegmentId: original.roofSegmentId,
+          roofFace: original.roofFace,
           metadata: original.metadata,
         })
-        if (original.parentId) markWallDirty(original.parentId)
+        useScene.temporal.getState().resume()
+
+        useScene.getState().updateNode(movingDoorNode.id, {
+          position: target.position,
+          rotation: [0, 0, 0],
+          side: 'front',
+          parentId: segmentId,
+          wallId: undefined,
+          roofSegmentId: segmentId,
+          roofFace: target.face.id,
+          metadata: {},
+        })
+
+        if (original.parentId && original.parentId !== segmentId) {
+          markHostDirty(original.parentId)
+        }
+        placedId = movingDoorNode.id
+      }
+
+      markHostDirty(segmentId)
+      useLiveTransforms.getState().clear(movingDoorNode.id)
+      useScene.temporal.getState().pause()
+
+      triggerSFX('sfx:structure-build')
+      hideCursor()
+      useViewer.getState().setSelection({ selectedIds: [placedId] })
+      exitMoveMode()
+      event.stopPropagation()
+    }
+
+    const onRoofLeave = () => {
+      hideCursor()
+      useLiveTransforms.getState().clear(movingDoorNode.id)
+      dragAnchor = null
+      lastTarget = null
+      if (isNew) return
+      if (currentHostId && currentHostId !== original.parentId) {
+        markHostDirty(currentHostId)
+      }
+      currentHostId = original.parentId
+      useScene.getState().updateNode(movingDoorNode.id, {
+        position: original.position,
+        rotation: original.rotation,
+        side: original.side,
+        parentId: original.parentId,
+        wallId: original.wallId,
+        roofSegmentId: original.roofSegmentId,
+        roofFace: original.roofFace,
+      })
+      if (original.parentId) markHostDirty(original.parentId)
+    }
+
+    const onCancel = () => {
+      useLiveTransforms.getState().clear(movingDoorNode.id)
+      if (isNew) {
+        useScene.getState().deleteNode(movingDoorNode.id)
+        if (currentHostId) markHostDirty(currentHostId)
+      } else {
+        useScene.getState().updateNode(movingDoorNode.id, {
+          position: original.position,
+          rotation: original.rotation,
+          side: original.side,
+          parentId: original.parentId,
+          wallId: original.wallId,
+          roofSegmentId: original.roofSegmentId,
+          roofFace: original.roofFace,
+          metadata: original.metadata,
+        })
+        if (original.parentId) markHostDirty(original.parentId)
       }
       useScene.temporal.getState().resume()
       hideCursor()
@@ -369,6 +530,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     emitter.on('wall:move', onWallMove)
     emitter.on('wall:click', onWallClick)
     emitter.on('wall:leave', onWallLeave)
+    emitter.on('roof:enter', onRoofHover)
+    emitter.on('roof:move', onRoofHover)
+    emitter.on('roof:click', onRoofClick)
+    emitter.on('roof:leave', onRoofLeave)
     emitter.on('tool:cancel', onCancel)
 
     return () => {
@@ -379,7 +544,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       if (currentMeta?.isTransient) {
         if (isNew) {
           useScene.getState().deleteNode(movingDoorNode.id)
-          if (currentWallId) markWallDirty(currentWallId)
+          if (currentHostId) markHostDirty(currentHostId)
         } else {
           useScene.getState().updateNode(movingDoorNode.id, {
             position: original.position,
@@ -387,9 +552,11 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
             side: original.side,
             parentId: original.parentId,
             wallId: original.wallId,
+            roofSegmentId: original.roofSegmentId,
+            roofFace: original.roofFace,
             metadata: original.metadata,
           })
-          if (original.parentId) markWallDirty(original.parentId)
+          if (original.parentId) markHostDirty(original.parentId)
         }
       }
       useLiveTransforms.getState().clear(movingDoorNode.id)
@@ -399,6 +566,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       emitter.off('wall:move', onWallMove)
       emitter.off('wall:click', onWallClick)
       emitter.off('wall:leave', onWallLeave)
+      emitter.off('roof:enter', onRoofHover)
+      emitter.off('roof:move', onRoofHover)
+      emitter.off('roof:click', onRoofClick)
+      emitter.off('roof:leave', onRoofLeave)
       emitter.off('tool:cancel', onCancel)
     }
   }, [movingDoorNode, exitMoveMode])

@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/viewer'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
+import { RoofFaceHostFrame } from '../shared/roof-face-host'
 
 export const WindowRenderer = ({ node }: { node: WindowNode }) => {
   const ref = useRef<Mesh>(null!)
@@ -33,7 +34,7 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
     node.material?.texture,
   ])
 
-  return (
+  const mesh = (
     <mesh
       material={material}
       position={node.position}
@@ -44,6 +45,13 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
     >
       <boxGeometry args={[0, 0, 0]} />
     </mesh>
+  )
+
+  if (!node.roofSegmentId) return mesh
+  return (
+    <RoofFaceHostFrame roofFace={node.roofFace} roofSegmentId={node.roofSegmentId}>
+      {mesh}
+    </RoofFaceHostFrame>
   )
 }
 

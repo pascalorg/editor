@@ -13,13 +13,17 @@ import { BufferGeometry, Float32BufferAttribute } from 'three'
  * (count 0) makes three.js create no GPU buffer for it, so vertex buffer slot 0
  * is never bound and WebGPU rejects the draw with "Vertex buffer slot 0 … was
  * not set", which poisons the whole command encoder (cascading into "Invalid
- * CommandBuffer" on every queue submit). Three real vertices give it a bound
- * buffer; the `groupCount` count-0 groups keep nothing drawn while matching the
- * mesh's material-array length so raycasts / BVH never index past the materials.
+ * CommandBuffer" on every queue submit). The zero normals and UVs keep lit
+ * node-material pipelines from compiling additional required-but-unbound
+ * vertex buffers. Three real vertices give it bound buffers; the `groupCount`
+ * count-0 groups keep nothing drawn while matching the mesh's material-array
+ * length so raycasts / BVH never index past the materials.
  */
 export function createPlaceholderGeometry(groupCount = 0): BufferGeometry {
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new Float32BufferAttribute(new Float32Array(9), 3))
+  geometry.setAttribute('normal', new Float32BufferAttribute(new Float32Array(9), 3))
+  geometry.setAttribute('uv', new Float32BufferAttribute(new Float32Array(6), 2))
   for (let group = 0; group < groupCount; group++) {
     geometry.addGroup(0, 0, group)
   }

@@ -27,6 +27,7 @@ const OPERATION_DOOR_COLLIDER_OPEN_THRESHOLD = 0.85
 const LEVEL_FALLBACK_FLOOR_THICKNESS = 0.08
 const LEVEL_FALLBACK_FLOOR_PADDING = 2
 const LEVEL_FALLBACK_FLOOR_MIN_SIZE = 30
+const SITE_GROUND_COLLIDER_MIN_SIZE = 2000
 
 export const FIRST_PERSON_SPAWN_EYE_HEIGHT = SPAWN_EYE_HEIGHT
 
@@ -47,6 +48,22 @@ type SceneNodes = ReturnType<typeof useScene.getState>['nodes']
 
 function isMesh(object: THREE.Object3D): object is THREE.Mesh {
   return 'isMesh' in object && (object as THREE.Mesh).isMesh
+}
+
+// Renderer-effective visibility: an invisible ancestor hides the whole
+// subtree at render time even when the object's own flag is true. The
+// collider world must match what's rendered — the roof keeps stale,
+// UNCUT per-segment CSG inside its hidden `segments-wrapper` (full-edit
+// exit hides the wrapper without stripping geometry), and cloning those
+// meshes would block the walkthrough player at openings the visible
+// merged shell has cut through.
+function isEffectivelyVisible(object: THREE.Object3D) {
+  let current: THREE.Object3D | null = object
+  while (current) {
+    if (!current.visible) return false
+    current = current.parent
+  }
+  return true
 }
 
 function isColliderMaterialVisible(material: THREE.Material | THREE.Material[]) {
@@ -129,8 +146,10 @@ function collectLevelFallbackFloorGeometries(nodes: SceneNodes) {
 // a dedicated collider, a spawn on the bare ground (no slab, or not parented to
 // a level that triggers the per-level fallback) has no floor to stand on and the
 // walkthrough player falls through. Derive a thin ground slab from node data (not
-// the rendered mesh) so it exists regardless of geometry-mount timing, sized to
-// cover the whole scene footprint at the site's ground plane.
+// the rendered mesh) so it exists regardless of geometry-mount timing. The slab
+// is effectively unbounded (not sized to the site polygon): the ground plane must
+// keep holding the player up even after they step past the site boundary,
+// otherwise they fall below the ground plane into the void.
 function createSiteGroundColliderGeometry(site: SiteNode, nodes: SceneNodes) {
   if (site.visible === false) return null
 
@@ -142,11 +161,11 @@ function createSiteGroundColliderGeometry(site: SiteNode, nodes: SceneNodes) {
   const [boundsWidth, boundsDepth] = bounds?.size ?? [0, 0]
   const width = Math.max(
     boundsWidth + LEVEL_FALLBACK_FLOOR_PADDING * 2,
-    LEVEL_FALLBACK_FLOOR_MIN_SIZE,
+    SITE_GROUND_COLLIDER_MIN_SIZE,
   )
   const depth = Math.max(
     boundsDepth + LEVEL_FALLBACK_FLOOR_PADDING * 2,
-    LEVEL_FALLBACK_FLOOR_MIN_SIZE,
+    SITE_GROUND_COLLIDER_MIN_SIZE,
   )
 
   const geometry = createBoxColliderGeometry(width, LEVEL_FALLBACK_FLOOR_THICKNESS, depth)
@@ -316,9 +335,12 @@ function collectColliderGeometriesFromNode(
     if (visitedMeshes.has(object)) return
     visitedMeshes.add(object)
 
+    // Prune hidden subtrees — children of an invisible group never render,
+    // so they must not collide either (see isEffectivelyVisible).
+    if (!object.visible) return
+
     if (
       isMesh(object) &&
-      object.visible &&
       isColliderMaterialVisible(object.material) &&
       !SKIPPED_MESH_NAMES.has(object.name)
     ) {
@@ -360,6 +382,11 @@ export function buildFirstPersonColliderWorldFromRegistry(): FirstPersonCollider
 
     const root = sceneRegistry.nodes.get(nodeId)
     if (!root) continue
+
+    // Registered objects can sit inside a hidden wrapper (roof segments
+    // under `segments-wrapper`) — the per-node traversal starts AT the
+    // object, so the ancestor chain must be checked here.
+    if (!isEffectivelyVisible(root)) continue
 
     if (node.type === 'door') {
       const doorGeometry = createDoorLeafColliderGeometry(root, node)

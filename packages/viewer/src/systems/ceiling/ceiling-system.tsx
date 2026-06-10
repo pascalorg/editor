@@ -133,6 +133,8 @@ export function generateCeilingGeometry(
     // the whole command encoder.
     const degenerate = new THREE.BufferGeometry()
     degenerate.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
+    degenerate.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
+    degenerate.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(6), 2))
     return degenerate
   }
 
