@@ -4519,7 +4519,17 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
   )
 })
 
-export function FloorplanPanel() {
+export function FloorplanPanel({
+  /**
+   * Element to portal the compass button into. The 2D/3D navigation poses stay
+   * in sync (`navigationSyncPose`), so hosting the compass on the always-visible
+   * viewer-area container keeps it correct — needle and align-to-north alike —
+   * in 2d, 3d, and split modes, while this panel itself may be display:none.
+   */
+  compassHost,
+}: {
+  compassHost?: HTMLElement | null
+}) {
   const viewportHostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const floorplanSceneRef = useRef<SVGGElement>(null)
@@ -10135,12 +10145,21 @@ export function FloorplanPanel() {
             only action menu the floor plan mounts. */}
         <FloorplanRegistryActionMenu />
 
-        {(levelNode?.type === 'level' || hasAmbientBuildingLevel) && (
-          <FloorplanCompassButton
-            northRotationDeg={-floorplanUserRotationDeg}
-            onAlignNorth={alignFloorplanViewToNorth}
-          />
-        )}
+        {(levelNode?.type === 'level' || hasAmbientBuildingLevel) &&
+          (compassHost ? (
+            createPortal(
+              <FloorplanCompassButton
+                northRotationDeg={-floorplanUserRotationDeg}
+                onAlignNorth={alignFloorplanViewToNorth}
+              />,
+              compassHost,
+            )
+          ) : (
+            <FloorplanCompassButton
+              northRotationDeg={-floorplanUserRotationDeg}
+              onAlignNorth={alignFloorplanViewToNorth}
+            />
+          ))}
 
         {referenceScaleDraft && (
           <div className="pointer-events-none absolute top-3 left-1/2 z-30 -translate-x-1/2 rounded-md border bg-background/95 px-3 py-2 text-center text-sm shadow-sm">
