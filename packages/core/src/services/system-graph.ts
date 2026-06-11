@@ -141,11 +141,11 @@ function summarize(
   for (const id of nodeIds) {
     const node = nodes[id]
     if (!node) continue
-    if (node.type === 'duct-segment' || node.type === 'lineset') {
+    if (node.type === 'duct-segment' || node.type === 'lineset' || node.type === 'pipe-segment') {
       runCount += 1
       runLengthM += pathLength(node.path)
-      if (node.type === 'duct-segment') systems.add(node.system)
-      else systems.add('refrigerant')
+      if (node.type === 'lineset') systems.add('refrigerant')
+      else systems.add(node.system)
     } else if (node.type === 'duct-fitting') {
       fittingCount += 1
       systems.add(node.system)

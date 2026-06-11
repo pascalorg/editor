@@ -34,6 +34,7 @@ type BuildToolKind =
   | 'duct-terminal'
   | 'hvac-equipment'
   | 'lineset'
+  | 'pipe-segment'
 
 type BuildType = {
   /** Selection id — equals `kind` for tool types, `'painting'` for paint mode. */
@@ -68,6 +69,7 @@ const BUILD_TYPES: BuildType[] = [
   { id: 'duct-terminal', label: 'Register', iconify: 'lucide:air-vent', kind: 'duct-terminal' },
   { id: 'hvac-equipment', label: 'HVAC Unit', iconify: 'lucide:heater', kind: 'hvac-equipment' },
   { id: 'lineset', label: 'Lineset', iconify: 'lucide:cable', kind: 'lineset' },
+  { id: 'pipe-segment', label: 'DWV Pipe', iconify: 'lucide:droplets', kind: 'pipe-segment' },
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.png', mode: 'material-paint' },
 ]
 

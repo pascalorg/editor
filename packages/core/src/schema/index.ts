@@ -71,8 +71,8 @@ export {
 export { EyebrowVentNode } from './nodes/eyebrow-vent'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
-export { HvacEquipmentNode } from './nodes/hvac-equipment'
 export { GutterNode, GutterOutlet } from './nodes/gutter'
+export { HvacEquipmentNode } from './nodes/hvac-equipment'
 export type {
   AnimationEffect,
   Asset,
@@ -93,6 +93,7 @@ export {
 } from './nodes/item'
 export { LevelNode } from './nodes/level'
 export { LinesetNode } from './nodes/lineset'
+export { PipeSegmentNode } from './nodes/pipe-segment'
 // Nodes
 export { RidgeVentNode } from './nodes/ridge-vent'
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'

@@ -23,6 +23,7 @@ import type {
   ItemNode,
   LevelNode,
   LinesetNode,
+  PipeSegmentNode,
   RidgeVentNode,
   RoofNode,
   RoofSegmentNode,
@@ -116,6 +117,7 @@ export type DuctSegmentEvent = NodeEvent<DuctSegmentNode>
 export type DuctFittingEvent = NodeEvent<DuctFittingNode>
 export type DuctTerminalEvent = NodeEvent<DuctTerminalNode>
 export type HvacEquipmentEvent = NodeEvent<HvacEquipmentNode>
+export type PipeSegmentEvent = NodeEvent<PipeSegmentNode>
 export type LinesetEvent = NodeEvent<LinesetNode>
 
 // Event suffixes - exported for use in hooks
@@ -275,6 +277,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'duct-fitting', DuctFittingEvent> &
   NodeEvents<'duct-terminal', DuctTerminalEvent> &
   NodeEvents<'hvac-equipment', HvacEquipmentEvent> &
+  NodeEvents<'pipe-segment', PipeSegmentEvent> &
   NodeEvents<'lineset', LinesetEvent> &
   CameraControlEvents &
   ToolEvents &
