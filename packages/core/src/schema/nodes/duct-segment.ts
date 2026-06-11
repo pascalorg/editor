@@ -21,10 +21,17 @@ export const DuctSegmentNode = BaseNode.extend({
   type: nodeType('duct-segment'),
   // Polyline path in level-local meters. Minimum two points (start, end).
   path: z.array(z.tuple([z.number(), z.number(), z.number()])).min(2),
-  // Nominal inner diameter in inches. Common residential sizes 4"–14"; we
-  // accept any positive number so the inspector slider stays ergonomic and
-  // larger commercial sizes load without a schema bump.
+  // Cross-section. Round is the branch default; rect is the trunk /
+  // plenum profile (real US systems: rect trunk, round branches).
+  shape: z.enum(['round', 'rect']).default('round'),
+  // Nominal inner diameter in inches (round shape). Common residential
+  // sizes 4"–14"; we accept any positive number so the inspector slider
+  // stays ergonomic and larger commercial sizes load without a schema bump.
   diameter: z.number().min(2).max(48).default(6),
+  // Rect-shape cross-section in inches: width is the horizontal face,
+  // height the vertical. Typical residential trunks 12×8 – 24×10.
+  width: z.number().min(4).max(60).default(14),
+  height: z.number().min(3).max(40).default(8),
   // Construction material.
   ductMaterial: z.enum(['sheet-metal', 'flex', 'duct-board']).default('flex'),
   // External insulation R-value. 0 = bare. Common flex-duct values are R-4.2,
@@ -35,9 +42,11 @@ export const DuctSegmentNode = BaseNode.extend({
   system: z.enum(['supply', 'return']).default('supply'),
 }).describe(
   dedent`
-  Round duct segment - polyline of 3D points connected by cylindrical sections.
+  Duct segment - polyline of 3D points connected by duct sections.
   - path: list of [x, y, z] points in level-local meters (min 2)
-  - diameter: nominal inner diameter in inches (typ. 4-14 residential)
+  - shape: round (branches) | rect (trunks / plenums)
+  - diameter: nominal inner diameter in inches for round (typ. 4-14 residential)
+  - width / height: rect cross-section in inches (typ. 12x8 - 24x10 trunks)
   - ductMaterial: sheet-metal | flex | duct-board
   - insulationR: external insulation R-value (0, 4, 6, 8 typical)
   - system: supply | return (drives visual tint)

@@ -5,7 +5,7 @@ import { DimensionPill, markToolCancelConsumed, triggerSFX, useEditor } from '@p
 import { getLevelHeight, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
-import { type Group, Vector3 } from 'three'
+import { type Group, Matrix4, Vector3 } from 'three'
 import { planElbowAtPort, planElbowRealign, planTeeAtRunBody } from '../shared/auto-fitting'
 import {
   collectScenePorts,
@@ -125,6 +125,9 @@ const DuctSegmentTool = () => {
     )?.diameter
     return seeded ?? (ductSegmentDefinition.defaults() as { diameter: number }).diameter
   })
+  // Cross-section for the next committed segment (Q toggles): round
+  // branches or a rect trunk at the schema's default trunk size.
+  const [shape, setShape] = useState<'round' | 'rect'>('round')
   const [draftPoints, setDraftPoints] = useState<Array<[number, number, number]>>([])
   const [cursorPos, setCursorPos] = useState<[number, number, number] | null>(null)
   // Ceiling mode (toggle with C): the first point lands at the level's
@@ -144,6 +147,8 @@ const DuctSegmentTool = () => {
   cursorPosRef.current = cursorPos
   const diameterRef = useRef(diameter)
   diameterRef.current = diameter
+  const shapeRef = useRef(shape)
+  shapeRef.current = shape
   const ceilingModeRef = useRef(ceilingMode)
   ceilingModeRef.current = ceilingMode
   // Port the anchored START point snapped onto (null = free placement).
@@ -277,8 +282,9 @@ const DuctSegmentTool = () => {
       const duct = DuctSegmentNode.parse({
         ...defaults,
         ...toolDefaults,
-        name: 'Duct run',
+        name: shapeRef.current === 'rect' ? 'Trunk' : 'Duct run',
         path: [ductStart, ductEnd],
+        shape: shapeRef.current,
         diameter: diameterRef.current,
       })
       // One atomic change: trim / split the joined runs, create the
@@ -315,8 +321,9 @@ const DuctSegmentTool = () => {
     const resolveBaseY = (): number => {
       if (!ceilingModeRef.current) return 0
       const ceiling = getLevelHeight(activeLevelId, useScene.getState().nodes)
-      const radius = (diameterRef.current * 0.0254) / 2
-      return Math.max(0, ceiling - radius)
+      const defaults = ductSegmentDefinition.defaults() as { height: number }
+      const verticalIn = shapeRef.current === 'rect' ? defaults.height : diameterRef.current
+      return Math.max(0, ceiling - (verticalIn * 0.0254) / 2)
     }
 
     const resolveSnappedPoint = (
@@ -488,6 +495,10 @@ const DuctSegmentTool = () => {
       } else if (e.key === ']') {
         e.preventDefault()
         stepDiameter(1)
+      } else if (e.key === 'q' || e.key === 'Q') {
+        e.preventDefault()
+        setShape((current) => (current === 'round' ? 'rect' : 'round'))
+        triggerSFX('sfx:grid-snap')
       } else if (e.key === 'c' || e.key === 'C') {
         // Toggle ceiling mode. Only the first point reads the base Y, so
         // toggling mid-run is a no-op until the next fresh segment — flip
@@ -555,7 +566,15 @@ const DuctSegmentTool = () => {
           value: last ? cursorPos[i]! - last[i]! : cursorPos[i]!,
           signed: !!last,
         })),
-        { key: 'diameter', prefix: 'Ø', value: diameter * 0.0254, signed: false },
+        ...(shape === 'rect'
+          ? (() => {
+              const d = ductSegmentDefinition.defaults() as { width: number; height: number }
+              return [
+                { key: 'trunk-w', prefix: 'W', value: d.width * 0.0254, signed: false },
+                { key: 'trunk-h', prefix: 'H', value: d.height * 0.0254, signed: false },
+              ]
+            })()
+          : [{ key: 'diameter', prefix: 'Ø', value: diameter * 0.0254, signed: false }]),
       ]
     : null
   const pillPrimary =
@@ -609,9 +628,9 @@ const DuctSegmentTool = () => {
           <meshBasicMaterial color="#818cf8" depthTest={false} />
         </mesh>
       ))}
-      {/* Preview cylinders */}
+      {/* Preview sections */}
       {previewSegments.map((seg, i) => (
-        <PreviewSegment a={seg.a} b={seg.b} diameterIn={diameter} key={`seg-${i}`} />
+        <PreviewSegment a={seg.a} b={seg.b} diameterIn={diameter} key={`seg-${i}`} shape={shape} />
       ))}
     </group>
   )
@@ -621,10 +640,12 @@ function PreviewSegment({
   a,
   b,
   diameterIn,
+  shape,
 }: {
   a: [number, number, number]
   b: [number, number, number]
   diameterIn: number
+  shape: 'round' | 'rect'
 }) {
   const start = new Vector3(...a)
   const end = new Vector3(...b)
@@ -633,6 +654,36 @@ function PreviewSegment({
   if (length < 1e-4) return null
   dir.normalize()
   const mid = new Vector3().addVectors(start, end).multiplyScalar(0.5)
+
+  if (shape === 'rect') {
+    const defaults = ductSegmentDefinition.defaults() as { width: number; height: number }
+    const w = defaults.width * 0.0254
+    const h = defaults.height * 0.0254
+    return (
+      <mesh
+        position={mid.toArray()}
+        ref={(m) => {
+          if (!m) return
+          // Same stable basis as the geometry builder: width horizontal.
+          const up = new Vector3(0, 1, 0)
+          const x = new Vector3().crossVectors(up, dir)
+          if (x.lengthSq() < 1e-8) x.set(1, 0, 0)
+          x.normalize()
+          const z = new Vector3().crossVectors(x, dir)
+          m.quaternion.setFromRotationMatrix(new Matrix4().makeBasis(x, dir, z))
+        }}
+      >
+        <boxGeometry args={[w, length, h]} />
+        <meshBasicMaterial
+          color="#818cf8"
+          depthTest={false}
+          opacity={PREVIEW_OPACITY}
+          transparent
+        />
+      </mesh>
+    )
+  }
+
   const radius = (diameterIn * 0.0254) / 2
   return (
     <mesh

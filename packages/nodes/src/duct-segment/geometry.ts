@@ -1,4 +1,14 @@
-import { CylinderGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry, Vector3 } from 'three'
+import {
+  BoxGeometry,
+  CylinderGeometry,
+  Group,
+  Matrix4,
+  Mesh,
+  MeshStandardMaterial,
+  Quaternion,
+  SphereGeometry,
+  Vector3,
+} from 'three'
 import type { DuctSegmentNode } from './schema'
 
 export const INCHES_TO_METERS = 0.0254
@@ -24,6 +34,62 @@ const DUCT_BOARD_COLOR = '#a5946d'
 const RADIAL_SEGMENTS = 24
 
 const UP = new Vector3(0, 1, 0)
+
+/**
+ * Area-equivalent round diameter (inches) for a rect cross-section —
+ * what a rect trunk advertises on its ports so round fittings / branches
+ * mate at a sensible size.
+ */
+export function equivalentDiameterIn(widthIn: number, heightIn: number): number {
+  return 2 * Math.sqrt((widthIn * heightIn) / Math.PI)
+}
+
+/** The diameter (inches) a duct segment presents at its ports. */
+export function ductPortDiameterIn(node: {
+  shape?: 'round' | 'rect'
+  diameter: number
+  width?: number
+  height?: number
+}): number {
+  if (node.shape === 'rect' && node.width && node.height) {
+    return equivalentDiameterIn(node.width, node.height)
+  }
+  return node.diameter
+}
+
+/**
+ * Rect box spanning `start`→`end` with a stable orientation: width stays
+ * horizontal and height vertical for any non-vertical run (vertical runs
+ * fall back to world X/Z). Quaternion from an explicit basis — the
+ * minimal-rotation `setFromUnitVectors` used for cylinders would roll
+ * the cross-section on axis-aligned runs.
+ */
+export function buildRectSection(
+  start: Vector3,
+  end: Vector3,
+  widthM: number,
+  heightM: number,
+  material: MeshStandardMaterial,
+  name: string,
+): Mesh | null {
+  const dir = new Vector3().subVectors(end, start)
+  const length = dir.length()
+  if (length < 1e-6) return null
+  dir.normalize()
+
+  // Basis: y = run direction; x = horizontal width axis; z = height axis.
+  const x = new Vector3().crossVectors(UP, dir)
+  if (x.lengthSq() < 1e-8) x.set(1, 0, 0)
+  x.normalize()
+  const z = new Vector3().crossVectors(x, dir)
+
+  const geom = new BoxGeometry(widthM, length, heightM)
+  const mesh = new Mesh(geom, material)
+  mesh.name = name
+  mesh.position.copy(start).addScaledVector(dir, length / 2)
+  mesh.quaternion.copy(new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(x, dir, z)))
+  return mesh
+}
 
 /**
  * Cylinder spanning `start`→`end` at `radius`. Shared by the segment and
@@ -101,31 +167,47 @@ export function buildDuctSegmentGeometry(node: DuctSegmentNode): Group {
   const group = new Group()
   if (node.path.length < 2) return group
 
+  const isRect = node.shape === 'rect'
   const radius = (node.diameter * INCHES_TO_METERS) / 2
+  const widthM = node.width * INCHES_TO_METERS
+  const heightM = node.height * INCHES_TO_METERS
   const ductMaterial = createDuctMaterial(node)
 
   const points = node.path.map(([x, y, z]) => new Vector3(x, y, z))
 
-  for (let i = 0; i < points.length - 1; i++) {
-    // Loop bounds + min(2) on the schema guarantee both points exist.
-    const a = points[i] as Vector3
-    const b = points[i + 1] as Vector3
-    const mesh = buildSection(a, b, radius, ductMaterial, `duct-section-${i}`)
-    if (mesh) group.add(mesh)
+  const addRun = (
+    half: number,
+    rectW: number,
+    rectH: number,
+    material: MeshStandardMaterial,
+    namePrefix: string,
+  ) => {
+    for (let i = 0; i < points.length - 1; i++) {
+      // Loop bounds + min(2) on the schema guarantee both points exist.
+      const a = points[i] as Vector3
+      const b = points[i + 1] as Vector3
+      const mesh = isRect
+        ? buildRectSection(a, b, rectW, rectH, material, `${namePrefix}-section-${i}`)
+        : buildSection(a, b, half, material, `${namePrefix}-section-${i}`)
+      if (mesh) group.add(mesh)
+    }
+    // Joint caps at interior points only (skip first and last — they're
+    // open ends; equipment / terminal / fitting collars cap them). Rect
+    // joints are cubes spanning the cross-section; round joints spheres.
+    for (let i = 1; i < points.length - 1; i++) {
+      const joint = isRect
+        ? new Mesh(new BoxGeometry(rectW, rectH, rectW), material)
+        : new Mesh(new SphereGeometry(half, RADIAL_SEGMENTS, 12), material)
+      joint.name = `${namePrefix}-joint-${i}`
+      joint.position.copy(points[i] as Vector3)
+      group.add(joint)
+    }
   }
 
-  // Joint caps at interior points only (skip first and last — they're open
-  // ends for now; equipment / terminal nodes will cap them later).
-  for (let i = 1; i < points.length - 1; i++) {
-    const joint = new Mesh(new SphereGeometry(radius, RADIAL_SEGMENTS, 12), ductMaterial)
-    joint.name = `duct-joint-${i}`
-    joint.position.copy(points[i] as Vector3)
-    group.add(joint)
-  }
+  addRun(radius, widthM, heightM, ductMaterial, 'duct')
 
   const insulationThickness = pickInsulationThickness(node.insulationR)
   if (insulationThickness > 0) {
-    const insulationRadius = radius + insulationThickness
     const insulationMaterial = new MeshStandardMaterial({
       color: '#f0e4c8',
       roughness: 1,
@@ -133,21 +215,13 @@ export function buildDuctSegmentGeometry(node: DuctSegmentNode): Group {
       transparent: true,
       opacity: 0.25,
     })
-    for (let i = 0; i < points.length - 1; i++) {
-      const a = points[i] as Vector3
-      const b = points[i + 1] as Vector3
-      const mesh = buildSection(a, b, insulationRadius, insulationMaterial, `duct-insulation-${i}`)
-      if (mesh) group.add(mesh)
-    }
-    for (let i = 1; i < points.length - 1; i++) {
-      const joint = new Mesh(
-        new SphereGeometry(insulationRadius, RADIAL_SEGMENTS, 12),
-        insulationMaterial,
-      )
-      joint.name = `duct-insulation-joint-${i}`
-      joint.position.copy(points[i] as Vector3)
-      group.add(joint)
-    }
+    addRun(
+      radius + insulationThickness,
+      widthM + insulationThickness * 2,
+      heightM + insulationThickness * 2,
+      insulationMaterial,
+      'duct-insulation',
+    )
   }
 
   return group

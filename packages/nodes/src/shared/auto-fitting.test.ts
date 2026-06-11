@@ -192,6 +192,36 @@ describe('planTeeAtRunBody', () => {
     expect(plan!.branchCollar[1]).toBeLessThan(2.4)
   })
 
+  test('rect trunk: tee sized to the equivalent diameter, tail stays rect', () => {
+    const rect = DuctSegmentNode.parse({
+      object: 'node',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      name: 'Trunk',
+      path: [
+        [0, 2.4, 0],
+        [6, 2.4, 0],
+      ],
+      shape: 'rect',
+      diameter: 6,
+      width: 14,
+      height: 8,
+      ductMaterial: 'sheet-metal',
+      insulationR: 0,
+      system: 'supply',
+    })
+    const plan = planTeeAtRunBody(rect, bodyHit(rect, 0, [3, 2.4, 0]), [0, 0, 1], 6)
+    expect(plan).not.toBeNull()
+    // Tee run legs carry the area-equivalent round size of 14×8.
+    expect(plan!.fitting.diameter).toBeCloseTo(2 * Math.sqrt((14 * 8) / Math.PI), 6)
+    expect(plan!.fitting.diameter2).toBe(6)
+    // The downstream half keeps the trunk's rect profile.
+    expect(plan!.trunkTail.shape).toBe('rect')
+    expect(plan!.trunkTail.width).toBe(14)
+    expect(plan!.trunkTail.height).toBe(8)
+  })
+
   test('polyline trunk: split lands in the hit segment, other points preserved', () => {
     const run = trunk([
       [0, 0, 0],

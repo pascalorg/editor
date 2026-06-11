@@ -1,6 +1,7 @@
 import { DuctFittingNode, DuctSegmentNode } from '@pascal-app/core'
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { fittingLegLength } from '../duct-fitting/ports'
+import { ductPortDiameterIn } from '../duct-segment/geometry'
 import type { RunBodyHit, ScenePort } from './ports'
 
 /** Turns shallower than this read as a straight continuation — butt-join
@@ -169,7 +170,10 @@ export function planTeeAtRunBody(
 
   // Room check: both run legs must fit inside the hit segment with a
   // margin of real duct on each side.
-  const legRun = fittingLegLength(trunk.diameter)
+  // Rect trunks present their area-equivalent round size at joints
+  // (clamped to the fitting schema's 48" ceiling).
+  const trunkDiameterIn = Math.min(48, ductPortDiameterIn(trunk))
+  const legRun = fittingLegLength(trunkDiameterIn)
   const legBranch = fittingLegLength(branchDiameterIn)
   const P = new Vector3(...hit.point)
   const upstream = P.distanceTo(new Vector3(...a))
@@ -198,7 +202,7 @@ export function planTeeAtRunBody(
     metadata: {},
     name: 'Tee',
     fittingType: 'tee',
-    diameter: trunk.diameter,
+    diameter: trunkDiameterIn,
     diameter2: branchDiameterIn,
     ductMaterial: 'sheet-metal',
     system: trunk.system,
@@ -224,7 +228,10 @@ export function planTeeAtRunBody(
     metadata: {},
     name: trunk.name ?? 'Duct run',
     path: tailPath,
+    shape: trunk.shape,
     diameter: trunk.diameter,
+    width: trunk.width,
+    height: trunk.height,
     ductMaterial: trunk.ductMaterial,
     insulationR: trunk.insulationR,
     system: trunk.system,

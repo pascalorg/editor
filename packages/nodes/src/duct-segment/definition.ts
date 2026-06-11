@@ -1,6 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { buildDuctSegmentFloorplan } from './floorplan'
-import { buildDuctSegmentGeometry } from './geometry'
+import { buildDuctSegmentGeometry, ductPortDiameterIn } from './geometry'
 import { ductSegmentParametrics } from './parametrics'
 import { DuctSegmentNode } from './schema'
 
@@ -38,7 +38,10 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
       [0, 0, 0],
       [3, 0, 0],
     ],
+    shape: 'round',
     diameter: 6,
+    width: 14,
+    height: 8,
     ductMaterial: 'flex',
     insulationR: 0.5,
     system: 'supply',
@@ -53,7 +56,17 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   parametrics: ductSegmentParametrics,
 
   geometry: buildDuctSegmentGeometry,
-  geometryKey: (n) => JSON.stringify([n.path, n.diameter, n.ductMaterial, n.insulationR, n.system]),
+  geometryKey: (n) =>
+    JSON.stringify([
+      n.path,
+      n.shape,
+      n.diameter,
+      n.width,
+      n.height,
+      n.ductMaterial,
+      n.insulationR,
+      n.system,
+    ]),
 
   // Open run ends as typed ports — directions point outward along the
   // path tangent so fittings mate flush. Path coords are already
@@ -77,14 +90,14 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
         id: 'start',
         position: first,
         direction: unit(first, second),
-        diameter: n.diameter,
+        diameter: ductPortDiameterIn(n),
         system: n.system,
       },
       {
         id: 'end',
         position: last,
         direction: unit(last, prev),
-        diameter: n.diameter,
+        diameter: ductPortDiameterIn(n),
         system: n.system,
       },
     ]
@@ -102,6 +115,7 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
     { key: 'Shift', label: 'Free angle' },
     { key: 'Alt + drag', label: 'Go vertical ↕, click to place' },
     { key: '[ / ]', label: 'Duct diameter down / up' },
+    { key: 'Q', label: 'Round / rect trunk' },
     { key: 'C', label: 'Ceiling / floor height' },
     { key: 'Esc', label: 'Cancel start point' },
   ],
@@ -116,6 +130,6 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
 
   mcp: {
     description:
-      'A round HVAC duct run defined as a polyline. Supply or return, with configurable diameter, material, and external insulation.',
+      'An HVAC duct run defined as a polyline — round (branches) or rect (trunks/plenums). Supply or return, with configurable size, material, and external insulation.',
   },
 }
