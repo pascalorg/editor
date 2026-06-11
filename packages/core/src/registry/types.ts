@@ -1262,6 +1262,31 @@ export type CapabilityCtx = { node: AnyNode }
 export type MovableConfig = {
   axes: ReadonlyArray<'x' | 'y' | 'z'>
   gridSnap?: boolean
+  /**
+   * Pin the dragged node to the cursor (absolute placement) instead of the
+   * default offset-preserving drag, where the node moves by the cursor's
+   * delta from where the drag started. Offset preservation suits large
+   * furniture you grab by an edge; small connector-like kinds (duct
+   * fittings) read as "lagging behind the mouse" — they want the cursor.
+   */
+  cursorAttached?: boolean
+  /**
+   * Magnetically snap one of this kind's own ports onto a nearby scene
+   * port while dragging — e.g. a register's collar onto a duct run end.
+   * The dragged node shifts in XZ so its closest matching port lands on
+   * the target port. Alt bypasses the snap. Kinds without `def.ports`
+   * can't use this. Snap takes precedence over grid / alignment snap.
+   */
+  portSnap?: {
+    /**
+     * Distribution loops a target port must belong to (e.g.
+     * `['supply', 'return']`). A target port with no `system` always
+     * matches. Omit to match every port.
+     */
+    systems?: readonly string[]
+    /** Snap radius in meters (XZ). Defaults to 0.5. */
+    radius?: number
+  }
   override?: (ctx: CapabilityCtx) => MovableConfig | null
 }
 
