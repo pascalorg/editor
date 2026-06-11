@@ -49,6 +49,7 @@ const HVAC_KINDS = new Set([
   'lineset',
   'pipe-segment',
   'pipe-fitting',
+  'plumbing-fixture',
 ])
 
 const ALLOWED_TYPES = [
@@ -632,6 +633,16 @@ export function FloatingActionMenu() {
                         <span className="text-muted-foreground">
                           {formatMeasurement(systemSummary.runLengthM, unit)} ·{' '}
                           {systemSummary.runCount} {systemSummary.runCount === 1 ? 'run' : 'runs'}
+                        </span>
+                      </>
+                    ) : null}
+                    {systemSummary.fixtureUnits > 0 ? (
+                      <>
+                        <span aria-hidden className="text-muted-foreground">
+                          ·
+                        </span>
+                        <span className="text-muted-foreground">
+                          {systemSummary.fixtureUnits} DFU
                         </span>
                       </>
                     ) : null}

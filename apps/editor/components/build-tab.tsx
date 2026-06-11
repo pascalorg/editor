@@ -35,6 +35,7 @@ type BuildToolKind =
   | 'hvac-equipment'
   | 'lineset'
   | 'pipe-segment'
+  | 'plumbing-fixture'
 
 type BuildType = {
   /** Selection id — equals `kind` for tool types, `'painting'` for paint mode. */
@@ -70,6 +71,7 @@ const BUILD_TYPES: BuildType[] = [
   { id: 'hvac-equipment', label: 'HVAC Unit', iconify: 'lucide:heater', kind: 'hvac-equipment' },
   { id: 'lineset', label: 'Lineset', iconify: 'lucide:cable', kind: 'lineset' },
   { id: 'pipe-segment', label: 'DWV Pipe', iconify: 'lucide:droplets', kind: 'pipe-segment' },
+  { id: 'plumbing-fixture', label: 'Fixture', iconify: 'lucide:bath', kind: 'plumbing-fixture' },
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.png', mode: 'material-paint' },
 ]
 

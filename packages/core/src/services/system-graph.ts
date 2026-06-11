@@ -19,6 +19,17 @@ import type { AnyNode, AnyNodeId } from '../schema'
  *  matches port-connectivity's tolerance for hand-placed joints. */
 const COINCIDENT_EPS_M = 0.05
 
+/** IPC Table 709.1 drainage fixture units (private installations) —
+ *  mirrors `plumbing-fixture/spec.ts` in the nodes package (core can't
+ *  import it; the fixture kind owns geometry, this service owns load). */
+const FIXTURE_DFU: Record<string, number> = {
+  toilet: 3,
+  lavatory: 1,
+  'kitchen-sink': 2,
+  tub: 2,
+  washer: 2,
+}
+
 export type SystemSummary = {
   /** Every node in this connected component. */
   nodeIds: AnyNodeId[]
@@ -30,6 +41,10 @@ export type SystemSummary = {
   fittingCount: number
   terminalCount: number
   equipmentCount: number
+  /** Plumbing fixtures in the component + their summed IPC drainage
+   *  fixture units — the load number pipe-sizing validators read. */
+  fixtureCount: number
+  fixtureUnits: number
   /** False = orphaned subtree: air goes nowhere (no furnace / air
    *  handler / condenser anywhere in the component). */
   connectedToEquipment: boolean
@@ -137,6 +152,8 @@ function summarize(
   let fittingCount = 0
   let terminalCount = 0
   let equipmentCount = 0
+  let fixtureCount = 0
+  let fixtureUnits = 0
 
   for (const id of nodeIds) {
     const node = nodes[id]
@@ -154,6 +171,10 @@ function summarize(
       systems.add(node.terminalType === 'return-grille' ? 'return' : 'supply')
     } else if (node.type === 'hvac-equipment') {
       equipmentCount += 1
+    } else if (node.type === 'plumbing-fixture') {
+      fixtureCount += 1
+      fixtureUnits += FIXTURE_DFU[node.fixtureType] ?? 0
+      systems.add('waste')
     }
   }
 
@@ -165,6 +186,8 @@ function summarize(
     fittingCount,
     terminalCount,
     equipmentCount,
+    fixtureCount,
+    fixtureUnits,
     connectedToEquipment: equipmentCount > 0,
   }
 }
