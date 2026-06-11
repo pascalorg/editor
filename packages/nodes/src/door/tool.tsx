@@ -23,12 +23,13 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
-import { BoxGeometry, EdgesGeometry, type Group, type LineSegments } from 'three'
+import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
   resolveRoofWallOpeningTarget,
+  worldToSelectedBuildingLocal,
 } from '../shared/roof-wall-opening-placement'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
@@ -42,6 +43,7 @@ const edgeMaterial = new LineBasicNodeMaterial({
 
 const FALLBACK_WIDTH = 0.9
 const FALLBACK_HEIGHT = 2.1
+const roofFallbackPoint = new Vector3()
 
 /**
  * Door tool — places DoorNodes on walls and on roof-segment wall faces
@@ -107,6 +109,12 @@ const DoorTool: React.FC = () => {
       if (draftRef.current) return
       const [x, y, z] = event.localPosition
       updateCursor([x, y + FALLBACK_HEIGHT / 2, z], 0, false)
+      useAlignmentGuides.getState().clear()
+    }
+
+    const showRoofFallbackCursor = (event: RoofEvent) => {
+      const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
+      updateCursor([x, getLevelYOffset() + FALLBACK_HEIGHT / 2, z], 0, false)
       useAlignmentGuides.getState().clear()
     }
 
@@ -384,10 +392,8 @@ const DoorTool: React.FC = () => {
       if (!target) {
         // On the roof but not over a placeable wall face (slope, soffit,
         // or a face the door cannot fit on).
-        if (draftRef.current?.roofSegmentId) {
-          destroyDraft()
-          hideCursor()
-        }
+        destroyDraft()
+        showRoofFallbackCursor(event)
         return
       }
       const { segment, face, position } = target

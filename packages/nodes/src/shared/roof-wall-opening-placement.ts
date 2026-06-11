@@ -88,7 +88,10 @@ const cursorPoint = new Vector3()
 export function worldToSelectedBuildingLocal(point: Vector3): [number, number, number] {
   const buildingId = useViewer.getState().selection.buildingId
   const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : undefined
-  if (buildingObj) buildingObj.worldToLocal(point)
+  if (buildingObj) {
+    buildingObj.updateWorldMatrix(true, false)
+    buildingObj.worldToLocal(point)
+  }
   return [point.x, point.y, point.z]
 }
 
