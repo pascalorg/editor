@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { resolveAssetSnapTarget } from './snap-target-badge'
+import type { AnyNode } from '@pascal-app/core'
+import { resolveAssetSnapTarget, resolveNodeSnapTarget } from './snap-target-badge'
 
 describe('resolveAssetSnapTarget', () => {
   test('maps wall-hosted catalog assets to a wall badge', () => {
@@ -13,5 +14,17 @@ describe('resolveAssetSnapTarget', () => {
 
   test('does not badge floor assets', () => {
     expect(resolveAssetSnapTarget(undefined)).toBeNull()
+  })
+})
+
+describe('resolveNodeSnapTarget', () => {
+  test('prefers roof attachment when a node is hosted by a roof segment', () => {
+    const node = {
+      id: 'window_1',
+      type: 'window',
+      roofSegmentId: 'roof-segment_1',
+    } as unknown as AnyNode
+
+    expect(resolveNodeSnapTarget(node)).toBe('roof')
   })
 })

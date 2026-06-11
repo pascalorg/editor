@@ -1,10 +1,10 @@
 'use client'
 
-import { type AnyNodeId, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type DoorNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
-import { SnapTargetIcon } from '../../../snap-target-badge'
+import { resolveNodeSnapTarget, SnapTargetIcon } from '../../../snap-target-badge'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
@@ -23,6 +23,7 @@ export const DoorTreeNode = memo(function DoorTreeNode({
 }: DoorTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId as AnyNodeId]?.visible !== false)
+  const node = useScene((s) => s.nodes[nodeId] as DoorNode | undefined)
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -46,6 +47,7 @@ export const DoorTreeNode = memo(function DoorTreeNode({
 
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
+  const snapTarget = resolveNodeSnapTarget(node) ?? 'wall'
 
   return (
     <TreeNodeWrapper
@@ -54,7 +56,7 @@ export const DoorTreeNode = memo(function DoorTreeNode({
       expanded={false}
       hasChildren={false}
       icon={
-        <SnapTargetIcon target="wall">
+        <SnapTargetIcon target={snapTarget}>
           <Image alt="" className="object-contain" height={14} src="/icons/door.png" width={14} />
         </SnapTargetIcon>
       }

@@ -3,7 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { resolveAssetSnapTarget, SnapTargetIcon } from '../../../snap-target-badge'
+import { resolveNodeSnapTarget, SnapTargetIcon } from '../../../snap-target-badge'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
@@ -36,7 +36,8 @@ export const ItemTreeNode = memo(function ItemTreeNode({
   const children = useScene(
     useShallow((s) => (s.nodes[nodeId] as ItemNode | undefined)?.children ?? []),
   )
-  const asset = useScene((s) => (s.nodes[nodeId] as ItemNode | undefined)?.asset)
+  const node = useScene((s) => s.nodes[nodeId] as ItemNode | undefined)
+  const asset = node?.asset
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -85,7 +86,7 @@ export const ItemTreeNode = memo(function ItemTreeNode({
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
   const iconSrc = CATEGORY_ICONS[asset?.category ?? ''] || '/icons/couch.png'
-  const snapTarget = resolveAssetSnapTarget(asset?.attachTo)
+  const snapTarget = resolveNodeSnapTarget(node)
   const defaultName = asset?.name || 'Item'
   const hasChildren = children.length > 0
 

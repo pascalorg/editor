@@ -1,4 +1,4 @@
-import type { AssetInput } from '@pascal-app/core'
+import type { AnyNode, AssetInput } from '@pascal-app/core'
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/utils'
 
@@ -19,6 +19,14 @@ const SNAP_TARGET_LABELS: Record<SnapTarget, string> = {
 export function resolveAssetSnapTarget(attachTo: AssetInput['attachTo']): SnapTarget | null {
   if (attachTo === 'wall' || attachTo === 'wall-side') return 'wall'
   if (attachTo === 'ceiling') return 'ceiling'
+  return null
+}
+
+export function resolveNodeSnapTarget(node: AnyNode | null | undefined): SnapTarget | null {
+  if (!node) return null
+  if ('roofSegmentId' in node && typeof node.roofSegmentId === 'string') return 'roof'
+  if (node.type === 'door' || node.type === 'window') return 'wall'
+  if (node.type === 'item') return resolveAssetSnapTarget(node.asset?.attachTo)
   return null
 }
 
