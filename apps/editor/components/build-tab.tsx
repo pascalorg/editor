@@ -28,6 +28,10 @@ type BuildToolKind =
   | 'column'
   | 'shelf'
   | 'spawn'
+  | 'duct-segment'
+  | 'duct-fitting'
+  | 'duct-terminal'
+  | 'hvac-equipment'
 
 type BuildType = {
   /** Selection id — equals `kind` for tool types, `'painting'` for paint mode. */
@@ -54,6 +58,10 @@ const BUILD_TYPES: BuildType[] = [
   { id: 'column', label: 'Column', iconSrc: '/icons/column.png', kind: 'column' },
   { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.png', kind: 'shelf' },
   { id: 'spawn', label: 'Spawn Point', iconSrc: '/icons/spawn-point.png', kind: 'spawn' },
+  { id: 'duct-segment', label: 'Duct', iconSrc: '/icons/wall.png', kind: 'duct-segment' },
+  { id: 'duct-fitting', label: 'Duct Fitting', iconSrc: '/icons/column.png', kind: 'duct-fitting' },
+  { id: 'duct-terminal', label: 'Register', iconSrc: '/icons/window.png', kind: 'duct-terminal' },
+  { id: 'hvac-equipment', label: 'HVAC Unit', iconSrc: '/icons/elevator.png', kind: 'hvac-equipment' },
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.png', mode: 'material-paint' },
 ]
 
