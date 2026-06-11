@@ -34,7 +34,7 @@ import {
 import {
   canDirectRotateNode,
   resolveDirectRotationPatch,
-  snapDirectRotationDelta,
+  resolveDirectRotationDragDelta,
 } from '../../../lib/direct-manipulation'
 import { createEditorApi } from '../../../lib/editor-api'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -362,8 +362,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       let lastPatch: Partial<AnyNode> | null = null
 
       const applyDelta = (pointerEvent: PointerEvent | ReactPointerEvent<SVGGElement>) => {
-        const rawDelta = (pointerEvent.clientX - startX) * DIRECT_ROTATE_RADIANS_PER_PIXEL
-        const delta = snapDirectRotationDelta(rawDelta, pointerEvent.shiftKey)
+        const delta = resolveDirectRotationDragDelta(
+          startX,
+          pointerEvent.clientX,
+          DIRECT_ROTATE_RADIANS_PER_PIXEL,
+          pointerEvent.shiftKey,
+        )
         if (Math.abs(delta) < DIRECT_ROTATE_EPSILON) {
           lastPatch = null
           useLiveNodeOverrides.getState().clear(nodeId)

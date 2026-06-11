@@ -37,6 +37,15 @@ export function snapDirectRotationDelta(delta: number, free: boolean): number {
   return free ? delta : Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
 }
 
+export function resolveDirectRotationDragDelta(
+  startX: number,
+  clientX: number,
+  radiansPerPixel: number,
+  free: boolean,
+): number {
+  return snapDirectRotationDelta((startX - clientX) * radiansPerPixel, free)
+}
+
 export function resolveDirectRotationPatch(
   node: AnyNode,
   delta: number,

@@ -58,7 +58,7 @@ import {
 import {
   canDirectRotateNode,
   resolveDirectRotationPatch,
-  snapDirectRotationDelta,
+  resolveDirectRotationDragDelta,
 } from '../../lib/direct-manipulation'
 import { createEditorApi } from '../../lib/editor-api'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
@@ -1398,8 +1398,12 @@ export const SelectionManager = () => {
       let lastPatch: Partial<AnyNode> | null = null
 
       const applyDelta = (moveEvent: PointerEvent) => {
-        const rawDelta = (moveEvent.clientX - startX) * DIRECT_ROTATE_RADIANS_PER_PIXEL
-        const delta = snapDirectRotationDelta(rawDelta, moveEvent.shiftKey)
+        const delta = resolveDirectRotationDragDelta(
+          startX,
+          moveEvent.clientX,
+          DIRECT_ROTATE_RADIANS_PER_PIXEL,
+          moveEvent.shiftKey,
+        )
         if (Math.abs(delta) < DIRECT_ROTATE_EPSILON) {
           lastPatch = null
           useLiveNodeOverrides.getState().clear(nodeId)
