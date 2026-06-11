@@ -1,5 +1,6 @@
 'use client'
 
+import { Icon as IconifyIcon } from '@iconify/react'
 import { MaterialPaintPanel, triggerSFX, useEditor } from '@pascal-app/editor'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef } from 'react'
@@ -38,7 +39,10 @@ type BuildType = {
   /** Selection id — equals `kind` for tool types, `'painting'` for paint mode. */
   id: string
   label: string
-  iconSrc: string
+  /** Raster asset tile (legacy Build sidebar artwork). */
+  iconSrc?: string
+  /** Iconify identifier — used by kinds with no bespoke PNG (HVAC). */
+  iconify?: string
   /** Present for structure-tool types (absent for the paint mode). */
   kind?: BuildToolKind
   /** Non-placement special mode. */
@@ -59,11 +63,11 @@ const BUILD_TYPES: BuildType[] = [
   { id: 'column', label: 'Column', iconSrc: '/icons/column.png', kind: 'column' },
   { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.png', kind: 'shelf' },
   { id: 'spawn', label: 'Spawn Point', iconSrc: '/icons/spawn-point.png', kind: 'spawn' },
-  { id: 'duct-segment', label: 'Duct', iconSrc: '/icons/wall.png', kind: 'duct-segment' },
-  { id: 'duct-fitting', label: 'Duct Fitting', iconSrc: '/icons/column.png', kind: 'duct-fitting' },
-  { id: 'duct-terminal', label: 'Register', iconSrc: '/icons/window.png', kind: 'duct-terminal' },
-  { id: 'hvac-equipment', label: 'HVAC Unit', iconSrc: '/icons/elevator.png', kind: 'hvac-equipment' },
-  { id: 'lineset', label: 'Lineset', iconSrc: '/icons/column.png', kind: 'lineset' },
+  { id: 'duct-segment', label: 'Duct', iconify: 'lucide:wind', kind: 'duct-segment' },
+  { id: 'duct-fitting', label: 'Duct Fitting', iconify: 'lucide:git-branch', kind: 'duct-fitting' },
+  { id: 'duct-terminal', label: 'Register', iconify: 'lucide:air-vent', kind: 'duct-terminal' },
+  { id: 'hvac-equipment', label: 'HVAC Unit', iconify: 'lucide:heater', kind: 'hvac-equipment' },
+  { id: 'lineset', label: 'Lineset', iconify: 'lucide:cable', kind: 'lineset' },
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.png', mode: 'material-paint' },
 ]
 
@@ -148,13 +152,21 @@ export function BuildTab() {
                     onMouseEnter={() => triggerSFX('sfx:menu-hover')}
                     type="button"
                   >
-                    <Image
-                      alt={type.label}
-                      className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
-                      height={48}
-                      src={type.iconSrc}
-                      width={48}
-                    />
+                    {type.iconSrc ? (
+                      <Image
+                        alt={type.label}
+                        className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                        height={48}
+                        src={type.iconSrc}
+                        width={48}
+                      />
+                    ) : (
+                      <IconifyIcon
+                        aria-label={type.label}
+                        className="size-3/5 text-foreground/80 transition-transform duration-200 group-hover:scale-110"
+                        icon={type.iconify ?? 'lucide:square'}
+                      />
+                    )}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent className="pointer-events-none" side="top">

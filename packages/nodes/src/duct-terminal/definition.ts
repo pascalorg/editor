@@ -64,7 +64,7 @@ export const ductTerminalDefinition: NodeDefinition<typeof DuctTerminalNode> = {
     label: 'Register',
     description:
       'Duct terminal — supply register, ceiling diffuser, or return grille. Duct runs end at its collar.',
-    icon: { kind: 'iconify', name: 'lucide:align-justify' },
+    icon: { kind: 'iconify', name: 'lucide:air-vent' },
     paletteSection: 'structure',
     paletteOrder: 93,
   },
