@@ -1,7 +1,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type BoxVentNode,
   type BuildingNode,
   type CeilingNode,
   type ColumnNode,
@@ -10,12 +9,12 @@ import {
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
   getMaterialPresetByRef,
+  getRoofSegmentSurfaceY,
   getSelectableKinds,
   type ItemNode,
   isRegistrySelectable,
   type NodeEvent,
   nodeRegistry,
-  type RidgeVentNode,
   type RoofEvent,
   type RoofNode,
   type RoofSegmentEvent,
@@ -42,24 +41,23 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef } from 'react'
-import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } from 'three'
+import { type BufferGeometry, Color, type Material, type Mesh, type Object3D, Vector3 } from 'three'
 import {
   type ActivePaintMaterial,
   buildRoofSegmentSurfaceMaterialPatch,
   buildRoofSurfaceMaterialPatch,
-  buildRoofSurfaceMaterialUpdates,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
   hasActivePaintMaterial,
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
-import { sfxEmitter } from '../../lib/sfx-bus'
+import { emitDeleteSFX } from '../../lib/sfx-bus'
 import useEditor, {
   type MaterialTargetRole,
   type Phase,
   type StructureLayer,
 } from './../../store/use-editor'
-import { boxSelectHandled } from '../tools/select/box-select-tool'
+import { boxSelectHandled } from '../tools/select/box-select-state'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   // Elevators are building-scoped, so they stay selectable across level filters.
@@ -208,6 +206,59 @@ function getRegisteredMesh(nodeId: string): Mesh | null {
   return object && (object as Mesh).isMesh ? (object as Mesh) : null
 }
 
+const roofSelectionWorldPoint = new Vector3()
+
+function resolveRoofSegmentSelectionTarget(event: NodeEvent): RoofSegmentNode | null {
+  const roof = event.node
+  if (roof.type !== 'roof') return null
+
+  roofSelectionWorldPoint.set(...event.position)
+  const nodes = useScene.getState().nodes
+  let firstSegment: RoofSegmentNode | null = null
+  let bestSegment: { node: RoofSegmentNode; score: number } | null = null
+
+  for (const childId of roof.children ?? []) {
+    const segment = nodes[childId as AnyNodeId] as RoofSegmentNode | undefined
+    if (segment?.type !== 'roof-segment') continue
+
+    const object = getRegisteredNodeObject(segment.id)
+    if (!object) continue
+
+    if (!firstSegment) firstSegment = segment
+
+    object.updateWorldMatrix(true, false)
+    const local = object.worldToLocal(roofSelectionWorldPoint.clone())
+    const overhang = segment.overhang ?? 0
+    const halfWidth = segment.width / 2 + overhang
+    const halfDepth = segment.depth / 2 + overhang
+
+    if (Math.abs(local.x) > halfWidth || Math.abs(local.z) > halfDepth) {
+      continue
+    }
+
+    const score = Math.abs(local.y - getRoofSegmentSurfaceY(segment, local.x, local.z))
+    if (!bestSegment || score < bestSegment.score) {
+      bestSegment = { node: segment, score }
+    }
+  }
+
+  return bestSegment?.node ?? firstSegment
+}
+
+function isInActiveRoofContext(
+  segment: RoofSegmentNode,
+  selectedIds: readonly string[],
+  nodes: Record<string, AnyNode>,
+): boolean {
+  if (!segment.parentId) return false
+  if (selectedIds.includes(segment.id) || selectedIds.includes(segment.parentId)) return true
+
+  return selectedIds.some((selectedId) => {
+    const selectedNode = nodes[selectedId]
+    return selectedNode?.type === 'roof-segment' && selectedNode.parentId === segment.parentId
+  })
+}
+
 function previewMeshMaterial(mesh: Mesh, material: Material | Material[]): PaintPreviewCleanup {
   const previousMaterial = mesh.material
   mesh.material = material
@@ -296,12 +347,9 @@ function applyRoofSegmentPaintPreview(
   if (!(edge || wall || top)) return null
   const fallback = parent ? getRoofMaterialArray(parent) : null
   const fb = (n: number) => fallback?.[n] ?? null
-  const arr: Material[] = [
-    edge ?? wall ?? top ?? fb(0)!,
-    wall ?? edge ?? top ?? fb(1)!,
-    wall ?? edge ?? top ?? fb(2)!,
-    top ?? wall ?? edge ?? fb(3)!,
-  ]
+  // Per-role only, then the parent's themed slot — matches the renderer so the
+  // preview never bleeds a painted surface onto the segment's other surfaces.
+  const arr: Material[] = [edge ?? fb(0)!, wall ?? fb(1)!, wall ?? fb(2)!, top ?? fb(3)!]
   if (arr.some((m) => !m)) return null
   return previewMeshMaterial(mesh, arr)
 }
@@ -353,7 +401,7 @@ function applyStairPaintPreview(
 }
 
 function applySingleSurfacePaintPreview(
-  node: FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode | BoxVentNode | RidgeVentNode,
+  node: FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
   material: ActivePaintMaterial,
 ): PaintPreviewCleanup | null {
   if (node.type === 'ceiling') {
@@ -421,10 +469,11 @@ function applySingleSurfacePaintPreview(
     }
   }
 
-  if (node.type === 'shelf' || node.type === 'box-vent' || node.type === 'ridge-vent') {
-    // These kinds register a `<group>` (not a Mesh) with `useRegistry`,
-    // so we walk the subtree and preview-swap every child mesh — same
-    // approach `column` uses.
+  if (node.type === 'shelf') {
+    // Shelf registers a `<group>` (not a Mesh) with `useRegistry`, so we walk
+    // the subtree and preview-swap every child mesh — same approach `column`
+    // uses. (The roof vents previously shared this arm; they now route through
+    // their `capabilities.paint` dispatcher.)
     if (!registeredObject) return null
     const restores: PaintPreviewCleanup[] = []
     registeredObject.traverse((object) => {
@@ -845,10 +894,30 @@ export const SelectionManager = () => {
       })
 
     const getPaintInteraction = (event: NodeEvent): PaintInteraction | null => {
+      const eraser = useEditor.getState().paintEraser
       const activePaintMaterial = resolveActivePaintMaterial()
       const node = event.node
 
       if (!isNodeInCurrentLevel(node)) return null
+
+      // The eraser clears a surface back to its default by painting with an
+      // empty material — every `build*SurfaceMaterialPatch` interprets
+      // `undefined` material/preset as "reset this role". So a single spec
+      // with both fields undefined drives the same apply/preview paths as a
+      // real material; only the enabled-gate differs (no material required).
+      const paintEnabled = eraser || hasActivePaintMaterial(activePaintMaterial)
+      const paintSpec: ActivePaintMaterial = eraser
+        ? {
+            material: undefined,
+            materialPreset: undefined,
+            sourceTarget:
+              activePaintMaterial?.sourceTarget ?? useEditor.getState().activePaintTarget,
+          }
+        : (activePaintMaterial ?? {
+            material: undefined,
+            materialPreset: undefined,
+            sourceTarget: useEditor.getState().activePaintTarget,
+          })
 
       // Registry-driven paint dispatch — kinds that declare
       // `capabilities.paint` route hover / click / preview through
@@ -865,9 +934,9 @@ export const SelectionManager = () => {
           localPosition: event.localPosition as readonly [number, number, number] | undefined,
           hitObjectName: event.nativeEvent.object?.name,
         })
-        const compatible = role !== null && hasActivePaintMaterial(activePaintMaterial)
+        const compatible = role !== null && paintEnabled
         return {
-          key: `${node.type}:${node.id}:${role ?? 'unsupported'}`,
+          key: `${node.type}:${node.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
           hoveredId: node.id as AnyNodeId,
           hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
           apply:
@@ -878,8 +947,8 @@ export const SelectionManager = () => {
                     paintCap.buildPatch({
                       node,
                       role,
-                      material: activePaintMaterial.material,
-                      materialPreset: activePaintMaterial.materialPreset,
+                      material: paintSpec.material,
+                      materialPreset: paintSpec.materialPreset,
                     }) as Partial<AnyNode>,
                   )
                 }
@@ -892,8 +961,8 @@ export const SelectionManager = () => {
                   return paintCap.applyPreview({
                     node,
                     role,
-                    material: activePaintMaterial.material,
-                    materialPreset: activePaintMaterial.materialPreset,
+                    material: paintSpec.material,
+                    materialPreset: paintSpec.materialPreset,
                     root,
                   })
                 }
@@ -912,7 +981,7 @@ export const SelectionManager = () => {
         if (!roofNode || roofNode.type !== 'roof') return null
 
         const role = resolveRoofMaterialTarget(event as RoofEvent | RoofSegmentEvent)
-        const compatible = role !== null && hasActivePaintMaterial(activePaintMaterial)
+        const compatible = role !== null && paintEnabled
         // Painting directly on a segment (only possible in segment edit
         // mode, where the per-segment mesh is visible) writes to the
         // segment's own role-specific fields. Painting the merged shell
@@ -921,14 +990,11 @@ export const SelectionManager = () => {
         return {
           key: `${segmentTarget ? 'roof-segment' : 'roof'}:${
             segmentTarget ? segmentTarget.id : roofNode.id
-          }:${role ?? 'unsupported'}`,
+          }:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
           hoveredId: (segmentTarget ? segmentTarget.id : roofNode.id) as AnyNodeId,
-          hoverMode:
-            compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? 'paint-ready'
-              : 'paint-disabled',
+          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
           apply:
-            compatible && hasActivePaintMaterial(activePaintMaterial)
+            compatible && role
               ? () => {
                   const sceneState = useScene.getState()
                   if (segmentTarget) {
@@ -936,35 +1002,35 @@ export const SelectionManager = () => {
                       segmentTarget.id as AnyNodeId,
                       buildRoofSegmentSurfaceMaterialPatch(
                         segmentTarget,
-                        role!,
-                        activePaintMaterial.material,
-                        activePaintMaterial.materialPreset,
+                        role,
+                        paintSpec.material,
+                        paintSpec.materialPreset,
                       ),
                     )
                   } else {
-                    sceneState.updateNodes(
-                      buildRoofSurfaceMaterialUpdates(
-                        sceneState.nodes,
+                    sceneState.updateNode(
+                      roofNode.id as AnyNodeId,
+                      buildRoofSurfaceMaterialPatch(
                         roofNode as RoofNode,
-                        role!,
-                        activePaintMaterial.material,
-                        activePaintMaterial.materialPreset,
+                        role,
+                        paintSpec.material,
+                        paintSpec.materialPreset,
                       ),
                     )
                   }
                 }
               : null,
           preview:
-            compatible && hasActivePaintMaterial(activePaintMaterial) && role
+            compatible && role
               ? () =>
                   segmentTarget
                     ? applyRoofSegmentPaintPreview(
                         segmentTarget,
                         roofNode as RoofNode,
                         role,
-                        activePaintMaterial,
+                        paintSpec,
                       )
-                    : applyRoofPaintPreview(roofNode as RoofNode, role, activePaintMaterial)
+                    : applyRoofPaintPreview(roofNode as RoofNode, role, paintSpec)
               : () => previewCursor('not-allowed'),
         }
       }
@@ -979,16 +1045,13 @@ export const SelectionManager = () => {
         if (!stairNode || stairNode.type !== 'stair') return null
 
         const role = resolveStairMaterialTarget(event as StairEvent | StairSegmentEvent)
-        const compatible = role !== null && hasActivePaintMaterial(activePaintMaterial)
+        const compatible = role !== null && paintEnabled
         return {
-          key: `stair:${stairNode.id}:${role ?? 'unsupported'}`,
+          key: `stair:${stairNode.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
           hoveredId: stairNode.id as AnyNodeId,
-          hoverMode:
-            compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? 'paint-ready'
-              : 'paint-disabled',
+          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
           apply:
-            compatible && hasActivePaintMaterial(activePaintMaterial)
+            compatible && role
               ? () => {
                   useScene
                     .getState()
@@ -996,16 +1059,16 @@ export const SelectionManager = () => {
                       stairNode.id as AnyNodeId,
                       buildStairSurfaceMaterialPatch(
                         stairNode as StairNode,
-                        role!,
-                        activePaintMaterial.material,
-                        activePaintMaterial.materialPreset,
+                        role,
+                        paintSpec.material,
+                        paintSpec.materialPreset,
                       ),
                     )
                 }
               : null,
           preview:
-            compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? () => applyStairPaintPreview(stairNode as StairNode, role, activePaintMaterial)
+            compatible && role
+              ? () => applyStairPaintPreview(stairNode as StairNode, role, paintSpec)
               : () => previewCursor('not-allowed'),
         }
       }
@@ -1020,14 +1083,12 @@ export const SelectionManager = () => {
         node.type === 'column' ||
         node.type === 'slab' ||
         node.type === 'ceiling' ||
-        node.type === 'shelf' ||
-        node.type === 'box-vent' ||
-        node.type === 'ridge-vent'
+        node.type === 'shelf'
       ) {
-        const compatible = hasActivePaintMaterial(activePaintMaterial)
+        const compatible = paintEnabled
 
         return {
-          key: `${node.type}:${node.id}:surface`,
+          key: `${node.type}:${node.id}:surface:${eraser ? 'erase' : 'paint'}`,
           hoveredId: node.id as AnyNodeId,
           hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
           apply: compatible
@@ -1037,29 +1098,16 @@ export const SelectionManager = () => {
                   .updateNode(
                     node.id as AnyNodeId,
                     buildSingleSurfaceMaterialPatch<
-                      | FenceNode
-                      | ColumnNode
-                      | SlabNode
-                      | CeilingNode
-                      | ShelfNode
-                      | BoxVentNode
-                      | RidgeVentNode
-                    >(activePaintMaterial.material, activePaintMaterial.materialPreset),
+                      FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode
+                    >(paintSpec.material, paintSpec.materialPreset),
                   )
               }
             : null,
           preview: compatible
             ? () =>
                 applySingleSurfacePaintPreview(
-                  node as
-                    | FenceNode
-                    | ColumnNode
-                    | SlabNode
-                    | CeilingNode
-                    | ShelfNode
-                    | BoxVentNode
-                    | RidgeVentNode,
-                  activePaintMaterial,
+                  node as FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
+                  paintSpec,
                 )
             : () => previewCursor('not-allowed'),
         }
@@ -1214,6 +1262,16 @@ export const SelectionManager = () => {
       if (boxSelectHandled) return
 
       const node = event.node
+
+      // A ceiling is selectable only through its corner handles, never via
+      // the `ceiling-grid` body mesh. When the grid is revealed (ceiling
+      // selected, or an item placed beneath it) a top-down click hits the
+      // grid first; selecting the ceiling there both re-selects it as a
+      // no-op and stops propagation, blocking the hosted item below. By
+      // ignoring non-handle ceiling clicks (without stopping propagation)
+      // the click falls through to the item underneath.
+      if (node.type === 'ceiling' && !event.viaHandle) return
+
       let currentPhase = useEditor.getState().phase
       let currentStructureLayer = useEditor.getState().structureLayer
 
@@ -1247,8 +1305,14 @@ export const SelectionManager = () => {
 
         let nodeToSelect = node
         if (node.type === 'roof-segment' && node.parentId) {
-          const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
-          if (parentNode && parentNode.type === 'roof') {
+          const nodes = useScene.getState().nodes
+          const parentNode = nodes[node.parentId as AnyNodeId]
+          const selectedIds = useViewer.getState().selection.selectedIds
+          if (
+            parentNode &&
+            parentNode.type === 'roof' &&
+            !isInActiveRoofContext(node, selectedIds, nodes)
+          ) {
             nodeToSelect = parentNode
           }
         }
@@ -1257,6 +1321,13 @@ export const SelectionManager = () => {
           if (parentNode && parentNode.type === 'stair') {
             nodeToSelect = parentNode
           }
+        }
+
+        // Clicking any node (e.g. the slab surface outside a hole) exits slab
+        // hole-edit mode. The hole handles + hit mesh stopPropagation, so a
+        // click reaching here means the user clicked outside the hole.
+        if (useEditor.getState().editingHole) {
+          useEditor.getState().setEditingHole(null)
         }
 
         activeStrategy.handleSelect(nodeToSelect, event.nativeEvent, modifierKeysRef.current)
@@ -1428,7 +1499,11 @@ export const SelectionManager = () => {
     }
 
     const onDoubleClick = (event: NodeEvent) => {
-      const node = event.node
+      let node = event.node
+      if (node.type === 'roof') {
+        node = resolveRoofSegmentSelectionTarget(event) ?? node
+      }
+
       const currentPhase = useEditor.getState().phase
 
       let targetPhase: 'site' | 'structure' | 'furnish' | null = null
@@ -1544,11 +1619,7 @@ export const SelectionManager = () => {
       event.stopPropagation()
 
       // Play appropriate SFX
-      if (node.type === 'item') {
-        sfxEmitter.emit('sfx:item-delete')
-      } else {
-        sfxEmitter.emit('sfx:structure-delete')
-      }
+      emitDeleteSFX(node.type)
 
       useScene.getState().deleteNode(node.id as AnyNodeId)
       if (node.parentId) useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)

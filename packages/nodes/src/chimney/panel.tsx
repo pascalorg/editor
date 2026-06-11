@@ -133,6 +133,21 @@ export default function ChimneyPanel() {
     }
   }, [selectedId, node, deleteNode, setSelection])
 
+  // Match the current store node against the preset table so the
+  // segmented control highlights "the preset you'd land on if you
+  // applied X again". Compare against the store node, not the live-
+  // override-merged `node`, so the highlight is stable across slider
+  // drags. Null means the user has tweaked away from any preset; the
+  // segmented control will then render with no segment selected.
+  const activePreset = useMemo(() => detectActiveChimneyPreset(storeNode), [storeNode])
+  const applyPreset = useCallback(
+    (key: ChimneyPresetKey) => {
+      commitProp(chimneyPresets[key] as Partial<ChimneyNode>)
+      triggerSFX('sfx:item-pick')
+    },
+    [commitProp],
+  )
+
   if (!(node && node.type === 'chimney' && selectedId)) return null
 
   const scenestate = useScene.getState()
@@ -322,20 +337,6 @@ export default function ChimneyPanel() {
   }
 
   // Match the current store node against the preset table so the
-  // segmented control highlights "the preset you'd land on if you
-  // applied X again". Compare against the store node, not the live-
-  // override-merged `node`, so the highlight is stable across slider
-  // drags. Null means the user has tweaked away from any preset; the
-  // segmented control will then render with no segment selected.
-  const activePreset = useMemo(() => detectActiveChimneyPreset(storeNode), [storeNode])
-  const applyPreset = useCallback(
-    (key: ChimneyPresetKey) => {
-      commitProp(chimneyPresets[key] as Partial<ChimneyNode>)
-      triggerSFX('sfx:item-pick')
-    },
-    [commitProp],
-  )
-
   return (
     <PanelWrapper
       icon="/icons/roof.png"

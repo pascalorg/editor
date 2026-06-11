@@ -20,6 +20,7 @@ import {
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { getRoofDebugMaterials, getRoofMaterials } from '../roof/roof-materials'
+import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 
 export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
   const ref = useRef<THREE.Mesh>(null!)
@@ -36,15 +37,8 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
   const parentNode = node.parentId
     ? (nodes[node.parentId as AnyNodeId] as RoofNode | undefined)
     : undefined
-  const placeholderGeometry = useMemo(() => {
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
-    geometry.addGroup(0, 0, 0)
-    geometry.addGroup(0, 0, 1)
-    geometry.addGroup(0, 0, 2)
-    geometry.addGroup(0, 0, 3)
-    return geometry
-  }, [])
+  // 4 groups map 1:1 to the roof's 4-material array (see getRoofMaterialArray).
+  const placeholderGeometry = useMemo(() => createPlaceholderGeometry(4), [])
 
   // Segment material precedence, per-role:
   //   1. Segment's role-specific override (topMaterial, edgeMaterial, wallMaterial).
@@ -88,13 +82,10 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
 
     // Some slots have explicit materials; fill the rest from the themed array so
     // an untextured slot still picks up the scene-theme role colour, not blank white.
+    // Per-role only, then the themed parent slot — no cross-role fallback, so
+    // painting one segment surface never bleeds onto its other surfaces.
     const slot = (i: number) => themedArray?.[i] ?? new THREE.MeshStandardMaterial()
-    return [
-      edge ?? wall ?? top ?? slot(0),
-      wall ?? edge ?? top ?? slot(1),
-      wall ?? edge ?? top ?? slot(2),
-      top ?? wall ?? edge ?? slot(3),
-    ] as THREE.Material[]
+    return [edge ?? slot(0), wall ?? slot(1), wall ?? slot(2), top ?? slot(3)] as THREE.Material[]
   }, [
     node.material,
     node.materialPreset,

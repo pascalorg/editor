@@ -630,6 +630,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
     attachTo: 'ceiling',
+    recessed: true,
     interactive: {
       controls: [
         { kind: 'toggle' },

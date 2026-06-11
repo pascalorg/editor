@@ -2,6 +2,7 @@
 
 import type { AssetInput } from '@pascal-app/core'
 import {
+  type AnyNode,
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
@@ -47,6 +48,30 @@ const MAX_FLOORPLAN_PANE_RATIO = 0.85
 
 export type ViewMode = '3d' | '2d' | 'split'
 export type SplitOrientation = 'horizontal' | 'vertical'
+export type WorkspaceMode = 'edit' | 'studio'
+
+// Snapshot capture is invoked from two surfaces with different policies.
+// `standard` mirrors the existing user-driven UX — pick region / viewport /
+// area, save the blob as a project thumbnail. `preset` is the constrained
+// variant for the unified preset capture flow (community save-as-preset
+// modal): the overlay locks to a square crop, the renderer clears alpha
+// (transparent background), and the rendered set is locked to `isolated`
+// — `ThumbnailGenerator` consults `captureMode.mode === 'preset'` and
+// applies those constraints. Keeping it a discriminated union lets us
+// add future modes without surfacing the choice to end users.
+export type CaptureMode =
+  | { mode: 'idle' }
+  | { mode: 'standard' }
+  | {
+      mode: 'preset'
+      isolated: AnyNodeId[]
+      framingBounds?: {
+        min: [number, number]
+        max: [number, number]
+        center: [number, number]
+        size: [number, number]
+      }
+    }
 
 export type Phase = 'site' | 'structure' | 'furnish'
 
@@ -72,10 +97,15 @@ export type StructureTool =
   | 'shelf'
   | 'box-vent'
   | 'ridge-vent'
+  | 'turbine-vent'
+  | 'cupola'
+  | 'eyebrow-vent'
   | 'chimney'
   | 'solar-panel'
   | 'skylight'
   | 'dormer'
+  | 'gutter'
+  | 'downspout'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'
@@ -98,8 +128,28 @@ export type StructureLayer = 'zones' | 'elements'
 export type FloorplanSelectionTool = 'click' | 'marquee'
 export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
 
+export type NavigationSyncSource = '2d' | '3d'
+
+export type NavigationSyncPose = {
+  source: NavigationSyncSource
+  revision: number
+  target: [number, number, number]
+  azimuth: number
+  viewWidth: number
+}
+
+export type NavigationSyncPoseInput = Omit<NavigationSyncPose, 'revision'>
+
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool
+
+/**
+ * Starting parameters seeded into a draw tool before it mints a node.
+ * A loose param bag — the tool's create path validates it through the
+ * kind's schema (`FenceNode.parse({ ...defaults, start, end })`), which
+ * is the real type gate, so unknown keys are simply ignored.
+ */
+export type ToolDefaults = Record<string, unknown>
 
 export type MovingWallEndpoint = {
   wall: WallNode
@@ -130,6 +180,8 @@ type MaterialPaintSelectionSnapshot = {
   activePaintMaterial: ActivePaintMaterial | null
 }
 
+export type SurfaceHoleTarget = { nodeId: string; holeIndex: number }
+
 export type GuideUiState = {
   locked?: boolean
   scaleReferenceVisible?: boolean
@@ -142,6 +194,15 @@ type EditorState = {
   setMode: (mode: Mode) => void
   tool: Tool | null
   setTool: (tool: Tool | null) => void
+  /**
+   * Per-tool starting parameters for the next node a draw tool mints.
+   * Transient (not persisted): host apps seed an entry just before
+   * activating the tool (placing a drawn preset, or a future dimension
+   * picker), the tool's create path merges it, and the tool clears its
+   * own entry on deactivation so a later manual draw isn't poisoned.
+   */
+  toolDefaults: Partial<Record<Tool, ToolDefaults>>
+  setToolDefaults: (tool: Tool, defaults: ToolDefaults | null) => void
   structureLayer: StructureLayer
   setStructureLayer: (layer: StructureLayer) => void
   catalogCategory: CatalogCategory | null
@@ -167,6 +228,13 @@ type EditorState = {
     | StairSegmentNode
     | BuildingNode
     | null
+  /**
+   * True while a move was engaged by a press-drag gizmo (the on-canvas move
+   * cross) rather than a click-to-place flow. The placement coordinator reads
+   * this to commit on pointer-release instead of waiting for a click.
+   */
+  placementDragMode: boolean
+  setPlacementDragMode: (dragMode: boolean) => void
   setMovingNode: (
     node:
       | ItemNode
@@ -233,6 +301,10 @@ type EditorState = {
   setActivePaintMaterial: (material: ActivePaintMaterial | null) => void
   activePaintTarget: PaintableMaterialTarget
   setActivePaintTarget: (target: PaintableMaterialTarget) => void
+  // When true, clicking a surface in paint mode clears it back to its
+  // default material instead of applying `activePaintMaterial`.
+  paintEraser: boolean
+  setPaintEraser: (eraser: boolean) => void
   primeMaterialPaintFromSelection: () => MaterialPaintSelectionSnapshot
   hoveredPaintTarget: PaintableMaterialTarget | null
   setHoveredPaintTarget: (target: PaintableMaterialTarget | null) => void
@@ -248,14 +320,23 @@ type EditorState = {
   spaces: Record<string, Space>
   setSpaces: (spaces: Record<string, Space>) => void
   // Generic hole editing (works for slabs, ceilings, and any future polygon nodes)
-  editingHole: { nodeId: string; holeIndex: number } | null
-  setEditingHole: (hole: { nodeId: string; holeIndex: number } | null) => void
+  editingHole: SurfaceHoleTarget | null
+  setEditingHole: (hole: SurfaceHoleTarget | null) => void
+  hoveredHole: SurfaceHoleTarget | null
+  setHoveredHole: (hole: SurfaceHoleTarget | null) => void
   // Preview mode (viewer-like experience inside the editor)
   isPreviewMode: boolean
   setPreviewMode: (preview: boolean) => void
-  // Capture mode (snapshot toolbar — hides panels for clean framing)
+  // Capture mode (snapshot toolbar — hides panels for clean framing).
+  // `captureMode` is the canonical discriminated-union state; the boolean
+  // `isCaptureMode` is kept synced as a derived convenience for the many
+  // existing read sites that just gate chrome visibility on "is capture
+  // active". New write sites should pass a `CaptureMode` shape; passing a
+  // boolean is accepted as a back-compat shim (`true` → `'standard'`,
+  // `false` → `'idle'`).
+  captureMode: CaptureMode
   isCaptureMode: boolean
-  setCaptureMode: (active: boolean) => void
+  setCaptureMode: (next: boolean | CaptureMode) => void
   // View mode (3D only, 2D only, or split 2D+3D)
   viewMode: ViewMode
   setViewMode: (mode: ViewMode) => void
@@ -267,10 +348,17 @@ type EditorState = {
   toggleFloorplanOpen: () => void
   isFloorplanHovered: boolean
   setFloorplanHovered: (hovered: boolean) => void
+  navigationSyncPose: NavigationSyncPose | null
+  publishNavigationSyncPose: (pose: NavigationSyncPoseInput) => void
   floorplanSelectionTool: FloorplanSelectionTool
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
   gridSnapStep: GridSnapStep
   setGridSnapStep: (step: GridSnapStep) => void
+  // Magnetic snapping while drafting — snaps wall endpoints onto existing
+  // wall corners / wall bodies (the "magnetic" beacon). Independent of grid
+  // snap. On by default; toggled from the Display menu.
+  magneticSnap: boolean
+  setMagneticSnap: (enabled: boolean) => void
   showReferenceFloor: boolean
   toggleReferenceFloor: () => void
   setShowReferenceFloor: (show: boolean) => void
@@ -285,9 +373,14 @@ type EditorState = {
   isFirstPersonMode: boolean
   _viewModeBeforeFirstPerson: ViewMode | null
   setFirstPersonMode: (enabled: boolean) => void
+  // Workspace mode: 'edit' is the full editing surface; 'studio' is the
+  // render/snapshot surface (clean canvas, no editing chrome or selection).
+  // Entering studio forces a 3D-only view and restores the prior view on exit.
+  workspaceMode: WorkspaceMode
+  _viewModeBeforeStudio: ViewMode | null
+  setWorkspaceMode: (mode: WorkspaceMode) => void
   activeSidebarPanel: string
   setActiveSidebarPanel: (id: string) => void
-  setIsCaptureMode: (enabled: boolean) => void
   floorplanPaneRatio: number
   setFloorplanPaneRatio: (ratio: number) => void
   // Mobile-only: pixel height of the secondary panel sheet while open (0 when closed).
@@ -308,6 +401,7 @@ type PersistedEditorLayoutState = Pick<
   | 'splitOrientation'
   | 'floorplanSelectionTool'
   | 'gridSnapStep'
+  | 'magneticSnap'
   | 'showReferenceFloor'
   | 'referenceFloorOffset'
   | 'referenceFloorOpacity'
@@ -330,12 +424,17 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   splitOrientation: 'horizontal',
   floorplanSelectionTool: 'click',
   gridSnapStep: 0.1,
+  magneticSnap: true,
   showReferenceFloor: false,
   referenceFloorOffset: 1,
   referenceFloorOpacity: 0.35,
 }
 
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
+
+type SelectDefaultBuildingAndLevelOptions = {
+  forceGroundLevel?: boolean
+}
 
 function normalizeModeForPhase(phase: Phase, mode: Mode | undefined): Mode {
   if (phase === 'site') {
@@ -442,6 +541,8 @@ function normalizePersistedEditorLayoutState(
     gridSnapStep: GRID_SNAP_STEPS.includes(state?.gridSnapStep as GridSnapStep)
       ? (state?.gridSnapStep as GridSnapStep)
       : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
+    // Default on: only an explicit persisted `false` disables it.
+    magneticSnap: state?.magneticSnap !== false,
     showReferenceFloor: state?.showReferenceFloor === true,
     referenceFloorOffset:
       typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
@@ -471,49 +572,94 @@ export function hasCustomPersistedEditorUiState(
   )
 }
 
+function getDefaultLevelId(
+  buildingNode: BuildingNode,
+  nodes: Record<string, AnyNode>,
+): LevelNode['id'] | null {
+  const levels = buildingNode.children
+    .map((childId) => nodes[childId as AnyNodeId])
+    .filter((node): node is LevelNode => node?.type === 'level')
+
+  if (levels.length === 0) {
+    return null
+  }
+
+  const groundLevel = levels.find((level) => level.level === 0)
+  if (groundLevel) {
+    return groundLevel.id
+  }
+
+  const firstLevel = levels[0]
+  if (!firstLevel) {
+    return null
+  }
+
+  let lowestLevel = firstLevel
+  for (const level of levels.slice(1)) {
+    if (level.level < lowestLevel.level) {
+      lowestLevel = level
+    }
+  }
+
+  return lowestLevel.id
+}
+
 /**
  * Selects the first building and level 0 in the scene.
  * Safe to call any time — no-ops if already selected or scene is empty.
  */
-export function selectDefaultBuildingAndLevel() {
+export function selectDefaultBuildingAndLevel(options: SelectDefaultBuildingAndLevelOptions = {}) {
   const viewer = useViewer.getState()
   const scene = useScene.getState()
 
-  let buildingId = viewer.selection.buildingId
+  const selectedBuilding = viewer.selection.buildingId
+    ? scene.nodes[viewer.selection.buildingId]
+    : null
+  let buildingNode =
+    selectedBuilding?.type === 'building' ? (selectedBuilding as BuildingNode) : null
 
   // If no building selected, find the first one from site's children
-  if (!buildingId) {
+  if (!buildingNode) {
     const siteNode = scene.rootNodeIds[0] ? scene.nodes[scene.rootNodeIds[0]] : null
     if (siteNode?.type === 'site') {
-      const firstBuilding = siteNode.children
-        .map((childId) => scene.nodes[childId as AnyNodeId])
-        .find((node) => node?.type === 'building')
-      if (firstBuilding) {
-        buildingId = firstBuilding.id as BuildingNode['id']
-        viewer.setSelection({ buildingId })
-      }
+      buildingNode =
+        siteNode.children
+          .map((childId) => scene.nodes[childId as AnyNodeId])
+          .find((node): node is BuildingNode => node?.type === 'building') ?? null
     }
   }
 
-  // If no level selected, find level 0 in the building
-  if (buildingId && !viewer.selection.levelId) {
-    const buildingNode = scene.nodes[buildingId] as BuildingNode
-    const level0Id = buildingNode.children.find((childId) => {
-      const levelNode = scene.nodes[childId] as LevelNode
-      return levelNode?.type === 'level' && levelNode.level === 0
-    })
-    if (level0Id) {
-      viewer.setSelection({ levelId: level0Id as LevelNode['id'] })
-    } else {
-      // Fallback to first level if level 0 doesn't exist
-      const firstLevelId = buildingNode.children.find(
-        (childId) => scene.nodes[childId]?.type === 'level',
-      )
-      if (firstLevelId) {
-        viewer.setSelection({ levelId: firstLevelId as LevelNode['id'] })
-      }
-    }
+  if (!buildingNode) {
+    return
   }
+
+  const selectedLevel = viewer.selection.levelId ? scene.nodes[viewer.selection.levelId] : null
+  const selectedLevelBelongsToBuilding =
+    selectedLevel?.type === 'level' && selectedLevel.parentId === buildingNode.id
+  const shouldSelectDefaultLevel = options.forceGroundLevel || !selectedLevelBelongsToBuilding
+  const defaultLevelId = shouldSelectDefaultLevel
+    ? getDefaultLevelId(buildingNode, scene.nodes as Record<string, AnyNode>)
+    : null
+
+  const selectionUpdate: Parameters<typeof viewer.setSelection>[0] = {}
+  if (viewer.selection.buildingId !== buildingNode.id) {
+    selectionUpdate.buildingId = buildingNode.id
+  }
+  if (defaultLevelId) {
+    selectionUpdate.levelId = defaultLevelId
+  }
+
+  if (Object.keys(selectionUpdate).length > 0) {
+    viewer.setSelection(selectionUpdate)
+  }
+}
+
+export function selectSiteFloorplanContext() {
+  selectDefaultBuildingAndLevel({ forceGroundLevel: true })
+  useViewer.getState().setSelection({
+    selectedIds: [],
+    zoneId: null,
+  })
 }
 
 const useEditor = create<EditorState>()(
@@ -544,12 +690,9 @@ const useEditor = create<EditorState>()(
           set({ mode: 'select', tool: null, catalogCategory: null })
         }
 
-        const viewer = useViewer.getState()
-
         switch (phase) {
           case 'site':
-            // In Site mode, we zoom out and deselect specific levels/buildings
-            viewer.resetSelection()
+            selectSiteFloorplanContext()
             break
 
           case 'structure':
@@ -590,6 +733,17 @@ const useEditor = create<EditorState>()(
       },
       tool: DEFAULT_PERSISTED_EDITOR_UI_STATE.tool,
       setTool: (tool) => set({ tool }),
+      toolDefaults: {},
+      setToolDefaults: (tool, defaults) =>
+        set((state) => {
+          const next = { ...state.toolDefaults }
+          if (defaults === null) {
+            delete next[tool]
+          } else {
+            next[tool] = defaults
+          }
+          return { toolDefaults: next }
+        }),
       structureLayer: DEFAULT_PERSISTED_EDITOR_UI_STATE.structureLayer,
       setStructureLayer: (layer) => {
         const { mode } = get()
@@ -628,6 +782,8 @@ const useEditor = create<EditorState>()(
         | StairSegmentNode
         | BuildingNode
         | null,
+      placementDragMode: false,
+      setPlacementDragMode: (dragMode) => set({ placementDragMode: dragMode }),
       setMovingNode: (node) =>
         set(
           node === null
@@ -635,7 +791,8 @@ const useEditor = create<EditorState>()(
               // non-owning side's effect cleanup — which fires after
               // `setMovingNode(null)` propagates — can still read who
               // finalised. The next non-null `setMovingNode` resets it.
-              { movingNode: null }
+              // Always clear the press-drag flag when a move ends.
+              { movingNode: null, placementDragMode: false }
             : { movingNode: node, movingNodeOrigin: null },
         ),
       movingNodeOrigin: null as '2d' | '3d' | null,
@@ -653,12 +810,17 @@ const useEditor = create<EditorState>()(
       selectedMaterialTarget: null,
       setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
       activePaintMaterial: null,
-      setActivePaintMaterial: (material) => set({ activePaintMaterial: material }),
+      // Picking a material implies paint, not erase — clear the eraser so the
+      // next click applies the chosen material.
+      setActivePaintMaterial: (material) =>
+        set({ activePaintMaterial: material, paintEraser: false }),
       activePaintTarget: 'wall',
       setActivePaintTarget: (target) =>
         set((state) =>
           state.activePaintTarget === target ? state : { activePaintTarget: target },
         ),
+      paintEraser: false,
+      setPaintEraser: (eraser) => set({ paintEraser: eraser }),
       primeMaterialPaintFromSelection: () => {
         const selectedId =
           useViewer.getState().selection.selectedIds.length === 1
@@ -729,6 +891,14 @@ const useEditor = create<EditorState>()(
       setSpaces: (spaces) => set({ spaces }),
       editingHole: null,
       setEditingHole: (hole) => set({ editingHole: hole }),
+      hoveredHole: null,
+      setHoveredHole: (hole) =>
+        set((state) =>
+          state.hoveredHole?.nodeId === hole?.nodeId &&
+          state.hoveredHole?.holeIndex === hole?.holeIndex
+            ? state
+            : { hoveredHole: hole },
+        ),
       isPreviewMode: false,
       setPreviewMode: (preview) => {
         if (preview) {
@@ -739,8 +909,13 @@ const useEditor = create<EditorState>()(
           set({ isPreviewMode: false })
         }
       },
+      captureMode: { mode: 'idle' } as CaptureMode,
       isCaptureMode: false,
-      setCaptureMode: (active) => set({ isCaptureMode: active }),
+      setCaptureMode: (next) => {
+        const resolved: CaptureMode =
+          typeof next === 'boolean' ? { mode: next ? 'standard' : 'idle' } : next
+        set({ captureMode: resolved, isCaptureMode: resolved.mode !== 'idle' })
+      },
       viewMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode,
       setViewMode: (mode) => set({ viewMode: mode, isFloorplanOpen: mode !== '3d' }),
       splitOrientation: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.splitOrientation,
@@ -754,10 +929,20 @@ const useEditor = create<EditorState>()(
         }),
       isFloorplanHovered: false,
       setFloorplanHovered: (hovered) => set({ isFloorplanHovered: hovered }),
+      navigationSyncPose: null,
+      publishNavigationSyncPose: (pose) =>
+        set((state) => ({
+          navigationSyncPose: {
+            ...pose,
+            revision: (state.navigationSyncPose?.revision ?? 0) + 1,
+          },
+        })),
       floorplanSelectionTool: 'click' as FloorplanSelectionTool,
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
       gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
       setGridSnapStep: (step) => set({ gridSnapStep: step }),
+      magneticSnap: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.magneticSnap,
+      setMagneticSnap: (enabled) => set({ magneticSnap: enabled }),
       showReferenceFloor: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showReferenceFloor,
       toggleReferenceFloor: () =>
         set((state) => ({ showReferenceFloor: !state.showReferenceFloor })),
@@ -793,9 +978,34 @@ const useEditor = create<EditorState>()(
           })
         }
       },
+      workspaceMode: 'edit' as WorkspaceMode,
+      _viewModeBeforeStudio: null as ViewMode | null,
+      setWorkspaceMode: (mode) => {
+        if (get().workspaceMode === mode) return
+        if (mode === 'studio') {
+          const currentViewMode = get().viewMode
+          set({
+            workspaceMode: 'studio',
+            _viewModeBeforeStudio: currentViewMode,
+            viewMode: '3d',
+            isFloorplanOpen: false,
+            mode: 'select',
+            tool: null,
+            catalogCategory: null,
+          })
+          // Clear selection so no edit affordances bleed into the clean canvas.
+          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+        } else {
+          const prevMode = get()._viewModeBeforeStudio
+          set({
+            workspaceMode: 'edit',
+            _viewModeBeforeStudio: null,
+            ...(prevMode ? { viewMode: prevMode, isFloorplanOpen: prevMode !== '3d' } : {}),
+          })
+        }
+      },
       activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
       setActiveSidebarPanel: (id) => set({ activeSidebarPanel: id }),
-      setIsCaptureMode: (enabled) => set({ isCaptureMode: enabled }),
       floorplanPaneRatio: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.floorplanPaneRatio,
       setFloorplanPaneRatio: (ratio) =>
         set({ floorplanPaneRatio: normalizeFloorplanPaneRatio(ratio) }),
@@ -822,6 +1032,7 @@ const useEditor = create<EditorState>()(
         splitOrientation: state.splitOrientation,
         floorplanSelectionTool: state.floorplanSelectionTool,
         gridSnapStep: state.gridSnapStep,
+        magneticSnap: state.magneticSnap,
         showReferenceFloor: state.showReferenceFloor,
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,

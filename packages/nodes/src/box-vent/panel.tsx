@@ -321,18 +321,32 @@ export default function BoxVentPanel() {
           </>
         )}
         {node.style === 'dome' && (
-          <SliderControl
-            label="Dome Curvature"
-            max={1.2}
-            min={0.3}
-            onChange={(v) => previewProp({ domeCurvature: v })}
-            onCommit={(v) => handleUpdate({ domeCurvature: v })}
-            precision={2}
-            restoreOnCommit={false}
-            step={0.05}
-            unit=""
-            value={Math.round((node.domeCurvature ?? 0.65) * 100) / 100}
-          />
+          <>
+            <SliderControl
+              label="Dome Curvature"
+              max={1.5}
+              min={0.3}
+              onChange={(v) => previewProp({ domeCurvature: v })}
+              onCommit={(v) => handleUpdate({ domeCurvature: v })}
+              precision={2}
+              restoreOnCommit={false}
+              step={0.05}
+              unit=""
+              value={Math.round((node.domeCurvature ?? 1.0) * 100) / 100}
+            />
+            <SliderControl
+              label="Base Flange"
+              max={0.2}
+              min={0}
+              onChange={(v) => previewProp({ hoodOverhang: v })}
+              onCommit={(v) => handleUpdate({ hoodOverhang: v })}
+              precision={3}
+              restoreOnCommit={false}
+              step={0.005}
+              unit="m"
+              value={Math.round((node.hoodOverhang ?? 0.04) * 1000) / 1000}
+            />
+          </>
         )}
       </PanelSection>
 

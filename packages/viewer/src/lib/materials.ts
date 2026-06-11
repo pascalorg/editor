@@ -71,7 +71,7 @@ export function resolveSurfaceColor(
   // The active scene theme may tint individual roles (e.g. Mediterranean's blue
   // roof); fall back to the chosen colour preset's palette when it doesn't.
   const tints = sceneThemeId ? getSceneTheme(sceneThemeId).clayTints : undefined
-  return tints?.[role] ?? PRESET_PALETTES[preset][role]
+  return tints?.[role] ?? (PRESET_PALETTES[preset] ?? CLAY_PALETTE)[role]
 }
 
 // DoubleSide on any NodeMaterial inside the MRT scenePass (SSGI's output /
@@ -524,7 +524,15 @@ export function createSurfaceRoleMaterial(
   side: THREE.Side = THREE.FrontSide,
   sceneThemeId?: string,
 ): THREE.Material {
-  const resolvedSide = role === 'glazing' ? THREE.DoubleSide : side
+  // DoubleSide on glazing trips the MRT back-face pipeline issue documented
+  // on `glassMaterial` above — the validator rejects the back-face variant
+  // for missing MRT outputs and poisons the render context (manifests as
+  // "Color target has no corresponding fragment stage output" on scene
+  // open, since the dormer's window-assembly mounts the glazing material
+  // on both gable faces on the first frame). Callers that need both sides
+  // visible (e.g. dormer back gable) must rotate the host mesh 180° so the
+  // FrontSide faces the viewer.
+  const resolvedSide = role === 'glazing' ? THREE.FrontSide : side
   const cacheKey = `${role}-${preset}-${resolvedSide}-${sceneThemeId ?? 'base'}`
   const cached = surfaceRoleMaterialCache.get(cacheKey)
   if (cached) return cached
@@ -569,11 +577,16 @@ export function DEFAULT_WINDOW_MATERIAL(shading: RenderShading = 'rendered'): TH
   const cached = defaultMaterialCache.get(cacheKey)
   if (cached) return cached
 
+  // DoubleSide on a NodeMaterial inside the MRT scene pass compiles a back-face
+  // pipeline variant whose fragment outputs don't cover every MRT target — the
+  // validator rejects it and poisons the render context (see the note above
+  // `glassMaterial`). FrontSide; flip the consumer's back-face group 180° if a
+  // back face is actually visible.
   const params = {
     color: '#87ceeb',
     opacity: 0.3,
     transparent: true,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
   }
   const material =
     shading === 'solid'

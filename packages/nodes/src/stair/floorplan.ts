@@ -11,6 +11,7 @@ import type {
 // `definition.ts` so the 2D handle visually lines up with where the 3D
 // curved-arrow gizmo would sit at the matching world point.
 const STAIR_ROTATE_PLAN_OFFSET = 0.4
+
 import {
   buildFloorplanStairEntry,
   buildSvgAnnularSectorPath,
@@ -134,14 +135,8 @@ export function buildStairFloorplan(
           // Segment-local +X (width axis) and +Z (run axis) in plan coords,
           // captured here so the affordance handler can project pointer
           // deltas without re-walking the stair chain.
-          const axisX: readonly [number, number] = [
-            (c1.x - c0.x) / width,
-            (c1.y - c0.y) / width,
-          ]
-          const axisZ: readonly [number, number] = [
-            (c3.x - c0.x) / length,
-            (c3.y - c0.y) / length,
-          ]
+          const axisX: readonly [number, number] = [(c1.x - c0.x) / width, (c1.y - c0.y) / width]
+          const axisZ: readonly [number, number] = [(c3.x - c0.x) / length, (c3.y - c0.y) / length]
           const rightMid: [number, number] = [(c1.x + c2.x) / 2, (c1.y + c2.y) / 2]
           const leftMid: [number, number] = [(c0.x + c3.x) / 2, (c0.y + c3.y) / 2]
           const frontEdgeMid: [number, number] = [(c2.x + c3.x) / 2, (c2.y + c3.y) / 2]
@@ -277,13 +272,7 @@ export function buildStairFloorplan(
       // steps past `dashedFromIndex` are dashed.
       const isEmphasised = stairType === 'spiral' ? isLast : isFirst || isLast
       const stepWidth =
-        stairType === 'spiral'
-          ? isEmphasised
-            ? 1.8
-            : 1.15
-          : isEmphasised
-            ? 1.5
-            : 1.1
+        stairType === 'spiral' ? (isEmphasised ? 1.8 : 1.15) : isEmphasised ? 1.5 : 1.1
       children.push({
         kind: 'line',
         x1: inner.x,
@@ -455,10 +444,7 @@ export function buildStairFloorplan(
       localZ = -STAIR_ROTATE_PLAN_OFFSET
     } else {
       const isSpiral = stairType === 'spiral'
-      const innerR = Math.max(
-        isSpiral ? 0.05 : 0.2,
-        stair.innerRadius ?? (isSpiral ? 0.2 : 0.9),
-      )
+      const innerR = Math.max(isSpiral ? 0.05 : 0.2, stair.innerRadius ?? (isSpiral ? 0.2 : 0.9))
       const outerR = innerR + (stair.width ?? 1)
       const sweep = stair.sweepAngle ?? (isSpiral ? Math.PI * 2 : Math.PI / 2)
       const radius = outerR + STAIR_ROTATE_PLAN_OFFSET
@@ -478,6 +464,7 @@ export function buildStairFloorplan(
       point: [planX, planY],
       angle: radialAngle,
       affordance: 'stair-rotate',
+      pivot: [cx, cz],
     })
   }
 

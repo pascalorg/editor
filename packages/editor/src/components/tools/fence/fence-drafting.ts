@@ -8,10 +8,11 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import useEditor from '../../../store/use-editor'
 import {
   findWallSnapTarget,
-  getWallAngleSnapStep,
   getSegmentGridStep,
+  getWallAngleSnapStep,
   isSegmentLongEnough,
   snapPointTo45Degrees,
   snapPointToGrid,
@@ -133,14 +134,23 @@ export function snapFenceDraftPoint(args: {
   ignoreFenceIds?: string[]
   /** Override the grid step (e.g. `WALL_FINE_GRID_STEP` for precision mode). */
   step?: number
+  /**
+   * Optional grid-snap function. When provided, replaces the default
+   * local-axis snap — lets the 2D floor-plan keep snapping to the
+   * world XZ grid even when the building is rotated. Wall / fence
+   * endpoint snap precedence is preserved.
+   */
+  gridSnap?: (point: FencePlanPoint) => FencePlanPoint
 }): FencePlanPoint {
-  const { point, walls, fences, start, angleSnap = false, ignoreFenceIds, step } = args
+  const { point, walls, fences, start, angleSnap = false, ignoreFenceIds, step, gridSnap } = args
   const gridStep = step ?? getSegmentGridStep()
   const angleStep = getWallAngleSnapStep(gridStep)
   const basePoint =
     start && angleSnap
-      ? snapPointTo45Degrees(start, point, gridStep, angleStep)
-      : snapPointToGrid(point, gridStep)
+      ? snapPointTo45Degrees(start, point, gridStep, angleStep, gridSnap)
+      : gridSnap
+        ? gridSnap(point)
+        : snapPointToGrid(point, gridStep)
   const fenceSnapTarget = findFenceSnapTarget(basePoint, fences, ignoreFenceIds)
 
   return fenceSnapTarget ?? findWallSnapTarget(basePoint, walls) ?? basePoint
@@ -158,7 +168,12 @@ export function createFenceOnCurrentLevel(
   }
 
   const fenceCount = Object.values(nodes).filter((node) => node.type === 'fence').length
+  // Build parameters seeded by a placed preset (height, style, post
+  // spacing, …) merge in first; `name`/`start`/`end` always win. The
+  // schema parse validates and drops anything unexpected.
+  const defaults = useEditor.getState().toolDefaults.fence ?? {}
   const fence = FenceNode.parse({
+    ...defaults,
     name: `Fence ${fenceCount + 1}`,
     start,
     end,

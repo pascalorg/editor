@@ -11,11 +11,15 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import {
+  alignFloorplanDraftPoint,
   getSegmentGridStep,
   isSegmentLongEnough,
+  snapBuildingLocalToWorldGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
+  useAlignmentGuides,
   WALL_FINE_GRID_STEP,
+  WALL_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 
@@ -109,8 +113,11 @@ export const wallCurveAffordance: FloorplanAffordance<WallNode> = {
       affectedIds: [node.id],
       apply({ planPoint, modifiers }) {
         const snapStep = getSegmentGridStep()
-        const x = modifiers.shiftKey ? planPoint[0] : snapScalarToGrid(planPoint[0], snapStep)
-        const y = modifiers.shiftKey ? planPoint[1] : snapScalarToGrid(planPoint[1], snapStep)
+        // World-grid snap so a rotated building doesn't drag the curve
+        // handle off the visible grid.
+        const [x, y] = modifiers.shiftKey
+          ? [planPoint[0], planPoint[1]]
+          : snapBuildingLocalToWorldGrid([planPoint[0], planPoint[1]], snapStep)
 
         // Signed projection of (snappedPoint - chord midpoint) onto the
         // chord normal. Legacy negates because the SVG y-axis flips
@@ -184,15 +191,24 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         // the angle snap is for initial draft only. Shift switches to
         // the fine grid step for precision, matching the 3D
         // `MoveWallEndpointTool`.
+        const worldStep = modifiers.shiftKey ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
         const snapped = snapWallDraftPoint({
           point: planPoint as WallPlanPoint,
           walls,
           ignoreWallIds: [node.id],
           step: modifiers.shiftKey ? WALL_FINE_GRID_STEP : undefined,
+          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, worldStep),
         })
+        // Figma-style alignment on the dragged corner — snaps it onto another
+        // object's edge / wall face and publishes a guide. The dragged wall
+        // and its linked siblings (which cascade with the corner) are excluded
+        // from the candidate pool. Alt is reserved for detach, NOT bypass.
+        const aligned = alignFloorplanDraftPoint(snapped, {
+          excludeIds: [node.id, ...linkedWalls.map((w) => w.id)],
+        }) as WallPlanPoint
 
-        const primaryStart: WallPlanPoint = endpoint === 'start' ? snapped : fixedPoint
-        const primaryEnd: WallPlanPoint = endpoint === 'end' ? snapped : fixedPoint
+        const primaryStart: WallPlanPoint = endpoint === 'start' ? aligned : fixedPoint
+        const primaryEnd: WallPlanPoint = endpoint === 'end' ? aligned : fixedPoint
 
         // ALT detaches: the linked walls keep their original endpoints,
         // and only the dragged wall moves.
@@ -229,6 +245,9 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         }
       },
       canCommit() {
+        // Pointer-up always runs canCommit — drop the alignment guide here
+        // so it doesn't linger after a commit / reject.
+        useAlignmentGuides.getState().clear()
         // The dragged wall must still be long enough at the preview
         // length — checked against `lastPrimary*`, not scene, because
         // scene holds baseline values until commit().

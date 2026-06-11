@@ -61,3 +61,8 @@ apps/editor/env.download
 
 # Worktrees
 .worktrees
+
+# Local IDE/agent configs
+.claude/launch.json
+.claude/settings.local.json
+.vscode/launch.json

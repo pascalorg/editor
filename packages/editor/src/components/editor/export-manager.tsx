@@ -4,7 +4,7 @@ import { sceneRegistry } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
-import type { Object3D } from 'three'
+import type { Mesh, Object3D } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
@@ -28,16 +28,18 @@ export function ExportManager() {
       const hiddenCaps = hideCapGeometryForExport()
 
       try {
+        const exportScene = prepareSceneForExport(sceneGroup)
+
         if (format === 'stl') {
           const exporter = new STLExporter()
-          const result = exporter.parse(sceneGroup, { binary: true })
+          const result = exporter.parse(exportScene, { binary: true })
           downloadBlob(new Blob([result], { type: 'model/stl' }), `model_${date}.stl`)
           return
         }
 
         if (format === 'obj') {
           const exporter = new OBJExporter()
-          const result = exporter.parse(sceneGroup)
+          const result = exporter.parse(exportScene)
           downloadBlob(new Blob([result], { type: 'model/obj' }), `model_${date}.obj`)
           return
         }
@@ -45,7 +47,7 @@ export function ExportManager() {
         const exporter = new GLTFExporter()
         await new Promise<void>((resolve, reject) => {
           exporter.parse(
-            sceneGroup,
+            exportScene,
             (gltf) => {
               downloadBlob(new Blob([gltf as ArrayBuffer], { type: 'model/gltf-binary' }), `model_${date}.glb`)
               resolve()
@@ -93,6 +95,33 @@ function restoreVisibility(hidden: Array<{ obj: Object3D; visible: boolean }>) {
   for (const { obj, visible } of hidden) {
     obj.visible = visible
   }
+}
+
+function prepareSceneForExport(source: Object3D) {
+  const clone = source.clone(true)
+  const meshesToRemove: Mesh[] = []
+
+  clone.traverse((object) => {
+    if (isMeshWithInvalidGeometry(object)) meshesToRemove.push(object)
+  })
+
+  for (const mesh of meshesToRemove) {
+    mesh.removeFromParent()
+  }
+
+  return clone
+}
+
+function isMeshWithInvalidGeometry(object: Object3D): object is Mesh {
+  if (!isMesh(object)) return false
+
+  // Three exporters can crash when a Mesh has no readable position attribute.
+  const position = object.geometry?.getAttribute('position')
+  return !position || position.count === 0
+}
+
+function isMesh(object: Object3D): object is Mesh {
+  return (object as Mesh).isMesh === true
 }
 
 function downloadBlob(blob: Blob, filename: string) {

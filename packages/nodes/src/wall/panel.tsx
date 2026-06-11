@@ -14,6 +14,9 @@ import {
 import {
   ActionButton,
   ActionGroup,
+  getLinearUnitLabel,
+  linearControlValueToMeters,
+  metersToLinearUnit,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -26,6 +29,7 @@ import { useCallback, useMemo, useRef } from 'react'
 
 export default function WallPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const unit = useViewer((s) => s.unit)
   const setSelection = useViewer((s) => s.setSelection)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
 
@@ -117,14 +121,19 @@ export default function WallPanel() {
 
   if (!(node && node.type === 'wall' && selectedId)) return null
 
-  const dx = node.end[0] - node.start[0]
-  const dz = node.end[1] - node.start[1]
   const length = getWallCurveLength(node)
 
   const height = node.height ?? 2.5
   const thickness = node.thickness ?? 0.1
   const curveOffset = getClampedWallCurveOffset(node)
   const maxCurveOffset = getMaxWallCurveOffset(node)
+  const unitLabel = getLinearUnitLabel(unit)
+  const displayLength = metersToLinearUnit(length, unit)
+  const displayHeight = metersToLinearUnit(height, unit)
+  const displayThickness = metersToLinearUnit(thickness, unit)
+  const displayCurveOffset = metersToLinearUnit(curveOffset, unit)
+  const displayMaxCurveOffset = metersToLinearUnit(maxCurveOffset, unit)
+  const curveOffsetLimit = Math.max(0.01, maxCurveOffset)
 
   return (
     <PanelWrapper
@@ -136,44 +145,66 @@ export default function WallPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Length"
-          max={20}
-          min={0.1}
-          onChange={handleUpdateLength}
+          max={metersToLinearUnit(20, unit)}
+          min={metersToLinearUnit(0.1, unit)}
+          onChange={(value) =>
+            handleUpdateLength(
+              linearControlValueToMeters(value, unit, { maxMeters: 20, minMeters: 0.1 }),
+            )
+          }
           precision={2}
-          step={0.01}
-          unit="m"
-          value={length}
+          step={unit === 'imperial' ? 0.1 : 0.01}
+          unit={unitLabel}
+          value={displayLength}
         />
         <SliderControl
           label="Height"
-          max={6}
-          min={0.1}
-          onChange={(v) => handleUpdate({ height: Math.max(0.1, v) })}
+          max={metersToLinearUnit(6, unit)}
+          min={metersToLinearUnit(0.1, unit)}
+          onChange={(v) =>
+            handleUpdate({
+              height: linearControlValueToMeters(v, unit, { maxMeters: 6, minMeters: 0.1 }),
+            })
+          }
           precision={2}
           step={0.1}
-          unit="m"
-          value={Math.round(height * 100) / 100}
+          unit={unitLabel}
+          value={Math.round(displayHeight * 100) / 100}
         />
         <SliderControl
           label="Thickness"
-          max={1}
-          min={0.05}
-          onChange={(v) => handleUpdate({ thickness: Math.max(0.05, v) })}
+          max={metersToLinearUnit(1, unit)}
+          min={metersToLinearUnit(0.05, unit)}
+          onChange={(v) =>
+            handleUpdate({
+              thickness: linearControlValueToMeters(v, unit, { maxMeters: 1, minMeters: 0.05 }),
+            })
+          }
           precision={3}
           step={0.01}
-          unit="m"
-          value={Math.round(thickness * 1000) / 1000}
+          unit={unitLabel}
+          value={Math.round(displayThickness * 1000) / 1000}
         />
         {!hasWallChildrenBlockingCurve && (
           <SliderControl
             label="Curve"
-            max={Math.max(0.01, maxCurveOffset)}
-            min={-Math.max(0.01, maxCurveOffset)}
-            onChange={(v) => handleUpdate({ curveOffset: normalizeWallCurveOffset(node, v) })}
+            max={Math.max(metersToLinearUnit(0.01, unit), displayMaxCurveOffset)}
+            min={-Math.max(metersToLinearUnit(0.01, unit), displayMaxCurveOffset)}
+            onChange={(v) =>
+              handleUpdate({
+                curveOffset: normalizeWallCurveOffset(
+                  node,
+                  linearControlValueToMeters(v, unit, {
+                    maxMeters: curveOffsetLimit,
+                    minMeters: -curveOffsetLimit,
+                  }),
+                ),
+              })
+            }
             precision={2}
             step={0.1}
-            unit="m"
-            value={Math.round(curveOffset * 100) / 100}
+            unit={unitLabel}
+            value={Math.round(displayCurveOffset * 100) / 100}
           />
         )}
       </PanelSection>

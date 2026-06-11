@@ -11,12 +11,14 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
-import { Bot, Images, Layers, Package, Plus, Settings, Video } from 'lucide-react'
+import { Bot, Hammer, Images, Layers, Package, Plus, Settings, Video } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AiAssistantPanel } from './ai-assistant-bubble'
+import { BuildTab } from './build-tab'
 import { PanoramaPhotoPanel, WalkthroughVideoPanel } from './panorama-walkthrough-panel'
 import { ImportDxfTool } from './tools/ImportDxfTool'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
@@ -48,6 +50,47 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
     component: () => null, // Built-in SitePanel handles this
     mobileDefaultSnap: 0.5,
     mobileIcon: <Layers className="h-5 w-5" />,
+    icon: (
+      <Image
+        alt=""
+        className="h-8 w-8 object-contain"
+        height={32}
+        src="/icons/scene.png"
+        width={32}
+      />
+    ),
+  },
+  {
+    id: 'build',
+    label: 'Build',
+    component: BuildTab,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Hammer className="h-5 w-5" />,
+    icon: (
+      <Image
+        alt=""
+        className="h-8 w-8 object-contain"
+        height={32}
+        src="/icons/build.png"
+        width={32}
+      />
+    ),
+  },
+  {
+    id: 'build',
+    label: 'Build',
+    component: BuildTab,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Hammer className="h-5 w-5" />,
+    icon: (
+      <Image
+        alt=""
+        className="h-8 w-8 object-contain"
+        height={32}
+        src="/icons/build.png"
+        width={32}
+      />
+    ),
   },
   {
     id: 'items',
@@ -55,6 +98,15 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
     component: ItemsPanel,
     mobileDefaultSnap: 0.5,
     mobileIcon: <Package className="h-5 w-5" />,
+    icon: (
+      <Image
+        alt=""
+        className="h-8 w-8 object-contain"
+        height={32}
+        src="/icons/couch.png"
+        width={32}
+      />
+    ),
   },
   {
     id: 'add-catalog',
@@ -83,6 +135,15 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
     component: () => null,
     mobileDefaultSnap: 0.5,
     mobileIcon: <Settings className="h-5 w-5" />,
+    icon: (
+      <Image
+        alt=""
+        className="h-8 w-8 object-contain"
+        height={32}
+        src="/icons/settings.png"
+        width={32}
+      />
+    ),
   },
 ]
 
@@ -137,7 +198,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
   const handleSave = useCallback(
-    async (graph: SceneGraph) => {
+    async (graph: SceneGraph, options?: { keepalive?: boolean }) => {
       const graphJson = sceneGraphSignature(graph)
       const isRecentRemoteApply = Date.now() < suppressRemoteSaveUntilRef.current
       if (lastRemoteGraphJsonRef.current === graphJson) {
@@ -155,6 +216,11 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
             'If-Match': String(versionRef.current),
           },
           body: JSON.stringify({ name: meta.name, graph }),
+          // `keepalive` lets the request outlive a page unload (the autosave
+          // flush on refresh/close). Browsers cap keepalive bodies at 64KB, so
+          // only the unload flush opts in — normal debounced saves omit it and
+          // can carry arbitrarily large scenes.
+          keepalive: options?.keepalive,
         })
 
         if (response.status === 409) {

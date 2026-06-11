@@ -2,12 +2,14 @@
 
 import {
   calculateLevelMiters,
+  collectAlignmentAnchors,
   emitter,
   type FenceNode,
   type GridEvent,
   getWallMiterBoundaryPoints,
   type LevelNode,
   type Point2D,
+  resolveAlignment,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -18,6 +20,7 @@ import {
   EDITOR_LAYER,
   type FencePlanPoint,
   formatAngleRadians,
+  formatLinearMeasurement,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
@@ -25,6 +28,8 @@ import {
   type SegmentAngleReference,
   snapFenceDraftPoint,
   triggerSFX,
+  useAlignmentGuides,
+  useEditor,
   WALL_FINE_GRID_STEP,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -34,9 +39,13 @@ import { BoxGeometry, BufferGeometry, DoubleSide, type Group, type Mesh, Vector3
 
 const FENCE_PREVIEW_HEIGHT = 1.8
 const FENCE_PREVIEW_THICKNESS = 0.08
-const DRAFT_LABEL_Y = FENCE_PREVIEW_HEIGHT + 0.22
-const DRAFT_ANGLE_LABEL_Y = FENCE_PREVIEW_HEIGHT + 0.08
-const DRAFT_ANGLE_ARC_Y = FENCE_PREVIEW_HEIGHT + 0.012
+/** Figma-style alignment-snap threshold (meters), matching the move tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
+// HUD label heights are measured from the top of the preview bar, so they
+// track whatever height a seeded preset draws at (`previewHeight`).
+const DRAFT_LABEL_Y_OFFSET = 0.22
+const DRAFT_ANGLE_LABEL_Y_OFFSET = 0.08
+const DRAFT_ANGLE_ARC_Y_OFFSET = 0.012
 const DRAFT_ANGLE_ARC_MIN_RADIUS = 0.32
 const DRAFT_ANGLE_ARC_MAX_RADIUS = 0.72
 const DRAFT_ANGLE_ARC_SEGMENTS = 24
@@ -86,17 +95,6 @@ type AngleSource = {
   draftVector: FencePlanPoint
 }
 
-function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
-  if (unit === 'imperial') {
-    const feet = value * 3.280_84
-    const wholeFeet = Math.floor(feet)
-    const inches = Math.round((feet - wholeFeet) * 12)
-    if (inches === 12) return `${wholeFeet + 1}'0"`
-    return `${wholeFeet}'${inches}"`
-  }
-  return `${Number.parseFloat(value.toFixed(2))}m`
-}
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
@@ -135,12 +133,16 @@ function toMiterWall(segment: SegmentLike): WallNode {
   }
 }
 
-function buildDraftFenceSegment(start: FencePlanPoint, end: FencePlanPoint): SegmentLike {
+function buildDraftFenceSegment(
+  start: FencePlanPoint,
+  end: FencePlanPoint,
+  thickness: number,
+): SegmentLike {
   return {
     id: 'fence_draft',
     start,
     end,
-    thickness: FENCE_PREVIEW_THICKNESS,
+    thickness,
   }
 }
 
@@ -269,10 +271,12 @@ function getDraftAngleLabels(
   end: FencePlanPoint,
   segments: SegmentLike[],
   baseY: number,
+  previewHeight: number,
+  previewThickness: number,
 ): DraftAngleLabel[] {
   const draftFromStart: FencePlanPoint = [end[0] - start[0], end[1] - start[1]]
   const draftFromEnd: FencePlanPoint = [start[0] - end[0], start[1] - end[1]]
-  const draftSegment = buildDraftFenceSegment(start, end)
+  const draftSegment = buildDraftFenceSegment(start, end, previewThickness)
   const miterData = calculateLevelMiters([...segments, draftSegment].map(toMiterWall))
   const endpoints = [
     { id: 'start', point: start, draftVector: draftFromStart },
@@ -322,7 +326,7 @@ function getDraftAngleLabels(
       label: formatAngleRadians(angle),
       position: [
         arcCenter[0] + Math.cos(arc.midAngle) * (radius + 0.16),
-        baseY + DRAFT_ANGLE_LABEL_Y,
+        baseY + previewHeight + DRAFT_ANGLE_LABEL_Y_OFFSET,
         arcCenter[1] + Math.sin(arc.midAngle) * (radius + 0.16),
       ],
       arc: {
@@ -330,7 +334,7 @@ function getDraftAngleLabels(
         radius,
         startAngle: arc.startAngle,
         endAngle: arc.endAngle,
-        y: baseY + DRAFT_ANGLE_ARC_Y,
+        y: baseY + previewHeight + DRAFT_ANGLE_ARC_Y_OFFSET,
       },
     })
   }
@@ -343,15 +347,21 @@ function getDraftMeasurementState(
   segments: SegmentLike[],
   unit: 'metric' | 'imperial',
   baseY: number,
+  previewHeight: number,
+  previewThickness: number,
 ): DraftMeasurementState {
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]
   const length = Math.hypot(dx, dz)
   if (length < 0.01) return null
   return {
-    lengthLabel: formatMeasurement(length, unit),
-    lengthPosition: [(start[0] + end[0]) / 2, baseY + DRAFT_LABEL_Y, (start[1] + end[1]) / 2],
-    angleLabels: getDraftAngleLabels(start, end, segments, baseY),
+    lengthLabel: formatLinearMeasurement(length, unit),
+    lengthPosition: [
+      (start[0] + end[0]) / 2,
+      baseY + previewHeight + DRAFT_LABEL_Y_OFFSET,
+      (start[1] + end[1]) / 2,
+    ],
+    angleLabels: getDraftAngleLabels(start, end, segments, baseY, previewHeight, previewThickness),
   }
 }
 
@@ -374,7 +384,13 @@ function getReferenceSegments(walls: WallNode[], fences: FenceNode[]): SegmentLi
   ]
 }
 
-function updateFencePreview(mesh: Mesh, start: Vector3, end: Vector3) {
+function updateFencePreview(
+  mesh: Mesh,
+  start: Vector3,
+  end: Vector3,
+  previewHeight: number,
+  previewThickness: number,
+) {
   const direction = new Vector3(end.x - start.x, 0, end.z - start.z)
   const length = direction.length()
   if (length < 0.01) {
@@ -383,14 +399,10 @@ function updateFencePreview(mesh: Mesh, start: Vector3, end: Vector3) {
   }
   mesh.visible = true
   direction.normalize()
-  const geometry = new BoxGeometry(length, FENCE_PREVIEW_HEIGHT, FENCE_PREVIEW_THICKNESS)
+  const geometry = new BoxGeometry(length, previewHeight, previewThickness)
   const angle = Math.atan2(direction.z, direction.x)
 
-  mesh.position.set(
-    (start.x + end.x) / 2,
-    start.y + FENCE_PREVIEW_HEIGHT / 2,
-    (start.z + end.z) / 2,
-  )
+  mesh.position.set((start.x + end.x) / 2, start.y + previewHeight / 2, (start.z + end.z) / 2)
   mesh.rotation.y = -angle
 
   if (mesh.geometry) {
@@ -415,6 +427,19 @@ function getCurrentLevelElements(): { walls: WallNode[]; fences: FenceNode[] } {
 export const FenceTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  // A placed preset seeds `toolDefaults.fence` before the tool mounts, so
+  // the draft preview is drawn at the preset's height / thickness rather
+  // than the generic fallbacks. Read through refs so the live event
+  // handlers below see the latest values without re-subscribing.
+  const fenceDefaults = useEditor((s) => s.toolDefaults.fence)
+  const previewHeight =
+    typeof fenceDefaults?.height === 'number' ? fenceDefaults.height : FENCE_PREVIEW_HEIGHT
+  const previewThickness =
+    typeof fenceDefaults?.thickness === 'number' ? fenceDefaults.thickness : FENCE_PREVIEW_THICKNESS
+  const previewHeightRef = useRef(previewHeight)
+  previewHeightRef.current = previewHeight
+  const previewThicknessRef = useRef(previewThickness)
+  previewThicknessRef.current = previewThickness
   const cursorRef = useRef<Group>(null)
   const previewRef = useRef<Mesh>(null!)
   const startingPoint = useRef(new Vector3(0, 0, 0))
@@ -425,13 +450,42 @@ export const FenceTool: React.FC = () => {
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
 
+  // Scope seeded defaults to this tool session: clear on deactivation so a
+  // later manual fence draw isn't drawn with a stale preset's parameters.
+  // Unmount-only (empty deps) — the [unit] effect below must not clear it.
+  useEffect(() => () => useEditor.getState().setToolDefaults('fence', null), [])
+
   useEffect(() => {
     let previousFenceEnd: FencePlanPoint | null = null
+
+    // Alignment candidates — anchors of every alignable object. Refreshed
+    // after each segment commits (the new fence becomes a candidate too).
+    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+    const refreshAlignmentCandidates = () => {
+      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+    }
+
+    // Align the drafted point onto another object's nearest real anchor and
+    // publish the guide. Alt bypasses. Returns the (possibly snapped) point.
+    const alignPoint = (point: FencePlanPoint, bypass: boolean): FencePlanPoint => {
+      if (bypass || alignmentCandidates.length === 0) {
+        useAlignmentGuides.getState().clear()
+        return point
+      }
+      const ar = resolveAlignment({
+        moving: [{ nodeId: '__fence-draft__', kind: 'corner', x: point[0], z: point[1] }],
+        candidates: alignmentCandidates,
+        threshold: ALIGNMENT_THRESHOLD_M,
+      })
+      useAlignmentGuides.getState().set(ar.guides)
+      return ar.snap ? [point[0] + ar.snap.dx, point[1] + ar.snap.dz] : point
+    }
 
     const stopDrafting = () => {
       buildingState.current = 0
       previewRef.current.visible = false
       setDraftMeasurement(null)
+      useAlignmentGuides.getState().clear()
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -441,14 +495,13 @@ export const FenceTool: React.FC = () => {
       // Default = active grid step; Shift switches to the fine step
       // (0.05m). No 45° angle snap — see `wall/tool.tsx` for rationale.
       const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
+      const bypassAlign = event.nativeEvent?.altKey === true
 
       if (buildingState.current === 1) {
-        const snappedLocal = snapFenceDraftPoint({
-          point: localPoint,
-          walls,
-          fences,
-          step,
-        })
+        const snappedLocal = alignPoint(
+          snapFenceDraftPoint({ point: localPoint, walls, fences, step }),
+          bypassAlign,
+        )
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
         cursorRef.current.position.copy(endingPoint.current)
         const currentFenceEnd: FencePlanPoint = [snappedLocal[0], snappedLocal[1]]
@@ -459,7 +512,13 @@ export const FenceTool: React.FC = () => {
           triggerSFX('sfx:grid-snap')
         }
         previousFenceEnd = currentFenceEnd
-        updateFencePreview(previewRef.current, startingPoint.current, endingPoint.current)
+        updateFencePreview(
+          previewRef.current,
+          startingPoint.current,
+          endingPoint.current,
+          previewHeightRef.current,
+          previewThicknessRef.current,
+        )
         setDraftMeasurement(
           getDraftMeasurementState(
             [startingPoint.current.x, startingPoint.current.z],
@@ -467,10 +526,15 @@ export const FenceTool: React.FC = () => {
             getReferenceSegments(walls, fences),
             unit,
             startingPoint.current.y,
+            previewHeightRef.current,
+            previewThicknessRef.current,
           ),
         )
       } else {
-        const snappedPoint = snapFenceDraftPoint({ point: localPoint, walls, fences, step })
+        const snappedPoint = alignPoint(
+          snapFenceDraftPoint({ point: localPoint, walls, fences, step }),
+          bypassAlign,
+        )
         cursorRef.current.position.set(snappedPoint[0], event.localPosition[1], snappedPoint[1])
         setDraftMeasurement(null)
       }
@@ -485,26 +549,24 @@ export const FenceTool: React.FC = () => {
       const { walls, fences } = getCurrentLevelElements()
       const localClick: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
       const clickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
+      const bypassAlign = event.nativeEvent?.altKey === true
 
       if (buildingState.current === 0) {
-        const snappedStart = snapFenceDraftPoint({
-          point: localClick,
-          walls,
-          fences,
-          step: clickStep,
-        })
+        const snappedStart = alignPoint(
+          snapFenceDraftPoint({ point: localClick, walls, fences, step: clickStep }),
+          bypassAlign,
+        )
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
+        triggerSFX('sfx:structure-build-start')
         previewRef.current.visible = true
         setDraftMeasurement(null)
       } else {
-        const snappedEnd = snapFenceDraftPoint({
-          point: localClick,
-          walls,
-          fences,
-          step: clickStep,
-        })
+        const snappedEnd = alignPoint(
+          snapFenceDraftPoint({ point: localClick, walls, fences, step: clickStep }),
+          bypassAlign,
+        )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
@@ -513,6 +575,11 @@ export const FenceTool: React.FC = () => {
           snappedEnd,
         )
         if (!createdFence) return
+
+        // The new segment is now a real node — make it an alignment target
+        // for the next segment, and drop the just-shown guide.
+        refreshAlignmentCandidates()
+        useAlignmentGuides.getState().clear()
 
         const nextStart = createdFence.end
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
@@ -551,12 +618,13 @@ export const FenceTool: React.FC = () => {
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      useAlignmentGuides.getState().clear()
     }
   }, [unit])
 
   return (
     <group>
-      <CursorSphere height={FENCE_PREVIEW_HEIGHT} ref={cursorRef} />
+      <CursorSphere height={previewHeight} ref={cursorRef} />
       <mesh layers={EDITOR_LAYER} ref={previewRef} renderOrder={1} visible={false}>
         <shapeGeometry />
         <meshBasicMaterial

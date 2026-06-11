@@ -98,7 +98,16 @@ const assetSchema = z.object({
   src: AssetUrl,
   dimensions: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]), // [w, h, d]
   attachTo: z.enum(['wall', 'wall-side', 'ceiling']).optional(),
+  // Ceiling fixtures (e.g. recessed downlights) that embed *into* the ceiling
+  // rather than hang below it: the item seats flush with the ceiling plane
+  // (its body rising into the void above) and the ceiling is cut out around
+  // the item's footprint. Ignored unless `attachTo === 'ceiling'`.
+  recessed: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
+  // Function-axis tag slugs from the taxonomy. Drives the hierarchical
+  // Items-tab browse: a tree node matches when any of its descendant slugs
+  // appears here. Absent for the seeded built-in catalog.
+  functionTags: z.array(z.string()).optional(),
   // These are "Corrective" transforms to normalize the GLB
   offset: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
@@ -126,6 +135,13 @@ export const ItemNode = BaseNode.extend({
   // Wall attachment properties (only used when asset.attachTo is "wall" or "wall-side")
   wallId: z.string().optional(),
   wallT: z.number().optional(), // 0-1 parametric position along wall
+  // Alternative wall host: a roof-segment's generated wall face. When
+  // set, `position` is FACE-LOCAL — [u along the face, v = bottom edge,
+  // z from the wall mid-plane] — exactly the wall-child convention
+  // (ItemSystem's wall-side push applies the same way); the renderer
+  // mounts the node inside the face frame (`getRoofWallFaceFrame`).
+  roofSegmentId: z.string().optional(),
+  roofFace: z.enum(['front', 'back', 'right', 'left']).optional(),
 
   // Denormalized references to collections this node belongs to
   collectionIds: z.array(z.custom<CollectionId>()).optional(),

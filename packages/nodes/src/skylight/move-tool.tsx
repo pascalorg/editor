@@ -11,32 +11,15 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import {
+  createRelativeRoofDrag,
+  type RelativeRoofDragTarget,
+  roofSegmentLocalToBuildingLocal,
+} from '../shared/relative-roof-drag'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import SkylightPreview from './preview'
-
-function resolveSegmentFromWorldPoint(
-  roof: RoofNode,
-  worldX: number,
-  worldY: number,
-  worldZ: number,
-  state: ReturnType<typeof useScene.getState>,
-): { segment: RoofSegmentNode; localX: number; localY: number; localZ: number } | null {
-  const worldPt = new THREE.Vector3(worldX, worldY, worldZ)
-  for (const childId of roof.children ?? []) {
-    const seg = state.nodes[childId as AnyNodeId] as RoofSegmentNode | undefined
-    if (seg?.type !== 'roof-segment') continue
-    const segObj = sceneRegistry.nodes.get(seg.id)
-    if (!segObj) continue
-    segObj.updateWorldMatrix(true, false)
-    const local = segObj.worldToLocal(worldPt.clone())
-    if (Math.abs(local.x) <= seg.width / 2 && Math.abs(local.z) <= seg.depth / 2) {
-      return { segment: seg, localX: local.x, localY: local.y, localZ: local.z }
-    }
-  }
-  return null
-}
 
 export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
   const exitMoveMode = useCallback(() => {
@@ -45,7 +28,15 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
 
   const previewRef = useRef<THREE.Group>(null!)
   const [previewPos, setPreviewPos] = useState<[number, number, number]>([0, 0, 0])
-  const [previewQuat, setPreviewQuat] = useState<[number, number, number, number]>([0, 0, 0, 1])
+  // Mirror the placement tool's transform stack so the ghost reads the
+  // same in both flows: outer rotation-y aligns the segment's world yaw
+  // (roof + segment), inner quaternion tilts to the segment surface in
+  // segment-local space (analytical, not raycast — raycast normals can
+  // be flipped or in the wrong frame depending on hit-object state).
+  // The skylight's own `rotation` is applied on a deeper group so it
+  // stays editable on top of the surface alignment.
+  const [previewYaw, setPreviewYaw] = useState(0)
+  const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
   const [hasHit, setHasHit] = useState(false)
 
   useEffect(() => {
@@ -71,34 +62,37 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     const skylightObj = sceneRegistry.nodes.get(node.id)
     if (skylightObj) skylightObj.visible = false
 
-    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
-      const buildingId = useViewer.getState().selection.buildingId
-      const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
-      if (buildingObj) {
-        const v = new THREE.Vector3(wx, wy, wz)
-        buildingObj.worldToLocal(v)
-        return [v.x, v.y, v.z]
-      }
-      return [wx, wy, wz]
-    }
-
     let lastSnapX = 0
     let lastSnapZ = 0
+    let lastTarget: RelativeRoofDragTarget | null = null
+    const roofDrag = createRelativeRoofDrag(original)
 
-    const captureNormal = (event: RoofEvent) => {
-      if (!event.normal) return
-      const n = new THREE.Vector3(event.normal[0], event.normal[1], event.normal[2])
-      const nm = new THREE.Matrix3().getNormalMatrix(event.object.matrixWorld)
-      n.applyMatrix3(nm).normalize()
-
-      const up = new THREE.Vector3(0, 1, 0)
-      const right = new THREE.Vector3().crossVectors(up, n)
-      if (right.lengthSq() < 1e-6) right.set(1, 0, 0)
-      else right.normalize()
-      const forward = new THREE.Vector3().crossVectors(right, n).normalize()
-      const m = new THREE.Matrix4().makeBasis(right, n, forward)
-      const q = new THREE.Quaternion().setFromRotationMatrix(m)
-      setPreviewQuat([q.x, q.y, q.z, q.w])
+    // Resolve which segment the cursor is over, then derive the same
+    // preview transform stack the placement tool uses (`skylight/tool.tsx`):
+    // analytical surface normal in segment-local frame → outer yaw =
+    // roof + segment rotation. Falls back to leaving the preview hidden
+    // if the cursor is between segments — the placement tool does the
+    // same via its `if (!hit) return` guard.
+    const updateFromHit = (event: RoofEvent) => {
+      const roof = event.node as RoofNode
+      const target = roofDrag.resolve(event)
+      if (!target) {
+        setHasHit(false)
+        return false
+      }
+      lastTarget = target
+      const normal = getAnalyticalNormal(target.localX, target.localZ, target.segment)
+      setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
+      setPreviewYaw((roof.rotation ?? 0) + (target.segment.rotation ?? 0))
+      setPreviewPos(
+        roofSegmentLocalToBuildingLocal(target.segment.id, [
+          target.localX,
+          target.localY,
+          target.localZ,
+        ]),
+      )
+      setHasHit(true)
+      return true
     }
 
     const onRoofMove = (event: RoofEvent) => {
@@ -109,33 +103,22 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
         lastSnapX = sx
         lastSnapZ = sz
       }
-      captureNormal(event)
-      setPreviewPos(worldToBuildingLocal(event.position[0], event.position[1], event.position[2]))
-      setHasHit(true)
+      updateFromHit(event)
       event.stopPropagation()
     }
 
     const onRoofEnter = (event: RoofEvent) => {
-      captureNormal(event)
-      setPreviewPos(worldToBuildingLocal(event.position[0], event.position[1], event.position[2]))
-      setHasHit(true)
+      updateFromHit(event)
       event.stopPropagation()
     }
 
     const onRoofClick = (event: RoofEvent) => {
-      const roof = event.node as RoofNode
       const st = useScene.getState()
 
-      const hit = resolveSegmentFromWorldPoint(
-        roof,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-        st,
-      )
-      if (!hit) return
+      const target = lastTarget ?? roofDrag.resolve(event)
+      if (!target) return
 
-      const targetSegmentId = hit.segment.id as AnyNodeId
+      const targetSegmentId = target.segment.id as AnyNodeId
       const finalRotation = original.rotation
 
       st.updateNode(node.id as AnyNodeId, {
@@ -147,11 +130,10 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
       })
       useScene.temporal.getState().resume()
 
-      captureNormal(event)
       st.updateNode(node.id as AnyNodeId, {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
-        position: [hit.localX, hit.localY, hit.localZ],
+        position: [target.localX, target.localY, target.localZ],
         rotation: finalRotation,
         visible: true,
         metadata: {},
@@ -241,10 +223,16 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     }
   }, [exitMoveMode, node])
 
+  if (!previewSurfaceQuat) return null
+
   return (
-    <group position={previewPos} quaternion={previewQuat} ref={previewRef} visible={hasHit}>
-      <group rotation-y={node.rotation ?? 0}>
-        <SkylightPreview node={node} />
+    <group position={previewPos} ref={previewRef} visible={hasHit}>
+      <group rotation-y={previewYaw}>
+        <group quaternion={previewSurfaceQuat}>
+          <group rotation-y={node.rotation ?? 0}>
+            <SkylightPreview node={node} />
+          </group>
+        </group>
       </group>
     </group>
   )

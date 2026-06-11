@@ -1,6 +1,7 @@
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, SlabNode, WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
+import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import {
   itemOverlapsPolygon,
   spatialGridManager,
@@ -26,6 +27,32 @@ export function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): s
   }
 
   return 'default' // fallback for orphaned items
+}
+
+/**
+ * Walks the parent chain of `nodeId` and returns the id of the first ancestor
+ * whose `type` is `'level'`, or `null` when no level ancestor exists (orphaned
+ * node, top-level building node, etc.). Unlike `resolveLevelId`, this variant:
+ *
+ * - accepts a node **id** rather than a resolved node, saving the caller a
+ *   `nodes[id]` lookup when only the id is at hand.
+ * - returns `null` instead of the `'default'` fallback, which lets callers
+ *   distinguish "genuinely has no level" from "is a level".
+ * - has a loop guard (16 iterations) so a corrupt parent-chain cycle cannot
+ *   hang the frame loop.
+ */
+export function findLevelAncestorId(
+  nodeId: AnyNodeId,
+  nodes: Record<string, AnyNode>,
+): string | null {
+  let current: AnyNode | undefined = nodes[nodeId]
+  let guard = 0
+  while (current && guard < 16) {
+    if (current.type === 'level') return current.id
+    current = current.parentId ? nodes[current.parentId] : undefined
+    guard += 1
+  }
+  return null
 }
 
 /**
@@ -152,7 +179,7 @@ function arraysEqual(a: number[], b: number[]): boolean {
 }
 
 /**
- * Mark all floor items, walls, and stairs that may be affected by a slab change as dirty.
+ * Mark all floor items and walls that may be affected by a slab change as dirty.
  */
 function markNodesOverlappingSlab(
   slab: SlabNode,
@@ -166,17 +193,21 @@ function markNodesOverlappingSlab(
     if (node.type === 'wall') {
       const wall = node as WallNode
       if (resolveLevelId(node, nodes) !== slabLevelId) continue
-      if (wallOverlapsPolygon(wall.start, wall.end, slab.polygon)) {
+      if (
+        wallOverlapsPolygon(
+          {
+            start: wall.start,
+            end: wall.end,
+            curveOffset: wall.curveOffset ?? 0,
+            thickness: wall.thickness,
+          },
+          slab.polygon,
+        )
+      ) {
         markDirty(node.id)
       }
       continue
     }
-    if (node.type === 'stair') {
-      if (resolveLevelId(node, nodes) !== slabLevelId) continue
-      markDirty(node.id)
-      continue
-    }
-
     // Generic floor-placed sweep: any registry kind that opts in via
     // `capabilities.floorPlaced` (item / shelf / column / spawn / …)
     // re-elevates through `<FloorElevationSystem>` when a slab below
@@ -186,12 +217,25 @@ function markNodesOverlappingSlab(
     const floorPlaced = def?.capabilities?.floorPlaced
     if (!floorPlaced) continue
     if (floorPlaced.applies && !floorPlaced.applies(node)) continue
+    const parentId = node.parentId as AnyNodeId | null
+    const parent = parentId ? nodes[parentId] : null
+    if (parent && parent.type !== 'level') continue
     if (resolveLevelId(node, nodes) !== slabLevelId) continue
     const position = (node as { position?: [number, number, number] }).position
     if (!position) continue
-    const { dimensions, rotation } = floorPlaced.footprint(node)
-    if (itemOverlapsPolygon(position, dimensions, rotation, slab.polygon, 0.01)) {
-      markDirty(node.id)
+    for (const footprint of getFloorPlacedFootprints(floorPlaced, node, { nodes })) {
+      if (
+        itemOverlapsPolygon(
+          footprint.position ?? position,
+          footprint.dimensions,
+          footprint.rotation,
+          slab.polygon,
+          0.01,
+        )
+      ) {
+        markDirty(node.id)
+        break
+      }
     }
   }
 }

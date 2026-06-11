@@ -13,9 +13,9 @@ import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
+import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import { solarPanelDefinition } from './definition'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from './geometry'
 import SolarPanelPreview from './preview'
 
 const worldPoint = new THREE.Vector3()

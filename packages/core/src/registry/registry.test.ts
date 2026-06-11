@@ -1,7 +1,30 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
-import { loadPlugin, nodeRegistry, registerNode } from './registry'
+import {
+  getHostRefFields,
+  isDrawnViaTool,
+  isDrawnViaToolKind,
+  isPresettable,
+  isPresettableKind,
+  loadPlugin,
+  nodeRegistry,
+  registerNode,
+} from './registry'
 import type { AnyNodeDefinition, Plugin } from './types'
+
+// Re-registering a kind warns + replaces in dev (HMR) but throws in
+// production — see `registry._register`. `bun test` runs with
+// NODE_ENV=test (dev path), so the throw-path tests pin NODE_ENV to
+// 'production' for the duration of the call.
+async function inProduction<T>(fn: () => T | Promise<T>): Promise<T> {
+  const prev = process.env.NODE_ENV
+  process.env.NODE_ENV = 'production'
+  try {
+    return await fn()
+  } finally {
+    process.env.NODE_ENV = prev
+  }
+}
 
 function makeDefinition(
   kind: string,
@@ -38,9 +61,20 @@ describe('nodeRegistry', () => {
     expect(nodeRegistry.get('column')).toBe(def)
   })
 
-  test('registerNode throws on duplicate kind', () => {
-    registerNode(makeDefinition('column'))
-    expect(() => registerNode(makeDefinition('column'))).toThrow(/duplicate node kind/)
+  test('registerNode throws on duplicate kind in production', async () => {
+    await inProduction(() => {
+      registerNode(makeDefinition('column'))
+      expect(() => registerNode(makeDefinition('column'))).toThrow(/duplicate node kind/)
+    })
+  })
+
+  test('registerNode replaces on duplicate kind in dev (HMR)', () => {
+    const first = makeDefinition('column')
+    const second = makeDefinition('column')
+    registerNode(first)
+    registerNode(second)
+    expect(nodeRegistry.size).toBe(1)
+    expect(nodeRegistry.get('column')).toBe(second)
   })
 
   test('registerNode rejects empty kind', () => {
@@ -67,6 +101,75 @@ describe('nodeRegistry', () => {
     registerNode(a)
     registerNode(b)
     expect(nodeRegistry.schemas()).toEqual([a.schema, b.schema])
+  })
+})
+
+describe('isPresettable', () => {
+  beforeEach(() => {
+    nodeRegistry._reset()
+  })
+
+  test('explicit true wins', () => {
+    const def = makeDefinition('explicit-true', { capabilities: { presettable: true } })
+    expect(isPresettable(def)).toBe(true)
+  })
+
+  test('explicit false wins even with parametrics', () => {
+    const def = makeDefinition('explicit-false', {
+      capabilities: { presettable: false },
+      parametrics: { groups: [] } as any,
+    })
+    expect(isPresettable(def)).toBe(false)
+  })
+
+  test('defaults to true when parametrics exists', () => {
+    const def = makeDefinition('param', { parametrics: { groups: [] } as any })
+    expect(isPresettable(def)).toBe(true)
+  })
+
+  test('defaults to false without parametrics', () => {
+    const def = makeDefinition('no-param')
+    expect(isPresettable(def)).toBe(false)
+  })
+
+  test('isPresettableKind looks up the registry', () => {
+    registerNode(makeDefinition('shelfy', { parametrics: { groups: [] } as any }))
+    expect(isPresettableKind('shelfy')).toBe(true)
+    expect(isPresettableKind('unknown')).toBe(false)
+  })
+})
+
+describe('getHostRefFields', () => {
+  test('returns the declared hostRefFields verbatim', () => {
+    const def = makeDefinition('door', { capabilities: { hostRefFields: ['wallId'] } })
+    expect(getHostRefFields(def)).toEqual(['wallId'])
+  })
+
+  test('defaults to an empty array when none declared', () => {
+    const def = makeDefinition('shelf')
+    expect(getHostRefFields(def)).toEqual([])
+  })
+})
+
+describe('isDrawnViaTool', () => {
+  beforeEach(() => {
+    nodeRegistry._reset()
+  })
+
+  test('true when capability set', () => {
+    const def = makeDefinition('fence', { capabilities: { drawTool: true } })
+    expect(isDrawnViaTool(def)).toBe(true)
+  })
+
+  test('false when unset or not exactly true', () => {
+    expect(isDrawnViaTool(makeDefinition('column'))).toBe(false)
+    expect(isDrawnViaTool(makeDefinition('off', { capabilities: { drawTool: false } }))).toBe(false)
+  })
+
+  test('isDrawnViaToolKind looks up the registry', () => {
+    registerNode(makeDefinition('fence', { capabilities: { drawTool: true } }))
+    expect(isDrawnViaToolKind('fence')).toBe(true)
+    expect(isDrawnViaToolKind('unknown')).toBe(false)
   })
 })
 
@@ -106,19 +209,21 @@ describe('loadPlugin', () => {
     await expect(loadPlugin(plugin)).rejects.toThrow(/apiVersion/)
   })
 
-  test('propagates duplicate-kind error from a single plugin', async () => {
+  test('propagates duplicate-kind error from a single plugin in production', async () => {
     const plugin: Plugin = {
       id: 'broken',
       apiVersion: 1,
       nodes: [makeDefinition('dup'), makeDefinition('dup')],
     }
-    await expect(loadPlugin(plugin)).rejects.toThrow(/duplicate node kind/)
+    await inProduction(() => expect(loadPlugin(plugin)).rejects.toThrow(/duplicate node kind/))
   })
 
-  test('propagates duplicate-kind error across plugins', async () => {
-    await loadPlugin({ id: 'a', apiVersion: 1, nodes: [makeDefinition('shared')] })
-    await expect(
-      loadPlugin({ id: 'b', apiVersion: 1, nodes: [makeDefinition('shared')] }),
-    ).rejects.toThrow(/duplicate node kind/)
+  test('propagates duplicate-kind error across plugins in production', async () => {
+    await inProduction(async () => {
+      await loadPlugin({ id: 'a', apiVersion: 1, nodes: [makeDefinition('shared')] })
+      await expect(
+        loadPlugin({ id: 'b', apiVersion: 1, nodes: [makeDefinition('shared')] }),
+      ).rejects.toThrow(/duplicate node kind/)
+    })
   })
 })

@@ -1,7 +1,12 @@
 'use client'
 
 import { resolveLevelId, type SlabNode, useLiveNodeOverrides, useScene } from '@pascal-app/core'
-import { PolygonEditor } from '@pascal-app/editor'
+import {
+  clearSlabSnapFeedback,
+  PolygonEditor,
+  type PolygonEditorPlanPointSnapContext,
+  resolveSlabPlanPointSnap,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect } from 'react'
 
@@ -30,9 +35,11 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
   const setSelection = useViewer((s) => s.setSelection)
 
   const slab = slabNode?.type === 'slab' ? (slabNode as SlabNode) : null
+  const slabLevelId = slab ? resolveLevelId(slab, useScene.getState().nodes) : null
 
   const handlePolygonChange = useCallback(
     (newPolygon: Array<[number, number]>) => {
+      clearSlabSnapFeedback()
       updateNode(slabId, { polygon: newPolygon })
       setSelection({ selectedIds: [slabId] })
     },
@@ -46,6 +53,7 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
           polygon: preview.map(([x, z]) => [x, z] as [number, number]),
         })
       } else {
+        clearSlabSnapFeedback()
         useLiveNodeOverrides.getState().clear(slabId)
       }
       markDirty(slabId)
@@ -53,11 +61,28 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
     [slabId, markDirty],
   )
 
+  const handleDragCommit = useCallback(() => {
+    clearSlabSnapFeedback()
+  }, [])
+
+  const resolvePolygonEditorPlanPoint = useCallback(
+    (context: PolygonEditorPlanPointSnapContext) =>
+      resolveSlabPlanPointSnap({
+        rawPoint: context.rawPoint,
+        fallbackPoint: context.gridPoint,
+        levelId: slabLevelId,
+        excludeId: slabId,
+        altKey: context.nativeEvent?.altKey === true,
+      }).point,
+    [slabId, slabLevelId],
+  )
+
   // Guarantee the override clears if the editor unmounts mid-drag
   // (selection change, mode switch) so the slab mesh doesn't get stuck
   // on a stale polygon.
   useEffect(() => {
     return () => {
+      clearSlabSnapFeedback()
       useLiveNodeOverrides.getState().clear(slabId)
       useScene.getState().markDirty(slabId)
     }
@@ -69,11 +94,13 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
     <PolygonEditor
       allowEdgeMove
       color="#a3a3a3"
-      levelId={resolveLevelId(slab, useScene.getState().nodes)}
+      levelId={slabLevelId ?? undefined}
       minVertices={3}
+      onDragCommit={handleDragCommit}
       onPolygonChange={handlePolygonChange}
       onPolygonPreview={handlePolygonPreview}
       polygon={slab.polygon}
+      resolvePlanPoint={resolvePolygonEditorPlanPoint}
       surfaceHeight={slab.elevation ?? 0.05}
     />
   )

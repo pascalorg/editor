@@ -5,17 +5,24 @@ import {
   hasSegmentMaterialOverride,
   type RoofNode,
   type RoofSegmentNode,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
 import { getRoofMaterialArray, NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import * as THREE from 'three'
+import type * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 import { getRoofDebugMaterials, getRoofMaterials } from './roof-materials'
 
-export const RoofRenderer = ({ node }: { node: RoofNode }) => {
+export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
   const ref = useRef<THREE.Group>(null!)
+  const liveOverride = useLiveNodeOverrides((s) => s.overrides.get(rawNode.id))
+  const node = useMemo<RoofNode>(
+    () => (liveOverride ? ({ ...rawNode, ...liveOverride } as RoofNode) : rawNode),
+    [rawNode, liveOverride],
+  )
 
   useRegistry(node.id, 'roof', ref)
   useLayoutEffect(() => {
@@ -74,15 +81,8 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
     }),
   )
 
-  const placeholderGeometry = useMemo(() => {
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
-    geometry.addGroup(0, 0, 0)
-    geometry.addGroup(0, 0, 1)
-    geometry.addGroup(0, 0, 2)
-    geometry.addGroup(0, 0, 3)
-    return geometry
-  }, [])
+  // 4 groups map 1:1 to the roof's 4-material array (see getRoofMaterialArray).
+  const placeholderGeometry = useMemo(() => createPlaceholderGeometry(4), [])
 
   const customMaterial = useMemo(
     () => getRoofMaterialArray(node, shading, textures, colorPreset, sceneTheme),

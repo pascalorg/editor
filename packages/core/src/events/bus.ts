@@ -7,11 +7,15 @@ import type {
   CeilingNode,
   ChimneyNode,
   ColumnNode,
+  CupolaNode,
   DoorNode,
   DormerNode,
+  DownspoutNode,
   ElevatorNode,
+  EyebrowVentNode,
   FenceNode,
   GuideNode,
+  GutterNode,
   ItemNode,
   LevelNode,
   RidgeVentNode,
@@ -26,6 +30,7 @@ import type {
   SpawnNode,
   StairNode,
   StairSegmentNode,
+  TurbineVentNode,
   WallNode,
   WindowNode,
   ZoneNode,
@@ -63,6 +68,11 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
   object: Object3D
   stopPropagation: () => void
   nativeEvent: ThreeEvent<PointerEvent>
+  // Set when the click originated from a dedicated selection affordance
+  // (e.g. a ceiling corner handle) rather than the node's own surface
+  // mesh. Lets selection logic accept handle clicks while ignoring clicks
+  // on the body so they fall through to whatever sits below.
+  viaHandle?: boolean
 }
 
 export type WallEvent = NodeEvent<WallNode>
@@ -88,10 +98,15 @@ export type ScanEvent = NodeEvent<ScanNode>
 export type GuideEvent = NodeEvent<GuideNode>
 export type BoxVentEvent = NodeEvent<BoxVentNode>
 export type RidgeVentEvent = NodeEvent<RidgeVentNode>
+export type TurbineVentEvent = NodeEvent<TurbineVentNode>
+export type CupolaEvent = NodeEvent<CupolaNode>
+export type EyebrowVentEvent = NodeEvent<EyebrowVentNode>
+export type GutterEvent = NodeEvent<GutterNode>
 export type ChimneyEvent = NodeEvent<ChimneyNode>
 export type SolarPanelEvent = NodeEvent<SolarPanelNode>
 export type SkylightEvent = NodeEvent<SkylightNode>
 export type DormerEvent = NodeEvent<DormerNode>
+export type DownspoutEvent = NodeEvent<DownspoutNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -130,6 +145,13 @@ export interface ThumbnailGenerateEvent {
    * that should fire immediately from the current camera pose.
    */
   snapLevels?: boolean
+  /**
+   * When true, keep the rendered alpha channel — emits a transparent PNG
+   * without baking the scene background into the output. Used by the
+   * preset capture flow so saved preset thumbnails composite cleanly on
+   * any palette background.
+   */
+  transparent?: boolean
 }
 
 export interface CameraControlFitSceneEvent {
@@ -182,11 +204,6 @@ type WindowAnimationEvents = {
   }
 }
 
-type PresetEvents = {
-  'preset:generate-thumbnail': { presetId: string; nodeId: string }
-  'preset:thumbnail-updated': { presetId: string; thumbnailUrl: string }
-}
-
 type ThumbnailEvents = {
   'thumbnail:before-capture': undefined
   'thumbnail:after-capture': undefined
@@ -201,6 +218,14 @@ type AIChatEvents = {
   'ai-chat:attach-images': {
     images: { url: string; name: string; kind: 'snapshot' | 'render' }[]
   }
+}
+
+export interface RoomPresetCreateEvent {
+  zoneId: ZoneNode['id']
+}
+
+type RoomPresetEvents = {
+  'room-preset:create': RoomPresetCreateEvent
 }
 
 type EditorEvents = GridEvents &
@@ -227,18 +252,23 @@ type EditorEvents = GridEvents &
   NodeEvents<'guide', GuideEvent> &
   NodeEvents<'box-vent', BoxVentEvent> &
   NodeEvents<'ridge-vent', RidgeVentEvent> &
+  NodeEvents<'turbine-vent', TurbineVentEvent> &
+  NodeEvents<'cupola', CupolaEvent> &
+  NodeEvents<'eyebrow-vent', EyebrowVentEvent> &
+  NodeEvents<'gutter', GutterEvent> &
   NodeEvents<'chimney', ChimneyEvent> &
   NodeEvents<'solar-panel', SolarPanelEvent> &
   NodeEvents<'skylight', SkylightEvent> &
   NodeEvents<'dormer', DormerEvent> &
+  NodeEvents<'downspout', DownspoutEvent> &
   CameraControlEvents &
   ToolEvents &
   GuideEvents &
   DoorAnimationEvents &
   WindowAnimationEvents &
-  PresetEvents &
   ThumbnailEvents &
   SnapshotEvents &
-  AIChatEvents
+  AIChatEvents &
+  RoomPresetEvents
 
 export const emitter = mitt<EditorEvents>()

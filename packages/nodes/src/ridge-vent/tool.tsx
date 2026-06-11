@@ -13,7 +13,8 @@ import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
+import { resolveRidgeSnap } from '../shared/ridge-snap'
+import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
 import { ridgeVentDefinition } from './definition'
 import RidgeVentPreview from './preview'
 
@@ -65,12 +66,18 @@ const RidgeVentTool = () => {
       )
       if (!hit) return
 
-      // Snap the cursor to the ridge by zeroing localZ via the
-      // segment's local frame, then convert back through the building.
+      // Project the cursor onto the segment's ridge line (clamped to the
+      // segment's ridge span). The preview then moves ALONG the ridge as the
+      // cursor moves — never off it. Flat segments have no ridge: hide.
+      const snap = resolveRidgeSnap(hit.segment, hit.localX, hit.localZ)
+      if (!snap) {
+        setPreviewPos(null)
+        return
+      }
       const segObj = sceneRegistry.nodes.get(hit.segment.id)
       let ridgeWorld: [number, number, number]
       if (segObj) {
-        const ridgeLocal = new THREE.Vector3(hit.localX, hit.localY, 0)
+        const ridgeLocal = new THREE.Vector3(snap.localX, hit.localY, snap.localZ)
         segObj.updateWorldMatrix(true, false)
         ridgeLocal.applyMatrix4(segObj.matrixWorld)
         ridgeWorld = [ridgeLocal.x, ridgeLocal.y, ridgeLocal.z]
@@ -99,14 +106,15 @@ const RidgeVentTool = () => {
         event.position[2],
       )
       if (!hit) return
+      const snap = resolveRidgeSnap(hit.segment, hit.localX, hit.localZ)
+      if (!snap) return
       const state = useScene.getState()
 
       const vent = RidgeVentNode.parse({
         ...ridgeVentDefinition.defaults(),
         name: 'Ridge Vent',
         roofSegmentId: hit.segment.id,
-        // Snap Z to 0 — ridge vents straddle the ridge line.
-        position: [hit.localX, hit.localY, 0],
+        position: [snap.localX, 0, snap.localZ],
         rotation: 0,
       })
       state.createNode(vent, hit.segment.id as AnyNodeId)

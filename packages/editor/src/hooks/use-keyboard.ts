@@ -7,7 +7,7 @@ import {
   copySelectedNodesToEditorClipboard,
   pasteEditorClipboardToLevel,
 } from '../lib/scene-clipboard'
-import { sfxEmitter } from '../lib/sfx-bus'
+import { emitDeleteSFX, sfxEmitter } from '../lib/sfx-bus'
 import { toggleWindowOpenState } from '../lib/window-interaction'
 import useEditor from '../store/use-editor'
 
@@ -99,7 +99,7 @@ export const useKeyboard = ({
         useEditor.getState().setPhase('structure')
         useEditor.getState().setStructureLayer('elements')
         useEditor.getState().setMode('build')
-      } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
+      } else if (e.key === 'x' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
         useEditor.getState().setMode('delete')
@@ -298,15 +298,6 @@ export const useKeyboard = ({
           }
         }
 
-        // Delete selected zone
-        const selectedZoneId = useViewer.getState().selection.zoneId
-        if (selectedZoneId) {
-          sfxEmitter.emit('sfx:structure-delete')
-          useScene.getState().deleteNode(selectedZoneId as AnyNodeId)
-          useViewer.getState().setSelection({ zoneId: null })
-          return
-        }
-
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
 
         if (selectedNodeIds.length > 0) {
@@ -322,16 +313,21 @@ export const useKeyboard = ({
           // Play appropriate SFX based on what's being deleted
           if (selectedNodeIds.length === 1) {
             const node = useScene.getState().nodes[selectedNodeIds[0]!]
-            if (node?.type === 'item') {
-              sfxEmitter.emit('sfx:item-delete')
-            } else {
-              sfxEmitter.emit('sfx:structure-delete')
-            }
+            emitDeleteSFX(node?.type)
           } else {
             sfxEmitter.emit('sfx:structure-delete')
           }
 
           useScene.getState().deleteNodes(selectedNodeIds)
+          return
+        }
+
+        // Delete selected zone when no explicit element selection is active.
+        const selectedZoneId = useViewer.getState().selection.zoneId
+        if (selectedZoneId) {
+          sfxEmitter.emit('sfx:structure-delete')
+          useScene.getState().deleteNode(selectedZoneId as AnyNodeId)
+          useViewer.getState().setSelection({ zoneId: null })
         }
       }
     }

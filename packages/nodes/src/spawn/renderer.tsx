@@ -1,16 +1,22 @@
 'use client'
 
-import { type SpawnNode, useLiveTransforms, useRegistry } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type SpawnNode,
+  useLiveNodeOverrides,
+  useLiveTransforms,
+  useRegistry,
+} from '@pascal-app/core'
 import { createDefaultMaterial, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useMemo, useRef } from 'react'
 import { Color, type Group, Shape } from 'three'
 
-const SPAWN_COLOR = new Color('#22c55e')
+const SPAWN_COLOR = new Color('#818cf8')
 
 /**
  * Registry-driven spawn renderer. Behaviorally identical to the legacy
  * `@pascal-app/viewer/components/renderers/spawn/spawn-renderer.tsx` — same
- * geometry, same colors, same event surface. When the spawn definition lands
+ * geometry and event surface. When the spawn definition lands
  * in `builtinPlugin.nodes`, the Phase 0 dispatch shims switch the renderer
  * here and the legacy one is short-circuited.
  *
@@ -20,6 +26,11 @@ const SPAWN_COLOR = new Color('#22c55e')
 const SpawnRenderer = ({ node }: { node: SpawnNode }) => {
   const ref = useRef<Group>(null!)
   const handlers = useNodeEvents(node, 'spawn')
+  const liveOverride = useLiveNodeOverrides((state) => state.get(node.id as AnyNodeId))
+  const effectiveNode = useMemo(
+    () => (liveOverride ? ({ ...node, ...liveOverride } as SpawnNode) : node),
+    [node, liveOverride],
+  )
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
   const walkthroughMode = useViewer((state) => state.walkthroughMode)
   const shading = useViewer((state) => state.shading)
@@ -27,7 +38,7 @@ const SpawnRenderer = ({ node }: { node: SpawnNode }) => {
   useRegistry(node.id, 'spawn', ref)
 
   const material = useMemo(() => {
-    const next = createDefaultMaterial('#22c55e', 0.42, shading) as ReturnType<
+    const next = createDefaultMaterial('#818cf8', 0.42, shading) as ReturnType<
       typeof createDefaultMaterial
     > & {
       emissive?: Color
@@ -52,10 +63,10 @@ const SpawnRenderer = ({ node }: { node: SpawnNode }) => {
 
   return (
     <group
-      position={liveTransform?.position ?? node.position}
+      position={liveTransform?.position ?? effectiveNode.position}
       ref={ref}
-      rotation={[0, liveTransform?.rotation ?? node.rotation, 0]}
-      visible={!walkthroughMode}
+      rotation={[0, liveTransform?.rotation ?? effectiveNode.rotation, 0]}
+      visible={!walkthroughMode && effectiveNode.visible !== false}
     >
       <mesh position={[0, 0.09, 0]} rotation={[-Math.PI / 2, 0, 0]} {...handlers}>
         <ringGeometry args={[0.34, 0.48, 48]} />

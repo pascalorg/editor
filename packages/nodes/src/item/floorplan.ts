@@ -4,8 +4,11 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getRoofWallFaceFrame,
   getScaledDimensions,
   type ItemNode,
+  type RoofSegmentNode,
+  roofFacePointToSegment,
   useLiveTransforms,
 } from '@pascal-app/core'
 
@@ -111,6 +114,31 @@ function resolveItemTransform(
       x: shelfX + offsetX,
       y: shelfZ + offsetY,
       rotation: shelfRotationY + localRotation,
+    }
+  } else if (parentNode?.type === 'roof-segment') {
+    // Roof-hosted wall item: FACE-LOCAL position mapped through the face
+    // frame, then composed through the segment's and parent roof's poses
+    // into level-local plan coords.
+    const segment = parentNode as RoofSegmentNode
+    const roof = segment.parentId
+      ? (ctx.resolve(segment.parentId as AnyNodeId) as
+          | (AnyNode & { position: [number, number, number]; rotation: number })
+          | undefined)
+      : undefined
+    if (roof?.type === 'roof' && item.roofFace) {
+      const frame = getRoofWallFaceFrame(segment, item.roofFace)
+      const segLocal = roofFacePointToSegment(segment, item.roofFace, item.position)
+      const [sx, sz] = rotateVec(segLocal[0], segLocal[2], segment.rotation ?? 0)
+      const [rx, rz] = rotateVec(
+        sx + segment.position[0],
+        sz + segment.position[2],
+        roof.rotation ?? 0,
+      )
+      result = {
+        x: rx + roof.position[0],
+        y: rz + roof.position[2],
+        rotation: (roof.rotation ?? 0) + (segment.rotation ?? 0) + frame.yaw + localRotation,
+      }
     }
   } else {
     // Level / slab / ceiling parent — item.position is level-local.

@@ -9,6 +9,22 @@ import {
 } from '@pascal-app/core'
 
 /**
+ * Keep the door handle at the same relative height when the door is resized:
+ * scale it by the height ratio, then clamp to the panel's slider bounds
+ * [0.5, height - 0.1] so it never lands outside the (possibly shrunk) door.
+ * Used by both the height-resize arrow and the panel's Height slider so the
+ * handle tracks the door whichever way it's resized.
+ */
+export function scaleHandleHeight(
+  handleHeight: number,
+  oldHeight: number,
+  newHeight: number,
+): number {
+  const ratio = oldHeight > 0 ? newHeight / oldHeight : 1
+  return Math.min(Math.max(handleHeight * ratio, 0.5), Math.max(0.5, newHeight - 0.1))
+}
+
+/**
  * Converts wall-local (X along wall, Y = height above wall base) to world XYZ.
  */
 export function wallLocalToWorld(

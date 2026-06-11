@@ -14,6 +14,7 @@ import {
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
   planWallMoveJunctions,
+  projectAutoSlabsForPlan,
   resumeSceneHistory,
   type SlabNode,
   useLiveNodeOverrides,
@@ -28,6 +29,7 @@ import {
   getSegmentGridStep,
   isSegmentLongEnough,
   markToolCancelConsumed,
+  snapBuildingLocalToWorldGrid,
   snapScalarToGrid,
   triggerSFX,
   useEditor,
@@ -266,10 +268,15 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // existing room → existing slab" logic sees stable IDs across
       // ticks. Without this anchor, IDs would drift as overrides
       // re-flowed through the planner.
-      const slabPlan = planAutoSlabsForLevel(roomPolygons, getLevelSlabs(levelId, sceneState.nodes))
+      const existingSlabs = getLevelSlabs(levelId, sceneState.nodes)
+      const slabPlan = planAutoSlabsForLevel(roomPolygons, existingSlabs)
       const ceilingPlan = planAutoCeilingsForLevel(
         roomPolygons,
         getLevelCeilings(levelId, sceneState.nodes),
+        {
+          walls: levelWalls,
+          slabs: projectAutoSlabsForPlan(existingSlabs, slabPlan),
+        },
       )
 
       latestSurfacePlans = { slabs: slabPlan, ceilings: ceilingPlan }
@@ -281,8 +288,8 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         touchedSlabIds.add(update.id as AnyNodeId)
       }
       for (const update of ceilingPlan.update) {
-        if (update.data.polygon === undefined) continue
-        overrideEntries.push([update.id, { polygon: update.data.polygon }])
+        if (update.data.polygon === undefined && update.data.height === undefined) continue
+        overrideEntries.push([update.id, update.data as Record<string, unknown>])
         touchedCeilingIds.add(update.id as AnyNodeId)
       }
 
@@ -460,15 +467,25 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       if (axis) {
         const originalProj = originalCenter[0] * axis[0] + originalCenter[1] * axis[1]
         const rawProj = originalProj + rawDeltaX * axis[0] + rawDeltaZ * axis[1]
-        const snappedProj = shiftPressedRef.current
-          ? rawProj
-          : snapScalarToGrid(rawProj, snapStep)
+        const snappedProj = shiftPressedRef.current ? rawProj : snapScalarToGrid(rawProj, snapStep)
         const perpDelta = snappedProj - originalProj
         deltaX = axis[0] * perpDelta
         deltaZ = axis[1] * perpDelta
+      } else if (shiftPressedRef.current) {
+        deltaX = rawDeltaX
+        deltaZ = rawDeltaZ
       } else {
-        deltaX = shiftPressedRef.current ? rawDeltaX : snapScalarToGrid(rawDeltaX, snapStep)
-        deltaZ = shiftPressedRef.current ? rawDeltaZ : snapScalarToGrid(rawDeltaZ, snapStep)
+        // Snap the resulting wall center to the WORLD XZ grid (projected
+        // back into building-local), then express the result as a delta
+        // from the original centre. Without this, a rotated building
+        // dragged the wall along its local axes instead of world ones.
+        const targetLocal: [number, number] = [
+          originalCenter[0] + rawDeltaX,
+          originalCenter[1] + rawDeltaZ,
+        ]
+        const snappedLocal = snapBuildingLocalToWorldGrid(targetLocal, snapStep)
+        deltaX = snappedLocal[0] - originalCenter[0]
+        deltaZ = snappedLocal[1] - originalCenter[1]
       }
 
       const constrainedGridPos: [number, number] = [anchor[0] + deltaX, anchor[1] + deltaZ]

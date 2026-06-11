@@ -7,6 +7,7 @@ import {
   type RenderShading,
 } from '@pascal-app/viewer'
 import { BoxGeometry, FrontSide, Group, type Material, Mesh } from 'three'
+import { sanitizeShelfDimensions } from './dimensions'
 import type { ShelfNode } from './schema'
 
 /**
@@ -69,10 +70,11 @@ function getShelfMaterial(node: ShelfNode, shading: RenderShading): Material {
 }
 
 export function buildShelfGeometry(
-  node: ShelfNode,
+  rawNode: ShelfNode,
   _ctx?: unknown,
   shading: RenderShading = 'rendered',
 ): Group {
+  const node = sanitizeShelfDimensions(rawNode)
   const group = new Group()
   group.name = 'shelf-geometry'
 
@@ -91,6 +93,13 @@ export function buildShelfGeometry(
     case 'cubby':
       buildCubby(group, node, material)
       break
+  }
+
+  // Boards/brackets cast + receive shadows like the other geometry-driven
+  // kinds (fence, slab). Set once here rather than on every `new Mesh` above.
+  for (const child of group.children) {
+    child.castShadow = true
+    child.receiveShadow = true
   }
 
   return group
@@ -336,8 +345,9 @@ function addCornerPosts(
  * can host in the lowest cell.
  */
 export function shelfRowSurfaceYs(node: ShelfNode): number[] {
-  const ys = boardCenterYs(node).map((y) => y + node.thickness / 2)
-  const bottomApplies = node.style === 'cubby' || node.style === 'bookshelf'
-  if (node.withBottom && bottomApplies) ys.unshift(node.thickness)
+  const safe = sanitizeShelfDimensions(node)
+  const ys = boardCenterYs(safe).map((y) => y + safe.thickness / 2)
+  const bottomApplies = safe.style === 'cubby' || safe.style === 'bookshelf'
+  if (safe.withBottom && bottomApplies) ys.unshift(safe.thickness)
   return ys
 }

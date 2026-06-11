@@ -1,51 +1,83 @@
 import {
+  type AnyNode,
   type AnyNodeId,
+  collectAlignmentAnchors,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  movingFootprintAnchors,
   type ShelfNode,
-  sceneRegistry,
-  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { snapPointToGrid, triggerSFX, type WallPlanPoint } from '@pascal-app/editor'
-import type * as THREE from 'three'
+import {
+  applyFloorplanAlignment,
+  getFloorStackPreviewPosition,
+  triggerSFX,
+  useEditor,
+  type WallPlanPoint,
+} from '@pascal-app/editor'
+import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 
 /**
- * 2D floor-plan move handler for shelf — behaves like items in the
- * floor-plan move flow:
+ * 2D floor-plan move handler for shelf — mirrors `itemFloorplanMoveTarget`,
+ * because shelf is a `position`-field kind (it carries its location in
+ * `node.position`, not in polygon vertices):
  *
- *   - Each pointermove writes the absolute world-plan target position
- *     to `useLiveTransforms` (so the 2D layer's `effectiveNode` override
- *     re-renders the SVG at the new position) AND mutates the
- *     registered mesh's `position` directly (so the 3D view mirrors the
- *     drag in real time).
- *   - On commit, `canCommit` writes the final position to `scene` as a
- *     single tracked update — the dispatcher's snapshot-diff captures
- *     it as one undoable step.
- *   - On any non-commit unmount (escape, abnormal teardown) the
- *     dispatcher clears `useLiveTransforms` for affectedIds, so the 3D
- *     visual snaps back to the reverted scene state.
+ *   - Each pointermove writes the absolute world-plan position straight
+ *     to `useScene` (history is paused by the overlay). This is the single
+ *     source of truth: the 2D `FloorplanRegistryLayer` and the 3D
+ *     `ParametricNodeRenderer` group transform both follow it reactively,
+ *     so 2D and 3D can never diverge.
+ *   - On commit, the overlay's snapshot-diff reverts to baseline, resumes
+ *     history, and re-applies the final position as one undoable step.
+ *     `canCommit` only validates.
  *
- * Unlike `slab` / `ceiling`, this writes the **absolute** position (the
- * shelf carries its location in `node.position`, not in polygon
- * vertices). The 2D layer's override branch for `shelf` mirrors `item`'s
- * world-plan handling.
+ * Earlier this used the `useLiveTransforms` + imperative-mesh pattern that
+ * `slab` / `ceiling` use. That works for polygon kinds because their commit
+ * rebuilds geometry (the vertices change), which forces the 3D group to
+ * reconcile. Shelf's `geometryKey` excludes `position`, so its commit
+ * `markDirty` is a no-op and nothing reconciled the 3D group off the cleared
+ * live transform — the 2D SVG moved but the 3D mesh stayed put. Writing the
+ * scene directly removes that second source of truth entirely.
  */
-const GRID_STEP = 0.5
-
-export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node }) => {
+export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node, nodes }) => {
   const shelfId = node.id as AnyNodeId
   const originalPosition: [number, number, number] = [...node.position] as [number, number, number]
   const originalRotationY = node.rotation[1] ?? 0
+  const resolveCursor = createFloorplanCursorResolver({
+    original: [originalPosition[0], originalPosition[2]],
+    metadata: node.metadata,
+  })
   let lastPosition: [number, number, number] = originalPosition
   let lastSnapKey: string | null = null
+
+  // Alignment candidates — corner/edge/segment anchors of every OTHER node
+  // (incl. wall faces). Gathered once: the scene is stable during the drag
+  // (only the shelf moves), so re-collecting per tick is wasted work.
+  const candidates = collectAlignmentAnchors(nodes, shelfId)
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: [shelfId],
     apply({ planPoint, modifiers }) {
-      const snapped: WallPlanPoint = modifiers.shiftKey
-        ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)
+      const snap = (value: number) => {
+        if (modifiers.shiftKey) return value
+        const step = useEditor.getState().gridSnapStep
+        return Math.round(value / step) * step
+      }
+      const gridSnapped = resolveCursor(planPoint, { snap }) as WallPlanPoint
+      // Figma-style alignment layered on the grid snap — the shelf footprint
+      // edges snap to neighbours / wall faces and a guide is published. Alt
+      // bypasses (matches placement tools' "No snap").
+      const { point: snapped } = applyFloorplanAlignment(
+        gridSnapped,
+        movingFootprintAnchors(
+          node as unknown as AnyNode,
+          gridSnapped[0],
+          gridSnapped[1],
+          originalRotationY,
+        ),
+        candidates,
+        { bypass: modifiers.altKey },
+      )
       const next: [number, number, number] = [snapped[0], originalPosition[1], snapped[1]]
       lastPosition = next
 
@@ -57,44 +89,28 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node 
         triggerSFX('sfx:grid-snap')
         lastSnapKey = snapKey
       }
-      // Live preview — same shape items use. `useLiveTransforms.position`
-      // holds world-plan coords (level-local); the 2D `FloorplanRegistryLayer`
-      // override for `shelf` reads this and re-renders the SVG entry.
-      useLiveTransforms.getState().set(shelfId, {
+      const visualPosition = getFloorStackPreviewPosition({
+        node,
         position: next,
-        rotation: originalRotationY,
+        rotation: node.rotation,
+        levelId: node.parentId ?? null,
       })
-      // Mirror to the 3D mesh so split-view follows the cursor without
-      // touching scene state per tick (no CSG, no React re-render of
-      // geometry — same imperative live-drag pattern as the 3D
-      // `MoveRegistryNodeTool`).
-      const mesh = sceneRegistry.nodes.get(shelfId) as THREE.Object3D | undefined
-      if (mesh) mesh.position.set(next[0], next[1], next[2])
+      // Single source of truth — write the absolute position straight to
+      // the scene (history is paused by the overlay). Both the 2D SVG and
+      // the 3D group transform read `node.position` reactively, so they
+      // stay in lockstep. The overlay's snapshot-diff turns the whole drag
+      // into one undoable step on commit.
+      useScene.getState().updateNodes([
+        {
+          id: shelfId,
+          data: { position: visualPosition },
+        },
+      ])
     },
     canCommit() {
       const live = useScene.getState().nodes[shelfId] as ShelfNode | undefined
       if (!live || live.type !== 'shelf') return false
-      if (lastPosition[0] === originalPosition[0] && lastPosition[2] === originalPosition[2]) {
-        return false
-      }
-      // Side-effect commit — write final position. The dispatcher's
-      // snapshot-diff right after `canCommit` returns picks this up as
-      // the single tracked change for undo. `useLiveTransforms` is
-      // cleared in the dispatcher's commit path (and in our
-      // abnormal-unmount cleanup) so the 3D view reconciles to the
-      // committed scene position on the next render.
-      useScene.getState().updateNodes([
-        {
-          id: shelfId,
-          data: { position: lastPosition },
-        },
-      ])
-      // The shelf's geometry doesn't depend on `position` (it's the
-      // group's transform, not the build inputs), but we mark dirty so
-      // any sibling-aware system that does watch position re-runs.
-      useScene.getState().markDirty(shelfId)
-      useLiveTransforms.getState().clear(shelfId)
-      return true
+      return !(lastPosition[0] === originalPosition[0] && lastPosition[2] === originalPosition[2])
     },
   }
   return session

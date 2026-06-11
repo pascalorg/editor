@@ -138,7 +138,6 @@ function buildBodyGeometry(node: ChimneyNode, baseY: number, topY: number): THRE
       parts.push(buildSmoothCylinder(baseY + sh, topY, r, r))
     }
     const merged = mergeAndDispose(parts)
-    applyNodeTransform(merged, node)
     return merged
   }
 
@@ -213,7 +212,6 @@ function buildCapGeometry(node: ChimneyNode, capBaseY: number): THREE.BufferGeom
         break
     }
     const merged = mergeAndDispose(parts)
-    applyNodeTransform(merged, node)
     return merged
   }
 
@@ -450,7 +448,6 @@ function buildBandsGeometry(
     }
     if (parts.length === 0) return null
     const merged = mergeAndDispose(parts)
-    applyNodeTransform(merged, node)
     return merged
   }
 
@@ -484,10 +481,14 @@ function buildBandsGeometry(
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
-function applyNodeTransform(geo: THREE.BufferGeometry, node: ChimneyNode) {
-  if (Math.abs(node.rotation) > 1e-4) geo.rotateY(node.rotation)
-  geo.translate(node.position[0] ?? 0, 0, node.position[2] ?? 0)
-}
+// Each builder returns geometry in chimney-local frame (chimney center
+// at X/Z origin, Y absolute in the host segment's frame). The renderer
+// applies `node.position` / `node.rotation` via a nested registered
+// group, which lets `NodeArrowHandles` read a chimney-local mesh frame
+// when placing the resize / rotation arrows. Kept as a no-op shim so
+// the existing call sites don't need to be touched if a future refactor
+// re-introduces per-builder baking.
+function applyNodeTransform(_geo: THREE.BufferGeometry, _node: ChimneyNode) {}
 
 function buildBufferGeometry(positions: number[], uvs: number[]): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry()

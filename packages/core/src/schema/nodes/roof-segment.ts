@@ -97,7 +97,7 @@ export const RoofSegmentNode = BaseNode.extend({
     .max(0.9)
     .default(ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio),
   // Hosted accessories — chimney, dormer, skylight, box-vent,
-  // ridge-vent, solar-panel. Each accessory's `parentId` points back
+  // ridge-vent, solar-panel, gutter. Each accessory's `parentId` points back
   // here; the segment renderer mounts them recursively via
   // `<NodeRenderer>` so they inherit the segment's transform stack.
   // Required for `createNode(child, segmentId)` to append the child
@@ -181,7 +181,6 @@ function getPrimarySlopeRun(input: PitchInputs & ShapeRatios): number {
       return min * input.mansardSteepWidthRatio
     case 'dutch':
       return min * input.dutchHipWidthRatio
-    case 'hip':
     default:
       return min / 2
   }
@@ -251,6 +250,42 @@ export function getSegmentSlopeFrame(
  */
 export function getActiveRoofHeight(node: Parameters<typeof getSegmentSlopeFrame>[0]): number {
   return getSegmentSlopeFrame(node).activeRh
+}
+
+/** Segment-local surface height used by roof accessory placement and hit disambiguation. */
+export function getRoofSegmentSurfaceY(
+  node: Pick<RoofSegmentNode, 'roofType' | 'width' | 'depth' | 'wallHeight'> &
+    Parameters<typeof getSegmentSlopeFrame>[0],
+  localX: number,
+  localZ: number,
+): number {
+  const activeRh = getActiveRoofHeight(node)
+  const peakY = node.wallHeight + activeRh
+  if (activeRh === 0) return node.wallHeight
+
+  if (
+    node.roofType === 'gable' ||
+    node.roofType === 'gambrel' ||
+    node.roofType === 'mansard' ||
+    node.roofType === 'dutch'
+  ) {
+    const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
+    return peakY - t * activeRh
+  }
+
+  if (node.roofType === 'shed') {
+    const t = (localZ + node.depth / 2) / (node.depth || 1)
+    return peakY - t * activeRh
+  }
+
+  if (node.roofType === 'hip') {
+    const fx = node.width > 0 ? Math.abs(localX) / (node.width / 2) : 0
+    const fz = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
+    return peakY - Math.max(fx, fz) * activeRh
+  }
+
+  const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
+  return peakY - t * activeRh
 }
 
 /**

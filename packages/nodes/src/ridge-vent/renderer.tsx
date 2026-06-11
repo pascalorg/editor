@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   type RidgeVentNode,
   type RoofSegmentNode,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -17,6 +18,8 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { RIDGE_LIFT, resolveRidgeSnap } from '../shared/ridge-snap'
+import { getSurfaceY } from '../shared/roof-surface'
 import { buildRidgeVentGeometry } from './geometry'
 
 // Single white fallback for every style. Paint customisation comes from
@@ -28,7 +31,6 @@ const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
   roughness: 0.85,
   metalness: 0.1,
-  side: THREE.DoubleSide,
 })
 
 /**
@@ -45,20 +47,46 @@ const defaultMaterial = new THREE.MeshStandardMaterial({
  * family (matte standard / shingled grey / brushed metal) before the
  * user opens the paint tray.
  */
-const RidgeVentRenderer = ({ node }: { node: RidgeVentNode }) => {
+const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
   const ref = useRef<THREE.Group>(null!)
-  useRegistry(node.id, 'ridge-vent', ref)
-  const handlers = useNodeEvents(node, 'ridge-vent')
+  useRegistry(storeNode.id, 'ridge-vent', ref)
+  const handlers = useNodeEvents(storeNode, 'ridge-vent')
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
 
-  const segment = useScene((state) =>
+  // Merge live drag overrides on top of the store node so handle drags
+  // update the mesh in-flight without flushing to zustand on every frame.
+  // Same pattern as box-vent / chimney / dormer — the override is set by
+  // `NodeArrowHandles`' drag handler and cleared on commit.
+  const overrides = useLiveNodeOverrides(
+    (s) => s.get(storeNode.id as AnyNodeId) as Partial<RidgeVentNode> | undefined,
+  )
+  const node: RidgeVentNode = overrides
+    ? ({ ...storeNode, ...overrides } as RidgeVentNode)
+    : storeNode
+
+  const segmentStore = useScene((state) =>
     node.roofSegmentId
       ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
       : undefined,
   )
+  // Subscribe to the segment's live overrides too — when the user drags a
+  // segment handle (width / depth / wallHeight / pitch / rotation), the
+  // dimensions stream through `useLiveNodeOverrides` and don't hit the
+  // store until release. Merging them lets the ridge ride the segment in
+  // real time instead of snapping into place on commit.
+  const segmentOverrides = useLiveNodeOverrides((s) =>
+    node.roofSegmentId
+      ? (s.get(node.roofSegmentId as AnyNodeId) as Partial<RoofSegmentNode> | undefined)
+      : undefined,
+  )
+  const segment: RoofSegmentNode | undefined = segmentStore
+    ? segmentOverrides
+      ? ({ ...segmentStore, ...segmentOverrides } as RoofSegmentNode)
+      : segmentStore
+    : undefined
 
   const geometry = useMemo(
     () => buildRidgeVentGeometry(node),
@@ -67,25 +95,20 @@ const RidgeVentRenderer = ({ node }: { node: RidgeVentNode }) => {
 
   useEffect(() => () => geometry.dispose(), [geometry])
 
-  // The preset cache returns materials with `side: FrontSide` (that's
-  // what the preset payload encodes). For a thin extruded ridge cap that
-  // makes the underside disappear when the camera dips below the eaves
-  // — so clone the resolved material and force `DoubleSide` locally
-  // without mutating the shared cache entry.
+  // Paint surface: FrontSide everywhere — DoubleSide on the role
+  // material's NodeMaterial poisons the MRT scene pass (see `materials.ts`
+  // line 77 / glazing fix 9400f1c5). Earlier this path forced DoubleSide
+  // so the underside of the thin extruded ridge cap stayed visible from
+  // below; that's now a known visual tradeoff — building the cap as a
+  // closed solid in `geometry.ts` is the right fix if the underside-view
+  // becomes noticeable.
   const material = useMemo(() => {
-    // Untextured ridge vent (and textures-off mode) takes the themed
-    // 'roof' role colour. Request DoubleSide directly so the cached role
-    // material is the right side — no clone/mutation of a shared material.
     if (!textures || (!node.material && !node.materialPreset)) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.DoubleSide, sceneTheme)
+      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
     }
-    const base = node.material
+    return node.material
       ? createMaterial(node.material, shading)
       : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
-    if (base.side === THREE.DoubleSide) return base
-    const cloned = base.clone()
-    cloned.side = THREE.DoubleSide
-    return cloned
   }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
 
   if (!segment) return null
@@ -102,10 +125,26 @@ const RidgeVentRenderer = ({ node }: { node: RidgeVentNode }) => {
   const segPos = segment.position ?? [0, 0, 0]
   const segRotY = segment.rotation ?? 0
 
+  // Lock the BASE position to the ridge so the vent always starts on the
+  // slope top; treat `position[1]` and `position[2]` as user-tunable OFFSETS
+  // off that base (Y above ridge lift, Z away from ridge centerline). So
+  // after placement the inspector's Y / Z sliders nudge the vent off the
+  // locked ridge without losing the slope-tracking base. X is the position
+  // along the ridge — the snap re-clamps it to the segment's ridge span.
+  const snap = resolveRidgeSnap(segment, node.position[0] ?? 0, 0)
+  const ridgeX = snap ? snap.localX : (node.position[0] ?? 0)
+  const baseZ = snap ? snap.localZ : 0
+  const baseY = getSurfaceY(ridgeX, baseZ, segment) + RIDGE_LIFT
+  // Clamp legacy stored Y (absolute peak height from earlier versions) so the
+  // vent doesn't fly off when the field was an absolute Y instead of offset.
+  const yOffset = Math.max(-2, Math.min(2, node.position[1] ?? 0))
+  const ridgeY = baseY + yOffset
+  const ridgeZ = baseZ + (node.position[2] ?? 0)
+
   return (
     <group position={segPos} rotation-y={segRotY}>
       <group
-        position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
+        position={[ridgeX, ridgeY, ridgeZ]}
         ref={ref}
         rotation-y={node.rotation ?? 0}
         visible={node.visible}

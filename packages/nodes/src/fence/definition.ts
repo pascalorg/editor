@@ -1,8 +1,4 @@
-import {
-  type FenceNode as FenceNodeType,
-  type HandleDescriptor,
-  type NodeDefinition,
-} from '@pascal-app/core'
+import type { FenceNode as FenceNodeType, HandleDescriptor, NodeDefinition } from '@pascal-app/core'
 import { buildFenceFloorplan } from './floorplan'
 import { fenceCurveAffordance, fenceMoveEndpointAffordance } from './floorplan-affordances'
 import { fenceFloorplanMoveTarget } from './floorplan-move'
@@ -75,6 +71,9 @@ function fenceHeightHandle(): HandleDescriptor<FenceNodeType> {
     axis: 'y',
     anchor: 'min',
     min: MIN_FENCE_HEIGHT,
+    // Drives the floating dimension pill (H · L · T) and suppresses the
+    // arrow's own inline chip, matching the wall height handle.
+    measureLabel: 'height',
     currentValue: (n) => n.height ?? 1.8,
     apply: (_n, newHeight) => ({ height: newHeight }),
     placement: {
@@ -164,6 +163,10 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
     surfaces: { sides: { faces: 'all' } },
     duplicable: true,
     deletable: true,
+    // Placed by drawing the span with the two-click tool; a saved preset
+    // seeds its build parameters via `toolDefaults.fence` (see `tool.tsx`
+    // and `createFenceOnCurrentLevel`).
+    drawTool: true,
   },
 
   relations: {

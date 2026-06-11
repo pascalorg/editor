@@ -12,12 +12,16 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import {
+  alignFloorplanDraftPoint,
   type FencePlanPoint,
   getSegmentGridStep,
   isSegmentLongEnough,
+  snapBuildingLocalToWorldGrid,
   snapFenceDraftPoint,
   snapScalarToGrid,
+  useAlignmentGuides,
   WALL_FINE_GRID_STEP,
+  WALL_GRID_STEP,
 } from '@pascal-app/editor'
 
 /**
@@ -157,22 +161,32 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
         // Endpoint move = grid snap only; the 45°-from-start angle
         // snap is draft-only. Shift switches to the fine grid step for
         // precision, matching the 3D fence endpoint action.
+        const worldStep = modifiers.shiftKey ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
         const snapped = snapFenceDraftPoint({
           point: planPoint as FencePlanPoint,
           walls: nextWalls,
           fences: nextFences,
           ignoreFenceIds: [node.id],
           step: modifiers.shiftKey ? WALL_FINE_GRID_STEP : undefined,
+          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, worldStep) as FencePlanPoint,
         })
-        const nextStart = endpoint === 'start' ? snapped : fixedPoint
-        const nextEnd = endpoint === 'end' ? snapped : fixedPoint
+        // Figma-style alignment on the dragged endpoint — snaps it onto
+        // another object's edge / wall face and publishes a guide, matching
+        // the 3D fence endpoint action. The dragged fence and its linked
+        // siblings (which cascade with the endpoint) are excluded from the
+        // candidate pool. Alt is reserved for detach here, NOT bypass.
+        const aligned = alignFloorplanDraftPoint(snapped, {
+          excludeIds: [node.id, ...linkedOriginals.map((l) => l.id)],
+        }) as FencePlanPoint
+        const nextStart = endpoint === 'start' ? aligned : fixedPoint
+        const nextEnd = endpoint === 'end' ? aligned : fixedPoint
 
         const linkedUpdates = modifiers.altKey
           ? []
           : linkedOriginals.map((l) => ({
               id: l.id,
-              start: pointsNearlyEqual(l.start, originalMovingPoint) ? snapped : l.start,
-              end: pointsNearlyEqual(l.end, originalMovingPoint) ? snapped : l.end,
+              start: pointsNearlyEqual(l.start, originalMovingPoint) ? aligned : l.start,
+              end: pointsNearlyEqual(l.end, originalMovingPoint) ? aligned : l.end,
             }))
 
         useScene.getState().updateNodes([
@@ -184,6 +198,9 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
         ])
       },
       canCommit() {
+        // Pointer-up always runs canCommit — drop the alignment guide here
+        // so it doesn't linger after a commit / reject.
+        useAlignmentGuides.getState().clear()
         const finalFence = useScene.getState().nodes[node.id] as FenceNode | undefined
         return (
           !!finalFence &&

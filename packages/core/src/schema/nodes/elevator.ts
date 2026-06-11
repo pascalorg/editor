@@ -19,8 +19,8 @@ export const ElevatorNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around the Y axis in radians.
   rotation: z.number().default(0),
-  width: z.number().default(1.6),
-  depth: z.number().default(1.6),
+  width: z.number().default(1.84),
+  depth: z.number().default(1.84),
   shaftWidth: z.number().optional(),
   shaftDepth: z.number().optional(),
   shaftWallThickness: z.number().default(0.09),
