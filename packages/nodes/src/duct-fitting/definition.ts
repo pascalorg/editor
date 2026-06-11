@@ -37,7 +37,10 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
-    movable: { axes: ['x', 'y', 'z'], gridSnap: true },
+    // `cursorAttached`: a fitting is a small connector — an offset-
+    // preserving drag reads as the mesh trailing the mouse, so pin its
+    // origin to the cursor instead.
+    movable: { axes: ['x', 'y', 'z'], gridSnap: true, cursorAttached: true },
     duplicable: true,
     deletable: true,
   },

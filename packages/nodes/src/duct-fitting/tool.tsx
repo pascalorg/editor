@@ -6,7 +6,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Euler, Quaternion, Vector3 } from 'three'
-import { collectScenePorts, findNearestPortXZ, type ScenePort } from '../shared/ports'
+import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ, type ScenePort } from '../shared/ports'
 import { ductFittingDefinition } from './definition'
 import { buildDuctFittingGeometry } from './geometry'
 import { localFittingPorts } from './ports'
@@ -41,7 +41,11 @@ function resolvePlacement(
   gridStep: number,
   manualQuat: Quaternion,
 ): Placement {
-  const port = findNearestPortXZ(raw, collectScenePorts(), PORT_SNAP_RADIUS_M)
+  const port = findNearestPortXZ(
+    raw,
+    collectScenePorts({ systems: DUCT_PORT_SYSTEMS }),
+    PORT_SNAP_RADIUS_M,
+  )
   if (port) {
     const direction = new Vector3(...port.direction).normalize()
     // Local +X must map onto the port's outward direction so the inlet

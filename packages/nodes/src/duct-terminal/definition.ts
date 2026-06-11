@@ -36,7 +36,7 @@ export const ductTerminalDefinition: NodeDefinition<typeof DuctTerminalNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
-    movable: { axes: ['x', 'z'], gridSnap: true },
+    movable: { axes: ['x', 'z'], gridSnap: true, portSnap: { systems: ['supply', 'return'] } },
     rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] },
     duplicable: true,
     deletable: true,
