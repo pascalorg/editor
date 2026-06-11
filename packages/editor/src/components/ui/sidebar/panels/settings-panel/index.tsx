@@ -2,7 +2,7 @@ import { emitter, type AnyNode, type AnyNodeId, useScene, validateBuildJson } fr
 import { exportSceneToDxf } from '@pascal-app/core/exporters/dxf'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
-import { Camera, Download, Move, Save, Trash2, Upload } from 'lucide-react'
+import { Camera, Download, FlipHorizontal2, Move, Save, Trash2, Upload } from 'lucide-react'
 import {
   type KeyboardEvent,
   type SyntheticEvent,
@@ -127,6 +127,24 @@ function translateVec3(point: [number, number, number], dx: number, dz: number):
   return [point[0] + dx, point[1], point[2] + dz]
 }
 
+function mirrorPlanPoint(point: [number, number]): [number, number] {
+  return [point[0], -point[1]]
+}
+
+function mirrorVec3(point: [number, number, number]): [number, number, number] {
+  return [point[0], point[1], -point[2]]
+}
+
+function mirrorRotationTuple(rotation: [number, number, number]): [number, number, number] {
+  return [-rotation[0], -rotation[1], rotation[2]]
+}
+
+function flipLeftRight<T extends string>(value: T, left: T, right: T): T {
+  if (value === left) return right
+  if (value === right) return left
+  return value
+}
+
 function buildCenterLayoutUpdates(
   nodes: Record<string, AnyNode>,
   dx: number,
@@ -150,6 +168,57 @@ function buildCenterLayoutUpdates(
     }
     if (isVec3(record.position) && hasPlanPositionInLayoutSpace(node, nodes)) {
       data.position = translateVec3(record.position, dx, dz)
+    }
+
+    if (Object.keys(data).length > 0) {
+      updates.push({ id: node.id as AnyNodeId, data: data as Partial<AnyNode> })
+    }
+  }
+
+  return updates
+}
+
+function buildMirrorLayoutUpdates(
+  nodes: Record<string, AnyNode>,
+): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
+
+  for (const node of Object.values(nodes)) {
+    if (!shouldCenterNode(node)) continue
+    const record = node as unknown as Record<string, unknown>
+    const data: Record<string, unknown> = {}
+
+    if (isPlanPoint(record.start)) {
+      data.start = mirrorPlanPoint(record.start)
+    }
+    if (isPlanPoint(record.end)) {
+      data.end = mirrorPlanPoint(record.end)
+    }
+    if (Array.isArray(record.polygon) && record.polygon.every(isPlanPoint)) {
+      data.polygon = record.polygon.map((point) => mirrorPlanPoint(point)).reverse()
+    }
+    if (isVec3(record.position) && hasPlanPositionInLayoutSpace(node, nodes)) {
+      data.position = mirrorVec3(record.position)
+    }
+    if (typeof record.rotation === 'number' && Number.isFinite(record.rotation)) {
+      data.rotation = -record.rotation
+    } else if (isVec3(record.rotation)) {
+      data.rotation = mirrorRotationTuple(record.rotation)
+    }
+    if (typeof record.curveOffset === 'number' && Number.isFinite(record.curveOffset)) {
+      data.curveOffset = -record.curveOffset
+    }
+    if (typeof record.sweepAngle === 'number' && Number.isFinite(record.sweepAngle)) {
+      data.sweepAngle = -record.sweepAngle
+    }
+    if (record.side === 'front' || record.side === 'back') {
+      data.side = record.side === 'front' ? 'back' : 'front'
+    }
+    if (record.hingesSide === 'left' || record.hingesSide === 'right') {
+      data.hingesSide = flipLeftRight(record.hingesSide, 'left', 'right')
+    }
+    if (record.attachmentSide === 'left' || record.attachmentSide === 'right') {
+      data.attachmentSide = flipLeftRight(record.attachmentSide, 'left', 'right')
     }
 
     if (Object.keys(data).length > 0) {
@@ -318,7 +387,7 @@ export function SettingsPanel({
   const setPhase = useEditor((state) => state.setPhase)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
-  const [centerLayoutStatus, setCenterLayoutStatus] = useState<string | null>(null)
+  const [layoutStatus, setLayoutStatus] = useState<string | null>(null)
   const sceneGraphValue = useMemo(
     () => buildSceneGraphValue(nodes as Record<string, SceneNode>, rootNodeIds),
     [nodes, rootNodeIds],
@@ -432,7 +501,7 @@ export function SettingsPanel({
   const handleCenterLayout = useCallback(() => {
     const bounds = computeCenterableBounds(nodes as Record<string, AnyNode>)
     if (!bounds.hasPoint) {
-      setCenterLayoutStatus('No layout geometry found.')
+      setLayoutStatus('No layout geometry found.')
       return
     }
 
@@ -442,20 +511,29 @@ export function SettingsPanel({
     const dz = -centerZ
 
     if (Math.abs(dx) < CENTER_LAYOUT_EPSILON && Math.abs(dz) < CENTER_LAYOUT_EPSILON) {
-      setCenterLayoutStatus('Layout is already centered.')
+      setLayoutStatus('Layout is already centered.')
       return
     }
 
     const updates = buildCenterLayoutUpdates(nodes as Record<string, AnyNode>, dx, dz)
     if (updates.length === 0) {
-      setCenterLayoutStatus('No movable layout nodes found.')
+      setLayoutStatus('No movable layout nodes found.')
       return
     }
 
     updateNodes(updates)
-    setCenterLayoutStatus(
-      `Centered ${updates.length} nodes by ${dx.toFixed(2)}m, ${dz.toFixed(2)}m.`,
-    )
+    setLayoutStatus(`Centered ${updates.length} nodes by ${dx.toFixed(2)}m, ${dz.toFixed(2)}m.`)
+  }, [nodes, updateNodes])
+
+  const handleMirrorLayout = useCallback(() => {
+    const updates = buildMirrorLayoutUpdates(nodes as Record<string, AnyNode>)
+    if (updates.length === 0) {
+      setLayoutStatus('No mirrorable layout nodes found.')
+      return
+    }
+
+    updateNodes(updates)
+    setLayoutStatus(`Mirrored ${updates.length} nodes across Z = 0.`)
   }, [nodes, updateNodes])
 
   const handleVisibilityChange = async (
@@ -570,9 +648,13 @@ export function SettingsPanel({
           <Move className="size-4" />
           Center Layout
         </Button>
-        {centerLayoutStatus ? (
+        <Button className="w-full justify-start gap-2" onClick={handleMirrorLayout} variant="outline">
+          <FlipHorizontal2 className="size-4" />
+          Mirror Layout
+        </Button>
+        {layoutStatus ? (
           <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-muted-foreground text-xs">
-            {centerLayoutStatus}
+            {layoutStatus}
           </div>
         ) : null}
       </div>
