@@ -8665,10 +8665,11 @@ export function FloorplanPanel({
       // that snap wins, so skip Figma alignment and stand the beacon there.
       const lockedToWall = wallSnap.snap !== null
       let snappedPoint = wallSnapped
-      if (lockedToWall || wallAngleSnap) {
+      if (lockedToWall) {
         useAlignmentGuides.getState().clear()
       } else {
         snappedPoint = alignFloorplanDraftPoint(wallSnapped, {
+          applySnap: !wallAngleSnap,
           bypass: event.altKey || bypassSnap,
         })
       }

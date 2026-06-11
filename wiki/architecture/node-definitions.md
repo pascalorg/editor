@@ -184,6 +184,28 @@ If the system also handles cascades, animations, or material updates, keep `def.
 - **Dispose on rebuild.** The generic system disposes the previous children's geometry + material before swapping. Custom systems that imperatively add children must dispose what they replace, or accept the GPU-memory cost.
 - **`def.renderer` overrides the generic renderer.** Once you set it, you own the mount — `<ParametricNodeRenderer>` is not invoked. The generic geometry system still runs for the kind if `def.geometry` is set, so a custom renderer can register an empty group and let the system fill it.
 
+## `toolHints`
+
+`toolHints?: ToolHint[]` is the registry-owned source for the floating helper shown while
+a registered placement or draw tool is active.
+
+```ts
+type ToolHint = {
+  key: string
+  label: string
+}
+```
+
+Keep labels short and action-oriented. Prefer the default guided-building language:
+snapping, angle increments, guides, and validation are active unless the user holds Shift
+during the gesture. A `Shift` hint should describe the bypass in user terms, such as
+`Free angle`, `Free place`, or `Bypass guided constraints`.
+
+`HelperManager` renders `def.toolHints` through `RegisteredToolHelper`, and active Shift
+state can update the row to show that guided constraints are currently bypassed. Select
+mode is not owned by a node definition, so its helper is derived separately from
+selection state, selected-node move/rotate capabilities, and held modifiers.
+
 ## Pitfalls
 
 ### `<GeometrySystem>` must not mutate `group.position` / `group.rotation`

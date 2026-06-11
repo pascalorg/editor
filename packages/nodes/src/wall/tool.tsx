@@ -509,8 +509,11 @@ export const WallTool: React.FC = () => {
 
     // Align the drafted point onto another object's nearest real anchor and
     // publish the guide. Alt bypasses. Returns the (possibly snapped) point.
-    const alignPoint = (point: WallPlanPoint, bypass: boolean): WallPlanPoint => {
-      if (bypass || alignmentCandidates.length === 0) {
+    const alignPoint = (
+      point: WallPlanPoint,
+      options: { applySnap?: boolean; bypass?: boolean },
+    ): WallPlanPoint => {
+      if (options.bypass || alignmentCandidates.length === 0) {
         useAlignmentGuides.getState().clear()
         return point
       }
@@ -520,7 +523,9 @@ export const WallTool: React.FC = () => {
         threshold: ALIGNMENT_THRESHOLD_M,
       })
       useAlignmentGuides.getState().set(ar.guides)
-      return ar.snap ? [point[0] + ar.snap.dx, point[1] + ar.snap.dz] : point
+      return ar.snap && options.applySnap !== false
+        ? [point[0] + ar.snap.dx, point[1] + ar.snap.dz]
+        : point
     }
 
     const stopDrafting = () => {
@@ -554,7 +559,10 @@ export const WallTool: React.FC = () => {
         bypassSnap,
         magnetic: !bypassSnap && useEditor.getState().magneticSnap,
       })
-      gridPosition = alignPoint(snapResult.point, bypassAlign || angleLocked)
+      gridPosition = alignPoint(snapResult.point, {
+        applySnap: !angleLocked,
+        bypass: bypassAlign,
+      })
       // Stand the magnetic beacon at the endpoint when it locked onto an
       // existing wall corner / wall point; clear it for plain grid/angle moves.
       useWallSnapIndicator
@@ -635,7 +643,7 @@ export const WallTool: React.FC = () => {
             bypassSnap,
             magnetic: !bypassSnap && useEditor.getState().magneticSnap,
           }).point,
-          bypassAlign,
+          { bypass: bypassAlign },
         )
         gridPosition = snappedStart
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
@@ -666,7 +674,10 @@ export const WallTool: React.FC = () => {
             bypassSnap,
             magnetic: !bypassSnap && useEditor.getState().magneticSnap,
           }).point,
-          bypassAlign || angleLocked,
+          {
+            applySnap: !angleLocked,
+            bypass: bypassAlign,
+          },
         )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z

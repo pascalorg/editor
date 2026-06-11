@@ -42,7 +42,7 @@ export function applyFloorplanAlignment(
   point: readonly [number, number],
   movingAnchors: AlignmentAnchor[],
   candidates: AlignmentAnchor[],
-  opts?: { bypass?: boolean; threshold?: number },
+  opts?: { applySnap?: boolean; bypass?: boolean; threshold?: number },
 ): FloorplanAlignmentResult {
   if (opts?.bypass) {
     useAlignmentGuides.getState().clear()
@@ -57,7 +57,7 @@ export function applyFloorplanAlignment(
 
   useAlignmentGuides.getState().set(result.guides)
 
-  if (!result.snap) {
+  if (!result.snap || opts?.applySnap === false) {
     return { point: [point[0], point[1]], snapped: false, guides: result.guides }
   }
   return {
@@ -81,8 +81,9 @@ export const FLOORPLAN_DRAFT_ALIGN_ID = '__floorplan_draft__'
  *
  * Used by BOTH the move-preview branch and the click-commit handler so the
  * committed vertex lands exactly where the preview showed it. Caller owns the
- * per-kind precedence (existing-wall endpoint/join snap wins; angle-snap
- * suppresses alignment) and only calls this when alignment should apply.
+ * per-kind precedence: existing-wall endpoint/join snap can still win, while
+ * angle-locked segments can pass `applySnap: false` to publish passive guide
+ * feedback without pulling the endpoint off its constrained ray.
  *
  * `excludeIds` drops those nodes' anchors from the candidate pool — used when
  * dragging a wall / fence endpoint so the moving endpoint doesn't try to
@@ -90,7 +91,12 @@ export const FLOORPLAN_DRAFT_ALIGN_ID = '__floorplan_draft__'
  */
 export function alignFloorplanDraftPoint(
   point: readonly [number, number],
-  opts?: { bypass?: boolean; threshold?: number; excludeIds?: readonly string[] },
+  opts?: {
+    applySnap?: boolean
+    bypass?: boolean
+    threshold?: number
+    excludeIds?: readonly string[]
+  },
 ): [number, number] {
   if (opts?.bypass) {
     useAlignmentGuides.getState().clear()
@@ -105,7 +111,7 @@ export function alignFloorplanDraftPoint(
     point,
     [{ nodeId: FLOORPLAN_DRAFT_ALIGN_ID, kind: 'corner', x: point[0], z: point[1] }],
     candidates,
-    { threshold: opts?.threshold },
+    { applySnap: opts?.applySnap, threshold: opts?.threshold },
   )
   return snapped
 }
