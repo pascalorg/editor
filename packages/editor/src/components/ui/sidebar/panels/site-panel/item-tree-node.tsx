@@ -4,9 +4,14 @@ import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { resolveNodeSnapTarget, SnapTargetIcon } from '../../../snap-target-badge'
-import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
-import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
+import {
+  focusTreeNode,
+  handleTreeSelection,
+  routeTreeSelectionToNode,
+  TreeNode,
+  TreeNodeWrapper,
+} from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -65,17 +70,15 @@ export const ItemTreeNode = memo(function ItemTreeNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      const handled = handleTreeSelection(
+      handleTreeSelection(
         e,
         nodeId,
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      if (!handled && useEditor.getState().phase === 'structure') {
-        useEditor.getState().setPhase('furnish')
-      }
+      routeTreeSelectionToNode(node)
     },
-    [nodeId, setSelection],
+    [node, nodeId, setSelection],
   )
 
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])

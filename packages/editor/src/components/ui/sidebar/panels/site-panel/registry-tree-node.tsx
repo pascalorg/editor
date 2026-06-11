@@ -3,9 +3,13 @@ import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
 import { resolveNodeSnapTarget, SnapTargetIcon } from '../../../snap-target-badge'
-import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
-import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
+import {
+  focusTreeNode,
+  handleTreeSelection,
+  routeTreeSelectionToNode,
+  TreeNodeWrapper,
+} from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface RegistryTreeNodeProps {
@@ -43,17 +47,15 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      const handled = handleTreeSelection(
+      handleTreeSelection(
         e,
         nodeId,
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      if (!handled && useEditor.getState().phase === 'furnish') {
-        useEditor.getState().setPhase('structure')
-      }
+      routeTreeSelectionToNode(node)
     },
-    [nodeId, setSelection],
+    [node, nodeId, setSelection],
   )
 
   return (

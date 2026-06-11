@@ -45,6 +45,7 @@ import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor from '../../store/use-editor'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { formatAngleRadians } from '../tools/shared/segment-angle'
@@ -167,6 +168,7 @@ function DimensionLabel({
 
 export function NodeArrowHandles() {
   const selectedIds = useViewer((state) => state.selection.selectedIds)
+  const activeRotateNodeId = useDirectManipulationFeedback((state) => state.activeRotateNodeId)
   const mode = useEditor((state) => state.mode)
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
   const movingNode = useEditor((state) => state.movingNode)
@@ -180,7 +182,7 @@ export function NodeArrowHandles() {
   const curvingWall = useEditor((state) => state.curvingWall)
   const curvingFence = useEditor((state) => state.curvingFence)
 
-  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : activeRotateNodeId
   const rawNode = useScene((state) =>
     selectedId ? (state.nodes[selectedId as AnyNodeId] ?? null) : null,
   )
@@ -1028,6 +1030,8 @@ function ArcArrow({
   // corner) render a two-headed curved arrow; everything else (stair
   // sweep, etc.) keeps the chevron.
   const isRotateShape = descriptor.shape === 'rotate'
+  const activeRotateNodeId = useDirectManipulationFeedback((state) => state.activeRotateNodeId)
+  const isDirectRotating = isRotateShape && activeRotateNodeId === liveNode.id
   // 'node-normal' spins the node about its local +Z (a wall item flat against
   // its wall) instead of yaw about world-Y. The drag plane and the icon both
   // tilt into that plane, and the horizontal-only wedge/ring readout is
@@ -1067,7 +1071,7 @@ function ArcArrow({
   // arrow is hovered or dragging. Same recipe as the linear / radial
   // decoration path.
   const decoration = descriptor.decoration
-  const showDecoration = Boolean(decoration) && (isHovered || isDragging)
+  const showDecoration = Boolean(decoration) && (isHovered || isDragging || isDirectRotating)
 
   const activate = useHandleDrag({
     kind: 'drag',
@@ -1142,13 +1146,6 @@ function ArcArrow({
     },
   })
 
-  // Suppress "declared but unused" for `liveNode` — ArcArrow's apply
-  // operates entirely on `initialNode` (snapshot taken inside activate)
-  // and `delta` (live cursor angle), so the live store node doesn't
-  // appear in the rotation pipeline. The prop is still required because
-  // ArrowHandle passes it uniformly to every variant.
-  void liveNode
-
   return (
     <>
       {showDecoration && decoration ? (
@@ -1172,7 +1169,7 @@ function ArcArrow({
       <HandleArrow
         activeCursor={dragCursor}
         cursor={hoverCursor}
-        hover={isHovered}
+        hover={isHovered || isDirectRotating}
         onHoverChange={setIsHovered}
         onPointerDown={activate}
         placement={{

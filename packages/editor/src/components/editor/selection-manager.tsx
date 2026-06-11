@@ -7,14 +7,14 @@ import {
   createSceneApi,
   emitter,
   type FenceNode,
+  type GridEvent,
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
   getMaterialPresetByRef,
   getRoofSegmentSurfaceY,
   getSelectableKinds,
-  type GridEvent,
-  isRegistryMovable,
   type ItemNode,
+  isRegistryMovable,
   isRegistrySelectable,
   type NodeEvent,
   nodeRegistry,
@@ -47,6 +47,12 @@ import {
 import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D, Vector3 } from 'three'
 import {
+  canDirectRotateNode,
+  resolveDirectRotationDragDelta,
+  resolveDirectRotationPatch,
+} from '../../lib/direct-manipulation'
+import { createEditorApi } from '../../lib/editor-api'
+import {
   type ActivePaintMaterial,
   buildRoofSegmentSurfaceMaterialPatch,
   buildRoofSurfaceMaterialPatch,
@@ -56,19 +62,16 @@ import {
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
 import {
-  canDirectRotateNode,
-  resolveDirectRotationPatch,
-  resolveDirectRotationDragDelta,
-} from '../../lib/direct-manipulation'
-import { createEditorApi } from '../../lib/editor-api'
+  resolveNodeSelectionTarget,
+  resolveSelectedIdsForNodeClick,
+  type SelectionModifierKeys,
+  selectionModifiersFromEvent,
+} from '../../lib/selection-routing'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
-import useEditor, {
-  type MaterialTargetRole,
-  type Phase,
-  type StructureLayer,
-} from './../../store/use-editor'
-import { swallowNextClick } from './node-arrow-handles'
+import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
+import useEditor, { type MaterialTargetRole } from './../../store/use-editor'
 import { boxSelectHandled, suppressBoxSelectForPointer } from '../tools/select/box-select-state'
+import { swallowNextClick } from './node-arrow-handles'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   // Elevators are building-scoped, so they stay selectable across level filters.
@@ -97,12 +100,6 @@ type SelectableNodeType =
   | 'window'
   | 'door'
 
-type ModifierKeys = {
-  meta: boolean
-  ctrl: boolean
-  shift: boolean
-}
-
 type PaintPreviewCleanup = () => void
 
 type PaintInteraction = {
@@ -115,14 +112,14 @@ type PaintInteraction = {
 
 interface SelectionStrategy {
   types: SelectableNodeType[]
-  handleSelect: (node: AnyNode, nativeEvent?: any, modifierKeys?: ModifierKeys) => void
+  handleSelect: (
+    node: AnyNode,
+    nativeEvent?: any,
+    modifierKeys?: SelectionModifierKeys,
+    baseSelectedIds?: readonly string[],
+  ) => void
   handleDeselect: () => void
   isValid: (node: AnyNode) => boolean
-}
-
-type SelectionTarget = {
-  phase: Phase
-  structureLayer?: StructureLayer
 }
 
 const DIRECT_DRAG_THRESHOLD_PX = 4
@@ -650,23 +647,17 @@ function disposeHighlightedMaterials(material: Material | Material[]) {
 
 const computeNextIds = (
   node: AnyNode,
-  selectedIds: string[],
+  selectedIds: readonly string[],
   event?: any,
-  modifierKeys?: ModifierKeys,
+  modifierKeys?: SelectionModifierKeys,
+  baseSelectedIds?: readonly string[],
 ): string[] => {
-  const isMeta = event?.metaKey || event?.nativeEvent?.metaKey || modifierKeys?.meta
-  const isCtrl = event?.ctrlKey || event?.nativeEvent?.ctrlKey || modifierKeys?.ctrl
-  const isShift = event?.shiftKey || event?.nativeEvent?.shiftKey || modifierKeys?.shift
-
-  if (isMeta || isCtrl || isShift) {
-    if (selectedIds.includes(node.id)) {
-      return selectedIds.filter((id) => id !== node.id)
-    }
-    return [...selectedIds, node.id]
-  }
-
-  // Not holding modifiers: select only this node
-  return [node.id]
+  return resolveSelectedIdsForNodeClick({
+    baseSelectedIds,
+    currentSelectedIds: selectedIds,
+    modifierKeys: selectionModifiersFromEvent(event, modifierKeys),
+    nodeId: node.id,
+  })
 }
 
 const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
@@ -699,7 +690,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       'window',
       'door',
     ],
-    handleSelect: (node, nativeEvent, modifierKeys) => {
+    handleSelect: (node, nativeEvent, modifierKeys, baseSelectedIds) => {
       const { selection, setSelection } = useViewer.getState()
       const nodes = useScene.getState().nodes
       const nodeLevelId = node.type === 'elevator' ? null : resolveLevelId(node, nodes)
@@ -726,7 +717,13 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
         // Wait, the hierarchy guard resets zoneId if levelId changes. That's fine since we provide zoneId.
         setSelection(updates)
       } else {
-        updates.selectedIds = computeNextIds(node, selection.selectedIds, nativeEvent, modifierKeys)
+        updates.selectedIds = computeNextIds(
+          node,
+          selection.selectedIds,
+          nativeEvent,
+          modifierKeys,
+          baseSelectedIds,
+        )
         setSelection(updates)
       }
     },
@@ -778,7 +775,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
 
   furnish: {
     types: ['item'],
-    handleSelect: (node, nativeEvent, modifierKeys) => {
+    handleSelect: (node, nativeEvent, modifierKeys, baseSelectedIds) => {
       const { selection, setSelection } = useViewer.getState()
       const nodes = useScene.getState().nodes
       const nodeLevelId = resolveLevelId(node, nodes)
@@ -792,7 +789,13 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
         updates.buildingId = buildingId
       }
 
-      updates.selectedIds = computeNextIds(node, selection.selectedIds, nativeEvent, modifierKeys)
+      updates.selectedIds = computeNextIds(
+        node,
+        selection.selectedIds,
+        nativeEvent,
+        modifierKeys,
+        baseSelectedIds,
+      )
       setSelection(updates)
     },
     handleDeselect: () => {
@@ -808,7 +811,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       // Registry-driven kinds with `category: 'furnish'` (shelf today,
       // future furniture kinds): selectable in furnish phase if their
       // definition declares the `selectable` capability. Without this
-      // branch, shelf clicks routed to furnish phase via getSelectionTarget
+      // branch, shelf clicks routed to furnish phase via resolveNodeSelectionTarget
       // would be rejected here — single-click selection broken.
       const def = nodeRegistry.get(node.type)
       if (def && def.category === 'furnish' && def.capabilities.selectable) return true
@@ -817,74 +820,11 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   },
 }
 
-const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
-  // Item is checked FIRST so its asset.category-driven routing (door/
-  // window items land in structure phase, everything else in furnish)
-  // beats the generic registry fallback below. Without this, registering
-  // `item` (Phase 5) made isRegistrySelectable('item') match the
-  // structure branch first, breaking single-click selection: first click
-  // switched the editor to structure phase, second click selected.
-  if (node.type === 'item') {
-    const item = node as ItemNode
-    if (item.asset.category === 'door' || item.asset.category === 'window') {
-      return {
-        phase: 'structure',
-        structureLayer: 'elements',
-      }
-    }
-    return {
-      phase: 'furnish',
-    }
-  }
-
-  if (node.type === 'zone') {
-    return {
-      phase: 'structure',
-      structureLayer: 'zones',
-    }
-  }
-
-  if (
-    node.type === 'wall' ||
-    node.type === 'fence' ||
-    node.type === 'column' ||
-    node.type === 'elevator' ||
-    node.type === 'slab' ||
-    node.type === 'ceiling' ||
-    node.type === 'roof' ||
-    node.type === 'roof-segment' ||
-    node.type === 'stair' ||
-    node.type === 'stair-segment' ||
-    node.type === 'spawn' ||
-    node.type === 'window' ||
-    node.type === 'door'
-  ) {
-    return {
-      phase: 'structure',
-      structureLayer: 'elements',
-    }
-  }
-
-  // Registry-driven kinds (Phase 5+): route by `def.category`. Built-ins
-  // above match before this fallback. Furnish-category kinds (shelf,
-  // item — already handled above) land on the furnish phase; structure-
-  // category kinds (everything else) on structure/elements.
-  const def = nodeRegistry.get(node.type)
-  if (def) {
-    if (def.category === 'furnish') {
-      return { phase: 'furnish' }
-    }
-    return { phase: 'structure', structureLayer: 'elements' }
-  }
-
-  return null
-}
-
 export const SelectionManager = () => {
   const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
   const setHoverHighlightMode = useViewer((s) => s.setHoverHighlightMode)
-  const modifierKeysRef = useRef<ModifierKeys>({
+  const modifierKeysRef = useRef<SelectionModifierKeys>({
     meta: false,
     ctrl: false,
     shift: false,
@@ -1424,6 +1364,7 @@ export const SelectionManager = () => {
         window.removeEventListener('contextmenu', preventContextMenu, true)
         useLiveNodeOverrides.getState().clear(nodeId)
         useScene.getState().markDirty(nodeId)
+        useDirectManipulationFeedback.getState().clearActiveRotateNodeId(nodeId)
         useScene.temporal.getState().resume()
         useViewer.getState().setInputDragging(false)
         if (document.body.style.cursor === 'ew-resize') {
@@ -1461,6 +1402,7 @@ export const SelectionManager = () => {
       }
 
       useViewer.getState().setInputDragging(true)
+      useDirectManipulationFeedback.getState().setActiveRotateNodeId(nodeId)
       useScene.temporal.getState().pause()
       document.body.style.cursor = 'ew-resize'
       sfxEmitter.emit('sfx:item-pick')
@@ -1499,12 +1441,13 @@ export const SelectionManager = () => {
 
       let currentPhase = useEditor.getState().phase
       let currentStructureLayer = useEditor.getState().structureLayer
+      const selectedIdsBeforeRouting = useViewer.getState().selection.selectedIds
 
       // Auto-switch between zones, structure, and furnish when clicking elements on the same level.
       // Also auto-switch from site phase when clicking structural/furnish elements (e.g. 2D floorplan).
       if (currentPhase === 'structure' || currentPhase === 'furnish' || currentPhase === 'site') {
         if (isNodeInCurrentLevel(node)) {
-          const target = getSelectionTarget(node)
+          const target = resolveNodeSelectionTarget(node)
           if (target) {
             if (target.phase !== currentPhase) {
               useEditor.getState().setPhase(target.phase)
@@ -1555,7 +1498,12 @@ export const SelectionManager = () => {
           useEditor.getState().setEditingHole(null)
         }
 
-        activeStrategy.handleSelect(nodeToSelect, event.nativeEvent, modifierKeysRef.current)
+        activeStrategy.handleSelect(
+          nodeToSelect,
+          event.nativeEvent,
+          modifierKeysRef.current,
+          selectedIdsBeforeRouting,
+        )
 
         let nextMaterialTargetHandled = false
 
@@ -1733,7 +1681,10 @@ export const SelectionManager = () => {
 
       const currentPhase = useEditor.getState().phase
 
-      let targetPhase: 'site' | 'structure' | 'furnish' | null = null
+      const selectedIdsBeforeRouting = useViewer.getState().selection.selectedIds
+      const target = resolveNodeSelectionTarget(node)
+      let targetPhase: 'site' | 'structure' | 'furnish' | null = target?.phase ?? null
+      let targetStructureLayer = target?.structureLayer
       let forceSelect = false
 
       if (node.type === 'building' || node.type === 'site') {
@@ -1742,35 +1693,14 @@ export const SelectionManager = () => {
         }
         if (node.type === 'building') {
           targetPhase = 'structure'
+          targetStructureLayer = 'elements'
         }
-      } else if (
-        node.type === 'wall' ||
-        node.type === 'fence' ||
-        node.type === 'column' ||
-        node.type === 'elevator' ||
-        node.type === 'slab' ||
-        node.type === 'ceiling' ||
-        node.type === 'roof' ||
-        node.type === 'roof-segment' ||
-        node.type === 'stair' ||
-        node.type === 'stair-segment' ||
-        node.type === 'spawn' ||
-        node.type === 'window' ||
-        node.type === 'door'
-      ) {
-        targetPhase = 'structure'
+      } else {
         if (node.type === 'roof-segment' && currentPhase === 'structure') {
           forceSelect = true // allow double click to dive into roof-segment even if already in structure phase
         }
         if (node.type === 'stair-segment' && currentPhase === 'structure') {
           forceSelect = true // allow double click to dive into stair-segment even if already in structure phase
-        }
-      } else if (node.type === 'item') {
-        const item = node as ItemNode
-        if (item.asset.category === 'door' || item.asset.category === 'window') {
-          targetPhase = 'structure'
-        } else {
-          targetPhase = 'furnish'
         }
       }
 
@@ -1785,13 +1715,22 @@ export const SelectionManager = () => {
           useEditor.getState().setPhase(targetPhase)
         }
 
-        if (targetPhase === 'structure' && useEditor.getState().structureLayer === 'zones') {
-          useEditor.getState().setStructureLayer('elements')
+        if (
+          targetPhase === 'structure' &&
+          targetStructureLayer &&
+          targetStructureLayer !== useEditor.getState().structureLayer
+        ) {
+          useEditor.getState().setStructureLayer(targetStructureLayer)
         }
 
         const strategy = SELECTION_STRATEGIES[targetPhase || currentPhase]
         if (strategy) {
-          strategy.handleSelect(node, event.nativeEvent, modifierKeysRef.current)
+          strategy.handleSelect(
+            node,
+            event.nativeEvent,
+            modifierKeysRef.current,
+            selectedIdsBeforeRouting,
+          )
         }
       }
     }

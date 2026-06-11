@@ -41,13 +41,13 @@ export function SnapTargetBadge({
   return (
     <span
       className={cn(
-        'flex h-4 w-4 items-center justify-center rounded bg-black/65 ring-1 ring-white/20',
+        'flex h-6 w-6 items-center justify-center rounded-md bg-black/65 ring-1 ring-white/20',
         className,
       )}
     >
       <img
         alt={SNAP_TARGET_LABELS[target]}
-        className="h-3 w-3 object-contain"
+        className="h-[18px] w-[18px] object-contain"
         src={SNAP_TARGET_ICONS[target]}
       />
     </span>
@@ -62,10 +62,10 @@ export function SnapTargetIcon({
   target: SnapTarget
 }) {
   return (
-    <span className="relative inline-flex h-4 w-4 items-center justify-center">
+    <span className="relative inline-flex h-5 w-5 items-center justify-center">
       {children}
       <SnapTargetBadge
-        className="-right-1 -bottom-1 absolute h-2.5 w-2.5 rounded-[2px] [&_img]:h-2 [&_img]:w-2"
+        className="-right-1.5 -bottom-1.5 absolute h-3.5 w-3.5 rounded-[3px] [&_img]:h-2.5 [&_img]:w-2.5"
         target={target}
       />
     </span>

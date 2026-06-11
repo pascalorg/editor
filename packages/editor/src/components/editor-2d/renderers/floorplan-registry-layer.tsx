@@ -3,13 +3,13 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  createSceneApi,
   type FloorplanAffordancePoint,
   type FloorplanAffordanceSession,
   type FloorplanGeometry,
   type FloorplanPalette,
   type FloorplanPoint,
   type GeometryContext,
-  createSceneApi,
   isRegistryMovable,
   kindsWithFloorplanScope,
   nodeRegistry,
@@ -33,12 +33,14 @@ import {
 } from 'react'
 import {
   canDirectRotateNode,
-  resolveDirectRotationPatch,
+  getDirectRotateHandle,
   resolveDirectRotationDragDelta,
+  resolveDirectRotationPatch,
 } from '../../../lib/direct-manipulation'
 import { createEditorApi } from '../../../lib/editor-api'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
+import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
 import useEditor from '../../../store/use-editor'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { useFloorplanRender } from '../floorplan-render-context'
@@ -142,6 +144,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
+  const activeRotateNodeId = useDirectManipulationFeedback((s) => s.activeRotateNodeId)
   const setHoveredId = useViewer((s) => s.setHoveredId)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
@@ -350,7 +353,21 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
       const node = useScene.getState().nodes[id]
       if (!node || !canDirectRotateNode(node)) return false
-      if (!useViewer.getState().selection.selectedIds.includes(id)) return false
+      const selectedIds = useViewer.getState().selection.selectedIds
+      if (!selectedIds.includes(id)) return false
+      if (getDirectRotateHandle(node)?.rotationPlane === 'node-normal') {
+        event.preventDefault()
+        event.stopPropagation()
+        const preventContextMenu = (contextEvent: Event) => {
+          contextEvent.preventDefault()
+          contextEvent.stopPropagation()
+        }
+        window.addEventListener('contextmenu', preventContextMenu, { capture: true, once: true })
+        window.setTimeout(() => {
+          window.removeEventListener('contextmenu', preventContextMenu, true)
+        }, 400)
+        return true
+      }
 
       event.preventDefault()
       event.stopPropagation()
@@ -389,6 +406,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         useLiveNodeOverrides.getState().clear(nodeId)
         useScene.getState().markDirty(nodeId)
         resumeSceneHistory(useScene)
+        useDirectManipulationFeedback.getState().clearActiveRotateNodeId(nodeId)
         useViewer.getState().setInputDragging(false)
         if (document.body.style.cursor === 'ew-resize') {
           document.body.style.cursor = ''
@@ -426,6 +444,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
       pauseSceneHistory(useScene)
       useViewer.getState().setInputDragging(true)
+      useDirectManipulationFeedback.getState().setActiveRotateNodeId(nodeId)
       document.body.style.cursor = 'ew-resize'
       sfxEmitter.emit('sfx:item-pick')
       applyDelta(event)
@@ -942,6 +961,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     >
       <InteractiveGeometry
         activeDragId={activeDragId}
+        activeRotateNodeId={activeRotateNodeId}
         geometry={geometry}
         hatchPatternId={renderCtx?.hatchPatternId}
         hoveredHandleId={hoveredHandleId}
@@ -1038,6 +1058,7 @@ function InteractiveGeometry({
   hatchPatternId,
   hoveredHandleId,
   activeDragId,
+  activeRotateNodeId,
   isMarqueeSelectionActive,
   nodeId,
   sceneRotationDeg,
@@ -1051,6 +1072,7 @@ function InteractiveGeometry({
   hatchPatternId: string | undefined
   hoveredHandleId: string | null
   activeDragId: string | null
+  activeRotateNodeId: AnyNodeId | null
   isMarqueeSelectionActive: boolean
   nodeId: AnyNodeId
   sceneRotationDeg: number
@@ -1293,7 +1315,7 @@ function InteractiveGeometry({
         // each end pointing tangentially in opposite directions —
         // "rotate either way."
         const handleId = makeHandleId(nodeId, g.payload)
-        const isHovered = hoveredHandleId === handleId
+        const isHovered = hoveredHandleId === handleId || activeRotateNodeId === nodeId
         // Arc geometry (all values precomputed for a 72° arc of
         // radius 0.13 — comparable footprint to `move-arrow`).
         const R = 0.13
