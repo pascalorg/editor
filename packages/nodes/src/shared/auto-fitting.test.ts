@@ -26,9 +26,10 @@ function dot(a: readonly number[], b: readonly number[]): number {
 
 /**
  * The real invariant: run the planned elbow back through the fitting
- * kind's OWN port math and check both collars mate — inlet sitting on the
- * joint port facing back into the run, outlet sitting on the returned
- * collar point facing along the new run.
+ * kind's OWN port math and check the joint composes — junction centered
+ * on the drawn corner, inlet collar sitting where the trimmed run now
+ * ends (facing back into it), outlet sitting on the returned collar
+ * point facing along the new run.
  */
 function expectMated(joint: ScenePort, away: Point) {
   const plan = planElbowAtPort(joint, away, 6)
@@ -37,7 +38,8 @@ function expectMated(joint: ScenePort, away: Point) {
   const inlet = ports.find((p) => p.id === 'inlet')!
   const outlet = ports.find((p) => p.id === 'outlet')!
 
-  expect(dist(inlet.position, joint.position)).toBeLessThan(1e-6)
+  expect(dist(plan!.fitting.position, joint.position)).toBeLessThan(1e-6)
+  expect(dist(inlet.position, plan!.trimmedPortPoint)).toBeLessThan(1e-6)
   expect(dot(inlet.direction, joint.direction)).toBeCloseTo(-1, 6)
   expect(dist(outlet.position, plan!.collarPoint)).toBeLessThan(1e-6)
   expect(dot(outlet.direction, away)).toBeCloseTo(1, 6)
@@ -79,14 +81,18 @@ describe('planElbowAtPort', () => {
     expect(planElbowAtPort(port([3, 0, 0], [1, 0, 0]), [Math.cos(t), 0, Math.sin(t)], 6)).toBeNull()
   })
 
-  test('collar point sits one leg beyond the joint along the new run', () => {
+  test('junction on the corner; trim and collar one leg out on each side', () => {
     const plan = expectMated(port([0, 0, 0], [1, 0, 0]), [0, 0, 1])
-    const junction = plan.fitting.position
-    expect(dist(junction, [0, 0, 0])).toBeGreaterThan(0)
-    // Junction is along +X from the joint; collar along +Z from the junction.
-    expect(junction[1]).toBeCloseTo(0, 6)
-    expect(junction[2]).toBeCloseTo(0, 6)
-    expect(plan.collarPoint[0]).toBeCloseTo(junction[0], 6)
+    // Junction exactly at the drawn corner.
+    expect(dist(plan.fitting.position, [0, 0, 0])).toBeLessThan(1e-6)
+    // Existing run (arriving along +X) trims back along -X...
+    expect(plan.trimmedPortPoint[0]).toBeLessThan(0)
+    expect(plan.trimmedPortPoint[1]).toBeCloseTo(0, 6)
+    expect(plan.trimmedPortPoint[2]).toBeCloseTo(0, 6)
+    // ...and the new run starts one leg out along +Z.
+    expect(plan.collarPoint[0]).toBeCloseTo(0, 6)
     expect(plan.collarPoint[2]).toBeGreaterThan(0)
+    // Symmetric legs.
+    expect(dist(plan.trimmedPortPoint, [0, 0, 0])).toBeCloseTo(dist(plan.collarPoint, [0, 0, 0]), 6)
   })
 })

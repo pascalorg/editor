@@ -14,13 +14,18 @@ const MAX_TURN_RAD = (90.5 * Math.PI) / 180
 type Point = [number, number, number]
 
 export type ElbowJointPlan = {
-  /** Parsed elbow node, positioned + oriented so its inlet collar sits on
-   *  the joint port and its outlet faces the new run. */
+  /** Parsed elbow node, its junction centered ON the drawn corner point,
+   *  oriented so the inlet faces the existing run and the outlet faces
+   *  the new one. */
   fitting: DuctFittingNode
   /** The elbow's outlet collar — where the new duct should start (or end)
-   *  instead of the port position, so duct meets metal instead of
+   *  instead of the corner point, so duct meets metal instead of
    *  overlapping the fitting. */
   collarPoint: Point
+  /** Where the EXISTING run's endpoint must move (pulled back one leg
+   *  from the corner) so the elbow's inlet collar replaces that stretch
+   *  of duct — keeping the visual corner exactly where it was drawn. */
+  trimmedPortPoint: Point
 }
 
 /** Orthonormal basis from a primary direction and a coplanar reference. */
@@ -75,12 +80,14 @@ export function planElbowAtPort(
   )
   const euler = new Euler().setFromQuaternion(rotation)
 
-  // Junction sits one leg beyond the run end (inlet collar ON the port);
-  // the outlet collar sits one leg further along the new direction.
+  // Junction sits exactly ON the corner the user drew. The elbow's inlet
+  // leg therefore overlaps the last stretch of the existing run — the
+  // caller trims that run back to `trimmedPortPoint` so the elbow
+  // replaces it and the visual corner stays put.
   const leg = fittingLegLength(diameterIn)
-  const portPos = new Vector3(...port.position)
-  const junction = portPos.clone().addScaledVector(portDir, leg)
+  const junction = new Vector3(...port.position)
   const collar = junction.clone().addScaledVector(away, leg)
+  const trimmed = junction.clone().addScaledVector(portDir, -leg)
 
   const system = port.system === 'return' ? 'return' : 'supply'
   // Built from the schema directly (defaults fill the rest) — importing
@@ -106,5 +113,6 @@ export function planElbowAtPort(
   return {
     fitting,
     collarPoint: [collar.x, collar.y, collar.z],
+    trimmedPortPoint: [trimmed.x, trimmed.y, trimmed.z],
   }
 }

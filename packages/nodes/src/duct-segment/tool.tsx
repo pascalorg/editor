@@ -1,6 +1,6 @@
 'use client'
 
-import { DuctSegmentNode, emitter, type GridEvent, useScene } from '@pascal-app/core'
+import { type AnyNode, DuctSegmentNode, emitter, type GridEvent, useScene } from '@pascal-app/core'
 import { DimensionPill, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
 import { getLevelHeight, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -154,13 +154,40 @@ const DuctSegmentTool = () => {
      * Auto-elbow gate: only joints onto another RUN's open end get a
      * fitting minted. Ports on fittings / equipment / terminals are
      * already proper connections — a duct mates straight onto those.
-     * Guards against the snapped node having been deleted between clicks.
+     *
+     * The elbow's junction sits ON the drawn corner, so the existing run
+     * must trim back one leg to make room (`trim` update). Plans that
+     * would trim the run to (or past) nothing are dropped — that corner
+     * stays a plain butt joint. Guards against the snapped node having
+     * been deleted between clicks.
      */
     const elbowPlanFor = (port: ScenePort | null, awayDir: [number, number, number]) => {
       if (!port) return null
       const owner = useScene.getState().nodes[port.nodeId]
       if (owner?.type !== 'duct-segment') return null
-      return planElbowAtPort(port, awayDir, diameterRef.current)
+      const plan = planElbowAtPort(port, awayDir, diameterRef.current)
+      if (!plan) return null
+
+      // Trim the run's snapped endpoint back to the elbow's inlet collar.
+      const path = owner.path.map((p) => [...p] as [number, number, number])
+      const index = port.id === 'start' ? 0 : path.length - 1
+      const neighbor = path[index === 0 ? 1 : index - 1]!
+      const remaining = Math.hypot(
+        plan.trimmedPortPoint[0] - neighbor[0],
+        plan.trimmedPortPoint[1] - neighbor[1],
+        plan.trimmedPortPoint[2] - neighbor[2],
+      )
+      // The trim must leave a real piece of the existing run AND not flip
+      // it (trimmed point past the neighbor) — otherwise skip the fitting.
+      const original = path[index]!
+      const originalLen = Math.hypot(
+        original[0] - neighbor[0],
+        original[1] - neighbor[1],
+        original[2] - neighbor[2],
+      )
+      if (remaining < 0.08 || remaining >= originalLen) return null
+      path[index] = plan.trimmedPortPoint
+      return { ...plan, trim: { id: port.nodeId, data: { path } as Partial<AnyNode> } }
     }
 
     // One segment per gesture: first click anchors the start, second
@@ -196,8 +223,9 @@ const DuctSegmentTool = () => {
         ductEnd[1] - ductStart[1],
         ductEnd[2] - ductStart[2],
       )
-      const fittings = remaining > 0.08 ? [startPlan, endPlan].filter((p) => p !== null) : []
-      if (fittings.length === 0) {
+      let plans = [startPlan, endPlan].filter((p) => p !== null)
+      if (remaining <= 0.08) {
+        plans = []
         ductStart = start
         ductEnd = end
       }
@@ -211,12 +239,15 @@ const DuctSegmentTool = () => {
         path: [ductStart, ductEnd],
         diameter: diameterRef.current,
       })
-      useScene
-        .getState()
-        .createNodes([
-          ...fittings.map((plan) => ({ node: plan.fitting, parentId: activeLevelId })),
+      // One atomic change: trim the joined runs back to the elbow inlets,
+      // create the elbows + the new duct. Single undo step.
+      useScene.getState().applyNodeChanges({
+        create: [
+          ...plans.map((plan) => ({ node: plan.fitting, parentId: activeLevelId })),
           { node: duct, parentId: activeLevelId },
-        ])
+        ],
+        update: plans.map((plan) => plan.trim),
+      })
       triggerSFX('sfx:item-place')
       setDraftPoints([])
       setSnapTarget(null)
