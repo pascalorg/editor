@@ -1,7 +1,7 @@
 import { DuctFittingNode, DuctSegmentNode } from '@pascal-app/core'
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { fittingLegLength } from '../duct-fitting/ports'
-import { ductPortDiameterIn } from '../duct-segment/geometry'
+import { ductPortDiameterIn, equivalentDiameterIn } from '../duct-segment/geometry'
 import type { RunBodyHit, ScenePort } from './ports'
 
 /** Turns shallower than this read as a straight continuation — butt-join
@@ -13,6 +13,23 @@ const MIN_TURN_RAD = (15 * Math.PI) / 180
 const MAX_TURN_RAD = (90.5 * Math.PI) / 180
 
 type Point = [number, number, number]
+
+/** Cross-section a planned fitting (and the duct drawing it) carries. */
+export type DuctProfile = {
+  shape: 'round' | 'rect'
+  /** Round size in inches (ignored for rect — the equivalent is derived). */
+  diameter: number
+  /** Rect profile in inches. */
+  width: number
+  height: number
+}
+
+/** Effective round-size (inches) a profile presents at joints. */
+export function profileDiameterIn(profile: DuctProfile): number {
+  return profile.shape === 'rect'
+    ? Math.min(48, equivalentDiameterIn(profile.width, profile.height))
+    : profile.diameter
+}
 
 export type ElbowJointPlan = {
   /** Parsed elbow node, its junction centered ON the drawn corner point,
@@ -58,7 +75,7 @@ function frame(primary: Vector3, reference: Vector3): Matrix4 | null {
 export function planElbowAtPort(
   port: ScenePort,
   awayDir: Point,
-  diameterIn: number,
+  profile: DuctProfile,
 ): ElbowJointPlan | null {
   const portDir = new Vector3(...port.direction).normalize()
   const away = new Vector3(...awayDir).normalize()
@@ -85,7 +102,7 @@ export function planElbowAtPort(
   // leg therefore overlaps the last stretch of the existing run — the
   // caller trims that run back to `trimmedPortPoint` so the elbow
   // replaces it and the visual corner stays put.
-  const leg = fittingLegLength(diameterIn)
+  const leg = fittingLegLength(profileDiameterIn(profile))
   const junction = new Vector3(...port.position)
   const collar = junction.clone().addScaledVector(away, leg)
   const trimmed = junction.clone().addScaledVector(portDir, -leg)
@@ -101,9 +118,12 @@ export function planElbowAtPort(
     metadata: {},
     name: 'Elbow',
     fittingType: 'elbow',
+    shape: profile.shape,
+    width: profile.width,
+    height: profile.height,
     angle: angleDeg,
-    diameter: diameterIn,
-    diameter2: diameterIn,
+    diameter: profileDiameterIn(profile),
+    diameter2: profileDiameterIn(profile),
     // Corner elbows are sheet metal even on flex runs (adjustable elbows).
     ductMaterial: 'sheet-metal',
     system,
@@ -202,6 +222,9 @@ export function planTeeAtRunBody(
     metadata: {},
     name: 'Tee',
     fittingType: 'tee',
+    shape: trunk.shape,
+    width: trunk.width,
+    height: trunk.height,
     diameter: trunkDiameterIn,
     diameter2: branchDiameterIn,
     ductMaterial: 'sheet-metal',

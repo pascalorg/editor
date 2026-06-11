@@ -1,5 +1,18 @@
-import { CylinderGeometry, Group, Mesh, SphereGeometry, TorusGeometry, Vector3 } from 'three'
-import { buildSection, createDuctMaterial, INCHES_TO_METERS } from '../duct-segment/geometry'
+import {
+  BoxGeometry,
+  CylinderGeometry,
+  Group,
+  Mesh,
+  SphereGeometry,
+  TorusGeometry,
+  Vector3,
+} from 'three'
+import {
+  buildRectSection,
+  buildSection,
+  createDuctMaterial,
+  INCHES_TO_METERS,
+} from '../duct-segment/geometry'
 import { localFittingPorts } from './ports'
 import type { DuctFittingNode } from './schema'
 
@@ -18,6 +31,12 @@ const UP = new Vector3(0, 1, 0)
  *
  * The reducer is special-cased: instead of equal stubs + sphere it draws
  * a short inlet stub, a tapered cone, and a short outlet stub inline.
+ *
+ * `shape: 'rect'` (elbow / tee): run legs become boxes at the fitting's
+ * width × height (matching the rect trunk they join) with a cube
+ * junction; a tee's branch leg stays a round cylinder at `diameter2`.
+ * The rect profile's height rides local +Y — for the horizontal-plane
+ * orientations rect trunks are drawn in, that's world-vertical.
  */
 export function buildDuctFittingGeometry(node: DuctFittingNode): Group {
   const group = new Group()
@@ -54,24 +73,43 @@ export function buildDuctFittingGeometry(node: DuctFittingNode): Group {
     )
     if (stubB) group.add(stubB)
   } else {
+    const isRect = node.shape === 'rect'
+    const widthM = node.width * INCHES_TO_METERS
+    const heightM = node.height * INCHES_TO_METERS
+    // Run legs (elbow inlet/outlet, tee inlet/outlet) follow the shape;
+    // a tee's branch collar is always round.
+    const isRunLeg = (id: string) => id === 'inlet' || id === 'outlet'
     for (const port of ports) {
-      const radius = (port.diameter * INCHES_TO_METERS) / 2
-      const stub = buildSection(
-        new Vector3(0, 0, 0),
-        port.position,
-        radius,
-        material,
-        `fitting-stub-${port.id}`,
-      )
+      const stub =
+        isRect && isRunLeg(port.id)
+          ? buildRectSection(
+              new Vector3(0, 0, 0),
+              port.position,
+              widthM,
+              heightM,
+              material,
+              `fitting-stub-${port.id}`,
+            )
+          : buildSection(
+              new Vector3(0, 0, 0),
+              port.position,
+              (port.diameter * INCHES_TO_METERS) / 2,
+              material,
+              `fitting-stub-${port.id}`,
+            )
       if (stub) group.add(stub)
     }
-    const junction = new Mesh(new SphereGeometry(radiusMain * 1.02, RADIAL_SEGMENTS, 12), material)
+    const junction = isRect
+      ? new Mesh(new BoxGeometry(widthM * 1.02, heightM * 1.02, widthM * 1.02), material)
+      : new Mesh(new SphereGeometry(radiusMain * 1.02, RADIAL_SEGMENTS, 12), material)
     junction.name = 'fitting-junction'
     group.add(junction)
   }
 
   // Crimp collar at each opening — a thin torus just proud of the stub.
+  // Round collars only; rect run legs end in the bare box profile.
   for (const port of ports) {
+    if (node.shape === 'rect' && (port.id === 'inlet' || port.id === 'outlet')) continue
     const radius = (port.diameter * INCHES_TO_METERS) / 2
     const collar = new Mesh(new TorusGeometry(radius, radius * 0.12, 8, RADIAL_SEGMENTS), material)
     collar.name = `fitting-collar-${port.id}`

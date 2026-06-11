@@ -90,6 +90,46 @@ function portPoint(port: ScenePort): [number, number, number] {
   return [port.position[0], port.position[1], port.position[2]]
 }
 
+/** Cross-section the tool draws with (and commits onto the node). */
+type DraftProfile = {
+  shape: 'round' | 'rect'
+  diameter: number
+  width: number
+  height: number
+}
+
+/**
+ * Profile to inherit when the segment start snaps onto `port` — joining
+ * means continuing that thing: a rect trunk end keeps its W×H, a round
+ * run / fitting collar keeps its diameter. Equipment and terminal
+ * collars are round at the port's advertised size.
+ */
+function inheritProfile(port: ScenePort): DraftProfile | null {
+  const owner = useScene.getState().nodes[port.nodeId]
+  if (!owner) return null
+  if (owner.type === 'duct-segment' || owner.type === 'duct-fitting') {
+    return {
+      shape: owner.shape,
+      diameter: Math.min(
+        48,
+        Math.max(2, owner.type === 'duct-segment' ? owner.diameter : port.diameter),
+      ),
+      width: owner.width,
+      height: owner.height,
+    }
+  }
+  if (owner.type === 'hvac-equipment' || owner.type === 'duct-terminal') {
+    const defaults = ductSegmentDefinition.defaults() as DraftProfile
+    return {
+      shape: 'round',
+      diameter: Math.min(48, Math.max(2, port.diameter)),
+      width: defaults.width,
+      height: defaults.height,
+    }
+  }
+  return null
+}
+
 /**
  * Project `raw` onto the nearest of the eight 45° rays emanating from
  * `from` in the XZ plane. Y is preserved from `from`. The projection
@@ -117,17 +157,23 @@ const DuctSegmentTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const unit = useViewer((s) => s.unit)
   const cursorRef = useRef<Group>(null)
-  // Diameter for the next committed segment. Seeded from `toolDefaults`
-  // (host-placed preset) when present, else the kind's schema default.
-  const [diameter, setDiameter] = useState<number>(() => {
-    const seeded = (
-      useEditor.getState().toolDefaults['duct-segment'] as { diameter?: number } | undefined
-    )?.diameter
-    return seeded ?? (ductSegmentDefinition.defaults() as { diameter: number }).diameter
+  // Cross-section profile for the next committed segment. Q toggles
+  // round/rect, [ / ] steps the round diameter, and snapping the start
+  // onto an existing run / fitting INHERITS that node's profile — so
+  // continuing a 14×8 trunk keeps drawing 14×8, and branching off a
+  // round collar keeps its diameter. Seeded from `toolDefaults`.
+  const [profile, setProfile] = useState<DraftProfile>(() => {
+    const defaults = ductSegmentDefinition.defaults() as DraftProfile
+    const seeded = useEditor.getState().toolDefaults['duct-segment'] as
+      | Partial<DraftProfile>
+      | undefined
+    return {
+      shape: seeded?.shape ?? defaults.shape,
+      diameter: seeded?.diameter ?? defaults.diameter,
+      width: seeded?.width ?? defaults.width,
+      height: seeded?.height ?? defaults.height,
+    }
   })
-  // Cross-section for the next committed segment (Q toggles): round
-  // branches or a rect trunk at the schema's default trunk size.
-  const [shape, setShape] = useState<'round' | 'rect'>('round')
   const [draftPoints, setDraftPoints] = useState<Array<[number, number, number]>>([])
   const [cursorPos, setCursorPos] = useState<[number, number, number] | null>(null)
   // Ceiling mode (toggle with C): the first point lands at the level's
@@ -145,10 +191,8 @@ const DuctSegmentTool = () => {
   draftRef.current = draftPoints
   const cursorPosRef = useRef(cursorPos)
   cursorPosRef.current = cursorPos
-  const diameterRef = useRef(diameter)
-  diameterRef.current = diameter
-  const shapeRef = useRef(shape)
-  shapeRef.current = shape
+  const profileRef = useRef(profile)
+  profileRef.current = profile
   const ceilingModeRef = useRef(ceilingMode)
   ceilingModeRef.current = ceilingMode
   // Port the anchored START point snapped onto (null = free placement).
@@ -182,7 +226,7 @@ const DuctSegmentTool = () => {
       if (!port) return null
       const owner = useScene.getState().nodes[port.nodeId]
       if (owner?.type !== 'duct-segment') return null
-      const plan = planElbowAtPort(port, awayDir, diameterRef.current)
+      const plan = planElbowAtPort(port, awayDir, profileRef.current)
       if (!plan) return null
 
       // Trim the run's snapped endpoint back to the elbow's inlet collar.
@@ -254,7 +298,7 @@ const DuctSegmentTool = () => {
       const trunkOwner = trunkBody ? useScene.getState().nodes[trunkBody.nodeId] : null
       const teePlan =
         trunkBody && trunkOwner?.type === 'duct-segment'
-          ? planTeeAtRunBody(trunkOwner, trunkBody, dir, diameterRef.current)
+          ? planTeeAtRunBody(trunkOwner, trunkBody, dir, profileRef.current.diameter)
           : null
       let ductStart =
         startPlan?.collarPoint ?? teePlan?.branchCollar ?? startRealign?.collarPoint ?? start
@@ -282,10 +326,12 @@ const DuctSegmentTool = () => {
       const duct = DuctSegmentNode.parse({
         ...defaults,
         ...toolDefaults,
-        name: shapeRef.current === 'rect' ? 'Trunk' : 'Duct run',
+        name: profileRef.current.shape === 'rect' ? 'Trunk' : 'Duct run',
         path: [ductStart, ductEnd],
-        shape: shapeRef.current,
-        diameter: diameterRef.current,
+        shape: profileRef.current.shape,
+        diameter: profileRef.current.diameter,
+        width: profileRef.current.width,
+        height: profileRef.current.height,
       })
       // One atomic change: trim / split the joined runs, create the
       // fittings + the new duct. Single undo step.
@@ -321,8 +367,8 @@ const DuctSegmentTool = () => {
     const resolveBaseY = (): number => {
       if (!ceilingModeRef.current) return 0
       const ceiling = getLevelHeight(activeLevelId, useScene.getState().nodes)
-      const defaults = ductSegmentDefinition.defaults() as { height: number }
-      const verticalIn = shapeRef.current === 'rect' ? defaults.height : diameterRef.current
+      const p = profileRef.current
+      const verticalIn = p.shape === 'rect' ? p.height : p.diameter
       return Math.max(0, ceiling - (verticalIn * 0.0254) / 2)
     }
 
@@ -444,9 +490,16 @@ const DuctSegmentTool = () => {
       if (!start) {
         // First click: anchor the segment start, remembering the port or
         // run body it snapped to so the commit can mint an elbow / tee.
+        // Joining a port INHERITS the source's cross-section — continuing
+        // a rect trunk keeps drawing rect at its W×H, a round collar its
+        // diameter. Body taps (tee branches) keep the tool's own profile.
         triggerSFX('sfx:grid-snap')
         startPortRef.current = port
         startBodyRef.current = port ? null : body
+        if (port) {
+          const inherited = inheritProfile(port)
+          if (inherited) setProfile(inherited)
+        }
         setDraftPoints([point])
         return
       }
@@ -470,7 +523,7 @@ const DuctSegmentTool = () => {
 
     const stepDiameter = (step: 1 | -1) => {
       const sizes = DUCT_DIAMETERS_IN
-      const current = diameterRef.current
+      const current = profileRef.current.diameter
       // Nearest catalogue index, then step — handles seeded off-catalogue
       // values (e.g. a preset's 7.5") gracefully.
       let nearest = 0
@@ -479,7 +532,7 @@ const DuctSegmentTool = () => {
       }
       const next = sizes[Math.min(sizes.length - 1, Math.max(0, nearest + step))]!
       if (next === current) return
-      setDiameter(next)
+      setProfile((p) => ({ ...p, diameter: next }))
       triggerSFX('sfx:grid-snap')
     }
 
@@ -497,7 +550,7 @@ const DuctSegmentTool = () => {
         stepDiameter(1)
       } else if (e.key === 'q' || e.key === 'Q') {
         e.preventDefault()
-        setShape((current) => (current === 'round' ? 'rect' : 'round'))
+        setProfile((p) => ({ ...p, shape: p.shape === 'round' ? 'rect' : 'round' }))
         triggerSFX('sfx:grid-snap')
       } else if (e.key === 'c' || e.key === 'C') {
         // Toggle ceiling mode. Only the first point reads the base Y, so
@@ -566,15 +619,12 @@ const DuctSegmentTool = () => {
           value: last ? cursorPos[i]! - last[i]! : cursorPos[i]!,
           signed: !!last,
         })),
-        ...(shape === 'rect'
-          ? (() => {
-              const d = ductSegmentDefinition.defaults() as { width: number; height: number }
-              return [
-                { key: 'trunk-w', prefix: 'W', value: d.width * 0.0254, signed: false },
-                { key: 'trunk-h', prefix: 'H', value: d.height * 0.0254, signed: false },
-              ]
-            })()
-          : [{ key: 'diameter', prefix: 'Ø', value: diameter * 0.0254, signed: false }]),
+        ...(profile.shape === 'rect'
+          ? [
+              { key: 'trunk-w', prefix: 'W', value: profile.width * 0.0254, signed: false },
+              { key: 'trunk-h', prefix: 'H', value: profile.height * 0.0254, signed: false },
+            ]
+          : [{ key: 'diameter', prefix: 'Ø', value: profile.diameter * 0.0254, signed: false }]),
       ]
     : null
   const pillPrimary =
@@ -630,7 +680,7 @@ const DuctSegmentTool = () => {
       ))}
       {/* Preview sections */}
       {previewSegments.map((seg, i) => (
-        <PreviewSegment a={seg.a} b={seg.b} diameterIn={diameter} key={`seg-${i}`} shape={shape} />
+        <PreviewSegment a={seg.a} b={seg.b} key={`seg-${i}`} profile={profile} />
       ))}
     </group>
   )
@@ -639,13 +689,11 @@ const DuctSegmentTool = () => {
 function PreviewSegment({
   a,
   b,
-  diameterIn,
-  shape,
+  profile,
 }: {
   a: [number, number, number]
   b: [number, number, number]
-  diameterIn: number
-  shape: 'round' | 'rect'
+  profile: DraftProfile
 }) {
   const start = new Vector3(...a)
   const end = new Vector3(...b)
@@ -655,10 +703,9 @@ function PreviewSegment({
   dir.normalize()
   const mid = new Vector3().addVectors(start, end).multiplyScalar(0.5)
 
-  if (shape === 'rect') {
-    const defaults = ductSegmentDefinition.defaults() as { width: number; height: number }
-    const w = defaults.width * 0.0254
-    const h = defaults.height * 0.0254
+  if (profile.shape === 'rect') {
+    const w = profile.width * 0.0254
+    const h = profile.height * 0.0254
     return (
       <mesh
         position={mid.toArray()}
@@ -684,7 +731,7 @@ function PreviewSegment({
     )
   }
 
-  const radius = (diameterIn * 0.0254) / 2
+  const radius = (profile.diameter * 0.0254) / 2
   return (
     <mesh
       position={mid.toArray()}

@@ -31,6 +31,14 @@ export const DuctFittingNode = BaseNode.extend({
   // XYZ euler radians.
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   fittingType: z.enum(['elbow', 'tee', 'reducer']).default('elbow'),
+  // Run-leg cross-section: round collars or a rect profile matching a
+  // rect trunk. A tee's BRANCH collar is always round (diameter2);
+  // reducers ignore the shape. When rect, `diameter` carries the
+  // area-equivalent round size (drives leg lengths + advertised ports).
+  shape: z.enum(['round', 'rect']).default('round'),
+  // Rect run-leg profile in inches (used when shape = 'rect').
+  width: z.number().min(4).max(60).default(14),
+  height: z.number().min(3).max(40).default(8),
   // Elbow turn angle in degrees. Residential sheet-metal elbows come in
   // 90° and 45°; adjustable elbows cover the range between.
   angle: z.number().min(15).max(90).default(90),
@@ -47,6 +55,8 @@ export const DuctFittingNode = BaseNode.extend({
   - position: [x, y, z] level-local meters
   - rotation: [x, y, z] euler radians
   - fittingType: elbow | tee | reducer
+  - shape: round | rect run legs (rect matches a rect trunk; branch stays round)
+  - width / height: rect run-leg profile in inches
   - angle: elbow turn in degrees (45 or 90 typical)
   - diameter: main nominal diameter in inches
   - diameter2: tee branch / reducer outlet diameter in inches

@@ -28,6 +28,9 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
     position: [0, 0, 0],
     rotation: [0, 0, 0],
     fittingType: 'elbow',
+    shape: 'round',
+    width: 14,
+    height: 8,
     angle: 90,
     diameter: 6,
     diameter2: 6,
@@ -49,7 +52,17 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
 
   geometry: buildDuctFittingGeometry,
   geometryKey: (n) =>
-    JSON.stringify([n.fittingType, n.angle, n.diameter, n.diameter2, n.ductMaterial, n.system]),
+    JSON.stringify([
+      n.fittingType,
+      n.shape,
+      n.width,
+      n.height,
+      n.angle,
+      n.diameter,
+      n.diameter2,
+      n.ductMaterial,
+      n.system,
+    ]),
 
   ports: getDuctFittingPorts,
 

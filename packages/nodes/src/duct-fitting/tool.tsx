@@ -6,7 +6,12 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Euler, Quaternion, Vector3 } from 'three'
-import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ, type ScenePort } from '../shared/ports'
+import {
+  collectScenePorts,
+  DUCT_PORT_SYSTEMS,
+  findNearestPortXZ,
+  type ScenePort,
+} from '../shared/ports'
 import { ductFittingDefinition } from './definition'
 import { buildDuctFittingGeometry } from './geometry'
 import { localFittingPorts } from './ports'

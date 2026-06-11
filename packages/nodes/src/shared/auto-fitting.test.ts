@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
-import { planElbowAtPort, planElbowRealign } from './auto-fitting'
+import { type DuctProfile, planElbowAtPort, planElbowRealign } from './auto-fitting'
 import type { ScenePort } from './ports'
 
 type Point = [number, number, number]
@@ -15,6 +15,8 @@ function port(position: Point, direction: Point): ScenePort {
     system: 'supply',
   }
 }
+
+const ROUND_6: DuctProfile = { shape: 'round', diameter: 6, width: 14, height: 8 }
 
 function dist(a: readonly number[], b: readonly number[]): number {
   return Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!)
@@ -32,7 +34,7 @@ function dot(a: readonly number[], b: readonly number[]): number {
  * point facing along the new run.
  */
 function expectMated(joint: ScenePort, away: Point) {
-  const plan = planElbowAtPort(joint, away, 6)
+  const plan = planElbowAtPort(joint, away, ROUND_6)
   expect(plan).not.toBeNull()
   const ports = getDuctFittingPorts(plan!.fitting)
   const inlet = ports.find((p) => p.id === 'inlet')!
@@ -68,17 +70,31 @@ describe('planElbowAtPort', () => {
   })
 
   test('straight continuation → no fitting', () => {
-    expect(planElbowAtPort(port([3, 0, 0], [1, 0, 0]), [1, 0, 0], 6)).toBeNull()
+    expect(planElbowAtPort(port([3, 0, 0], [1, 0, 0]), [1, 0, 0], ROUND_6)).toBeNull()
   })
 
   test('shallow 10° turn → no fitting (below the 15° elbow minimum)', () => {
     const t = (10 * Math.PI) / 180
-    expect(planElbowAtPort(port([3, 0, 0], [1, 0, 0]), [Math.cos(t), 0, Math.sin(t)], 6)).toBeNull()
+    expect(
+      planElbowAtPort(port([3, 0, 0], [1, 0, 0]), [Math.cos(t), 0, Math.sin(t)], ROUND_6),
+    ).toBeNull()
   })
 
   test('doubling back past 90° → no fitting', () => {
     const t = (135 * Math.PI) / 180
-    expect(planElbowAtPort(port([3, 0, 0], [1, 0, 0]), [Math.cos(t), 0, Math.sin(t)], 6)).toBeNull()
+    expect(
+      planElbowAtPort(port([3, 0, 0], [1, 0, 0]), [Math.cos(t), 0, Math.sin(t)], ROUND_6),
+    ).toBeNull()
+  })
+
+  test('rect profile: elbow carries the trunk W×H and equivalent diameter', () => {
+    const rect: DuctProfile = { shape: 'rect', diameter: 6, width: 14, height: 8 }
+    const plan = planElbowAtPort(port([3, 2.4, 0], [1, 0, 0]), [0, 0, 1], rect)
+    expect(plan).not.toBeNull()
+    expect(plan!.fitting.shape).toBe('rect')
+    expect(plan!.fitting.width).toBe(14)
+    expect(plan!.fitting.height).toBe(8)
+    expect(plan!.fitting.diameter).toBeCloseTo(2 * Math.sqrt((14 * 8) / Math.PI), 6)
   })
 
   test('junction on the corner; trim and collar one leg out on each side', () => {
@@ -243,7 +259,7 @@ describe('planElbowRealign', () => {
   // A 90° elbow as the draw tool mints it: horizontal run arrives along
   // +X (inlet mated), free outlet pointing +Z.
   function existingElbow() {
-    const plan = planElbowAtPort(port([3, 0, 0], [1, 0, 0]), [0, 0, 1], 6)!
+    const plan = planElbowAtPort(port([3, 0, 0], [1, 0, 0]), [0, 0, 1], ROUND_6)!
     return plan.fitting
   }
 
