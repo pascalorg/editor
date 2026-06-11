@@ -11,6 +11,12 @@ export { default as Editor } from './components/editor'
 // they're referenced throughout the editor's own internals; the public
 // surface uses the shorter, shell-friendly names from the unified
 // preset-system spec.
+// Headless-composition surface: lets embedders compose `<Viewer>` +
+// tool routing + camera + keyboard directly (without mounting the full
+// `<Editor>` chrome). Tool/affordance implementations stay kind-owned via
+// the registry (`def.tool` / `def.affordanceTools`); these exports are the
+// thin editor-side glue that routes and hosts them.
+export { CustomCameraControls } from './components/editor/custom-camera-controls'
 export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
 export { formatMeasurement, MeasurementPill } from './components/editor/measurement-pill'
 export {
@@ -26,6 +32,15 @@ export {
   buildSvgArrowHeadPoints,
   getArcPlanPoint,
 } from './components/editor-2d/svg-paths'
+// Edit-affordance systems for kinds whose geometry editing lives outside
+// their registry tools (ceiling boundaries, roof slope handles, stair
+// segments, zone boundaries). Mounted by `<Editor>` internally; exported so
+// self-composed shells get the same editing affordances.
+export { CeilingSelectionAffordanceSystem } from './components/systems/ceiling/ceiling-selection-affordance-system'
+export { CeilingSystem } from './components/systems/ceiling/ceiling-system'
+export { RoofEditSystem } from './components/systems/roof/roof-edit-system'
+export { StairEditSystem } from './components/systems/stair/stair-edit-system'
+export { ZoneSystem } from './components/systems/zone/zone-system'
 // Phase 5 Stage D transitional exports — pure drafting / angle helpers
 // consumed by kind-owned drag actions in @pascal-app/nodes. Stage F
 // cleanup moves these into @pascal-app/nodes (fence/drafting.ts +
@@ -58,6 +73,12 @@ export {
   type PlacementCoordinatorConfig,
   usePlacementCoordinator,
 } from './components/tools/item/use-placement-coordinator'
+// Screen-space marquee selection — mounted by `<Editor>` internally;
+// exported for self-composed shells.
+export { BoxSelectTool } from './components/tools/select/box-select-tool'
+// Resolves a kind's drag affordance component from `def.affordanceTools`
+// (the registry contract) — the dispatcher `ToolManager` uses internally.
+export { getRegistryAffordanceTool } from './components/tools/shared/affordance-dispatch'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
 export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'
@@ -96,6 +117,11 @@ export {
   DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
 } from './components/tools/stair/stair-defaults'
+// The tool router: reads `useEditor` (phase/mode/tool) + the node registry
+// and lazy-mounts the active kind-owned tool / affordance / legacy fallback.
+// The single component a self-composed shell mounts inside `<Viewer>` to get
+// the complete interaction layer.
+export { ToolManager } from './components/tools/tool-manager'
 export {
   createWallOnCurrentLevel,
   getSegmentGridStep,
@@ -171,7 +197,7 @@ export type { SaveStatus } from './hooks/use-auto-save'
 // can express their affordances declaratively in their own folder.
 export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
-export { markToolCancelConsumed } from './hooks/use-keyboard'
+export { markToolCancelConsumed, useKeyboard } from './hooks/use-keyboard'
 export { type Selection, useSelection } from './hooks/use-selection'
 export {
   CEILING_ALIGNMENT_THRESHOLD_M,
@@ -285,6 +311,7 @@ export type {
   FloorplanSelectionTool,
   MovingFenceEndpoint,
   MovingWallEndpoint,
+  Phase,
   SplitOrientation,
   Tool,
   ToolDefaults,
