@@ -96,3 +96,115 @@ describe('planElbowAtPort', () => {
     expect(dist(plan.trimmedPortPoint, [0, 0, 0])).toBeCloseTo(dist(plan.collarPoint, [0, 0, 0]), 6)
   })
 })
+
+import { DuctSegmentNode } from '@pascal-app/core'
+import { planTeeAtRunBody } from './auto-fitting'
+import type { RunBodyHit } from './ports'
+
+function trunk(path: Point[]): DuctSegmentNode {
+  return DuctSegmentNode.parse({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    name: 'Trunk',
+    path,
+    diameter: 8,
+    ductMaterial: 'sheet-metal',
+    insulationR: 0,
+    system: 'supply',
+  })
+}
+
+function bodyHit(node: DuctSegmentNode, segmentIndex: number, point: Point): RunBodyHit {
+  return { nodeId: node.id, segmentIndex, point }
+}
+
+describe('planTeeAtRunBody', () => {
+  test('mid-trunk tap: junction on the hit, run legs mate the split halves', () => {
+    const run = trunk([
+      [0, 2.4, 0],
+      [6, 2.4, 0],
+    ])
+    const plan = planTeeAtRunBody(run, bodyHit(run, 0, [3, 2.4, 0]), [0, 0, 1], 6)
+    expect(plan).not.toBeNull()
+
+    const ports = getDuctFittingPorts(plan!.fitting)
+    const inlet = ports.find((p) => p.id === 'inlet')!
+    const outlet = ports.find((p) => p.id === 'outlet')!
+    const branch = ports.find((p) => p.id === 'branch')!
+
+    // Junction exactly on the centerline hit.
+    expect(dist(plan!.fitting.position, [3, 2.4, 0])).toBeLessThan(1e-6)
+    // Trunk keeps the upstream half, ending at the inlet collar.
+    const upstream = plan!.trunkUpdate.data.path
+    expect(dist(upstream[upstream.length - 1]!, inlet.position)).toBeLessThan(1e-6)
+    expect(dot(inlet.direction, [-1, 0, 0])).toBeCloseTo(1, 6)
+    // Tail carries the rest, starting at the outlet collar.
+    expect(dist(plan!.trunkTail.path[0]!, outlet.position)).toBeLessThan(1e-6)
+    expect(dist(plan!.trunkTail.path[1]!, [6, 2.4, 0])).toBeLessThan(1e-6)
+    // Branch collar square to the run, where the new duct starts.
+    expect(dist(plan!.branchCollar, branch.position)).toBeLessThan(1e-6)
+    expect(dot(branch.direction, [0, 0, 1])).toBeCloseTo(1, 6)
+    // Tee carries trunk diameter on the run, branch diameter on the collar.
+    expect(plan!.fitting.diameter).toBe(8)
+    expect(plan!.fitting.diameter2).toBe(6)
+  })
+
+  test('45° drawn branch leaves square (projected perpendicular)', () => {
+    const run = trunk([
+      [0, 0, 0],
+      [6, 0, 0],
+    ])
+    const d = Math.SQRT1_2
+    const plan = planTeeAtRunBody(run, bodyHit(run, 0, [3, 0, 0]), [d, 0, d], 6)
+    expect(plan).not.toBeNull()
+    const branch = getDuctFittingPorts(plan!.fitting).find((p) => p.id === 'branch')!
+    expect(dot(branch.direction, [0, 0, 1])).toBeCloseTo(1, 6)
+  })
+
+  test('tap too close to a run end → null (use the end port instead)', () => {
+    const run = trunk([
+      [0, 0, 0],
+      [6, 0, 0],
+    ])
+    expect(planTeeAtRunBody(run, bodyHit(run, 0, [0.1, 0, 0]), [0, 0, 1], 6)).toBeNull()
+    expect(planTeeAtRunBody(run, bodyHit(run, 0, [5.95, 0, 0]), [0, 0, 1], 6)).toBeNull()
+  })
+
+  test('branch parallel to the trunk → null', () => {
+    const run = trunk([
+      [0, 0, 0],
+      [6, 0, 0],
+    ])
+    expect(planTeeAtRunBody(run, bodyHit(run, 0, [3, 0, 0]), [1, 0, 0], 6)).toBeNull()
+  })
+
+  test('vertical drop off a horizontal trunk', () => {
+    const run = trunk([
+      [0, 2.4, 0],
+      [6, 2.4, 0],
+    ])
+    const plan = planTeeAtRunBody(run, bodyHit(run, 0, [3, 2.4, 0]), [0, -1, 0], 6)
+    expect(plan).not.toBeNull()
+    const branch = getDuctFittingPorts(plan!.fitting).find((p) => p.id === 'branch')!
+    expect(dot(branch.direction, [0, -1, 0])).toBeCloseTo(1, 6)
+    expect(plan!.branchCollar[1]).toBeLessThan(2.4)
+  })
+
+  test('polyline trunk: split lands in the hit segment, other points preserved', () => {
+    const run = trunk([
+      [0, 0, 0],
+      [4, 0, 0],
+      [4, 0, 4],
+    ])
+    const plan = planTeeAtRunBody(run, bodyHit(run, 1, [4, 0, 2]), [1, 0, 0], 6)
+    expect(plan).not.toBeNull()
+    // Upstream half keeps both leading points.
+    expect(plan!.trunkUpdate.data.path.length).toBe(3)
+    expect(dist(plan!.trunkUpdate.data.path[0]!, [0, 0, 0])).toBeLessThan(1e-6)
+    expect(dist(plan!.trunkUpdate.data.path[1]!, [4, 0, 0])).toBeLessThan(1e-6)
+    // Tail runs from past the tap to the original end.
+    expect(dist(plan!.trunkTail.path[1]!, [4, 0, 4])).toBeLessThan(1e-6)
+  })
+})
