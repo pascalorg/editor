@@ -67,3 +67,8 @@ export {
   snapVec3ToGrid,
   snapWorldXZToBuildingLocal,
 } from './snap'
+export {
+  buildPortComponents,
+  type SystemSummary,
+  summarizeSystemFor,
+} from './system-graph'

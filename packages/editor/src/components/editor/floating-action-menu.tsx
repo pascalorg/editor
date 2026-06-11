@@ -22,6 +22,7 @@ import {
   StairNode,
   StairSegmentNode,
   sceneRegistry,
+  summarizeSystemFor,
   useLiveNodeOverrides,
   useScene,
   WallNode,
@@ -30,7 +31,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { useCallback, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
@@ -38,6 +39,15 @@ import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import useEditor from '../../store/use-editor'
 import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
+
+/** Distribution kinds that get the system pill above the action menu. */
+const HVAC_KINDS = new Set([
+  'duct-segment',
+  'duct-fitting',
+  'duct-terminal',
+  'hvac-equipment',
+  'lineset',
+])
 
 const ALLOWED_TYPES = [
   'item',
@@ -190,6 +200,17 @@ export function FloatingActionMenu() {
   const isValidType = node
     ? ALLOWED_TYPES.includes(node.type) || isRegistrySelectable(node.type)
     : false
+
+  // System summary for distribution kinds (HVAC): which supply/return
+  // tree the selected node belongs to, its run length, and whether it
+  // actually reaches a piece of equipment. Subscribes to the full nodes
+  // map — connectivity changes when ANY joint moves — but computes only
+  // while an HVAC node is selected.
+  const allNodes = useScene((s) => s.nodes)
+  const systemSummary = useMemo(
+    () => (node && HVAC_KINDS.has(node.type) ? summarizeSystemFor(node.id, allNodes) : null),
+    [node, allNodes],
+  )
 
   // Height-drag pill: shown just above the menu only while the selected
   // wall/fence height arrow is being dragged. Length + thickness are fixed
@@ -586,25 +607,68 @@ export function FloatingActionMenu() {
                 />
               </div>
             ) : null}
-            {/* Rotation-axis pill for kinds with full 3D orientation (duct
-                fittings): shows which world axis R/T turns around and that
-                Alt cycles it. Same slot as the wall height pill — directly
-                above the action menu. */}
-            {node?.type === 'duct-fitting' ? (
-              <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2">
-                <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
-                  <span className="font-medium text-foreground">
-                    Axis {rotationAxis.toUpperCase()}
-                  </span>
-                  <span aria-hidden className="text-muted-foreground">
-                    ·
-                  </span>
-                  <span className="text-muted-foreground">R/T rotate</span>
-                  <span aria-hidden className="text-muted-foreground">
-                    ·
-                  </span>
-                  <span className="text-muted-foreground">⌥ axis</span>
-                </div>
+            {/* HVAC chrome above the menu — same slot as the wall height
+                pill. System pill (which tree, run length, equipment reach)
+                for every distribution kind; the rotation-axis pill stacks
+                under it for duct fittings. */}
+            {node && HVAC_KINDS.has(node.type) ? (
+              <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2 flex flex-col items-center gap-1">
+                {systemSummary ? (
+                  <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
+                    <span className="font-medium text-foreground">
+                      {systemSummary.systems.length > 0
+                        ? systemSummary.systems
+                            .map((sys) => sys[0]!.toUpperCase() + sys.slice(1))
+                            .join(' + ')
+                        : 'System'}
+                    </span>
+                    {systemSummary.runCount > 0 ? (
+                      <>
+                        <span aria-hidden className="text-muted-foreground">
+                          ·
+                        </span>
+                        <span className="text-muted-foreground">
+                          {formatMeasurement(systemSummary.runLengthM, unit)} ·{' '}
+                          {systemSummary.runCount} {systemSummary.runCount === 1 ? 'run' : 'runs'}
+                        </span>
+                      </>
+                    ) : null}
+                    {systemSummary.terminalCount > 0 ? (
+                      <>
+                        <span aria-hidden className="text-muted-foreground">
+                          ·
+                        </span>
+                        <span className="text-muted-foreground">
+                          {systemSummary.terminalCount}{' '}
+                          {systemSummary.terminalCount === 1 ? 'register' : 'registers'}
+                        </span>
+                      </>
+                    ) : null}
+                    {systemSummary.connectedToEquipment ? null : (
+                      <>
+                        <span aria-hidden className="text-muted-foreground">
+                          ·
+                        </span>
+                        <span className="font-medium text-amber-500">⚠ no equipment</span>
+                      </>
+                    )}
+                  </div>
+                ) : null}
+                {node.type === 'duct-fitting' ? (
+                  <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
+                    <span className="font-medium text-foreground">
+                      Axis {rotationAxis.toUpperCase()}
+                    </span>
+                    <span aria-hidden className="text-muted-foreground">
+                      ·
+                    </span>
+                    <span className="text-muted-foreground">R/T rotate</span>
+                    <span aria-hidden className="text-muted-foreground">
+                      ·
+                    </span>
+                    <span className="text-muted-foreground">⌥ axis</span>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
