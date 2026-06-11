@@ -80,6 +80,7 @@ const ENDPOINT_HOVER_GLOW_STROKE_WIDTH_PX = 16
 const ENDPOINT_HOVER_RING_STROKE_WIDTH_PX = 7
 const HOVER_TRANSITION = 'opacity 180ms cubic-bezier(0.2, 0, 0, 1)'
 const DIRECT_DRAG_THRESHOLD_PX = 4
+const DIRECT_ROTATE_EPSILON = 1e-6
 const DIRECT_ROTATE_RADIANS_PER_PIXEL = Math.PI / 180
 
 /**
@@ -363,6 +364,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const applyDelta = (pointerEvent: PointerEvent | ReactPointerEvent<SVGGElement>) => {
         const rawDelta = (pointerEvent.clientX - startX) * DIRECT_ROTATE_RADIANS_PER_PIXEL
         const delta = snapDirectRotationDelta(rawDelta, pointerEvent.shiftKey)
+        if (Math.abs(delta) < DIRECT_ROTATE_EPSILON) {
+          lastPatch = null
+          useLiveNodeOverrides.getState().clear(nodeId)
+          useScene.getState().markDirty(nodeId)
+          return
+        }
         const patch = resolveDirectRotationPatch(node, delta, sceneApi)
         if (!patch) return
         lastPatch = patch

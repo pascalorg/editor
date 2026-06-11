@@ -126,6 +126,7 @@ type SelectionTarget = {
 }
 
 const DIRECT_DRAG_THRESHOLD_PX = 4
+const DIRECT_ROTATE_EPSILON = 1e-6
 const DIRECT_ROTATE_RADIANS_PER_PIXEL = Math.PI / 180
 
 function pointerEventFromNodeEvent(event: NodeEvent): PointerEvent {
@@ -1399,6 +1400,12 @@ export const SelectionManager = () => {
       const applyDelta = (moveEvent: PointerEvent) => {
         const rawDelta = (moveEvent.clientX - startX) * DIRECT_ROTATE_RADIANS_PER_PIXEL
         const delta = snapDirectRotationDelta(rawDelta, moveEvent.shiftKey)
+        if (Math.abs(delta) < DIRECT_ROTATE_EPSILON) {
+          lastPatch = null
+          useLiveNodeOverrides.getState().clear(nodeId)
+          useScene.getState().markDirty(nodeId)
+          return
+        }
         const patch = resolveDirectRotationPatch(node, delta, sceneApi)
         if (!patch) return
         lastPatch = patch
