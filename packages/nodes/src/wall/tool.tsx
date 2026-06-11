@@ -614,6 +614,8 @@ export const WallTool: React.FC = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (!wallPreviewRef.current) return
+
       if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
         stopDrafting()
         return
@@ -708,7 +710,9 @@ export const WallTool: React.FC = () => {
         // BoxGeometry stays visible for a frame on top of the
         // freshly-committed real wall, producing a brief
         // double-paint at the new wall's position.
-        wallPreviewRef.current.visible = false
+        if (wallPreviewRef.current) {
+          wallPreviewRef.current.visible = false
+        }
         setDraftMeasurement(null)
       }
     }
