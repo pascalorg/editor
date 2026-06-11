@@ -50,6 +50,12 @@ export {
   resolveMovable,
 } from './movement'
 export {
+  analyzePortConnectivity,
+  type PortConnection,
+  type PortConnectivity,
+  resolveConnectivityUpdates,
+} from './port-connectivity'
+export {
   DEFAULT_ANGLE_STEP,
   DEFAULT_GRID_STEP,
   type SnapServices,
