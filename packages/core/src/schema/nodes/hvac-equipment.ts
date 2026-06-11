@@ -28,8 +28,8 @@ export const HvacEquipmentNode = BaseNode.extend({
   depth: z.number().min(0.3).max(2).default(0.71),
   height: z.number().min(0.4).max(2.5).default(1.1),
   // Collar diameters in inches for the duct connections.
-  supplyDiameter: z.number().min(6).max(30).default(12),
-  returnDiameter: z.number().min(6).max(30).default(14),
+  supplyDiameter: z.number().min(6).max(30).default(8),
+  returnDiameter: z.number().min(6).max(30).default(8),
 }).describe(
   dedent`
   HVAC equipment cabinet - furnace, air handler, or outdoor condenser.

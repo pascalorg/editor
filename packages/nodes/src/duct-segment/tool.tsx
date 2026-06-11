@@ -337,7 +337,7 @@ const DuctSegmentTool = () => {
           next click will join an existing duct rather than freeform-place. */}
       {snapTarget && (
         <mesh position={snapTarget}>
-          <sphereGeometry args={[0.18, 24, 16]} />
+          <sphereGeometry args={[0.12, 24, 16]} />
           <meshBasicMaterial color="#818cf8" depthTest={false} opacity={0.35} transparent />
         </mesh>
       )}

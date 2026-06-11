@@ -31,8 +31,8 @@ export const hvacEquipmentDefinition: NodeDefinition<typeof HvacEquipmentNode> =
     width: 0.56,
     depth: 0.71,
     height: 1.1,
-    supplyDiameter: 12,
-    returnDiameter: 14,
+    supplyDiameter: 8,
+    returnDiameter: 8,
   }),
 
   capabilities: {
