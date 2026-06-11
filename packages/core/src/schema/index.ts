@@ -59,6 +59,9 @@ export {
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
 export { DownspoutNode } from './nodes/downspout'
+export { DuctFittingNode } from './nodes/duct-fitting'
+export { DuctSegmentNode } from './nodes/duct-segment'
+export { DuctTerminalNode } from './nodes/duct-terminal'
 export {
   ElevatorDoorPanelStyle,
   ElevatorDoorStyle,
@@ -68,6 +71,7 @@ export {
 export { EyebrowVentNode } from './nodes/eyebrow-vent'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
+export { HvacEquipmentNode } from './nodes/hvac-equipment'
 export { GutterNode, GutterOutlet } from './nodes/gutter'
 export type {
   AnimationEffect,
