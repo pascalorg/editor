@@ -144,6 +144,7 @@ export const floorStrategy = {
   ): CommitResult | null {
     if (ctx.state.surface !== 'floor') return null
     if (!(ctx.levelId && ctx.draftItem)) return null
+    if (ctx.draftItem.asset.attachTo) return null
 
     const pos: [number, number, number] = [
       ctx.gridPosition.x,

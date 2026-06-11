@@ -118,16 +118,34 @@ const DoorTool: React.FC = () => {
       useAlignmentGuides.getState().clear()
     }
 
+    const showWallFallbackCursor = (event: WallEvent) => {
+      const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
+      updateCursor([x, getLevelYOffset() + FALLBACK_HEIGHT / 2, z], 0, false)
+      useAlignmentGuides.getState().clear()
+    }
+
     const onWallEnter = (event: WallEvent) => {
-      if (!isValidWallSideFace(event.normal)) return
+      if (!isValidWallSideFace(event.normal)) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
       if (isCurvedWall(event.node)) {
         destroyDraft()
-        hideCursor()
+        showWallFallbackCursor(event)
         return
       }
       const levelId = getLevelId()
-      if (!levelId) return
-      if (event.node.parentId !== levelId) return
+      if (!levelId) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
+      if (event.node.parentId !== levelId) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
 
       destroyDraft()
 
@@ -177,13 +195,21 @@ const DoorTool: React.FC = () => {
     }
 
     const onWallMove = (event: WallEvent) => {
-      if (!isValidWallSideFace(event.normal)) return
-      if (isCurvedWall(event.node)) {
+      if (!isValidWallSideFace(event.normal)) {
         destroyDraft()
-        hideCursor()
+        showWallFallbackCursor(event)
         return
       }
-      if (event.node.parentId !== getLevelId()) return
+      if (isCurvedWall(event.node)) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
+      if (event.node.parentId !== getLevelId()) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
 
       const side = getSideFromNormal(event.normal)
       const itemRotation = calculateItemRotation(event.normal)

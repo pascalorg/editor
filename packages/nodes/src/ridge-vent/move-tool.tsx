@@ -9,7 +9,12 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  consumePlacementDragRelease,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useCallback, useEffect, useState } from 'react'
 import {
   createRelativeRoofDrag,
@@ -60,6 +65,7 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
 
     let lastSnap: [number, number] | null = null
     let lastTarget: RidgeVentDragTarget | null = null
+    let committed = false
     const roofDrag = createRelativeRoofDrag(original)
 
     const resolveTarget = (event: RoofEvent): RidgeVentDragTarget | null => {
@@ -100,8 +106,10 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
     }
 
     const onRoofClick = (event: RoofEvent) => {
+      if (committed) return
       const target = lastTarget ?? resolveTarget(event)
       if (!target) return
+      committed = true
       const targetSegmentId = target.segment.id as AnyNodeId
       const st = useScene.getState()
 
@@ -180,16 +188,27 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
       exitMoveMode()
     }
 
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      if (!lastTarget) return
+      onRoofClick({
+        nativeEvent: event,
+        stopPropagation: () => event.stopPropagation(),
+      } as unknown as RoofEvent)
+    }
+
     emitter.on('roof:move', updatePreview)
     emitter.on('roof:enter', updatePreview)
     emitter.on('roof:click', onRoofClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onRoofClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
 
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true

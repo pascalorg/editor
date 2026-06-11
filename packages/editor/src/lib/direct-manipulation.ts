@@ -27,12 +27,9 @@ export function getDirectRotateHandle(node: AnyNode): ArcResizeHandle<AnyNode> |
 }
 
 export function canDirectRotateNode(node: AnyNode): boolean {
-  if (getDirectRotateHandle(node)) return true
-  const rotation = (node as { rotation?: unknown }).rotation
   return (
-    nodeRegistry.get(node.type)?.capabilities?.rotatable !== undefined ||
-    typeof rotation === 'number' ||
-    Array.isArray(rotation)
+    getDirectRotateHandle(node) !== null ||
+    nodeRegistry.get(node.type)?.capabilities?.rotatable !== undefined
   )
 }
 

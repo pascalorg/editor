@@ -123,17 +123,35 @@ const WindowTool: React.FC = () => {
       useAlignmentGuides.getState().clear()
     }
 
+    const showWallFallbackCursor = (event: WallEvent) => {
+      const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
+      updateCursor([x, getLevelYOffset() + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z], 0, false)
+      useAlignmentGuides.getState().clear()
+    }
+
     const onWallEnter = (event: WallEvent) => {
-      if (!isValidWallSideFace(event.normal)) return
+      if (!isValidWallSideFace(event.normal)) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
       if (isCurvedWall(event.node)) {
         destroyDraft()
-        hideCursor()
+        showWallFallbackCursor(event)
         return
       }
       const levelId = getLevelId()
-      if (!levelId) return
+      if (!levelId) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
       // Only interact with walls on the current level
-      if (event.node.parentId !== levelId) return
+      if (event.node.parentId !== levelId) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
 
       destroyDraft()
 
@@ -187,14 +205,22 @@ const WindowTool: React.FC = () => {
     }
 
     const onWallMove = (event: WallEvent) => {
-      if (!isValidWallSideFace(event.normal)) return
+      if (!isValidWallSideFace(event.normal)) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
       if (isCurvedWall(event.node)) {
         destroyDraft()
-        hideCursor()
+        showWallFallbackCursor(event)
         return
       }
       // Only interact with walls on the current level
-      if (event.node.parentId !== getLevelId()) return
+      if (event.node.parentId !== getLevelId()) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
 
       const side = getSideFromNormal(event.normal)
       const itemRotation = calculateItemRotation(event.normal)

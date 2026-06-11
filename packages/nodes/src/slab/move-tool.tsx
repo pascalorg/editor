@@ -16,6 +16,7 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  consumePlacementDragRelease,
   getSegmentGridStep,
   markToolCancelConsumed,
   resolveAlignmentForActiveBuilding,
@@ -214,6 +215,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (wasCommitted) return
       if (isFloorplanSourcedEvent(event)) return
       if (Date.now() - activatedAtRef.current < 150) {
         event.nativeEvent?.stopPropagation?.()
@@ -245,6 +247,12 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       event.nativeEvent?.stopPropagation?.()
     }
 
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      activatedAtRef.current = 0
+      onGridClick({ nativeEvent: event } as unknown as GridEvent)
+    }
+
     const onCancel = () => {
       // No scene state to roll back — we never wrote anything. Just
       // restore the mesh visual.
@@ -258,6 +266,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       useAlignmentGuides.getState().clear()
@@ -269,6 +278,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
   }, [exitMoveMode, node.id, node.parentId])
 
