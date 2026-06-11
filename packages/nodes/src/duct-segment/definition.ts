@@ -101,6 +101,8 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
     { key: 'Click again', label: 'Place it (locked to 45°)' },
     { key: 'Shift', label: 'Free angle' },
     { key: 'Alt + drag', label: 'Go vertical ↕, click to place' },
+    { key: '[ / ]', label: 'Duct diameter down / up' },
+    { key: 'C', label: 'Ceiling / floor height' },
     { key: 'Esc', label: 'Cancel start point' },
   ],
 

@@ -2,11 +2,11 @@
 
 import { DuctSegmentNode, emitter, type GridEvent, useScene } from '@pascal-app/core'
 import { DimensionPill, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import { getLevelHeight, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
-import { collectScenePorts, findNearestPortXZ } from '../shared/ports'
+import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 import { ductSegmentDefinition } from './definition'
 
 /**
@@ -23,9 +23,19 @@ import { ductSegmentDefinition } from './definition'
  *     release the lock.
  *   - Hold **Alt** → vertical mode. Cursor XZ locks to the start;
  *     vertical mouse motion drives Y. Click commits the riser segment.
+ *   - **[ / ]** step the duct diameter through nominal US sizes; the
+ *     ghost preview and the committed node both use it.
+ *   - **C** toggles ceiling-level placement: the start point lands at
+ *     the level's ceiling height (duct top hugging the ceiling) instead
+ *     of the floor. Subsequent points inherit the start's Y as usual.
  *   - Esc clears an anchored start point.
  */
 const PREVIEW_OPACITY = 0.55
+/**
+ * Nominal US round-duct sizes (inches): 4"–10" in 1" steps, 12"+ in 2"
+ * steps — matches what flex and rigid round actually ship in.
+ */
+const DUCT_DIAMETERS_IN = [4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20] as const
 /** Snap radius (meters) for joining onto an existing duct's start/end. */
 const ENDPOINT_SNAP_RADIUS_M = 0.5
 /** Angle step (radians) for the XZ angle lock — 45°. */
@@ -49,7 +59,11 @@ function snap(value: number, step: number): number {
  * adopts the port's full 3D position.
  */
 function findNearbyPort(point: [number, number, number]): [number, number, number] | null {
-  const port = findNearestPortXZ(point, collectScenePorts(), ENDPOINT_SNAP_RADIUS_M)
+  const port = findNearestPortXZ(
+    point,
+    collectScenePorts({ systems: DUCT_PORT_SYSTEMS }),
+    ENDPOINT_SNAP_RADIUS_M,
+  )
   return port ? [port.position[0], port.position[1], port.position[2]] : null
 }
 
@@ -80,8 +94,19 @@ const DuctSegmentTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const unit = useViewer((s) => s.unit)
   const cursorRef = useRef<Group>(null)
+  // Diameter for the next committed segment. Seeded from `toolDefaults`
+  // (host-placed preset) when present, else the kind's schema default.
+  const [diameter, setDiameter] = useState<number>(() => {
+    const seeded = (
+      useEditor.getState().toolDefaults['duct-segment'] as { diameter?: number } | undefined
+    )?.diameter
+    return seeded ?? (ductSegmentDefinition.defaults() as { diameter: number }).diameter
+  })
   const [draftPoints, setDraftPoints] = useState<Array<[number, number, number]>>([])
   const [cursorPos, setCursorPos] = useState<[number, number, number] | null>(null)
+  // Ceiling mode (toggle with C): the first point lands at the level's
+  // ceiling height (duct top hugging the ceiling) instead of the floor.
+  const [ceilingMode, setCeilingMode] = useState(false)
   // When the cursor is within snap range of an existing duct's endpoint we
   // surface a brighter indicator and commit at the endpoint's exact coords.
   const [snapTarget, setSnapTarget] = useState<[number, number, number] | null>(null)
@@ -94,6 +119,10 @@ const DuctSegmentTool = () => {
   draftRef.current = draftPoints
   const cursorPosRef = useRef(cursorPos)
   cursorPosRef.current = cursorPos
+  const diameterRef = useRef(diameter)
+  diameterRef.current = diameter
+  const ceilingModeRef = useRef(ceilingMode)
+  ceilingModeRef.current = ceilingMode
   // Anchor captured when Alt is pressed: screen Y at that moment and the
   // base elevation (= last point's Y). Cleared on Alt release.
   const altAnchorRef = useRef<{ clientY: number; baseY: number } | null>(null)
@@ -115,10 +144,13 @@ const DuctSegmentTool = () => {
         Math.abs(start[2] - end[2]) < 1e-4
       if (sameSpot) return
       const defaults = ductSegmentDefinition.defaults()
+      const toolDefaults = useEditor.getState().toolDefaults['duct-segment'] ?? {}
       const duct = DuctSegmentNode.parse({
         ...defaults,
+        ...toolDefaults,
         name: 'Duct run',
         path: [start, end],
+        diameter: diameterRef.current,
       })
       useScene.getState().createNode(duct, activeLevelId)
       triggerSFX('sfx:item-place')
@@ -128,21 +160,33 @@ const DuctSegmentTool = () => {
       setAltActive(false)
     }
 
+    // Base Y for a fresh run's first point: floor (0) by default, or just
+    // below the level's ceiling in ceiling mode so the duct's top hugs the
+    // ceiling (centerline = ceiling height − radius).
+    const resolveBaseY = (): number => {
+      if (!ceilingModeRef.current) return 0
+      const ceiling = getLevelHeight(activeLevelId, useScene.getState().nodes)
+      const radius = (diameterRef.current * 0.0254) / 2
+      return Math.max(0, ceiling - radius)
+    }
+
     const resolveSnappedPoint = (
       event: GridEvent,
     ): { point: [number, number, number]; snapped: [number, number, number] | null } => {
       const last = draftRef.current.at(-1)
-      // First point of the run: free grid-snapped placement at Y=0 (floor).
-      // Endpoint snap can still join into an existing run.
+      // First point of the run: grid-snapped placement at the base Y (floor,
+      // or ceiling height in ceiling mode). Endpoint snap can still join an
+      // existing run.
       if (!last) {
-        const raw: [number, number, number] = [event.localPosition[0], 0, event.localPosition[2]]
+        const baseY = resolveBaseY()
+        const raw: [number, number, number] = [event.localPosition[0], baseY, event.localPosition[2]]
         if (event.nativeEvent?.altKey !== true) {
           const target = findNearbyPort(raw)
           if (target) return { point: target, snapped: target }
         }
         const step = useEditor.getState().gridSnapStep
         return {
-          point: [snap(raw[0], step), 0, snap(raw[2], step)],
+          point: [snap(raw[0], step), baseY, snap(raw[2], step)],
           snapped: null,
         }
       }
@@ -242,12 +286,41 @@ const DuctSegmentTool = () => {
       setAltActive(false)
     }
 
+    const stepDiameter = (step: 1 | -1) => {
+      const sizes = DUCT_DIAMETERS_IN
+      const current = diameterRef.current
+      // Nearest catalogue index, then step — handles seeded off-catalogue
+      // values (e.g. a preset's 7.5") gracefully.
+      let nearest = 0
+      for (let i = 1; i < sizes.length; i++) {
+        if (Math.abs(sizes[i]! - current) < Math.abs(sizes[nearest]! - current)) nearest = i
+      }
+      const next = sizes[Math.min(sizes.length - 1, Math.max(0, nearest + step))]!
+      if (next === current) return
+      setDiameter(next)
+      triggerSFX('sfx:grid-snap')
+    }
+
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       if (e.key === 'Alt') {
         e.preventDefault()
         enterAltMode()
+      } else if (e.key === '[') {
+        e.preventDefault()
+        stepDiameter(-1)
+      } else if (e.key === ']') {
+        e.preventDefault()
+        stepDiameter(1)
+      } else if (e.key === 'c' || e.key === 'C') {
+        // Toggle ceiling mode. Only the first point reads the base Y, so
+        // toggling mid-run is a no-op until the next fresh segment — flip
+        // it only while unanchored to keep the behaviour predictable.
+        if (draftRef.current.length > 0) return
+        e.preventDefault()
+        setCeilingMode((m) => !m)
+        triggerSFX('sfx:grid-snap')
       }
     }
 
@@ -295,14 +368,18 @@ const DuctSegmentTool = () => {
   // Wall-style dimension pill above the cursor: absolute world coords before
   // the first point, signed per-axis deltas from the last placed point while
   // a segment is in flight. The actively-driven axis is emphasised — Y in
-  // Alt-vertical mode, otherwise whichever horizontal axis dominates.
+  // Alt-vertical mode, otherwise whichever horizontal axis dominates. A
+  // trailing Ø readout shows the diameter the next click commits ([ / ]).
   const pillParts = cursorPos
-    ? (['x', 'y', 'z'] as const).map((axis, i) => ({
-        key: axis,
-        prefix: axis.toUpperCase(),
-        value: last ? cursorPos[i]! - last[i]! : cursorPos[i]!,
-        signed: !!last,
-      }))
+    ? [
+        ...(['x', 'y', 'z'] as const).map((axis, i) => ({
+          key: axis,
+          prefix: axis.toUpperCase(),
+          value: last ? cursorPos[i]! - last[i]! : cursorPos[i]!,
+          signed: !!last,
+        })),
+        { key: 'diameter', prefix: 'Ø', value: diameter * 0.0254, signed: false },
+      ]
     : null
   const pillPrimary =
     last && cursorPos
@@ -328,7 +405,14 @@ const DuctSegmentTool = () => {
             style={{ pointerEvents: 'none', userSelect: 'none' }}
             zIndexRange={[100, 0]}
           >
-            <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
+            <div className="flex flex-col items-center gap-1">
+              <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
+              {ceilingMode && !last && (
+                <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
+                  Ceiling · C to toggle
+                </div>
+              )}
+            </div>
           </Html>
         )}
       </group>
@@ -350,13 +434,21 @@ const DuctSegmentTool = () => {
       ))}
       {/* Preview cylinders */}
       {previewSegments.map((seg, i) => (
-        <PreviewSegment a={seg.a} b={seg.b} key={`seg-${i}`} />
+        <PreviewSegment a={seg.a} b={seg.b} diameterIn={diameter} key={`seg-${i}`} />
       ))}
     </group>
   )
 }
 
-function PreviewSegment({ a, b }: { a: [number, number, number]; b: [number, number, number] }) {
+function PreviewSegment({
+  a,
+  b,
+  diameterIn,
+}: {
+  a: [number, number, number]
+  b: [number, number, number]
+  diameterIn: number
+}) {
   const start = new Vector3(...a)
   const end = new Vector3(...b)
   const dir = new Vector3().subVectors(end, start)
@@ -364,8 +456,7 @@ function PreviewSegment({ a, b }: { a: [number, number, number]; b: [number, num
   if (length < 1e-4) return null
   dir.normalize()
   const mid = new Vector3().addVectors(start, end).multiplyScalar(0.5)
-  // Default duct preview is 6" (~0.152m) diameter.
-  const radius = (6 * 0.0254) / 2
+  const radius = (diameterIn * 0.0254) / 2
   return (
     <mesh
       position={mid.toArray()}

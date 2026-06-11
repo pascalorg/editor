@@ -108,7 +108,7 @@ export { InteractiveSystem } from './systems/interactive/interactive-system'
 export { ItemSystem } from './systems/item/item-system'
 export { ItemLightSystem } from './systems/item-light/item-light-system'
 export { LevelSystem } from './systems/level/level-system'
-export { snapLevelsToTruePositions } from './systems/level/level-utils'
+export { getLevelHeight, snapLevelsToTruePositions } from './systems/level/level-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
 // Generic roof-segment primitives. Kinds that compose CSG against
 // the roof shell (chimney's self-trim, dormer's virtual-segment cut)
