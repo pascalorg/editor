@@ -237,3 +237,83 @@ export function planTeeAtRunBody(
     trunkTail,
   }
 }
+
+// ─── Elbow realignment (run drawn onto an existing fitting's collar) ──
+
+export type ElbowRealignPlan = {
+  /** Patch for the existing elbow: new turn angle + orientation. */
+  update: { id: DuctFittingNode['id']; data: { angle: number; rotation: Point } }
+  /** Where the free collar lands — the new duct starts (or ends) here. */
+  collarPoint: Point
+}
+
+/**
+ * Re-aim an existing elbow whose open collar a new run just snapped
+ * onto. The junction stays put and the OTHER collar keeps its exact
+ * position + direction (it's mated to something), while the snapped
+ * collar swings to face the incoming run — the elbow's `angle` adjusts
+ * to whatever turn that requires.
+ *
+ * Geometry: with the fixed collar's outward direction f and the desired
+ * free direction `awayDir`, the elbow's local inlet/outlet pair subtends
+ * 180° − angle, so the new turn is θ = 180° − ∠(f, away). Buildable only
+ * while θ stays in the elbow's 15–90° range — otherwise null and the
+ * caller leaves the joint as a plain butt joint.
+ */
+export function planElbowRealign(
+  elbow: DuctFittingNode,
+  snappedPortId: string,
+  awayDir: Point,
+): ElbowRealignPlan | null {
+  if (elbow.fittingType !== 'elbow') return null
+  if (snappedPortId !== 'inlet' && snappedPortId !== 'outlet') return null
+
+  const away = new Vector3(...awayDir)
+  if (away.lengthSq() < 1e-10) return null
+  away.normalize()
+
+  // Current world directions of both collars.
+  const currentRotation = new Quaternion().setFromEuler(
+    new Euler(elbow.rotation[0], elbow.rotation[1], elbow.rotation[2]),
+  )
+  const turnCur = (elbow.angle * Math.PI) / 180
+  const inletWorld = new Vector3(-1, 0, 0).applyQuaternion(currentRotation)
+  const outletWorld = new Vector3(Math.cos(turnCur), 0, Math.sin(turnCur)).applyQuaternion(
+    currentRotation,
+  )
+  const fixedWorld = snappedPortId === 'inlet' ? outletWorld : inletWorld
+
+  // New turn from the fixed collar / free collar pair.
+  const spread = fixedWorld.angleTo(away)
+  const turnNew = Math.PI - spread
+  if (turnNew < MIN_TURN_RAD || turnNew > MAX_TURN_RAD) return null
+
+  // Local outward pair at the new angle, ordered (fixed, free) to match
+  // the world pair.
+  const inletLocal = new Vector3(-1, 0, 0)
+  const outletLocal = new Vector3(Math.cos(turnNew), 0, Math.sin(turnNew))
+  const fixedLocal = snappedPortId === 'inlet' ? outletLocal : inletLocal
+  const freeLocal = snappedPortId === 'inlet' ? inletLocal : outletLocal
+
+  const localFrame = frame(fixedLocal, freeLocal)
+  const worldFrame = frame(fixedWorld, away)
+  if (!localFrame || !worldFrame) return null
+  const rotation = new Quaternion().setFromRotationMatrix(
+    worldFrame.multiply(localFrame.transpose()),
+  )
+  const euler = new Euler().setFromQuaternion(rotation)
+
+  const leg = fittingLegLength(elbow.diameter)
+  const collar = new Vector3(...elbow.position).addScaledVector(away, leg)
+
+  return {
+    update: {
+      id: elbow.id,
+      data: {
+        angle: Math.min(90, (turnNew * 180) / Math.PI),
+        rotation: [euler.x, euler.y, euler.z],
+      },
+    },
+    collarPoint: [collar.x, collar.y, collar.z],
+  }
+}

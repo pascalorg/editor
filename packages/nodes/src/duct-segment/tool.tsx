@@ -6,7 +6,7 @@ import { getLevelHeight, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
-import { planElbowAtPort, planTeeAtRunBody } from '../shared/auto-fitting'
+import { planElbowAtPort, planElbowRealign, planTeeAtRunBody } from '../shared/auto-fitting'
 import {
   collectScenePorts,
   DUCT_PORT_SYSTEMS,
@@ -202,6 +202,19 @@ const DuctSegmentTool = () => {
       return { ...plan, trim: { id: port.nodeId, data: { path } as Partial<AnyNode> } }
     }
 
+    /**
+     * Realign gate: the snapped port belongs to an existing ELBOW's open
+     * collar — re-aim that elbow (junction + mated collar fixed, free
+     * collar swings to the drawn direction). Null when the owner isn't
+     * an elbow or the required turn leaves the 15–90° range.
+     */
+    const realignPlanFor = (port: ScenePort | null, awayDir: [number, number, number]) => {
+      if (!port) return null
+      const owner = useScene.getState().nodes[port.nodeId]
+      if (owner?.type !== 'duct-fitting') return null
+      return planElbowRealign(owner, port.id, awayDir)
+    }
+
     // One segment per gesture: first click anchors the start, second
     // click commits a two-point duct immediately. No selection switch —
     // the tool stays armed so the next click starts the next segment
@@ -226,6 +239,10 @@ const DuctSegmentTool = () => {
 
       const startPlan = elbowPlanFor(startPortRef.current, dir)
       const endPlan = elbowPlanFor(endPort, [-dir[0], -dir[1], -dir[2]])
+      // Existing-fitting joints: re-aim the elbow whose collar was hit so
+      // it faces the drawn run instead of leaving a mismatched butt joint.
+      const startRealign = startPlan ? null : realignPlanFor(startPortRef.current, dir)
+      const endRealign = endPlan ? null : realignPlanFor(endPort, [-dir[0], -dir[1], -dir[2]])
       // Tee tap: the start snapped onto a run's BODY (not an end port) —
       // split the trunk and branch from the tee's collar.
       const trunkBody = startPlan ? null : startBodyRef.current
@@ -234,8 +251,9 @@ const DuctSegmentTool = () => {
         trunkBody && trunkOwner?.type === 'duct-segment'
           ? planTeeAtRunBody(trunkOwner, trunkBody, dir, diameterRef.current)
           : null
-      let ductStart = startPlan ? startPlan.collarPoint : (teePlan?.branchCollar ?? start)
-      let ductEnd = endPlan ? endPlan.collarPoint : end
+      let ductStart =
+        startPlan?.collarPoint ?? teePlan?.branchCollar ?? startRealign?.collarPoint ?? start
+      let ductEnd = endPlan?.collarPoint ?? endRealign?.collarPoint ?? end
       // The collar pull-back must leave a real piece of duct between the
       // fittings; if not, fall back to the plain joint.
       const remaining = Math.hypot(
@@ -245,9 +263,11 @@ const DuctSegmentTool = () => {
       )
       let plans = [startPlan, endPlan].filter((p) => p !== null)
       let tee = teePlan
+      let realigns = [startRealign, endRealign].filter((p) => p !== null)
       if (remaining <= 0.08) {
         plans = []
         tee = null
+        realigns = []
         ductStart = start
         ductEnd = end
       }
@@ -277,6 +297,7 @@ const DuctSegmentTool = () => {
         update: [
           ...plans.map((plan) => plan.trim),
           ...(tee ? [tee.trunkUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
+          ...realigns.map((plan) => plan.update as { id: AnyNode['id']; data: Partial<AnyNode> }),
         ],
       })
       triggerSFX('sfx:item-place')

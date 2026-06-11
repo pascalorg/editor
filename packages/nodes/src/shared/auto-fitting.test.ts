@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
-import { planElbowAtPort } from './auto-fitting'
+import { planElbowAtPort, planElbowRealign } from './auto-fitting'
 import type { ScenePort } from './ports'
 
 type Point = [number, number, number]
@@ -206,5 +206,61 @@ describe('planTeeAtRunBody', () => {
     expect(dist(plan!.trunkUpdate.data.path[1]!, [4, 0, 0])).toBeLessThan(1e-6)
     // Tail runs from past the tap to the original end.
     expect(dist(plan!.trunkTail.path[1]!, [4, 0, 4])).toBeLessThan(1e-6)
+  })
+})
+
+describe('planElbowRealign', () => {
+  // A 90° elbow as the draw tool mints it: horizontal run arrives along
+  // +X (inlet mated), free outlet pointing +Z.
+  function existingElbow() {
+    const plan = planElbowAtPort(port([3, 0, 0], [1, 0, 0]), [0, 0, 1], 6)!
+    return plan.fitting
+  }
+
+  function realigned(elbow: ReturnType<typeof existingElbow>, away: Point) {
+    const plan = planElbowRealign(elbow, 'outlet', away)
+    expect(plan).not.toBeNull()
+    const patched = { ...elbow, ...plan!.update.data } as typeof elbow
+    return { plan: plan!, ports: getDuctFittingPorts(patched) }
+  }
+
+  test('free collar swings to the incoming run; mated collar stays put', () => {
+    const elbow = existingElbow()
+    const before = getDuctFittingPorts(elbow)
+    const inletBefore = before.find((p) => p.id === 'inlet')!
+
+    // Incoming slope: up at 60° from the trunk plane.
+    const away: Point = [0, Math.sin(Math.PI / 3), Math.cos(Math.PI / 3)]
+    const { plan, ports } = realigned(elbow, away)
+    const inlet = ports.find((p) => p.id === 'inlet')!
+    const outlet = ports.find((p) => p.id === 'outlet')!
+
+    // Mated inlet collar unchanged — the horizontal run stays connected.
+    expect(dist(inlet.position, inletBefore.position)).toBeLessThan(1e-6)
+    expect(dot(inlet.direction, inletBefore.direction)).toBeCloseTo(1, 6)
+    // Free outlet now faces the slope, collar one leg out along it.
+    expect(dot(outlet.direction, away)).toBeCloseTo(1, 6)
+    expect(dist(outlet.position, plan.collarPoint)).toBeLessThan(1e-6)
+  })
+
+  test('straight-on arrival keeps the same geometry (no-op realign)', () => {
+    const elbow = existingElbow()
+    const { ports } = realigned(elbow, [0, 0, 1])
+    const outlet = ports.find((p) => p.id === 'outlet')!
+    expect(dot(outlet.direction, [0, 0, 1])).toBeCloseTo(1, 6)
+  })
+
+  test('arrival needing a turn outside 15–90° → null', () => {
+    const elbow = existingElbow()
+    // Away nearly opposite the fixed inlet direction → turn < 15°.
+    expect(planElbowRealign(elbow, 'outlet', [0.99, 0, 0.14])).toBeNull()
+    // Away aligned WITH the fixed collar direction → turn > 90°.
+    expect(planElbowRealign(elbow, 'outlet', [-0.99, 0, 0.14])).toBeNull()
+  })
+
+  test('non-elbow fittings are left alone', () => {
+    const elbow = existingElbow()
+    const tee = { ...elbow, fittingType: 'tee' as const }
+    expect(planElbowRealign(tee, 'outlet', [0, 1, 0])).toBeNull()
   })
 })
