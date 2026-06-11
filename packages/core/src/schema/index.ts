@@ -92,6 +92,7 @@ export {
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
 export { LevelNode } from './nodes/level'
+export { LinesetNode } from './nodes/lineset'
 // Nodes
 export { RidgeVentNode } from './nodes/ridge-vent'
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'

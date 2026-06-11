@@ -32,6 +32,7 @@ type BuildToolKind =
   | 'duct-fitting'
   | 'duct-terminal'
   | 'hvac-equipment'
+  | 'lineset'
 
 type BuildType = {
   /** Selection id — equals `kind` for tool types, `'painting'` for paint mode. */
@@ -62,6 +63,7 @@ const BUILD_TYPES: BuildType[] = [
   { id: 'duct-fitting', label: 'Duct Fitting', iconSrc: '/icons/column.png', kind: 'duct-fitting' },
   { id: 'duct-terminal', label: 'Register', iconSrc: '/icons/window.png', kind: 'duct-terminal' },
   { id: 'hvac-equipment', label: 'HVAC Unit', iconSrc: '/icons/elevator.png', kind: 'hvac-equipment' },
+  { id: 'lineset', label: 'Lineset', iconSrc: '/icons/column.png', kind: 'lineset' },
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.png', mode: 'material-paint' },
 ]
 

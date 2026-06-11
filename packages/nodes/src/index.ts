@@ -19,6 +19,7 @@ import { gutterDefinition } from './gutter'
 import { hvacEquipmentDefinition } from './hvac-equipment'
 import { itemDefinition } from './item'
 import { levelDefinition } from './level'
+import { linesetDefinition } from './lineset'
 import { ridgeVentDefinition } from './ridge-vent'
 import { roofDefinition } from './roof'
 import { roofSegmentDefinition } from './roof-segment'
@@ -97,6 +98,7 @@ export const builtinPlugin: Plugin = {
     ductFittingDefinition as unknown as AnyNodeDefinition,
     ductTerminalDefinition as unknown as AnyNodeDefinition,
     hvacEquipmentDefinition as unknown as AnyNodeDefinition,
+    linesetDefinition as unknown as AnyNodeDefinition,
   ],
 }
 
@@ -120,6 +122,7 @@ export { gutterDefinition } from './gutter'
 export { hvacEquipmentDefinition } from './hvac-equipment'
 export { itemDefinition } from './item'
 export { levelDefinition } from './level'
+export { linesetDefinition } from './lineset'
 export { ridgeVentDefinition } from './ridge-vent'
 export { roofDefinition } from './roof'
 export { roofSegmentDefinition } from './roof-segment'

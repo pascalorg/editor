@@ -110,6 +110,7 @@ export type StructureTool =
   | 'duct-fitting'
   | 'duct-terminal'
   | 'hvac-equipment'
+  | 'lineset'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'

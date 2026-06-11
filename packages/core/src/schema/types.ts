@@ -19,6 +19,7 @@ import { HvacEquipmentNode } from './nodes/hvac-equipment'
 import { GutterNode } from './nodes/gutter'
 import { ItemNode } from './nodes/item'
 import { LevelNode } from './nodes/level'
+import { LinesetNode } from './nodes/lineset'
 import { RidgeVentNode } from './nodes/ridge-vent'
 import { RoofNode } from './nodes/roof'
 import { RoofSegmentNode } from './nodes/roof-segment'
@@ -73,6 +74,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   DuctFittingNode,
   DuctTerminalNode,
   HvacEquipmentNode,
+  LinesetNode,
 ])
 
 export type AnyNode = z.infer<typeof AnyNode>
