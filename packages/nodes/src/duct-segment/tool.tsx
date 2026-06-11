@@ -1,0 +1,383 @@
+'use client'
+
+import { DuctSegmentNode, emitter, type GridEvent, useScene } from '@pascal-app/core'
+import { DimensionPill, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
+import { Html } from '@react-three/drei'
+import { useEffect, useRef, useState } from 'react'
+import { type Group, Vector3 } from 'three'
+import { collectScenePorts, findNearestPortXZ } from '../shared/ports'
+import { ductSegmentDefinition } from './definition'
+
+/**
+ * One-segment-at-a-time placement tool for round duct segments.
+ *
+ * Mouse-driven model:
+ *   - **First click** anchors the segment start (port snap joins onto an
+ *     existing run / fitting collar).
+ *   - **Second click** commits a two-point duct immediately and re-arms
+ *     the tool — no polyline accumulation, no finish gesture. Chain runs
+ *     by clicking again near the end you just placed (port snap).
+ *   - The in-flight end is angle-locked to the nearest 45° step in XZ
+ *     from the start; Y stays at the start's height. Hold **Shift** to
+ *     release the lock.
+ *   - Hold **Alt** → vertical mode. Cursor XZ locks to the start;
+ *     vertical mouse motion drives Y. Click commits the riser segment.
+ *   - Esc clears an anchored start point.
+ */
+const PREVIEW_OPACITY = 0.55
+/** Snap radius (meters) for joining onto an existing duct's start/end. */
+const ENDPOINT_SNAP_RADIUS_M = 0.5
+/** Angle step (radians) for the XZ angle lock — 45°. */
+const ANGLE_STEP_RAD = Math.PI / 4
+/** Mouse pixels → meters mapping for Alt-vertical drag. 100 px ≈ 1 m. */
+const ALT_PIXELS_PER_METER = 100
+/** Bounds on Alt-driven Y so a wild fling doesn't fly off. */
+const ALT_Y_MIN_M = -3
+const ALT_Y_MAX_M = 10
+
+function snap(value: number, step: number): number {
+  if (step <= 0) return value
+  return Math.round(value / step) * step
+}
+
+/**
+ * Nearest typed port — duct run ends, fitting collars, anything whose
+ * kind registers `def.ports` — within snap range of `point` on the XZ
+ * plane, as a position tuple. Y is ignored for the distance check (grid
+ * events ride the floor while ports hang at duct height); the snap
+ * adopts the port's full 3D position.
+ */
+function findNearbyPort(point: [number, number, number]): [number, number, number] | null {
+  const port = findNearestPortXZ(point, collectScenePorts(), ENDPOINT_SNAP_RADIUS_M)
+  return port ? [port.position[0], port.position[1], port.position[2]] : null
+}
+
+/**
+ * Project `raw` onto the nearest of the eight 45° rays emanating from
+ * `from` in the XZ plane. Y is preserved from `from`. The projection
+ * keeps the cursor's *distance* along the chosen ray so the user feels
+ * the segment grow with their mouse motion rather than snap to a fixed
+ * length.
+ */
+function projectToAngleLock(
+  from: [number, number, number],
+  raw: [number, number, number],
+): [number, number, number] {
+  const dx = raw[0] - from[0]
+  const dz = raw[2] - from[2]
+  const len = Math.hypot(dx, dz)
+  if (len < 1e-4) return [from[0], from[1], from[2]]
+  const theta = Math.atan2(dz, dx)
+  const snapped = Math.round(theta / ANGLE_STEP_RAD) * ANGLE_STEP_RAD
+  // Distance along the chosen ray = projection of raw onto that direction.
+  const proj = dx * Math.cos(snapped) + dz * Math.sin(snapped)
+  const d = Math.max(0, proj)
+  return [from[0] + Math.cos(snapped) * d, from[1], from[2] + Math.sin(snapped) * d]
+}
+
+const DuctSegmentTool = () => {
+  const activeLevelId = useViewer((s) => s.selection.levelId)
+  const unit = useViewer((s) => s.unit)
+  const cursorRef = useRef<Group>(null)
+  const [draftPoints, setDraftPoints] = useState<Array<[number, number, number]>>([])
+  const [cursorPos, setCursorPos] = useState<[number, number, number] | null>(null)
+  // When the cursor is within snap range of an existing duct's endpoint we
+  // surface a brighter indicator and commit at the endpoint's exact coords.
+  const [snapTarget, setSnapTarget] = useState<[number, number, number] | null>(null)
+  // True while Alt is held with a last point on the draft — drives the
+  // vertical-cylinder ghost and the cursor HUD label.
+  const [altActive, setAltActive] = useState(false)
+  // Mirror into refs so emitter callbacks (closing over the first render's
+  // setState) read the latest values without re-subscribing.
+  const draftRef = useRef(draftPoints)
+  draftRef.current = draftPoints
+  const cursorPosRef = useRef(cursorPos)
+  cursorPosRef.current = cursorPos
+  // Anchor captured when Alt is pressed: screen Y at that moment and the
+  // base elevation (= last point's Y). Cleared on Alt release.
+  const altAnchorRef = useRef<{ clientY: number; baseY: number } | null>(null)
+  // Latest mouse clientY from grid:move; used so the Alt anchor knows where
+  // the cursor was at key-press time.
+  const lastClientYRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!activeLevelId) return
+
+    // One segment per gesture: first click anchors the start, second
+    // click commits a two-point duct immediately. No selection switch —
+    // the tool stays armed so the next click starts the next segment
+    // (port snap joins it onto the end just committed).
+    const commitSegment = (start: [number, number, number], end: [number, number, number]) => {
+      const sameSpot =
+        Math.abs(start[0] - end[0]) < 1e-4 &&
+        Math.abs(start[1] - end[1]) < 1e-4 &&
+        Math.abs(start[2] - end[2]) < 1e-4
+      if (sameSpot) return
+      const defaults = ductSegmentDefinition.defaults()
+      const duct = DuctSegmentNode.parse({
+        ...defaults,
+        name: 'Duct run',
+        path: [start, end],
+      })
+      useScene.getState().createNode(duct, activeLevelId)
+      triggerSFX('sfx:item-place')
+      setDraftPoints([])
+      setSnapTarget(null)
+      altAnchorRef.current = null
+      setAltActive(false)
+    }
+
+    const resolveSnappedPoint = (
+      event: GridEvent,
+    ): { point: [number, number, number]; snapped: [number, number, number] | null } => {
+      const last = draftRef.current.at(-1)
+      // First point of the run: free grid-snapped placement at Y=0 (floor).
+      // Endpoint snap can still join into an existing run.
+      if (!last) {
+        const raw: [number, number, number] = [event.localPosition[0], 0, event.localPosition[2]]
+        if (event.nativeEvent?.altKey !== true) {
+          const target = findNearbyPort(raw)
+          if (target) return { point: target, snapped: target }
+        }
+        const step = useEditor.getState().gridSnapStep
+        return {
+          point: [snap(raw[0], step), 0, snap(raw[2], step)],
+          snapped: null,
+        }
+      }
+      // Subsequent points: angle-locked to 45° from `last` (Shift releases).
+      // Y stays at `last[1]` — depth changes come from Shift+click risers.
+      const rawXZ: [number, number, number] = [
+        event.localPosition[0],
+        last[1],
+        event.localPosition[2],
+      ]
+      const shift = event.nativeEvent?.shiftKey === true
+      const angled = shift ? rawXZ : projectToAngleLock(last, rawXZ)
+      // Port snap (Alt bypass) — checked against the RAW cursor, not the
+      // angle-locked projection, so a port slightly off the 45° ray can
+      // still capture the cursor. Joining beats the lock.
+      if (event.nativeEvent?.altKey !== true && !shift) {
+        const target = findNearbyPort(rawXZ)
+        if (target) return { point: target, snapped: target }
+      }
+      const step = useEditor.getState().gridSnapStep
+      return {
+        point: [snap(angled[0], step), angled[1], snap(angled[2], step)],
+        snapped: null,
+      }
+    }
+
+    /**
+     * Compute the Alt-mode cursor position: XZ locked to the last point,
+     * Y driven by how far the mouse has moved vertically on screen since
+     * Alt was pressed. Returns null if there's no anchor (Alt not active).
+     */
+    const resolveAltVerticalPoint = (clientY: number): [number, number, number] | null => {
+      const anchor = altAnchorRef.current
+      const last = draftRef.current.at(-1)
+      if (!anchor || !last) return null
+      // Screen +Y points down, so subtract to map "drag up = raise Y".
+      const dy = (anchor.clientY - clientY) / ALT_PIXELS_PER_METER
+      const y = Math.min(ALT_Y_MAX_M, Math.max(ALT_Y_MIN_M, anchor.baseY + dy))
+      return [last[0], y, last[2]]
+    }
+
+    const onMove = (event: GridEvent) => {
+      const clientY = (event.nativeEvent as { clientY?: number } | undefined)?.clientY
+      if (typeof clientY === 'number') lastClientYRef.current = clientY
+      // Alt vertical mode wins over the XZ logic.
+      if (altAnchorRef.current && typeof clientY === 'number') {
+        const point = resolveAltVerticalPoint(clientY)
+        if (point) {
+          setCursorPos(point)
+          setSnapTarget(null)
+          return
+        }
+      }
+      const { point, snapped } = resolveSnappedPoint(event)
+      setCursorPos(point)
+      setSnapTarget(snapped)
+    }
+
+    const onClick = (event: GridEvent) => {
+      const start = draftRef.current.at(-1)
+      // Vertical mode with a start anchored: the click commits the riser
+      // segment right there. Never falls through to the XZ logic — a
+      // no-op Alt click (height unchanged) must not place anything.
+      if (altAnchorRef.current && start) {
+        const clientY =
+          (event.nativeEvent as { clientY?: number } | undefined)?.clientY ?? lastClientYRef.current
+        if (typeof clientY === 'number') {
+          const point = resolveAltVerticalPoint(clientY)
+          if (point && Math.abs(point[1] - start[1]) >= 1e-4) {
+            commitSegment(start, point)
+          }
+        }
+        return
+      }
+      const { point } = resolveSnappedPoint(event)
+      if (!start) {
+        // First click: anchor the segment start.
+        triggerSFX('sfx:grid-snap')
+        setDraftPoints([point])
+        return
+      }
+      // Second click: commit the segment and re-arm.
+      commitSegment(start, point)
+    }
+
+    const enterAltMode = () => {
+      const last = draftRef.current.at(-1)
+      if (!last || lastClientYRef.current === null) return
+      if (altAnchorRef.current) return
+      altAnchorRef.current = { clientY: lastClientYRef.current, baseY: last[1] }
+      setAltActive(true)
+    }
+
+    const exitAltMode = () => {
+      if (!altAnchorRef.current) return
+      altAnchorRef.current = null
+      setAltActive(false)
+    }
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (e.key === 'Alt') {
+        e.preventDefault()
+        enterAltMode()
+      }
+    }
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') {
+        e.preventDefault()
+        exitAltMode()
+      }
+    }
+
+    const onCancel = () => {
+      if (draftRef.current.length === 0) return
+      markToolCancelConsumed()
+      setDraftPoints([])
+      setCursorPos(null)
+      setSnapTarget(null)
+    }
+
+    emitter.on('grid:move', onMove)
+    emitter.on('grid:click', onClick)
+    emitter.on('tool:cancel', onCancel)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      emitter.off('grid:move', onMove)
+      emitter.off('grid:click', onClick)
+      emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      altAnchorRef.current = null
+    }
+  }, [activeLevelId])
+
+  if (!activeLevelId) return null
+
+  const previewSegments: Array<{ a: [number, number, number]; b: [number, number, number] }> = []
+  for (let i = 0; i < draftPoints.length - 1; i++) {
+    previewSegments.push({ a: draftPoints[i]!, b: draftPoints[i + 1]! })
+  }
+  const last = draftPoints.at(-1)
+  if (last && cursorPos) {
+    previewSegments.push({ a: last, b: cursorPos })
+  }
+
+  // Wall-style dimension pill above the cursor: absolute world coords before
+  // the first point, signed per-axis deltas from the last placed point while
+  // a segment is in flight. The actively-driven axis is emphasised — Y in
+  // Alt-vertical mode, otherwise whichever horizontal axis dominates.
+  const pillParts = cursorPos
+    ? (['x', 'y', 'z'] as const).map((axis, i) => ({
+        key: axis,
+        prefix: axis.toUpperCase(),
+        value: last ? cursorPos[i]! - last[i]! : cursorPos[i]!,
+        signed: !!last,
+      }))
+    : null
+  const pillPrimary =
+    last && cursorPos
+      ? altActive
+        ? 'y'
+        : Math.abs(cursorPos[0] - last[0]) >= Math.abs(cursorPos[2] - last[2])
+          ? 'x'
+          : 'z'
+      : undefined
+
+  return (
+    <group>
+      {/* Cursor pip */}
+      <group ref={cursorRef} position={cursorPos ?? [0, 0, 0]} visible={!!cursorPos}>
+        <mesh>
+          <sphereGeometry args={[0.08, 16, 12]} />
+          <meshBasicMaterial color="#818cf8" depthTest={false} transparent opacity={0.9} />
+        </mesh>
+        {pillParts && (
+          <Html
+            center
+            position={[0, 0.35, 0]}
+            style={{ pointerEvents: 'none', userSelect: 'none' }}
+            zIndexRange={[100, 0]}
+          >
+            <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
+          </Html>
+        )}
+      </group>
+      {/* Endpoint-snap halo — brighter ring around the target endpoint
+          while the cursor is within snap range, so the user sees that the
+          next click will join an existing duct rather than freeform-place. */}
+      {snapTarget && (
+        <mesh position={snapTarget}>
+          <sphereGeometry args={[0.18, 24, 16]} />
+          <meshBasicMaterial color="#818cf8" depthTest={false} opacity={0.35} transparent />
+        </mesh>
+      )}
+      {/* Committed point pips */}
+      {draftPoints.map((p, i) => (
+        <mesh key={`pt-${i}`} position={p}>
+          <sphereGeometry args={[0.07, 16, 12]} />
+          <meshBasicMaterial color="#818cf8" depthTest={false} />
+        </mesh>
+      ))}
+      {/* Preview cylinders */}
+      {previewSegments.map((seg, i) => (
+        <PreviewSegment a={seg.a} b={seg.b} key={`seg-${i}`} />
+      ))}
+    </group>
+  )
+}
+
+function PreviewSegment({ a, b }: { a: [number, number, number]; b: [number, number, number] }) {
+  const start = new Vector3(...a)
+  const end = new Vector3(...b)
+  const dir = new Vector3().subVectors(end, start)
+  const length = dir.length()
+  if (length < 1e-4) return null
+  dir.normalize()
+  const mid = new Vector3().addVectors(start, end).multiplyScalar(0.5)
+  // Default duct preview is 6" (~0.152m) diameter.
+  const radius = (6 * 0.0254) / 2
+  return (
+    <mesh
+      position={mid.toArray()}
+      ref={(m) => {
+        if (!m) return
+        m.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), dir)
+      }}
+    >
+      <cylinderGeometry args={[radius, radius, length, 24, 1, false]} />
+      <meshBasicMaterial color="#818cf8" depthTest={false} opacity={PREVIEW_OPACITY} transparent />
+    </mesh>
+  )
+}
+
+export default DuctSegmentTool
