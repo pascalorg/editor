@@ -167,6 +167,7 @@ const DownspoutTool = () => {
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
+        onInvalidTarget={() => setTarget(null)}
         size={[0.2, 2.5, 0.2]}
         validTarget="gutter"
       />

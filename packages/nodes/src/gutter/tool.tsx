@@ -145,7 +145,11 @@ const GutterTool = () => {
 
   return (
     <>
-      <RoofAttachmentFallbackPreview activeBuildingId={activeBuildingId} size={[2, 0.2, 0.25]} />
+      <RoofAttachmentFallbackPreview
+        activeBuildingId={activeBuildingId}
+        onInvalidTarget={() => setTarget(null)}
+        size={[2, 0.2, 0.25]}
+      />
       {activeBuildingId && target && (
         <group position={target.roof.position} rotation-y={target.roof.rotation}>
           <group position={target.segment.position} rotation-y={target.segment.rotation}>

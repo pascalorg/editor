@@ -133,7 +133,14 @@ const SolarPanelTool = () => {
 
   return (
     <>
-      <RoofAttachmentFallbackPreview activeBuildingId={activeBuildingId} size={[1.8, 0.2, 1.2]} />
+      <RoofAttachmentFallbackPreview
+        activeBuildingId={activeBuildingId}
+        onInvalidTarget={() => {
+          setPreviewPos(null)
+          setPreviewSurfaceQuat(null)
+        }}
+        size={[1.8, 0.2, 1.2]}
+      />
       {activeBuildingId && previewPos && previewSurfaceQuat && (
         <group position={previewPos}>
           <group rotation-y={previewYaw}>

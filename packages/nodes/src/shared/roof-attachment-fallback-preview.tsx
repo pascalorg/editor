@@ -1,25 +1,42 @@
 'use client'
 
-import { emitter, type GridEvent, type GutterEvent, type RoofEvent } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  type GridEvent,
+  type GutterEvent,
+  type RoofEvent,
+  sceneRegistry,
+} from '@pascal-app/core'
 import { DragBoundingBox } from '@pascal-app/editor'
 import { useEffect, useRef, useState } from 'react'
+import { Vector3 } from 'three'
 
 const INVALID_PREVIEW_COLOR = 0xef_44_44
 type ValidTarget = 'roof' | 'gutter'
 
 export function RoofAttachmentFallbackPreview({
   activeBuildingId,
+  isValidRoofTarget,
   lift = 0,
+  onInvalidTarget,
   size,
   validTarget = 'roof',
 }: {
   activeBuildingId: string | null | undefined
+  isValidRoofTarget?: (event: RoofEvent) => boolean
   lift?: number
+  onInvalidTarget?: () => void
   size: [number, number, number]
   validTarget?: ValidTarget
 }) {
   const [position, setPosition] = useState<[number, number, number] | null>(null)
   const lastValidTargetEventRef = useRef<unknown>(null)
+  const localPointRef = useRef(new Vector3())
+  const isValidRoofTargetRef = useRef(isValidRoofTarget)
+  const onInvalidTargetRef = useRef(onInvalidTarget)
+  isValidRoofTargetRef.current = isValidRoofTarget
+  onInvalidTargetRef.current = onInvalidTarget
 
   useEffect(() => {
     if (!activeBuildingId) {
@@ -32,13 +49,32 @@ export function RoofAttachmentFallbackPreview({
       lastValidTargetEventRef.current = nativeEvent
       setPosition(null)
     }
-    const onRoofHit = (event: RoofEvent) => trackValidHit(event.nativeEvent)
+    const showInvalidAt = (x: number, y: number, z: number) => {
+      setPosition([x, y + lift, z])
+      onInvalidTargetRef.current?.()
+    }
+    const showInvalidAtWorld = (event: RoofEvent) => {
+      const point = localPointRef.current.set(...event.position)
+      const building = sceneRegistry.nodes.get(activeBuildingId as AnyNodeId)
+      if (building) {
+        building.updateWorldMatrix(true, false)
+        building.worldToLocal(point)
+      }
+      showInvalidAt(point.x, 0, point.z)
+    }
+    const onRoofHit = (event: RoofEvent) => {
+      if (isValidRoofTargetRef.current?.(event) === false) {
+        showInvalidAtWorld(event)
+        return
+      }
+      trackValidHit(event.nativeEvent)
+    }
     const onGutterHit = (event: GutterEvent) => trackValidHit(event.nativeEvent)
 
     const onGridMove = (event: GridEvent) => {
       if (event.nativeEvent === lastValidTargetEventRef.current) return
       const [x, y, z] = event.localPosition
-      setPosition([x, y + lift, z])
+      showInvalidAt(x, y, z)
     }
 
     if (validTarget === 'roof') {

@@ -117,7 +117,14 @@ const CupolaTool = () => {
 
   return (
     <>
-      <RoofAttachmentFallbackPreview activeBuildingId={activeBuildingId} size={[0.8, 1.2, 0.8]} />
+      <RoofAttachmentFallbackPreview
+        activeBuildingId={activeBuildingId}
+        onInvalidTarget={() => {
+          setPreviewPos(null)
+          setPreviewSurfaceQuat(null)
+        }}
+        size={[0.8, 1.2, 0.8]}
+      />
       {activeBuildingId && previewPos && previewSurfaceQuat && (
         <group position={previewPos}>
           <group rotation-y={previewYaw}>

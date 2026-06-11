@@ -58,6 +58,7 @@ export function useDormerPlacement(opts: {
   onCommit: (hit: DormerPlacementHit, rotation: number) => void
 }): {
   activeBuildingId: string | undefined
+  clearPreview: () => void
   segmentXform: DormerSegmentTransform | null
   hitLocal: [number, number, number] | null
   ghostRotation: number
@@ -77,6 +78,11 @@ export function useDormerPlacement(opts: {
   // every time the parent rerenders).
   const onCommitRef = useRef(opts.onCommit)
   onCommitRef.current = opts.onCommit
+
+  const clearPreview = () => {
+    setSegmentXform(null)
+    setHitLocal(null)
+  }
 
   useEffect(() => {
     if (!activeBuildingId) return
@@ -177,6 +183,7 @@ export function useDormerPlacement(opts: {
 
   return {
     activeBuildingId: activeBuildingId ?? undefined,
+    clearPreview,
     segmentXform,
     hitLocal,
     ghostRotation,

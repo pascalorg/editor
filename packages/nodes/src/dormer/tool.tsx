@@ -48,29 +48,34 @@ const DormerTool = () => {
     [],
   )
 
-  const { activeBuildingId, segmentXform, hitLocal, ghostRotation } = useDormerPlacement({
-    onCommit: (hit, rotation) => {
-      const state = useScene.getState()
-      const dormer = DormerNode.parse({
-        ...dormerDefinition.defaults(),
-        name: `Dormer ${nextDormerNumber(state.nodes)}`,
-        roofSegmentId: hit.segment.id,
-        parentId: hit.segment.id,
-        // Anchor at the slope height so the renderer matches the ghost.
-        // The CSG still carves cleanly because it inverts T(position)
-        // when bringing the host into dormer-local.
-        position: [hit.localX, hit.localY, hit.localZ],
-        rotation,
-      })
-      state.createNode(dormer, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
-      setSelection({ selectedIds: [dormer.id] })
-    },
-  })
+  const { activeBuildingId, clearPreview, segmentXform, hitLocal, ghostRotation } =
+    useDormerPlacement({
+      onCommit: (hit, rotation) => {
+        const state = useScene.getState()
+        const dormer = DormerNode.parse({
+          ...dormerDefinition.defaults(),
+          name: `Dormer ${nextDormerNumber(state.nodes)}`,
+          roofSegmentId: hit.segment.id,
+          parentId: hit.segment.id,
+          // Anchor at the slope height so the renderer matches the ghost.
+          // The CSG still carves cleanly because it inverts T(position)
+          // when bringing the host into dormer-local.
+          position: [hit.localX, hit.localY, hit.localZ],
+          rotation,
+        })
+        state.createNode(dormer, hit.segment.id as AnyNodeId)
+        state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+        setSelection({ selectedIds: [dormer.id] })
+      },
+    })
 
   return (
     <>
-      <RoofAttachmentFallbackPreview activeBuildingId={activeBuildingId} size={[1.8, 1.8, 1.4]} />
+      <RoofAttachmentFallbackPreview
+        activeBuildingId={activeBuildingId}
+        onInvalidTarget={clearPreview}
+        size={[1.8, 1.8, 1.4]}
+      />
       {activeBuildingId && segmentXform && hitLocal && (
         <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
           <group position={hitLocal}>

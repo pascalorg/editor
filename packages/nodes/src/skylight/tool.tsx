@@ -112,7 +112,14 @@ const SkylightTool = () => {
 
   return (
     <>
-      <RoofAttachmentFallbackPreview activeBuildingId={activeBuildingId} size={[1.2, 0.2, 1]} />
+      <RoofAttachmentFallbackPreview
+        activeBuildingId={activeBuildingId}
+        onInvalidTarget={() => {
+          setPreviewPos(null)
+          setPreviewSurfaceQuat(null)
+        }}
+        size={[1.2, 0.2, 1]}
+      />
       {activeBuildingId && previewPos && previewSurfaceQuat && (
         <group position={previewPos}>
           <group rotation-y={previewYaw}>
