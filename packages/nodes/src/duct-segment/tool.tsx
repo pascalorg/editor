@@ -6,7 +6,13 @@ import { getLevelHeight, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
-import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
+import { planElbowAtPort } from '../shared/auto-fitting'
+import {
+  collectScenePorts,
+  DUCT_PORT_SYSTEMS,
+  findNearestPortXZ,
+  type ScenePort,
+} from '../shared/ports'
 import { ductSegmentDefinition } from './definition'
 
 /**
@@ -18,6 +24,10 @@ import { ductSegmentDefinition } from './definition'
  *   - **Second click** commits a two-point duct immediately and re-arms
  *     the tool — no polyline accumulation, no finish gesture. Chain runs
  *     by clicking again near the end you just placed (port snap).
+ *   - **Auto-elbow**: when either end snapped onto another RUN's open
+ *     port at an angle (15–90°, vertical turns included), an elbow
+ *     fitting is minted at the joint and the duct pulls back to its
+ *     outlet collar — corners get real fittings instead of butt joints.
  *   - The in-flight end is angle-locked to the nearest 45° step in XZ
  *     from the start; Y stays at the start's height. Hold **Shift** to
  *     release the lock.
@@ -54,17 +64,21 @@ function snap(value: number, step: number): number {
 /**
  * Nearest typed port — duct run ends, fitting collars, anything whose
  * kind registers `def.ports` — within snap range of `point` on the XZ
- * plane, as a position tuple. Y is ignored for the distance check (grid
- * events ride the floor while ports hang at duct height); the snap
- * adopts the port's full 3D position.
+ * plane. Y is ignored for the distance check (grid events ride the floor
+ * while ports hang at duct height); the snap adopts the port's full 3D
+ * position. The full port is returned so the commit knows what it joined
+ * (auto-elbow insertion needs the port's direction and owner).
  */
-function findNearbyPort(point: [number, number, number]): [number, number, number] | null {
-  const port = findNearestPortXZ(
+function findNearbyPort(point: [number, number, number]): ScenePort | null {
+  return findNearestPortXZ(
     point,
     collectScenePorts({ systems: DUCT_PORT_SYSTEMS }),
     ENDPOINT_SNAP_RADIUS_M,
   )
-  return port ? [port.position[0], port.position[1], port.position[2]] : null
+}
+
+function portPoint(port: ScenePort): [number, number, number] {
+  return [port.position[0], port.position[1], port.position[2]]
 }
 
 /**
@@ -123,6 +137,9 @@ const DuctSegmentTool = () => {
   diameterRef.current = diameter
   const ceilingModeRef = useRef(ceilingMode)
   ceilingModeRef.current = ceilingMode
+  // Port the anchored START point snapped onto (null = free placement).
+  // Read at commit so a turn off an existing run mints an elbow there.
+  const startPortRef = useRef<ScenePort | null>(null)
   // Anchor captured when Alt is pressed: screen Y at that moment and the
   // base elevation (= last point's Y). Cleared on Alt release.
   const altAnchorRef = useRef<{ clientY: number; baseY: number } | null>(null)
@@ -133,29 +150,77 @@ const DuctSegmentTool = () => {
   useEffect(() => {
     if (!activeLevelId) return
 
+    /**
+     * Auto-elbow gate: only joints onto another RUN's open end get a
+     * fitting minted. Ports on fittings / equipment / terminals are
+     * already proper connections — a duct mates straight onto those.
+     * Guards against the snapped node having been deleted between clicks.
+     */
+    const elbowPlanFor = (port: ScenePort | null, awayDir: [number, number, number]) => {
+      if (!port) return null
+      const owner = useScene.getState().nodes[port.nodeId]
+      if (owner?.type !== 'duct-segment') return null
+      return planElbowAtPort(port, awayDir, diameterRef.current)
+    }
+
     // One segment per gesture: first click anchors the start, second
     // click commits a two-point duct immediately. No selection switch —
     // the tool stays armed so the next click starts the next segment
     // (port snap joins it onto the end just committed).
-    const commitSegment = (start: [number, number, number], end: [number, number, number]) => {
-      const sameSpot =
-        Math.abs(start[0] - end[0]) < 1e-4 &&
-        Math.abs(start[1] - end[1]) < 1e-4 &&
-        Math.abs(start[2] - end[2]) < 1e-4
-      if (sameSpot) return
+    //
+    // When an end of the segment snapped onto another run's open port at
+    // an angle, an elbow fitting is minted at that joint and the duct is
+    // pulled back to the elbow's outlet collar — corners get real
+    // fittings instead of butt joints.
+    const commitSegment = (
+      start: [number, number, number],
+      end: [number, number, number],
+      endPort: ScenePort | null = null,
+    ) => {
+      const length = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2])
+      if (length < 1e-4) return
+      const dir: [number, number, number] = [
+        (end[0] - start[0]) / length,
+        (end[1] - start[1]) / length,
+        (end[2] - start[2]) / length,
+      ]
+
+      const startPlan = elbowPlanFor(startPortRef.current, dir)
+      const endPlan = elbowPlanFor(endPort, [-dir[0], -dir[1], -dir[2]])
+      let ductStart = startPlan ? startPlan.collarPoint : start
+      let ductEnd = endPlan ? endPlan.collarPoint : end
+      // The collar pull-back must leave a real piece of duct between the
+      // fittings; if not, fall back to the plain joint.
+      const remaining = Math.hypot(
+        ductEnd[0] - ductStart[0],
+        ductEnd[1] - ductStart[1],
+        ductEnd[2] - ductStart[2],
+      )
+      const fittings = remaining > 0.08 ? [startPlan, endPlan].filter((p) => p !== null) : []
+      if (fittings.length === 0) {
+        ductStart = start
+        ductEnd = end
+      }
+
       const defaults = ductSegmentDefinition.defaults()
       const toolDefaults = useEditor.getState().toolDefaults['duct-segment'] ?? {}
       const duct = DuctSegmentNode.parse({
         ...defaults,
         ...toolDefaults,
         name: 'Duct run',
-        path: [start, end],
+        path: [ductStart, ductEnd],
         diameter: diameterRef.current,
       })
-      useScene.getState().createNode(duct, activeLevelId)
+      useScene
+        .getState()
+        .createNodes([
+          ...fittings.map((plan) => ({ node: plan.fitting, parentId: activeLevelId })),
+          { node: duct, parentId: activeLevelId },
+        ])
       triggerSFX('sfx:item-place')
       setDraftPoints([])
       setSnapTarget(null)
+      startPortRef.current = null
       altAnchorRef.current = null
       setAltActive(false)
     }
@@ -172,22 +237,31 @@ const DuctSegmentTool = () => {
 
     const resolveSnappedPoint = (
       event: GridEvent,
-    ): { point: [number, number, number]; snapped: [number, number, number] | null } => {
+    ): {
+      point: [number, number, number]
+      snapped: [number, number, number] | null
+      port: ScenePort | null
+    } => {
       const last = draftRef.current.at(-1)
       // First point of the run: grid-snapped placement at the base Y (floor,
       // or ceiling height in ceiling mode). Endpoint snap can still join an
       // existing run.
       if (!last) {
         const baseY = resolveBaseY()
-        const raw: [number, number, number] = [event.localPosition[0], baseY, event.localPosition[2]]
+        const raw: [number, number, number] = [
+          event.localPosition[0],
+          baseY,
+          event.localPosition[2],
+        ]
         if (event.nativeEvent?.altKey !== true) {
           const target = findNearbyPort(raw)
-          if (target) return { point: target, snapped: target }
+          if (target) return { point: portPoint(target), snapped: portPoint(target), port: target }
         }
         const step = useEditor.getState().gridSnapStep
         return {
           point: [snap(raw[0], step), baseY, snap(raw[2], step)],
           snapped: null,
+          port: null,
         }
       }
       // Subsequent points: angle-locked to 45° from `last` (Shift releases).
@@ -204,12 +278,13 @@ const DuctSegmentTool = () => {
       // still capture the cursor. Joining beats the lock.
       if (event.nativeEvent?.altKey !== true && !shift) {
         const target = findNearbyPort(rawXZ)
-        if (target) return { point: target, snapped: target }
+        if (target) return { point: portPoint(target), snapped: portPoint(target), port: target }
       }
       const step = useEditor.getState().gridSnapStep
       return {
         point: [snap(angled[0], step), angled[1], snap(angled[2], step)],
         snapped: null,
+        port: null,
       }
     }
 
@@ -261,15 +336,17 @@ const DuctSegmentTool = () => {
         }
         return
       }
-      const { point } = resolveSnappedPoint(event)
+      const { point, port } = resolveSnappedPoint(event)
       if (!start) {
-        // First click: anchor the segment start.
+        // First click: anchor the segment start, remembering the port it
+        // snapped to so the commit can mint an elbow on a turn.
         triggerSFX('sfx:grid-snap')
+        startPortRef.current = port
         setDraftPoints([point])
         return
       }
       // Second click: commit the segment and re-arm.
-      commitSegment(start, point)
+      commitSegment(start, point, port)
     }
 
     const enterAltMode = () => {
@@ -337,6 +414,7 @@ const DuctSegmentTool = () => {
       setDraftPoints([])
       setCursorPos(null)
       setSnapTarget(null)
+      startPortRef.current = null
     }
 
     emitter.on('grid:move', onMove)
