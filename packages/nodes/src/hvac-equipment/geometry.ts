@@ -11,7 +11,7 @@ import {
   Vector3,
 } from 'three'
 import { INCHES_TO_METERS } from '../duct-segment/geometry'
-import { localEquipmentPorts } from './ports'
+import { localEquipmentPorts, localRefrigerantPorts } from './ports'
 import type { HvacEquipmentNode } from './schema'
 
 const RADIAL_SEGMENTS = 24
@@ -39,6 +39,8 @@ const AIR_HANDLER_TRIM = EQUIPMENT_TRIM
 const FAN_GRILLE_COLOR = '#3a3f44'
 const FAN_BLADE_COLOR = '#d7dade'
 const COIL_FIN_COLOR = '#9aa1a8'
+const COPPER_COLOR = '#b06b3f'
+const SERVICE_VALVE_COLOR = '#7a8086'
 
 const UP = new Vector3(0, 1, 0)
 
@@ -220,6 +222,7 @@ export function buildHvacEquipmentGeometry(node: HvacEquipmentNode): Group {
   buildGasLine(node, group, { hw, hd, H })
 
   buildCollars(node, group)
+  buildServiceValves(node, group)
   return group
 }
 
@@ -387,6 +390,72 @@ function buildCollars(node: HvacEquipmentNode, group: Group): void {
   }
 }
 
+// Default lineset line radii (meters) — must mirror the lineset kind's
+// defaults so the two service stubs sit exactly where its suction/liquid
+// pipes run. See `lineset/geometry.ts` (suction 7/8", liquid 3/8", 3/8"
+// foam jacket) and its symmetric ±offset about the path centerline.
+const LINESET_SUCTION_R = (0.875 * INCHES_TO_METERS) / 2
+const LINESET_LIQUID_R = (0.375 * INCHES_TO_METERS) / 2
+const LINESET_JACKET_R = LINESET_SUCTION_R + 0.01
+const LINESET_PAIR_OFFSET = LINESET_JACKET_R + LINESET_LIQUID_R
+
+/**
+ * Refrigerant service valves at the lineset port — a brass-grey valve body
+ * with two copper stubs the lineset run mates onto. Built on every
+ * equipment type so a split system can be piped from condenser to coil.
+ *
+ * A lineset is a parallel pair (insulated suction + bare liquid) offset
+ * symmetrically about its path centerline. The snap point is that
+ * centerline, so a single stub would sit in the empty gap between the two
+ * pipes. Instead we emit two stubs at exactly the lineset's ±offset along
+ * the port's horizontal perpendicular: the suction pipe lands on the wide
+ * stub, the liquid pipe on the narrow one, when the run leaves the face.
+ */
+function buildServiceValves(node: HvacEquipmentNode, group: Group): void {
+  const valveMat = new MeshStandardMaterial({
+    color: SERVICE_VALVE_COLOR,
+    metalness: 0.7,
+    roughness: 0.35,
+  })
+  const copperMat = new MeshStandardMaterial({
+    color: COPPER_COLOR,
+    metalness: 0.8,
+    roughness: 0.3,
+  })
+  for (const port of localRefrigerantPorts(node)) {
+    const dir = port.direction.clone().normalize()
+    // Horizontal perpendicular to the port — matches the lineset geometry's
+    // `horizontal.cross(UP)`, so the stub offsets track its pipe offsets.
+    const perp = dir.clone().cross(UP).normalize()
+
+    // Brass-grey valve body bolted to the cabinet face, spanning the pair.
+    const bodyWidth = 2 * LINESET_PAIR_OFFSET + 2 * LINESET_JACKET_R
+    const body = new Mesh(new BoxGeometry(0.05, 0.08, bodyWidth), valveMat)
+    body.name = 'service-valve-body'
+    body.position.copy(port.position).addScaledVector(dir, 0.025)
+    body.quaternion.setFromUnitVectors(UP, dir)
+    group.add(body)
+
+    const stubLen = 0.07
+    const addStub = (sign: number, radius: number, id: string) => {
+      const stub = new Mesh(
+        new CylinderGeometry(radius, radius, stubLen, SMALL_SEGMENTS),
+        copperMat,
+      )
+      stub.name = `service-valve-stub-${id}`
+      stub.position
+        .copy(port.position)
+        .addScaledVector(perp, sign * LINESET_PAIR_OFFSET)
+        .addScaledVector(dir, 0.05 + stubLen / 2)
+      stub.quaternion.setFromUnitVectors(UP, dir)
+      group.add(stub)
+    }
+    // Suction pipe is the lineset's -offset line; liquid is +offset.
+    addStub(-1, LINESET_SUCTION_R, 'suction')
+    addStub(1, LINESET_LIQUID_R, 'liquid')
+  }
+}
+
 /**
  * Residential split-system condenser, matching the reference photos: a
  * greenish-grey body wrapped in vertical louvered coil fins on all four
@@ -478,6 +547,7 @@ function buildCondenser(node: HvacEquipmentNode, group: Group): Group {
   addFins(finsAlongD, D - post, hw - post / 2 + 0.004, 'z', -1) // left
 
   buildCondenserFanGuard(group, W, H, D)
+  buildServiceValves(node, group)
   return group
 }
 
@@ -694,5 +764,6 @@ function buildAirHandler(node: HvacEquipmentNode, group: Group): Group {
   }
 
   buildCollars(node, group)
+  buildServiceValves(node, group)
   return group
 }

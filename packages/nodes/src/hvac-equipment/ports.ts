@@ -7,15 +7,20 @@ type LocalPort = {
   position: Vector3
   direction: Vector3
   diameter: number
-  system: 'supply' | 'return'
+  system: 'supply' | 'return' | 'refrigerant'
 }
 
+/** Nominal suction-line OD (inches) the refrigerant service connection
+ * advertises — matches the lineset kind's default suction diameter so a
+ * lineset run mates cleanly onto the valve. */
+const REFRIGERANT_PORT_DIAMETER_IN = 0.875
+
 /**
- * Ports in the cabinet's LOCAL frame (origin at the base center, before
- * yaw / position). Matches a typical upflow furnace / vertical air
+ * Duct ports in the cabinet's LOCAL frame (origin at the base center,
+ * before yaw / position). Matches a typical upflow furnace / vertical air
  * handler: supply plenum collar on top, return drop on the -X side near
- * the bottom third. Condensers are the refrigerant side of a split
- * system — no duct ports.
+ * the bottom third. Condensers carry no duct ports — their connection is
+ * the refrigerant lineset (see `localRefrigerantPorts`).
  */
 export function localEquipmentPorts(node: HvacEquipmentNode): LocalPort[] {
   if (node.equipmentType === 'condenser') return []
@@ -37,10 +42,33 @@ export function localEquipmentPorts(node: HvacEquipmentNode): LocalPort[] {
   ]
 }
 
-/** `def.ports` — local ports transformed into level-local space (yaw + position). */
+/**
+ * Refrigerant service connection in the cabinet's LOCAL frame — the point
+ * a lineset run leaves from (condenser) or arrives at (indoor coil on a
+ * furnace / air handler). Every equipment type exposes exactly one, on the
+ * +X service-valve face: a condenser/air-handler near the bottom third, a
+ * furnace near the top where the cased A-coil sits above the heat
+ * exchanger.
+ */
+export function localRefrigerantPorts(node: HvacEquipmentNode): LocalPort[] {
+  const y = node.equipmentType === 'furnace' ? node.height * 0.8 : node.height * 0.3
+  return [
+    {
+      id: 'lineset',
+      position: new Vector3(node.width / 2, y, 0),
+      direction: new Vector3(1, 0, 0),
+      diameter: REFRIGERANT_PORT_DIAMETER_IN,
+      system: 'refrigerant',
+    },
+  ]
+}
+
+/** `def.ports` — duct + refrigerant ports transformed into level-local
+ * space (yaw + position). */
 export function getHvacEquipmentPorts(node: HvacEquipmentNode): NodePort[] {
   const offset = new Vector3(node.position[0], node.position[1], node.position[2])
-  return localEquipmentPorts(node).map((port) => {
+  const local = [...localEquipmentPorts(node), ...localRefrigerantPorts(node)]
+  return local.map((port) => {
     const position = port.position.clone().applyAxisAngle(new Vector3(0, 1, 0), node.rotation)
     position.add(offset)
     const direction = port.direction

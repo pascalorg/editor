@@ -7,9 +7,11 @@ import { BaseNode, nodeType, objectId } from '../base'
  * air handler, outdoor condenser.
  *
  * Phase 3 of the HVAC node system. Furnaces and air handlers expose
- * typed ports (supply plenum on top, return drop on the side) so duct
- * runs and fittings snap onto them; condensers are the outdoor half of
- * a split system and carry no duct ports.
+ * typed duct ports (supply plenum on top, return drop on the side) so
+ * duct runs and fittings snap onto them. Every unit also exposes a
+ * refrigerant service port on its valve face — a condenser, the outdoor
+ * half of a split system, carries no duct ports but pipes to the indoor
+ * coil through a `lineset` run mating onto that port.
  *
  * Floor-placed: `position` is level-local meters with y at the base,
  * `rotation` is yaw radians (the editor's default R-rotate applies).

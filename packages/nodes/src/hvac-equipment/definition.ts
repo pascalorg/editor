@@ -88,6 +88,6 @@ export const hvacEquipmentDefinition: NodeDefinition<typeof HvacEquipmentNode> =
 
   mcp: {
     description:
-      'HVAC equipment cabinet (furnace, air handler, or condenser) with supply/return duct ports. Position is level-local meters; rotation is yaw radians.',
+      'HVAC equipment cabinet (furnace, air handler, or condenser). Furnaces and air handlers have supply/return duct ports; every unit also has a refrigerant service port that a lineset run connects to. Position is level-local meters; rotation is yaw radians.',
   },
 }
