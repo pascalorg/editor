@@ -146,7 +146,7 @@ function summarize(
       runLengthM += pathLength(node.path)
       if (node.type === 'lineset') systems.add('refrigerant')
       else systems.add(node.system)
-    } else if (node.type === 'duct-fitting') {
+    } else if (node.type === 'duct-fitting' || node.type === 'pipe-fitting') {
       fittingCount += 1
       systems.add(node.system)
     } else if (node.type === 'duct-terminal') {

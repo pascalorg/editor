@@ -1,7 +1,13 @@
-import { DuctFittingNode, DuctSegmentNode } from '@pascal-app/core'
+import {
+  DuctFittingNode,
+  DuctSegmentNode,
+  PipeFittingNode,
+  PipeSegmentNode,
+} from '@pascal-app/core'
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { fittingLegLength } from '../duct-fitting/ports'
 import { ductPortDiameterIn, equivalentDiameterIn } from '../duct-segment/geometry'
+import { pipeFittingLegLength, WYE_BRANCH_RAD } from '../pipe-fitting/ports'
 import type { RunBodyHit, ScenePort } from './ports'
 
 /** Turns shallower than this read as a straight continuation — butt-join
@@ -72,11 +78,27 @@ function frame(primary: Vector3, reference: Vector3): Matrix4 | null {
  * continuation (butt-join is fine), a back-turn sharper than 90°, or a
  * degenerate direction pair.
  */
-export function planElbowAtPort(
-  port: ScenePort,
+/**
+ * Domain-agnostic corner-joint math: where an elbow-shaped fitting (any
+ * kind whose local inlet faces -X with the outlet turned `angle`° in
+ * XZ) lands when joining `port` to a run leaving along `awayDir`, with
+ * legs of `legM` meters. The junction sits exactly ON the corner; the
+ * caller trims the existing run to `trimmedPortPoint` and starts the
+ * new one at `collarPoint`.
+ */
+export type CornerJointGeometry = {
+  angleDeg: number
+  rotation: Point
+  junction: Point
+  collarPoint: Point
+  trimmedPortPoint: Point
+}
+
+export function planCornerJoint(
+  port: Pick<ScenePort, 'position' | 'direction'>,
   awayDir: Point,
-  profile: DuctProfile,
-): ElbowJointPlan | null {
+  legM: number,
+): CornerJointGeometry | null {
   const portDir = new Vector3(...port.direction).normalize()
   const away = new Vector3(...awayDir).normalize()
   if (portDir.lengthSq() < 1e-10 || away.lengthSq() < 1e-10) return null
@@ -88,7 +110,7 @@ export function planElbowAtPort(
   // Rotation mapping the local pair onto the world pair: local +X (the
   // inlet axis, flow direction) → portDir, local outlet → awayDir. Both
   // pairs subtend the same angle, so a shared-plane basis transfer is
-  // exact.
+  // exact — vertical turns included.
   const outletLocal = new Vector3(Math.cos(turn), 0, Math.sin(turn))
   const localFrame = frame(new Vector3(1, 0, 0), outletLocal)
   const worldFrame = frame(portDir, away)
@@ -98,14 +120,26 @@ export function planElbowAtPort(
   )
   const euler = new Euler().setFromQuaternion(rotation)
 
-  // Junction sits exactly ON the corner the user drew. The elbow's inlet
-  // leg therefore overlaps the last stretch of the existing run — the
-  // caller trims that run back to `trimmedPortPoint` so the elbow
-  // replaces it and the visual corner stays put.
-  const leg = fittingLegLength(profileDiameterIn(profile))
   const junction = new Vector3(...port.position)
-  const collar = junction.clone().addScaledVector(away, leg)
-  const trimmed = junction.clone().addScaledVector(portDir, -leg)
+  const collar = junction.clone().addScaledVector(away, legM)
+  const trimmed = junction.clone().addScaledVector(portDir, -legM)
+
+  return {
+    angleDeg,
+    rotation: [euler.x, euler.y, euler.z],
+    junction: [junction.x, junction.y, junction.z],
+    collarPoint: [collar.x, collar.y, collar.z],
+    trimmedPortPoint: [trimmed.x, trimmed.y, trimmed.z],
+  }
+}
+
+export function planElbowAtPort(
+  port: ScenePort,
+  awayDir: Point,
+  profile: DuctProfile,
+): ElbowJointPlan | null {
+  const joint = planCornerJoint(port, awayDir, fittingLegLength(profileDiameterIn(profile)))
+  if (!joint) return null
 
   const system = port.system === 'return' ? 'return' : 'supply'
   // Built from the schema directly (defaults fill the rest) — importing
@@ -121,20 +155,20 @@ export function planElbowAtPort(
     shape: profile.shape,
     width: profile.width,
     height: profile.height,
-    angle: angleDeg,
+    angle: joint.angleDeg,
     diameter: profileDiameterIn(profile),
     diameter2: profileDiameterIn(profile),
     // Corner elbows are sheet metal even on flex runs (adjustable elbows).
     ductMaterial: 'sheet-metal',
     system,
-    position: [junction.x, junction.y, junction.z],
-    rotation: [euler.x, euler.y, euler.z],
+    position: joint.junction,
+    rotation: joint.rotation,
   })
 
   return {
     fitting,
-    collarPoint: [collar.x, collar.y, collar.z],
-    trimmedPortPoint: [trimmed.x, trimmed.y, trimmed.z],
+    collarPoint: joint.collarPoint,
+    trimmedPortPoint: joint.trimmedPortPoint,
   }
 }
 
@@ -345,5 +379,171 @@ export function planElbowRealign(
       },
     },
     collarPoint: [collar.x, collar.y, collar.z],
+  }
+}
+
+// ─── DWV pipe joints ─────────────────────────────────────────────────
+
+export type PipeElbowPlan = {
+  fitting: PipeFittingNode
+  collarPoint: Point
+  trimmedPortPoint: Point
+}
+
+/**
+ * Elbow (bend) joining an existing DWV run's open port to a new run —
+ * same corner geometry as the duct elbow, minted as a pipe fitting.
+ */
+export function planPipeElbowAtPort(
+  port: ScenePort,
+  awayDir: Point,
+  diameterIn: number,
+  pipeMaterial: PipeFittingNode['pipeMaterial'] = 'pvc',
+): PipeElbowPlan | null {
+  const joint = planCornerJoint(port, awayDir, pipeFittingLegLength(diameterIn))
+  if (!joint) return null
+
+  const fitting = PipeFittingNode.parse({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    name: 'Bend',
+    fittingType: 'elbow',
+    angle: joint.angleDeg,
+    diameter: diameterIn,
+    diameter2: diameterIn,
+    pipeMaterial,
+    system: port.system === 'vent' ? 'vent' : 'waste',
+    position: joint.junction,
+    rotation: joint.rotation,
+  })
+
+  return {
+    fitting,
+    collarPoint: joint.collarPoint,
+    trimmedPortPoint: joint.trimmedPortPoint,
+  }
+}
+
+export type PipeBranchTapPlan = {
+  /** Parsed wye / sanitary tee, junction ON the tap point. */
+  fitting: PipeFittingNode
+  /** The branch collar — where the new run starts. */
+  branchCollar: Point
+  /** Tapped run rewritten to END one run-leg before the tap. */
+  runUpdate: { id: PipeSegmentNode['id']; data: { path: Point[] } }
+  /** New run carrying the rest of the tapped run. */
+  runTail: PipeSegmentNode
+}
+
+/** A run steeper than this reads as a vertical stack — branch entries
+ *  use a sanitary tee instead of a wye. */
+const STACK_AXIS_Y = 0.7
+
+/**
+ * Plan the branch fitting that taps a new run into the SIDE of an
+ * existing DWV run — plumbing's code-correct joints:
+ *
+ *   - Horizontal drain → **wye**: the branch enters at 45°, leaning
+ *     DOWNSTREAM (along the run's draw direction, which is its fall
+ *     direction), so flow merges instead of colliding.
+ *   - Vertical stack → **sanitary tee**: the branch enters square.
+ *
+ * The run splits like a duct tee tap: original keeps the upstream half,
+ * a new node carries the downstream half, both trimmed one run-leg from
+ * the tap point.
+ */
+export function planPipeBranchTap(
+  run: PipeSegmentNode,
+  hit: RunBodyHit,
+  awayDir: Point,
+  branchDiameterIn: number,
+): PipeBranchTapPlan | null {
+  const a = run.path[hit.segmentIndex]
+  const b = run.path[hit.segmentIndex + 1]
+  if (!a || !b) return null
+  const axis = new Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+  if (axis.lengthSq() < 1e-10) return null
+  axis.normalize()
+
+  const away = new Vector3(...awayDir)
+  const perp = away.clone().addScaledVector(axis, -away.dot(axis))
+  if (perp.lengthSq() < 1e-6) return null
+  perp.normalize()
+
+  const isStack = Math.abs(axis.y) > STACK_AXIS_Y
+  const fittingType = isStack ? 'sanitary-tee' : 'wye'
+  const branchDir = isStack
+    ? perp.clone()
+    : axis
+        .clone()
+        .multiplyScalar(Math.cos(WYE_BRANCH_RAD))
+        .addScaledVector(perp, Math.sin(WYE_BRANCH_RAD))
+        .normalize()
+
+  const legRun = pipeFittingLegLength(run.diameter)
+  const legBranch = pipeFittingLegLength(branchDiameterIn)
+  const P = new Vector3(...hit.point)
+  const upstream = P.distanceTo(new Vector3(...a))
+  const downstream = P.distanceTo(new Vector3(...b))
+  const MIN_STUB = 0.05
+  if (upstream < legRun + MIN_STUB || downstream < legRun + MIN_STUB) return null
+
+  // Local +X (run) → axis, local +Z (branch plane) → perp. The wye's
+  // 45° local branch maps onto branchDir automatically.
+  const localFrame = frame(new Vector3(1, 0, 0), new Vector3(0, 0, 1))
+  const worldFrame = frame(axis, perp)
+  if (!localFrame || !worldFrame) return null
+  const rotation = new Quaternion().setFromRotationMatrix(
+    worldFrame.multiply(localFrame.transpose()),
+  )
+  const euler = new Euler().setFromQuaternion(rotation)
+
+  const inletTrim = P.clone().addScaledVector(axis, -legRun)
+  const outletTrim = P.clone().addScaledVector(axis, legRun)
+  const collar = P.clone().addScaledVector(branchDir, legBranch)
+
+  const fitting = PipeFittingNode.parse({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    name: isStack ? 'Sanitary tee' : 'Wye',
+    fittingType,
+    diameter: run.diameter,
+    diameter2: branchDiameterIn,
+    pipeMaterial: run.pipeMaterial,
+    system: run.system,
+    position: [P.x, P.y, P.z],
+    rotation: [euler.x, euler.y, euler.z],
+  })
+
+  const upstreamPath: Point[] = [
+    ...run.path.slice(0, hit.segmentIndex + 1).map((p) => [...p] as Point),
+    [inletTrim.x, inletTrim.y, inletTrim.z],
+  ]
+  const tailPath: Point[] = [
+    [outletTrim.x, outletTrim.y, outletTrim.z],
+    ...run.path.slice(hit.segmentIndex + 1).map((p) => [...p] as Point),
+  ]
+
+  const runTail = PipeSegmentNode.parse({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    name: run.name ?? 'Drain',
+    path: tailPath,
+    diameter: run.diameter,
+    pipeMaterial: run.pipeMaterial,
+    system: run.system,
+  })
+
+  return {
+    fitting,
+    branchCollar: [collar.x, collar.y, collar.z],
+    runUpdate: { id: run.id, data: { path: upstreamPath } },
+    runTail,
   }
 }

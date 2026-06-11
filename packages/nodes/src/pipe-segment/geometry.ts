@@ -11,13 +11,18 @@ const VENT_OPACITY = 0.85
 
 const RADIAL_SEGMENTS = 20
 
-function getPipeColor(node: PipeSegmentNode): string {
+type PipeAppearance = {
+  pipeMaterial: 'pvc' | 'abs' | 'cast-iron'
+  system: 'waste' | 'vent'
+}
+
+function getPipeColor(node: PipeAppearance): string {
   if (node.pipeMaterial === 'abs') return ABS_COLOR
   if (node.pipeMaterial === 'cast-iron') return CAST_IRON_COLOR
   return PVC_COLOR
 }
 
-export function createPipeMaterial(node: PipeSegmentNode): MeshStandardMaterial {
+export function createPipeMaterial(node: PipeAppearance): MeshStandardMaterial {
   return new MeshStandardMaterial({
     color: getPipeColor(node),
     metalness: node.pipeMaterial === 'cast-iron' ? 0.5 : 0.05,

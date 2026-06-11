@@ -93,6 +93,7 @@ export {
 } from './nodes/item'
 export { LevelNode } from './nodes/level'
 export { LinesetNode } from './nodes/lineset'
+export { PipeFittingNode } from './nodes/pipe-fitting'
 export { PipeSegmentNode } from './nodes/pipe-segment'
 // Nodes
 export { RidgeVentNode } from './nodes/ridge-vent'

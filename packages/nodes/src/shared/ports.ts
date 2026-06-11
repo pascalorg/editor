@@ -92,14 +92,16 @@ export type RunBodyHit = {
 export function findNearestRunBodyXZ(
   point: readonly [number, number, number],
   radius: number,
-  excludeNodeId?: AnyNodeId,
+  filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[] } = {},
 ): RunBodyHit | null {
+  const kinds = filter.kinds ?? ['duct-segment']
   const { nodes } = useScene.getState()
   let best: RunBodyHit | null = null
   let bestDistSq = radius * radius
   for (const node of Object.values(nodes)) {
-    if (!node || node.type !== 'duct-segment' || node.id === excludeNodeId) continue
-    const path = node.path
+    if (!node || !kinds.includes(node.type) || node.id === filter.excludeNodeId) continue
+    const path = (node as { path?: Array<readonly [number, number, number]> }).path
+    if (!path) continue
     for (let i = 0; i < path.length - 1; i++) {
       const a = path[i]!
       const b = path[i + 1]!

@@ -1,15 +1,18 @@
 'use client'
 
-import { emitter, type GridEvent, PipeSegmentNode, useScene } from '@pascal-app/core'
+import { type AnyNode, emitter, type GridEvent, PipeSegmentNode, useScene } from '@pascal-app/core'
 import { DimensionPill, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { Vector3 } from 'three'
+import { planPipeBranchTap, planPipeElbowAtPort } from '../shared/auto-fitting'
 import {
   collectScenePorts,
   DWV_PORT_SYSTEMS,
   findNearestPortXZ,
+  findNearestRunBodyXZ,
+  type RunBodyHit,
   type ScenePort,
 } from '../shared/ports'
 import { pipeSegmentDefinition } from './definition'
@@ -41,6 +44,8 @@ const PIPE_DIAMETERS_IN = [1.25, 1.5, 2, 3, 4, 6] as const
 const DRAIN_SLOPE = 1 / 48
 /** Snap radius (meters, XZ) for joining onto an existing pipe end. */
 const PORT_SNAP_RADIUS_M = 0.5
+/** Snap radius (meters, XZ) for tapping the side of an existing run. */
+const BODY_SNAP_RADIUS_M = 0.3
 const ANGLE_STEP_RAD = Math.PI / 4
 const ALT_PIXELS_PER_METER = 100
 const ALT_Y_MIN_M = -3
@@ -92,26 +97,110 @@ const PipeSegmentTool = () => {
   systemRef.current = system
   const diameterRef = useRef(diameter)
   diameterRef.current = diameter
+  // Port / run-body the anchored start snapped onto — read at commit so
+  // joints mint bends (corner) or wyes / sanitary tees (body tap).
+  const startPortRef = useRef<ScenePort | null>(null)
+  const startBodyRef = useRef<RunBodyHit | null>(null)
   const altAnchorRef = useRef<{ clientY: number; baseY: number } | null>(null)
   const lastClientYRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!activeLevelId) return
 
-    const commitSegment = (start: [number, number, number], end: [number, number, number]) => {
+    /** Corner-bend gate: joints onto another PIPE run's open end. */
+    const bendPlanFor = (port: ScenePort | null, awayDir: [number, number, number]) => {
+      if (!port) return null
+      const owner = useScene.getState().nodes[port.nodeId]
+      if (owner?.type !== 'pipe-segment') return null
+      const plan = planPipeElbowAtPort(port, awayDir, diameterRef.current, owner.pipeMaterial)
+      if (!plan) return null
+      // Trim the run's snapped endpoint back to the bend's inlet collar.
+      const path = owner.path.map((p) => [...p] as [number, number, number])
+      const index = port.id === 'start' ? 0 : path.length - 1
+      const neighbor = path[index === 0 ? 1 : index - 1]!
+      const remaining = Math.hypot(
+        plan.trimmedPortPoint[0] - neighbor[0],
+        plan.trimmedPortPoint[1] - neighbor[1],
+        plan.trimmedPortPoint[2] - neighbor[2],
+      )
+      const original = path[index]!
+      const originalLen = Math.hypot(
+        original[0] - neighbor[0],
+        original[1] - neighbor[1],
+        original[2] - neighbor[2],
+      )
+      if (remaining < 0.05 || remaining >= originalLen) return null
+      path[index] = plan.trimmedPortPoint
+      return { ...plan, trim: { id: port.nodeId, data: { path } as Partial<AnyNode> } }
+    }
+
+    const commitSegment = (
+      start: [number, number, number],
+      end: [number, number, number],
+      endPort: ScenePort | null = null,
+    ) => {
       const length = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2])
       if (length < 1e-4) return
+      const dir: [number, number, number] = [
+        (end[0] - start[0]) / length,
+        (end[1] - start[1]) / length,
+        (end[2] - start[2]) / length,
+      ]
+
+      const startPlan = bendPlanFor(startPortRef.current, dir)
+      const endPlan = bendPlanFor(endPort, [-dir[0], -dir[1], -dir[2]])
+      // Body tap (wye / sanitary tee) when the start landed on a run's side.
+      const body = startPlan ? null : startBodyRef.current
+      const bodyOwner = body ? useScene.getState().nodes[body.nodeId] : null
+      const tapPlan =
+        body && bodyOwner?.type === 'pipe-segment'
+          ? planPipeBranchTap(bodyOwner, body, dir, diameterRef.current)
+          : null
+
+      let pipeStart = startPlan?.collarPoint ?? tapPlan?.branchCollar ?? start
+      let pipeEnd = endPlan?.collarPoint ?? end
+      const remaining = Math.hypot(
+        pipeEnd[0] - pipeStart[0],
+        pipeEnd[1] - pipeStart[1],
+        pipeEnd[2] - pipeStart[2],
+      )
+      let bends = [startPlan, endPlan].filter((p) => p !== null)
+      let tap = tapPlan
+      if (remaining <= 0.05) {
+        bends = []
+        tap = null
+        pipeStart = start
+        pipeEnd = end
+      }
+
       const pipe = PipeSegmentNode.parse({
         ...pipeSegmentDefinition.defaults(),
         name: systemRef.current === 'vent' ? 'Vent' : 'Drain',
-        path: [start, end],
+        path: [pipeStart, pipeEnd],
         diameter: diameterRef.current,
         system: systemRef.current,
       })
-      useScene.getState().createNode(pipe, activeLevelId)
+      useScene.getState().applyNodeChanges({
+        create: [
+          ...bends.map((plan) => ({ node: plan.fitting, parentId: activeLevelId })),
+          ...(tap
+            ? [
+                { node: tap.fitting, parentId: activeLevelId },
+                { node: tap.runTail, parentId: activeLevelId },
+              ]
+            : []),
+          { node: pipe, parentId: activeLevelId },
+        ],
+        update: [
+          ...bends.map((plan) => plan.trim),
+          ...(tap ? [tap.runUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
+        ],
+      })
       triggerSFX('sfx:item-place')
       setDraftStart(null)
       setSnapTarget(null)
+      startPortRef.current = null
+      startBodyRef.current = null
       altAnchorRef.current = null
       setAltActive(false)
     }
@@ -128,7 +217,12 @@ const PipeSegmentTool = () => {
 
     const resolveSnappedPoint = (
       event: GridEvent,
-    ): { point: [number, number, number]; snapped: [number, number, number] | null } => {
+    ): {
+      point: [number, number, number]
+      snapped: [number, number, number] | null
+      port: ScenePort | null
+      body: RunBodyHit | null
+    } => {
       const start = startRef.current
       if (!start) {
         const raw: [number, number, number] = [event.localPosition[0], 0, event.localPosition[2]]
@@ -140,11 +234,21 @@ const PipeSegmentTool = () => {
               port.position[1],
               port.position[2],
             ]
-            return { point: p, snapped: p }
+            return { point: p, snapped: p, port, body: null }
           }
+          // No open end nearby — try the side of a run (wye / santee tap).
+          const body = findNearestRunBodyXZ(raw, BODY_SNAP_RADIUS_M, {
+            kinds: ['pipe-segment'],
+          })
+          if (body) return { point: body.point, snapped: body.point, port: null, body }
         }
         const step = useEditor.getState().gridSnapStep
-        return { point: [snap(raw[0], step), 0, snap(raw[2], step)], snapped: null }
+        return {
+          point: [snap(raw[0], step), 0, snap(raw[2], step)],
+          snapped: null,
+          port: null,
+          body: null,
+        }
       }
       const rawXZ: [number, number, number] = [
         event.localPosition[0],
@@ -157,7 +261,7 @@ const PipeSegmentTool = () => {
         const port = findNearbyPort(rawXZ)
         if (port) {
           const p: [number, number, number] = [port.position[0], port.position[1], port.position[2]]
-          return { point: p, snapped: p }
+          return { point: p, snapped: p, port, body: null }
         }
       }
       const step = useEditor.getState().gridSnapStep
@@ -166,7 +270,7 @@ const PipeSegmentTool = () => {
         angled[1],
         snap(angled[2], step),
       ]
-      return { point: applySlope(start, snapped), snapped: null }
+      return { point: applySlope(start, snapped), snapped: null, port: null, body: null }
     }
 
     const resolveAltVerticalPoint = (clientY: number): [number, number, number] | null => {
@@ -205,13 +309,17 @@ const PipeSegmentTool = () => {
         }
         return
       }
-      const { point } = resolveSnappedPoint(event)
+      const { point, port, body } = resolveSnappedPoint(event)
       if (!start) {
+        // First click: anchor the start, remembering the port / run body
+        // it snapped to so the commit can mint a bend / wye.
         triggerSFX('sfx:grid-snap')
+        startPortRef.current = port
+        startBodyRef.current = port ? null : body
         setDraftStart(point)
         return
       }
-      commitSegment(start, point)
+      commitSegment(start, point, port)
     }
 
     const enterAltMode = () => {
@@ -273,6 +381,8 @@ const PipeSegmentTool = () => {
       setDraftStart(null)
       setCursorPos(null)
       setSnapTarget(null)
+      startPortRef.current = null
+      startBodyRef.current = null
     }
 
     emitter.on('grid:move', onMove)

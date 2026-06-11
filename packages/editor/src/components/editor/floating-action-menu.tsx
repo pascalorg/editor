@@ -48,6 +48,7 @@ const HVAC_KINDS = new Set([
   'hvac-equipment',
   'lineset',
   'pipe-segment',
+  'pipe-fitting',
 ])
 
 const ALLOWED_TYPES = [
