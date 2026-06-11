@@ -3,6 +3,7 @@
 import { type AnyNodeId, DormerNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useMemo } from 'react'
+import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { dormerDefinition } from './definition'
 import DormerPreview from './preview'
 import { useDormerPlacement } from './use-dormer-placement'
@@ -67,16 +68,19 @@ const DormerTool = () => {
     },
   })
 
-  if (!activeBuildingId || !segmentXform || !hitLocal) return null
-
   return (
-    <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
-      <group position={hitLocal}>
-        <group rotation-y={ghostRotation}>
-          <DormerPreview node={previewNode} />
+    <>
+      <RoofAttachmentFallbackPreview activeBuildingId={activeBuildingId} size={[1.8, 1.8, 1.4]} />
+      {activeBuildingId && segmentXform && hitLocal && (
+        <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
+          <group position={hitLocal}>
+            <group rotation-y={ghostRotation}>
+              <DormerPreview node={previewNode} />
+            </group>
+          </group>
         </group>
-      </group>
-    </group>
+      )}
+    </>
   )
 }
 

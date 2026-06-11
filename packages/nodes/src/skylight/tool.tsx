@@ -13,6 +13,7 @@ import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import { skylightDefinition } from './definition'
@@ -109,16 +110,19 @@ const SkylightTool = () => {
     }
   }, [activeBuildingId, setSelection])
 
-  if (!activeBuildingId || !previewPos || !previewSurfaceQuat) return null
-
   return (
-    <group position={previewPos}>
-      <group rotation-y={previewYaw}>
-        <group quaternion={previewSurfaceQuat}>
-          <SkylightPreview node={previewNode} />
+    <>
+      <RoofAttachmentFallbackPreview activeBuildingId={activeBuildingId} size={[1.2, 0.2, 1]} />
+      {activeBuildingId && previewPos && previewSurfaceQuat && (
+        <group position={previewPos}>
+          <group rotation-y={previewYaw}>
+            <group quaternion={previewSurfaceQuat}>
+              <SkylightPreview node={previewNode} />
+            </group>
+          </group>
         </group>
-      </group>
-    </group>
+      )}
+    </>
   )
 }
 

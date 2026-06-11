@@ -14,6 +14,7 @@ import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
 import { chimneyDefinition } from './definition'
 import ChimneyPreview from './preview'
@@ -139,19 +140,22 @@ const ChimneyTool = () => {
     }
   }, [activeBuildingId, setSelection])
 
-  if (!activeBuildingId || !segmentXform || !hitLocal || !previewSegment) return null
-
-  // Outer group mirrors the real renderer's `position={segment.position}
-  // rotation-y={segment.rotation}` chain by composing the segment's
-  // building-local matrix (which walks roof + level + segment). Inner
-  // group offsets by the cursor's segment-local x/z so the chimney
-  // geometry (built with `position[0,2] = 0`) lands under the cursor.
   return (
-    <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
-      <group position={[hitLocal[0], 0, hitLocal[2]]}>
-        <ChimneyPreview node={previewNode} segment={previewSegment} />
-      </group>
-    </group>
+    <>
+      <RoofAttachmentFallbackPreview activeBuildingId={activeBuildingId} size={[1, 2.5, 1]} />
+      {activeBuildingId && segmentXform && hitLocal && previewSegment && (
+        // Outer group mirrors the real renderer's `position={segment.position}
+        // rotation-y={segment.rotation}` chain by composing the segment's
+        // building-local matrix (which walks roof + level + segment). Inner
+        // group offsets by the cursor's segment-local x/z so the chimney
+        // geometry (built with `position[0,2] = 0`) lands under the cursor.
+        <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
+          <group position={[hitLocal[0], 0, hitLocal[2]]}>
+            <ChimneyPreview node={previewNode} segment={previewSegment} />
+          </group>
+        </group>
+      )}
+    </>
   )
 }
 

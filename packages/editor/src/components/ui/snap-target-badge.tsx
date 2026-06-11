@@ -25,6 +25,7 @@ export function resolveAssetSnapTarget(attachTo: AssetInput['attachTo']): SnapTa
 export function resolveNodeSnapTarget(node: AnyNode | null | undefined): SnapTarget | null {
   if (!node) return null
   if ('roofSegmentId' in node && typeof node.roofSegmentId === 'string') return 'roof'
+  if (node.type === 'downspout') return 'roof'
   if (node.type === 'door' || node.type === 'window') return 'wall'
   if (node.type === 'item') return resolveAssetSnapTarget(node.asset?.attachTo)
   return null

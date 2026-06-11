@@ -102,6 +102,7 @@ const treeNodeByType: Record<
   ceiling: CeilingTreeNode,
   chimney: ChimneyTreeNode,
   dormer: DormerTreeNode,
+  downspout: RegistryTreeNode,
   'solar-panel': SolarPanelTreeNode,
   column: ColumnTreeNode,
   elevator: ElevatorTreeNode,

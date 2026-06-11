@@ -11,6 +11,7 @@ import {
 import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
 import { gutterDefinition } from './definition'
 import { type EaveSnap, resolveEaveSnap } from './eave-snap'
@@ -142,19 +143,22 @@ const GutterTool = () => {
     }
   }, [activeBuildingId, setSelection])
 
-  if (!activeBuildingId || !target) return null
-
   return (
-    <group position={target.roof.position} rotation-y={target.roof.rotation}>
-      <group position={target.segment.position} rotation-y={target.segment.rotation}>
-        <group
-          position={[target.snap.eaveX, target.snap.eaveY, target.snap.eaveZ]}
-          rotation-y={target.snap.rotation}
-        >
-          <GutterPreview node={previewNode} />
+    <>
+      <RoofAttachmentFallbackPreview activeBuildingId={activeBuildingId} size={[2, 0.2, 0.25]} />
+      {activeBuildingId && target && (
+        <group position={target.roof.position} rotation-y={target.roof.rotation}>
+          <group position={target.segment.position} rotation-y={target.segment.rotation}>
+            <group
+              position={[target.snap.eaveX, target.snap.eaveY, target.snap.eaveZ]}
+              rotation-y={target.snap.rotation}
+            >
+              <GutterPreview node={previewNode} />
+            </group>
+          </group>
         </group>
-      </group>
-    </group>
+      )}
+    </>
   )
 }
 
