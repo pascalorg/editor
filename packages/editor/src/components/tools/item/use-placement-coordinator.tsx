@@ -52,7 +52,12 @@ import {
   type PreviewBounds,
   updateLineGeometry,
 } from '../shared/placement-box-geometry'
-import { getGridAlignedDimensions, snapToGrid, snapUpToGridStep } from './placement-math'
+import {
+  getDetachedAttachmentPreviewLift,
+  getGridAlignedDimensions,
+  snapToGrid,
+  snapUpToGridStep,
+} from './placement-math'
 import {
   ceilingStrategy,
   checkCanPlace,
@@ -732,6 +737,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       previousGridPos = [...gridPos]
       gridPosition.current.set(...gridPos)
       const cursorPosition = getFloorVisualPosition(gridPos)
+      if (!draft && asset.attachTo) {
+        cursorPosition[1] += getDetachedAttachmentPreviewLift(asset.attachTo)
+      }
       cursorGroupRef.current.position.set(cursorPosition[0], cursorPosition[1], cursorPosition[2])
       // Floor items only rotate on Y; keep the preview box (and the live
       // transform the 2D floorplan mirrors) aligned with the draft's
