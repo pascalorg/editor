@@ -1,9 +1,13 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
+  analyzePortConnectivity,
   type DuctSegmentNode,
+  type PortConnectivity,
   pauseSceneHistory,
+  resolveConnectivityUpdates,
   resumeSceneHistory,
   sceneRegistry,
   useScene,
@@ -14,7 +18,7 @@ import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
 import { type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
-import { collectScenePorts, findNearestPortXZ } from '../shared/ports'
+import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 
 /** Handle pip radius (meters). */
 const HANDLE_RADIUS = 0.09
@@ -98,6 +102,9 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     initialPath: Point[]
     current: Point
     cleanup: () => void
+    // Connectivity snapshot taken at pointer-down: which fittings / ducts are
+    // mated to this run's endpoints, so they follow as the endpoint moves.
+    connectivity: PortConnectivity | null
   } | null>(null)
 
   const makeRay = (clientX: number, clientY: number) => {
@@ -145,10 +152,25 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     return [local.x, local.y, local.z]
   }
 
+  // Follow-updates for fittings / ducts mated to this run's endpoints, given
+  // the run's live path. Endpoints whose position didn't change resolve to a
+  // zero delta, so only the dragged endpoint's partner actually moves.
+  const connectivityUpdatesForPath = (
+    connectivity: PortConnectivity | null,
+    path: Point[],
+  ): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
+    if (!connectivity) return []
+    const preview = { ...(duct as Record<string, unknown>), path } as AnyNode
+    return resolveConnectivityUpdates(connectivity, preview).filter(
+      (u) => useScene.getState().nodes[u.id],
+    )
+  }
+
   const onHandleDown = (index: number) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     const initialPath = duct.path.map((p) => [...p] as Point)
     const startPoint = initialPath[index]!
+    const connectivity = analyzePortConnectivity(duct as AnyNode, useScene.getState().nodes)
     pauseSceneHistory(useScene)
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = 'grabbing'
@@ -197,7 +219,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           if (isEndpoint) {
             const port = findNearestPortXZ(
               [local[0], current[1], local[2]],
-              collectScenePorts(duct.id),
+              collectScenePorts({ excludeNodeId: duct.id, systems: DUCT_PORT_SYSTEMS }),
               PORT_SNAP_RADIUS_M,
             )
             if (port) next = [port.position[0], port.position[1], port.position[2]]
@@ -220,7 +242,13 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       if (next[0] === current[0] && next[1] === current[1] && next[2] === current[2]) return
       drag.current = next
       const path = duct.path.map((p, i) => (i === drag.index ? next! : p)) as Point[]
-      useScene.getState().updateNode(duct.id, { path })
+      // Drag the run + any fittings mated to the moved endpoint as one batch.
+      useScene
+        .getState()
+        .updateNodes([
+          { id: duct.id as AnyNodeId, data: { path } },
+          ...connectivityUpdatesForPath(drag.connectivity, path),
+        ])
     }
 
     const onUp = () => {
@@ -230,16 +258,33 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       dragRef.current = null
       setDraggingIndex(null)
       // Single-undo dance: revert (still paused), resume, re-apply the
-      // final path as one tracked change.
+      // final path — plus any connected fitting moves — as one tracked batch.
       const finalPath = drag.initialPath.map((p, i) =>
         i === drag.index ? drag.current : p,
       ) as Point[]
-      useScene.getState().updateNode(duct.id, { path: drag.initialPath })
+      const finalUpdates = connectivityUpdatesForPath(drag.connectivity, finalPath)
+      // Revert the run AND the followers to their pre-drag state while paused
+      // so history captures a clean before→after delta.
+      const revertUpdates = (drag.connectivity?.connections ?? []).flatMap((conn) =>
+        conn.kind === 'rigid-node'
+          ? [{ id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }]
+          : [{ id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> }],
+      )
+      useScene
+        .getState()
+        .updateNodes([
+          { id: duct.id as AnyNodeId, data: { path: drag.initialPath } },
+          ...revertUpdates.filter((u) => useScene.getState().nodes[u.id]),
+        ])
       resumeSceneHistory(useScene)
       const moved = finalPath[drag.index]!.some(
         (v, axis) => v !== drag.initialPath[drag.index]![axis],
       )
-      if (moved) useScene.getState().updateNode(duct.id, { path: finalPath })
+      if (moved) {
+        useScene
+          .getState()
+          .updateNodes([{ id: duct.id as AnyNodeId, data: { path: finalPath } }, ...finalUpdates])
+      }
     }
 
     const cleanup = () => {
@@ -250,7 +295,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       document.body.style.cursor = ''
     }
 
-    dragRef.current = { index, initialPath, current: startPoint, cleanup }
+    dragRef.current = { index, initialPath, current: startPoint, cleanup, connectivity }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onUp)
