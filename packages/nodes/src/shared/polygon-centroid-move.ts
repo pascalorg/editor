@@ -104,7 +104,7 @@ export function createPolygonCentroidMoveTarget(args: {
       let dx = target[0] - originalCenter[0]
       let dz = target[1] - originalCenter[1]
 
-      if (!modifiers.altKey && candidates.length > 0) {
+      if (!(modifiers.altKey || modifiers.shiftKey) && candidates.length > 0) {
         const result = resolveAlignment({
           moving: polygonAnchors(id, translatePolygon(originalPolygon, dx, dz)),
           candidates,

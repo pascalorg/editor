@@ -136,6 +136,13 @@ export {
   type StairBodyMaterials,
 } from './systems/stair/stair-materials'
 export { StairSystem } from './systems/stair/stair-system'
+// Pure opening-cutout profile math shared by the wall CSG pipeline and
+// roof-wall opening cuts in `@pascal-app/nodes` — keeps shaped holes
+// (arch / rounded / frameless opening) identical across both hosts.
+export {
+  buildOpeningCutoutGeometry,
+  hasFlatOpeningCutoutBottom,
+} from './systems/wall/opening-cutout-geometry'
 export { WallCutout } from './systems/wall/wall-cutout'
 export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 // Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall

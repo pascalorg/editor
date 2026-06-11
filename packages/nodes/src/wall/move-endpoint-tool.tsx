@@ -28,7 +28,6 @@ import {
   useAlignmentGuides,
   useEditor,
   useWallSnapIndicator,
-  WALL_FINE_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -288,16 +287,15 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       // drag by warping the endpoint onto the nearest 45° line from
       // the fixed corner.
       //
-      // Shift switches to the *fine* grid step (`WALL_FINE_GRID_STEP`)
-      // for precision placement, so it can land on positions the
-      // active grid would skip (e.g. 0.05m increments when the active
-      // grid is 0.5m). It does NOT bypass snap.
+      // Shift is a hard snap bypass: raw endpoint position, no grid,
+      // no magnetic wall snap, and no alignment guide snap.
+      const bypassSnap = shiftPressedRef.current || event.nativeEvent.shiftKey
       const snapResult = snapWallDraftPointDetailed({
         point: planPoint,
         walls: levelWalls,
         ignoreWallIds: [nodeId],
-        step: shiftPressedRef.current ? WALL_FINE_GRID_STEP : undefined,
-        magnetic: useEditor.getState().magneticSnap,
+        bypassSnap,
+        magnetic: !bypassSnap && useEditor.getState().magneticSnap,
       })
       const snappedPoint = snapResult.point
 
@@ -308,7 +306,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       // midpoint), never an empty-space bbox corner. Layered on top of the
       // grid + corner snap above; Alt is reserved for corner-detach here.
       let alignedPoint = snappedPoint
-      if (wallAlignmentCandidates.length > 0) {
+      if (!bypassSnap && wallAlignmentCandidates.length > 0) {
         const ar = resolveAlignment({
           moving: [{ nodeId, kind: 'corner', x: snappedPoint[0], z: snappedPoint[1] }],
           candidates: wallAlignmentCandidates,
@@ -318,9 +316,12 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           alignedPoint = [snappedPoint[0] + ar.snap.dx, snappedPoint[1] + ar.snap.dz]
         }
         useAlignmentGuides.getState().set(ar.guides)
+      } else {
+        useAlignmentGuides.getState().clear()
       }
 
       if (
+        !bypassSnap &&
         previousGridPosRef.current &&
         (alignedPoint[0] !== previousGridPosRef.current[0] ||
           alignedPoint[1] !== previousGridPosRef.current[1])

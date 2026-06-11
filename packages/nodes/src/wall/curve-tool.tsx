@@ -85,11 +85,12 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      const bypassSnap = shiftPressedRef.current || event.nativeEvent?.shiftKey === true
       const snapStep = getSegmentGridStep()
       // Snap the cursor on the WORLD XZ grid (still in building-local
       // coords for the rest of the math) so a rotated building doesn't
       // pull the curve handle off the visible grid lines.
-      const [snappedLocalX, snappedLocalZ] = shiftPressedRef.current
+      const [snappedLocalX, snappedLocalZ] = bypassSnap
         ? [event.localPosition[0], event.localPosition[2]]
         : snapBuildingLocalToWorldGrid([event.localPosition[0], event.localPosition[2]], snapStep)
       const localX = snappedLocalX
@@ -99,7 +100,7 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         (localX - chord.midpoint.x) * chord.normal.x +
         (localZ - chord.midpoint.y) * chord.normal.y
       )
-      const snappedOffset = shiftPressedRef.current
+      const snappedOffset = bypassSnap
         ? offsetFromMidpoint
         : snapScalarToGrid(offsetFromMidpoint, snapStep)
       const nextCurveOffset = normalizeWallCurveOffset(
@@ -108,6 +109,7 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       )
 
       if (
+        !bypassSnap &&
         previousCurveOffsetRef.current !== null &&
         nextCurveOffset !== previousCurveOffsetRef.current
       ) {

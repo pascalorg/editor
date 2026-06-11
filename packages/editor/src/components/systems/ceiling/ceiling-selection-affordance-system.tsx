@@ -11,7 +11,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BoxGeometry, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { BoxGeometry, type Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import {
   clearCeilingSnapFeedback,
@@ -153,6 +153,7 @@ const CeilingSelectionAffordance = ({
   const [draggedCornerIndex, setDraggedCornerIndex] = useState<number | null>(null)
   const [previewPolygon, setPreviewPolygon] = useState<Array<[number, number]> | null>(null)
   const dragRef = useRef<CornerDragState | null>(null)
+  const bracketsRootRef = useRef<Group>(null)
   const raycasterRef = useRef(new Raycaster())
   const ndcRef = useRef(new Vector2())
   const planeRef = useRef(new Plane())
@@ -293,19 +294,23 @@ const CeilingSelectionAffordance = ({
         initialCorner[0] + (planePosition[0] - drag.startPlanePosition[0]),
         initialCorner[1] + (planePosition[1] - drag.startPlanePosition[1]),
       ]
-      const gridNextPosition: [number, number] = [
-        initialCorner[0] + snapToHalf(planePosition[0] - drag.startPlanePosition[0]),
-        initialCorner[1] + snapToHalf(planePosition[1] - drag.startPlanePosition[1]),
-      ]
+      const gridNextPosition: [number, number] = event.shiftKey
+        ? rawNextPosition
+        : [
+            initialCorner[0] + snapToHalf(planePosition[0] - drag.startPlanePosition[0]),
+            initialCorner[1] + snapToHalf(planePosition[1] - drag.startPlanePosition[1]),
+          ]
       const nextPosition = resolveCeilingPlanPointSnap({
         rawPoint: rawNextPosition,
         fallbackPoint: gridNextPosition,
         levelId,
         excludeId: drag.ceilingId,
         altKey: event.altKey,
+        shiftKey: event.shiftKey,
       }).point
 
       if (
+        !event.shiftKey &&
         drag.previousSnappedPosition &&
         (nextPosition[0] !== drag.previousSnappedPosition[0] ||
           nextPosition[1] !== drag.previousSnappedPosition[1])
@@ -372,6 +377,25 @@ const CeilingSelectionAffordance = ({
     }
   }, [effectiveCeiling.id, getHandlePlanePoint, levelId, selectCeilingForEdit])
 
+  // The brackets render on SCENE_LAYER (scene-depth occlusion), so unlike
+  // EDITOR_LAYER affordances the thumbnail camera can't filter them — hide
+  // them around captures via synchronous Object3D.visible mutation (the
+  // capture renders right after the emit), same as `site-boundary-editor.tsx`.
+  useEffect(() => {
+    const hideForCapture = () => {
+      if (bracketsRootRef.current) bracketsRootRef.current.visible = false
+    }
+    const restoreAfterCapture = () => {
+      if (bracketsRootRef.current) bracketsRootRef.current.visible = true
+    }
+    emitter.on('thumbnail:before-capture', hideForCapture)
+    emitter.on('thumbnail:after-capture', restoreAfterCapture)
+    return () => {
+      emitter.off('thumbnail:before-capture', hideForCapture)
+      emitter.off('thumbnail:after-capture', restoreAfterCapture)
+    }
+  }, [])
+
   useEffect(() => {
     let frameId = 0
 
@@ -401,7 +425,10 @@ const CeilingSelectionAffordance = ({
   if (!levelObject || corners.length === 0) return null
 
   return createPortal(
-    <group position={[0, (effectiveCeiling.height ?? 2.5) + BRACKET_Y_OFFSET, 0]}>
+    <group
+      position={[0, (effectiveCeiling.height ?? 2.5) + BRACKET_Y_OFFSET, 0]}
+      ref={bracketsRootRef}
+    >
       {corners.map((corner, index) => (
         <CornerBracket
           ceiling={effectiveCeiling}

@@ -118,12 +118,10 @@ const DormerWindowAssembly = ({
       // non-zero yaw needs to recompute exposure to know which gable
       // is now poking above the slope.
       node.rotation,
-      // Window position + height feed `getDormerExposedFaces` now that
-      // it's gating on window-bottom-above-slope (not wall-top-above-
-      // slope) — dragging the window down via inspector or the new
-      // window-height/offset handles must re-evaluate which gable
-      // still has a fully-visible opening.
-      node.windowHeight,
+      // The window's vertical placement feeds `getDormerExposedFaces`
+      // (gates on the window CENTER clearing the host slope) — dragging
+      // the window down via inspector or the offset handle must
+      // re-evaluate which gable still exposes the opening.
       node.windowOffsetY,
       node.wallSkirtHeight,
     ],

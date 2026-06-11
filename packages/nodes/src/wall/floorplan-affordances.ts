@@ -18,7 +18,6 @@ import {
   snapScalarToGrid,
   snapWallDraftPoint,
   useAlignmentGuides,
-  WALL_FINE_GRID_STEP,
   WALL_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
@@ -187,23 +186,22 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         // the legacy flow.
         const sceneNodes = useScene.getState().nodes
         const walls = collectLevelWalls(sceneNodes, node.id)
-        // Endpoint move = grid snap, never 45° from the fixed corner —
-        // the angle snap is for initial draft only. Shift switches to
-        // the fine grid step for precision, matching the 3D
-        // `MoveWallEndpointTool`.
-        const worldStep = modifiers.shiftKey ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
+        // Endpoint move = grid snap, never 45° from the fixed corner.
+        // Shift bypasses grid, magnetic, and alignment snap.
         const snapped = snapWallDraftPoint({
           point: planPoint as WallPlanPoint,
           walls,
           ignoreWallIds: [node.id],
-          step: modifiers.shiftKey ? WALL_FINE_GRID_STEP : undefined,
-          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, worldStep),
+          bypassSnap: modifiers.shiftKey,
+          magnetic: !modifiers.shiftKey,
+          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, WALL_GRID_STEP),
         })
         // Figma-style alignment on the dragged corner — snaps it onto another
         // object's edge / wall face and publishes a guide. The dragged wall
         // and its linked siblings (which cascade with the corner) are excluded
         // from the candidate pool. Alt is reserved for detach, NOT bypass.
         const aligned = alignFloorplanDraftPoint(snapped, {
+          bypass: modifiers.shiftKey,
           excludeIds: [node.id, ...linkedWalls.map((w) => w.id)],
         }) as WallPlanPoint
 

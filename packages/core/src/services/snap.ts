@@ -15,7 +15,7 @@ export type Vec3 = readonly [number, number, number]
 /** Default planar grid spacing in meters. Matches the editor's wall tool. */
 export const DEFAULT_GRID_STEP = 0.25
 
-/** Default angle-snap step — π/12 = 15°. Wall tools also use π/4 (45°). */
+/** Default angle-snap step — π/12 = 15°. */
 export const DEFAULT_ANGLE_STEP = Math.PI / 12
 
 // ─── Grid snap ────────────────────────────────────────────────────────
@@ -109,6 +109,32 @@ export function snapPointToAngle(
     from[1] + Math.sin(snappedAngle) * distance,
   ]
   return gridStep == null ? projected : snapPointToGrid(projected, gridStep)
+}
+
+/**
+ * Snaps a cursor point onto the nearest angle ray from `from` (multiples of
+ * `angleStep`), projecting the cursor onto that ray, then snaps the distance
+ * ALONG the ray to `distanceStep`. Unlike `snapPointToAngle` with a
+ * `gridStep`, the result stays exactly on the snapped ray — grid-snapping
+ * after the angle projection pulls points off non-axis rays.
+ */
+export function snapPointAlongAngleRay(
+  from: Vec2,
+  cursor: Vec2,
+  angleStep: number = DEFAULT_ANGLE_STEP,
+  distanceStep?: number,
+): Vec2 {
+  const dx = cursor[0] - from[0]
+  const dz = cursor[1] - from[1]
+  if (dx === 0 && dz === 0) return [from[0], from[1]]
+  const angle = Math.atan2(dz, dx)
+  const snappedAngle = angleStep > 0 ? Math.round(angle / angleStep) * angleStep : angle
+  const dirX = Math.cos(snappedAngle)
+  const dirZ = Math.sin(snappedAngle)
+  const projected = dx * dirX + dz * dirZ
+  const distance =
+    distanceStep != null && distanceStep > 0 ? snapScalar(projected, distanceStep) : projected
+  return [from[0] + dirX * distance, from[1] + dirZ * distance]
 }
 
 /**

@@ -225,6 +225,7 @@ export function buildGutterGeometry(
       const drillBrush = new Brush(drill)
       prepareBrushForCSG(drillBrush)
       const next = csgEvaluator.evaluate(workingBrush, drillBrush, SUBTRACTION) as Brush
+      prepareBrushForCSG(next)
       // Free the previous step's intermediate result (but not `merged`,
       // which is disposed once below).
       if (workingBrush.geometry !== merged) workingBrush.geometry.dispose()

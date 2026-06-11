@@ -1,4 +1,12 @@
-import { emitter, type GridEvent, type LevelNode, useScene, ZoneNode } from '@pascal-app/core'
+import {
+  DEFAULT_ANGLE_STEP,
+  emitter,
+  type GridEvent,
+  type LevelNode,
+  snapPointAlongAngleRay,
+  useScene,
+  ZoneNode,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
@@ -9,42 +17,6 @@ import useEditor from './../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
 const Y_OFFSET = 0.02
-
-/**
- * Snaps a point to the nearest axis-aligned or 45-degree diagonal from the last point
- */
-const calculateSnapPoint = (
-  lastPoint: [number, number],
-  currentPoint: [number, number],
-): [number, number] => {
-  const [x1, y1] = lastPoint
-  const [x, y] = currentPoint
-
-  const dx = x - x1
-  const dy = y - y1
-  const absDx = Math.abs(dx)
-  const absDy = Math.abs(dy)
-
-  // Calculate distances to horizontal, vertical, and diagonal lines
-  const horizontalDist = absDy
-  const verticalDist = absDx
-  const diagonalDist = Math.abs(absDx - absDy)
-
-  // Find the minimum distance to determine which axis to snap to
-  const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
-
-  if (minDist === diagonalDist) {
-    // Snap to 45° diagonal
-    const diagonalLength = Math.min(absDx, absDy)
-    return [x1 + Math.sign(dx) * diagonalLength, y1 + Math.sign(dy) * diagonalLength]
-  }
-  if (minDist === horizontalDist) {
-    // Snap to horizontal
-    return [x, y1]
-  }
-  // Snap to vertical
-  return [x1, y]
-}
 
 /**
  * Creates a zone with the given polygon points
@@ -93,6 +65,7 @@ export const ZoneTool: React.FC = () => {
   const pointsRef = useRef<Array<[number, number]>>([])
   const previousSnappedPointRef = useRef<[number, number] | null>(null)
   const levelYRef = useRef(0) // Track current level Y position
+  const shiftPressed = useRef(false)
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const setTool = useEditor((state) => state.setTool)
 
@@ -107,10 +80,29 @@ export const ZoneTool: React.FC = () => {
     if (!currentLevelId) return
 
     let cursorPosition: [number, number] = [0, 0]
+    let rawCursorPosition: [number, number] = [0, 0]
 
     // Initialize line geometries
     mainLineRef.current.geometry = new BufferGeometry()
     closingLineRef.current.geometry = new BufferGeometry()
+
+    // 15° angle snap from the last vertex by default. Shift bypasses all snap.
+    // Distance snaps along the ray so the vertex lands on
+    // grid-multiple lengths without leaving the ray.
+    const snapDraftPoint = (
+      lastPoint: [number, number],
+      gridPoint: [number, number],
+      rawPoint: [number, number],
+    ): [number, number] => {
+      if (shiftPressed.current) return rawPoint
+      const [x, z] = snapPointAlongAngleRay(
+        lastPoint,
+        rawPoint,
+        DEFAULT_ANGLE_STEP,
+        useEditor.getState().gridSnapStep,
+      )
+      return [x, z]
+    }
 
     const updateLines = () => {
       const points = pointsRef.current
@@ -128,7 +120,7 @@ export const ZoneTool: React.FC = () => {
       // Add cursor point
       const lastPoint = points[points.length - 1]
       if (lastPoint) {
-        const snapped = calculateSnapPoint(lastPoint, cursorPosition)
+        const snapped = snapDraftPoint(lastPoint, cursorPosition, rawCursorPosition)
         if (isValidPoint(snapped)) {
           linePoints.push(new Vector3(snapped[0], y, snapped[1]))
         }
@@ -146,7 +138,7 @@ export const ZoneTool: React.FC = () => {
       // Update closing line (from cursor back to first point)
       const firstPoint = points[0]
       if (points.length >= 2 && lastPoint && isValidPoint(firstPoint)) {
-        const snapped = calculateSnapPoint(lastPoint, cursorPosition)
+        const snapped = snapDraftPoint(lastPoint, cursorPosition, rawCursorPosition)
         if (isValidPoint(snapped)) {
           const closingPoints = [
             new Vector3(snapped[0], y, snapped[1]),
@@ -167,7 +159,7 @@ export const ZoneTool: React.FC = () => {
 
       let cursorPt: [number, number] | null = null
       if (lastPoint) {
-        cursorPt = calculateSnapPoint(lastPoint, cursorPosition)
+        cursorPt = snapDraftPoint(lastPoint, cursorPosition, rawCursorPosition)
       } else if (points.length === 0) {
         cursorPt = cursorPosition
       }
@@ -181,22 +173,27 @@ export const ZoneTool: React.FC = () => {
 
       // World-grid snap projected into building-local; rotated buildings
       // used to pull the snap off the visible grid lines.
-      const [gridX, gridZ] = snapWorldXZForActiveBuilding(
-        event.position[0],
-        event.position[2],
-        useEditor.getState().gridSnapStep,
-      ).local
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
+      const [gridX, gridZ] = bypassSnap
+        ? [event.localPosition[0], event.localPosition[2]]
+        : snapWorldXZForActiveBuilding(
+            event.position[0],
+            event.position[2],
+            useEditor.getState().gridSnapStep,
+          ).local
       cursorPosition = [gridX, gridZ]
+      rawCursorPosition = [event.localPosition[0], event.localPosition[2]]
       levelYRef.current = event.localPosition[1]
 
-      // If we have points, snap to axis from last point
+      // If we have points, snap to the 15° ray from the last point
       const lastPoint = pointsRef.current[pointsRef.current.length - 1]
       const displayPoint = lastPoint
-        ? calculateSnapPoint(lastPoint, cursorPosition)
+        ? snapDraftPoint(lastPoint, cursorPosition, rawCursorPosition)
         : cursorPosition
 
       // Play snap sound when the snapped position changes during drawing
       if (
+        !bypassSnap &&
         pointsRef.current.length > 0 &&
         previousSnappedPointRef.current &&
         (displayPoint[0] !== previousSnappedPointRef.current[0] ||
@@ -214,17 +211,23 @@ export const ZoneTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!currentLevelId) return
 
-      const [gridX, gridZ] = snapWorldXZForActiveBuilding(
-        event.position[0],
-        event.position[2],
-        useEditor.getState().gridSnapStep,
-      ).local
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
+      const [gridX, gridZ] = bypassSnap
+        ? [event.localPosition[0], event.localPosition[2]]
+        : snapWorldXZForActiveBuilding(
+            event.position[0],
+            event.position[2],
+            useEditor.getState().gridSnapStep,
+          ).local
       let clickPoint: [number, number] = [gridX, gridZ]
 
-      // Snap to axis from last point
+      // Snap to the 15° ray from the last point
       const lastPoint = pointsRef.current[pointsRef.current.length - 1]
       if (lastPoint) {
-        clickPoint = calculateSnapPoint(lastPoint, clickPoint)
+        clickPoint = snapDraftPoint(lastPoint, clickPoint, [
+          event.localPosition[0],
+          event.localPosition[2],
+        ])
       }
 
       // Check if clicking on the first point to close the shape
@@ -267,12 +270,28 @@ export const ZoneTool: React.FC = () => {
       }
     }
 
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') shiftPressed.current = true
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') shiftPressed.current = false
+    }
+    const onWindowBlur = () => {
+      shiftPressed.current = false
+    }
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onWindowBlur)
+
     // Subscribe to events
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('grid:double-click', onGridDoubleClick)
 
     return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onWindowBlur)
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('grid:double-click', onGridDoubleClick)

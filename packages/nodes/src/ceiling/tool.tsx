@@ -1,6 +1,13 @@
 'use client'
 
-import { emitter, type GridEvent, type LevelNode, useScene } from '@pascal-app/core'
+import {
+  DEFAULT_ANGLE_STEP,
+  emitter,
+  type GridEvent,
+  type LevelNode,
+  snapPointAlongAngleRay,
+  useScene,
+} from '@pascal-app/core'
 import {
   CursorSphere,
   clearCeilingSnapFeedback,
@@ -22,33 +29,11 @@ import { CeilingNode } from './schema'
  * Multi-click polygon drawing at the ceiling height (2.52m default)
  * with a vertical TSL-gradient connector + ground-shadow lines so the
  * draft is visible against both the ceiling plane and the floor.
- * Shift defeats the axis/45° snap during drag.
+ * Shift defeats the 15° angle snap during drag.
  */
 
 const CEILING_HEIGHT = 2.52
 const GRID_OFFSET = 0.02
-
-function calculateSnapPoint(
-  lastPoint: [number, number],
-  currentPoint: [number, number],
-): [number, number] {
-  const [x1, y1] = lastPoint
-  const [x, y] = currentPoint
-  const dx = x - x1
-  const dy = y - y1
-  const absDx = Math.abs(dx)
-  const absDy = Math.abs(dy)
-  const horizontalDist = absDy
-  const verticalDist = absDx
-  const diagonalDist = Math.abs(absDx - absDy)
-  const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
-  if (minDist === diagonalDist) {
-    const diagonalLength = Math.min(absDx, absDy)
-    return [x1 + Math.sign(dx) * diagonalLength, y1 + Math.sign(dy) * diagonalLength]
-  }
-  if (minDist === horizontalDist) return [x, y1]
-  return [x1, y]
-}
 
 function commitCeilingDrawing(levelId: LevelNode['id'], points: Array<[number, number]>): string {
   const { createNode, nodes } = useScene.getState()
@@ -107,26 +92,38 @@ export const CeilingTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && gridCursorRef.current)) return
       const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
       const gridX = Math.round(rawPoint[0] * 2) / 2
       const gridZ = Math.round(rawPoint[1] * 2) / 2
-      const gridPosition: [number, number] = [gridX, gridZ]
+      const gridPosition: [number, number] = bypassSnap ? rawPoint : [gridX, gridZ]
       setCursorPosition(gridPosition)
       setLevelY(event.localPosition[1])
       const ceilingY = event.localPosition[1] + CEILING_HEIGHT
       const gridY = event.localPosition[1] + GRID_OFFSET
       const lastPoint = points[points.length - 1]
-      const orthoPoint =
-        shiftPressed.current || !lastPoint
+      // 15° angle snap from the raw cursor (matching the 2D floorplan
+      // pipeline) with the distance snapped along the ray to the grid step.
+      const orthoPoint: [number, number] =
+        bypassSnap || !lastPoint
           ? gridPosition
-          : calculateSnapPoint(lastPoint, gridPosition)
+          : [
+              ...snapPointAlongAngleRay(
+                lastPoint,
+                rawPoint,
+                DEFAULT_ANGLE_STEP,
+                useEditor.getState().gridSnapStep,
+              ),
+            ]
       const displayPoint = resolveCeilingPlanPointSnap({
         rawPoint,
         fallbackPoint: orthoPoint,
         levelId: currentLevelId,
         altKey: event.nativeEvent?.altKey === true,
+        shiftKey: bypassSnap,
       }).point
       setSnappedCursorPosition(displayPoint)
       if (
+        !bypassSnap &&
         points.length > 0 &&
         previousSnappedPointRef.current &&
         (displayPoint[0] !== previousSnappedPointRef.current[0] ||
@@ -186,8 +183,12 @@ export const CeilingTool: React.FC = () => {
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Shift') shiftPressed.current = false
     }
+    const onWindowBlur = () => {
+      shiftPressed.current = false
+    }
     document.addEventListener('keydown', onKeyDown)
     document.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onWindowBlur)
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
@@ -197,6 +198,7 @@ export const CeilingTool: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onWindowBlur)
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('grid:double-click', onGridDoubleClick)

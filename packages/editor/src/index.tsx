@@ -104,7 +104,6 @@ export {
   snapScalarToGrid,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
-  WALL_FINE_GRID_STEP,
   WALL_GRID_STEP,
   type WallDraftSnapKind,
   type WallDraftSnapResult,
@@ -299,6 +298,7 @@ export {
   usePaletteViewRegistry,
 } from './store/use-palette-view-registry'
 export { default as usePlacementPreview } from './store/use-placement-preview'
+export { default as useSegmentDraftChain } from './store/use-segment-draft-chain'
 export { useUploadStore } from './store/use-upload'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
 export {

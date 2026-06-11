@@ -123,7 +123,8 @@ const DoorTool: React.FC = () => {
         rawLocalX: event.localPosition[0],
         width,
         candidates: alignmentCandidates,
-        bypass: event.nativeEvent?.altKey === true,
+        bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
+        bypassSnap: event.nativeEvent?.shiftKey === true,
       })
 
       const { clampedX, clampedY } = clampToWall(event.node, localX, width, height)
@@ -176,7 +177,8 @@ const DoorTool: React.FC = () => {
         rawLocalX: event.localPosition[0],
         width,
         candidates: alignmentCandidates,
-        bypass: event.nativeEvent?.altKey === true,
+        bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
+        bypassSnap: event.nativeEvent?.shiftKey === true,
       })
 
       const { clampedX, clampedY } = clampToWall(event.node, localX, width, height)
@@ -268,7 +270,8 @@ const DoorTool: React.FC = () => {
         rawLocalX: event.localPosition[0],
         width: draftRef.current.width,
         candidates: alignmentCandidates,
-        bypass: event.nativeEvent?.altKey === true,
+        bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
+        bypassSnap: event.nativeEvent?.shiftKey === true,
       })
       const { clampedX, clampedY } = clampToWall(
         event.node,

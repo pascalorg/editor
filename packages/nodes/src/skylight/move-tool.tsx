@@ -98,7 +98,7 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     const onRoofMove = (event: RoofEvent) => {
       const sx = Math.round(event.position[0] * 20) / 20
       const sz = Math.round(event.position[2] * 20) / 20
-      if (sx !== lastSnapX || sz !== lastSnapZ) {
+      if (event.nativeEvent?.shiftKey !== true && (sx !== lastSnapX || sz !== lastSnapZ)) {
         triggerSFX('sfx:grid-snap')
         lastSnapX = sx
         lastSnapZ = sz

@@ -131,8 +131,9 @@ export function MoveElevatorTool({
     }
 
     const onGridMove = (event: GridEvent) => {
-      const rawX = Math.round(event.localPosition[0] * 2) / 2
-      const rawZ = Math.round(event.localPosition[2] * 2) / 2
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const rawX = bypassSnap ? event.localPosition[0] : Math.round(event.localPosition[0] * 2) / 2
+      const rawZ = bypassSnap ? event.localPosition[2] : Math.round(event.localPosition[2] * 2) / 2
       const anchor = dragAnchorRef.current ?? [rawX, rawZ]
       dragAnchorRef.current = anchor
       const gridX = movingNode.position[0] + (rawX - anchor[0])
@@ -145,6 +146,7 @@ export function MoveElevatorTool({
       })
 
       if (
+        !bypassSnap &&
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
       ) {

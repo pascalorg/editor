@@ -683,11 +683,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // item's edge, snap and publish a guide. The guide connects to the
       // nearest real corner of the candidate (resolver tie-break), so the dot
       // always sits on an actual point. The delta is applied to BOTH the grid
-      // and cursor positions below. Alt bypasses.
+      // and cursor positions below. Alt bypasses alignment; Shift bypasses all snap.
       const draft = draftNode.current
       let alignX = 0
       let alignZ = 0
-      const bypassAlign = floorEvent.nativeEvent?.altKey === true
+      const bypassSnap = floorEvent.nativeEvent?.shiftKey === true
+      const bypassAlign = floorEvent.nativeEvent?.altKey === true || bypassSnap
       if (!bypassAlign && draft) {
         alignmentCandidates ??= collectAlignmentAnchors(
           useScene.getState().nodes,
@@ -721,6 +722,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       // Play snap sound when grid position changes
       if (
+        !bypassSnap &&
         previousGridPos &&
         (gridPos[0] !== previousGridPos[0] || gridPos[2] !== previousGridPos[2])
       ) {
@@ -866,7 +868,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.z !== result.gridPosition[2]
 
       // Play snap sound when grid position changes
-      if (posChanged) {
+      if (event.nativeEvent?.shiftKey !== true && posChanged) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
@@ -1035,7 +1037,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.y !== result.gridPosition[1] ||
         gridPosition.current.z !== result.gridPosition[2]
 
-      if (posChanged) {
+      if (!shiftFreeRef.current && posChanged) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
@@ -1128,8 +1130,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         event.position[1],
         event.position[2],
       )
-      const wx = Math.round(buildingLocalPoint.x * 2) / 2
-      const wz = Math.round(buildingLocalPoint.z * 2) / 2
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const wx = bypassSnap ? buildingLocalPoint.x : Math.round(buildingLocalPoint.x * 2) / 2
+      const wz = bypassSnap ? buildingLocalPoint.z : Math.round(buildingLocalPoint.z * 2) / 2
       const floorPos: [number, number, number] = [wx, 0, wz]
 
       Object.assign(placementState.current, {
@@ -1429,7 +1432,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.y !== result.gridPosition[1] ||
         gridPosition.current.z !== result.gridPosition[2]
 
-      if (posChanged) {
+      if (event.nativeEvent?.shiftKey !== true && posChanged) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 

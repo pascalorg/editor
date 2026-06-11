@@ -533,6 +533,7 @@ function createEmptyGeometry(): THREE.BufferGeometry {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(6), 2))
+  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(new Float32Array(6), 2))
   geometry.addGroup(0, 0, STAIR_TREAD_MATERIAL_INDEX)
   geometry.addGroup(0, 0, STAIR_SIDE_MATERIAL_INDEX)
   return geometry

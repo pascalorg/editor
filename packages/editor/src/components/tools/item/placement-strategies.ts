@@ -113,10 +113,14 @@ export const floorStrategy = {
     // is rotated; then project the world point back into building-local
     // for storage. Without this, a rotated building drags placement off
     // the world grid.
-    const snappedWorldX = snapToGrid(event.position[0], swapDims ? dimZ : dimX)
-    const snappedWorldZ = snapToGrid(event.position[2], swapDims ? dimX : dimZ)
-    const { local } = snapWorldXZForActiveBuilding(snappedWorldX, snappedWorldZ, 0)
-    const [x, z] = local
+    const bypassSnap = event.nativeEvent?.shiftKey === true
+    const [x, z] = bypassSnap
+      ? [event.localPosition[0], event.localPosition[2]]
+      : snapWorldXZForActiveBuilding(
+          snapToGrid(event.position[0], swapDims ? dimZ : dimX),
+          snapToGrid(event.position[2], swapDims ? dimX : dimZ),
+          0,
+        ).local
     const y = ctx.gridPosition.y
 
     return {
@@ -197,9 +201,10 @@ export const wallStrategy = {
     const itemRotation = calculateItemRotation(event.normal)
     const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
 
-    const x = snapToHalf(event.localPosition[0])
-    const y = snapToHalf(event.localPosition[1])
-    const z = snapToHalf(event.localPosition[2])
+    const bypassSnap = event.nativeEvent?.shiftKey === true
+    const x = bypassSnap ? event.localPosition[0] : snapToHalf(event.localPosition[0])
+    const y = bypassSnap ? event.localPosition[1] : snapToHalf(event.localPosition[1])
+    const z = bypassSnap ? event.localPosition[2] : snapToHalf(event.localPosition[2])
 
     // Get auto-adjusted Y position from validator
     const rawDims = ctx.draftItem
@@ -231,11 +236,13 @@ export const wallStrategy = {
       },
       cursorRotationY: cursorRotation,
       gridPosition: [x, adjustedY, z],
-      cursorPosition: [
-        snapToHalf(event.position[0]),
-        snapToHalf(event.position[1]),
-        snapToHalf(event.position[2]),
-      ],
+      cursorPosition: bypassSnap
+        ? [event.position[0], event.position[1], event.position[2]]
+        : [
+            snapToHalf(event.position[0]),
+            snapToHalf(event.position[1]),
+            snapToHalf(event.position[2]),
+          ],
       stopPropagation: true,
     }
   },
@@ -258,9 +265,10 @@ export const wallStrategy = {
     const itemRotation = calculateItemRotation(event.normal)
     const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
 
-    const snappedX = snapToHalf(event.localPosition[0])
-    const snappedY = snapToHalf(event.localPosition[1])
-    const snappedZ = snapToHalf(event.localPosition[2])
+    const bypassSnap = event.nativeEvent?.shiftKey === true
+    const snappedX = bypassSnap ? event.localPosition[0] : snapToHalf(event.localPosition[0])
+    const snappedY = bypassSnap ? event.localPosition[1] : snapToHalf(event.localPosition[1])
+    const snappedZ = bypassSnap ? event.localPosition[2] : snapToHalf(event.localPosition[2])
 
     // Get auto-adjusted Y position from validator
     const validation = validators.canPlaceOnWall(
@@ -278,11 +286,13 @@ export const wallStrategy = {
 
     return {
       gridPosition: [snappedX, adjustedY, snappedZ],
-      cursorPosition: [
-        snapToHalf(event.position[0]),
-        snapToHalf(event.position[1]),
-        snapToHalf(event.position[2]),
-      ],
+      cursorPosition: bypassSnap
+        ? [event.position[0], event.position[1], event.position[2]]
+        : [
+            snapToHalf(event.position[0]),
+            snapToHalf(event.position[1]),
+            snapToHalf(event.position[2]),
+          ],
       cursorRotationY: cursorRotation,
       nodeUpdate: {
         position: [snappedX, adjustedY, snappedZ],
@@ -403,8 +413,8 @@ function resolveRoofWallTarget(
   const dims = getGridAlignedDimensions(rawDims, attachTo)
   const [width, height] = dims
 
-  const u = snapToHalf(hit.u)
-  const centerV = snapToHalf(hit.v) + height / 2
+  const u = shiftFree ? hit.u : snapToHalf(hit.u)
+  const centerV = (shiftFree ? hit.v : snapToHalf(hit.v)) + height / 2
   const fitted = shiftFree ? null : clampRectToRoofWallFace(hit.face, u, centerV, width, height)
   if (!fitted && !shiftFree) return null
   const finalU = fitted?.u ?? u
@@ -604,8 +614,13 @@ export const ceilingStrategy = {
 
     // Ceiling items are stored in ceiling-local coordinates, so snapping must
     // use the ceiling hit's local position rather than world position.
-    const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
-    const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
+    const bypassSnap = event.nativeEvent?.shiftKey === true
+    const x = bypassSnap
+      ? event.localPosition[0]
+      : snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
+    const z = bypassSnap
+      ? event.localPosition[2]
+      : snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
     // Recessed fixtures seat flush with the ceiling plane (body rising into the
     // void above); everything else hangs its full height below the ceiling.
     const seatY = ctx.asset.recessed ? 0 : -itemHeight
@@ -638,8 +653,13 @@ export const ceilingStrategy = {
     const rotY = ctx.draftItem.rotation?.[1] ?? 0
     const swapDims = Math.abs(Math.sin(rotY)) > 0.9
 
-    const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
-    const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
+    const bypassSnap = event.nativeEvent?.shiftKey === true
+    const x = bypassSnap
+      ? event.localPosition[0]
+      : snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
+    const z = bypassSnap
+      ? event.localPosition[2]
+      : snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
     // Recessed fixtures seat flush with the ceiling plane (body rising into the
     // void above); everything else hangs its full height below the ceiling.
     const seatY = ctx.draftItem.asset.recessed ? 0 : -itemHeight
@@ -750,8 +770,9 @@ export const itemSurfaceStrategy = {
     const surfaceHeight = getSurfacePlacementHeight(surfaceItem, event, localPos)
     if (surfaceHeight === null) return null
 
-    const x = snapToGrid(localPos.x, ourDims[0])
-    const z = snapToGrid(localPos.z, ourDims[2])
+    const bypassSnap = event.nativeEvent?.shiftKey === true
+    const x = bypassSnap ? localPos.x : snapToGrid(localPos.x, ourDims[0])
+    const z = bypassSnap ? localPos.z : snapToGrid(localPos.z, ourDims[2])
     const y = surfaceHeight
 
     const worldSnapped = surfaceMesh.localToWorld(new Vector3(x, y, z))
@@ -801,8 +822,9 @@ export const itemSurfaceStrategy = {
     const surfaceHeight = getSurfacePlacementHeight(surfaceItem, event, localPos)
     if (surfaceHeight === null) return null
 
-    const x = snapToGrid(localPos.x, ourDims[0])
-    const z = snapToGrid(localPos.z, ourDims[2])
+    const bypassSnap = event.nativeEvent?.shiftKey === true
+    const x = bypassSnap ? localPos.x : snapToGrid(localPos.x, ourDims[0])
+    const z = bypassSnap ? localPos.z : snapToGrid(localPos.z, ourDims[2])
     const y = surfaceHeight
 
     const worldSnapped = surfaceMesh.localToWorld(new Vector3(x, y, z))
@@ -901,8 +923,9 @@ export const shelfSurfaceStrategy = {
     const rowY = getShelfRowSurfaceY(shelfNode, localPos.y)
     if (rowY === null) return null
 
-    const x = snapToGrid(localPos.x, ourDims[0])
-    const z = snapToGrid(localPos.z, ourDims[2])
+    const bypassSnap = event.nativeEvent?.shiftKey === true
+    const x = bypassSnap ? localPos.x : snapToGrid(localPos.x, ourDims[0])
+    const z = bypassSnap ? localPos.z : snapToGrid(localPos.z, ourDims[2])
 
     const worldSnapped = shelfMesh.localToWorld(new Vector3(x, rowY, z))
 
@@ -945,8 +968,9 @@ export const shelfSurfaceStrategy = {
     const rowY = getShelfRowSurfaceY(shelfNode, localPos.y)
     if (rowY === null) return null
 
-    const x = snapToGrid(localPos.x, ourDims[0])
-    const z = snapToGrid(localPos.z, ourDims[2])
+    const bypassSnap = event.nativeEvent?.shiftKey === true
+    const x = bypassSnap ? localPos.x : snapToGrid(localPos.x, ourDims[0])
+    const z = bypassSnap ? localPos.z : snapToGrid(localPos.z, ourDims[2])
     const worldSnapped = shelfMesh.localToWorld(new Vector3(x, rowY, z))
 
     return {

@@ -88,7 +88,7 @@ const RidgeVentTool = () => {
       const sx = Math.round(ridgeWorld[0] * 20) / 20
       const sz = Math.round(ridgeWorld[2] * 20) / 20
       const prev = lastSnapRef.current
-      if (!prev || prev[0] !== sx || prev[1] !== sz) {
+      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
         triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }

@@ -1,6 +1,13 @@
 'use client'
 
-import { type FenceNode, getWallCurveLength, useScene, type WallNode } from '@pascal-app/core'
+import {
+  emitter,
+  type FenceNode,
+  type GridEvent,
+  getWallCurveLength,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import {
   CursorSphere,
   type FencePlanPoint,
@@ -121,13 +128,43 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
   const movingPoint = endpoint === 'start' ? liveStart : liveEnd
 
   // Ticker SFX on each grid-snap step, mirroring the wall endpoint tool.
-  // The action snaps the point before writing to the scene, so `movingPoint`
-  // only changes in discrete grid steps — the right cadence for the click.
-  // First tick just seeds the ref (no sound on mount).
+  // First tick just seeds the ref (no sound on mount). The drag action receives
+  // the Shift modifier through grid events, so mirror that modifier here to
+  // avoid playing grid ticks while snap is bypassed.
   const previousGridPosRef = useRef<FencePlanPoint | null>(null)
+  const shiftPressedRef = useRef(false)
+  useEffect(() => {
+    const onGridMove = (event: GridEvent) => {
+      shiftPressedRef.current = event.nativeEvent?.shiftKey === true
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') shiftPressedRef.current = true
+    }
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') shiftPressedRef.current = false
+    }
+    const onBlur = () => {
+      shiftPressedRef.current = false
+    }
+    emitter.on('grid:move', onGridMove)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      emitter.off('grid:move', onGridMove)
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [])
+
   useEffect(() => {
     const prev = previousGridPosRef.current
-    if (prev && (prev[0] !== movingPoint[0] || prev[1] !== movingPoint[1])) {
+    if (
+      !shiftPressedRef.current &&
+      prev &&
+      (prev[0] !== movingPoint[0] || prev[1] !== movingPoint[1])
+    ) {
       triggerSFX('sfx:grid-snap')
     }
     previousGridPosRef.current = movingPoint

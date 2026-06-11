@@ -79,11 +79,12 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
 
     return {
       affectedIds: [segmentId],
-      apply({ planPoint }) {
+      apply({ planPoint, modifiers }) {
         const currentLocal = projectLocalAxis(planPoint[0], planPoint[1])
         const delta = (currentLocal - initialLocal) * side
         const rawValue = initialValue + 2 * delta
-        const snappedValue = gridSnapStep > 0 ? snapScalar(rawValue, gridSnapStep) : rawValue
+        const snappedValue =
+          !modifiers.shiftKey && gridSnapStep > 0 ? snapScalar(rawValue, gridSnapStep) : rawValue
         const newValue = Math.max(MIN_ROOF_DIM, snappedValue)
         lastValue = newValue
         useScene

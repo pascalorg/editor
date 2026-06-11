@@ -11,7 +11,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { type Camera, type Object3D, type Plane, Vector2, type Vector3 } from 'three'
+import { type Camera, type Object3D, type Plane, type Ray, Vector2, type Vector3 } from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 
@@ -27,9 +27,12 @@ type IntersectPlane = (
   target: Vector3,
 ) => Vector3 | null
 
+type GetPointerRay = (clientX: number, clientY: number, target: Ray) => Ray
+
 export type HandleDragStartContext = {
   event: ThreeEvent<PointerEvent>
   camera: Camera
+  getPointerRay: GetPointerRay
   intersectPlane: IntersectPlane
   initialNode: AnyNode
   node: AnyNode
@@ -40,6 +43,7 @@ export type HandleDragStartContext = {
 
 export type HandleDragMoveContext = {
   event: PointerEvent
+  getPointerRay: GetPointerRay
   intersectPlane: IntersectPlane
 }
 
@@ -121,13 +125,20 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     rideObject.updateMatrixWorld()
 
     const ndc = new Vector2()
-    const intersectPlane: IntersectPlane = (clientX, clientY, plane, target) => {
+    const setPointerRay = (clientX: number, clientY: number) => {
       const rect = gl.domElement.getBoundingClientRect()
       ndc.set(
         ((clientX - rect.left) / rect.width) * 2 - 1,
         -((clientY - rect.top) / rect.height) * 2 + 1,
       )
       raycaster.setFromCamera(ndc, camera)
+    }
+    const getPointerRay: GetPointerRay = (clientX, clientY, target) => {
+      setPointerRay(clientX, clientY)
+      return target.copy(raycaster.ray)
+    }
+    const intersectPlane: IntersectPlane = (clientX, clientY, plane, target) => {
+      setPointerRay(clientX, clientY)
       return raycaster.ray.intersectPlane(plane, target)
     }
 
@@ -137,6 +148,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     const session = args.onStart({
       event,
       camera,
+      getPointerRay,
       intersectPlane,
       initialNode,
       node,
@@ -159,7 +171,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     let lastPatch: Partial<AnyNode> | null = null
 
     const onMove = (moveEvent: PointerEvent) => {
-      const patch = session.move({ event: moveEvent, intersectPlane })
+      const patch = session.move({ event: moveEvent, getPointerRay, intersectPlane })
       if (!patch) return
       lastPatch = patch
       useLiveNodeOverrides.getState().set(overrideId, patch as Record<string, unknown>)

@@ -348,18 +348,20 @@ export const StairTool: React.FC = () => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      const bypassSnap = event.nativeEvent?.shiftKey === true
       const [gridX, gridZ] = alignPoint(
-        Math.round(event.localPosition[0] * 2) / 2,
-        Math.round(event.localPosition[2] * 2) / 2,
+        bypassSnap ? event.localPosition[0] : Math.round(event.localPosition[0] * 2) / 2,
+        bypassSnap ? event.localPosition[2] : Math.round(event.localPosition[2] * 2) / 2,
         event.localPosition[0],
         event.localPosition[2],
-        event.nativeEvent?.altKey === true,
+        event.nativeEvent?.altKey === true || bypassSnap,
       )
       const position: [number, number, number] = [gridX, 0, gridZ]
       lastCanonicalPositionRef.current = position
       applyDraftPreview(position, rotationRef.current)
 
       if (
+        !bypassSnap &&
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
       ) {
@@ -370,12 +372,13 @@ export const StairTool: React.FC = () => {
     }
 
     const getAlignedGridPosition = (event: GridEvent): [number, number, number] => {
+      const bypassSnap = event.nativeEvent?.shiftKey === true
       const [gridX, gridZ] = alignPoint(
-        Math.round(event.localPosition[0] * 2) / 2,
-        Math.round(event.localPosition[2] * 2) / 2,
+        bypassSnap ? event.localPosition[0] : Math.round(event.localPosition[0] * 2) / 2,
+        bypassSnap ? event.localPosition[2] : Math.round(event.localPosition[2] * 2) / 2,
         event.localPosition[0],
         event.localPosition[2],
-        event.nativeEvent?.altKey === true,
+        event.nativeEvent?.altKey === true || bypassSnap,
       )
       return [gridX, 0, gridZ]
     }

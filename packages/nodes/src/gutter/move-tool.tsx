@@ -97,7 +97,10 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
 
       const sx = Math.round(snap.eaveX * 20) / 20
       const sz = Math.round(snap.eaveZ * 20) / 20
-      if (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz) {
+      if (
+        event.nativeEvent?.shiftKey !== true &&
+        (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
+      ) {
         triggerSFX('sfx:grid-snap')
         lastSnap = [sx, sz]
       }

@@ -20,6 +20,7 @@ function makeEmptySegmentGeometry(): THREE.BufferGeometry {
   g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
   g.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
   g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(6), 2))
+  g.setAttribute('uv2', new THREE.Float32BufferAttribute(new Float32Array(6), 2))
   // Match the four material slots the roof-segment renderer's material
   // array expects (0=top, 1=side, 2=interior, 3=shingle). Without these
   // groups, mesh.material is a single-material lookup that mismatches

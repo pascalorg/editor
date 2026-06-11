@@ -137,3 +137,15 @@ export function surfaceQuatFromNormal(normal: THREE.Vector3, out: THREE.Quaterni
   const m = new THREE.Matrix4().makeBasis(right, normal, forward)
   return out.setFromRotationMatrix(m)
 }
+
+// Yaw (about the surface normal, composed AFTER `surfaceQuatFromNormal`)
+// that points the node's local +Z down the slope. The analytical normals
+// are axis-aligned (n.x or n.z is 0), and in the +X-projected basis above
+// the down-slope direction decomposes to atan2(n.x · n.y, n.z): +Z face
+// → 0, −Z → π, +X → +π/2, −X → −π/2. Kept next to `surfaceQuatFromNormal`
+// so the two stay in lockstep — the formula is only valid for its basis.
+export function getDownSlopeYaw(lx: number, lz: number, seg: RoofSegmentNode): number {
+  const n = getAnalyticalNormal(lx, lz, seg)
+  if (n.x === 0 && n.z === 0) return 0
+  return Math.atan2(n.x * n.y, n.z)
+}

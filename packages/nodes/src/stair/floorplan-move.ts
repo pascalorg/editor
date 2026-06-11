@@ -43,7 +43,7 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
       const step = getSegmentGridStep()
       const snap = (value: number) => (modifiers.shiftKey ? value : snapScalar(value, step))
       const [gx, gz] = resolveCursor(planPoint, { snap })
-      // Figma alignment on the actual stair footprint (Alt bypasses),
+      // Figma alignment on the actual stair footprint (Alt bypasses alignment; Shift all snap),
       // matching the 3D move tool. Publishes guides via `useAlignmentGuides`.
       const movingAnchors = movingAlignmentAnchors(node, nodes, gx, gz, node.rotation ?? 0)
       const { point: aligned } = applyFloorplanAlignment(
@@ -52,7 +52,7 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
           ? movingAnchors
           : [{ nodeId: node.id, kind: 'corner', x: gx, z: gz }],
         candidates,
-        { bypass: modifiers.altKey },
+        { bypass: modifiers.altKey || modifiers.shiftKey },
       )
       const sx = aligned[0]
       const sz = aligned[1]
