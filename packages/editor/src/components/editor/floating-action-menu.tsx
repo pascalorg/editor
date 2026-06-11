@@ -155,6 +155,8 @@ export function FloatingActionMenu() {
   // flips only at drag start / end, so subscribing here is cheap — the live
   // height value is written imperatively in the useFrame below.
   const activeHandleDrag = useEditor((s) => s.activeHandleDrag)
+  // R/T rotation axis for kinds with full 3D orientation (duct fittings).
+  const rotationAxis = useEditor((s) => s.rotationAxis)
 
   const groupRef = useRef<THREE.Group>(null)
   const menuScaleRef = useRef<HTMLDivElement>(null)
@@ -582,6 +584,27 @@ export function FloatingActionMenu() {
                   thickness={pillDims.thickness}
                   unit={unit}
                 />
+              </div>
+            ) : null}
+            {/* Rotation-axis pill for kinds with full 3D orientation (duct
+                fittings): shows which world axis R/T turns around and that
+                Alt cycles it. Same slot as the wall height pill — directly
+                above the action menu. */}
+            {node?.type === 'duct-fitting' ? (
+              <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2">
+                <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
+                  <span className="font-medium text-foreground">
+                    Axis {rotationAxis.toUpperCase()}
+                  </span>
+                  <span aria-hidden className="text-muted-foreground">
+                    ·
+                  </span>
+                  <span className="text-muted-foreground">R/T rotate</span>
+                  <span aria-hidden className="text-muted-foreground">
+                    ·
+                  </span>
+                  <span className="text-muted-foreground">⌥ axis</span>
+                </div>
               </div>
             ) : null}
           </div>
