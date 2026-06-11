@@ -106,6 +106,10 @@ export type StructureTool =
   | 'dormer'
   | 'gutter'
   | 'downspout'
+  | 'duct-segment'
+  | 'duct-fitting'
+  | 'duct-terminal'
+  | 'hvac-equipment'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'
@@ -291,6 +295,14 @@ type EditorState = {
    */
   activeHandleDrag: { nodeId: AnyNodeId; label: string } | null
   setActiveHandleDrag: (drag: { nodeId: AnyNodeId; label: string } | null) => void
+  /**
+   * World axis the R/T keyboard rotation turns around, for kinds with
+   * full 3D orientation (duct fittings). Alt cycles it Y → X → Z; the
+   * kind's tool / keyboard actions read it, and the floating action
+   * menu surfaces it in a pill above the selected node.
+   */
+  rotationAxis: 'x' | 'y' | 'z'
+  cycleRotationAxis: () => 'x' | 'y' | 'z'
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
   curvingFence: FenceNode | null
@@ -803,6 +815,13 @@ const useEditor = create<EditorState>()(
       setMovingFenceEndpoint: (value) => set({ movingFenceEndpoint: value }),
       activeHandleDrag: null,
       setActiveHandleDrag: (drag) => set({ activeHandleDrag: drag }),
+      rotationAxis: 'y',
+      cycleRotationAxis: () => {
+        const order = ['y', 'x', 'z'] as const
+        const next = order[(order.indexOf(get().rotationAxis as 'y' | 'x' | 'z') + 1) % 3]!
+        set({ rotationAxis: next })
+        return next
+      },
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       curvingFence: null,
