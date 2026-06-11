@@ -84,6 +84,7 @@ export type {
   MovableConfig,
   NodeCategory,
   NodeDefinition,
+  NodePort,
   NodeRegistry,
   PaintCapability,
   PaintEffectiveMaterialArgs,

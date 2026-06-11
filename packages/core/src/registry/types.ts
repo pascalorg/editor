@@ -168,6 +168,31 @@ export type FloorplanStyle = {
   cursor?: string
 }
 
+// ─── NodePort ────────────────────────────────────────────────────────
+//
+// A typed connection point exposed by a node — the open end of a duct
+// run, the collar of a fitting, the supply plenum of an air handler.
+// Ports are what placement tools snap to and what a future system graph
+// walks to decide connectivity.
+//
+// Coordinates are LEVEL-LOCAL meters — the same space duct paths and
+// grid events use. Kinds whose schema stores a node transform
+// (`position` / `rotation`) apply it themselves inside `def.ports` so
+// consumers never need to know how a kind stores its placement.
+
+export type NodePort = {
+  /** Stable identifier within the node, e.g. 'start', 'end', 'branch'. */
+  id: string
+  /** Level-local meters. */
+  position: readonly [number, number, number]
+  /** Unit vector pointing OUT of the port (away from the node body). */
+  direction: readonly [number, number, number]
+  /** Nominal connection diameter in inches. */
+  diameter: number
+  /** Which distribution loop the port belongs to, e.g. 'supply' | 'return'. */
+  system?: string
+}
+
 // ─── ToolHint ────────────────────────────────────────────────────────
 //
 // A single key + label entry in the contextual shortcut hint panel.
@@ -795,6 +820,15 @@ export type NodeDefinition<S extends ZodObject<any>> = {
     nodes: Record<AnyNodeId, AnyNode>
     liveOverrides: Map<string, Record<string, unknown>>
   }) => Record<AnyNodeId, AnyNode>
+  /**
+   * Typed connection points this kind exposes (duct/pipe open ends,
+   * fitting collars, equipment plenums). Pure function of the node —
+   * returns LEVEL-LOCAL positions/directions (the kind applies its own
+   * transform). Consumed by placement tools for port-snapping and, in a
+   * later slice, by the system graph for connectivity. Kinds with no
+   * connectable geometry omit this.
+   */
+  ports?: (node: z.infer<S>) => NodePort[]
   system?: SystemContribution
   tool?: LazyComponent
   /**
