@@ -4,6 +4,7 @@ import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
+import { SnapTargetIcon } from '../../../snap-target-badge'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
@@ -53,7 +54,9 @@ export const DoorTreeNode = memo(function DoorTreeNode({
       expanded={false}
       hasChildren={false}
       icon={
-        <Image alt="" className="object-contain" height={14} src="/icons/door.png" width={14} />
+        <SnapTargetIcon target="wall">
+          <Image alt="" className="object-contain" height={14} src="/icons/door.png" width={14} />
+        </SnapTargetIcon>
       }
       isHovered={isHovered}
       isLast={isLast}

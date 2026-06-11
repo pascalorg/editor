@@ -3,6 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { resolveAssetSnapTarget, SnapTargetIcon } from '../../../snap-target-badge'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
@@ -84,6 +85,7 @@ export const ItemTreeNode = memo(function ItemTreeNode({
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
   const iconSrc = CATEGORY_ICONS[asset?.category ?? ''] || '/icons/couch.png'
+  const snapTarget = resolveAssetSnapTarget(asset?.attachTo)
   const defaultName = asset?.name || 'Item'
   const hasChildren = children.length > 0
 
@@ -93,7 +95,15 @@ export const ItemTreeNode = memo(function ItemTreeNode({
       depth={depth}
       expanded={expanded}
       hasChildren={hasChildren}
-      icon={<Image alt="" className="object-contain" height={14} src={iconSrc} width={14} />}
+      icon={
+        snapTarget ? (
+          <SnapTargetIcon target={snapTarget}>
+            <Image alt="" className="object-contain" height={14} src={iconSrc} width={14} />
+          </SnapTargetIcon>
+        ) : (
+          <Image alt="" className="object-contain" height={14} src={iconSrc} width={14} />
+        )
+      }
       isHovered={isHovered}
       isLast={isLast}
       isSelected={isSelected}

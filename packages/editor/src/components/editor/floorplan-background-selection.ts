@@ -7,6 +7,7 @@ import type { WallPlanPoint } from '../tools/wall/wall-drafting'
 type ModifierKeys = {
   meta: boolean
   ctrl: boolean
+  shift: boolean
 }
 
 type ZoneHitEntry = {
@@ -85,7 +86,7 @@ export function resolveFloorplanBackgroundSelection({
         handled: true,
         kind: 'select-elements',
         selectedIds:
-          modifierKeys.meta || modifierKeys.ctrl
+          modifierKeys.meta || modifierKeys.ctrl || modifierKeys.shift
             ? currentSelectedIds.includes(hitId)
               ? currentSelectedIds.filter((selectedId) => selectedId !== hitId)
               : [...currentSelectedIds, hitId]
@@ -105,7 +106,7 @@ export function resolveFloorplanBackgroundSelection({
     return {
       handled: true,
       kind: 'clear-elements',
-      preserveSelection: modifierKeys.meta || modifierKeys.ctrl,
+      preserveSelection: modifierKeys.meta || modifierKeys.ctrl || modifierKeys.shift,
     }
   }
 

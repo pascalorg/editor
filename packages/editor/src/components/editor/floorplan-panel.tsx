@@ -868,10 +868,15 @@ function getElevatorResizeSign(handle: ElevatorResizeHandle) {
   return handle.endsWith('positive') ? 1 : -1
 }
 
-function getSelectionModifierKeys(event?: { metaKey?: boolean; ctrlKey?: boolean }) {
+function getSelectionModifierKeys(event?: {
+  metaKey?: boolean
+  ctrlKey?: boolean
+  shiftKey?: boolean
+}) {
   return {
     meta: Boolean(event?.metaKey),
     ctrl: Boolean(event?.ctrlKey),
+    shift: Boolean(event?.shiftKey),
   }
 }
 
@@ -9233,8 +9238,11 @@ export function FloorplanPanel({
   )
 
   const addFloorplanSelection = useCallback(
-    (nextSelectedIds: string[], modifierKeys?: { meta: boolean; ctrl: boolean }) => {
-      const shouldAppend = Boolean(modifierKeys?.meta || modifierKeys?.ctrl)
+    (
+      nextSelectedIds: string[],
+      modifierKeys?: { meta: boolean; ctrl: boolean; shift: boolean },
+    ) => {
+      const shouldAppend = Boolean(modifierKeys?.meta || modifierKeys?.ctrl || modifierKeys?.shift)
 
       if (shouldAppend) {
         if (nextSelectedIds.length === 0) {
@@ -9252,8 +9260,8 @@ export function FloorplanPanel({
   )
 
   const toggleFloorplanSelection = useCallback(
-    (nodeId: string, modifierKeys?: { meta: boolean; ctrl: boolean }) => {
-      const shouldToggle = Boolean(modifierKeys?.meta || modifierKeys?.ctrl)
+    (nodeId: string, modifierKeys?: { meta: boolean; ctrl: boolean; shift: boolean }) => {
+      const shouldToggle = Boolean(modifierKeys?.meta || modifierKeys?.ctrl || modifierKeys?.shift)
 
       if (shouldToggle) {
         const currentSelectedIds = useViewer.getState().selection.selectedIds
@@ -9296,7 +9304,7 @@ export function FloorplanPanel({
   const commitFloorplanScreenSelection = useCallback(
     (nextSelectedIds: string[], event: PointerEvent) => {
       const modifierKeys = getSelectionModifierKeys(event)
-      const shouldAppend = modifierKeys.meta || modifierKeys.ctrl
+      const shouldAppend = modifierKeys.meta || modifierKeys.ctrl || modifierKeys.shift
 
       setSelectedReferenceId(null)
 
@@ -9934,7 +9942,7 @@ export function FloorplanPanel({
 
         if (hitId) {
           toggleFloorplanSelection(hitId, modifierKeys)
-        } else if (!(modifierKeys.meta || modifierKeys.ctrl)) {
+        } else if (!(modifierKeys.meta || modifierKeys.ctrl || modifierKeys.shift)) {
           commitFloorplanSelection([])
         }
       }

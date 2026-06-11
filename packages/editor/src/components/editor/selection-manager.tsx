@@ -4,6 +4,7 @@ import {
   type BuildingNode,
   type CeilingNode,
   type ColumnNode,
+  createSceneApi,
   emitter,
   type FenceNode,
   getEffectiveRoofSurfaceMaterial,
@@ -11,6 +12,8 @@ import {
   getMaterialPresetByRef,
   getRoofSegmentSurfaceY,
   getSelectableKinds,
+  type GridEvent,
+  isRegistryMovable,
   type ItemNode,
   isRegistrySelectable,
   type NodeEvent,
@@ -28,6 +31,7 @@ import {
   type StairSegmentEvent,
   type StairSurfaceMaterialRole,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 
@@ -51,13 +55,20 @@ import {
   hasActivePaintMaterial,
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
-import { emitDeleteSFX } from '../../lib/sfx-bus'
+import {
+  canDirectRotateNode,
+  resolveDirectRotationPatch,
+  snapDirectRotationDelta,
+} from '../../lib/direct-manipulation'
+import { createEditorApi } from '../../lib/editor-api'
+import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import useEditor, {
   type MaterialTargetRole,
   type Phase,
   type StructureLayer,
 } from './../../store/use-editor'
-import { boxSelectHandled } from '../tools/select/box-select-state'
+import { swallowNextClick } from './node-arrow-handles'
+import { boxSelectHandled, suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   // Elevators are building-scoped, so they stay selectable across level filters.
@@ -89,6 +100,7 @@ type SelectableNodeType =
 type ModifierKeys = {
   meta: boolean
   ctrl: boolean
+  shift: boolean
 }
 
 type PaintPreviewCleanup = () => void
@@ -111,6 +123,24 @@ interface SelectionStrategy {
 type SelectionTarget = {
   phase: Phase
   structureLayer?: StructureLayer
+}
+
+const DIRECT_DRAG_THRESHOLD_PX = 4
+const DIRECT_ROTATE_RADIANS_PER_PIXEL = Math.PI / 180
+
+function pointerEventFromNodeEvent(event: NodeEvent): PointerEvent {
+  const threeEvent = event.nativeEvent as unknown as PointerEvent & {
+    nativeEvent?: PointerEvent
+  }
+  return threeEvent.nativeEvent ?? threeEvent
+}
+
+function isCommandModifier(event: Pick<PointerEvent, 'metaKey' | 'ctrlKey'>): boolean {
+  return event.metaKey || event.ctrlKey
+}
+
+function pointerDistancePx(event: PointerEvent, startX: number, startY: number): number {
+  return Math.hypot(event.clientX - startX, event.clientY - startY)
 }
 
 export const resolveBuildingId = (
@@ -625,8 +655,9 @@ const computeNextIds = (
 ): string[] => {
   const isMeta = event?.metaKey || event?.nativeEvent?.metaKey || modifierKeys?.meta
   const isCtrl = event?.ctrlKey || event?.nativeEvent?.ctrlKey || modifierKeys?.ctrl
+  const isShift = event?.shiftKey || event?.nativeEvent?.shiftKey || modifierKeys?.shift
 
-  if (isMeta || isCtrl) {
+  if (isMeta || isCtrl || isShift) {
     if (selectedIds.includes(node.id)) {
       return selectedIds.filter((id) => id !== node.id)
     }
@@ -855,6 +886,7 @@ export const SelectionManager = () => {
   const modifierKeysRef = useRef<ModifierKeys>({
     meta: false,
     ctrl: false,
+    shift: false,
   })
   const clickHandledRef = useRef(false)
 
@@ -1230,16 +1262,19 @@ export const SelectionManager = () => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Meta') modifierKeysRef.current.meta = true
       if (event.key === 'Control') modifierKeysRef.current.ctrl = true
+      if (event.key === 'Shift') modifierKeysRef.current.shift = true
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.key === 'Meta') modifierKeysRef.current.meta = false
       if (event.key === 'Control') modifierKeysRef.current.ctrl = false
+      if (event.key === 'Shift') modifierKeysRef.current.shift = false
     }
 
     const clearModifiers = () => {
       modifierKeysRef.current.meta = false
       modifierKeysRef.current.ctrl = false
+      modifierKeysRef.current.shift = false
     }
 
     window.addEventListener('keydown', onKeyDown)
@@ -1252,6 +1287,185 @@ export const SelectionManager = () => {
       window.removeEventListener('blur', clearModifiers)
     }
   }, [])
+
+  useEffect(() => {
+    if (mode !== 'select') return
+    if (movingNode || curvingWall || curvingFence) return
+
+    const onPointerDown = (event: NodeEvent) => {
+      const pointer = pointerEventFromNodeEvent(event)
+      if (pointer.button !== 0 || !isCommandModifier(pointer)) return
+
+      const node = useScene.getState().nodes[event.node.id as AnyNodeId] ?? event.node
+      if (!isRegistryMovable(node.type)) return
+      if (!useViewer.getState().selection.selectedIds.includes(node.id)) return
+
+      const startX = pointer.clientX
+      const startY = pointer.clientY
+      const pointerId = pointer.pointerId
+      let engaged = false
+
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onEnd)
+        window.removeEventListener('pointercancel', onEnd)
+        if (engaged) {
+          useViewer.getState().setInputDragging(false)
+        }
+      }
+
+      const onMove = (moveEvent: PointerEvent) => {
+        if (moveEvent.pointerId !== pointerId) return
+        if (engaged) return
+        if (pointerDistancePx(moveEvent, startX, startY) < DIRECT_DRAG_THRESHOLD_PX) return
+
+        engaged = true
+        event.stopPropagation()
+        suppressBoxSelectForPointer(event.nativeEvent)
+        useViewer.getState().setInputDragging(true)
+        swallowNextClick()
+        createEditorApi().engageMoveDrag(node)
+      }
+
+      const onEnd = (endEvent: PointerEvent) => {
+        if (endEvent.pointerId !== pointerId) return
+        cleanup()
+      }
+
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onEnd)
+      window.addEventListener('pointercancel', onEnd)
+    }
+
+    const allTypes = [
+      'wall',
+      'fence',
+      'item',
+      'column',
+      'slab',
+      'ceiling',
+      'roof',
+      'roof-segment',
+      'stair',
+      'stair-segment',
+      'window',
+      'door',
+      'zone',
+      'shelf',
+      'spawn',
+      'elevator',
+      'building',
+    ] as const
+    const registryKinds = getSelectableKinds().filter(
+      (kind) => !(allTypes as readonly string[]).includes(kind),
+    )
+    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+
+    for (const type of subscribedKinds) {
+      emitter.on(`${type}:pointerdown` as any, onPointerDown as any)
+    }
+
+    return () => {
+      for (const type of subscribedKinds) {
+        emitter.off(`${type}:pointerdown` as any, onPointerDown as any)
+      }
+    }
+  }, [curvingFence, curvingWall, mode, movingNode])
+
+  useEffect(() => {
+    if (mode !== 'select') return
+    if (movingNode || curvingWall || curvingFence) return
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.button !== 2 || !isCommandModifier(event)) return
+      if (!(event.target instanceof HTMLCanvasElement)) return
+
+      const selectedIds = useViewer.getState().selection.selectedIds
+      const hoveredId = useViewer.getState().hoveredId as AnyNodeId | null
+      if (!hoveredId || !selectedIds.includes(hoveredId)) return
+
+      const node = useScene.getState().nodes[hoveredId]
+      if (!node || !canDirectRotateNode(node)) return
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      const nodeId = node.id as AnyNodeId
+      const pointerId = event.pointerId
+      const startX = event.clientX
+      const sceneApi = createSceneApi(useScene)
+      let lastPatch: Partial<AnyNode> | null = null
+
+      const applyDelta = (moveEvent: PointerEvent) => {
+        const rawDelta = (moveEvent.clientX - startX) * DIRECT_ROTATE_RADIANS_PER_PIXEL
+        const delta = snapDirectRotationDelta(rawDelta, moveEvent.shiftKey)
+        const patch = resolveDirectRotationPatch(node, delta, sceneApi)
+        if (!patch) return
+        lastPatch = patch
+        useLiveNodeOverrides.getState().set(nodeId, patch as Record<string, unknown>)
+        useScene.getState().markDirty(nodeId)
+      }
+
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove, true)
+        window.removeEventListener('pointerup', onUp, true)
+        window.removeEventListener('pointercancel', onCancel, true)
+        window.removeEventListener('contextmenu', preventContextMenu, true)
+        useLiveNodeOverrides.getState().clear(nodeId)
+        useScene.getState().markDirty(nodeId)
+        useScene.temporal.getState().resume()
+        useViewer.getState().setInputDragging(false)
+        if (document.body.style.cursor === 'ew-resize') {
+          document.body.style.cursor = ''
+        }
+      }
+
+      const onMove = (moveEvent: PointerEvent) => {
+        if (moveEvent.pointerId !== pointerId) return
+        moveEvent.preventDefault()
+        moveEvent.stopPropagation()
+        applyDelta(moveEvent)
+      }
+
+      const onUp = (upEvent: PointerEvent) => {
+        if (upEvent.pointerId !== pointerId) return
+        upEvent.preventDefault()
+        upEvent.stopPropagation()
+        swallowNextClick()
+        if (lastPatch) {
+          sceneApi.update(nodeId, lastPatch)
+          sfxEmitter.emit('sfx:item-place')
+        }
+        cleanup()
+      }
+
+      const onCancel = (cancelEvent: PointerEvent) => {
+        if (cancelEvent.pointerId !== pointerId) return
+        cleanup()
+      }
+
+      const preventContextMenu = (contextEvent: Event) => {
+        contextEvent.preventDefault()
+        contextEvent.stopPropagation()
+      }
+
+      useViewer.getState().setInputDragging(true)
+      useScene.temporal.getState().pause()
+      document.body.style.cursor = 'ew-resize'
+      sfxEmitter.emit('sfx:item-pick')
+      applyDelta(event)
+
+      window.addEventListener('pointermove', onMove, true)
+      window.addEventListener('pointerup', onUp, true)
+      window.addEventListener('pointercancel', onCancel, true)
+      window.addEventListener('contextmenu', preventContextMenu, true)
+    }
+
+    window.addEventListener('pointerdown', onPointerDown, true)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true)
+    }
+  }, [curvingFence, curvingWall, mode, movingNode])
 
   useEffect(() => {
     if (mode !== 'select') return
@@ -1435,9 +1649,11 @@ export const SelectionManager = () => {
       emitter.on(`${type}:click` as any, onClick as any)
     })
 
-    const onGridClick = () => {
+    const onGridClick = (event: GridEvent) => {
       if (clickHandledRef.current) return
       if (boxSelectHandled) return
+      const nativeEvent = event.nativeEvent
+      if (nativeEvent?.metaKey || nativeEvent?.ctrlKey || nativeEvent?.shiftKey) return
       const { phase, structureLayer } = useEditor.getState()
       const activeStrategy = SELECTION_STRATEGIES[phase]
       if (activeStrategy) activeStrategy.handleDeselect()

@@ -3,6 +3,7 @@ import {
   collectAlignmentAnchors,
   DoorNode,
   emitter,
+  type GridEvent,
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
@@ -38,6 +39,9 @@ const edgeMaterial = new LineBasicNodeMaterial({
   depthTest: false,
   depthWrite: false,
 })
+
+const FALLBACK_WIDTH = 0.9
+const FALLBACK_HEIGHT = 2.1
 
 /**
  * Door tool — places DoorNodes on walls and on roof-segment wall faces
@@ -97,6 +101,13 @@ const DoorTool: React.FC = () => {
       group.position.set(...worldPosition)
       group.rotation.y = cursorRotationY
       edgeMaterial.color.setHex(valid ? 0x22_c5_5e : 0xef_44_44)
+    }
+
+    const showFallbackCursor = (event: GridEvent) => {
+      if (draftRef.current) return
+      const [x, y, z] = event.localPosition
+      updateCursor([x, y + FALLBACK_HEIGHT / 2, z], 0, false)
+      useAlignmentGuides.getState().clear()
     }
 
     const onWallEnter = (event: WallEvent) => {
@@ -483,6 +494,7 @@ const DoorTool: React.FC = () => {
     emitter.on('roof:move', onRoofHover)
     emitter.on('roof:click', onRoofClick)
     emitter.on('roof:leave', onRoofLeave)
+    emitter.on('grid:move', showFallbackCursor)
     emitter.on('tool:cancel', onCancel)
 
     return () => {
@@ -498,12 +510,13 @@ const DoorTool: React.FC = () => {
       emitter.off('roof:move', onRoofHover)
       emitter.off('roof:click', onRoofClick)
       emitter.off('roof:leave', onRoofLeave)
+      emitter.off('grid:move', showFallbackCursor)
       emitter.off('tool:cancel', onCancel)
     }
   }, [])
 
-  // Cursor geometry: door outline (default 0.9 × 2.1 × 0.07)
-  const boxGeo = new BoxGeometry(0.9, 2.1, 0.07)
+  // Cursor geometry: door outline.
+  const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
   const edgesGeo = new EdgesGeometry(boxGeo)
   boxGeo.dispose()
 
