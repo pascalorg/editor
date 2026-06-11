@@ -37,9 +37,6 @@ export {
 } from './wall-snap-geometry'
 
 export const WALL_GRID_STEP = 0.5
-// Smallest available grid snap. Used as a precision-mode step (Shift +
-// drag) so a drag can land on values the regular grid skips.
-export const WALL_FINE_GRID_STEP = 0.05
 export const WALL_MIN_LENGTH = 0.01
 // An endpoint projecting within this distance of an existing wall's corner
 // resolves to the corner without splitting — splitting there would mint a
@@ -313,7 +310,8 @@ type SnapWallDraftArgs = {
   start?: WallPlanPoint
   angleSnap?: boolean
   ignoreWallIds?: string[]
-  /** Override the grid step (e.g. `WALL_FINE_GRID_STEP` for precision mode). */
+  bypassSnap?: boolean
+  /** Override the grid step. */
   step?: number
   /**
    * Magnetic snapping to existing wall geometry (corners, midpoints,
@@ -340,11 +338,14 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
     start,
     angleSnap = false,
     ignoreWallIds,
+    bypassSnap = false,
     step: overrideStep,
     magnetic = true,
     gridSnap,
     snapRadii,
   } = args
+
+  if (bypassSnap) return { point, snap: null }
 
   // Discrete special points (corner / midpoint / crossing) are taken from the
   // raw cursor so an interim grid snap can't mask them. A corner always wins,

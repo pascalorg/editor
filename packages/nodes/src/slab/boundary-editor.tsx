@@ -73,6 +73,7 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
         levelId: slabLevelId,
         excludeId: slabId,
         altKey: context.nativeEvent?.altKey === true,
+        shiftKey: context.nativeEvent?.shiftKey === true,
       }).point,
     [slabId, slabLevelId],
   )

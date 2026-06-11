@@ -7,7 +7,7 @@ import {
   WallNode as WallSchema,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { createWallOnCurrentLevel } from './wall-drafting'
+import { createWallOnCurrentLevel, snapWallDraftPointDetailed } from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'
 
 const LEVEL_ID = 'level_test' as AnyNodeId
@@ -99,5 +99,21 @@ describe('createWallOnCurrentLevel', () => {
   test('exact duplicate segment is rejected', () => {
     expect(createWallOnCurrentLevel([0, 0], [4, 0])).toBeNull()
     expect(levelWalls()).toHaveLength(1)
+  })
+})
+
+describe('snapWallDraftPointDetailed', () => {
+  test('bypassSnap returns the raw point without endpoint or angle snap', () => {
+    const wall = makeWall([0, 0], [4, 0], 'wall_a')
+    const result = snapWallDraftPointDetailed({
+      point: [3.99, 0.03],
+      walls: [wall],
+      start: [2, 2],
+      angleSnap: true,
+      bypassSnap: true,
+    })
+
+    expect(result.point).toEqual([3.99, 0.03])
+    expect(result.snap).toBeNull()
   })
 })

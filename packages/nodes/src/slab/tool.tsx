@@ -75,16 +75,17 @@ export const SlabTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
       const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
       const gridX = Math.round(rawPoint[0] * 2) / 2
       const gridZ = Math.round(rawPoint[1] * 2) / 2
-      const gridPosition: [number, number] = [gridX, gridZ]
+      const gridPosition: [number, number] = bypassSnap ? rawPoint : [gridX, gridZ]
       setCursorPosition(gridPosition)
       setLevelY(event.localPosition[1])
       const lastPoint = points[points.length - 1]
       // 15° angle snap from the raw cursor (matching the 2D floorplan
       // pipeline) with the distance snapped along the ray to the grid step.
       const orthoPoint: [number, number] =
-        shiftPressed.current || !lastPoint
+        bypassSnap || !lastPoint
           ? gridPosition
           : [
               ...snapPointAlongAngleRay(
@@ -99,9 +100,11 @@ export const SlabTool: React.FC = () => {
         fallbackPoint: orthoPoint,
         levelId: currentLevelId,
         altKey: event.nativeEvent?.altKey === true,
+        shiftKey: bypassSnap,
       }).point
       setSnappedCursorPosition(displayPoint)
       if (
+        !bypassSnap &&
         points.length > 0 &&
         previousSnappedPointRef.current &&
         (displayPoint[0] !== previousSnappedPointRef.current[0] ||

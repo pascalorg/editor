@@ -35,6 +35,7 @@ import {
   OrthographicCamera,
   Plane,
   Quaternion,
+  Ray,
   RingGeometry,
   Vector3,
 } from 'three'
@@ -60,6 +61,43 @@ import { type HandleDragControls, useHandleDrag } from './handles/use-handle-dra
 // Pooled scratch for the handle rig's world-relative pose mapping.
 const _rigRelative = new Matrix4()
 const _rigScratchScale = new Vector3()
+const _resizeAxisW = new Vector3()
+const _resizeScale = new Vector3()
+const _resizeQuaternion = new Quaternion()
+const _resizeOriginW = new Vector3()
+const _resizePositionW = new Vector3()
+const _resizeRay = new Ray()
+const _resizeRayW = new Vector3()
+
+function axisVector(axis: 'x' | 'y' | 'z', target: Vector3) {
+  target.set(0, 0, 0)
+  if (axis === 'x') target.x = 1
+  else if (axis === 'y') target.y = 1
+  else target.z = 1
+  return target
+}
+
+function axisScale(axis: 'x' | 'y' | 'z', scale: Vector3) {
+  return axis === 'x' ? scale.x : axis === 'y' ? scale.y : scale.z
+}
+
+function closestAxisParameterToRay(axisOrigin: Vector3, axisDirection: Vector3, ray: Ray) {
+  _resizeRayW.subVectors(axisOrigin, ray.origin)
+  const b = axisDirection.dot(ray.direction)
+  const d = axisDirection.dot(_resizeRayW)
+  const e = ray.direction.dot(_resizeRayW)
+  const denominator = 1 - b * b
+  if (Math.abs(denominator) < 1e-6) {
+    return -d
+  }
+
+  const axisParameter = (b * e - d) / denominator
+  const rayParameter = e + b * axisParameter
+  if (rayParameter < 0) {
+    return -d
+  }
+  return axisParameter
+}
 
 export {
   ARROW_COLOR,
@@ -580,34 +618,31 @@ function LinearArrow({
     rideObject,
     setIsDragging,
     onStart: ({
-      camera: dragCamera,
       event,
+      getPointerRay,
       initialNode,
-      intersectPlane,
       nodeId,
       rideObject: dragRideObject,
       sceneApi,
     }) => {
-      const initialFrameInverse = new Matrix4().copy(dragRideObject.matrixWorld).invert()
-      const worldOrigin = new Vector3(...position).applyMatrix4(dragRideObject.matrixWorld)
-      const planeNormal = new Vector3().subVectors(dragCamera.position, worldOrigin).setY(0)
-      if (planeNormal.lengthSq() === 0) return null
-      planeNormal.normalize()
-      const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, worldOrigin)
+      dragRideObject.matrixWorld.decompose(_resizePositionW, _resizeQuaternion, _resizeScale)
+      _resizeOriginW.set(...position).applyMatrix4(dragRideObject.matrixWorld)
+      axisVector(descriptor.axis, _resizeAxisW).applyQuaternion(_resizeQuaternion).normalize()
+      const localToWorldScale = axisScale(descriptor.axis, _resizeScale)
+      if (Math.abs(localToWorldScale) < 1e-6 || _resizeAxisW.lengthSq() === 0) return null
 
-      const hitWorld = new Vector3()
-      if (!intersectPlane(event.nativeEvent.clientX, event.nativeEvent.clientY, plane, hitWorld)) {
-        return null
-      }
-      const hitLocal = hitWorld.clone().applyMatrix4(initialFrameInverse)
+      const initialPointer =
+        closestAxisParameterToRay(
+          _resizeOriginW,
+          _resizeAxisW,
+          getPointerRay(event.nativeEvent.clientX, event.nativeEvent.clientY, _resizeRay),
+        ) / localToWorldScale
 
       const overrideId =
         (descriptor.kind === 'linear-resize'
           ? descriptor.overrideTarget?.(initialNode as never, sceneApi)
           : undefined) ?? nodeId
       const initialValue = descriptor.currentValue(initialNode)
-      const initialPointer =
-        descriptor.axis === 'x' ? hitLocal.x : descriptor.axis === 'y' ? hitLocal.y : hitLocal.z
       const minBound = resolveBound(descriptor.min, Number.NEGATIVE_INFINITY, initialNode, sceneApi)
       const maxBound = resolveBound(descriptor.max, Number.POSITIVE_INFINITY, initialNode, sceneApi)
       const gridSnapStep =
@@ -635,22 +670,19 @@ function LinearArrow({
             useEditor.getState().setActiveHandleDrag(null)
           }
         },
-        move: ({ event: moveEvent, intersectPlane: intersectMovePlane }) => {
-          const intersection = new Vector3()
-          if (!intersectMovePlane(moveEvent.clientX, moveEvent.clientY, plane, intersection)) {
-            return null
-          }
-          const intersectionLocal = intersection.clone().applyMatrix4(initialFrameInverse)
+        move: ({ event: moveEvent, getPointerRay: getMovePointerRay }) => {
           const currentPointer =
-            descriptor.axis === 'x'
-              ? intersectionLocal.x
-              : descriptor.axis === 'y'
-                ? intersectionLocal.y
-                : intersectionLocal.z
+            closestAxisParameterToRay(
+              _resizeOriginW,
+              _resizeAxisW,
+              getMovePointerRay(moveEvent.clientX, moveEvent.clientY, _resizeRay),
+            ) / localToWorldScale
           const delta = currentPointer - initialPointer
           const rawNext = initialValue + delta * factor
           const snappedNext =
-            gridSnapStep && gridSnapStep > 0 ? snapScalar(rawNext, gridSnapStep) : rawNext
+            !moveEvent.shiftKey && gridSnapStep && gridSnapStep > 0
+              ? snapScalar(rawNext, gridSnapStep)
+              : rawNext
           const next = Math.min(maxBound, Math.max(minBound, snappedNext))
           return descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>
         },

@@ -31,7 +31,6 @@ import {
   useAlignmentGuides,
   useEditor,
   useSegmentDraftChain,
-  WALL_FINE_GRID_STEP,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -494,15 +493,13 @@ export const FenceTool: React.FC = () => {
       if (!(cursorRef.current && previewRef.current)) return
       const { walls, fences } = getCurrentLevelElements()
       const localPoint: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
-      // Default = active grid step; Shift switches to the fine step
-      // (0.05m). While drafting, the segment locks to 15° rays from
-      // its start (Shift = free angle); endpoint snap still beats the
-      // lock, and alignment is skipped while the lock owns the point.
-      const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
-      const bypassAlign = event.nativeEvent?.altKey === true
+      // While drafting, the segment locks to 15° rays from its start
+      // unless Shift is held. Shift also bypasses grid and magnetic snap.
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
+      const bypassAlign = event.nativeEvent?.altKey === true || bypassSnap
 
       if (buildingState.current === 1) {
-        const angleLocked = !shiftPressed.current
+        const angleLocked = !bypassSnap
         const snappedLocal = alignPoint(
           snapFenceDraftPoint({
             point: localPoint,
@@ -510,7 +507,7 @@ export const FenceTool: React.FC = () => {
             fences,
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
-            step,
+            bypassSnap,
           }),
           bypassAlign || angleLocked,
         )
@@ -518,6 +515,7 @@ export const FenceTool: React.FC = () => {
         cursorRef.current.position.copy(endingPoint.current)
         const currentFenceEnd: FencePlanPoint = [snappedLocal[0], snappedLocal[1]]
         if (
+          !bypassSnap &&
           previousFenceEnd &&
           (currentFenceEnd[0] !== previousFenceEnd[0] || currentFenceEnd[1] !== previousFenceEnd[1])
         ) {
@@ -544,7 +542,7 @@ export const FenceTool: React.FC = () => {
         )
       } else {
         const snappedPoint = alignPoint(
-          snapFenceDraftPoint({ point: localPoint, walls, fences, step }),
+          snapFenceDraftPoint({ point: localPoint, walls, fences, bypassSnap }),
           bypassAlign,
         )
         cursorRef.current.position.set(snappedPoint[0], event.localPosition[1], snappedPoint[1])
@@ -560,12 +558,12 @@ export const FenceTool: React.FC = () => {
 
       const { walls, fences } = getCurrentLevelElements()
       const localClick: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
-      const clickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
-      const bypassAlign = event.nativeEvent?.altKey === true
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
+      const bypassAlign = event.nativeEvent?.altKey === true || bypassSnap
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
-          snapFenceDraftPoint({ point: localClick, walls, fences, step: clickStep }),
+          snapFenceDraftPoint({ point: localClick, walls, fences, bypassSnap }),
           bypassAlign,
         )
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
@@ -575,7 +573,7 @@ export const FenceTool: React.FC = () => {
         previewRef.current.visible = true
         setDraftMeasurement(null)
       } else {
-        const angleLocked = !shiftPressed.current
+        const angleLocked = !bypassSnap
         const snappedEnd = alignPoint(
           snapFenceDraftPoint({
             point: localClick,
@@ -583,7 +581,7 @@ export const FenceTool: React.FC = () => {
             fences,
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
-            step: clickStep,
+            bypassSnap,
           }),
           bypassAlign || angleLocked,
         )

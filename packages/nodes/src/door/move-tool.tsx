@@ -180,7 +180,8 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         rawLocalX: targetLocalX,
         width: movingDoorNode.width,
         candidates: alignmentCandidates,
-        bypass: event.nativeEvent?.altKey === true,
+        bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
+        bypassSnap: event.nativeEvent?.shiftKey === true,
       })
       const { clampedX, clampedY } = clampToWall(
         event.node,

@@ -17,6 +17,7 @@ import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
+import { ensureRenderableGeometryAttributes } from '../../lib/csg-utils'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -30,7 +31,7 @@ function csgMaterials(brush: Brush): THREE.Material[] {
 const csgEvaluator = new Evaluator()
 csgEvaluator.useGroups = true
 ;(csgEvaluator as any).consolidateGroups = false // shared dummyMats across brushes causes consolidation to misalign groupIndices vs groupOrder indices → crash
-csgEvaluator.attributes = ['position', 'normal', 'uv']
+csgEvaluator.attributes = ['position', 'normal', 'uv', 'uv2']
 
 function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
   ;(geometry as any).computeBoundsTree = computeBoundsTree
@@ -38,6 +39,7 @@ function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
 }
 
 function prepareBrushForCSG(brush: Brush) {
+  ensureRenderableGeometryAttributes(brush.geometry)
   computeGeometryBoundsTree(brush.geometry)
   brush.updateMatrixWorld()
 }
@@ -176,6 +178,10 @@ export const RoofSystem = () => {
                 'uv',
                 new THREE.Float32BufferAttribute(new Float32Array(6), 2),
               )
+              placeholder.setAttribute(
+                'uv2',
+                new THREE.Float32BufferAttribute(new Float32Array(6), 2),
+              )
               computeGeometryBoundsTree(placeholder)
               mesh.geometry = placeholder
             }
@@ -299,6 +305,7 @@ function subtractAccessoryCuts(
     welded.clearGroups()
     welded.addGroup(0, idxCount, 0)
     welded.computeVertexNormals()
+    ensureRenderableGeometryAttributes(welded)
     computeGeometryBoundsTree(welded)
     const cut = new Brush(welded, dummyMats[0])
     cut.updateMatrixWorld()
@@ -434,11 +441,16 @@ function updateMergedRoofGeometry(
   if (totalShinSlab && totalDeckSlab && totalWall && totalInner) {
     try {
       const finalShinTrimmed = csgEvaluator.evaluate(totalShinSlab, totalInner, SUBTRACTION)
+      prepareBrushForCSG(finalShinTrimmed)
       const finalDeckTrimmed = csgEvaluator.evaluate(totalDeckSlab, totalInner, SUBTRACTION)
+      prepareBrushForCSG(finalDeckTrimmed)
       const finalWallTrimmed = csgEvaluator.evaluate(totalWall, totalInner, SUBTRACTION)
+      prepareBrushForCSG(finalWallTrimmed)
 
       const shinDeck = csgEvaluator.evaluate(finalShinTrimmed, finalDeckTrimmed, ADDITION)
+      prepareBrushForCSG(shinDeck)
       const combined = csgEvaluator.evaluate(shinDeck, finalWallTrimmed, ADDITION)
+      prepareBrushForCSG(combined)
 
       const resultGeo = csgGeometry(combined)
       if (geometryHasNaNPositions(resultGeo)) {
@@ -472,7 +484,7 @@ function updateMergedRoofGeometry(
       }
 
       resultGeo.computeVertexNormals()
-      ensureUv2Attribute(resultGeo)
+      ensureRenderableGeometryAttributes(resultGeo)
       mergedMesh.geometry.dispose()
       mergedMesh.geometry = resultGeo
 
@@ -765,6 +777,7 @@ export function getRoofSegmentBrushes(
     // when a group exists but covers no triangles (can happen after mergeVertices)
     geo.groups = geo.groups.filter((g) => g.count > 0)
     if (geo.groups.length === 0) return null
+    ensureRenderableGeometryAttributes(geo)
     computeGeometryBoundsTree(geo)
     const brush = new Brush(geo, dummyMats)
     brush.updateMatrixWorld()
@@ -810,7 +823,9 @@ export function getRoofSegmentBrushes(
   if (deckTopBrush && deckBotBrush && wallBrush && innerBrush && shinTopBrush && shinBotBrush) {
     try {
       const deckSlab = csgEvaluator.evaluate(deckTopBrush, deckBotBrush, SUBTRACTION)
+      prepareBrushForCSG(deckSlab)
       const shinSlab = csgEvaluator.evaluate(shinTopBrush, shinBotBrush, SUBTRACTION)
+      prepareBrushForCSG(shinSlab)
 
       deckTopBrush.geometry.dispose()
       deckBotBrush.geometry.dispose()
@@ -852,8 +867,11 @@ export function generateRoofSegmentGeometry(
 
   try {
     const hollowWall = csgEvaluator.evaluate(wallBrush, innerBrush, SUBTRACTION)
+    prepareBrushForCSG(hollowWall)
     const shinDeck = csgEvaluator.evaluate(shinSlab, deckSlab, ADDITION)
+    prepareBrushForCSG(shinDeck)
     const combined = csgEvaluator.evaluate(shinDeck, hollowWall, ADDITION)
+    prepareBrushForCSG(combined)
 
     resultGeo = csgGeometry(combined)
 
@@ -889,7 +907,7 @@ export function generateRoofSegmentGeometry(
   innerBrush.geometry.dispose()
 
   resultGeo.computeVertexNormals()
-  ensureUv2Attribute(resultGeo)
+  ensureRenderableGeometryAttributes(resultGeo)
   return resultGeo
 }
 
@@ -1296,7 +1314,7 @@ function createGeometryFromFaces(
   const mergedGeo = mergeVertices(geometry, 1e-4)
   geometry.dispose()
 
-  ensureUv2Attribute(mergedGeo)
+  ensureRenderableGeometryAttributes(mergedGeo)
   return mergedGeo
 }
 
@@ -1328,13 +1346,6 @@ function pushRoofUv(uvs: number[], point: THREE.Vector3, normal: THREE.Vector3) 
   }
 
   uvs.push(_uvFaceNormal.z >= 0 ? point.x : -point.x, -point.y)
-}
-
-function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
-  const uv = geometry.getAttribute('uv')
-  if (!uv) return
-
-  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
 }
 
 // ─── Skylight cutout ─────────────────────────────────────────────────

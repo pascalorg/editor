@@ -193,14 +193,17 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      const bypassSnap = event.nativeEvent?.shiftKey === true
       const [localX, localZ] = snapFenceDraftPoint({
         point: [event.localPosition[0], event.localPosition[2]],
         walls: levelWalls,
         fences: levelFences,
         ignoreFenceIds: [fenceId],
+        bypassSnap,
       })
 
       if (
+        !bypassSnap &&
         previousGridPosRef.current &&
         (localX !== previousGridPosRef.current[0] || localZ !== previousGridPosRef.current[1])
       ) {

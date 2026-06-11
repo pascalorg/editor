@@ -28,10 +28,12 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
+import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
 import { buildOpeningCutoutGeometry } from './opening-cutout-geometry'
 
 // Reusable CSG evaluator for better performance
 const csgEvaluator = new Evaluator()
+csgEvaluator.attributes = ['position', 'normal', 'uv', 'uv2']
 const CURVED_WALL_3D_ENDPOINT_INSET = 0.0015
 const WALL_FACE_NORMAL_Y_EPSILON = 0.6
 const WALL_FACE_EDGE_DISTANCE_EPSILON = 0.003
@@ -51,13 +53,6 @@ type TaggedWallBoundaryEdge = {
   start: THREE.Vector2
   end: THREE.Vector2
   tag: WallBoundaryEdgeTag
-}
-
-function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
-  const uv = geometry.getAttribute('uv')
-  if (!uv) return
-
-  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
 }
 
 function insetCurvedWallBoundaryPointsFor3D(
@@ -672,7 +667,7 @@ export function generateExtrudedWall(
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
   assignWallMaterialGroups(geometry, wallNode, boundaryEdges)
-  ensureUv2Attribute(geometry)
+  ensureRenderableGeometryAttributes(geometry)
 
   // Apply CSG subtraction for cutouts (doors/windows)
   const cutoutBrushes = collectCutoutBrushes(wallNode, childrenNodes, thickness)
@@ -682,6 +677,7 @@ export function generateExtrudedWall(
 
   // Create wall brush from geometry
   // Pre-compute BVH with new API to avoid deprecation warning
+  ensureRenderableGeometryAttributes(geometry)
   computeGeometryBoundsTree(geometry)
 
   const wallBrush = new Brush(geometry)
@@ -690,8 +686,9 @@ export function generateExtrudedWall(
   // Subtract each cutout from the wall
   let resultBrush = wallBrush
   for (const cutoutBrush of cutoutBrushes) {
-    cutoutBrush.updateMatrixWorld()
+    prepareBrushForCSG(cutoutBrush)
     const newResult = csgEvaluator.evaluate(resultBrush, cutoutBrush, SUBTRACTION)
+    prepareBrushForCSG(newResult)
     if (resultBrush !== wallBrush) {
       csgGeometry(resultBrush).dispose()
     }
@@ -707,7 +704,7 @@ export function generateExtrudedWall(
   const resultGeometry = csgGeometry(resultBrush)
   resultGeometry.computeVertexNormals()
   assignWallMaterialGroups(resultGeometry, wallNode, boundaryEdges)
-  ensureUv2Attribute(resultGeometry)
+  ensureRenderableGeometryAttributes(resultGeometry)
 
   return resultGeometry
 }

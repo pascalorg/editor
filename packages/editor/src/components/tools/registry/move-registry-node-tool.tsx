@@ -286,7 +286,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         original: [originalPosition[0], originalPosition[2]],
         anchor: dragAnchorRef.current,
         mode: useAbsoluteCursorPlacement ? 'absolute' : 'relative',
-        snap: snapToGridStep,
+        snap: event.nativeEvent?.shiftKey === true ? (value) => value : snapToGridStep,
       })
       dragAnchorRef.current = resolved.anchor
       let [x, z] = resolved.point
@@ -295,8 +295,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // moving item's edge lines up (on X or Z) with another item's edge,
       // snap and publish a guide. The guide connects to the nearest real
       // corner of the candidate (resolver tie-break), so the dot always sits
-      // on an actual point. Alt bypasses.
-      const bypass = event.nativeEvent?.altKey === true
+      // on an actual point. Alt bypasses alignment; Shift bypasses all snap.
+      const bypass = event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true
       if (!bypass && alignmentCandidates.length > 0) {
         const result = resolveAlignment({
           moving: movingFootprintAnchors(node, x, z, rotationRef.current),
@@ -338,7 +338,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       markMovedNodeDirty()
 
       const prev = previousSnapRef.current
-      if (!prev || prev[0] !== x || prev[1] !== z) {
+      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== x || prev[1] !== z)) {
         sfxEmitter.emit('sfx:grid-snap')
         previousSnapRef.current = [x, z]
       }

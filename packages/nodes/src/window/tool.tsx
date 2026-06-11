@@ -128,9 +128,13 @@ const WindowTool: React.FC = () => {
         rawLocalX: event.localPosition[0],
         width,
         candidates: alignmentCandidates,
-        bypass: event.nativeEvent?.altKey === true,
+        bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
+        bypassSnap: event.nativeEvent?.shiftKey === true,
       })
-      const localY = snapToHalf(event.localPosition[1])
+      const localY =
+        event.nativeEvent?.shiftKey === true
+          ? event.localPosition[1]
+          : snapToHalf(event.localPosition[1])
 
       const { clampedX, clampedY } = clampToWall(event.node, localX, localY, width, height)
 
@@ -183,9 +187,13 @@ const WindowTool: React.FC = () => {
         rawLocalX: event.localPosition[0],
         width,
         candidates: alignmentCandidates,
-        bypass: event.nativeEvent?.altKey === true,
+        bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
+        bypassSnap: event.nativeEvent?.shiftKey === true,
       })
-      const localY = snapToHalf(event.localPosition[1])
+      const localY =
+        event.nativeEvent?.shiftKey === true
+          ? event.localPosition[1]
+          : snapToHalf(event.localPosition[1])
 
       const { clampedX, clampedY } = clampToWall(event.node, localX, localY, width, height)
 
@@ -277,9 +285,13 @@ const WindowTool: React.FC = () => {
         rawLocalX: event.localPosition[0],
         width: draftRef.current.width,
         candidates: alignmentCandidates,
-        bypass: event.nativeEvent?.altKey === true,
+        bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
+        bypassSnap: event.nativeEvent?.shiftKey === true,
       })
-      const localY = snapToHalf(event.localPosition[1])
+      const localY =
+        event.nativeEvent?.shiftKey === true
+          ? event.localPosition[1]
+          : snapToHalf(event.localPosition[1])
       const { clampedX, clampedY } = clampToWall(
         event.node,
         localX,
@@ -367,7 +379,10 @@ const WindowTool: React.FC = () => {
         width: draftRef.current?.width ?? 1.5,
         height: draftRef.current?.height ?? 1.5,
         ignoreId: draftRef.current?.id,
-        vertical: { kind: 'free', snap: snapToHalf },
+        vertical: {
+          kind: 'free',
+          snap: event.nativeEvent?.shiftKey === true ? undefined : snapToHalf,
+        },
       })
 
     const updateRoofCursor = (target: RoofWallOpeningTarget, roof: RoofNode) => {

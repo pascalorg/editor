@@ -86,15 +86,15 @@ export const ZoneTool: React.FC = () => {
     mainLineRef.current.geometry = new BufferGeometry()
     closingLineRef.current.geometry = new BufferGeometry()
 
-    // 15° angle snap from the last vertex by default; Shift = free placement
-    // (grid snap only). Distance snaps along the ray so the vertex lands on
+    // 15° angle snap from the last vertex by default. Shift bypasses all snap.
+    // Distance snaps along the ray so the vertex lands on
     // grid-multiple lengths without leaving the ray.
     const snapDraftPoint = (
       lastPoint: [number, number],
       gridPoint: [number, number],
       rawPoint: [number, number],
     ): [number, number] => {
-      if (shiftPressed.current) return gridPoint
+      if (shiftPressed.current) return rawPoint
       const [x, z] = snapPointAlongAngleRay(
         lastPoint,
         rawPoint,
@@ -173,11 +173,14 @@ export const ZoneTool: React.FC = () => {
 
       // World-grid snap projected into building-local; rotated buildings
       // used to pull the snap off the visible grid lines.
-      const [gridX, gridZ] = snapWorldXZForActiveBuilding(
-        event.position[0],
-        event.position[2],
-        useEditor.getState().gridSnapStep,
-      ).local
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
+      const [gridX, gridZ] = bypassSnap
+        ? [event.localPosition[0], event.localPosition[2]]
+        : snapWorldXZForActiveBuilding(
+            event.position[0],
+            event.position[2],
+            useEditor.getState().gridSnapStep,
+          ).local
       cursorPosition = [gridX, gridZ]
       rawCursorPosition = [event.localPosition[0], event.localPosition[2]]
       levelYRef.current = event.localPosition[1]
@@ -190,6 +193,7 @@ export const ZoneTool: React.FC = () => {
 
       // Play snap sound when the snapped position changes during drawing
       if (
+        !bypassSnap &&
         pointsRef.current.length > 0 &&
         previousSnappedPointRef.current &&
         (displayPoint[0] !== previousSnappedPointRef.current[0] ||
@@ -207,11 +211,14 @@ export const ZoneTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!currentLevelId) return
 
-      const [gridX, gridZ] = snapWorldXZForActiveBuilding(
-        event.position[0],
-        event.position[2],
-        useEditor.getState().gridSnapStep,
-      ).local
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
+      const [gridX, gridZ] = bypassSnap
+        ? [event.localPosition[0], event.localPosition[2]]
+        : snapWorldXZForActiveBuilding(
+            event.position[0],
+            event.position[2],
+            useEditor.getState().gridSnapStep,
+          ).local
       let clickPoint: [number, number] = [gridX, gridZ]
 
       // Snap to the 15° ray from the last point

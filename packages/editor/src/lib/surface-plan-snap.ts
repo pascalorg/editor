@@ -43,6 +43,7 @@ export type SurfacePlanSnapInput = {
   candidates?: readonly AlignmentAnchor[]
   threshold?: number
   altKey?: boolean
+  shiftKey?: boolean
   magnetic?: boolean
   align?: boolean
   highlightWalls?: boolean
@@ -171,6 +172,12 @@ export function clearSurfacePlanSnapFeedback() {
 }
 
 export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): SurfacePlanSnapResult {
+  if (input.shiftKey) {
+    useWallSnapIndicator.getState().clear()
+    useAlignmentGuides.getState().clear()
+    return { point: input.rawPoint, wallSnap: null, guides: [], wallIds: [] }
+  }
+
   const nodes = input.nodes ?? useScene.getState().nodes
   const walls = getLevelWalls(nodes, input.levelId, input.walls)
   const fallbackPoint = input.fallbackPoint

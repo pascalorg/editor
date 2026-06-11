@@ -20,7 +20,6 @@ import {
   snapFenceDraftPoint,
   snapScalarToGrid,
   useAlignmentGuides,
-  WALL_FINE_GRID_STEP,
   WALL_GRID_STEP,
 } from '@pascal-app/editor'
 
@@ -159,16 +158,15 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
         const sceneNodes = useScene.getState().nodes
         const { walls: nextWalls, fences: nextFences } = collectLevel(sceneNodes, parentId)
         // Endpoint move = grid snap only; the 45°-from-start angle
-        // snap is draft-only. Shift switches to the fine grid step for
-        // precision, matching the 3D fence endpoint action.
-        const worldStep = modifiers.shiftKey ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
+        // snap is draft-only. Shift bypasses grid, magnetic, and alignment snap.
         const snapped = snapFenceDraftPoint({
           point: planPoint as FencePlanPoint,
           walls: nextWalls,
           fences: nextFences,
           ignoreFenceIds: [node.id],
-          step: modifiers.shiftKey ? WALL_FINE_GRID_STEP : undefined,
-          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, worldStep) as FencePlanPoint,
+          bypassSnap: modifiers.shiftKey,
+          magnetic: !modifiers.shiftKey,
+          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, WALL_GRID_STEP) as FencePlanPoint,
         })
         // Figma-style alignment on the dragged endpoint — snaps it onto
         // another object's edge / wall face and publishes a guide, matching
@@ -176,6 +174,7 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
         // siblings (which cascade with the endpoint) are excluded from the
         // candidate pool. Alt is reserved for detach here, NOT bypass.
         const aligned = alignFloorplanDraftPoint(snapped, {
+          bypass: modifiers.shiftKey,
           excludeIds: [node.id, ...linkedOriginals.map((l) => l.id)],
         }) as FencePlanPoint
         const nextStart = endpoint === 'start' ? aligned : fixedPoint

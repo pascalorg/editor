@@ -28,7 +28,6 @@ import {
   useEditor,
   useSegmentDraftChain,
   useWallSnapIndicator,
-  WALL_FINE_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -541,22 +540,19 @@ export const WallTool: React.FC = () => {
 
       const walls = getCurrentLevelWalls()
       const localPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
-      // Default to the active grid step; Shift switches to the fine
-      // step (0.05m) for precision. While drafting, the segment locks
-      // to 15° rays from its start (Shift = free angle); magnetic
-      // corner/midpoint snap still beats the angle lock, and Figma
-      // alignment is skipped while the lock owns the point so it
-      // can't pull the cursor off the ray.
-      const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
-      const angleLocked = buildingState.current === 1 && !shiftPressed.current
-      const bypassAlign = event.nativeEvent?.altKey === true
+      // Default path: grid + magnetic snap, with 15° angle lock while
+      // drafting. Shift is a hard snap bypass: no grid, magnetic, angle,
+      // or alignment snap.
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
+      const angleLocked = buildingState.current === 1 && !bypassSnap
+      const bypassAlign = event.nativeEvent?.altKey === true || bypassSnap
       const snapResult = snapWallDraftPointDetailed({
         point: localPoint,
         walls,
         start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
         angleSnap: angleLocked,
-        step,
-        magnetic: useEditor.getState().magneticSnap,
+        bypassSnap,
+        magnetic: !bypassSnap && useEditor.getState().magneticSnap,
       })
       gridPosition = alignPoint(snapResult.point, bypassAlign || angleLocked)
       // Stand the magnetic beacon at the endpoint when it locked onto an
@@ -585,6 +581,7 @@ export const WallTool: React.FC = () => {
 
         const currentWallEnd: [number, number] = [snappedLocal[0], snappedLocal[1]]
         if (
+          !bypassSnap &&
           previousWallEnd &&
           (currentWallEnd[0] !== previousWallEnd[0] || currentWallEnd[1] !== previousWallEnd[1])
         ) {
@@ -625,16 +622,16 @@ export const WallTool: React.FC = () => {
       const walls = getCurrentLevelWalls()
       const localClick: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
 
-      const clickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
-      const bypassAlign = event.nativeEvent?.altKey === true
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
+      const bypassAlign = event.nativeEvent?.altKey === true || bypassSnap
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
           snapWallDraftPointDetailed({
             point: localClick,
             walls,
-            step: clickStep,
-            magnetic: useEditor.getState().magneticSnap,
+            bypassSnap,
+            magnetic: !bypassSnap && useEditor.getState().magneticSnap,
           }).point,
           bypassAlign,
         )
@@ -657,15 +654,15 @@ export const WallTool: React.FC = () => {
         // `onGridMove` writes a real BoxGeometry skips that frame.
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
-        const angleLocked = !shiftPressed.current
+        const angleLocked = !bypassSnap
         const snappedEnd = alignPoint(
           snapWallDraftPointDetailed({
             point: localClick,
             walls,
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
-            step: clickStep,
-            magnetic: useEditor.getState().magneticSnap,
+            bypassSnap,
+            magnetic: !bypassSnap && useEditor.getState().magneticSnap,
           }).point,
           bypassAlign || angleLocked,
         )

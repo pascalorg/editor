@@ -340,12 +340,15 @@ export function generateDormerGeometry(
       dormerBrushes.innerBrush,
       SUBTRACTION,
     ) as Brush
+    prepareBrushForCSG(hollowWall)
     const shinDeck = csgEvaluator.evaluate(
       dormerBrushes.shinSlab,
       dormerBrushes.deckSlab,
       ADDITION,
     ) as Brush
+    prepareBrushForCSG(shinDeck)
     dormerSolid = csgEvaluator.evaluate(shinDeck, hollowWall, ADDITION) as Brush
+    prepareBrushForCSG(dormerSolid)
     hollowWall.geometry.dispose()
     shinDeck.geometry.dispose()
 
@@ -364,7 +367,9 @@ export function generateDormerGeometry(
         hostBrushes.deckSlab,
         ADDITION,
       ) as Brush
+      prepareBrushForCSG(wallPlusDeck)
       hostSolid = csgEvaluator.evaluate(wallPlusDeck, hostBrushes.shinSlab, ADDITION) as Brush
+      prepareBrushForCSG(hostSolid)
       wallPlusDeck.geometry.dispose()
       hostBrushes.deckSlab.geometry.dispose()
       hostBrushes.shinSlab.geometry.dispose()
@@ -381,8 +386,9 @@ export function generateDormerGeometry(
       groundBoxGeo.addGroup(0, indexCount, 0)
       computeGeometryBoundsTree(groundBoxGeo)
       const groundBrush = new Brush(groundBoxGeo, roofCsgDummyMats[0])
-      groundBrush.updateMatrixWorld()
+      prepareBrushForCSG(groundBrush)
       const fullTrim = csgEvaluator.evaluate(hostSolid, groundBrush, ADDITION) as Brush
+      prepareBrushForCSG(fullTrim)
       hostSolid.geometry.dispose()
       groundBrush.geometry.dispose()
       hostSolid = fullTrim
@@ -404,6 +410,7 @@ export function generateDormerGeometry(
       prepareBrushForCSG(hostSolid)
 
       const trimmed = csgEvaluator.evaluate(dormerSolid, hostSolid, SUBTRACTION) as Brush
+      prepareBrushForCSG(trimmed)
       dormerSolid.geometry.dispose()
       hostSolid.geometry.dispose()
       hostSolid = null
@@ -435,8 +442,9 @@ export function generateDormerGeometry(
       cutGeo.addGroup(0, idxCount, 0)
       computeGeometryBoundsTree(cutGeo)
       const brush = new Brush(cutGeo, roofCsgDummyMats[0])
-      brush.updateMatrixWorld()
+      prepareBrushForCSG(brush)
       const result = csgEvaluator.evaluate(dormerSolid!, brush, SUBTRACTION) as Brush
+      prepareBrushForCSG(result)
       dormerSolid!.geometry.dispose()
       brush.geometry.dispose()
       dormerSolid = result

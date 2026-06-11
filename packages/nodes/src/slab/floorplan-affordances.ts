@@ -37,6 +37,7 @@ const slabSnapOptions = {
       excludeId: node.id,
       nodes: sceneNodes,
       altKey: modifiers.altKey,
+      shiftKey: modifiers.shiftKey,
     }).point
   },
 }

@@ -294,19 +294,23 @@ const CeilingSelectionAffordance = ({
         initialCorner[0] + (planePosition[0] - drag.startPlanePosition[0]),
         initialCorner[1] + (planePosition[1] - drag.startPlanePosition[1]),
       ]
-      const gridNextPosition: [number, number] = [
-        initialCorner[0] + snapToHalf(planePosition[0] - drag.startPlanePosition[0]),
-        initialCorner[1] + snapToHalf(planePosition[1] - drag.startPlanePosition[1]),
-      ]
+      const gridNextPosition: [number, number] = event.shiftKey
+        ? rawNextPosition
+        : [
+            initialCorner[0] + snapToHalf(planePosition[0] - drag.startPlanePosition[0]),
+            initialCorner[1] + snapToHalf(planePosition[1] - drag.startPlanePosition[1]),
+          ]
       const nextPosition = resolveCeilingPlanPointSnap({
         rawPoint: rawNextPosition,
         fallbackPoint: gridNextPosition,
         levelId,
         excludeId: drag.ceilingId,
         altKey: event.altKey,
+        shiftKey: event.shiftKey,
       }).point
 
       if (
+        !event.shiftKey &&
         drag.previousSnappedPosition &&
         (nextPosition[0] !== drag.previousSnappedPosition[0] ||
           nextPosition[1] !== drag.previousSnappedPosition[1])

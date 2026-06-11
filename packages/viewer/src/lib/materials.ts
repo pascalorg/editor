@@ -86,10 +86,14 @@ export const glassMaterial = new MeshLambertNodeMaterial({
   side: THREE.FrontSide,
 })
 
+function resolveNodeMaterialSide(side: THREE.Side): THREE.Side {
+  return side === THREE.DoubleSide ? THREE.FrontSide : side
+}
+
 const sideMap: Record<MaterialProperties['side'], THREE.Side> = {
   front: THREE.FrontSide,
   back: THREE.BackSide,
-  double: THREE.DoubleSide,
+  double: THREE.FrontSide,
 }
 
 const materialCache = new Map<string, THREE.Material>()
@@ -366,12 +370,13 @@ function applyMaterialMapProperties(
   }
   material.transparent = mapProperties.transparent
   material.opacity = mapProperties.opacity
-  material.side =
+  material.side = resolveNodeMaterialSide(
     mapProperties.side === 0
       ? THREE.FrontSide
       : mapProperties.side === 1
         ? THREE.BackSide
-        : THREE.DoubleSide
+        : THREE.DoubleSide,
+  )
   applyTexturePropertiesToMaterial(material, mapProperties)
   material.needsUpdate = true
 }
@@ -487,10 +492,11 @@ export function createDefaultMaterial(
   shading: RenderShading = 'rendered',
   side: THREE.Side = THREE.FrontSide,
 ): THREE.Material {
+  const resolvedSide = resolveNodeMaterialSide(side)
   if (shading === 'solid') {
     return new MeshLambertNodeMaterial({
       color,
-      side,
+      side: resolvedSide,
     })
   }
 
@@ -498,7 +504,7 @@ export function createDefaultMaterial(
     color,
     roughness,
     metalness: 0,
-    side,
+    side: resolvedSide,
   })
 }
 
@@ -532,7 +538,8 @@ export function createSurfaceRoleMaterial(
   // on both gable faces on the first frame). Callers that need both sides
   // visible (e.g. dormer back gable) must rotate the host mesh 180° so the
   // FrontSide faces the viewer.
-  const resolvedSide = role === 'glazing' ? THREE.FrontSide : side
+  const resolvedSide =
+    role === 'glazing' ? THREE.FrontSide : resolveNodeMaterialSide(side ?? THREE.FrontSide)
   const cacheKey = `${role}-${preset}-${resolvedSide}-${sceneThemeId ?? 'base'}`
   const cached = surfaceRoleMaterialCache.get(cacheKey)
   if (cached) return cached

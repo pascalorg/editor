@@ -211,16 +211,17 @@ function buildWallItemSession(
 
       // Figma-style along-wall alignment (edge-to-edge with other openings /
       // wall items / wall ends), winning over the 0.5m grid snap; falls back
-      // to grid when nothing aligns. Alt bypasses; Shift drops the grid snap.
-      const neighborX = modifiers.altKey
-        ? null
-        : snapLocalXToNeighbors({
-            wall: hit.wall,
-            localX: hit.localX,
-            width,
-            selfId: node.id as AnyNodeId,
-            nodes,
-          })
+      // to grid when nothing aligns. Alt bypasses alignment; Shift bypasses all snap.
+      const neighborX =
+        modifiers.altKey || modifiers.shiftKey
+          ? null
+          : snapLocalXToNeighbors({
+              wall: hit.wall,
+              localX: hit.localX,
+              width,
+              selfId: node.id as AnyNodeId,
+              nodes,
+            })
       const step = useEditor.getState().gridSnapStep
       const snappedLocalX =
         neighborX ?? (modifiers.shiftKey ? hit.localX : Math.round(hit.localX / step) * step)
@@ -286,7 +287,7 @@ function buildFloorItemSession(
           rotationY,
         ),
         candidates,
-        { bypass: modifiers.altKey },
+        { bypass: modifiers.altKey || modifiers.shiftKey },
       )
 
       const sourceY = node.position[1]

@@ -50,8 +50,8 @@ const snapToGridStep = (value: number) => {
   return Math.round(value / step) * step
 }
 
-/** 90° steps, matching the GLB item / shelf placement rotation. */
-const ROTATION_STEP = Math.PI / 2
+/** 45° steps, matching the generic move tool's R/T rotation. */
+const ROTATION_STEP = Math.PI / 4
 
 /** Figma-style alignment-snap threshold (meters), matching the other tools. */
 const ALIGNMENT_THRESHOLD_M = 0.08
@@ -124,15 +124,15 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
         original: [node.position[0], node.position[2]],
         anchor: dragAnchor,
         mode: useAbsoluteCursorPlacement ? 'absolute' : 'relative',
-        snap: snapToGridStep,
+        snap: event.nativeEvent?.shiftKey === true ? (value) => value : snapToGridStep,
       })
       dragAnchor = resolved.anchor
       let [x, z] = resolved.point
 
-      // Figma-style alignment snap on top of grid snap; Alt bypasses. The
+      // Figma-style alignment snap on top of grid snap; Alt bypasses alignment; Shift all snap. The
       // guide connects to the candidate's nearest real anchor (resolver
       // tie-break), so the dot always sits on an actual point.
-      const bypass = event.nativeEvent?.altKey === true
+      const bypass = event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true
       if (!bypass && alignmentCandidates.length > 0) {
         const result = resolveAlignment({
           moving: movingFootprintAnchors(node, x, z, rotationY),
@@ -151,7 +151,7 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
       applyPreview([x, 0, z])
     }
 
-    // R / T rotate the dragged column about Y in 90° steps (matches the move
+    // R / T rotate the dragged column about Y in 45° steps (matches the move
     // HUD's "Rotate" hints), committed on drop.
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return

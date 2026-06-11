@@ -104,7 +104,6 @@ export {
   snapScalarToGrid,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
-  WALL_FINE_GRID_STEP,
   WALL_GRID_STEP,
   type WallDraftSnapKind,
   type WallDraftSnapResult,

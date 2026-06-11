@@ -83,16 +83,17 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       // Figma-style along-wall alignment first (edge-to-edge with other
       // openings / wall ends); it competes with — and wins over — the 0.5m
       // grid snap. Falls back to the grid snap when nothing aligns. Alt
-      // bypasses; Shift drops the grid snap for fine positioning.
-      const neighborX = modifiers.altKey
-        ? null
-        : snapLocalXToNeighbors({
-            wall: hit.wall,
-            localX: hit.localX,
-            width: node.width,
-            selfId: node.id as AnyNodeId,
-            nodes,
-          })
+      // bypasses alignment; Shift bypasses all snap.
+      const neighborX =
+        modifiers.altKey || modifiers.shiftKey
+          ? null
+          : snapLocalXToNeighbors({
+              wall: hit.wall,
+              localX: hit.localX,
+              width: node.width,
+              selfId: node.id as AnyNodeId,
+              nodes,
+            })
       const snappedLocalX = neighborX ?? (modifiers.shiftKey ? hit.localX : snapToHalf(hit.localX))
       const { clampedX, clampedY } = clampToWall(hit.wall, snappedLocalX, node.width, node.height)
 

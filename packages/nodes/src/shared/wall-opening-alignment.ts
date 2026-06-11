@@ -21,7 +21,8 @@ const MIN_AXIS_COMPONENT = 0.5
  * runs along and map it to the along-wall coordinate that lands the opening on
  * it. Falls back to the half-metre snap when nothing aligns, and clears the
  * guide on bypass / no-match. Returns the localX to use (X-clamped to the wall
- * given `width`). `bypass` (Alt) disables alignment.
+ * given `width`). `bypass` disables alignment; `bypassSnap` also skips the
+ * half-metre fallback.
  */
 export function resolveWallSlideAlignment(args: {
   wallNode: WallNode
@@ -29,9 +30,10 @@ export function resolveWallSlideAlignment(args: {
   width: number
   candidates: readonly AlignmentAnchor[]
   bypass: boolean
+  bypassSnap?: boolean
 }): number {
-  const { wallNode, rawLocalX, width, candidates, bypass } = args
-  const base = snapToHalf(rawLocalX)
+  const { wallNode, rawLocalX, width, candidates, bypass, bypassSnap = false } = args
+  const base = bypassSnap ? rawLocalX : snapToHalf(rawLocalX)
   if (bypass || candidates.length === 0) {
     useAlignmentGuides.getState().clear()
     return base

@@ -83,7 +83,8 @@ const ShelfTool = () => {
         rawZ: event.localPosition[2],
         gridStep: useEditor.getState().gridSnapStep,
         candidates: alignmentCandidates,
-        bypassAlignment: event.nativeEvent?.altKey === true,
+        bypassAlignment: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
+        bypassGrid: event.nativeEvent?.shiftKey === true,
       })
       useAlignmentGuides.getState().set(guides)
 
@@ -97,7 +98,10 @@ const ShelfTool = () => {
       lastCursorRef.current = position
 
       const prev = previousSnapRef.current
-      if (!prev || prev[0] !== position[0] || prev[1] !== position[2]) {
+      if (
+        event.nativeEvent?.shiftKey !== true &&
+        (!prev || prev[0] !== position[0] || prev[1] !== position[2])
+      ) {
         triggerSFX('sfx:grid-snap')
         previousSnapRef.current = [position[0], position[2]]
       }
@@ -110,7 +114,12 @@ const ShelfTool = () => {
       // first). Both paths apply the same grid snap.
       const position =
         lastCursorRef.current ??
-        getLevelLocalSnappedPosition(activeLevelId, event, useEditor.getState().gridSnapStep)
+        getLevelLocalSnappedPosition(
+          activeLevelId,
+          event,
+          useEditor.getState().gridSnapStep,
+          event.nativeEvent?.shiftKey === true,
+        )
       const shelf = ShelfNode.parse({
         ...shelfDefinition.defaults(),
         name: 'Shelf',

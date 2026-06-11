@@ -100,7 +100,7 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
 
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
-      if (sx !== lastSnapX || sz !== lastSnapZ) {
+      if (event.nativeEvent?.shiftKey !== true && (sx !== lastSnapX || sz !== lastSnapZ)) {
         triggerSFX('sfx:grid-snap')
         lastSnapX = sx
         lastSnapZ = sz

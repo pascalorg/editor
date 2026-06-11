@@ -187,23 +187,31 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       const rawLocalX = event.localPosition[0]
       const rawLocalY = event.localPosition[1]
       if (!dragAnchor || dragAnchor.wallId !== event.node.id) {
+        const bypassSnap = event.nativeEvent?.shiftKey === true
         dragAnchor = {
           wallId: event.node.id,
           rawX: rawLocalX,
           rawY: rawLocalY,
           startX: event.node.id === original.parentId ? original.position[0] : rawLocalX,
           startY:
-            event.node.id === original.parentId ? original.position[1] : snapToHalf(rawLocalY),
+            event.node.id === original.parentId
+              ? original.position[1]
+              : bypassSnap
+                ? rawLocalY
+                : snapToHalf(rawLocalY),
         }
       }
       const targetLocalX = dragAnchor.startX + (rawLocalX - dragAnchor.rawX)
-      const targetLocalY = snapToHalf(dragAnchor.startY + (rawLocalY - dragAnchor.rawY))
+      const targetRawLocalY = dragAnchor.startY + (rawLocalY - dragAnchor.rawY)
+      const targetLocalY =
+        event.nativeEvent?.shiftKey === true ? targetRawLocalY : snapToHalf(targetRawLocalY)
       const localX = resolveWallSlideAlignment({
         wallNode: event.node,
         rawLocalX: targetLocalX,
         width: movingWindowNode.width,
         candidates: alignmentCandidates,
-        bypass: event.nativeEvent?.altKey === true,
+        bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
+        bypassSnap: event.nativeEvent?.shiftKey === true,
       })
       const { clampedX, clampedY } = clampToWall(
         event.node,
@@ -409,7 +417,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         width: movingWindowNode.width,
         height: movingWindowNode.height,
         ignoreId: movingWindowNode.id,
-        vertical: { kind: 'free', snap: snapToHalf },
+        vertical: {
+          kind: 'free',
+          snap: event.nativeEvent?.shiftKey === true ? undefined : snapToHalf,
+        },
       })
 
     const updateRoofCursor = (target: RoofWallOpeningTarget, roof: RoofNode) => {

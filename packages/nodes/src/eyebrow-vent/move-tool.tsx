@@ -67,7 +67,10 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
 
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
-      if (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz) {
+      if (
+        event.nativeEvent?.shiftKey !== true &&
+        (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
+      ) {
         triggerSFX('sfx:grid-snap')
         lastSnap = [sx, sz]
       }

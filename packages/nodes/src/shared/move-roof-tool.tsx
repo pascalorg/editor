@@ -293,6 +293,7 @@ export const MoveRoofTool: React.FC<{
         point: [event.localPosition[0], event.localPosition[2]],
         walls: levelWalls,
         fences: levelFences,
+        bypassSnap: event.nativeEvent?.shiftKey === true,
       })
       const [rawGridX, , rawGridZ] = localToWorldPoint(snappedLocal, y)
       const [rawLocalX, rawLocalZ] = computeLocal(
@@ -312,12 +313,17 @@ export const MoveRoofTool: React.FC<{
       let [localX, localZ] = resolved.point
 
       if (alignTopLevel) {
-        const aligned = alignLocalPoint(localX, localZ, event.nativeEvent?.altKey === true)
+        const aligned = alignLocalPoint(
+          localX,
+          localZ,
+          event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
+        )
         localX = aligned[0]
         localZ = aligned[1]
       }
 
       if (
+        event.nativeEvent?.shiftKey !== true &&
         previousGridPosRef.current &&
         (localX !== previousGridPosRef.current[0] || localZ !== previousGridPosRef.current[1])
       ) {

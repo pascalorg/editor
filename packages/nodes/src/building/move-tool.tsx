@@ -93,7 +93,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
         return
       }
 
-      const ROTATION_STEP = Math.PI / 2
+      const ROTATION_STEP = Math.PI / 4
       let rotationDelta = 0
       if (event.key === 'r' || event.key === 'R') rotationDelta = ROTATION_STEP
       else if (event.key === 't' || event.key === 'T') rotationDelta = -ROTATION_STEP
@@ -121,14 +121,16 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const rawX = Math.round(event.position[0] * 2) / 2
-      const rawZ = Math.round(event.position[2] * 2) / 2
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const rawX = bypassSnap ? event.position[0] : Math.round(event.position[0] * 2) / 2
+      const rawZ = bypassSnap ? event.position[2] : Math.round(event.position[2] * 2) / 2
       const anchor = dragAnchorRef.current ?? [rawX, rawZ]
       dragAnchorRef.current = anchor
       const gridX = originalCenter[0] + (rawX - anchor[0])
       const gridZ = originalCenter[1] + (rawZ - anchor[1])
 
       if (
+        !bypassSnap &&
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
       ) {

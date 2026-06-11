@@ -132,7 +132,9 @@ export function snapFenceDraftPoint(args: {
   start?: FencePlanPoint
   angleSnap?: boolean
   ignoreFenceIds?: string[]
-  /** Override the grid step (e.g. `WALL_FINE_GRID_STEP` for precision mode). */
+  bypassSnap?: boolean
+  magnetic?: boolean
+  /** Override the grid step. */
   step?: number
   /**
    * Optional grid-snap function. When provided, replaces the default
@@ -142,7 +144,20 @@ export function snapFenceDraftPoint(args: {
    */
   gridSnap?: (point: FencePlanPoint) => FencePlanPoint
 }): FencePlanPoint {
-  const { point, walls, fences, start, angleSnap = false, ignoreFenceIds, step, gridSnap } = args
+  const {
+    point,
+    walls,
+    fences,
+    start,
+    angleSnap = false,
+    ignoreFenceIds,
+    bypassSnap = false,
+    magnetic = true,
+    step,
+    gridSnap,
+  } = args
+  if (bypassSnap) return point
+
   const gridStep = step ?? getSegmentGridStep()
 
   // Magnetic endpoint snap must beat the angle lock, and the lock can pull
@@ -151,7 +166,8 @@ export function snapFenceDraftPoint(args: {
   // first (mirrors `snapWallDraftPointDetailed`'s special-point pre-pass).
   if (start && angleSnap) {
     const rawTarget =
-      findFenceSnapTarget(point, fences, ignoreFenceIds) ?? findWallSnapTarget(point, walls)
+      magnetic &&
+      (findFenceSnapTarget(point, fences, ignoreFenceIds) ?? findWallSnapTarget(point, walls))
     if (rawTarget) return rawTarget
   }
 
@@ -164,8 +180,9 @@ export function snapFenceDraftPoint(args: {
       : gridSnap
         ? gridSnap(point)
         : snapPointToGrid(point, gridStep)
-  const fenceSnapTarget = findFenceSnapTarget(basePoint, fences, ignoreFenceIds)
+  if (!magnetic) return basePoint
 
+  const fenceSnapTarget = findFenceSnapTarget(basePoint, fences, ignoreFenceIds)
   return fenceSnapTarget ?? findWallSnapTarget(basePoint, walls) ?? basePoint
 }
 
