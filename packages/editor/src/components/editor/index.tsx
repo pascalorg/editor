@@ -49,6 +49,7 @@ import { EditorLayoutV2 } from './editor-layout-v2'
 import { ExportManager } from './export-manager'
 import { FirstPersonControls, FirstPersonOverlay } from './first-person-controls'
 import { FloatingActionMenu } from './floating-action-menu'
+import { RiserDiagramPanel } from './riser-diagram-panel'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
@@ -1263,6 +1264,7 @@ export default function Editor({
             <div className="pointer-events-auto">
               <HelperManager />
             </div>
+            <RiserDiagramPanel />
             {isFirstPersonMode && (
               <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
             )}

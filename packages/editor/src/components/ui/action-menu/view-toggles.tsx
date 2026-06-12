@@ -10,7 +10,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Check, ChevronDown, Eye, EyeOff, Layers2, Plus, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, Eye, EyeOff, Layers2, Plus, Trash2, Waypoints } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { getLevelDisplayName } from '../../../lib/level-name'
@@ -987,6 +987,29 @@ function ReferenceFloorControl() {
   )
 }
 
+// ── Riser diagram control ────────────────────────────────────────────────────
+
+function RiserControl() {
+  const isRiserOpen = useEditor((state) => state.isRiserOpen)
+  const toggleRiserOpen = useEditor((state) => state.toggleRiserOpen)
+
+  return (
+    <ActionButton
+      className={cn(
+        isRiserOpen
+          ? 'bg-white/15'
+          : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
+      )}
+      label="Riser diagram"
+      onClick={toggleRiserOpen}
+      size="icon"
+      variant="ghost"
+    >
+      <Waypoints className="h-4 w-4" />
+    </ActionButton>
+  )
+}
+
 // ── Exports ─────────────────────────────────────────────────────────────────
 
 export { GridSnapControl }
@@ -1006,6 +1029,7 @@ export function ViewToggles() {
       <ScansControl />
       <GuidesControl />
       <ReferenceFloorControl />
+      <RiserControl />
     </div>
   )
 }

@@ -362,6 +362,10 @@ type EditorState = {
   toggleFloorplanOpen: () => void
   isFloorplanHovered: boolean
   setFloorplanHovered: (hovered: boolean) => void
+  // Toggleable DWV riser-diagram (plumbing isometric) overlay.
+  isRiserOpen: boolean
+  setRiserOpen: (open: boolean) => void
+  toggleRiserOpen: () => void
   navigationSyncPose: NavigationSyncPose | null
   publishNavigationSyncPose: (pose: NavigationSyncPoseInput) => void
   floorplanSelectionTool: FloorplanSelectionTool
@@ -950,6 +954,9 @@ const useEditor = create<EditorState>()(
         }),
       isFloorplanHovered: false,
       setFloorplanHovered: (hovered) => set({ isFloorplanHovered: hovered }),
+      isRiserOpen: false,
+      setRiserOpen: (open) => set({ isRiserOpen: open }),
+      toggleRiserOpen: () => set((state) => ({ isRiserOpen: !state.isRiserOpen })),
       navigationSyncPose: null,
       publishNavigationSyncPose: (pose) =>
         set((state) => ({
