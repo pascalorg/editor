@@ -51,7 +51,9 @@ export function resolveSelectModeHelpHints({
     if (hasRotatableSelection) {
       hints.push({
         keys: [COMMAND_KEY, RIGHT_CLICK],
-        label: shiftPressed ? 'Drag left or right to rotate freely' : 'Drag left or right to rotate',
+        label: shiftPressed
+          ? 'Drag left or right to rotate freely'
+          : 'Drag left or right to rotate',
         active: true,
       })
     }
