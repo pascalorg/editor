@@ -112,6 +112,7 @@ export type StructureTool =
   | 'hvac-equipment'
   | 'lineset'
   | 'pipe-segment'
+  | 'pipe-fitting'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'

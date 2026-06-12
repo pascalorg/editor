@@ -657,7 +657,7 @@ export function FloatingActionMenu() {
                     )}
                   </div>
                 ) : null}
-                {node.type === 'duct-fitting' ? (
+                {node.type === 'duct-fitting' || node.type === 'pipe-fitting' ? (
                   <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
                     <span className="font-medium text-foreground">
                       Axis {rotationAxis.toUpperCase()}

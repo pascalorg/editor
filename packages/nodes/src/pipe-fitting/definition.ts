@@ -1,4 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { useScene } from '@pascal-app/core'
+import { getRotationAxis, rotateEulerWorld } from '../duct-fitting/rotation'
 import { buildPipeFittingFloorplan } from './floorplan'
 import { buildPipeFittingGeometry } from './geometry'
 import { pipeFittingParametrics } from './parametrics'
@@ -8,9 +10,8 @@ import { PipeFittingNode } from './schema'
 /**
  * DWV fittings — minted automatically by the pipe draw tool (corner
  * joints → elbows, body taps → wyes on horizontal drains / sanitary
- * tees on stacks). No placement tool of its own: unlike duct fittings,
- * a loose DWV fitting on the floor isn't a real workflow. Editable
- * after the fact via the inspector.
+ * tees on stacks), or click-placed via the tool (armed from the Build
+ * tab's DWV Pipe panel). Editable after the fact via the inspector.
  */
 export const pipeFittingDefinition: NodeDefinition<typeof PipeFittingNode> = {
   kind: 'pipe-fitting',
@@ -49,6 +50,45 @@ export const pipeFittingDefinition: NodeDefinition<typeof PipeFittingNode> = {
   ports: getPipeFittingPorts,
 
   floorplan: buildPipeFittingFloorplan,
+
+  // R/T rotate a selected fitting ±45° around the shared active axis —
+  // same scheme as duct fittings (the default editor rotate only knows
+  // Y; DWV stacks need X/Z). Alt-cycling lives in `./system.tsx`.
+  keyboardActions: {
+    r: {
+      appliesTo: (node) => node.type === 'pipe-fitting',
+      run: (node) =>
+        useScene.getState().updateNode(node.id, {
+          rotation: rotateEulerWorld(
+            (node as PipeFittingNode).rotation,
+            getRotationAxis(),
+            1,
+          ),
+        }),
+    },
+    t: {
+      appliesTo: (node) => node.type === 'pipe-fitting',
+      run: (node) =>
+        useScene.getState().updateNode(node.id, {
+          rotation: rotateEulerWorld(
+            (node as PipeFittingNode).rotation,
+            getRotationAxis(),
+            -1,
+          ),
+        }),
+    },
+  },
+
+  system: { module: () => import('./system') },
+
+  tool: () => import('./tool'),
+  toolHints: [
+    { key: 'Click', label: 'Place fitting' },
+    { key: 'Hover a pipe end', label: 'Snap onto the run' },
+    { key: 'R / T', label: 'Rotate ±45°' },
+    { key: 'Alt', label: 'Switch rotation axis (Y → X → Z)' },
+    { key: 'Esc', label: 'Exit' },
+  ],
 
   presentation: {
     label: 'Pipe Fitting',

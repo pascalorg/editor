@@ -35,6 +35,7 @@ type BuildToolKind =
   | 'hvac-equipment'
   | 'lineset'
   | 'pipe-segment'
+  | 'pipe-fitting'
 
 type BuildType = {
   /** Selection id — equals `kind` for tool types, `'painting'` for paint mode. */
@@ -104,16 +105,20 @@ export function BuildTab() {
   const activeTool = useEditor((s) => s.tool)
   const mode = useEditor((s) => s.mode)
 
-  // The fitting tool is armed from the Duct panel, not a grid tile — keep
-  // the Duct tile lit so the panel (and the way back) stays visible.
+  // The fitting tools are armed from their segment's panel, not a grid
+  // tile — keep the segment tile lit so the panel (and the way back)
+  // stays visible.
   const ductContext = mode === 'build' && (activeTool === 'duct-segment' || activeTool === 'duct-fitting')
+  const pipeContext = mode === 'build' && (activeTool === 'pipe-segment' || activeTool === 'pipe-fitting')
 
   const isTypeActive = (type: BuildType) =>
     type.mode === 'material-paint'
       ? mode === 'material-paint'
       : type.kind === 'duct-segment'
         ? ductContext
-        : mode === 'build' && activeTool === type.kind
+        : type.kind === 'pipe-segment'
+          ? pipeContext
+          : mode === 'build' && activeTool === type.kind
 
   const handleTypeClick = useCallback((type: BuildType) => {
     if (type.mode === 'material-paint') {
@@ -203,6 +208,29 @@ export function BuildTab() {
             type="button"
           >
             <IconifyIcon aria-hidden className="size-4" icon="lucide:git-branch" />
+            Add Fitting
+          </button>
+        </div>
+      ) : null}
+
+      {pipeContext ? (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-muted-foreground text-xs">DWV Pipe</span>
+          <button
+            className={cn(
+              'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
+              activeTool === 'pipe-fitting'
+                ? 'bg-primary/10 ring-1 ring-primary/50'
+                : 'bg-muted/40 hover:bg-muted',
+            )}
+            onClick={() => {
+              triggerSFX('sfx:menu-click')
+              activateBuildTool(activeTool === 'pipe-fitting' ? 'pipe-segment' : 'pipe-fitting')
+            }}
+            onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+            type="button"
+          >
+            <IconifyIcon aria-hidden className="size-4" icon="lucide:git-merge" />
             Add Fitting
           </button>
         </div>
