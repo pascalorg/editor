@@ -14,6 +14,7 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  consumePlacementDragRelease,
   markToolCancelConsumed,
   triggerSFX,
   useAlignmentGuides,
@@ -189,6 +190,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (wasCommitted) return
       if (isFloorplanSourcedEvent(event)) return
       if (Date.now() - activatedAtRef.current < 150) {
         event.nativeEvent?.stopPropagation?.()
@@ -214,6 +216,12 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       event.nativeEvent?.stopPropagation?.()
     }
 
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      activatedAtRef.current = 0
+      onGridClick({ nativeEvent: event } as unknown as GridEvent)
+    }
+
     const onCancel = () => {
       clearPreview()
       useAlignmentGuides.getState().clear()
@@ -225,6 +233,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       useAlignmentGuides.getState().clear()
@@ -236,6 +245,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
   }, [exitMoveMode, node.id])
 

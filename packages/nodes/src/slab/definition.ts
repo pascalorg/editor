@@ -201,6 +201,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   toolHints: [
     { key: 'Left click', label: 'Trace slab outline' },
     { key: 'Enter', label: 'Finish slab' },
+    { key: 'Shift', label: 'Free outline' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

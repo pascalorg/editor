@@ -2,9 +2,14 @@ import { type AnyNodeId, nodeRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
-import useEditor from './../../../../../store/use-editor'
+import { resolveNodeSnapTarget, SnapTargetIcon } from '../../../snap-target-badge'
 import { InlineRenameInput } from './inline-rename-input'
-import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
+import {
+  focusTreeNode,
+  handleTreeSelection,
+  routeTreeSelectionToNode,
+  TreeNodeWrapper,
+} from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface RegistryTreeNodeProps {
@@ -36,22 +41,21 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
   const presentation = node ? nodeRegistry.get(node.type)?.presentation : undefined
   const icon = presentation?.icon
   const iconSrc = icon?.kind === 'url' ? icon.src : '/icons/roof.png'
+  const snapTarget = resolveNodeSnapTarget(node)
   const defaultName = node?.name || presentation?.label || 'Node'
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      const handled = handleTreeSelection(
+      handleTreeSelection(
         e,
         nodeId,
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      if (!handled && useEditor.getState().phase === 'furnish') {
-        useEditor.getState().setPhase('structure')
-      }
+      routeTreeSelectionToNode(node)
     },
-    [nodeId, setSelection],
+    [node, nodeId, setSelection],
   )
 
   return (
@@ -61,13 +65,25 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
       expanded={false}
       hasChildren={false}
       icon={
-        <Image
-          alt=""
-          className="object-contain opacity-60"
-          height={14}
-          src={iconSrc}
-          width={14}
-        />
+        snapTarget ? (
+          <SnapTargetIcon target={snapTarget}>
+            <Image
+              alt=""
+              className="object-contain opacity-60"
+              height={14}
+              src={iconSrc}
+              width={14}
+            />
+          </SnapTargetIcon>
+        ) : (
+          <Image
+            alt=""
+            className="object-contain opacity-60"
+            height={14}
+            src={iconSrc}
+            width={14}
+          />
+        )
       }
       isHovered={isHovered}
       isLast={isLast}

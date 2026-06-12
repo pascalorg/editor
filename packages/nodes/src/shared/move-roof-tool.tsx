@@ -20,6 +20,7 @@ import {
 import {
   CursorSphere,
   commitFreshPlacementSubtree,
+  consumePlacementDragRelease,
   DragBoundingBox,
   getFloorStackPreviewPosition,
   resolvePlanarCursorPosition,
@@ -359,6 +360,7 @@ export const MoveRoofTool: React.FC<{
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (wasCommitted) return
       if (!hasMoved) return
       const [localX, , localZ] = lastLocalPosition
 
@@ -392,6 +394,11 @@ export const MoveRoofTool: React.FC<{
       useEditor.getState().setMovingNodeOrigin('3d')
       exitMoveMode()
       event.nativeEvent?.stopPropagation?.()
+    }
+
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      onGridClick({ nativeEvent: event } as unknown as GridEvent)
     }
 
     const onCancel = () => {
@@ -454,6 +461,7 @@ export const MoveRoofTool: React.FC<{
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       // Restore segment wrapper visibility (React will re-sync on next render)
@@ -485,6 +493,7 @@ export const MoveRoofTool: React.FC<{
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
   }, [movingNode, exitMoveMode, isFreshPlacement, revealFreshPlacement, useAbsoluteCursorPlacement])
 

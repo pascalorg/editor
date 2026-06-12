@@ -8,7 +8,13 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { CursorSphere, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  consumePlacementDragRelease,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -151,6 +157,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (wasCommitted) return
       const [gridX, gridZ] = previousGridPosRef.current ?? originalCenter
 
       wasCommitted = true
@@ -167,6 +174,11 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
       useViewer.getState().setSelection({ buildingId: nodeId as BuildingNode['id'] })
       exitMoveMode()
       event.nativeEvent?.stopPropagation?.()
+    }
+
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      onGridClick({ nativeEvent: event } as unknown as GridEvent)
     }
 
     const onCancel = () => {
@@ -190,6 +202,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       if (!wasCommitted) {
@@ -207,6 +220,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
   }, [exitMoveMode]) // stable — node values captured via refs at mount
 

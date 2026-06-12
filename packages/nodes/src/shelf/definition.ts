@@ -258,6 +258,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Left click', label: 'Place shelf' },
+    { key: 'Shift', label: 'Free place' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

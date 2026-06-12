@@ -15,6 +15,7 @@ import {
 import {
   calculateCursorRotation,
   calculateItemRotation,
+  consumePlacementDragRelease,
   EDITOR_LAYER,
   getSideFromNormal,
   isValidWallSideFace,
@@ -99,6 +100,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     let currentHostId: string | null = movingWindowNode.parentId
+    let committed = false
     let dragAnchor: {
       wallId: string
       rawX: number
@@ -117,6 +119,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       valid: boolean
       event: WallEvent
     } | null = null
+    let lastRoofEvent: RoofEvent | null = null
 
     const markHostDirty = (hostId: string | null) => {
       if (hostId) useScene.getState().dirtyNodes.add(hostId as AnyNodeId)
@@ -285,29 +288,44 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
     const onWallEnter = (event: WallEvent) => {
       const target = resolveMoveTarget(event)
-      if (!target) return
+      if (!target) {
+        onWallLeave()
+        return
+      }
       lastTarget = target
+      lastRoofEvent = null
       applyPreview(target)
       event.stopPropagation()
     }
 
     const onWallMove = (event: WallEvent) => {
-      if (!isValidWallSideFace(event.normal)) return
+      if (!isValidWallSideFace(event.normal)) {
+        onWallLeave()
+        return
+      }
       if (isCurvedWall(event.node)) {
-        hideCursor()
+        onWallLeave()
         return
       }
       // Only interact with walls on the current level
-      if (event.node.parentId !== getLevelId()) return
+      if (event.node.parentId !== getLevelId()) {
+        onWallLeave()
+        return
+      }
 
       const target = resolveMoveTarget(event)
-      if (!target) return
+      if (!target) {
+        onWallLeave()
+        return
+      }
       lastTarget = target
+      lastRoofEvent = null
       applyPreview(target)
       event.stopPropagation()
     }
 
     const onWallClick = (event: WallEvent) => {
+      if (committed) return
       if (!isValidWallSideFace(event.normal)) return
       if (isCurvedWall(event.node)) return
       // Only interact with walls on the current level
@@ -315,6 +333,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
       const target = lastTarget?.wallId === event.node.id ? lastTarget : resolveMoveTarget(event)
       if (!target?.valid) return
+      committed = true
 
       let placedId: string
 
@@ -387,6 +406,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       useLiveTransforms.getState().clear(movingWindowNode.id)
       dragAnchor = null
       lastTarget = null
+      lastRoofEvent = null
       if (isNew) return // No original to restore for duplicates
       // Move mode: restore to original position while off-wall
       if (currentHostId && currentHostId !== original.parentId) {
@@ -430,10 +450,14 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
     const onRoofHover = (event: RoofEvent) => {
       const target = resolveRoofMoveTarget(event)
-      if (!target) return
+      if (!target) {
+        onRoofLeave()
+        return
+      }
       // Wall-frame drag anchor / live transform don't apply on a roof face.
       dragAnchor = null
       lastTarget = null
+      lastRoofEvent = event
       useLiveTransforms.getState().clear(movingWindowNode.id)
       if (currentHostId !== target.segment.id) {
         useScene.getState().updateNode(movingWindowNode.id, {
@@ -459,8 +483,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const onRoofClick = (event: RoofEvent) => {
+      if (committed) return
       const target = resolveRoofMoveTarget(event)
       if (!target?.valid) return
+      committed = true
       const segmentId = target.segment.id
 
       let placedId: string
@@ -531,6 +557,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       useLiveTransforms.getState().clear(movingWindowNode.id)
       dragAnchor = null
       lastTarget = null
+      lastRoofEvent = null
       if (isNew) return
       if (currentHostId && currentHostId !== original.parentId) {
         markHostDirty(currentHostId)
@@ -571,6 +598,15 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       exitMoveMode()
     }
 
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      if (lastTarget) {
+        onWallClick(lastTarget.event)
+        return
+      }
+      if (lastRoofEvent) onRoofClick(lastRoofEvent)
+    }
+
     emitter.on('wall:enter', onWallEnter)
     emitter.on('wall:move', onWallMove)
     emitter.on('wall:click', onWallClick)
@@ -580,6 +616,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     emitter.on('roof:click', onRoofClick)
     emitter.on('roof:leave', onRoofLeave)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       // Safety cleanup: if still transient on unmount (e.g. phase switch mid-move)
@@ -617,6 +654,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       emitter.off('roof:click', onRoofClick)
       emitter.off('roof:leave', onRoofLeave)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
   }, [movingWindowNode, exitMoveMode])
 

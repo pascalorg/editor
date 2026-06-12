@@ -10,7 +10,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX, useEditor } from '@pascal-app/editor'
+import { consumePlacementDragRelease, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -89,9 +89,19 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
       roofSegmentId: node.roofSegmentId,
     })
 
+    const clearTarget = () => {
+      lastTarget = null
+      setSegmentXform(null)
+      setHitLocal(null)
+      setPreviewSegment(null)
+    }
+
     const updatePreview = (event: RoofEvent) => {
       const target = roofDrag.resolve(event)
-      if (!target) return
+      if (!target) {
+        clearTarget()
+        return
+      }
       lastTarget = target
 
       const sx = Math.round(target.localX * 20) / 20
@@ -156,14 +166,27 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
       event.stopPropagation()
     }
 
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      if (!lastTarget) return
+      onClick({
+        nativeEvent: event,
+        stopPropagation: () => event.stopPropagation(),
+      } as unknown as RoofEvent)
+    }
+
     emitter.on('roof:move', updatePreview)
     emitter.on('roof:enter', updatePreview)
     emitter.on('roof:click', onClick)
+    emitter.on('roof:leave', clearTarget)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
+      emitter.off('roof:leave', clearTarget)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
   }, [activeBuildingId, node, setMovingNode, setSelection])
 

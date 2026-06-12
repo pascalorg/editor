@@ -3,9 +3,15 @@ import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import useEditor from './../../../../../store/use-editor'
+import { resolveNodeSnapTarget, SnapTargetIcon } from '../../../snap-target-badge'
 import { InlineRenameInput } from './inline-rename-input'
-import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
+import {
+  focusTreeNode,
+  handleTreeSelection,
+  routeTreeSelectionToNode,
+  TreeNode,
+  TreeNodeWrapper,
+} from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -35,7 +41,8 @@ export const ItemTreeNode = memo(function ItemTreeNode({
   const children = useScene(
     useShallow((s) => (s.nodes[nodeId] as ItemNode | undefined)?.children ?? []),
   )
-  const asset = useScene((s) => (s.nodes[nodeId] as ItemNode | undefined)?.asset)
+  const node = useScene((s) => s.nodes[nodeId] as ItemNode | undefined)
+  const asset = node?.asset
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -63,17 +70,15 @@ export const ItemTreeNode = memo(function ItemTreeNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      const handled = handleTreeSelection(
+      handleTreeSelection(
         e,
         nodeId,
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      if (!handled && useEditor.getState().phase === 'structure') {
-        useEditor.getState().setPhase('furnish')
-      }
+      routeTreeSelectionToNode(node)
     },
-    [nodeId, setSelection],
+    [node, nodeId, setSelection],
   )
 
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
@@ -84,6 +89,7 @@ export const ItemTreeNode = memo(function ItemTreeNode({
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
   const iconSrc = CATEGORY_ICONS[asset?.category ?? ''] || '/icons/couch.png'
+  const snapTarget = resolveNodeSnapTarget(node)
   const defaultName = asset?.name || 'Item'
   const hasChildren = children.length > 0
 
@@ -93,7 +99,15 @@ export const ItemTreeNode = memo(function ItemTreeNode({
       depth={depth}
       expanded={expanded}
       hasChildren={hasChildren}
-      icon={<Image alt="" className="object-contain" height={14} src={iconSrc} width={14} />}
+      icon={
+        snapTarget ? (
+          <SnapTargetIcon target={snapTarget}>
+            <Image alt="" className="object-contain" height={14} src={iconSrc} width={14} />
+          </SnapTargetIcon>
+        ) : (
+          <Image alt="" className="object-contain" height={14} src={iconSrc} width={14} />
+        )
+      }
       isHovered={isHovered}
       isLast={isLast}
       isSelected={isSelected}

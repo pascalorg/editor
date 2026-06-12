@@ -10,7 +10,12 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  consumePlacementDragRelease,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useCallback, useEffect, useState } from 'react'
 import { createRelativeRoofDrag } from '../shared/relative-roof-drag'
 import { type EaveSnap, resolveEaveSnap } from './eave-snap'
@@ -71,7 +76,14 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
 
     let lastSnap: [number, number] | null = null
     let lastTarget: GutterDragTarget | null = null
+    let committed = false
     const roofDrag = createRelativeRoofDrag(original)
+
+    const clearTarget = () => {
+      lastTarget = null
+      lastSnap = null
+      setTarget(null)
+    }
 
     const resolveTarget = (event: RoofEvent): GutterDragTarget | null => {
       const target = roofDrag.resolve(event)
@@ -85,7 +97,10 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
     const updatePreview = (event: RoofEvent) => {
       const roof = event.node as RoofNode
       const target = resolveTarget(event)
-      if (!target) return
+      if (!target) {
+        clearTarget()
+        return
+      }
       lastTarget = target
 
       // Same snap math as the placement tool — picking-up and putting-
@@ -120,8 +135,10 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
     }
 
     const onRoofClick = (event: RoofEvent) => {
+      if (committed) return
       const target = lastTarget ?? resolveTarget(event)
       if (!target) return
+      committed = true
       const targetSegmentId = target.segment.id as AnyNodeId
       const { snap } = target
       const st = useScene.getState()
@@ -201,16 +218,29 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
       exitMoveMode()
     }
 
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      if (!lastTarget) return
+      onRoofClick({
+        nativeEvent: event,
+        stopPropagation: () => event.stopPropagation(),
+      } as unknown as RoofEvent)
+    }
+
     emitter.on('roof:move', updatePreview)
     emitter.on('roof:enter', updatePreview)
     emitter.on('roof:click', onRoofClick)
+    emitter.on('roof:leave', clearTarget)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onRoofClick)
+      emitter.off('roof:leave', clearTarget)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
 
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true

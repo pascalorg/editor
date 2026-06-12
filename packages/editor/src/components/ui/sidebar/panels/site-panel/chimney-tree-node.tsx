@@ -2,6 +2,7 @@ import { type AnyNodeId, type ChimneyNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
+import { SnapTargetIcon } from '../../../snap-target-badge'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
@@ -51,13 +52,15 @@ export const ChimneyTreeNode = memo(function ChimneyTreeNode({
       expanded={false}
       hasChildren={false}
       icon={
-        <Image
-          alt=""
-          className="object-contain opacity-60"
-          height={14}
-          src="/icons/roof.png"
-          width={14}
-        />
+        <SnapTargetIcon target="roof">
+          <Image
+            alt=""
+            className="object-contain opacity-60"
+            height={14}
+            src="/icons/roof.png"
+            width={14}
+          />
+        </SnapTargetIcon>
       }
       isHovered={isHovered}
       isLast={isLast}

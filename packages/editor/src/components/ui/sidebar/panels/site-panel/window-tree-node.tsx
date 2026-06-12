@@ -1,9 +1,10 @@
 'use client'
 
-import { type AnyNodeId, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type WindowNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
+import { resolveNodeSnapTarget, SnapTargetIcon } from '../../../snap-target-badge'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
@@ -22,6 +23,7 @@ export const WindowTreeNode = memo(function WindowTreeNode({
 }: WindowTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId as AnyNodeId]?.visible !== false)
+  const node = useScene((s) => s.nodes[nodeId] as WindowNode | undefined)
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -45,6 +47,7 @@ export const WindowTreeNode = memo(function WindowTreeNode({
 
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
+  const snapTarget = resolveNodeSnapTarget(node) ?? 'wall'
 
   return (
     <TreeNodeWrapper
@@ -53,7 +56,9 @@ export const WindowTreeNode = memo(function WindowTreeNode({
       expanded={false}
       hasChildren={false}
       icon={
-        <Image alt="" className="object-contain" height={14} src="/icons/window.png" width={14} />
+        <SnapTargetIcon target={snapTarget}>
+          <Image alt="" className="object-contain" height={14} src="/icons/window.png" width={14} />
+        </SnapTargetIcon>
       }
       isHovered={isHovered}
       isLast={isLast}

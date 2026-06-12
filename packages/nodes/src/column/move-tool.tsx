@@ -16,6 +16,7 @@ import {
 import {
   CursorSphere,
   commitFreshPlacementSubtree,
+  consumePlacementDragRelease,
   DragBoundingBox,
   getFloorStackPreviewPosition,
   markToolCancelConsumed,
@@ -165,6 +166,7 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (committed) return
       if (!hasMoved) return
       useAlignmentGuides.getState().clear()
       // Commit at the last previewed position so the alignment snap (which
@@ -225,6 +227,11 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
       event.nativeEvent?.stopPropagation?.()
     }
 
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      onGridClick({ nativeEvent: event } as unknown as GridEvent)
+    }
+
     const onCancel = () => {
       useLiveTransforms.getState().clear(node.id)
       useAlignmentGuides.getState().clear()
@@ -244,12 +251,14 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
     }
 
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
 
     return () => {
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)

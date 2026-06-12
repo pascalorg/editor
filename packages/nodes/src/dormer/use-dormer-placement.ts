@@ -6,7 +6,7 @@ import {
   type RoofSegmentNode,
   sceneRegistry,
 } from '@pascal-app/core'
-import { triggerSFX } from '@pascal-app/editor'
+import { consumePlacementDragRelease, triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -58,6 +58,7 @@ export function useDormerPlacement(opts: {
   onCommit: (hit: DormerPlacementHit, rotation: number) => void
 }): {
   activeBuildingId: string | undefined
+  clearPreview: () => void
   segmentXform: DormerSegmentTransform | null
   hitLocal: [number, number, number] | null
   ghostRotation: number
@@ -77,6 +78,11 @@ export function useDormerPlacement(opts: {
   // every time the parent rerenders).
   const onCommitRef = useRef(opts.onCommit)
   onCommitRef.current = opts.onCommit
+
+  const clearPreview = () => {
+    setSegmentXform(null)
+    setHitLocal(null)
+  }
 
   useEffect(() => {
     if (!activeBuildingId) return
@@ -99,6 +105,7 @@ export function useDormerPlacement(opts: {
     const roofDrag = relativeStartRef.current
       ? createRelativeRoofDrag(relativeStartRef.current)
       : null
+    let committed = false
     let lastRelativeHit: DormerPlacementHit | null = null
 
     const resolvePlacementHit = (event: RoofEvent): DormerPlacementHit | null => {
@@ -139,13 +146,25 @@ export function useDormerPlacement(opts: {
     }
 
     const onClick = (event: RoofEvent) => {
+      if (committed) return
       const hit = roofDrag
         ? (lastRelativeHit ?? resolvePlacementHit(event))
         : resolvePlacementHit(event)
       if (!hit) return
+      committed = true
       onCommitRef.current(hit, ghostRotationRef.current)
       triggerSFX('sfx:item-place')
       event.stopPropagation()
+    }
+
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (committed) return
+      if (!consumePlacementDragRelease(event)) return
+      const hit = roofDrag ? lastRelativeHit : null
+      if (!hit) return
+      committed = true
+      onCommitRef.current(hit, ghostRotationRef.current)
+      triggerSFX('sfx:item-place')
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -166,17 +185,20 @@ export function useDormerPlacement(opts: {
     emitter.on('roof:enter', updatePreview)
     emitter.on('roof:click', onClick)
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
   }, [activeBuildingId])
 
   return {
     activeBuildingId: activeBuildingId ?? undefined,
+    clearPreview,
     segmentXform,
     hitLocal,
     ghostRotation,

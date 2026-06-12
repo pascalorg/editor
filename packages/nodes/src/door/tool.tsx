@@ -3,6 +3,7 @@ import {
   collectAlignmentAnchors,
   DoorNode,
   emitter,
+  type GridEvent,
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
@@ -22,12 +23,13 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
-import { BoxGeometry, EdgesGeometry, type Group, type LineSegments } from 'three'
+import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
   resolveRoofWallOpeningTarget,
+  worldToSelectedBuildingLocal,
 } from '../shared/roof-wall-opening-placement'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
@@ -38,6 +40,10 @@ const edgeMaterial = new LineBasicNodeMaterial({
   depthTest: false,
   depthWrite: false,
 })
+
+const FALLBACK_WIDTH = 0.9
+const FALLBACK_HEIGHT = 2.1
+const roofFallbackPoint = new Vector3()
 
 /**
  * Door tool — places DoorNodes on walls and on roof-segment wall faces
@@ -99,16 +105,47 @@ const DoorTool: React.FC = () => {
       edgeMaterial.color.setHex(valid ? 0x22_c5_5e : 0xef_44_44)
     }
 
+    const showFallbackCursor = (event: GridEvent) => {
+      if (draftRef.current) return
+      const [x, y, z] = event.localPosition
+      updateCursor([x, y + FALLBACK_HEIGHT / 2, z], 0, false)
+      useAlignmentGuides.getState().clear()
+    }
+
+    const showRoofFallbackCursor = (event: RoofEvent) => {
+      const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
+      updateCursor([x, getLevelYOffset() + FALLBACK_HEIGHT / 2, z], 0, false)
+      useAlignmentGuides.getState().clear()
+    }
+
+    const showWallFallbackCursor = (event: WallEvent) => {
+      const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
+      updateCursor([x, getLevelYOffset() + FALLBACK_HEIGHT / 2, z], 0, false)
+      useAlignmentGuides.getState().clear()
+    }
+
     const onWallEnter = (event: WallEvent) => {
-      if (!isValidWallSideFace(event.normal)) return
+      if (!isValidWallSideFace(event.normal)) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
       if (isCurvedWall(event.node)) {
         destroyDraft()
-        hideCursor()
+        showWallFallbackCursor(event)
         return
       }
       const levelId = getLevelId()
-      if (!levelId) return
-      if (event.node.parentId !== levelId) return
+      if (!levelId) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
+      if (event.node.parentId !== levelId) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
 
       destroyDraft()
 
@@ -158,13 +195,21 @@ const DoorTool: React.FC = () => {
     }
 
     const onWallMove = (event: WallEvent) => {
-      if (!isValidWallSideFace(event.normal)) return
-      if (isCurvedWall(event.node)) {
+      if (!isValidWallSideFace(event.normal)) {
         destroyDraft()
-        hideCursor()
+        showWallFallbackCursor(event)
         return
       }
-      if (event.node.parentId !== getLevelId()) return
+      if (isCurvedWall(event.node)) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
+      if (event.node.parentId !== getLevelId()) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
 
       const side = getSideFromNormal(event.normal)
       const itemRotation = calculateItemRotation(event.normal)
@@ -373,10 +418,8 @@ const DoorTool: React.FC = () => {
       if (!target) {
         // On the roof but not over a placeable wall face (slope, soffit,
         // or a face the door cannot fit on).
-        if (draftRef.current?.roofSegmentId) {
-          destroyDraft()
-          hideCursor()
-        }
+        destroyDraft()
+        showRoofFallbackCursor(event)
         return
       }
       const { segment, face, position } = target
@@ -483,6 +526,7 @@ const DoorTool: React.FC = () => {
     emitter.on('roof:move', onRoofHover)
     emitter.on('roof:click', onRoofClick)
     emitter.on('roof:leave', onRoofLeave)
+    emitter.on('grid:move', showFallbackCursor)
     emitter.on('tool:cancel', onCancel)
 
     return () => {
@@ -498,12 +542,13 @@ const DoorTool: React.FC = () => {
       emitter.off('roof:move', onRoofHover)
       emitter.off('roof:click', onRoofClick)
       emitter.off('roof:leave', onRoofLeave)
+      emitter.off('grid:move', showFallbackCursor)
       emitter.off('tool:cancel', onCancel)
     }
   }, [])
 
-  // Cursor geometry: door outline (default 0.9 × 2.1 × 0.07)
-  const boxGeo = new BoxGeometry(0.9, 2.1, 0.07)
+  // Cursor geometry: door outline.
+  const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
   const edgesGeo = new EdgesGeometry(boxGeo)
   boxGeo.dispose()
 

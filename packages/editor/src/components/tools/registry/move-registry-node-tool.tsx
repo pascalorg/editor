@@ -27,6 +27,7 @@ import { stripPlacementMetadataFlags } from '../../../lib/placement-metadata'
 import { resolvePlanarCursorPosition } from '../../../lib/planar-cursor-placement'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import { swallowNextClick } from '../../editor/node-arrow-handles'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { DragBoundingBox } from '../shared/drag-bounding-box'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
@@ -505,6 +506,21 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', commitAtCursor)
 
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!useEditor.getState().placementDragMode) return
+      if (event.button !== 0) return
+      swallowNextClick()
+      if (!hasMovedRef.current) {
+        exitMoveMode()
+        return
+      }
+      commitAtCursor({
+        nativeEvent: event,
+        stopPropagation: () => event.stopPropagation(),
+      } as unknown as ClickTriggerEvent)
+    }
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
+
     // Listen on every common kind's click event too. mitt's typing keeps
     // `${kind}:click` as a fixed union so the cast is safe at runtime —
     // we're just routing them through the shared commit path.
@@ -539,6 +555,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       window.removeEventListener('keyup', onKeyUp)
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', commitAtCursor)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
       for (const kind of CLICK_TRIGGER_KINDS) {
         const key = `${kind}:click` as ClickKey
         emitter.off(key, commitAtCursor as never)

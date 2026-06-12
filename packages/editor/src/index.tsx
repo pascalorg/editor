@@ -165,6 +165,13 @@ export {
 } from './components/ui/sidebar/panels/settings-panel'
 export type { SitePanelProps } from './components/ui/sidebar/panels/site-panel'
 export type { SidebarTab } from './components/ui/sidebar/tab-bar'
+export {
+  resolveAssetSnapTarget,
+  resolveNodeSnapTarget,
+  type SnapTarget,
+  SnapTargetBadge,
+  SnapTargetIcon,
+} from './components/ui/snap-target-badge'
 export type { SaveStatus } from './hooks/use-auto-save'
 // useDragAction is the React-side glue for the registry's DragAction
 // primitive. Public so registry-driven kinds (Phase 5+ Stage D ports)
@@ -226,6 +233,7 @@ export {
   linearUnitToMeters,
   metersToLinearUnit,
 } from './lib/measurements'
+export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
   addFreshPlacementMetadata,
   getPlacementMetadataRecord,

@@ -5,6 +5,7 @@ import { type MouseEvent as ReactMouseEvent, useCallback } from 'react'
 import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
+import useAlignmentGuides from '../../store/use-alignment-guides'
 import useSegmentDraftChain from '../../store/use-segment-draft-chain'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { WALL_GRID_STEP, type WallPlanPoint } from '../tools/wall/wall-drafting'
@@ -329,10 +330,15 @@ export function useFloorplanBackgroundPlacement({
         const wallGridBase = bypassSnap ? planPoint : worldGridSnap(planPoint, wallStep)
         const wallLocked =
           !bypassSnap && (wallSnapped[0] !== wallGridBase[0] || wallSnapped[1] !== wallGridBase[1])
-        const snappedPoint =
-          wallLocked || wallAngleSnap
-            ? wallSnapped
-            : alignFloorplanDraftPoint(wallSnapped, { bypass: event.altKey || bypassSnap })
+        let snappedPoint = wallSnapped
+        if (wallLocked) {
+          useAlignmentGuides.getState().clear()
+        } else {
+          snappedPoint = alignFloorplanDraftPoint(wallSnapped, {
+            applySnap: !wallAngleSnap,
+            bypass: event.altKey || bypassSnap,
+          })
+        }
 
         emitFloorplanGridEvent('click', snappedPoint, event)
 

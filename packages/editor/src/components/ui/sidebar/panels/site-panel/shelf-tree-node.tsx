@@ -5,9 +5,14 @@ import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
-import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
+import {
+  focusTreeNode,
+  handleTreeSelection,
+  routeTreeSelectionToNode,
+  TreeNode,
+  TreeNodeWrapper,
+} from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface ShelfTreeNodeProps {
@@ -34,6 +39,7 @@ export const ShelfTreeNode = memo(function ShelfTreeNode({
   const children = useScene(
     useShallow((s) => (s.nodes[nodeId] as ShelfNode | undefined)?.children ?? []),
   )
+  const node = useScene((s) => s.nodes[nodeId] as ShelfNode | undefined)
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -63,17 +69,15 @@ export const ShelfTreeNode = memo(function ShelfTreeNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      const handled = handleTreeSelection(
+      handleTreeSelection(
         e,
         nodeId,
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      if (!handled && useEditor.getState().phase === 'furnish') {
-        useEditor.getState().setPhase('structure')
-      }
+      routeTreeSelectionToNode(node)
     },
-    [nodeId, setSelection],
+    [node, nodeId, setSelection],
   )
 
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
