@@ -359,7 +359,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Left click', label: 'Place column' },
-    { key: 'Alt', label: 'No snap' },
+    { key: 'Shift', label: 'Free place' },
     { key: 'Esc', label: 'Cancel' },
   ],
   floorplan: buildColumnFloorplan,

@@ -30,9 +30,9 @@ export type FloorplanAlignmentResult = {
  *
  * Publishes guides to the `useAlignmentGuides` store as a side effect — set
  * on a match, cleared otherwise — so the mounted `FloorplanAlignmentGuideLayer`
- * renders them. Returns the adjusted point. When `bypass` is true (Alt held)
- * the point is returned unchanged and guides are cleared, matching the
- * "No snap" affordance the placement tools advertise.
+ * renders them. Returns the adjusted point. When `bypass` is true (Alt for
+ * alignment-only bypass, or Shift for the full guided-constraint bypass) the
+ * point is returned unchanged and guides are cleared.
  *
  * `candidates` should be gathered ONCE per drag (`collectAlignmentAnchors`);
  * the scene is stable during a single drag, so re-collecting per pointer-move

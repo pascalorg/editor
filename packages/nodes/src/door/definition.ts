@@ -219,6 +219,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place door on wall' },
+    { key: 'Shift', label: 'Free place' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

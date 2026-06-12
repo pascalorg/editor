@@ -114,6 +114,6 @@ export function HelperManager() {
   // Legacy fallback — only `roof` remains because it hasn't migrated to
   // `def.tool` / `def.toolHints` yet (no Stage D port). When roof
   // migrates, this switch deletes outright.
-  if (tool === 'roof') return <RoofHelper />
+  if (tool === 'roof') return <RoofHelper shiftPressed={modifiers.shift} />
   return null
 }

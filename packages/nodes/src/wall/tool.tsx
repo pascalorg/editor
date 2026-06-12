@@ -508,7 +508,8 @@ export const WallTool: React.FC = () => {
     }
 
     // Align the drafted point onto another object's nearest real anchor and
-    // publish the guide. Alt bypasses. Returns the (possibly snapped) point.
+    // publish the guide. Alt bypasses alignment; Shift bypasses all guided
+    // snapping. Returns the possibly snapped point.
     const alignPoint = (
       point: WallPlanPoint,
       options: { applySnap?: boolean; bypass?: boolean },
