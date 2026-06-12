@@ -43,8 +43,11 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
     width: 14,
     height: 8,
     ductMaterial: 'flex',
+    seamDetail: false,
+    insulated: false,
     insulationR: 0.5,
     system: 'supply',
+    roll: 0,
   }),
 
   capabilities: {
@@ -63,7 +66,10 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
       n.diameter,
       n.width,
       n.height,
+      n.roll,
       n.ductMaterial,
+      n.seamDetail,
+      n.insulated,
       n.insulationR,
       n.system,
     ]),
@@ -122,7 +128,7 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
 
   presentation: {
     label: 'Duct',
-    description: 'Round HVAC duct run — polyline of points connected by cylindrical sections.',
+    description: 'HVAC duct run — polyline of round, rect, or flat-oval sections.',
     icon: { kind: 'iconify', name: 'lucide:wind' },
     paletteSection: 'structure',
     paletteOrder: 90,
@@ -130,6 +136,6 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
 
   mcp: {
     description:
-      'An HVAC duct run defined as a polyline — round (branches) or rect (trunks/plenums). Supply or return, with configurable size, material, and external insulation.',
+      'An HVAC duct run defined as a polyline — round (branches), rect (trunks/plenums), or flat-oval (tight joist bays). Supply or return, with configurable size, material (incl. spiral seam), and external insulation.',
   },
 }

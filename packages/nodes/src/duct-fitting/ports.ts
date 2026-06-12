@@ -23,7 +23,9 @@ type LocalPort = { id: string; position: Vector3; direction: Vector3; diameter: 
  * port).
  *
  * Conventions documented on the schema: elbow inlet -X / outlet turned
- * `angle`° in XZ; tee run along X with branch +Z; reducer -X → +X.
+ * `angle`° in XZ; tee run along X with the branch at `branchAngle`° off
+ * the +X outlet axis (90° → +Z square tee, 45° → downstream lateral,
+ * 135° → upstream lateral); reducer -X → +X.
  */
 export function localFittingPorts(node: DuctFittingNode): LocalPort[] {
   const main = fittingLegLength(node.diameter)
@@ -47,6 +49,13 @@ export function localFittingPorts(node: DuctFittingNode): LocalPort[] {
   }
   if (node.fittingType === 'tee') {
     const branch = fittingLegLength(node.diameter2)
+    // Branch leans `branchAngle`° off the +X outlet axis in XZ: 90° is a
+    // square tap (+Z), shallower angles sweep the branch downstream
+    // toward the outlet so the lateral merges with the run's flow, and
+    // angles past 90° lean it upstream toward the inlet (cos goes
+    // negative, swinging the collar to -X).
+    const phi = (node.branchAngle * Math.PI) / 180
+    const branchDir = new Vector3(Math.cos(phi), 0, Math.sin(phi))
     return [
       {
         id: 'inlet',
@@ -62,13 +71,15 @@ export function localFittingPorts(node: DuctFittingNode): LocalPort[] {
       },
       {
         id: 'branch',
-        position: new Vector3(0, 0, branch),
-        direction: new Vector3(0, 0, 1),
+        position: branchDir.clone().multiplyScalar(branch),
+        direction: branchDir,
         diameter: node.diameter2,
       },
     ]
   }
-  // reducer
+  // reducer / transition: straight-through, inlet at `diameter` (the
+  // transition's rect end advertises its area-equivalent round size),
+  // outlet at `diameter2`.
   return [
     {
       id: 'inlet',

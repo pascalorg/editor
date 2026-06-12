@@ -35,7 +35,6 @@ type BuildToolKind =
   | 'hvac-equipment'
   | 'lineset'
   | 'pipe-segment'
-  | 'plumbing-fixture'
 
 type BuildType = {
   /** Selection id — equals `kind` for tool types, `'painting'` for paint mode. */
@@ -66,12 +65,10 @@ const BUILD_TYPES: BuildType[] = [
   { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.png', kind: 'shelf' },
   { id: 'spawn', label: 'Spawn Point', iconSrc: '/icons/spawn-point.png', kind: 'spawn' },
   { id: 'duct-segment', label: 'Duct', iconify: 'lucide:wind', kind: 'duct-segment' },
-  { id: 'duct-fitting', label: 'Duct Fitting', iconify: 'lucide:git-branch', kind: 'duct-fitting' },
   { id: 'duct-terminal', label: 'Register', iconify: 'lucide:air-vent', kind: 'duct-terminal' },
   { id: 'hvac-equipment', label: 'HVAC Unit', iconify: 'lucide:heater', kind: 'hvac-equipment' },
   { id: 'lineset', label: 'Lineset', iconify: 'lucide:cable', kind: 'lineset' },
   { id: 'pipe-segment', label: 'DWV Pipe', iconify: 'lucide:droplets', kind: 'pipe-segment' },
-  { id: 'plumbing-fixture', label: 'Fixture', iconify: 'lucide:bath', kind: 'plumbing-fixture' },
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.png', mode: 'material-paint' },
 ]
 
@@ -107,10 +104,16 @@ export function BuildTab() {
   const activeTool = useEditor((s) => s.tool)
   const mode = useEditor((s) => s.mode)
 
+  // The fitting tool is armed from the Duct panel, not a grid tile — keep
+  // the Duct tile lit so the panel (and the way back) stays visible.
+  const ductContext = mode === 'build' && (activeTool === 'duct-segment' || activeTool === 'duct-fitting')
+
   const isTypeActive = (type: BuildType) =>
     type.mode === 'material-paint'
       ? mode === 'material-paint'
-      : mode === 'build' && activeTool === type.kind
+      : type.kind === 'duct-segment'
+        ? ductContext
+        : mode === 'build' && activeTool === type.kind
 
   const handleTypeClick = useCallback((type: BuildType) => {
     if (type.mode === 'material-paint') {
@@ -181,6 +184,29 @@ export function BuildTab() {
           })}
         </div>
       </TooltipProvider>
+
+      {ductContext ? (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-muted-foreground text-xs">Duct</span>
+          <button
+            className={cn(
+              'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
+              activeTool === 'duct-fitting'
+                ? 'bg-primary/10 ring-1 ring-primary/50'
+                : 'bg-muted/40 hover:bg-muted',
+            )}
+            onClick={() => {
+              triggerSFX('sfx:menu-click')
+              activateBuildTool(activeTool === 'duct-fitting' ? 'duct-segment' : 'duct-fitting')
+            }}
+            onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+            type="button"
+          >
+            <IconifyIcon aria-hidden className="size-4" icon="lucide:git-branch" />
+            Add Fitting
+          </button>
+        </div>
+      ) : null}
 
       {mode === 'material-paint' ? (
         <div className="min-h-0 flex-1 overflow-y-auto">

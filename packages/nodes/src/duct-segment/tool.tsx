@@ -6,7 +6,9 @@ import { getLevelHeight, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { type Group, Matrix4, Vector3 } from 'three'
+import { getDuctFittingPorts } from '../duct-fitting/ports'
 import { planElbowAtPort, planElbowRealign, planTeeAtRunBody } from '../shared/auto-fitting'
+import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
 import {
   collectScenePorts,
   DUCT_PORT_SYSTEMS,
@@ -70,6 +72,63 @@ function snap(value: number, step: number): number {
   return Math.round(value / step) * step
 }
 
+function dist2(
+  a: readonly [number, number, number],
+  b: readonly [number, number, number],
+): number {
+  const dx = a[0] - b[0]
+  const dy = a[1] - b[1]
+  const dz = a[2] - b[2]
+  return dx * dx + dy * dy + dz * dz
+}
+
+/**
+ * Cross-section roll for a new rect run leaving `port` along `newDir`,
+ * so its profile stays continuous with whatever it joined: a turn
+ * re-derives the roll through the (future) elbow, a straight
+ * continuation inherits the source's roll as-is. Sources: a rect run's
+ * open end, or a rect fitting's open collar (continuity then comes from
+ * the leg on the far side of the junction and the rect run mated
+ * there). Null when the port doesn't carry a rect orientation. Shared
+ * by the ghost preview and the commit so what you see is what lands.
+ */
+function continuityRollFrom(port: ScenePort | null, newDir: Vector3): number | null {
+  if (!port) return null
+  const nodes = useScene.getState().nodes
+  const owner = nodes[port.nodeId]
+  let srcDir: Vector3 | null = null
+  let srcRoll = 0
+  if (owner?.type === 'duct-segment' && owner.shape !== 'round') {
+    srcDir = new Vector3(...port.direction)
+    srcRoll = owner.roll
+  } else if (
+    owner?.type === 'duct-fitting' &&
+    owner.shape !== 'round' &&
+    owner.fittingType !== 'reducer' &&
+    owner.fittingType !== 'transition'
+  ) {
+    const source = getDuctFittingPorts(owner).find(
+      (p) => p.id !== port.id && p.id !== 'branch',
+    )
+    if (source) {
+      srcDir = new Vector3(...source.direction)
+      const tol2 = 0.03 * 0.03
+      for (const n of Object.values(nodes)) {
+        if (n.type !== 'duct-segment' || n.shape === 'round' || n.path.length < 2) continue
+        const ends = [n.path[0]!, n.path[n.path.length - 1]!]
+        if (ends.some((e) => dist2(e, source.position) <= tol2)) {
+          srcRoll = n.roll
+          break
+        }
+      }
+    }
+  }
+  if (!srcDir) return null
+  const cross = new Vector3().crossVectors(srcDir, newDir)
+  if (cross.lengthSq() < 1e-8) return srcRoll
+  return rollToContinueAcrossElbow(srcDir, srcRoll, srcDir, newDir)
+}
+
 /**
  * Nearest typed port — duct run ends, fitting collars, anything whose
  * kind registers `def.ports` — within snap range of `point` on the XZ
@@ -90,9 +149,11 @@ function portPoint(port: ScenePort): [number, number, number] {
   return [port.position[0], port.position[1], port.position[2]]
 }
 
-/** Cross-section the tool draws with (and commits onto the node). */
+/** Cross-section the tool draws with (and commits onto the node). Oval
+ *  never comes from the Q toggle (round ↔ rect) — it enters by joining
+ *  an existing oval run / fitting collar and continuing its profile. */
 type DraftProfile = {
-  shape: 'round' | 'rect'
+  shape: 'round' | 'rect' | 'oval'
   diameter: number
   width: number
   height: number
@@ -298,7 +359,7 @@ const DuctSegmentTool = () => {
       const trunkOwner = trunkBody ? useScene.getState().nodes[trunkBody.nodeId] : null
       const teePlan =
         trunkBody && trunkOwner?.type === 'duct-segment'
-          ? planTeeAtRunBody(trunkOwner, trunkBody, dir, profileRef.current.diameter)
+          ? planTeeAtRunBody(trunkOwner, trunkBody, dir, profileRef.current)
           : null
       let ductStart =
         startPlan?.collarPoint ?? teePlan?.branchCollar ?? startRealign?.collarPoint ?? start
@@ -321,6 +382,19 @@ const DuctSegmentTool = () => {
         ductEnd = end
       }
 
+      // Rect / oval continuity: roll the new run's cross-section so its
+      // profile stays continuous with whatever either end joined — run
+      // end or fitting collar, turn or straight continuation (see
+      // `continuityRollFrom`). The start joint wins if both ends join.
+      let roll = 0
+      if (profileRef.current.shape !== 'round') {
+        const newDir = new Vector3(...dir)
+        roll =
+          continuityRollFrom(startPortRef.current, newDir) ??
+          continuityRollFrom(endPort, newDir) ??
+          0
+      }
+
       const defaults = ductSegmentDefinition.defaults()
       const toolDefaults = useEditor.getState().toolDefaults['duct-segment'] ?? {}
       const duct = DuctSegmentNode.parse({
@@ -332,6 +406,7 @@ const DuctSegmentTool = () => {
         diameter: profileRef.current.diameter,
         width: profileRef.current.width,
         height: profileRef.current.height,
+        roll,
       })
       // One atomic change: trim / split the joined runs, create the
       // fittings + the new duct. Single undo step.
@@ -368,7 +443,7 @@ const DuctSegmentTool = () => {
       if (!ceilingModeRef.current) return 0
       const ceiling = getLevelHeight(activeLevelId, useScene.getState().nodes)
       const p = profileRef.current
-      const verticalIn = p.shape === 'rect' ? p.height : p.diameter
+      const verticalIn = p.shape === 'round' ? p.diameter : p.height
       return Math.max(0, ceiling - (verticalIn * 0.0254) / 2)
     }
 
@@ -619,12 +694,12 @@ const DuctSegmentTool = () => {
           value: last ? cursorPos[i]! - last[i]! : cursorPos[i]!,
           signed: !!last,
         })),
-        ...(profile.shape === 'rect'
-          ? [
+        ...(profile.shape === 'round'
+          ? [{ key: 'diameter', prefix: 'Ø', value: profile.diameter * 0.0254, signed: false }]
+          : [
               { key: 'trunk-w', prefix: 'W', value: profile.width * 0.0254, signed: false },
               { key: 'trunk-h', prefix: 'H', value: profile.height * 0.0254, signed: false },
-            ]
-          : [{ key: 'diameter', prefix: 'Ø', value: profile.diameter * 0.0254, signed: false }]),
+            ]),
       ]
     : null
   const pillPrimary =
@@ -680,7 +755,13 @@ const DuctSegmentTool = () => {
       ))}
       {/* Preview sections */}
       {previewSegments.map((seg, i) => (
-        <PreviewSegment a={seg.a} b={seg.b} key={`seg-${i}`} profile={profile} />
+        <PreviewSegment
+          a={seg.a}
+          b={seg.b}
+          key={`seg-${i}`}
+          profile={profile}
+          startPort={startPortRef.current}
+        />
       ))}
     </group>
   )
@@ -690,10 +771,12 @@ function PreviewSegment({
   a,
   b,
   profile,
+  startPort,
 }: {
   a: [number, number, number]
   b: [number, number, number]
   profile: DraftProfile
+  startPort: ScenePort | null
 }) {
   const start = new Vector3(...a)
   const end = new Vector3(...b)
@@ -703,7 +786,8 @@ function PreviewSegment({
   dir.normalize()
   const mid = new Vector3().addVectors(start, end).multiplyScalar(0.5)
 
-  if (profile.shape === 'rect') {
+  // Rect AND oval ghost as a box — close enough for a translucent guide.
+  if (profile.shape !== 'round') {
     const w = profile.width * 0.0254
     const h = profile.height * 0.0254
     return (
@@ -711,12 +795,10 @@ function PreviewSegment({
         position={mid.toArray()}
         ref={(m) => {
           if (!m) return
-          // Same stable basis as the geometry builder: width horizontal.
-          const up = new Vector3(0, 1, 0)
-          const x = new Vector3().crossVectors(up, dir)
-          if (x.lengthSq() < 1e-8) x.set(1, 0, 0)
-          x.normalize()
-          const z = new Vector3().crossVectors(x, dir)
+          // Same basis AND roll as the commit will use, so the ghost
+          // shows the orientation that actually lands.
+          const roll = continuityRollFrom(startPort, dir) ?? 0
+          const { width: x, height: z } = rectSectionAxes(dir, roll)
           m.quaternion.setFromRotationMatrix(new Matrix4().makeBasis(x, dir, z))
         }}
       >

@@ -6,7 +6,11 @@ import {
 } from '@pascal-app/core'
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { fittingLegLength } from '../duct-fitting/ports'
-import { ductPortDiameterIn, equivalentDiameterIn } from '../duct-segment/geometry'
+import {
+  ductPortDiameterIn,
+  equivalentDiameterIn,
+  ovalEquivalentDiameterIn,
+} from '../duct-segment/geometry'
 import { pipeFittingLegLength, WYE_BRANCH_RAD } from '../pipe-fitting/ports'
 import type { RunBodyHit, ScenePort } from './ports'
 
@@ -22,19 +26,23 @@ type Point = [number, number, number]
 
 /** Cross-section a planned fitting (and the duct drawing it) carries. */
 export type DuctProfile = {
-  shape: 'round' | 'rect'
-  /** Round size in inches (ignored for rect — the equivalent is derived). */
+  shape: 'round' | 'rect' | 'oval'
+  /** Round size in inches (ignored for rect / oval — the equivalent is derived). */
   diameter: number
-  /** Rect profile in inches. */
+  /** Rect / oval profile in inches. */
   width: number
   height: number
 }
 
 /** Effective round-size (inches) a profile presents at joints. */
 export function profileDiameterIn(profile: DuctProfile): number {
-  return profile.shape === 'rect'
-    ? Math.min(48, equivalentDiameterIn(profile.width, profile.height))
-    : profile.diameter
+  if (profile.shape === 'rect') {
+    return Math.min(48, equivalentDiameterIn(profile.width, profile.height))
+  }
+  if (profile.shape === 'oval') {
+    return Math.min(48, ovalEquivalentDiameterIn(profile.width, profile.height))
+  }
+  return profile.diameter
 }
 
 export type ElbowJointPlan = {
@@ -206,7 +214,7 @@ export function planTeeAtRunBody(
   trunk: DuctSegmentNode,
   hit: RunBodyHit,
   awayDir: Point,
-  branchDiameterIn: number,
+  branch: DuctProfile,
 ): TeeTapPlan | null {
   const a = trunk.path[hit.segmentIndex]
   const b = trunk.path[hit.segmentIndex + 1]
@@ -227,6 +235,7 @@ export function planTeeAtRunBody(
   // Rect trunks present their area-equivalent round size at joints
   // (clamped to the fitting schema's 48" ceiling).
   const trunkDiameterIn = Math.min(48, ductPortDiameterIn(trunk))
+  const branchDiameterIn = Math.min(48, profileDiameterIn(branch))
   const legRun = fittingLegLength(trunkDiameterIn)
   const legBranch = fittingLegLength(branchDiameterIn)
   const P = new Vector3(...hit.point)
@@ -260,6 +269,9 @@ export function planTeeAtRunBody(
     width: trunk.width,
     height: trunk.height,
     diameter: trunkDiameterIn,
+    shape2: branch.shape,
+    width2: branch.width,
+    height2: branch.height,
     diameter2: branchDiameterIn,
     ductMaterial: 'sheet-metal',
     system: trunk.system,
@@ -289,7 +301,9 @@ export function planTeeAtRunBody(
     diameter: trunk.diameter,
     width: trunk.width,
     height: trunk.height,
+    roll: trunk.roll,
     ductMaterial: trunk.ductMaterial,
+    insulated: trunk.insulated,
     insulationR: trunk.insulationR,
     system: trunk.system,
   })

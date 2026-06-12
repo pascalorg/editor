@@ -31,7 +31,11 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
     shape: 'round',
     width: 14,
     height: 8,
+    shape2: 'round',
+    width2: 14,
+    height2: 8,
     angle: 90,
+    branchAngle: 90,
     diameter: 6,
     diameter2: 6,
     ductMaterial: 'sheet-metal',
@@ -54,10 +58,18 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
   geometryKey: (n) =>
     JSON.stringify([
       n.fittingType,
+      // The mitered elbow + flange profiles swap width/height roles based
+      // on where world-up sits in the local frame, so orientation is a
+      // geometry input.
+      n.rotation,
       n.shape,
       n.width,
       n.height,
+      n.shape2,
+      n.width2,
+      n.height2,
       n.angle,
+      n.branchAngle,
       n.diameter,
       n.diameter2,
       n.ductMaterial,
@@ -96,7 +108,7 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
 
   presentation: {
     label: 'Duct Fitting',
-    description: 'Elbow, tee, or reducer junction connecting round duct runs.',
+    description: 'Elbow, tee, reducer, or square-to-round transition connecting duct runs.',
     icon: { kind: 'iconify', name: 'lucide:git-branch' },
     paletteSection: 'structure',
     paletteOrder: 91,
@@ -104,6 +116,6 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
 
   mcp: {
     description:
-      'A duct fitting (elbow, tee, or reducer) with typed connection ports. Position is level-local meters; rotation is an XYZ euler in radians.',
+      'A duct fitting (elbow, tee, reducer, or square-to-round transition) with typed connection ports. Position is level-local meters; rotation is an XYZ euler in radians.',
   },
 }

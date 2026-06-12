@@ -2,6 +2,7 @@ import {
   BufferGeometry,
   CylinderGeometry,
   DoubleSide,
+  Euler,
   Float32BufferAttribute,
   Group,
   Mesh,
@@ -11,6 +12,7 @@ import {
   Vector3,
 } from 'three'
 import {
+  buildOvalSection,
   buildRectSection,
   buildSection,
   createDuctMaterial,
@@ -30,16 +32,50 @@ const UP = new Vector3(0, 1, 0)
  * join(u) = (wA + wB) · u / (1 + wA·wB)), so the two legs meet in a
  * crisp seam instead of interpenetrating boxes.
  *
- * Local frame: legs in the XZ plane (ports convention), profile height
- * along local Y. Non-indexed triangles → flat face normals for the
- * folded-metal look; the closed solid renders double-sided so winding
- * never makes a face vanish.
+ * Local frame: legs in the XZ plane (ports convention) so the fold hinge
+ * is always local Y. `sweepM` is the profile dimension carried through the
+ * bend (in the XZ bend plane); `cheekM` is the dimension that stays
+ * constant along the hinge. Which physical dimension (width vs height)
+ * plays each role depends on the elbow's world orientation and is decided
+ * by the caller — a floor turn folds about vertical (cheek = height),
+ * a wall riser folds about horizontal (cheek = width).
+ *
+ * Non-indexed triangles → flat face normals for the folded-metal look;
+ * the closed solid renders double-sided so winding never makes a face
+ * vanish.
  */
-function buildMiteredRectElbow(
+/**
+ * Stadium (flat-oval) outline in profile (u, v) coordinates: u-extent
+ * `uM`, v-extent `vM`, semicircular caps of the smaller dimension. The
+ * caps land on whichever axis is longer, so a riser-rotated profile
+ * (swapped roles) stays a valid stadium.
+ */
+function stadiumOutline(uM: number, vM: number, samplesPerCap = 10): Array<[number, number]> {
+  const pts: Array<[number, number]> = []
+  const r = Math.min(uM, vM) / 2
+  const s = (Math.max(uM, vM) - Math.min(uM, vM)) / 2
+  const cap = (cu: number, cv: number, startA: number) => {
+    for (let i = 0; i <= samplesPerCap; i++) {
+      const a = startA + (Math.PI * i) / samplesPerCap
+      pts.push([cu + r * Math.cos(a), cv + r * Math.sin(a)])
+    }
+  }
+  if (uM >= vM) {
+    cap(s, 0, -Math.PI / 2)
+    cap(-s, 0, Math.PI / 2)
+  } else {
+    cap(0, s, 0)
+    cap(0, -s, Math.PI)
+  }
+  return pts
+}
+
+function buildMiteredElbow(
   inletPos: Vector3,
   outletPos: Vector3,
-  widthM: number,
-  heightM: number,
+  sweepM: number,
+  cheekM: number,
+  profileShape: 'rect' | 'oval',
   material: MeshStandardMaterial,
 ): Mesh {
   const travelIn = inletPos.clone().multiplyScalar(-1).normalize() // inlet → junction
@@ -50,14 +86,18 @@ function buildMiteredRectElbow(
   const miterScale = 1 / (1 + wA.dot(wB))
   const wJoin = new Vector3().addVectors(wA, wB)
 
-  const hw = widthM / 2
-  const hh = heightM / 2
-  const corners: Array<[number, number]> = [
-    [hw, hh],
-    [-hw, hh],
-    [-hw, -hh],
-    [hw, -hh],
-  ]
+  const hw = sweepM / 2
+  const hh = cheekM / 2
+  const corners: Array<[number, number]> =
+    profileShape === 'oval'
+      ? stadiumOutline(sweepM, cheekM)
+      : [
+          [hw, hh],
+          [-hw, hh],
+          [-hw, -hh],
+          [hw, -hh],
+        ]
+  const n = corners.length
   const ring = (center: Vector3, uAxis: Vector3, scale = 1): Vector3[] =>
     corners.map(([u, v]) =>
       center
@@ -78,16 +118,18 @@ function buildMiteredRectElbow(
     tri(a, c, d)
   }
   const skin = (from: Vector3[], to: Vector3[]) => {
-    for (let k = 0; k < 4; k++) {
-      const k2 = (k + 1) % 4
+    for (let k = 0; k < n; k++) {
+      const k2 = (k + 1) % n
       quad(from[k]!, to[k]!, to[k2]!, from[k2]!)
     }
   }
   skin(inletRing, miterRing)
   skin(miterRing, outletRing)
-  // End caps.
-  quad(inletRing[0]!, inletRing[1]!, inletRing[2]!, inletRing[3]!)
-  quad(outletRing[3]!, outletRing[2]!, outletRing[1]!, outletRing[0]!)
+  // End caps — triangle fans so any convex profile closes.
+  for (let k = 1; k < n - 1; k++) {
+    tri(inletRing[0]!, inletRing[k]!, inletRing[k + 1]!)
+    tri(outletRing[k + 1]!, outletRing[k]!, outletRing[0]!)
+  }
 
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
@@ -95,7 +137,58 @@ function buildMiteredRectElbow(
   const solidMaterial = material.clone()
   solidMaterial.side = DoubleSide
   const mesh = new Mesh(geometry, solidMaterial)
-  mesh.name = 'fitting-elbow-rect'
+  mesh.name = `fitting-elbow-${profileShape}`
+  return mesh
+}
+
+/**
+ * Square-to-round loft between a rect ring at `xRect` and a round ring
+ * at `xRound`, both centered on the local X axis (the straight-through
+ * run). Profiles are sampled at matching polar angles — the rect point
+ * is the ray's intersection with the rectangle boundary — so the skin
+ * twists nowhere. Non-indexed triangles + computed normals give the
+ * faceted gore look of a real shop-made square-to-round.
+ */
+function buildRectToRoundLoft(
+  xRect: number,
+  xRound: number,
+  widthM: number,
+  heightM: number,
+  radius: number,
+  material: MeshStandardMaterial,
+): Mesh {
+  const hw = widthM / 2
+  const hh = heightM / 2
+  const rectRing: Vector3[] = []
+  const roundRing: Vector3[] = []
+  for (let i = 0; i < RADIAL_SEGMENTS; i++) {
+    const theta = (2 * Math.PI * i) / RADIAL_SEGMENTS
+    const cz = Math.cos(theta)
+    const sy = Math.sin(theta)
+    // Scale the unit ray until it hits the rectangle boundary. Width
+    // spans local Z and height local Y — the same axes buildRectSection
+    // gives a +X run.
+    const t = 1 / Math.max(Math.abs(cz) / hw, Math.abs(sy) / hh)
+    rectRing.push(new Vector3(xRect, t * sy, t * cz))
+    roundRing.push(new Vector3(xRound, radius * sy, radius * cz))
+  }
+
+  const positions: number[] = []
+  const tri = (a: Vector3, b: Vector3, c: Vector3) =>
+    positions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z)
+  for (let i = 0; i < RADIAL_SEGMENTS; i++) {
+    const j = (i + 1) % RADIAL_SEGMENTS
+    tri(rectRing[i]!, roundRing[i]!, roundRing[j]!)
+    tri(rectRing[i]!, roundRing[j]!, rectRing[j]!)
+  }
+
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+  geometry.computeVertexNormals()
+  const solidMaterial = material.clone()
+  solidMaterial.side = DoubleSide
+  const mesh = new Mesh(geometry, solidMaterial)
+  mesh.name = 'fitting-transition-loft'
   return mesh
 }
 
@@ -112,17 +205,29 @@ function buildMiteredRectElbow(
  * The reducer is special-cased: instead of equal stubs + sphere it draws
  * a short inlet stub, a tapered cone, and a short outlet stub inline.
  *
- * `shape: 'rect'` (elbow / tee): run legs become boxes at the fitting's
- * width × height (matching the rect trunk they join) with a cube
- * junction; a tee's branch leg stays a round cylinder at `diameter2`.
- * The rect profile's height rides local +Y — for the horizontal-plane
- * orientations rect trunks are drawn in, that's world-vertical.
+ * Non-round shapes (elbow / tee): run legs carry the fitting's
+ * width × height profile — rect prisms or flat-oval stadiums — matching
+ * the trunk they join; a tee's branch leg carries its own `shape2`
+ * profile (width2 × height2, or round at `diameter2`). The profile's
+ * height rides local +Y — for the horizontal-plane orientations trunks
+ * are drawn in, that's world-vertical.
  */
 export function buildDuctFittingGeometry(node: DuctFittingNode): Group {
   const group = new Group()
   const material = createDuctMaterial(node)
   const radiusMain = (node.diameter * INCHES_TO_METERS) / 2
   const ports = localFittingPorts(node)
+  const widthM = node.width * INCHES_TO_METERS
+  const heightM = node.height * INCHES_TO_METERS
+  // The elbow folds about its local Y. Width spans the XZ bend plane and
+  // height rides the hinge ONLY when local Y is world-vertical (a floor
+  // turn). For a riser the node is rotated so local Y lands horizontal —
+  // then it's width that runs along the hinge, so the roles swap. Pick by
+  // where world-up sits in the fitting's local frame.
+  const hingeWorld = UP.clone().applyEuler(
+    new Euler(node.rotation[0], node.rotation[1], node.rotation[2]),
+  )
+  const hingeIsVertical = Math.abs(hingeWorld.y) >= Math.SQRT1_2
 
   if (node.fittingType === 'reducer') {
     const radiusOut = (node.diameter2 * INCHES_TO_METERS) / 2
@@ -152,26 +257,56 @@ export function buildDuctFittingGeometry(node: DuctFittingNode): Group {
       'fitting-stub-outlet',
     )
     if (stubB) group.add(stubB)
-  } else if (node.shape === 'rect' && node.fittingType === 'elbow') {
-    // One mitered solid — no stubs, no junction blob.
+  } else if (node.fittingType === 'transition') {
+    // Square-to-round: rect stub on the inlet, lofted gore body through
+    // the junction, round stub on the outlet. Same inline layout as the
+    // reducer, with the taper replaced by the loft.
+    const radiusOut = (node.diameter2 * INCHES_TO_METERS) / 2
+    const inlet = ports[0]!
+    const outlet = ports[1]!
+    const taperHalf = Math.abs(inlet.position.x) / 3
+    const stubA = buildRectSection(
+      inlet.position,
+      new Vector3(-taperHalf, 0, 0),
+      widthM,
+      heightM,
+      material,
+      'fitting-stub-inlet',
+    )
+    if (stubA) group.add(stubA)
+    group.add(buildRectToRoundLoft(-taperHalf, taperHalf, widthM, heightM, radiusOut, material))
+    const stubB = buildSection(
+      new Vector3(taperHalf, 0, 0),
+      outlet.position,
+      radiusOut,
+      material,
+      'fitting-stub-outlet',
+    )
+    if (stubB) group.add(stubB)
+  } else if (node.shape !== 'round' && node.fittingType === 'elbow') {
+    // One mitered solid — no stubs, no junction blob. Oval profiles
+    // sweep the same way; the ring is a stadium instead of 4 corners.
     const inlet = ports.find((p) => p.id === 'inlet')!
     const outlet = ports.find((p) => p.id === 'outlet')!
     group.add(
-      buildMiteredRectElbow(
+      buildMiteredElbow(
         inlet.position,
         outlet.position,
-        node.width * INCHES_TO_METERS,
-        node.height * INCHES_TO_METERS,
+        hingeIsVertical ? widthM : heightM,
+        hingeIsVertical ? heightM : widthM,
+        node.shape,
         material,
       ),
     )
-  } else if (node.shape === 'rect' && node.fittingType === 'tee') {
-    // Straight rect run inlet→outlet (one box — nothing to miter) with a
-    // round branch stub tapping its side.
+  } else if (node.shape !== 'round' && node.fittingType === 'tee') {
+    // Straight rect / oval run inlet→outlet (one prism — nothing to
+    // miter) plus a branch leg tapping its side. The branch carries its
+    // own profile: rect or oval at width2 × height2, round at diameter2.
     const inlet = ports.find((p) => p.id === 'inlet')!
     const outlet = ports.find((p) => p.id === 'outlet')!
     const branch = ports.find((p) => p.id === 'branch')!
-    const run = buildRectSection(
+    const buildRunSection = node.shape === 'oval' ? buildOvalSection : buildRectSection
+    const run = buildRunSection(
       inlet.position,
       outlet.position,
       node.width * INCHES_TO_METERS,
@@ -180,13 +315,24 @@ export function buildDuctFittingGeometry(node: DuctFittingNode): Group {
       'fitting-run',
     )
     if (run) group.add(run)
-    const stub = buildSection(
-      new Vector3(0, 0, 0),
-      branch.position,
-      (branch.diameter * INCHES_TO_METERS) / 2,
-      material,
-      'fitting-stub-branch',
-    )
+    const buildBranchSection = node.shape2 === 'oval' ? buildOvalSection : buildRectSection
+    const stub =
+      node.shape2 !== 'round'
+        ? buildBranchSection(
+            new Vector3(0, 0, 0),
+            branch.position,
+            node.width2 * INCHES_TO_METERS,
+            node.height2 * INCHES_TO_METERS,
+            material,
+            'fitting-stub-branch',
+          )
+        : buildSection(
+            new Vector3(0, 0, 0),
+            branch.position,
+            (branch.diameter * INCHES_TO_METERS) / 2,
+            material,
+            'fitting-stub-branch',
+          )
     if (stub) group.add(stub)
   } else {
     for (const port of ports) {
@@ -204,10 +350,53 @@ export function buildDuctFittingGeometry(node: DuctFittingNode): Group {
     group.add(junction)
   }
 
-  // Crimp collar at each opening — a thin torus just proud of the stub.
-  // Round collars only; rect run legs end in the bare box profile.
+  // Joint trim at each opening. Round legs get a crimp-collar torus just
+  // proud of the stub; rect legs get a drive-cleat flange — the thin
+  // raised rim (TDC/S-cleat) real sheet-metal trunk joints wear where a
+  // section meets a fitting. The plate is centered on the collar plane so
+  // the rim reads as the seam between fitting and duct. Run legs
+  // (inlet/outlet) are rect when `shape` is rect; a rect tee's branch is
+  // rect when `shape2` is rect. Reducers ignore shape.
+  // Which profile a leg's opening carries: a transition's inlet is its
+  // rect end regardless of `shape`; reducers are always round; otherwise
+  // the run legs follow `shape` and a tee's branch follows `shape2`
+  // (only meaningful when the run itself is non-round).
+  const legShape = (portId: string): 'round' | 'rect' | 'oval' => {
+    if (node.fittingType === 'transition') return portId === 'inlet' ? 'rect' : 'round'
+    if (node.fittingType === 'reducer' || node.shape === 'round') return 'round'
+    return portId === 'branch' ? node.shape2 : node.shape
+  }
+  // The flange's profile must match the leg it caps: the branch carries
+  // its own width2 × height2; elbow legs swap width/height roles when the
+  // fold hinge lies horizontal (riser elbows) — same choice as the
+  // mitered solid above.
+  const rectLegProfile = (portId: string): [number, number] => {
+    if (portId === 'branch') {
+      return [node.width2 * INCHES_TO_METERS, node.height2 * INCHES_TO_METERS]
+    }
+    if (node.fittingType === 'elbow' && !hingeIsVertical) return [heightM, widthM]
+    return [widthM, heightM]
+  }
+  const FLANGE_LIP_M = 0.02
+  const FLANGE_THICK_M = 0.012
   for (const port of ports) {
-    if (node.shape === 'rect' && (port.id === 'inlet' || port.id === 'outlet')) continue
+    const profile = legShape(port.id)
+    if (profile !== 'round') {
+      const [w, h] = rectLegProfile(port.id)
+      const start = port.position.clone().addScaledVector(port.direction, -FLANGE_THICK_M / 2)
+      const end = port.position.clone().addScaledVector(port.direction, FLANGE_THICK_M / 2)
+      const buildFlange = profile === 'oval' ? buildOvalSection : buildRectSection
+      const flange = buildFlange(
+        start,
+        end,
+        w + FLANGE_LIP_M * 2,
+        h + FLANGE_LIP_M * 2,
+        material,
+        `fitting-flange-${port.id}`,
+      )
+      if (flange) group.add(flange)
+      continue
+    }
     const radius = (port.diameter * INCHES_TO_METERS) / 2
     const collar = new Mesh(new TorusGeometry(radius, radius * 0.12, 8, RADIAL_SEGMENTS), material)
     collar.name = `fitting-collar-${port.id}`

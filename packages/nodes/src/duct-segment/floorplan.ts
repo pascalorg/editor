@@ -28,8 +28,8 @@ export function buildDuctSegmentFloorplan(
     points.push([x, z])
   }
 
-  // Plan width: a rect trunk draws at its actual width; round at diameter.
-  const diameterM = (node.shape === 'rect' ? node.width : node.diameter) * INCHES_TO_METERS
+  // Plan width: rect / oval runs draw at their actual width; round at diameter.
+  const diameterM = (node.shape === 'round' ? node.diameter : node.width) * INCHES_TO_METERS
   const view = ctx.viewState
   const palette = view?.palette
   const showSelectedChrome = (view?.selected || view?.highlighted) ?? false
