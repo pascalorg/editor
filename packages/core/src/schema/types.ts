@@ -22,7 +22,7 @@ import { LevelNode } from './nodes/level'
 import { LinesetNode } from './nodes/lineset'
 import { PipeFittingNode } from './nodes/pipe-fitting'
 import { PipeSegmentNode } from './nodes/pipe-segment'
-import { PlumbingFixtureNode } from './nodes/plumbing-fixture'
+import { PipeTrapNode } from './nodes/pipe-trap'
 import { RidgeVentNode } from './nodes/ridge-vent'
 import { RoofNode } from './nodes/roof'
 import { RoofSegmentNode } from './nodes/roof-segment'
@@ -80,7 +80,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   LinesetNode,
   PipeSegmentNode,
   PipeFittingNode,
-  PlumbingFixtureNode,
+  PipeTrapNode,
 ])
 
 export type AnyNode = z.infer<typeof AnyNode>

@@ -95,7 +95,7 @@ export { LevelNode } from './nodes/level'
 export { LinesetNode } from './nodes/lineset'
 export { PipeFittingNode } from './nodes/pipe-fitting'
 export { PipeSegmentNode } from './nodes/pipe-segment'
-export { PlumbingFixtureNode } from './nodes/plumbing-fixture'
+export { PipeTrapNode } from './nodes/pipe-trap'
 // Nodes
 export { RidgeVentNode } from './nodes/ridge-vent'
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'

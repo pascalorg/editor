@@ -25,7 +25,7 @@ import type {
   LinesetNode,
   PipeFittingNode,
   PipeSegmentNode,
-  PlumbingFixtureNode,
+  PipeTrapNode,
   RidgeVentNode,
   RoofNode,
   RoofSegmentNode,
@@ -121,7 +121,7 @@ export type DuctTerminalEvent = NodeEvent<DuctTerminalNode>
 export type HvacEquipmentEvent = NodeEvent<HvacEquipmentNode>
 export type PipeSegmentEvent = NodeEvent<PipeSegmentNode>
 export type PipeFittingEvent = NodeEvent<PipeFittingNode>
-export type PlumbingFixtureEvent = NodeEvent<PlumbingFixtureNode>
+export type PipeTrapEvent = NodeEvent<PipeTrapNode>
 export type LinesetEvent = NodeEvent<LinesetNode>
 
 // Event suffixes - exported for use in hooks
@@ -283,7 +283,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'hvac-equipment', HvacEquipmentEvent> &
   NodeEvents<'pipe-segment', PipeSegmentEvent> &
   NodeEvents<'pipe-fitting', PipeFittingEvent> &
-  NodeEvents<'plumbing-fixture', PlumbingFixtureEvent> &
+  NodeEvents<'pipe-trap', PipeTrapEvent> &
   NodeEvents<'lineset', LinesetEvent> &
   CameraControlEvents &
   ToolEvents &

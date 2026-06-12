@@ -1,5 +1,0 @@
-export { plumbingFixtureDefinition } from './definition'
-export { buildPlumbingFixtureGeometry } from './geometry'
-export { getPlumbingFixturePorts } from './ports'
-export { PlumbingFixtureNode } from './schema'
-export { FIXTURE_SPECS } from './spec'

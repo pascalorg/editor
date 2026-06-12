@@ -22,7 +22,7 @@ import { levelDefinition } from './level'
 import { linesetDefinition } from './lineset'
 import { pipeFittingDefinition } from './pipe-fitting'
 import { pipeSegmentDefinition } from './pipe-segment'
-import { plumbingFixtureDefinition } from './plumbing-fixture'
+import { pipeTrapDefinition } from './pipe-trap'
 import { ridgeVentDefinition } from './ridge-vent'
 import { roofDefinition } from './roof'
 import { roofSegmentDefinition } from './roof-segment'
@@ -105,7 +105,7 @@ export const builtinPlugin: Plugin = {
     // DWV plumbing — Phase 2 of the research doc's plan.
     pipeSegmentDefinition as unknown as AnyNodeDefinition,
     pipeFittingDefinition as unknown as AnyNodeDefinition,
-    plumbingFixtureDefinition as unknown as AnyNodeDefinition,
+    pipeTrapDefinition as unknown as AnyNodeDefinition,
   ],
 }
 
@@ -132,7 +132,7 @@ export { levelDefinition } from './level'
 export { linesetDefinition } from './lineset'
 export { pipeFittingDefinition } from './pipe-fitting'
 export { pipeSegmentDefinition } from './pipe-segment'
-export { plumbingFixtureDefinition } from './plumbing-fixture'
+export { pipeTrapDefinition } from './pipe-trap'
 export { ridgeVentDefinition } from './ridge-vent'
 export { roofDefinition } from './roof'
 export { roofSegmentDefinition } from './roof-segment'
