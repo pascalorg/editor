@@ -30,6 +30,8 @@ export const siteDefinition: NodeDefinition<typeof SiteNode> = {
   },
 
   parametrics: siteParametrics,
+  // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',

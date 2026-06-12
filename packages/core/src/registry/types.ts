@@ -659,6 +659,18 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   parametrics?: ParametricDescriptor<z.infer<S>>
 
   /**
+   * Whether scene mutations add this kind to `dirtyNodes` (the per-frame
+   * rebuild queue). Default true. Set `false` for structural/organizational
+   * kinds (site, building, level, zone, guide) that no dirty consumer ever
+   * rebuilds — no `def.geometry`, no legacy viewer system, no
+   * `capabilities.floorPlaced`. Their marks are never cleared, so they
+   * accumulate for the whole session, defeat every consumer's empty-set
+   * early exit each frame, and pollute the perf overlay's DIRTY readout.
+   * If a kind later gains a dirty consumer, delete the flag.
+   */
+  dirtyTracking?: boolean
+
+  /**
    * Renderer for this kind. Optional under the three-checkbox composition
    * model (see `wiki/architecture/node-definitions.md`): when omitted, the
    * framework mounts a generic empty-group renderer that the per-kind
