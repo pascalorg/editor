@@ -985,6 +985,7 @@ export const deleteNodesAction = (
   if (get().readOnly) return
   const parentsToMarkDirty = new Set<AnyNodeId>()
   const nodesToMarkDirty = new Set<AnyNodeId>()
+  const deletedIds = new Set<AnyNodeId>()
   const mergePlans = buildWallMergePlans(get().nodes, ids)
 
   set((state) => {
@@ -1007,6 +1008,7 @@ export const deleteNodesAction = (
     for (const plan of mergePlans) {
       allIds.add(plan.secondaryWallId)
     }
+    allIds.forEach((id) => deletedIds.add(id))
 
     for (const plan of mergePlans) {
       const primaryWall = nextNodes[plan.primaryWallId]
@@ -1067,6 +1069,11 @@ export const deleteNodesAction = (
 
     return { nodes: nextNodes, rootNodeIds: nextRootIds, collections: nextCollections }
   })
+
+  // Deleted ids must leave the dirty set: every consumer skips missing
+  // nodes without clearing them, so a mark on a deleted node would sit in
+  // the set (and defeat the consumers' empty-set early exit) forever.
+  deletedIds.forEach((id) => get().clearDirty(id))
 
   // Mark affected nodes dirty: parents of deleted nodes and their remaining children
   // (e.g. deleting a slab affects sibling walls via level elevation changes)

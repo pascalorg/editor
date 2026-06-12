@@ -36,6 +36,8 @@ export const levelDefinition: NodeDefinition<typeof LevelNode> = {
   },
 
   parametrics: levelParametrics,
+  // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',

@@ -3,6 +3,7 @@
 import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
+import { nodeRegistry } from '../registry/registry'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
@@ -853,6 +854,8 @@ const useScene: UseSceneStore = create<SceneState>()(
       },
 
       markDirty: (id) => {
+        const node = get().nodes[id]
+        if (node && nodeRegistry.get(node.type)?.dirtyTracking === false) return
         get().dirtyNodes.add(id)
       },
 

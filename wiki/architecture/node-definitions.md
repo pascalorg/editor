@@ -59,6 +59,10 @@ A kind may declare `surfaceRole?: SurfaceRole` on its definition. It is a colour
 
 Per-kind `def.system` components mount alongside via `<RegisteredSystems>`. They run their own `useFrame` and can mark nodes dirty, address meshes by `getObjectByName`, advance animation state, etc. They run **in addition** to `GeometrySystem`, not instead of it.
 
+### `dirtyTracking`
+
+`dirtyNodes` is the per-frame rebuild queue consumed by `<GeometrySystem>` (`def.geometry`), `<FloorElevationSystem>` (`capabilities.floorPlaced`), and the legacy per-kind viewer systems. Kinds none of those consume — structural/organizational kinds like site, building, level, zone, guide — declare `dirtyTracking: false` so `markDirty` skips them. Without it their marks are never cleared: they accumulate for the whole session, defeat every consumer's empty-set early exit each frame, and pollute the perf overlay's DIRTY readout. If such a kind later gains `def.geometry` (or any other dirty consumer), delete the flag.
+
 ## `GeometryContext`
 
 The second arg to `geometry()` is scene read access for builders that reference other nodes by ID. Most kinds ignore it.
