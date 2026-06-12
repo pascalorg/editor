@@ -1419,7 +1419,24 @@ export type Relations = {
 export type ParametricDescriptor<N> = {
   groups: ParamGroup<N>[]
   invariants?: ReadonlyArray<(n: N) => Issue[]>
-  derive?: (n: N) => Partial<N>
+  /**
+   * Co-update hook for fields that must stay consistent when edited
+   * from the inspector. Called with the node AFTER `patch` is merged
+   * plus the patch itself (so the hook can tell which field the user
+   * touched); whatever it returns is folded into the same update.
+   * Direct store/MCP writes bypass it — keep real invariants in
+   * `invariants`.
+   */
+  derive?: (next: N, patch: Partial<N>) => Partial<N>
+  /**
+   * Cross-node companion to `derive`: after an inspector edit lands on
+   * this node, return patches for OTHER nodes that must follow to keep
+   * the scene consistent — e.g. duct runs re-trimmed onto a resized
+   * fitting's collars. `prev` is the node before the edit, `next` after
+   * (with `derive` already folded in). Applied in the same gesture via
+   * `updateNodes`.
+   */
+  reconcile?: (prev: N, next: N) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
   customPanel?: () => Promise<{ default: ComponentType<{ node: N }> }>
   /**
    * Extra buttons rendered in the inspector's Actions section

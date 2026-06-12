@@ -62,9 +62,20 @@ export function ParametricInspector({
   const handleUpdate = useCallback(
     (patch: Partial<AnyNode>) => {
       if (!selectedId) return
-      useScene.getState().updateNode(selectedId, patch)
+      const scene = useScene.getState()
+      const node = scene.nodes[selectedId]
+      if (parametrics?.derive && node) {
+        const next = { ...node, ...patch } as AnyNode
+        patch = { ...patch, ...parametrics.derive(next, patch) }
+      }
+      scene.updateNode(selectedId, patch)
+      if (parametrics?.reconcile && node) {
+        const next = { ...node, ...patch } as AnyNode
+        const updates = parametrics.reconcile(node as AnyNode, next)
+        if (updates.length > 0) scene.updateNodes(updates)
+      }
     },
-    [selectedId],
+    [selectedId, parametrics],
   )
 
   const clearSelection = useCallback(() => {
