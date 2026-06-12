@@ -20,6 +20,7 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
   schemaVersion: 1,
   schema: LinesetNode,
   category: 'utility',
+  distributionRole: 'run',
 
   defaults: () => ({
     object: 'node',
@@ -86,7 +87,12 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
   floorplan: buildLinesetFloorplan,
 
   // Selection-time path-point handles (drag to edit a committed run).
-  system: { module: () => import('./system') },
+  // Editor-only UI (reads gridSnapStep, renders DimensionPill), so it
+  // mounts via the editor's SelectionAffordanceManager — not `def.system`,
+  // which the viewer package mounts for the read-only route.
+  affordanceTools: {
+    selection: () => import('./selection'),
+  },
 
   tool: () => import('./tool'),
   toolHints: [

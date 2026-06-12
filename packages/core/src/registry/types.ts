@@ -669,12 +669,26 @@ export type SurfaceRole =
   | 'glazing'
   | 'furnishing'
 
+/** Role a kind plays in a duct / pipe / lineset distribution system. */
+export type DistributionRole = 'run' | 'fitting' | 'terminal' | 'equipment'
+
 export type NodeDefinition<S extends ZodObject<any>> = {
   kind: string
   schemaVersion: number
   schema: S
   category: NodeCategory
   surfaceRole?: SurfaceRole
+  /**
+   * Role this kind plays in a distribution system (HVAC duct / DWV pipe /
+   * refrigerant lineset). Lets the system-graph summary classify a
+   * component without branching on `node.type`:
+   *   - `'run'` — a duct / pipe / lineset segment (carries `path`).
+   *   - `'fitting'` — an inline fitting (elbow / tee / reducer / trap).
+   *   - `'terminal'` — a grille / register / diffuser endpoint.
+   *   - `'equipment'` — a furnace / air handler / condenser source.
+   * Kinds outside any distribution system leave this unset.
+   */
+  distributionRole?: DistributionRole
 
   defaults: () => Omit<z.infer<S>, 'id' | 'type'>
   migrate?: Record<number, (old: unknown) => unknown>
@@ -915,6 +929,14 @@ export type KeyboardActions = {
   r?: KeyboardAction
   /** T / Shift+T secondary action. */
   t?: KeyboardAction
+  /**
+   * Set for kinds whose R/T rotation turns around a user-cyclable world
+   * axis (Alt cycles Y → X → Z) — duct / pipe fittings with full 3D
+   * orientation. The floating action menu reads this to surface the
+   * active-axis pill above the selected node; kinds with plain Y-only
+   * rotation omit it.
+   */
+  axisCycling?: boolean
 }
 
 export type KeyboardAction = {

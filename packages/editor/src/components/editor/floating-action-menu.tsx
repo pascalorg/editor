@@ -40,17 +40,20 @@ import useEditor from '../../store/use-editor'
 import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
 
-/** Distribution kinds that get the system pill above the action menu. */
-const HVAC_KINDS = new Set([
-  'duct-segment',
-  'duct-fitting',
-  'duct-terminal',
-  'hvac-equipment',
-  'lineset',
-  'pipe-segment',
-  'pipe-fitting',
-  'pipe-trap',
-])
+/**
+ * A kind shows the system pill when it exposes typed ports — `def.ports`
+ * is exactly what makes a node participate in the supply/return graph the
+ * pill summarizes. Keeps the menu off a hand-maintained kind list.
+ */
+const hasPorts = (type: string) => nodeRegistry.get(type)?.ports != null
+
+/**
+ * A kind shows the rotation-axis pill when its R/T keyboard rotation
+ * turns around a user-cyclable axis (`keyboardActions.axisCycling`) —
+ * duct / pipe fittings with full 3D orientation.
+ */
+const hasAxisCycling = (type: string) =>
+  nodeRegistry.get(type)?.keyboardActions?.axisCycling === true
 
 const ALLOWED_TYPES = [
   'item',
@@ -203,17 +206,6 @@ export function FloatingActionMenu() {
   const isValidType = node
     ? ALLOWED_TYPES.includes(node.type) || isRegistrySelectable(node.type)
     : false
-
-  // System summary for distribution kinds (HVAC): which supply/return
-  // tree the selected node belongs to, its run length, and whether it
-  // actually reaches a piece of equipment. Subscribes to the full nodes
-  // map — connectivity changes when ANY joint moves — but computes only
-  // while an HVAC node is selected.
-  const allNodes = useScene((s) => s.nodes)
-  const systemSummary = useMemo(
-    () => (node && HVAC_KINDS.has(node.type) ? summarizeSystemFor(node.id, allNodes) : null),
-    [node, allNodes],
-  )
 
   // Height-drag pill: shown just above the menu only while the selected
   // wall/fence height arrow is being dragged. Length + thickness are fixed
@@ -614,50 +606,10 @@ export function FloatingActionMenu() {
                 pill. System pill (which tree, run length, equipment reach)
                 for every distribution kind; the rotation-axis pill stacks
                 under it for duct fittings. */}
-            {node && HVAC_KINDS.has(node.type) ? (
+            {node && hasPorts(node.type) ? (
               <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2 flex flex-col items-center gap-1">
-                {systemSummary ? (
-                  <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
-                    <span className="font-medium text-foreground">
-                      {systemSummary.systems.length > 0
-                        ? systemSummary.systems
-                            .map((sys) => sys[0]!.toUpperCase() + sys.slice(1))
-                            .join(' + ')
-                        : 'System'}
-                    </span>
-                    {systemSummary.runCount > 0 ? (
-                      <>
-                        <span aria-hidden className="text-muted-foreground">
-                          ·
-                        </span>
-                        <span className="text-muted-foreground">
-                          {formatMeasurement(systemSummary.runLengthM, unit)} ·{' '}
-                          {systemSummary.runCount} {systemSummary.runCount === 1 ? 'run' : 'runs'}
-                        </span>
-                      </>
-                    ) : null}
-                    {systemSummary.terminalCount > 0 ? (
-                      <>
-                        <span aria-hidden className="text-muted-foreground">
-                          ·
-                        </span>
-                        <span className="text-muted-foreground">
-                          {systemSummary.terminalCount}{' '}
-                          {systemSummary.terminalCount === 1 ? 'register' : 'registers'}
-                        </span>
-                      </>
-                    ) : null}
-                    {systemSummary.connectedToEquipment ? null : (
-                      <>
-                        <span aria-hidden className="text-muted-foreground">
-                          ·
-                        </span>
-                        <span className="font-medium text-amber-500">⚠ no equipment</span>
-                      </>
-                    )}
-                  </div>
-                ) : null}
-                {node.type === 'duct-fitting' || node.type === 'pipe-fitting' ? (
+                <SystemSummaryPill nodeId={node.id} unit={unit} />
+                {hasAxisCycling(node.type) ? (
                   <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
                     <span className="font-medium text-foreground">
                       Axis {rotationAxis.toUpperCase()}
@@ -678,5 +630,58 @@ export function FloatingActionMenu() {
         </Html>
       </group>
     </group>
+  )
+}
+
+/**
+ * System summary pill for a selected distribution kind (HVAC duct / DWV
+ * pipe / refrigerant lineset): which supply/return tree it belongs to, its
+ * run length, and whether it actually reaches a piece of equipment.
+ *
+ * Mounted only while an HVAC node is selected, so the full-`nodes`
+ * subscription it needs (connectivity changes when ANY joint moves) doesn't
+ * re-render the always-mounted parent menu on every unrelated scene tick.
+ */
+function SystemSummaryPill({ nodeId, unit }: { nodeId: AnyNodeId; unit: 'metric' | 'imperial' }) {
+  const allNodes = useScene((s) => s.nodes)
+  const summary = useMemo(() => summarizeSystemFor(nodeId, allNodes), [nodeId, allNodes])
+  if (!summary) return null
+  return (
+    <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
+      <span className="font-medium text-foreground">
+        {summary.systems.length > 0
+          ? summary.systems.map((sys) => sys[0]!.toUpperCase() + sys.slice(1)).join(' + ')
+          : 'System'}
+      </span>
+      {summary.runCount > 0 ? (
+        <>
+          <span aria-hidden className="text-muted-foreground">
+            ·
+          </span>
+          <span className="text-muted-foreground">
+            {formatMeasurement(summary.runLengthM, unit)} · {summary.runCount}{' '}
+            {summary.runCount === 1 ? 'run' : 'runs'}
+          </span>
+        </>
+      ) : null}
+      {summary.terminalCount > 0 ? (
+        <>
+          <span aria-hidden className="text-muted-foreground">
+            ·
+          </span>
+          <span className="text-muted-foreground">
+            {summary.terminalCount} {summary.terminalCount === 1 ? 'register' : 'registers'}
+          </span>
+        </>
+      ) : null}
+      {summary.connectedToEquipment ? null : (
+        <>
+          <span aria-hidden className="text-muted-foreground">
+            ·
+          </span>
+          <span className="font-medium text-amber-500">⚠ no equipment</span>
+        </>
+      )}
+    </div>
   )
 }

@@ -1,6 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { useScene } from '@pascal-app/core'
-import { getRotationAxis, rotateEulerWorld } from '../duct-fitting/rotation'
+import { getRotationAxis, rotateEulerWorld } from '../shared/fitting-rotation'
 import { buildPipeFittingFloorplan } from './floorplan'
 import { buildPipeFittingGeometry } from './geometry'
 import { pipeFittingParametrics } from './parametrics'
@@ -18,6 +18,7 @@ export const pipeFittingDefinition: NodeDefinition<typeof PipeFittingNode> = {
   schemaVersion: 1,
   schema: PipeFittingNode,
   category: 'utility',
+  distributionRole: 'fitting',
 
   defaults: () => ({
     object: 'node',
@@ -53,33 +54,31 @@ export const pipeFittingDefinition: NodeDefinition<typeof PipeFittingNode> = {
 
   // R/T rotate a selected fitting ±45° around the shared active axis —
   // same scheme as duct fittings (the default editor rotate only knows
-  // Y; DWV stacks need X/Z). Alt-cycling lives in `./system.tsx`.
+  // Y; DWV stacks need X/Z). Alt-cycling lives in `./selection.tsx`.
   keyboardActions: {
     r: {
       appliesTo: (node) => node.type === 'pipe-fitting',
       run: (node) =>
         useScene.getState().updateNode(node.id, {
-          rotation: rotateEulerWorld(
-            (node as PipeFittingNode).rotation,
-            getRotationAxis(),
-            1,
-          ),
+          rotation: rotateEulerWorld((node as PipeFittingNode).rotation, getRotationAxis(), 1),
         }),
     },
     t: {
       appliesTo: (node) => node.type === 'pipe-fitting',
       run: (node) =>
         useScene.getState().updateNode(node.id, {
-          rotation: rotateEulerWorld(
-            (node as PipeFittingNode).rotation,
-            getRotationAxis(),
-            -1,
-          ),
+          rotation: rotateEulerWorld((node as PipeFittingNode).rotation, getRotationAxis(), -1),
         }),
     },
+    axisCycling: true,
   },
 
-  system: { module: () => import('./system') },
+  // Alt-cycles the active rotation axis while a fitting is selected.
+  // Editor-only (drives `useEditor.rotationAxis`), so it mounts via the
+  // editor's SelectionAffordanceManager rather than `def.system`.
+  affordanceTools: {
+    selection: () => import('./selection'),
+  },
 
   tool: () => import('./tool'),
   toolHints: [

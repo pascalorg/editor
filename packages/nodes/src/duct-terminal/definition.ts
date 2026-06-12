@@ -19,6 +19,7 @@ export const ductTerminalDefinition: NodeDefinition<typeof DuctTerminalNode> = {
   schemaVersion: 1,
   schema: DuctTerminalNode,
   category: 'utility',
+  distributionRole: 'terminal',
 
   defaults: () => ({
     object: 'node',

@@ -68,12 +68,14 @@ export function ParametricInspector({
         const next = { ...node, ...patch } as AnyNode
         patch = { ...patch, ...parametrics.derive(next, patch) }
       }
-      scene.updateNode(selectedId, patch)
+      // Bundle the edited node + any reconcile follow-ups into ONE
+      // updateNodes call so a single inspector edit is a single undo step.
+      const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = [{ id: selectedId, data: patch }]
       if (parametrics?.reconcile && node) {
         const next = { ...node, ...patch } as AnyNode
-        const updates = parametrics.reconcile(node as AnyNode, next)
-        if (updates.length > 0) scene.updateNodes(updates)
+        updates.push(...parametrics.reconcile(node as AnyNode, next))
       }
+      scene.updateNodes(updates)
     },
     [selectedId, parametrics],
   )

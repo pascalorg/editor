@@ -19,6 +19,7 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
   schemaVersion: 1,
   schema: PipeSegmentNode,
   category: 'utility',
+  distributionRole: 'run',
 
   defaults: () => ({
     object: 'node',
@@ -82,7 +83,12 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
   floorplan: buildPipeSegmentFloorplan,
 
   // Selection-time path-point handles (drag to edit a committed run).
-  system: { module: () => import('./system') },
+  // Editor-only UI (reads gridSnapStep, renders DimensionPill), so it
+  // mounts via the editor's SelectionAffordanceManager — not `def.system`,
+  // which the viewer package mounts for the read-only route.
+  affordanceTools: {
+    selection: () => import('./selection'),
+  },
 
   tool: () => import('./tool'),
   toolHints: [

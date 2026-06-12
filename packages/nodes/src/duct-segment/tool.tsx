@@ -1,14 +1,26 @@
 'use client'
 
-import { type AnyNode, DuctSegmentNode, emitter, type GridEvent, useScene } from '@pascal-app/core'
-import { DimensionPill, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
-import { getLevelHeight, useViewer } from '@pascal-app/viewer'
+import {
+  type AnyNode,
+  DuctSegmentNode,
+  emitter,
+  type GridEvent,
+  getLevelHeight,
+  useScene,
+} from '@pascal-app/core'
+import {
+  DimensionPill,
+  EDITOR_LAYER,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { type Group, Matrix4, Vector3 } from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import { planElbowAtPort, planElbowRealign, planTeeAtRunBody } from '../shared/auto-fitting'
-import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
 import {
   collectScenePorts,
   DUCT_PORT_SYSTEMS,
@@ -18,6 +30,7 @@ import {
   type ScenePort,
 } from '../shared/ports'
 import { ductSegmentDefinition } from './definition'
+import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
 
 /**
  * One-segment-at-a-time placement tool for round duct segments.
@@ -72,10 +85,7 @@ function snap(value: number, step: number): number {
   return Math.round(value / step) * step
 }
 
-function dist2(
-  a: readonly [number, number, number],
-  b: readonly [number, number, number],
-): number {
+function dist2(a: readonly [number, number, number], b: readonly [number, number, number]): number {
   const dx = a[0] - b[0]
   const dy = a[1] - b[1]
   const dz = a[2] - b[2]
@@ -107,9 +117,7 @@ function continuityRollFrom(port: ScenePort | null, newDir: Vector3): number | n
     owner.fittingType !== 'reducer' &&
     owner.fittingType !== 'transition'
   ) {
-    const source = getDuctFittingPorts(owner).find(
-      (p) => p.id !== port.id && p.id !== 'branch',
-    )
+    const source = getDuctFittingPorts(owner).find((p) => p.id !== port.id && p.id !== 'branch')
     if (source) {
       srcDir = new Vector3(...source.direction)
       const tol2 = 0.03 * 0.03
@@ -715,7 +723,7 @@ const DuctSegmentTool = () => {
     <group>
       {/* Cursor pip */}
       <group ref={cursorRef} position={cursorPos ?? [0, 0, 0]} visible={!!cursorPos}>
-        <mesh>
+        <mesh layers={EDITOR_LAYER}>
           <sphereGeometry args={[0.08, 16, 12]} />
           <meshBasicMaterial color="#818cf8" depthTest={false} transparent opacity={0.9} />
         </mesh>
@@ -741,14 +749,14 @@ const DuctSegmentTool = () => {
           while the cursor is within snap range, so the user sees that the
           next click will join an existing duct rather than freeform-place. */}
       {snapTarget && (
-        <mesh position={snapTarget}>
+        <mesh layers={EDITOR_LAYER} position={snapTarget}>
           <sphereGeometry args={[0.12, 24, 16]} />
           <meshBasicMaterial color="#818cf8" depthTest={false} opacity={0.35} transparent />
         </mesh>
       )}
       {/* Committed point pips */}
       {draftPoints.map((p, i) => (
-        <mesh key={`pt-${i}`} position={p}>
+        <mesh key={`pt-${i}`} layers={EDITOR_LAYER} position={p}>
           <sphereGeometry args={[0.07, 16, 12]} />
           <meshBasicMaterial color="#818cf8" depthTest={false} />
         </mesh>
@@ -792,6 +800,7 @@ function PreviewSegment({
     const h = profile.height * 0.0254
     return (
       <mesh
+        layers={EDITOR_LAYER}
         position={mid.toArray()}
         ref={(m) => {
           if (!m) return
@@ -816,6 +825,7 @@ function PreviewSegment({
   const radius = (profile.diameter * 0.0254) / 2
   return (
     <mesh
+      layers={EDITOR_LAYER}
       position={mid.toArray()}
       ref={(m) => {
         if (!m) return

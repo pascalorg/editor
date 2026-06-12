@@ -42,6 +42,10 @@ export {
   type Vec3,
 } from './hosting'
 export {
+  DEFAULT_LEVEL_HEIGHT,
+  getLevelHeight,
+} from './level-height'
+export {
   type AxisLock,
   applyAxisLock,
   isMovable,
@@ -55,6 +59,13 @@ export {
   type PortConnectivity,
   resolveConnectivityUpdates,
 } from './port-connectivity'
+export {
+  buildRiserDiagram,
+  projectIso,
+  type RiserDiagram,
+  type RiserLine,
+  type RiserMarker,
+} from './riser-diagram'
 export {
   DEFAULT_ANGLE_STEP,
   DEFAULT_GRID_STEP,
@@ -77,10 +88,3 @@ export {
   type DwvSeverity,
   validateDwv,
 } from './validate-dwv'
-export {
-  buildRiserDiagram,
-  projectIso,
-  type RiserDiagram,
-  type RiserLine,
-  type RiserMarker,
-} from './riser-diagram'

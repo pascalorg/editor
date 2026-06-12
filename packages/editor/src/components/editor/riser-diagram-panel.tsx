@@ -23,13 +23,19 @@ const SCALE = 90
  */
 export function RiserDiagramPanel() {
   const isOpen = useEditor((s) => s.isRiserOpen)
+  // Only the open flag lives here. The whole-scene subscription that drives
+  // the diagram lives in the child, mounted only while the panel is open —
+  // so a closed panel doesn't re-render on every scene mutation.
+  if (!isOpen) return null
+  return <RiserDiagramContent />
+}
+
+function RiserDiagramContent() {
   const setRiserOpen = useEditor((s) => s.setRiserOpen)
   const nodes = useScene((s) => s.nodes)
   const selectedIds = useViewer((s) => s.selection.selectedIds)
 
-  const diagram = useMemo(() => (isOpen ? buildRiserDiagram(nodes) : null), [isOpen, nodes])
-
-  if (!isOpen) return null
+  const diagram = useMemo(() => buildRiserDiagram(nodes), [nodes])
 
   const select = (nodeId: AnyNodeId) => useViewer.getState().setSelection({ selectedIds: [nodeId] })
 

@@ -55,6 +55,7 @@ export type {
   Capabilities,
   CapabilityCtx,
   CuttableConfig,
+  DistributionRole,
   DragAction,
   EditorCtx,
   FloorPlacedConfig,

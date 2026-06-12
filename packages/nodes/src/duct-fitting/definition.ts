@@ -1,9 +1,9 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { rotateFittingNode } from '../shared/fitting-rotation'
 import { buildDuctFittingFloorplan } from './floorplan'
 import { buildDuctFittingGeometry } from './geometry'
 import { ductFittingParametrics } from './parametrics'
 import { getDuctFittingPorts } from './ports'
-import { rotateFittingNode } from './rotation'
 import { DuctFittingNode } from './schema'
 
 /**
@@ -19,6 +19,7 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
   schemaVersion: 1,
   schema: DuctFittingNode,
   category: 'utility',
+  distributionRole: 'fitting',
 
   defaults: () => ({
     object: 'node',
@@ -83,7 +84,7 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
   // R/T rotate a selected fitting ±45° around the shared active axis.
   // The default editor rotate only knows Y; fittings need X/Z for
   // risers, so this overrides it. Alt-cycling of the axis + the axis
-  // badge live in `./system.tsx`.
+  // badge live in `./selection.tsx`.
   keyboardActions: {
     r: {
       appliesTo: (node) => node.type === 'duct-fitting',
@@ -93,9 +94,15 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
       appliesTo: (node) => node.type === 'duct-fitting',
       run: (node) => rotateFittingNode(node, -1),
     },
+    axisCycling: true,
   },
 
-  system: { module: () => import('./system') },
+  // Alt-cycles the active rotation axis while a fitting is selected.
+  // Editor-only (drives `useEditor.rotationAxis`), so it mounts via the
+  // editor's SelectionAffordanceManager rather than `def.system`.
+  affordanceTools: {
+    selection: () => import('./selection'),
+  },
 
   tool: () => import('./tool'),
   toolHints: [

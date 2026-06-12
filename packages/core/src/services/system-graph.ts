@@ -141,18 +141,24 @@ function summarize(
   for (const id of nodeIds) {
     const node = nodes[id]
     if (!node) continue
-    if (node.type === 'duct-segment' || node.type === 'lineset' || node.type === 'pipe-segment') {
+    const role = nodeRegistry.get(node.type)?.distributionRole
+    const fields = node as {
+      path?: ReadonlyArray<readonly [number, number, number]>
+      system?: string
+      terminalType?: string
+    }
+    if (role === 'run') {
       runCount += 1
-      runLengthM += pathLength(node.path)
-      if (node.type === 'lineset') systems.add('refrigerant')
-      else systems.add(node.system)
-    } else if (node.type === 'duct-fitting' || node.type === 'pipe-fitting') {
+      if (fields.path) runLengthM += pathLength(fields.path)
+      // Linesets carry refrigerant; duct / pipe runs name their own loop.
+      systems.add(fields.system ?? 'refrigerant')
+    } else if (role === 'fitting') {
       fittingCount += 1
-      systems.add(node.system)
-    } else if (node.type === 'duct-terminal') {
+      if (fields.system) systems.add(fields.system)
+    } else if (role === 'terminal') {
       terminalCount += 1
-      systems.add(node.terminalType === 'return-grille' ? 'return' : 'supply')
-    } else if (node.type === 'hvac-equipment') {
+      systems.add(fields.terminalType === 'return-grille' ? 'return' : 'supply')
+    } else if (role === 'equipment') {
       equipmentCount += 1
     }
   }

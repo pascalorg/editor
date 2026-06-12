@@ -27,6 +27,7 @@ import { RoofEditSystem } from '../systems/roof/roof-edit-system'
 import { StairEditSystem } from '../systems/stair/stair-edit-system'
 import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
 import { ZoneSystem } from '../systems/zone/zone-system'
+import { SelectionAffordanceManager } from '../systems/selection-affordance-manager'
 import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
@@ -617,6 +618,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
       <CeilingSystem />
       <CeilingSelectionAffordanceSystem />
+      {!noEditing && <SelectionAffordanceManager />}
       <RoofEditSystem />
       <StairEditSystem />
       {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}

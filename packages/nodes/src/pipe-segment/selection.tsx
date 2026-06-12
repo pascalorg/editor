@@ -4,7 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   analyzePortConnectivity,
-  type DuctSegmentNode,
+  type PipeSegmentNode,
   type PortConnectivity,
   pauseSceneHistory,
   resolveConnectivityUpdates,
@@ -12,13 +12,13 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { DimensionPill, useEditor } from '@pascal-app/editor'
+import { DimensionPill, EDITOR_LAYER, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
 import { type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
-import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
+import { collectScenePorts, DWV_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 
 /** Handle pip radius (meters). */
 const HANDLE_RADIUS = 0.09
@@ -35,62 +35,53 @@ function snap(value: number, step: number): number {
 type Point = [number, number, number]
 
 /**
- * Selection-time editing for committed duct runs: one draggable handle
- * per path point.
+ * Selection-time editing for committed DWV pipe runs: one draggable
+ * handle per path point. The plumbing sibling of the duct-segment
+ * affordance — same portal / constrained-drag / single-undo model, snapping
+ * to DWV ports instead of duct ports.
  *
- * Handles are PORTALED into the duct's registered scene group so they
+ * Handles are PORTALED into the pipe's registered scene group so they
  * share its exact frame — path coords are node-local, and the level /
  * building transform above the group applies to the handles for free.
- * Drag raycasts run in world space and convert hits back into the
- * group's local frame before writing the path.
  *
  * Drag model: by default the point is CONSTRAINED to the axis the
- * segment was drawn along — a horizontal duct's endpoint slides along
- * its own length, a riser's endpoint slides vertically. Holding **Alt**
- * releases the constraint into free horizontal-plane movement (at the
- * point's height); in free mode dragged run endpoints (first / last
- * point) also snap onto nearby typed ports so a loose run can be mated
- * onto a fitting after the fact. Holding **Shift** bypasses grid
- * snapping in either mode for a perfectly smooth precision drag.
- *
- * History does the single-undo dance: paused during the drag (the live
- * `updateNode` ticks are untracked), then on release the path is
- * reverted, history resumed, and the final path applied as one tracked
- * change.
+ * segment was drawn along. Holding **Alt** releases it into free
+ * horizontal-plane movement (endpoints port-snap onto nearby DWV ports).
+ * Holding **Shift** bypasses grid snapping for a precision drag.
  */
-const DuctSegmentSystem = () => {
+const PipeSegmentSelectionAffordance = () => {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
-  const duct = useScene((s) => {
+  const pipe = useScene((s) => {
     if (selectedIds.length !== 1) return null
     const node = s.nodes[selectedIds[0] as AnyNodeId]
-    return node?.type === 'duct-segment' ? (node as DuctSegmentNode) : null
+    return node?.type === 'pipe-segment' ? (node as PipeSegmentNode) : null
   })
 
-  // Portal target: the duct's registered group. Resolved with a rAF
+  // Portal target: the pipe's registered group. Resolved with a rAF
   // retry because registration happens on the renderer's mount, which
   // can land a frame after selection.
-  const ductId = duct?.id ?? null
+  const pipeId = pipe?.id ?? null
   const [target, setTarget] = useState<Object3D | null>(null)
   useEffect(() => {
-    if (!ductId) {
+    if (!pipeId) {
       setTarget(null)
       return
     }
     let frameId = 0
     const resolve = () => {
-      const next = sceneRegistry.nodes.get(ductId as AnyNodeId) ?? null
+      const next = sceneRegistry.nodes.get(pipeId as AnyNodeId) ?? null
       setTarget((cur) => (cur === next ? cur : next))
       if (!next) frameId = window.requestAnimationFrame(resolve)
     }
     resolve()
     return () => window.cancelAnimationFrame(frameId)
-  }, [ductId])
+  }, [pipeId])
 
-  if (!duct || !target) return null
-  return createPortal(<DuctPointHandles duct={duct} target={target} />, target, undefined)
+  if (!pipe || !target) return null
+  return createPortal(<PipePointHandles pipe={pipe} target={target} />, target, undefined)
 }
 
-const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Object3D }) => {
+const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Object3D }) => {
   const { camera, gl } = useThree()
   const unit = useViewer((s) => s.unit)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
@@ -102,7 +93,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     initialPath: Point[]
     current: Point
     cleanup: () => void
-    // Connectivity snapshot taken at pointer-down: which fittings / ducts are
+    // Connectivity snapshot taken at pointer-down: which fittings / pipes are
     // mated to this run's endpoints, so they follow as the endpoint moves.
     connectivity: PortConnectivity | null
   } | null>(null)
@@ -146,13 +137,13 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
 
   /** World-space position of a local path point. */
   const toWorld = (p: Point): Vector3 => target.localToWorld(new Vector3(p[0], p[1], p[2]))
-  /** Convert a world-space hit back into the duct group's local frame. */
+  /** Convert a world-space hit back into the pipe group's local frame. */
   const toLocal = (world: Vector3): Point => {
     const local = target.worldToLocal(world.clone())
     return [local.x, local.y, local.z]
   }
 
-  // Follow-updates for fittings / ducts mated to this run's endpoints, given
+  // Follow-updates for fittings / pipes mated to this run's endpoints, given
   // the run's live path. Endpoints whose position didn't change resolve to a
   // zero delta, so only the dragged endpoint's partner actually moves.
   const connectivityUpdatesForPath = (
@@ -160,7 +151,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     path: Point[],
   ): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
     if (!connectivity) return []
-    const preview = { ...(duct as Record<string, unknown>), path } as AnyNode
+    const preview = { ...(pipe as Record<string, unknown>), path } as AnyNode
     return resolveConnectivityUpdates(connectivity, preview).filter(
       (u) => useScene.getState().nodes[u.id],
     )
@@ -168,9 +159,9 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
 
   const onHandleDown = (index: number) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
-    const initialPath = duct.path.map((p) => [...p] as Point)
+    const initialPath = pipe.path.map((p) => [...p] as Point)
     const startPoint = initialPath[index]!
-    const connectivity = analyzePortConnectivity(duct as AnyNode, useScene.getState().nodes)
+    const connectivity = analyzePortConnectivity(pipe as AnyNode, useScene.getState().nodes)
     pauseSceneHistory(useScene)
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = 'grabbing'
@@ -219,7 +210,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           if (isEndpoint) {
             const port = findNearestPortXZ(
               [local[0], current[1], local[2]],
-              collectScenePorts({ excludeNodeId: duct.id, systems: DUCT_PORT_SYSTEMS }),
+              collectScenePorts({ excludeNodeId: pipe.id, systems: DWV_PORT_SYSTEMS }),
               PORT_SNAP_RADIUS_M,
             )
             if (port) next = [port.position[0], port.position[1], port.position[2]]
@@ -241,12 +232,12 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       if (!next) return
       if (next[0] === current[0] && next[1] === current[1] && next[2] === current[2]) return
       drag.current = next
-      const path = duct.path.map((p, i) => (i === drag.index ? next! : p)) as Point[]
+      const path = pipe.path.map((p, i) => (i === drag.index ? next! : p)) as Point[]
       // Drag the run + any fittings mated to the moved endpoint as one batch.
       useScene
         .getState()
         .updateNodes([
-          { id: duct.id as AnyNodeId, data: { path } },
+          { id: pipe.id as AnyNodeId, data: { path } },
           ...connectivityUpdatesForPath(drag.connectivity, path),
         ])
     }
@@ -273,7 +264,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       useScene
         .getState()
         .updateNodes([
-          { id: duct.id as AnyNodeId, data: { path: drag.initialPath } },
+          { id: pipe.id as AnyNodeId, data: { path: drag.initialPath } },
           ...revertUpdates.filter((u) => useScene.getState().nodes[u.id]),
         ])
       resumeSceneHistory(useScene)
@@ -283,7 +274,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       if (moved) {
         useScene
           .getState()
-          .updateNodes([{ id: duct.id as AnyNodeId, data: { path: finalPath } }, ...finalUpdates])
+          .updateNodes([{ id: pipe.id as AnyNodeId, data: { path: finalPath } }, ...finalUpdates])
       }
     }
 
@@ -303,12 +294,13 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
 
   return (
     <group>
-      {duct.path.map((p, i) => {
+      {pipe.path.map((p, i) => {
         const active = draggingIndex === i
         const hovered = hoverIndex === i
         return (
           <mesh
-            key={`duct-handle-${i}`}
+            key={`pipe-handle-${i}`}
+            layers={EDITOR_LAYER}
             onPointerDown={onHandleDown(i)}
             onPointerEnter={(e) => {
               e.stopPropagation()
@@ -323,7 +315,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           >
             <sphereGeometry args={[HANDLE_RADIUS, 16, 12]} />
             <meshBasicMaterial
-              color={active || hovered ? '#a5b4fc' : '#818cf8'}
+              color={active || hovered ? '#7dd3fc' : '#38bdf8'}
               depthTest={false}
               opacity={active ? 1 : 0.85}
               transparent
@@ -332,11 +324,11 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         )
       })}
       {draggingIndex !== null &&
-        duct.path[draggingIndex] &&
+        pipe.path[draggingIndex] &&
         (() => {
           // Same pill as the draw tool: signed per-axis deltas from the
           // drag-start position, dominant axis emphasised.
-          const point = duct.path[draggingIndex]!
+          const point = pipe.path[draggingIndex]!
           const origin = dragRef.current?.initialPath[draggingIndex] ?? point
           const deltas = [point[0] - origin[0], point[1] - origin[1], point[2] - origin[2]]
           const axes = ['x', 'y', 'z'] as const
@@ -367,4 +359,4 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
   )
 }
 
-export default DuctSegmentSystem
+export default PipeSegmentSelectionAffordance

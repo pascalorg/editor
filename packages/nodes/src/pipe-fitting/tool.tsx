@@ -1,7 +1,7 @@
 'use client'
 
 import { emitter, type GridEvent, PipeFittingNode, useScene } from '@pascal-app/core'
-import { triggerSFX, useEditor } from '@pascal-app/editor'
+import { EDITOR_LAYER, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -11,7 +11,7 @@ import {
   cycleRotationAxis,
   getRotationAxis,
   ROTATE_STEP_RAD,
-} from '../duct-fitting/rotation'
+} from '../shared/fitting-rotation'
 import {
   collectScenePorts,
   DWV_PORT_SYSTEMS,
@@ -118,6 +118,9 @@ const PipeFittingTool = () => {
   const ghost = useMemo(() => {
     const group = buildPipeFittingGeometry(previewNode)
     group.traverse((child) => {
+      // Overlay layer keeps the placement ghost out of the ink / SSGI
+      // buffers and the thumbnail export, like every other tool preview.
+      child.layers.set(EDITOR_LAYER)
       const mesh = child as { material?: { transparent: boolean; opacity: number } }
       if (mesh.material) {
         mesh.material.transparent = true
@@ -231,7 +234,10 @@ const PipeFittingTool = () => {
       </Html>
       {/* Port-snap halo so the user sees the click will mate, not free-place. */}
       {placement.snapPort && (
-        <mesh position={placement.snapPort.position as [number, number, number]}>
+        <mesh
+          layers={EDITOR_LAYER}
+          position={placement.snapPort.position as [number, number, number]}
+        >
           <sphereGeometry args={[0.18, 24, 16]} />
           <meshBasicMaterial color="#818cf8" depthTest={false} opacity={0.35} transparent />
         </mesh>

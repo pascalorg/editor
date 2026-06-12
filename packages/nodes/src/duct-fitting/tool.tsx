@@ -1,11 +1,17 @@
 'use client'
 
 import { DuctFittingNode, emitter, type GridEvent, useScene } from '@pascal-app/core'
-import { triggerSFX, useEditor } from '@pascal-app/editor'
+import { EDITOR_LAYER, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Euler, Quaternion, Vector3 } from 'three'
+import {
+  AXIS_VECTORS,
+  cycleRotationAxis,
+  getRotationAxis,
+  ROTATE_STEP_RAD,
+} from '../shared/fitting-rotation'
 import {
   collectScenePorts,
   DUCT_PORT_SYSTEMS,
@@ -15,7 +21,6 @@ import {
 import { ductFittingDefinition } from './definition'
 import { buildDuctFittingGeometry } from './geometry'
 import { localFittingPorts } from './ports'
-import { AXIS_VECTORS, cycleRotationAxis, getRotationAxis, ROTATE_STEP_RAD } from './rotation'
 
 /** Snap radius (meters, XZ) for mating onto an existing port. */
 const PORT_SNAP_RADIUS_M = 0.5
@@ -111,6 +116,9 @@ const DuctFittingTool = () => {
   const ghost = useMemo(() => {
     const group = buildDuctFittingGeometry(previewNode)
     group.traverse((child) => {
+      // Overlay layer keeps the placement ghost out of the ink / SSGI
+      // buffers and the thumbnail export, like every other tool preview.
+      child.layers.set(EDITOR_LAYER)
       const mesh = child as { material?: { transparent: boolean; opacity: number } }
       if (mesh.material) {
         mesh.material.transparent = true
@@ -224,7 +232,10 @@ const DuctFittingTool = () => {
       </Html>
       {/* Port-snap halo so the user sees the click will mate, not free-place. */}
       {placement.snapPort && (
-        <mesh position={placement.snapPort.position as [number, number, number]}>
+        <mesh
+          layers={EDITOR_LAYER}
+          position={placement.snapPort.position as [number, number, number]}
+        >
           <sphereGeometry args={[0.18, 24, 16]} />
           <meshBasicMaterial color="#818cf8" depthTest={false} opacity={0.35} transparent />
         </mesh>

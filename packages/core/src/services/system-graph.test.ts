@@ -1,28 +1,33 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNodeDefinition, NodePort } from '../registry'
+import type { AnyNodeDefinition, DistributionRole, NodePort } from '../registry'
 import { registerNode } from '../registry'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { buildPortComponents, summarizeSystemFor } from './system-graph'
 
 type Point = [number, number, number]
 
-// Stub registrations: the graph only consults `def.ports`, so each test
-// kind carries just that. Mirrors the real kinds' port conventions
-// (duct runs expose start/end, equipment a supply collar, terminals one
-// collar) without importing the nodes package — core can't.
-function stubDef(kind: string, ports: (node: AnyNode) => NodePort[]): void {
+// Stub registrations: the graph consults `def.ports` for the connectivity
+// graph and `def.distributionRole` to classify each node. Mirrors the real
+// kinds' port + role conventions (duct runs expose start/end, equipment a
+// supply collar, terminals one collar) without importing the nodes package.
+function stubDef(
+  kind: string,
+  distributionRole: DistributionRole,
+  ports: (node: AnyNode) => NodePort[],
+): void {
   registerNode({
     kind,
     schemaVersion: 1,
     schema: {},
     category: 'utility',
+    distributionRole,
     defaults: () => ({}),
     capabilities: {},
     ports,
   } as unknown as AnyNodeDefinition)
 }
 
-stubDef('duct-segment', (node) => {
+stubDef('duct-segment', 'run', (node) => {
   const path = (node as unknown as { path: Point[] }).path
   const system = (node as unknown as { system: string }).system
   return [
@@ -36,11 +41,11 @@ stubDef('duct-segment', (node) => {
     },
   ]
 })
-stubDef('hvac-equipment', (node) => {
+stubDef('hvac-equipment', 'equipment', (node) => {
   const position = (node as unknown as { position: Point }).position
   return [{ id: 'supply', position, direction: [0, 1, 0], diameter: 12, system: 'supply' }]
 })
-stubDef('duct-terminal', (node) => {
+stubDef('duct-terminal', 'terminal', (node) => {
   const position = (node as unknown as { position: Point }).position
   return [{ id: 'collar', position, direction: [0, -1, 0], diameter: 6, system: 'supply' }]
 })

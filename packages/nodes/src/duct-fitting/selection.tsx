@@ -3,18 +3,19 @@
 import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
-import { cycleRotationAxis } from './rotation'
+import { cycleRotationAxis } from '../shared/fitting-rotation'
 
 /**
- * Selection-time rotation support for placed fittings. The R/T rotation
- * itself lives in `def.keyboardActions` (the editor's keyboard hook
- * dispatches it); this system contributes the piece that hook can't:
- * **Alt cycles the active rotation axis** while a single fitting is
- * selected. The axis itself lives on `useEditor.rotationAxis`, which the
+ * Selection-time rotation support for placed fittings, mounted by the
+ * editor's SelectionAffordanceManager (`def.affordanceTools.selection`).
+ * The R/T rotation itself lives in `def.keyboardActions` (the editor's
+ * keyboard hook dispatches it); this contributes the piece that hook
+ * can't: **Alt cycles the active rotation axis** while a single fitting
+ * is selected. The axis lives on `useEditor.rotationAxis`, which the
  * floating action menu reads to show the axis pill above the selected
  * fitting — so this component renders nothing.
  */
-const DuctFittingSystem = () => {
+const DuctFittingSelectionAffordance = () => {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const hasSelectedFitting = useScene((s) => {
     if (selectedIds.length !== 1) return false
@@ -39,4 +40,4 @@ const DuctFittingSystem = () => {
   return null
 }
 
-export default DuctFittingSystem
+export default DuctFittingSelectionAffordance

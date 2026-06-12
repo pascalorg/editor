@@ -1,7 +1,7 @@
 import { type AnyNode, useScene } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
 import { Euler, Quaternion, Vector3 } from 'three'
-import type { DuctFittingNode } from './schema'
+import type { DuctFittingNode } from '../duct-fitting/schema'
 
 /** R/T rotation step — 45°, matching the editor's default rotate. */
 export const ROTATE_STEP_RAD = Math.PI / 4
@@ -40,7 +40,7 @@ export function rotateEulerWorld(
 
 /**
  * R / T keyboard action for a placed fitting — rotate ±45° around the
- * shared active axis (Alt cycles it; see `system.tsx`).
+ * shared active axis (Alt cycles it; see `selection.tsx`).
  */
 export function rotateFittingNode(node: AnyNode, steps: 1 | -1): void {
   const fitting = node as DuctFittingNode

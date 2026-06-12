@@ -16,6 +16,7 @@ export const pipeTrapDefinition: NodeDefinition<typeof PipeTrapNode> = {
   schemaVersion: 1,
   schema: PipeTrapNode,
   category: 'utility',
+  distributionRole: 'fitting',
 
   defaults: () => ({
     object: 'node',

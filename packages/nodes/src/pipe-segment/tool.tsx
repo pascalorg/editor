@@ -1,7 +1,13 @@
 'use client'
 
 import { type AnyNode, emitter, type GridEvent, PipeSegmentNode, useScene } from '@pascal-app/core'
-import { DimensionPill, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  DimensionPill,
+  EDITOR_LAYER,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
@@ -478,7 +484,7 @@ const PipeSegmentTool = () => {
   return (
     <group>
       <group position={cursorPos ?? [0, 0, 0]} visible={!!cursorPos}>
-        <mesh>
+        <mesh layers={EDITOR_LAYER}>
           <sphereGeometry args={[0.06, 16, 12]} />
           <meshBasicMaterial color="#818cf8" depthTest={false} transparent opacity={0.9} />
         </mesh>
@@ -504,13 +510,13 @@ const PipeSegmentTool = () => {
         )}
       </group>
       {snapTarget && (
-        <mesh position={snapTarget}>
+        <mesh layers={EDITOR_LAYER} position={snapTarget}>
           <sphereGeometry args={[0.1, 24, 16]} />
           <meshBasicMaterial color="#818cf8" depthTest={false} opacity={0.35} transparent />
         </mesh>
       )}
       {displayStart && (
-        <mesh position={displayStart}>
+        <mesh layers={EDITOR_LAYER} position={displayStart}>
           <sphereGeometry args={[0.05, 16, 12]} />
           <meshBasicMaterial color="#818cf8" depthTest={false} />
         </mesh>
@@ -541,6 +547,7 @@ function PreviewPipe({
   const radius = (diameterIn * 0.0254) / 2
   return (
     <mesh
+      layers={EDITOR_LAYER}
       position={mid.toArray()}
       ref={(m) => {
         if (!m) return
