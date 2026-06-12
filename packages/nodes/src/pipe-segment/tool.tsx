@@ -25,12 +25,13 @@ import { pipeSegmentDefinition } from './definition'
  *     existing pipe end — DWV ports only, duct/refrigerant collars are
  *     invisible to it). The start inherits the snapped port's height.
  *   - **Second click** commits a two-point pipe and re-arms.
- *   - **Slope**: waste runs FALL automatically at ¼" per foot (1:48) of
- *     horizontal distance, the IPC default for residential drains. A
+ *   - **Slope**: runs draw LEVEL by default. **S** toggles slope mode,
+ *     where waste runs fall at ¼" per foot (1:48) of horizontal
+ *     distance, the IPC default for residential drains. When sloped, a
  *     freely placed start is RAISED so the run falls onto the grid plane
  *     (nothing clips below); a port/body-snapped start keeps its fixed
- *     height and the end drops instead. Vent runs stay level. The pill
- *     shows the live drop in the Y part.
+ *     height and the end drops instead. Vent runs always stay level.
+ *     The pill shows the live drop in the Y part.
  *   - **Q** toggles waste ↔ vent. **[ / ]** steps the pipe size through
  *     nominal DWV diameters.
  *   - Hold **Alt** → vertical mode (stacks): XZ locks to the start,
@@ -85,6 +86,7 @@ const PipeSegmentTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const unit = useViewer((s) => s.unit)
   const [system, setSystem] = useState<'waste' | 'vent'>('waste')
+  const [sloped, setSloped] = useState(false)
   const [diameter, setDiameter] = useState<number>(
     (pipeSegmentDefinition.defaults() as { diameter: number }).diameter,
   )
@@ -97,6 +99,8 @@ const PipeSegmentTool = () => {
   startRef.current = draftStart
   const systemRef = useRef(system)
   systemRef.current = system
+  const slopedRef = useRef(sloped)
+  slopedRef.current = sloped
   const diameterRef = useRef(diameter)
   diameterRef.current = diameter
   // Port / run-body the anchored start snapped onto — read at commit so
@@ -146,6 +150,7 @@ const PipeSegmentTool = () => {
       // height-fixed (fixture drain, run end), so their end drops instead.
       let start = rawStart
       if (
+        slopedRef.current &&
         systemRef.current === 'waste' &&
         !startPortRef.current &&
         !startBodyRef.current &&
@@ -228,7 +233,7 @@ const PipeSegmentTool = () => {
       start: [number, number, number],
       end: [number, number, number],
     ): [number, number, number] => {
-      if (systemRef.current !== 'waste') return end
+      if (!slopedRef.current || systemRef.current !== 'waste') return end
       if (!startPortRef.current && !startBodyRef.current) return end
       const run = Math.hypot(end[0] - start[0], end[2] - start[2])
       return [end[0], start[1] - run * DRAIN_SLOPE, end[2]]
@@ -284,12 +289,24 @@ const PipeSegmentTool = () => {
         }
       }
       const step = useEditor.getState().gridSnapStep
-      const snapped: [number, number, number] = [
-        snap(angled[0], step),
-        angled[1],
-        snap(angled[2], step),
-      ]
-      return { point: applySlope(start, snapped), snapped: null, port: null, body: null }
+      let end: [number, number, number]
+      if (shift) {
+        end = [snap(angled[0], step), angled[1], snap(angled[2], step)]
+      } else {
+        // Snap the run LENGTH along the locked ray, not each axis — an
+        // off-grid start (port / body snap) plus per-axis rounding pulls
+        // the end off the 45° ray, bending the run as the cursor moves.
+        const dx = angled[0] - start[0]
+        const dz = angled[2] - start[2]
+        const len = Math.hypot(dx, dz)
+        if (len < 1e-6) {
+          end = angled
+        } else {
+          const s = snap(len, step) / len
+          end = [start[0] + dx * s, angled[1], start[2] + dz * s]
+        }
+      }
+      return { point: applySlope(start, end), snapped: null, port: null, body: null }
     }
 
     const resolveAltVerticalPoint = (clientY: number): [number, number, number] | null => {
@@ -384,6 +401,10 @@ const PipeSegmentTool = () => {
         e.preventDefault()
         setSystem((s) => (s === 'waste' ? 'vent' : 'waste'))
         triggerSFX('sfx:grid-snap')
+      } else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault()
+        setSloped((s) => !s)
+        triggerSFX('sfx:grid-snap')
       }
     }
 
@@ -427,6 +448,7 @@ const PipeSegmentTool = () => {
   const displayStart =
     draftStart &&
     cursorPos &&
+    sloped &&
     system === 'waste' &&
     !startPortRef.current &&
     !startBodyRef.current &&
@@ -470,7 +492,12 @@ const PipeSegmentTool = () => {
             <div className="flex flex-col items-center gap-1">
               <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
               <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
-                {system === 'waste' ? 'Waste · ¼″/ft fall' : 'Vent · level'} · Q to toggle
+                {system === 'waste'
+                  ? sloped
+                    ? 'Waste · ¼″/ft fall'
+                    : 'Waste · level'
+                  : 'Vent · level'}{' '}
+                · Q system{system === 'waste' ? ' · S slope' : ''}
               </div>
             </div>
           </Html>
