@@ -81,6 +81,9 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
 
   floorplan: buildPipeSegmentFloorplan,
 
+  // Selection-time path-point handles (drag to edit a committed run).
+  system: { module: () => import('./system') },
+
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Start run' },

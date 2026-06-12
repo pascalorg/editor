@@ -25,10 +25,12 @@ import { pipeSegmentDefinition } from './definition'
  *     existing pipe end — DWV ports only, duct/refrigerant collars are
  *     invisible to it). The start inherits the snapped port's height.
  *   - **Second click** commits a two-point pipe and re-arms.
- *   - **Slope**: waste runs FALL automatically — the end point drops by
- *     ¼" per foot (1:48) of horizontal distance, the IPC default for
- *     residential drains. Vent runs stay level. The pill shows the live
- *     drop in the Y part.
+ *   - **Slope**: waste runs FALL automatically at ¼" per foot (1:48) of
+ *     horizontal distance, the IPC default for residential drains. A
+ *     freely placed start is RAISED so the run falls onto the grid plane
+ *     (nothing clips below); a port/body-snapped start keeps its fixed
+ *     height and the end drops instead. Vent runs stay level. The pill
+ *     shows the live drop in the Y part.
  *   - **Q** toggles waste ↔ vent. **[ / ]** steps the pipe size through
  *     nominal DWV diameters.
  *   - Hold **Alt** → vertical mode (stacks): XZ locks to the start,
@@ -135,10 +137,23 @@ const PipeSegmentTool = () => {
     }
 
     const commitSegment = (
-      start: [number, number, number],
+      rawStart: [number, number, number],
       end: [number, number, number],
       endPort: ScenePort | null = null,
     ) => {
+      // Free waste start: lift it by the drain fall so the run lands ON
+      // the grid plane instead of sinking below it. Snapped starts are
+      // height-fixed (fixture drain, run end), so their end drops instead.
+      let start = rawStart
+      if (
+        systemRef.current === 'waste' &&
+        !startPortRef.current &&
+        !startBodyRef.current &&
+        !endPort
+      ) {
+        const run = Math.hypot(end[0] - rawStart[0], end[2] - rawStart[2])
+        start = [rawStart[0], rawStart[1] + run * DRAIN_SLOPE, rawStart[2]]
+      }
       const length = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2])
       if (length < 1e-4) return
       const dir: [number, number, number] = [
@@ -205,12 +220,16 @@ const PipeSegmentTool = () => {
       setAltActive(false)
     }
 
-    /** Apply the drain fall to an XZ-resolved end point. */
+    /** Apply the drain fall to an XZ-resolved end point. Only snapped
+     *  starts (fixture drain, run end/body) drop the end — they're
+     *  height-fixed. A free start keeps the end on the grid plane and
+     *  gets LIFTED at commit instead, so the run never sinks below it. */
     const applySlope = (
       start: [number, number, number],
       end: [number, number, number],
     ): [number, number, number] => {
       if (systemRef.current !== 'waste') return end
+      if (!startPortRef.current && !startBodyRef.current) return end
       const run = Math.hypot(end[0] - start[0], end[2] - start[2])
       return [end[0], start[1] - run * DRAIN_SLOPE, end[2]]
     }
@@ -402,13 +421,32 @@ const PipeSegmentTool = () => {
 
   if (!activeLevelId) return null
 
+  // Free waste start lifts at commit so the run falls ONTO the grid —
+  // mirror that here so the preview line / pill match the placed pipe.
+  // A snapped end (snapTarget set) keeps the start where it is.
+  const displayStart =
+    draftStart &&
+    cursorPos &&
+    system === 'waste' &&
+    !startPortRef.current &&
+    !startBodyRef.current &&
+    !snapTarget &&
+    !altActive
+      ? ([
+          draftStart[0],
+          draftStart[1] +
+            Math.hypot(cursorPos[0] - draftStart[0], cursorPos[2] - draftStart[2]) * DRAIN_SLOPE,
+          draftStart[2],
+        ] as [number, number, number])
+      : draftStart
+
   const pillParts = cursorPos
     ? [
         ...(['x', 'y', 'z'] as const).map((axis, i) => ({
           key: axis,
           prefix: axis.toUpperCase(),
-          value: draftStart ? cursorPos[i]! - draftStart[i]! : cursorPos[i]!,
-          signed: !!draftStart,
+          value: displayStart ? cursorPos[i]! - displayStart[i]! : cursorPos[i]!,
+          signed: !!displayStart,
         })),
         { key: 'diameter', prefix: 'Ø', value: diameter * 0.0254, signed: false },
       ]
@@ -444,14 +482,14 @@ const PipeSegmentTool = () => {
           <meshBasicMaterial color="#818cf8" depthTest={false} opacity={0.35} transparent />
         </mesh>
       )}
-      {draftStart && (
-        <mesh position={draftStart}>
+      {displayStart && (
+        <mesh position={displayStart}>
           <sphereGeometry args={[0.05, 16, 12]} />
           <meshBasicMaterial color="#818cf8" depthTest={false} />
         </mesh>
       )}
-      {draftStart && cursorPos && (
-        <PreviewPipe a={draftStart} b={cursorPos} diameterIn={diameter} />
+      {displayStart && cursorPos && (
+        <PreviewPipe a={displayStart} b={cursorPos} diameterIn={diameter} />
       )}
     </group>
   )
