@@ -33,7 +33,6 @@ import {
 } from 'react'
 import {
   canDirectRotateNode,
-  getDirectRotateHandle,
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
 } from '../../../lib/direct-manipulation'
@@ -355,20 +354,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (!node || !canDirectRotateNode(node)) return false
       const selectedIds = useViewer.getState().selection.selectedIds
       if (!selectedIds.includes(id)) return false
-      if (getDirectRotateHandle(node)?.rotationPlane === 'node-normal') {
-        event.preventDefault()
-        event.stopPropagation()
-        const preventContextMenu = (contextEvent: Event) => {
-          contextEvent.preventDefault()
-          contextEvent.stopPropagation()
-        }
-        window.addEventListener('contextmenu', preventContextMenu, { capture: true, once: true })
-        window.setTimeout(() => {
-          window.removeEventListener('contextmenu', preventContextMenu, true)
-        }, 400)
-        return true
-      }
-
       event.preventDefault()
       event.stopPropagation()
 

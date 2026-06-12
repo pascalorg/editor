@@ -257,7 +257,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
     const onWallEnter = (event: WallEvent) => {
       const target = resolveMoveTarget(event)
-      if (!target) return
+      if (!target) {
+        onWallLeave()
+        return
+      }
       lastTarget = target
       lastRoofEvent = null
       applyPreview(target)
@@ -265,15 +268,24 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     const onWallMove = (event: WallEvent) => {
-      if (!isValidWallSideFace(event.normal)) return
-      if (isCurvedWall(event.node)) {
-        hideCursor()
+      if (!isValidWallSideFace(event.normal)) {
+        onWallLeave()
         return
       }
-      if (event.node.parentId !== getLevelId()) return
+      if (isCurvedWall(event.node)) {
+        onWallLeave()
+        return
+      }
+      if (event.node.parentId !== getLevelId()) {
+        onWallLeave()
+        return
+      }
 
       const target = resolveMoveTarget(event)
-      if (!target) return
+      if (!target) {
+        onWallLeave()
+        return
+      }
       lastTarget = target
       lastRoofEvent = null
       applyPreview(target)
@@ -395,7 +407,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
     const onRoofHover = (event: RoofEvent) => {
       const target = resolveRoofMoveTarget(event)
-      if (!target) return
+      if (!target) {
+        onRoofLeave()
+        return
+      }
       // Wall-frame drag anchor / live transform don't apply on a roof face.
       dragAnchor = null
       lastTarget = null

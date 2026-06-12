@@ -3,15 +3,15 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  isRegistryMovable,
   nodeRegistry,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { resolveSelectModeHelpHints } from '../../../lib/contextual-help'
-import { canDirectRotateNode } from '../../../lib/direct-manipulation'
+import { canDirectMoveNode, canDirectRotateNode } from '../../../lib/direct-manipulation'
 import useEditor from '../../../store/use-editor'
 import { BuildingHelper } from './building-helper'
 import { ContextualHelperPanel } from './contextual-helper-panel'
@@ -63,21 +63,20 @@ export function HelperManager() {
   const tool = useEditor((s) => s.tool)
   const movingNode = useEditor((state) => state.movingNode)
   const selectedIds = useViewer((s) => s.selection.selectedIds)
-  const nodes = useScene((s) => s.nodes)
   const isMobile = useIsMobile()
   const modifiers = useActiveModifierKeys()
-  const selectedNodes = useMemo<AnyNode[]>(
-    () =>
+  const selectedNodes = useScene(
+    useShallow((s) =>
       selectedIds
-        .map((id) => nodes[id as AnyNodeId])
+        .map((id) => s.nodes[id as AnyNodeId])
         .filter((node): node is AnyNode => node !== undefined),
-    [nodes, selectedIds],
+    ),
   )
   const selectModeHints = useMemo(
     () =>
       resolveSelectModeHelpHints({
         selectedCount: selectedNodes.length,
-        hasMovableSelection: selectedNodes.some((node) => isRegistryMovable(node.type)),
+        hasMovableSelection: selectedNodes.some((node) => canDirectMoveNode(node)),
         hasRotatableSelection: selectedNodes.some((node) => canDirectRotateNode(node)),
         commandPressed: modifiers.command,
         shiftPressed: modifiers.shift,

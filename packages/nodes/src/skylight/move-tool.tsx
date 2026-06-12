@@ -73,6 +73,11 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     let committed = false
     const roofDrag = createRelativeRoofDrag(original)
 
+    const clearTarget = () => {
+      lastTarget = null
+      setHasHit(false)
+    }
+
     // Resolve which segment the cursor is over, then derive the same
     // preview transform stack the placement tool uses (`skylight/tool.tsx`):
     // analytical surface normal in segment-local frame → outer yaw =
@@ -83,7 +88,7 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
       const roof = event.node as RoofNode
       const target = roofDrag.resolve(event)
       if (!target) {
-        setHasHit(false)
+        clearTarget()
         return false
       }
       lastTarget = target
@@ -226,6 +231,7 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     emitter.on('roof:move', onRoofMove)
     emitter.on('roof:enter', onRoofEnter)
     emitter.on('roof:click', onRoofClick)
+    emitter.on('roof:leave', clearTarget)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('pointerup', onPlacementDragPointerUp)
 
@@ -233,6 +239,7 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
       emitter.off('roof:move', onRoofMove)
       emitter.off('roof:enter', onRoofEnter)
       emitter.off('roof:click', onRoofClick)
+      emitter.off('roof:leave', clearTarget)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
 

@@ -1,9 +1,31 @@
-import { DEFAULT_ANGLE_STEP } from '@pascal-app/core'
 import { describe, expect, test } from 'bun:test'
 import {
+  type AnyNode,
+  type AnyNodeDefinition,
+  DEFAULT_ANGLE_STEP,
+  nodeRegistry,
+  registerNode,
+} from '@pascal-app/core'
+import { z } from 'zod'
+import {
+  canDirectMoveNode,
   resolveDirectRotationDragDelta,
   snapDirectRotationDelta,
 } from './direct-manipulation'
+
+function registerTestDefinition(kind: string, overrides: Partial<AnyNodeDefinition>) {
+  if (nodeRegistry.has(kind)) return
+  registerNode({
+    kind,
+    schemaVersion: 1,
+    schema: z.object({ type: z.literal(kind) }) as never,
+    category: 'structure',
+    defaults: () => ({ type: kind }) as never,
+    capabilities: {},
+    renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
+    ...overrides,
+  } as AnyNodeDefinition)
+}
 
 describe('snapDirectRotationDelta', () => {
   test('snaps rotation deltas to the default angle increment', () => {
@@ -36,5 +58,36 @@ describe('resolveDirectRotationDragDelta', () => {
 
   test('keeps unsnapped drag deltas while free-rotating', () => {
     expect(resolveDirectRotationDragDelta(100, 103, 0.1, true)).toBeCloseTo(-0.3)
+  })
+})
+
+describe('canDirectMoveNode', () => {
+  test('excludes floorplan-only move targets from 3D direct move', () => {
+    const kind = 'direct-move-floorplan-only-test'
+    registerTestDefinition(kind, { floorplanMoveTarget: {} as never })
+
+    expect(canDirectMoveNode({ id: 'node_1', type: kind } as unknown as AnyNode)).toBe(false)
+  })
+
+  test('excludes bespoke move tools from 3D direct move', () => {
+    const kind = 'direct-move-bespoke-tool-test'
+    registerTestDefinition(kind, {
+      affordanceTools: {
+        move: async () => ({ default: () => null }),
+      } as never,
+    })
+
+    expect(canDirectMoveNode({ id: 'node_1', type: kind } as unknown as AnyNode)).toBe(false)
+  })
+
+  test('accepts nodes with the generic movable capability', () => {
+    const kind = 'direct-move-movable-test'
+    registerTestDefinition(kind, {
+      capabilities: {
+        movable: { axes: ['x', 'z'], gridSnap: true },
+      },
+    } as Partial<AnyNodeDefinition>)
+
+    expect(canDirectMoveNode({ id: 'node_1', type: kind } as unknown as AnyNode)).toBe(true)
   })
 })

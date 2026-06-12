@@ -68,6 +68,12 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
     let committed = false
     const roofDrag = createRelativeRoofDrag(original)
 
+    const clearTarget = () => {
+      lastTarget = null
+      lastSnap = null
+      setPreviewPos(null)
+    }
+
     const resolveTarget = (event: RoofEvent): RidgeVentDragTarget | null => {
       const target = roofDrag.resolve(event)
       if (!target) return null
@@ -81,7 +87,10 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
 
     const updatePreview = (event: RoofEvent) => {
       const target = resolveTarget(event)
-      if (!target) return
+      if (!target) {
+        clearTarget()
+        return
+      }
       lastTarget = target
 
       const sx = Math.round(target.localX * 20) / 20
@@ -200,6 +209,7 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
     emitter.on('roof:move', updatePreview)
     emitter.on('roof:enter', updatePreview)
     emitter.on('roof:click', onRoofClick)
+    emitter.on('roof:leave', clearTarget)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('pointerup', onPlacementDragPointerUp)
 
@@ -207,6 +217,7 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onRoofClick)
+      emitter.off('roof:leave', clearTarget)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
 

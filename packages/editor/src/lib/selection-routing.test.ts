@@ -38,6 +38,19 @@ describe('selectionModifiersFromEvent', () => {
       shift: false,
     })
   })
+
+  test('prefers explicit event key state over stale tracked modifiers', () => {
+    expect(
+      selectionModifiersFromEvent(
+        { metaKey: false, ctrlKey: false, shiftKey: false },
+        { meta: true, ctrl: true, shift: true },
+      ),
+    ).toEqual({
+      meta: false,
+      ctrl: false,
+      shift: false,
+    })
+  })
 })
 
 describe('resolveNodeSelectionTarget', () => {

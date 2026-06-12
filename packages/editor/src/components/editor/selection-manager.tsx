@@ -14,7 +14,6 @@ import {
   getRoofSegmentSurfaceY,
   getSelectableKinds,
   type ItemNode,
-  isRegistryMovable,
   isRegistrySelectable,
   type NodeEvent,
   nodeRegistry,
@@ -47,6 +46,7 @@ import {
 import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D, Vector3 } from 'three'
 import {
+  canDirectMoveNode,
   canDirectRotateNode,
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
@@ -1238,12 +1238,13 @@ export const SelectionManager = () => {
       if (pointer.button !== 0 || !isCommandModifier(pointer)) return
 
       const node = useScene.getState().nodes[event.node.id as AnyNodeId] ?? event.node
-      if (!isRegistryMovable(node.type)) return
+      if (!canDirectMoveNode(node)) return
       if (!useViewer.getState().selection.selectedIds.includes(node.id)) return
 
       const startX = pointer.clientX
       const startY = pointer.clientY
       const pointerId = pointer.pointerId
+      const pointerTarget = pointer.target instanceof EventTarget ? pointer.target : null
       let engaged = false
 
       const cleanup = () => {
@@ -1266,11 +1267,35 @@ export const SelectionManager = () => {
         useViewer.getState().setInputDragging(true)
         swallowNextClick()
         createEditorApi().engageMoveDrag(node)
+        requestAnimationFrame(() => {
+          if (useEditor.getState().movingNode?.id !== node.id) return
+          pointerTarget?.dispatchEvent(
+            new PointerEvent('pointermove', {
+              altKey: moveEvent.altKey,
+              bubbles: true,
+              buttons: moveEvent.buttons,
+              clientX: moveEvent.clientX,
+              clientY: moveEvent.clientY,
+              ctrlKey: moveEvent.ctrlKey,
+              metaKey: moveEvent.metaKey,
+              pointerId,
+              pointerType: moveEvent.pointerType,
+              shiftKey: moveEvent.shiftKey,
+            }),
+          )
+        })
       }
 
       const onEnd = (endEvent: PointerEvent) => {
         if (endEvent.pointerId !== pointerId) return
         cleanup()
+        if (engaged) {
+          requestAnimationFrame(() => {
+            const editor = useEditor.getState()
+            if (editor.movingNode?.id !== node.id || !editor.placementDragMode) return
+            editor.setMovingNode(null)
+          })
+        }
       }
 
       window.addEventListener('pointermove', onMove)

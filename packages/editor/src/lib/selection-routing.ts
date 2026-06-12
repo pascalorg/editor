@@ -28,10 +28,19 @@ export function selectionModifiersFromEvent(
   } | null,
   fallback?: Partial<SelectionModifierKeys>,
 ): SelectionModifierKeys {
+  const fromEvent = (
+    key: keyof SelectionModifierKeys,
+    eventKey: 'metaKey' | 'ctrlKey' | 'shiftKey',
+  ) => {
+    if (typeof event?.[eventKey] === 'boolean') return event[eventKey]
+    if (typeof event?.nativeEvent?.[eventKey] === 'boolean') return event.nativeEvent[eventKey]
+    return Boolean(fallback?.[key])
+  }
+
   return {
-    meta: Boolean(event?.metaKey || event?.nativeEvent?.metaKey || fallback?.meta),
-    ctrl: Boolean(event?.ctrlKey || event?.nativeEvent?.ctrlKey || fallback?.ctrl),
-    shift: Boolean(event?.shiftKey || event?.nativeEvent?.shiftKey || fallback?.shift),
+    meta: fromEvent('meta', 'metaKey'),
+    ctrl: fromEvent('ctrl', 'ctrlKey'),
+    shift: fromEvent('shift', 'shiftKey'),
   }
 }
 

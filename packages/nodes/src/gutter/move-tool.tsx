@@ -79,6 +79,12 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
     let committed = false
     const roofDrag = createRelativeRoofDrag(original)
 
+    const clearTarget = () => {
+      lastTarget = null
+      lastSnap = null
+      setTarget(null)
+    }
+
     const resolveTarget = (event: RoofEvent): GutterDragTarget | null => {
       const target = roofDrag.resolve(event)
       if (!target) return null
@@ -91,7 +97,10 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
     const updatePreview = (event: RoofEvent) => {
       const roof = event.node as RoofNode
       const target = resolveTarget(event)
-      if (!target) return
+      if (!target) {
+        clearTarget()
+        return
+      }
       lastTarget = target
 
       // Same snap math as the placement tool — picking-up and putting-
@@ -221,6 +230,7 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
     emitter.on('roof:move', updatePreview)
     emitter.on('roof:enter', updatePreview)
     emitter.on('roof:click', onRoofClick)
+    emitter.on('roof:leave', clearTarget)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('pointerup', onPlacementDragPointerUp)
 
@@ -228,6 +238,7 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onRoofClick)
+      emitter.off('roof:leave', clearTarget)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
 

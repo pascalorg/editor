@@ -33,6 +33,10 @@ export function canDirectRotateNode(node: AnyNode): boolean {
   )
 }
 
+export function canDirectMoveNode(node: AnyNode): boolean {
+  return nodeRegistry.get(node.type)?.capabilities?.movable !== undefined
+}
+
 export function snapDirectRotationDelta(delta: number, free: boolean): number {
   return free ? delta : Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
 }
