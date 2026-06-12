@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
 import { buildRidgeVentGeometry } from './geometry'
 import type { RidgeVentNode } from './schema'
 
-const RidgeVentPreview = ({ node }: { node: RidgeVentNode }) => {
+const RidgeVentPreview = ({ node, invalid }: { node: RidgeVentNode; invalid?: boolean }) => {
   const geometry = useMemo(
     () => buildRidgeVentGeometry(node),
     [node.length, node.width, node.height, node.style, node.endCaps],
@@ -14,17 +15,17 @@ const RidgeVentPreview = ({ node }: { node: RidgeVentNode }) => {
   const material = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: 0xff_ff_ff,
-        emissive: 0xff_ff_ff,
+        color: invalid ? INVALID_GHOST_COLOR : 0xff_ff_ff,
+        emissive: invalid ? INVALID_GHOST_COLOR : 0xff_ff_ff,
         emissiveIntensity: 0.12,
         roughness: 0.85,
         metalness: 0.05,
         transparent: true,
-        opacity: 0.55,
+        opacity: invalid ? 0.4 : 0.55,
         depthWrite: false,
         side: THREE.DoubleSide,
       }),
-    [],
+    [invalid],
   )
 
   const edgesGeometry = useMemo(() => new THREE.EdgesGeometry(geometry, 25), [geometry])

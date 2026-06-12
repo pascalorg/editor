@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
 import { buildFrameGeometry } from './frame-csg'
 import type { SkylightNode } from './schema'
 
@@ -15,7 +16,19 @@ const ghostMaterial = new THREE.MeshStandardMaterial({
   depthWrite: false,
 })
 
-const SkylightPreview = ({ node }: { node: SkylightNode }) => {
+const invalidGhostMaterial = new THREE.MeshStandardMaterial({
+  color: INVALID_GHOST_COLOR,
+  emissive: INVALID_GHOST_COLOR,
+  emissiveIntensity: 0.12,
+  roughness: 0.5,
+  transparent: true,
+  opacity: 0.4,
+  depthWrite: false,
+})
+
+const SkylightPreview = ({ node, invalid }: { node: SkylightNode; invalid?: boolean }) => {
+  const material = invalid ? invalidGhostMaterial : ghostMaterial
+
   const frame = useMemo(
     () =>
       buildFrameGeometry({
@@ -48,8 +61,8 @@ const SkylightPreview = ({ node }: { node: SkylightNode }) => {
 
   return (
     <group>
-      <mesh geometry={frame} material={ghostMaterial} raycast={() => {}} />
-      <mesh geometry={glass} material={ghostMaterial} raycast={() => {}} />
+      <mesh geometry={frame} material={material} raycast={() => {}} />
+      <mesh geometry={glass} material={material} raycast={() => {}} />
     </group>
   )
 }

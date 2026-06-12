@@ -23,7 +23,7 @@ import {
   useAlignmentGuides,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
@@ -33,6 +33,7 @@ import {
   worldToSelectedBuildingLocal,
 } from '../shared/roof-wall-opening-placement'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
+import WindowPreview from './preview'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
 
 // Shared edge material — reuse across renders, just toggle color
@@ -58,6 +59,19 @@ const WindowTool: React.FC = () => {
   const draftRef = useRef<WindowNode | null>(null)
   const cursorGroupRef = useRef<Group>(null!)
   const edgesRef = useRef<LineSegments>(null!)
+
+  // Off-host floating ghost: the real window geometry follows the cursor
+  // over the grid / invalid faces (tinted invalid). Mutually exclusive with
+  // the on-host draft.
+  const [fallbackPose, setFallbackPose] = useState<{
+    position: [number, number, number]
+    rotationY: number
+  } | null>(null)
+
+  const ghostStub = useMemo(
+    () => WindowNode.parse({ position: [0, 0, 0], rotation: [0, 0, 0] }),
+    [],
+  )
 
   useEffect(() => {
     useScene.temporal.getState().pause()
@@ -90,6 +104,7 @@ const WindowTool: React.FC = () => {
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       useAlignmentGuides.getState().clear()
+      setFallbackPose(null)
     }
 
     // Alignment candidates — anchors of every alignable object; refreshed
@@ -97,11 +112,15 @@ const WindowTool: React.FC = () => {
     // (along-wall only; the floor-plane guides don't cover sill height).
     let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
 
+    // On-host cursor: the green/red wireframe outline tracks a live draft.
+    // Showing it always clears the off-host floating ghost (they never
+    // coexist — a draft means the cursor is on a valid host).
     const updateCursor = (
       worldPosition: [number, number, number],
       cursorRotationY: number,
       valid: boolean,
     ) => {
+      setFallbackPose(null)
       const group = cursorGroupRef.current
       if (!group) return
       group.visible = true
@@ -110,23 +129,28 @@ const WindowTool: React.FC = () => {
       edgeMaterial.color.setHex(valid ? 0x22_c5_5e : 0xef_44_44)
     }
 
+    // Off-host fallback: hide the wireframe outline and float the real window
+    // geometry (tinted invalid) at the cursor so the armed tool is visible.
+    const showGhostAt = (position: [number, number, number]) => {
+      if (cursorGroupRef.current) cursorGroupRef.current.visible = false
+      setFallbackPose({ position, rotationY: 0 })
+      useAlignmentGuides.getState().clear()
+    }
+
     const showFallbackCursor = (event: GridEvent) => {
       if (draftRef.current) return
       const [x, y, z] = event.localPosition
-      updateCursor([x, y + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z], 0, false)
-      useAlignmentGuides.getState().clear()
+      showGhostAt([x, y + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z])
     }
 
     const showRoofFallbackCursor = (event: RoofEvent) => {
       const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
-      updateCursor([x, getLevelYOffset() + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z], 0, false)
-      useAlignmentGuides.getState().clear()
+      showGhostAt([x, getLevelYOffset() + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z])
     }
 
     const showWallFallbackCursor = (event: WallEvent) => {
       const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
-      updateCursor([x, getLevelYOffset() + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z], 0, false)
-      useAlignmentGuides.getState().clear()
+      showGhostAt([x, getLevelYOffset() + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z])
     }
 
     const onWallEnter = (event: WallEvent) => {
@@ -570,14 +594,21 @@ const WindowTool: React.FC = () => {
   boxGeo.dispose()
 
   return (
-    <group ref={cursorGroupRef} visible={false}>
-      <lineSegments
-        geometry={edgesGeo}
-        layers={EDITOR_LAYER}
-        material={edgeMaterial}
-        ref={edgesRef}
-      />
-    </group>
+    <>
+      <group ref={cursorGroupRef} visible={false}>
+        <lineSegments
+          geometry={edgesGeo}
+          layers={EDITOR_LAYER}
+          material={edgeMaterial}
+          ref={edgesRef}
+        />
+      </group>
+      {fallbackPose && (
+        <group position={fallbackPose.position} rotation-y={fallbackPose.rotationY}>
+          <WindowPreview invalid node={ghostStub} />
+        </group>
+      )}
+    </>
   )
 }
 
