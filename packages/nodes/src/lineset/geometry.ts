@@ -139,12 +139,30 @@ export function buildLinesetGeometry(node: LinesetNode): Group {
   const liquidPts = points.map((p, i) => p.clone().add(offsets[i]!))
 
   for (let i = 0; i < points.length - 1; i++) {
-    const sCopper = buildRun(suctionPts[i]!, suctionPts[i + 1]!, suctionR, copperMat, `lineset-suction-${i}`)
+    const sCopper = buildRun(
+      suctionPts[i]!,
+      suctionPts[i + 1]!,
+      suctionR,
+      copperMat,
+      `lineset-suction-${i}`,
+    )
     if (sCopper) group.add(sCopper)
-    const liquid = buildRun(liquidPts[i]!, liquidPts[i + 1]!, liquidR, copperMat, `lineset-liquid-${i}`)
+    const liquid = buildRun(
+      liquidPts[i]!,
+      liquidPts[i + 1]!,
+      liquidR,
+      copperMat,
+      `lineset-liquid-${i}`,
+    )
     if (liquid) group.add(liquid)
     if (node.insulated) {
-      const jacket = buildRun(suctionPts[i]!, suctionPts[i + 1]!, jacketR, insulationMat, `lineset-jacket-${i}`)
+      const jacket = buildRun(
+        suctionPts[i]!,
+        suctionPts[i + 1]!,
+        jacketR,
+        insulationMat,
+        `lineset-jacket-${i}`,
+      )
       if (jacket) group.add(jacket)
     }
   }

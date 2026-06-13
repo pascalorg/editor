@@ -66,13 +66,7 @@ const LinesetSelectionAffordance = () => {
   return createPortal(<LinesetPointHandles lineset={lineset} target={target} />, target, undefined)
 }
 
-const LinesetPointHandles = ({
-  lineset,
-  target,
-}: {
-  lineset: LinesetNode
-  target: Object3D
-}) => {
+const LinesetPointHandles = ({ lineset, target }: { lineset: LinesetNode; target: Object3D }) => {
   const { camera, gl } = useThree()
   const unit = useViewer((s) => s.unit)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)

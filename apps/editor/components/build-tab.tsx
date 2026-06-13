@@ -154,8 +154,10 @@ export function BuildTab() {
   // The fitting tools are armed from their segment's panel, not a grid
   // tile — keep the segment tile lit so the panel (and the way back)
   // stays visible.
-  const ductContext = mode === 'build' && (activeTool === 'duct-segment' || activeTool === 'duct-fitting')
-  const pipeContext = mode === 'build' && (activeTool === 'pipe-segment' || activeTool === 'pipe-fitting')
+  const ductContext =
+    mode === 'build' && (activeTool === 'duct-segment' || activeTool === 'duct-fitting')
+  const pipeContext =
+    mode === 'build' && (activeTool === 'pipe-segment' || activeTool === 'pipe-fitting')
 
   const isTypeActive = (type: BuildType) =>
     type.mode === 'material-paint'

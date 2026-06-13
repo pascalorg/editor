@@ -24,10 +24,7 @@ export function buildPipeTrapGeometry(node: PipeTrapNode): Group {
 
   // U-bend: half torus in the XY plane, opening upward. Sits so its two
   // tops are at y = bendR (the inlet riser and the arm rise).
-  const bend = new Mesh(
-    new TorusGeometry(bendR, radius, 12, BEND_SEGMENTS, Math.PI),
-    material,
-  )
+  const bend = new Mesh(new TorusGeometry(bendR, radius, 12, BEND_SEGMENTS, Math.PI), material)
   bend.rotation.z = Math.PI // open side up
   bend.position.set(bendR, bendR, 0)
   bend.name = 'pipe-trap-bend'

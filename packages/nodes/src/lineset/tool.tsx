@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNodeId, LinesetNode, emitter, type GridEvent, useScene } from '@pascal-app/core'
+import { type AnyNodeId, emitter, type GridEvent, LinesetNode, useScene } from '@pascal-app/core'
 import {
   DimensionPill,
   EDITOR_LAYER,
@@ -144,7 +144,11 @@ const LinesetTool = () => {
         const step = useEditor.getState().gridSnapStep
         return { point: [snap(raw[0], step), 0, snap(raw[2], step)], snapped: null }
       }
-      const rawXZ: [number, number, number] = [event.localPosition[0], last[1], event.localPosition[2]]
+      const rawXZ: [number, number, number] = [
+        event.localPosition[0],
+        last[1],
+        event.localPosition[2],
+      ]
       const shift = event.nativeEvent?.shiftKey === true
       const angled = shift ? rawXZ : projectToAngleLock(last, rawXZ)
       if (event.nativeEvent?.altKey !== true && !shift) {
@@ -340,7 +344,12 @@ function PreviewSegment({ a, b }: { a: [number, number, number]; b: [number, num
       }}
     >
       <cylinderGeometry args={[radius, radius, length, 16, 1, false]} />
-      <meshBasicMaterial color={PREVIEW_COLOR} depthTest={false} opacity={PREVIEW_OPACITY} transparent />
+      <meshBasicMaterial
+        color={PREVIEW_COLOR}
+        depthTest={false}
+        opacity={PREVIEW_OPACITY}
+        transparent
+      />
     </mesh>
   )
 }

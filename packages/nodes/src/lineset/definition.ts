@@ -45,8 +45,7 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
   parametrics: linesetParametrics,
 
   geometry: buildLinesetGeometry,
-  geometryKey: (n) =>
-    JSON.stringify([n.path, n.suctionDiameter, n.liquidDiameter, n.insulated]),
+  geometryKey: (n) => JSON.stringify([n.path, n.suctionDiameter, n.liquidDiameter, n.insulated]),
 
   // Open run ends as typed refrigerant ports — directions point outward
   // along the path tangent so they mate flush onto a service valve. Path

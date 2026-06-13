@@ -83,10 +83,7 @@ export function ductPortDiameterIn(node: {
  * pair in the plane perpendicular to `dir`, letting a riser carry the
  * orientation of the run it turned off instead of the bare fallback.
  */
-export function rectSectionAxes(
-  dir: Vector3,
-  roll = 0,
-): { width: Vector3; height: Vector3 } {
+export function rectSectionAxes(dir: Vector3, roll = 0): { width: Vector3; height: Vector3 } {
   const d = dir.clone().normalize()
   const xBase = new Vector3().crossVectors(UP, d)
   if (xBase.lengthSq() < 1e-8) xBase.set(1, 0, 0)

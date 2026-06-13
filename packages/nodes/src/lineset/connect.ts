@@ -79,7 +79,12 @@ export function planLinesetConnect(
   if (atStart && atEnd && atStart.line.id !== atEnd.line.id) {
     const left = endLast(atStart.line.path as Point[], atStart.side) // ...→ start
     const right = startFirst(atEnd.line.path as Point[], atEnd.side) // end →...
-    return { kind: 'bridge', id: atStart.line.id, path: [...left, ...right], deleteId: atEnd.line.id }
+    return {
+      kind: 'bridge',
+      id: atStart.line.id,
+      path: [...left, ...right],
+      deleteId: atEnd.line.id,
+    }
   }
   if (atStart) {
     const base = endLast(atStart.line.path as Point[], atStart.side) // ...→ start

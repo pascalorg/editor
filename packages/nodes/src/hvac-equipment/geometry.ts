@@ -153,8 +153,26 @@ export function buildHvacEquipmentGeometry(node: HvacEquipmentNode): Group {
   })
   addBox(frontW, openBottom - t, t, cabinet, 0, (t + openBottom) / 2, frontZ, 'equipment-sill')
   addBox(frontW, H - t - openTop, t, panelMat, 0, (openTop + H - t) / 2, frontZ, 'equipment-panel')
-  addBox(jamb, openTop - openBottom, t, cabinet, -frontHalf + jamb / 2, (openBottom + openTop) / 2, frontZ, 'equipment-jamb-l')
-  addBox(jamb, openTop - openBottom, t, cabinet, frontHalf - jamb / 2, (openBottom + openTop) / 2, frontZ, 'equipment-jamb-r')
+  addBox(
+    jamb,
+    openTop - openBottom,
+    t,
+    cabinet,
+    -frontHalf + jamb / 2,
+    (openBottom + openTop) / 2,
+    frontZ,
+    'equipment-jamb-l',
+  )
+  addBox(
+    jamb,
+    openTop - openBottom,
+    t,
+    cabinet,
+    frontHalf - jamb / 2,
+    (openBottom + openTop) / 2,
+    frontZ,
+    'equipment-jamb-r',
+  )
 
   // ── Control area on the upper front panel (fan-limit switch + cover).
   const ctrlMat = new MeshStandardMaterial({
@@ -162,8 +180,26 @@ export function buildHvacEquipmentGeometry(node: HvacEquipmentNode): Group {
     metalness: 0.4,
     roughness: 0.6,
   })
-  addBox(W * 0.34, (H - openTop) * 0.5, 0.012, ctrlMat, W * 0.18, (openTop + H) / 2, frontZ + 0.008, 'equipment-control')
-  addBox(W * 0.1, (H - openTop) * 0.3, 0.02, ctrlMat, -W * 0.22, (openTop + H) / 2, frontZ + 0.012, 'equipment-switch')
+  addBox(
+    W * 0.34,
+    (H - openTop) * 0.5,
+    0.012,
+    ctrlMat,
+    W * 0.18,
+    (openTop + H) / 2,
+    frontZ + 0.008,
+    'equipment-control',
+  )
+  addBox(
+    W * 0.1,
+    (H - openTop) * 0.3,
+    0.02,
+    ctrlMat,
+    -W * 0.22,
+    (openTop + H) / 2,
+    frontZ + 0.012,
+    'equipment-switch',
+  )
 
   // ── Squirrel-cage circulating fan, seated in the open lower cavity. The
   // round scroll housing faces front (+Z) so it shows through the cut.
@@ -181,18 +217,12 @@ export function buildHvacEquipmentGeometry(node: HvacEquipmentNode): Group {
     metalness: 0.2,
     roughness: 0.75,
   })
-  const housing = new Mesh(
-    new CylinderGeometry(rB, rB, housingD, RADIAL_SEGMENTS),
-    blowerMat,
-  )
+  const housing = new Mesh(new CylinderGeometry(rB, rB, housingD, RADIAL_SEGMENTS), blowerMat)
   housing.name = 'blower-housing'
   housing.rotation.x = Math.PI / 2 // axis Y → axis Z (round face toward front)
   housing.position.set(0, cy, zc)
   group.add(housing)
-  const intake = new Mesh(
-    new TorusGeometry(rB * 0.7, rB * 0.12, 10, RADIAL_SEGMENTS),
-    blowerMat,
-  )
+  const intake = new Mesh(new TorusGeometry(rB * 0.7, rB * 0.12, 10, RADIAL_SEGMENTS), blowerMat)
   intake.name = 'blower-intake'
   intake.position.set(0, cy, hd - t - 0.005)
   group.add(intake)
@@ -208,10 +238,7 @@ export function buildHvacEquipmentGeometry(node: HvacEquipmentNode): Group {
   const BLADES = 14
   for (let i = 0; i < BLADES; i++) {
     const a = (i / BLADES) * Math.PI * 2
-    const blade = new Mesh(
-      new BoxGeometry(0.006, rB * 0.62, housingD * 0.82),
-      bladeMat,
-    )
+    const blade = new Mesh(new BoxGeometry(0.006, rB * 0.62, housingD * 0.82), bladeMat)
     blade.name = `blower-blade-${i}`
     blade.position.set(Math.cos(a) * rB * 0.5, cy + Math.sin(a) * rB * 0.5, zc)
     blade.rotation.z = a
@@ -519,13 +546,7 @@ function buildCondenser(node: HvacEquipmentNode, group: Group): Group {
   // them read as the coil louvers.
   const finY = H / 2
   const finH = H - 2 * frameH
-  const addFins = (
-    count: number,
-    span: number,
-    fixed: number,
-    axis: 'x' | 'z',
-    sign: number,
-  ) => {
+  const addFins = (count: number, span: number, fixed: number, axis: 'x' | 'z', sign: number) => {
     for (let i = 0; i < count; i++) {
       const t = (i + 0.5) / count
       const c = -span / 2 + t * span
@@ -568,10 +589,7 @@ function buildCondenserFanGuard(group: Group, W: number, H: number, D: number): 
 
   // Recessed throat dropping below the top deck so the fan reads as an
   // opening, not a disc sitting on the lid.
-  const throat = new Mesh(
-    new CylinderGeometry(r, r, H * 0.12, RADIAL_SEGMENTS, 1, true),
-    fanMat,
-  )
+  const throat = new Mesh(new CylinderGeometry(r, r, H * 0.12, RADIAL_SEGMENTS, 1, true), fanMat)
   throat.name = 'condenser-fan-throat'
   throat.position.set(0, deckY - H * 0.06, 0)
   group.add(throat)
@@ -582,10 +600,7 @@ function buildCondenserFanGuard(group: Group, W: number, H: number, D: number): 
     metalness: 0.3,
     roughness: 0.6,
   })
-  const hub = new Mesh(
-    new CylinderGeometry(r * 0.16, r * 0.16, 0.04, SMALL_SEGMENTS),
-    bladeMat,
-  )
+  const hub = new Mesh(new CylinderGeometry(r * 0.16, r * 0.16, 0.04, SMALL_SEGMENTS), bladeMat)
   hub.name = 'condenser-fan-hub'
   hub.position.set(0, deckY - 0.02, 0)
   group.add(hub)
@@ -647,20 +662,14 @@ function buildAxialFan(
   })
 
   // Recessed throat behind the blades so the fan reads as an opening.
-  const throat = new Mesh(
-    new CylinderGeometry(r, r, 0.04, RADIAL_SEGMENTS),
-    grilleMat,
-  )
+  const throat = new Mesh(new CylinderGeometry(r, r, 0.04, RADIAL_SEGMENTS), grilleMat)
   throat.name = `fan-${index}-throat`
   throat.rotation.x = Math.PI / 2
   throat.position.set(x, y, frontZ - 0.02)
   group.add(throat)
 
   // Hub + swept blades, sitting just proud of the throat.
-  const hub = new Mesh(
-    new CylinderGeometry(r * 0.18, r * 0.18, 0.03, SMALL_SEGMENTS),
-    bladeMat,
-  )
+  const hub = new Mesh(new CylinderGeometry(r * 0.18, r * 0.18, 0.03, SMALL_SEGMENTS), bladeMat)
   hub.name = `fan-${index}-hub`
   hub.rotation.x = Math.PI / 2
   hub.position.set(x, y, frontZ + 0.005)
@@ -669,10 +678,7 @@ function buildAxialFan(
   const BLADES = 5
   for (let i = 0; i < BLADES; i++) {
     const a = (i / BLADES) * Math.PI * 2
-    const blade = new Mesh(
-      new BoxGeometry(r * 0.34, 0.006, r * 0.78),
-      bladeMat,
-    )
+    const blade = new Mesh(new BoxGeometry(r * 0.34, 0.006, r * 0.78), bladeMat)
     blade.name = `fan-${index}-blade-${i}`
     // Position blade outward from hub, then tilt for an airfoil sweep.
     const br = r * 0.5
@@ -690,10 +696,7 @@ function buildAxialFan(
   })
   for (let k = 1; k <= 3; k++) {
     const rr = (r * k) / 3
-    const ring = new Mesh(
-      new TorusGeometry(rr, 0.004, 6, RADIAL_SEGMENTS),
-      ringMat,
-    )
+    const ring = new Mesh(new TorusGeometry(rr, 0.004, 6, RADIAL_SEGMENTS), ringMat)
     ring.name = `fan-${index}-grille-${k}`
     ring.position.set(x, y, frontZ + 0.02)
     group.add(ring)

@@ -1,8 +1,4 @@
-import {
-  type DuctFittingNode,
-  type ParametricDescriptor,
-  useScene,
-} from '@pascal-app/core'
+import { type DuctFittingNode, type ParametricDescriptor, useScene } from '@pascal-app/core'
 import { Vector3 } from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import { rollToContinueAcrossElbow } from './geometry'
@@ -11,10 +7,7 @@ import type { DuctSegmentNode } from './schema'
 /** A run endpoint sitting this close to a collar counts as mated. */
 const MATE_TOL_M = 0.03
 
-function dist2(
-  a: readonly [number, number, number],
-  b: readonly [number, number, number],
-): number {
+function dist2(a: readonly [number, number, number], b: readonly [number, number, number]): number {
   const dx = a[0] - b[0]
   const dy = a[1] - b[1]
   const dz = a[2] - b[2]

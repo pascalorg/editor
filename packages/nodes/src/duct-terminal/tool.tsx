@@ -8,7 +8,6 @@ import {
   sceneRegistry,
   useScene,
   type WallEvent,
-  type WallNode,
 } from '@pascal-app/core'
 import { triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
