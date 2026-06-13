@@ -15,6 +15,7 @@ export const PerfMonitor = () => {
     drawCalls: 0,
     triangles: 0,
     dirty: 0,
+    dirtyDetail: '',
     meshes: 0,
     lines: 0,
     sprites: 0,
@@ -60,7 +61,20 @@ export const PerfMonitor = () => {
       const drawCalls = Math.round(totalCalls / Math.max(1, frameCount.current))
       const triangles = totalTriangles / Math.max(1, frameCount.current)
       info.reset()
-      const dirty = useScene.getState().dirtyNodes.size
+      const sceneState = useScene.getState()
+      const dirty = sceneState.dirtyNodes.size
+      let dirtyDetail = ''
+      if (dirty > 0) {
+        const counts = new Map<string, number>()
+        for (const id of sceneState.dirtyNodes) {
+          const type = sceneState.nodes[id]?.type ?? 'missing'
+          counts.set(type, (counts.get(type) ?? 0) + 1)
+        }
+        dirtyDetail = [...counts.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([type, count]) => `${count} ${type}`)
+          .join(', ')
+      }
 
       // Count visible drawables by type so we can match scene contents
       // against the renderer's draw count and find hidden contributors.
@@ -99,6 +113,7 @@ export const PerfMonitor = () => {
         drawCalls,
         triangles,
         dirty,
+        dirtyDetail,
         meshes,
         lines,
         sprites,
@@ -133,7 +148,7 @@ export const PerfMonitor = () => {
 GPU    ${stats.gpuMs > 0 ? `${stats.gpuMs.toFixed(1)}ms (max ${stats.gpuMaxMs.toFixed(1)})` : '—'}
 DRAW   ${stats.drawCalls}
 TRI    ${(stats.triangles / 1000).toFixed(1)}k
-DIRTY  ${stats.dirty}
+DIRTY  ${stats.dirty}${stats.dirtyDetail ? ` (${stats.dirtyDetail})` : ''}
 MESH   ${stats.meshes}
 LINE   ${stats.lines}
 SPRITE ${stats.sprites}

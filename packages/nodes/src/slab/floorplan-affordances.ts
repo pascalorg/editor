@@ -1,8 +1,10 @@
-import type { SlabNode } from '@pascal-app/core'
+import { type AnyNode, resolveLevelId, type SlabNode } from '@pascal-app/core'
+import { resolveSlabPlanPointSnap } from '@pascal-app/editor'
 import {
   createPolygonAddVertexAffordance,
   createPolygonMoveEdgeAffordance,
   createPolygonVertexAffordance,
+  type PolygonAffordanceSnapContext,
 } from '../shared/polygon-vertex-affordance'
 
 /**
@@ -19,6 +21,36 @@ import {
  * the slab is selected, every hole's handles appear at the same time.
  * Simpler model, no UX downside in practice.
  */
-export const slabMoveVertexAffordance = createPolygonVertexAffordance<SlabNode>('slab')
-export const slabAddVertexAffordance = createPolygonAddVertexAffordance<SlabNode>('slab')
-export const slabMoveEdgeAffordance = createPolygonMoveEdgeAffordance<SlabNode>('slab')
+const slabSnapOptions = {
+  resolvePlanPoint({
+    node,
+    nodes,
+    rawPoint,
+    fallbackPoint,
+    modifiers,
+  }: PolygonAffordanceSnapContext<SlabNode>) {
+    const sceneNodes = nodes as Record<string, AnyNode>
+    return resolveSlabPlanPointSnap({
+      rawPoint,
+      fallbackPoint,
+      levelId: resolveLevelId(node, sceneNodes),
+      excludeId: node.id,
+      nodes: sceneNodes,
+      altKey: modifiers.altKey,
+      shiftKey: modifiers.shiftKey,
+    }).point
+  },
+}
+
+export const slabMoveVertexAffordance = createPolygonVertexAffordance<SlabNode>(
+  'slab',
+  slabSnapOptions,
+)
+export const slabAddVertexAffordance = createPolygonAddVertexAffordance<SlabNode>(
+  'slab',
+  slabSnapOptions,
+)
+export const slabMoveEdgeAffordance = createPolygonMoveEdgeAffordance<SlabNode>(
+  'slab',
+  slabSnapOptions,
+)

@@ -223,7 +223,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Set fence start / end' },
-    { key: 'Shift', label: 'Allow non-45° angles' },
+    { key: 'Shift', label: 'Free angle (no 15° snap)' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

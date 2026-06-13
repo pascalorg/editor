@@ -6,6 +6,7 @@ import {
   type ArcResizeHandle,
   type Cursor,
   createSceneApi,
+  DEFAULT_ANGLE_STEP,
   type HandleDescriptor,
   type HandlePortal,
   type LinearResizeHandle,
@@ -34,15 +35,19 @@ import {
   OrthographicCamera,
   Plane,
   Quaternion,
+  Ray,
   RingGeometry,
   Vector3,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor from '../../store/use-editor'
+import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { formatAngleRadians } from '../tools/shared/segment-angle'
 import {
   ARROW_COLOR,
@@ -53,6 +58,47 @@ import {
   NO_RAYCAST,
 } from './handles/handle-arrow'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
+
+// Pooled scratch for the handle rig's world-relative pose mapping.
+const _rigRelative = new Matrix4()
+const _rigScratchScale = new Vector3()
+const _resizeAxisW = new Vector3()
+const _resizeScale = new Vector3()
+const _resizeQuaternion = new Quaternion()
+const _resizeOriginW = new Vector3()
+const _resizePositionW = new Vector3()
+const _resizeRay = new Ray()
+const _resizeRayW = new Vector3()
+
+function axisVector(axis: 'x' | 'y' | 'z', target: Vector3) {
+  target.set(0, 0, 0)
+  if (axis === 'x') target.x = 1
+  else if (axis === 'y') target.y = 1
+  else target.z = 1
+  return target
+}
+
+function axisScale(axis: 'x' | 'y' | 'z', scale: Vector3) {
+  return axis === 'x' ? scale.x : axis === 'y' ? scale.y : scale.z
+}
+
+function closestAxisParameterToRay(axisOrigin: Vector3, axisDirection: Vector3, ray: Ray) {
+  _resizeRayW.subVectors(axisOrigin, ray.origin)
+  const b = axisDirection.dot(ray.direction)
+  const d = axisDirection.dot(_resizeRayW)
+  const e = ray.direction.dot(_resizeRayW)
+  const denominator = 1 - b * b
+  if (Math.abs(denominator) < 1e-6) {
+    return -d
+  }
+
+  const axisParameter = (b * e - d) / denominator
+  const rayParameter = e + b * axisParameter
+  if (rayParameter < 0) {
+    return -d
+  }
+  return axisParameter
+}
 
 export {
   ARROW_COLOR,
@@ -122,6 +168,7 @@ function DimensionLabel({
 
 export function NodeArrowHandles() {
   const selectedIds = useViewer((state) => state.selection.selectedIds)
+  const activeRotateNodeId = useDirectManipulationFeedback((state) => state.activeRotateNodeId)
   const mode = useEditor((state) => state.mode)
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
   const movingNode = useEditor((state) => state.movingNode)
@@ -135,7 +182,7 @@ export function NodeArrowHandles() {
   const curvingWall = useEditor((state) => state.curvingWall)
   const curvingFence = useEditor((state) => state.curvingFence)
 
-  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : activeRotateNodeId
   const rawNode = useScene((state) =>
     selectedId ? (state.nodes[selectedId as AnyNodeId] ?? null) : null,
   )
@@ -275,13 +322,31 @@ function NodeArrowHandlesForNode({
   // exclusion the wall arrow also goes without.
 
   useFrame(() => {
+    if (innerRef.current && innerRide && portalObject) {
+      // Grandparent mode: pose the rig by mapping the node's WORLD pose
+      // into the portal target's frame. Copying the parent + node
+      // registry poses (the previous approach) assumed the node mesh is
+      // a DIRECT child of the parent's registered object — roof-hosted
+      // openings break that with an intermediate face-frame group, which
+      // the world-relative mapping absorbs for free. For wall children
+      // the result is identical (portal⁻¹ ∘ node = wall.local ∘ node.local).
+      if (outerRef.current) {
+        outerRef.current.position.set(0, 0, 0)
+        outerRef.current.quaternion.identity()
+      }
+      portalObject.updateWorldMatrix(true, false)
+      innerRide.updateWorldMatrix(true, false)
+      _rigRelative.copy(portalObject.matrixWorld).invert().multiply(innerRide.matrixWorld)
+      _rigRelative.decompose(
+        innerRef.current.position,
+        innerRef.current.quaternion,
+        _rigScratchScale,
+      )
+      return
+    }
     if (outerRef.current && outerRide) {
       outerRef.current.position.copy(outerRide.position)
       outerRef.current.quaternion.copy(outerRide.quaternion)
-    }
-    if (innerRef.current && innerRide) {
-      innerRef.current.position.copy(innerRide.position)
-      innerRef.current.quaternion.copy(innerRide.quaternion)
     }
   })
 
@@ -555,34 +620,31 @@ function LinearArrow({
     rideObject,
     setIsDragging,
     onStart: ({
-      camera: dragCamera,
       event,
+      getPointerRay,
       initialNode,
-      intersectPlane,
       nodeId,
       rideObject: dragRideObject,
       sceneApi,
     }) => {
-      const initialFrameInverse = new Matrix4().copy(dragRideObject.matrixWorld).invert()
-      const worldOrigin = new Vector3(...position).applyMatrix4(dragRideObject.matrixWorld)
-      const planeNormal = new Vector3().subVectors(dragCamera.position, worldOrigin).setY(0)
-      if (planeNormal.lengthSq() === 0) return null
-      planeNormal.normalize()
-      const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, worldOrigin)
+      dragRideObject.matrixWorld.decompose(_resizePositionW, _resizeQuaternion, _resizeScale)
+      _resizeOriginW.set(...position).applyMatrix4(dragRideObject.matrixWorld)
+      axisVector(descriptor.axis, _resizeAxisW).applyQuaternion(_resizeQuaternion).normalize()
+      const localToWorldScale = axisScale(descriptor.axis, _resizeScale)
+      if (Math.abs(localToWorldScale) < 1e-6 || _resizeAxisW.lengthSq() === 0) return null
 
-      const hitWorld = new Vector3()
-      if (!intersectPlane(event.nativeEvent.clientX, event.nativeEvent.clientY, plane, hitWorld)) {
-        return null
-      }
-      const hitLocal = hitWorld.clone().applyMatrix4(initialFrameInverse)
+      const initialPointer =
+        closestAxisParameterToRay(
+          _resizeOriginW,
+          _resizeAxisW,
+          getPointerRay(event.nativeEvent.clientX, event.nativeEvent.clientY, _resizeRay),
+        ) / localToWorldScale
 
       const overrideId =
         (descriptor.kind === 'linear-resize'
           ? descriptor.overrideTarget?.(initialNode as never, sceneApi)
           : undefined) ?? nodeId
       const initialValue = descriptor.currentValue(initialNode)
-      const initialPointer =
-        descriptor.axis === 'x' ? hitLocal.x : descriptor.axis === 'y' ? hitLocal.y : hitLocal.z
       const minBound = resolveBound(descriptor.min, Number.NEGATIVE_INFINITY, initialNode, sceneApi)
       const maxBound = resolveBound(descriptor.max, Number.POSITIVE_INFINITY, initialNode, sceneApi)
       const gridSnapStep =
@@ -610,22 +672,19 @@ function LinearArrow({
             useEditor.getState().setActiveHandleDrag(null)
           }
         },
-        move: ({ event: moveEvent, intersectPlane: intersectMovePlane }) => {
-          const intersection = new Vector3()
-          if (!intersectMovePlane(moveEvent.clientX, moveEvent.clientY, plane, intersection)) {
-            return null
-          }
-          const intersectionLocal = intersection.clone().applyMatrix4(initialFrameInverse)
+        move: ({ event: moveEvent, getPointerRay: getMovePointerRay }) => {
           const currentPointer =
-            descriptor.axis === 'x'
-              ? intersectionLocal.x
-              : descriptor.axis === 'y'
-                ? intersectionLocal.y
-                : intersectionLocal.z
+            closestAxisParameterToRay(
+              _resizeOriginW,
+              _resizeAxisW,
+              getMovePointerRay(moveEvent.clientX, moveEvent.clientY, _resizeRay),
+            ) / localToWorldScale
           const delta = currentPointer - initialPointer
           const rawNext = initialValue + delta * factor
           const snappedNext =
-            gridSnapStep && gridSnapStep > 0 ? snapScalar(rawNext, gridSnapStep) : rawNext
+            !moveEvent.shiftKey && gridSnapStep && gridSnapStep > 0
+              ? snapScalar(rawNext, gridSnapStep)
+              : rawNext
           const next = Math.min(maxBound, Math.max(minBound, snappedNext))
           return descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>
         },
@@ -971,6 +1030,8 @@ function ArcArrow({
   // corner) render a two-headed curved arrow; everything else (stair
   // sweep, etc.) keeps the chevron.
   const isRotateShape = descriptor.shape === 'rotate'
+  const activeRotateNodeId = useDirectManipulationFeedback((state) => state.activeRotateNodeId)
+  const isDirectRotating = isRotateShape && activeRotateNodeId === liveNode.id
   // 'node-normal' spins the node about its local +Z (a wall item flat against
   // its wall) instead of yaw about world-Y. The drag plane and the icon both
   // tilt into that plane, and the horizontal-only wedge/ring readout is
@@ -1010,7 +1071,7 @@ function ArcArrow({
   // arrow is hovered or dragging. Same recipe as the linear / radial
   // decoration path.
   const decoration = descriptor.decoration
-  const showDecoration = Boolean(decoration) && (isHovered || isDragging)
+  const showDecoration = Boolean(decoration) && (isHovered || isDragging || isDirectRotating)
 
   const activate = useHandleDrag({
     kind: 'drag',
@@ -1072,9 +1133,8 @@ function ArcArrow({
           while (delta > Math.PI) delta -= 2 * Math.PI
           while (delta < -Math.PI) delta += 2 * Math.PI
 
-          if (moveEvent.shiftKey && descriptor.shape === 'rotate') {
-            const step = Math.PI / 12
-            delta = Math.round(delta / step) * step
+          if (!moveEvent.shiftKey && descriptor.shape === 'rotate') {
+            delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
           }
 
           if (isRotateShape && !isNodeNormalRot) {
@@ -1085,13 +1145,6 @@ function ArcArrow({
       }
     },
   })
-
-  // Suppress "declared but unused" for `liveNode` — ArcArrow's apply
-  // operates entirely on `initialNode` (snapshot taken inside activate)
-  // and `delta` (live cursor angle), so the live store node doesn't
-  // appear in the rotation pipeline. The prop is still required because
-  // ArrowHandle passes it uniformly to every variant.
-  void liveNode
 
   return (
     <>
@@ -1116,7 +1169,7 @@ function ArcArrow({
       <HandleArrow
         activeCursor={dragCursor}
         cursor={hoverCursor}
-        hover={isHovered}
+        hover={isHovered || isDirectRotating}
         onHoverChange={setIsHovered}
         onPointerDown={activate}
         placement={{
@@ -1169,6 +1222,7 @@ function TranslateArrow({
   // 3D translate gizmo and the floating Move button behave identically.
   const activate = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
     sfxEmitter.emit('sfx:item-pick')
     useEditor.getState().setMovingNode(node as never)
     useViewer.getState().setSelection({ selectedIds: [] })

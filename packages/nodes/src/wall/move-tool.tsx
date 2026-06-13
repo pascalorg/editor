@@ -437,6 +437,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      const bypassSnap = shiftPressedRef.current || event.nativeEvent?.shiftKey === true
       const rawX = event.localPosition[0]
       const rawZ = event.localPosition[2]
       const snapStep = getSegmentGridStep()
@@ -467,11 +468,11 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       if (axis) {
         const originalProj = originalCenter[0] * axis[0] + originalCenter[1] * axis[1]
         const rawProj = originalProj + rawDeltaX * axis[0] + rawDeltaZ * axis[1]
-        const snappedProj = shiftPressedRef.current ? rawProj : snapScalarToGrid(rawProj, snapStep)
+        const snappedProj = bypassSnap ? rawProj : snapScalarToGrid(rawProj, snapStep)
         const perpDelta = snappedProj - originalProj
         deltaX = axis[0] * perpDelta
         deltaZ = axis[1] * perpDelta
-      } else if (shiftPressedRef.current) {
+      } else if (bypassSnap) {
         deltaX = rawDeltaX
         deltaZ = rawDeltaZ
       } else {
@@ -491,6 +492,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       const constrainedGridPos: [number, number] = [anchor[0] + deltaX, anchor[1] + deltaZ]
 
       if (
+        !bypassSnap &&
         previousGridPosRef.current &&
         (constrainedGridPos[0] !== previousGridPosRef.current[0] ||
           constrainedGridPos[1] !== previousGridPosRef.current[1])

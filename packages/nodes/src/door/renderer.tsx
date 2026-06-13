@@ -4,6 +4,7 @@ import { type DoorNode, useRegistry, useScene } from '@pascal-app/core'
 import { useNodeEvents } from '@pascal-app/viewer'
 import { useLayoutEffect, useRef } from 'react'
 import { type Mesh, MeshBasicMaterial } from 'three'
+import { RoofFaceHostFrame } from '../shared/roof-face-host'
 
 const doorHitboxMaterial = new MeshBasicMaterial({ visible: false })
 
@@ -17,7 +18,7 @@ export const DoorRenderer = ({ node }: { node: DoorNode }) => {
   const handlers = useNodeEvents(node, 'door')
   const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
 
-  return (
+  const mesh = (
     <mesh
       castShadow
       material={doorHitboxMaterial}
@@ -30,6 +31,13 @@ export const DoorRenderer = ({ node }: { node: DoorNode }) => {
     >
       <boxGeometry args={[0, 0, 0]} />
     </mesh>
+  )
+
+  if (!node.roofSegmentId) return mesh
+  return (
+    <RoofFaceHostFrame roofFace={node.roofFace} roofSegmentId={node.roofSegmentId}>
+      {mesh}
+    </RoofFaceHostFrame>
   )
 }
 

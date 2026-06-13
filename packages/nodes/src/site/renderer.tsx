@@ -15,8 +15,15 @@ import {
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
-import { useMemo, useRef } from 'react'
-import { BufferGeometry, Float32BufferAttribute, type Group, Path, Shape } from 'three'
+import { useEffect, useMemo, useRef } from 'react'
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  type Group,
+  Path,
+  Shape,
+  ShapeGeometry,
+} from 'three'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
 
 const Y_OFFSET = 0.01
@@ -134,6 +141,13 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     if (!polygonPoints || polygonPoints.length < 2) return null
     return createBoundaryLineGeometry(polygonPoints)
   }, [polygonPoints])
+  useEffect(() => () => lineGeometry?.dispose(), [lineGeometry])
+
+  const groundGeometry = useMemo(() => {
+    if (!groundShape) return null
+    return new ShapeGeometry(groundShape)
+  }, [groundShape])
+  useEffect(() => () => groundGeometry?.dispose(), [groundGeometry])
 
   const handlers = useNodeEvents(node, 'site')
 
@@ -149,15 +163,14 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       ))}
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
-      {groundShape && (
+      {groundGeometry && (
         <mesh
+          geometry={groundGeometry}
           material={groundMaterial}
           position={[0, -0.05, 0]}
           receiveShadow
           rotation={[-Math.PI / 2, 0, 0]}
-        >
-          <shapeGeometry args={[groundShape]} />
-        </mesh>
+        />
       )}
 
       {/* Simple boundary line */}

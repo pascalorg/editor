@@ -9,6 +9,10 @@ import {
 import { snapToHalf } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import {
+  getRoofHostedOpeningLevelId,
+  getRoofHostedOpeningPlanPoint,
+} from '../shared/roof-opening-host'
+import {
   findClosestWallInPlan,
   projectWallLocalPointToPlan,
   snapLocalXToNeighbors,
@@ -29,7 +33,12 @@ import { clampToWall, hasWallChildOverlap } from './window-math'
 
 export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ node }) => {
   const startLevelId = (() => {
-    const wall = useScene.getState().nodes[node.parentId as AnyNodeId]
+    // Wall-hosted: the wall's parent is the level. Roof-hosted: walk
+    // segment → roof → level.
+    const nodes = useScene.getState().nodes
+    const roofLevelId = getRoofHostedOpeningLevelId(node, nodes)
+    if (roofLevelId) return roofLevelId
+    const wall = nodes[node.parentId as AnyNodeId]
     return wall ? (wall.parentId as AnyNodeId | null) : null
   })()
   const originalWall = node.parentId
@@ -39,7 +48,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     original:
       originalWall?.type === 'wall'
         ? projectWallLocalPointToPlan(originalWall, node.position[0])
-        : [node.position[0], 0],
+        : (getRoofHostedOpeningPlanPoint(node, useScene.getState().nodes) ?? [node.position[0], 0]),
     metadata: node.metadata,
   })
 
@@ -56,6 +65,8 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     side: WindowNode['side']
     parentId: string
     wallId: string
+    roofSegmentId: undefined
+    roofFace: undefined
   } | null = null
 
   const session: FloorplanMoveTargetSession = {
@@ -68,16 +79,17 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
 
       // Figma-style along-wall alignment first (edge-to-edge with other
       // openings / wall ends), winning over the 0.5m grid snap; falls back
-      // to grid when nothing aligns. Alt bypasses; Shift drops the grid snap.
-      const neighborX = modifiers.altKey
-        ? null
-        : snapLocalXToNeighbors({
-            wall: hit.wall,
-            localX: hit.localX,
-            width: node.width,
-            selfId: node.id as AnyNodeId,
-            nodes,
-          })
+      // to grid when nothing aligns. Alt bypasses alignment; Shift bypasses all snap.
+      const neighborX =
+        modifiers.altKey || modifiers.shiftKey
+          ? null
+          : snapLocalXToNeighbors({
+              wall: hit.wall,
+              localX: hit.localX,
+              width: node.width,
+              selfId: node.id as AnyNodeId,
+              nodes,
+            })
       const snappedLocalX = neighborX ?? (modifiers.shiftKey ? hit.localX : snapToHalf(hit.localX))
       const { clampedX, clampedY } = clampToWall(
         hit.wall,
@@ -93,6 +105,10 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         side: hit.side,
         parentId: hit.wall.id,
         wallId: hit.wall.id,
+        // Re-anchoring to a wall ends any roof-segment hosting; the
+        // overlay's snapshot restores it if the move is reverted.
+        roofSegmentId: undefined,
+        roofFace: undefined,
       }
 
       useScene.getState().updateNodes([

@@ -65,6 +65,7 @@ export { useFreshPlacementVisibility } from './components/tools/shared/fresh-pla
 // Phase 5 Stage D — PolygonEditor for slab/ceiling boundary + hole editors.
 export {
   PolygonEditor,
+  type PolygonEditorPlanPointSnapContext,
   type PolygonEditorProps,
 } from './components/tools/shared/polygon-editor'
 export {
@@ -103,11 +104,11 @@ export {
   snapScalarToGrid,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
-  WALL_FINE_GRID_STEP,
   WALL_GRID_STEP,
   type WallDraftSnapKind,
   type WallDraftSnapResult,
   type WallPlanPoint,
+  type WallSnapRadii,
 } from './components/tools/wall/wall-drafting'
 // `ToolbarLeft` / `ToolbarRight` are the headless-spec aliases for the
 // existing `ViewerToolbarLeft` / `ViewerToolbarRight` exports — the
@@ -164,6 +165,13 @@ export {
 } from './components/ui/sidebar/panels/settings-panel'
 export type { SitePanelProps } from './components/ui/sidebar/panels/site-panel'
 export type { SidebarTab } from './components/ui/sidebar/tab-bar'
+export {
+  resolveAssetSnapTarget,
+  resolveNodeSnapTarget,
+  type SnapTarget,
+  SnapTargetBadge,
+  SnapTargetIcon,
+} from './components/ui/snap-target-badge'
 export type { SaveStatus } from './hooks/use-auto-save'
 // useDragAction is the React-side glue for the registry's DragAction
 // primitive. Public so registry-driven kinds (Phase 5+ Stage D ports)
@@ -172,6 +180,13 @@ export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
 export { markToolCancelConsumed } from './hooks/use-keyboard'
 export { type Selection, useSelection } from './hooks/use-selection'
+export {
+  CEILING_ALIGNMENT_THRESHOLD_M,
+  type CeilingPlanSnapInput,
+  type CeilingPlanSnapResult,
+  clearCeilingSnapFeedback,
+  resolveCeilingPlanPointSnap,
+} from './lib/ceiling-plan-snap'
 export { EDITOR_LAYER } from './lib/constants'
 // Helper libs used by the kind-owned roof / stair / elevator panels.
 export {
@@ -211,6 +226,15 @@ export {
   hasActivePaintMaterial,
 } from './lib/material-paint'
 export {
+  formatLinearMeasurement,
+  getLinearUnitLabel,
+  type LinearUnit,
+  linearControlValueToMeters,
+  linearUnitToMeters,
+  metersToLinearUnit,
+} from './lib/measurements'
+export { consumePlacementDragRelease } from './lib/placement-drag-release'
+export {
   addFreshPlacementMetadata,
   getPlacementMetadataRecord,
   isFreshPlacementMetadata,
@@ -222,9 +246,20 @@ export {
   resolvePlanarCursorPosition,
 } from './lib/planar-cursor-placement'
 export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
+// Roof wall-face hit resolution + overlap guard — shared by the
+// kind-owned door / window tools in `@pascal-app/nodes` and the item
+// placement coordinator's roof-wall strategy.
+export { hasRoofFaceChildOverlap, type RoofWallHit, resolveRoofWallHit } from './lib/roof-wall-hit'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { triggerSFX } from './lib/sfx-bus'
+export {
+  clearSlabSnapFeedback,
+  resolveSlabPlanPointSnap,
+  SLAB_ALIGNMENT_THRESHOLD_M,
+  type SlabPlanSnapInput,
+  type SlabPlanSnapResult,
+} from './lib/slab-plan-snap'
 export { duplicateStairSubtree } from './lib/stair-duplication'
 export {
   getBuildingLevelsForLevel,
@@ -234,6 +269,13 @@ export {
   resolveStairPlacementLevelId,
   resolveStairToLevelId,
 } from './lib/stair-levels'
+export {
+  clearSurfacePlanSnapFeedback,
+  resolveSurfacePlanPointSnap,
+  SURFACE_ALIGNMENT_THRESHOLD_M,
+  type SurfacePlanSnapInput,
+  type SurfacePlanSnapResult,
+} from './lib/surface-plan-snap'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
@@ -264,6 +306,7 @@ export {
   usePaletteViewRegistry,
 } from './store/use-palette-view-registry'
 export { default as usePlacementPreview } from './store/use-placement-preview'
+export { default as useSegmentDraftChain } from './store/use-segment-draft-chain'
 export { useUploadStore } from './store/use-upload'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
 export {

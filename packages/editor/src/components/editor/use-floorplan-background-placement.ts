@@ -2,24 +2,25 @@
 
 import { emitter, type FenceNode, isCurvedWall, type WallNode } from '@pascal-app/core'
 import { type MouseEvent as ReactMouseEvent, useCallback } from 'react'
+import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
+import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
+import useAlignmentGuides from '../../store/use-alignment-guides'
+import useSegmentDraftChain from '../../store/use-segment-draft-chain'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
-import {
-  WALL_FINE_GRID_STEP,
-  WALL_GRID_STEP,
-  type WallPlanPoint,
-} from '../tools/wall/wall-drafting'
+import { WALL_GRID_STEP, type WallPlanPoint } from '../tools/wall/wall-drafting'
 
 type UseFloorplanBackgroundPlacementArgs = {
   activePolygonDraftPoints: WallPlanPoint[]
   ceilingDraftPoints: WallPlanPoint[]
   clearFencePlacementDraft: () => void
   clearRoofPlacementDraft: () => void
+  clearWallPlacementDraft: () => void
   emitFloorplanGridEvent: (
     type: 'click' | 'double-click' | 'move',
     planPoint: WallPlanPoint,
     event: ReactMouseEvent<SVGSVGElement>,
-  ) => WallPlanPoint
+  ) => void
   fenceDraftStart: WallPlanPoint | null
   fences: FenceNode[]
   findClosestWallPoint: (
@@ -49,8 +50,10 @@ type UseFloorplanBackgroundPlacementArgs = {
   isOpeningPlacementActive: boolean
   isPolygonBuildActive: boolean
   isRoofBuildActive: boolean
+  isSlabBuildActive: boolean
   isWallBuildActive: boolean
   isZoneBuildActive: boolean
+  levelId: string | null
   roofDraftStart: WallPlanPoint | null
   setCursorPoint: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
   setFenceDraftEnd: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
@@ -63,6 +66,7 @@ type UseFloorplanBackgroundPlacementArgs = {
     walls: WallNode[]
     start?: WallPlanPoint
     angleSnap?: boolean
+    bypassSnap?: boolean
     step?: number
     gridSnap?: (point: WallPlanPoint) => WallPlanPoint
   }) => WallPlanPoint
@@ -70,6 +74,7 @@ type UseFloorplanBackgroundPlacementArgs = {
     point: WallPlanPoint
     start?: WallPlanPoint
     angleSnap: boolean
+    bypassSnap?: boolean
   }) => WallPlanPoint
   toPoint2D: (point: WallPlanPoint) => { x: number; y: number }
   walls: WallNode[]
@@ -77,7 +82,7 @@ type UseFloorplanBackgroundPlacementArgs = {
    * Snap a building-local plan point to the world XZ grid at `step`.
    * Injected so the hook doesn't have to know the building's rotation
    * or position — used by wall / fence branches that snap at variable
-   * step (Shift = fine).
+   * step.
    */
   worldGridSnap: (point: WallPlanPoint, step: number) => WallPlanPoint
 }
@@ -87,6 +92,7 @@ export function useFloorplanBackgroundPlacement({
   ceilingDraftPoints,
   clearFencePlacementDraft,
   clearRoofPlacementDraft,
+  clearWallPlacementDraft,
   emitFloorplanGridEvent,
   fenceDraftStart,
   fences,
@@ -105,8 +111,10 @@ export function useFloorplanBackgroundPlacement({
   isOpeningPlacementActive,
   isPolygonBuildActive,
   isRoofBuildActive,
+  isSlabBuildActive,
   isWallBuildActive,
   isZoneBuildActive,
+  levelId,
   roofDraftStart,
   setCursorPoint,
   setFenceDraftEnd,
@@ -148,18 +156,26 @@ export function useFloorplanBackgroundPlacement({
       }
 
       if (isCeilingBuildActive) {
+        const bypassSnap = shiftPressed || event.shiftKey
         // Align the committed vertex the same way the move-preview did, so
-        // the placed point matches what the user saw. Skip when angle snap
-        // owns the vertex (matches the move branch).
-        const angleSnap = ceilingDraftPoints.length > 0 && !shiftPressed
-        let snappedPoint = snapPolygonDraftPoint({
+        // the placed point matches what the user saw. Wall magnetic snap may
+        // still win; generic alignment is skipped when angle snap owns the
+        // vertex (matches the move branch).
+        const angleSnap = ceilingDraftPoints.length > 0 && !bypassSnap
+        const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: ceilingDraftPoints[ceilingDraftPoints.length - 1],
           angleSnap,
+          bypassSnap,
         })
-        if (!angleSnap) {
-          snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
-        }
+        const snappedPoint = resolveCeilingPlanPointSnap({
+          rawPoint: planPoint,
+          fallbackPoint,
+          levelId,
+          altKey: event.altKey,
+          shiftKey: bypassSnap,
+          align: !angleSnap,
+        }).point
 
         emitFloorplanGridEvent('click', snappedPoint, event)
         handleCeilingPlacementPoint(snappedPoint)
@@ -167,9 +183,11 @@ export function useFloorplanBackgroundPlacement({
       }
 
       if (isRoofBuildActive) {
-        const snappedPoint = alignFloorplanDraftPoint(getSnappedFloorplanPoint(planPoint), {
-          bypass: event.altKey,
-        })
+        const bypassSnap = shiftPressed || event.shiftKey
+        const snappedPoint = alignFloorplanDraftPoint(
+          bypassSnap ? planPoint : getSnappedFloorplanPoint(planPoint),
+          { bypass: event.altKey || bypassSnap },
+        )
         emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
 
@@ -183,27 +201,43 @@ export function useFloorplanBackgroundPlacement({
       }
 
       if (isFenceBuildActive) {
+        const bypassSnap = shiftPressed || event.shiftKey
         // Fence draft: grid snap (+ existing-wall/fence endpoint snap), then
         // Figma alignment — endpoint snap wins (same precedence as move).
-        // `gridSnap` keeps the snap on the world XZ grid even when the
-        // building is rotated.
-        const fenceStep = shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
+        // While a draft is open the segment locks to 15° rays from its
+        // start unless Shift is held; Shift bypasses grid, magnetic,
+        // angle, and alignment snap. `gridSnap` keeps the regular snap
+        // on the world XZ grid even when the building is rotated.
+        const fenceStep = WALL_GRID_STEP
+        const fenceAngleSnap = fenceDraftStart !== null && !bypassSnap
         const fenceSnapped = snapFenceDraftPoint({
           point: planPoint,
           walls,
           fences,
-          step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
+          start: fenceDraftStart ?? undefined,
+          angleSnap: fenceAngleSnap,
+          bypassSnap,
           gridSnap: (p) => worldGridSnap(p, fenceStep),
         })
-        const fenceGridBase = worldGridSnap(planPoint, fenceStep)
+        const fenceGridBase = bypassSnap ? planPoint : worldGridSnap(planPoint, fenceStep)
         const fenceLocked =
-          fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
-        const snappedPoint = fenceLocked
-          ? fenceSnapped
-          : alignFloorplanDraftPoint(fenceSnapped, { bypass: event.altKey })
+          !bypassSnap &&
+          (fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1])
+        const snappedPoint =
+          fenceLocked || fenceAngleSnap
+            ? fenceSnapped
+            : alignFloorplanDraftPoint(fenceSnapped, { bypass: event.altKey || bypassSnap })
 
         emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
+
+        // Double-click finishes the chain. The emit above already made the
+        // 3D fence tool stopDrafting (its detail >= 2 guard), so close the
+        // 2D draft too — leaving it open desyncs the two views.
+        if (fenceDraftStart && event.detail >= 2) {
+          clearFencePlacementDraft()
+          return true
+        }
 
         if (!fenceDraftStart) {
           setFenceDraftStart(snappedPoint)
@@ -211,7 +245,13 @@ export function useFloorplanBackgroundPlacement({
         } else if (
           getPlanPointDistance(toPoint2D(fenceDraftStart), toPoint2D(snappedPoint)) >= 0.01
         ) {
-          clearFencePlacementDraft()
+          // The 3D fence tool owns creation and keeps chaining from the
+          // committed fence's resolved end — chain the 2D draft from the
+          // same published point so both views draft the next segment
+          // from the same start.
+          const nextStart = useSegmentDraftChain.getState().fence ?? snappedPoint
+          setFenceDraftStart(nextStart)
+          setFenceDraftEnd(nextStart)
         } else {
           setFenceDraftEnd(snappedPoint)
         }
@@ -224,14 +264,28 @@ export function useFloorplanBackgroundPlacement({
       // swallow the click and skip local draft state updates — leaving
       // the 2D draft polygon invisible while the 3D tool builds fine).
       if (isPolygonBuildActive) {
-        const angleSnap = activePolygonDraftPoints.length > 0 && !shiftPressed
-        let snappedPoint = snapPolygonDraftPoint({
+        const bypassSnap = shiftPressed || event.shiftKey
+        const angleSnap = activePolygonDraftPoints.length > 0 && !bypassSnap
+        const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
           angleSnap,
+          bypassSnap,
         })
-        if (!angleSnap) {
-          snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
+        let snappedPoint = fallbackPoint
+        if (isSlabBuildActive) {
+          snappedPoint = resolveSlabPlanPointSnap({
+            rawPoint: planPoint,
+            fallbackPoint,
+            levelId,
+            altKey: event.altKey,
+            shiftKey: bypassSnap,
+            align: !angleSnap,
+          }).point
+        } else if (!angleSnap) {
+          snappedPoint = alignFloorplanDraftPoint(fallbackPoint, {
+            bypass: event.altKey || bypassSnap,
+          })
         }
 
         // Emit the grid event so the registry-driven slab tool also
@@ -255,25 +309,49 @@ export function useFloorplanBackgroundPlacement({
       // / draftEnd state in the floor plan would never update, leaving
       // the dashed-line draft preview invisible.
       if (isWallBuildActive) {
+        const bypassSnap = shiftPressed || event.shiftKey
         // Wall draft: grid snap (+ existing-wall endpoint/join snap), then
         // Figma alignment — endpoint/join snap wins (same precedence as the
         // move-preview branch), so committing onto a corner still works.
-        // `gridSnap` keeps the snap on the world XZ grid even when the
-        // building is rotated.
-        const wallStep = shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
+        // While a draft is open the segment locks to 15° rays from its
+        // start unless Shift is held; Shift bypasses grid, magnetic,
+        // angle, and alignment snap. `gridSnap` keeps the regular snap
+        // on the world XZ grid even when the building is rotated.
+        const wallStep = WALL_GRID_STEP
+        const wallAngleSnap = draftStart !== null && !bypassSnap
         const wallSnapped = snapWallDraftPoint({
           point: planPoint,
           walls,
-          step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
+          start: draftStart ?? undefined,
+          angleSnap: wallAngleSnap,
+          bypassSnap,
           gridSnap: (p) => worldGridSnap(p, wallStep),
         })
-        const wallGridBase = worldGridSnap(planPoint, wallStep)
-        const wallLocked = wallSnapped[0] !== wallGridBase[0] || wallSnapped[1] !== wallGridBase[1]
-        const snappedPoint = wallLocked
-          ? wallSnapped
-          : alignFloorplanDraftPoint(wallSnapped, { bypass: false })
+        const wallGridBase = bypassSnap ? planPoint : worldGridSnap(planPoint, wallStep)
+        const wallLocked =
+          !bypassSnap && (wallSnapped[0] !== wallGridBase[0] || wallSnapped[1] !== wallGridBase[1])
+        let snappedPoint = wallSnapped
+        if (wallLocked) {
+          useAlignmentGuides.getState().clear()
+        } else {
+          snappedPoint = alignFloorplanDraftPoint(wallSnapped, {
+            applySnap: !wallAngleSnap,
+            bypass: event.altKey || bypassSnap,
+          })
+        }
 
         emitFloorplanGridEvent('click', snappedPoint, event)
+
+        // Double-click finishes the chain. The emit above already made the
+        // 3D wall tool stopDrafting (its detail >= 2 guard), so close the
+        // 2D draft too — otherwise it stays open against a closed 3D tool
+        // and the next previewed segment is silently never created.
+        if (draftStart && event.detail >= 2) {
+          clearWallPlacementDraft()
+          setCursorPoint(snappedPoint)
+          return true
+        }
+
         handleWallPlacementPoint(snappedPoint, { singleWall: event.altKey })
         return true
       }
@@ -291,7 +369,8 @@ export function useFloorplanBackgroundPlacement({
       // local floor-plan draft handler (column / spawn / shelf / etc.).
       // The tool's `grid:click` subscriber owns the placement.
       if (isFloorplanGridInteractionActive) {
-        const snappedPoint = emitFloorplanGridEvent('click', planPoint, event)
+        const snappedPoint = event.shiftKey ? planPoint : getSnappedFloorplanPoint(planPoint)
+        emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
         return true
       }
@@ -303,6 +382,7 @@ export function useFloorplanBackgroundPlacement({
       ceilingDraftPoints,
       clearFencePlacementDraft,
       clearRoofPlacementDraft,
+      clearWallPlacementDraft,
       emitFloorplanGridEvent,
       fenceDraftStart,
       fences,
@@ -320,8 +400,10 @@ export function useFloorplanBackgroundPlacement({
       isOpeningPlacementActive,
       isPolygonBuildActive,
       isRoofBuildActive,
+      isSlabBuildActive,
       isWallBuildActive,
       isZoneBuildActive,
+      levelId,
       roofDraftStart,
       setCursorPoint,
       setFenceDraftEnd,

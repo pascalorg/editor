@@ -22,15 +22,23 @@ function getExistingSpawnIds() {
     .sort()
 }
 
-function getLevelLocalPosition(levelId: string, event: GridEvent): [number, number, number] {
+function getLevelLocalPosition(
+  levelId: string,
+  event: GridEvent,
+  bypassSnap: boolean,
+): [number, number, number] {
   const levelObject = sceneRegistry.nodes.get(levelId)
   if (!levelObject) {
-    return [roundToHalf(event.localPosition[0]), 0, roundToHalf(event.localPosition[2])]
+    return bypassSnap
+      ? [event.localPosition[0], 0, event.localPosition[2]]
+      : [roundToHalf(event.localPosition[0]), 0, roundToHalf(event.localPosition[2])]
   }
   worldVector.set(event.position[0], event.position[1], event.position[2])
   levelObject.updateWorldMatrix(true, false)
   levelObject.worldToLocal(worldVector)
-  return [roundToHalf(worldVector.x), 0, roundToHalf(worldVector.z)]
+  return bypassSnap
+    ? [worldVector.x, 0, worldVector.z]
+    : [roundToHalf(worldVector.x), 0, roundToHalf(worldVector.z)]
 }
 
 /**
@@ -52,8 +60,9 @@ const SpawnTool = () => {
       // Cursor lives in the ToolManager's building-local group. Use
       // event.localPosition directly (already building-local) with the
       // same half-meter snap the legacy tool uses.
-      const nextX = roundToHalf(event.localPosition[0])
-      const nextZ = roundToHalf(event.localPosition[2])
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const nextX = bypassSnap ? event.localPosition[0] : roundToHalf(event.localPosition[0])
+      const nextZ = bypassSnap ? event.localPosition[2] : roundToHalf(event.localPosition[2])
       const position: [number, number, number] = [nextX, 0, nextZ]
       const previewNode = SpawnNode.parse({
         name: 'Spawn Point',
@@ -72,14 +81,14 @@ const SpawnTool = () => {
       // not every frame the mouse moves within the same cell. Matches the
       // wall / slab / curve tools.
       const prev = previousSnapRef.current
-      if (!prev || prev[0] !== nextX || prev[1] !== nextZ) {
+      if (!bypassSnap && (!prev || prev[0] !== nextX || prev[1] !== nextZ)) {
         triggerSFX('sfx:grid-snap')
         previousSnapRef.current = [nextX, nextZ]
       }
     }
 
     const onGridClick = (event: GridEvent) => {
-      const next = getLevelLocalPosition(activeLevelId, event)
+      const next = getLevelLocalPosition(activeLevelId, event, event.nativeEvent?.shiftKey === true)
       const [existingSpawnId, ...duplicates] = getExistingSpawnIds()
       let placedId: SpawnNode['id']
 

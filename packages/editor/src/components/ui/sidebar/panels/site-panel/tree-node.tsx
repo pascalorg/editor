@@ -1,7 +1,10 @@
-import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, emitter, useScene } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { ChevronRight } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { forwardRef, memo, useEffect, useRef } from 'react'
+import { resolveNodeSelectionTarget } from '../../../../../lib/selection-routing'
+import useEditor from '../../../../../store/use-editor'
 
 export function handleTreeSelection(
   e: React.MouseEvent,
@@ -53,6 +56,31 @@ export function focusTreeNode(nodeId: AnyNodeId) {
   emitter.emit('camera-controls:focus', { nodeId })
 }
 
+export function routeTreeSelectionToNode(node: AnyNode | null | undefined) {
+  const target = node ? resolveNodeSelectionTarget(node) : null
+  if (!target) return
+
+  const selectedIdsAfterClick = useViewer.getState().selection.selectedIds
+  const editor = useEditor.getState()
+  let didRoute = false
+
+  if (target.phase !== editor.phase) {
+    editor.setPhase(target.phase)
+    didRoute = true
+  }
+  if (
+    target.phase === 'structure' &&
+    target.structureLayer &&
+    target.structureLayer !== useEditor.getState().structureLayer
+  ) {
+    useEditor.getState().setStructureLayer(target.structureLayer)
+    didRoute = true
+  }
+  if (didRoute) {
+    useViewer.getState().setSelection({ selectedIds: selectedIdsAfterClick })
+  }
+}
+
 import { cn } from '../../../../../lib/utils'
 import { BuildingTreeNode } from './building-tree-node'
 import { CeilingTreeNode } from './ceiling-tree-node'
@@ -102,6 +130,7 @@ const treeNodeByType: Record<
   ceiling: CeilingTreeNode,
   chimney: ChimneyTreeNode,
   dormer: DormerTreeNode,
+  downspout: RegistryTreeNode,
   'solar-panel': SolarPanelTreeNode,
   column: ColumnTreeNode,
   elevator: ElevatorTreeNode,
@@ -266,10 +295,10 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
               </motion.div>
             ) : null}
           </button>
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <span
               className={cn(
-                'flex h-4 w-4 shrink-0 items-center justify-center transition-all duration-200',
+                'flex h-5 w-5 shrink-0 items-center justify-center transition-all duration-200',
                 !isSelected && 'opacity-60 grayscale',
               )}
             >

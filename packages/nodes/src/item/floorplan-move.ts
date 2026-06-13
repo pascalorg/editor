@@ -5,9 +5,12 @@ import {
   collectAlignmentAnchors,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  getRoofWallFaceFrame,
   getScaledDimensions,
   type ItemNode,
   movingFootprintAnchors,
+  type RoofSegmentNode,
+  roofFacePointToSegment,
   useScene,
 } from '@pascal-app/core'
 import { applyFloorplanAlignment, useEditor, type WallPlanPoint } from '@pascal-app/editor'
@@ -94,6 +97,31 @@ function resolveItemPlanTransform(
     result = {
       point: [parentTransform.point[0] + offsetX, parentTransform.point[1] + offsetZ],
       rotation: parentTransform.rotation + localRotation,
+    }
+  } else if (parent?.type === 'roof-segment') {
+    // Roof-hosted wall item: FACE-LOCAL position mapped through the face
+    // frame, then composed through the segment's and roof's yaw +
+    // position into level-local plan coords — without this the drag seed
+    // jumps off the roof at move start.
+    const segment = parent as RoofSegmentNode
+    const roof = segment.parentId
+      ? (nodes[segment.parentId as AnyNodeId] as
+          | (AnyNode & { position: [number, number, number]; rotation: number })
+          | undefined)
+      : undefined
+    if (roof?.type === 'roof' && item.roofFace) {
+      const frame = getRoofWallFaceFrame(segment, item.roofFace)
+      const segLocal = roofFacePointToSegment(segment, item.roofFace, item.position)
+      const [sx, sz] = rotateVec(segLocal[0], segLocal[2], segment.rotation ?? 0)
+      const [rx, rz] = rotateVec(
+        sx + segment.position[0],
+        sz + segment.position[2],
+        roof.rotation ?? 0,
+      )
+      result = {
+        point: [rx + roof.position[0], rz + roof.position[2]],
+        rotation: (roof.rotation ?? 0) + (segment.rotation ?? 0) + frame.yaw + localRotation,
+      }
     }
   }
 
@@ -183,16 +211,17 @@ function buildWallItemSession(
 
       // Figma-style along-wall alignment (edge-to-edge with other openings /
       // wall items / wall ends), winning over the 0.5m grid snap; falls back
-      // to grid when nothing aligns. Alt bypasses; Shift drops the grid snap.
-      const neighborX = modifiers.altKey
-        ? null
-        : snapLocalXToNeighbors({
-            wall: hit.wall,
-            localX: hit.localX,
-            width,
-            selfId: node.id as AnyNodeId,
-            nodes,
-          })
+      // to grid when nothing aligns. Alt bypasses alignment; Shift bypasses all snap.
+      const neighborX =
+        modifiers.altKey || modifiers.shiftKey
+          ? null
+          : snapLocalXToNeighbors({
+              wall: hit.wall,
+              localX: hit.localX,
+              width,
+              selfId: node.id as AnyNodeId,
+              nodes,
+            })
       const step = useEditor.getState().gridSnapStep
       const snappedLocalX =
         neighborX ?? (modifiers.shiftKey ? hit.localX : Math.round(hit.localX / step) * step)
@@ -208,6 +237,10 @@ function buildWallItemSession(
             rotation: [0, hit.itemRotation, 0],
             side: hit.side,
             parentId: hit.wall.id,
+            // Re-anchoring to a wall ends any roof-segment hosting; the
+            // overlay's snapshot restores it if the move is reverted.
+            roofSegmentId: undefined,
+            roofFace: undefined,
           },
         },
       ])
@@ -254,7 +287,7 @@ function buildFloorItemSession(
           rotationY,
         ),
         candidates,
-        { bypass: modifiers.altKey },
+        { bypass: modifiers.altKey || modifiers.shiftKey },
       )
 
       const sourceY = node.position[1]

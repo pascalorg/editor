@@ -15,6 +15,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { resolveElevatorSupportY } from '../../../lib/elevator-support'
+import { consumePlacementDragRelease } from '../../../lib/placement-drag-release'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -131,8 +132,9 @@ export function MoveElevatorTool({
     }
 
     const onGridMove = (event: GridEvent) => {
-      const rawX = Math.round(event.localPosition[0] * 2) / 2
-      const rawZ = Math.round(event.localPosition[2] * 2) / 2
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const rawX = bypassSnap ? event.localPosition[0] : Math.round(event.localPosition[0] * 2) / 2
+      const rawZ = bypassSnap ? event.localPosition[2] : Math.round(event.localPosition[2] * 2) / 2
       const anchor = dragAnchorRef.current ?? [rawX, rawZ]
       dragAnchorRef.current = anchor
       const gridX = movingNode.position[0] + (rawX - anchor[0])
@@ -145,6 +147,7 @@ export function MoveElevatorTool({
       })
 
       if (
+        !bypassSnap &&
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
       ) {
@@ -158,6 +161,7 @@ export function MoveElevatorTool({
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (wasCommitted) return
       const nextPosition: ElevatorNode['position'] = [...previewPositionRef.current]
 
       wasCommitted = true
@@ -185,6 +189,11 @@ export function MoveElevatorTool({
       sfxEmitter.emit('sfx:item-place')
       exitMoveMode()
       event.nativeEvent?.stopPropagation?.()
+    }
+
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      onGridClick({ nativeEvent: event } as unknown as GridEvent)
     }
 
     const onCancel = () => {
@@ -229,6 +238,7 @@ export function MoveElevatorTool({
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       clearPreview()
@@ -245,6 +255,7 @@ export function MoveElevatorTool({
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
   }, [movingNode, exitMoveMode])
 

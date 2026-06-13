@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  DEFAULT_ANGLE_STEP,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -39,8 +40,6 @@ import {
   useArrowMaterial,
   useInvisibleHitAreaMaterial,
 } from './node-arrow-handles'
-
-const ROTATE_SNAP = Math.PI / 12 // 15°
 
 /**
  * Group-rotate gizmo. When 2+ transformable nodes in the active level frame are
@@ -201,7 +200,7 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       let delta = angleOf(moveHit) - initialAngle
       while (delta > Math.PI) delta -= 2 * Math.PI
       while (delta < -Math.PI) delta += 2 * Math.PI
-      if (e.shiftKey) delta = Math.round(delta / ROTATE_SNAP) * ROTATE_SNAP
+      if (!e.shiftKey) delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
 
       // Orbit each node's anchor point(s) CCW by `delta` (atan2 x→z sense) and
       // turn its yaw by `-delta` to match three.js Y-rotation handedness (same

@@ -55,6 +55,12 @@ export function getGridAlignedDimensions(
   return [snapUpToGridStep(w, step), h, snapUpToGridStep(d, step)]
 }
 
+export function getDetachedAttachmentPreviewLift(
+  attachTo: AssetInput['attachTo'] | null | undefined,
+): number {
+  return attachTo ? 0.45 : 0
+}
+
 /**
  * Calculate cursor rotation in WORLD space from wall normal and orientation.
  */

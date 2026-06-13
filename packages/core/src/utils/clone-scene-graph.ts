@@ -76,6 +76,13 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
         | undefined
     }
 
+    // Remap roofSegmentId (doors/windows/items hosted on roof wall faces)
+    if ('roofSegmentId' in clonedNode && typeof clonedNode.roofSegmentId === 'string') {
+      ;(clonedNode as Record<string, unknown>).roofSegmentId = idMap.get(
+        clonedNode.roofSegmentId,
+      ) as string | undefined
+    }
+
     clonedNodes[newId] = clonedNode
   }
 
@@ -218,6 +225,12 @@ export function cloneLevelSubtree(
     // Remap wallId (doors/windows attached to walls)
     if ('wallId' in cloned && typeof cloned.wallId === 'string') {
       ;(cloned as Record<string, unknown>).wallId = idMap.get(cloned.wallId) ?? cloned.wallId
+    }
+
+    // Remap roofSegmentId (doors/windows/items hosted on roof wall faces)
+    if ('roofSegmentId' in cloned && typeof cloned.roofSegmentId === 'string') {
+      ;(cloned as Record<string, unknown>).roofSegmentId =
+        idMap.get(cloned.roofSegmentId) ?? cloned.roofSegmentId
     }
 
     clonedNodes.push(cloned)

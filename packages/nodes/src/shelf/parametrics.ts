@@ -76,5 +76,9 @@ export const shelfParametrics: ParametricDescriptor<ShelfNode> = {
         { key: 'height', kind: 'number', unit: 'm', min: 0.05, max: 2.5, step: 0.05 },
       ],
     },
+    {
+      label: 'Position',
+      fields: [{ key: 'position', kind: 'vec3' }],
+    },
   ],
 }

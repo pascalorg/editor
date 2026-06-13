@@ -89,11 +89,12 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      const bypassSnap = shiftPressedRef.current || event.nativeEvent?.shiftKey === true
       const snapStep = getSegmentGridStep()
-      const localX = shiftPressedRef.current
+      const localX = bypassSnap
         ? event.localPosition[0]
         : snapScalarToGrid(event.localPosition[0], snapStep)
-      const localZ = shiftPressedRef.current
+      const localZ = bypassSnap
         ? event.localPosition[2]
         : snapScalarToGrid(event.localPosition[2], snapStep)
 
@@ -101,7 +102,7 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
         (localX - chord.midpoint.x) * chord.normal.x +
         (localZ - chord.midpoint.y) * chord.normal.y
       )
-      const snappedOffset = shiftPressedRef.current
+      const snappedOffset = bypassSnap
         ? offsetFromMidpoint
         : snapScalarToGrid(offsetFromMidpoint, snapStep)
       const nextCurveOffset = normalizeWallCurveOffset(
@@ -110,6 +111,7 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       )
 
       if (
+        !bypassSnap &&
         previousCurveOffsetRef.current !== null &&
         nextCurveOffset !== previousCurveOffsetRef.current
       ) {

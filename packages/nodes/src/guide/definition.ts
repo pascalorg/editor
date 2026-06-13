@@ -30,6 +30,8 @@ export const guideDefinition: NodeDefinition<typeof GuideNode> = {
   },
 
   parametrics: guideParametrics,
+  // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',

@@ -6,6 +6,7 @@ import {
   type AnyNodeId,
   type BuildingNode,
   emitter,
+  getLevelDisplayName,
   type LevelNode,
   useScene,
   type ZoneNode,
@@ -30,7 +31,6 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useShallow } from 'zustand/react/shallow'
-import { getLevelDisplayName } from '../lib/level-name'
 import { cn } from '../lib/utils'
 import { ActionButton } from './ui/action-menu/action-button'
 import {

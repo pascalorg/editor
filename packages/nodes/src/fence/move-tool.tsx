@@ -14,6 +14,7 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  consumePlacementDragRelease,
   markToolCancelConsumed,
   snapFenceDraftPoint,
   triggerSFX,
@@ -193,14 +194,17 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      const bypassSnap = event.nativeEvent?.shiftKey === true
       const [localX, localZ] = snapFenceDraftPoint({
         point: [event.localPosition[0], event.localPosition[2]],
         walls: levelWalls,
         fences: levelFences,
         ignoreFenceIds: [fenceId],
+        bypassSnap,
       })
 
       if (
+        !bypassSnap &&
         previousGridPosRef.current &&
         (localX !== previousGridPosRef.current[0] || localZ !== previousGridPosRef.current[1])
       ) {
@@ -224,6 +228,7 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (wasCommitted) return
       if (Date.now() - activatedAtRef.current < 150) {
         event.nativeEvent?.stopPropagation?.()
         return
@@ -261,6 +266,12 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       event.nativeEvent?.stopPropagation?.()
     }
 
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      activatedAtRef.current = 0
+      onGridClick({ nativeEvent: event } as unknown as GridEvent)
+    }
+
     const onCancel = () => {
       restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [fenceId] })
@@ -276,6 +287,7 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       if (!wasCommitted) {
@@ -300,6 +312,7 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
   }, [exitMoveMode, node])
 

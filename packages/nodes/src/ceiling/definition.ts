@@ -150,6 +150,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   toolHints: [
     { key: 'Left click', label: 'Trace ceiling outline' },
     { key: 'Enter', label: 'Finish ceiling' },
+    { key: 'Shift', label: 'Free outline' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

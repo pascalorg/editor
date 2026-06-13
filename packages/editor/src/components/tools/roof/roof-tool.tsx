@@ -242,17 +242,20 @@ export const RoofTool: React.FC = () => {
 
       // World-grid snap projected into building-local; rotated buildings
       // used to drag every roof corner off the visible grid.
-      const snapped = snapWorldXZForActiveBuilding(
-        event.position[0],
-        event.position[2],
-        useEditor.getState().gridSnapStep,
-      ).local
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const snapped: [number, number] = bypassSnap
+        ? [event.localPosition[0], event.localPosition[2]]
+        : snapWorldXZForActiveBuilding(
+            event.position[0],
+            event.position[2],
+            useEditor.getState().gridSnapStep,
+          ).local
       const [gridX, gridZ] = alignPoint(
         snapped[0],
         snapped[1],
         event.localPosition[0],
         event.localPosition[2],
-        event.nativeEvent?.altKey === true,
+        event.nativeEvent?.altKey === true || bypassSnap,
       )
       const y = event.localPosition[1]
 
@@ -262,6 +265,7 @@ export const RoofTool: React.FC = () => {
       cursorRef.current.position.set(gridX, gridY, gridZ)
 
       if (
+        !bypassSnap &&
         corner1Ref.current &&
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
@@ -287,17 +291,20 @@ export const RoofTool: React.FC = () => {
 
       // World-grid snap projected into building-local; rotated buildings
       // used to drag every roof corner off the visible grid.
-      const snapped = snapWorldXZForActiveBuilding(
-        event.position[0],
-        event.position[2],
-        useEditor.getState().gridSnapStep,
-      ).local
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const snapped: [number, number] = bypassSnap
+        ? [event.localPosition[0], event.localPosition[2]]
+        : snapWorldXZForActiveBuilding(
+            event.position[0],
+            event.position[2],
+            useEditor.getState().gridSnapStep,
+          ).local
       const [gridX, gridZ] = alignPoint(
         snapped[0],
         snapped[1],
         event.localPosition[0],
         event.localPosition[2],
-        event.nativeEvent?.altKey === true,
+        event.nativeEvent?.altKey === true || bypassSnap,
       )
       const y = event.localPosition[1]
 

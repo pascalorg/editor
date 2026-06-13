@@ -59,6 +59,10 @@ A kind may declare `surfaceRole?: SurfaceRole` on its definition. It is a colour
 
 Per-kind `def.system` components mount alongside via `<RegisteredSystems>`. They run their own `useFrame` and can mark nodes dirty, address meshes by `getObjectByName`, advance animation state, etc. They run **in addition** to `GeometrySystem`, not instead of it.
 
+### `dirtyTracking`
+
+`dirtyNodes` is the per-frame rebuild queue consumed by `<GeometrySystem>` (`def.geometry`), `<FloorElevationSystem>` (`capabilities.floorPlaced`), and the legacy per-kind viewer systems. Kinds none of those consume — structural/organizational kinds like site, building, level, zone, guide — declare `dirtyTracking: false` so `markDirty` skips them. Without it their marks are never cleared: they accumulate for the whole session, defeat every consumer's empty-set early exit each frame, and pollute the perf overlay's DIRTY readout. If such a kind later gains `def.geometry` (or any other dirty consumer), delete the flag.
+
 ## `GeometryContext`
 
 The second arg to `geometry()` is scene read access for builders that reference other nodes by ID. Most kinds ignore it.
@@ -183,6 +187,28 @@ If the system also handles cascades, animations, or material updates, keep `def.
 - **Custom systems run in addition to the generic system, not instead of it.** A kind with `def.geometry` + `def.system` will see the generic system rebuild children on dirty AND the per-kind system run its `useFrame`. Plan priorities accordingly: door-animation runs at priority 2, geometry rebuild at priority 3.
 - **Dispose on rebuild.** The generic system disposes the previous children's geometry + material before swapping. Custom systems that imperatively add children must dispose what they replace, or accept the GPU-memory cost.
 - **`def.renderer` overrides the generic renderer.** Once you set it, you own the mount — `<ParametricNodeRenderer>` is not invoked. The generic geometry system still runs for the kind if `def.geometry` is set, so a custom renderer can register an empty group and let the system fill it.
+
+## `toolHints`
+
+`toolHints?: ToolHint[]` is the registry-owned source for the floating helper shown while
+a registered placement or draw tool is active.
+
+```ts
+type ToolHint = {
+  key: string
+  label: string
+}
+```
+
+Keep labels short and action-oriented. Prefer the default guided-building language:
+snapping, angle increments, guides, and validation are active unless the user holds Shift
+during the gesture. A `Shift` hint should describe the bypass in user terms, such as
+`Free angle`, `Free place`, or `Bypass guided constraints`.
+
+`HelperManager` renders `def.toolHints` through `RegisteredToolHelper`, and active Shift
+state can update the row to show that guided constraints are currently bypassed. Select
+mode is not owned by a node definition, so its helper is derived separately from
+selection state, selected-node move/rotate capabilities, and held modifiers.
 
 ## Pitfalls
 

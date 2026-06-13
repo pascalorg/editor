@@ -3,6 +3,7 @@ import {
   DEFAULT_ANGLE_STEP,
   DEFAULT_GRID_STEP,
   snapAngleToList,
+  snapPointAlongAngleRay,
   snapPointToAngle,
   snapPointToGrid,
   snapScalar,
@@ -84,6 +85,54 @@ describe('snapPointToAngle', () => {
     const distance = Math.hypot(1, 1)
     const snapped = snapPointToAngle(from, cursor, Math.PI / 4)
     expect(Math.hypot(snapped[0] - 2, snapped[1] - 3)).toBeCloseTo(distance)
+  })
+})
+
+describe('snapPointAlongAngleRay', () => {
+  test('stays exactly on the 15° ray while distance-snapping to the grid step', () => {
+    const from: Vec2 = [0, 0]
+    const cursor: Vec2 = [2, 0.5] // ≈14° — snaps to 15°
+    const snapped = snapPointAlongAngleRay(from, cursor, Math.PI / 12, 0.25)
+    expect(Math.atan2(snapped[1], snapped[0])).toBeCloseTo(Math.PI / 12, 10)
+    const distance = Math.hypot(snapped[0], snapped[1])
+    expect(distance / 0.25).toBeCloseTo(Math.round(distance / 0.25), 10)
+  })
+
+  test('grid-snapping after the angle projection would pull the point off the ray', () => {
+    const from: Vec2 = [0, 0]
+    const cursor: Vec2 = [2, 0.5]
+    const offRay = snapPointToAngle(from, cursor, Math.PI / 12, 0.25)
+    expect(Math.atan2(offRay[1], offRay[0])).not.toBeCloseTo(Math.PI / 12, 4)
+  })
+
+  test('45° back-compat: locks to the diagonal with grid-multiple distance', () => {
+    const from: Vec2 = [1, 1]
+    const cursor: Vec2 = [2.1, 1.9] // near 45° from `from`
+    const snapped = snapPointAlongAngleRay(from, cursor, Math.PI / 4, 0.25)
+    expect(Math.atan2(snapped[1] - 1, snapped[0] - 1)).toBeCloseTo(Math.PI / 4, 10)
+    const distance = Math.hypot(snapped[0] - 1, snapped[1] - 1)
+    expect(distance / 0.25).toBeCloseTo(Math.round(distance / 0.25), 10)
+  })
+
+  test('preserves the projected distance when no distanceStep is given', () => {
+    const from: Vec2 = [0, 0]
+    const cursor: Vec2 = [1, 0.05] // near 0°
+    const snapped = snapPointAlongAngleRay(from, cursor, Math.PI / 12)
+    expect(snapped[0]).toBeCloseTo(1, 10) // projection of (1, 0.05) onto 0° ray
+    expect(snapped[1]).toBeCloseTo(0, 10)
+  })
+
+  test('returns `from` for a zero-length segment', () => {
+    expect(snapPointAlongAngleRay([2, 3], [2, 3], Math.PI / 12, 0.25)).toEqual([2, 3])
+  })
+
+  test('is idempotent on its own output', () => {
+    const from: Vec2 = [0.5, -1]
+    const cursor: Vec2 = [3.2, 0.4]
+    const once = snapPointAlongAngleRay(from, cursor, Math.PI / 12, 0.5)
+    const twice = snapPointAlongAngleRay(from, once, Math.PI / 12, 0.5)
+    expect(twice[0]).toBeCloseTo(once[0], 10)
+    expect(twice[1]).toBeCloseTo(once[1], 10)
   })
 })
 

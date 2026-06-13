@@ -19,7 +19,10 @@ import { useEffect, useRef } from 'react'
 const sceneApi = createSceneApi(useScene)
 
 function modifiersFromGridEvent(event: GridEvent): Modifiers {
-  const ne = event.nativeEvent?.nativeEvent as Partial<KeyboardEvent> | undefined
+  // Both grid-event emit paths (use-grid-events.ts and the floorplan panel)
+  // store the raw DOM event directly at `.nativeEvent` — there is no second
+  // `.nativeEvent` hop.
+  const ne = event.nativeEvent as Partial<MouseEvent> | undefined
   return {
     shift: ne?.shiftKey ?? false,
     alt: ne?.altKey ?? false,

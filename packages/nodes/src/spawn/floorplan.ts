@@ -113,6 +113,11 @@ export function buildSpawnFloorplan(node: SpawnNode, ctx: GeometryContext): Floo
   ]
 
   if (isSelected) {
+    children.push({
+      kind: 'move-handle',
+      point: [px, pz],
+    })
+
     const cornerLocalX = 0.34 + ROTATE_ARROW_CORNER_OFFSET
     const cornerLocalZ = 0.34 + ROTATE_ARROW_CORNER_OFFSET
     const [cornerX, cornerZ] = rotatePlanVector(cornerLocalX, cornerLocalZ, planRotation)

@@ -3,7 +3,15 @@ import { SCENE_LAYER } from '@pascal-app/viewer'
 import { useGLTF } from '@react-three/drei/core/Gltf'
 import { useFrame } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Color, CylinderGeometry, DoubleSide, type Mesh, type Object3D, RingGeometry } from 'three'
+import {
+  Color,
+  CylinderGeometry,
+  DoubleSide,
+  type Group,
+  type Mesh,
+  type Object3D,
+  RingGeometry,
+} from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -38,6 +46,7 @@ const SITE_FLAG_HALO_COLOR = '#6366f1'
 
 type TintableMaterial = {
   color?: Color
+  depthTest: boolean
   depthWrite: boolean
   opacity: number
   needsUpdate: boolean
@@ -69,10 +78,9 @@ function SiteFlagModel({
         mesh.frustumCulled = false
         mesh.raycast = NO_RAYCAST
         mesh.receiveShadow = false
-        mesh.renderOrder = 1010
         mesh.material = new MeshBasicNodeMaterial({
           color: new Color(ARROW_COLOR),
-          depthTest: false,
+          depthTest: true,
           depthWrite: opacity >= 0.999,
           opacity,
           transparent: opacity < 0.999,
@@ -93,6 +101,7 @@ function SiteFlagModel({
 
         for (const material of materials as Array<MeshBasicNodeMaterial & TintableMaterial>) {
           material.color?.copy(color)
+          material.depthTest = true
           material.opacity = opacity
           material.transparent = opacity < 0.999
           material.depthWrite = opacity >= 0.999
@@ -217,11 +226,23 @@ function SiteFlagFallback({
     <group position={[0, SITE_FLAG_BASE_Y + (active ? SITE_FLAG_ACTIVE_LIFT : 0), 0]}>
       <mesh layers={SCENE_LAYER} position={[0, 0.16, 0]} raycast={NO_RAYCAST}>
         <cylinderGeometry args={[0.11, 0.16, 0.32, 24]} />
-        <meshBasicMaterial color={color} depthTest={false} opacity={opacity} transparent />
+        <meshBasicMaterial
+          color={color}
+          depthTest
+          depthWrite={opacity >= 0.999}
+          opacity={opacity}
+          transparent={opacity < 0.999}
+        />
       </mesh>
       <mesh layers={SCENE_LAYER} position={[0, 0.34, 0]} raycast={NO_RAYCAST}>
         <cylinderGeometry args={[0.04, 0.11, 0.14, 24]} />
-        <meshBasicMaterial color={color} depthTest={false} opacity={opacity} transparent />
+        <meshBasicMaterial
+          color={color}
+          depthTest
+          depthWrite={opacity >= 0.999}
+          opacity={opacity}
+          transparent={opacity < 0.999}
+        />
       </mesh>
     </group>
   )
@@ -394,6 +415,26 @@ export const SiteBoundaryEditor: React.FC = () => {
     }
   }, [isSiteEditing, siteId])
 
+  // The flag models render on SCENE_LAYER (scene-depth occlusion), so unlike
+  // EDITOR_LAYER affordances the thumbnail camera can't filter them — hide
+  // them around captures (preset/snapshot/auto-save thumbnails), same as
+  // `handle-arrow.tsx`.
+  const handlesRootRef = useRef<Group>(null)
+  useEffect(() => {
+    const hideForCapture = () => {
+      if (handlesRootRef.current) handlesRootRef.current.visible = false
+    }
+    const restoreAfterCapture = () => {
+      if (handlesRootRef.current) handlesRootRef.current.visible = true
+    }
+    emitter.on('thumbnail:before-capture', hideForCapture)
+    emitter.on('thumbnail:after-capture', restoreAfterCapture)
+    return () => {
+      emitter.off('thumbnail:before-capture', hideForCapture)
+      emitter.off('thumbnail:after-capture', restoreAfterCapture)
+    }
+  }, [])
+
   const activateSiteEditing = useCallback(() => {
     isDraggingSiteBoundaryRef.current = true
     setIsDraggingSiteBoundary(true)
@@ -470,25 +511,27 @@ export const SiteBoundaryEditor: React.FC = () => {
   if (!showSiteHandles) return null
 
   return (
-    <PolygonEditor
-      color={isSiteBoundaryHighlighted ? ARROW_COLOR : '#10b981'}
-      minVertices={3}
-      onBeforeVertexDrag={activateSiteEditing}
-      onDragCommit={() => {
-        sfxEmitter.emit('sfx:item-place')
-        exitSiteEditing()
-      }}
-      onDragStart={() => sfxEmitter.emit('sfx:item-pick')}
-      onDragStateChange={handleSiteBoundaryDragChange}
-      onMidpointHoverChange={setHoveredMidpoint}
-      onPolygonChange={handlePolygonChange}
-      onPolygonPreview={handlePolygonPreview}
-      onVertexHoverChange={setHoveredVertex}
-      polygon={displayPolygon}
-      renderMidpointHandle={renderSiteFlagMidpoint}
-      renderVertexHandle={renderSiteFlagVertex}
-      showBorderLine={isSiteBoundaryHighlighted}
-      showMidpointHandles={showSiteHandles}
-    />
+    <group ref={handlesRootRef}>
+      <PolygonEditor
+        color={isSiteBoundaryHighlighted ? ARROW_COLOR : '#10b981'}
+        minVertices={3}
+        onBeforeVertexDrag={activateSiteEditing}
+        onDragCommit={() => {
+          sfxEmitter.emit('sfx:item-place')
+          exitSiteEditing()
+        }}
+        onDragStart={() => sfxEmitter.emit('sfx:item-pick')}
+        onDragStateChange={handleSiteBoundaryDragChange}
+        onMidpointHoverChange={setHoveredMidpoint}
+        onPolygonChange={handlePolygonChange}
+        onPolygonPreview={handlePolygonPreview}
+        onVertexHoverChange={setHoveredVertex}
+        polygon={displayPolygon}
+        renderMidpointHandle={renderSiteFlagMidpoint}
+        renderVertexHandle={renderSiteFlagVertex}
+        showBorderLine={isSiteBoundaryHighlighted}
+        showMidpointHandles={showSiteHandles}
+      />
+    </group>
   )
 }

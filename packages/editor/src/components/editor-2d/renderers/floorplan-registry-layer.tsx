@@ -3,12 +3,14 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  createSceneApi,
   type FloorplanAffordancePoint,
   type FloorplanAffordanceSession,
   type FloorplanGeometry,
   type FloorplanPalette,
   type FloorplanPoint,
   type GeometryContext,
+  isRegistryMovable,
   kindsWithFloorplanScope,
   nodeRegistry,
   pauseSceneHistory,
@@ -19,7 +21,6 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import {
   memo,
@@ -30,8 +31,17 @@ import {
   useRef,
   useState,
 } from 'react'
+import {
+  canDirectRotateNode,
+  resolveDirectRotationDragDelta,
+  resolveDirectRotationPatch,
+} from '../../../lib/direct-manipulation'
+import { createEditorApi } from '../../../lib/editor-api'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
+import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
 import useEditor from '../../../store/use-editor'
+import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 
@@ -70,6 +80,9 @@ const ENDPOINT_HIT_STROKE_WIDTH_PX = 18
 const ENDPOINT_HOVER_GLOW_STROKE_WIDTH_PX = 16
 const ENDPOINT_HOVER_RING_STROKE_WIDTH_PX = 7
 const HOVER_TRANSITION = 'opacity 180ms cubic-bezier(0.2, 0, 0, 1)'
+const DIRECT_DRAG_THRESHOLD_PX = 4
+const DIRECT_ROTATE_EPSILON = 1e-6
+const DIRECT_ROTATE_RADIANS_PER_PIXEL = Math.PI / 180
 
 /**
  * Snapshot of node fields captured at drag-start, used by the single-undo
@@ -130,6 +143,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
+  const activeRotateNodeId = useDirectManipulationFeedback((s) => s.activeRotateNodeId)
   const setHoveredId = useViewer((s) => s.setHoveredId)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
@@ -226,11 +240,16 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const [activeDragId, setActiveDragId] = useState<string | null>(null)
   const [rotationOverlay, setRotationOverlay] = useState<RotationOverlayState | null>(null)
 
-  const handleSelect = useCallback(
-    (id: AnyNodeId, event: React.PointerEvent<SVGGElement>) => {
-      if (event.button !== 0) return
-      event.stopPropagation()
-      setSelection({ selectedIds: [id] })
+  const applyEntrySelection = useCallback(
+    (id: AnyNodeId, shouldToggle: boolean) => {
+      const currentSelectedIds = useViewer.getState().selection.selectedIds
+      setSelection({
+        selectedIds: shouldToggle
+          ? currentSelectedIds.includes(id)
+            ? currentSelectedIds.filter((selectedId) => selectedId !== id)
+            : [...currentSelectedIds, id]
+          : [id],
+      })
       // Setting selection re-renders the entry — the overlay pass mounts
       // (endpoint handles, etc.), reshuffling DOM under the cursor between
       // pointerdown and click. If the click target ends up on the SVG
@@ -239,20 +258,199 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       // selection we just set. Swallow the next click globally to break
       // that race; the listener removes itself after firing (or after a
       // safety timeout if no click follows).
-      const swallowClick = (ev: Event) => {
-        ev.stopPropagation()
-        ev.preventDefault()
-        window.removeEventListener('click', swallowClick, true)
-      }
-      window.addEventListener('click', swallowClick, true)
-      setTimeout(() => window.removeEventListener('click', swallowClick, true), 200)
+      swallowNextClick(200)
     },
     [setSelection],
+  )
+
+  const handleSelect = useCallback(
+    (id: AnyNodeId, event: React.PointerEvent<SVGGElement>) => {
+      if (event.button !== 0) return
+      event.stopPropagation()
+      applyEntrySelection(id, event.metaKey || event.ctrlKey || event.shiftKey)
+    },
+    [applyEntrySelection],
   )
 
   const handleClickStop = useCallback((event: React.MouseEvent<SVGGElement>) => {
     event.stopPropagation()
   }, [])
+
+  const startDirectMoveDrag = useCallback(
+    (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>): boolean => {
+      if (event.button !== 0 || !(event.metaKey || event.ctrlKey)) return false
+
+      const node = useScene.getState().nodes[id]
+      if (!node || !isRegistryMovable(node.type)) return false
+      if (!useViewer.getState().selection.selectedIds.includes(id)) return false
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      const startX = event.clientX
+      const startY = event.clientY
+      const pointerId = event.pointerId
+      let engaged = false
+
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onEnd)
+        window.removeEventListener('pointercancel', onEnd)
+        if (engaged) {
+          useViewer.getState().setInputDragging(false)
+        }
+      }
+
+      const onMove = (moveEvent: PointerEvent) => {
+        if (moveEvent.pointerId !== pointerId) return
+        if (engaged) return
+        const distance = Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY)
+        if (distance < DIRECT_DRAG_THRESHOLD_PX) return
+
+        engaged = true
+        useViewer.getState().setInputDragging(true)
+        swallowNextClick(300)
+        createEditorApi().engageMoveDrag(node)
+
+        requestAnimationFrame(() => {
+          window.dispatchEvent(
+            new PointerEvent('pointermove', {
+              altKey: moveEvent.altKey,
+              bubbles: true,
+              buttons: moveEvent.buttons,
+              clientX: moveEvent.clientX,
+              clientY: moveEvent.clientY,
+              ctrlKey: moveEvent.ctrlKey,
+              metaKey: moveEvent.metaKey,
+              pointerId,
+              pointerType: moveEvent.pointerType,
+              shiftKey: moveEvent.shiftKey,
+            }),
+          )
+        })
+      }
+
+      const onEnd = (endEvent: PointerEvent) => {
+        if (endEvent.pointerId !== pointerId) return
+        cleanup()
+        if (!engaged) {
+          applyEntrySelection(id, true)
+        }
+      }
+
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onEnd)
+      window.addEventListener('pointercancel', onEnd)
+      return true
+    },
+    [applyEntrySelection],
+  )
+
+  const startDirectRotateDrag = useCallback(
+    (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>): boolean => {
+      if (event.button !== 2 || !(event.metaKey || event.ctrlKey)) return false
+
+      const node = useScene.getState().nodes[id]
+      if (!node || !canDirectRotateNode(node)) return false
+      const selectedIds = useViewer.getState().selection.selectedIds
+      if (!selectedIds.includes(id)) return false
+      event.preventDefault()
+      event.stopPropagation()
+
+      const nodeId = node.id as AnyNodeId
+      const pointerId = event.pointerId
+      const startX = event.clientX
+      const sceneApi = createSceneApi(useScene)
+      let lastPatch: Partial<AnyNode> | null = null
+
+      const applyDelta = (pointerEvent: PointerEvent | ReactPointerEvent<SVGGElement>) => {
+        const delta = resolveDirectRotationDragDelta(
+          startX,
+          pointerEvent.clientX,
+          DIRECT_ROTATE_RADIANS_PER_PIXEL,
+          pointerEvent.shiftKey,
+        )
+        if (Math.abs(delta) < DIRECT_ROTATE_EPSILON) {
+          lastPatch = null
+          useLiveNodeOverrides.getState().clear(nodeId)
+          useScene.getState().markDirty(nodeId)
+          return
+        }
+        const patch = resolveDirectRotationPatch(node, delta, sceneApi)
+        if (!patch) return
+        lastPatch = patch
+        useLiveNodeOverrides.getState().set(nodeId, patch as Record<string, unknown>)
+        useScene.getState().markDirty(nodeId)
+      }
+
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove, true)
+        window.removeEventListener('pointerup', onUp, true)
+        window.removeEventListener('pointercancel', onCancel, true)
+        window.removeEventListener('contextmenu', preventContextMenu, true)
+        useLiveNodeOverrides.getState().clear(nodeId)
+        useScene.getState().markDirty(nodeId)
+        resumeSceneHistory(useScene)
+        useDirectManipulationFeedback.getState().clearActiveRotateNodeId(nodeId)
+        useViewer.getState().setInputDragging(false)
+        if (document.body.style.cursor === 'ew-resize') {
+          document.body.style.cursor = ''
+        }
+      }
+
+      const onMove = (moveEvent: PointerEvent) => {
+        if (moveEvent.pointerId !== pointerId) return
+        moveEvent.preventDefault()
+        moveEvent.stopPropagation()
+        applyDelta(moveEvent)
+      }
+
+      const onUp = (upEvent: PointerEvent) => {
+        if (upEvent.pointerId !== pointerId) return
+        upEvent.preventDefault()
+        upEvent.stopPropagation()
+        swallowNextClick(300)
+        if (lastPatch) {
+          sceneApi.update(nodeId, lastPatch)
+          sfxEmitter.emit('sfx:item-place')
+        }
+        cleanup()
+      }
+
+      const onCancel = (cancelEvent: PointerEvent) => {
+        if (cancelEvent.pointerId !== pointerId) return
+        cleanup()
+      }
+
+      const preventContextMenu = (contextEvent: Event) => {
+        contextEvent.preventDefault()
+        contextEvent.stopPropagation()
+      }
+
+      pauseSceneHistory(useScene)
+      useViewer.getState().setInputDragging(true)
+      useDirectManipulationFeedback.getState().setActiveRotateNodeId(nodeId)
+      document.body.style.cursor = 'ew-resize'
+      sfxEmitter.emit('sfx:item-pick')
+      applyDelta(event)
+
+      window.addEventListener('pointermove', onMove, true)
+      window.addEventListener('pointerup', onUp, true)
+      window.addEventListener('pointercancel', onCancel, true)
+      window.addEventListener('contextmenu', preventContextMenu, true)
+      return true
+    },
+    [],
+  )
+
+  const handleEntryPointerDown = useCallback(
+    (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => {
+      if (startDirectMoveDrag(id, event)) return
+      if (startDirectRotateDrag(id, event)) return
+      handleSelect(id, event)
+    },
+    [handleSelect, startDirectMoveDrag, startDirectRotateDrag],
+  )
 
   // Build the geometry list. `viewState` flows into ctx so kinds can
   // theme their output and conditionally emit selection chrome.
@@ -493,6 +691,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
       event.preventDefault()
       event.stopPropagation()
+      suppressBoxSelectForPointer(event)
 
       const session = handler.start({
         node,
@@ -603,6 +802,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         }
         drag.session.commit()
         sfxEmitter.emit('sfx:structure-build')
+        clearSurfacePlanSnapFeedback()
         dragRef.current = null
         setActiveDragId(null)
         setRotationOverlay(null)
@@ -654,6 +854,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         for (const id of drag.session.affectedIds) overrides.clear(id)
       }
 
+      clearSurfacePlanSnapFeedback()
       dragRef.current = null
       setActiveDragId(null)
       setRotationOverlay(null)
@@ -672,7 +873,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       // Affordances that publish Figma alignment guides during `apply`
       // (fence endpoint) leave them in the store on cancel — `canCommit`
       // (the pointer-up clear) never runs on a cancel.
-      useAlignmentGuides.getState().clear()
+      clearSurfacePlanSnapFeedback()
       // Drop any live overrides the session may have published. No-op
       // for affordances whose `apply()` writes straight to scene; the
       // override-routed sessions (wall endpoint, wall curve) rely on
@@ -707,7 +908,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         dragRef.current = null
       }
       // Clear any alignment guide a session left behind on mid-drag unmount.
-      useAlignmentGuides.getState().clear()
+      clearSurfacePlanSnapFeedback()
     }
   }, [])
 
@@ -725,7 +926,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       onPointerDown={
         isOpeningPlacementActive || isMarqueeSelectionActive
           ? undefined
-          : (e) => handleSelect(id, e)
+          : (e) => handleEntryPointerDown(id, e)
       }
       // Mirror the sidebar tree nodes' hover wiring — `useViewer.
       // hoveredId` drives the highlight halo in 3D as well as the
@@ -745,6 +946,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     >
       <InteractiveGeometry
         activeDragId={activeDragId}
+        activeRotateNodeId={activeRotateNodeId}
         geometry={geometry}
         hatchPatternId={renderCtx?.hatchPatternId}
         hoveredHandleId={hoveredHandleId}
@@ -767,6 +969,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           if (!node) return
           event.preventDefault()
           event.stopPropagation()
+          suppressBoxSelectForPointer(event)
           sfxEmitter.emit('sfx:item-pick')
           setMovingNode(node as never)
         }}
@@ -840,6 +1043,7 @@ function InteractiveGeometry({
   hatchPatternId,
   hoveredHandleId,
   activeDragId,
+  activeRotateNodeId,
   isMarqueeSelectionActive,
   nodeId,
   sceneRotationDeg,
@@ -853,6 +1057,7 @@ function InteractiveGeometry({
   hatchPatternId: string | undefined
   hoveredHandleId: string | null
   activeDragId: string | null
+  activeRotateNodeId: AnyNodeId | null
   isMarqueeSelectionActive: boolean
   nodeId: AnyNodeId
   sceneRotationDeg: number
@@ -1095,7 +1300,7 @@ function InteractiveGeometry({
         // each end pointing tangentially in opposite directions —
         // "rotate either way."
         const handleId = makeHandleId(nodeId, g.payload)
-        const isHovered = hoveredHandleId === handleId
+        const isHovered = hoveredHandleId === handleId || activeRotateNodeId === nodeId
         // Arc geometry (all values precomputed for a 72° arc of
         // radius 0.13 — comparable footprint to `move-arrow`).
         const R = 0.13
@@ -1960,4 +2165,16 @@ function clientToPlan(clientX: number, clientY: number): FloorplanAffordancePoin
   // The floor-plan `<g>` maps plan X/Z directly to SVG x/y (Z stored as
   // the Y axis on screen — same convention as `toSvgPlanPoint`).
   return [transformed.x, transformed.y]
+}
+
+function swallowNextClick(timeoutMs = 0) {
+  const swallowClick = (event: MouseEvent) => {
+    event.stopPropagation()
+    event.preventDefault()
+    window.removeEventListener('click', swallowClick, true)
+  }
+  window.addEventListener('click', swallowClick, true)
+  setTimeout(() => {
+    window.removeEventListener('click', swallowClick, true)
+  }, timeoutMs)
 }

@@ -3,8 +3,11 @@ import type {
   DoorNode as DoorNodeType,
   HandleDescriptor,
   NodeDefinition,
+  RoofSegmentNode,
   WallNode,
 } from '@pascal-app/core'
+import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
+import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { scaleHandleHeight } from './door-math'
 import { buildDoorFloorplan } from './floorplan'
 import { doorWidthAffordance } from './floorplan-affordances'
@@ -42,7 +45,13 @@ function doorWidthHandle(side: 'left' | 'right'): HandleDescriptor<DoorNodeType>
     // 'max' = +X edge anchored (left arrow grows the -X edge outward).
     anchor: side === 'right' ? 'min' : 'max',
     min: MIN_DOOR_WIDTH,
-    max: (n, scene) => readWallLength(n, scene),
+    max: (n, scene) => {
+      // Roof-hosted doors clamp against the face profile (the wall-based
+      // limits read Infinity when wallId is unset).
+      const roofMax = readRoofFaceWidthMax(n, scene, sign)
+      if (roofMax !== null) return Math.max(MIN_DOOR_WIDTH, roofMax)
+      return readWallLength(n, scene)
+    },
     currentValue: (n) => n.width,
     apply: (initial, newWidth) => {
       // Anchored edge stays fixed in wall-local coords. Door rotation is
@@ -80,6 +89,8 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
     anchor: 'min', // bottom anchored at wall-local Y = position[1] - height/2
     min: MIN_DOOR_HEIGHT,
     max: (n, scene) => {
+      const roofMax = readRoofFaceHeightMax(n, scene, 1)
+      if (roofMax !== null) return Math.max(MIN_DOOR_HEIGHT, roofMax)
       const bottom = n.position[1] - n.height / 2
       return Math.max(MIN_DOOR_HEIGHT, readWallHeight(n, scene) - bottom)
     },
@@ -147,10 +158,22 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     duplicable: true,
     deletable: true,
     wallOpeningPlacement: true,
-    // `wallId` ties the door to its host wall and is re-derived from
-    // the wall under the cursor when a preset is placed. Host apps
-    // strip this at preset-save time via `getHostRefFields(def)`.
-    hostRefFields: ['wallId'],
+    // Doors also host on roof-segment wall faces (base walls under the
+    // roof, gable ends). `buildCut` punches the opening into the
+    // segment's wall brush; `dirtyHandledByOwnSystem` keeps the roof-merge
+    // loop from consuming door dirty marks (DoorSystem owns them and
+    // already cascades to the host via parentId).
+    roofAccessory: {
+      buildCut: (node, hostSegment) =>
+        buildRoofWallOpeningCut(node as DoorNodeType, hostSegment as RoofSegmentNode),
+      cutScope: 'wall',
+      dirtyHandledByOwnSystem: true,
+    },
+    // `wallId` / `roofSegmentId` tie the door to its host and are
+    // re-derived from the surface under the cursor when a preset is
+    // placed. Host apps strip these at preset-save time via
+    // `getHostRefFields(def)`.
+    hostRefFields: ['wallId', 'roofSegmentId', 'roofFace'],
   },
 
   parametrics: doorParametrics,
@@ -196,6 +219,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place door on wall' },
+    { key: 'Shift', label: 'Free place' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

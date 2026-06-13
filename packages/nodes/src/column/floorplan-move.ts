@@ -63,7 +63,7 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
         return Math.round(value / step) * step
       }
       const gridSnapped = resolveCursor(planPoint, { snap }) as WallPlanPoint
-      // Figma-style alignment layered on the grid snap (Alt bypasses).
+      // Figma-style alignment layered on the grid snap (Alt bypasses alignment; Shift all snap).
       const { point: snapped } = applyFloorplanAlignment(
         gridSnapped,
         movingFootprintAnchors(
@@ -73,13 +73,13 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
           rotationY,
         ),
         candidates,
-        { bypass: modifiers.altKey },
+        { bypass: modifiers.altKey || modifiers.shiftKey },
       )
       const next: [number, number, number] = [snapped[0], originalPosition[1], snapped[1]]
       lastPosition = next
 
       const snapKey = `${snapped[0]},${snapped[1]}`
-      if (snapKey !== lastSnapKey) {
+      if (!modifiers.shiftKey && snapKey !== lastSnapKey) {
         triggerSFX('sfx:grid-snap')
         lastSnapKey = snapKey
       }

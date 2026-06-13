@@ -1,4 +1,4 @@
-import type { LevelNode } from '@pascal-app/core'
+import type { LevelNode } from '../schema'
 
 export function getDefaultLevelName(level: number): string {
   if (level === 0) return 'Ground Floor'
