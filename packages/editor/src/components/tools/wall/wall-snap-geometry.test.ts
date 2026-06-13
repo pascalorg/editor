@@ -62,6 +62,13 @@ describe('findWallSpecialPointSnap', () => {
     // handled separately by findWallSnapTarget, not a special point.
     expect(findWallSpecialPointSnap([1.2, 0.1], walls)).toBeNull()
   })
+
+  test('honors tighter per-call radii without changing defaults', () => {
+    const walls = [makeWall([0, 0], [4, 0])]
+
+    expect(findWallSpecialPointSnap([0.34, 0], walls)?.snap).toBe('endpoint')
+    expect(findWallSpecialPointSnap([0.34, 0], walls, undefined, { endpoint: 0.3 })).toBeNull()
+  })
 })
 
 describe('findWallSnapTarget (edge / along-wall)', () => {
@@ -75,5 +82,11 @@ describe('findWallSnapTarget (edge / along-wall)', () => {
   test('returns null when too far from any wall', () => {
     const walls = [makeWall([0, 0], [4, 0])]
     expect(findWallSnapTarget([1.2, 2], walls)).toBeNull()
+  })
+
+  test('honors a tighter wall-body radius', () => {
+    const walls = [makeWall([0, 0], [4, 0])]
+
+    expect(findWallSnapTarget([1.2, 0.1], walls, { radius: 0.08 })).toBeNull()
   })
 })

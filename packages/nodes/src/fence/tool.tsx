@@ -20,6 +20,7 @@ import {
   EDITOR_LAYER,
   type FencePlanPoint,
   formatAngleRadians,
+  formatLinearMeasurement,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
@@ -29,7 +30,7 @@ import {
   triggerSFX,
   useAlignmentGuides,
   useEditor,
-  WALL_FINE_GRID_STEP,
+  useSegmentDraftChain,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -92,17 +93,6 @@ type AngleSource = {
   arcCenter: FencePlanPoint
   connectedVector: FencePlanPoint
   draftVector: FencePlanPoint
-}
-
-function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
-  if (unit === 'imperial') {
-    const feet = value * 3.280_84
-    const wholeFeet = Math.floor(feet)
-    const inches = Math.round((feet - wholeFeet) * 12)
-    if (inches === 12) return `${wholeFeet + 1}'0"`
-    return `${wholeFeet}'${inches}"`
-  }
-  return `${Number.parseFloat(value.toFixed(2))}m`
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -365,7 +355,7 @@ function getDraftMeasurementState(
   const length = Math.hypot(dx, dz)
   if (length < 0.01) return null
   return {
-    lengthLabel: formatMeasurement(length, unit),
+    lengthLabel: formatLinearMeasurement(length, unit),
     lengthPosition: [
       (start[0] + end[0]) / 2,
       baseY + previewHeight + DRAFT_LABEL_Y_OFFSET,
@@ -476,7 +466,8 @@ export const FenceTool: React.FC = () => {
     }
 
     // Align the drafted point onto another object's nearest real anchor and
-    // publish the guide. Alt bypasses. Returns the (possibly snapped) point.
+    // publish the guide. Alt bypasses alignment; Shift bypasses all guided
+    // snapping. Returns the possibly snapped point.
     const alignPoint = (point: FencePlanPoint, bypass: boolean): FencePlanPoint => {
       if (bypass || alignmentCandidates.length === 0) {
         useAlignmentGuides.getState().clear()
@@ -495,6 +486,7 @@ export const FenceTool: React.FC = () => {
       buildingState.current = 0
       previewRef.current.visible = false
       setDraftMeasurement(null)
+      useSegmentDraftChain.getState().clear('fence')
       useAlignmentGuides.getState().clear()
     }
 
@@ -502,20 +494,29 @@ export const FenceTool: React.FC = () => {
       if (!(cursorRef.current && previewRef.current)) return
       const { walls, fences } = getCurrentLevelElements()
       const localPoint: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
-      // Default = active grid step; Shift switches to the fine step
-      // (0.05m). No 45° angle snap — see `wall/tool.tsx` for rationale.
-      const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
-      const bypassAlign = event.nativeEvent?.altKey === true
+      // While drafting, the segment locks to 15° rays from its start
+      // unless Shift is held. Shift also bypasses grid and magnetic snap.
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
+      const bypassAlign = event.nativeEvent?.altKey === true || bypassSnap
 
       if (buildingState.current === 1) {
+        const angleLocked = !bypassSnap
         const snappedLocal = alignPoint(
-          snapFenceDraftPoint({ point: localPoint, walls, fences, step }),
-          bypassAlign,
+          snapFenceDraftPoint({
+            point: localPoint,
+            walls,
+            fences,
+            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+            angleSnap: angleLocked,
+            bypassSnap,
+          }),
+          bypassAlign || angleLocked,
         )
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
         cursorRef.current.position.copy(endingPoint.current)
         const currentFenceEnd: FencePlanPoint = [snappedLocal[0], snappedLocal[1]]
         if (
+          !bypassSnap &&
           previousFenceEnd &&
           (currentFenceEnd[0] !== previousFenceEnd[0] || currentFenceEnd[1] !== previousFenceEnd[1])
         ) {
@@ -542,7 +543,7 @@ export const FenceTool: React.FC = () => {
         )
       } else {
         const snappedPoint = alignPoint(
-          snapFenceDraftPoint({ point: localPoint, walls, fences, step }),
+          snapFenceDraftPoint({ point: localPoint, walls, fences, bypassSnap }),
           bypassAlign,
         )
         cursorRef.current.position.set(snappedPoint[0], event.localPosition[1], snappedPoint[1])
@@ -558,12 +559,12 @@ export const FenceTool: React.FC = () => {
 
       const { walls, fences } = getCurrentLevelElements()
       const localClick: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
-      const clickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
-      const bypassAlign = event.nativeEvent?.altKey === true
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
+      const bypassAlign = event.nativeEvent?.altKey === true || bypassSnap
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
-          snapFenceDraftPoint({ point: localClick, walls, fences, step: clickStep }),
+          snapFenceDraftPoint({ point: localClick, walls, fences, bypassSnap }),
           bypassAlign,
         )
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
@@ -573,9 +574,17 @@ export const FenceTool: React.FC = () => {
         previewRef.current.visible = true
         setDraftMeasurement(null)
       } else {
+        const angleLocked = !bypassSnap
         const snappedEnd = alignPoint(
-          snapFenceDraftPoint({ point: localClick, walls, fences, step: clickStep }),
-          bypassAlign,
+          snapFenceDraftPoint({
+            point: localClick,
+            walls,
+            fences,
+            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+            angleSnap: angleLocked,
+            bypassSnap,
+          }),
+          bypassAlign || angleLocked,
         )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
@@ -592,6 +601,10 @@ export const FenceTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
 
         const nextStart = createdFence.end
+        // Publish the resolved chain start so the 2D floor-plan draft
+        // chains its next segment from the same point (its own snap
+        // pipeline can resolve a slightly different endpoint).
+        useSegmentDraftChain.getState().setChainStart('fence', [nextStart[0], nextStart[1]])
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
         endingPoint.current.copy(startingPoint.current)
         cursorRef.current?.position.copy(startingPoint.current)
@@ -609,6 +622,12 @@ export const FenceTool: React.FC = () => {
       if (e.key === 'Shift') shiftPressed.current = false
     }
 
+    // Cmd-tabbing away mid-draft never delivers the keyup — reset so the
+    // angle lock isn't stuck off when focus returns.
+    const onBlur = () => {
+      shiftPressed.current = false
+    }
+
     const onCancel = () => {
       if (buildingState.current === 1) {
         markToolCancelConsumed()
@@ -621,6 +640,7 @@ export const FenceTool: React.FC = () => {
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
 
     return () => {
       emitter.off('grid:move', onGridMove)
@@ -628,6 +648,8 @@ export const FenceTool: React.FC = () => {
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+      useSegmentDraftChain.getState().clear('fence')
       useAlignmentGuides.getState().clear()
     }
   }, [unit])

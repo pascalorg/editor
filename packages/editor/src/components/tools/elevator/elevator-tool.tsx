@@ -195,12 +195,13 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
     }
 
     const onGridMove = (event: GridEvent) => {
+      const bypassSnap = event.nativeEvent?.shiftKey === true
       const [gridX, gridZ] = alignPoint(
-        Math.round(event.localPosition[0] * 2) / 2,
-        Math.round(event.localPosition[2] * 2) / 2,
+        bypassSnap ? event.localPosition[0] : Math.round(event.localPosition[0] * 2) / 2,
+        bypassSnap ? event.localPosition[2] : Math.round(event.localPosition[2] * 2) / 2,
         event.localPosition[0],
         event.localPosition[2],
-        event.nativeEvent?.altKey === true,
+        event.nativeEvent?.altKey === true || bypassSnap,
       )
       const supportY = resolveElevatorSupportY({
         buildingId: currentBuildingId,
@@ -220,6 +221,7 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
       })
 
       if (
+        !bypassSnap &&
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
       ) {
@@ -237,12 +239,13 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
       })
       if (!latestBuildingId) return
 
+      const bypassSnap = event.nativeEvent?.shiftKey === true
       const [gridX, gridZ] = alignPoint(
-        Math.round(event.localPosition[0] * 2) / 2,
-        Math.round(event.localPosition[2] * 2) / 2,
+        bypassSnap ? event.localPosition[0] : Math.round(event.localPosition[0] * 2) / 2,
+        bypassSnap ? event.localPosition[2] : Math.round(event.localPosition[2] * 2) / 2,
         event.localPosition[0],
         event.localPosition[2],
-        event.nativeEvent?.altKey === true,
+        event.nativeEvent?.altKey === true || bypassSnap,
       )
       commitElevatorPlacement(
         latestBuildingId,

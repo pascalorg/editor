@@ -17,6 +17,7 @@ import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
+import { ensureRenderableGeometryAttributes } from '../../lib/csg-utils'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -30,7 +31,7 @@ function csgMaterials(brush: Brush): THREE.Material[] {
 const csgEvaluator = new Evaluator()
 csgEvaluator.useGroups = true
 ;(csgEvaluator as any).consolidateGroups = false // shared dummyMats across brushes causes consolidation to misalign groupIndices vs groupOrder indices → crash
-csgEvaluator.attributes = ['position', 'normal', 'uv']
+csgEvaluator.attributes = ['position', 'normal', 'uv', 'uv2']
 
 function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
   ;(geometry as any).computeBoundsTree = computeBoundsTree
@@ -38,6 +39,7 @@ function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
 }
 
 function prepareBrushForCSG(brush: Brush) {
+  ensureRenderableGeometryAttributes(brush.geometry)
   computeGeometryBoundsTree(brush.geometry)
   brush.updateMatrixWorld()
 }
@@ -110,7 +112,13 @@ export const RoofSystem = () => {
       // previous cut shape (stale CSG) once the user exits segment
       // edit mode. Registry-driven so the viewer stays kind-agnostic.
       const def = nodeRegistry.get(node.type)
-      if (def?.capabilities?.roofAccessory) {
+      // Kinds with `dirtyHandledByOwnSystem` (door / window) reach the roof
+      // through their own geometry system's parentId cascade instead —
+      // their dirty marks belong to that system, not to this loop.
+      if (
+        def?.capabilities?.roofAccessory &&
+        !def.capabilities.roofAccessory.dirtyHandledByOwnSystem
+      ) {
         const segId = (node as { roofSegmentId?: string }).roofSegmentId
         const seg = segId ? (nodes[segId as AnyNodeId] as RoofSegmentNode | undefined) : undefined
         if (seg?.parentId) {
@@ -131,10 +139,20 @@ export const RoofSystem = () => {
           // Only compute expensive individual CSG when the segment is actually rendered
           // (its parent group is visible = the roof is selected for editing)
           const isVisible = mesh.parent?.visible !== false
-          if (isVisible && segmentsProcessed < MAX_SEGMENTS_PER_FRAME) {
-            updateRoofSegmentGeometry(effectiveSegment, mesh)
+          // Accessory-reveal mode (RoofEditSystem): the wrapper is shown so
+          // portaled handles render, but the merged shell stays visible and
+          // the segment meshes are stripped to empty placeholders. Rebuilding
+          // per-segment CSG here would draw UNCUT geometry on top of the
+          // merged shell — hiding a freshly cut opening (door / window /
+          // skylight) until the next deselect. Full edit mode hides the
+          // merged mesh, so gate the rebuild on its visibility.
+          const revealOnly =
+            mesh.parent?.name === 'segments-wrapper' &&
+            mesh.parent?.parent?.getObjectByName('merged-roof')?.visible === true
+          if (isVisible && !revealOnly && segmentsProcessed < MAX_SEGMENTS_PER_FRAME) {
+            updateRoofSegmentGeometry(effectiveSegment, mesh, nodes)
             segmentsProcessed++
-          } else if (isVisible) {
+          } else if (isVisible && !revealOnly) {
             return // Over budget — keep dirty, process next frame
           } else {
             // Just sync transform, skip CSG — the merged roof handles visuals.
@@ -151,6 +169,18 @@ export const RoofSystem = () => {
               placeholder.setAttribute(
                 'position',
                 new THREE.Float32BufferAttribute(new Float32Array(9), 3),
+              )
+              placeholder.setAttribute(
+                'normal',
+                new THREE.Float32BufferAttribute(new Float32Array(9), 3),
+              )
+              placeholder.setAttribute(
+                'uv',
+                new THREE.Float32BufferAttribute(new Float32Array(6), 2),
+              )
+              placeholder.setAttribute(
+                'uv2',
+                new THREE.Float32BufferAttribute(new Float32Array(6), 2),
               )
               computeGeometryBoundsTree(placeholder)
               mesh.geometry = placeholder
@@ -210,8 +240,12 @@ export const RoofSystem = () => {
 // GEOMETRY GENERATION
 // ============================================================================
 
-function updateRoofSegmentGeometry(node: RoofSegmentNode, mesh: THREE.Mesh) {
-  const newGeo = generateRoofSegmentGeometry(node)
+function updateRoofSegmentGeometry(
+  node: RoofSegmentNode,
+  mesh: THREE.Mesh,
+  nodes?: Record<string, AnyNode>,
+) {
+  const newGeo = generateRoofSegmentGeometry(node, nodes)
 
   mesh.geometry.dispose()
   mesh.geometry = newGeo
@@ -219,6 +253,90 @@ function updateRoofSegmentGeometry(node: RoofSegmentNode, mesh: THREE.Mesh) {
 
   mesh.position.set(node.position[0], node.position[1], node.position[2])
   mesh.rotation.y = node.rotation
+}
+
+/**
+ * Subtract every hosted accessory cut (`capabilities.roofAccessory.
+ * buildCut`) from a segment's brushes, in SEGMENT-LOCAL space. Shared by
+ * the merged-shell path AND the per-segment path (full edit mode /
+ * painted segments) — without the latter, selecting a segment used to
+ * swap the merged shell for uncut per-segment meshes and every door /
+ * window / skylight hole vanished until deselect. Children are read
+ * live-effective so an in-flight handle drag carves the live hole.
+ * Registry-driven so the viewer never names a kind.
+ */
+function subtractAccessoryCuts(
+  brushes: { deckSlab: Brush; shinSlab: Brush; wallBrush: Brush; innerBrush: Brush },
+  segment: RoofSegmentNode,
+  nodes: Record<string, AnyNode>,
+) {
+  let workingShin = brushes.shinSlab
+  let workingDeck = brushes.deckSlab
+  let workingWall = brushes.wallBrush
+  for (const childElemId of segment.children ?? []) {
+    const storedChild = nodes[childElemId as AnyNodeId]
+    if (!storedChild) continue
+    const childElem = getEffectiveNode(storedChild)
+    const meta =
+      typeof childElem.metadata === 'object' && childElem.metadata !== null
+        ? (childElem.metadata as Record<string, unknown>)
+        : undefined
+    if (meta?.isTransient) continue
+
+    const childDef = nodeRegistry.get(childElem.type)
+    const buildCut = childDef?.capabilities?.roofAccessory?.buildCut
+    if (!buildCut) continue
+
+    const cutGeo = buildCut(childElem, segment)
+    if (!cutGeo) continue
+
+    // Wrap the kind-emitted geometry in a Brush. Kinds return raw
+    // shapes; the viewer welds (mandatory after rotations leave
+    // duplicated verts), attaches a single material group, and
+    // builds the bounds tree — keeping kind code free of
+    // three-bvh-csg / three-mesh-bvh imports.
+    const welded = mergeVertices(cutGeo, 1e-4)
+    cutGeo.dispose()
+    const idxCount = welded.getIndex()?.count ?? 0
+    if (idxCount === 0) {
+      welded.dispose()
+      continue
+    }
+    welded.clearGroups()
+    welded.addGroup(0, idxCount, 0)
+    welded.computeVertexNormals()
+    ensureRenderableGeometryAttributes(welded)
+    computeGeometryBoundsTree(welded)
+    const cut = new Brush(welded, dummyMats[0])
+    cut.updateMatrixWorld()
+
+    const cutScope = childDef?.capabilities?.roofAccessory?.cutScope ?? 'all'
+    try {
+      if (cutScope !== 'wall') {
+        const nextShin = csgEvaluator.evaluate(workingShin, cut, SUBTRACTION) as Brush
+        workingShin.geometry.dispose()
+        prepareBrushForCSG(nextShin)
+        workingShin = nextShin
+
+        const nextDeck = csgEvaluator.evaluate(workingDeck, cut, SUBTRACTION) as Brush
+        workingDeck.geometry.dispose()
+        prepareBrushForCSG(nextDeck)
+        workingDeck = nextDeck
+      }
+
+      const nextWall = csgEvaluator.evaluate(workingWall, cut, SUBTRACTION) as Brush
+      workingWall.geometry.dispose()
+      prepareBrushForCSG(nextWall)
+      workingWall = nextWall
+    } catch (e) {
+      console.error(`[${childElem.type}] cut CSG failed:`, e)
+    } finally {
+      cut.geometry.dispose()
+    }
+  }
+  brushes.shinSlab = workingShin
+  brushes.deckSlab = workingDeck
+  brushes.wallBrush = workingWall
 }
 
 function updateMergedRoofGeometry(
@@ -261,74 +379,7 @@ function updateMergedRoofGeometry(
     const brushes = getRoofSegmentBrushes(child)
     if (!brushes) continue
 
-    // Per-child cuts in SEGMENT-LOCAL space: subtract every accessory
-    // that contributes a cut (declares
-    // `capabilities.roofAccessory.buildCut`) from shin / deck / wall
-    // before we accumulate. Mirrors roof-system v1 — the cut is built
-    // in segment-local, then carved out before the segment transform
-    // stacks on. Registry-driven so the viewer never names a kind.
-    let workingShin = brushes.shinSlab
-    let workingDeck = brushes.deckSlab
-    let workingWall = brushes.wallBrush
-    for (const childElemId of child.children ?? []) {
-      const childElem = nodes[childElemId as AnyNodeId]
-      if (!childElem) continue
-      const meta =
-        typeof childElem.metadata === 'object' && childElem.metadata !== null
-          ? (childElem.metadata as Record<string, unknown>)
-          : undefined
-      if (meta?.isTransient) continue
-
-      const childDef = nodeRegistry.get(childElem.type)
-      const buildCut = childDef?.capabilities?.roofAccessory?.buildCut
-      if (!buildCut) continue
-
-      const cutGeo = buildCut(childElem, child)
-      if (!cutGeo) continue
-
-      // Wrap the kind-emitted geometry in a Brush. Kinds return raw
-      // shapes; the viewer welds (mandatory after rotations leave
-      // duplicated verts), attaches a single material group, and
-      // builds the bounds tree — keeping kind code free of
-      // three-bvh-csg / three-mesh-bvh imports.
-      const welded = mergeVertices(cutGeo, 1e-4)
-      cutGeo.dispose()
-      const idxCount = welded.getIndex()?.count ?? 0
-      if (idxCount === 0) {
-        welded.dispose()
-        continue
-      }
-      welded.clearGroups()
-      welded.addGroup(0, idxCount, 0)
-      welded.computeVertexNormals()
-      computeGeometryBoundsTree(welded)
-      const cut = new Brush(welded, dummyMats[0])
-      cut.updateMatrixWorld()
-
-      try {
-        const nextShin = csgEvaluator.evaluate(workingShin, cut, SUBTRACTION) as Brush
-        workingShin.geometry.dispose()
-        prepareBrushForCSG(nextShin)
-        workingShin = nextShin
-
-        const nextDeck = csgEvaluator.evaluate(workingDeck, cut, SUBTRACTION) as Brush
-        workingDeck.geometry.dispose()
-        prepareBrushForCSG(nextDeck)
-        workingDeck = nextDeck
-
-        const nextWall = csgEvaluator.evaluate(workingWall, cut, SUBTRACTION) as Brush
-        workingWall.geometry.dispose()
-        prepareBrushForCSG(nextWall)
-        workingWall = nextWall
-      } catch (e) {
-        console.error(`[${childElem.type}] cut CSG failed:`, e)
-      } finally {
-        cut.geometry.dispose()
-      }
-    }
-    brushes.shinSlab = workingShin
-    brushes.deckSlab = workingDeck
-    brushes.wallBrush = workingWall
+    subtractAccessoryCuts(brushes, child, nodes)
 
     _matrix.compose(
       _position.set(child.position[0], child.position[1], child.position[2]),
@@ -390,11 +441,16 @@ function updateMergedRoofGeometry(
   if (totalShinSlab && totalDeckSlab && totalWall && totalInner) {
     try {
       const finalShinTrimmed = csgEvaluator.evaluate(totalShinSlab, totalInner, SUBTRACTION)
+      prepareBrushForCSG(finalShinTrimmed)
       const finalDeckTrimmed = csgEvaluator.evaluate(totalDeckSlab, totalInner, SUBTRACTION)
+      prepareBrushForCSG(finalDeckTrimmed)
       const finalWallTrimmed = csgEvaluator.evaluate(totalWall, totalInner, SUBTRACTION)
+      prepareBrushForCSG(finalWallTrimmed)
 
       const shinDeck = csgEvaluator.evaluate(finalShinTrimmed, finalDeckTrimmed, ADDITION)
+      prepareBrushForCSG(shinDeck)
       const combined = csgEvaluator.evaluate(shinDeck, finalWallTrimmed, ADDITION)
+      prepareBrushForCSG(combined)
 
       const resultGeo = csgGeometry(combined)
       if (geometryHasNaNPositions(resultGeo)) {
@@ -428,7 +484,7 @@ function updateMergedRoofGeometry(
       }
 
       resultGeo.computeVertexNormals()
-      ensureUv2Attribute(resultGeo)
+      ensureRenderableGeometryAttributes(resultGeo)
       mergedMesh.geometry.dispose()
       mergedMesh.geometry = resultGeo
 
@@ -721,6 +777,7 @@ export function getRoofSegmentBrushes(
     // when a group exists but covers no triangles (can happen after mergeVertices)
     geo.groups = geo.groups.filter((g) => g.count > 0)
     if (geo.groups.length === 0) return null
+    ensureRenderableGeometryAttributes(geo)
     computeGeometryBoundsTree(geo)
     const brush = new Brush(geo, dummyMats)
     brush.updateMatrixWorld()
@@ -766,7 +823,9 @@ export function getRoofSegmentBrushes(
   if (deckTopBrush && deckBotBrush && wallBrush && innerBrush && shinTopBrush && shinBotBrush) {
     try {
       const deckSlab = csgEvaluator.evaluate(deckTopBrush, deckBotBrush, SUBTRACTION)
+      prepareBrushForCSG(deckSlab)
       const shinSlab = csgEvaluator.evaluate(shinTopBrush, shinBotBrush, SUBTRACTION)
+      prepareBrushForCSG(shinSlab)
 
       deckTopBrush.geometry.dispose()
       deckBotBrush.geometry.dispose()
@@ -789,11 +848,18 @@ export function getRoofSegmentBrushes(
   return null
 }
 
-export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.BufferGeometry {
+export function generateRoofSegmentGeometry(
+  node: RoofSegmentNode,
+  nodes?: Record<string, AnyNode>,
+): THREE.BufferGeometry {
   const brushes = getRoofSegmentBrushes(node)
   if (!brushes) {
     // Fallback: simple box
     return new THREE.BoxGeometry(node.width, node.wallHeight, node.depth)
+  }
+
+  if (nodes) {
+    subtractAccessoryCuts(brushes, node, nodes)
   }
 
   const { deckSlab, shinSlab, wallBrush, innerBrush } = brushes
@@ -801,8 +867,11 @@ export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.Buffer
 
   try {
     const hollowWall = csgEvaluator.evaluate(wallBrush, innerBrush, SUBTRACTION)
+    prepareBrushForCSG(hollowWall)
     const shinDeck = csgEvaluator.evaluate(shinSlab, deckSlab, ADDITION)
+    prepareBrushForCSG(shinDeck)
     const combined = csgEvaluator.evaluate(shinDeck, hollowWall, ADDITION)
+    prepareBrushForCSG(combined)
 
     resultGeo = csgGeometry(combined)
 
@@ -838,7 +907,7 @@ export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.Buffer
   innerBrush.geometry.dispose()
 
   resultGeo.computeVertexNormals()
-  ensureUv2Attribute(resultGeo)
+  ensureRenderableGeometryAttributes(resultGeo)
   return resultGeo
 }
 
@@ -1245,7 +1314,7 @@ function createGeometryFromFaces(
   const mergedGeo = mergeVertices(geometry, 1e-4)
   geometry.dispose()
 
-  ensureUv2Attribute(mergedGeo)
+  ensureRenderableGeometryAttributes(mergedGeo)
   return mergedGeo
 }
 
@@ -1277,13 +1346,6 @@ function pushRoofUv(uvs: number[], point: THREE.Vector3, normal: THREE.Vector3) 
   }
 
   uvs.push(_uvFaceNormal.z >= 0 ? point.x : -point.x, -point.y)
-}
-
-function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
-  const uv = geometry.getAttribute('uv')
-  if (!uv) return
-
-  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
 }
 
 // ─── Skylight cutout ─────────────────────────────────────────────────

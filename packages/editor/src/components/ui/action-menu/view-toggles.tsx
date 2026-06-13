@@ -13,7 +13,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Check, ChevronDown, Eye, EyeOff, Layers2, Plus, Trash2, Waypoints } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { getLevelDisplayName } from '../../../lib/level-name'
+import { getLevelDisplayName } from '@pascal-app/core'
 import { createLocalGuideImage } from '../../../lib/local-guide-image'
 import { cn } from '../../../lib/utils'
 import useEditor, { type GridSnapStep } from '../../../store/use-editor'
@@ -26,6 +26,8 @@ import { ActionButton } from './action-button'
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const ACCEPTED_FILE_TYPES = '.glb,.gltf,image/jpeg,image/png,image/webp,image/gif'
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
+const REFERENCES_EMPTY_TEXT =
+  'Upload GLB meshes as scan references or blueprint images as guide references.'
 
 function formatGridSnapStep(step: GridSnapStep) {
   return step.toFixed(2)
@@ -342,7 +344,7 @@ function GuidesControl() {
             </div>
           ) : (
             <div className="rounded-xl border border-border/45 border-dashed bg-background/60 px-3 py-4 text-muted-foreground text-sm">
-              No guide images on this level yet.
+              {REFERENCES_EMPTY_TEXT}
             </div>
           )}
         </div>
@@ -581,7 +583,7 @@ function ScansControl() {
             </div>
           ) : (
             <div className="rounded-xl border border-border/45 border-dashed bg-background/60 px-3 py-4 text-muted-foreground text-sm">
-              No scans on this level yet.
+              {REFERENCES_EMPTY_TEXT}
             </div>
           )}
         </div>
@@ -805,7 +807,7 @@ function ReferencesControl() {
             </div>
           )}
           <ReferenceListSection
-            emptyText="No scans on this level yet."
+            emptyText={REFERENCES_EMPTY_TEXT}
             iconSrc="/icons/mesh.png"
             nodes={scans}
             noun="scan"
@@ -816,7 +818,7 @@ function ReferencesControl() {
           />
           <div className="h-px bg-border/45" />
           <ReferenceListSection
-            emptyText="No guide images on this level yet."
+            emptyText={REFERENCES_EMPTY_TEXT}
             iconSrc="/icons/floorplan.png"
             nodes={guides}
             noun="guide image"

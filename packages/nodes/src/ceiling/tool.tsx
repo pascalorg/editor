@@ -1,19 +1,20 @@
 'use client'
 
 import {
-  collectAlignmentAnchors,
+  DEFAULT_ANGLE_STEP,
   emitter,
   type GridEvent,
   type LevelNode,
-  resolveAlignment,
+  snapPointAlongAngleRay,
   useScene,
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  clearCeilingSnapFeedback,
   EDITOR_LAYER,
   markToolCancelConsumed,
+  resolveCeilingPlanPointSnap,
   triggerSFX,
-  useAlignmentGuides,
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -28,35 +29,11 @@ import { CeilingNode } from './schema'
  * Multi-click polygon drawing at the ceiling height (2.52m default)
  * with a vertical TSL-gradient connector + ground-shadow lines so the
  * draft is visible against both the ceiling plane and the floor.
- * Shift defeats the axis/45° snap during drag.
+ * Shift defeats the 15° angle snap during drag.
  */
 
 const CEILING_HEIGHT = 2.52
 const GRID_OFFSET = 0.02
-/** Figma-style alignment-snap threshold (meters), matching the move tools. */
-const ALIGNMENT_THRESHOLD_M = 0.08
-
-function calculateSnapPoint(
-  lastPoint: [number, number],
-  currentPoint: [number, number],
-): [number, number] {
-  const [x1, y1] = lastPoint
-  const [x, y] = currentPoint
-  const dx = x - x1
-  const dy = y - y1
-  const absDx = Math.abs(dx)
-  const absDy = Math.abs(dy)
-  const horizontalDist = absDy
-  const verticalDist = absDx
-  const diagonalDist = Math.abs(absDx - absDy)
-  const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
-  if (minDist === diagonalDist) {
-    const diagonalLength = Math.min(absDx, absDy)
-    return [x1 + Math.sign(dx) * diagonalLength, y1 + Math.sign(dy) * diagonalLength]
-  }
-  if (minDist === horizontalDist) return [x, y1]
-  return [x1, y]
-}
 
 function commitCeilingDrawing(levelId: LevelNode['id'], points: Array<[number, number]>): string {
   const { createNode, nodes } = useScene.getState()
@@ -93,10 +70,7 @@ export const CeilingTool: React.FC = () => {
   // draw isn't built with a stale preset's parameters. Unmount-only.
   useEffect(() => () => useEditor.getState().setToolDefaults('ceiling', null), [])
 
-  // Clear alignment guides on unmount ONLY. The main drawing effect re-runs
-  // on every cursor move (cursorPosition is in its deps), so clearing guides
-  // in its cleanup would wipe the guide the instant after each move sets it.
-  useEffect(() => () => useAlignmentGuides.getState().clear(), [])
+  useEffect(() => () => clearCeilingSnapFeedback(), [])
 
   const verticalGeo = useMemo(
     () =>
@@ -115,62 +89,41 @@ export const CeilingTool: React.FC = () => {
   useEffect(() => {
     if (!currentLevelId) return
 
-    // Alignment candidates — anchors of every OTHER alignable object. The
-    // ceiling's own in-progress vertices are intentionally excluded (no
-    // self-alignment while drawing).
-    const alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
-    // Snap the drafted vertex onto another object's nearest real anchor and
-    // publish the guide. The probe is the RAW cursor, NOT the 0.5m-grid-snapped
-    // point: resolving against the grid point would only ever catch anchors
-    // that happen to sit on a grid line, so off-grid items (furniture, angled
-    // walls) would never surface a guide. The matched axis locks exactly to the
-    // candidate's coordinate; the other axis keeps its grid/ortho snap. Alt
-    // bypasses.
-    const alignPoint = (
-      fallback: [number, number],
-      raw: [number, number],
-      bypass: boolean,
-    ): [number, number] => {
-      if (bypass || alignmentCandidates.length === 0) {
-        useAlignmentGuides.getState().clear()
-        return fallback
-      }
-      const ar = resolveAlignment({
-        moving: [{ nodeId: '__ceiling-draft__', kind: 'corner', x: raw[0], z: raw[1] }],
-        candidates: alignmentCandidates,
-        threshold: ALIGNMENT_THRESHOLD_M,
-      })
-      if (ar.guides.length === 0) {
-        useAlignmentGuides.getState().clear()
-        return fallback
-      }
-      useAlignmentGuides.getState().set(ar.guides)
-      let [x, z] = fallback
-      for (const guide of ar.guides) {
-        if (guide.axis === 'x') x = guide.coord
-        else z = guide.coord
-      }
-      return [x, z]
-    }
-
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && gridCursorRef.current)) return
       const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
       const gridX = Math.round(rawPoint[0] * 2) / 2
       const gridZ = Math.round(rawPoint[1] * 2) / 2
-      const gridPosition: [number, number] = [gridX, gridZ]
+      const gridPosition: [number, number] = bypassSnap ? rawPoint : [gridX, gridZ]
       setCursorPosition(gridPosition)
       setLevelY(event.localPosition[1])
       const ceilingY = event.localPosition[1] + CEILING_HEIGHT
       const gridY = event.localPosition[1] + GRID_OFFSET
       const lastPoint = points[points.length - 1]
-      const orthoPoint =
-        shiftPressed.current || !lastPoint
+      // 15° angle snap from the raw cursor (matching the 2D floorplan
+      // pipeline) with the distance snapped along the ray to the grid step.
+      const orthoPoint: [number, number] =
+        bypassSnap || !lastPoint
           ? gridPosition
-          : calculateSnapPoint(lastPoint, gridPosition)
-      const displayPoint = alignPoint(orthoPoint, rawPoint, event.nativeEvent?.altKey === true)
+          : [
+              ...snapPointAlongAngleRay(
+                lastPoint,
+                rawPoint,
+                DEFAULT_ANGLE_STEP,
+                useEditor.getState().gridSnapStep,
+              ),
+            ]
+      const displayPoint = resolveCeilingPlanPointSnap({
+        rawPoint,
+        fallbackPoint: orthoPoint,
+        levelId: currentLevelId,
+        altKey: event.nativeEvent?.altKey === true,
+        shiftKey: bypassSnap,
+      }).point
       setSnappedCursorPosition(displayPoint)
       if (
+        !bypassSnap &&
         points.length > 0 &&
         previousSnappedPointRef.current &&
         (displayPoint[0] !== previousSnappedPointRef.current[0] ||
@@ -199,7 +152,7 @@ export const CeilingTool: React.FC = () => {
         const ceilingId = commitCeilingDrawing(currentLevelId, points)
         setSelection({ selectedIds: [ceilingId] })
         setPoints([])
-        useAlignmentGuides.getState().clear()
+        clearCeilingSnapFeedback()
       } else {
         // Every non-closing vertex is a "start" tick; the closing click above
         // fires the structure-build (end) cue.
@@ -214,14 +167,14 @@ export const CeilingTool: React.FC = () => {
         const ceilingId = commitCeilingDrawing(currentLevelId, points)
         setSelection({ selectedIds: [ceilingId] })
         setPoints([])
-        useAlignmentGuides.getState().clear()
+        clearCeilingSnapFeedback()
       }
     }
 
     const onCancel = () => {
       if (points.length > 0) markToolCancelConsumed()
       setPoints([])
-      useAlignmentGuides.getState().clear()
+      clearCeilingSnapFeedback()
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -230,8 +183,12 @@ export const CeilingTool: React.FC = () => {
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Shift') shiftPressed.current = false
     }
+    const onWindowBlur = () => {
+      shiftPressed.current = false
+    }
     document.addEventListener('keydown', onKeyDown)
     document.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onWindowBlur)
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
@@ -241,6 +198,7 @@ export const CeilingTool: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onWindowBlur)
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('grid:double-click', onGridDoubleClick)

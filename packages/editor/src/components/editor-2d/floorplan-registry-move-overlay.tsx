@@ -428,7 +428,8 @@ export function FloorplanRegistryMoveOverlay() {
       // 1) Grid snap baseline. Fresh catalog placement is absolute under
       // the cursor; existing moves preserve the cursor's grab offset.
       const gridStep = useEditor.getState().gridSnapStep
-      const snap = (value: number) => Math.round(value / gridStep) * gridStep
+      const snap = (value: number) =>
+        event.shiftKey ? value : Math.round(value / gridStep) * gridStep
       const resolved = resolvePlanarCursorPosition({
         cursor: [m[0], m[1]],
         original: [originalPosition[0], originalPosition[2]],
@@ -442,11 +443,11 @@ export function FloorplanRegistryMoveOverlay() {
       // 2) Alignment snap layered on top. Treat the grid-snapped point
       // as the "proposed" position so alignment competes from a stable
       // base rather than the raw cursor jitter. Alt bypasses alignment
-      // entirely — same affordance Path 1 advertises in its "No Snap"
+      // entirely; Shift bypasses both grid and alignment
       // hint chip.
       let finalX = gridX
       let finalZ = gridZ
-      if (!event.altKey && candidateAnchors.length > 0) {
+      if (!(event.altKey || event.shiftKey) && candidateAnchors.length > 0) {
         // Translate the cached local bbox to the proposed pos to get the
         // moving anchors at that location. The entry's untransformed
         // bbox is in world meters relative to the node's origin, so a

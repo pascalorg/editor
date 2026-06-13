@@ -71,7 +71,32 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       {
         keys: ['Cmd/Ctrl', 'Left click'],
         action: 'Add or remove an object from multi-selection',
-        note: 'Works while in Select mode.',
+        note: 'Works in Select mode on the 3D canvas, the 2D floor plan, and the scene graph.',
+      },
+      {
+        keys: ['Shift', 'Left click'],
+        action: 'Add or remove an object from canvas multi-selection',
+        note: 'In the scene graph, Shift-click selects the visible range like a file browser.',
+      },
+    ],
+  },
+  {
+    title: 'Direct Manipulation',
+    shortcuts: [
+      {
+        keys: ['Cmd/Ctrl', 'Left click'],
+        action: 'Move the selected movable object under the cursor',
+        note: 'Drag in Select mode. Guided snapping and guides are enabled by default.',
+      },
+      {
+        keys: ['Cmd/Ctrl', 'Right click'],
+        action: 'Rotate the selected object under the cursor',
+        note: 'Drag left or right in Select mode. Rotation snaps to 15° increments by default.',
+      },
+      {
+        keys: ['Cmd/Ctrl', 'Shift', 'Right click'],
+        action: 'Rotate freely',
+        note: 'Hold Shift during the drag to bypass the 15° rotation increment.',
       },
     ],
   },
@@ -80,8 +105,13 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     shortcuts: [
       {
         keys: ['Shift'],
-        action: 'Temporarily disable angle snapping while drawing walls, slabs, and ceilings',
-        note: 'Hold while drawing.',
+        action: 'Bypass guided snapping and angle constraints',
+        note: 'Hold during the active gesture. Passive guide or measurement feedback may stay visible.',
+      },
+      {
+        keys: ['Shift'],
+        action: 'Rotate freely, bypassing the default 15° rotation snap',
+        note: 'Hold while dragging a rotate handle or direct-rotation gesture.',
       },
     ],
   },
@@ -157,7 +187,8 @@ export function KeyboardShortcutsDialog() {
         <DialogHeader className="shrink-0 border-b px-6 py-4">
           <DialogTitle>Keyboard Shortcuts</DialogTitle>
           <DialogDescription>
-            Shortcuts are context-aware and depend on the current phase or tool.
+            Shortcuts are context-aware. Guided constraints are enabled by default; hold Shift
+            during an active gesture to build freely.
           </DialogDescription>
         </DialogHeader>
 

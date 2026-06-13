@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Vector3 } from 'three'
 import { computeEaveY } from '../gutter/eave-snap'
 import { resolveGutterOutletById } from '../gutter/outlet-lookup'
+import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { downspoutDefinition } from './definition'
 import DownspoutPreview from './preview'
 import { computeDownspoutRouting, type DownspoutRouting } from './routing'
@@ -162,22 +163,30 @@ const DownspoutTool = () => {
     }
   }, [activeBuildingId, setSelection])
 
-  if (!activeBuildingId || !target) return null
-
   return (
-    <group position={target.segment.position} rotation-y={target.segment.rotation}>
-      <group
-        position={[target.gutter.position[0], target.segment.eaveY, target.gutter.position[2]]}
-        rotation-y={target.gutter.rotation}
-      >
-        <group position={[target.outlet.x, target.outlet.y, target.outlet.z]}>
-          <DownspoutPreview
-            node={previewNodeWithDefaults(previewNode, target)}
-            routing={target.routing}
-          />
+    <>
+      <RoofAttachmentFallbackPreview
+        activeBuildingId={activeBuildingId}
+        onInvalidTarget={() => setTarget(null)}
+        size={[0.2, 2.5, 0.2]}
+        validTarget="gutter"
+      />
+      {activeBuildingId && target && (
+        <group position={target.segment.position} rotation-y={target.segment.rotation}>
+          <group
+            position={[target.gutter.position[0], target.segment.eaveY, target.gutter.position[2]]}
+            rotation-y={target.gutter.rotation}
+          >
+            <group position={[target.outlet.x, target.outlet.y, target.outlet.z]}>
+              <DownspoutPreview
+                node={previewNodeWithDefaults(previewNode, target)}
+                routing={target.routing}
+              />
+            </group>
+          </group>
         </group>
-      </group>
-    </group>
+      )}
+    </>
   )
 }
 

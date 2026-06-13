@@ -9,7 +9,12 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  consumePlacementDragRelease,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useCallback, useEffect, useState } from 'react'
 import * as THREE from 'three'
 import {
@@ -59,16 +64,30 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
 
     let lastSnap: [number, number] | null = null
     let lastTarget: RelativeRoofDragTarget | null = null
+    let committed = false
     const roofDrag = createRelativeRoofDrag(original)
+
+    const clearTarget = () => {
+      lastTarget = null
+      lastSnap = null
+      setPreviewPos(null)
+      setPreviewSurfaceQuat(null)
+    }
 
     const updatePreview = (event: RoofEvent) => {
       const target = roofDrag.resolve(event)
-      if (!target) return
+      if (!target) {
+        clearTarget()
+        return
+      }
       lastTarget = target
 
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
-      if (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz) {
+      if (
+        event.nativeEvent?.shiftKey !== true &&
+        (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
+      ) {
         triggerSFX('sfx:grid-snap')
         lastSnap = [sx, sz]
       }
@@ -87,8 +106,10 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
     }
 
     const onRoofClick = (event: RoofEvent) => {
+      if (committed) return
       const target = lastTarget ?? roofDrag.resolve(event)
       if (!target) return
+      committed = true
       const targetSegmentId = target.segment.id as AnyNodeId
       const st = useScene.getState()
 
@@ -173,16 +194,29 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
       exitMoveMode()
     }
 
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      if (!lastTarget) return
+      onRoofClick({
+        nativeEvent: event,
+        stopPropagation: () => event.stopPropagation(),
+      } as unknown as RoofEvent)
+    }
+
     emitter.on('roof:move', updatePreview)
     emitter.on('roof:enter', updatePreview)
     emitter.on('roof:click', onRoofClick)
+    emitter.on('roof:leave', clearTarget)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onRoofClick)
+      emitter.off('roof:leave', clearTarget)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
 
       // Safety restore — if the tool is unmounted by something other than
       // a commit / cancel path (e.g. tool change, selection wipe), leave

@@ -628,8 +628,7 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
 
   const glassMaterial = useMemo(() => {
     // Untextured glass (and textures-off mode) takes the themed 'glazing'
-    // role material — already DoubleSide + semi-transparent, and shared
-    // from the cache, so it must not be mutated.
+    // role material from the shared cache, so it must not be mutated.
     if (!textures || (!node.glassMaterial && !node.glassMaterialPreset)) {
       return createSurfaceRoleMaterial('glazing', colorPreset, undefined, sceneTheme)
     }
@@ -638,7 +637,6 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
       : (createMaterialFromPresetRef(node.glassMaterialPreset, shading) ??
         defaultGlassMaterial.clone())
     if (mat && typeof mat === 'object') {
-      ;(mat as THREE.Material).side = THREE.DoubleSide
       if (mat instanceof THREE.MeshPhysicalMaterial) {
         mat.thickness = glassThickness
       }

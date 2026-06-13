@@ -74,6 +74,7 @@ const PAINT_CURSOR_BADGE_COLOR = '#818cf8'
 const PAINT_CURSOR_BADGE_DISABLED_COLOR = '#94a3b8'
 const PAINT_CURSOR_BADGE_OFFSET_X = 14
 const PAINT_CURSOR_BADGE_OFFSET_Y = 14
+const SCENE_READY_FALLBACK_MS = 8000
 const EDITOR_HOVER_STYLES: HoverStyles = {
   default: { visibleColor: 0x00_aa_ff, hiddenColor: 0xf3_ff_47, strength: 5, pulse: true },
   delete: { visibleColor: 0xef_44_44, hiddenColor: 0x99_1b_1b, strength: 6, pulse: false },
@@ -819,6 +820,13 @@ const ViewerCanvas = memo(function ViewerCanvas({
   )
 
   const viewerAreaRef = useRef<HTMLDivElement>(null)
+  // State mirror of `viewerAreaRef` so the floorplan compass portal re-renders
+  // once the container exists (a plain ref mutation wouldn't trigger it).
+  const [viewerAreaEl, setViewerAreaEl] = useState<HTMLDivElement | null>(null)
+  const setViewerAreaNode = useCallback((el: HTMLDivElement | null) => {
+    viewerAreaRef.current = el
+    setViewerAreaEl(el)
+  }, [])
   const viewer3dRef = useRef<HTMLDivElement>(null)
   const isResizingFloorplan = useRef(false)
 
@@ -864,7 +872,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
 
   return (
     <ErrorBoundary fallback={<EditorSceneCrashFallback />}>
-      <div className="flex h-full" ref={viewerAreaRef}>
+      {/* `relative` so the floorplan compass (portaled here to stay visible in
+          2d / 3d / split alike) can anchor to this container's bottom-left. */}
+      <div className="relative flex h-full" ref={setViewerAreaNode}>
         {/* 2D floorplan — always mounted once shown, hidden via CSS to preserve state */}
         <div
           className="relative h-full flex-shrink-0"
@@ -874,7 +884,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           }}
         >
           <div className="h-full w-full overflow-hidden">
-            <FloorplanPanel />
+            <FloorplanPanel compassHost={viewerAreaEl} />
           </div>
           {viewMode === 'split' && (
             <div
@@ -889,6 +899,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
         {/* 3D viewer — always mounted, hidden via CSS to avoid destroying the WebGL context */}
         <div
           className="relative min-w-0 flex-1 overflow-hidden"
+          data-pascal-viewer-3d
           ref={viewer3dRef}
           style={{ display: show3d ? undefined : 'none' }}
         >
@@ -1061,6 +1072,19 @@ export default function Editor({
   const handleSceneReadyChange = useCallback((ready: boolean) => {
     setIsViewerSceneReady(ready)
   }, [])
+
+  useEffect(() => {
+    if (isLoading || isSceneLoading || !hasLoadedInitialScene || isViewerSceneReady) return
+
+    const timer = window.setTimeout(() => {
+      console.warn('[editor] viewer scene readiness timed out; showing editor shell anyway', {
+        sceneReadyKey,
+      })
+      setIsViewerSceneReady(true)
+    }, SCENE_READY_FALLBACK_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
 
   const showLoader = isLoading || isSceneLoading || !hasLoadedInitialScene || !isViewerSceneReady
 

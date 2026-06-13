@@ -1,17 +1,12 @@
 'use client'
 
 import type { AssetInput } from '@pascal-app/core'
-import { resolveCdnUrl } from '@pascal-app/viewer'
-import Image from 'next/image'
+import { resolveCdnUrl, useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from './../../../components/ui/primitives/tooltip'
 import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
 import useEditor, { type CatalogCategory } from './../../../store/use-editor'
+import { resolveAssetSnapTarget, SnapTargetBadge } from '../snap-target-badge'
 import { CATALOG_ITEMS } from './catalog-items'
 
 export function ItemCatalog({
@@ -68,12 +63,6 @@ export function ItemCatalog({
     }
   }, [categoryItems, selectedItem?.src, setSelectedItem])
 
-  const getAttachmentIcon = (attachTo: AssetInput['attachTo']) => {
-    if (attachTo === 'wall' || attachTo === 'wall-side') return '/icons/wall.png'
-    if (attachTo === 'ceiling') return '/icons/ceiling.png'
-    return null
-  }
-
   if (filteredItems.length === 0 && emptyState) {
     return <>{emptyState}</>
   }
@@ -86,7 +75,7 @@ export function ItemCatalog({
       {leadingTile}
       {filteredItems.map((item, index) => {
         const isSelected = selectedItem?.src === item?.src
-        const attachmentIcon = getAttachmentIcon(item?.attachTo)
+        const snapTarget = resolveAssetSnapTarget(item?.attachTo)
         return (
           <button
             className={cn(
@@ -96,6 +85,10 @@ export function ItemCatalog({
             key={index}
             onClick={() => {
               triggerSFX('sfx:menu-click')
+              // Drop the current selection before arming placement — keeping
+              // it would route shortcuts (rotate & co) to both the ghost and
+              // the selected node.
+              useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
               setSelectedItem(item)
               setTool('item')
               setMode('build')
@@ -110,14 +103,8 @@ export function ItemCatalog({
                 loading="eager"
                 src={resolveCdnUrl(item.thumbnail) || ''}
               />
-              {attachmentIcon && (
-                <div className="absolute right-1 bottom-1 flex h-4 w-4 items-center justify-center rounded bg-black/60">
-                  <img
-                    alt={item.attachTo === 'ceiling' ? 'Ceiling attachment' : 'Wall attachment'}
-                    className="h-4 w-4"
-                    src={attachmentIcon}
-                  />
-                </div>
+              {snapTarget && (
+                <SnapTargetBadge className="absolute right-1 bottom-1" target={snapTarget} />
               )}
             </div>
             <span className="truncate px-0.5 text-left font-medium text-[11px] text-muted-foreground group-hover:text-foreground">

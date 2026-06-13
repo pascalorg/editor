@@ -36,6 +36,7 @@ type FloorPlacementAlignmentArgs = {
   gridStep: number
   candidates: Parameters<typeof resolveAlignment>[0]['candidates']
   bypassAlignment?: boolean
+  bypassGrid?: boolean
   rotationY?: number
 }
 
@@ -45,18 +46,23 @@ export function getLevelLocalSnappedPosition(
   levelId: string,
   event: FloorPlacementClickTriggerEvent,
   gridStep: number,
+  bypassGrid = false,
 ): [number, number, number] {
   const levelObject = sceneRegistry.nodes.get(levelId)
   if (!levelObject) {
     const rawPoint = 'node' in event ? event.position : event.localPosition
-    const [sx, sz] = snapPointToGrid([rawPoint[0], rawPoint[2]], gridStep)
+    const [sx, sz] = bypassGrid
+      ? [rawPoint[0], rawPoint[2]]
+      : snapPointToGrid([rawPoint[0], rawPoint[2]], gridStep)
     return [sx, 0, sz]
   }
 
   worldVector.set(event.position[0], event.position[1], event.position[2])
   levelObject.updateWorldMatrix(true, false)
   levelObject.worldToLocal(worldVector)
-  const [sx, sz] = snapPointToGrid([worldVector.x, worldVector.z], gridStep)
+  const [sx, sz] = bypassGrid
+    ? [worldVector.x, worldVector.z]
+    : snapPointToGrid([worldVector.x, worldVector.z], gridStep)
   return [sx, 0, sz]
 }
 
@@ -67,9 +73,10 @@ export function resolveAlignedFloorPlacement({
   gridStep,
   candidates,
   bypassAlignment = false,
+  bypassGrid = false,
   rotationY = 0,
 }: FloorPlacementAlignmentArgs) {
-  const [sx, sz] = snapPointToGrid([rawX, rawZ], gridStep)
+  const [sx, sz] = bypassGrid ? [rawX, rawZ] : snapPointToGrid([rawX, rawZ], gridStep)
   let ax = sx
   let az = sz
 

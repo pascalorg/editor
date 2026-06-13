@@ -1,16 +1,17 @@
-import { ShortcutToken } from '../primitives/shortcut-token'
+import { ContextualHelperPanel } from './contextual-helper-panel'
 
-export function RoofHelper() {
+export function RoofHelper({ shiftPressed = false }: { shiftPressed?: boolean }) {
   return (
-    <div className="pointer-events-none fixed top-1/2 right-4 z-40 flex -translate-y-1/2 flex-col gap-2 rounded-lg border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur-md">
-      <div className="flex items-center gap-2 text-sm">
-        <ShortcutToken value="Left click" />
-        <span className="text-muted-foreground">Set corner</span>
-      </div>
-      <div className="flex items-center gap-2 text-sm">
-        <ShortcutToken value="Esc" />
-        <span className="text-muted-foreground">Cancel</span>
-      </div>
-    </div>
+    <ContextualHelperPanel
+      hints={[
+        { keys: ['Left click'], label: 'Set corner' },
+        {
+          keys: ['Shift'],
+          label: shiftPressed ? 'Guided constraints bypassed' : 'Free corner',
+          active: shiftPressed,
+        },
+        { keys: ['Esc'], label: 'Cancel' },
+      ]}
+    />
   )
 }

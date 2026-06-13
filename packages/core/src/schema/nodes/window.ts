@@ -28,6 +28,14 @@ export const WindowNode = BaseNode.extend({
 
   // Wall reference
   wallId: z.string().optional(),
+  // Alternative host: a roof-segment's generated wall face (base wall
+  // under the roof or a coplanar gable end). When set, `position` is
+  // FACE-LOCAL — [u along the face, v height, z from the wall mid-plane]
+  // — exactly the wall-child convention; the renderer mounts the node
+  // inside the face frame (`getRoofWallFaceFrame`), which is what makes
+  // hosted children track segment resizes live.
+  roofSegmentId: z.string().optional(),
+  roofFace: z.enum(['front', 'back', 'right', 'left']).optional(),
 
   // Overall dimensions
   width: z.number().default(1.5),

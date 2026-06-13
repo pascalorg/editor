@@ -8,7 +8,13 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { CursorSphere, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  consumePlacementDragRelease,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -93,7 +99,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
         return
       }
 
-      const ROTATION_STEP = Math.PI / 2
+      const ROTATION_STEP = Math.PI / 4
       let rotationDelta = 0
       if (event.key === 'r' || event.key === 'R') rotationDelta = ROTATION_STEP
       else if (event.key === 't' || event.key === 'T') rotationDelta = -ROTATION_STEP
@@ -121,14 +127,16 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const rawX = Math.round(event.position[0] * 2) / 2
-      const rawZ = Math.round(event.position[2] * 2) / 2
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const rawX = bypassSnap ? event.position[0] : Math.round(event.position[0] * 2) / 2
+      const rawZ = bypassSnap ? event.position[2] : Math.round(event.position[2] * 2) / 2
       const anchor = dragAnchorRef.current ?? [rawX, rawZ]
       dragAnchorRef.current = anchor
       const gridX = originalCenter[0] + (rawX - anchor[0])
       const gridZ = originalCenter[1] + (rawZ - anchor[1])
 
       if (
+        !bypassSnap &&
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
       ) {
@@ -149,6 +157,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (wasCommitted) return
       const [gridX, gridZ] = previousGridPosRef.current ?? originalCenter
 
       wasCommitted = true
@@ -165,6 +174,11 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
       useViewer.getState().setSelection({ buildingId: nodeId as BuildingNode['id'] })
       exitMoveMode()
       event.nativeEvent?.stopPropagation?.()
+    }
+
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      onGridClick({ nativeEvent: event } as unknown as GridEvent)
     }
 
     const onCancel = () => {
@@ -188,6 +202,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       if (!wasCommitted) {
@@ -205,6 +220,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
   }, [exitMoveMode]) // stable — node values captured via refs at mount
 

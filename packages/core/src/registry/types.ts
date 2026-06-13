@@ -698,6 +698,18 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   parametrics?: ParametricDescriptor<z.infer<S>>
 
   /**
+   * Whether scene mutations add this kind to `dirtyNodes` (the per-frame
+   * rebuild queue). Default true. Set `false` for structural/organizational
+   * kinds (site, building, level, zone, guide) that no dirty consumer ever
+   * rebuilds — no `def.geometry`, no legacy viewer system, no
+   * `capabilities.floorPlaced`. Their marks are never cleared, so they
+   * accumulate for the whole session, defeat every consumer's empty-set
+   * early exit each frame, and pollute the perf overlay's DIRTY readout.
+   * If a kind later gains a dirty consumer, delete the flag.
+   */
+  dirtyTracking?: boolean
+
+  /**
    * Renderer for this kind. Optional under the three-checkbox composition
    * model (see `wiki/architecture/node-definitions.md`): when omitted, the
    * framework mounts a generic empty-group renderer that the per-kind
@@ -1261,6 +1273,23 @@ export type PaintEffectiveMaterialArgs = {
  */
 export type RoofAccessoryConfig = {
   buildCut?: (node: AnyNode, hostSegment: AnyNode) => BufferGeometry | null
+  /**
+   * Which segment brushes `buildCut` subtracts from. Wall-face openings
+   * (door / window) cut only the wall brush — subtracting the same box
+   * from the shin / deck slabs is pointless work and creates tangential
+   * / coplanar CSG cases near the gable and shed slopes. Defaults to
+   * all three (skylight / dormer genuinely poke through the deck).
+   */
+  cutScope?: 'all' | 'wall'
+  /**
+   * The kind's own dirty-driven geometry system consumes its dirty
+   * marks (door / window via DoorSystem / WindowSystem, which already
+   * cascade to the host segment through `parentId`). The roof-merge
+   * loop must then leave those marks alone — consuming them would
+   * starve that system whenever it defers a rebuild (mesh not mounted
+   * yet, per-frame rebuild budget exhausted).
+   */
+  dirtyHandledByOwnSystem?: boolean
 }
 
 /**

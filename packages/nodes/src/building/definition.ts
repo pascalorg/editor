@@ -39,6 +39,8 @@ export const buildingDefinition: NodeDefinition<typeof BuildingNode> = {
   },
 
   parametrics: buildingParametrics,
+  // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',

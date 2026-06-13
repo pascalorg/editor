@@ -1,9 +1,10 @@
 'use client'
 
 import { Icon as IconifyIcon } from '@iconify/react'
+import { nodeRegistry } from '@pascal-app/core'
 import { MaterialPaintPanel, triggerSFX, useEditor } from '@pascal-app/editor'
 import Image from 'next/image'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Tooltip,
   TooltipContent,
@@ -95,6 +96,28 @@ function activatePaintMode(): void {
   ed.setMode('material-paint')
 }
 
+type RoofFeature = { kind: string; label: string; iconSrc: string }
+
+const ROOF_FEATURE_FALLBACK_ICON = '/icons/roof.png'
+
+/**
+ * Roof accessories surfaced under the Roof tile (a "Features" group). Unlike
+ * the community editor these aren't DB presets — each is a registry kind with
+ * `capabilities.roofAccessory`, enumerated from the registry at render time
+ * (it is populated by the app bootstrap — a module-scope const would race it)
+ * and activated like any structure tool (the kind's tool attaches it to the
+ * roof segment under the cursor). Label + icon come from the registry's
+ * `presentation`; non-url icons fall back to the roof icon.
+ */
+function activateRoofFeatureTool(kind: string): void {
+  const ed = useEditor.getState()
+  ed.setPhase('structure')
+  ed.setStructureLayer('elements')
+  ed.setCatalogCategory(null)
+  ed.setMode('build')
+  ed.setTool(kind as Parameters<typeof ed.setTool>[0])
+}
+
 /**
  * Build tab for the open-source standalone editor — a preset-less replica of
  * the community Build sidebar. Clicking a type activates its raw tool, drawn
@@ -104,6 +127,29 @@ function activatePaintMode(): void {
 export function BuildTab() {
   const activeTool = useEditor((s) => s.tool)
   const mode = useEditor((s) => s.mode)
+  // Which build tile's panel is showing. Roof is the only tile with a panel
+  // (its Features group); others arm a tool and show nothing below.
+  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null)
+
+  // Read at render time (not module scope): the registry is populated by the
+  // app bootstrap, so enumerating earlier would race it and see no kinds.
+  const roofFeatures = useMemo<RoofFeature[]>(() => {
+    const features: RoofFeature[] = []
+    for (const [kind, def] of nodeRegistry.entries()) {
+      if (def.capabilities.roofAccessory === undefined) continue
+      // Door / window declare `roofAccessory` for the wall-face cut but
+      // already have their own Build tiles — listing them here too
+      // would duplicate the entry under Roof → Features.
+      if (def.capabilities.wallOpeningPlacement) continue
+      const icon = def.presentation?.icon
+      features.push({
+        kind,
+        label: def.presentation?.label ?? kind,
+        iconSrc: icon?.kind === 'url' ? icon.src : ROOF_FEATURE_FALLBACK_ICON,
+      })
+    }
+    return features
+  }, [])
 
   // The fitting tools are armed from their segment's panel, not a grid
   // tile — keep the segment tile lit so the panel (and the way back)
@@ -118,7 +164,7 @@ export function BuildTab() {
         ? ductContext
         : type.kind === 'pipe-segment'
           ? pipeContext
-          : mode === 'build' && activeTool === type.kind
+          : selectedTypeId === type.id
 
   const handleTypeClick = useCallback((type: BuildType) => {
     if (type.mode === 'material-paint') {
@@ -126,6 +172,7 @@ export function BuildTab() {
     } else if (type.kind) {
       activateBuildTool(type.kind)
     }
+    setSelectedTypeId(type.id)
   }, [])
 
   // On open, land on the first build tool — parity with the community Build
@@ -239,6 +286,51 @@ export function BuildTab() {
       {mode === 'material-paint' ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <MaterialPaintPanel />
+        </div>
+      ) : selectedTypeId === 'roof' && roofFeatures.length > 0 ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+          <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">Features</div>
+          <TooltipProvider delayDuration={0} disableHoverableContent>
+            <div
+              className="grid gap-1.5"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+            >
+              {roofFeatures.map((feature) => {
+                const active = mode === 'build' && activeTool === feature.kind
+                return (
+                  <Tooltip key={feature.kind}>
+                    <TooltipTrigger asChild>
+                      <button
+                        className={cn(
+                          'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
+                          active
+                            ? 'bg-primary/10 ring-1 ring-primary/50'
+                            : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
+                        )}
+                        onClick={() => {
+                          triggerSFX('sfx:menu-click')
+                          activateRoofFeatureTool(feature.kind)
+                        }}
+                        onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                        type="button"
+                      >
+                        <Image
+                          alt={feature.label}
+                          className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                          height={48}
+                          src={feature.iconSrc}
+                          width={48}
+                        />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="pointer-events-none" side="top">
+                      {feature.label}
+                    </TooltipContent>
+                  </Tooltip>
+                )
+              })}
+            </div>
+          </TooltipProvider>
         </div>
       ) : null}
     </div>

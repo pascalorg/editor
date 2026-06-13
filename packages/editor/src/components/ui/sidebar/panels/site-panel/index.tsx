@@ -36,7 +36,7 @@ import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
 } from './../../../../../lib/level-duplication'
-import { getDefaultLevelName } from './../../../../../lib/level-name'
+import { getDefaultLevelName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
 import { cn } from './../../../../../lib/utils'

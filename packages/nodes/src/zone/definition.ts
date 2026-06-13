@@ -37,6 +37,8 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   },
 
   parametrics: zoneParametrics,
+  // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',

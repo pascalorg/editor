@@ -13,6 +13,7 @@ import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import { solarPanelDefinition } from './definition'
@@ -72,7 +73,7 @@ const SolarPanelTool = () => {
       const sx = Math.round(wx * 20) / 20
       const sz = Math.round(wz * 20) / 20
       const prev = lastSnapRef.current
-      if (!prev || prev[0] !== sx || prev[1] !== sz) {
+      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
         triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
@@ -130,16 +131,26 @@ const SolarPanelTool = () => {
     }
   }, [activeBuildingId, setSelection])
 
-  if (!activeBuildingId || !previewPos || !previewSurfaceQuat) return null
-
   return (
-    <group position={previewPos}>
-      <group rotation-y={previewYaw}>
-        <group quaternion={previewSurfaceQuat}>
-          <SolarPanelPreview node={previewNode} />
+    <>
+      <RoofAttachmentFallbackPreview
+        activeBuildingId={activeBuildingId}
+        onInvalidTarget={() => {
+          setPreviewPos(null)
+          setPreviewSurfaceQuat(null)
+        }}
+        size={[1.8, 0.2, 1.2]}
+      />
+      {activeBuildingId && previewPos && previewSurfaceQuat && (
+        <group position={previewPos}>
+          <group rotation-y={previewYaw}>
+            <group quaternion={previewSurfaceQuat}>
+              <SolarPanelPreview node={previewNode} />
+            </group>
+          </group>
         </group>
-      </group>
-    </group>
+      )}
+    </>
   )
 }
 

@@ -73,6 +73,21 @@ phase: 'furnish'   → selectable: furniture items only
 
 Clicking a node of a different phase auto-switches the phase. Double-click drills into a context level.
 
+In Select mode, 3D and 2D canvas selection share the same modifier vocabulary:
+
+- `Ctrl/Meta + click` toggles the clicked object in `selectedIds`.
+- `Shift + click` also toggles the clicked canvas object so users can multi-select from
+  either viewport. The scene graph keeps file-browser semantics: `Shift + click` selects
+  the visible range between the last selected row and the clicked row.
+- `Ctrl/Meta + left-drag` on a selected movable object starts direct move from the canvas.
+- `Ctrl/Meta + right-drag` on a selected rotatable object starts direct rotation from the
+  canvas. Rotation snaps to the default angle increment unless Shift is held during the
+  drag.
+
+The floating helper in `packages/editor/src/components/ui/helpers/helper-manager.tsx`
+mirrors these rules from current selection state and held modifiers. Keep that helper and
+the shortcut dialog in sync when changing selection gestures.
+
 ---
 
 ## Rules

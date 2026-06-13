@@ -66,6 +66,27 @@ export function MyTool() {
   - The offset must be cleared on tool unmount, cancel, *and* commit — both `mesh.position.set(0, 0, 0)` and `useLiveTransforms.clear(id)`.
   - The tool must not generate or mutate geometry in this path — only transform writes. Geometry generation still belongs in a core system.
 - **No business logic in tools** — delegate geometry/constraint rules to core systems.
+- **Guided manipulation is the default.** Placement, move, rotate, resize, endpoint drag,
+  and handle drag should behave as guided building mode: they help the user build quickly
+  with fewer mistakes through grid/object snapping, canonical angle increments,
+  alignment guides, and distance feedback. Holding Shift is the standard live bypass for
+  those constraints: while Shift is held, tools should commit the raw pointer/angle
+  proposal instead of applying sticky snap or angle corrections. Passive measurement
+  guides may remain visible only when they do not alter the proposal. If an interaction
+  cannot use Shift because of an established shortcut or topology rule, document the
+  opt-out in its manipulation policy and explain the replacement behavior.
+- **Constraints and guides can be decoupled.** When a stronger constraint owns the
+  proposal, such as a wall segment's 15° angle lock, the tool may still publish passive
+  dashed alignment/proximity guides as long as it does not apply the guide snap delta.
+  Use this for chained wall segments: users keep the fast constrained draft, but still see
+  proximity feedback for later points. Shift remains the hard bypass for both correction
+  and guide feedback.
+- **Help must mirror manipulation policy.** The shortcut dialog and floating helper panel
+  are part of the interaction contract. Static shortcut docs should describe guided
+  building as the default and Shift as the live bypass. Floating help should be contextual
+  when enough state exists: Select mode can derive direct move, direct rotate,
+  multi-select, and Shift-bypass tips from the selected nodes and active modifiers; active
+  tools can highlight the Shift bypass row while the modifier is held.
 - **Preview geometry is local** — transient meshes shown while a tool is active live in the tool component, not in the scene store.
 - **Clean up on unmount** — remove any pending/incomplete nodes *and* any live transforms/mesh offsets when the tool unmounts.
 - **Tools must not import from `@pascal-app/viewer`** — use the scene store and core hooks only. `sceneRegistry` is exported from `@pascal-app/core` and is the allowed door into the Three.js graph for the narrow purposes above.

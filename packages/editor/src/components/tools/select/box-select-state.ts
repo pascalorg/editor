@@ -9,6 +9,10 @@ type PointerEventLike = {
   nativeEvent?: PointerEvent | PointerEventLike
 }
 
+type SuppressBoxSelectOptions = {
+  markHandled?: boolean
+}
+
 function pointerIdFor(event: PointerEvent | PointerEventLike): number | null {
   if ('pointerId' in event && typeof event.pointerId === 'number') {
     return event.pointerId
@@ -28,8 +32,12 @@ export function markBoxSelectHandled() {
   }, 50)
 }
 
-export function suppressBoxSelectForPointer(event: PointerEvent | PointerEventLike) {
-  markBoxSelectHandled()
+export function suppressBoxSelectForPointer(
+  event: PointerEvent | PointerEventLike,
+  options: SuppressBoxSelectOptions = {},
+) {
+  const markHandled = options.markHandled ?? true
+  if (markHandled) markBoxSelectHandled()
 
   const pointerId = pointerIdFor(event)
   if (pointerId === null || suppressedPointerIds.has(pointerId)) return
@@ -38,7 +46,7 @@ export function suppressBoxSelectForPointer(event: PointerEvent | PointerEventLi
 
   const clear = (releaseEvent?: PointerEvent) => {
     if (releaseEvent && releaseEvent.pointerId !== pointerId) return
-    markBoxSelectHandled()
+    if (markHandled) markBoxSelectHandled()
     suppressedPointerIds.delete(pointerId)
     const cleanup = suppressionCleanups.get(pointerId)
     suppressionCleanups.delete(pointerId)
@@ -48,15 +56,18 @@ export function suppressBoxSelectForPointer(event: PointerEvent | PointerEventLi
   const onPointerUp = (releaseEvent: PointerEvent) => clear(releaseEvent)
   const onPointerCancel = (releaseEvent: PointerEvent) => clear(releaseEvent)
   const onBlur = () => clear()
+  // Click-preserving handle interactions need suppression cleared before
+  // canvas-level pointerup handlers decide whether to block the follow-up click.
+  const releaseListenerOptions = markHandled ? undefined : { capture: true }
   const cleanup = () => {
-    window.removeEventListener('pointerup', onPointerUp)
-    window.removeEventListener('pointercancel', onPointerCancel)
+    window.removeEventListener('pointerup', onPointerUp, releaseListenerOptions)
+    window.removeEventListener('pointercancel', onPointerCancel, releaseListenerOptions)
     window.removeEventListener('blur', onBlur)
   }
 
   suppressionCleanups.set(pointerId, cleanup)
-  window.addEventListener('pointerup', onPointerUp)
-  window.addEventListener('pointercancel', onPointerCancel)
+  window.addEventListener('pointerup', onPointerUp, releaseListenerOptions)
+  window.addEventListener('pointercancel', onPointerCancel, releaseListenerOptions)
   window.addEventListener('blur', onBlur)
 }
 

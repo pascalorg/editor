@@ -108,7 +108,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Set wall start / end' },
-    { key: 'Shift', label: 'Allow non-45° angles' },
+    { key: 'Shift', label: 'Free angle (no 15° snap)' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

@@ -1,6 +1,8 @@
 import {
+  type AnyNode,
   type AnyNodeId,
   type FloorplanAffordance,
+  type FloorplanAffordanceModifiers,
   type FloorplanAffordanceSession,
   useScene,
 } from '@pascal-app/core'
@@ -41,6 +43,22 @@ export type EdgeDragPayload = {
   edgeIndex: number
 }
 
+type PolygonAffordanceMode = 'move-vertex' | 'add-vertex' | 'move-edge'
+
+export type PolygonAffordanceSnapContext<N extends PolygonShape & { id: AnyNodeId }> = {
+  node: N
+  nodes: Record<AnyNodeId, AnyNode>
+  rawPoint: WallPlanPoint
+  fallbackPoint: WallPlanPoint
+  modifiers: FloorplanAffordanceModifiers
+  holeIndex?: number
+  mode: PolygonAffordanceMode
+}
+
+type PolygonAffordanceOptions<N extends PolygonShape & { id: AnyNodeId }> = {
+  resolvePlanPoint?: (context: PolygonAffordanceSnapContext<N>) => WallPlanPoint
+}
+
 type PolygonShape = {
   polygon: ReadonlyArray<readonly [number, number]>
   holes?: ReadonlyArray<ReadonlyArray<readonly [number, number]>>
@@ -76,11 +94,19 @@ function buildRingPatch(
   return { holes: nextHoles }
 }
 
+function resolveAffordancePlanPoint<N extends PolygonShape & { id: AnyNodeId }>(
+  options: PolygonAffordanceOptions<N> | undefined,
+  context: PolygonAffordanceSnapContext<N>,
+): WallPlanPoint {
+  return options?.resolvePlanPoint?.(context) ?? context.fallbackPoint
+}
+
 export function createPolygonVertexAffordance<N extends PolygonShape & { id: AnyNodeId }>(
   kind: string,
+  options?: PolygonAffordanceOptions<N>,
 ): FloorplanAffordance<N> {
   return {
-    start({ node, payload }): FloorplanAffordanceSession {
+    start({ node, payload, nodes }): FloorplanAffordanceSession {
       const { vertexIndex, holeIndex } = payload as PolygonVertexPayload
       const originalRing = getRing(node, holeIndex)
       if (!originalRing) {
@@ -96,9 +122,17 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
       return {
         affectedIds: [node.id],
         apply({ planPoint, modifiers }) {
-          const snapped: WallPlanPoint = modifiers.shiftKey
-            ? (planPoint as WallPlanPoint)
-            : snapPointToGrid(planPoint as WallPlanPoint)
+          const rawPoint: WallPlanPoint = [planPoint[0], planPoint[1]]
+          const fallbackPoint = modifiers.shiftKey ? rawPoint : snapPointToGrid(rawPoint)
+          const snapped = resolveAffordancePlanPoint(options, {
+            node,
+            nodes,
+            rawPoint,
+            fallbackPoint,
+            modifiers,
+            holeIndex,
+            mode: 'move-vertex',
+          })
           const nextRing: [number, number][] = originalRing.map((p, i) =>
             i === vertexIndex ? [snapped[0], snapped[1]] : p,
           )
@@ -128,9 +162,10 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
  */
 export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: AnyNodeId }>(
   kind: string,
+  options?: PolygonAffordanceOptions<N>,
 ): FloorplanAffordance<N> {
   return {
-    start({ node, payload }): FloorplanAffordanceSession {
+    start({ node, payload, nodes }): FloorplanAffordanceSession {
       const { edgeIndex, holeIndex } = payload as AddVertexPayload
       const originalRing = getRing(node, holeIndex)
       if (!originalRing) {
@@ -171,9 +206,17 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
       return {
         affectedIds: [node.id],
         apply({ planPoint, modifiers }) {
-          const snapped: WallPlanPoint = modifiers.shiftKey
-            ? (planPoint as WallPlanPoint)
-            : snapPointToGrid(planPoint as WallPlanPoint)
+          const rawPoint: WallPlanPoint = [planPoint[0], planPoint[1]]
+          const fallbackPoint = modifiers.shiftKey ? rawPoint : snapPointToGrid(rawPoint)
+          const snapped = resolveAffordancePlanPoint(options, {
+            node,
+            nodes,
+            rawPoint,
+            fallbackPoint,
+            modifiers,
+            holeIndex,
+            mode: 'add-vertex',
+          })
           const nextRing: [number, number][] = initialRing.map((p, i) =>
             i === newVertexIndex ? [snapped[0], snapped[1]] : p,
           )
@@ -204,9 +247,10 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
  */
 export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: AnyNodeId }>(
   kind: string,
+  options?: PolygonAffordanceOptions<N>,
 ): FloorplanAffordance<N> {
   return {
-    start({ node, payload, initialPlanPoint }): FloorplanAffordanceSession {
+    start({ node, payload, initialPlanPoint, nodes }): FloorplanAffordanceSession {
       const { edgeIndex, holeIndex } = payload as EdgeDragPayload
       const originalRing = getRing(node, holeIndex)
       if (!originalRing) {
@@ -254,17 +298,33 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
         apply({ planPoint, modifiers }) {
           // Project the pointer delta onto the edge normal — that's the
           // signed perpendicular distance the edge should travel.
-          const deltaX = planPoint[0] - startX
-          const deltaY = planPoint[1] - startY
+          const rawPoint: WallPlanPoint = [planPoint[0], planPoint[1]]
+          const deltaX = rawPoint[0] - startX
+          const deltaY = rawPoint[1] - startY
           let projection = deltaX * normalX + deltaY * normalY
           if (!modifiers.shiftKey) {
             // Snap the projection scalar to a 0.5m grid (legacy uses the
             // same half-meter snap for slab edges).
             projection = Math.round(projection * 2) / 2
           }
+          const fallbackPoint: WallPlanPoint = [
+            startX + normalX * projection,
+            startY + normalY * projection,
+          ]
+          const snappedPoint = resolveAffordancePlanPoint(options, {
+            node,
+            nodes,
+            rawPoint,
+            fallbackPoint,
+            modifiers,
+            holeIndex,
+            mode: 'move-edge',
+          })
+          const normalDistance =
+            (snappedPoint[0] - startX) * normalX + (snappedPoint[1] - startY) * normalY
           const nextRing: [number, number][] = originalRing.map((p, i) => {
             if (i === edgeStartIndex || i === edgeEndIndex) {
-              return [p[0] + normalX * projection, p[1] + normalY * projection]
+              return [p[0] + normalX * normalDistance, p[1] + normalY * normalDistance]
             }
             return [p[0], p[1]] as [number, number]
           })

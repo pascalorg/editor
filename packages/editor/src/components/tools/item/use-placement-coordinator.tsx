@@ -10,6 +10,7 @@ import {
   getScaledDimensions,
   type ItemEvent,
   movingFootprintAnchors,
+  type RoofEvent,
   resolveLevelId,
   type ShelfEvent,
   sceneRegistry,
@@ -40,6 +41,7 @@ import {
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import { formatLinearMeasurement } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveAlignmentForActiveBuilding } from '../../../lib/world-grid-snap'
 import useEditor from '../../../store/use-editor'
@@ -50,12 +52,18 @@ import {
   type PreviewBounds,
   updateLineGeometry,
 } from '../shared/placement-box-geometry'
-import { getGridAlignedDimensions, snapToGrid, snapUpToGridStep } from './placement-math'
+import {
+  getDetachedAttachmentPreviewLift,
+  getGridAlignedDimensions,
+  snapToGrid,
+  snapUpToGridStep,
+} from './placement-math'
 import {
   ceilingStrategy,
   checkCanPlace,
   floorStrategy,
   itemSurfaceStrategy,
+  roofWallStrategy,
   shelfSurfaceStrategy,
   wallStrategy,
 } from './placement-strategies'
@@ -67,17 +75,6 @@ const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 /** Figma-style alignment-snap threshold (meters), matching the 2D
  *  floor-plan overlay and the 3D registry move tool. */
 const ALIGNMENT_THRESHOLD_M = 0.08
-
-function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
-  if (unit === 'imperial') {
-    const feet = value * 3.280_84
-    const wholeFeet = Math.floor(feet)
-    const inches = Math.round((feet - wholeFeet) * 12)
-    if (inches === 12) return `${wholeFeet + 1}'0"`
-    return `${wholeFeet}'${inches}"`
-  }
-  return `${Number.parseFloat(value.toFixed(2))}m`
-}
 
 /**
  * Expand `bounds` outward so each axis is rounded up to the active grid step.
@@ -213,6 +210,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     config.initialState ?? {
       surface: 'floor',
       wallId: null,
+      roofSegmentId: null,
       ceilingId: null,
       surfaceItemId: null,
       shelfId: null,
@@ -413,6 +411,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     placementState.current = configRef.current.initialState ?? {
       surface: 'floor',
       wallId: null,
+      roofSegmentId: null,
       ceilingId: null,
       surfaceItemId: null,
       shelfId: null,
@@ -689,11 +688,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // item's edge, snap and publish a guide. The guide connects to the
       // nearest real corner of the candidate (resolver tie-break), so the dot
       // always sits on an actual point. The delta is applied to BOTH the grid
-      // and cursor positions below. Alt bypasses.
+      // and cursor positions below. Alt bypasses alignment; Shift bypasses all snap.
       const draft = draftNode.current
       let alignX = 0
       let alignZ = 0
-      const bypassAlign = floorEvent.nativeEvent?.altKey === true
+      const bypassSnap = floorEvent.nativeEvent?.shiftKey === true
+      const bypassAlign = floorEvent.nativeEvent?.altKey === true || bypassSnap
       if (!bypassAlign && draft) {
         alignmentCandidates ??= collectAlignmentAnchors(
           useScene.getState().nodes,
@@ -727,6 +727,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       // Play snap sound when grid position changes
       if (
+        !bypassSnap &&
         previousGridPos &&
         (gridPos[0] !== previousGridPos[0] || gridPos[2] !== previousGridPos[2])
       ) {
@@ -736,6 +737,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       previousGridPos = [...gridPos]
       gridPosition.current.set(...gridPos)
       const cursorPosition = getFloorVisualPosition(gridPos)
+      if (!draft && asset.attachTo) {
+        cursorPosition[1] += getDetachedAttachmentPreviewLift(asset.attachTo)
+      }
       cursorGroupRef.current.position.set(cursorPosition[0], cursorPosition[1], cursorPosition[2])
       // Floor items only rotate on Y; keep the preview box (and the live
       // transform the 2D floorplan mirrors) aligned with the draft's
@@ -872,7 +876,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.z !== result.gridPosition[2]
 
       // Play snap sound when grid position changes
-      if (posChanged) {
+      if (event.nativeEvent?.shiftKey !== true && posChanged) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
@@ -987,6 +991,145 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     }
 
+    // ---- Roof Wall Handlers ----
+    // Wall-attach items also host on the vertical wall faces a roof
+    // segment generates (base walls + coplanar gable ends). Unlike walls,
+    // crossing between segments inside ONE roof never re-fires
+    // `roof:enter` (events come from the roof group), so the move handler
+    // re-enters whenever the strategy reports a segment change.
+
+    const enterRoofWall = (event: RoofEvent): boolean => {
+      const result = roofWallStrategy.enter(getContext(), event, shiftFreeRef.current)
+      if (!result) return false
+
+      event.stopPropagation()
+      applyTransition(result)
+
+      if (!draftNode.current) {
+        ensureDraft(result)
+      } else if (result.nodeUpdate.parentId) {
+        // Existing draft (move mode): reparent to the segment
+        useScene.getState().updateNode(draftNode.current.id, result.nodeUpdate)
+      }
+      return true
+    }
+
+    const onRoofWallEnter = (event: RoofEvent) => {
+      has3DPointerDrivenMoveRef.current = true
+      enterRoofWall(event)
+    }
+
+    const onRoofWallMove = (event: RoofEvent) => {
+      releaseCommit = () => onRoofWallClick(event)
+      has3DPointerDrivenMoveRef.current = true
+      if (!cursorGroupRef.current) return
+      const ctx = getContext()
+
+      if (ctx.state.surface !== 'roof-wall' || !draftNode.current) {
+        enterRoofWall(event)
+        return
+      }
+
+      const result = roofWallStrategy.move(ctx, event, shiftFreeRef.current)
+      if (!result) {
+        // Different segment under the pointer (or no placeable face) —
+        // try a fresh enter; a null resolve leaves the draft where it is.
+        enterRoofWall(event)
+        return
+      }
+
+      event.stopPropagation()
+
+      const posChanged =
+        gridPosition.current.x !== result.gridPosition[0] ||
+        gridPosition.current.y !== result.gridPosition[1] ||
+        gridPosition.current.z !== result.gridPosition[2]
+
+      if (!shiftFreeRef.current && posChanged) {
+        sfxEmitter.emit('sfx:grid-snap')
+      }
+
+      gridPosition.current.set(...result.gridPosition)
+      const wc = worldToBuildingLocal(...result.cursorPosition)
+      cursorGroupRef.current.position.set(wc.x, wc.y, wc.z)
+      cursorGroupRef.current.rotation.y = result.cursorRotationY
+
+      const draft = draftNode.current
+      if (draft && result.nodeUpdate) {
+        if ('side' in result.nodeUpdate) draft.side = result.nodeUpdate.side
+        if ('rotation' in result.nodeUpdate)
+          draft.rotation = result.nodeUpdate.rotation as [number, number, number]
+      }
+
+      const placeable = revalidate()
+
+      if (draft && placeable) {
+        draft.position = result.gridPosition
+        const mesh = sceneRegistry.nodes.get(draft.id)
+        if (mesh) {
+          mesh.position.copy(gridPosition.current)
+          // Wall-side items sit on the outer surface: mirror ItemSystem's
+          // push (z = thickness/2 off the face frame's mid-plane) so the
+          // drag preview doesn't sink into the wall until commit.
+          if (asset.attachTo === 'wall-side' && placementState.current.roofSegmentId) {
+            const segment =
+              useScene.getState().nodes[placementState.current.roofSegmentId as AnyNodeId]
+            if (segment?.type === 'roof-segment') {
+              mesh.position.z = (segment.wallThickness ?? 0.1) / 2
+            }
+          }
+          const rot = result.nodeUpdate?.rotation
+          if (rot) mesh.rotation.y = rot[1]
+        }
+        // The 2D floor-plan live frame is wall-local; a segment-local
+        // value would render garbage — clear instead of publishing.
+        useLiveTransforms.getState().clear(draft.id)
+      }
+    }
+
+    const onRoofWallClick = (event: RoofEvent) => {
+      const result = roofWallStrategy.click(getContext(), event, shiftFreeRef.current)
+      if (!result) return
+
+      event.stopPropagation()
+      if (draftNode.current) {
+        useLiveTransforms.getState().clear(draftNode.current.id)
+      }
+      draftNode.commit(result.nodeUpdate)
+
+      if (configRef.current.onCommitted()) {
+        const enterResult = roofWallStrategy.enter(getContext(), event, shiftFreeRef.current)
+        if (enterResult) {
+          applyTransition(enterResult)
+        } else {
+          revalidate()
+        }
+      }
+    }
+
+    const onRoofWallLeave = (event: RoofEvent) => {
+      const result = roofWallStrategy.leave(getContext())
+      if (!result) return
+
+      event.stopPropagation()
+
+      if (draftNode.isAdopted) {
+        // Move mode: keep draft alive, reparent to level
+        applyTransition(result)
+        const draft = draftNode.current
+        if (draft) {
+          useScene.getState().updateNode(draft.id, {
+            parentId: result.nodeUpdate.parentId as string,
+            roofSegmentId: undefined,
+          })
+        }
+      } else {
+        // Create mode: destroy transient and reset state
+        draftNode.destroy()
+        Object.assign(placementState.current, result.stateUpdate)
+      }
+    }
+
     // ---- Item Surface Handlers ----
 
     const detachItemSurfaceToFloor = (event: ItemEvent) => {
@@ -995,8 +1138,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         event.position[1],
         event.position[2],
       )
-      const wx = Math.round(buildingLocalPoint.x * 2) / 2
-      const wz = Math.round(buildingLocalPoint.z * 2) / 2
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const wx = bypassSnap ? buildingLocalPoint.x : Math.round(buildingLocalPoint.x * 2) / 2
+      const wz = bypassSnap ? buildingLocalPoint.z : Math.round(buildingLocalPoint.z * 2) / 2
       const floorPos: [number, number, number] = [wx, 0, wz]
 
       Object.assign(placementState.current, {
@@ -1296,7 +1440,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.y !== result.gridPosition[1] ||
         gridPosition.current.z !== result.gridPosition[2]
 
-      if (posChanged) {
+      if (event.nativeEvent?.shiftKey !== true && posChanged) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
@@ -1499,6 +1643,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const draft = draftNode.current
       if (!draft) return
 
+      // Roof-wall drafts live flat in the host face frame (yaw 0) —
+      // manual rotation would skew them off the wall plane.
+      if (placementState.current.surface === 'roof-wall') return
+
       let rotationDelta = 0
       if ((event.key === 'r' || event.key === 'R') && !event.metaKey && !event.ctrlKey)
         rotationDelta = ROTATION_STEP
@@ -1673,6 +1821,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('wall:move', onWallMove)
     emitter.on('wall:click', onWallClick)
     emitter.on('wall:leave', onWallLeave)
+    emitter.on('roof:enter', onRoofWallEnter)
+    emitter.on('roof:move', onRoofWallMove)
+    emitter.on('roof:click', onRoofWallClick)
+    emitter.on('roof:leave', onRoofWallLeave)
     emitter.on('ceiling:enter', onCeilingEnter)
     emitter.on('ceiling:move', onCeilingMove)
     emitter.on('ceiling:click', onCeilingClick)
@@ -1704,6 +1856,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('wall:move', onWallMove)
       emitter.off('wall:click', onWallClick)
       emitter.off('wall:leave', onWallLeave)
+      emitter.off('roof:enter', onRoofWallEnter)
+      emitter.off('roof:move', onRoofWallMove)
+      emitter.off('roof:click', onRoofWallClick)
+      emitter.off('roof:leave', onRoofWallLeave)
       emitter.off('ceiling:enter', onCeilingEnter)
       emitter.off('ceiling:move', onCeilingMove)
       emitter.off('ceiling:click', onCeilingClick)
@@ -1869,9 +2025,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const initialDepthGuideGeometry = useMemo(() => createLineGeometry(), [])
   const initialHeightGuideGeometry = useMemo(() => createLineGeometry(), [])
   const currentDimensionBounds = dimensionBounds ?? initialDimensionBounds
-  const widthLabel = formatMeasurement(currentDimensionBounds.dimensions[0], unit)
-  const depthLabel = formatMeasurement(currentDimensionBounds.dimensions[2], unit)
-  const heightLabel = formatMeasurement(currentDimensionBounds.dimensions[1], unit)
+  const widthLabel = formatLinearMeasurement(currentDimensionBounds.dimensions[0], unit)
+  const depthLabel = formatLinearMeasurement(currentDimensionBounds.dimensions[2], unit)
+  const heightLabel = formatLinearMeasurement(currentDimensionBounds.dimensions[1], unit)
   const widthLabelPosition: [number, number, number] = [
     currentDimensionBounds.center[0],
     0.04,

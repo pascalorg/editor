@@ -3,6 +3,7 @@
 import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
+import { nodeRegistry } from '../registry/registry'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
@@ -14,6 +15,7 @@ import {
   type RoofSegmentNode,
   type RoofType,
 } from '../schema/nodes/roof-segment'
+import { segmentPointToRoofWallFace } from '../schema/nodes/roof-segment-walls'
 import { ShelfNode as ShelfNodeSchema } from '../schema/nodes/shelf'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
@@ -539,6 +541,55 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       patchedNodes[id] = { ...node, children: [] } as AnyNode
     }
 
+    // Roof-hosted wall children (door / window / item) originally stored
+    // SEGMENT-LOCAL positions with the face yaw in rotation[1]; the
+    // format moved to explicit `roofFace` + FACE-LOCAL coords so the
+    // renderer's face frame can track segment edits live. Convert in
+    // place: face from the old cardinal yaw, u/v from the outer-plane
+    // projection, z re-based from the outer plane to the wall mid-plane.
+    if (
+      (node.type === 'door' || node.type === 'window' || node.type === 'item') &&
+      typeof (node as { roofSegmentId?: unknown }).roofSegmentId === 'string' &&
+      (node as { roofFace?: unknown }).roofFace === undefined
+    ) {
+      const current = patchedNodes[id] as AnyNode & {
+        roofSegmentId: string
+        position: [number, number, number]
+        rotation: [number, number, number]
+      }
+      const segment = patchedNodes[current.roofSegmentId] as
+        | (AnyNode & { wallThickness?: number })
+        | undefined
+      if (segment?.type === 'roof-segment') {
+        const tau = Math.PI * 2
+        const yaw = (((current.rotation?.[1] ?? 0) % tau) + tau) % tau
+        const eps = 1e-3
+        const face =
+          yaw < eps || tau - yaw < eps
+            ? ('front' as const)
+            : Math.abs(yaw - Math.PI) < eps
+              ? ('back' as const)
+              : Math.abs(yaw - Math.PI / 2) < eps
+                ? ('right' as const)
+                : Math.abs(yaw - (3 * Math.PI) / 2) < eps
+                  ? ('left' as const)
+                  : null
+        if (face) {
+          const { u, v, dist } = segmentPointToRoofWallFace(
+            segment as never,
+            face,
+            current.position,
+          )
+          patchedNodes[id] = {
+            ...current,
+            roofFace: face,
+            position: [u, v, dist + (segment.wallThickness ?? 0.1) / 2],
+            rotation: [0, 0, 0],
+          } as AnyNode
+        }
+      }
+    }
+
     if (node.type === 'roof') {
       patchedNodes[id] = migrateRoofSurfaceMaterials(patchedNodes[id])
     }
@@ -803,6 +854,8 @@ const useScene: UseSceneStore = create<SceneState>()(
       },
 
       markDirty: (id) => {
+        const node = get().nodes[id]
+        if (node && nodeRegistry.get(node.type)?.dirtyTracking === false) return
         get().dirtyNodes.add(id)
       },
 

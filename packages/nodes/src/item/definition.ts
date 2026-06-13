@@ -22,10 +22,10 @@ const ROTATE_RING_OFFSET = 0.06
 // Whole-item rotation handle — the two-headed curved arrow. `arc-resize`
 // does the angular drag math (raycasts a horizontal plane at the gizmo's
 // Y, measures cursor bearing around the item's local origin, returns the
-// delta). Holding Shift snaps to 15° increments (handled generically in
-// node-arrow-handles for any `shape: 'rotate'`), matching the R/T rotate
-// step for placed items. Item rotation is stored as `[x, y, z]`; only the
-// Y component turns.
+// delta). Rotation snaps to 15° increments by default; holding Shift
+// bypasses that snap (handled generically in node-arrow-handles for any
+// `shape: 'rotate'`), matching the R/T rotate step for placed items. Item
+// rotation is stored as `[x, y, z]`; only the Y component turns.
 function itemRotateHandle(): HandleDescriptor<ItemNodeType> {
   return {
     kind: 'arc-resize',
@@ -206,12 +206,13 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     // siblings of GLB items inside the unified `items` table.
     //
     // Items can be hosted on walls (assets with `attachTo: 'wall'`)
-    // via `wallId` + `wallT`. When a composition that includes a
-    // wall-hosted item is saved as a preset (a sconce, a hanging
-    // shelf, etc.), the host app strips these via `getHostRefFields(def)`
-    // so the descendant re-attaches against the new wall geometry at
+    // via `wallId` + `wallT`, or on a roof-segment wall face via
+    // `roofSegmentId`. When a composition that includes a wall-hosted
+    // item is saved as a preset (a sconce, a hanging shelf, etc.), the
+    // host app strips these via `getHostRefFields(def)` so the
+    // descendant re-attaches against the new host geometry at
     // placement time.
-    hostRefFields: ['wallId', 'wallT'],
+    hostRefFields: ['wallId', 'wallT', 'roofSegmentId', 'roofFace'],
     // Floor items get lifted by slabs underneath via the generic
     // `<FloorElevationSystem>`. Wall- / ceiling-attached items live in
     // their parent's local frame and skip the lift via `applies`.

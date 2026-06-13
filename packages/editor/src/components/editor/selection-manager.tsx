@@ -4,8 +4,10 @@ import {
   type BuildingNode,
   type CeilingNode,
   type ColumnNode,
+  createSceneApi,
   emitter,
   type FenceNode,
+  type GridEvent,
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
   getMaterialPresetByRef,
@@ -28,6 +30,7 @@ import {
   type StairSegmentEvent,
   type StairSurfaceMaterialRole,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 
@@ -43,6 +46,13 @@ import {
 import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D, Vector3 } from 'three'
 import {
+  canDirectMoveNode,
+  canDirectRotateNode,
+  resolveDirectRotationDragDelta,
+  resolveDirectRotationPatch,
+} from '../../lib/direct-manipulation'
+import { createEditorApi } from '../../lib/editor-api'
+import {
   type ActivePaintMaterial,
   buildRoofSegmentSurfaceMaterialPatch,
   buildRoofSurfaceMaterialPatch,
@@ -51,13 +61,17 @@ import {
   hasActivePaintMaterial,
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
-import { emitDeleteSFX } from '../../lib/sfx-bus'
-import useEditor, {
-  type MaterialTargetRole,
-  type Phase,
-  type StructureLayer,
-} from './../../store/use-editor'
-import { boxSelectHandled } from '../tools/select/box-select-state'
+import {
+  resolveNodeSelectionTarget,
+  resolveSelectedIdsForNodeClick,
+  type SelectionModifierKeys,
+  selectionModifiersFromEvent,
+} from '../../lib/selection-routing'
+import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
+import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
+import useEditor, { type MaterialTargetRole } from './../../store/use-editor'
+import { boxSelectHandled, suppressBoxSelectForPointer } from '../tools/select/box-select-state'
+import { swallowNextClick } from './node-arrow-handles'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   // Elevators are building-scoped, so they stay selectable across level filters.
@@ -86,11 +100,6 @@ type SelectableNodeType =
   | 'window'
   | 'door'
 
-type ModifierKeys = {
-  meta: boolean
-  ctrl: boolean
-}
-
 type PaintPreviewCleanup = () => void
 
 type PaintInteraction = {
@@ -103,14 +112,33 @@ type PaintInteraction = {
 
 interface SelectionStrategy {
   types: SelectableNodeType[]
-  handleSelect: (node: AnyNode, nativeEvent?: any, modifierKeys?: ModifierKeys) => void
+  handleSelect: (
+    node: AnyNode,
+    nativeEvent?: any,
+    modifierKeys?: SelectionModifierKeys,
+    baseSelectedIds?: readonly string[],
+  ) => void
   handleDeselect: () => void
   isValid: (node: AnyNode) => boolean
 }
 
-type SelectionTarget = {
-  phase: Phase
-  structureLayer?: StructureLayer
+const DIRECT_DRAG_THRESHOLD_PX = 4
+const DIRECT_ROTATE_EPSILON = 1e-6
+const DIRECT_ROTATE_RADIANS_PER_PIXEL = Math.PI / 180
+
+function pointerEventFromNodeEvent(event: NodeEvent): PointerEvent {
+  const threeEvent = event.nativeEvent as unknown as PointerEvent & {
+    nativeEvent?: PointerEvent
+  }
+  return threeEvent.nativeEvent ?? threeEvent
+}
+
+function isCommandModifier(event: Pick<PointerEvent, 'metaKey' | 'ctrlKey'>): boolean {
+  return event.metaKey || event.ctrlKey
+}
+
+function pointerDistancePx(event: PointerEvent, startX: number, startY: number): number {
+  return Math.hypot(event.clientX - startX, event.clientY - startY)
 }
 
 export const resolveBuildingId = (
@@ -619,22 +647,17 @@ function disposeHighlightedMaterials(material: Material | Material[]) {
 
 const computeNextIds = (
   node: AnyNode,
-  selectedIds: string[],
+  selectedIds: readonly string[],
   event?: any,
-  modifierKeys?: ModifierKeys,
+  modifierKeys?: SelectionModifierKeys,
+  baseSelectedIds?: readonly string[],
 ): string[] => {
-  const isMeta = event?.metaKey || event?.nativeEvent?.metaKey || modifierKeys?.meta
-  const isCtrl = event?.ctrlKey || event?.nativeEvent?.ctrlKey || modifierKeys?.ctrl
-
-  if (isMeta || isCtrl) {
-    if (selectedIds.includes(node.id)) {
-      return selectedIds.filter((id) => id !== node.id)
-    }
-    return [...selectedIds, node.id]
-  }
-
-  // Not holding modifiers: select only this node
-  return [node.id]
+  return resolveSelectedIdsForNodeClick({
+    baseSelectedIds,
+    currentSelectedIds: selectedIds,
+    modifierKeys: selectionModifiersFromEvent(event, modifierKeys),
+    nodeId: node.id,
+  })
 }
 
 const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
@@ -667,7 +690,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       'window',
       'door',
     ],
-    handleSelect: (node, nativeEvent, modifierKeys) => {
+    handleSelect: (node, nativeEvent, modifierKeys, baseSelectedIds) => {
       const { selection, setSelection } = useViewer.getState()
       const nodes = useScene.getState().nodes
       const nodeLevelId = node.type === 'elevator' ? null : resolveLevelId(node, nodes)
@@ -694,7 +717,13 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
         // Wait, the hierarchy guard resets zoneId if levelId changes. That's fine since we provide zoneId.
         setSelection(updates)
       } else {
-        updates.selectedIds = computeNextIds(node, selection.selectedIds, nativeEvent, modifierKeys)
+        updates.selectedIds = computeNextIds(
+          node,
+          selection.selectedIds,
+          nativeEvent,
+          modifierKeys,
+          baseSelectedIds,
+        )
         setSelection(updates)
       }
     },
@@ -746,7 +775,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
 
   furnish: {
     types: ['item'],
-    handleSelect: (node, nativeEvent, modifierKeys) => {
+    handleSelect: (node, nativeEvent, modifierKeys, baseSelectedIds) => {
       const { selection, setSelection } = useViewer.getState()
       const nodes = useScene.getState().nodes
       const nodeLevelId = resolveLevelId(node, nodes)
@@ -760,7 +789,13 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
         updates.buildingId = buildingId
       }
 
-      updates.selectedIds = computeNextIds(node, selection.selectedIds, nativeEvent, modifierKeys)
+      updates.selectedIds = computeNextIds(
+        node,
+        selection.selectedIds,
+        nativeEvent,
+        modifierKeys,
+        baseSelectedIds,
+      )
       setSelection(updates)
     },
     handleDeselect: () => {
@@ -776,7 +811,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       // Registry-driven kinds with `category: 'furnish'` (shelf today,
       // future furniture kinds): selectable in furnish phase if their
       // definition declares the `selectable` capability. Without this
-      // branch, shelf clicks routed to furnish phase via getSelectionTarget
+      // branch, shelf clicks routed to furnish phase via resolveNodeSelectionTarget
       // would be rejected here — single-click selection broken.
       const def = nodeRegistry.get(node.type)
       if (def && def.category === 'furnish' && def.capabilities.selectable) return true
@@ -785,76 +820,14 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   },
 }
 
-const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
-  // Item is checked FIRST so its asset.category-driven routing (door/
-  // window items land in structure phase, everything else in furnish)
-  // beats the generic registry fallback below. Without this, registering
-  // `item` (Phase 5) made isRegistrySelectable('item') match the
-  // structure branch first, breaking single-click selection: first click
-  // switched the editor to structure phase, second click selected.
-  if (node.type === 'item') {
-    const item = node as ItemNode
-    if (item.asset.category === 'door' || item.asset.category === 'window') {
-      return {
-        phase: 'structure',
-        structureLayer: 'elements',
-      }
-    }
-    return {
-      phase: 'furnish',
-    }
-  }
-
-  if (node.type === 'zone') {
-    return {
-      phase: 'structure',
-      structureLayer: 'zones',
-    }
-  }
-
-  if (
-    node.type === 'wall' ||
-    node.type === 'fence' ||
-    node.type === 'column' ||
-    node.type === 'elevator' ||
-    node.type === 'slab' ||
-    node.type === 'ceiling' ||
-    node.type === 'roof' ||
-    node.type === 'roof-segment' ||
-    node.type === 'stair' ||
-    node.type === 'stair-segment' ||
-    node.type === 'spawn' ||
-    node.type === 'window' ||
-    node.type === 'door'
-  ) {
-    return {
-      phase: 'structure',
-      structureLayer: 'elements',
-    }
-  }
-
-  // Registry-driven kinds (Phase 5+): route by `def.category`. Built-ins
-  // above match before this fallback. Furnish-category kinds (shelf,
-  // item — already handled above) land on the furnish phase; structure-
-  // category kinds (everything else) on structure/elements.
-  const def = nodeRegistry.get(node.type)
-  if (def) {
-    if (def.category === 'furnish') {
-      return { phase: 'furnish' }
-    }
-    return { phase: 'structure', structureLayer: 'elements' }
-  }
-
-  return null
-}
-
 export const SelectionManager = () => {
   const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
   const setHoverHighlightMode = useViewer((s) => s.setHoverHighlightMode)
-  const modifierKeysRef = useRef<ModifierKeys>({
+  const modifierKeysRef = useRef<SelectionModifierKeys>({
     meta: false,
     ctrl: false,
+    shift: false,
   })
   const clickHandledRef = useRef(false)
 
@@ -1230,16 +1203,19 @@ export const SelectionManager = () => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Meta') modifierKeysRef.current.meta = true
       if (event.key === 'Control') modifierKeysRef.current.ctrl = true
+      if (event.key === 'Shift') modifierKeysRef.current.shift = true
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.key === 'Meta') modifierKeysRef.current.meta = false
       if (event.key === 'Control') modifierKeysRef.current.ctrl = false
+      if (event.key === 'Shift') modifierKeysRef.current.shift = false
     }
 
     const clearModifiers = () => {
       modifierKeysRef.current.meta = false
       modifierKeysRef.current.ctrl = false
+      modifierKeysRef.current.shift = false
     }
 
     window.addEventListener('keydown', onKeyDown)
@@ -1252,6 +1228,222 @@ export const SelectionManager = () => {
       window.removeEventListener('blur', clearModifiers)
     }
   }, [])
+
+  useEffect(() => {
+    if (mode !== 'select') return
+    if (movingNode || curvingWall || curvingFence) return
+
+    const onPointerDown = (event: NodeEvent) => {
+      const pointer = pointerEventFromNodeEvent(event)
+      if (pointer.button !== 0 || !isCommandModifier(pointer)) return
+
+      const node = useScene.getState().nodes[event.node.id as AnyNodeId] ?? event.node
+      if (!canDirectMoveNode(node)) return
+      if (!useViewer.getState().selection.selectedIds.includes(node.id)) return
+
+      const startX = pointer.clientX
+      const startY = pointer.clientY
+      const pointerId = pointer.pointerId
+      const pointerTarget = pointer.target instanceof EventTarget ? pointer.target : null
+      let engaged = false
+
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onEnd)
+        window.removeEventListener('pointercancel', onEnd)
+        if (engaged) {
+          useViewer.getState().setInputDragging(false)
+        }
+      }
+
+      const onMove = (moveEvent: PointerEvent) => {
+        if (moveEvent.pointerId !== pointerId) return
+        if (engaged) return
+        if (pointerDistancePx(moveEvent, startX, startY) < DIRECT_DRAG_THRESHOLD_PX) return
+
+        engaged = true
+        event.stopPropagation()
+        suppressBoxSelectForPointer(event.nativeEvent)
+        useViewer.getState().setInputDragging(true)
+        swallowNextClick()
+        createEditorApi().engageMoveDrag(node)
+        requestAnimationFrame(() => {
+          if (useEditor.getState().movingNode?.id !== node.id) return
+          pointerTarget?.dispatchEvent(
+            new PointerEvent('pointermove', {
+              altKey: moveEvent.altKey,
+              bubbles: true,
+              buttons: moveEvent.buttons,
+              clientX: moveEvent.clientX,
+              clientY: moveEvent.clientY,
+              ctrlKey: moveEvent.ctrlKey,
+              metaKey: moveEvent.metaKey,
+              pointerId,
+              pointerType: moveEvent.pointerType,
+              shiftKey: moveEvent.shiftKey,
+            }),
+          )
+        })
+      }
+
+      const onEnd = (endEvent: PointerEvent) => {
+        if (endEvent.pointerId !== pointerId) return
+        cleanup()
+        if (engaged) {
+          requestAnimationFrame(() => {
+            const editor = useEditor.getState()
+            if (editor.movingNode?.id !== node.id || !editor.placementDragMode) return
+            editor.setMovingNode(null)
+          })
+        }
+      }
+
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onEnd)
+      window.addEventListener('pointercancel', onEnd)
+    }
+
+    const allTypes = [
+      'wall',
+      'fence',
+      'item',
+      'column',
+      'slab',
+      'ceiling',
+      'roof',
+      'roof-segment',
+      'stair',
+      'stair-segment',
+      'window',
+      'door',
+      'zone',
+      'shelf',
+      'spawn',
+      'elevator',
+      'building',
+    ] as const
+    const registryKinds = getSelectableKinds().filter(
+      (kind) => !(allTypes as readonly string[]).includes(kind),
+    )
+    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+
+    for (const type of subscribedKinds) {
+      emitter.on(`${type}:pointerdown` as any, onPointerDown as any)
+    }
+
+    return () => {
+      for (const type of subscribedKinds) {
+        emitter.off(`${type}:pointerdown` as any, onPointerDown as any)
+      }
+    }
+  }, [curvingFence, curvingWall, mode, movingNode])
+
+  useEffect(() => {
+    if (mode !== 'select') return
+    if (movingNode || curvingWall || curvingFence) return
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.button !== 2 || !isCommandModifier(event)) return
+      if (!(event.target instanceof HTMLCanvasElement)) return
+
+      const selectedIds = useViewer.getState().selection.selectedIds
+      const hoveredId = useViewer.getState().hoveredId as AnyNodeId | null
+      if (!hoveredId || !selectedIds.includes(hoveredId)) return
+
+      const node = useScene.getState().nodes[hoveredId]
+      if (!node || !canDirectRotateNode(node)) return
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      const nodeId = node.id as AnyNodeId
+      const pointerId = event.pointerId
+      const startX = event.clientX
+      const sceneApi = createSceneApi(useScene)
+      let lastPatch: Partial<AnyNode> | null = null
+
+      const applyDelta = (moveEvent: PointerEvent) => {
+        const delta = resolveDirectRotationDragDelta(
+          startX,
+          moveEvent.clientX,
+          DIRECT_ROTATE_RADIANS_PER_PIXEL,
+          moveEvent.shiftKey,
+        )
+        if (Math.abs(delta) < DIRECT_ROTATE_EPSILON) {
+          lastPatch = null
+          useLiveNodeOverrides.getState().clear(nodeId)
+          useScene.getState().markDirty(nodeId)
+          return
+        }
+        const patch = resolveDirectRotationPatch(node, delta, sceneApi)
+        if (!patch) return
+        lastPatch = patch
+        useLiveNodeOverrides.getState().set(nodeId, patch as Record<string, unknown>)
+        useScene.getState().markDirty(nodeId)
+      }
+
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove, true)
+        window.removeEventListener('pointerup', onUp, true)
+        window.removeEventListener('pointercancel', onCancel, true)
+        window.removeEventListener('contextmenu', preventContextMenu, true)
+        useLiveNodeOverrides.getState().clear(nodeId)
+        useScene.getState().markDirty(nodeId)
+        useDirectManipulationFeedback.getState().clearActiveRotateNodeId(nodeId)
+        useScene.temporal.getState().resume()
+        useViewer.getState().setInputDragging(false)
+        if (document.body.style.cursor === 'ew-resize') {
+          document.body.style.cursor = ''
+        }
+      }
+
+      const onMove = (moveEvent: PointerEvent) => {
+        if (moveEvent.pointerId !== pointerId) return
+        moveEvent.preventDefault()
+        moveEvent.stopPropagation()
+        applyDelta(moveEvent)
+      }
+
+      const onUp = (upEvent: PointerEvent) => {
+        if (upEvent.pointerId !== pointerId) return
+        upEvent.preventDefault()
+        upEvent.stopPropagation()
+        swallowNextClick()
+        if (lastPatch) {
+          sceneApi.update(nodeId, lastPatch)
+          sfxEmitter.emit('sfx:item-place')
+        }
+        cleanup()
+      }
+
+      const onCancel = (cancelEvent: PointerEvent) => {
+        if (cancelEvent.pointerId !== pointerId) return
+        cleanup()
+      }
+
+      const preventContextMenu = (contextEvent: Event) => {
+        contextEvent.preventDefault()
+        contextEvent.stopPropagation()
+      }
+
+      useViewer.getState().setInputDragging(true)
+      useDirectManipulationFeedback.getState().setActiveRotateNodeId(nodeId)
+      useScene.temporal.getState().pause()
+      document.body.style.cursor = 'ew-resize'
+      sfxEmitter.emit('sfx:item-pick')
+      applyDelta(event)
+
+      window.addEventListener('pointermove', onMove, true)
+      window.addEventListener('pointerup', onUp, true)
+      window.addEventListener('pointercancel', onCancel, true)
+      window.addEventListener('contextmenu', preventContextMenu, true)
+    }
+
+    window.addEventListener('pointerdown', onPointerDown, true)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true)
+    }
+  }, [curvingFence, curvingWall, mode, movingNode])
 
   useEffect(() => {
     if (mode !== 'select') return
@@ -1274,12 +1466,13 @@ export const SelectionManager = () => {
 
       let currentPhase = useEditor.getState().phase
       let currentStructureLayer = useEditor.getState().structureLayer
+      const selectedIdsBeforeRouting = useViewer.getState().selection.selectedIds
 
       // Auto-switch between zones, structure, and furnish when clicking elements on the same level.
       // Also auto-switch from site phase when clicking structural/furnish elements (e.g. 2D floorplan).
       if (currentPhase === 'structure' || currentPhase === 'furnish' || currentPhase === 'site') {
         if (isNodeInCurrentLevel(node)) {
-          const target = getSelectionTarget(node)
+          const target = resolveNodeSelectionTarget(node)
           if (target) {
             if (target.phase !== currentPhase) {
               useEditor.getState().setPhase(target.phase)
@@ -1330,7 +1523,12 @@ export const SelectionManager = () => {
           useEditor.getState().setEditingHole(null)
         }
 
-        activeStrategy.handleSelect(nodeToSelect, event.nativeEvent, modifierKeysRef.current)
+        activeStrategy.handleSelect(
+          nodeToSelect,
+          event.nativeEvent,
+          modifierKeysRef.current,
+          selectedIdsBeforeRouting,
+        )
 
         let nextMaterialTargetHandled = false
 
@@ -1435,9 +1633,11 @@ export const SelectionManager = () => {
       emitter.on(`${type}:click` as any, onClick as any)
     })
 
-    const onGridClick = () => {
+    const onGridClick = (event: GridEvent) => {
       if (clickHandledRef.current) return
       if (boxSelectHandled) return
+      const nativeEvent = event.nativeEvent
+      if (nativeEvent?.metaKey || nativeEvent?.ctrlKey || nativeEvent?.shiftKey) return
       const { phase, structureLayer } = useEditor.getState()
       const activeStrategy = SELECTION_STRATEGIES[phase]
       if (activeStrategy) activeStrategy.handleDeselect()
@@ -1506,7 +1706,10 @@ export const SelectionManager = () => {
 
       const currentPhase = useEditor.getState().phase
 
-      let targetPhase: 'site' | 'structure' | 'furnish' | null = null
+      const selectedIdsBeforeRouting = useViewer.getState().selection.selectedIds
+      const target = resolveNodeSelectionTarget(node)
+      let targetPhase: 'site' | 'structure' | 'furnish' | null = target?.phase ?? null
+      let targetStructureLayer = target?.structureLayer
       let forceSelect = false
 
       if (node.type === 'building' || node.type === 'site') {
@@ -1515,35 +1718,14 @@ export const SelectionManager = () => {
         }
         if (node.type === 'building') {
           targetPhase = 'structure'
+          targetStructureLayer = 'elements'
         }
-      } else if (
-        node.type === 'wall' ||
-        node.type === 'fence' ||
-        node.type === 'column' ||
-        node.type === 'elevator' ||
-        node.type === 'slab' ||
-        node.type === 'ceiling' ||
-        node.type === 'roof' ||
-        node.type === 'roof-segment' ||
-        node.type === 'stair' ||
-        node.type === 'stair-segment' ||
-        node.type === 'spawn' ||
-        node.type === 'window' ||
-        node.type === 'door'
-      ) {
-        targetPhase = 'structure'
+      } else {
         if (node.type === 'roof-segment' && currentPhase === 'structure') {
           forceSelect = true // allow double click to dive into roof-segment even if already in structure phase
         }
         if (node.type === 'stair-segment' && currentPhase === 'structure') {
           forceSelect = true // allow double click to dive into stair-segment even if already in structure phase
-        }
-      } else if (node.type === 'item') {
-        const item = node as ItemNode
-        if (item.asset.category === 'door' || item.asset.category === 'window') {
-          targetPhase = 'structure'
-        } else {
-          targetPhase = 'furnish'
         }
       }
 
@@ -1558,13 +1740,22 @@ export const SelectionManager = () => {
           useEditor.getState().setPhase(targetPhase)
         }
 
-        if (targetPhase === 'structure' && useEditor.getState().structureLayer === 'zones') {
-          useEditor.getState().setStructureLayer('elements')
+        if (
+          targetPhase === 'structure' &&
+          targetStructureLayer &&
+          targetStructureLayer !== useEditor.getState().structureLayer
+        ) {
+          useEditor.getState().setStructureLayer(targetStructureLayer)
         }
 
         const strategy = SELECTION_STRATEGIES[targetPhase || currentPhase]
         if (strategy) {
-          strategy.handleSelect(node, event.nativeEvent, modifierKeysRef.current)
+          strategy.handleSelect(
+            node,
+            event.nativeEvent,
+            modifierKeysRef.current,
+            selectedIdsBeforeRouting,
+          )
         }
       }
     }

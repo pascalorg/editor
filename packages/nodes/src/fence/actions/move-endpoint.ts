@@ -14,7 +14,6 @@ import {
   isSegmentLongEnough,
   snapFenceDraftPoint,
   useAlignmentGuides,
-  WALL_FINE_GRID_STEP,
 } from '@pascal-app/editor'
 
 /**
@@ -165,14 +164,13 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
     preview: (ctx, point, modifiers) => {
       const planPoint: FencePlanPoint = [point[0], point[1]]
       // Endpoint move = grid snap only; the 45°-from-start angle snap
-      // is draft-only. Shift switches to the fine grid step for
-      // precision, mirroring the wall convention.
+      // is draft-only. Shift is a hard snap bypass.
       const snapped = snapFenceDraftPoint({
         point: planPoint,
         walls: ctx.levelWalls,
         fences: ctx.levelFences,
         ignoreFenceIds: [ctx.fenceId as string],
-        step: modifiers.shift ? WALL_FINE_GRID_STEP : undefined,
+        bypassSnap: modifiers.shift,
       })
 
       // Figma-style alignment: nudge the dragged endpoint onto another wall /
@@ -180,7 +178,7 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
       // guide. The resolver connects to the NEAREST real anchor, so the dot
       // always sits on an actual point. Alt is reserved for detach.
       let aligned = snapped
-      if (ctx.alignCandidates.length > 0) {
+      if (!modifiers.shift && ctx.alignCandidates.length > 0) {
         const ar = resolveAlignment({
           moving: [{ nodeId: ctx.fenceId as string, kind: 'corner', x: snapped[0], z: snapped[1] }],
           candidates: ctx.alignCandidates,
@@ -190,6 +188,8 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
           aligned = [snapped[0] + ar.snap.dx, snapped[1] + ar.snap.dz]
         }
         useAlignmentGuides.getState().set(ar.guides)
+      } else {
+        useAlignmentGuides.getState().clear()
       }
 
       const nextStart = ctx.endpoint === 'start' ? aligned : ctx.fixedPoint
