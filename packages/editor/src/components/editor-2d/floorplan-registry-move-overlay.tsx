@@ -283,6 +283,27 @@ export function FloorplanRegistryMoveOverlay() {
       }
 
       const onKey = (event: KeyboardEvent) => {
+        // R flips a directional kind's facing mid-placement (door / window:
+        // front ↔ back). The session records the flip and re-runs its last
+        // apply so the 2D symbol updates immediately; kinds without a facing
+        // leave `flipSide` unset and R falls through to the global handler.
+        //
+        // Only when THIS overlay is the active mover — i.e. the user has moved
+        // the pointer over the 2D pane (`hasMovedSinceStart`). The 3D move tool
+        // also listens for R while a door/window `movingNode` is placed (split
+        // / 3D-only view); gating on `hasMovedSinceStart` keeps the two from
+        // both flipping (or double-playing the cue) on a single R press.
+        if (event.key === 'r' || event.key === 'R') {
+          if (!(session.flipSide && hasMovedSinceStart)) return
+          const t = event.target as HTMLElement | null
+          if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
+            return
+          }
+          event.preventDefault()
+          session.flipSide()
+          sfxEmitter.emit('sfx:item-rotate')
+          return
+        }
         if (event.key !== 'Escape') return
         // Claim teardown ownership so the 3D move tool's cleanup skips
         // its own restore — without this, both sides would race to

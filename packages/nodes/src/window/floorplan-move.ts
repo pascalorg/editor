@@ -69,9 +69,23 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     roofFace: undefined
   } | null = null
 
+  // R flips the window's facing (front ↔ back) mid-placement — see
+  // `doorFloorplanMoveTarget`. `apply` re-derives the side each move, so the
+  // flip is a persistent XOR plus a π rotation offset.
+  let flipped = false
+  let lastApply: {
+    planPoint: readonly [number, number]
+    modifiers: { shiftKey: boolean; altKey: boolean; ctrlKey: boolean; metaKey: boolean }
+  } | null = null
+
   const session: FloorplanMoveTargetSession = {
     affectedIds: [node.id as AnyNodeId],
+    flipSide() {
+      flipped = !flipped
+      if (lastApply) this.apply(lastApply)
+    },
     apply({ planPoint, modifiers }) {
+      lastApply = { planPoint, modifiers }
       const nodes = useScene.getState().nodes
       const resolvedPlanPoint = resolveCursor(planPoint)
       const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)
@@ -99,10 +113,17 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         node.height,
       )
 
+      const side: WindowNode['side'] = flipped
+        ? hit.side === 'front'
+          ? 'back'
+          : 'front'
+        : hit.side
+      const itemRotation = hit.itemRotation + (flipped ? Math.PI : 0)
+
       lastValid = {
         position: [clampedX, clampedY, 0],
-        rotation: [0, hit.itemRotation, 0],
-        side: hit.side,
+        rotation: [0, itemRotation, 0],
+        side,
         parentId: hit.wall.id,
         wallId: hit.wall.id,
         // Re-anchoring to a wall ends any roof-segment hosting; the

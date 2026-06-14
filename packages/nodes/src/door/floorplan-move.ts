@@ -72,9 +72,25 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
     roofFace: undefined
   } | null = null
 
+  // R flips the door's facing (front ↔ back) mid-placement. `apply` re-derives
+  // the wall-facing side every move, so the flip is a persistent XOR applied on
+  // top of the wall hit, plus a π rotation offset (matching the committed R).
+  let flipped = false
+  // Remember the last apply args so the overlay's R keydown can re-run `apply`
+  // (which has no event of its own) to show the flip immediately.
+  let lastApply: {
+    planPoint: readonly [number, number]
+    modifiers: { shiftKey: boolean; altKey: boolean; ctrlKey: boolean; metaKey: boolean }
+  } | null = null
+
   const session: FloorplanMoveTargetSession = {
     affectedIds: [node.id as AnyNodeId],
+    flipSide() {
+      flipped = !flipped
+      if (lastApply) this.apply(lastApply)
+    },
     apply({ planPoint, modifiers }) {
+      lastApply = { planPoint, modifiers }
       const nodes = useScene.getState().nodes
       const resolvedPlanPoint = resolveCursor(planPoint)
       const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)
@@ -97,10 +113,14 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       const snappedLocalX = neighborX ?? (modifiers.shiftKey ? hit.localX : snapToHalf(hit.localX))
       const { clampedX, clampedY } = clampToWall(hit.wall, snappedLocalX, node.width, node.height)
 
+      // Apply the R-flip on top of the wall-derived side.
+      const side: DoorNode['side'] = flipped ? (hit.side === 'front' ? 'back' : 'front') : hit.side
+      const itemRotation = hit.itemRotation + (flipped ? Math.PI : 0)
+
       lastValid = {
         position: [clampedX, clampedY, 0],
-        rotation: [0, hit.itemRotation, 0],
-        side: hit.side,
+        rotation: [0, itemRotation, 0],
+        side,
         parentId: hit.wall.id,
         wallId: hit.wall.id,
         // Re-anchoring to a wall ends any roof-segment hosting; the

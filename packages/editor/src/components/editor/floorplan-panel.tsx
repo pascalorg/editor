@@ -8636,7 +8636,16 @@ export function FloorplanPanel({
       // `wall:move` events the door / window placement tools listen for.
       // Same reason `handleBackgroundPlacementClick` runs its opening
       // branch before its grid catch-all.
-      if (isOpeningPlacementActive) {
+      //
+      // Only the pure BUILD case (a door/window tool armed with no
+      // `movingNode`) drives placement through these synthesized `wall:*`
+      // events. When a door/window `movingNode` is set — the community
+      // preset / catalog flow — `FloorplanRegistryMoveOverlay` owns 2D
+      // placement end-to-end via `def.floorplanMoveTarget` (faithful symbol,
+      // plan-space snap, single-undo commit, R-flip). Running both at once
+      // made them fight (R-flip overwritten on the next move, click-commit
+      // dropped), so the move case is excluded here.
+      if (isOpeningBuildActive && !isOpeningMoveActive) {
         const closest = findClosestWallPoint(planPoint, walls, {
           canUseWall: (wall) => !isCurvedWall(wall),
         })
@@ -8704,7 +8713,13 @@ export function FloorplanPanel({
       // window are also registered kinds, but need wall events — see
       // comment there). Wall build skips this so its own branch below
       // updates local `draftEnd` state alongside the registry tool.
-      if (!isWallBuildActive && isFloorplanGridInteractionActive) {
+      //
+      // A door/window MOVE (community preset) is owned by
+      // `FloorplanRegistryMoveOverlay`; `isRegistryToolBuildActive` is true
+      // for it (build mode + a registered `door`/`window` tool), so without
+      // this exclusion the catch-all would emit `grid:move` and re-drive the
+      // 3D MoveDoorTool's free-follow, fighting the overlay again.
+      if (!isWallBuildActive && !isOpeningMoveActive && isFloorplanGridInteractionActive) {
         const snappedPoint = event.shiftKey ? planPoint : getSnappedFloorplanPoint(planPoint)
         emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
@@ -9051,8 +9066,15 @@ export function FloorplanPanel({
     isCeilingBuildActive,
     isCeilingItemPlacementActive,
     isFenceBuildActive,
-    isFloorplanGridInteractionActive,
-    isOpeningPlacementActive,
+    // Exclude the door/window MOVE case: `isRegistryToolBuildActive` makes the
+    // grid catch-all true for it, but the overlay owns its commit (its own
+    // pointerup). Letting the catch-all emit `grid:click` here would consume
+    // the commit click and fight the overlay.
+    isFloorplanGridInteractionActive: isFloorplanGridInteractionActive && !isOpeningMoveActive,
+    // Only the pure-build opening case (tool armed, no movingNode) commits via
+    // the synthesized `wall:click`; the move case (community preset) is owned
+    // by FloorplanRegistryMoveOverlay, which commits on its own pointerup.
+    isOpeningPlacementActive: isOpeningBuildActive && !isOpeningMoveActive,
     isPolygonBuildActive,
     isRoofBuildActive,
     isSlabBuildActive,
