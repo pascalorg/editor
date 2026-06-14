@@ -34,7 +34,6 @@ import {
   type RoofWallOpeningTarget,
   resolveRoofWallOpeningTarget,
 } from '../shared/roof-wall-opening-placement'
-import { findClosestWallInPlan } from '../shared/wall-attach-target'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
 
@@ -84,18 +83,18 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     let currentHostId: string | null = movingDoorNode.parentId
     let dragAnchor: { wallId: string; rawX: number; startX: number } | null = null
     let committed = false
-    // Off-wall free-follow: when the cursor is over empty floor (no wall to
-    // snap to) the door is parented to the level and tracks the cursor like an
-    // item node. `freeFollowing` distinguishes that state so grid:click can
-    // no-op (a door can't commit in open space) and the wall/roof paths can
-    // reclaim ownership. `lastMeshEventTime` defers the floor handler whenever
-    // a wall/roof mesh event owns the same pointermove (shared DOM timeStamp).
+    // Off-wall free-follow: when the cursor is over empty floor (no wall under
+    // the ray) the door is parented to the level and tracks the cursor like an
+    // item node. `freeFollowing` distinguishes that state so the placement
+    // commit no-ops in open space (a door needs a wall). `lastMeshEventTime`
+    // defers the floor handler whenever a wall/roof mesh event owns the same
+    // pointermove (shared DOM timeStamp) — that's the only thing that snaps.
     let freeFollowing = false
     let lastMeshEventTime = -1
-    // Along-wall snap cell of the last proximity snap, so the grid-snap sound
-    // fires when the door snaps onto a new spot (enters a wall / slides to a
-    // new ~5cm cell), not on every move. Null while free-following.
-    let lastSnapKey: string | null = null
+    // The door's chosen facing side. R flips it mid-placement (front ↔ back,
+    // same as the committed-selected R flip) so the user can reorient before
+    // committing. Initialised from the moving node's side.
+    let sideOverride: DoorNode['side'] = movingDoorNode.side
     let lastTarget: {
       wallNode: WallEvent['node']
       wallId: string
@@ -163,7 +162,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
     const getPlacementOrientation = (event: WallEvent) => {
       const faceSide = getSideFromNormal(event.normal)
-      const side = movingDoorNode.side ?? faceSide
+      const side = sideOverride ?? faceSide
       const rotationOffset = side !== faceSide ? Math.PI : 0
       return {
         side,
@@ -403,60 +402,6 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       lastRoofEvent = null
     }
 
-    // Snap the door onto a nearby wall from a plan-space proximity hit
-    // (cursor over the floor within range of a wall), reusing the wall
-    // preview path. Returns the resolved target or null when nothing fits.
-    const resolveProximityTarget = (
-      hit: NonNullable<ReturnType<typeof findClosestWallInPlan>>,
-      nativeEvent: GridEvent['nativeEvent'] | undefined,
-    ) => {
-      const bypassSnap = nativeEvent?.shiftKey === true
-      const bypass = nativeEvent?.altKey === true || bypassSnap
-      const wallAngle = Math.atan2(hit.dirY, hit.dirX)
-      const cursorRotation = hit.side === 'front' ? Math.PI - wallAngle : -wallAngle
-      const localX = resolveWallSlideAlignment({
-        wallNode: hit.wall,
-        rawLocalX: hit.localX,
-        width: movingDoorNode.width,
-        candidates: alignmentCandidates,
-        bypass,
-        bypassSnap,
-      })
-      const { clampedX, clampedY } = clampToWall(
-        hit.wall,
-        localX,
-        movingDoorNode.width,
-        movingDoorNode.height,
-      )
-      const valid = !hasWallChildOverlap(
-        hit.wall.id,
-        clampedX,
-        clampedY,
-        movingDoorNode.width,
-        movingDoorNode.height,
-        movingDoorNode.id,
-      )
-      // Build a synthetic WallEvent so applyPreview / onWallClick can reuse the
-      // wall-frame math (only wallLocalToWorld's slab-elevation read needs the
-      // node fields, which the real wall carries).
-      const syntheticEvent = {
-        node: hit.wall,
-        normal: undefined,
-        localPosition: [clampedX, clampedY, 0],
-      } as unknown as WallEvent
-      return {
-        wallNode: hit.wall,
-        wallId: hit.wall.id,
-        side: hit.side,
-        itemRotation: hit.itemRotation,
-        cursorRotation,
-        clampedX,
-        clampedY,
-        valid,
-        event: syntheticEvent,
-      }
-    }
-
     // Free-follow: the door rides the cursor over empty floor, parented to the
     // level like an item node (lifted so it stands on the floor). No wall to
     // attach to, so it is not committable here.
@@ -464,16 +409,20 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       freeFollowing = true
       lastTarget = null
       lastRoofEvent = null
-      lastSnapKey = null
       hideCursor()
       useLiveTransforms.getState().clear(movingDoorNode.id)
       const levelId = getLevelId()
       const y = movingDoorNode.height / 2
+      // Keep the R-flip visible while free-following: face the chosen side
+      // (back = rotated π) instead of forcing 0, so an R press isn't undone on
+      // the next mousemove.
+      const yaw = sideOverride === 'back' ? Math.PI : 0
       if (currentHostId !== levelId) {
         if (currentHostId && currentHostId !== levelId) markHostDirty(currentHostId)
         useScene.getState().updateNode(movingDoorNode.id, {
           position: [localX, y, localZ],
-          rotation: [0, 0, 0],
+          rotation: [0, yaw, 0],
+          side: sideOverride,
           parentId: levelId ?? undefined,
           wallId: undefined,
           roofSegmentId: undefined,
@@ -483,7 +432,8 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       } else {
         useScene.getState().updateNode(movingDoorNode.id, {
           position: [localX, y, localZ],
-          rotation: [0, 0, 0],
+          rotation: [0, yaw, 0],
+          side: sideOverride,
         })
       }
     }
@@ -492,49 +442,15 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       if (committed) return
       if (useViewer.getState().cameraDragging) return
       // A wall/roof mesh handler owns this exact pointermove (shared DOM
-      // timeStamp): let it drive. Order-independent and self-healing.
+      // timeStamp): the cursor ray is on a wall/roof, so it snaps. Otherwise
+      // the cursor is over open floor — free-follow it.
       if (event.nativeEvent?.timeStamp === lastMeshEventTime) return
 
-      const levelId = getLevelId()
+      // No proximity magnet: in 3D the wall side faces are big raycast targets,
+      // so snapping engages only when the cursor ray actually hovers a wall
+      // (`onWallMove`). Over open floor the door just follows the cursor.
       const [x, , z] = event.localPosition
-      if (!levelId) {
-        freeFollowAt(x, z)
-        return
-      }
-
-      const hit = findClosestWallInPlan([x, z], useScene.getState().nodes, levelId as AnyNodeId)
-      if (!hit) {
-        freeFollowAt(x, z)
-        return
-      }
-
-      freeFollowing = false
-      const target = resolveProximityTarget(hit, event.nativeEvent)
-      lastTarget = target
-      lastRoofEvent = null
-      applyPreview(target)
-
-      // Snap cue when the door lands on a new wall / along-wall cell (~5cm),
-      // the same feedback the on-grid item move plays. Shift bypasses snapping.
-      const bypassSnap = event.nativeEvent?.shiftKey === true
-      const snapKey = `${target.wallId}:${Math.round(target.clampedX * 20)}`
-      if (!bypassSnap && snapKey !== lastSnapKey) triggerSFX('sfx:grid-snap')
-      lastSnapKey = snapKey
-    }
-
-    const onGridClick = (event: GridEvent) => {
-      // Free-following over open floor isn't committable (a door needs a wall).
-      // wall:click / roof:click own the commit when over those meshes.
-      if (committed || freeFollowing) return
-      if (event.nativeEvent?.timeStamp === lastMeshEventTime) return
-      const levelId = getLevelId()
-      if (!levelId) return
-      const [x, , z] = event.localPosition
-      const hit = findClosestWallInPlan([x, z], useScene.getState().nodes, levelId as AnyNodeId)
-      if (!hit) return
-      const target = resolveProximityTarget(hit, event.nativeEvent)
-      if (!target.valid) return
-      commitToWall(target)
+      freeFollowAt(x, z)
     }
 
     // ── Roof-segment wall faces ─────────────────────────────────────
@@ -696,14 +612,51 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
     const onPlacementDragPointerUp = (event: PointerEvent) => {
       if (!consumePlacementDragRelease(event)) return
-      // Free-following over open floor can't commit (no wall). A wall target
-      // (from a real wall hover or a proximity snap) commits via commitToWall;
-      // the synthetic proximity event would fail onWallClick's normal check.
+      // Free-following over open floor can't commit (no wall). A wall hover
+      // target commits via commitToWall; a roof face via onRoofClick.
       if (lastTarget?.valid && !freeFollowing) {
         commitToWall(lastTarget)
         return
       }
       if (lastRoofEvent) onRoofClick(lastRoofEvent)
+    }
+
+    // R flips the door's facing side mid-placement (front ↔ back), like the
+    // committed-selected R flip — usable before commit, whether snapped to a
+    // wall or free-following. Re-applies the preview so the flip shows live.
+    // No-op on a roof-segment face (those host front-only; nothing to flip).
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (committed) return
+      if (e.key !== 'r' && e.key !== 'R') return
+      const target = e.target as HTMLElement | null
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      ) {
+        return
+      }
+      // Only act where a flip is meaningful — on a wall hover or while
+      // free-following. On a roof face leave it to the default R (no flip, no
+      // sfx) so the cue never fires without a visible effect.
+      const onWall = lastTarget !== null
+      if (!(onWall || freeFollowing)) return
+      e.preventDefault()
+      sideOverride = sideOverride === 'front' ? 'back' : 'front'
+      triggerSFX('sfx:item-rotate')
+      if (onWall) {
+        // On a wall: re-resolve with the flipped side and re-preview.
+        const next = resolveMoveTarget(lastTarget!.event)
+        if (next) {
+          lastTarget = next
+          applyPreview(next)
+        }
+      } else {
+        // Free-following on the level: flip the draft's facing in place.
+        useScene.getState().updateNode(movingDoorNode.id, {
+          side: sideOverride,
+          rotation: [0, sideOverride === 'back' ? Math.PI : 0, 0],
+        })
+      }
     }
 
     emitter.on('wall:enter', onWallEnter)
@@ -715,9 +668,9 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     emitter.on('roof:click', onRoofClick)
     emitter.on('roof:leave', onRoofLeave)
     emitter.on('grid:move', onGridMove)
-    emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('pointerup', onPlacementDragPointerUp)
+    window.addEventListener('keydown', onKeyDown)
 
     return () => {
       const current = useScene.getState().nodes[movingDoorNode.id as AnyNodeId] as
@@ -754,9 +707,9 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       emitter.off('roof:click', onRoofClick)
       emitter.off('roof:leave', onRoofLeave)
       emitter.off('grid:move', onGridMove)
-      emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
+      window.removeEventListener('keydown', onKeyDown)
     }
   }, [movingDoorNode, exitMoveMode])
 

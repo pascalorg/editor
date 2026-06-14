@@ -32,7 +32,6 @@ import {
   resolveRoofWallOpeningTarget,
   worldToSelectedBuildingLocal,
 } from '../shared/roof-wall-opening-placement'
-import { findClosestWallInPlan } from '../shared/wall-attach-target'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
 import DoorPreview from './preview'
@@ -48,10 +47,9 @@ const FALLBACK_WIDTH = 0.9
 const FALLBACK_HEIGHT = 2.1
 const roofFallbackPoint = new Vector3()
 
-// What currently owns the cursor frame. The grid (proximity) handler defers
-// to a wall/roof mesh hover; it only drives the draft when the cursor is on
-// the floor ('proximity' = snapped to a nearby wall, null = free-floating).
-type HostKind = 'wall' | 'roof' | 'proximity' | null
+// What currently owns the cursor frame: a wall/roof mesh hover, or null when
+// the cursor is over open floor (the grid handler then free-follows).
+type HostKind = 'wall' | 'roof' | null
 
 /**
  * Door tool — places DoorNodes on walls and on roof-segment wall faces
@@ -59,11 +57,11 @@ type HostKind = 'wall' | 'roof' | 'proximity' | null
  * Doors always sit at floor level (clampedY = height/2 — segment base for
  * roof-hosted doors).
  *
- * The ghost follows the cursor everywhere (like moving an item): over the
- * floor it floats as an invalid ghost, and it MAGNETICALLY snaps onto the
- * nearest wall within `findClosestWallInPlan`'s range (1.5 m), releasing back
- * to free-follow when the cursor moves away. A direct wall-mesh hover takes
- * over with the precise face side; both paths share `applyWallTarget`.
+ * The ghost follows the cursor everywhere (like moving an item): over open
+ * floor it floats as an invalid (unplaceable) ghost; the moment the cursor
+ * ray hovers a wall (or roof-segment face) the real draft snaps onto it.
+ * Snapping engages only on an actual mesh hover — no proximity magnet — since
+ * the wall side faces are big raycast targets.
  */
 const DoorTool: React.FC = () => {
   const draftRef = useRef<DoorNode | null>(null)
@@ -86,15 +84,16 @@ const DoorTool: React.FC = () => {
     let hostKind: HostKind = null
     // timeStamp of the most recent wall/roof mesh event. A wall/roof hover and
     // the grid raycast from the SAME pointermove share the source DOM event's
-    // timeStamp, so the proximity handler can detect "a mesh handler already
-    // owns this frame" without depending on event order or on a leave firing
-    // (node events are suppressed during a camera drag, so a sticky boolean
-    // would strand the draft after an orbit; a per-frame timestamp self-heals).
+    // timeStamp, so the grid handler can detect "a mesh handler already owns
+    // this frame" without depending on event order or on a leave firing (node
+    // events are suppressed during a camera drag, so a sticky boolean would
+    // strand the draft after an orbit; a per-frame timestamp self-heals).
     let lastMeshEventTime = -1
-    // Last snapped wall + along-wall cell, so the grid-snap SFX fires only when
-    // the proximity snap lands on a NEW spot (entering a wall or sliding to a
-    // new cell), not every move.
-    let lastSnapKey: string | null = null
+    // R flips the door's facing side mid-placement (front ↔ back). On a wall
+    // the chosen side is `getSideFromNormal(normal)` flipped by `sideFlip`;
+    // re-applied to the last wall hover so the flip shows live before commit.
+    let sideFlip = false
+    let lastWallEvent: WallEvent | null = null
 
     const getLevelId = () => useViewer.getState().selection.levelId
     const getLevelYOffset = () => {
@@ -271,7 +270,6 @@ const DoorTool: React.FC = () => {
       if (!draft) return
       draftRef.current = null
       hostKind = null
-      lastSnapKey = null
 
       useScene.getState().deleteNode(draft.id)
       useScene.temporal.getState().resume()
@@ -336,10 +334,14 @@ const DoorTool: React.FC = () => {
         showWallFallbackCursor(event)
         return
       }
+      lastWallEvent = event
 
-      const side = getSideFromNormal(event.normal)
-      const itemRotation = calculateItemRotation(event.normal)
-      const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
+      const faceSide = getSideFromNormal(event.normal)
+      const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
+      const flipOffset = sideFlip ? Math.PI : 0
+      const itemRotation = calculateItemRotation(event.normal) + flipOffset
+      const cursorRotation =
+        calculateCursorRotation(event.normal, event.node.start, event.node.end) + flipOffset
       const bypassSnap = event.nativeEvent?.shiftKey === true
       const bypass = event.nativeEvent?.altKey === true || bypassSnap
 
@@ -365,8 +367,9 @@ const DoorTool: React.FC = () => {
         return
       }
 
-      const side = getSideFromNormal(event.normal)
-      const itemRotation = calculateItemRotation(event.normal)
+      const faceSide = getSideFromNormal(event.normal)
+      const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
+      const itemRotation = calculateItemRotation(event.normal) + (sideFlip ? Math.PI : 0)
       const bypassSnap = event.nativeEvent?.shiftKey === true
       const bypass = event.nativeEvent?.altKey === true || bypassSnap
 
@@ -387,99 +390,30 @@ const DoorTool: React.FC = () => {
 
     const onWallLeave = () => {
       if (hostKind !== 'wall') return
+      lastWallEvent = null
       destroyDraft()
       hideCursor()
       hostKind = null
     }
 
-    // ── Floor proximity (magnetic snap) ─────────────────────────────
-    // The ghost follows the cursor over the floor and snaps onto the nearest
-    // wall within range, like moving an item. A wall/roof mesh hover owns the
-    // frame instead (hostKind), and grid events fire during camera drag, so
-    // both are gated here.
-    const onGridMoveProximity = (event: GridEvent) => {
+    // ── Floor free-follow ───────────────────────────────────────────
+    // Over open floor the ghost follows the cursor like a moving item. It does
+    // NOT snap from proximity — snapping engages only when the cursor ray
+    // actually hovers a wall (onWallHover) or roof face (onRoofHover).
+    const onGridFreeFollow = (event: GridEvent) => {
       if (useViewer.getState().cameraDragging) return
       // A wall/roof mesh handler processed this exact pointermove (R3F + the
-      // grid raycast share the source DOM event's timeStamp) — let it own the
-      // frame. This works regardless of which handler fires first: if the wall
-      // handler ran first this tick, hostKind is already 'wall'/'roof' and the
-      // timeStamps match; if grid runs first, the timeStamps still match so we
-      // defer and the wall handler applies authoritatively right after.
+      // grid raycast share the source DOM event's timeStamp) — it owns the
+      // frame and has snapped the draft, so skip the floor follow this tick.
       const ts = event.nativeEvent?.timeStamp ?? -1
       if (ts === lastMeshEventTime) return
-      // Fresh frame with no wall/roof event: the cursor left those meshes.
-      // Clear any stale ownership (a leave can be missed during a camera drag,
-      // when node events are suppressed but grid:move keeps firing).
-      if (hostKind === 'wall' || hostKind === 'roof') hostKind = null
-
+      // Fresh floor-only frame: the cursor is off any wall/roof. Drop any draft
+      // and free-follow the cursor with the invalid (unplaceable) ghost.
+      hostKind = null
+      lastWallEvent = null
       const [x, y, z] = event.localPosition
-      const levelId = getLevelId()
-      if (!levelId) {
-        destroyDraft()
-        hostKind = null
-        lastSnapKey = null
-        showGhostAt([x, y + FALLBACK_HEIGHT / 2, z])
-        return
-      }
-
-      const bypassSnap = event.nativeEvent?.shiftKey === true
-      const hit = findClosestWallInPlan([x, z], useScene.getState().nodes, levelId as AnyNodeId)
-      if (!hit) {
-        // Beyond snap range — free-follow the cursor as an invalid ghost.
-        destroyDraft()
-        hostKind = null
-        lastSnapKey = null
-        showGhostAt([x, y + FALLBACK_HEIGHT / 2, z])
-        return
-      }
-
-      hostKind = 'proximity'
-      // Wireframe outline orientation: mirror calculateCursorRotation's
-      // normal→world mapping, derived from the wall direction + hit side.
-      const wallAngle = Math.atan2(hit.dirY, hit.dirX)
-      const cursorRotationY = hit.side === 'front' ? Math.PI - wallAngle : -wallAngle
-
-      const { clampedX } = applyWallTarget({
-        wall: hit.wall,
-        rawLocalX: hit.localX,
-        side: hit.side,
-        itemRotation: hit.itemRotation,
-        cursorRotationY,
-        bypass: event.nativeEvent?.altKey === true || bypassSnap,
-        bypassSnap,
-      })
-
-      // Bucket the along-wall position to ~5cm so the snap cue fires on entry
-      // and on each meaningful slide step, not on every sub-cm mouse jitter.
-      const snapKey = `${hit.wall.id}:${Math.round(clampedX * 20)}`
-      if (!bypassSnap && snapKey !== lastSnapKey) triggerSFX('sfx:grid-snap')
-      lastSnapKey = snapKey
-    }
-
-    const onGridClick = (event: GridEvent) => {
-      // wall:click / roof:click own a commit when the cursor is on those
-      // meshes; only the floor proximity snap commits here.
-      if (hostKind !== 'proximity' || !draftRef.current) return
-      const levelId = getLevelId()
-      if (!levelId) return
-
-      const [x, , z] = event.localPosition
-      const hit = findClosestWallInPlan([x, z], useScene.getState().nodes, levelId as AnyNodeId)
-      if (!hit) return
-
-      const bypassSnap = event.nativeEvent?.shiftKey === true
-      const { clampedX, clampedY, valid } = resolveWallPlacement(
-        hit.wall,
-        hit.localX,
-        draftRef.current.width,
-        draftRef.current.height,
-        event.nativeEvent?.altKey === true || bypassSnap,
-        bypassSnap,
-        draftRef.current.id,
-      )
-      if (!valid) return
-
-      commitDoorAtWall(hit.wall, clampedX, clampedY, hit.side, hit.itemRotation)
+      destroyDraft()
+      showGhostAt([x, y + FALLBACK_HEIGHT / 2, z])
     }
 
     // ── Roof-segment wall faces ─────────────────────────────────────
@@ -608,7 +542,21 @@ const DoorTool: React.FC = () => {
       destroyDraft()
       hideCursor()
       hostKind = null
-      lastSnapKey = null
+    }
+
+    // R flips the door's facing side mid-placement (front ↔ back), like the
+    // committed-selected R flip. Only meaningful while snapped to a wall (the
+    // off-wall ghost has no orientation), so it acts only then — re-applying
+    // the last wall hover so the snapped preview flips live.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'r' && e.key !== 'R') return
+      if (!lastWallEvent) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      e.preventDefault()
+      sideFlip = !sideFlip
+      triggerSFX('sfx:item-rotate')
+      onWallHover(lastWallEvent)
     }
 
     emitter.on('wall:enter', onWallHover)
@@ -619,9 +567,9 @@ const DoorTool: React.FC = () => {
     emitter.on('roof:move', onRoofHover)
     emitter.on('roof:click', onRoofClick)
     emitter.on('roof:leave', onRoofLeave)
-    emitter.on('grid:move', onGridMoveProximity)
-    emitter.on('grid:click', onGridClick)
+    emitter.on('grid:move', onGridFreeFollow)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('keydown', onKeyDown)
 
     return () => {
       destroyDraft()
@@ -636,9 +584,9 @@ const DoorTool: React.FC = () => {
       emitter.off('roof:move', onRoofHover)
       emitter.off('roof:click', onRoofClick)
       emitter.off('roof:leave', onRoofLeave)
-      emitter.off('grid:move', onGridMoveProximity)
-      emitter.off('grid:click', onGridClick)
+      emitter.off('grid:move', onGridFreeFollow)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown)
     }
   }, [])
 

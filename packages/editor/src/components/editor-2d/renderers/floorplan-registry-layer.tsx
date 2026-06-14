@@ -506,7 +506,26 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         if (live) {
           const floorPlaced = def?.capabilities?.floorPlaced
           const hasPosition = Array.isArray((node as { position?: unknown }).position)
-          if (floorPlaced && hasPosition) {
+          if (node.type === 'door' || node.type === 'window') {
+            // Door / window movers publish WALL-LOCAL live transforms
+            // ([along-wall x, sill y, 0], wall-local Y rotation) — see
+            // wiki/architecture/tools.md. The mover only writes
+            // `useScene.updateNode` on a wall CHANGE, so a same-wall slide
+            // updates the 3D mesh imperatively but never the scene node —
+            // without applying the live transform here the 2D symbol stays
+            // frozen while the cursor slides. Merge the wall-local position +
+            // rotation onto the node but KEEP `parentId` (the wall) so
+            // `buildDoorFloorplan` still resolves `ctx.parent` and draws the
+            // real swing-arc / pane symbol at the live spot.
+            const r = (node as { rotation?: unknown }).rotation
+            effectiveNode = {
+              ...node,
+              position: live.position,
+              rotation: Array.isArray(r)
+                ? [(r[0] as number) ?? 0, live.rotation, (r[2] as number) ?? 0]
+                : r,
+            } as AnyNode
+          } else if (floorPlaced && hasPosition) {
             effectiveNode = applyPositionLiveTransform(node, live)
           } else if (node.type === 'slab' || node.type === 'ceiling' || node.type === 'zone') {
             const dx = live.position[0]
