@@ -12,12 +12,27 @@ import {
   DoubleSide,
   ExtrudeGeometry,
   type Group,
+  type Intersection,
+  Mesh,
+  type Raycaster,
   Shape,
   TorusGeometry,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import useEditor from '../../../store/use-editor'
+
+// While a press-drag move is in flight (`placementDragMode`), the move tool
+// owns the pointer and the handle rig rides the moving node — so a handle hit
+// area would sit under the cursor and starve the tool's surface raycast
+// (`wall:move` for openings, `grid:move` for free movers), freezing the drag.
+// Make every handle hit area inert for the duration; the indicator mesh still
+// renders (it's already NO_RAYCAST + depthTest off) so the grip stays visible.
+function hitAreaRaycast(this: Mesh, raycaster: Raycaster, intersects: Intersection[]): void {
+  if (useEditor.getState().placementDragMode) return
+  Mesh.prototype.raycast.call(this, raycaster, intersects)
+}
 
 export const ARROW_SCALE = 0.65
 export const ARROW_COLOR = '#8381ed'
@@ -382,6 +397,7 @@ export function InvisibleHandleHitArea({
       onPointerDown={onPointerDown}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
+      raycast={hitAreaRaycast}
       renderOrder={HIT_AREA_RENDER_ORDER}
       scale={scale}
     />

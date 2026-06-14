@@ -70,6 +70,10 @@ const _resizePositionW = new Vector3()
 const _resizeRay = new Ray()
 const _resizeRayW = new Vector3()
 
+// Tilt that stands a flat XZ-plane move cross up into a node's facing plane
+// (its local XY = a wall face) for `plane: 'node-normal'` handles.
+const NODE_NORMAL_TILT: [number, number, number] = [Math.PI / 2, 0, 0]
+
 function axisVector(axis: 'x' | 'y' | 'z', target: Vector3) {
   target.set(0, 0, 0)
   if (axis === 'x') target.x = 1
@@ -1230,7 +1234,7 @@ function TranslateArrow({
 
   // The cross is built flat in the XZ plane. On a wall, tilt it up about X so
   // it lies in the item-local XY plane (= the wall face).
-  const iconRotation: [number, number, number] = isWallPlane ? [Math.PI / 2, 0, 0] : [0, 0, 0]
+  const iconRotation: [number, number, number] = isWallPlane ? NODE_NORMAL_TILT : [0, 0, 0]
 
   return (
     <HandleArrow
@@ -1288,16 +1292,20 @@ function TapActionArrow({
     )
   }
 
-  // Default 'arrow' shape — the standard chevron.
   const baseScale = zoom * ARROW_SCALE
+  // A `move-cross` with `plane: 'node-normal'` stands up into the node's facing
+  // plane (a wall face) like the door / window / wall-item move grips; other
+  // tap-actions keep their in-plane `rotationY`.
+  const rotation: [number, number, number] =
+    descriptor.plane === 'node-normal' ? NODE_NORMAL_TILT : [0, rotationY, 0]
   return (
     <HandleArrow
       cursor={cursor}
       hover={isHovered}
       onHoverChange={setIsHovered}
       onPointerDown={onActivate}
-      placement={{ position, rotation: [0, rotationY, 0], baseScale }}
-      shape="chevron"
+      placement={{ position, rotation, baseScale }}
+      shape={shape === 'move-cross' ? 'move-cross' : 'chevron'}
     />
   )
 }
