@@ -4767,6 +4767,11 @@ export function FloorplanPanel({
   )
   const [stairBuildPreviewPoint, setStairBuildPreviewPoint] = useState<WallPlanPoint | null>(null)
   const [stairBuildPreviewRotation, setStairBuildPreviewRotation] = useState(0)
+  // Plan-space cursor point of a door/window placement ghost while it is NOT
+  // over a wall — drives a loose rectangle footprint that follows the cursor
+  // (the 2D mirror of the 3D free-follow), so it's obvious what's being placed
+  // before it snaps to a wall. Null while snapped to a wall or not placing.
+  const [openingGhostPoint, setOpeningGhostPoint] = useState<WallPlanPoint | null>(null)
   const [isSpacePanPressed, setIsSpacePanPressed] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
   const [isRotatingFloorplan, setIsRotatingFloorplan] = useState(false)
@@ -5501,6 +5506,24 @@ export function FloorplanPanel({
 
     return 0
   }, [isWindowBuildActive, movingNode, shiftPressed])
+  // Drop the loose opening ghost whenever opening placement ends (commit, tool
+  // change, mode switch, cancel) or the active level changes, so a stale
+  // rectangle never lingers on the wrong level.
+  useEffect(() => {
+    if (!isOpeningPlacementActive) setOpeningGhostPoint(null)
+  }, [isOpeningPlacementActive])
+  useEffect(() => {
+    setOpeningGhostPoint(null)
+  }, [levelId])
+  // Width of the loose opening ghost: the moving node's, or the kind default.
+  const openingGhostWidth =
+    movingOpeningType === 'door' || (isDoorBuildActive && !movingOpeningType)
+      ? movingNode?.type === 'door'
+        ? movingNode.width
+        : 0.9
+      : movingNode?.type === 'window'
+        ? movingNode.width
+        : 1.5
   const isMarqueeSelectionToolActive =
     mode === 'select' &&
     floorplanSelectionTool === 'marquee' &&
@@ -8595,9 +8618,21 @@ export function FloorplanPanel({
           } else {
             emitter.emit('wall:move', wallEvent as any)
           }
-        } else if (hoveredWallIdRef.current) {
-          emitFloorplanWallLeave(hoveredWallIdRef.current)
-          hoveredWallIdRef.current = null
+          // Snapped to a wall — the real on-wall draft is the preview; drop
+          // the loose free-follow ghost.
+          setOpeningGhostPoint(null)
+        } else {
+          if (hoveredWallIdRef.current) {
+            emitFloorplanWallLeave(hoveredWallIdRef.current)
+            hoveredWallIdRef.current = null
+          }
+          // Off any wall — follow the cursor with a loose footprint rectangle
+          // (Shift bypasses the grid snap, matching the wall path).
+          const snappedPoint =
+            shiftPressed || event.shiftKey ? planPoint : getSnappedFloorplanPoint(planPoint)
+          setOpeningGhostPoint((previous) =>
+            previous && pointsEqual(previous, snappedPoint) ? previous : snappedPoint,
+          )
         }
         return
       }
@@ -10518,6 +10553,26 @@ export function FloorplanPanel({
                       the only placement visual in the floor plan. See
                       `floorplan-placement-preview-layer.tsx`. */}
                   <FloorplanPlacementPreviewLayer />
+                  {/* Loose footprint of a door/window being placed while it is
+                      NOT over a wall — follows the cursor (2D mirror of the 3D
+                      free-follow). Resolves to the full on-wall door/window
+                      symbol the moment it snaps (the registry layer draws that).
+                      A plain rectangle: off-wall there's no orientation/swing to
+                      show, just "this is what you're placing." */}
+                  {openingGhostPoint && (
+                    <g data-floorplan-opening-ghost opacity={0.5} pointerEvents="none">
+                      <rect
+                        x={openingGhostPoint[0] - openingGhostWidth / 2}
+                        y={openingGhostPoint[1] - 0.05}
+                        width={openingGhostWidth}
+                        height={0.1}
+                        fill="#ffffff"
+                        stroke="rgba(100, 116, 139, 0.82)"
+                        strokeWidth={1.25}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    </g>
+                  )}
                   {/* Bridge-wall ghost previews painted on top of the
                       registry layer (drag-time only); cleared by the
                       wall move's `commit()` so real bridges replace
