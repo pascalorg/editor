@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   collectAlignmentAnchors,
   emitter,
+  type GridEvent,
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
@@ -34,6 +35,7 @@ import {
   type RoofWallOpeningTarget,
   resolveRoofWallOpeningTarget,
 } from '../shared/roof-wall-opening-placement'
+import { findClosestWallInPlan } from '../shared/wall-attach-target'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
 
@@ -101,6 +103,15 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
     let currentHostId: string | null = movingWindowNode.parentId
     let committed = false
+    // Off-wall free-follow: over empty floor the window is parented to the
+    // level and tracks the cursor like an item. `freeFollowing` keeps grid:click
+    // from committing in open space; `lastMeshEventTime` defers the floor
+    // handler whenever a wall/roof mesh event owns the same pointermove.
+    let freeFollowing = false
+    let lastMeshEventTime = -1
+    // Along-wall snap cell of the last proximity snap, so the grid-snap sound
+    // fires when the window snaps onto a new spot, not on every move.
+    let lastSnapKey: string | null = null
     let dragAnchor: {
       wallId: string
       rawX: number
@@ -140,6 +151,17 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     const getLevelYOffset = () => {
       const id = getLevelId()
       return id ? (sceneRegistry.nodes.get(id as AnyNodeId)?.position.y ?? 0) : 0
+    }
+
+    // Sill-center height used while the window isn't on a wall (free-follow and
+    // proximity). Fresh preset clones are created at position [0,0,0], which
+    // would bury half the window below the floor; default such windows to a
+    // ~0.9m sill so the ghost floats at a realistic height. An existing window
+    // keeps its own sill.
+    const DEFAULT_SILL = 0.9
+    const getSillCenterY = () => {
+      const y = movingWindowNode.position[1]
+      return y > 0.1 ? y : DEFAULT_SILL + movingWindowNode.height / 2
     }
     const getSlabElevation = (wallEvent: WallEvent) =>
       spatialGridManager.getSlabElevationForWall(
@@ -287,11 +309,13 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const onWallEnter = (event: WallEvent) => {
+      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
       const target = resolveMoveTarget(event)
       if (!target) {
         onWallLeave()
         return
       }
+      freeFollowing = false
       lastTarget = target
       lastRoofEvent = null
       applyPreview(target)
@@ -299,6 +323,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const onWallMove = (event: WallEvent) => {
+      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
       if (!isValidWallSideFace(event.normal)) {
         onWallLeave()
         return
@@ -318,21 +343,17 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         onWallLeave()
         return
       }
+      freeFollowing = false
       lastTarget = target
       lastRoofEvent = null
       applyPreview(target)
       event.stopPropagation()
     }
 
-    const onWallClick = (event: WallEvent) => {
+    // Promote the moving window into its committed wall placement. Shared by
+    // the direct wall-mesh click and the floor proximity click.
+    const commitToWall = (target: NonNullable<typeof lastTarget>) => {
       if (committed) return
-      if (!isValidWallSideFace(event.normal)) return
-      if (isCurvedWall(event.node)) return
-      // Only interact with walls on the current level
-      if (event.node.parentId !== getLevelId()) return
-
-      const target = lastTarget?.wallId === event.node.id ? lastTarget : resolveMoveTarget(event)
-      if (!target?.valid) return
       committed = true
 
       let placedId: string
@@ -398,31 +419,166 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       hideCursor()
       useViewer.getState().setSelection({ selectedIds: [placedId] })
       exitMoveMode()
+    }
+
+    const onWallClick = (event: WallEvent) => {
+      if (committed) return
+      if (!isValidWallSideFace(event.normal)) return
+      if (isCurvedWall(event.node)) return
+      // Only interact with walls on the current level
+      if (event.node.parentId !== getLevelId()) return
+
+      const target = lastTarget?.wallId === event.node.id ? lastTarget : resolveMoveTarget(event)
+      if (!target?.valid) return
+      commitToWall(target)
       event.stopPropagation()
     }
 
     const onWallLeave = () => {
+      // The cursor left the wall mesh. Don't snap back to the origin/original
+      // here — the floor proximity handler (onGridMove) takes over on the same
+      // pointermove: it snaps to a nearby wall or free-follows the cursor, so
+      // the window never blinks back to the building origin between a wall and
+      // open floor. Revert is left to free-follow / cancel / commit.
       hideCursor()
       useLiveTransforms.getState().clear(movingWindowNode.id)
       dragAnchor = null
       lastTarget = null
       lastRoofEvent = null
-      if (isNew) return // No original to restore for duplicates
-      // Move mode: restore to original position while off-wall
-      if (currentHostId && currentHostId !== original.parentId) {
-        markHostDirty(currentHostId)
-      }
-      currentHostId = original.parentId
-      useScene.getState().updateNode(movingWindowNode.id, {
-        position: original.position,
-        rotation: original.rotation,
-        side: original.side,
-        parentId: original.parentId,
-        wallId: original.wallId,
-        roofSegmentId: original.roofSegmentId,
-        roofFace: original.roofFace,
+    }
+
+    // Snap the window onto a nearby wall from a plan-space proximity hit
+    // (cursor over the floor within range), reusing the wall preview path.
+    // The floor cursor carries no wall-face height, so the sill keeps the
+    // window's current Y (or the default it was created with).
+    const resolveProximityTarget = (
+      hit: NonNullable<ReturnType<typeof findClosestWallInPlan>>,
+      nativeEvent: GridEvent['nativeEvent'] | undefined,
+    ) => {
+      const bypassSnap = nativeEvent?.shiftKey === true
+      const bypass = nativeEvent?.altKey === true || bypassSnap
+      const wallAngle = Math.atan2(hit.dirY, hit.dirX)
+      const cursorRotation = hit.side === 'front' ? Math.PI - wallAngle : -wallAngle
+      const localX = resolveWallSlideAlignment({
+        wallNode: hit.wall,
+        rawLocalX: hit.localX,
+        width: movingWindowNode.width,
+        candidates: alignmentCandidates,
+        bypass,
+        bypassSnap,
       })
-      if (original.parentId) markHostDirty(original.parentId)
+      const sillCenterY = getSillCenterY()
+      const { clampedX, clampedY } = clampToWall(
+        hit.wall,
+        localX,
+        sillCenterY,
+        movingWindowNode.width,
+        movingWindowNode.height,
+      )
+      const valid = !hasWallChildOverlap(
+        hit.wall.id,
+        clampedX,
+        clampedY,
+        movingWindowNode.width,
+        movingWindowNode.height,
+        movingWindowNode.id,
+      )
+      const syntheticEvent = {
+        node: hit.wall,
+        normal: undefined,
+        localPosition: [clampedX, clampedY, 0],
+      } as unknown as WallEvent
+      return {
+        wallNode: hit.wall,
+        wallId: hit.wall.id,
+        side: hit.side,
+        itemRotation: hit.itemRotation,
+        cursorRotation,
+        clampedX,
+        clampedY,
+        valid,
+        event: syntheticEvent,
+      }
+    }
+
+    // Free-follow: the window rides the cursor over empty floor, parented to
+    // the level like an item node, kept at a sensible sill height. No wall to
+    // attach to, so it is not committable here.
+    const freeFollowAt = (localX: number, localZ: number) => {
+      freeFollowing = true
+      lastTarget = null
+      lastRoofEvent = null
+      lastSnapKey = null
+      hideCursor()
+      useLiveTransforms.getState().clear(movingWindowNode.id)
+      const levelId = getLevelId()
+      const sillCenterY = getSillCenterY()
+      if (currentHostId !== levelId) {
+        if (currentHostId && currentHostId !== levelId) markHostDirty(currentHostId)
+        useScene.getState().updateNode(movingWindowNode.id, {
+          position: [localX, sillCenterY, localZ],
+          rotation: [0, 0, 0],
+          parentId: levelId ?? undefined,
+          wallId: undefined,
+          roofSegmentId: undefined,
+          roofFace: undefined,
+        })
+        currentHostId = levelId
+      } else {
+        useScene.getState().updateNode(movingWindowNode.id, {
+          position: [localX, sillCenterY, localZ],
+          rotation: [0, 0, 0],
+        })
+      }
+    }
+
+    const onGridMove = (event: GridEvent) => {
+      if (committed) return
+      if (useViewer.getState().cameraDragging) return
+      // A wall/roof mesh handler owns this exact pointermove (shared DOM
+      // timeStamp): let it drive. Order-independent and self-healing.
+      if (event.nativeEvent?.timeStamp === lastMeshEventTime) return
+
+      const levelId = getLevelId()
+      const [x, , z] = event.localPosition
+      if (!levelId) {
+        freeFollowAt(x, z)
+        return
+      }
+
+      const hit = findClosestWallInPlan([x, z], useScene.getState().nodes, levelId as AnyNodeId)
+      if (!hit) {
+        freeFollowAt(x, z)
+        return
+      }
+
+      freeFollowing = false
+      const target = resolveProximityTarget(hit, event.nativeEvent)
+      lastTarget = target
+      lastRoofEvent = null
+      applyPreview(target)
+
+      // Snap cue when the window lands on a new wall / along-wall cell (~5cm),
+      // the same feedback the on-grid item move plays. Shift bypasses snapping.
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const snapKey = `${target.wallId}:${Math.round(target.clampedX * 20)}`
+      if (!bypassSnap && snapKey !== lastSnapKey) triggerSFX('sfx:grid-snap')
+      lastSnapKey = snapKey
+    }
+
+    const onGridClick = (event: GridEvent) => {
+      // Free-following over open floor isn't committable (a window needs a
+      // wall). wall:click / roof:click own the commit when over those meshes.
+      if (committed || freeFollowing) return
+      if (event.nativeEvent?.timeStamp === lastMeshEventTime) return
+      const levelId = getLevelId()
+      if (!levelId) return
+      const [x, , z] = event.localPosition
+      const hit = findClosestWallInPlan([x, z], useScene.getState().nodes, levelId as AnyNodeId)
+      if (!hit) return
+      const target = resolveProximityTarget(hit, event.nativeEvent)
+      if (!target.valid) return
+      commitToWall(target)
     }
 
     // ── Roof-segment wall faces ─────────────────────────────────────
@@ -449,12 +605,14 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const onRoofHover = (event: RoofEvent) => {
+      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
       const target = resolveRoofMoveTarget(event)
       if (!target) {
         onRoofLeave()
         return
       }
       // Wall-frame drag anchor / live transform don't apply on a roof face.
+      freeFollowing = false
       dragAnchor = null
       lastTarget = null
       lastRoofEvent = event
@@ -553,26 +711,13 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const onRoofLeave = () => {
+      // Mirror onWallLeave: don't revert to origin here — onGridMove takes
+      // over on the same pointermove (snap to a nearby wall or free-follow).
       hideCursor()
       useLiveTransforms.getState().clear(movingWindowNode.id)
       dragAnchor = null
       lastTarget = null
       lastRoofEvent = null
-      if (isNew) return
-      if (currentHostId && currentHostId !== original.parentId) {
-        markHostDirty(currentHostId)
-      }
-      currentHostId = original.parentId
-      useScene.getState().updateNode(movingWindowNode.id, {
-        position: original.position,
-        rotation: original.rotation,
-        side: original.side,
-        parentId: original.parentId,
-        wallId: original.wallId,
-        roofSegmentId: original.roofSegmentId,
-        roofFace: original.roofFace,
-      })
-      if (original.parentId) markHostDirty(original.parentId)
     }
 
     const onCancel = () => {
@@ -600,8 +745,11 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
     const onPlacementDragPointerUp = (event: PointerEvent) => {
       if (!consumePlacementDragRelease(event)) return
-      if (lastTarget) {
-        onWallClick(lastTarget.event)
+      // Free-following over open floor can't commit (no wall). A wall target
+      // (from a real wall hover or a proximity snap) commits via commitToWall;
+      // the synthetic proximity event would fail onWallClick's normal check.
+      if (lastTarget?.valid && !freeFollowing) {
+        commitToWall(lastTarget)
         return
       }
       if (lastRoofEvent) onRoofClick(lastRoofEvent)
@@ -615,6 +763,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     emitter.on('roof:move', onRoofHover)
     emitter.on('roof:click', onRoofClick)
     emitter.on('roof:leave', onRoofLeave)
+    emitter.on('grid:move', onGridMove)
+    emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('pointerup', onPlacementDragPointerUp)
 
@@ -653,6 +803,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       emitter.off('roof:move', onRoofHover)
       emitter.off('roof:click', onRoofClick)
       emitter.off('roof:leave', onRoofLeave)
+      emitter.off('grid:move', onGridMove)
+      emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
