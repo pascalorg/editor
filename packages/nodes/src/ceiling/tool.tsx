@@ -6,6 +6,7 @@ import {
   type GridEvent,
   type LevelNode,
   snapPointAlongAngleRay,
+  snapPointToGrid,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -93,9 +94,9 @@ export const CeilingTool: React.FC = () => {
       if (!(cursorRef.current && gridCursorRef.current)) return
       const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
       const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
-      const gridX = Math.round(rawPoint[0] * 2) / 2
-      const gridZ = Math.round(rawPoint[1] * 2) / 2
-      const gridPosition: [number, number] = bypassSnap ? rawPoint : [gridX, gridZ]
+      const gridPosition: [number, number] = bypassSnap
+        ? rawPoint
+        : [...snapPointToGrid(rawPoint, useEditor.getState().gridSnapStep)]
       setCursorPosition(gridPosition)
       setLevelY(event.localPosition[1])
       const ceilingY = event.localPosition[1] + CEILING_HEIGHT

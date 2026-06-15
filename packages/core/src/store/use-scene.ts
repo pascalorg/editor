@@ -21,6 +21,7 @@ import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { healSceneNodes } from '../utils/heal-scene-graph'
 import * as nodeActions from './actions/node-actions'
 import { resetSceneHistoryPauseDepth } from './history-control'
 
@@ -414,7 +415,10 @@ function migrateRoofSurfaceMaterials(node: Record<string, any>) {
 }
 
 function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
-  const patchedNodes = { ...nodes }
+  // Repair pre-existing corruption (null children, zero-length walls) before
+  // any per-type migration runs, so already-saved scenes load cleanly.
+  const { nodes: healed } = healSceneNodes(nodes)
+  const patchedNodes = { ...healed } as Record<string, any>
   for (const [id, node] of Object.entries(patchedNodes)) {
     // 1. Item scale migration
     if (node.type === 'item' && !('scale' in node)) {
