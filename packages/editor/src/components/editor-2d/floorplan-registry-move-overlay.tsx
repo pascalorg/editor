@@ -389,11 +389,32 @@ export function FloorplanRegistryMoveOverlay() {
     const entry = scene.querySelector(`[data-node-id="${movingNode.id}"]`) as SVGGElement | null
     if (!entry) return
 
-    const originalPosition = ((
-      movingNode as unknown as {
-        position?: [number, number, number]
-      }
-    ).position ?? [0, 0, 0]) as [number, number, number]
+    // Polyline kinds (duct / pipe / lineset) carry a `path`, not a
+    // `position` — translating a `position` here would write a field their
+    // schema ignores and snap the run back. For those we move every path
+    // point by the cursor delta and commit the translated `path` instead.
+    // The reference origin is the path centre so the SVG `translate` delta
+    // matches the geometry's actual location (which isn't at [0,0,0]).
+    const originalPath =
+      'path' in movingNode && Array.isArray((movingNode as { path?: unknown }).path)
+        ? (movingNode as { path: [number, number, number][] }).path.map(
+            (p) => [...p] as [number, number, number],
+          )
+        : null
+    const originalPosition: [number, number, number] = originalPath
+      ? (() => {
+          let cx = 0
+          let cz = 0
+          for (const p of originalPath) {
+            cx += p[0]
+            cz += p[2]
+          }
+          const n = originalPath.length || 1
+          return [cx / n, originalPath[0]?.[1] ?? 0, cz / n]
+        })()
+      : (((movingNode as unknown as { position?: [number, number, number] }).position ?? [
+          0, 0, 0,
+        ]) as [number, number, number])
     const isFreshPlacement = isFreshPlacementMetadata(
       (movingNode as { metadata?: unknown }).metadata,
     )
@@ -410,12 +431,33 @@ export function FloorplanRegistryMoveOverlay() {
       const otherId = el.getAttribute('data-node-id')
       if (!otherId || otherId === movingNode.id) continue
       const b = (el as SVGGraphicsElement).getBBox()
-      if (b.width <= 0 || b.height <= 0) continue
+      // Skip only fully-degenerate (point) entries. A thin run (duct / pipe /
+      // lineset drawn as a line) has one zero dimension but is still a valid
+      // alignment target — its endpoints become line anchors.
+      if (b.width <= 0 && b.height <= 0) continue
       candidateAnchors.push(...bboxAnchors(otherId, b.x, b.y, b.x + b.width, b.y + b.height))
     }
 
     let lastSnapped: [number, number] | null = null
     let dragAnchor: [number, number] | null = null
+
+    // Footprint bounding box drawn around the dragged entry — the 2D
+    // counterpart of the 3D `DragBoundingBox`, so a moved / duplicated node
+    // reads the same in both views. Green wireframe rect over the entry's
+    // own bbox, translated in lockstep with it. The entry stays visible the
+    // whole drag (no hide-until-move) so it never appears to vanish.
+    const SVG_NS = 'http://www.w3.org/2000/svg'
+    const boxEl = document.createElementNS(SVG_NS, 'rect')
+    boxEl.setAttribute('x', String(movingLocalBBox.x))
+    boxEl.setAttribute('y', String(movingLocalBBox.y))
+    boxEl.setAttribute('width', String(movingLocalBBox.width))
+    boxEl.setAttribute('height', String(movingLocalBBox.height))
+    boxEl.setAttribute('fill', 'none')
+    boxEl.setAttribute('stroke', '#22c55e')
+    boxEl.setAttribute('stroke-width', '1.5')
+    boxEl.setAttribute('vector-effect', 'non-scaling-stroke')
+    boxEl.setAttribute('pointer-events', 'none')
+    scene.appendChild(boxEl)
 
     const onMove = (event: PointerEvent) => {
       // Same target guard as Path 1 — pointer must be over the floor
@@ -487,6 +529,7 @@ export function FloorplanRegistryMoveOverlay() {
       const dx = finalX - originalPosition[0]
       const dz = finalZ - originalPosition[2]
       entry.setAttribute('transform', `translate(${dx} ${dz})`)
+      boxEl.setAttribute('transform', `translate(${dx} ${dz})`)
       lastSnapped = [finalX, finalZ]
     }
 
@@ -500,6 +543,33 @@ export function FloorplanRegistryMoveOverlay() {
       const [, oldY] = originalPosition
       setMovingNodeOrigin('2d')
       let selectedId = movingNode.id as AnyNodeId
+      if (originalPath) {
+        // Polyline kinds: shift every point by the committed delta and
+        // write `path`. Strip the fresh-placement flags on first drop.
+        const dx = sx - originalPosition[0]
+        const dz = sz - originalPosition[2]
+        const nextPath = originalPath.map(
+          ([x, y, z]) => [x + dx, y, z + dz] as [number, number, number],
+        )
+        useScene.getState().updateNode(
+          movingNode.id as AnyNodeId,
+          (isFreshPlacement
+            ? {
+                path: nextPath,
+                metadata: stripPlacementMetadataFlags(
+                  (movingNode as { metadata?: unknown }).metadata,
+                ),
+                visible: true,
+              }
+            : { path: nextPath }) as Partial<AnyNode>,
+        )
+        useViewer.getState().setSelection({ selectedIds: [movingNode.id as AnyNodeId] })
+        entry.removeAttribute('transform')
+        useAlignmentGuides.getState().clear()
+        setMovingNode(null)
+        swallowNextClick()
+        return
+      }
       if (isFreshPlacement) {
         selectedId =
           commitFreshPlacementSubtree(
@@ -552,6 +622,10 @@ export function FloorplanRegistryMoveOverlay() {
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('keydown', onKey)
       entry.removeAttribute('transform')
+      // Always un-hide on teardown so a committed copy shows and a
+      // never-revealed entry doesn't leak a hidden style onto a reused node.
+      entry.style.visibility = ''
+      boxEl.remove()
       useAlignmentGuides.getState().clear()
     }
   }, [isActive, movingNode, setMovingNode, setMovingNodeOrigin, hasMoveTarget, def])

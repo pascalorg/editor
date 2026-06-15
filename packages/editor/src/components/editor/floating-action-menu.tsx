@@ -508,10 +508,25 @@ export function FloatingActionMenu() {
           // item without clicking" bug. (Item has its own
           // draft-committing move tool, so it must skip the generic
           // registry auto-create branch below.)
+        } else if (
+          duplicate.type === 'duct-segment' ||
+          duplicate.type === 'duct-fitting' ||
+          duplicate.type === 'pipe-segment' ||
+          duplicate.type === 'lineset'
+        ) {
+          // Duct runs & fittings, DWV pipe runs, and refrigerant linesets use
+          // pure drag-to-place: NO node is inserted into the scene until the
+          // commit click. `setMovingNode` below hands the clone (with
+          // `metadata.isNew`) to its ghost tool (`MoveDuctSegmentTool` /
+          // `MoveDuctFittingTool` / `MovePipeSegmentTool` / `MoveLinesetTool`),
+          // which previews a translucent copy inside a footprint bounding box
+          // on the cursor and calls `createNode` on the drop click.
+          // Pre-creating here would drop a copy before any click — the
+          // "auto-places it" bug.
         } else if (nodeRegistry.has(duplicate.type)) {
-          // Registry-driven kinds: offset the position slightly so the
-          // duplicate doesn't overlap exactly, then create + hand to the
-          // move tool. Mirrors the roof-segment / stair-segment behavior.
+          // Registry-driven kinds: offset slightly so the duplicate doesn't
+          // overlap exactly, then create + hand to the move tool. Mirrors the
+          // roof-segment / stair-segment behavior.
           if ('position' in duplicate && Array.isArray((duplicate as any).position)) {
             const pos = (duplicate as { position: [number, number, number] }).position
             ;(duplicate as { position: [number, number, number] }).position = [
@@ -519,6 +534,12 @@ export function FloatingActionMenu() {
               pos[1],
               pos[2] + 1,
             ]
+          } else if ('path' in duplicate && Array.isArray((duplicate as any).path)) {
+            // Other polyline kinds (pipe / lineset) carry a `path`, not a
+            // `position`. Create the copy HIDDEN so nothing is auto-placed:
+            // their shared path mover reveals it as a cursor-following
+            // preview on the first mouse move and commits on the next click.
+            ;(duplicate as { visible?: boolean }).visible = false
           }
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
         }

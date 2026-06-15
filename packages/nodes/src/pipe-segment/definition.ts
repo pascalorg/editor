@@ -88,6 +88,11 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
   // which the viewer package mounts for the read-only route.
   affordanceTools: {
     selection: () => import('./selection'),
+    // Ghost-preview duplicate / move (the plumbing sibling of duct-segment's
+    // mover). Duplicate is pure drag-to-place: a translucent copy of the run,
+    // wrapped in a footprint bounding box, follows the cursor and only lands
+    // on the commit click — nothing is inserted into the scene before that.
+    move: () => import('./move-tool'),
   },
 
   tool: () => import('./tool'),

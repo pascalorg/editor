@@ -163,8 +163,10 @@ const LinesetTool = () => {
       const anchor = altAnchorRef.current
       const last = draftRef.current.at(-1)
       if (!anchor || !last) return null
+      const step = useEditor.getState().gridSnapStep
       const dy = (anchor.clientY - clientY) / ALT_PIXELS_PER_METER
-      const y = Math.min(ALT_Y_MAX_M, Math.max(ALT_Y_MIN_M, anchor.baseY + dy))
+      const snappedDy = snap(dy, step)
+      const y = Math.min(ALT_Y_MAX_M, Math.max(ALT_Y_MIN_M, anchor.baseY + snappedDy))
       return [last[0], y, last[2]]
     }
 

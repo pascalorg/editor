@@ -102,6 +102,12 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
   // editor's SelectionAffordanceManager rather than `def.system`.
   affordanceTools: {
     selection: () => import('./selection'),
+    // Ghost-preview duplicate / move. Duplicate is pure drag-to-place: a
+    // translucent copy of the fitting (built from its real geometry, at its
+    // own rotation, so an elbow / riser stays properly aligned) follows the
+    // cursor and only lands on the commit click. Takes priority over
+    // `capabilities.movable` in the MoveTool dispatcher.
+    move: () => import('./move-tool'),
   },
 
   tool: () => import('./tool'),

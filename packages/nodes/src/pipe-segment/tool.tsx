@@ -319,8 +319,10 @@ const PipeSegmentTool = () => {
       const anchor = altAnchorRef.current
       const start = startRef.current
       if (!anchor || !start) return null
+      const step = useEditor.getState().gridSnapStep
       const dy = (anchor.clientY - clientY) / ALT_PIXELS_PER_METER
-      const y = Math.min(ALT_Y_MAX_M, Math.max(ALT_Y_MIN_M, anchor.baseY + dy))
+      const snappedDy = snap(dy, step)
+      const y = Math.min(ALT_Y_MAX_M, Math.max(ALT_Y_MIN_M, anchor.baseY + snappedDy))
       return [start[0], y, start[2]]
     }
 
