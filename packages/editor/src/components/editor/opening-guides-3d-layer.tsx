@@ -2,8 +2,8 @@
 
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { memo, useEffect, useMemo } from 'react'
-import { BufferGeometry, Line as ThreeLine, Vector3 } from 'three'
+import { memo, useEffect, useLayoutEffect, useMemo } from 'react'
+import { BufferGeometry, Float32BufferAttribute, Line as ThreeLine } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import useOpeningGuides, {
@@ -56,8 +56,8 @@ export const OpeningGuides3DLayer = memo(function OpeningGuides3DLayer() {
   if (guides.length === 0) return null
   return (
     <>
-      {guides.map((guide, i) => (
-        <OpeningGuide guide={guide} key={i} unit={unit} />
+      {guides.map((guide) => (
+        <OpeningGuide guide={guide} key={guide.id} unit={unit} />
       ))}
     </>
   )
@@ -114,17 +114,31 @@ function GuideSegment({
   to: OpeningGuideVec3
   material: LineBasicNodeMaterial
 }) {
-  // Build a concrete THREE.Line and mount it via <primitive>: the intrinsic
-  // <line> JSX element collides with React's SVG <line>, so <primitive> keeps
-  // the typing clean and gives us direct control of layers + renderOrder.
-  const line = useMemo(() => {
-    const geometry = new BufferGeometry().setFromPoints([new Vector3(...from), new Vector3(...to)])
-    const object = new ThreeLine(geometry, material)
-    object.frustumCulled = false
-    object.layers.set(EDITOR_LAYER)
-    object.renderOrder = 1000
-    return object
-  }, [from, to, material])
+  // Build the THREE.Line once with a preallocated 2-point position buffer and
+  // mount it via <primitive> (the intrinsic <line> JSX element collides with
+  // React's SVG <line>). `material` is a module-level constant, so this memo
+  // runs exactly once per mounted slot; subsequent drag ticks mutate the
+  // existing buffer in place via the layout effect below rather than rebuilding
+  // the geometry, line, and GPU buffer every frame.
+  const { line, position } = useMemo(() => {
+    const position = new Float32BufferAttribute(new Float32Array(6), 3)
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', position)
+    const line = new ThreeLine(geometry, material)
+    line.frustumCulled = false
+    line.layers.set(EDITOR_LAYER)
+    line.renderOrder = 1000
+    return { line, position }
+  }, [material])
+
+  const [fx, fy, fz] = from
+  const [tx, ty, tz] = to
+  useLayoutEffect(() => {
+    position.setXYZ(0, fx, fy, fz)
+    position.setXYZ(1, tx, ty, tz)
+    position.needsUpdate = true
+  }, [position, fx, fy, fz, tx, ty, tz])
+
   useEffect(() => () => line.geometry.dispose(), [line])
   return <primitive object={line} />
 }

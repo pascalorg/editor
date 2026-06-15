@@ -702,6 +702,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     boxGeo.dispose()
     return geo
   }, [movingWindowNode])
+  useEffect(() => () => edgesGeo.dispose(), [edgesGeo])
 
   return (
     <group ref={cursorGroupRef} visible={false}>

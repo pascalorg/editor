@@ -22,7 +22,7 @@ import {
   useAlignmentGuides,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
@@ -585,10 +585,16 @@ const DoorTool: React.FC = () => {
     }
   }, [])
 
-  // Cursor geometry: door outline.
-  const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
-  const edgesGeo = new EdgesGeometry(boxGeo)
-  boxGeo.dispose()
+  // Cursor geometry: door outline. Static dims, so build it once and dispose on
+  // unmount rather than reallocating (and orphaning) an EdgesGeometry on every
+  // re-render during placement.
+  const edgesGeo = useMemo(() => {
+    const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
+    const geo = new EdgesGeometry(boxGeo)
+    boxGeo.dispose()
+    return geo
+  }, [])
+  useEffect(() => () => edgesGeo.dispose(), [edgesGeo])
 
   return (
     <group ref={cursorGroupRef} visible={false}>

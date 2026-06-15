@@ -105,10 +105,14 @@ export function publishOpeningGuides3D(args: {
 
   const out: OpeningGuide3D[] = []
 
+  // Stable `id`s keyed on the guide's semantic role (not list position) so the
+  // 3D layer can keep a persisting slot's element + `<Html>` pill mounted as the
+  // set churns each tick — see `OpeningGuide3D`.
   if (guides.sillHead) {
     if (guides.sillHead.sill > MIN_DIMENSION_M) {
       out.push({
         kind: 'dimension',
+        id: 'sill',
         from: toWorld(centerS, 0),
         to: toWorld(centerS, guides.sillHead.bottomY),
         value: guides.sillHead.sill,
@@ -117,6 +121,7 @@ export function publishOpeningGuides3D(args: {
     if (guides.sillHead.head > MIN_DIMENSION_M) {
       out.push({
         kind: 'dimension',
+        id: 'head',
         from: toWorld(centerS, guides.sillHead.topY),
         to: toWorld(centerS, wallHeight),
         value: guides.sillHead.head,
@@ -127,6 +132,7 @@ export function publishOpeningGuides3D(args: {
   for (const gap of guides.gaps) {
     out.push({
       kind: 'dimension',
+      id: `gap:${gap.side}`,
       from: toWorld(gap.fromS, centerY),
       to: toWorld(gap.toS, centerY),
       value: gap.distance,
@@ -140,6 +146,7 @@ export function publishOpeningGuides3D(args: {
       const hi = Math.max(centerS + width / 2, target.centerS + target.width / 2)
       out.push({
         kind: 'align-line',
+        id: 'vertical',
         from: toWorld(lo, guides.vertical.y),
         to: toWorld(hi, guides.vertical.y),
       })
@@ -147,13 +154,15 @@ export function publishOpeningGuides3D(args: {
   }
 
   if (guides.equalSpacing) {
-    for (const seg of guides.equalSpacing.segments) {
+    const { gap, segments } = guides.equalSpacing
+    segments.forEach((seg, i) => {
       out.push({
         kind: 'badge',
+        id: `spacing:${i}`,
         at: toWorld((seg.fromS + seg.toS) / 2, centerY),
-        value: guides.equalSpacing.gap,
+        value: gap,
       })
-    }
+    })
   }
 
   useOpeningGuides.getState().set(out)
