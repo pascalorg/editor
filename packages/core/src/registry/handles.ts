@@ -117,6 +117,14 @@ export type LinearResizeHandle<N> = {
   currentValue: (node: N) => number
   apply: (node: N, newValue: number, sceneApi: SceneApi) => Partial<N>
   /**
+   * Optional per-tick hook fired while this handle is being dragged, with the
+   * live (in-progress, override-merged) node. A pure side-channel for transient
+   * feedback — doors/windows use it to publish proximity / sill guides for the
+   * edge being resized. The return value is ignored; the resize itself is driven
+   * by `apply`.
+   */
+  onDrag?: (node: N, sceneApi: SceneApi) => void
+  /**
    * Cross-node redirect. By default the drag's live override + the
    * committed write both land on the SELECTED node. When this returns
    * another node's id, the editor publishes the override to / commits on

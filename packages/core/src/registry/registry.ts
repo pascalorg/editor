@@ -147,6 +147,20 @@ export function isRegistryMovable(kind: string): boolean {
 }
 
 /**
+ * Whether the kind has a move tool that MOUNTS in the 3D viewport — the
+ * generic `capabilities.movable` mover or a bespoke `affordanceTools.move`.
+ * Narrower than {@link isRegistryMovable}, which also accepts floorplan-only
+ * movers (e.g. zone) that have no 3D tool. Gates 3D direct move: Ctrl/Meta-drag
+ * and the move-cross grip. Kept beside `isRegistryMovable` so the 2D and 3D
+ * movability predicates can't drift apart.
+ */
+export function hasRegistry3DMoveTool(kind: string): boolean {
+  const def = nodeRegistry.get(kind)
+  if (!def) return false
+  return def.capabilities.movable !== undefined || def.affordanceTools?.move !== undefined
+}
+
+/**
  * Whether the kind can be saved as a reusable preset. Default: an
  * explicit `capabilities.presettable` boolean wins; otherwise the kind
  * is presettable iff it declares `def.parametrics`. Read by host apps

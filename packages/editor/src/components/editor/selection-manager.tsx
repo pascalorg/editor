@@ -1101,7 +1101,11 @@ export const SelectionManager = () => {
     }
 
     const onEnter = (event: NodeEvent) => {
-      if (boxSelectHandled) return
+      // A host-driven drag (handle resize/rotate) sets `inputDragging`.
+      // useNodeEvents now emits hover events during such a drag so surface
+      // move tools keep tracking the cursor — but paint preview must not fire
+      // mid-drag, so gate on `inputDragging` here too.
+      if (boxSelectHandled || useViewer.getState().inputDragging) return
 
       const interaction = getPaintInteraction(event)
       if (!interaction) return
@@ -1665,6 +1669,11 @@ export const SelectionManager = () => {
     if (movingNode || curvingWall || curvingFence) return
 
     const onEnter = (event: NodeEvent) => {
+      // A host-driven drag (handle resize/rotate, box-select) sets
+      // `inputDragging`. useNodeEvents still emits hover events during it so
+      // surface move tools keep tracking — but the select-hover outline must
+      // stay put, so don't repaint under the cursor mid-drag.
+      if (useViewer.getState().inputDragging) return
       const node = event.node
       const currentPhase = useEditor.getState().phase
 
@@ -1692,6 +1701,7 @@ export const SelectionManager = () => {
     }
 
     const onLeave = (event: NodeEvent) => {
+      if (useViewer.getState().inputDragging) return
       const nodeId = event?.node?.id
       if (nodeId && useViewer.getState().hoveredId === nodeId) {
         useViewer.setState({ hoveredId: null })

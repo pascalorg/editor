@@ -441,6 +441,20 @@ export type FloorplanGeometry =
       angle: number
     }
   /**
+   * Equal-spacing badge — a small accent pill marking one gap in a run of
+   * (near-)equally-spaced openings (the 2D counterpart of Figma's "=" distance
+   * chips). Emitted once per equal gap so the repeated value reads as a rhythm.
+   * `text` is the shared gap distance; `angle` orients the pill along the wall
+   * (the renderer auto-flips it upright).
+   */
+  | {
+      kind: 'equal-spacing-badge'
+      point: FloorplanPoint
+      text: string
+      /** Rotation in radians. */
+      angle: number
+    }
+  /**
    * Architect's dimension overlay — extension lines from the edge
    * endpoints out past the dimension line, two dimension line halves
    * with the label sitting in the gap, end ticks perpendicular to the

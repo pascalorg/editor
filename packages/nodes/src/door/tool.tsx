@@ -27,6 +27,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
+  clearOpeningGuides3D,
+  publishOpeningGuidesForWallEvent,
+} from '../shared/opening-guides-runtime'
+import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
   resolveRoofWallOpeningTarget,
@@ -118,6 +122,7 @@ const DoorTool: React.FC = () => {
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
       setFallbackPose(null)
     }
 
@@ -148,6 +153,7 @@ const DoorTool: React.FC = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       setFallbackPose({ position, rotationY: 0 })
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     const showRoofFallbackCursor = (event: RoofEvent) => {
@@ -254,6 +260,20 @@ const DoorTool: React.FC = () => {
         cursorRotationY,
         valid,
       )
+
+      if (draftRef.current) {
+        publishOpeningGuidesForWallEvent({
+          wall,
+          movingId: draftRef.current.id,
+          centerS: clampedX,
+          centerY: clampedY,
+          width,
+          height,
+          includeVertical: false,
+          levelYOffset: getLevelYOffset(),
+          slabElevation: getSlabElevationForWall(wall),
+        })
+      }
       return { clampedX, clampedY, valid }
     }
 
@@ -319,6 +339,7 @@ const DoorTool: React.FC = () => {
       triggerSFX('sfx:structure-build')
       alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     // ── Direct wall-mesh hover ──────────────────────────────────────
@@ -467,6 +488,8 @@ const DoorTool: React.FC = () => {
         useScene.getState().createNode(node, segment.id as AnyNodeId)
         draftRef.current = node
       }
+      // Opening guides are wall-specific; clear them while over a roof face.
+      clearOpeningGuides3D()
       updateRoofCursor(target, event.node as RoofNode)
       event.stopPropagation()
     }
@@ -575,6 +598,7 @@ const DoorTool: React.FC = () => {
       destroyDraft()
       hideCursor()
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallHover)
       emitter.off('wall:move', onWallHover)
@@ -590,10 +614,16 @@ const DoorTool: React.FC = () => {
     }
   }, [])
 
-  // Cursor geometry: door outline.
-  const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
-  const edgesGeo = new EdgesGeometry(boxGeo)
-  boxGeo.dispose()
+  // Cursor geometry: door outline. Static dims, so build it once and dispose on
+  // unmount rather than reallocating (and orphaning) an EdgesGeometry on every
+  // re-render during placement.
+  const edgesGeo = useMemo(() => {
+    const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
+    const geo = new EdgesGeometry(boxGeo)
+    boxGeo.dispose()
+    return geo
+  }, [])
+  useEffect(() => () => edgesGeo.dispose(), [edgesGeo])
 
   return (
     <>

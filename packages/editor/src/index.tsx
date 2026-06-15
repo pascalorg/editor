@@ -301,6 +301,11 @@ export type {
 } from './store/use-editor'
 export { default as useEditor } from './store/use-editor'
 export {
+  default as useOpeningGuides,
+  type OpeningGuide3D,
+  type OpeningGuideVec3,
+} from './store/use-opening-guides'
+export {
   type PaletteView,
   type PaletteViewProps,
   usePaletteViewRegistry,

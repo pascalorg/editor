@@ -28,6 +28,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
+  clearOpeningGuides3D,
+  publishOpeningGuidesForWallEvent,
+  resolveSillSnap,
+} from '../shared/opening-guides-runtime'
+import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
   resolveRoofWallOpeningTarget,
@@ -124,6 +129,7 @@ const WindowTool: React.FC = () => {
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
       setFallbackPose(null)
     }
 
@@ -155,6 +161,7 @@ const WindowTool: React.FC = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       setFallbackPose({ position, rotationY: 0 })
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     const showRoofFallbackCursor = (event: RoofEvent) => {
@@ -165,6 +172,32 @@ const WindowTool: React.FC = () => {
     const showWallFallbackCursor = (event: WallEvent) => {
       const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
       showGhostAt([x, getLevelYOffset() + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z])
+    }
+
+    // Sill alignment (snap + guide): a sibling sill/centre/top wins over the
+    // 0.5m grid when within threshold; Shift bypasses both. `movingId` is the
+    // draft's id once it exists (so it's excluded from the sibling scan), or ''
+    // before the draft is created (nothing to exclude yet).
+    const resolvePlacementY = (args: {
+      wall: WallNode
+      movingId: string
+      localX: number
+      rawLocalY: number
+      width: number
+      height: number
+      bypassSnap: boolean
+    }): number => {
+      if (args.bypassSnap) return args.rawLocalY
+      const sillY = resolveSillSnap({
+        wall: args.wall,
+        movingId: args.movingId,
+        localX: args.localX,
+        localY: args.rawLocalY,
+        width: args.width,
+        height: args.height,
+        nodes: useScene.getState().nodes,
+      })
+      return sillY ?? snapToHalf(args.rawLocalY)
     }
 
     // Settle a wall target: alignment snap → sill clamp → overlap check.
@@ -186,7 +219,15 @@ const WindowTool: React.FC = () => {
         bypass,
         bypassSnap,
       })
-      const localY = bypassSnap ? rawLocalY : snapToHalf(rawLocalY)
+      const localY = resolvePlacementY({
+        wall,
+        movingId: ignoreId ?? '',
+        localX,
+        rawLocalY,
+        width,
+        height,
+        bypassSnap,
+      })
       const { clampedX, clampedY } = clampToWall(wall, localX, localY, width, height)
       const valid = !hasWallChildOverlap(wall.id, clampedX, clampedY, width, height, ignoreId)
       return { clampedX, clampedY, valid }
@@ -274,6 +315,20 @@ const WindowTool: React.FC = () => {
         cursorRotationY,
         valid,
       )
+
+      if (draftRef.current) {
+        publishOpeningGuidesForWallEvent({
+          wall,
+          movingId: draftRef.current.id,
+          centerS: clampedX,
+          centerY: clampedY,
+          width,
+          height,
+          includeVertical: true,
+          levelYOffset: getLevelYOffset(),
+          slabElevation: getSlabElevationForWall(wall),
+        })
+      }
       return { clampedX, clampedY, valid }
     }
 
@@ -333,6 +388,7 @@ const WindowTool: React.FC = () => {
       triggerSFX('sfx:structure-build')
       alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     // ── Direct wall-mesh hover ──────────────────────────────────────
@@ -488,6 +544,8 @@ const WindowTool: React.FC = () => {
         useScene.getState().createNode(node, segment.id as AnyNodeId)
         draftRef.current = node
       }
+      // Opening guides are wall-specific; clear them while over a roof face.
+      clearOpeningGuides3D()
       updateRoofCursor(target, event.node as RoofNode)
       event.stopPropagation()
     }
@@ -590,6 +648,7 @@ const WindowTool: React.FC = () => {
       destroyDraft()
       hideCursor()
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallHover)
       emitter.off('wall:move', onWallHover)
@@ -605,10 +664,16 @@ const WindowTool: React.FC = () => {
     }
   }, [])
 
-  // Cursor geometry: window outline rectangle.
-  const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
-  const edgesGeo = new EdgesGeometry(boxGeo)
-  boxGeo.dispose()
+  // Cursor geometry: window outline rectangle. Static dims, so build it once and
+  // dispose on unmount rather than reallocating (and orphaning) an EdgesGeometry
+  // on every re-render during placement.
+  const edgesGeo = useMemo(() => {
+    const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
+    const geo = new EdgesGeometry(boxGeo)
+    boxGeo.dispose()
+    return geo
+  }, [])
+  useEffect(() => () => edgesGeo.dispose(), [edgesGeo])
 
   return (
     <>

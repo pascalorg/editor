@@ -30,6 +30,10 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
+  clearOpeningGuides3D,
+  publishOpeningGuidesForWallEvent,
+} from '../shared/opening-guides-runtime'
+import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
   resolveRoofWallOpeningTarget,
@@ -138,6 +142,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     // Alignment candidates — anchors of every OTHER alignable object (the
@@ -266,6 +271,19 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         target.cursorRotation,
         target.valid,
       )
+
+      publishOpeningGuidesForWallEvent({
+        wall: target.wallNode,
+        movingId: movingDoorNode.id,
+        centerS: target.clampedX,
+        centerY: target.clampedY,
+        width: movingDoorNode.width,
+        height: movingDoorNode.height,
+        // Doors sit on the floor — no sill/head or vertical alignment guides.
+        includeVertical: false,
+        levelYOffset: getLevelYOffset(),
+        slabElevation: getSlabElevation(target.event),
+      })
     }
 
     const onWallEnter = (event: WallEvent) => {
@@ -485,6 +503,8 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       lastTarget = null
       lastRoofEvent = event
       useLiveTransforms.getState().clear(movingDoorNode.id)
+      // Opening guides are wall-specific; clear them when over a roof face.
+      clearOpeningGuides3D()
       if (currentHostId !== target.segment.id) {
         useScene.getState().updateNode(movingDoorNode.id, {
           position: target.position,
@@ -697,6 +717,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       }
       useLiveTransforms.getState().clear(movingDoorNode.id)
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)
@@ -723,6 +744,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     boxGeo.dispose()
     return geo
   }, [movingDoorNode])
+  useEffect(() => () => edgesGeo.dispose(), [edgesGeo])
 
   return (
     <group ref={cursorGroupRef} visible={false}>

@@ -1675,6 +1675,58 @@ function InteractiveGeometry({
           </g>
         )
       }
+      case 'equal-spacing-badge': {
+        // A distinct accent (Figma-style "=" rhythm) so equal spacing reads
+        // apart from the orange placement dimensions. Same screen-upright flip
+        // as the dimension-label case above.
+        const accent = '#ec4899'
+        let degrees = (g.angle * 180) / Math.PI
+        let screenDegrees = degrees + sceneRotationDeg
+        screenDegrees = ((((screenDegrees + 180) % 360) + 360) % 360) - 180
+        if (screenDegrees > 90) degrees -= 180
+        else if (screenDegrees <= -90) degrees += 180
+
+        const label = `= ${g.text}`
+        const padX = unitsPerPixel * 6
+        const padY = unitsPerPixel * 3
+        const fontSize = Math.max(unitsPerPixel * 10, 0.08)
+        const textWidth = label.length * unitsPerPixel * 6.2
+        const plateW = textWidth + padX * 2
+        const plateH = fontSize + padY * 2
+        return (
+          <g
+            key={keyHint}
+            pointerEvents="none"
+            transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${degrees})`}
+          >
+            <rect
+              fill="#ffffff"
+              height={plateH}
+              opacity={0.95}
+              rx={unitsPerPixel * 3}
+              ry={unitsPerPixel * 3}
+              stroke={accent}
+              strokeWidth={unitsPerPixel * 0.75}
+              vectorEffect="non-scaling-stroke"
+              width={plateW}
+              x={-plateW / 2}
+              y={-plateH / 2}
+            />
+            <text
+              dominantBaseline="middle"
+              fill={accent}
+              fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+              fontSize={fontSize}
+              fontWeight={700}
+              textAnchor="middle"
+              x={0}
+              y={0}
+            >
+              {label}
+            </text>
+          </g>
+        )
+      }
       case 'dimension': {
         if (!palette) return <></>
         const stroke = g.stroke ?? palette.measurementStroke
@@ -1978,6 +2030,7 @@ const OVERLAY_KINDS = new Set<FloorplanGeometry['kind']>([
   'rotate-arrow',
   'dimension',
   'dimension-label',
+  'equal-spacing-badge',
 ])
 
 /**
