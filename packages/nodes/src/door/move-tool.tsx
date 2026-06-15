@@ -3,6 +3,7 @@ import {
   collectAlignmentAnchors,
   DoorNode,
   emitter,
+  type GridEvent,
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
@@ -28,6 +29,10 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import {
+  clearOpeningGuides3D,
+  publishOpeningGuidesForWallEvent,
+} from '../shared/opening-guides-runtime'
 import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
@@ -82,6 +87,18 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     let currentHostId: string | null = movingDoorNode.parentId
     let dragAnchor: { wallId: string; rawX: number; startX: number } | null = null
     let committed = false
+    // Off-wall free-follow: when the cursor is over empty floor (no wall under
+    // the ray) the door is parented to the level and tracks the cursor like an
+    // item node. `freeFollowing` distinguishes that state so the placement
+    // commit no-ops in open space (a door needs a wall). `lastMeshEventTime`
+    // defers the floor handler whenever a wall/roof mesh event owns the same
+    // pointermove (shared DOM timeStamp) — that's the only thing that snaps.
+    let freeFollowing = false
+    let lastMeshEventTime = -1
+    // The door's chosen facing side. R flips it mid-placement (front ↔ back,
+    // same as the committed-selected R flip) so the user can reorient before
+    // committing. Initialised from the moving node's side.
+    let sideOverride: DoorNode['side'] = movingDoorNode.side
     let lastTarget: {
       wallNode: WallEvent['node']
       wallId: string
@@ -125,6 +142,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     // Alignment candidates — anchors of every OTHER alignable object (the
@@ -149,7 +167,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
     const getPlacementOrientation = (event: WallEvent) => {
       const faceSide = getSideFromNormal(event.normal)
-      const side = movingDoorNode.side ?? faceSide
+      const side = sideOverride ?? faceSide
       const rotationOffset = side !== faceSide ? Math.PI : 0
       return {
         side,
@@ -253,14 +271,29 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         target.cursorRotation,
         target.valid,
       )
+
+      publishOpeningGuidesForWallEvent({
+        wall: target.wallNode,
+        movingId: movingDoorNode.id,
+        centerS: target.clampedX,
+        centerY: target.clampedY,
+        width: movingDoorNode.width,
+        height: movingDoorNode.height,
+        // Doors sit on the floor — no sill/head or vertical alignment guides.
+        includeVertical: false,
+        levelYOffset: getLevelYOffset(),
+        slabElevation: getSlabElevation(target.event),
+      })
     }
 
     const onWallEnter = (event: WallEvent) => {
+      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
       const target = resolveMoveTarget(event)
       if (!target) {
         onWallLeave()
         return
       }
+      freeFollowing = false
       lastTarget = target
       lastRoofEvent = null
       applyPreview(target)
@@ -268,6 +301,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     const onWallMove = (event: WallEvent) => {
+      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
       if (!isValidWallSideFace(event.normal)) {
         onWallLeave()
         return
@@ -286,20 +320,17 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         onWallLeave()
         return
       }
+      freeFollowing = false
       lastTarget = target
       lastRoofEvent = null
       applyPreview(target)
       event.stopPropagation()
     }
 
-    const onWallClick = (event: WallEvent) => {
+    // Promote the moving door into its committed wall placement. Shared by the
+    // direct wall-mesh click and the floor proximity click.
+    const commitToWall = (target: NonNullable<typeof lastTarget>) => {
       if (committed) return
-      if (!isValidWallSideFace(event.normal)) return
-      if (isCurvedWall(event.node)) return
-      if (event.node.parentId !== getLevelId()) return
-
-      const target = lastTarget?.wallId === event.node.id ? lastTarget : resolveMoveTarget(event)
-      if (!target?.valid) return
       committed = true
 
       let placedId: string
@@ -360,30 +391,84 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       hideCursor()
       useViewer.getState().setSelection({ selectedIds: [placedId] })
       exitMoveMode()
+    }
+
+    const onWallClick = (event: WallEvent) => {
+      if (committed) return
+      if (!isValidWallSideFace(event.normal)) return
+      if (isCurvedWall(event.node)) return
+      if (event.node.parentId !== getLevelId()) return
+
+      const target = lastTarget?.wallId === event.node.id ? lastTarget : resolveMoveTarget(event)
+      if (!target?.valid) return
+      commitToWall(target)
       event.stopPropagation()
     }
 
     const onWallLeave = () => {
+      // The cursor left the wall mesh. Don't snap back to the origin/original
+      // here — the floor proximity handler (onGridMove) takes over on the same
+      // pointermove: it either snaps to a nearby wall or free-follows the
+      // cursor. The wireframe outline + live transform are cleared so the
+      // free-follow path can re-establish them. Reverting the node is left to
+      // onGridMove's free-follow / cancel / commit, so the door never blinks
+      // back to the building origin between a wall and open floor.
       hideCursor()
       useLiveTransforms.getState().clear(movingDoorNode.id)
       dragAnchor = null
       lastTarget = null
       lastRoofEvent = null
-      if (isNew) return
-      if (currentHostId && currentHostId !== original.parentId) {
-        markHostDirty(currentHostId)
+    }
+
+    // Free-follow: the door rides the cursor over empty floor, parented to the
+    // level like an item node (lifted so it stands on the floor). No wall to
+    // attach to, so it is not committable here.
+    const freeFollowAt = (localX: number, localZ: number) => {
+      freeFollowing = true
+      lastTarget = null
+      lastRoofEvent = null
+      hideCursor()
+      useLiveTransforms.getState().clear(movingDoorNode.id)
+      const levelId = getLevelId()
+      const y = movingDoorNode.height / 2
+      // Keep the R-flip visible while free-following: face the chosen side
+      // (back = rotated π) instead of forcing 0, so an R press isn't undone on
+      // the next mousemove.
+      const yaw = sideOverride === 'back' ? Math.PI : 0
+      if (currentHostId !== levelId) {
+        if (currentHostId && currentHostId !== levelId) markHostDirty(currentHostId)
+        useScene.getState().updateNode(movingDoorNode.id, {
+          position: [localX, y, localZ],
+          rotation: [0, yaw, 0],
+          side: sideOverride,
+          parentId: levelId ?? undefined,
+          wallId: undefined,
+          roofSegmentId: undefined,
+          roofFace: undefined,
+        })
+        currentHostId = levelId
+      } else {
+        useScene.getState().updateNode(movingDoorNode.id, {
+          position: [localX, y, localZ],
+          rotation: [0, yaw, 0],
+          side: sideOverride,
+        })
       }
-      currentHostId = original.parentId
-      useScene.getState().updateNode(movingDoorNode.id, {
-        position: original.position,
-        rotation: original.rotation,
-        side: original.side,
-        parentId: original.parentId,
-        wallId: original.wallId,
-        roofSegmentId: original.roofSegmentId,
-        roofFace: original.roofFace,
-      })
-      if (original.parentId) markHostDirty(original.parentId)
+    }
+
+    const onGridMove = (event: GridEvent) => {
+      if (committed) return
+      if (useViewer.getState().cameraDragging) return
+      // A wall/roof mesh handler owns this exact pointermove (shared DOM
+      // timeStamp): the cursor ray is on a wall/roof, so it snaps. Otherwise
+      // the cursor is over open floor — free-follow it.
+      if (event.nativeEvent?.timeStamp === lastMeshEventTime) return
+
+      // No proximity magnet: in 3D the wall side faces are big raycast targets,
+      // so snapping engages only when the cursor ray actually hovers a wall
+      // (`onWallMove`). Over open floor the door just follows the cursor.
+      const [x, , z] = event.localPosition
+      freeFollowAt(x, z)
     }
 
     // ── Roof-segment wall faces ─────────────────────────────────────
@@ -406,16 +491,20 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     const onRoofHover = (event: RoofEvent) => {
+      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
       const target = resolveRoofMoveTarget(event)
       if (!target) {
         onRoofLeave()
         return
       }
       // Wall-frame drag anchor / live transform don't apply on a roof face.
+      freeFollowing = false
       dragAnchor = null
       lastTarget = null
       lastRoofEvent = event
       useLiveTransforms.getState().clear(movingDoorNode.id)
+      // Opening guides are wall-specific; clear them when over a roof face.
+      clearOpeningGuides3D()
       if (currentHostId !== target.segment.id) {
         useScene.getState().updateNode(movingDoorNode.id, {
           position: target.position,
@@ -509,26 +598,13 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     const onRoofLeave = () => {
+      // Mirror onWallLeave: don't revert to origin here — onGridMove takes
+      // over on the same pointermove (snap to a nearby wall or free-follow).
       hideCursor()
       useLiveTransforms.getState().clear(movingDoorNode.id)
       dragAnchor = null
       lastTarget = null
       lastRoofEvent = null
-      if (isNew) return
-      if (currentHostId && currentHostId !== original.parentId) {
-        markHostDirty(currentHostId)
-      }
-      currentHostId = original.parentId
-      useScene.getState().updateNode(movingDoorNode.id, {
-        position: original.position,
-        rotation: original.rotation,
-        side: original.side,
-        parentId: original.parentId,
-        wallId: original.wallId,
-        roofSegmentId: original.roofSegmentId,
-        roofFace: original.roofFace,
-      })
-      if (original.parentId) markHostDirty(original.parentId)
     }
 
     const onCancel = () => {
@@ -556,11 +632,51 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
     const onPlacementDragPointerUp = (event: PointerEvent) => {
       if (!consumePlacementDragRelease(event)) return
-      if (lastTarget) {
-        onWallClick(lastTarget.event)
+      // Free-following over open floor can't commit (no wall). A wall hover
+      // target commits via commitToWall; a roof face via onRoofClick.
+      if (lastTarget?.valid && !freeFollowing) {
+        commitToWall(lastTarget)
         return
       }
       if (lastRoofEvent) onRoofClick(lastRoofEvent)
+    }
+
+    // R flips the door's facing side mid-placement (front ↔ back), like the
+    // committed-selected R flip — usable before commit, whether snapped to a
+    // wall or free-following. Re-applies the preview so the flip shows live.
+    // No-op on a roof-segment face (those host front-only; nothing to flip).
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (committed) return
+      if (e.key !== 'r' && e.key !== 'R') return
+      const target = e.target as HTMLElement | null
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      ) {
+        return
+      }
+      // Only act where a flip is meaningful — on a wall hover or while
+      // free-following. On a roof face leave it to the default R (no flip, no
+      // sfx) so the cue never fires without a visible effect.
+      const onWall = lastTarget !== null
+      if (!(onWall || freeFollowing)) return
+      e.preventDefault()
+      sideOverride = sideOverride === 'front' ? 'back' : 'front'
+      triggerSFX('sfx:item-rotate')
+      if (onWall) {
+        // On a wall: re-resolve with the flipped side and re-preview.
+        const next = resolveMoveTarget(lastTarget!.event)
+        if (next) {
+          lastTarget = next
+          applyPreview(next)
+        }
+      } else {
+        // Free-following on the level: flip the draft's facing in place.
+        useScene.getState().updateNode(movingDoorNode.id, {
+          side: sideOverride,
+          rotation: [0, sideOverride === 'back' ? Math.PI : 0, 0],
+        })
+      }
     }
 
     emitter.on('wall:enter', onWallEnter)
@@ -571,8 +687,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     emitter.on('roof:move', onRoofHover)
     emitter.on('roof:click', onRoofClick)
     emitter.on('roof:leave', onRoofLeave)
+    emitter.on('grid:move', onGridMove)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('pointerup', onPlacementDragPointerUp)
+    window.addEventListener('keydown', onKeyDown)
 
     return () => {
       const current = useScene.getState().nodes[movingDoorNode.id as AnyNodeId] as
@@ -599,6 +717,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       }
       useLiveTransforms.getState().clear(movingDoorNode.id)
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)
@@ -608,8 +727,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       emitter.off('roof:move', onRoofHover)
       emitter.off('roof:click', onRoofClick)
       emitter.off('roof:leave', onRoofLeave)
+      emitter.off('grid:move', onGridMove)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
+      window.removeEventListener('keydown', onKeyDown)
     }
   }, [movingDoorNode, exitMoveMode])
 
@@ -623,6 +744,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     boxGeo.dispose()
     return geo
   }, [movingDoorNode])
+  useEffect(() => () => edgesGeo.dispose(), [edgesGeo])
 
   return (
     <group ref={cursorGroupRef} visible={false}>

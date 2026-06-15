@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
 import { buildEyebrowVentGeometry } from './geometry'
 import type { EyebrowVentNode } from './schema'
 
@@ -11,7 +12,7 @@ import type { EyebrowVentNode } from './schema'
  * so the ghost stays in lockstep with the committed vent. Raycast disabled so
  * the preview doesn't intercept the cursor ray feeding the tool.
  */
-const EyebrowVentPreview = ({ node }: { node: EyebrowVentNode }) => {
+const EyebrowVentPreview = ({ node, invalid }: { node: EyebrowVentNode; invalid?: boolean }) => {
   const geometry = useMemo(
     () => buildEyebrowVentGeometry(node),
     [node.width, node.depth, node.height, node.style, node.louverCount, node.backRatio],
@@ -20,17 +21,17 @@ const EyebrowVentPreview = ({ node }: { node: EyebrowVentNode }) => {
   const material = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: 0xff_ff_ff,
-        emissive: 0x6c_a3_ff,
+        color: invalid ? INVALID_GHOST_COLOR : 0xff_ff_ff,
+        emissive: invalid ? INVALID_GHOST_COLOR : 0x6c_a3_ff,
         emissiveIntensity: 0.18,
         roughness: 0.7,
         metalness: 0.1,
         transparent: true,
-        opacity: 0.35,
+        opacity: invalid ? 0.4 : 0.35,
         depthWrite: false,
         side: THREE.DoubleSide,
       }),
-    [],
+    [invalid],
   )
 
   const edgesGeometry = useMemo(() => new THREE.EdgesGeometry(geometry, 25), [geometry])

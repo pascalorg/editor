@@ -10,6 +10,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
+import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
@@ -283,6 +284,9 @@ export const ToolManager: React.FC = () => {
             tools above. Lives inside the building-local group so the
             building-local guide coords render at the right world position. */}
         <Alignment3DGuideLayer />
+        {/* Wall-plane proximity / sill / equal-spacing guides for openings,
+            published by the door/window move tools in the same world frame. */}
+        <OpeningGuides3DLayer />
         {/* "Magnetic" beacon at the active wall-draft snap point. */}
         <WallSnapBeaconLayer />
       </group>

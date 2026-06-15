@@ -54,6 +54,26 @@ export {
   resolveMovable,
 } from './movement'
 export {
+  type AlongWallAlignment,
+  type AlongWallFeature,
+  computeEdgeGaps,
+  computeOpeningGuides,
+  DEFAULT_OPENING_GUIDE_TOLERANCES,
+  detectAlongWallAlignment,
+  detectEqualSpacing,
+  detectVerticalAlignment,
+  type EdgeGap,
+  type EqualSpacingRun,
+  type OpeningGuideInput,
+  type OpeningGuides,
+  type OpeningGuideTolerances,
+  type OpeningSpan,
+  type SillHeadGuide,
+  type VerticalAlignment,
+  type VerticalFeature,
+  type WallExtent,
+} from './opening-guides'
+export {
   analyzePortConnectivity,
   type PortConnection,
   type PortConnectivity,

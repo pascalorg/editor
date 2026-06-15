@@ -47,6 +47,7 @@ import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor from '../../store/use-editor'
+import useOpeningGuides from '../../store/use-opening-guides'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { formatAngleRadians } from '../tools/shared/segment-angle'
 import {
@@ -69,6 +70,10 @@ const _resizeOriginW = new Vector3()
 const _resizePositionW = new Vector3()
 const _resizeRay = new Ray()
 const _resizeRayW = new Vector3()
+
+// Tilt that stands a flat XZ-plane move cross up into a node's facing plane
+// (its local XY = a wall face) for `plane: 'node-normal'` handles.
+const NODE_NORMAL_TILT: [number, number, number] = [Math.PI / 2, 0, 0]
 
 function axisVector(axis: 'x' | 'y' | 'z', target: Vector3) {
   target.set(0, 0, 0)
@@ -589,6 +594,9 @@ function LinearArrow({
   // floating dimension pill (via `activeHandleDrag`) and its own in-world
   // chip is suppressed — matches the wall height handle.
   const measureLabel = descriptor.kind === 'linear-resize' ? descriptor.measureLabel : undefined
+  // Optional per-tick feedback hook (doors/windows publish proximity/sill guides
+  // for the edge being resized); cleared when the drag ends.
+  const onDrag = descriptor.kind === 'linear-resize' ? descriptor.onDrag : undefined
   const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
   const basePosition = descriptor.placement.position(node, placementSceneApi)
   // `freezeOffset` (in node-local frame) cancels the mesh's `position`
@@ -671,6 +679,7 @@ function LinearArrow({
           if (measureLabel) {
             useEditor.getState().setActiveHandleDrag(null)
           }
+          if (onDrag) useOpeningGuides.getState().clear()
         },
         move: ({ event: moveEvent, getPointerRay: getMovePointerRay }) => {
           const currentPointer =
@@ -686,7 +695,10 @@ function LinearArrow({
               ? snapScalar(rawNext, gridSnapStep)
               : rawNext
           const next = Math.min(maxBound, Math.max(minBound, snappedNext))
-          return descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>
+          const patch = descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>
+          // Let the kind publish live guides for the edge being resized.
+          onDrag?.({ ...(initialNode as object), ...patch } as AnyNode, sceneApi)
+          return patch
         },
       }
     },
@@ -1230,7 +1242,7 @@ function TranslateArrow({
 
   // The cross is built flat in the XZ plane. On a wall, tilt it up about X so
   // it lies in the item-local XY plane (= the wall face).
-  const iconRotation: [number, number, number] = isWallPlane ? [Math.PI / 2, 0, 0] : [0, 0, 0]
+  const iconRotation: [number, number, number] = isWallPlane ? NODE_NORMAL_TILT : [0, 0, 0]
 
   return (
     <HandleArrow
@@ -1288,16 +1300,20 @@ function TapActionArrow({
     )
   }
 
-  // Default 'arrow' shape — the standard chevron.
   const baseScale = zoom * ARROW_SCALE
+  // A `move-cross` with `plane: 'node-normal'` stands up into the node's facing
+  // plane (a wall face) like the door / window / wall-item move grips; other
+  // tap-actions keep their in-plane `rotationY`.
+  const rotation: [number, number, number] =
+    descriptor.plane === 'node-normal' ? NODE_NORMAL_TILT : [0, rotationY, 0]
   return (
     <HandleArrow
       cursor={cursor}
       hover={isHovered}
       onHoverChange={setIsHovered}
       onPointerDown={onActivate}
-      placement={{ position, rotation: [0, rotationY, 0], baseScale }}
-      shape="chevron"
+      placement={{ position, rotation, baseScale }}
+      shape={shape === 'move-cross' ? 'move-cross' : 'chevron'}
     />
   )
 }

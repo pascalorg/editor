@@ -62,14 +62,16 @@ describe('resolveDirectRotationDragDelta', () => {
 })
 
 describe('canDirectMoveNode', () => {
-  test('excludes floorplan-only move targets from 3D direct move', () => {
+  // Accepts kinds with a 3D-mountable move tool (`movable` or
+  // `affordanceTools.move`); floorplan-only movers (zone) are excluded.
+  test('rejects floorplan-only move targets (no 3D tool mounts)', () => {
     const kind = 'direct-move-floorplan-only-test'
     registerTestDefinition(kind, { floorplanMoveTarget: {} as never })
 
     expect(canDirectMoveNode({ id: 'node_1', type: kind } as unknown as AnyNode)).toBe(false)
   })
 
-  test('excludes bespoke move tools from 3D direct move', () => {
+  test('accepts kinds with a bespoke move tool', () => {
     const kind = 'direct-move-bespoke-tool-test'
     registerTestDefinition(kind, {
       affordanceTools: {
@@ -77,7 +79,7 @@ describe('canDirectMoveNode', () => {
       } as never,
     })
 
-    expect(canDirectMoveNode({ id: 'node_1', type: kind } as unknown as AnyNode)).toBe(false)
+    expect(canDirectMoveNode({ id: 'node_1', type: kind } as unknown as AnyNode)).toBe(true)
   })
 
   test('accepts nodes with the generic movable capability', () => {
@@ -89,5 +91,12 @@ describe('canDirectMoveNode', () => {
     } as Partial<AnyNodeDefinition>)
 
     expect(canDirectMoveNode({ id: 'node_1', type: kind } as unknown as AnyNode)).toBe(true)
+  })
+
+  test('rejects kinds with no registered move path', () => {
+    const kind = 'direct-move-none-test'
+    registerTestDefinition(kind, {})
+
+    expect(canDirectMoveNode({ id: 'node_1', type: kind } as unknown as AnyNode)).toBe(false)
   })
 })

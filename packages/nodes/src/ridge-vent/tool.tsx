@@ -140,6 +140,7 @@ const RidgeVentTool = () => {
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
+        ghost={<RidgeVentPreview node={previewNode} invalid />}
         isValidRoofTarget={(event) => {
           const hit = resolveRoofSegmentHit(
             event.node as RoofNode,
@@ -150,7 +151,6 @@ const RidgeVentTool = () => {
           return !!hit && !!resolveRidgeSnap(hit.segment, hit.localX, hit.localZ)
         }}
         onInvalidTarget={() => setPreviewPos(null)}
-        size={[2, 0.15, 0.35]}
       />
       {activeBuildingId && previewPos && (
         <group position={previewPos}>

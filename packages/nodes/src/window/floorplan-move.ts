@@ -2,16 +2,15 @@ import {
   type AnyNodeId,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  useLiveTransforms,
   useScene,
   type WallNode,
+  WallNode as WallNodeSchema,
   type WindowNode,
 } from '@pascal-app/core'
-import { snapToHalf } from '@pascal-app/editor'
+import { snapToHalf, usePlacementPreview } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
-import {
-  getRoofHostedOpeningLevelId,
-  getRoofHostedOpeningPlanPoint,
-} from '../shared/roof-opening-host'
+import { getOpeningHostLevelId, getRoofHostedOpeningPlanPoint } from '../shared/roof-opening-host'
 import {
   findClosestWallInPlan,
   projectWallLocalPointToPlan,
@@ -32,15 +31,9 @@ import { clampToWall, hasWallChildOverlap } from './window-math'
  */
 
 export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ node }) => {
-  const startLevelId = (() => {
-    // Wall-hosted: the wall's parent is the level. Roof-hosted: walk
-    // segment → roof → level.
-    const nodes = useScene.getState().nodes
-    const roofLevelId = getRoofHostedOpeningLevelId(node, nodes)
-    if (roofLevelId) return roofLevelId
-    const wall = nodes[node.parentId as AnyNodeId]
-    return wall ? (wall.parentId as AnyNodeId | null) : null
-  })()
+  // The level that owns the wall-snap candidates — resolves the wall-hosted,
+  // roof-hosted, and fresh-placement parentings (see `getOpeningHostLevelId`).
+  const startLevelId = getOpeningHostLevelId(node, useScene.getState().nodes)
   const originalWall = node.parentId
     ? (useScene.getState().nodes[node.parentId as AnyNodeId] as WallNode | undefined)
     : undefined
@@ -50,12 +43,21 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         ? projectWallLocalPointToPlan(originalWall, node.position[0])
         : (getRoofHostedOpeningPlanPoint(node, useScene.getState().nodes) ?? [node.position[0], 0]),
     metadata: node.metadata,
+    // Absolute: query the wall snap with the TRUE cursor (see the matching
+    // comment in `doorFloorplanMoveTarget`). Relative mode anchored the search
+    // to the original wall, which let the window snap to a farther wall across
+    // a thin gap instead of the one under the cursor.
+    mode: 'absolute',
   })
 
   // Preserve the source window's local Y — 2D move doesn't have a way
   // to express vertical motion, so we keep whatever vertical position
-  // the window had when the move started.
-  const startLocalY = node.position[1]
+  // the window had when the move started. A fresh preset/catalog clone is
+  // created at y=0, which would sit the window's centre on the floor (half
+  // below ground); default those to a realistic sill so it floats above
+  // the floor in 2D too. Same rule as the 3D `MoveWindowTool` (`getSillCenterY`).
+  const DEFAULT_SILL = 0.9
+  const startLocalY = node.position[1] > 0.1 ? node.position[1] : DEFAULT_SILL + node.height / 2
 
   // Track the last successful placement so `commit()` can write it
   // atomically — same deterministic-commit fix as `doorFloorplanMoveTarget`.
@@ -69,13 +71,72 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     roofFace: undefined
   } | null = null
 
+  // R flips the window's facing (front ↔ back) mid-placement — see
+  // `doorFloorplanMoveTarget`. `apply` re-derives the side each move, so the
+  // flip is a persistent XOR plus a π rotation offset.
+  let flipped = false
+  let lastApply: {
+    planPoint: readonly [number, number]
+    modifiers: { shiftKey: boolean; altKey: boolean; ctrlKey: boolean; metaKey: boolean }
+  } | null = null
+  // See `doorFloorplanMoveTarget`: off-wall the window free-follows the cursor
+  // as a ghost and isn't committable (it needs a wall). Starts true.
+  let onWall = true
+
+  const freeFollow = (planPoint: readonly [number, number]) => {
+    onWall = false
+    lastValid = null
+    if ((useScene.getState().nodes[node.id as AnyNodeId] as WindowNode | undefined)?.visible) {
+      useScene.getState().updateNode(node.id as AnyNodeId, { visible: false })
+    }
+    const half = node.width / 2 + 0.5
+    const wall = WallNodeSchema.parse({
+      start: [planPoint[0] - half, planPoint[1]],
+      end: [planPoint[0] + half, planPoint[1]],
+      thickness: 0.1,
+    })
+    const ghost = {
+      ...node,
+      parentId: wall.id,
+      wallId: wall.id,
+      roofSegmentId: undefined,
+      roofFace: undefined,
+      position: [half, startLocalY, 0] as [number, number, number],
+      rotation: [0, 0, 0] as [number, number, number],
+      visible: true,
+    } as WindowNode
+    usePlacementPreview.getState().set(ghost, wall)
+  }
+
   const session: FloorplanMoveTargetSession = {
     affectedIds: [node.id as AnyNodeId],
+    flipSide() {
+      flipped = !flipped
+      if (lastApply) this.apply(lastApply)
+    },
     apply({ planPoint, modifiers }) {
+      lastApply = { planPoint, modifiers }
+      // Drop any stale live transform left by the 3D `MoveWindowTool` — see
+      // `doorFloorplanMoveTarget.apply`. Without this the 2D registry layer
+      // keeps rendering the window at the 3D tool's last hover (it prefers
+      // `useLiveTransforms` over the scene node for door/window), so the 2D
+      // slide — which writes the scene node — wouldn't show. Guarded on
+      // existence: `clear` allocates a new Map + re-renders.
+      if (useLiveTransforms.getState().transforms.has(node.id as AnyNodeId)) {
+        useLiveTransforms.getState().clear(node.id as AnyNodeId)
+      }
       const nodes = useScene.getState().nodes
       const resolvedPlanPoint = resolveCursor(planPoint)
       const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)
-      if (!hit) return
+      if (!hit) {
+        freeFollow(resolvedPlanPoint)
+        return
+      }
+      onWall = true
+      usePlacementPreview.getState().clear()
+      if ((nodes[node.id as AnyNodeId] as WindowNode | undefined)?.visible === false) {
+        useScene.getState().updateNode(node.id as AnyNodeId, { visible: true })
+      }
 
       // Figma-style along-wall alignment first (edge-to-edge with other
       // openings / wall ends), winning over the 0.5m grid snap; falls back
@@ -99,10 +160,17 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         node.height,
       )
 
+      const side: WindowNode['side'] = flipped
+        ? hit.side === 'front'
+          ? 'back'
+          : 'front'
+        : hit.side
+      const itemRotation = hit.itemRotation + (flipped ? Math.PI : 0)
+
       lastValid = {
         position: [clampedX, clampedY, 0],
-        rotation: [0, hit.itemRotation, 0],
-        side: hit.side,
+        rotation: [0, itemRotation, 0],
+        side,
         parentId: hit.wall.id,
         wallId: hit.wall.id,
         // Re-anchoring to a wall ends any roof-segment hosting; the
@@ -119,6 +187,9 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
       ])
     },
     canCommit() {
+      // Off-wall the window is free-following — not placeable; the overlay
+      // reverts to the pre-move snapshot. Matches the 3D move.
+      if (!onWall) return false
       const live = useScene.getState().nodes[node.id as AnyNodeId] as WindowNode | undefined
       if (!live || live.type !== 'window') return false
       const overlapping = hasWallChildOverlap(

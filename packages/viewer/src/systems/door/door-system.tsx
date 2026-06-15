@@ -2372,3 +2372,13 @@ function syncDoorCutout(node: DoorNode, mesh: THREE.Mesh) {
   }
   cutout.visible = false
 }
+
+/**
+ * Build a fresh door mesh for preview/ghost rendering.
+ * Returns a mesh with an invisible hitbox root and visible children (frame, panels, hardware).
+ */
+export function buildDoorPreviewMesh(node: DoorNode): THREE.Mesh {
+  const mesh = new THREE.Mesh()
+  updateDoorMesh(node, mesh)
+  return mesh
+}

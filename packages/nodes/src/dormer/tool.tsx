@@ -73,8 +73,8 @@ const DormerTool = () => {
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
+        ghost={<DormerPreview node={previewNode} invalid />}
         onInvalidTarget={clearPreview}
-        size={[1.8, 1.8, 1.4]}
       />
       {activeBuildingId && segmentXform && hitLocal && (
         <group position={segmentXform.position} quaternion={segmentXform.quaternion}>

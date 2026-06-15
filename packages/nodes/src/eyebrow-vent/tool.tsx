@@ -122,11 +122,11 @@ const EyebrowVentTool = () => {
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
+        ghost={<EyebrowVentPreview node={previewNode} invalid />}
         onInvalidTarget={() => {
           setPreviewPos(null)
           setPreviewSurfaceQuat(null)
         }}
-        size={[1.2, 0.4, 0.5]}
       />
       {activeBuildingId && previewPos && previewSurfaceQuat && (
         <group position={previewPos}>

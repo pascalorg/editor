@@ -11,6 +11,7 @@ import {
   spatialGridManager,
   useScene,
   type WallEvent,
+  type WallNode,
 } from '@pascal-app/core'
 import {
   calculateCursorRotation,
@@ -22,9 +23,13 @@ import {
   useAlignmentGuides,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import {
+  clearOpeningGuides3D,
+  publishOpeningGuidesForWallEvent,
+} from '../shared/opening-guides-runtime'
 import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
@@ -33,6 +38,7 @@ import {
 } from '../shared/roof-wall-opening-placement'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
+import DoorPreview from './preview'
 
 const edgeMaterial = new LineBasicNodeMaterial({
   color: 0xef_44_44,
@@ -45,31 +51,61 @@ const FALLBACK_WIDTH = 0.9
 const FALLBACK_HEIGHT = 2.1
 const roofFallbackPoint = new Vector3()
 
+// What currently owns the cursor frame: a wall/roof mesh hover, or null when
+// the cursor is over open floor (the grid handler then free-follows).
+type HostKind = 'wall' | 'roof' | null
+
 /**
  * Door tool — places DoorNodes on walls and on roof-segment wall faces
  * (the generated base walls under a roof, including coplanar gable ends).
  * Doors always sit at floor level (clampedY = height/2 — segment base for
  * roof-hosted doors).
+ *
+ * The ghost follows the cursor everywhere (like moving an item): over open
+ * floor it floats as an invalid (unplaceable) ghost; the moment the cursor
+ * ray hovers a wall (or roof-segment face) the real draft snaps onto it.
+ * Snapping engages only on an actual mesh hover — no proximity magnet — since
+ * the wall side faces are big raycast targets.
  */
 const DoorTool: React.FC = () => {
   const draftRef = useRef<DoorNode | null>(null)
   const cursorGroupRef = useRef<Group>(null!)
   const edgesRef = useRef<LineSegments>(null!)
 
+  // Off-host floating ghost: the real door geometry follows the cursor over
+  // the grid (tinted invalid). Mutually exclusive with the on-host draft —
+  // when a draft + wireframe is shown this is null and vice-versa.
+  const [fallbackPose, setFallbackPose] = useState<{
+    position: [number, number, number]
+    rotationY: number
+  } | null>(null)
+
+  const ghostStub = useMemo(() => DoorNode.parse({ position: [0, 0, 0], rotation: [0, 0, 0] }), [])
+
   useEffect(() => {
     useScene.temporal.getState().pause()
+
+    let hostKind: HostKind = null
+    // timeStamp of the most recent wall/roof mesh event. A wall/roof hover and
+    // the grid raycast from the SAME pointermove share the source DOM event's
+    // timeStamp, so the grid handler can detect "a mesh handler already owns
+    // this frame" without depending on event order or on a leave firing (node
+    // events are suppressed during a camera drag, so a sticky boolean would
+    // strand the draft after an orbit; a per-frame timestamp self-heals).
+    let lastMeshEventTime = -1
+    // R flips the door's facing side mid-placement (front ↔ back). On a wall
+    // the chosen side is `getSideFromNormal(normal)` flipped by `sideFlip`;
+    // re-applied to the last wall hover so the flip shows live before commit.
+    let sideFlip = false
+    let lastWallEvent: WallEvent | null = null
 
     const getLevelId = () => useViewer.getState().selection.levelId
     const getLevelYOffset = () => {
       const id = getLevelId()
       return id ? (sceneRegistry.nodes.get(id as AnyNodeId)?.position.y ?? 0) : 0
     }
-    const getSlabElevation = (wallEvent: WallEvent) =>
-      spatialGridManager.getSlabElevationForWall(
-        wallEvent.node.parentId ?? '',
-        wallEvent.node.start,
-        wallEvent.node.end,
-      )
+    const getSlabElevationForWall = (wall: WallNode) =>
+      spatialGridManager.getSlabElevationForWall(wall.parentId ?? '', wall.start, wall.end)
 
     const markHostDirty = (hostId: string) => {
       useScene.getState().dirtyNodes.add(hostId as AnyNodeId)
@@ -86,17 +122,23 @@ const DoorTool: React.FC = () => {
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
+      setFallbackPose(null)
     }
 
     // Alignment candidates — anchors of every alignable object; refreshed
     // after each placement. A door aligns by the plan position of its centre.
     let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
 
+    // On-host cursor: the green/red wireframe outline tracks a live draft.
+    // Showing it always clears the off-host floating ghost (they never
+    // coexist — a draft means the cursor is on a valid host).
     const updateCursor = (
       worldPosition: [number, number, number],
       cursorRotationY: number,
       valid: boolean,
     ) => {
+      setFallbackPose(null)
       const group = cursorGroupRef.current
       if (!group) return
       group.visible = true
@@ -105,237 +147,149 @@ const DoorTool: React.FC = () => {
       edgeMaterial.color.setHex(valid ? 0x22_c5_5e : 0xef_44_44)
     }
 
-    const showFallbackCursor = (event: GridEvent) => {
-      if (draftRef.current) return
-      const [x, y, z] = event.localPosition
-      updateCursor([x, y + FALLBACK_HEIGHT / 2, z], 0, false)
+    // Off-host fallback: hide the wireframe outline and float the real door
+    // geometry (tinted invalid) at the cursor so the armed tool is visible.
+    const showGhostAt = (position: [number, number, number]) => {
+      if (cursorGroupRef.current) cursorGroupRef.current.visible = false
+      setFallbackPose({ position, rotationY: 0 })
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     const showRoofFallbackCursor = (event: RoofEvent) => {
       const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
-      updateCursor([x, getLevelYOffset() + FALLBACK_HEIGHT / 2, z], 0, false)
-      useAlignmentGuides.getState().clear()
+      showGhostAt([x, getLevelYOffset() + FALLBACK_HEIGHT / 2, z])
     }
 
     const showWallFallbackCursor = (event: WallEvent) => {
       const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
-      updateCursor([x, getLevelYOffset() + FALLBACK_HEIGHT / 2, z], 0, false)
-      useAlignmentGuides.getState().clear()
+      showGhostAt([x, getLevelYOffset() + FALLBACK_HEIGHT / 2, z])
     }
 
-    const onWallEnter = (event: WallEvent) => {
-      if (!isValidWallSideFace(event.normal)) {
-        destroyDraft()
-        showWallFallbackCursor(event)
-        return
-      }
-      if (isCurvedWall(event.node)) {
-        destroyDraft()
-        showWallFallbackCursor(event)
-        return
-      }
-      const levelId = getLevelId()
-      if (!levelId) {
-        destroyDraft()
-        showWallFallbackCursor(event)
-        return
-      }
-      if (event.node.parentId !== levelId) {
-        destroyDraft()
-        showWallFallbackCursor(event)
-        return
-      }
-
-      destroyDraft()
-
-      const side = getSideFromNormal(event.normal)
-      const itemRotation = calculateItemRotation(event.normal)
-      const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
-
-      const width = 0.9
-      const height = 2.1
+    // Settle a wall target: alignment snap → clamp → overlap check. Pure read.
+    const resolveWallPlacement = (
+      wall: WallNode,
+      rawLocalX: number,
+      width: number,
+      height: number,
+      bypass: boolean,
+      bypassSnap: boolean,
+      ignoreId?: string,
+    ) => {
       const localX = resolveWallSlideAlignment({
-        wallNode: event.node,
-        rawLocalX: event.localPosition[0],
+        wallNode: wall,
+        rawLocalX,
         width,
         candidates: alignmentCandidates,
-        bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
-        bypassSnap: event.nativeEvent?.shiftKey === true,
+        bypass,
+        bypassSnap,
       })
-
-      const { clampedX, clampedY } = clampToWall(event.node, localX, width, height)
-
-      const node = DoorNode.parse({
-        position: [clampedX, clampedY, 0],
-        rotation: [0, itemRotation, 0],
-        side,
-        wallId: event.node.id,
-        parentId: event.node.id,
-        metadata: { isTransient: true },
-      })
-
-      useScene.getState().createNode(node, event.node.id as AnyNodeId)
-      draftRef.current = node
-
-      const valid = !hasWallChildOverlap(event.node.id, clampedX, clampedY, width, height, node.id)
-
-      updateCursor(
-        wallLocalToWorld(
-          event.node,
-          clampedX,
-          clampedY,
-          getLevelYOffset(),
-          getSlabElevation(event),
-        ),
-        cursorRotation,
-        valid,
-      )
-      event.stopPropagation()
+      const { clampedX, clampedY } = clampToWall(wall, localX, width, height)
+      const valid = !hasWallChildOverlap(wall.id, clampedX, clampedY, width, height, ignoreId)
+      return { clampedX, clampedY, valid }
     }
 
-    const onWallMove = (event: WallEvent) => {
-      if (!isValidWallSideFace(event.normal)) {
-        destroyDraft()
-        showWallFallbackCursor(event)
-        return
-      }
-      if (isCurvedWall(event.node)) {
-        destroyDraft()
-        showWallFallbackCursor(event)
-        return
-      }
-      if (event.node.parentId !== getLevelId()) {
-        destroyDraft()
-        showWallFallbackCursor(event)
-        return
-      }
-
-      const side = getSideFromNormal(event.normal)
-      const itemRotation = calculateItemRotation(event.normal)
-      const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
-
+    // Shared create/update path for the wall draft — used by the direct
+    // wall-mesh hover and the floor proximity snap. Reuses the existing draft
+    // (reparenting only on an actual wall change to avoid churning the host's
+    // children array, which flashes 0-vertex wall geometry in WebGPU).
+    const applyWallTarget = (args: {
+      wall: WallNode
+      rawLocalX: number
+      side: 'front' | 'back'
+      itemRotation: number
+      cursorRotationY: number
+      bypass: boolean
+      bypassSnap: boolean
+    }) => {
+      const { wall, rawLocalX, side, itemRotation, cursorRotationY, bypass, bypassSnap } = args
       const width = draftRef.current?.width ?? 0.9
       const height = draftRef.current?.height ?? 2.1
-      const localX = resolveWallSlideAlignment({
-        wallNode: event.node,
-        rawLocalX: event.localPosition[0],
-        width,
-        candidates: alignmentCandidates,
-        bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
-        bypassSnap: event.nativeEvent?.shiftKey === true,
-      })
 
-      const { clampedX, clampedY } = clampToWall(event.node, localX, width, height)
-
-      // Draft may be null after a successful placement (the click handler
-      // deletes it and relies on the wall rebuild → pointer-enter cascade to
-      // recreate it). Recreate it here on the first subsequent move so the
-      // preview is ready for the next click without requiring a leave/enter.
       if (!draftRef.current) {
-        const levelId = getLevelId()
-        if (levelId && event.node.parentId === levelId) {
-          const node = DoorNode.parse({
-            position: [clampedX, clampedY, 0],
-            rotation: [0, itemRotation, 0],
-            side,
-            wallId: event.node.id,
-            parentId: event.node.id,
-            metadata: { isTransient: true },
-          })
-          useScene.getState().createNode(node, event.node.id as AnyNodeId)
-          draftRef.current = node
-        }
+        const node = DoorNode.parse({
+          position: [0, height / 2, 0],
+          rotation: [0, itemRotation, 0],
+          side,
+          wallId: wall.id,
+          parentId: wall.id,
+          metadata: { isTransient: true },
+        })
+        useScene.getState().createNode(node, wall.id as AnyNodeId)
+        draftRef.current = node
       }
 
-      if (draftRef.current) {
-        // Update the scene store on every move so the 2D floor plan
-        // stays in sync (it re-renders from `node.position`). Only
-        // forward `parentId` / `wallId` when the wall actually changed
-        // — otherwise the reparent path churns the host wall's
-        // `children` array every tick, which re-renders the wall and
-        // briefly draws its 0-vertex placeholder geometry (WebGPU then
-        // flags "Vertex buffer slot 0 ... was not set").
-        const isSameWall = event.node.id === draftRef.current.parentId
-        if (isSameWall) {
-          useScene.getState().updateNode(draftRef.current.id, {
-            position: [clampedX, clampedY, 0],
-            rotation: [0, itemRotation, 0],
-            side,
-          })
-          markHostDirty(event.node.id)
-        } else {
-          useScene.getState().updateNode(draftRef.current.id, {
-            position: [clampedX, clampedY, 0],
-            rotation: [0, itemRotation, 0],
-            side,
-            parentId: event.node.id,
-            wallId: event.node.id,
-            // The draft may arrive from a roof-segment face hover.
-            roofSegmentId: undefined,
-            roofFace: undefined,
-          })
-        }
-      }
-
-      const valid = !hasWallChildOverlap(
-        event.node.id,
-        clampedX,
-        clampedY,
+      const { clampedX, clampedY, valid } = resolveWallPlacement(
+        wall,
+        rawLocalX,
         width,
         height,
-        draftRef.current?.id,
+        bypass,
+        bypassSnap,
+        draftRef.current.id,
       )
+
+      if (wall.id === draftRef.current.parentId) {
+        useScene.getState().updateNode(draftRef.current.id, {
+          position: [clampedX, clampedY, 0],
+          rotation: [0, itemRotation, 0],
+          side,
+        })
+        markHostDirty(wall.id)
+      } else {
+        useScene.getState().updateNode(draftRef.current.id, {
+          position: [clampedX, clampedY, 0],
+          rotation: [0, itemRotation, 0],
+          side,
+          parentId: wall.id,
+          wallId: wall.id,
+          // The draft may arrive from a roof-segment face hover.
+          roofSegmentId: undefined,
+          roofFace: undefined,
+        })
+      }
 
       updateCursor(
         wallLocalToWorld(
-          event.node,
+          wall,
           clampedX,
           clampedY,
           getLevelYOffset(),
-          getSlabElevation(event),
+          getSlabElevationForWall(wall),
         ),
-        cursorRotation,
+        cursorRotationY,
         valid,
       )
-      event.stopPropagation()
+
+      if (draftRef.current) {
+        publishOpeningGuidesForWallEvent({
+          wall,
+          movingId: draftRef.current.id,
+          centerS: clampedX,
+          centerY: clampedY,
+          width,
+          height,
+          includeVertical: false,
+          levelYOffset: getLevelYOffset(),
+          slabElevation: getSlabElevationForWall(wall),
+        })
+      }
+      return { clampedX, clampedY, valid }
     }
 
-    const onWallClick = (event: WallEvent) => {
-      if (!draftRef.current) return
-      if (!isValidWallSideFace(event.normal)) return
-      if (isCurvedWall(event.node)) return
-      if (event.node.parentId !== getLevelId()) return
-
-      const side = getSideFromNormal(event.normal)
-      const itemRotation = calculateItemRotation(event.normal)
-
-      const localX = resolveWallSlideAlignment({
-        wallNode: event.node,
-        rawLocalX: event.localPosition[0],
-        width: draftRef.current.width,
-        candidates: alignmentCandidates,
-        bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
-        bypassSnap: event.nativeEvent?.shiftKey === true,
-      })
-      const { clampedX, clampedY } = clampToWall(
-        event.node,
-        localX,
-        draftRef.current.width,
-        draftRef.current.height,
-      )
-      const valid = !hasWallChildOverlap(
-        event.node.id,
-        clampedX,
-        clampedY,
-        draftRef.current.width,
-        draftRef.current.height,
-        draftRef.current.id,
-      )
-      if (!valid) return
-
+    // Promote the draft into a permanent door. Shared by the wall-mesh click
+    // and the floor proximity click.
+    const commitDoorAtWall = (
+      wall: WallNode,
+      clampedX: number,
+      clampedY: number,
+      side: 'front' | 'back',
+      itemRotation: number,
+    ) => {
       const draft = draftRef.current
+      if (!draft) return
       draftRef.current = null
+      hostKind = null
 
       useScene.getState().deleteNode(draft.id)
       useScene.temporal.getState().resume()
@@ -344,18 +298,17 @@ const DoorTool: React.FC = () => {
       const state = useScene.getState()
       const doorCount = Object.values(state.nodes).filter((n) => {
         if (n.type !== 'door') return false
-        const wall = n.parentId ? state.nodes[n.parentId as AnyNodeId] : undefined
-        return wall?.parentId === levelId
+        const w = n.parentId ? state.nodes[n.parentId as AnyNodeId] : undefined
+        return w?.parentId === levelId
       }).length
-      const name = `Door ${doorCount + 1}`
 
       const node = DoorNode.parse({
-        name,
+        name: `Door ${doorCount + 1}`,
         position: [clampedX, clampedY, 0],
         rotation: [0, itemRotation, 0],
         side,
-        wallId: event.node.id,
-        parentId: event.node.id,
+        wallId: wall.id,
+        parentId: wall.id,
         width: draft.width,
         height: draft.height,
         doorCategory: draft.doorCategory,
@@ -380,19 +333,108 @@ const DoorTool: React.FC = () => {
         panicBarHeight: draft.panicBarHeight,
       })
 
-      useScene.getState().createNode(node, event.node.id as AnyNodeId)
+      useScene.getState().createNode(node, wall.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
       useScene.temporal.getState().pause()
       triggerSFX('sfx:structure-build')
       alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
+    }
 
+    // ── Direct wall-mesh hover ──────────────────────────────────────
+    const onWallHover = (event: WallEvent) => {
+      hostKind = 'wall'
+      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
+      if (
+        !isValidWallSideFace(event.normal) ||
+        isCurvedWall(event.node) ||
+        event.node.parentId !== getLevelId()
+      ) {
+        destroyDraft()
+        showWallFallbackCursor(event)
+        return
+      }
+      lastWallEvent = event
+
+      const faceSide = getSideFromNormal(event.normal)
+      const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
+      const flipOffset = sideFlip ? Math.PI : 0
+      const itemRotation = calculateItemRotation(event.normal) + flipOffset
+      const cursorRotation =
+        calculateCursorRotation(event.normal, event.node.start, event.node.end) + flipOffset
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const bypass = event.nativeEvent?.altKey === true || bypassSnap
+
+      applyWallTarget({
+        wall: event.node,
+        rawLocalX: event.localPosition[0],
+        side,
+        itemRotation,
+        cursorRotationY: cursorRotation,
+        bypass,
+        bypassSnap,
+      })
+      event.stopPropagation()
+    }
+
+    const onWallClick = (event: WallEvent) => {
+      if (!draftRef.current) return
+      if (
+        !isValidWallSideFace(event.normal) ||
+        isCurvedWall(event.node) ||
+        event.node.parentId !== getLevelId()
+      ) {
+        return
+      }
+
+      const faceSide = getSideFromNormal(event.normal)
+      const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
+      const itemRotation = calculateItemRotation(event.normal) + (sideFlip ? Math.PI : 0)
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const bypass = event.nativeEvent?.altKey === true || bypassSnap
+
+      const { clampedX, clampedY, valid } = resolveWallPlacement(
+        event.node,
+        event.localPosition[0],
+        draftRef.current.width,
+        draftRef.current.height,
+        bypass,
+        bypassSnap,
+        draftRef.current.id,
+      )
+      if (!valid) return
+
+      commitDoorAtWall(event.node, clampedX, clampedY, side, itemRotation)
       event.stopPropagation()
     }
 
     const onWallLeave = () => {
+      if (hostKind !== 'wall') return
+      lastWallEvent = null
       destroyDraft()
       hideCursor()
+      hostKind = null
+    }
+
+    // ── Floor free-follow ───────────────────────────────────────────
+    // Over open floor the ghost follows the cursor like a moving item. It does
+    // NOT snap from proximity — snapping engages only when the cursor ray
+    // actually hovers a wall (onWallHover) or roof face (onRoofHover).
+    const onGridFreeFollow = (event: GridEvent) => {
+      if (useViewer.getState().cameraDragging) return
+      // A wall/roof mesh handler processed this exact pointermove (R3F + the
+      // grid raycast share the source DOM event's timeStamp) — it owns the
+      // frame and has snapped the draft, so skip the floor follow this tick.
+      const ts = event.nativeEvent?.timeStamp ?? -1
+      if (ts === lastMeshEventTime) return
+      // Fresh floor-only frame: the cursor is off any wall/roof. Drop any draft
+      // and free-follow the cursor with the invalid (unplaceable) ghost.
+      hostKind = null
+      lastWallEvent = null
+      const [x, y, z] = event.localPosition
+      destroyDraft()
+      showGhostAt([x, y + FALLBACK_HEIGHT / 2, z])
     }
 
     // ── Roof-segment wall faces ─────────────────────────────────────
@@ -414,6 +456,8 @@ const DoorTool: React.FC = () => {
     }
 
     const onRoofHover = (event: RoofEvent) => {
+      hostKind = 'roof'
+      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
       const target = resolveRoofTarget(event)
       if (!target) {
         // On the roof but not over a placeable wall face (slope, soffit,
@@ -444,6 +488,8 @@ const DoorTool: React.FC = () => {
         useScene.getState().createNode(node, segment.id as AnyNodeId)
         draftRef.current = node
       }
+      // Opening guides are wall-specific; clear them while over a roof face.
+      clearOpeningGuides3D()
       updateRoofCursor(target, event.node as RoofNode)
       event.stopPropagation()
     }
@@ -456,6 +502,7 @@ const DoorTool: React.FC = () => {
 
       const draft = draftRef.current
       draftRef.current = null
+      hostKind = null
 
       useScene.getState().deleteNode(draft.id)
       useScene.temporal.getState().resume()
@@ -508,59 +555,92 @@ const DoorTool: React.FC = () => {
     }
 
     const onRoofLeave = () => {
-      if (!draftRef.current?.roofSegmentId) return
+      if (hostKind !== 'roof') return
       destroyDraft()
       hideCursor()
+      hostKind = null
     }
 
     const onCancel = () => {
       destroyDraft()
       hideCursor()
+      hostKind = null
     }
 
-    emitter.on('wall:enter', onWallEnter)
-    emitter.on('wall:move', onWallMove)
+    // R flips the door's facing side mid-placement (front ↔ back), like the
+    // committed-selected R flip. Only meaningful while snapped to a wall (the
+    // off-wall ghost has no orientation), so it acts only then — re-applying
+    // the last wall hover so the snapped preview flips live.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'r' && e.key !== 'R') return
+      if (!lastWallEvent) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      e.preventDefault()
+      sideFlip = !sideFlip
+      triggerSFX('sfx:item-rotate')
+      onWallHover(lastWallEvent)
+    }
+
+    emitter.on('wall:enter', onWallHover)
+    emitter.on('wall:move', onWallHover)
     emitter.on('wall:click', onWallClick)
     emitter.on('wall:leave', onWallLeave)
     emitter.on('roof:enter', onRoofHover)
     emitter.on('roof:move', onRoofHover)
     emitter.on('roof:click', onRoofClick)
     emitter.on('roof:leave', onRoofLeave)
-    emitter.on('grid:move', showFallbackCursor)
+    emitter.on('grid:move', onGridFreeFollow)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('keydown', onKeyDown)
 
     return () => {
       destroyDraft()
       hideCursor()
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
       useScene.temporal.getState().resume()
-      emitter.off('wall:enter', onWallEnter)
-      emitter.off('wall:move', onWallMove)
+      emitter.off('wall:enter', onWallHover)
+      emitter.off('wall:move', onWallHover)
       emitter.off('wall:click', onWallClick)
       emitter.off('wall:leave', onWallLeave)
       emitter.off('roof:enter', onRoofHover)
       emitter.off('roof:move', onRoofHover)
       emitter.off('roof:click', onRoofClick)
       emitter.off('roof:leave', onRoofLeave)
-      emitter.off('grid:move', showFallbackCursor)
+      emitter.off('grid:move', onGridFreeFollow)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown)
     }
   }, [])
 
-  // Cursor geometry: door outline.
-  const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
-  const edgesGeo = new EdgesGeometry(boxGeo)
-  boxGeo.dispose()
+  // Cursor geometry: door outline. Static dims, so build it once and dispose on
+  // unmount rather than reallocating (and orphaning) an EdgesGeometry on every
+  // re-render during placement.
+  const edgesGeo = useMemo(() => {
+    const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
+    const geo = new EdgesGeometry(boxGeo)
+    boxGeo.dispose()
+    return geo
+  }, [])
+  useEffect(() => () => edgesGeo.dispose(), [edgesGeo])
 
   return (
-    <group ref={cursorGroupRef} visible={false}>
-      <lineSegments
-        geometry={edgesGeo}
-        layers={EDITOR_LAYER}
-        material={edgeMaterial}
-        ref={edgesRef}
-      />
-    </group>
+    <>
+      <group ref={cursorGroupRef} visible={false}>
+        <lineSegments
+          geometry={edgesGeo}
+          layers={EDITOR_LAYER}
+          material={edgeMaterial}
+          ref={edgesRef}
+        />
+      </group>
+      {fallbackPose && (
+        <group position={fallbackPose.position} rotation-y={fallbackPose.rotationY}>
+          <DoorPreview invalid node={ghostStub} />
+        </group>
+      )}
+    </>
   )
 }
 
