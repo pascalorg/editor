@@ -630,6 +630,14 @@ export type FloorplanMoveTargetSession = {
    * returns.
    */
   commit?(): void
+  /**
+   * Optional R-key flip toggle. Kinds with a directional facing
+   * (door / window: front ↔ back) implement this so the overlay can flip
+   * the orientation mid-placement before commit. Toggling just records the
+   * intent; the visible change lands when the overlay re-runs `apply()` with
+   * the last pointer position. Kinds with no facing leave it unset.
+   */
+  flipSide?(): void
 }
 
 export type FloorplanMoveTarget<N> = (args: {

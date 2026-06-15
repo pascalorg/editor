@@ -369,6 +369,11 @@ type EditorState = {
   // Development-only camera debug flag for inspecting underside geometry
   allowUndergroundCamera: boolean
   setAllowUndergroundCamera: (enabled: boolean) => void
+  // Development-only debug overlay: draw each wall's opening-snap hit area
+  // (the capsule of points within the snap radius of its centerline). Lets us
+  // see why a door/window snaps where it does.
+  show2dVoronoi: boolean
+  setShow2dVoronoi: (enabled: boolean) => void
   // First-person walkthrough mode (street view)
   isFirstPersonMode: boolean
   _viewModeBeforeFirstPerson: ViewMode | null
@@ -955,6 +960,8 @@ const useEditor = create<EditorState>()(
         set({ referenceFloorOpacity: Math.min(0.8, Math.max(0.1, opacity)) }),
       allowUndergroundCamera: false,
       setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
+      show2dVoronoi: false,
+      setShow2dVoronoi: (enabled) => set({ show2dVoronoi: enabled }),
       isFirstPersonMode: false,
       _viewModeBeforeFirstPerson: null as ViewMode | null,
       setFirstPersonMode: (enabled) => {

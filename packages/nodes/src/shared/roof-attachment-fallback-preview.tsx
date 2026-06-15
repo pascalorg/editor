@@ -9,7 +9,7 @@ import {
   sceneRegistry,
 } from '@pascal-app/core'
 import { DragBoundingBox } from '@pascal-app/editor'
-import { useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Vector3 } from 'three'
 
 const INVALID_PREVIEW_COLOR = 0xef_44_44
@@ -17,6 +17,7 @@ type ValidTarget = 'roof' | 'gutter'
 
 export function RoofAttachmentFallbackPreview({
   activeBuildingId,
+  ghost,
   isValidRoofTarget,
   lift = 0,
   onInvalidTarget,
@@ -24,10 +25,11 @@ export function RoofAttachmentFallbackPreview({
   validTarget = 'roof',
 }: {
   activeBuildingId: string | null | undefined
+  ghost?: ReactNode
   isValidRoofTarget?: (event: RoofEvent) => boolean
   lift?: number
   onInvalidTarget?: () => void
-  size: [number, number, number]
+  size?: [number, number, number]
   validTarget?: ValidTarget
 }) {
   const [position, setPosition] = useState<[number, number, number] | null>(null)
@@ -100,6 +102,13 @@ export function RoofAttachmentFallbackPreview({
 
   if (!(activeBuildingId && position)) return null
 
+  // When ghost is provided, render the ghost instead of DragBoundingBox
+  if (ghost) {
+    return <group position={position}>{ghost}</group>
+  }
+
+  // Fallback to DragBoundingBox for callers not yet migrated
+  if (!size) return null
   return (
     <DragBoundingBox
       color={INVALID_PREVIEW_COLOR}

@@ -1,6 +1,13 @@
 'use client'
 
-import { emitter, type GridEvent, SpawnNode, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  emitter,
+  type GridEvent,
+  SpawnNode,
+  sceneRegistry,
+  snapScalar,
+  useScene,
+} from '@pascal-app/core'
 import {
   CursorSphere,
   getFloorStackPreviewPosition,
@@ -11,7 +18,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { type Group, Vector3 } from 'three'
 
-const roundToHalf = (value: number) => Math.round(value * 2) / 2
+const snapToGrid = (value: number) => snapScalar(value, useEditor.getState().gridSnapStep)
 const worldVector = new Vector3()
 
 function getExistingSpawnIds() {
@@ -31,14 +38,14 @@ function getLevelLocalPosition(
   if (!levelObject) {
     return bypassSnap
       ? [event.localPosition[0], 0, event.localPosition[2]]
-      : [roundToHalf(event.localPosition[0]), 0, roundToHalf(event.localPosition[2])]
+      : [snapToGrid(event.localPosition[0]), 0, snapToGrid(event.localPosition[2])]
   }
   worldVector.set(event.position[0], event.position[1], event.position[2])
   levelObject.updateWorldMatrix(true, false)
   levelObject.worldToLocal(worldVector)
   return bypassSnap
     ? [worldVector.x, 0, worldVector.z]
-    : [roundToHalf(worldVector.x), 0, roundToHalf(worldVector.z)]
+    : [snapToGrid(worldVector.x), 0, snapToGrid(worldVector.z)]
 }
 
 /**
@@ -58,11 +65,11 @@ const SpawnTool = () => {
 
     const onGridMove = (event: GridEvent) => {
       // Cursor lives in the ToolManager's building-local group. Use
-      // event.localPosition directly (already building-local) with the
-      // same half-meter snap the legacy tool uses.
+      // event.localPosition directly (already building-local), snapped to the
+      // editor's configured grid step (Shift bypasses).
       const bypassSnap = event.nativeEvent?.shiftKey === true
-      const nextX = bypassSnap ? event.localPosition[0] : roundToHalf(event.localPosition[0])
-      const nextZ = bypassSnap ? event.localPosition[2] : roundToHalf(event.localPosition[2])
+      const nextX = bypassSnap ? event.localPosition[0] : snapToGrid(event.localPosition[0])
+      const nextZ = bypassSnap ? event.localPosition[2] : snapToGrid(event.localPosition[2])
       const position: [number, number, number] = [nextX, 0, nextZ]
       const previewNode = SpawnNode.parse({
         name: 'Spawn Point',

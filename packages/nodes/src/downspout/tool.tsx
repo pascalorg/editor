@@ -167,8 +167,8 @@ const DownspoutTool = () => {
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
+        ghost={<DownspoutPreview node={previewNode} invalid />}
         onInvalidTarget={() => setTarget(null)}
-        size={[0.2, 2.5, 0.2]}
         validTarget="gutter"
       />
       {activeBuildingId && target && (

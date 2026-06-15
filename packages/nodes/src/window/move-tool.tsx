@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   collectAlignmentAnchors,
   emitter,
+  type GridEvent,
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
@@ -106,6 +107,15 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
     let currentHostId: string | null = movingWindowNode.parentId
     let committed = false
+    // Off-wall free-follow: over empty floor the window is parented to the
+    // level and tracks the cursor like an item. `freeFollowing` marks that
+    // state; `lastMeshEventTime` defers the floor handler whenever a wall/roof
+    // mesh event owns the same pointermove — that's the only thing that snaps.
+    let freeFollowing = false
+    let lastMeshEventTime = -1
+    // The window's chosen facing side. R flips it mid-placement (front ↔ back),
+    // matching the committed-selected R flip. Initialised from the moving node.
+    let sideOverride: WindowNode['side'] = movingWindowNode.side
     let dragAnchor: {
       wallId: string
       rawX: number
@@ -145,6 +155,17 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     const getLevelYOffset = () => {
       const id = getLevelId()
       return id ? (sceneRegistry.nodes.get(id as AnyNodeId)?.position.y ?? 0) : 0
+    }
+
+    // Sill-center height used while the window isn't on a wall (free-follow and
+    // proximity). Fresh preset clones are created at position [0,0,0], which
+    // would bury half the window below the floor; default such windows to a
+    // ~0.9m sill so the ghost floats at a realistic height. An existing window
+    // keeps its own sill.
+    const DEFAULT_SILL = 0.9
+    const getSillCenterY = () => {
+      const y = movingWindowNode.position[1]
+      return y > 0.1 ? y : DEFAULT_SILL + movingWindowNode.height / 2
     }
     const getSlabElevation = (wallEvent: WallEvent) =>
       spatialGridManager.getSlabElevationForWall(
@@ -189,9 +210,12 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // Only interact with walls on the current level
       if (event.node.parentId !== getLevelId()) return
 
-      const side = getSideFromNormal(event.normal)
-      const itemRotation = calculateItemRotation(event.normal)
-      const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
+      const faceSide = getSideFromNormal(event.normal)
+      const side = sideOverride ?? faceSide
+      const rotationOffset = side !== faceSide ? Math.PI : 0
+      const itemRotation = calculateItemRotation(event.normal) + rotationOffset
+      const cursorRotation =
+        calculateCursorRotation(event.normal, event.node.start, event.node.end) + rotationOffset
 
       const rawLocalX = event.localPosition[0]
       const rawLocalY = event.localPosition[1]
@@ -318,11 +342,13 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const onWallEnter = (event: WallEvent) => {
+      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
       const target = resolveMoveTarget(event)
       if (!target) {
         onWallLeave()
         return
       }
+      freeFollowing = false
       lastTarget = target
       lastRoofEvent = null
       applyPreview(target)
@@ -330,6 +356,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const onWallMove = (event: WallEvent) => {
+      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
       if (!isValidWallSideFace(event.normal)) {
         onWallLeave()
         return
@@ -349,21 +376,17 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         onWallLeave()
         return
       }
+      freeFollowing = false
       lastTarget = target
       lastRoofEvent = null
       applyPreview(target)
       event.stopPropagation()
     }
 
-    const onWallClick = (event: WallEvent) => {
+    // Promote the moving window into its committed wall placement. Shared by
+    // the direct wall-mesh click and the floor proximity click.
+    const commitToWall = (target: NonNullable<typeof lastTarget>) => {
       if (committed) return
-      if (!isValidWallSideFace(event.normal)) return
-      if (isCurvedWall(event.node)) return
-      // Only interact with walls on the current level
-      if (event.node.parentId !== getLevelId()) return
-
-      const target = lastTarget?.wallId === event.node.id ? lastTarget : resolveMoveTarget(event)
-      if (!target?.valid) return
       committed = true
 
       let placedId: string
@@ -429,31 +452,78 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       hideCursor()
       useViewer.getState().setSelection({ selectedIds: [placedId] })
       exitMoveMode()
+    }
+
+    const onWallClick = (event: WallEvent) => {
+      if (committed) return
+      if (!isValidWallSideFace(event.normal)) return
+      if (isCurvedWall(event.node)) return
+      // Only interact with walls on the current level
+      if (event.node.parentId !== getLevelId()) return
+
+      const target = lastTarget?.wallId === event.node.id ? lastTarget : resolveMoveTarget(event)
+      if (!target?.valid) return
+      commitToWall(target)
       event.stopPropagation()
     }
 
     const onWallLeave = () => {
+      // The cursor left the wall mesh. Don't snap back to the origin/original
+      // here — the floor proximity handler (onGridMove) takes over on the same
+      // pointermove: it snaps to a nearby wall or free-follows the cursor, so
+      // the window never blinks back to the building origin between a wall and
+      // open floor. Revert is left to free-follow / cancel / commit.
       hideCursor()
       useLiveTransforms.getState().clear(movingWindowNode.id)
       dragAnchor = null
       lastTarget = null
       lastRoofEvent = null
-      if (isNew) return // No original to restore for duplicates
-      // Move mode: restore to original position while off-wall
-      if (currentHostId && currentHostId !== original.parentId) {
-        markHostDirty(currentHostId)
+    }
+
+    // Free-follow: the window rides the cursor over empty floor, parented to
+    // the level like an item node, kept at a sensible sill height. No wall to
+    // attach to, so it is not committable here.
+    const freeFollowAt = (localX: number, localZ: number) => {
+      freeFollowing = true
+      lastTarget = null
+      lastRoofEvent = null
+      hideCursor()
+      useLiveTransforms.getState().clear(movingWindowNode.id)
+      const levelId = getLevelId()
+      const sillCenterY = getSillCenterY()
+      // Keep the R-flip visible while free-following (back = rotated π).
+      const yaw = sideOverride === 'back' ? Math.PI : 0
+      if (currentHostId !== levelId) {
+        if (currentHostId && currentHostId !== levelId) markHostDirty(currentHostId)
+        useScene.getState().updateNode(movingWindowNode.id, {
+          position: [localX, sillCenterY, localZ],
+          rotation: [0, yaw, 0],
+          side: sideOverride,
+          parentId: levelId ?? undefined,
+          wallId: undefined,
+          roofSegmentId: undefined,
+          roofFace: undefined,
+        })
+        currentHostId = levelId
+      } else {
+        useScene.getState().updateNode(movingWindowNode.id, {
+          position: [localX, sillCenterY, localZ],
+          rotation: [0, yaw, 0],
+          side: sideOverride,
+        })
       }
-      currentHostId = original.parentId
-      useScene.getState().updateNode(movingWindowNode.id, {
-        position: original.position,
-        rotation: original.rotation,
-        side: original.side,
-        parentId: original.parentId,
-        wallId: original.wallId,
-        roofSegmentId: original.roofSegmentId,
-        roofFace: original.roofFace,
-      })
-      if (original.parentId) markHostDirty(original.parentId)
+    }
+
+    const onGridMove = (event: GridEvent) => {
+      if (committed) return
+      if (useViewer.getState().cameraDragging) return
+      // A wall/roof mesh handler owns this exact pointermove (shared DOM
+      // timeStamp): the cursor ray is on a wall/roof, so it snaps. Otherwise
+      // the cursor is over open floor — free-follow it. No proximity magnet:
+      // snapping engages only when the cursor ray actually hovers a wall.
+      if (event.nativeEvent?.timeStamp === lastMeshEventTime) return
+      const [x, , z] = event.localPosition
+      freeFollowAt(x, z)
     }
 
     // ── Roof-segment wall faces ─────────────────────────────────────
@@ -480,12 +550,14 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const onRoofHover = (event: RoofEvent) => {
+      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
       const target = resolveRoofMoveTarget(event)
       if (!target) {
         onRoofLeave()
         return
       }
       // Wall-frame drag anchor / live transform don't apply on a roof face.
+      freeFollowing = false
       dragAnchor = null
       lastTarget = null
       lastRoofEvent = event
@@ -586,26 +658,13 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const onRoofLeave = () => {
+      // Mirror onWallLeave: don't revert to origin here — onGridMove takes
+      // over on the same pointermove (snap to a nearby wall or free-follow).
       hideCursor()
       useLiveTransforms.getState().clear(movingWindowNode.id)
       dragAnchor = null
       lastTarget = null
       lastRoofEvent = null
-      if (isNew) return
-      if (currentHostId && currentHostId !== original.parentId) {
-        markHostDirty(currentHostId)
-      }
-      currentHostId = original.parentId
-      useScene.getState().updateNode(movingWindowNode.id, {
-        position: original.position,
-        rotation: original.rotation,
-        side: original.side,
-        parentId: original.parentId,
-        wallId: original.wallId,
-        roofSegmentId: original.roofSegmentId,
-        roofFace: original.roofFace,
-      })
-      if (original.parentId) markHostDirty(original.parentId)
     }
 
     const onCancel = () => {
@@ -633,11 +692,45 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
     const onPlacementDragPointerUp = (event: PointerEvent) => {
       if (!consumePlacementDragRelease(event)) return
-      if (lastTarget) {
-        onWallClick(lastTarget.event)
+      // Free-following over open floor can't commit (no wall). A wall hover
+      // target commits via commitToWall; a roof face via onRoofClick.
+      if (lastTarget?.valid && !freeFollowing) {
+        commitToWall(lastTarget)
         return
       }
       if (lastRoofEvent) onRoofClick(lastRoofEvent)
+    }
+
+    // R flips the window's facing side mid-placement (front ↔ back), like the
+    // committed-selected R flip — usable before commit, whether snapped to a
+    // wall or free-following. No-op on a roof-segment face (front-only host).
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (committed) return
+      if (e.key !== 'r' && e.key !== 'R') return
+      const target = e.target as HTMLElement | null
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      ) {
+        return
+      }
+      const onWall = lastTarget !== null
+      if (!(onWall || freeFollowing)) return
+      e.preventDefault()
+      sideOverride = sideOverride === 'front' ? 'back' : 'front'
+      triggerSFX('sfx:item-rotate')
+      if (onWall) {
+        const next = resolveMoveTarget(lastTarget!.event)
+        if (next) {
+          lastTarget = next
+          applyPreview(next)
+        }
+      } else {
+        useScene.getState().updateNode(movingWindowNode.id, {
+          side: sideOverride,
+          rotation: [0, sideOverride === 'back' ? Math.PI : 0, 0],
+        })
+      }
     }
 
     emitter.on('wall:enter', onWallEnter)
@@ -648,8 +741,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     emitter.on('roof:move', onRoofHover)
     emitter.on('roof:click', onRoofClick)
     emitter.on('roof:leave', onRoofLeave)
+    emitter.on('grid:move', onGridMove)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('pointerup', onPlacementDragPointerUp)
+    window.addEventListener('keydown', onKeyDown)
 
     return () => {
       // Safety cleanup: if still transient on unmount (e.g. phase switch mid-move)
@@ -687,8 +782,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       emitter.off('roof:move', onRoofHover)
       emitter.off('roof:click', onRoofClick)
       emitter.off('roof:leave', onRoofLeave)
+      emitter.off('grid:move', onGridMove)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
+      window.removeEventListener('keydown', onKeyDown)
     }
   }, [movingWindowNode, exitMoveMode])
 

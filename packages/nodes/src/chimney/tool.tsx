@@ -144,12 +144,12 @@ const ChimneyTool = () => {
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
+        ghost={<ChimneyPreview node={previewNode} invalid />}
         onInvalidTarget={() => {
           setSegmentXform(null)
           setHitLocal(null)
           setPreviewSegment(null)
         }}
-        size={[1, 2.5, 1]}
       />
       {activeBuildingId && segmentXform && hitLocal && previewSegment && (
         // Outer group mirrors the real renderer's `position={segment.position}
