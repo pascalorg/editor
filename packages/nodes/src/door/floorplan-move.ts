@@ -5,8 +5,9 @@ import {
   type FloorplanMoveTargetSession,
   useScene,
   type WallNode,
+  WallNode as WallNodeSchema,
 } from '@pascal-app/core'
-import { snapToHalf } from '@pascal-app/editor'
+import { snapToHalf, usePlacementPreview } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import {
   getRoofHostedOpeningLevelId,
@@ -82,6 +83,39 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
     planPoint: readonly [number, number]
     modifiers: { shiftKey: boolean; altKey: boolean; ctrlKey: boolean; metaKey: boolean }
   } | null = null
+  // Whether the cursor is currently over a wall. Off-wall the door free-follows
+  // the cursor as a ghost (like the 3D move) and is NOT committable — a door
+  // needs a wall. Starts true so a click before any move keeps the door put.
+  let onWall = true
+
+  // Off-wall: float the faithful door symbol at the cursor (via a synthetic
+  // wall fed to the placement-preview layer) and hide the real node, so the
+  // ghost follows the cursor in 2D instead of the door staying frozen on its
+  // old wall. Mirrors the fresh-placement free-follow.
+  const freeFollow = (planPoint: readonly [number, number]) => {
+    onWall = false
+    lastValid = null
+    if ((useScene.getState().nodes[node.id as AnyNodeId] as DoorNode | undefined)?.visible) {
+      useScene.getState().updateNode(node.id as AnyNodeId, { visible: false })
+    }
+    const half = node.width / 2 + 0.5
+    const wall = WallNodeSchema.parse({
+      start: [planPoint[0] - half, planPoint[1]],
+      end: [planPoint[0] + half, planPoint[1]],
+      thickness: 0.1,
+    })
+    const ghost = {
+      ...node,
+      parentId: wall.id,
+      wallId: wall.id,
+      roofSegmentId: undefined,
+      roofFace: undefined,
+      position: [half, node.position[1], 0] as [number, number, number],
+      rotation: [0, 0, 0] as [number, number, number],
+      visible: true,
+    } as DoorNode
+    usePlacementPreview.getState().set(ghost, wall)
+  }
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: [node.id as AnyNodeId],
@@ -94,7 +128,17 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       const nodes = useScene.getState().nodes
       const resolvedPlanPoint = resolveCursor(planPoint)
       const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)
-      if (!hit) return // pointer off any wall — keep door at last valid position
+      if (!hit) {
+        // Off any wall — free-follow the cursor (not committable).
+        freeFollow(resolvedPlanPoint)
+        return
+      }
+      // Back on a wall — drop the free-follow ghost + reveal the real node.
+      onWall = true
+      usePlacementPreview.getState().clear()
+      if ((nodes[node.id as AnyNodeId] as DoorNode | undefined)?.visible === false) {
+        useScene.getState().updateNode(node.id as AnyNodeId, { visible: true })
+      }
 
       // Figma-style along-wall alignment first (edge-to-edge with other
       // openings / wall ends); it competes with — and wins over — the 0.5m
@@ -142,6 +186,11 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       ])
     },
     canCommit() {
+      // Off-wall the door is free-following in mid-air — not placeable. The
+      // overlay then reverts to the pre-move snapshot (door returns to its
+      // original wall), matching the 3D move where an open-floor click commits
+      // nothing.
+      if (!onWall) return false
       const live = useScene.getState().nodes[node.id as AnyNodeId] as DoorNode | undefined
       if (!live || live.type !== 'door') return false
       // Block commit if the door overlaps any other wall child at its
