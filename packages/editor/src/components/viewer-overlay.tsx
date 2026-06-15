@@ -91,7 +91,7 @@ const SHADING_OPTIONS = [
 ] as const
 
 const TEXTURE_OPTIONS = [
-  { id: true, name: 'Colored', detail: 'Show materials, textures & colours', icon: Palette },
+  { id: true, name: 'Colored', detail: 'Show materials, textures & colors', icon: Palette },
   { id: false, name: 'Monochrome', detail: 'Flat clay surfaces by role', icon: Square },
 ] as const
 
