@@ -9,12 +9,13 @@ import {
   useScene,
   type WallEvent,
 } from '@pascal-app/core'
-import { triggerSFX, useEditor } from '@pascal-app/editor'
+import { CursorSphere, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Matrix3, Matrix4, Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { ductTerminalDefinition } from './definition'
 import { buildDuctTerminalGeometry } from './geometry'
 
@@ -137,10 +138,13 @@ const DuctTerminalTool = () => {
       const hit = hitLocalPlane(nativeEvent, y)
       if (!hit) return null
       const step = nativeEvent.shiftKey ? 0 : useEditor.getState().gridSnapStep
-      return {
-        position: [snap(hit.x, step), y, snap(hit.z, step)],
-        yaw: yawRef.current,
-      }
+      // Grid-snap, then layer Figma-style alignment so a floor / ceiling
+      // register lines up with ducts, equipment, and items (Shift = free).
+      const position = alignDrawPoint([snap(hit.x, step), y, snap(hit.z, step)], {
+        applySnap: true,
+        bypass: nativeEvent.shiftKey === true,
+      })
+      return { position, yaw: yawRef.current }
     }
 
     const commit = (p: Placement) => {
@@ -191,6 +195,8 @@ const DuctTerminalTool = () => {
 
     const onWallMove = (event: WallEvent) => {
       if (mountRef.current !== 'wall') return
+      // Wall-mounted terminals snap flush to the wall — no plan alignment.
+      clearDrawAlignment()
       const p = resolveWall(event)
       if (p) setPlacement(p)
     }
@@ -239,6 +245,7 @@ const DuctTerminalTool = () => {
       emitter.off('wall:move', onWallMove)
       emitter.off('wall:click', onWallClick)
       window.removeEventListener('keydown', onKeyDown, true)
+      clearDrawAlignment()
     }
   }, [activeLevelId, camera, gl])
 
@@ -248,6 +255,11 @@ const DuctTerminalTool = () => {
 
   return (
     <group>
+      {/* Same ground ring + vertical line + tool-icon badge the duct draw
+          tool shows in 3D (icon resolved from the active `duct-terminal`
+          structure-tools entry). In 2D the floorplan overlay draws this for
+          every tool; in 3D each tool renders its own. */}
+      <CursorSphere position={placement.position} />
       <group position={placement.position} rotation={[0, placement.yaw, 0]}>
         <primitive object={ghost} />
       </group>

@@ -1,7 +1,7 @@
 'use client'
 
 import { emitter, type GridEvent, PipeFittingNode, useScene } from '@pascal-app/core'
-import { EDITOR_LAYER, triggerSFX, useEditor } from '@pascal-app/editor'
+import { CursorSphere, EDITOR_LAYER, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -208,6 +208,11 @@ const PipeFittingTool = () => {
 
   return (
     <group>
+      {/* Same ground ring + vertical line + tool-icon badge the duct draw
+          tool shows in 3D (icon resolved from the active `pipe-fitting`
+          structure-tools entry). In 2D the floorplan overlay draws this for
+          every tool; in 3D each tool renders its own. */}
+      <CursorSphere position={placement.position} />
       <group position={placement.position} rotation={placement.rotation}>
         <primitive object={ghost} />
       </group>

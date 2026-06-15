@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
 import { buildLinesetFloorplan } from './floorplan'
 import { buildLinesetGeometry } from './geometry'
 import { linesetParametrics } from './parametrics'
@@ -85,6 +86,13 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
 
   floorplan: buildLinesetFloorplan,
 
+  // 2D selection-time path-point handles — the floor-plan twin of the 3D
+  // `affordanceTools.selection` handles. The builder emits an
+  // `endpoint-handle` per path vertex; this drags the matching point.
+  floorplanAffordances: {
+    'move-path-point': createPathPointMoveAffordance('lineset'),
+  },
+
   // Selection-time path-point handles (drag to edit a committed run).
   // Editor-only UI (reads gridSnapStep, renders DimensionPill), so it
   // mounts via the editor's SelectionAffordanceManager — not `def.system`,
@@ -112,7 +120,7 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
     label: 'Lineset',
     description:
       'Refrigerant lineset — copper suction + liquid pair joining a condenser to the indoor coil.',
-    icon: { kind: 'iconify', name: 'lucide:cable' },
+    icon: { kind: 'url', src: '/icons/lineset.png' },
     paletteSection: 'structure',
     paletteOrder: 93,
   },

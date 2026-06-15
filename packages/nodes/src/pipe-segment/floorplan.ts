@@ -17,10 +17,15 @@ export function buildPipeSegmentFloorplan(
   if (node.path.length < 2) return null
 
   const points: FloorplanPoint[] = []
-  for (const [x, , z] of node.path) {
+  // Plan point k ← original path index indexMap[k] (stacks collapse to one
+  // plan point), so the path-point drag handle edits the right vertex.
+  const indexMap: number[] = []
+  for (let i = 0; i < node.path.length; i++) {
+    const [x, , z] = node.path[i]!
     const prev = points[points.length - 1]
     if (prev && Math.abs(prev[0] - x) < 1e-6 && Math.abs(prev[1] - z) < 1e-6) continue
     points.push([x, z])
+    indexMap.push(i)
   }
 
   const diameterM = node.diameter * INCHES_TO_METERS
@@ -75,6 +80,20 @@ export function buildPipeSegmentFloorplan(
           opacity: showSelectedChrome ? 0.95 : 0.85,
         },
   ]
+
+  // Selection chrome: one draggable handle per path vertex (2D twin of the
+  // 3D selection handles). Routes to the shared `move-path-point` affordance.
+  if (view?.selected) {
+    for (let k = 0; k < points.length; k++) {
+      children.push({
+        kind: 'endpoint-handle',
+        point: points[k]!,
+        state: 'idle',
+        affordance: 'move-path-point',
+        payload: { pointIndex: indexMap[k]! },
+      })
+    }
+  }
 
   return { kind: 'group', children }
 }

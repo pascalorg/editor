@@ -9,6 +9,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  CursorSphere,
   DimensionPill,
   EDITOR_LAYER,
   markToolCancelConsumed,
@@ -21,6 +22,7 @@ import { useEffect, useRef, useState } from 'react'
 import { type Group, Matrix4, Vector3 } from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import { planElbowAtPort, planElbowRealign, planTeeAtRunBody } from '../shared/auto-fitting'
+import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import {
   collectScenePorts,
   DUCT_PORT_SYSTEMS,
@@ -538,6 +540,24 @@ const DuctSegmentTool = () => {
       return [last[0], y, last[2]]
     }
 
+    // Resolve the cursor point (port / body / grid / angle snap) and then
+    // layer Figma-style alignment on top so a run lines up with other runs,
+    // fittings, and items as it's drawn. Snap is applied for a free point
+    // (first vertex, or Shift free-angle); an angle-locked continuation shows
+    // the guide passively without leaving its 45° ray. A port / body snap or
+    // Alt bypasses alignment entirely.
+    const resolveAlignedPoint = (event: GridEvent) => {
+      const r = resolveSnappedPoint(event)
+      const hasStart = draftRef.current.length > 0
+      const shift = event.nativeEvent?.shiftKey === true
+      const alt = event.nativeEvent?.altKey === true
+      const point = alignDrawPoint(r.point, {
+        applySnap: !hasStart || shift,
+        bypass: alt || r.snapped !== null,
+      })
+      return { ...r, point }
+    }
+
     const onMove = (event: GridEvent) => {
       const clientY = (event.nativeEvent as { clientY?: number } | undefined)?.clientY
       if (typeof clientY === 'number') lastClientYRef.current = clientY
@@ -545,12 +565,13 @@ const DuctSegmentTool = () => {
       if (altAnchorRef.current && typeof clientY === 'number') {
         const point = resolveAltVerticalPoint(clientY)
         if (point) {
+          clearDrawAlignment()
           setCursorPos(point)
           setSnapTarget(null)
           return
         }
       }
-      const { point, snapped } = resolveSnappedPoint(event)
+      const { point, snapped } = resolveAlignedPoint(event)
       setCursorPos(point)
       setSnapTarget(snapped)
     }
@@ -571,7 +592,7 @@ const DuctSegmentTool = () => {
         }
         return
       }
-      const { point, port, body } = resolveSnappedPoint(event)
+      const { point, port, body } = resolveAlignedPoint(event)
       if (!start) {
         // First click: anchor the segment start, remembering the port or
         // run body it snapped to so the commit can mint an elbow / tee.
@@ -656,6 +677,7 @@ const DuctSegmentTool = () => {
     }
 
     const onCancel = () => {
+      clearDrawAlignment()
       if (draftRef.current.length === 0) return
       markToolCancelConsumed()
       setDraftPoints([])
@@ -677,6 +699,7 @@ const DuctSegmentTool = () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       altAnchorRef.current = null
+      clearDrawAlignment()
     }
   }, [activeLevelId])
 
@@ -723,30 +746,34 @@ const DuctSegmentTool = () => {
 
   return (
     <group>
-      {/* Cursor pip */}
-      <group ref={cursorRef} position={cursorPos ?? [0, 0, 0]} visible={!!cursorPos}>
-        <mesh layers={EDITOR_LAYER}>
-          <sphereGeometry args={[0.08, 16, 12]} />
-          <meshBasicMaterial color="#818cf8" depthTest={false} transparent opacity={0.9} />
-        </mesh>
-        {pillParts && (
-          <Html
-            center
-            position={[0, 0.35, 0]}
-            style={{ pointerEvents: 'none', userSelect: 'none' }}
-            zIndexRange={[100, 0]}
-          >
-            <div className="flex flex-col items-center gap-1">
-              <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
-              {ceilingMode && !last && (
-                <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
-                  Ceiling · C to toggle
+      {/* Cursor marker — the same ground ring + vertical line + tool-icon
+          badge walls and items show while drawing (icon resolved from the
+          active `duct-segment` structure-tools entry). The dimension pill
+          rides just above the cursor. */}
+      {cursorPos && (
+        <>
+          <CursorSphere position={cursorPos} ref={cursorRef} />
+          {pillParts && (
+            <group position={cursorPos}>
+              <Html
+                center
+                position={[0, 0.35, 0]}
+                style={{ pointerEvents: 'none', userSelect: 'none' }}
+                zIndexRange={[100, 0]}
+              >
+                <div className="flex flex-col items-center gap-1">
+                  <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
+                  {ceilingMode && !last && (
+                    <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
+                      Ceiling · C to toggle
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </Html>
-        )}
-      </group>
+              </Html>
+            </group>
+          )}
+        </>
+      )}
       {/* Endpoint-snap halo — brighter ring around the target endpoint
           while the cursor is within snap range, so the user sees that the
           next click will join an existing duct rather than freeform-place. */}

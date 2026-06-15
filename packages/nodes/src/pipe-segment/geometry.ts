@@ -2,7 +2,7 @@ import { Group, Mesh, MeshStandardMaterial, SphereGeometry, Vector3 } from 'thre
 import { buildSection, INCHES_TO_METERS } from '../duct-segment/geometry'
 import type { PipeSegmentNode } from './schema'
 
-const PVC_COLOR = '#e9e7e1'
+const PVC_COLOR = '#f5f5f5'
 const ABS_COLOR = '#3a3a3a'
 const CAST_IRON_COLOR = '#54575c'
 /** Vents read slightly translucent-matte so they don't visually compete

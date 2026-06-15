@@ -5,7 +5,9 @@ import type { LinesetNode } from './schema'
 const RADIAL_SEGMENTS = 16
 
 const COPPER_COLOR = '#b06b3f'
-const INSULATION_COLOR = '#1f1f22'
+// Light foam sleeve. Real Armaflex is black, but a light jacket reads
+// cleaner against the scene and matches the white pipe materials.
+const INSULATION_COLOR = '#e8e8ea'
 
 const UP = new Vector3(0, 1, 0)
 const FALLBACK_PERP = new Vector3(1, 0, 0)
@@ -103,7 +105,7 @@ function buildRun(
  * The two lines are offset symmetrically about the path centerline along a
  * horizontal perpendicular to each segment, so the pair reads as a parallel
  * run. Joint spheres cap interior corners on each line; the suction line's
- * black foam jacket is a larger opaque cylinder over the copper.
+ * light foam jacket is a larger opaque cylinder over the copper.
  *
  * Children are level-local meters; `<ParametricNodeRenderer>` owns the
  * node transform (identity today — the path is absolute within the level).

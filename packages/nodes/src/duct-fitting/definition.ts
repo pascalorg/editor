@@ -122,7 +122,7 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
   presentation: {
     label: 'Duct Fitting',
     description: 'Elbow, tee, reducer, or square-to-round transition connecting duct runs.',
-    icon: { kind: 'iconify', name: 'lucide:git-branch' },
+    icon: { kind: 'url', src: '/icons/duct-fitting.png' },
     paletteSection: 'structure',
     paletteOrder: 91,
   },

@@ -29,11 +29,10 @@ function pickInsulationThickness(r: number): number {
   return (INSULATION_BASE_IN + r * INSULATION_INCHES_PER_R) * INCHES_TO_METERS
 }
 
+// Supply/return tint — kept only for the spiral seam ridge accent; the duct
+// body itself is plain white (see createDuctMaterial).
 const SUPPLY_COLOR = '#d4825a'
 const RETURN_COLOR = '#5a8ad4'
-const FLEX_COLOR = '#8a8a8a'
-const SHEET_METAL_COLOR = '#c2c2c2'
-const DUCT_BOARD_COLOR = '#a5946d'
 
 const RADIAL_SEGMENTS = 24
 
@@ -321,30 +320,21 @@ type DuctAppearance = {
   system: 'supply' | 'return'
 }
 
-function getDuctColor(node: DuctAppearance): string {
-  if (node.ductMaterial === 'flex') return FLEX_COLOR
-  if (node.ductMaterial === 'duct-board') return DUCT_BOARD_COLOR
-  // Spiral is galvanized sheet metal — same body finish; the seam ridge
-  // is what tells it apart.
-  return SHEET_METAL_COLOR
-}
-
 function getSystemTint(node: DuctAppearance): string {
   return node.system === 'supply' ? SUPPLY_COLOR : RETURN_COLOR
 }
 
 /**
- * Standard duct body material — color by construction material with a
- * faint supply/return emissive tint. Shared with the fitting builder so
- * connected runs and junctions read as one system.
+ * Standard duct body material — a plain white matte finish so runs and
+ * fittings read like walls / other building elements rather than tinted
+ * metal. Shared with the fitting builder so connected runs and junctions
+ * look like one piece.
  */
-export function createDuctMaterial(node: DuctAppearance): MeshStandardMaterial {
+export function createDuctMaterial(_node: DuctAppearance): MeshStandardMaterial {
   return new MeshStandardMaterial({
-    color: getDuctColor(node),
-    metalness: node.ductMaterial === 'flex' ? 0.1 : 0.6,
-    roughness: node.ductMaterial === 'flex' ? 0.85 : 0.4,
-    emissive: getSystemTint(node),
-    emissiveIntensity: 0.08,
+    color: '#ffffff',
+    metalness: 0,
+    roughness: 0.7,
   })
 }
 

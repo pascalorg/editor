@@ -5,6 +5,7 @@ import { triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { hvacEquipmentDefinition } from './definition'
 import { buildHvacEquipmentGeometry } from './geometry'
 
@@ -55,10 +56,19 @@ const HvacEquipmentTool = () => {
       return [snap(event.localPosition[0], step), 0, snap(event.localPosition[2], step)]
     }
 
-    const onMove = (event: GridEvent) => setCursor(resolve(event))
+    // Grid-snap the cursor, then layer Figma-style alignment so the unit lines
+    // up with ducts, other equipment, and items as it's placed (Shift = free,
+    // no snap + no guides).
+    const resolveAligned = (event: GridEvent): [number, number, number] =>
+      alignDrawPoint(resolve(event), {
+        applySnap: true,
+        bypass: event.nativeEvent?.shiftKey === true,
+      })
+
+    const onMove = (event: GridEvent) => setCursor(resolveAligned(event))
 
     const onClick = (event: GridEvent) => {
-      const position = resolve(event)
+      const position = resolveAligned(event)
       const unit = HvacEquipmentNode.parse({
         ...hvacEquipmentDefinition.defaults(),
         name: 'Furnace',
@@ -92,6 +102,7 @@ const HvacEquipmentTool = () => {
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', onClick)
       window.removeEventListener('keydown', onKeyDown, true)
+      clearDrawAlignment()
     }
   }, [activeLevelId])
 

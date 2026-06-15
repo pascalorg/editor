@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
 import { buildDuctSegmentFloorplan } from './floorplan'
 import { buildDuctSegmentGeometry, ductPortDiameterIn } from './geometry'
 import { ductSegmentParametrics } from './parametrics'
@@ -112,6 +113,13 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
 
   floorplan: buildDuctSegmentFloorplan,
 
+  // 2D selection-time path-point handles — the floor-plan twin of the 3D
+  // `affordanceTools.selection` handles. The builder emits an
+  // `endpoint-handle` per path vertex; this drags the matching point.
+  floorplanAffordances: {
+    'move-path-point': createPathPointMoveAffordance('duct-segment'),
+  },
+
   // Selection-time path-point handles (drag to edit a committed run).
   // Editor-only UI (reads gridSnapStep, renders DimensionPill), so it
   // mounts via the editor's SelectionAffordanceManager — not `def.system`,
@@ -139,7 +147,7 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   presentation: {
     label: 'Duct',
     description: 'HVAC duct run — polyline of round, rect, or flat-oval sections.',
-    icon: { kind: 'iconify', name: 'lucide:wind' },
+    icon: { kind: 'url', src: '/icons/duct.png' },
     paletteSection: 'structure',
     paletteOrder: 90,
   },

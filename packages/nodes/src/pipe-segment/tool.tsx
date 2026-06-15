@@ -2,6 +2,7 @@
 
 import { type AnyNode, emitter, type GridEvent, PipeSegmentNode, useScene } from '@pascal-app/core'
 import {
+  CursorSphere,
   DimensionPill,
   EDITOR_LAYER,
   markToolCancelConsumed,
@@ -13,6 +14,7 @@ import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { Vector3 } from 'three'
 import { planPipeBranchTap, planPipeElbowAtPort } from '../shared/auto-fitting'
+import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import {
   collectScenePorts,
   DWV_PORT_SYSTEMS,
@@ -326,18 +328,36 @@ const PipeSegmentTool = () => {
       return [start[0], y, start[2]]
     }
 
+    // Resolve the cursor point (port / body / grid / angle snap) then layer
+    // Figma-style alignment so a run lines up with other runs, fittings, and
+    // items as it's drawn. Free point (first vertex / Shift) snaps; an
+    // angle-locked continuation shows the guide passively. Port / body snap or
+    // Alt bypasses alignment.
+    const resolveAlignedPoint = (event: GridEvent) => {
+      const r = resolveSnappedPoint(event)
+      const hasStart = !!startRef.current
+      const shift = event.nativeEvent?.shiftKey === true
+      const alt = event.nativeEvent?.altKey === true
+      const point = alignDrawPoint(r.point, {
+        applySnap: !hasStart || shift,
+        bypass: alt || r.snapped !== null,
+      })
+      return { ...r, point }
+    }
+
     const onMove = (event: GridEvent) => {
       const clientY = (event.nativeEvent as { clientY?: number } | undefined)?.clientY
       if (typeof clientY === 'number') lastClientYRef.current = clientY
       if (altAnchorRef.current && typeof clientY === 'number') {
         const point = resolveAltVerticalPoint(clientY)
         if (point) {
+          clearDrawAlignment()
           setCursorPos(point)
           setSnapTarget(null)
           return
         }
       }
-      const { point, snapped } = resolveSnappedPoint(event)
+      const { point, snapped } = resolveAlignedPoint(event)
       setCursorPos(point)
       setSnapTarget(snapped)
     }
@@ -353,7 +373,7 @@ const PipeSegmentTool = () => {
         }
         return
       }
-      const { point, port, body } = resolveSnappedPoint(event)
+      const { point, port, body } = resolveAlignedPoint(event)
       if (!start) {
         // First click: anchor the start, remembering the port / run body
         // it snapped to so the commit can mint a bend / wye.
@@ -424,6 +444,7 @@ const PipeSegmentTool = () => {
     }
 
     const onCancel = () => {
+      clearDrawAlignment()
       if (!startRef.current) return
       markToolCancelConsumed()
       setDraftStart(null)
@@ -445,6 +466,7 @@ const PipeSegmentTool = () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       altAnchorRef.current = null
+      clearDrawAlignment()
     }
   }, [activeLevelId])
 
@@ -485,32 +507,38 @@ const PipeSegmentTool = () => {
 
   return (
     <group>
-      <group position={cursorPos ?? [0, 0, 0]} visible={!!cursorPos}>
-        <mesh layers={EDITOR_LAYER}>
-          <sphereGeometry args={[0.06, 16, 12]} />
-          <meshBasicMaterial color="#818cf8" depthTest={false} transparent opacity={0.9} />
-        </mesh>
-        {pillParts && (
-          <Html
-            center
-            position={[0, 0.3, 0]}
-            style={{ pointerEvents: 'none', userSelect: 'none' }}
-            zIndexRange={[100, 0]}
-          >
-            <div className="flex flex-col items-center gap-1">
-              <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
-              <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
-                {system === 'waste'
-                  ? sloped
-                    ? 'Waste · ¼″/ft fall'
-                    : 'Waste · level'
-                  : 'Vent · level'}{' '}
-                · Q system{system === 'waste' ? ' · S slope' : ''}
-              </div>
-            </div>
-          </Html>
-        )}
-      </group>
+      {/* Cursor marker — the same ground ring + vertical line + tool-icon
+          badge the duct draw tool shows in 3D (icon resolved from the active
+          `pipe-segment` structure-tools entry). In 2D the floorplan overlay
+          draws this for every tool; in 3D each tool renders its own. The
+          dimension pill rides just above the cursor. */}
+      {cursorPos && (
+        <>
+          <CursorSphere position={cursorPos} />
+          {pillParts && (
+            <group position={cursorPos}>
+              <Html
+                center
+                position={[0, 0.3, 0]}
+                style={{ pointerEvents: 'none', userSelect: 'none' }}
+                zIndexRange={[100, 0]}
+              >
+                <div className="flex flex-col items-center gap-1">
+                  <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
+                  <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
+                    {system === 'waste'
+                      ? sloped
+                        ? 'Waste · ¼″/ft fall'
+                        : 'Waste · level'
+                      : 'Vent · level'}{' '}
+                    · Q system{system === 'waste' ? ' · S slope' : ''}
+                  </div>
+                </div>
+              </Html>
+            </group>
+          )}
+        </>
+      )}
       {snapTarget && (
         <mesh layers={EDITOR_LAYER} position={snapTarget}>
           <sphereGeometry args={[0.1, 24, 16]} />

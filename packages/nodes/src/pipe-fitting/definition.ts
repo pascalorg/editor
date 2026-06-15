@@ -92,7 +92,8 @@ export const pipeFittingDefinition: NodeDefinition<typeof PipeFittingNode> = {
   presentation: {
     label: 'Pipe Fitting',
     description: 'DWV joint — elbow bend, 45° wye, or sanitary tee.',
-    icon: { kind: 'iconify', name: 'lucide:git-merge' },
+    // Reuses the duct-fitting artwork — DWV fittings read the same in the UI.
+    icon: { kind: 'url', src: '/icons/duct-fitting.png' },
     paletteSection: 'structure',
     paletteOrder: 96,
     hidden: true,

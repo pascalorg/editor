@@ -66,11 +66,16 @@ const BUILD_TYPES: BuildType[] = [
   { id: 'column', label: 'Column', iconSrc: '/icons/column.png', kind: 'column' },
   { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.png', kind: 'shelf' },
   { id: 'spawn', label: 'Spawn Point', iconSrc: '/icons/spawn-point.png', kind: 'spawn' },
-  { id: 'duct-segment', label: 'Duct', iconify: 'lucide:wind', kind: 'duct-segment' },
-  { id: 'duct-terminal', label: 'Register', iconify: 'lucide:air-vent', kind: 'duct-terminal' },
-  { id: 'hvac-equipment', label: 'HVAC Unit', iconify: 'lucide:heater', kind: 'hvac-equipment' },
-  { id: 'lineset', label: 'Lineset', iconify: 'lucide:cable', kind: 'lineset' },
-  { id: 'pipe-segment', label: 'DWV Pipe', iconify: 'lucide:droplets', kind: 'pipe-segment' },
+  { id: 'duct-segment', label: 'Duct', iconSrc: '/icons/duct.png', kind: 'duct-segment' },
+  {
+    id: 'duct-terminal',
+    label: 'Register',
+    iconSrc: '/icons/registers.png',
+    kind: 'duct-terminal',
+  },
+  { id: 'hvac-equipment', label: 'HVAC Unit', iconSrc: '/icons/HVAC.png', kind: 'hvac-equipment' },
+  { id: 'lineset', label: 'Lineset', iconSrc: '/icons/lineset.png', kind: 'lineset' },
+  { id: 'pipe-segment', label: 'DWV Pipe', iconSrc: '/icons/dwv-pipes.png', kind: 'pipe-segment' },
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.png', mode: 'material-paint' },
 ]
 
@@ -256,7 +261,14 @@ export function BuildTab() {
             onMouseEnter={() => triggerSFX('sfx:menu-hover')}
             type="button"
           >
-            <IconifyIcon aria-hidden className="size-4" icon="lucide:git-branch" />
+            <Image
+              alt=""
+              aria-hidden
+              className="size-4 object-contain"
+              height={16}
+              src="/icons/duct-fitting.png"
+              width={16}
+            />
             Add Fitting
           </button>
         </div>
@@ -279,7 +291,14 @@ export function BuildTab() {
             onMouseEnter={() => triggerSFX('sfx:menu-hover')}
             type="button"
           >
-            <IconifyIcon aria-hidden className="size-4" icon="lucide:git-merge" />
+            <Image
+              alt=""
+              aria-hidden
+              className="size-4 object-contain"
+              height={16}
+              src="/icons/duct-fitting.png"
+              width={16}
+            />
             Add Fitting
           </button>
         </div>

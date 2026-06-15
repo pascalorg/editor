@@ -2,6 +2,7 @@
 
 import { type AnyNodeId, emitter, type GridEvent, LinesetNode, useScene } from '@pascal-app/core'
 import {
+  CursorSphere,
   DimensionPill,
   EDITOR_LAYER,
   markToolCancelConsumed,
@@ -12,6 +13,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
+import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { collectScenePorts, findNearestPortXZ, REFRIGERANT_PORT_SYSTEMS } from '../shared/ports'
 import { planLinesetConnect } from './connect'
 import { linesetDefinition } from './definition'
@@ -170,18 +172,36 @@ const LinesetTool = () => {
       return [last[0], y, last[2]]
     }
 
+    // Resolve the cursor point (port / grid / angle snap) then layer
+    // Figma-style alignment so a lineset lines up with other runs, equipment,
+    // and items as it's drawn. Free point (first vertex / Shift) snaps; an
+    // angle-locked continuation shows the guide passively. Port snap or Alt
+    // bypasses alignment.
+    const resolveAlignedPoint = (event: GridEvent) => {
+      const r = resolveSnappedPoint(event)
+      const hasStart = draftRef.current.length > 0
+      const shift = event.nativeEvent?.shiftKey === true
+      const alt = event.nativeEvent?.altKey === true
+      const point = alignDrawPoint(r.point, {
+        applySnap: !hasStart || shift,
+        bypass: alt || r.snapped !== null,
+      })
+      return { ...r, point }
+    }
+
     const onMove = (event: GridEvent) => {
       const clientY = (event.nativeEvent as { clientY?: number } | undefined)?.clientY
       if (typeof clientY === 'number') lastClientYRef.current = clientY
       if (altAnchorRef.current && typeof clientY === 'number') {
         const point = resolveAltVerticalPoint(clientY)
         if (point) {
+          clearDrawAlignment()
           setCursorPos(point)
           setSnapTarget(null)
           return
         }
       }
-      const { point, snapped } = resolveSnappedPoint(event)
+      const { point, snapped } = resolveAlignedPoint(event)
       setCursorPos(point)
       setSnapTarget(snapped)
     }
@@ -199,7 +219,7 @@ const LinesetTool = () => {
         }
         return
       }
-      const { point } = resolveSnappedPoint(event)
+      const { point } = resolveAlignedPoint(event)
       if (!start) {
         triggerSFX('sfx:grid-snap')
         setDraftPoints([point])
@@ -239,6 +259,7 @@ const LinesetTool = () => {
     }
 
     const onCancel = () => {
+      clearDrawAlignment()
       if (draftRef.current.length === 0) return
       markToolCancelConsumed()
       setDraftPoints([])
@@ -258,6 +279,7 @@ const LinesetTool = () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       altAnchorRef.current = null
+      clearDrawAlignment()
     }
   }, [activeLevelId])
 
@@ -291,22 +313,28 @@ const LinesetTool = () => {
 
   return (
     <group>
-      <group ref={cursorRef} position={cursorPos ?? [0, 0, 0]} visible={!!cursorPos}>
-        <mesh layers={EDITOR_LAYER}>
-          <sphereGeometry args={[0.07, 16, 12]} />
-          <meshBasicMaterial color={PREVIEW_COLOR} depthTest={false} transparent opacity={0.9} />
-        </mesh>
-        {pillParts && (
-          <Html
-            center
-            position={[0, 0.35, 0]}
-            style={{ pointerEvents: 'none', userSelect: 'none' }}
-            zIndexRange={[100, 0]}
-          >
-            <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
-          </Html>
-        )}
-      </group>
+      {/* Cursor marker — the same ground ring + vertical line + tool-icon
+          badge the duct draw tool shows in 3D (icon resolved from the active
+          `lineset` structure-tools entry). In 2D the floorplan overlay draws
+          this for every tool; in 3D each tool renders its own. The dimension
+          pill rides just above the cursor. */}
+      {cursorPos && (
+        <>
+          <CursorSphere color={PREVIEW_COLOR} position={cursorPos} ref={cursorRef} />
+          {pillParts && (
+            <group position={cursorPos}>
+              <Html
+                center
+                position={[0, 0.35, 0]}
+                style={{ pointerEvents: 'none', userSelect: 'none' }}
+                zIndexRange={[100, 0]}
+              >
+                <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
+              </Html>
+            </group>
+          )}
+        </>
+      )}
       {snapTarget && (
         <mesh layers={EDITOR_LAYER} position={snapTarget}>
           <sphereGeometry args={[0.1, 24, 16]} />

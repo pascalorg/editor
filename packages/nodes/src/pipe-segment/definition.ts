@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
 import { buildPipeSegmentFloorplan } from './floorplan'
 import { buildPipeSegmentGeometry } from './geometry'
 import { pipeSegmentParametrics } from './parametrics'
@@ -82,6 +83,13 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
 
   floorplan: buildPipeSegmentFloorplan,
 
+  // 2D selection-time path-point handles — the floor-plan twin of the 3D
+  // `affordanceTools.selection` handles. The builder emits an
+  // `endpoint-handle` per path vertex; this drags the matching point.
+  floorplanAffordances: {
+    'move-path-point': createPathPointMoveAffordance('pipe-segment'),
+  },
+
   // Selection-time path-point handles (drag to edit a committed run).
   // Editor-only UI (reads gridSnapStep, renders DimensionPill), so it
   // mounts via the editor's SelectionAffordanceManager — not `def.system`,
@@ -110,7 +118,7 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
     label: 'DWV Pipe',
     description:
       'Drain / waste / vent pipe run — waste lines fall at ¼″ per foot, vents run level or vertical.',
-    icon: { kind: 'iconify', name: 'lucide:droplets' },
+    icon: { kind: 'url', src: '/icons/dwv-pipes.png' },
     paletteSection: 'structure',
     paletteOrder: 95,
   },

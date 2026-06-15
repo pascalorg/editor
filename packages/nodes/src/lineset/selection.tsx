@@ -237,7 +237,7 @@ const LinesetPointHandles = ({ lineset, target }: { lineset: LinesetNode; target
           >
             <sphereGeometry args={[HANDLE_RADIUS, 16, 12]} />
             <meshBasicMaterial
-              color={active || hovered ? '#d68a5a' : '#b06b3f'}
+              color={active || hovered ? '#a5b4fc' : '#818cf8'}
               depthTest={false}
               opacity={active ? 1 : 0.85}
               transparent
