@@ -8,6 +8,9 @@ import {
   type Interactive,
   type ItemNode,
   isSlotMaterialName,
+  LIBRARY_MATERIAL_REF_PREFIX,
+  SCENE_MATERIAL_REF_PREFIX,
+  toLibraryMaterialRef,
   type LightEffect,
   useInteractive,
   useLiveNodeOverrides,
@@ -50,12 +53,14 @@ type MutableMaterial = Material & {
 type CapturedSingleItemMaterialData = {
   captured: true
   authoredMaterials: Material
+  curatedRefs: string | undefined
   slotIds: string | null
 }
 
 type CapturedMultiItemMaterialData = {
   captured: true
   authoredMaterials: Material[]
+  curatedRefs: (string | undefined)[]
   slotIds: (string | null)[]
 }
 
@@ -71,6 +76,15 @@ type SceneMaterials = ReturnType<typeof useScene.getState>['materials']
 const getAuthoredSlotId = (material: Material): string | null =>
   isSlotMaterialName(material.name) ? deriveSlotId(material.name) : null
 
+function curatedRefFromMaterial(material: Material): string | undefined {
+  const raw = (material.userData as { pascal_material?: unknown }).pascal_material
+  if (typeof raw !== 'string' || raw.length === 0) return undefined
+  if (raw.startsWith(LIBRARY_MATERIAL_REF_PREFIX) || raw.startsWith(SCENE_MATERIAL_REF_PREFIX)) {
+    return raw
+  }
+  return toLibraryMaterialRef(raw)
+}
+
 const captureItemMeshMaterials = (mesh: Mesh): CapturedItemMaterialData => {
   const userData = mesh.userData as ItemMeshUserData
   const captured = userData.pascalItemMaterialCapture
@@ -82,9 +96,11 @@ const captureItemMeshMaterials = (mesh: Mesh): CapturedItemMaterialData => {
   if (Array.isArray(mesh.material)) {
     const authoredMaterials = mesh.material.slice()
     const slotIds = authoredMaterials.map(getAuthoredSlotId)
+    const curatedRefs = authoredMaterials.map(curatedRefFromMaterial)
     const next: CapturedItemMaterialData = {
       captured: true,
       authoredMaterials,
+      curatedRefs,
       slotIds,
     }
     userData.pascalItemMaterialCapture = next
@@ -93,9 +109,11 @@ const captureItemMeshMaterials = (mesh: Mesh): CapturedItemMaterialData => {
   }
 
   const slotId = getAuthoredSlotId(mesh.material)
+  const curatedRef = curatedRefFromMaterial(mesh.material)
   const next: CapturedItemMaterialData = {
     captured: true,
     authoredMaterials: mesh.material,
+    curatedRefs: curatedRef,
     slotIds: slotId,
   }
   userData.pascalItemMaterialCapture = next
@@ -134,6 +152,7 @@ const clampGeometryGroups = (mesh: Mesh, matCount: number): void => {
 const resolveItemMaterial = (
   authoredMaterial: Material,
   slotId: string | null,
+  curatedRef: string | undefined,
   {
     colorPreset,
     isAuthored,
@@ -155,6 +174,8 @@ const resolveItemMaterial = (
   if (slotId != null) {
     const override = resolveMaterialRef(nodeSlots?.[slotId], sceneMaterials, shading)
     if (override) return override
+    const curated = resolveMaterialRef(curatedRef, sceneMaterials, shading)
+    if (curated) return curated
     return authoredMaterial
   }
   if (isAuthored) return authoredMaterial
@@ -342,7 +363,12 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
 
       if (isCapturedMaterialArray(captured)) {
         const nextMaterials = captured.authoredMaterials.map((authoredMaterial, index) =>
-          resolveItemMaterial(authoredMaterial, captured.slotIds[index] ?? null, materialOptions),
+          resolveItemMaterial(
+            authoredMaterial,
+            captured.slotIds[index] ?? null,
+            captured.curatedRefs[index],
+            materialOptions,
+          ),
         )
         mesh.material = nextMaterials
         hasGlass = nextMaterials.some(isGlassMaterial)
@@ -351,6 +377,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
         const nextMaterial = resolveItemMaterial(
           captured.authoredMaterials,
           captured.slotIds,
+          captured.curatedRefs,
           materialOptions,
         )
         mesh.material = nextMaterial
