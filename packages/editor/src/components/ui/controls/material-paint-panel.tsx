@@ -11,6 +11,8 @@ import {
 import useEditor from './../../../store/use-editor'
 import { Button } from '../primitives/button'
 import { MaterialPicker } from './material-picker'
+import { PanelSection } from './panel-section'
+import { SceneMaterialList } from './scene-material-list'
 
 /**
  * Material picker for paint mode. Embedders render this wherever paint controls
@@ -27,6 +29,7 @@ export function MaterialPaintPanel() {
   const setPaintEraser = useEditor((state) => state.setPaintEraser)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const nodes = useScene((state) => state.nodes)
+  const materialCount = useScene((state) => Object.keys(state.materials).length)
   const selectedId = selectedIds.length === 1 ? (selectedIds[0] ?? null) : null
   const selectedNode = selectedId ? nodes[selectedId as AnyNodeId] : null
   const canResetSelection =
@@ -78,6 +81,11 @@ export function MaterialPaintPanel() {
         selectedMaterialPreset={activePaintMaterial?.materialPreset}
         value={activePaintMaterial?.material}
       />
+      {materialCount > 0 ? (
+        <PanelSection title="Scene materials">
+          <SceneMaterialList />
+        </PanelSection>
+      ) : null}
     </div>
   )
 }
