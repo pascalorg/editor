@@ -32,4 +32,5 @@ export const tools: ToolConfig[] = [
   { id: 'pipe-segment', iconSrc: '/icons/dwv-pipes.png', label: 'DWV Pipe' },
   { id: 'pipe-fitting', iconSrc: '/icons/duct-fitting.png', label: 'Pipe Fitting' },
   { id: 'lineset', iconSrc: '/icons/lineset.png', label: 'Lineset' },
+  { id: 'liquid-line', iconSrc: '/icons/lineset.png', label: 'Liquid Line' },
 ]

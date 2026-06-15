@@ -512,7 +512,8 @@ export function FloatingActionMenu() {
           duplicate.type === 'duct-segment' ||
           duplicate.type === 'duct-fitting' ||
           duplicate.type === 'pipe-segment' ||
-          duplicate.type === 'lineset'
+          duplicate.type === 'lineset' ||
+          duplicate.type === 'liquid-line'
         ) {
           // Duct runs & fittings, DWV pipe runs, and refrigerant linesets use
           // pure drag-to-place: NO node is inserted into the scene until the

@@ -10,8 +10,9 @@ import { BaseNode, nodeType, objectId } from '../base'
  *
  * Real linesets run a fat insulated SUCTION line (cool vapour back to the
  * compressor) beside a thin bare LIQUID line (warm liquid out to the coil).
- * The geometry builder draws both: the suction line wrapped in a foam
- * jacket, the liquid line as bare copper offset alongside it.
+ * The geometry builder draws a single copper line on the path centerline
+ * (sized to `suctionDiameter`, wrapped in a foam jacket when `insulated`);
+ * draw the liquid line as a second lineset rather than both off one path.
  *
  * Path coordinates are level-local meters: [x, y, z] tuples, same space as
  * duct paths and grid events. Diameters are nominal copper OD in inches.
