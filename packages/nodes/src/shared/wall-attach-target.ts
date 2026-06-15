@@ -22,7 +22,12 @@ import {
  * rejects curved walls (mitering + arc + opening would tear in 3D).
  */
 
-const WALL_SNAP_DISTANCE_M = 1.5
+// Max cursor-to-wall distance (metres) for a 2D opening to snap onto a wall.
+// Kept tight: plan walls are thin and often close together, so a large radius
+// would grab a wall the cursor isn't really near. The wall chosen is always
+// the single closest segment to the cursor (true Voronoi nearest), and only if
+// it's within this radius.
+const WALL_SNAP_DISTANCE_M = 0.4
 
 export type WallHit = {
   wall: WallNode
@@ -78,6 +83,12 @@ export function findClosestWallInPlan(
   if (!Array.isArray(childIds)) return null
 
   let best: WallHit | null = null
+  // Segment distance (cursor → closest point on the wall segment) of `best`.
+  // The wall we snap to is the one minimising THIS, so a door never jumps to a
+  // farther wall just because the cursor's perpendicular offset to its infinite
+  // line happens to be small. `perpDistance` on `WallHit` is the signed offset
+  // for the side calc only — never the closeness metric.
+  let bestDistance = Number.POSITIVE_INFINITY
 
   for (const childId of childIds) {
     const node = nodes[childId]
@@ -108,7 +119,10 @@ export function findClosestWallInPlan(
     const closestPointY = sy + dirY * clampedAlong
     const distance = Math.hypot(planPoint[0] - closestPointX, planPoint[1] - closestPointY)
     if (distance > WALL_SNAP_DISTANCE_M) continue
-    if (best && distance >= Math.abs(best.perpDistance) && best.wall.id !== wall.id) continue
+    // Keep only the single closest wall segment (strict nearest). Compare true
+    // segment distances — not perpDistance — so close-together walls resolve to
+    // whichever the cursor is actually nearest.
+    if (distance >= bestDistance) continue
 
     // Side determination, calibrated to the 3D wall convention. In
     // wall-local space the wall extends along +X and its +Z axis is the
@@ -131,6 +145,7 @@ export function findClosestWallInPlan(
     // here — the consumer writes this straight into `node.rotation[1]`.
     const itemRotation = side === 'front' ? 0 : Math.PI
 
+    bestDistance = distance
     best = {
       wall,
       localX: clampedAlong,
