@@ -28,6 +28,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { clearOpeningGuides3D, publishOpeningGuides3D } from '../shared/opening-guides-runtime'
 import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
@@ -125,6 +126,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     // Alignment candidates — anchors of every OTHER alignable object (the
@@ -253,6 +255,26 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         target.cursorRotation,
         target.valid,
       )
+
+      publishOpeningGuides3D({
+        wall: target.wallNode,
+        movingId: movingDoorNode.id,
+        centerS: target.clampedX,
+        centerY: target.clampedY,
+        width: movingDoorNode.width,
+        height: movingDoorNode.height,
+        // Doors sit on the floor — no sill/head or vertical alignment guides.
+        includeVertical: false,
+        nodes: useScene.getState().nodes,
+        toWorld: (s, y) =>
+          wallLocalToWorld(
+            target.wallNode,
+            s,
+            y,
+            getLevelYOffset(),
+            getSlabElevation(target.event),
+          ),
+      })
     }
 
     const onWallEnter = (event: WallEvent) => {
@@ -416,6 +438,8 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       lastTarget = null
       lastRoofEvent = event
       useLiveTransforms.getState().clear(movingDoorNode.id)
+      // Opening guides are wall-specific; clear them when over a roof face.
+      clearOpeningGuides3D()
       if (currentHostId !== target.segment.id) {
         useScene.getState().updateNode(movingDoorNode.id, {
           position: target.position,
@@ -599,6 +623,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       }
       useLiveTransforms.getState().clear(movingDoorNode.id)
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)

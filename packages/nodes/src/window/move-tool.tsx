@@ -30,6 +30,11 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
+  clearOpeningGuides3D,
+  publishOpeningGuides3D,
+  resolveSillSnap,
+} from '../shared/opening-guides-runtime'
+import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
   resolveRoofWallOpeningTarget,
@@ -151,6 +156,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     // Alignment candidates — anchors of every OTHER alignable object (the
@@ -206,8 +212,21 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       }
       const targetLocalX = dragAnchor.startX + (rawLocalX - dragAnchor.rawX)
       const targetRawLocalY = dragAnchor.startY + (rawLocalY - dragAnchor.rawY)
-      const targetLocalY =
-        event.nativeEvent?.shiftKey === true ? targetRawLocalY : snapToHalf(targetRawLocalY)
+      // Vertical sill alignment (snap + guide): a sibling's sill/centre/top wins
+      // over the 0.5m grid when within threshold; Shift bypasses both.
+      const bypassY = event.nativeEvent?.shiftKey === true
+      const sillSnapped = bypassY
+        ? null
+        : resolveSillSnap({
+            wall: event.node,
+            movingId: movingWindowNode.id,
+            localX: targetLocalX,
+            localY: targetRawLocalY,
+            width: movingWindowNode.width,
+            height: movingWindowNode.height,
+            nodes: useScene.getState().nodes,
+          })
+      const targetLocalY = bypassY ? targetRawLocalY : (sillSnapped ?? snapToHalf(targetRawLocalY))
       const localX = resolveWallSlideAlignment({
         wallNode: event.node,
         rawLocalX: targetLocalX,
@@ -284,6 +303,25 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         target.cursorRotation,
         target.valid,
       )
+
+      publishOpeningGuides3D({
+        wall: target.wallNode,
+        movingId: movingWindowNode.id,
+        centerS: target.clampedX,
+        centerY: target.clampedY,
+        width: movingWindowNode.width,
+        height: movingWindowNode.height,
+        includeVertical: true,
+        nodes: useScene.getState().nodes,
+        toWorld: (s, y) =>
+          wallLocalToWorld(
+            target.wallNode,
+            s,
+            y,
+            getLevelYOffset(),
+            getSlabElevation(target.event),
+          ),
+      })
     }
 
     const onWallEnter = (event: WallEvent) => {
@@ -459,6 +497,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       lastTarget = null
       lastRoofEvent = event
       useLiveTransforms.getState().clear(movingWindowNode.id)
+      // Opening guides are wall-specific; clear them when over a roof face.
+      clearOpeningGuides3D()
       if (currentHostId !== target.segment.id) {
         useScene.getState().updateNode(movingWindowNode.id, {
           position: target.position,
@@ -644,6 +684,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       }
       useLiveTransforms.getState().clear(movingWindowNode.id)
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)
