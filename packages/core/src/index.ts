@@ -73,6 +73,12 @@ export {
 } from './lib/polygon-relations'
 export { getRenderableSlabPolygon } from './lib/slab-polygon'
 export {
+  deriveSlotId,
+  isSlotMaterialName,
+  SLOT_MATERIAL_PREFIX,
+  slotLabelFromId,
+} from './lib/slots'
+export {
   type AutoCeilingPlanningContext,
   type AutoCeilingSyncPlan,
   type AutoSlabSyncPlan,
@@ -92,12 +98,18 @@ export {
   getLibraryMaterialIdFromRef,
   getMaterialPresetByRef,
   getMaterialsForCategory,
+  getSceneMaterialIdFromRef,
   LIBRARY_MATERIAL_REF_PREFIX,
   MATERIAL_CATALOG,
   MATERIAL_CATEGORIES,
   type MaterialCatalogItem,
   type MaterialCategory,
+  type MaterialRef,
+  type ParsedMaterialRef,
+  parseMaterialRef,
+  SCENE_MATERIAL_REF_PREFIX,
   toLibraryMaterialRef,
+  toSceneMaterialRef,
 } from './material-library'
 export type {
   FloorPlacedFootprint,

@@ -168,6 +168,7 @@ export type MaterialTargetRole =
   | ChimneyMaterialRole
   | DormerSurfaceMaterialRole
   | SingleSurfaceMaterialRole
+  | string
 
 export type SelectedMaterialTarget = {
   nodeId: AnyNodeId

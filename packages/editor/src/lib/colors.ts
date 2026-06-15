@@ -1,0 +1,16 @@
+export const CURATED_COLORS = [
+  { name: 'Warm white', hex: '#f5f1e8' },
+  { name: 'Soft linen', hex: '#e9ddcf' },
+  { name: 'Stone', hex: '#c8c2b8' },
+  { name: 'Clay beige', hex: '#b9a58f' },
+  { name: 'Greige', hex: '#9d9488' },
+  { name: 'Charcoal', hex: '#3c3c3a' },
+  { name: 'Mushroom', hex: '#a38f7b' },
+  { name: 'Terracotta', hex: '#b7654b' },
+  { name: 'Muted ochre', hex: '#c29b52' },
+  { name: 'Sage', hex: '#8d9b82' },
+  { name: 'Olive gray', hex: '#68715f' },
+  { name: 'Dusty blue', hex: '#7d91a3' },
+  { name: 'Slate teal', hex: '#4f7372' },
+  { name: 'Aubergine', hex: '#594354' },
+] as const

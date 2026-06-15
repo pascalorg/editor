@@ -61,6 +61,12 @@ export function useAutoSave({
   useEffect(() => {
     let lastNodesSnapshot = JSON.stringify(useScene.getState().nodes)
     let lastNodeCount = Object.keys(useScene.getState().nodes).length
+    // Collections + scene materials are document-level state that persists with
+    // the graph but lives outside `nodes`. Track them by reference (zustand
+    // hands out a new object on every mutation) so a material edit or a
+    // collection change still triggers a save.
+    let lastCollectionsRef = useScene.getState().collections
+    let lastMaterialsRef = useScene.getState().materials
 
     async function executeSave() {
       if (isLoadingSceneRef.current || isVersionPreviewModeRef.current) {
@@ -69,8 +75,8 @@ export function useAutoSave({
         return
       }
 
-      const { nodes, rootNodeIds } = useScene.getState()
-      const sceneGraph = { nodes, rootNodeIds } as SceneGraph
+      const { nodes, rootNodeIds, collections, materials } = useScene.getState()
+      const sceneGraph = { nodes, rootNodeIds, collections, materials } as SceneGraph
 
       // Guard: refuse to autosave if the scene went from populated to nearly empty.
       // This catches accidental full deletions before they're persisted.
@@ -118,19 +124,29 @@ export function useAutoSave({
     const unsubscribe = useScene.subscribe((state) => {
       if (isLoadingSceneRef.current) {
         lastNodesSnapshot = JSON.stringify(state.nodes)
+        lastCollectionsRef = state.collections
+        lastMaterialsRef = state.materials
         return
       }
 
       if (isVersionPreviewModeRef.current) {
         setSaveStatus('paused')
         lastNodesSnapshot = JSON.stringify(state.nodes)
+        lastCollectionsRef = state.collections
+        lastMaterialsRef = state.materials
         return
       }
 
       const currentNodesSnapshot = JSON.stringify(state.nodes)
-      if (currentNodesSnapshot === lastNodesSnapshot) return
+      const changed =
+        currentNodesSnapshot !== lastNodesSnapshot ||
+        state.collections !== lastCollectionsRef ||
+        state.materials !== lastMaterialsRef
+      if (!changed) return
 
       lastNodesSnapshot = currentNodesSnapshot
+      lastCollectionsRef = state.collections
+      lastMaterialsRef = state.materials
       hasDirtyChangesRef.current = true
       onDirtyRef.current?.()
       setSaveStatus('pending')
@@ -156,8 +172,8 @@ export function useAutoSave({
     function flushOnExit() {
       if (!hasDirtyChangesRef.current) return
       hasDirtyChangesRef.current = false
-      const { nodes, rootNodeIds } = useScene.getState()
-      const sceneGraph = { nodes, rootNodeIds } as SceneGraph
+      const { nodes, rootNodeIds, collections, materials } = useScene.getState()
+      const sceneGraph = { nodes, rootNodeIds, collections, materials } as SceneGraph
       if (onSaveRef.current) {
         onSaveRef.current(sceneGraph, { keepalive: true }).catch(() => {})
       } else {

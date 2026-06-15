@@ -20,6 +20,7 @@ import { ShelfNode as ShelfNodeSchema } from '../schema/nodes/shelf'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
+import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import * as nodeActions from './actions/node-actions'
 import { resetSceneHistoryPauseDepth } from './history-control'
@@ -694,6 +695,7 @@ export type SceneState = {
 
   // 4. Relational metadata — not nodes
   collections: Record<CollectionId, Collection>
+  materials: Record<SceneMaterialId, SceneMaterial>
 
   // 5. Read-only lock — when true all create/update/delete operations are no-ops
   readOnly: boolean
@@ -703,7 +705,14 @@ export type SceneState = {
   loadScene: () => void
   clearScene: () => void
   unloadScene: () => void
-  setScene: (nodes: Record<AnyNodeId, AnyNode>, rootNodeIds: AnyNodeId[]) => void
+  setScene: (
+    nodes: Record<AnyNodeId, AnyNode>,
+    rootNodeIds: AnyNodeId[],
+    extra?: {
+      collections?: Record<CollectionId, Collection>
+      materials?: Record<SceneMaterialId, SceneMaterial>
+    },
+  ) => void
 
   markDirty: (id: AnyNodeId) => void
   clearDirty: (id: AnyNodeId) => void
@@ -728,12 +737,19 @@ export type SceneState = {
   updateCollection: (id: CollectionId, data: Partial<Omit<Collection, 'id'>>) => void
   addToCollection: (id: CollectionId, nodeId: AnyNodeId) => void
   removeFromCollection: (id: CollectionId, nodeId: AnyNodeId) => void
+
+  // Scene material actions
+  addSceneMaterial: (material: SceneMaterial) => void
+  updateSceneMaterial: (id: SceneMaterialId, data: Partial<Omit<SceneMaterial, 'id'>>) => void
+  removeSceneMaterial: (id: SceneMaterialId) => void
 }
 
 // type PartializedStoreState = Pick<SceneState, 'rootNodeIds' | 'nodes'>;
 
 type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
-  temporal: StoreApi<TemporalState<Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections'>>>
+  temporal: StoreApi<
+    TemporalState<Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections' | 'materials'>>
+  >
 }
 
 const useScene: UseSceneStore = create<SceneState>()(
@@ -750,6 +766,7 @@ const useScene: UseSceneStore = create<SceneState>()(
 
       // 4. Collections
       collections: {} as Record<CollectionId, Collection>,
+      materials: {} as Record<SceneMaterialId, SceneMaterial>,
 
       // 5. Read-only lock
       readOnly: false,
@@ -761,6 +778,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           rootNodeIds: [],
           dirtyNodes: new Set<AnyNodeId>(),
           collections: {},
+          materials: {},
         })
       },
 
@@ -769,7 +787,7 @@ const useScene: UseSceneStore = create<SceneState>()(
         get().loadScene() // Default scene
       },
 
-      setScene: (nodes, rootNodeIds) => {
+      setScene: (nodes, rootNodeIds, extra) => {
         // Apply backward compatibility migrations
         const patchedNodes = migrateNodes(nodes)
 
@@ -792,7 +810,8 @@ const useScene: UseSceneStore = create<SceneState>()(
           nodes: cleanedNodes,
           rootNodeIds,
           dirtyNodes: new Set<AnyNodeId>(),
-          collections: {},
+          collections: extra?.collections ?? {},
+          materials: extra?.materials ?? {},
         })
 
         const normalizedRootNodeIds = normalizeRootNodeIds(cleanedNodes, rootNodeIds)
@@ -809,7 +828,8 @@ const useScene: UseSceneStore = create<SceneState>()(
           nodes: cleanedNodes,
           rootNodeIds: normalizedRootNodeIds,
           dirtyNodes: new Set<AnyNodeId>(),
-          collections: {},
+          collections: extra?.collections ?? {},
+          materials: extra?.materials ?? {},
         })
         // Mark all nodes as dirty to trigger re-validation
         Object.values(cleanedNodes).forEach((node) => {
@@ -969,11 +989,38 @@ const useScene: UseSceneStore = create<SceneState>()(
           return { collections: nextCollections, nodes: nextNodes }
         })
       },
+
+      // --- SCENE MATERIALS ---
+
+      addSceneMaterial: (material) => {
+        if (get().readOnly) return
+        set((state) => ({
+          materials: { ...state.materials, [material.id]: material },
+        }))
+      },
+
+      updateSceneMaterial: (id, data) => {
+        if (get().readOnly) return
+        set((state) => {
+          const material = state.materials[id]
+          if (!material) return state
+          return { materials: { ...state.materials, [id]: { ...material, ...data } } }
+        })
+      },
+
+      removeSceneMaterial: (id) => {
+        if (get().readOnly) return
+        set((state) => {
+          const materials = { ...state.materials }
+          delete materials[id]
+          return { materials }
+        })
+      },
     }),
     {
       partialize: (state) => {
-        const { nodes, rootNodeIds, collections } = state
-        return { nodes, rootNodeIds, collections }
+        const { nodes, rootNodeIds, collections, materials } = state
+        return { nodes, rootNodeIds, collections, materials }
       },
       limit: 50, // Limit to last 50 actions
     },

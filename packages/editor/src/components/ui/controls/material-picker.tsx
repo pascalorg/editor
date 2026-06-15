@@ -10,6 +10,7 @@ import {
   toLibraryMaterialRef,
 } from '@pascal-app/core'
 import { useEffect, useRef, useState } from 'react'
+import { CURATED_COLORS } from '../../../lib/colors'
 import useEditor from '../../../store/use-editor'
 
 type MaterialPickerProps = {
@@ -55,7 +56,8 @@ export function MaterialPicker({
       return
     }
 
-    const catalogId = getLibraryMaterialIdFromRef(selectedMaterialPreset) ?? value?.id ?? undefined
+    const catalogId =
+      getLibraryMaterialIdFromRef(selectedMaterialPreset) ?? value?.id ?? undefined
     const selectedCatalogEntry = getCatalogMaterialById(catalogId)
     if (selectedCatalogEntry?.category) {
       setSelectedCategory(selectedCatalogEntry.category)
@@ -64,12 +66,32 @@ export function MaterialPicker({
 
   const selectedCatalogId =
     selectedMaterialPreset ?? (value?.id ? toLibraryMaterialRef(value.id) : undefined)
+  const selectedCatalogMaterialId = getLibraryMaterialIdFromRef(selectedCatalogId) ?? undefined
+  const selectedCatalogEntry = getCatalogMaterialById(selectedCatalogMaterialId)
+  const selectedColor = value?.properties?.color.toLowerCase()
 
   const handleCatalogSelect = (materialId: string) => {
     if (disabled) return
     setShowCustom(false)
     setPaintPanelOpen(false)
     onSelectMaterialPreset?.(toLibraryMaterialRef(materialId))
+  }
+
+  const handleColorSelect = (hex: string) => {
+    if (disabled) return
+    setShowCustom(false)
+    setPaintPanelOpen(false)
+    onChange?.({
+      preset: 'custom',
+      properties: {
+        color: hex,
+        roughness: 0.6,
+        metalness: 0,
+        opacity: 1,
+        transparent: false,
+        side: 'front',
+      },
+    })
   }
 
   useEffect(() => {
@@ -97,10 +119,13 @@ export function MaterialPicker({
     if (disabled) return
     setShowCustom(true)
     setPaintPanelOpen(true)
+    const forkColor = selectedMaterialPreset
+      ? (selectedCatalogEntry?.previewColor ?? '#ffffff')
+      : '#ffffff'
     onChange?.({
       preset: 'custom',
       properties: {
-        color: value?.properties?.color || '#ffffff',
+        color: value?.properties?.color || forkColor,
         roughness: value?.properties?.roughness ?? 0.5,
         metalness: value?.properties?.metalness ?? 0,
         opacity: value?.properties?.opacity ?? 1,
@@ -114,6 +139,33 @@ export function MaterialPicker({
     <div className={`min-w-0 space-y-3 ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
       {(catalogItems.length > 0 || onChange) && (
         <div className="min-w-0 space-y-1">
+          {onChange ? (
+            <div className="space-y-1.5">
+              <div className="font-medium text-[11px] text-muted-foreground uppercase tracking-[0.12em]">
+                Colors
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {CURATED_COLORS.map((color) => {
+                  const isSelected = selectedColor === color.hex.toLowerCase()
+                  return (
+                    <button
+                      aria-label={color.name}
+                      className={`h-7 w-7 rounded-md border transition-all ${
+                        isSelected
+                          ? 'border-blue-500 ring-2 ring-blue-500/30'
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                      key={color.hex}
+                      onClick={() => handleColorSelect(color.hex)}
+                      style={{ backgroundColor: color.hex }}
+                      title={color.name}
+                      type="button"
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
           <div
             className="w-full max-w-full overflow-x-auto overflow-y-hidden"
             ref={categoryScrollRef}
@@ -149,45 +201,48 @@ export function MaterialPicker({
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))' }}
           >
             {catalogItems.map((item) => (
-                <button
-                  className={`relative aspect-square w-full overflow-hidden rounded-lg border transition-all ${
-                    selectedCatalogId === toLibraryMaterialRef(item.id)
-                      ? 'border-blue-500 ring-2 ring-blue-500/30'
-                      : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                  key={item.id}
-                  onClick={() => handleCatalogSelect(item.id)}
-                  title={item.label}
-                  type="button"
-                >
-                  <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-white/12 ring-inset" />
-                  {item.previewThumbnailUrl ? (
-                    <img
-                      alt={item.label}
-                      className="h-full w-full object-cover"
-                      src={item.previewThumbnailUrl}
-                    />
-                  ) : item.previewColor ? (
-                    <div className="h-full w-full" style={{ backgroundColor: item.previewColor }} />
-                  ) : (
-                    <div className="h-full w-full bg-gray-100" />
-                  )}
-                </button>
-              ))}
-              {selectedCategory === 'other' && onChange ? (
-                <button
-                  className={`flex aspect-square w-full items-center justify-center rounded-lg border font-medium text-[10px] transition-all ${
-                    showCustom
-                      ? 'border-blue-500 ring-2 ring-blue-500/30'
-                      : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                  onClick={handleCustomOpen}
-                  title="Custom"
-                  type="button"
-                >
-                  Custom
-                </button>
-              ) : null}
+              <button
+                className={`relative aspect-square w-full overflow-hidden rounded-lg border transition-all ${
+                  selectedCatalogId === toLibraryMaterialRef(item.id)
+                    ? 'border-blue-500 ring-2 ring-blue-500/30'
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+                key={item.id}
+                onClick={() => handleCatalogSelect(item.id)}
+                title={item.label}
+                type="button"
+              >
+                <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-white/12 ring-inset" />
+                {item.previewThumbnailUrl ? (
+                  <img
+                    alt={item.label}
+                    className="h-full w-full object-cover"
+                    src={item.previewThumbnailUrl}
+                  />
+                ) : item.previewColor ? (
+                  <div
+                    className="h-full w-full"
+                    style={{ backgroundColor: item.previewColor }}
+                  />
+                ) : (
+                  <div className="h-full w-full bg-gray-100" />
+                )}
+              </button>
+            ))}
+            {selectedCategory === 'other' && onChange ? (
+              <button
+                className={`flex aspect-square w-full items-center justify-center rounded-lg border font-medium text-[10px] transition-all ${
+                  showCustom
+                    ? 'border-blue-500 ring-2 ring-blue-500/30'
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+                onClick={handleCustomOpen}
+                title="Custom"
+                type="button"
+              >
+                Custom
+              </button>
+            ) : null}
           </div>
         </div>
       )}
