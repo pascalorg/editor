@@ -31,7 +31,7 @@ import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
   clearOpeningGuides3D,
-  publishOpeningGuides3D,
+  publishOpeningGuidesForWallEvent,
   resolveSillSnap,
 } from '../shared/opening-guides-runtime'
 import {
@@ -304,7 +304,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         target.valid,
       )
 
-      publishOpeningGuides3D({
+      publishOpeningGuidesForWallEvent({
         wall: target.wallNode,
         movingId: movingWindowNode.id,
         centerS: target.clampedX,
@@ -312,15 +312,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         width: movingWindowNode.width,
         height: movingWindowNode.height,
         includeVertical: true,
-        nodes: useScene.getState().nodes,
-        toWorld: (s, y) =>
-          wallLocalToWorld(
-            target.wallNode,
-            s,
-            y,
-            getLevelYOffset(),
-            getSlabElevation(target.event),
-          ),
+        levelYOffset: getLevelYOffset(),
+        slabElevation: getSlabElevation(target.event),
       })
     }
 

@@ -47,6 +47,7 @@ import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor from '../../store/use-editor'
+import useOpeningGuides from '../../store/use-opening-guides'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { formatAngleRadians } from '../tools/shared/segment-angle'
 import {
@@ -593,6 +594,9 @@ function LinearArrow({
   // floating dimension pill (via `activeHandleDrag`) and its own in-world
   // chip is suppressed — matches the wall height handle.
   const measureLabel = descriptor.kind === 'linear-resize' ? descriptor.measureLabel : undefined
+  // Optional per-tick feedback hook (doors/windows publish proximity/sill guides
+  // for the edge being resized); cleared when the drag ends.
+  const onDrag = descriptor.kind === 'linear-resize' ? descriptor.onDrag : undefined
   const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
   const basePosition = descriptor.placement.position(node, placementSceneApi)
   // `freezeOffset` (in node-local frame) cancels the mesh's `position`
@@ -675,6 +679,7 @@ function LinearArrow({
           if (measureLabel) {
             useEditor.getState().setActiveHandleDrag(null)
           }
+          if (onDrag) useOpeningGuides.getState().clear()
         },
         move: ({ event: moveEvent, getPointerRay: getMovePointerRay }) => {
           const currentPointer =
@@ -690,7 +695,10 @@ function LinearArrow({
               ? snapScalar(rawNext, gridSnapStep)
               : rawNext
           const next = Math.min(maxBound, Math.max(minBound, snappedNext))
-          return descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>
+          const patch = descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>
+          // Let the kind publish live guides for the edge being resized.
+          onDrag?.({ ...(initialNode as object), ...patch } as AnyNode, sceneApi)
+          return patch
         },
       }
     },

@@ -26,6 +26,10 @@ import { useEffect, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
+  clearOpeningGuides3D,
+  publishOpeningGuidesForWallEvent,
+} from '../shared/opening-guides-runtime'
+import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
   resolveRoofWallOpeningTarget,
@@ -86,6 +90,7 @@ const DoorTool: React.FC = () => {
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     // Alignment candidates — anchors of every alignable object; refreshed
@@ -110,18 +115,21 @@ const DoorTool: React.FC = () => {
       const [x, y, z] = event.localPosition
       updateCursor([x, y + FALLBACK_HEIGHT / 2, z], 0, false)
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     const showRoofFallbackCursor = (event: RoofEvent) => {
       const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
       updateCursor([x, getLevelYOffset() + FALLBACK_HEIGHT / 2, z], 0, false)
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     const showWallFallbackCursor = (event: WallEvent) => {
       const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
       updateCursor([x, getLevelYOffset() + FALLBACK_HEIGHT / 2, z], 0, false)
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     const onWallEnter = (event: WallEvent) => {
@@ -191,6 +199,18 @@ const DoorTool: React.FC = () => {
         cursorRotation,
         valid,
       )
+
+      publishOpeningGuidesForWallEvent({
+        wall: event.node,
+        movingId: node.id,
+        centerS: clampedX,
+        centerY: clampedY,
+        width,
+        height,
+        includeVertical: false,
+        levelYOffset: getLevelYOffset(),
+        slabElevation: getSlabElevation(event),
+      })
       event.stopPropagation()
     }
 
@@ -298,6 +318,20 @@ const DoorTool: React.FC = () => {
         cursorRotation,
         valid,
       )
+
+      if (draftRef.current) {
+        publishOpeningGuidesForWallEvent({
+          wall: event.node,
+          movingId: draftRef.current.id,
+          centerS: clampedX,
+          centerY: clampedY,
+          width,
+          height,
+          includeVertical: false,
+          levelYOffset: getLevelYOffset(),
+          slabElevation: getSlabElevation(event),
+        })
+      }
       event.stopPropagation()
     }
 
@@ -386,6 +420,7 @@ const DoorTool: React.FC = () => {
       triggerSFX('sfx:structure-build')
       alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
 
       event.stopPropagation()
     }
@@ -444,6 +479,8 @@ const DoorTool: React.FC = () => {
         useScene.getState().createNode(node, segment.id as AnyNodeId)
         draftRef.current = node
       }
+      // Opening guides are wall-specific; clear them while over a roof face.
+      clearOpeningGuides3D()
       updateRoofCursor(target, event.node as RoofNode)
       event.stopPropagation()
     }
@@ -533,6 +570,7 @@ const DoorTool: React.FC = () => {
       destroyDraft()
       hideCursor()
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)

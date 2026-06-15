@@ -6,6 +6,7 @@ import type {
   RoofSegmentNode,
   WallNode,
 } from '@pascal-app/core'
+import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { scaleHandleHeight } from './door-math'
@@ -56,6 +57,7 @@ function doorWidthHandle(side: 'left' | 'right'): HandleDescriptor<DoorNodeType>
       return readWallLength(n, scene)
     },
     currentValue: (n) => n.width,
+    onDrag: (node) => publishOpeningResizeGuides(node, false),
     apply: (initial, newWidth) => {
       // Anchored edge stays fixed in wall-local coords. Door rotation is
       // applied by the inner ride group (the renderer mounts a nested
@@ -98,6 +100,7 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
       return Math.max(MIN_DOOR_HEIGHT, readWallHeight(n, scene) - bottom)
     },
     currentValue: (n) => n.height,
+    onDrag: (node) => publishOpeningResizeGuides(node, false),
     apply: (initial, newHeight) => {
       const bottom = initial.position[1] - initial.height / 2
       // Scale the handle so it tracks the door instead of staying glued to a

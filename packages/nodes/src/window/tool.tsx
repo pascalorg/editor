@@ -27,6 +27,11 @@ import { useEffect, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
+  clearOpeningGuides3D,
+  publishOpeningGuidesForWallEvent,
+  resolveSillSnap,
+} from '../shared/opening-guides-runtime'
+import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
   resolveRoofWallOpeningTarget,
@@ -90,6 +95,7 @@ const WindowTool: React.FC = () => {
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     // Alignment candidates — anchors of every alignable object; refreshed
@@ -115,18 +121,46 @@ const WindowTool: React.FC = () => {
       const [x, y, z] = event.localPosition
       updateCursor([x, y + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z], 0, false)
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     const showRoofFallbackCursor = (event: RoofEvent) => {
       const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
       updateCursor([x, getLevelYOffset() + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z], 0, false)
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
     }
 
     const showWallFallbackCursor = (event: WallEvent) => {
       const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
       updateCursor([x, getLevelYOffset() + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z], 0, false)
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
+    }
+
+    // Sill alignment (snap + guide): a sibling sill/centre/top wins over the
+    // 0.5m grid when within threshold; Shift bypasses both. `movingId` is the
+    // draft's id once it exists (so it's excluded from the sibling scan), or ''
+    // before the draft is created (nothing to exclude yet).
+    const resolvePlacementY = (args: {
+      event: WallEvent
+      movingId: string
+      localX: number
+      width: number
+      height: number
+    }): number => {
+      const rawY = args.event.localPosition[1]
+      if (args.event.nativeEvent?.shiftKey === true) return rawY
+      const sillY = resolveSillSnap({
+        wall: args.event.node,
+        movingId: args.movingId,
+        localX: args.localX,
+        localY: rawY,
+        width: args.width,
+        height: args.height,
+        nodes: useScene.getState().nodes,
+      })
+      return sillY ?? snapToHalf(rawY)
     }
 
     const onWallEnter = (event: WallEvent) => {
@@ -169,10 +203,7 @@ const WindowTool: React.FC = () => {
         bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
         bypassSnap: event.nativeEvent?.shiftKey === true,
       })
-      const localY =
-        event.nativeEvent?.shiftKey === true
-          ? event.localPosition[1]
-          : snapToHalf(event.localPosition[1])
+      const localY = resolvePlacementY({ event, movingId: '', localX, width, height })
 
       const { clampedX, clampedY } = clampToWall(event.node, localX, localY, width, height)
 
@@ -201,6 +232,18 @@ const WindowTool: React.FC = () => {
         cursorRotation,
         valid,
       )
+
+      publishOpeningGuidesForWallEvent({
+        wall: event.node,
+        movingId: node.id,
+        centerS: clampedX,
+        centerY: clampedY,
+        width,
+        height,
+        includeVertical: true,
+        levelYOffset: getLevelYOffset(),
+        slabElevation: getSlabElevation(event),
+      })
       event.stopPropagation()
     }
 
@@ -236,10 +279,13 @@ const WindowTool: React.FC = () => {
         bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
         bypassSnap: event.nativeEvent?.shiftKey === true,
       })
-      const localY =
-        event.nativeEvent?.shiftKey === true
-          ? event.localPosition[1]
-          : snapToHalf(event.localPosition[1])
+      const localY = resolvePlacementY({
+        event,
+        movingId: draftRef.current?.id ?? '',
+        localX,
+        width,
+        height,
+      })
 
       const { clampedX, clampedY } = clampToWall(event.node, localX, localY, width, height)
 
@@ -313,6 +359,20 @@ const WindowTool: React.FC = () => {
         cursorRotation,
         valid,
       )
+
+      if (draftRef.current) {
+        publishOpeningGuidesForWallEvent({
+          wall: event.node,
+          movingId: draftRef.current.id,
+          centerS: clampedX,
+          centerY: clampedY,
+          width,
+          height,
+          includeVertical: true,
+          levelYOffset: getLevelYOffset(),
+          slabElevation: getSlabElevation(event),
+        })
+      }
       event.stopPropagation()
     }
 
@@ -334,10 +394,13 @@ const WindowTool: React.FC = () => {
         bypass: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
         bypassSnap: event.nativeEvent?.shiftKey === true,
       })
-      const localY =
-        event.nativeEvent?.shiftKey === true
-          ? event.localPosition[1]
-          : snapToHalf(event.localPosition[1])
+      const localY = resolvePlacementY({
+        event,
+        movingId: draftRef.current.id,
+        localX,
+        width: draftRef.current.width,
+        height: draftRef.current.height,
+      })
       const { clampedX, clampedY } = clampToWall(
         event.node,
         localX,
@@ -404,6 +467,7 @@ const WindowTool: React.FC = () => {
       triggerSFX('sfx:structure-build')
       alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
 
       event.stopPropagation()
     }
@@ -467,6 +531,8 @@ const WindowTool: React.FC = () => {
         useScene.getState().createNode(node, segment.id as AnyNodeId)
         draftRef.current = node
       }
+      // Opening guides are wall-specific; clear them while over a roof face.
+      clearOpeningGuides3D()
       updateRoofCursor(target, event.node as RoofNode)
       event.stopPropagation()
     }
@@ -550,6 +616,7 @@ const WindowTool: React.FC = () => {
       destroyDraft()
       hideCursor()
       useAlignmentGuides.getState().clear()
+      clearOpeningGuides3D()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)

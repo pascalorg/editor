@@ -6,6 +6,7 @@ import type {
   WallNode,
   WindowNode as WindowNodeType,
 } from '@pascal-app/core'
+import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { buildWindowFloorplan } from './floorplan'
@@ -50,6 +51,7 @@ function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeT
       return readWallLength(n, scene)
     },
     currentValue: (n) => n.width,
+    onDrag: (node) => publishOpeningResizeGuides(node, true),
     apply: (initial, newWidth) => {
       const rotY = initial.rotation[1]
       const armX = Math.cos(rotY)
@@ -97,6 +99,7 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
         : Math.max(MIN_WINDOW_HEIGHT, anchored)
     },
     currentValue: (n) => n.height,
+    onDrag: (node) => publishOpeningResizeGuides(node, true),
     apply: (initial, newHeight) => {
       // Anchored edge stays in wall-local Y; opposite edge moves.
       const anchorY =

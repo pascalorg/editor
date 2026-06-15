@@ -9,6 +9,9 @@ import {
   computeOpeningGuides,
   detectVerticalAlignment,
   type OpeningSpan,
+  sceneRegistry,
+  spatialGridManager,
+  useScene,
   type WallNode,
 } from '@pascal-app/core'
 import { type OpeningGuide3D, useOpeningGuides } from '@pascal-app/editor'
@@ -158,4 +161,90 @@ export function publishOpeningGuides3D(args: {
 
 export function clearOpeningGuides3D(): void {
   useOpeningGuides.getState().clear()
+}
+
+/** Wall-local (s along the wall, y above the wall base) → the move tool's render
+ *  frame, given the level Y offset + slab elevation. Shared by the wall-event
+ *  publisher (which already has them) and the resize publisher (which derives
+ *  them from the scene). Same frame as `wallLocalToWorld`. */
+function makeWallToWorld(wall: WallNode, levelYOffset: number, slabElevation: number): ToWorld {
+  const angle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+  return (s, y) => [
+    wall.start[0] + s * cos,
+    slabElevation + y + levelYOffset,
+    wall.start[1] + s * sin,
+  ]
+}
+
+/** Like {@link makeWallToWorld} but derives the level Y + slab elevation from the
+ *  scene, for callers without a wall event — i.e. the resize handles. */
+export function wallToWorld(wall: WallNode): ToWorld {
+  const levelId = wall.parentId as AnyNodeId | undefined
+  const levelYOffset = levelId ? (sceneRegistry.nodes.get(levelId)?.position.y ?? 0) : 0
+  const slabElevation = spatialGridManager.getSlabElevationForWall(
+    wall.parentId ?? '',
+    wall.start,
+    wall.end,
+  )
+  return makeWallToWorld(wall, levelYOffset, slabElevation)
+}
+
+/**
+ * Publish 3D opening guides for an opening being placed or moved on a wall via a
+ * wall event. The caller passes the level Y + slab elevation it already computed
+ * for the drag cursor, so the guides share the cursor's frame exactly — the one
+ * place the door/window move + placement tools publish from.
+ */
+export function publishOpeningGuidesForWallEvent(args: {
+  wall: WallNode
+  movingId: string
+  centerS: number
+  centerY: number
+  width: number
+  height: number
+  includeVertical: boolean
+  levelYOffset: number
+  slabElevation: number
+}): void {
+  const { wall, levelYOffset, slabElevation, ...rest } = args
+  publishOpeningGuides3D({
+    ...rest,
+    wall,
+    nodes: useScene.getState().nodes,
+    toWorld: makeWallToWorld(wall, levelYOffset, slabElevation),
+  })
+}
+
+/**
+ * Publish 3D opening guides for an opening being RESIZED via a handle arrow.
+ * Resolves the host wall + transform from the scene (no wall event), then reuses
+ * the shared publish. Doors pass `includeVertical: false` (they sit on the
+ * floor); windows pass `true` so a height drag also shows the live sill/head.
+ */
+export function publishOpeningResizeGuides(
+  node: {
+    id: string
+    parentId?: string | null
+    position: readonly [number, number, number]
+    width: number
+    height: number
+  },
+  includeVertical: boolean,
+): void {
+  const nodes = useScene.getState().nodes
+  const wall = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+  if (wall?.type !== 'wall') return
+  publishOpeningGuides3D({
+    wall,
+    movingId: node.id,
+    centerS: node.position[0],
+    centerY: node.position[1],
+    width: node.width,
+    height: node.height,
+    includeVertical,
+    nodes,
+    toWorld: wallToWorld(wall),
+  })
 }
