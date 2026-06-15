@@ -1,8 +1,13 @@
 'use client'
 
-import type { ChimneyNode, RoofSegmentNode } from '@pascal-app/core'
+import {
+  type ChimneyNode,
+  type RoofSegmentNode,
+  RoofSegmentNode as RoofSegmentSchema,
+} from '@pascal-app/core'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
 import { buildChimneyGeometry } from './geometry'
 
 const ghostMaterial = new THREE.MeshStandardMaterial({
@@ -15,21 +20,42 @@ const ghostMaterial = new THREE.MeshStandardMaterial({
   depthWrite: false,
 })
 
+const invalidGhostMaterial = new THREE.MeshStandardMaterial({
+  color: INVALID_GHOST_COLOR,
+  emissive: INVALID_GHOST_COLOR,
+  emissiveIntensity: 0.12,
+  roughness: 0.85,
+  transparent: true,
+  opacity: 0.4,
+  depthWrite: false,
+})
+
 /**
  * The preview needs a segment fixture to build the body height. The
- * placement tool passes the segment under the cursor; before any
- * segment is hit, the preview isn't shown at all (the tool guards on
- * `previewPos`).
+ * placement tool passes the segment under the cursor; when floating
+ * (off-roof fallback), segment is absent — build against RoofSegmentNode
+ * defaults so the ghost renders flat at the grid position with yaw 0.
  */
-const ChimneyPreview = ({ node, segment }: { node: ChimneyNode; segment: RoofSegmentNode }) => {
+const ChimneyPreview = ({
+  node,
+  segment,
+  invalid,
+}: {
+  node: ChimneyNode
+  segment?: RoofSegmentNode
+  invalid?: boolean
+}) => {
+  const material = invalid ? invalidGhostMaterial : ghostMaterial
+  const effectiveSegment = segment ?? RoofSegmentSchema.parse({})
+
   const geo = useMemo(
-    () => buildChimneyGeometry(node, segment),
+    () => buildChimneyGeometry(node, effectiveSegment),
     [
-      segment.wallHeight,
-      segment.pitch,
-      segment.roofType,
-      segment.width,
-      segment.depth,
+      effectiveSegment.wallHeight,
+      effectiveSegment.pitch,
+      effectiveSegment.roofType,
+      effectiveSegment.width,
+      effectiveSegment.depth,
       node.width,
       node.depth,
       node.heightAboveRidge,
@@ -68,16 +94,10 @@ const ChimneyPreview = ({ node, segment }: { node: ChimneyNode; segment: RoofSeg
 
   return (
     <group>
-      <mesh
-        geometry={geo.body}
-        material={ghostMaterial}
-        raycast={() => {
-          /* preview should not intercept the cursor */
-        }}
-      />
-      {geo.cap && <mesh geometry={geo.cap} material={ghostMaterial} raycast={() => {}} />}
-      {geo.flues && <mesh geometry={geo.flues} material={ghostMaterial} raycast={() => {}} />}
-      {geo.cricket && <mesh geometry={geo.cricket} material={ghostMaterial} raycast={() => {}} />}
+      <mesh geometry={geo.body} material={material} raycast={() => {}} />
+      {geo.cap && <mesh geometry={geo.cap} material={material} raycast={() => {}} />}
+      {geo.flues && <mesh geometry={geo.flues} material={material} raycast={() => {}} />}
+      {geo.cricket && <mesh geometry={geo.cricket} material={material} raycast={() => {}} />}
     </group>
   )
 }

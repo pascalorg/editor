@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
 import { buildSolarPanelGeometry } from './geometry'
 import type { SolarPanelNode } from './schema'
 
@@ -15,7 +16,19 @@ const ghostMaterial = new THREE.MeshStandardMaterial({
   depthWrite: false,
 })
 
-const SolarPanelPreview = ({ node }: { node: SolarPanelNode }) => {
+const invalidGhostMaterial = new THREE.MeshStandardMaterial({
+  color: INVALID_GHOST_COLOR,
+  emissive: INVALID_GHOST_COLOR,
+  emissiveIntensity: 0.12,
+  roughness: 0.5,
+  transparent: true,
+  opacity: 0.4,
+  depthWrite: false,
+})
+
+const SolarPanelPreview = ({ node, invalid }: { node: SolarPanelNode; invalid?: boolean }) => {
+  const material = invalid ? invalidGhostMaterial : ghostMaterial
+
   const geometry = useMemo(
     () => buildSolarPanelGeometry(node),
     [
@@ -38,7 +51,7 @@ const SolarPanelPreview = ({ node }: { node: SolarPanelNode }) => {
   return (
     <mesh
       geometry={geometry}
-      material={ghostMaterial}
+      material={material}
       raycast={() => {
         /* preview should not intercept the cursor */
       }}

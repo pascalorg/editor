@@ -27,6 +27,7 @@ import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
  */
 export const FloorplanPlacementPreviewLayer = memo(function FloorplanPlacementPreviewLayer() {
   const node = usePlacementPreview((s) => s.node)
+  const parentNode = usePlacementPreview((s) => s.parentNode)
   if (!node) return null
 
   const builder = nodeRegistry.get(node.type)?.floorplan
@@ -37,11 +38,13 @@ export const FloorplanPlacementPreviewLayer = memo(function FloorplanPlacementPr
   // `resolve` reads the scene lazily (a builder rarely calls it for a ghost,
   // and `parent: null` short-circuits the elevator's level walk) so the layer
   // never subscribes to / bulk-reads the nodes map during render.
+  // `parentNode` is the synthetic wall for an off-wall door/window ghost so
+  // its builder draws the real swing-arc / pane symbol (see use-placement-preview).
   const ctx = {
     resolve: (id: AnyNodeId) => useScene.getState().nodes[id],
     children: [],
     siblings: [],
-    parent: null,
+    parent: parentNode ?? null,
     viewState: undefined,
   } as unknown as GeometryContext
 
