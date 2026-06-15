@@ -3,16 +3,14 @@ import {
   type DoorNode,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  useLiveTransforms,
   useScene,
   type WallNode,
   WallNode as WallNodeSchema,
 } from '@pascal-app/core'
 import { snapToHalf, usePlacementPreview } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
-import {
-  getRoofHostedOpeningLevelId,
-  getRoofHostedOpeningPlanPoint,
-} from '../shared/roof-opening-host'
+import { getOpeningHostLevelId, getRoofHostedOpeningPlanPoint } from '../shared/roof-opening-host'
 import {
   findClosestWallInPlan,
   projectWallLocalPointToPlan,
@@ -39,16 +37,10 @@ import { clampToWall, hasWallChildOverlap } from './door-math'
 export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node }) => {
   // Snapshot of the door's "valid" state at move-start — used by
   // canCommit to decide whether the current snapped position is OK.
-  const startLevelId = (() => {
-    // Wall-hosted: the wall's parent is the level. Roof-hosted: walk
-    // segment → roof → level. Cached at start because the parent chain
-    // doesn't change during a move.
-    const nodes = useScene.getState().nodes
-    const roofLevelId = getRoofHostedOpeningLevelId(node, nodes)
-    if (roofLevelId) return roofLevelId
-    const wall = nodes[node.parentId as AnyNodeId]
-    return wall ? (wall.parentId as AnyNodeId | null) : null
-  })()
+  // The level that owns the wall-snap candidates — resolves the wall-hosted,
+  // roof-hosted, and fresh-placement parentings (see `getOpeningHostLevelId`).
+  // Cached at start because the parent chain doesn't change during a move.
+  const startLevelId = getOpeningHostLevelId(node, useScene.getState().nodes)
   const originalWall = node.parentId
     ? (useScene.getState().nodes[node.parentId as AnyNodeId] as WallNode | undefined)
     : undefined
@@ -58,6 +50,14 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
         ? projectWallLocalPointToPlan(originalWall, node.position[0])
         : (getRoofHostedOpeningPlanPoint(node, useScene.getState().nodes) ?? [node.position[0], 0]),
     metadata: node.metadata,
+    // Absolute: query the wall snap with the TRUE cursor, not the door's
+    // original wall position plus a grab delta. A wall-hosted opening always
+    // belongs to the wall nearest the cursor (the user's rule), and the 3D
+    // move snaps on the wall literally under the ray — relative mode would
+    // anchor the search to the old wall and resist hopping to a closer one
+    // across a thin gap, picking the "far" wall the user reported. It also
+    // makes the 2D Voronoi overlay (classified by cursor) predict the snap.
+    mode: 'absolute',
   })
 
   // Track the last successful placement so `commit()` can write it
@@ -125,6 +125,17 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
     },
     apply({ planPoint, modifiers }) {
       lastApply = { planPoint, modifiers }
+      // Drop any stale live transform left by the 3D `MoveDoorTool` (it
+      // publishes one on every wall hover). The 2D registry layer renders
+      // door/window from `useLiveTransforms` IN PREFERENCE to the scene node,
+      // but this 2D move writes the scene node — so a leftover 3D entry would
+      // freeze the symbol on its wall and the slide wouldn't show. Only the
+      // 2D path runs during an opening move (the panel gates the 3D tool's
+      // events off via `!isOpeningMoveActive`), so nothing re-adds it. Guarded
+      // on existence: `clear` always allocates a new Map + re-renders.
+      if (useLiveTransforms.getState().transforms.has(node.id as AnyNodeId)) {
+        useLiveTransforms.getState().clear(node.id as AnyNodeId)
+      }
       const nodes = useScene.getState().nodes
       const resolvedPlanPoint = resolveCursor(planPoint)
       const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)

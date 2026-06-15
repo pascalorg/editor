@@ -1,9 +1,11 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  collectLevelWallSegments,
   getScaledDimensions,
   type ItemNode,
-  isCurvedWall,
+  nearestWallSegment,
+  WALL_SNAP_DISTANCE_M,
   type WallNode,
 } from '@pascal-app/core'
 
@@ -21,13 +23,6 @@ import {
  * Curved walls are excluded — the legacy door / window placement also
  * rejects curved walls (mitering + arc + opening would tear in 3D).
  */
-
-// Max cursor-to-wall distance (metres) for a 2D opening to snap onto a wall.
-// Kept tight: plan walls are thin and often close together, so a large radius
-// would grab a wall the cursor isn't really near. The wall chosen is always
-// the single closest segment to the cursor (true Voronoi nearest), and only if
-// it's within this radius.
-const WALL_SNAP_DISTANCE_M = 0.4
 
 export type WallHit = {
   wall: WallNode
@@ -66,10 +61,14 @@ export function projectWallLocalPointToPlan(
 }
 
 /**
- * Walk every wall under `parentLevelId` and return the closest one to
- * `planPoint`, or `null` if no wall is within `WALL_SNAP_DISTANCE_M`.
- * `excludeWallId` skips a specific wall (e.g. the current parent during
- * a re-parent flow if you want a "must change" guard).
+ * Return the single closest wall under `parentLevelId` to `planPoint` — the
+ * wall whose segment-Voronoi cell the point lies in — or `null` if nothing is
+ * within `WALL_SNAP_DISTANCE_M`. `excludeWallId` skips a specific wall.
+ *
+ * The nearest-segment scan + curved-wall filter live in core
+ * (`collectLevelWallSegments` / `nearestWallSegment`) so the editor's 2D
+ * Voronoi debug overlay classifies points with the exact same math — the
+ * overlay is then a faithful picture of where this snaps.
  */
 export function findClosestWallInPlan(
   planPoint: readonly [number, number],
@@ -77,88 +76,36 @@ export function findClosestWallInPlan(
   parentLevelId: AnyNodeId | null,
   excludeWallId?: AnyNodeId,
 ): WallHit | null {
-  if (!parentLevelId) return null
-  const level = nodes[parentLevelId]
-  const childIds = (level as unknown as { children?: AnyNodeId[] })?.children
-  if (!Array.isArray(childIds)) return null
+  const segments = collectLevelWallSegments(nodes, parentLevelId)
+  const closest = nearestWallSegment(
+    segments,
+    planPoint[0],
+    planPoint[1],
+    WALL_SNAP_DISTANCE_M,
+    excludeWallId,
+  )
+  if (!closest) return null
 
-  let best: WallHit | null = null
-  // Segment distance (cursor → closest point on the wall segment) of `best`.
-  // The wall we snap to is the one minimising THIS, so a door never jumps to a
-  // farther wall just because the cursor's perpendicular offset to its infinite
-  // line happens to be small. `perpDistance` on `WallHit` is the signed offset
-  // for the side calc only — never the closeness metric.
-  let bestDistance = Number.POSITIVE_INFINITY
+  const { segment, along, perp } = closest
+  // Side determination, calibrated to the 3D wall convention. In wall-local
+  // space the wall extends along +X and its +Z axis is the front-face normal;
+  // `perp >= 0` is consistently the front side (see `closestOnSegment`).
+  const side: 'front' | 'back' = perp >= 0 ? 'front' : 'back'
+  // Wall-local rotation matching 3D `calculateItemRotation`: 0 front, π back.
+  // The node is parented to the wall, so this composes with the wall's own
+  // rotation at render — never a world-space rotation here.
+  const itemRotation = side === 'front' ? 0 : Math.PI
 
-  for (const childId of childIds) {
-    const node = nodes[childId]
-    if (!node || node.type !== 'wall') continue
-    if (childId === excludeWallId) continue
-    const wall = node as WallNode
-    if (isCurvedWall(wall)) continue
-
-    const sx = wall.start[0]
-    const sy = wall.start[1]
-    const dx = wall.end[0] - sx
-    const dy = wall.end[1] - sy
-    const wallLength = Math.hypot(dx, dy)
-    if (wallLength < 1e-6) continue
-
-    const dirX = dx / wallLength
-    const dirY = dy / wallLength
-
-    // Project pointer onto wall axis.
-    const px = planPoint[0] - sx
-    const py = planPoint[1] - sy
-    const along = px * dirX + py * dirY
-    const perpRaw = px * -dirY + py * dirX // signed perpendicular distance
-    const clampedAlong = Math.max(0, Math.min(wallLength, along))
-
-    // Distance from the pointer to the wall segment (not just the line).
-    const closestPointX = sx + dirX * clampedAlong
-    const closestPointY = sy + dirY * clampedAlong
-    const distance = Math.hypot(planPoint[0] - closestPointX, planPoint[1] - closestPointY)
-    if (distance > WALL_SNAP_DISTANCE_M) continue
-    // Keep only the single closest wall segment (strict nearest). Compare true
-    // segment distances — not perpDistance — so close-together walls resolve to
-    // whichever the cursor is actually nearest.
-    if (distance >= bestDistance) continue
-
-    // Side determination, calibrated to the 3D wall convention. In
-    // wall-local space the wall extends along +X and its +Z axis is the
-    // front-face normal. After `mesh.rotation.y = -wallAngle`:
-    //   - For a wall going `+X` in plan (wallAngle=0): wall-local +Z
-    //     maps to world +Z = plan +Y, so the front face is on plan +Y.
-    //     `perpRaw = py` is positive → front.
-    //   - For a wall going `+Y` in plan (wallAngle=π/2): wall-local +Z
-    //     maps to world -X = plan -X, so the front face is on plan -X.
-    //     `perpRaw = -px` is positive there → front.
-    // So `perpRaw >= 0` is consistently the front side. The earlier
-    // labelling had this flipped, which produced rotations that were
-    // off by 90° on non-horizontal walls.
-    const side: 'front' | 'back' = perpRaw >= 0 ? 'front' : 'back'
-
-    // Rotation in wall-local space — matches 3D `calculateItemRotation`:
-    // 0 when the item faces the front normal (+Z), π for the back. The
-    // node is parented to the wall, so this composes with the wall's
-    // own rotation when rendered. Don't return a world-space rotation
-    // here — the consumer writes this straight into `node.rotation[1]`.
-    const itemRotation = side === 'front' ? 0 : Math.PI
-
-    bestDistance = distance
-    best = {
-      wall,
-      localX: clampedAlong,
-      perpDistance: perpRaw,
-      side,
-      dirX,
-      dirY,
-      wallLength,
-      itemRotation,
-    }
+  return {
+    wall: segment.wall,
+    localX: along,
+    perpDistance: perp,
+    side,
+    dirX: segment.dirX,
+    dirY: segment.dirY,
+    wallLength: segment.length,
+    itemRotation,
   }
-
-  return best
 }
 
 /** Figma-style along-wall alignment threshold (meters) — parity with the

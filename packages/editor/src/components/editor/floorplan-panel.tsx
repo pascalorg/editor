@@ -106,6 +106,7 @@ import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-
 import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
 import { FloorplanRegistryLayer } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
+import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { snapToHalf } from '../tools/item/placement-math'
@@ -10515,6 +10516,13 @@ export function FloorplanPanel({
                 palette={palette}
                 showGrid={showGrid}
               />
+
+              {/* Dev-only: draw each wall's opening-snap hit area (the
+                  capsule of points within the snap radius of its centerline).
+                  Gated on the developer-menu toggle. Painted right after the
+                  grid so the translucent capsules sit under the wall / opening
+                  glyphs. */}
+              <FloorplanVoronoiLayer />
 
               <FloorplanReferenceFloorLayer
                 data={referenceFloorData}
