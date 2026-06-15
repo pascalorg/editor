@@ -4,7 +4,10 @@ import {
   type MaterialPresetPayload,
   type MaterialProperties,
   type MaterialSchema,
+  parseMaterialRef,
   resolveMaterial,
+  type SceneMaterial,
+  type SceneMaterialId,
   type SurfaceRole,
 } from '@pascal-app/core'
 import * as THREE from 'three'
@@ -484,6 +487,24 @@ export function createMaterial(
 
   materialCache.set(cacheKey, threeMaterial)
   return threeMaterial
+}
+
+/**
+ * Resolve a MaterialRef ('library:<id>' | 'scene:<id>') to a three.js material.
+ * Returns null for an unknown / dangling ref so callers fall back to the
+ * slot's default (authored material, then themed default). Never throws.
+ */
+export function resolveMaterialRef(
+  ref: string | undefined,
+  sceneMaterials: Record<SceneMaterialId, SceneMaterial> | undefined,
+  shading: RenderShading = 'rendered',
+): THREE.Material | null {
+  const parsed = parseMaterialRef(ref)
+  if (!parsed) return null
+  if (parsed.kind === 'library') return createMaterialFromPresetRef(ref, shading)
+  const sceneMaterial = sceneMaterials?.[parsed.id as SceneMaterialId]
+  if (!sceneMaterial) return null
+  return createMaterial(sceneMaterial.material, shading)
 }
 
 export function createDefaultMaterial(

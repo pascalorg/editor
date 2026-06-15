@@ -2423,15 +2423,37 @@ export function getCatalogMaterialById(id?: string): MaterialCatalogItem | undef
 }
 
 export const LIBRARY_MATERIAL_REF_PREFIX = 'library:'
+export const SCENE_MATERIAL_REF_PREFIX = 'scene:'
 
 export function toLibraryMaterialRef(id: string) {
   return `${LIBRARY_MATERIAL_REF_PREFIX}${id}`
+}
+
+export function toSceneMaterialRef(id: string) {
+  return `${SCENE_MATERIAL_REF_PREFIX}${id}`
 }
 
 export function getLibraryMaterialIdFromRef(materialRef?: string | null) {
   if (!materialRef) return null
   if (!materialRef.startsWith(LIBRARY_MATERIAL_REF_PREFIX)) return null
   return materialRef.slice(LIBRARY_MATERIAL_REF_PREFIX.length)
+}
+
+export function getSceneMaterialIdFromRef(materialRef?: string | null): string | null {
+  if (!materialRef || !materialRef.startsWith(SCENE_MATERIAL_REF_PREFIX)) return null
+  return materialRef.slice(SCENE_MATERIAL_REF_PREFIX.length)
+}
+
+export type MaterialRef = string
+
+export type ParsedMaterialRef = { kind: 'library'; id: string } | { kind: 'scene'; id: string }
+
+export function parseMaterialRef(ref?: string | null): ParsedMaterialRef | null {
+  const lib = getLibraryMaterialIdFromRef(ref)
+  if (lib) return { kind: 'library', id: lib }
+  const scene = getSceneMaterialIdFromRef(ref)
+  if (scene) return { kind: 'scene', id: scene }
+  return null
 }
 
 export function getMaterialPresetByRef(materialRef?: string | null): MaterialPresetPayload | null {

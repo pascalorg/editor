@@ -906,6 +906,7 @@ export const SelectionManager = () => {
           normal: event.normal,
           localPosition: event.localPosition as readonly [number, number, number] | undefined,
           hitObjectName: event.nativeEvent.object?.name,
+          hitObject: getEventObject(event),
         })
         const compatible = role !== null && paintEnabled
         return {
@@ -915,15 +916,22 @@ export const SelectionManager = () => {
           apply:
             compatible && role
               ? () => {
-                  useScene.getState().updateNode(
-                    node.id as AnyNodeId,
-                    paintCap.buildPatch({
-                      node,
-                      role,
-                      material: paintSpec.material,
-                      materialPreset: paintSpec.materialPreset,
-                    }) as Partial<AnyNode>,
-                  )
+                  const args = {
+                    node,
+                    role,
+                    material: paintSpec.material,
+                    materialPreset: paintSpec.materialPreset,
+                  }
+                  if (paintCap.commit) {
+                    paintCap.commit(args)
+                  } else {
+                    useScene
+                      .getState()
+                      .updateNode(
+                        node.id as AnyNodeId,
+                        paintCap.buildPatch(args) as Partial<AnyNode>,
+                      )
+                  }
                 }
               : null,
           preview:
@@ -1086,7 +1094,7 @@ export const SelectionManager = () => {
         }
       }
 
-      const disabledNodeTypes = ['item', 'window', 'door', 'zone']
+      const disabledNodeTypes = ['window', 'door', 'zone']
       if (disabledNodeTypes.includes(node.type)) {
         return {
           key: `${node.type}:${node.id}:unsupported`,
@@ -1549,6 +1557,7 @@ export const SelectionManager = () => {
               normal: event.normal,
               localPosition: event.localPosition as readonly [number, number, number] | undefined,
               hitObjectName: event.nativeEvent.object?.name,
+              hitObject: getEventObject(event),
             })
             if (role) {
               setSelectedMaterialTargetForNode(nodeToSelect, role as MaterialTargetRole)
@@ -1930,7 +1939,8 @@ const SelectionStateSync = () => {
     const selectedNode = useScene.getState().nodes[singleSelectedId as AnyNodeId]
     if (
       !selectedNode ||
-      (selectedNode.type !== 'wall' &&
+      (!nodeRegistry.get(selectedNode.type)?.capabilities?.paint &&
+        selectedNode.type !== 'wall' &&
         selectedNode.type !== 'fence' &&
         selectedNode.type !== 'slab' &&
         selectedNode.type !== 'ceiling' &&

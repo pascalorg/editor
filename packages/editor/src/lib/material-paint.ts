@@ -30,24 +30,26 @@ import {
   type WallSurfaceSide,
 } from '@pascal-app/core'
 
-export type PaintableMaterialTarget = Extract<
-  MaterialTarget,
-  | 'wall'
-  | 'roof'
-  | 'stair'
-  | 'fence'
-  | 'column'
-  | 'slab'
-  | 'ceiling'
-  | 'shelf'
-  | 'chimney'
-  | 'dormer'
-  | 'box-vent'
-  | 'ridge-vent'
-  | 'turbine-vent'
-  | 'cupola'
-  | 'eyebrow-vent'
->
+export type PaintableMaterialTarget =
+  | Extract<
+      MaterialTarget,
+      | 'wall'
+      | 'roof'
+      | 'stair'
+      | 'fence'
+      | 'column'
+      | 'slab'
+      | 'ceiling'
+      | 'shelf'
+      | 'chimney'
+      | 'dormer'
+      | 'box-vent'
+      | 'ridge-vent'
+      | 'turbine-vent'
+      | 'cupola'
+      | 'eyebrow-vent'
+    >
+  | 'item'
 
 export type SingleSurfaceMaterialRole = 'surface'
 
@@ -179,6 +181,7 @@ export function buildResetSurfaceMaterialUpdates(
       if (
         key === 'material' ||
         key === 'materialPreset' ||
+        key === 'slots' ||
         key.endsWith('Material') ||
         key.endsWith('MaterialPreset')
       ) {
@@ -276,6 +279,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
       | ChimneyMaterialRole
       | DormerSurfaceMaterialRole
       | SingleSurfaceMaterialRole
+      | string
   } | null
 }): ActivePaintMaterial | null {
   const { nodes, selectedId, selectedMaterialTarget } = params
@@ -442,6 +446,10 @@ export function resolvePaintTargetFromSelection(params: {
 
   if (selectedNode.type === 'shelf') {
     return 'shelf'
+  }
+
+  if (selectedNode.type === 'item') {
+    return 'item'
   }
 
   if (selectedNode.type === 'chimney') {

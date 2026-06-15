@@ -68,6 +68,7 @@ export {
   MONO_PALETTE,
   PRESET_PALETTES,
   type RenderShading,
+  resolveMaterialRef,
   resolveSurfaceColor,
   WHITE_PALETTE,
 } from './lib/materials'

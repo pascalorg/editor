@@ -1127,6 +1127,14 @@ export type PaintCapability = {
    */
   buildPatch: (args: PaintPatchArgs) => Partial<AnyNode>
   /**
+   * Optional: fully own the click-commit instead of the default
+   * `updateNode(node.id, buildPatch(...))`. Kinds whose commit has a side
+   * effect (items create a scene material for one-off colours, then store a
+   * `scene:<id>` ref) implement this; kinds that just patch the node omit it.
+   * Must perform its mutations as a single undo step.
+   */
+  commit?: (args: PaintPatchArgs) => void
+  /**
    * Apply a preview to the kind's registered mesh subtree at
    * `role`. The kind builds whatever preview material(s) it needs
    * (single material, full material array, multi-slot patch — all
@@ -1169,6 +1177,8 @@ export type PaintResolveArgs = {
   localPosition?: readonly [number, number, number]
   /** Optional: name of the three.js object that received the hit. Stair uses this. */
   hitObjectName?: string
+  /** Optional: the three.js object that received the pointer hit. Items read userData.slotId off it. */
+  hitObject?: Object3D
 }
 
 export type PaintPatchArgs = {
