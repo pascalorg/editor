@@ -9,16 +9,15 @@ import {
   type ItemNode,
   isSlotMaterialName,
   LIBRARY_MATERIAL_REF_PREFIX,
+  type LightEffect,
   SCENE_MATERIAL_REF_PREFIX,
   toLibraryMaterialRef,
-  type LightEffect,
   useInteractive,
   useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
 import {
-  baseMaterial,
   type ColorPreset,
   createDefaultMaterial,
   createSurfaceRoleMaterial,
@@ -121,11 +120,6 @@ const captureItemMeshMaterials = (mesh: Mesh): CapturedItemMaterialData => {
   return next
 }
 
-const hasCapturedSlot = (captured: CapturedItemMaterialData): boolean =>
-  Array.isArray(captured.slotIds)
-    ? captured.slotIds.some((slotId) => slotId != null)
-    : captured.slotIds != null
-
 const isCapturedMaterialArray = (
   captured: CapturedItemMaterialData,
 ): captured is CapturedMultiItemMaterialData => Array.isArray(captured.authoredMaterials)
@@ -155,20 +149,19 @@ const resolveItemMaterial = (
   curatedRef: string | undefined,
   {
     colorPreset,
-    isAuthored,
     nodeSlots,
     sceneMaterials,
     shading,
     textures,
   }: {
     colorPreset: ColorPreset
-    isAuthored: boolean
     nodeSlots: ItemNode['slots']
     sceneMaterials: SceneMaterials
     shading: RenderShading
     textures: boolean
   },
 ): Material => {
+  // Monochrome (textures off): collapse to the themed furnishing clay colour.
   if (!textures) return createSurfaceRoleMaterial('furnishing', colorPreset)
   if (authoredMaterial.name.toLowerCase() === 'glass') return glassMaterial
   if (slotId != null) {
@@ -178,8 +171,10 @@ const resolveItemMaterial = (
     if (curated) return curated
     return authoredMaterial
   }
-  if (isAuthored) return authoredMaterial
-  return baseMaterial(shading)
+  // Colored (textures on): show the item's real authored material — its
+  // textures, vertex colours, and default colours — for every item, not just
+  // slot-authored ones (no more strip-to-clay default).
+  return authoredMaterial
 }
 
 const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
@@ -334,7 +329,6 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
     if (!root) return
 
     const meshEntries: { mesh: Mesh; captured: CapturedItemMaterialData }[] = []
-    let isAuthored = false
 
     root.traverse((child) => {
       if (!(child as Mesh).isMesh) return
@@ -345,13 +339,11 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
       }
 
       const captured = captureItemMeshMaterials(mesh)
-      if (hasCapturedSlot(captured)) isAuthored = true
       if (mesh.name !== 'cutout') meshEntries.push({ mesh, captured })
     })
 
     const materialOptions = {
       colorPreset,
-      isAuthored,
       nodeSlots: node.slots,
       sceneMaterials,
       shading,
