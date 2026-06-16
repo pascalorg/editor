@@ -12,6 +12,7 @@ import {
   getRotationAxis,
   ROTATE_STEP_RAD,
 } from '../shared/fitting-rotation'
+import { LevelOffsetGroup } from '../shared/level-offset-group'
 import {
   collectScenePorts,
   DWV_PORT_SYSTEMS,
@@ -207,7 +208,7 @@ const PipeFittingTool = () => {
   if (!activeLevelId || !placement) return null
 
   return (
-    <group>
+    <LevelOffsetGroup>
       {/* Same ground ring + vertical line + tool-icon badge the duct draw
           tool shows in 3D (icon resolved from the active `pipe-fitting`
           structure-tools entry). In 2D the floorplan overlay draws this for
@@ -247,7 +248,7 @@ const PipeFittingTool = () => {
           <meshBasicMaterial color="#818cf8" depthTest={false} opacity={0.35} transparent />
         </mesh>
       )}
-    </group>
+    </LevelOffsetGroup>
   )
 }
 

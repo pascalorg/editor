@@ -1,5 +1,6 @@
 import type { NodePort } from '@pascal-app/core'
 import { Euler, Quaternion, Vector3 } from 'three'
+import { equivalentDiameterIn, ovalEquivalentDiameterIn } from '../duct-segment/geometry'
 import type { DuctTerminalNode } from './schema'
 
 /** Collar stub length in meters behind the face. */
@@ -22,6 +23,19 @@ export function terminalSystem(node: DuctTerminalNode): 'supply' | 'return' {
 }
 
 /**
+ * Diameter (inches) the collar advertises at its port. Rect / oval
+ * collars report the area-equivalent round diameter so round runs mate
+ * at a sensible size — the same convention duct segments use.
+ */
+export function collarPortDiameterIn(node: DuctTerminalNode): number {
+  if (node.collarShape === 'rect') return equivalentDiameterIn(node.collarWidth, node.collarHeight)
+  if (node.collarShape === 'oval') {
+    return ovalEquivalentDiameterIn(node.collarWidth, node.collarHeight)
+  }
+  return node.collarDiameter
+}
+
+/**
  * `def.ports` — the single collar port in level-local space. Canonical
  * frame: collar tip at (0, -COLLAR_LENGTH, 0) pointing -Y (away from the
  * face); mount + yaw + position transform it. Direction points OUT of
@@ -40,8 +54,11 @@ export function getDuctTerminalPorts(node: DuctTerminalNode): NodePort[] {
       id: 'collar',
       position: [position.x, position.y, position.z] as const,
       direction: [direction.x, direction.y, direction.z] as const,
-      diameter: node.collarDiameter,
+      diameter: collarPortDiameterIn(node),
       system: terminalSystem(node),
+      shape: node.collarShape,
+      width: node.collarWidth,
+      height: node.collarHeight,
     },
   ]
 }

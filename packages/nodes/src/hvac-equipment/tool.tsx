@@ -6,6 +6,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
+import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { hvacEquipmentDefinition } from './definition'
 import { buildHvacEquipmentGeometry } from './geometry'
 
@@ -109,7 +110,7 @@ const HvacEquipmentTool = () => {
   if (!activeLevelId || !cursor) return null
 
   return (
-    <group>
+    <LevelOffsetGroup>
       <group position={cursor} rotation={[0, yaw, 0]}>
         <primitive object={ghost} />
       </group>
@@ -127,7 +128,7 @@ const HvacEquipmentTool = () => {
           <span className="text-muted-foreground">⇧ smooth</span>
         </div>
       </Html>
-    </group>
+    </LevelOffsetGroup>
   )
 }
 

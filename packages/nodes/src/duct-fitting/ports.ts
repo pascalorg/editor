@@ -77,6 +77,39 @@ export function localFittingPorts(node: DuctFittingNode): LocalPort[] {
       },
     ]
   }
+  if (node.fittingType === 'cross') {
+    // Four-way junction: run inlet -X / outlet +X at the run profile,
+    // two opposed branches square to the run along ±Z at the branch
+    // profile. Both branches share `diameter2` (one drawn run passes
+    // straight through, so its two halves are the same size).
+    const branch = fittingLegLength(node.diameter2)
+    return [
+      {
+        id: 'inlet',
+        position: new Vector3(-main, 0, 0),
+        direction: new Vector3(-1, 0, 0),
+        diameter: node.diameter,
+      },
+      {
+        id: 'outlet',
+        position: new Vector3(main, 0, 0),
+        direction: new Vector3(1, 0, 0),
+        diameter: node.diameter,
+      },
+      {
+        id: 'branch',
+        position: new Vector3(0, 0, branch),
+        direction: new Vector3(0, 0, 1),
+        diameter: node.diameter2,
+      },
+      {
+        id: 'branch2',
+        position: new Vector3(0, 0, -branch),
+        direction: new Vector3(0, 0, -1),
+        diameter: node.diameter2,
+      },
+    ]
+  }
   // reducer / transition: straight-through, inlet at `diameter` (the
   // transition's rect end advertises its area-equivalent round size),
   // outlet at `diameter2`.

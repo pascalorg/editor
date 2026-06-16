@@ -29,8 +29,16 @@ export const DuctTerminalNode = BaseNode.extend({
   // ceiling diffusers are square (0.6 × 0.6); return grilles run large.
   width: z.number().min(0.1).max(1.5).default(0.3),
   depth: z.number().min(0.05).max(1.5).default(0.15),
+  // Collar cross-section on the duct side. Round is the default; rect and
+  // oval (flat-oval) match the duct shapes a run might end with.
+  collarShape: z.enum(['round', 'rect', 'oval']).default('round'),
   // Round collar diameter in inches on the duct side.
   collarDiameter: z.number().min(4).max(20).default(6),
+  // Rect / oval collar cross-section in inches: width is the horizontal
+  // face, height the vertical. For oval, height is also the end-cap
+  // semicircle diameter (width ≥ height).
+  collarWidth: z.number().min(4).max(20).default(10),
+  collarHeight: z.number().min(3).max(20).default(6),
 }).describe(
   dedent`
   Duct terminal - supply register, ceiling diffuser, or return grille.
@@ -39,7 +47,9 @@ export const DuctTerminalNode = BaseNode.extend({
   - terminalType: supply-register | diffuser | return-grille (grille = return side)
   - mount: floor | ceiling | wall - face orientation + collar direction
   - width / depth: face size in meters
-  - collarDiameter: duct collar in inches
+  - collarShape: round | rect | oval - duct-side collar cross-section
+  - collarDiameter: round collar diameter in inches
+  - collarWidth / collarHeight: rect / oval collar cross-section in inches
   `,
 )
 export type DuctTerminalNode = z.infer<typeof DuctTerminalNode>

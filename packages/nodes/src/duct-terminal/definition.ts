@@ -32,7 +32,10 @@ export const ductTerminalDefinition: NodeDefinition<typeof DuctTerminalNode> = {
     mount: 'floor',
     width: 0.3,
     depth: 0.15,
+    collarShape: 'round',
     collarDiameter: 6,
+    collarWidth: 10,
+    collarHeight: 6,
   }),
 
   capabilities: {
@@ -46,7 +49,17 @@ export const ductTerminalDefinition: NodeDefinition<typeof DuctTerminalNode> = {
   parametrics: ductTerminalParametrics,
 
   geometry: buildDuctTerminalGeometry,
-  geometryKey: (n) => JSON.stringify([n.terminalType, n.mount, n.width, n.depth, n.collarDiameter]),
+  geometryKey: (n) =>
+    JSON.stringify([
+      n.terminalType,
+      n.mount,
+      n.width,
+      n.depth,
+      n.collarShape,
+      n.collarDiameter,
+      n.collarWidth,
+      n.collarHeight,
+    ]),
 
   ports: getDuctTerminalPorts,
 

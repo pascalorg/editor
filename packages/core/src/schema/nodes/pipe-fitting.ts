@@ -5,14 +5,15 @@ import { BaseNode, nodeType, objectId } from '../base'
 /**
  * DWV pipe fitting — the joints drain systems are actually built from:
  * elbows (bends), wyes (45° branch entries, the code-preferred way to
- * join horizontal drains), and sanitary tees (90° branch into a
- * vertical stack).
+ * join horizontal drains), sanitary tees (square branch entries), and
+ * crosses (two opposed branches where a run passes straight through).
  *
  * Local-frame conventions (before `rotation`):
  *   - elbow:        inlet faces -X, outlet turned `angle`° in XZ.
  *   - wye:          run along X (inlet -X, outlet +X), branch collar at
  *                   45° between +X and +Z.
  *   - sanitary-tee: run along X, branch collar faces +Z.
+ *   - cross:        run along X, two opposed branch collars on ±Z.
  */
 export const PipeFittingNode = BaseNode.extend({
   id: objectId('pipe-fitting'),
@@ -21,7 +22,7 @@ export const PipeFittingNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // XYZ euler radians.
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
-  fittingType: z.enum(['elbow', 'wye', 'sanitary-tee']).default('elbow'),
+  fittingType: z.enum(['elbow', 'wye', 'sanitary-tee', 'cross']).default('elbow'),
   // Elbow turn in degrees — DWV bends ship as 22.5 / 45 / 90 ("long
   // sweep" for drains); adjustable range matches the duct elbow.
   angle: z.number().min(15).max(90).default(90),
@@ -33,12 +34,12 @@ export const PipeFittingNode = BaseNode.extend({
   system: z.enum(['waste', 'vent']).default('waste'),
 }).describe(
   dedent`
-  DWV pipe fitting - elbow (bend), wye (45° branch), or sanitary tee (90° branch into a stack).
+  DWV pipe fitting - elbow (bend), wye (45° branch), sanitary tee (square branch), or cross (two opposed branches).
   - position: [x, y, z] level-local meters
   - rotation: [x, y, z] euler radians
-  - fittingType: elbow | wye | sanitary-tee
+  - fittingType: elbow | wye | sanitary-tee | cross
   - angle: elbow turn in degrees (22.5 / 45 / 90 typical)
-  - diameter: run size in inches; diameter2: branch collar size
+  - diameter: run size in inches; diameter2: branch collar size (both branches for a cross)
   - pipeMaterial: pvc | abs | cast-iron
   - system: waste | vent
   `,

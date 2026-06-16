@@ -29,9 +29,21 @@ export const HvacEquipmentNode = BaseNode.extend({
   width: z.number().min(0.3).max(2).default(0.56),
   depth: z.number().min(0.3).max(2).default(0.71),
   height: z.number().min(0.4).max(2.5).default(1.1),
-  // Collar diameters in inches for the duct connections.
+  // Duct collar cross-section on the supply / return connections. Round is
+  // the default; rect and oval (flat-oval) match the duct shapes a run
+  // might mate with. Condensers carry no duct collars (ignored).
+  supplyShape: z.enum(['round', 'rect', 'oval']).default('round'),
+  returnShape: z.enum(['round', 'rect', 'oval']).default('round'),
+  // Round collar diameters in inches.
   supplyDiameter: z.number().min(6).max(30).default(8),
   returnDiameter: z.number().min(6).max(30).default(8),
+  // Rect / oval collar cross-section in inches: width is the horizontal
+  // face, height the vertical. For oval, height is also the end-cap
+  // semicircle diameter (width ≥ height).
+  supplyWidth: z.number().min(6).max(30).default(12),
+  supplyHeight: z.number().min(6).max(30).default(8),
+  returnWidth: z.number().min(6).max(30).default(14),
+  returnHeight: z.number().min(6).max(30).default(8),
 }).describe(
   dedent`
   HVAC equipment cabinet - furnace, air handler, or outdoor condenser.
@@ -39,7 +51,9 @@ export const HvacEquipmentNode = BaseNode.extend({
   - rotation: yaw radians
   - equipmentType: furnace | air-handler | condenser
   - width / depth / height: cabinet size in meters
-  - supplyDiameter / returnDiameter: duct collar sizes in inches (ignored by condenser)
+  - supplyShape / returnShape: round | rect | oval duct collar cross-section (ignored by condenser)
+  - supplyDiameter / returnDiameter: round collar sizes in inches
+  - supplyWidth / supplyHeight / returnWidth / returnHeight: rect / oval collar cross-section in inches
   `,
 )
 export type HvacEquipmentNode = z.infer<typeof HvacEquipmentNode>

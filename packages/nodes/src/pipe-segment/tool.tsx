@@ -13,13 +13,19 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { Vector3 } from 'three'
-import { planPipeBranchTap, planPipeElbowAtPort } from '../shared/auto-fitting'
+import {
+  planPipeBranchTap,
+  planPipeCrossAtRunBody,
+  planPipeElbowAtPort,
+} from '../shared/auto-fitting'
 import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
+import { LevelOffsetGroup } from '../shared/level-offset-group'
 import {
   collectScenePorts,
   DWV_PORT_SYSTEMS,
   findNearestPortXZ,
   findNearestRunBodyXZ,
+  findRunBodyCrossingXZ,
   type RunBodyHit,
   type ScenePort,
 } from '../shared/ports'
@@ -65,6 +71,13 @@ const ALT_Y_MAX_M = 10
 function snap(value: number, step: number): number {
   if (step <= 0) return value
   return Math.round(value / step) * step
+}
+
+function dist2(a: readonly [number, number, number], b: readonly [number, number, number]): number {
+  const dx = a[0] - b[0]
+  const dy = a[1] - b[1]
+  const dz = a[2] - b[2]
+  return dx * dx + dy * dy + dz * dz
 }
 
 function findNearbyPort(point: [number, number, number]): ScenePort | null {
@@ -152,6 +165,7 @@ const PipeSegmentTool = () => {
       rawStart: [number, number, number],
       end: [number, number, number],
       endPort: ScenePort | null = null,
+      endBody: RunBodyHit | null = null,
     ) => {
       // Free waste start: lift it by the drain fall so the run lands ON
       // the grid plane instead of sinking below it. Snapped starts are
@@ -184,9 +198,26 @@ const PipeSegmentTool = () => {
         body && bodyOwner?.type === 'pipe-segment'
           ? planPipeBranchTap(bodyOwner, body, dir, diameterRef.current)
           : null
+      // End body tap: the END landed on a run's side — split that trunk and
+      // the new run ends at the branch collar, the branch leaving back
+      // toward the drawn run (along -dir, since dir points start→end).
+      const endTapBody = endPlan ? null : endBody
+      const endTapOwner = endTapBody ? useScene.getState().nodes[endTapBody.nodeId] : null
+      const endTapPlan =
+        endTapBody && endTapOwner?.type === 'pipe-segment'
+          ? planPipeBranchTap(
+              endTapOwner,
+              endTapBody,
+              [-dir[0], -dir[1], -dir[2]],
+              diameterRef.current,
+            )
+          : null
+      // Both ends tapping the SAME run would split one polyline twice in a
+      // single change — drop the end tap and let the end butt-join instead.
+      const endTap = endTapPlan && endTapBody?.nodeId === body?.nodeId ? null : endTapPlan
 
       let pipeStart = startPlan?.collarPoint ?? tapPlan?.branchCollar ?? start
-      let pipeEnd = endPlan?.collarPoint ?? end
+      let pipeEnd = endPlan?.collarPoint ?? endTap?.branchCollar ?? end
       const remaining = Math.hypot(
         pipeEnd[0] - pipeStart[0],
         pipeEnd[1] - pipeStart[1],
@@ -194,20 +225,54 @@ const PipeSegmentTool = () => {
       )
       let bends = [startPlan, endPlan].filter((p) => p !== null)
       let tap = tapPlan
+      let endTapFinal = endTap
+
+      // Cross tap: the drawn run passes straight THROUGH a run's body
+      // (interior crossing, not an end touch). Split that run and the drawn
+      // pipe into two halves meeting the cross's opposed branch collars.
+      // Skip a run already tapped by a start / end tee so one polyline isn't
+      // split twice in a single change.
+      const crossHit = findRunBodyCrossingXZ(start, end, BODY_SNAP_RADIUS_M, {
+        kinds: ['pipe-segment'],
+      })
+      const crossOwner = crossHit ? useScene.getState().nodes[crossHit.nodeId] : null
+      const crossTappedElsewhere =
+        crossHit?.nodeId === body?.nodeId || crossHit?.nodeId === endTapBody?.nodeId
+      let cross =
+        crossHit && !crossTappedElsewhere && crossOwner?.type === 'pipe-segment'
+          ? planPipeCrossAtRunBody(crossOwner, crossHit, dir, diameterRef.current)
+          : null
+
       if (remaining <= 0.05) {
         bends = []
         tap = null
+        endTapFinal = null
+        cross = null
         pipeStart = start
         pipeEnd = end
       }
 
-      const pipe = PipeSegmentNode.parse({
-        ...pipeSegmentDefinition.defaults(),
-        name: systemRef.current === 'vent' ? 'Vent' : 'Drain',
-        path: [pipeStart, pipeEnd],
-        diameter: diameterRef.current,
-        system: systemRef.current,
-      })
+      const makePipe = (from: [number, number, number], to: [number, number, number]) =>
+        PipeSegmentNode.parse({
+          ...pipeSegmentDefinition.defaults(),
+          name: systemRef.current === 'vent' ? 'Vent' : 'Drain',
+          path: [from, to],
+          diameter: diameterRef.current,
+          system: systemRef.current,
+        })
+      // A cross splits the drawn run into two halves that meet its opposed
+      // branch collars; otherwise it's one pipe end-to-end. Degenerate
+      // halves (the crossing too near an end) are dropped.
+      const pipes = cross
+        ? [
+            dist2(pipeStart, cross.branchCollarNear) > 0.05 * 0.05
+              ? makePipe(pipeStart, cross.branchCollarNear)
+              : null,
+            dist2(cross.branchCollarFar, pipeEnd) > 0.05 * 0.05
+              ? makePipe(cross.branchCollarFar, pipeEnd)
+              : null,
+          ].filter((p) => p !== null)
+        : [makePipe(pipeStart, pipeEnd)]
       useScene.getState().applyNodeChanges({
         create: [
           ...bends.map((plan) => ({ node: plan.fitting, parentId: activeLevelId })),
@@ -217,11 +282,27 @@ const PipeSegmentTool = () => {
                 { node: tap.runTail, parentId: activeLevelId },
               ]
             : []),
-          { node: pipe, parentId: activeLevelId },
+          ...(endTapFinal
+            ? [
+                { node: endTapFinal.fitting, parentId: activeLevelId },
+                { node: endTapFinal.runTail, parentId: activeLevelId },
+              ]
+            : []),
+          ...(cross
+            ? [
+                { node: cross.fitting, parentId: activeLevelId },
+                { node: cross.runTail, parentId: activeLevelId },
+              ]
+            : []),
+          ...pipes.map((node) => ({ node, parentId: activeLevelId })),
         ],
         update: [
           ...bends.map((plan) => plan.trim),
           ...(tap ? [tap.runUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
+          ...(endTapFinal
+            ? [endTapFinal.runUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }]
+            : []),
+          ...(cross ? [cross.runUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
         ],
       })
       triggerSFX('sfx:item-place')
@@ -258,6 +339,8 @@ const PipeSegmentTool = () => {
       const start = startRef.current
       if (!start) {
         const raw: [number, number, number] = [event.localPosition[0], 0, event.localPosition[2]]
+        const step = useEditor.getState().gridSnapStep
+        const shift = event.nativeEvent?.shiftKey === true
         if (event.nativeEvent?.altKey !== true) {
           const port = findNearbyPort(raw)
           if (port) {
@@ -269,12 +352,16 @@ const PipeSegmentTool = () => {
             return { point: p, snapped: p, port, body: null }
           }
           // No open end nearby — try the side of a run (wye / santee tap).
-          const body = findNearestRunBodyXZ(raw, BODY_SNAP_RADIUS_M, {
+          // Probe with a grid-snapped cursor so the tap steps along the run
+          // like every other placement; Shift frees it to ride smoothly.
+          const probe: [number, number, number] = shift
+            ? raw
+            : [snap(raw[0], step), 0, snap(raw[2], step)]
+          const body = findNearestRunBodyXZ(probe, BODY_SNAP_RADIUS_M, {
             kinds: ['pipe-segment'],
           })
           if (body) return { point: body.point, snapped: body.point, port: null, body }
         }
-        const step = useEditor.getState().gridSnapStep
         return {
           point: [snap(raw[0], step), 0, snap(raw[2], step)],
           snapped: null,
@@ -289,14 +376,25 @@ const PipeSegmentTool = () => {
       ]
       const shift = event.nativeEvent?.shiftKey === true
       const angled = shift ? rawXZ : projectToAngleLock(start, rawXZ)
+      const step = useEditor.getState().gridSnapStep
       if (event.nativeEvent?.altKey !== true && !shift) {
         const port = findNearbyPort(rawXZ)
         if (port) {
           const p: [number, number, number] = [port.position[0], port.position[1], port.position[2]]
           return { point: p, snapped: p, port, body: null }
         }
+        // No open end nearby — landing on the side of a run taps a wye /
+        // sanitary tee there (mirror of the first-point tap). Probe with a
+        // grid-snapped cursor so the tap steps along the run; checked against
+        // the cursor, not the 45° projection, so a slightly-off trunk captures.
+        const probe: [number, number, number] = [
+          snap(rawXZ[0], step),
+          rawXZ[1],
+          snap(rawXZ[2], step),
+        ]
+        const body = findNearestRunBodyXZ(probe, BODY_SNAP_RADIUS_M, { kinds: ['pipe-segment'] })
+        if (body) return { point: body.point, snapped: body.point, port: null, body }
       }
-      const step = useEditor.getState().gridSnapStep
       let end: [number, number, number]
       if (shift) {
         end = [snap(angled[0], step), angled[1], snap(angled[2], step)]
@@ -383,7 +481,7 @@ const PipeSegmentTool = () => {
         setDraftStart(point)
         return
       }
-      commitSegment(start, point, port)
+      commitSegment(start, point, port, port ? null : body)
     }
 
     const enterAltMode = () => {
@@ -506,7 +604,7 @@ const PipeSegmentTool = () => {
   const pillPrimary = draftStart && cursorPos ? (altActive ? 'y' : 'y') : undefined
 
   return (
-    <group>
+    <LevelOffsetGroup>
       {/* Cursor marker — the same ground ring + vertical line + tool-icon
           badge the duct draw tool shows in 3D (icon resolved from the active
           `pipe-segment` structure-tools entry). In 2D the floorplan overlay
@@ -554,7 +652,7 @@ const PipeSegmentTool = () => {
       {displayStart && cursorPos && (
         <PreviewPipe a={displayStart} b={cursorPos} diameterIn={diameter} />
       )}
-    </group>
+    </LevelOffsetGroup>
   )
 }
 

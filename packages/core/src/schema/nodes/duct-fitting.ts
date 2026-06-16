@@ -23,6 +23,10 @@ import { BaseNode, nodeType, objectId } from '../base'
  *              XZ plane — 90° a square straight tee, <90° a lateral
  *              leaning downstream toward the outlet, >90° leaning upstream
  *              toward the inlet — sized at `diameter2`.
+ *   - cross:   four-way junction — run along the X axis (ports face -X
+ *              and +X) at the run profile, two opposed branches square to
+ *              the run along ±Z (branch faces +Z, branch2 faces -Z) at the
+ *              branch profile (`shape2` / `diameter2`).
  *   - reducer: inlet at `diameter` faces -X, outlet at `diameter2`
  *              faces +X.
  *   - transition: square-to-round — rect end at `width` × `height` faces
@@ -36,7 +40,7 @@ export const DuctFittingNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // XYZ euler radians.
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
-  fittingType: z.enum(['elbow', 'tee', 'reducer', 'transition']).default('elbow'),
+  fittingType: z.enum(['elbow', 'tee', 'cross', 'reducer', 'transition']).default('elbow'),
   // Run-leg cross-section: round collars, or a rect / flat-oval profile
   // matching the trunk the fitting sits in. Reducers ignore the shape.
   // When non-round, `diameter` carries the area-equivalent round size
@@ -45,9 +49,10 @@ export const DuctFittingNode = BaseNode.extend({
   // Rect / oval run-leg profile in inches (used when shape ≠ 'round').
   width: z.number().min(4).max(60).default(14),
   height: z.number().min(3).max(40).default(8),
-  // Tee BRANCH cross-section: a round collar at `diameter2` or a rect /
-  // oval profile matching the duct drawn off the tap. When non-round,
-  // `diameter2` carries the branch's area-equivalent round size.
+  // Tee / cross BRANCH cross-section: a round collar at `diameter2` or a
+  // rect / oval profile matching the duct drawn off the tap. When
+  // non-round, `diameter2` carries the branch's area-equivalent round
+  // size. A cross's two opposed branches share this one profile.
   shape2: z.enum(['round', 'rect', 'oval']).default('round'),
   // Rect / oval branch profile in inches (used when shape2 ≠ 'round').
   width2: z.number().min(4).max(60).default(14),
@@ -69,18 +74,18 @@ export const DuctFittingNode = BaseNode.extend({
   system: z.enum(['supply', 'return']).default('supply'),
 }).describe(
   dedent`
-  Duct fitting - elbow, tee, reducer, or square-to-round transition between duct runs.
+  Duct fitting - elbow, tee, cross, reducer, or square-to-round transition between duct runs.
   - position: [x, y, z] level-local meters
   - rotation: [x, y, z] euler radians
-  - fittingType: elbow | tee | reducer | transition (rect end -X, round end +X)
+  - fittingType: elbow | tee | cross | reducer | transition (rect end -X, round end +X)
   - shape: round | rect | oval run legs (matches the trunk; ignored by reducer / transition)
   - width / height: rect / oval run-leg profile in inches (transition: the rect end)
-  - shape2: round | rect | oval tee branch (matches the duct drawn off the tap)
+  - shape2: round | rect | oval tee / cross branch (matches the duct drawn off the tap)
   - width2 / height2: rect / oval branch profile in inches
   - angle: elbow turn in degrees (45 or 90 typical)
-  - branchAngle: tee branch angle off the outlet axis (90 straight tee, 45 downstream lateral, 135 upstream)
+  - branchAngle: tee branch angle off the outlet axis (90 straight tee, 45 downstream lateral, 135 upstream); cross branches are always square
   - diameter: main nominal diameter in inches
-  - diameter2: tee branch / reducer outlet / transition round-end diameter in inches
+  - diameter2: tee / cross branch / reducer outlet / transition round-end diameter in inches
   - ductMaterial: sheet-metal | flex | duct-board
   - system: supply | return
   `,

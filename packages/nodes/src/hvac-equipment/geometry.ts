@@ -1,8 +1,10 @@
 import {
   BoxGeometry,
+  type BufferGeometry,
   CylinderGeometry,
   ExtrudeGeometry,
   Group,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   Path,
@@ -10,7 +12,11 @@ import {
   TorusGeometry,
   Vector3,
 } from 'three'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import {
+  createOvalSectionGeometry,
+  INCHES_TO_METERS,
+  rectSectionAxes,
+} from '../duct-segment/geometry'
 import { localEquipmentPorts, localRefrigerantPorts } from './ports'
 import type { HvacEquipmentNode } from './schema'
 
@@ -104,8 +110,8 @@ export function buildHvacEquipmentGeometry(node: HvacEquipmentNode): Group {
   }
 
   const ports = localEquipmentPorts(node)
-  const supplyR = portRadius(ports, 'supply')
-  const returnR = portRadius(ports, 'return')
+  const supplyPort = ports.find((p) => p.id === 'supply')
+  const returnPort = ports.find((p) => p.id === 'return')
 
   // ── Cabinet shell as butt-jointed sheet-metal plates. Top + bottom span
   // the full footprint; the four walls sit *between* them (height innerH),
@@ -123,7 +129,7 @@ export function buildHvacEquipmentGeometry(node: HvacEquipmentNode): Group {
 
   // Top plate, flat, with the supply hole at the cabinet center. Built
   // centered in its own XY plane (x→W, y→D); rotate.x = -90° lays it flat.
-  const top = buildHolePlate(W, D, t, supplyR, 0, 0, cabinet)
+  const top = buildHolePlate(W, D, t, supplyPort, 0, 0, cabinet)
   top.name = 'equipment-top'
   top.rotation.x = -Math.PI / 2
   top.position.set(0, H - t / 2, 0)
@@ -132,7 +138,7 @@ export function buildHvacEquipmentGeometry(node: HvacEquipmentNode): Group {
   // Left wall with the return hole. After rotate.y = -90° the plate's x→world
   // -z and y→world height; centered at midY with the return port at world
   // y = H*0.35, so the hole sits at plate-y (H*0.35 - midY).
-  const left = buildHolePlate(D, innerH, t, returnR, 0, H * 0.35 - midY, interior)
+  const left = buildHolePlate(D, innerH, t, returnPort, 0, H * 0.35 - midY, interior)
   left.name = 'equipment-left'
   left.rotation.y = -Math.PI / 2
   left.position.set(-hw + t / 2, midY, 0)
@@ -347,22 +353,106 @@ function buildGasLine(
 
 type LocalPort = ReturnType<typeof localEquipmentPorts>[number]
 
-function portRadius(ports: LocalPort[], id: 'supply' | 'return'): number {
-  const port = ports.find((p) => p.id === id)
-  return port ? (port.diameter * INCHES_TO_METERS) / 2 : 0.1
+type CollarSection = { shape: 'round' | 'rect' | 'oval'; widthM: number; heightM: number }
+
+/**
+ * Radial clearance (meters) the collar sleeve carries over the duct's
+ * nominal cross-section. A duct run leaves the port at the advertised size;
+ * the collar is built one clearance larger on every side so it reads as a
+ * sheet-metal sleeve wrapping the duct — and so their faces never coincide
+ * (no z-fighting where the run overlaps the stub). ~5 mm ≈ a real slip joint.
+ */
+const COLLAR_CLEARANCE_M = 0.005
+
+/**
+ * Collar cross-section in meters, already grown by `COLLAR_CLEARANCE_M` so
+ * the sleeve sits over the duct. Round collapses to a single diameter on
+ * both axes; rect / oval carry the explicit width × height (width is the
+ * horizontal face, height the vertical). For round the port's `diameter`
+ * is the true round size; for rect / oval it is the area-equivalent value
+ * the port advertises, so the mesh uses width / height instead.
+ */
+function collarSection(port: LocalPort): CollarSection {
+  const shape = port.shape ?? 'round'
+  const grow = 2 * COLLAR_CLEARANCE_M
+  if (shape === 'round') {
+    const d = port.diameter * INCHES_TO_METERS + grow
+    return { shape, widthM: d, heightM: d }
+  }
+  return {
+    shape,
+    widthM: (port.width ?? port.diameter) * INCHES_TO_METERS + grow,
+    heightM: (port.height ?? port.diameter) * INCHES_TO_METERS + grow,
+  }
+}
+
+/** Collar sleeve geometry with the run length on local Y and the
+ * cross-section on local X (width) × Z (height) — the basis the caller
+ * orients with `rectSectionAxes`. Round stays open-ended so you can see
+ * straight through into the hole. */
+function collarGeometry(section: CollarSection, length: number): BufferGeometry {
+  if (section.shape === 'rect') return new BoxGeometry(section.widthM, length, section.heightM)
+  if (section.shape === 'oval') {
+    return createOvalSectionGeometry(section.widthM, section.heightM, length)
+  }
+  const r = section.widthM / 2
+  return new CylinderGeometry(r, r, length, RADIAL_SEGMENTS, 1, true)
+}
+
+/**
+ * Hole `Path` in the plate's local XY (width → X, height → Y), centered at
+ * (`hx`, `hy`) and clamped to keep it inside the plate. Three.js corrects
+ * hole winding when extruding, so the path direction here is irrelevant.
+ */
+function collarHolePath(
+  section: CollarSection,
+  hx: number,
+  hy: number,
+  maxHalfW: number,
+  maxHalfH: number,
+): Path | null {
+  if (section.shape === 'rect') {
+    const hw = Math.min(section.widthM / 2, maxHalfW)
+    const hh = Math.min(section.heightM / 2, maxHalfH)
+    if (hw <= 0 || hh <= 0) return null
+    return new Path()
+      .moveTo(hx - hw, hy - hh)
+      .lineTo(hx + hw, hy - hh)
+      .lineTo(hx + hw, hy + hh)
+      .lineTo(hx - hw, hy + hh)
+      .closePath()
+  }
+  if (section.shape === 'oval') {
+    const w = Math.min(section.widthM, maxHalfW * 2)
+    const h = Math.min(section.heightM, maxHalfH * 2)
+    const r = Math.min(w, h) / 2
+    const straight = Math.max(0, w - h) / 2
+    if (r <= 0) return null
+    const path = new Path()
+    path.absarc(hx + straight, hy, r, -Math.PI / 2, Math.PI / 2, false)
+    path.absarc(hx - straight, hy, r, Math.PI / 2, (3 * Math.PI) / 2, false)
+    path.closePath()
+    return path
+  }
+  const r = Math.min(section.widthM / 2, maxHalfW, maxHalfH)
+  if (r <= 0) return null
+  const path = new Path()
+  path.absarc(hx, hy, r, 0, Math.PI * 2, true)
+  return path
 }
 
 /**
  * Flat rectangular plate of `thickness`, centered on the origin in its own
  * XY plane (width → X, height → Y) and centered through the thickness on Z,
- * with a circular hole of `holeR` punched at (`hx`, `hy`). Callers rotate /
- * position it into a wall; the hole becomes the duct opening.
+ * with the duct opening for `port` punched at (`hx`, `hy`). Callers rotate /
+ * position it into a wall; the hole takes the collar's round / rect / oval
+ * cross-section.
  */
 function buildHolePlate(
   width: number,
   height: number,
   thickness: number,
-  holeR: number,
+  port: LocalPort | undefined,
   hx: number,
   hy: number,
   material: MeshStandardMaterial,
@@ -376,11 +466,8 @@ function buildHolePlate(
     .lineTo(-hw, hh)
     .lineTo(-hw, -hh)
 
-  if (holeR > 0) {
-    const hole = new Path()
-    hole.absarc(hx, hy, Math.min(holeR, hw * 0.95, hh * 0.95), 0, Math.PI * 2, true)
-    shape.holes.push(hole)
-  }
+  const hole = port ? collarHolePath(collarSection(port), hx, hy, hw * 0.95, hh * 0.95) : null
+  if (hole) shape.holes.push(hole)
 
   const geom = new ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false })
   geom.translate(0, 0, -thickness / 2)
@@ -389,9 +476,11 @@ function buildHolePlate(
 }
 
 /**
- * Open-ended sheet-metal sleeves at the supply/return ports. Each collar
- * straddles the wall hole — part inside the cabinet, part outside — so a
- * duct run slides through the opening instead of dead-ending on a panel.
+ * Sheet-metal sleeves at the supply/return ports. Each collar straddles the
+ * wall hole — part inside the cabinet, part outside — so a duct run slides
+ * through the opening instead of dead-ending on a panel. The collar takes
+ * the port's round / rect / oval cross-section, oriented with the same
+ * width-horizontal / height-vertical basis as the hole it sits in.
  */
 function buildCollars(node: HvacEquipmentNode, group: Group): void {
   const collarMaterial = new MeshStandardMaterial({
@@ -404,15 +493,12 @@ function buildCollars(node: HvacEquipmentNode, group: Group): void {
   const IN = 0.05 // sleeve length reaching inside past the hole
   const length = OUT + IN
   for (const port of localEquipmentPorts(node)) {
-    const radius = (port.diameter * INCHES_TO_METERS) / 2
-    const sleeve = new Mesh(
-      // openEnded so you can see straight through the collar into the hole.
-      new CylinderGeometry(radius, radius, length, RADIAL_SEGMENTS, 1, true),
-      collarMaterial,
-    )
+    const dir = port.direction.clone().normalize()
+    const sleeve = new Mesh(collarGeometry(collarSection(port), length), collarMaterial)
     sleeve.name = `equipment-collar-${port.id}`
-    sleeve.position.copy(port.position).addScaledVector(port.direction, (OUT - IN) / 2)
-    sleeve.quaternion.setFromUnitVectors(UP, port.direction)
+    const { width: wAxis, height: hAxis } = rectSectionAxes(dir)
+    sleeve.quaternion.setFromRotationMatrix(new Matrix4().makeBasis(wAxis, dir, hAxis))
+    sleeve.position.copy(port.position).addScaledVector(dir, (OUT - IN) / 2)
     group.add(sleeve)
   }
 }
@@ -737,14 +823,18 @@ function buildAirHandler(node: HvacEquipmentNode, group: Group): Group {
   body.name = 'equipment-body'
   body.position.set(0, H / 2, 0)
   group.add(body)
+  // Trim caps straddle the cabinet's top / bottom edges (centered on
+  // y = H and y = 0) so the body's end faces fall inside the cap volume.
+  // Sitting them flush instead (top face at y = H) leaves two coplanar
+  // full-footprint faces that z-fight.
   const capH = Math.min(0.05, H * 0.06)
   const topCap = new Mesh(new BoxGeometry(W * 1.04, capH, D * 1.04), trimMat)
   topCap.name = 'air-handler-top-cap'
-  topCap.position.set(0, H - capH / 2, 0)
+  topCap.position.set(0, H, 0)
   group.add(topCap)
   const botCap = new Mesh(new BoxGeometry(W * 1.04, capH, D * 1.04), trimMat)
   botCap.name = 'air-handler-bottom-cap'
-  botCap.position.set(0, capH / 2, 0)
+  botCap.position.set(0, 0, 0)
   group.add(botCap)
 
   // Two stacked axial fans on the front face, sized to the cabinet width.

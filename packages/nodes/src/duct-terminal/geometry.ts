@@ -1,9 +1,22 @@
-import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import {
+  BoxGeometry,
+  type BufferGeometry,
+  CylinderGeometry,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  Vector3,
+} from 'three'
+import { createOvalSectionGeometry, INCHES_TO_METERS } from '../duct-segment/geometry'
 import { COLLAR_LENGTH, mountQuaternion, terminalSystem } from './ports'
 import type { DuctTerminalNode } from './schema'
 
 const RADIAL_SEGMENTS = 20
+
+/** Radial clearance (meters) the collar sleeve carries over the duct's
+ *  nominal cross-section, so a run leaving at the advertised size nests
+ *  inside the sleeve instead of z-fighting its faces. ~5 mm ≈ a slip joint. */
+const COLLAR_CLEARANCE_M = 0.005
 
 const FRAME_COLOR = '#e3e5e8'
 const SLAT_SUPPLY_COLOR = '#cdd1d6'
@@ -57,9 +70,31 @@ export function buildDuctTerminalGeometry(node: DuctTerminalNode): Group {
     oriented.add(slat)
   }
 
-  const radius = (node.collarDiameter * INCHES_TO_METERS) / 2
+  // Collar runs along -Y from the face toward the duct. Round is a
+  // cylinder; rect a box; oval the flat-oval prism (its extrude basis
+  // already puts the run length on Y, matching the collar axis). The
+  // sleeve is grown one clearance on every side so a duct run leaving at
+  // the advertised size nests inside it instead of z-fighting its faces.
+  const grow = 2 * COLLAR_CLEARANCE_M
+  let collarGeom: BufferGeometry
+  if (node.collarShape === 'rect') {
+    collarGeom = new BoxGeometry(
+      node.collarWidth * INCHES_TO_METERS + grow,
+      COLLAR_LENGTH,
+      node.collarHeight * INCHES_TO_METERS + grow,
+    )
+  } else if (node.collarShape === 'oval') {
+    collarGeom = createOvalSectionGeometry(
+      node.collarWidth * INCHES_TO_METERS + grow,
+      node.collarHeight * INCHES_TO_METERS + grow,
+      COLLAR_LENGTH,
+    )
+  } else {
+    const radius = (node.collarDiameter * INCHES_TO_METERS + grow) / 2
+    collarGeom = new CylinderGeometry(radius, radius, COLLAR_LENGTH, RADIAL_SEGMENTS, 1, false)
+  }
   const collar = new Mesh(
-    new CylinderGeometry(radius, radius, COLLAR_LENGTH, RADIAL_SEGMENTS, 1, false),
+    collarGeom,
     new MeshStandardMaterial({ color: COLLAR_COLOR, metalness: 0.6, roughness: 0.4 }),
   )
   collar.name = 'terminal-collar'

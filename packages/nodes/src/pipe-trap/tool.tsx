@@ -5,6 +5,7 @@ import { triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { pipeTrapDefinition } from './definition'
 import { buildPipeTrapGeometry } from './geometry'
 
@@ -109,7 +110,7 @@ const PipeTrapTool = () => {
   if (!activeLevelId || !cursor) return null
 
   return (
-    <group>
+    <LevelOffsetGroup>
       <group position={cursor} rotation={[0, yaw, 0]}>
         <primitive object={ghost} />
       </group>
@@ -127,7 +128,7 @@ const PipeTrapTool = () => {
           <span className="text-muted-foreground">R/T rotate</span>
         </div>
       </Html>
-    </group>
+    </LevelOffsetGroup>
   )
 }
 

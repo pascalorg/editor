@@ -19,7 +19,8 @@ type LocalPort = { id: string; position: Vector3; direction: Vector3; diameter: 
  * Ports in the fitting's LOCAL frame (origin at the junction, before
  * `position`/`rotation`). Conventions documented on the schema: elbow
  * inlet -X / outlet at `angle`° in XZ; wye run along X with the branch
- * at 45° between +X and +Z; sanitary tee run along X, branch +Z.
+ * at 45° between +X and +Z; sanitary tee run along X, branch +Z; cross
+ * run along X, two opposed branches on ±Z.
  */
 export function localPipeFittingPorts(node: PipeFittingNode): LocalPort[] {
   const run = pipeFittingLegLength(node.diameter)
@@ -49,6 +50,24 @@ export function localPipeFittingPorts(node: PipeFittingNode): LocalPort[] {
     diameter: node.diameter,
   }
   const branchLeg = pipeFittingLegLength(node.diameter2)
+  if (node.fittingType === 'cross') {
+    return [
+      inlet,
+      outlet,
+      {
+        id: 'branch',
+        position: new Vector3(0, 0, branchLeg),
+        direction: new Vector3(0, 0, 1),
+        diameter: node.diameter2,
+      },
+      {
+        id: 'branch2',
+        position: new Vector3(0, 0, -branchLeg),
+        direction: new Vector3(0, 0, -1),
+        diameter: node.diameter2,
+      },
+    ]
+  }
   const branchDir =
     node.fittingType === 'wye'
       ? new Vector3(Math.cos(WYE_BRANCH_RAD), 0, Math.sin(WYE_BRANCH_RAD))

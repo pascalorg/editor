@@ -322,7 +322,7 @@ export function BuildTab() {
           <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">MEP</div>
           <TooltipProvider delayDuration={0} disableHoverableContent>
             <div
-              className="grid gap-1.5"
+              className="grid gap-1.5 px-0.5"
               style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
             >
               {MEP_ITEMS.map((item) => {
@@ -332,7 +332,7 @@ export function BuildTab() {
                     <TooltipTrigger asChild>
                       <button
                         className={cn(
-                          'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
+                          'group relative flex aspect-square items-center justify-center rounded-xl transition-all duration-200',
                           active
                             ? 'bg-primary/10 ring-1 ring-primary/50'
                             : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',

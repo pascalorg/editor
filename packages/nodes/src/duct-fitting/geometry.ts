@@ -302,15 +302,25 @@ export function buildDuctFittingGeometry(node: DuctFittingNode): Group {
     // Straight rect / oval run inlet→outlet (one prism — nothing to
     // miter) plus a branch leg tapping its side. The branch carries its
     // own profile: rect or oval at width2 × height2, round at diameter2.
+    //
+    // Same orientation swap as the elbow: the run prism and branch stub
+    // are built on the `rectSectionAxes` basis, whose height rides local
+    // +Y. That's world-vertical only when the tee's local Y stays vertical
+    // (a flat tap off a horizontal trunk). When the tee is rotated so
+    // local Y lands horizontal, width and height roles swap so the
+    // physical height keeps reading as the vertical face — without this a
+    // tee drawn along the perpendicular axis looks squished.
     const inlet = ports.find((p) => p.id === 'inlet')!
     const outlet = ports.find((p) => p.id === 'outlet')!
     const branch = ports.find((p) => p.id === 'branch')!
+    const width2M = node.width2 * INCHES_TO_METERS
+    const height2M = node.height2 * INCHES_TO_METERS
     const buildRunSection = node.shape === 'oval' ? buildOvalSection : buildRectSection
     const run = buildRunSection(
       inlet.position,
       outlet.position,
-      node.width * INCHES_TO_METERS,
-      node.height * INCHES_TO_METERS,
+      hingeIsVertical ? widthM : heightM,
+      hingeIsVertical ? heightM : widthM,
       material,
       'fitting-run',
     )
@@ -321,8 +331,8 @@ export function buildDuctFittingGeometry(node: DuctFittingNode): Group {
         ? buildBranchSection(
             new Vector3(0, 0, 0),
             branch.position,
-            node.width2 * INCHES_TO_METERS,
-            node.height2 * INCHES_TO_METERS,
+            hingeIsVertical ? width2M : height2M,
+            hingeIsVertical ? height2M : width2M,
             material,
             'fitting-stub-branch',
           )
@@ -334,6 +344,48 @@ export function buildDuctFittingGeometry(node: DuctFittingNode): Group {
             'fitting-stub-branch',
           )
     if (stub) group.add(stub)
+  } else if (node.shape !== 'round' && node.fittingType === 'cross') {
+    // Straight rect / oval run inlet→outlet plus two opposed branch legs
+    // (±Z) carrying the branch profile — both halves of the run that
+    // passed through, same size at `width2 × height2` / `diameter2`. Same
+    // orientation swap as the tee / elbow so the cross stays upright when
+    // rotated so its local Y lands horizontal.
+    const inlet = ports.find((p) => p.id === 'inlet')!
+    const outlet = ports.find((p) => p.id === 'outlet')!
+    const width2M = node.width2 * INCHES_TO_METERS
+    const height2M = node.height2 * INCHES_TO_METERS
+    const buildRunSection = node.shape === 'oval' ? buildOvalSection : buildRectSection
+    const run = buildRunSection(
+      inlet.position,
+      outlet.position,
+      hingeIsVertical ? widthM : heightM,
+      hingeIsVertical ? heightM : widthM,
+      material,
+      'fitting-run',
+    )
+    if (run) group.add(run)
+    const buildBranchSection = node.shape2 === 'oval' ? buildOvalSection : buildRectSection
+    for (const id of ['branch', 'branch2'] as const) {
+      const branch = ports.find((p) => p.id === id)!
+      const stub =
+        node.shape2 !== 'round'
+          ? buildBranchSection(
+              new Vector3(0, 0, 0),
+              branch.position,
+              hingeIsVertical ? width2M : height2M,
+              hingeIsVertical ? height2M : width2M,
+              material,
+              `fitting-stub-${id}`,
+            )
+          : buildSection(
+              new Vector3(0, 0, 0),
+              branch.position,
+              (branch.diameter * INCHES_TO_METERS) / 2,
+              material,
+              `fitting-stub-${id}`,
+            )
+      if (stub) group.add(stub)
+    }
   } else {
     for (const port of ports) {
       const stub = buildSection(
@@ -364,17 +416,19 @@ export function buildDuctFittingGeometry(node: DuctFittingNode): Group {
   const legShape = (portId: string): 'round' | 'rect' | 'oval' => {
     if (node.fittingType === 'transition') return portId === 'inlet' ? 'rect' : 'round'
     if (node.fittingType === 'reducer' || node.shape === 'round') return 'round'
-    return portId === 'branch' ? node.shape2 : node.shape
+    return portId === 'branch' || portId === 'branch2' ? node.shape2 : node.shape
   }
   // The flange's profile must match the leg it caps: the branch carries
   // its own width2 × height2; elbow legs swap width/height roles when the
   // fold hinge lies horizontal (riser elbows) — same choice as the
   // mitered solid above.
   const rectLegProfile = (portId: string): [number, number] => {
-    if (portId === 'branch') {
-      return [node.width2 * INCHES_TO_METERS, node.height2 * INCHES_TO_METERS]
+    if (portId === 'branch' || portId === 'branch2') {
+      const width2M = node.width2 * INCHES_TO_METERS
+      const height2M = node.height2 * INCHES_TO_METERS
+      return hingeIsVertical ? [width2M, height2M] : [height2M, width2M]
     }
-    if (node.fittingType === 'elbow' && !hingeIsVertical) return [heightM, widthM]
+    if (!hingeIsVertical) return [heightM, widthM]
     return [widthM, heightM]
   }
   const FLANGE_LIP_M = 0.02

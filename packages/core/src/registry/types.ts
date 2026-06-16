@@ -187,10 +187,19 @@ export type NodePort = {
   position: readonly [number, number, number]
   /** Unit vector pointing OUT of the port (away from the node body). */
   direction: readonly [number, number, number]
-  /** Nominal connection diameter in inches. */
+  /** Nominal connection diameter in inches. For a rect / oval port this is
+   *  the area-equivalent round size, so a round run still mates sensibly. */
   diameter: number
   /** Which distribution loop the port belongs to, e.g. 'supply' | 'return'. */
   system?: string
+  /** Cross-section of the connection. Omitted = round at `diameter`. A duct
+   *  run joining a rect / oval port adopts this shape and rolls its
+   *  cross-section to line up with the collar. */
+  shape?: 'round' | 'rect' | 'oval'
+  /** Rect / oval cross-section in inches: width is the collar's horizontal
+   *  face at roll 0, height the vertical one. */
+  width?: number
+  height?: number
 }
 
 // ─── ToolHint ────────────────────────────────────────────────────────

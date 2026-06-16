@@ -130,3 +130,71 @@ export function findNearestRunBodyXZ(
   }
   return best
 }
+
+/**
+ * Where a drawn segment `start`→`end` crosses straight THROUGH an
+ * existing run's centerline in XZ — the four-way (cross) case, as
+ * opposed to ending ON a run (the tee case). The crossing must be
+ * INTERIOR to both: strictly between the drawn segment's ends (so the
+ * run truly passes through, not just touches at a tip — those are tee
+ * taps) and strictly inside the hit trunk segment, clear of its joints
+ * by `endMargin` meters so the run legs have room. The hit's `point`
+ * adopts the trunk centerline's interpolated 3D position (the drawn run
+ * snaps onto the trunk's height). Returns the nearest such crossing, or
+ * null. Vertical risers (no XZ extent) are skipped, same as the body
+ * query.
+ */
+export function findRunBodyCrossingXZ(
+  start: readonly [number, number, number],
+  end: readonly [number, number, number],
+  endMargin: number,
+  filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[] } = {},
+): RunBodyHit | null {
+  const kinds = filter.kinds ?? ['duct-segment']
+  const { nodes } = useScene.getState()
+  const dx = end[0] - start[0]
+  const dz = end[2] - start[2]
+  const drawnLenSq = dx * dx + dz * dz
+  if (drawnLenSq < 1e-8) return null
+  const drawnLen = Math.sqrt(drawnLenSq)
+  // Interior margins as a fraction of each segment's length.
+  const drawnPad = Math.min(0.45, endMargin / drawnLen)
+  let best: RunBodyHit | null = null
+  let bestScore = Number.POSITIVE_INFINITY
+  for (const node of Object.values(nodes)) {
+    if (!node || !kinds.includes(node.type) || node.id === filter.excludeNodeId) continue
+    const path = (node as { path?: Array<readonly [number, number, number]> }).path
+    if (!path) continue
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = path[i]!
+      const b = path[i + 1]!
+      const ex = b[0] - a[0]
+      const ez = b[2] - a[2]
+      const runLenSq = ex * ex + ez * ez
+      if (runLenSq < 1e-8) continue // vertical riser — no XZ extent
+      // Solve start + s·d = a + t·e in XZ. denom is the 2D cross of the
+      // two directions; ~0 means parallel (no single crossing).
+      const denom = dx * ez - dz * ex
+      if (Math.abs(denom) < 1e-9) continue
+      const wx = a[0] - start[0]
+      const wz = a[2] - start[2]
+      const s = (wx * ez - wz * ex) / denom
+      const t = (wx * dz - wz * dx) / denom
+      const runLen = Math.sqrt(runLenSq)
+      const runPad = Math.min(0.45, endMargin / runLen)
+      // Strictly interior to both segments, clear of the trunk's joints.
+      if (s <= drawnPad || s >= 1 - drawnPad) continue
+      if (t <= runPad || t >= 1 - runPad) continue
+      // Prefer the crossing nearest the drawn start (first run hit).
+      if (s < bestScore) {
+        bestScore = s
+        best = {
+          nodeId: node.id,
+          segmentIndex: i,
+          point: [a[0] + ex * t, a[1] + (b[1] - a[1]) * t, a[2] + ez * t],
+        }
+      }
+    }
+  }
+  return best
+}

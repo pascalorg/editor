@@ -14,6 +14,7 @@ import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
 import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
+import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { collectScenePorts, findNearestPortXZ, REFRIGERANT_PORT_SYSTEMS } from '../shared/ports'
 import { planLinesetConnect } from './connect'
 import { linesetDefinition } from './definition'
@@ -312,7 +313,7 @@ const LinesetTool = () => {
       : undefined
 
   return (
-    <group>
+    <LevelOffsetGroup>
       {/* Cursor marker — the same ground ring + vertical line + tool-icon
           badge the duct draw tool shows in 3D (icon resolved from the active
           `lineset` structure-tools entry). In 2D the floorplan overlay draws
@@ -350,7 +351,7 @@ const LinesetTool = () => {
       {previewSegments.map((seg, i) => (
         <PreviewSegment a={seg.a} b={seg.b} key={`seg-${i}`} />
       ))}
-    </group>
+    </LevelOffsetGroup>
   )
 }
 

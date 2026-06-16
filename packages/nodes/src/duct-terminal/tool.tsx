@@ -14,16 +14,21 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Matrix3, Matrix4, Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { Euler, Matrix3, Matrix4, Plane, Quaternion, Raycaster, Vector2, Vector3 } from 'three'
 import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
+import { LevelOffsetGroup } from '../shared/level-offset-group'
+import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 import { ductTerminalDefinition } from './definition'
 import { buildDuctTerminalGeometry } from './geometry'
+import { COLLAR_LENGTH, mountQuaternion } from './ports'
 
 const PREVIEW_OPACITY = 0.55
 /** R/T yaw step — 45°. */
 const ROTATE_STEP_RAD = Math.PI / 4
 /** Fallback ceiling height (meters) when no walls/ceilings inform one. */
 const DEFAULT_CEILING_HEIGHT = 2.5
+/** Snap radius (meters) for mating the collar onto a nearby duct port. */
+const PORT_SNAP_RADIUS_M = 0.5
 
 type Mount = DuctTerminalNode['mount']
 const MOUNT_CYCLE: Mount[] = ['floor', 'ceiling', 'wall']
@@ -33,10 +38,25 @@ function snap(value: number, step: number): number {
   return Math.round(value / step) * step
 }
 
-/** The active building's mesh, or null when placing outside a building. */
-function activeBuildingMesh() {
-  const buildingId = useViewer.getState().selection.buildingId
-  return buildingId ? (sceneRegistry.nodes.get(buildingId as AnyNodeId) ?? null) : null
+/**
+ * Collar-port offset from the node origin for a given mount + yaw, in
+ * level-local meters — the same transform `def.ports` applies, so the
+ * placement tool can predict where the collar lands and shift the whole
+ * terminal to mate it onto a duct port.
+ */
+function collarOffset(mount: Mount, yaw: number): Vector3 {
+  const transform = new Quaternion()
+    .setFromEuler(new Euler(0, yaw, 0))
+    .multiply(mountQuaternion(mount))
+  return new Vector3(0, -COLLAR_LENGTH, 0).applyQuaternion(transform)
+}
+
+/** The active level's mesh, or null. Carries the building transform plus the
+ *  level's stacked elevation — the frame terminals are stored and parented in,
+ *  so cursor hits resolve to true level-local coords on every floor. */
+function activeLevelMesh() {
+  const levelId = useViewer.getState().selection.levelId
+  return levelId ? (sceneRegistry.nodes.get(levelId as AnyNodeId) ?? null) : null
 }
 
 /**
@@ -67,6 +87,71 @@ type Placement = {
   position: [number, number, number]
   /** Yaw radians applied to the ghost / committed node. */
   yaw: number
+  /** Mount the ghost / committed node uses — inferred from the mated port
+   *  when snapped, else the user's manual M selection. */
+  mount: Mount
+  /** True when the collar mated onto a nearby duct port (magnetic snap). */
+  snapped?: boolean
+}
+
+/** Direction is "vertical" when its Y component dominates this much. */
+const VERTICAL_DOT = 0.7
+
+/**
+ * Pick the mount that makes a collar mate onto a duct port pointing
+ * `dir` (the port's outward direction). The collar leaves the face along
+ * −Y in the canonical frame, so the mount rotation must turn −Y to face
+ * *into* the port (i.e. opposite `dir`):
+ *   - port pointing up (a riser top) → collar must point down → **floor**
+ *   - port pointing down (a ceiling drop) → collar points up → **ceiling**
+ *   - port horizontal (a wall stub) → **wall**, yawed so the collar runs
+ *     back along the port. `lockYaw` is set only for wall (floor / ceiling
+ *     yaw is free — the user keeps spinning the face with R/T).
+ */
+function inferMountFromPort(dir: readonly [number, number, number]): {
+  mount: Mount
+  lockYaw: number | null
+} {
+  const v = new Vector3(dir[0], dir[1], dir[2])
+  if (v.lengthSq() < 1e-8) return { mount: 'floor', lockYaw: null }
+  v.normalize()
+  if (v.y > VERTICAL_DOT) return { mount: 'floor', lockYaw: null }
+  if (v.y < -VERTICAL_DOT) return { mount: 'ceiling', lockYaw: null }
+  // Wall collar dir after mount + yaw is (−sin yaw, 0, −cos yaw); set it
+  // opposite the port so the collar runs back into the wall stub.
+  return { mount: 'wall', lockYaw: Math.atan2(v.x, v.z) }
+}
+
+/**
+ * If a duct port is within snap range of `position` (XZ — ports hang at
+ * duct height, the grid hit rides the floor), mate the register onto it:
+ * the port's direction *picks the mount* (floor / ceiling / wall) and, for
+ * walls, the yaw; the whole terminal then hops so its collar lands exactly
+ * on the port. Null when nothing is in range. `fallbackYaw` keeps the
+ * user's R/T face orientation for floor / ceiling mounts.
+ */
+function resolvePortSnap(
+  position: [number, number, number],
+  fallbackYaw: number,
+): { position: [number, number, number]; mount: Mount; yaw: number } | null {
+  const port = findNearestPortXZ(
+    position,
+    collectScenePorts({ systems: DUCT_PORT_SYSTEMS }),
+    PORT_SNAP_RADIUS_M,
+  )
+  if (!port) return null
+  const { mount, lockYaw } = inferMountFromPort(port.direction)
+  const yaw = lockYaw ?? fallbackYaw
+  const offset = collarOffset(mount, yaw)
+  return {
+    position: [
+      port.position[0] - offset.x,
+      port.position[1] - offset.y,
+      port.position[2] - offset.z,
+    ],
+    mount,
+    yaw,
+  }
 }
 
 /**
@@ -90,9 +175,18 @@ const DuctTerminalTool = () => {
   const raycaster = useRef(new Raycaster())
   const pointer = useRef(new Vector2())
 
+  // The ghost mirrors whatever mount will actually be committed: a snap can
+  // override the manual M selection (port direction picks floor / ceiling /
+  // wall), so the preview must show the inferred mount, not the toolbar one.
+  const effectiveMount = placement?.mount ?? mount
   const previewNode = useMemo(
-    () => DuctTerminalNode.parse({ ...ductTerminalDefinition.defaults(), name: 'Register', mount }),
-    [mount],
+    () =>
+      DuctTerminalNode.parse({
+        ...ductTerminalDefinition.defaults(),
+        name: 'Register',
+        mount: effectiveMount,
+      }),
+    [effectiveMount],
   )
   const ghost = useMemo(() => {
     const group = buildDuctTerminalGeometry(previewNode)
@@ -112,9 +206,9 @@ const DuctTerminalTool = () => {
 
     /**
      * Intersect the cursor ray with a level-local horizontal plane at `y`.
-     * The ray is transformed into building-local space first, so the hit is
-     * already in the frame terminals are stored in (matching how the duct
-     * draw tool stores `grid:move` local positions).
+     * The ray is transformed into level-local space first (building transform
+     * plus the floor's stacked elevation), so the hit is already in the frame
+     * terminals are stored and parented in — accurate on every floor.
      */
     const hitLocalPlane = (nativeEvent: PointerEvent | MouseEvent, y: number): Vector3 | null => {
       const rect = canvas.getBoundingClientRect()
@@ -122,10 +216,10 @@ const DuctTerminalTool = () => {
       pointer.current.y = -((nativeEvent.clientY - rect.top) / rect.height) * 2 + 1
       raycaster.current.setFromCamera(pointer.current, camera)
 
-      const building = activeBuildingMesh()
+      const level = activeLevelMesh()
       const ray = raycaster.current.ray.clone()
-      if (building) {
-        const inv = new Matrix4().copy(building.matrixWorld).invert()
+      if (level) {
+        const inv = new Matrix4().copy(level.matrixWorld).invert()
         ray.applyMatrix4(inv)
       }
       const plane = new Plane(new Vector3(0, 1, 0), -y)
@@ -144,14 +238,25 @@ const DuctTerminalTool = () => {
         applySnap: true,
         bypass: nativeEvent.shiftKey === true,
       })
-      return { position, yaw: yawRef.current }
+      // Magnetic port snap: if a duct run end / fitting collar is in range,
+      // the port's direction picks the mount (floor / ceiling / wall) and
+      // hops the whole register so its collar mates exactly onto it. Takes
+      // precedence over grid / alignment and the manual M mount; Shift
+      // bypasses.
+      if (!nativeEvent.shiftKey) {
+        const mated = resolvePortSnap(position, yawRef.current)
+        if (mated) {
+          return { position: mated.position, yaw: mated.yaw, mount: mated.mount, snapped: true }
+        }
+      }
+      return { position, yaw: yawRef.current, mount: mountRef.current }
     }
 
     const commit = (p: Placement) => {
       const terminal = DuctTerminalNode.parse({
         ...ductTerminalDefinition.defaults(),
         name: 'Register',
-        mount: mountRef.current,
+        mount: p.mount,
         position: p.position,
         rotation: p.yaw,
       })
@@ -188,9 +293,9 @@ const DuctTerminalTool = () => {
       const yaw = Math.atan2(worldNormal.x, worldNormal.z)
 
       const world = new Vector3(event.position[0], event.position[1], event.position[2])
-      const building = activeBuildingMesh()
-      const local = building ? building.worldToLocal(world.clone()) : world
-      return { position: [local.x, local.y, local.z], yaw }
+      const level = activeLevelMesh()
+      const local = level ? level.worldToLocal(world.clone()) : world
+      return { position: [local.x, local.y, local.z], yaw, mount: 'wall' }
     }
 
     const onWallMove = (event: WallEvent) => {
@@ -251,10 +356,10 @@ const DuctTerminalTool = () => {
 
   if (!activeLevelId || !placement) return null
 
-  const mountLabel = mount.charAt(0).toUpperCase() + mount.slice(1)
+  const mountLabel = effectiveMount.charAt(0).toUpperCase() + effectiveMount.slice(1)
 
   return (
-    <group>
+    <LevelOffsetGroup>
       {/* Same ground ring + vertical line + tool-icon badge the duct draw
           tool shows in 3D (icon resolved from the active `duct-terminal`
           structure-tools entry). In 2D the floorplan overlay draws this for
@@ -270,12 +375,20 @@ const DuctTerminalTool = () => {
         zIndexRange={[100, 0]}
       >
         <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
+          {placement.snapped && (
+            <>
+              <span className="font-medium text-primary">Snapped to duct</span>
+              <span aria-hidden className="text-muted-foreground">
+                ·
+              </span>
+            </>
+          )}
           <span className="font-medium text-foreground">Mount {mountLabel}</span>
           <span aria-hidden className="text-muted-foreground">
             ·
           </span>
           <span className="text-muted-foreground">M surface</span>
-          {mount !== 'wall' && (
+          {effectiveMount !== 'wall' && (
             <>
               <span aria-hidden className="text-muted-foreground">
                 ·
@@ -285,7 +398,7 @@ const DuctTerminalTool = () => {
           )}
         </div>
       </Html>
-    </group>
+    </LevelOffsetGroup>
   )
 }
 

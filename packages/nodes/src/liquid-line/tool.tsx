@@ -21,6 +21,7 @@ import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
 import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
+import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { offsetPathHorizontal } from '../shared/path-offset'
 import { collectScenePorts, findNearestPortXZ, REFRIGERANT_PORT_SYSTEMS } from '../shared/ports'
 import { planLiquidLineConnect } from './connect'
@@ -445,7 +446,7 @@ const LiquidLineTool = () => {
       : undefined
 
   return (
-    <group>
+    <LevelOffsetGroup>
       {cursorPos && (
         <>
           <CursorSphere color={PREVIEW_COLOR} position={cursorPos} ref={cursorRef} />
@@ -508,7 +509,7 @@ const LiquidLineTool = () => {
       {traceSegments.map((seg, i) => (
         <PreviewSegment a={seg.a} b={seg.b} key={`trace-${i}`} />
       ))}
-    </group>
+    </LevelOffsetGroup>
   )
 }
 

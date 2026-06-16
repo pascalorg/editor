@@ -1,6 +1,9 @@
 import type { NodePort } from '@pascal-app/core'
 import { Vector3 } from 'three'
+import { equivalentDiameterIn, ovalEquivalentDiameterIn } from '../duct-segment/geometry'
 import type { HvacEquipmentNode } from './schema'
+
+type CollarShape = 'round' | 'rect' | 'oval'
 
 type LocalPort = {
   id: string
@@ -8,6 +11,20 @@ type LocalPort = {
   direction: Vector3
   diameter: number
   system: 'supply' | 'return' | 'refrigerant'
+  // Duct collars only — the cross-section the collar mesh and wall hole
+  // take. `diameter` above is the area-equivalent round size the port
+  // advertises so round runs mate at a sensible size. Refrigerant ports
+  // are always round and omit these.
+  shape?: CollarShape
+  width?: number
+  height?: number
+}
+
+/** Area-equivalent round diameter (inches) a shaped collar advertises. */
+function collarDiameterIn(shape: CollarShape, diameter: number, width: number, height: number) {
+  if (shape === 'rect') return equivalentDiameterIn(width, height)
+  if (shape === 'oval') return ovalEquivalentDiameterIn(width, height)
+  return diameter
 }
 
 /** Nominal suction-line OD (inches) the refrigerant service connection
@@ -29,15 +46,31 @@ export function localEquipmentPorts(node: HvacEquipmentNode): LocalPort[] {
       id: 'supply',
       position: new Vector3(0, node.height, 0),
       direction: new Vector3(0, 1, 0),
-      diameter: node.supplyDiameter,
+      diameter: collarDiameterIn(
+        node.supplyShape,
+        node.supplyDiameter,
+        node.supplyWidth,
+        node.supplyHeight,
+      ),
       system: 'supply',
+      shape: node.supplyShape,
+      width: node.supplyWidth,
+      height: node.supplyHeight,
     },
     {
       id: 'return',
       position: new Vector3(-node.width / 2, node.height * 0.35, 0),
       direction: new Vector3(-1, 0, 0),
-      diameter: node.returnDiameter,
+      diameter: collarDiameterIn(
+        node.returnShape,
+        node.returnDiameter,
+        node.returnWidth,
+        node.returnHeight,
+      ),
       system: 'return',
+      shape: node.returnShape,
+      width: node.returnWidth,
+      height: node.returnHeight,
     },
   ]
 }
@@ -81,6 +114,9 @@ export function getHvacEquipmentPorts(node: HvacEquipmentNode): NodePort[] {
       direction: [direction.x, direction.y, direction.z] as const,
       diameter: port.diameter,
       system: port.system,
+      shape: port.shape,
+      width: port.width,
+      height: port.height,
     }
   })
 }

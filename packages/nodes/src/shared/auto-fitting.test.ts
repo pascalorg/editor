@@ -126,7 +126,7 @@ describe('planElbowAtPort', () => {
 })
 
 import { DuctFittingNode, DuctSegmentNode } from '@pascal-app/core'
-import { planTeeAtRunBody } from './auto-fitting'
+import { planCrossAtRunBody, planTeeAtRunBody } from './auto-fitting'
 import type { RunBodyHit } from './ports'
 
 function trunk(path: Point[]): DuctSegmentNode {
@@ -296,6 +296,128 @@ describe('planTeeAtRunBody', () => {
   })
 })
 
+describe('planCrossAtRunBody', () => {
+  test('drawn run through a trunk: junction on the hit, four legs mate', () => {
+    const run = trunk([
+      [0, 2.4, 0],
+      [6, 2.4, 0],
+    ])
+    // Drawn run goes -Z → +Z straight through the trunk at x=3.
+    const plan = planCrossAtRunBody(run, bodyHit(run, 0, [3, 2.4, 0]), [0, 0, 1], ROUND_6)
+    expect(plan).not.toBeNull()
+
+    const ports = getDuctFittingPorts(plan!.fitting)
+    const inlet = ports.find((p) => p.id === 'inlet')!
+    const outlet = ports.find((p) => p.id === 'outlet')!
+    const branch = ports.find((p) => p.id === 'branch')!
+    const branch2 = ports.find((p) => p.id === 'branch2')!
+
+    // Junction exactly on the centerline hit.
+    expect(dist(plan!.fitting.position, [3, 2.4, 0])).toBeLessThan(1e-6)
+    // Run legs along the trunk axis; trunk split halves mate them.
+    const upstream = plan!.trunkUpdate.data.path
+    expect(dist(upstream[upstream.length - 1]!, inlet.position)).toBeLessThan(1e-6)
+    expect(dist(plan!.trunkTail.path[0]!, outlet.position)).toBeLessThan(1e-6)
+    expect(dist(plan!.trunkTail.path[1]!, [6, 2.4, 0])).toBeLessThan(1e-6)
+    // Opposed branches square to the run; collars where the drawn halves meet.
+    expect(dot(branch.direction, [0, 0, 1])).toBeCloseTo(1, 6)
+    expect(dot(branch2.direction, [0, 0, -1])).toBeCloseTo(1, 6)
+    expect(dist(plan!.branchCollarFar, branch.position)).toBeLessThan(1e-6)
+    expect(dist(plan!.branchCollarNear, branch2.position)).toBeLessThan(1e-6)
+    // Cross carries trunk diameter on the run, branch diameter on the collars.
+    expect(plan!.fitting.diameter).toBe(8)
+    expect(plan!.fitting.diameter2).toBe(6)
+  })
+
+  test('near / far collars sit on opposite sides of the trunk', () => {
+    const run = trunk([
+      [0, 0, 0],
+      [6, 0, 0],
+    ])
+    const plan = planCrossAtRunBody(run, bodyHit(run, 0, [3, 0, 0]), [0, 0, 1], ROUND_6)
+    expect(plan).not.toBeNull()
+    // awayDir is +Z, so the far collar (drawn end side) is +Z, near is -Z.
+    expect(plan!.branchCollarFar[2]).toBeGreaterThan(0)
+    expect(plan!.branchCollarNear[2]).toBeLessThan(0)
+  })
+
+  test('crossing too close to a trunk end → null', () => {
+    const run = trunk([
+      [0, 0, 0],
+      [6, 0, 0],
+    ])
+    expect(planCrossAtRunBody(run, bodyHit(run, 0, [0.1, 0, 0]), [0, 0, 1], ROUND_6)).toBeNull()
+    expect(planCrossAtRunBody(run, bodyHit(run, 0, [5.95, 0, 0]), [0, 0, 1], ROUND_6)).toBeNull()
+  })
+
+  test('drawn run parallel to the trunk → null', () => {
+    const run = trunk([
+      [0, 0, 0],
+      [6, 0, 0],
+    ])
+    expect(planCrossAtRunBody(run, bodyHit(run, 0, [3, 0, 0]), [1, 0, 0], ROUND_6)).toBeNull()
+  })
+
+  test('rect trunk: cross sized to the equivalent diameter, tail stays rect', () => {
+    const rect = DuctSegmentNode.parse({
+      object: 'node',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      name: 'Trunk',
+      path: [
+        [0, 2.4, 0],
+        [6, 2.4, 0],
+      ],
+      shape: 'rect',
+      diameter: 6,
+      width: 14,
+      height: 8,
+      ductMaterial: 'sheet-metal',
+      insulationR: 0,
+      system: 'supply',
+    })
+    const plan = planCrossAtRunBody(rect, bodyHit(rect, 0, [3, 2.4, 0]), [0, 0, 1], ROUND_6)
+    expect(plan).not.toBeNull()
+    expect(plan!.fitting.shape).toBe('rect')
+    expect(plan!.fitting.diameter).toBeCloseTo(2 * Math.sqrt((14 * 8) / Math.PI), 6)
+    expect(plan!.trunkTail.shape).toBe('rect')
+    expect(plan!.trunkTail.width).toBe(14)
+  })
+})
+
+describe('cross ports', () => {
+  function cross(): DuctFittingNode {
+    return DuctFittingNode.parse({
+      object: 'node',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      name: 'Cross',
+      fittingType: 'cross',
+      diameter: 8,
+      diameter2: 6,
+      system: 'supply',
+    })
+  }
+
+  test('four opposed ports: run ±X at diameter, branches ±Z at diameter2', () => {
+    const ports = getDuctFittingPorts(cross())
+    expect(ports).toHaveLength(4)
+    const inlet = ports.find((p) => p.id === 'inlet')!
+    const outlet = ports.find((p) => p.id === 'outlet')!
+    const branch = ports.find((p) => p.id === 'branch')!
+    const branch2 = ports.find((p) => p.id === 'branch2')!
+    expect(dot(inlet.direction, [-1, 0, 0])).toBeCloseTo(1, 6)
+    expect(dot(outlet.direction, [1, 0, 0])).toBeCloseTo(1, 6)
+    expect(dot(branch.direction, [0, 0, 1])).toBeCloseTo(1, 6)
+    expect(dot(branch2.direction, [0, 0, -1])).toBeCloseTo(1, 6)
+    expect(inlet.diameter).toBe(8)
+    expect(branch.diameter).toBe(6)
+    expect(branch2.diameter).toBe(6)
+  })
+})
+
 describe('tee branchAngle (lateral)', () => {
   function tee(branchAngle: number): DuctFittingNode {
     return DuctFittingNode.parse({
@@ -392,5 +514,146 @@ describe('planElbowRealign', () => {
     const elbow = existingElbow()
     const tee = { ...elbow, fittingType: 'tee' as const }
     expect(planElbowRealign(tee, 'outlet', [0, 1, 0])).toBeNull()
+  })
+})
+
+import { PipeFittingNode, PipeSegmentNode } from '@pascal-app/core'
+import { getPipeFittingPorts } from '../pipe-fitting/ports'
+import { planPipeBranchTap, planPipeCrossAtRunBody } from './auto-fitting'
+
+function pipeRun(path: Point[]): PipeSegmentNode {
+  return PipeSegmentNode.parse({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    name: 'Drain',
+    path,
+    diameter: 2,
+    system: 'waste',
+  })
+}
+
+function pipeBodyHit(node: PipeSegmentNode, segmentIndex: number, point: Point): RunBodyHit {
+  return { nodeId: node.id, segmentIndex, point }
+}
+
+describe('planPipeBranchTap', () => {
+  test('horizontal drain tap mints a SQUARE sanitary tee (not a wye)', () => {
+    const run = pipeRun([
+      [0, 0, 0],
+      [6, 0, 0],
+    ])
+    const plan = planPipeBranchTap(run, pipeBodyHit(run, 0, [3, 0, 0]), [0, 0, 1], 2)
+    expect(plan).not.toBeNull()
+    expect(plan!.fitting.fittingType).toBe('sanitary-tee')
+    const branch = getPipeFittingPorts(plan!.fitting).find((p) => p.id === 'branch')!
+    // Branch leaves square to the run regardless of the drawn lead-in.
+    expect(dot(branch.direction, [0, 0, 1])).toBeCloseTo(1, 6)
+  })
+
+  test('45° drawn branch still enters square (projected perpendicular)', () => {
+    const run = pipeRun([
+      [0, 0, 0],
+      [6, 0, 0],
+    ])
+    const d = Math.SQRT1_2
+    const plan = planPipeBranchTap(run, pipeBodyHit(run, 0, [3, 0, 0]), [d, 0, d], 2)
+    expect(plan).not.toBeNull()
+    const branch = getPipeFittingPorts(plan!.fitting).find((p) => p.id === 'branch')!
+    expect(dot(branch.direction, [0, 0, 1])).toBeCloseTo(1, 6)
+  })
+
+  test('junction on the hit, run legs mate the split halves', () => {
+    const run = pipeRun([
+      [0, 0, 0],
+      [6, 0, 0],
+    ])
+    const plan = planPipeBranchTap(run, pipeBodyHit(run, 0, [3, 0, 0]), [0, 0, 1], 2)
+    expect(plan).not.toBeNull()
+    const ports = getPipeFittingPorts(plan!.fitting)
+    const inlet = ports.find((p) => p.id === 'inlet')!
+    const outlet = ports.find((p) => p.id === 'outlet')!
+    const branch = ports.find((p) => p.id === 'branch')!
+    expect(dist(plan!.fitting.position, [3, 0, 0])).toBeLessThan(1e-6)
+    const upstream = plan!.runUpdate.data.path
+    expect(dist(upstream[upstream.length - 1]!, inlet.position)).toBeLessThan(1e-6)
+    expect(dist(plan!.runTail.path[0]!, outlet.position)).toBeLessThan(1e-6)
+    expect(dist(plan!.branchCollar, branch.position)).toBeLessThan(1e-6)
+  })
+
+  test('tap too close to a run end → null', () => {
+    const run = pipeRun([
+      [0, 0, 0],
+      [6, 0, 0],
+    ])
+    expect(planPipeBranchTap(run, pipeBodyHit(run, 0, [0.02, 0, 0]), [0, 0, 1], 2)).toBeNull()
+  })
+})
+
+describe('planPipeCrossAtRunBody', () => {
+  test('drawn run through a run: junction on the hit, four legs mate', () => {
+    const run = pipeRun([
+      [0, 0, 0],
+      [6, 0, 0],
+    ])
+    const plan = planPipeCrossAtRunBody(run, pipeBodyHit(run, 0, [3, 0, 0]), [0, 0, 1], 2)
+    expect(plan).not.toBeNull()
+    expect(plan!.fitting.fittingType).toBe('cross')
+    const ports = getPipeFittingPorts(plan!.fitting)
+    expect(ports).toHaveLength(4)
+    const inlet = ports.find((p) => p.id === 'inlet')!
+    const outlet = ports.find((p) => p.id === 'outlet')!
+    const branch = ports.find((p) => p.id === 'branch')!
+    const branch2 = ports.find((p) => p.id === 'branch2')!
+    expect(dist(plan!.fitting.position, [3, 0, 0])).toBeLessThan(1e-6)
+    const upstream = plan!.runUpdate.data.path
+    expect(dist(upstream[upstream.length - 1]!, inlet.position)).toBeLessThan(1e-6)
+    expect(dist(plan!.runTail.path[0]!, outlet.position)).toBeLessThan(1e-6)
+    // awayDir +Z → far collar (drawn end) on +Z branch, near on -Z branch2.
+    expect(dot(branch.direction, [0, 0, 1])).toBeCloseTo(1, 6)
+    expect(dot(branch2.direction, [0, 0, -1])).toBeCloseTo(1, 6)
+    expect(dist(plan!.branchCollarFar, branch.position)).toBeLessThan(1e-6)
+    expect(dist(plan!.branchCollarNear, branch2.position)).toBeLessThan(1e-6)
+  })
+
+  test('crossing too close to a run end → null', () => {
+    const run = pipeRun([
+      [0, 0, 0],
+      [6, 0, 0],
+    ])
+    expect(planPipeCrossAtRunBody(run, pipeBodyHit(run, 0, [0.02, 0, 0]), [0, 0, 1], 2)).toBeNull()
+  })
+
+  test('drawn run parallel to the run → null', () => {
+    const run = pipeRun([
+      [0, 0, 0],
+      [6, 0, 0],
+    ])
+    expect(planPipeCrossAtRunBody(run, pipeBodyHit(run, 0, [3, 0, 0]), [1, 0, 0], 2)).toBeNull()
+  })
+})
+
+describe('cross pipe ports', () => {
+  test('four opposed ports: run ±X at diameter, branches ±Z at diameter2', () => {
+    const cross = PipeFittingNode.parse({
+      object: 'node',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      name: 'Cross',
+      fittingType: 'cross',
+      diameter: 3,
+      diameter2: 2,
+      system: 'waste',
+    })
+    const ports = getPipeFittingPorts(cross)
+    expect(ports).toHaveLength(4)
+    const branch = ports.find((p) => p.id === 'branch')!
+    const branch2 = ports.find((p) => p.id === 'branch2')!
+    expect(dot(branch.direction, [0, 0, 1])).toBeCloseTo(1, 6)
+    expect(dot(branch2.direction, [0, 0, -1])).toBeCloseTo(1, 6)
+    expect(branch.diameter).toBe(2)
+    expect(branch2.diameter).toBe(2)
   })
 })

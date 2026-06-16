@@ -11,7 +11,7 @@ import {
   equivalentDiameterIn,
   ovalEquivalentDiameterIn,
 } from '../duct-segment/geometry'
-import { pipeFittingLegLength, WYE_BRANCH_RAD } from '../pipe-fitting/ports'
+import { pipeFittingLegLength } from '../pipe-fitting/ports'
 import type { RunBodyHit, ScenePort } from './ports'
 
 /** Turns shallower than this read as a straight continuation — butt-join
@@ -316,6 +316,143 @@ export function planTeeAtRunBody(
   }
 }
 
+// ─── Cross taps (drawn run passes THROUGH a trunk's body) ────────────
+
+export type CrossTapPlan = {
+  /** Parsed cross node, junction ON the crossing point, run legs along
+   *  the trunk and two opposed branch legs along the drawn run. */
+  fitting: DuctFittingNode
+  /** Branch collar on the START side of the drawn run — the first half
+   *  of the drawn duct ENDS here. */
+  branchCollarNear: Point
+  /** Branch collar on the END side of the drawn run — the second half
+   *  of the drawn duct STARTS here. */
+  branchCollarFar: Point
+  /** Trunk rewritten to END one run-leg before the crossing. */
+  trunkUpdate: { id: DuctSegmentNode['id']; data: { path: Point[] } }
+  /** New run carrying the rest of the trunk, starting one run-leg past
+   *  the crossing. Created alongside the cross. */
+  trunkTail: DuctSegmentNode
+}
+
+/**
+ * Plan the four-way cross where a drawn run passes straight THROUGH the
+ * SIDE of an existing run. Like a tee tap, the trunk is split at the
+ * crossing (original keeps the upstream half, a new node carries the
+ * downstream half, both pulled one run-leg back). The drawn run is split
+ * by the CALLER into two halves that meet the cross's two opposed branch
+ * collars — `branchCollarNear` toward `awayDir`'s origin (the drawn
+ * start) and `branchCollarFar` along `awayDir` (the drawn end).
+ *
+ * `awayDir` is the drawn run's direction (start → end). Its component
+ * perpendicular to the trunk axis sets the branch axis; a drawn run that
+ * isn't square to the trunk still gets a square cross (the off-square
+ * lead-ins are absorbed by the drawn duct halves). Returns null when the
+ * crossing is too near a trunk end (no room for the run legs) or the
+ * drawn run is parallel to the trunk.
+ */
+export function planCrossAtRunBody(
+  trunk: DuctSegmentNode,
+  hit: RunBodyHit,
+  awayDir: Point,
+  branch: DuctProfile,
+): CrossTapPlan | null {
+  const a = trunk.path[hit.segmentIndex]
+  const b = trunk.path[hit.segmentIndex + 1]
+  if (!a || !b) return null
+  const axis = new Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+  if (axis.lengthSq() < 1e-10) return null
+  axis.normalize()
+
+  // Branch axis: the drawn direction projected square to the trunk.
+  const away = new Vector3(...awayDir)
+  const branchDir = away.clone().addScaledVector(axis, -away.dot(axis))
+  if (branchDir.lengthSq() < 1e-6) return null
+  branchDir.normalize()
+
+  const trunkDiameterIn = Math.min(48, ductPortDiameterIn(trunk))
+  const branchDiameterIn = Math.min(48, profileDiameterIn(branch))
+  const legRun = fittingLegLength(trunkDiameterIn)
+  const legBranch = fittingLegLength(branchDiameterIn)
+  const P = new Vector3(...hit.point)
+  const upstream = P.distanceTo(new Vector3(...a))
+  const downstream = P.distanceTo(new Vector3(...b))
+  const MIN_STUB = 0.08
+  if (upstream < legRun + MIN_STUB || downstream < legRun + MIN_STUB) return null
+
+  // Local +X (the run) → axis, local +Z (the branch +Z leg) → branchDir.
+  const localFrame = frame(new Vector3(1, 0, 0), new Vector3(0, 0, 1))
+  const worldFrame = frame(axis, branchDir)
+  if (!localFrame || !worldFrame) return null
+  const rotation = new Quaternion().setFromRotationMatrix(
+    worldFrame.multiply(localFrame.transpose()),
+  )
+  const euler = new Euler().setFromQuaternion(rotation)
+
+  const inletTrim = P.clone().addScaledVector(axis, -legRun)
+  const outletTrim = P.clone().addScaledVector(axis, legRun)
+  // +Z branch (`branch`) faces along branchDir = the drawn END side;
+  // -Z branch (`branch2`) faces the drawn START side.
+  const collarFar = P.clone().addScaledVector(branchDir, legBranch)
+  const collarNear = P.clone().addScaledVector(branchDir, -legBranch)
+
+  const fitting = DuctFittingNode.parse({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    name: 'Cross',
+    fittingType: 'cross',
+    shape: trunk.shape,
+    width: trunk.width,
+    height: trunk.height,
+    diameter: trunkDiameterIn,
+    shape2: branch.shape,
+    width2: branch.width,
+    height2: branch.height,
+    diameter2: branchDiameterIn,
+    ductMaterial: 'sheet-metal',
+    system: trunk.system,
+    position: [P.x, P.y, P.z],
+    rotation: [euler.x, euler.y, euler.z],
+  })
+
+  const upstreamPath: Point[] = [
+    ...trunk.path.slice(0, hit.segmentIndex + 1).map((p) => [...p] as Point),
+    [inletTrim.x, inletTrim.y, inletTrim.z],
+  ]
+  const tailPath: Point[] = [
+    [outletTrim.x, outletTrim.y, outletTrim.z],
+    ...trunk.path.slice(hit.segmentIndex + 1).map((p) => [...p] as Point),
+  ]
+
+  const trunkTail = DuctSegmentNode.parse({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    name: trunk.name ?? 'Duct run',
+    path: tailPath,
+    shape: trunk.shape,
+    diameter: trunk.diameter,
+    width: trunk.width,
+    height: trunk.height,
+    roll: trunk.roll,
+    ductMaterial: trunk.ductMaterial,
+    insulated: trunk.insulated,
+    insulationR: trunk.insulationR,
+    system: trunk.system,
+  })
+
+  return {
+    fitting,
+    branchCollarNear: [collarNear.x, collarNear.y, collarNear.z],
+    branchCollarFar: [collarFar.x, collarFar.y, collarFar.z],
+    trunkUpdate: { id: trunk.id, data: { path: upstreamPath } },
+    trunkTail,
+  }
+}
+
 // ─── Elbow realignment (run drawn onto an existing fitting's collar) ──
 
 export type ElbowRealignPlan = {
@@ -451,18 +588,10 @@ export type PipeBranchTapPlan = {
   runTail: PipeSegmentNode
 }
 
-/** A run steeper than this reads as a vertical stack — branch entries
- *  use a sanitary tee instead of a wye. */
-const STACK_AXIS_Y = 0.7
-
 /**
  * Plan the branch fitting that taps a new run into the SIDE of an
- * existing DWV run — plumbing's code-correct joints:
- *
- *   - Horizontal drain → **wye**: the branch enters at 45°, leaning
- *     DOWNSTREAM (along the run's draw direction, which is its fall
- *     direction), so flow merges instead of colliding.
- *   - Vertical stack → **sanitary tee**: the branch enters square.
+ * existing DWV run — a **sanitary tee**: the branch enters SQUARE off the
+ * run (same T as the duct tee tap), facing the drawn branch's side.
  *
  * The run splits like a duct tee tap: original keeps the upstream half,
  * a new node carries the downstream half, both trimmed one run-leg from
@@ -481,20 +610,12 @@ export function planPipeBranchTap(
   if (axis.lengthSq() < 1e-10) return null
   axis.normalize()
 
+  // Branch axis: the drawn direction projected square to the run, so the
+  // tee enters perpendicular regardless of the lead-in angle.
   const away = new Vector3(...awayDir)
-  const perp = away.clone().addScaledVector(axis, -away.dot(axis))
-  if (perp.lengthSq() < 1e-6) return null
-  perp.normalize()
-
-  const isStack = Math.abs(axis.y) > STACK_AXIS_Y
-  const fittingType = isStack ? 'sanitary-tee' : 'wye'
-  const branchDir = isStack
-    ? perp.clone()
-    : axis
-        .clone()
-        .multiplyScalar(Math.cos(WYE_BRANCH_RAD))
-        .addScaledVector(perp, Math.sin(WYE_BRANCH_RAD))
-        .normalize()
+  const branchDir = away.clone().addScaledVector(axis, -away.dot(axis))
+  if (branchDir.lengthSq() < 1e-6) return null
+  branchDir.normalize()
 
   const legRun = pipeFittingLegLength(run.diameter)
   const legBranch = pipeFittingLegLength(branchDiameterIn)
@@ -504,10 +625,11 @@ export function planPipeBranchTap(
   const MIN_STUB = 0.05
   if (upstream < legRun + MIN_STUB || downstream < legRun + MIN_STUB) return null
 
-  // Local +X (run) → axis, local +Z (branch plane) → perp. The wye's
-  // 45° local branch maps onto branchDir automatically.
+  // Local +X (run) → axis, local +Z (branch) → branchDir. Both pairs are
+  // perpendicular, so the basis transfer is exact and the santee's square
+  // +Z branch lands on branchDir.
   const localFrame = frame(new Vector3(1, 0, 0), new Vector3(0, 0, 1))
-  const worldFrame = frame(axis, perp)
+  const worldFrame = frame(axis, branchDir)
   if (!localFrame || !worldFrame) return null
   const rotation = new Quaternion().setFromRotationMatrix(
     worldFrame.multiply(localFrame.transpose()),
@@ -523,8 +645,8 @@ export function planPipeBranchTap(
     parentId: null,
     visible: true,
     metadata: {},
-    name: isStack ? 'Sanitary tee' : 'Wye',
-    fittingType,
+    name: 'Sanitary tee',
+    fittingType: 'sanitary-tee',
     diameter: run.diameter,
     diameter2: branchDiameterIn,
     pipeMaterial: run.pipeMaterial,
@@ -557,6 +679,120 @@ export function planPipeBranchTap(
   return {
     fitting,
     branchCollar: [collar.x, collar.y, collar.z],
+    runUpdate: { id: run.id, data: { path: upstreamPath } },
+    runTail,
+  }
+}
+
+export type PipeCrossTapPlan = {
+  /** Parsed cross node, junction ON the crossing point, run legs along
+   *  the run and two opposed branch legs along the drawn run. */
+  fitting: PipeFittingNode
+  /** Branch collar on the START side of the drawn run — the first half
+   *  of the drawn pipe ENDS here. */
+  branchCollarNear: Point
+  /** Branch collar on the END side of the drawn run — the second half
+   *  of the drawn pipe STARTS here. */
+  branchCollarFar: Point
+  /** Tapped run rewritten to END one run-leg before the crossing. */
+  runUpdate: { id: PipeSegmentNode['id']; data: { path: Point[] } }
+  /** New run carrying the rest of the tapped run. */
+  runTail: PipeSegmentNode
+}
+
+/**
+ * Plan the four-way DWV cross where a drawn run passes straight THROUGH
+ * the SIDE of an existing run — the pipe sibling of `planCrossAtRunBody`.
+ * The run splits at the crossing (original keeps the upstream half, a new
+ * node carries the downstream half, both pulled one run-leg back). The
+ * drawn run is split by the CALLER into two halves meeting the cross's
+ * opposed branch collars — `branchCollarNear` toward the drawn start,
+ * `branchCollarFar` along the drawn end. Returns null when the crossing
+ * is too near a run end or the drawn run is parallel to the run.
+ */
+export function planPipeCrossAtRunBody(
+  run: PipeSegmentNode,
+  hit: RunBodyHit,
+  awayDir: Point,
+  branchDiameterIn: number,
+): PipeCrossTapPlan | null {
+  const a = run.path[hit.segmentIndex]
+  const b = run.path[hit.segmentIndex + 1]
+  if (!a || !b) return null
+  const axis = new Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+  if (axis.lengthSq() < 1e-10) return null
+  axis.normalize()
+
+  // Branch axis: the drawn direction projected square to the run.
+  const away = new Vector3(...awayDir)
+  const branchDir = away.clone().addScaledVector(axis, -away.dot(axis))
+  if (branchDir.lengthSq() < 1e-6) return null
+  branchDir.normalize()
+
+  const legRun = pipeFittingLegLength(run.diameter)
+  const legBranch = pipeFittingLegLength(branchDiameterIn)
+  const P = new Vector3(...hit.point)
+  const upstream = P.distanceTo(new Vector3(...a))
+  const downstream = P.distanceTo(new Vector3(...b))
+  const MIN_STUB = 0.05
+  if (upstream < legRun + MIN_STUB || downstream < legRun + MIN_STUB) return null
+
+  // Local +X (run) → axis, local +Z (the branch +Z leg) → branchDir.
+  const localFrame = frame(new Vector3(1, 0, 0), new Vector3(0, 0, 1))
+  const worldFrame = frame(axis, branchDir)
+  if (!localFrame || !worldFrame) return null
+  const rotation = new Quaternion().setFromRotationMatrix(
+    worldFrame.multiply(localFrame.transpose()),
+  )
+  const euler = new Euler().setFromQuaternion(rotation)
+
+  const inletTrim = P.clone().addScaledVector(axis, -legRun)
+  const outletTrim = P.clone().addScaledVector(axis, legRun)
+  // +Z branch faces along branchDir = the drawn END side; -Z branch2
+  // faces the drawn START side.
+  const collarFar = P.clone().addScaledVector(branchDir, legBranch)
+  const collarNear = P.clone().addScaledVector(branchDir, -legBranch)
+
+  const fitting = PipeFittingNode.parse({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    name: 'Cross',
+    fittingType: 'cross',
+    diameter: run.diameter,
+    diameter2: branchDiameterIn,
+    pipeMaterial: run.pipeMaterial,
+    system: run.system,
+    position: [P.x, P.y, P.z],
+    rotation: [euler.x, euler.y, euler.z],
+  })
+
+  const upstreamPath: Point[] = [
+    ...run.path.slice(0, hit.segmentIndex + 1).map((p) => [...p] as Point),
+    [inletTrim.x, inletTrim.y, inletTrim.z],
+  ]
+  const tailPath: Point[] = [
+    [outletTrim.x, outletTrim.y, outletTrim.z],
+    ...run.path.slice(hit.segmentIndex + 1).map((p) => [...p] as Point),
+  ]
+
+  const runTail = PipeSegmentNode.parse({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    name: run.name ?? 'Drain',
+    path: tailPath,
+    diameter: run.diameter,
+    pipeMaterial: run.pipeMaterial,
+    system: run.system,
+  })
+
+  return {
+    fitting,
+    branchCollarNear: [collarNear.x, collarNear.y, collarNear.z],
+    branchCollarFar: [collarFar.x, collarFar.y, collarFar.z],
     runUpdate: { id: run.id, data: { path: upstreamPath } },
     runTail,
   }

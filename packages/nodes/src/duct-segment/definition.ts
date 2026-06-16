@@ -1,4 +1,4 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import { type AnyNode, type NodeDefinition, useScene } from '@pascal-app/core'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
 import { buildDuctSegmentFloorplan } from './floorplan'
 import { buildDuctSegmentGeometry, ductPortDiameterIn } from './geometry'
@@ -24,6 +24,21 @@ import { DuctSegmentNode } from './schema'
  * The node can be created programmatically today via
  * `DuctSegmentNode.parse({ path: [...] })` + `useScene.createNode(...)`.
  */
+/** R / T roll step (radians) — 45°, matching the fitting rotate. */
+const ROLL_STEP_RAD = Math.PI / 4
+
+/**
+ * R / T roll a selected rect / oval run's cross-section ±45° around its
+ * drawn line, so a rectangular trunk can be turned on its side after
+ * placement. Round runs look identical at any roll, so the action gates
+ * itself off for them (`appliesTo`) and the editor's default rotation —
+ * a no-op for a node with no `rotation` field — takes over harmlessly.
+ */
+function rollDuctSegment(node: AnyNode, steps: 1 | -1): void {
+  const duct = node as DuctSegmentNode
+  useScene.getState().updateNode(duct.id, { roll: duct.roll + steps * ROLL_STEP_RAD })
+}
+
 export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   kind: 'duct-segment',
   schemaVersion: 1,
@@ -40,7 +55,7 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
       [0, 0, 0],
       [3, 0, 0],
     ],
-    shape: 'round',
+    shape: 'rect',
     diameter: 6,
     width: 14,
     height: 8,
@@ -59,6 +74,20 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   },
 
   parametrics: ductSegmentParametrics,
+
+  // R / T roll a selected rect / oval run ±45° around its drawn line.
+  // `appliesTo` lets round runs fall through to the editor's default
+  // (harmless — duct-segment has no `rotation` field).
+  keyboardActions: {
+    r: {
+      appliesTo: (node) => node.type === 'duct-segment' && node.shape !== 'round',
+      run: (node) => rollDuctSegment(node, 1),
+    },
+    t: {
+      appliesTo: (node) => node.type === 'duct-segment' && node.shape !== 'round',
+      run: (node) => rollDuctSegment(node, -1),
+    },
+  },
 
   geometry: buildDuctSegmentGeometry,
   geometryKey: (n) =>

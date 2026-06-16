@@ -9,7 +9,7 @@ export const pipeFittingParametrics: ParametricDescriptor<PipeFittingNode> = {
         {
           key: 'fittingType',
           kind: 'enum',
-          options: ['elbow', 'wye', 'sanitary-tee'],
+          options: ['elbow', 'wye', 'sanitary-tee', 'cross'],
           display: 'segmented',
         },
         {

@@ -24,7 +24,44 @@ export const ductTerminalParametrics: ParametricDescriptor<DuctTerminalNode> = {
       fields: [
         { key: 'width', kind: 'number', unit: 'm', min: 0.1, max: 1.5, step: 0.05 },
         { key: 'depth', kind: 'number', unit: 'm', min: 0.05, max: 1.5, step: 0.05 },
-        { key: 'collarDiameter', kind: 'number', unit: 'in', min: 4, max: 20, step: 1 },
+      ],
+    },
+    {
+      label: 'Collar',
+      fields: [
+        {
+          key: 'collarShape',
+          kind: 'enum',
+          options: ['round', 'rect', 'oval'],
+          display: 'segmented',
+        },
+        {
+          key: 'collarDiameter',
+          kind: 'number',
+          unit: 'in',
+          min: 4,
+          max: 20,
+          step: 1,
+          visibleIf: (n) => n.collarShape === 'round',
+        },
+        {
+          key: 'collarWidth',
+          kind: 'number',
+          unit: 'in',
+          min: 4,
+          max: 20,
+          step: 1,
+          visibleIf: (n) => n.collarShape !== 'round',
+        },
+        {
+          key: 'collarHeight',
+          kind: 'number',
+          unit: 'in',
+          min: 3,
+          max: 20,
+          step: 1,
+          visibleIf: (n) => n.collarShape !== 'round',
+        },
       ],
     },
     {

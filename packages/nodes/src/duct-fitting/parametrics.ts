@@ -74,8 +74,10 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
         // Oval runs present their area-equivalent round size.
         out.diameter = clampDiameter(ductPortDiameterIn(run))
       }
-      if (next.fittingType === 'tee') {
-        const branchDuct = mates.get('branch')?.duct
+      if (next.fittingType === 'tee' || next.fittingType === 'cross') {
+        // A cross's two branches share one profile — size off whichever
+        // branch leg has a duct mated (both halves are the same run).
+        const branchDuct = (mates.get('branch') ?? mates.get('branch2'))?.duct
         out.shape2 = branchDuct?.shape ?? next.shape
         if (branchDuct && branchDuct.shape !== 'round') {
           out.width2 = branchDuct.width
@@ -94,7 +96,7 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
       out.diameter = clampDiameter(equivalent(out.width ?? next.width, out.height ?? next.height))
     }
     const shape2 = out.shape2 ?? next.shape2
-    if (next.fittingType === 'tee' && shape2 !== 'round') {
+    if ((next.fittingType === 'tee' || next.fittingType === 'cross') && shape2 !== 'round') {
       const equivalent2 = shape2 === 'oval' ? ovalEquivalentDiameterIn : equivalentDiameterIn
       out.diameter2 = clampDiameter(
         equivalent2(out.width2 ?? next.width2, out.height2 ?? next.height2),
@@ -133,7 +135,9 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
       // possibly-stale riser roll would corrupt it.
       if (next.shape !== 'round' && mate.duct.shape !== 'round') {
         const away = mate.duct.path[mate.endIndex === 0 ? 1 : mate.duct.path.length - 2]
-        const source = getDuctFittingPorts(next).find((p) => p.id !== portId && p.id !== 'branch')
+        const source = getDuctFittingPorts(next).find(
+          (p) => p.id !== portId && p.id !== 'branch' && p.id !== 'branch2',
+        )
         if (away && source) {
           const newDir = new Vector3(away[0] - end[0], away[1] - end[1], away[2] - end[2])
           if (newDir.lengthSq() >= 1e-10) {
@@ -159,7 +163,7 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
         {
           key: 'fittingType',
           kind: 'enum',
-          options: ['elbow', 'tee', 'reducer', 'transition'],
+          options: ['elbow', 'tee', 'cross', 'reducer', 'transition'],
           display: 'segmented',
         },
         {
@@ -237,7 +241,7 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
           kind: 'enum',
           options: ['round', 'rect', 'oval'],
           display: 'segmented',
-          visibleIf: (n) => n.fittingType === 'tee',
+          visibleIf: (n) => n.fittingType === 'tee' || n.fittingType === 'cross',
         },
         {
           key: 'diameter2',
@@ -247,7 +251,9 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
           max: 24,
           step: 1,
           visibleIf: (n) =>
-            n.fittingType !== 'elbow' && (n.fittingType !== 'tee' || n.shape2 === 'round'),
+            n.fittingType !== 'elbow' &&
+            (n.fittingType !== 'tee' || n.shape2 === 'round') &&
+            (n.fittingType !== 'cross' || n.shape2 === 'round'),
         },
         {
           key: 'width2',
@@ -256,7 +262,8 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
           min: 4,
           max: 60,
           step: 1,
-          visibleIf: (n) => n.fittingType === 'tee' && n.shape2 !== 'round',
+          visibleIf: (n) =>
+            (n.fittingType === 'tee' || n.fittingType === 'cross') && n.shape2 !== 'round',
         },
         {
           key: 'height2',
@@ -265,7 +272,8 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
           min: 3,
           max: 40,
           step: 1,
-          visibleIf: (n) => n.fittingType === 'tee' && n.shape2 !== 'round',
+          visibleIf: (n) =>
+            (n.fittingType === 'tee' || n.fittingType === 'cross') && n.shape2 !== 'round',
         },
         {
           key: 'ductMaterial',
