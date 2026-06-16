@@ -1,6 +1,6 @@
 'use client'
 
-import type { ItemNode } from '@pascal-app/core'
+import { type AnyNodeId, type ItemNode, useScene } from '@pascal-app/core'
 import {
   type PlacementState,
   triggerSFX,
@@ -67,6 +67,32 @@ function getInitialState(node: ItemNode): PlacementState {
       shelfId: null,
     }
   }
+  // A floor item resting on a host surface (table / counter / shelf) starts in
+  // that surface, not 'floor', so the first pointer move runs the surface move
+  // handler — which preserves the grab offset — instead of a fresh `enter()`
+  // that snaps the item's origin under the cursor. Without this the item
+  // teleports the instant it's grabbed.
+  const parent = node.parentId ? useScene.getState().nodes[node.parentId as AnyNodeId] : undefined
+  if (parent?.type === 'item') {
+    return {
+      surface: 'item-surface',
+      wallId: null,
+      roofSegmentId: null,
+      ceilingId: null,
+      surfaceItemId: node.parentId,
+      shelfId: null,
+    }
+  }
+  if (parent?.type === 'shelf') {
+    return {
+      surface: 'shelf-surface',
+      wallId: null,
+      roofSegmentId: null,
+      ceilingId: null,
+      surfaceItemId: null,
+      shelfId: node.parentId,
+    }
+  }
   return {
     surface: 'floor',
     wallId: null,
@@ -102,7 +128,7 @@ export function MoveItemTool({ node }: { node: ItemNode }) {
       : getInitialState(node),
     // Preserve the original item's scale so Y-position calculations use the correct height.
     defaultScale: isNew ? node.scale : undefined,
-    preserveFloorDragOffset: true,
+    preserveDragOffset: true,
     initDraft: (gridPosition) => {
       if (isNew) {
         // Duplicate: floor items get a draft immediately; wall/ceiling
