@@ -447,7 +447,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // duct run end. Takes precedence over grid / alignment snap; Alt
       // bypasses. Only kinds that opted in via `movable.portSnap`.
       if (!bypass && portSnapConfig) {
-        const mated = resolvePortSnap(node, [x, z], portSnapConfig)
+        // Build the preview node at the ORIGINAL position but with the LIVE
+        // rotation so `def.ports` reflects any mid-drag R/T rotation. Without
+        // this the snap solver mates the pre-rotation collar and commit then
+        // writes the rotated node offset from the port it visually snapped to.
+        const snapNode = buildPreviewNode(originalPosition, rotationRef.current)
+        const mated = resolvePortSnap(snapNode, [x, z], portSnapConfig)
         if (mated) {
           x = mated[0]
           z = mated[1]

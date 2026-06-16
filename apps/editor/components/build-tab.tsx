@@ -44,6 +44,7 @@ type MepToolKind =
   | 'liquid-line'
   | 'pipe-segment'
   | 'pipe-fitting'
+  | 'pipe-trap'
 
 type BuildType = {
   /** Selection id — equals `kind` for tool types, `'painting'` for paint mode, `'mep'` for the MEP group. */
@@ -98,6 +99,7 @@ const MEP_ITEMS: MepItem[] = [
   { id: 'lineset', label: 'Lineset', iconSrc: '/icons/lineset.png', kind: 'lineset' },
   { id: 'liquid-line', label: 'Liquid Line', iconSrc: '/icons/lineset.png', kind: 'liquid-line' },
   { id: 'pipe-segment', label: 'DWV Pipe', iconSrc: '/icons/dwv-pipes.png', kind: 'pipe-segment' },
+  { id: 'pipe-trap', label: 'Trap', iconSrc: '/icons/dwv-pipes.png', kind: 'pipe-trap' },
 ]
 
 /**

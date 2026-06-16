@@ -41,7 +41,9 @@ export function snapLevelsToTruePositions(): () => void {
   for (const { levelId, obj } of entries) {
     obj.position.y = cumulativeY
     obj.visible = true
-    cumulativeY += getLevelHeight(levelId, nodes)
+    cumulativeY += getLevelHeight(levelId, nodes, (wallId) =>
+      sceneRegistry.nodes.get(wallId)?.position.y,
+    )
   }
 
   return () => {

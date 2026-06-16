@@ -39,7 +39,9 @@ export const LevelSystem = () => {
       obj.position.y = lerp(obj.position.y, targetY, delta * 12) // Smoothly animate to new Y position
       obj.visible = levelMode !== 'solo' || level?.id === selectedLevel || !selectedLevel
 
-      cumulativeY += getLevelHeight(levelId, nodes)
+      cumulativeY += getLevelHeight(levelId, nodes, (wallId) =>
+        sceneRegistry.nodes.get(wallId)?.position.y,
+      )
     }
   }, 5) // Using a lower priority so it runs after transforms from other systems have settled
   return null
