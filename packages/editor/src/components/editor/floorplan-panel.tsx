@@ -8814,6 +8814,12 @@ export function FloorplanPanel({
       isFloorplanGridInteractionActive,
       isMarqueeSelectionToolActive,
       isOpeningPlacementActive,
+      // The off-wall opening ghost is published through this memoised
+      // callback, whose glyph (door swing-arc vs window panes) is bound to
+      // `isDoorBuildActive`. It must be a dependency or a door→window tool
+      // switch (which changes none of the other listed deps) would keep the
+      // stale closure and float a door symbol while the window tool is armed.
+      showOpeningGhost,
       isPolygonBuildActive,
       isRoofBuildActive,
       isSlabBuildActive,
