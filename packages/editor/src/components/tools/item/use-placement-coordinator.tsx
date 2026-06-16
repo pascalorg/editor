@@ -598,6 +598,34 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       return [world.x, world.y, world.z]
     }
 
+    // Floor grab-offset: the item tracks the grabbed point instead of snapping
+    // its origin under the cursor. `floorStrategy.move` snaps on the WORLD grid
+    // (`event.position`) on its default path and only reads `event.localPosition`
+    // under Shift, so both frames must carry the offset; the world point is
+    // derived from the corrected local one so the two stay consistent.
+    const applyFloorGrabOffset = (event: GridEvent): GridEvent => {
+      if (relativeFloorStart === null) return event
+      const rawX = event.localPosition[0]
+      const rawZ = event.localPosition[2]
+      const anchor = floorDragAnchor ?? [rawX, rawZ]
+      floorDragAnchor = anchor
+      const correctedLocal: [number, number, number] = [
+        relativeFloorStart.x + (rawX - anchor[0]),
+        event.localPosition[1],
+        relativeFloorStart.z + (rawZ - anchor[1]),
+      ]
+      const correctedWorld = buildingLocalToWorld(
+        correctedLocal[0],
+        correctedLocal[1],
+        correctedLocal[2],
+      )
+      return {
+        ...event,
+        position: [correctedWorld.x, event.position[1], correctedWorld.z],
+        localPosition: correctedLocal,
+      }
+    }
+
     // Sync cursor to the draft mesh's world position and rotation
     if (draftNode.current) {
       const mesh = sceneRegistry.nodes.get(draftNode.current.id)
@@ -720,42 +748,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         detachItemSurfaceToFloor(event as unknown as ItemEvent)
       }
 
-      const floorEvent =
-        relativeFloorStart !== null
-          ? (() => {
-              const rawX = event.localPosition[0]
-              const rawZ = event.localPosition[2]
-              const anchor = floorDragAnchor ?? [rawX, rawZ]
-              floorDragAnchor = anchor
-              // Shift the cursor by the grab offset so the item tracks the point
-              // the user grabbed, not its origin teleporting under the cursor.
-              // `floorStrategy.move` snaps on the WORLD grid (`event.position`)
-              // on its default path and only reads `event.localPosition` when
-              // Shift is held, so BOTH frames must carry the offset — patching
-              // localPosition alone leaves the non-Shift drag teleporting.
-              // Deriving the world point from the corrected local point keeps
-              // the two fields describing the same location.
-              const correctedLocal: [number, number, number] = [
-                relativeFloorStart.x + (rawX - anchor[0]),
-                event.localPosition[1],
-                relativeFloorStart.z + (rawZ - anchor[1]),
-              ]
-              const correctedWorld = buildingLocalToWorld(
-                correctedLocal[0],
-                correctedLocal[1],
-                correctedLocal[2],
-              )
-              return {
-                ...event,
-                position: [correctedWorld.x, event.position[1], correctedWorld.z] as [
-                  number,
-                  number,
-                  number,
-                ],
-                localPosition: correctedLocal,
-              }
-            })()
-          : event
+      const floorEvent = applyFloorGrabOffset(event)
 
       lastRawPos.current.set(
         floorEvent.localPosition[0],
@@ -964,21 +957,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const correctedX = wallDragAnchor.startX + (rawX - wallDragAnchor.rawX)
         const correctedY = wallDragAnchor.startY + (rawY - wallDragAnchor.rawY)
         const wallMesh = sceneRegistry.nodes.get(event.node.id)
+        // Derive the world cursor from the corrected wall-local point so the
+        // visual cursor (world) and the stored position (wall-local) agree; if
+        // the wall mesh is somehow absent, keep the raw world hit unchanged.
         const correctedWorld = wallMesh
           ? wallMesh.localToWorld(new Vector3(correctedX, correctedY, event.localPosition[2]))
           : null
         wallMoveEvent = {
           ...event,
           localPosition: [correctedX, correctedY, event.localPosition[2]],
-          ...(correctedWorld
-            ? {
-                position: [correctedWorld.x, correctedWorld.y, correctedWorld.z] as [
-                  number,
-                  number,
-                  number,
-                ],
-              }
-            : {}),
+          position: correctedWorld
+            ? [correctedWorld.x, correctedWorld.y, correctedWorld.z]
+            : event.position,
         }
       }
       const result = wallStrategy.move(ctx, wallMoveEvent, getActiveValidators())
