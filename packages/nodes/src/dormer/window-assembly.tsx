@@ -142,7 +142,6 @@ const DormerWindowAssembly = ({
       {winGeo.glassPanes.map((pane, i) => (
         <mesh
           geometry={pane.geo}
-          // biome-ignore lint/suspicious/noArrayIndexKey: glass panes are derived from grid indices, no stable id.
           key={`${keyPrefix}-glass-${i}`}
           material={glassMaterial}
           name={`dormer-glass-${keyPrefix}-${i}`}
@@ -153,7 +152,6 @@ const DormerWindowAssembly = ({
         <mesh
           castShadow
           geometry={bar.geo}
-          // biome-ignore lint/suspicious/noArrayIndexKey: frame bars are derived from grid indices, no stable id.
           key={`${keyPrefix}-bar-${i}`}
           material={frameMaterial}
           name={`dormer-frame-${keyPrefix}-${i}`}
