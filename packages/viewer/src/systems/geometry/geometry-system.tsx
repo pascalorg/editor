@@ -72,7 +72,7 @@ export const GeometrySystem = () => {
         useScene.getState().markDirty(node.id as AnyNodeId)
       }
     }
-  }, [shading, textures, colorPreset, sceneTheme])
+  }, [])
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return

@@ -90,6 +90,7 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
       node.baseInset,
       node.baseHeight,
       node.cornerBevel,
+      node,
     ],
   )
 

@@ -10,7 +10,12 @@ import {
   useScene,
   type WallEvent,
 } from '@pascal-app/core'
-import { CursorSphere, getFloorStackPreviewPosition, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  getFloorStackPreviewPosition,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'

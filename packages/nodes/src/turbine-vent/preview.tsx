@@ -16,7 +16,15 @@ import type { TurbineVentNode } from './schema'
 const TurbineVentPreview = ({ node, invalid }: { node: TurbineVentNode; invalid?: boolean }) => {
   const geometry = useMemo(
     () => buildTurbineVentGeometry(node),
-    [node.style, node.diameter, node.height, node.neckHeight, node.vaneCount, node.baseOverhang],
+    [
+      node.style,
+      node.diameter,
+      node.height,
+      node.neckHeight,
+      node.vaneCount,
+      node.baseOverhang,
+      node,
+    ],
   )
 
   const material = useMemo(

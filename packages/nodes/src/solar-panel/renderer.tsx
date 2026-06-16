@@ -110,6 +110,7 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
       node.frameThickness,
       node.frameDepth,
       node.standoffHeight,
+      node,
     ],
   )
 
@@ -147,7 +148,7 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
       node.position[0] ?? 0,
       node.position[2] ?? 0,
     )
-  }, [segment, segmentOverrides, node.position[0], node.position[2]])
+  }, [node.position[0], node.position[2], effectiveSegment])
 
   const surfaceQuat = useMemo(
     () => surfaceQuatFromNormal(surfaceFrame.normal, new THREE.Quaternion()),

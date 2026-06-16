@@ -57,7 +57,7 @@ const EyebrowVentRenderer = ({ node: storeNode }: { node: EyebrowVentNode }) => 
 
   const geometry = useMemo(
     () => buildEyebrowVentGeometry(node),
-    [node.width, node.depth, node.height, node.style, node.louverCount, node.backRatio],
+    [node.width, node.depth, node.height, node.style, node.louverCount, node.backRatio, node],
   )
   useEffect(() => () => geometry.dispose(), [geometry])
 

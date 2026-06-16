@@ -79,8 +79,7 @@ export function DormerPositionSection({
       if (Number.isFinite(lo_x)) bounds = { minX: lo_x, maxX: hi_x, minZ: lo_z, maxZ: hi_z }
     }
     return { worldX, worldZ, worldRotation, bounds }
-    // biome-ignore lint/correctness/useExhaustiveDependencies: roofChildrenKey is the stable signature of `roof.children`; intentionally omitting `roof` (object identity) in favor of the joined ids.
-  }, [selectedId, px, py, pz, nodeRotation, segmentId, roofChildrenKey])
+  }, [selectedId, px, pz, nodeRotation, roof.children, roof])
 
   const worldX_now = worldXform.worldX
   const worldZ_now = worldXform.worldZ

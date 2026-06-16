@@ -79,6 +79,8 @@ const ChimneyPreview = ({
       node.position[0],
       node.position[2],
       node.rotation,
+      node,
+      effectiveSegment,
     ],
   )
 

@@ -37,6 +37,7 @@ const DownspoutPreview = ({
       node.strapSpacing,
       node.terminal,
       routing,
+      node,
     ],
   )
 

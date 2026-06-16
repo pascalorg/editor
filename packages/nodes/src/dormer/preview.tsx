@@ -28,7 +28,15 @@ const DormerPreview = ({ node, invalid }: { node: DormerNode; invalid?: boolean 
 
   const geo = useMemo(
     () => buildDormerGhostGeometry(node),
-    [node.width, node.depth, node.height, node.roofHeight, node.roofType, node.wallSkirtHeight],
+    [
+      node.width,
+      node.depth,
+      node.height,
+      node.roofHeight,
+      node.roofType,
+      node.wallSkirtHeight,
+      node,
+    ],
   )
 
   useEffect(() => () => geo.dispose(), [geo])

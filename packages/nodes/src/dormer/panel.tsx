@@ -107,7 +107,7 @@ export default function DormerPanel() {
   }, [node, selectedId, setMovingNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!(node && node.roofSegmentId)) return
+    if (!node?.roofSegmentId) return
     triggerSFX('sfx:item-pick')
     // Deep clone and strip the id so the move tool's onClick branch
     // (`isNew || !node.id`) takes the "create fresh" path. Setting

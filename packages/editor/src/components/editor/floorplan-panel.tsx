@@ -5551,15 +5551,7 @@ export function FloorplanPanel({
       } as AnyNode
       usePlacementPreview.getState().set(ghost, wall)
     },
-    [
-      DoorNodeSchema,
-      WallNodeSchema,
-      WindowNodeSchema,
-      floorplanOpeningLocalY,
-      isDoorBuildActive,
-      movingNode,
-      movingOpeningType,
-    ],
+    [floorplanOpeningLocalY, isDoorBuildActive, movingNode, movingOpeningType],
   )
   // Drop the floating opening ghost whenever opening placement ends (commit,
   // tool change, mode switch, cancel) or the active level changes, so a stale
@@ -5569,7 +5561,7 @@ export function FloorplanPanel({
   }, [isOpeningPlacementActive])
   useEffect(() => {
     usePlacementPreview.getState().clear()
-  }, [levelId])
+  }, [])
   const isMarqueeSelectionToolActive =
     mode === 'select' &&
     floorplanSelectionTool === 'marquee' &&
@@ -8813,7 +8805,6 @@ export function FloorplanPanel({
       isFenceBuildActive,
       isFloorplanGridInteractionActive,
       isMarqueeSelectionToolActive,
-      isOpeningPlacementActive,
       isPolygonBuildActive,
       isRoofBuildActive,
       isSlabBuildActive,
@@ -8831,6 +8822,9 @@ export function FloorplanPanel({
       viewBox.height,
       viewBox.width,
       walls,
+      isOpeningMoveActive,
+      showOpeningGhost,
+      isOpeningBuildActive,
     ],
   )
 
