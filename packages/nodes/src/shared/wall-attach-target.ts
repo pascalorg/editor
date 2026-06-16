@@ -5,6 +5,7 @@ import {
   getScaledDimensions,
   type ItemNode,
   nearestWallSegment,
+  useScene,
   WALL_SNAP_DISTANCE_M,
   type WallNode,
 } from '@pascal-app/core'
@@ -186,4 +187,105 @@ export function snapLocalXToNeighbors(args: {
   }
 
   return bestDelta === null ? null : localX + bestDelta
+}
+
+/**
+ * Does a wall-hosted opening of `width × height` centred at `(clampedX,
+ * clampedY)` (wall-local) overlap any OTHER child of `wallId` (door / window /
+ * wall-mounted item)? AABB test in the wall's local face plane. `ignoreId`
+ * excludes the moving node itself. Returns `true` (blocked) if the wall is
+ * gone.
+ *
+ * Single source of truth for door + window placement collision — door-math and
+ * window-math had byte-identical copies of this. Y conventions differ per kind
+ * (items store bottom Y; doors/windows store centre Y), handled inline.
+ */
+export function hasWallChildOverlap(
+  wallId: string,
+  clampedX: number,
+  clampedY: number,
+  width: number,
+  height: number,
+  ignoreId?: string,
+): boolean {
+  const nodes = useScene.getState().nodes
+  const wallNode = nodes[wallId as AnyNodeId] as WallNode | undefined
+  if (!wallNode) return true
+  const halfW = width / 2
+  const halfH = height / 2
+  const newBottom = clampedY - halfH
+  const newTop = clampedY + halfH
+  const newLeft = clampedX - halfW
+  const newRight = clampedX + halfW
+
+  for (const childId of Array.isArray(wallNode.children) ? wallNode.children : []) {
+    if (childId === ignoreId) continue
+    const child = nodes[childId as AnyNodeId]
+    if (!child) continue
+
+    let childLeft: number
+    let childRight: number
+    let childBottom: number
+    let childTop: number
+
+    if (child.type === 'item') {
+      const item = child as ItemNode
+      if (item.asset.attachTo !== 'wall' && item.asset.attachTo !== 'wall-side') continue
+      const [w, h] = getScaledDimensions(item)
+      childLeft = item.position[0] - w / 2
+      childRight = item.position[0] + w / 2
+      childBottom = item.position[1] // items store bottom Y
+      childTop = item.position[1] + h
+    } else if (child.type === 'window') {
+      const win = child as { position: [number, number, number]; width: number; height: number }
+      childLeft = win.position[0] - win.width / 2
+      childRight = win.position[0] + win.width / 2
+      childBottom = win.position[1] - win.height / 2 // windows store centre Y
+      childTop = win.position[1] + win.height / 2
+    } else if (child.type === 'door') {
+      const door = child as { position: [number, number, number]; width: number; height: number }
+      childLeft = door.position[0] - door.width / 2
+      childRight = door.position[0] + door.width / 2
+      childBottom = door.position[1] - door.height / 2 // doors store centre Y
+      childTop = door.position[1] + door.height / 2
+    } else {
+      continue
+    }
+
+    const xOverlap = newLeft < childRight && newRight > childLeft
+    const yOverlap = newBottom < childTop && newTop > childBottom
+    if (xOverlap && yOverlap) return true
+  }
+
+  return false
+}
+
+/** Placement state for a wall-hosted opening — the SINGLE decision the preview
+ *  tint and the commit gate both consume so they can never disagree. */
+export type OpeningPlacement = {
+  /** Geometric overlap with another wall child (independent of modifiers). */
+  collides: boolean
+  /** May the opening be committed here? `true` unless it collides and the user
+   *  isn't force-placing. */
+  placeable: boolean
+  /** Ghost tint: green when placeable, red when not. */
+  tint: 'valid' | 'invalid'
+}
+
+/**
+ * Resolve the placement state from the raw collision result and whether the
+ * user is force-placing (Shift). Force-place lifts the collision block, so the
+ * opening becomes placeable AND the tint goes green — the preview and the
+ * commit gate stay in lockstep because both read this one result.
+ */
+export function resolveOpeningPlacement(args: {
+  collides: boolean
+  forcePlace: boolean
+}): OpeningPlacement {
+  const placeable = !args.collides || args.forcePlace
+  return {
+    collides: args.collides,
+    placeable,
+    tint: placeable ? 'valid' : 'invalid',
+  }
 }

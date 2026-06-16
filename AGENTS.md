@@ -34,6 +34,7 @@ Read the relevant page in `wiki/architecture/` **before** writing code. The page
 
 - Adding a node type → `node-schemas.md`, `renderers.md`, `systems.md`
 - Adding a tool → `tools.md`, `spatial-queries.md`, `events.md`
+- Adding / changing a placement or move interaction → `tools.md` ("2D ↔ 3D behavioral parity": applicable behaviors must exist in both views; port the change to the sibling 2D/3D file in the same PR)
 - Adding a system → `systems.md`, `scene-registry.md`
 - Anything in `packages/viewer` → `viewer-isolation.md`, `layers.md`
 - Anything touching selection → `selection-managers.md`, `scene-registry.md`, `events.md`
