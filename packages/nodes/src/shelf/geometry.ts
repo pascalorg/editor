@@ -63,16 +63,33 @@ function stampShelfSlot(mesh: Mesh, slotId: ShelfSlotId): Mesh {
   return mesh
 }
 
-// Plates (boards) span the full footprint, so their end / front / back faces
-// land exactly on the frame's (posts / sides / back) outer faces — coplanar
-// surfaces the depth buffer can't separate, which flickers as z-fighting. Recess
-// every board 1mm on width + depth so it sits just inside the frame: the meshes
-// still overlap (no visible gap), but no two faces are coplanar.
+// A board's front/back faces land on the frame's outer faces (posts / back panel)
+// — coplanar surfaces the depth buffer can't separate, which flickers as z-fighting.
+// Recess 1mm so the board sits just inside: the meshes still overlap (no gap), but
+// no faces are coplanar. Depth is always recessed (boards reach into the back panel
+// / posts). Width is recessed only at call sites where boards span OVER posts
+// (open-rack / no-sides bookshelf); boards that ABUT side panels keep full width so
+// they meet the sides flush — abutting faces are back-to-back and never fight.
 const BOARD_INSET = 0.001
 
-function boardGeometry(width: number, thickness: number, depth: number): BoxGeometry {
+// Frame members that pass under the top board (dividers / back / corner posts) reach
+// y=unitHeight, coplanar with the top board's top face → z-fighting. Drop their top 1mm so
+// the board cleanly caps them; their bottom stays on the floor.
+const FRAME_TOP_INSET = 0.001
+
+function cappedFrameY(unitHeight: number): { height: number; centerY: number } {
+  const height = Math.max(unitHeight - FRAME_TOP_INSET, 0.001)
+  return { height, centerY: height / 2 }
+}
+
+function boardGeometry(
+  width: number,
+  thickness: number,
+  depth: number,
+  insetWidth = false,
+): BoxGeometry {
   return new BoxGeometry(
-    Math.max(width - 2 * BOARD_INSET, 0.001),
+    insetWidth ? Math.max(width - 2 * BOARD_INSET, 0.001) : width,
     thickness,
     Math.max(depth - 2 * BOARD_INSET, 0.001),
   )
@@ -167,10 +184,14 @@ function buildBookshelf(group: Group, node: ShelfNode, materials: ShelfSlotMater
   const unitHeight = node.height + node.thickness
   const innerWidth = node.withSides ? node.width - 2 * node.thickness : node.width
 
-  // Top + bottom + intermediate boards
+  // Top + bottom + intermediate boards. No sides => boards span over corner
+  // posts, so inset their width too; with sides they abut the panels (flush).
   for (const y of boardCenterYs(node)) {
     const board = stampShelfSlot(
-      new Mesh(boardGeometry(innerWidth, node.thickness, node.depth), materials.shelves),
+      new Mesh(
+        boardGeometry(innerWidth, node.thickness, node.depth, !node.withSides),
+        materials.shelves,
+      ),
       'shelves',
     )
     board.name = `shelf-board-${boardRowIndex(node, y)}`
@@ -204,26 +225,28 @@ function buildBookshelf(group: Group, node: ShelfNode, materials: ShelfSlotMater
   }
 
   if (node.withBack) {
+    const fy = cappedFrameY(unitHeight)
     const back = stampShelfSlot(
-      new Mesh(new BoxGeometry(innerWidth, unitHeight, node.thickness), materials.back),
+      new Mesh(new BoxGeometry(innerWidth, fy.height, node.thickness), materials.back),
       'back',
     )
     back.name = 'shelf-back'
-    back.position.set(0, unitHeight / 2, -(node.depth / 2 - node.thickness / 2))
+    back.position.set(0, fy.centerY, -(node.depth / 2 - node.thickness / 2))
     group.add(back)
   }
 
   // Vertical dividers between columns
   if (node.columns > 1) {
+    const fy = cappedFrameY(unitHeight)
     const colStep = innerWidth / node.columns
     for (let c = 1; c < node.columns; c++) {
       const x = -innerWidth / 2 + c * colStep
       const divider = stampShelfSlot(
-        new Mesh(new BoxGeometry(node.thickness, unitHeight, node.depth), materials.frame),
+        new Mesh(new BoxGeometry(node.thickness, fy.height, node.depth), materials.frame),
         'frame',
       )
       divider.name = `shelf-divider-col-${c}`
-      divider.position.set(x, unitHeight / 2, 0)
+      divider.position.set(x, fy.centerY, 0)
       group.add(divider)
     }
   }
@@ -241,7 +264,7 @@ function buildOpenRack(group: Group, node: ShelfNode, materials: ShelfSlotMateri
 
   for (const y of boardCenterYs(node)) {
     const board = stampShelfSlot(
-      new Mesh(boardGeometry(innerWidth, boardThickness, node.depth), materials.shelves),
+      new Mesh(boardGeometry(innerWidth, boardThickness, node.depth, true), materials.shelves),
       'shelves',
     )
     board.name = `shelf-board-${boardRowIndex(node, y)}`
@@ -307,12 +330,13 @@ function buildCubby(group: Group, node: ShelfNode, materials: ShelfSlotMaterials
     group.add(side)
   }
 
+  const fy = cappedFrameY(unitHeight)
   const back = stampShelfSlot(
-    new Mesh(new BoxGeometry(innerWidth, unitHeight, node.thickness), materials.back),
+    new Mesh(new BoxGeometry(innerWidth, fy.height, node.thickness), materials.back),
     'back',
   )
   back.name = 'shelf-back'
-  back.position.set(0, unitHeight / 2, -(node.depth / 2 - node.thickness / 2))
+  back.position.set(0, fy.centerY, -(node.depth / 2 - node.thickness / 2))
   group.add(back)
 
   if (node.columns > 1) {
@@ -371,19 +395,20 @@ function addCornerPosts(
   unitHeight: number,
   postStyle: 'rack' | 'leg',
 ) {
+  const fy = cappedFrameY(unitHeight)
   const postThickness =
     postStyle === 'rack' ? Math.max(0.025, node.thickness * 1.5) : Math.max(0.02, node.thickness)
   const inset = postThickness / 2
   for (const xSign of [-1, 1] as const) {
     for (const zSign of [-1, 1] as const) {
       const post = stampShelfSlot(
-        new Mesh(new BoxGeometry(postThickness, unitHeight, postThickness), material),
+        new Mesh(new BoxGeometry(postThickness, fy.height, postThickness), material),
         'frame',
       )
       post.name = `shelf-post-${xSign === -1 ? 'l' : 'r'}${zSign === -1 ? 'b' : 'f'}`
       post.position.set(
         xSign * (node.width / 2 - inset),
-        unitHeight / 2,
+        fy.centerY,
         zSign * (node.depth / 2 - inset),
       )
       group.add(post)
