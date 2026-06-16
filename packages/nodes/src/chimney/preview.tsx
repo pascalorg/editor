@@ -48,6 +48,7 @@ const ChimneyPreview = ({
   const material = invalid ? invalidGhostMaterial : ghostMaterial
   const effectiveSegment = segment ?? RoofSegmentSchema.parse({})
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geo = useMemo(
     () => buildChimneyGeometry(node, effectiveSegment),
     [

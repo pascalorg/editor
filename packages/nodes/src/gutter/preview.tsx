@@ -22,6 +22,7 @@ import type { GutterNode } from './schema'
  * placed gutter.
  */
 const GutterPreview = ({ node, invalid }: { node: GutterNode; invalid?: boolean }) => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildGutterGeometry(node),
     [

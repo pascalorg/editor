@@ -64,6 +64,14 @@ export const GeometrySystem = () => {
   // shelf dirties the shelf without altering its boards.
   const builtGeometryKeyRef = useRef<Map<string, string>>(new Map())
 
+  // Re-mark every geometry-backed node dirty whenever a viewer appearance
+  // value changes, so `def.geometry` builders re-run and pick up the new
+  // shading / texture / preset / theme. These four are deliberate re-run
+  // TRIGGERS, not values read in the body — the effect re-fires on any
+  // change. They're primitives (stable by value), so listing them is safe;
+  // biome flags them as "unnecessary" because the body doesn't reference
+  // them, but dropping them silently breaks appearance-mode switching.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: shading/textures/colorPreset/sceneTheme are intentional re-run triggers; removing them stops geometry from rebuilding on appearance change.
   useEffect(() => {
     const nodes = useScene.getState().nodes
     for (const node of Object.values(nodes)) {

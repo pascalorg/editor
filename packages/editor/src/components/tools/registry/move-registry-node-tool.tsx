@@ -5,6 +5,7 @@ import '../../../three-types'
 import {
   type AnyNode,
   type AnyNodeId,
+  analyzePortConnectivity,
   collectAlignmentAnchors,
   type EventSuffix,
   emitter,
@@ -12,9 +13,12 @@ import {
   movingFootprintAnchors,
   type NodeEvent,
   nodeRegistry,
+  type PortConnectivity,
   resolveAlignment,
+  resolveConnectivityUpdates,
   sceneRegistry,
   spatialGridManager,
+  useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
@@ -43,6 +47,65 @@ const snapToGridStep = (value: number) => {
 
 /** 45° steps, matching the GLB item placement rotation. */
 const ROTATION_STEP = Math.PI / 4
+
+/** Default magnetic radius (meters, XZ) for `movable.portSnap`. */
+const PORT_SNAP_RADIUS_M = 0.5
+
+/**
+ * Magnetic port snap for a dragged node: if one of the node's own ports
+ * (read live from `def.ports`) lands within `radius` of a matching scene
+ * port at the candidate XZ, return the node XZ that mates them exactly.
+ *
+ * Pure core: ports come through `nodeRegistry` so this stays layer-clean.
+ * Ports are level-local meters — the same frame as the cursor's
+ * `localPosition`, so no extra transform is needed. The dragged node's
+ * ports move rigidly with its position, so a port at candidate `(x,z)`
+ * sits at `portStored + (candidate - nodeStored)`. We pick the closest
+ * (own-port, target-port) pair and shift the node so they coincide in XZ.
+ */
+function resolvePortSnap(
+  node: AnyNode,
+  candidate: [number, number],
+  config: { systems?: readonly string[]; radius?: number },
+): [number, number] | null {
+  const nodePos = (node as { position?: [number, number, number] }).position
+  if (!nodePos) return null
+  const ownPorts = nodeRegistry.get(node.type)?.ports?.(node)
+  if (!ownPorts || ownPorts.length === 0) return null
+
+  const radius = config.radius ?? PORT_SNAP_RADIUS_M
+  const radiusSq = radius * radius
+  const { systems } = config
+  const dragDx = candidate[0] - nodePos[0]
+  const dragDz = candidate[1] - nodePos[2]
+
+  const nodes = useScene.getState().nodes
+  let bestDistSq = radiusSq
+  let snap: [number, number] | null = null
+
+  for (const node2 of Object.values(nodes)) {
+    if (!node2 || node2.id === node.id) continue
+    const targets = nodeRegistry.get(node2.type)?.ports?.(node2)
+    if (!targets) continue
+    for (const target of targets) {
+      if (systems && target.system !== undefined && !systems.includes(target.system)) continue
+      for (const own of ownPorts) {
+        // Own port at the candidate position = stored port + drag delta.
+        const ownX = own.position[0] + dragDx
+        const ownZ = own.position[2] + dragDz
+        const dx = target.position[0] - ownX
+        const dz = target.position[2] - ownZ
+        const distSq = dx * dx + dz * dz
+        if (distSq <= bestDistSq) {
+          bestDistSq = distSq
+          // Shift the node so this own port lands on the target (XZ only).
+          snap = [candidate[0] + dx, candidate[1] + dz]
+        }
+      }
+    }
+  }
+  return snap
+}
 
 /** Figma-style alignment-snap threshold (meters), matching the 2D
  *  floor-plan overlay's `ALIGNMENT_THRESHOLD_M`. 8 cm gives a magnetic pull
@@ -145,6 +208,15 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // and bumped by R/T. Applied imperatively + mirrored to `useLiveTransforms`,
   // and committed to the scene on drop.
   const rotationRef = useRef(originalRotationY)
+  // Snapshot of which ducts / fittings are mated to this node's ports at
+  // drag-start (duct fittings only). Drives the "connected ductwork follows"
+  // behaviour: connected nodes preview through `useLiveNodeOverrides` during
+  // the drag and commit alongside the moved node on drop. Null for kinds with
+  // no ports, so every other movable kind is unaffected.
+  const connectivityRef = useRef<PortConnectivity | null>(null)
+  // Node ids this drag has pushed live overrides onto — cleared on
+  // commit / cancel / unmount so a follow-on drag starts clean.
+  const overriddenIdsRef = useRef<AnyNodeId[]>([])
 
   // Shelf placement shows the same green/red footprint box GLB items use
   // (instead of the vertical-arrow cursor) and refuses an invalid drop unless
@@ -163,6 +235,15 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   const [cursorRotationY, setCursorRotationY] = useState(originalRotationY)
   const { isFreshPlacement, previewVisible, revealFreshPlacement, useAbsoluteCursorPlacement } =
     useFreshPlacementVisibility({ node })
+  // Kinds that declare `movable.cursorAttached` (duct fittings) pin to the
+  // cursor instead of preserving the grab offset — small connector-like
+  // nodes read an offset drag as "lagging behind the mouse".
+  const cursorAttached = nodeRegistry.get(node.type)?.capabilities?.movable?.cursorAttached === true
+  // Kinds that declare `movable.portSnap` (duct terminals) magnetically
+  // mate one of their own ports onto a nearby scene port while dragging —
+  // a register collar drops onto a duct run end. Reads `def.ports` through
+  // the core registry, so it stays layer-clean (no @pascal-app/nodes import).
+  const portSnapConfig = nodeRegistry.get(node.type)?.capabilities?.movable?.portSnap ?? null
   // Mirrors of `valid` / Shift for the event handlers inside the effect, which
   // can't read React state without stale closures.
   const validRef = useRef(true)
@@ -209,6 +290,45 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     const markMovedNodeDirty = () => {
       if (useScene.getState().nodes[node.id]) {
         useScene.getState().markDirty(node.id as AnyNodeId)
+      }
+    }
+
+    // Connectivity follow (duct fittings): the moved node with its live drag
+    // transform, so `def.ports` recomputes for `resolveConnectivityUpdates`.
+    // Uses the logical (un-stacked) position + Y rotation that commit writes,
+    // not the floor-lifted visual position.
+    const buildPreviewNode = (position: [number, number, number], rotationY: number): AnyNode =>
+      ({
+        ...(node as Record<string, unknown>),
+        position,
+        rotation: toCommitRotation(rotationY),
+      }) as AnyNode
+
+    // Resolve the patches that keep connected ductwork attached and preview
+    // them through `useLiveNodeOverrides` (transient — no history churn;
+    // GeometrySystem merges overrides via getEffectiveNode). Each connected
+    // node is re-dirtied so its geometry rebuilds against the new override.
+    const previewConnectivity = (position: [number, number, number], rotationY: number) => {
+      const connectivity = connectivityRef.current
+      if (!connectivity) return
+      const updates = resolveConnectivityUpdates(
+        connectivity,
+        buildPreviewNode(position, rotationY),
+      )
+      if (updates.length === 0) return
+      useLiveNodeOverrides
+        .getState()
+        .setMany(updates.map((u) => [u.id, u.data as Record<string, unknown>] as const))
+      overriddenIdsRef.current = updates.map((u) => u.id)
+      for (const u of updates) {
+        if (useScene.getState().nodes[u.id]) useScene.getState().markDirty(u.id)
+      }
+    }
+
+    const clearConnectivityOverrides = () => {
+      for (const id of overriddenIdsRef.current) {
+        useLiveNodeOverrides.getState().clear(id)
+        if (useScene.getState().nodes[id]) useScene.getState().markDirty(id)
       }
     }
 
@@ -277,6 +397,16 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       useViewer.getState().selection.levelId ?? node.parentId,
     )
 
+    // Connectivity snapshot (existing port-bearing nodes only — fresh
+    // placements aren't connected to anything yet). Records which ducts /
+    // fittings are mated to this node's ports so they can follow the drag.
+    connectivityRef.current = null
+    overriddenIdsRef.current = []
+    if (!isNew && nodeRegistry.get(node.type)?.ports) {
+      const snapshot = analyzePortConnectivity(node, useScene.getState().nodes)
+      if (snapshot.connections.length > 0) connectivityRef.current = snapshot
+    }
+
     const onGridMove = (event: GridEvent) => {
       const rawX = event.localPosition[0]
       const rawZ = event.localPosition[2]
@@ -286,7 +416,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         cursor: [rawX, rawZ],
         original: [originalPosition[0], originalPosition[2]],
         anchor: dragAnchorRef.current,
-        mode: useAbsoluteCursorPlacement ? 'absolute' : 'relative',
+        mode: useAbsoluteCursorPlacement || cursorAttached ? 'absolute' : 'relative',
         snap: event.nativeEvent?.shiftKey === true ? (value) => value : snapToGridStep,
       })
       dragAnchorRef.current = resolved.anchor
@@ -313,6 +443,18 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         useAlignmentGuides.getState().clear()
       }
 
+      // Magnetic port snap (duct terminals): mate a collar onto a nearby
+      // duct run end. Takes precedence over grid / alignment snap; Alt
+      // bypasses. Only kinds that opted in via `movable.portSnap`.
+      if (!bypass && portSnapConfig) {
+        const mated = resolvePortSnap(node, [x, z], portSnapConfig)
+        if (mated) {
+          x = mated[0]
+          z = mated[1]
+          useAlignmentGuides.getState().clear()
+        }
+      }
+
       const position: [number, number, number] = [x, originalPosition[1], z]
       const visualPosition = getVisualPosition(position)
       hasMovedRef.current = true
@@ -337,6 +479,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         rotation: rotationRef.current,
       })
       markMovedNodeDirty()
+      // Carry connected ductwork along (preview only — committed on drop).
+      previewConnectivity(position, rotationRef.current)
 
       const prev = previousSnapRef.current
       if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== x || prev[1] !== z)) {
@@ -403,8 +547,18 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
             committedId = finalId
           }
         } else {
+          // Fold the connected-ductwork follow-updates into the SAME
+          // batch as the moved node so the whole thing is one undo step.
+          const connectivityUpdates = connectivityRef.current
+            ? resolveConnectivityUpdates(
+                connectivityRef.current,
+                buildPreviewNode(position, rotationRef.current),
+              ).filter((u) => useScene.getState().nodes[u.id])
+            : []
           useScene.temporal.getState().resume()
-          useScene.getState().updateNode(node.id, data)
+          useScene
+            .getState()
+            .updateNodes([{ id: node.id as AnyNodeId, data }, ...connectivityUpdates])
           useScene.temporal.getState().pause()
           committed = true
         }
@@ -430,6 +584,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // canonical position, then restamp the lifted presentation Y for the
       // current frame.
       useLiveTransforms.getState().clear(node.id)
+      // Connected ductwork is now committed to the store — drop its live
+      // overrides so the renderers read the canonical path/position.
+      clearConnectivityOverrides()
       const mesh = sceneRegistry.nodes.get(node.id)
       if (mesh) {
         mesh.position.set(...visualPosition)
@@ -491,6 +648,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         rotation: rotationRef.current,
       })
       markMovedNodeDirty()
+      // Rotating the fitting swings its collars — connected ducts follow.
+      previewConnectivity(position, rotationRef.current)
       // Rotation changes the footprint's collision span — re-check validity.
       recomputeValidity()
     }
@@ -533,6 +692,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
     const onCancel = () => {
       useLiveTransforms.getState().clear(node.id)
+      clearConnectivityOverrides()
       if (isNew) {
         useScene.getState().deleteNode(node.id as AnyNodeId)
       } else {
@@ -570,6 +730,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       const finalisedBy2D = useEditor.getState().movingNodeOrigin === '2d'
       if (!(committed || isNew || finalisedBy2D)) {
         useLiveTransforms.getState().clear(node.id)
+        clearConnectivityOverrides()
         sceneRegistry.nodes
           .get(node.id)
           ?.position.set(...getVisualPosition(originalPosition, originalRotationY))
@@ -579,6 +740,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
   }, [
     boxDimensions,
+    cursorAttached,
+    portSnapConfig,
     exitMoveMode,
     isFreshPlacement,
     node,

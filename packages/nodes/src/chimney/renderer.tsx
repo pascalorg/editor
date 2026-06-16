@@ -77,24 +77,16 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
   }, [node, segment])
 
   // Segment brushes for the body trim. Building these is non-trivial
-  // (4 CSG-ready Brush instances per segment), so memoise by the shape
-  // fields that drive their geometry. A chimney slider drag changes
-  // `node.*` but not these, so the cached brushes survive the drag —
-  // previously each frame rebuilt all four.
-  const segmentBrushes = useMemo(
-    () => (segment ? getRoofSegmentBrushes(segment) : null),
-    [
-      segment?.roofType,
-      segment?.width,
-      segment?.depth,
-      segment?.wallHeight,
-      segment?.pitch,
-      segment?.wallThickness,
-      segment?.deckThickness,
-      segment?.overhang,
-      segment?.shingleThickness,
-    ],
-  )
+  // (4 CSG-ready Brush instances per segment). `segment` comes from a
+  // `useScene` selector, so it only re-identifies when the segment's own
+  // data changes — depend on it directly (as the `geo` memo above does)
+  // and the brushes rebuild exactly when the host roof reshapes, incl.
+  // the gambrel / mansard / dutch-hip width-ratio fields that
+  // `getRoofSegmentBrushes` reads. A chimney slider drag changes `node`,
+  // not `segment`, so the cache still survives the drag. Enumerating
+  // individual fields here previously omitted those ratios and left the
+  // trim CSG-ing against a stale roof outline.
+  const segmentBrushes = useMemo(() => (segment ? getRoofSegmentBrushes(segment) : null), [segment])
   useEffect(
     () => () => {
       if (segmentBrushes) {

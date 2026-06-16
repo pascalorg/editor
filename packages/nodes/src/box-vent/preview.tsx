@@ -17,6 +17,7 @@ import type { BoxVentNode } from './schema'
  * the cursor ray and starve the placement tool of `roof:move` events.
  */
 const BoxVentPreview = ({ node, invalid }: { node: BoxVentNode; invalid?: boolean }) => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildBoxVentGeometry(node),
     [node.width, node.depth, node.height, node.hoodOverhang, node.style],

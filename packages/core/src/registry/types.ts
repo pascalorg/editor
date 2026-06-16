@@ -168,6 +168,40 @@ export type FloorplanStyle = {
   cursor?: string
 }
 
+// ─── NodePort ────────────────────────────────────────────────────────
+//
+// A typed connection point exposed by a node — the open end of a duct
+// run, the collar of a fitting, the supply plenum of an air handler.
+// Ports are what placement tools snap to and what a future system graph
+// walks to decide connectivity.
+//
+// Coordinates are LEVEL-LOCAL meters — the same space duct paths and
+// grid events use. Kinds whose schema stores a node transform
+// (`position` / `rotation`) apply it themselves inside `def.ports` so
+// consumers never need to know how a kind stores its placement.
+
+export type NodePort = {
+  /** Stable identifier within the node, e.g. 'start', 'end', 'branch'. */
+  id: string
+  /** Level-local meters. */
+  position: readonly [number, number, number]
+  /** Unit vector pointing OUT of the port (away from the node body). */
+  direction: readonly [number, number, number]
+  /** Nominal connection diameter in inches. For a rect / oval port this is
+   *  the area-equivalent round size, so a round run still mates sensibly. */
+  diameter: number
+  /** Which distribution loop the port belongs to, e.g. 'supply' | 'return'. */
+  system?: string
+  /** Cross-section of the connection. Omitted = round at `diameter`. A duct
+   *  run joining a rect / oval port adopts this shape and rolls its
+   *  cross-section to line up with the collar. */
+  shape?: 'round' | 'rect' | 'oval'
+  /** Rect / oval cross-section in inches: width is the collar's horizontal
+   *  face at roll 0, height the vertical one. */
+  width?: number
+  height?: number
+}
+
 // ─── ToolHint ────────────────────────────────────────────────────────
 //
 // A single key + label entry in the contextual shortcut hint panel.
@@ -666,12 +700,26 @@ export type SurfaceRole =
   | 'glazing'
   | 'furnishing'
 
+/** Role a kind plays in a duct / pipe / lineset distribution system. */
+export type DistributionRole = 'run' | 'fitting' | 'terminal' | 'equipment'
+
 export type NodeDefinition<S extends ZodObject<any>> = {
   kind: string
   schemaVersion: number
   schema: S
   category: NodeCategory
   surfaceRole?: SurfaceRole
+  /**
+   * Role this kind plays in a distribution system (HVAC duct / DWV pipe /
+   * refrigerant lineset). Lets the system-graph summary classify a
+   * component without branching on `node.type`:
+   *   - `'run'` — a duct / pipe / lineset segment (carries `path`).
+   *   - `'fitting'` — an inline fitting (elbow / tee / reducer / trap).
+   *   - `'terminal'` — a grille / register / diffuser endpoint.
+   *   - `'equipment'` — a furnace / air handler / condenser source.
+   * Kinds outside any distribution system leave this unset.
+   */
+  distributionRole?: DistributionRole
 
   defaults: () => Omit<z.infer<S>, 'id' | 'type'>
   migrate?: Record<number, (old: unknown) => unknown>
@@ -829,6 +877,15 @@ export type NodeDefinition<S extends ZodObject<any>> = {
     nodes: Record<AnyNodeId, AnyNode>
     liveOverrides: Map<string, Record<string, unknown>>
   }) => Record<AnyNodeId, AnyNode>
+  /**
+   * Typed connection points this kind exposes (duct/pipe open ends,
+   * fitting collars, equipment plenums). Pure function of the node —
+   * returns LEVEL-LOCAL positions/directions (the kind applies its own
+   * transform). Consumed by placement tools for port-snapping and, in a
+   * later slice, by the system graph for connectivity. Kinds with no
+   * connectable geometry omit this.
+   */
+  ports?: (node: z.infer<S>) => NodePort[]
   system?: SystemContribution
   tool?: LazyComponent
   /**
@@ -915,6 +972,14 @@ export type KeyboardActions = {
   r?: KeyboardAction
   /** T / Shift+T secondary action. */
   t?: KeyboardAction
+  /**
+   * Set for kinds whose R/T rotation turns around a user-cyclable world
+   * axis (Alt cycles Y → X → Z) — duct / pipe fittings with full 3D
+   * orientation. The floating action menu reads this to surface the
+   * active-axis pill above the selected node; kinds with plain Y-only
+   * rotation omit it.
+   */
+  axisCycling?: boolean
 }
 
 export type KeyboardAction = {
@@ -1279,6 +1344,31 @@ export type CapabilityCtx = { node: AnyNode }
 export type MovableConfig = {
   axes: ReadonlyArray<'x' | 'y' | 'z'>
   gridSnap?: boolean
+  /**
+   * Pin the dragged node to the cursor (absolute placement) instead of the
+   * default offset-preserving drag, where the node moves by the cursor's
+   * delta from where the drag started. Offset preservation suits large
+   * furniture you grab by an edge; small connector-like kinds (duct
+   * fittings) read as "lagging behind the mouse" — they want the cursor.
+   */
+  cursorAttached?: boolean
+  /**
+   * Magnetically snap one of this kind's own ports onto a nearby scene
+   * port while dragging — e.g. a register's collar onto a duct run end.
+   * The dragged node shifts in XZ so its closest matching port lands on
+   * the target port. Alt bypasses the snap. Kinds without `def.ports`
+   * can't use this. Snap takes precedence over grid / alignment snap.
+   */
+  portSnap?: {
+    /**
+     * Distribution loops a target port must belong to (e.g.
+     * `['supply', 'return']`). A target port with no `system` always
+     * matches. Omit to match every port.
+     */
+    systems?: readonly string[]
+    /** Snap radius in meters (XZ). Defaults to 0.5. */
+    radius?: number
+  }
   override?: (ctx: CapabilityCtx) => MovableConfig | null
 }
 
@@ -1411,7 +1501,24 @@ export type Relations = {
 export type ParametricDescriptor<N> = {
   groups: ParamGroup<N>[]
   invariants?: ReadonlyArray<(n: N) => Issue[]>
-  derive?: (n: N) => Partial<N>
+  /**
+   * Co-update hook for fields that must stay consistent when edited
+   * from the inspector. Called with the node AFTER `patch` is merged
+   * plus the patch itself (so the hook can tell which field the user
+   * touched); whatever it returns is folded into the same update.
+   * Direct store/MCP writes bypass it — keep real invariants in
+   * `invariants`.
+   */
+  derive?: (next: N, patch: Partial<N>) => Partial<N>
+  /**
+   * Cross-node companion to `derive`: after an inspector edit lands on
+   * this node, return patches for OTHER nodes that must follow to keep
+   * the scene consistent — e.g. duct runs re-trimmed onto a resized
+   * fitting's collars. `prev` is the node before the edit, `next` after
+   * (with `derive` already folded in). Applied in the same gesture via
+   * `updateNodes`.
+   */
+  reconcile?: (prev: N, next: N) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
   customPanel?: () => Promise<{ default: ComponentType<{ node: N }> }>
   /**
    * Extra buttons rendered in the inspector's Actions section

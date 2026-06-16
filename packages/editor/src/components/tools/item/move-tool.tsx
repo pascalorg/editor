@@ -9,14 +9,17 @@ import { getRegistryAffordanceTool } from '../shared/affordance-dispatch'
 /**
  * MoveTool dispatcher. Routes to (in order):
  *
- *   1. `MoveRegistryNodeTool` — generic translate-on-XZ for kinds that
- *      declare `capabilities.movable` (shelf, spawn, item-with-floor-attach,
- *      …).
- *   2. `def.affordanceTools.move` — kind-owned move component, lazy-loaded
- *      via `getRegistryAffordanceTool`. Covers both generic movers
- *      (slab / ceiling / wall / fence / column / item / door / window) and
- *      the bespoke roof / roof-segment / stair / stair-segment / building
- *      movers ported into `@pascal-app/nodes`.
+ *   1. `def.affordanceTools.move` — kind-owned move component, lazy-loaded
+ *      via `getRegistryAffordanceTool`. Covers generic movers
+ *      (slab / ceiling / wall / fence / column / item / door / window), the
+ *      bespoke roof / roof-segment / stair / stair-segment / building
+ *      movers, and the polyline / fitting ghost-placement movers
+ *      (duct-segment / duct-fitting). A kind that ships its own mover wins
+ *      even if it also declares `capabilities.movable` (duct-fitting keeps
+ *      `movable` for the inspector / hint readers but places via its ghost).
+ *   2. `MoveRegistryNodeTool` — generic translate-on-XZ for kinds that only
+ *      declare `capabilities.movable` (shelf, spawn, duct-terminal,
+ *      hvac-equipment, …).
  *   3. `elevator` is the lone remaining legacy arm — its bespoke cab/shaft
  *      mover hasn't been ported to a kind-owned affordance yet.
  */
@@ -29,9 +32,6 @@ export const MoveTool: React.FC<{
   if (!movingNode) return null
 
   const def = nodeRegistry.get(movingNode.type)
-  if (def?.capabilities?.movable) {
-    return <MoveRegistryNodeTool node={movingNode} />
-  }
 
   const RegistryMove = getRegistryAffordanceTool(movingNode.type, 'move')
   if (RegistryMove) {
@@ -40,6 +40,10 @@ export const MoveTool: React.FC<{
         <RegistryMove node={movingNode} />
       </Suspense>
     )
+  }
+
+  if (def?.capabilities?.movable) {
+    return <MoveRegistryNodeTool node={movingNode} />
   }
 
   if (movingNode.type === 'elevator')

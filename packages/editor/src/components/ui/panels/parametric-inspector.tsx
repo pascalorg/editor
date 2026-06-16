@@ -62,9 +62,22 @@ export function ParametricInspector({
   const handleUpdate = useCallback(
     (patch: Partial<AnyNode>) => {
       if (!selectedId) return
-      useScene.getState().updateNode(selectedId, patch)
+      const scene = useScene.getState()
+      const node = scene.nodes[selectedId]
+      if (parametrics?.derive && node) {
+        const next = { ...node, ...patch } as AnyNode
+        patch = { ...patch, ...parametrics.derive(next, patch) }
+      }
+      // Bundle the edited node + any reconcile follow-ups into ONE
+      // updateNodes call so a single inspector edit is a single undo step.
+      const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = [{ id: selectedId, data: patch }]
+      if (parametrics?.reconcile && node) {
+        const next = { ...node, ...patch } as AnyNode
+        updates.push(...parametrics.reconcile(node as AnyNode, next))
+      }
+      scene.updateNodes(updates)
     },
-    [selectedId],
+    [selectedId, parametrics],
   )
 
   const clearSelection = useCallback(() => {

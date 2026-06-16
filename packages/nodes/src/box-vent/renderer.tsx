@@ -75,6 +75,7 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
   // every parametric field, including the per-style ones. Listing them
   // explicitly keeps the dep array tight (vs. `[node]` which would
   // also fire on `name` / `visible` flips).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildBoxVentGeometry(node),
     [

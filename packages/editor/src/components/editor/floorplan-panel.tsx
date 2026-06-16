@@ -5551,15 +5551,7 @@ export function FloorplanPanel({
       } as AnyNode
       usePlacementPreview.getState().set(ghost, wall)
     },
-    [
-      DoorNodeSchema,
-      WallNodeSchema,
-      WindowNodeSchema,
-      floorplanOpeningLocalY,
-      isDoorBuildActive,
-      movingNode,
-      movingOpeningType,
-    ],
+    [floorplanOpeningLocalY, isDoorBuildActive, movingNode, movingOpeningType],
   )
   // Drop the floating opening ghost whenever opening placement ends (commit,
   // tool change, mode switch, cancel) or the active level changes, so a stale
@@ -5567,6 +5559,7 @@ export function FloorplanPanel({
   useEffect(() => {
     if (!isOpeningPlacementActive) usePlacementPreview.getState().clear()
   }, [isOpeningPlacementActive])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `levelId` is an intentional re-run trigger; the effect drops the placement ghost when the active level changes.
   useEffect(() => {
     usePlacementPreview.getState().clear()
   }, [levelId])
@@ -8813,7 +8806,14 @@ export function FloorplanPanel({
       isFenceBuildActive,
       isFloorplanGridInteractionActive,
       isMarqueeSelectionToolActive,
-      isOpeningPlacementActive,
+      isOpeningBuildActive,
+      isOpeningMoveActive,
+      // The off-wall opening ghost is published through this memoised
+      // callback, whose glyph (door swing-arc vs window panes) is bound to
+      // `isDoorBuildActive`. It must be a dependency or a door→window tool
+      // switch (which changes none of the other listed deps) would keep the
+      // stale closure and float a door symbol while the window tool is armed.
+      showOpeningGhost,
       isPolygonBuildActive,
       isRoofBuildActive,
       isSlabBuildActive,

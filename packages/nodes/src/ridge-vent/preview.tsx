@@ -7,6 +7,7 @@ import { buildRidgeVentGeometry } from './geometry'
 import type { RidgeVentNode } from './schema'
 
 const RidgeVentPreview = ({ node, invalid }: { node: RidgeVentNode; invalid?: boolean }) => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildRidgeVentGeometry(node),
     [node.length, node.width, node.height, node.style, node.endCaps],

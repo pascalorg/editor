@@ -59,6 +59,9 @@ export {
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
 export { DownspoutNode } from './nodes/downspout'
+export { DuctFittingNode } from './nodes/duct-fitting'
+export { DuctSegmentNode } from './nodes/duct-segment'
+export { DuctTerminalNode } from './nodes/duct-terminal'
 export {
   ElevatorDoorPanelStyle,
   ElevatorDoorStyle,
@@ -69,6 +72,7 @@ export { EyebrowVentNode } from './nodes/eyebrow-vent'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export { GutterNode, GutterOutlet } from './nodes/gutter'
+export { HvacEquipmentNode } from './nodes/hvac-equipment'
 export type {
   AnimationEffect,
   Asset,
@@ -88,6 +92,11 @@ export {
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
 export { LevelNode } from './nodes/level'
+export { LinesetNode } from './nodes/lineset'
+export { LiquidLineNode } from './nodes/liquid-line'
+export { PipeFittingNode } from './nodes/pipe-fitting'
+export { PipeSegmentNode } from './nodes/pipe-segment'
+export { PipeTrapNode } from './nodes/pipe-trap'
 // Nodes
 export { RidgeVentNode } from './nodes/ridge-vent'
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
