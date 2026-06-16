@@ -19,7 +19,7 @@ import type { BoxVentNode } from './schema'
 const BoxVentPreview = ({ node, invalid }: { node: BoxVentNode; invalid?: boolean }) => {
   const geometry = useMemo(
     () => buildBoxVentGeometry(node),
-    [node.width, node.depth, node.height, node.hoodOverhang, node.style, node],
+    [node.width, node.depth, node.height, node.hoodOverhang, node.style],
   )
 
   const material = useMemo(

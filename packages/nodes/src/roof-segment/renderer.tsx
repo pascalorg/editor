@@ -100,7 +100,6 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     textures,
     colorPreset,
     sceneTheme,
-    node,
   ])
 
   const material = debugColors

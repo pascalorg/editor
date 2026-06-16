@@ -15,7 +15,7 @@ import type { EyebrowVentNode } from './schema'
 const EyebrowVentPreview = ({ node, invalid }: { node: EyebrowVentNode; invalid?: boolean }) => {
   const geometry = useMemo(
     () => buildEyebrowVentGeometry(node),
-    [node.width, node.depth, node.height, node.style, node.louverCount, node.backRatio, node],
+    [node.width, node.depth, node.height, node.style, node.louverCount, node.backRatio],
   )
 
   const material = useMemo(

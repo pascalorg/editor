@@ -9,7 +9,7 @@ import type { RidgeVentNode } from './schema'
 const RidgeVentPreview = ({ node, invalid }: { node: RidgeVentNode; invalid?: boolean }) => {
   const geometry = useMemo(
     () => buildRidgeVentGeometry(node),
-    [node.length, node.width, node.height, node.style, node.endCaps, node],
+    [node.length, node.width, node.height, node.style, node.endCaps],
   )
 
   const material = useMemo(

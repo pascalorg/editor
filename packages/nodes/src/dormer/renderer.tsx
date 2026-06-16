@@ -95,7 +95,6 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     node.sideMaterialPreset,
     node.wallMaterial,
     node.wallMaterialPreset,
-    node,
   ])
 
   // The window frame bars / sill take the 'joinery' role when untextured;
@@ -140,7 +139,6 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     node.windowCornerRadii[1],
     node.windowCornerRadii[2],
     node.windowCornerRadii[3],
-    node,
   ])
 
   useEffect(() => () => geometry?.dispose(), [geometry])

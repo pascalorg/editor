@@ -67,11 +67,11 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
 
   const baseGeometry = useMemo(
     () => buildTurbineVentBase(node),
-    [node.diameter, node.height, node.neckHeight, node.baseOverhang, node],
+    [node.diameter, node.height, node.neckHeight, node.baseOverhang],
   )
   const headGeometry = useMemo(
     () => buildTurbineVentHead(node),
-    [node.style, node.diameter, node.height, node.neckHeight, node.vaneCount, node],
+    [node.style, node.diameter, node.height, node.neckHeight, node.vaneCount],
   )
   useEffect(() => () => baseGeometry.dispose(), [baseGeometry])
   useEffect(() => () => headGeometry.dispose(), [headGeometry])

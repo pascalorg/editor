@@ -30,7 +30,6 @@ const WindowPreview = ({ node, invalid }: { node: WindowNode; invalid?: boolean 
     node.sill,
     node.sillDepth,
     node.sillThickness,
-    node,
   ])
 
   // Ghost treatment (clone + tint + raycast-off) re-applies if `invalid`

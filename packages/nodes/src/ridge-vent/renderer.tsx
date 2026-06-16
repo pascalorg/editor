@@ -90,7 +90,7 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
 
   const geometry = useMemo(
     () => buildRidgeVentGeometry(node),
-    [node.length, node.width, node.height, node.style, node.endCaps, node],
+    [node.length, node.width, node.height, node.style, node.endCaps],
   )
 
   useEffect(() => () => geometry.dispose(), [geometry])

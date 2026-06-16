@@ -15,7 +15,7 @@ import type { CupolaNode } from './schema'
 const CupolaPreview = ({ node, invalid }: { node: CupolaNode; invalid?: boolean }) => {
   const geometry = useMemo(
     () => buildCupolaGeometry(node),
-    [node.width, node.depth, node.height, node.roofStyle, node.finial, node],
+    [node.width, node.depth, node.height, node.roofStyle, node.finial],
   )
 
   const material = useMemo(

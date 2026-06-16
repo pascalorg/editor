@@ -655,7 +655,7 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
   const surfaceFrame = useMemo(() => {
     if (!segment) return { point: new THREE.Vector3(), normal: new THREE.Vector3(0, 1, 0) }
     return getRoofOuterSurfaceFrameAtPoint(segment, node.position[0] ?? 0, node.position[2] ?? 0)
-  }, [segment, node.position[0], node.position[2]])
+  }, [segment, node.position[0], node.position[2], node.rotation, liveOverrides, storeNode.id])
 
   const surfaceQuat = useMemo(
     () => surfaceQuatFromNormal(surfaceFrame.normal, new THREE.Quaternion()),

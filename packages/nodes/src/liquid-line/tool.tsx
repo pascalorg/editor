@@ -183,7 +183,7 @@ const LiquidLineTool = () => {
     followTargetRef.current = null
     altAnchorRef.current = null
     setAltActive(false)
-  }, [])
+  }, [follow])
 
   // Leaving the tool clears Follow so re-arming it starts in free-draw.
   useEffect(() => () => useLiquidLineToolOptions.getState().setFollow(false), [])

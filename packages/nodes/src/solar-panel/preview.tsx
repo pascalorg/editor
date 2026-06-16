@@ -41,7 +41,6 @@ const SolarPanelPreview = ({ node, invalid }: { node: SolarPanelNode; invalid?: 
       node.frameThickness,
       node.frameDepth,
       node.standoffHeight,
-      node,
     ],
   )
 

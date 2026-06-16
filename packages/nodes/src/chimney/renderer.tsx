@@ -93,7 +93,6 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
       segment?.deckThickness,
       segment?.overhang,
       segment?.shingleThickness,
-      segment,
     ],
   )
   useEffect(

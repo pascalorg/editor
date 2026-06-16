@@ -55,7 +55,7 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
 
   const geometry = useMemo(
     () => buildCupolaGeometry(node),
-    [node.width, node.depth, node.height, node.roofStyle, node.finial, node],
+    [node.width, node.depth, node.height, node.roofStyle, node.finial],
   )
   useEffect(() => () => geometry.dispose(), [geometry])
 

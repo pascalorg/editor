@@ -33,7 +33,7 @@ const GutterPreview = ({ node, invalid }: { node: GutterNode; invalid?: boolean 
       node.endCapRight,
       node.hangerStyle,
       node.hangerSpacing,
-      node,
+      JSON.stringify(node.outlets),
     ],
   )
 

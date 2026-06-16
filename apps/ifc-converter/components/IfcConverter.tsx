@@ -115,7 +115,18 @@ export default function IfcConverter() {
     return results
   }, [pascalData, searchQuery])
 
-  const loadAndConvert = useCallback(async (data: Uint8Array, name: string) => {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const requested = params.get('file')
+    const matched = testFiles.some((f) => f.name === requested)
+    const initial = matched ? requested! : '01-duplex.ifc'
+    loadExampleFile(initial)
+    if (matched) {
+      document.getElementById('try')?.scrollIntoView({ block: 'start' })
+    }
+  }, [])
+
+  const loadAndConvert = async (data: Uint8Array, name: string) => {
     setFileName(name)
     setStatus('converting')
     setSearchQuery('')
@@ -137,89 +148,69 @@ export default function IfcConverter() {
       setStatus('error')
       setConversionProgress(0)
     }
-  }, [])
+  }
 
-  const loadExampleFile = useCallback(
-    async (filename: string) => {
-      setStatus('loading')
-      setSelectedFile(filename)
-      setError(null)
+  const loadExampleFile = async (filename: string) => {
+    setStatus('loading')
+    setSelectedFile(filename)
+    setError(null)
 
-      const params = new URLSearchParams(window.location.search)
-      if (params.get('file') !== filename) {
-        params.set('file', filename)
-        const newUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`
-        window.history.replaceState(null, '', newUrl)
-      }
-
-      try {
-        const file = testFiles.find((f) => f.name === filename)
-        const url = file ? exampleFileUrl(file) : `/test-ifc-files/${filename}`
-        const response = await fetch(url)
-        if (!response.ok) throw new Error(`Could not load ${filename} (${response.status})`)
-        const arrayBuffer = await response.arrayBuffer()
-        const uint8Array = new Uint8Array(arrayBuffer)
-        setIfcData(uint8Array)
-        await loadAndConvert(uint8Array, filename)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load file')
-        setStatus('error')
-      }
-    },
-    [loadAndConvert],
-  )
-
-  const handleFile = useCallback(
-    async (file: File) => {
-      setStatus('loading')
-      setError(null)
-      setSelectedFile('')
-
-      const params = new URLSearchParams(window.location.search)
-      if (params.has('file')) {
-        params.delete('file')
-        const qs = params.toString()
-        const newUrl = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`
-        window.history.replaceState(null, '', newUrl)
-      }
-
-      try {
-        const arrayBuffer = await file.arrayBuffer()
-        const uint8Array = new Uint8Array(arrayBuffer)
-        setIfcData(uint8Array)
-        await loadAndConvert(uint8Array, file.name)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load file')
-        setStatus('error')
-      }
-    },
-    [loadAndConvert],
-  )
-
-  useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const requested = params.get('file')
-    const matched = testFiles.some((f) => f.name === requested)
-    const initial = matched ? requested! : '01-duplex.ifc'
-    loadExampleFile(initial)
-    if (matched) {
-      document.getElementById('try')?.scrollIntoView({ block: 'start' })
+    if (params.get('file') !== filename) {
+      params.set('file', filename)
+      const newUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`
+      window.history.replaceState(null, '', newUrl)
     }
-  }, [loadExampleFile])
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault()
-      setIsDragging(false)
-      const file = e.dataTransfer.files[0]
-      if (file?.name.toLowerCase().endsWith('.ifc')) {
-        handleFile(file)
-      } else {
-        setError('Please drop a valid IFC file')
-      }
-    },
-    [handleFile],
-  )
+    try {
+      const file = testFiles.find((f) => f.name === filename)
+      const url = file ? exampleFileUrl(file) : `/test-ifc-files/${filename}`
+      const response = await fetch(url)
+      if (!response.ok) throw new Error(`Could not load ${filename} (${response.status})`)
+      const arrayBuffer = await response.arrayBuffer()
+      const uint8Array = new Uint8Array(arrayBuffer)
+      setIfcData(uint8Array)
+      await loadAndConvert(uint8Array, filename)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load file')
+      setStatus('error')
+    }
+  }
+
+  const handleFile = async (file: File) => {
+    setStatus('loading')
+    setError(null)
+    setSelectedFile('')
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.has('file')) {
+      params.delete('file')
+      const qs = params.toString()
+      const newUrl = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`
+      window.history.replaceState(null, '', newUrl)
+    }
+
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const uint8Array = new Uint8Array(arrayBuffer)
+      setIfcData(uint8Array)
+      await loadAndConvert(uint8Array, file.name)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load file')
+      setStatus('error')
+    }
+  }
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file?.name.toLowerCase().endsWith('.ifc')) {
+      handleFile(file)
+    } else {
+      setError('Please drop a valid IFC file')
+    }
+  }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -243,7 +234,7 @@ export default function IfcConverter() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${fileName.replace('.ifc', '')}_pascal.json`
+    a.download = fileName.replace('.ifc', '') + '_pascal.json'
     a.click()
     URL.revokeObjectURL(url)
   }

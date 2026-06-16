@@ -109,10 +109,11 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
     [
       effectiveGutter?.profile,
       effectiveGutter?.size,
+      // The outlets array — its referenced entry's diameter / offset
+      // drives the collar bore + nesting.
+      effectiveGutter ? JSON.stringify(effectiveGutter.outlets) : undefined,
       effectiveSegment?.overhang,
       node.outletId,
-      effectiveSegment,
-      effectiveGutter,
     ],
   )
 
@@ -127,7 +128,6 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
       node.strapSpacing,
       node.terminal,
       routing,
-      node,
     ],
   )
   useEffect(() => () => geometry.dispose(), [geometry])

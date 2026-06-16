@@ -21,15 +21,7 @@ const DoorPreview = ({ node, invalid }: { node: DoorNode; invalid?: boolean }) =
     const m = buildDoorPreviewMesh(node)
     m.layers.set(EDITOR_LAYER)
     return m
-  }, [
-    node.width,
-    node.height,
-    node.frameDepth,
-    node.openingShape,
-    node.doorType,
-    node.leafCount,
-    node,
-  ])
+  }, [node.width, node.height, node.frameDepth, node.openingShape, node.doorType, node.leafCount])
 
   // Ghost treatment (clone + tint + raycast-off) re-applies if `invalid`
   // flips; its cleanup only disposes the clones it made.

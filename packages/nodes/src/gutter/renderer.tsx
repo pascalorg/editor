@@ -156,8 +156,6 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
     effectiveSegment?.pitch,
     effectiveSegment?.roofType,
     mitreNodes,
-    effectiveSegment,
-    node,
   ])
 
   const geometry = useMemo(
@@ -171,10 +169,11 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
       node.endCapRight,
       node.hangerStyle,
       node.hangerSpacing,
+      // Value-compare the outlets array so the CSG drills only rebuild
+      // when an outlet's offset / diameter changes or one is added.
+      JSON.stringify(node.outlets),
       mitres.left,
       mitres.right,
-      node,
-      mitres,
     ],
   )
   useEffect(() => () => geometry.dispose(), [geometry])
