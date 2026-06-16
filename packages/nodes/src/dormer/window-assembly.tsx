@@ -28,6 +28,7 @@ const DormerWindowAssembly = ({
   frameMaterial: THREE.Material
   glassMaterial: THREE.Material
 }) => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const skirtWin = useMemo(
     () => getDormerSkirtWindowDims(node),
     [
@@ -45,6 +46,7 @@ const DormerWindowAssembly = ({
   const winShape: DormerWindowShape = node.windowShape
   const resolvedRadii: [number, number, number, number] = [...node.windowCornerRadii]
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const winGeo = useMemo(
     () =>
       buildDormerWindowGeometries(
@@ -101,6 +103,7 @@ const DormerWindowAssembly = ({
   )
   useEffect(() => () => sillGeo?.dispose(), [sillGeo])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const exposed = useMemo(
     () => getDormerExposedFaces(node, segment),
     [

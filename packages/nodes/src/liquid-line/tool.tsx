@@ -177,6 +177,7 @@ const LiquidLineTool = () => {
   const lastClientYRef = useRef<number | null>(null)
 
   // Clear in-flight draft / trace whenever Follow toggles (panel button or F).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `follow` is an intentional re-run trigger; the body clears the in-flight draft when it toggles.
   useEffect(() => {
     setDraftPoints([])
     setTraceGhost(null)

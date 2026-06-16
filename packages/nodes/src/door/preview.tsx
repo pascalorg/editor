@@ -17,6 +17,7 @@ import type { DoorNode } from './schema'
  * material on SCENE_LAYER would poison the WebGPU MRT pass (project gotcha).
  */
 const DoorPreview = ({ node, invalid }: { node: DoorNode; invalid?: boolean }) => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const mesh = useMemo(() => {
     const m = buildDoorPreviewMesh(node)
     m.layers.set(EDITOR_LAYER)

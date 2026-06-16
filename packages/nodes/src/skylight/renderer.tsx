@@ -652,6 +652,7 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
     node.glassMaterialPreset,
   ])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const surfaceFrame = useMemo(() => {
     if (!segment) return { point: new THREE.Vector3(), normal: new THREE.Vector3(0, 1, 0) }
     return getRoofOuterSurfaceFrameAtPoint(segment, node.position[0] ?? 0, node.position[2] ?? 0)

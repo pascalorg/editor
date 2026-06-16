@@ -26,6 +26,7 @@ const DownspoutPreview = ({
   routing?: DownspoutRouting | null
   invalid?: boolean
 }) => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildDownspoutGeometry(node, routing),
     [

@@ -14,6 +14,7 @@ import type { TurbineVentNode } from './schema'
  * doesn't intercept the cursor ray feeding the placement tool.
  */
 const TurbineVentPreview = ({ node, invalid }: { node: TurbineVentNode; invalid?: boolean }) => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildTurbineVentGeometry(node),
     [node.style, node.diameter, node.height, node.neckHeight, node.vaneCount, node.baseOverhang],

@@ -115,6 +115,7 @@ export default function IfcConverter() {
     return results
   }, [pascalData, searchQuery])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once on mount to load the initial file from the URL.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const requested = params.get('file')
@@ -201,6 +202,7 @@ export default function IfcConverter() {
     }
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stable drop handler; handleFile only calls setState setters, so a mount-time capture stays correct.
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
@@ -234,7 +236,7 @@ export default function IfcConverter() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = fileName.replace('.ifc', '') + '_pascal.json'
+    a.download = `${fileName.replace('.ifc', '')}_pascal.json`
     a.click()
     URL.revokeObjectURL(url)
   }
