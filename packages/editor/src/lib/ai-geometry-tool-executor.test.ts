@@ -208,6 +208,209 @@ describe('AI geometry tool executor', () => {
     expect(opening?.radius).toBeLessThan(shaft?.radiusTop ?? 0)
   })
 
+  test('falls back from invalid river primitives to a curved cyan river with ripples', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        name: 'curved cyan river',
+        geometryBrief: {
+          category: 'natural_environment',
+          requiredRoles: ['riverbed', 'water_surface', 'riverbanks'],
+        },
+        shapes: [
+          { kind: 'lofted_shell', semanticRole: 'water_surface' },
+          { kind: 'extrude', semanticRole: 'riverbed', profile: [] },
+          {
+            kind: 'sweep',
+            semanticRole: 'water_ripple',
+            path: [
+              [-1, 0.05, 0],
+              [1, 0.05, 0.2],
+            ],
+          },
+        ],
+      },
+      { prompt: 'generate a curved cyan river with water ripples' },
+    )
+
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+    const water = result.artifact?.shapes.find((shape) => shape.semanticRole === 'water_surface')
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Created draft assembly')
+    expect(roles.has('riverbed')).toBe(true)
+    expect(roles.has('water_surface')).toBe(true)
+    expect(roles.has('riverbanks')).toBe(true)
+    expect(roles.has('water_ripple')).toBe(true)
+    expect(water?.kind).toBe('rounded-panel')
+    expect(water?.material?.properties?.color).toBe('#00CED1')
+    expect(water?.material?.properties?.transparent).toBe(true)
+  })
+
+  test('creates a river fallback when compose_primitive has no shapes', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      { primaryColor: '#00CED1' },
+      {
+        prompt:
+          '\u751f\u6210\u4e00\u6761\u9752\u8272\u5f2f\u66f2\u5c0f\u6cb3\uff0c\u5e26\u6c34\u7eb9',
+      },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.artifact?.geometryBrief?.category).toBe('natural_environment')
+    expect(result.artifact?.shapes.some((shape) => shape.semanticRole === 'water_ripple')).toBe(
+      true,
+    )
+  })
+
+  test('creates a generic rockery draft when no recipe, assembly, or parts match', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: '\u5047\u5c71',
+        parts: [{ kind: 'rockery', semanticRole: 'rockery' }],
+      },
+      { prompt: '\u751f\u6210\u4e00\u4e2a\u5047\u5c71' },
+    )
+
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Created draft assembly')
+    expect(result.artifact?.geometryBrief?.category).toBe('landscape_rockery')
+    expect(roles.has('rock_mass')).toBe(true)
+    expect(roles.has('rock_layer')).toBe(true)
+    expect(roles.has('support_base')).toBe(true)
+    expect(result.content).not.toContain('No geometry could be created')
+  })
+
+  test('creates a generic editable draft for unsupported long-tail objects', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      { name: 'mystery artifact' },
+      { prompt: 'generate a ceremonial signal glyph' },
+    )
+
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(result.artifact).toBeDefined()
+    expect(result.artifact?.geometryBrief?.category).toBe('generic_object')
+    expect(roles.has('main_body')).toBe(true)
+    expect(roles.has('support_base')).toBe(true)
+    expect(roles.has('detail_accent')).toBe(true)
+    expect(result.content).not.toContain('No geometry could be created')
+  })
+
+  test('reports invalid revised geometry instead of throwing on malformed legacy profiles', () => {
+    const initial = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        shapes: [
+          {
+            kind: 'extrude',
+            name: 'legacy logo strip',
+            semanticRole: 'panel_surface',
+            profile: [
+              [-0.5, -0.1],
+              [0.5, -0.1],
+              [0.5, 0.1],
+              [-0.5, 0.1],
+            ],
+            depth: 0.08,
+          },
+        ],
+      },
+      { prompt: 'legacy logo strip' },
+    )
+    const malformedTarget = {
+      ...initial.artifact,
+      shapes:
+        initial.artifact?.shapes.map((shape) =>
+          shape.semanticRole === 'panel_surface'
+            ? { ...shape, profile: { curve: 'sine' } as unknown as [number, number][] }
+            : shape,
+        ) ?? [],
+    }
+
+    const result = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        operations: [
+          {
+            op: 'transform',
+            selector: { semanticRole: 'panel_surface' },
+            scale: [1.2, 1, 1.2],
+          },
+        ],
+      },
+      {
+        prompt: 'make the logo panel more sinuous',
+        revisionTarget: malformedTarget,
+        revisionOf: malformedTarget.id,
+        revisionVersion: malformedTarget.version,
+      },
+    )
+
+    expect(result.artifact).toBeUndefined()
+    expect(result.content).toContain('Invalid geometry tool call')
+    expect(result.content).toContain('extrude.profile needs at least 3')
+  })
+
+  test('replaces a straight river strip with a curved river fallback on curve revision', () => {
+    const initial = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        name: 'straight cyan river',
+        geometryBrief: {
+          category: 'natural_environment',
+          requiredRoles: ['water_surface'],
+        },
+        shapes: [
+          {
+            kind: 'rounded-panel',
+            name: 'straight cyan river water',
+            semanticRole: 'water_surface',
+            length: 12,
+            width: 1.6,
+            thickness: 0.04,
+            material: { properties: { color: '#00CED1', transparent: true, opacity: 0.7 } },
+          },
+        ],
+      },
+      { prompt: '能不能给做个弯曲的小河，河水是青的，然后带水纹' },
+    )
+
+    const result = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        operations: [
+          {
+            op: 'transform',
+            selector: { semanticRole: 'water_surface' },
+            scale: [1, 1, 1],
+          },
+        ],
+      },
+      {
+        prompt: '让他有曲线。弯弯扭扭的',
+        revisionTarget: initial.artifact,
+        revisionOf: initial.artifact?.id,
+        revisionVersion: initial.artifact?.version,
+      },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Created draft assembly')
+    expect(
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'water_surface').length,
+    ).toBeGreaterThan(1)
+    expect(result.artifact?.shapes.some((shape) => shape.semanticRole === 'water_ripple')).toBe(
+      true,
+    )
+    expect(result.artifact?.shapes.some((shape) => shape.semanticRole === 'riverbanks')).toBe(true)
+  })
+
   test('accepts conformal_strip alias with string fuselage attachment target', () => {
     const result = executeGeometryToolCall(
       'compose_primitive',
@@ -554,7 +757,7 @@ describe('AI geometry tool executor', () => {
         },
         parts: [{ kind: 'vehicle_body', length: 4.4, width: 1.8, height: 1.35 }],
       },
-      { prompt: '鐢熸垚涓€杈嗙孩鑹插皬杞胯溅' },
+      { prompt: '\u751f\u6210\u4e00\u8f86\u7ea2\u8272\u5c0f\u8f7f\u8f66' },
     )
 
     expect(result.artifact).toBeDefined()
@@ -564,6 +767,280 @@ describe('AI geometry tool executor', () => {
     expect(
       result.artifact?.shapes.filter((shape) => shape.semanticRole === 'vehicle_tire'),
     ).toHaveLength(4)
+  })
+
+  test('accepts single car tire required role aliases without requiring a full car', () => {
+    const primitiveResult = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        geometryBrief: {
+          category: 'vehicle component',
+          requiredRoles: ['car_tire'],
+        },
+        shapes: [
+          {
+            kind: 'torus',
+            name: 'single car tire',
+            semanticRole: 'vehicle_tire',
+            position: [0, 0.3, 0],
+            axis: 'z',
+            majorRadius: 0.32,
+            tubeRadius: 0.08,
+          },
+          {
+            kind: 'cylinder',
+            name: 'single car wheel hub',
+            semanticRole: 'wheel_hub',
+            position: [0, 0.3, 0],
+            axis: 'z',
+            radius: 0.16,
+            height: 0.04,
+          },
+        ],
+      },
+      {
+        prompt: '\u751f\u6210\u4e00\u4e2a\u6c7d\u8f66\u8f6e\u80ce',
+        blueprintCategory: 'vehicle component',
+      },
+    )
+
+    expect(primitiveResult.artifact).toBeDefined()
+    expect(primitiveResult.content).toContain('Created draft')
+    expect(primitiveResult.content).not.toContain('required semantic role "car_tire" is missing')
+    expect(primitiveResult.content).not.toContain('vehicle requires exactly 4 tires')
+
+    const partsResult = executeGeometryToolCall(
+      'compose_parts',
+      {
+        geometryBrief: {
+          category: 'vehicle component',
+          requiredRoles: ['car_tire'],
+        },
+        parts: [{ kind: 'wheel', semanticRole: 'car_tire', radius: 0.32, wheelWidth: 0.18 }],
+      },
+      { prompt: 'make a car tire', blueprintCategory: 'vehicle component' },
+    )
+
+    expect(partsResult.artifact).toBeDefined()
+    expect(partsResult.content).toContain('Created draft')
+    expect(partsResult.content).not.toContain('required semantic role "car_tire" is missing')
+    expect(partsResult.content).not.toContain('vehicle requires exactly 4 tires')
+    expect(
+      partsResult.artifact?.shapes.some((shape) => shape.semanticRole === 'vehicle_tire'),
+    ).toBe(true)
+  })
+
+  test('accepts family-qualified single wheel parts without vehicle validation', () => {
+    for (const prompt of ['做个汽车轮子', 'make a car wheel']) {
+      const result = executeGeometryToolCall(
+        'compose_parts',
+        {
+          parts: [{ kind: 'wheel', name: prompt, radius: 0.3, wheelWidth: 0.12 }],
+        },
+        { prompt },
+      )
+
+      expect(result.artifact).toBeDefined()
+      expect(result.content).toContain('Created draft')
+      expect(result.content).not.toContain('vehicle requires')
+      expect(result.content).not.toContain('vehicle visual quality')
+      expect(result.artifact?.shapes.some((shape) => shape.kind === 'torus')).toBe(true)
+      expect(
+        result.artifact?.shapes.some((shape) => shape.name?.toLowerCase().includes('hub')),
+      ).toBe(true)
+    }
+  })
+
+  test('creates one bicycle wheel from singular bicycle wheel intent and count-style required roles', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        geometryBrief: {
+          category: 'bicycle_component',
+          requiredRoles: ['bicycle_tire:1', 'bicycle_rim:1', 'bicycle_hub:1', 'bicycle_spoke:8'],
+        },
+        parts: [
+          {
+            id: 'bicycle_wheel',
+            kind: 'wheel_set',
+            semanticRole: 'bicycle_wheel',
+            radius: 0.35,
+          },
+        ],
+      },
+      {
+        prompt: '生成一个自行车的轮子',
+        blueprintCategory: 'bicycle_component',
+        blueprintRequiredRoles: [
+          'bicycle_tire:1',
+          'bicycle_rim:1',
+          'bicycle_hub:1',
+          'bicycle_spoke:8',
+        ],
+      },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Created draft')
+    expect(result.content).not.toContain('required semantic role "bicycle_tire:1" is missing')
+    expect(result.artifact?.geometryBrief?.requiredRoles).toEqual([
+      'bicycle_tire',
+      'bicycle_rim',
+      'bicycle_hub',
+      'bicycle_spoke',
+    ])
+    expect(
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'bicycle_tire'),
+    ).toHaveLength(1)
+    expect(
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'bicycle_spoke'),
+    ).toHaveLength(8)
+  })
+
+  test('accepts steering wheel primitives as a vehicle-domain component without car validation', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        geometryBrief: {
+          category: 'vehicle',
+          requiredRoles: ['steering_wheel_rim', 'steering_wheel_hub', 'steering_wheel_spoke'],
+        },
+        shapes: [
+          {
+            kind: 'torus',
+            name: 'steering wheel outer rim',
+            axis: 'z',
+            majorRadius: 0.24,
+            tubeRadius: 0.025,
+            position: [0, 0.8, 0],
+          },
+          {
+            kind: 'cylinder',
+            name: 'steering wheel center hub',
+            axis: 'z',
+            radius: 0.06,
+            height: 0.04,
+            position: [0, 0.8, 0],
+          },
+          ...[0, 1, 2].map((index) => ({
+            kind: 'box',
+            name: 'steering wheel spoke',
+            length: 0.34,
+            width: 0.018,
+            height: 0.018,
+            position: [0, 0.8, 0],
+            rotation: [0, 0, (index * Math.PI * 2) / 3],
+          })),
+        ],
+      },
+      { prompt: 'generate a steering wheel' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.artifact?.sourceTool).toBe('compose_primitive')
+    expect(result.content).toContain('Created draft assembly')
+    expect(result.content).not.toContain('vehicle requires')
+    expect(result.content).not.toContain('vehicle visual quality')
+  })
+
+  test('accepts steering wheel primitive aliases emitted by repair turns', () => {
+    const steeringWheelPrimitives = [
+      {
+        id: 'rim',
+        primitive: 'torus',
+        semanticRole: 'wheel_rim',
+        axis: 'y',
+        majorRadius: 0.175,
+        tubeRadius: 0.015,
+        position: [0, 0, 0],
+      },
+      {
+        id: 'hub',
+        kind: 'cylinder',
+        semanticRole: 'center_hub',
+        axis: 'y',
+        radius: 0.06,
+        height: 0.08,
+        position: [0, 0, 0],
+      },
+      ...[0, 1, 2].map((index) => ({
+        id: `spoke_${index}`,
+        kind: 'capsule',
+        semanticRole: 'spoke',
+        axis: 'x',
+        radius: 0.012,
+        height: 0.115,
+        position: [
+          0.0875 * Math.cos((index * Math.PI * 2) / 3),
+          0,
+          0.0875 * Math.sin((index * Math.PI * 2) / 3),
+        ],
+      })),
+    ]
+
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        geometryBrief: '汽车方向盘：圆形轮圈、中心轮毂、三根辐条。',
+        primitives: steeringWheelPrimitives,
+      },
+      {
+        prompt: '生成一个汽车方向盘',
+        blueprintCategory: 'automotive steering wheel',
+        blueprintRequiredRoles: ['wheel_rim', 'center_hub', 'spoke'],
+      },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Created draft assembly')
+    expect(result.content).not.toContain('required semantic role "center_hub" is missing')
+    expect(result.content).not.toContain('required semantic role "spoke" is missing')
+  })
+
+  test('recovers primitive-like compose_parts calls for unsupported single components', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        parts: [
+          {
+            id: 'rim',
+            kind: 'torus',
+            semanticRole: 'wheel_rim',
+            axis: 'y',
+            majorRadius: 0.175,
+            tubeRadius: 0.015,
+            position: [0, 0, 0],
+          },
+          {
+            id: 'hub',
+            kind: 'cylinder',
+            semanticRole: 'center_hub',
+            axis: 'y',
+            radius: 0.06,
+            height: 0.08,
+            position: [0, 0, 0],
+          },
+          {
+            id: 'spoke',
+            kind: 'capsule',
+            semanticRole: 'spoke',
+            axis: 'x',
+            radius: 0.012,
+            height: 0.115,
+            position: [0.0875, 0, 0],
+          },
+        ],
+      },
+      {
+        prompt: '生成一个汽车方向盘',
+        blueprintCategory: 'automotive steering wheel',
+        blueprintRequiredRoles: ['wheel_rim', 'center_hub', 'spoke'],
+      },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Created draft assembly')
+    expect(result.content).not.toContain('No geometry could be created')
   })
 
   test('builds unsupported aircraft from generic parts without vehicle auto-completion', () => {
@@ -865,7 +1342,7 @@ describe('AI geometry tool executor', () => {
         })),
       },
       {
-        prompt: '??????????8?',
+        prompt: 'generate an 8 meter aircraft',
         blueprintCategory: 'aircraft',
         blueprintRequiredRoles: [
           'aircraft_fuselage',
@@ -914,7 +1391,7 @@ describe('AI geometry tool executor', () => {
         ],
       },
       {
-        prompt: '??????????8?',
+        prompt: 'generate an 8 meter aircraft',
         blueprintCategory: 'aircraft',
         blueprintRequiredRoles: [
           'aircraft_fuselage',
@@ -967,7 +1444,10 @@ describe('AI geometry tool executor', () => {
         },
         params: {},
       },
-      { prompt: '娉ユ祮鎼呮媽閮ㄤ欢锛屼竴鏍规潌瀛愶紝涓嬮潰涓夐潰妗ㄥ彾' },
+      {
+        prompt:
+          '\u6ce5\u6d46\u6405\u62cc\u90e8\u4ef6\uff0c\u4e00\u6839\u6746\u5b50\uff0c\u4e0b\u9762\u4e09\u9762\u6868\u53f6',
+      },
     )
 
     expect(result.artifact).toBeDefined()
@@ -1281,7 +1761,7 @@ describe('AI geometry tool executor', () => {
           },
         ],
       },
-      { prompt: '鐢熸垚涓€杈嗙孩鑹插皬杞胯溅' },
+      { prompt: '\u751f\u6210\u4e00\u8f86\u7ea2\u8272\u5c0f\u8f7f\u8f66' },
     )
 
     expect(result.artifact).toBeUndefined()
@@ -1311,7 +1791,7 @@ describe('AI geometry tool executor', () => {
           },
         },
       },
-      { prompt: '鐢熸垚涓€涓柊鐨勬纭嚜琛岃溅妯″瀷' },
+      { prompt: '\u751f\u6210\u4e00\u4e2a\u6b63\u786e\u7684\u81ea\u884c\u8f66\u6a21\u578b' },
     )
 
     expect(result.artifact).toBeDefined()
@@ -1322,6 +1802,285 @@ describe('AI geometry tool executor', () => {
         (shape) => shape.kind === 'sweep' && shape.name?.includes('chain elongated loop'),
       ),
     ).toBe(true)
+  })
+
+  test('accepts LLM-style complete red bicycle calls with invented bicycle aliases', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        geometryBrief:
+          'Complete red bicycle with frame, fork, two wheels, handlebar, seat, crank, chainring, pedals, and chain. Primary color red (#CC0000). Length approximately 2 meters.',
+        parts: [
+          { id: 'frame', kind: 'bicycle_frame', semanticRole: 'frame', dimensions: { length: 2 } },
+          {
+            id: 'fork',
+            kind: 'bicycle_fork',
+            semanticRole: 'fork',
+            connectTo: 'frame',
+            connectPoint: 'head_tube',
+            dimensions: { length: 0.65 },
+          },
+          {
+            id: 'wheel_front',
+            kind: 'bicycle_wheel',
+            semanticRole: 'wheel',
+            axis: 'x',
+            centeredOn: 'fork',
+            connectPoint: 'dropout',
+            dimensions: { radius: 0.35 },
+          },
+          {
+            id: 'wheel_rear',
+            kind: 'bicycle_wheel',
+            semanticRole: 'wheel',
+            axis: 'x',
+            centeredOn: 'frame',
+            connectPoint: 'rear_dropout',
+            dimensions: { radius: 0.35 },
+          },
+          {
+            id: 'handlebar',
+            kind: 'bicycle_handlebar',
+            semanticRole: 'handlebar',
+            connectTo: 'fork',
+            connectPoint: 'steerer',
+          },
+          {
+            id: 'seat',
+            kind: 'bicycle_seat',
+            semanticRole: 'seat',
+            connectTo: 'frame',
+            connectPoint: 'seatpost',
+          },
+          {
+            id: 'crank',
+            kind: 'bicycle_crank',
+            semanticRole: 'crank',
+            connectTo: 'frame',
+            connectPoint: 'bottom_bracket',
+          },
+          {
+            id: 'chainring',
+            kind: 'bicycle_chainring',
+            semanticRole: 'chainring',
+            centeredOn: 'crank',
+          },
+          {
+            id: 'pedals',
+            kind: 'bicycle_pedals',
+            semanticRole: 'pedal',
+            array: { count: 2, axis: 'x', spacing: 0.18 },
+          },
+          {
+            id: 'chain',
+            kind: 'bicycle_chain',
+            semanticRole: 'chain',
+            connectTo: 'chainring',
+            connectPoint: 'sprocket',
+          },
+        ],
+        requiredRoles: [
+          'frame',
+          'fork',
+          'wheel',
+          'handlebar',
+          'seat',
+          'crank',
+          'chainring',
+          'pedal',
+          'chain',
+        ],
+        primaryColor: '#CC0000',
+        length: 2,
+      },
+      {
+        prompt: '生成一辆红色自行车',
+        blueprintCategory: 'complete_bicycle',
+        blueprintRequiredRoles: [
+          'frame',
+          'fork',
+          'wheel_front',
+          'wheel_rear',
+          'handlebar',
+          'seat',
+          'crank',
+          'chainring',
+          'pedals',
+          'chain',
+        ],
+      },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Validation: family=bicycle')
+    expect(result.content).not.toContain('bicycle requires bicycle_frame')
+    expect(result.content).not.toContain('required semantic role "pedal" is missing')
+    expect(
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'bicycle_tire'),
+    ).toHaveLength(2)
+    const bicycleTires = result.artifact?.shapes.filter(
+      (shape) => shape.semanticRole === 'bicycle_tire',
+    )
+    expect(bicycleTires?.every((shape) => shape.axis === 'z')).toBe(true)
+    expect(
+      bicycleTires?.every((shape) => (shape.tubeRadius ?? 1) < (shape.majorRadius ?? 0) * 0.1),
+    ).toBe(true)
+    expect(
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'bicycle_spoke'),
+    ).toHaveLength(16)
+    expect(result.artifact?.shapes.some((shape) => shape.semanticRole === 'chainring')).toBe(true)
+  })
+
+  test('accepts bicycle handlebar and saddle semantic role aliases from repair calls', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        geometryBrief: {
+          category: 'complete_bicycle',
+          requiredRoles: [
+            'bicycle_tire',
+            'bicycle_frame',
+            'bicycle_fork',
+            'bicycle_handlebar',
+            'bicycle_saddle',
+            'chain_drive',
+          ],
+        },
+        parts: [
+          { id: 'wheels', kind: 'bicycle_wheels', semanticRole: 'bicycle_tire' },
+          { id: 'frame', kind: 'bicycle_frame', semanticRole: 'bicycle_frame' },
+          { id: 'fork', kind: 'bicycle_fork', semanticRole: 'bicycle_fork' },
+          { id: 'handlebar', kind: 'bicycle_handlebar', semanticRole: 'bicycle_handlebar' },
+          { id: 'saddle', kind: 'bicycle_seat', semanticRole: 'bicycle_saddle' },
+          { id: 'chain', kind: 'bicycle_chain', semanticRole: 'chain_loop' },
+        ],
+      },
+      {
+        prompt: '\u751f\u6210\u4e00\u8f86\u5b8c\u6574\u7684\u81ea\u884c\u8f66',
+        blueprintCategory: 'complete_bicycle',
+        blueprintRequiredRoles: ['bicycle_handlebar', 'bicycle_saddle', 'chain_drive'],
+      },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Validation: family=bicycle')
+    expect(result.content).not.toContain('bicycle requires handlebar')
+    expect(result.content).not.toContain('bicycle requires saddle')
+    expect(result.content).not.toContain('required semantic role "bicycle_handlebar" is missing')
+    expect(result.content).not.toContain('required semantic role "bicycle_saddle" is missing')
+    expect(result.content).not.toContain('required semantic role "chain_drive" is missing')
+    expect(result.artifact?.shapes.some((shape) => shape.semanticRole === 'handlebar')).toBe(true)
+    expect(result.artifact?.shapes.some((shape) => shape.semanticRole === 'saddle')).toBe(true)
+  })
+
+  test('stabilizes complete bicycle layout when model emits relationship-heavy wheel_set parts', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        route: 'compose_parts',
+        category: 'complete_bicycle',
+        constraints: {
+          length: 1.8,
+          width: 0.5,
+          height: 1,
+          primaryColor: '#2563EB',
+        },
+        length: 1.8,
+        width: 0.5,
+        height: 1,
+        primaryColor: '#2563EB',
+        geometryBrief: {
+          category: 'complete_bicycle',
+          requiredRoles: [
+            'bicycle_tire',
+            'bicycle_frame',
+            'bicycle_fork',
+            'handlebar',
+            'saddle',
+            'chain_loop',
+          ],
+        },
+        parts: [
+          { id: 'rear_wheel', kind: 'wheel_set', semanticRole: 'bicycle_tire', radius: 0.35 },
+          {
+            id: 'front_wheel',
+            kind: 'wheel_set',
+            semanticRole: 'bicycle_tire',
+            alignBeside: 'rear_wheel',
+            side: 'front',
+            radius: 0.35,
+          },
+          {
+            id: 'frame',
+            kind: 'tube_frame',
+            semanticRole: 'bicycle_frame',
+            alignAbove: 'rear_wheel',
+          },
+          {
+            id: 'fork',
+            kind: 'fork',
+            semanticRole: 'bicycle_fork',
+            connectTo: 'frame',
+            connectPoint: 'head_tube',
+          },
+          {
+            id: 'handlebar',
+            kind: 'handlebar',
+            semanticRole: 'handlebar',
+            connectTo: 'fork',
+            connectPoint: 'steerer_top',
+          },
+          {
+            id: 'saddle',
+            kind: 'saddle',
+            semanticRole: 'saddle',
+            connectTo: 'frame',
+            connectPoint: 'seat_tube_top',
+          },
+          { id: 'chain', kind: 'chain_loop', semanticRole: 'chain_loop' },
+        ],
+        requiredRoles: [
+          'bicycle_tire',
+          'bicycle_frame',
+          'bicycle_fork',
+          'handlebar',
+          'saddle',
+          'chain_loop',
+        ],
+      },
+      {
+        prompt: '\u751f\u6210\u4e00\u8f86\u5b8c\u6574\u7684\u81ea\u884c\u8f66',
+        blueprintCategory: 'complete_bicycle',
+      },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Validation: family=bicycle')
+    const tires = result.artifact?.shapes.filter((shape) => shape.semanticRole === 'bicycle_tire')
+    expect(tires).toHaveLength(2)
+    expect(tires?.every((shape) => shape.axis === 'z')).toBe(true)
+    expect(tires?.every((shape) => (shape.tubeRadius ?? 1) < (shape.majorRadius ?? 0) * 0.1)).toBe(
+      true,
+    )
+    expect(
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'bicycle_spoke'),
+    ).toHaveLength(16)
+    expect(tires?.[0]?.majorRadius).toBeCloseTo(0.32)
+    expect(tires?.map((shape) => shape.position?.[0]).sort()).toEqual([
+      -0.5800000000000001, 0.5800000000000001,
+    ])
+    expect(tires?.every((shape) => shape.position?.[1] === 0.32)).toBe(true)
+    const tireTop = (tires?.[0]?.position?.[1] ?? 0) + (tires?.[0]?.majorRadius ?? 0)
+    const topTube = result.artifact?.shapes.find((shape) => shape.name?.includes('top tube'))
+    const handlebar = result.artifact?.shapes.find((shape) =>
+      shape.name?.includes('handlebar crossbar'),
+    )
+    const saddle = result.artifact?.shapes.find((shape) => shape.name?.includes('saddle cushion'))
+    expect(topTube?.position?.[1]).toBeGreaterThan(tireTop + 0.2)
+    expect(handlebar?.position?.[1]).toBeGreaterThan(tireTop + 0.3)
+    expect(saddle?.position?.[1]).toBeGreaterThan(tireTop + 0.28)
+    expect(handlebar?.position?.[2]).toBe(0)
+    expect(saddle?.position?.[2]).toBe(0)
   })
 
   test('accepts valve compose_parts output with strict semantic required roles', () => {
@@ -1370,7 +2129,7 @@ describe('AI geometry tool executor', () => {
         ],
       },
       {
-        prompt: '鐢熸垚涓€鍙扮噧姘旀満',
+        prompt: '\u751f\u6210\u4e00\u53f0\u71c3\u6c14\u673a',
         blueprintCategory: 'gas_engine',
         blueprintRequiredRoles: ['machine_base', 'engine_block', 'flywheel'],
       },
@@ -1726,7 +2485,7 @@ describe('AI geometry tool executor', () => {
         height: 0.9,
         primaryColor: '#f5c842',
       },
-      { prompt: '?????????' },
+      { prompt: '\u751f\u6210\u4e00\u6761\u8f93\u9001\u5e26' },
     )
 
     const frame = result.artifact?.shapes.find((shape) => shape.semanticRole === 'conveyor_frame')
@@ -1939,7 +2698,7 @@ describe('AI geometry tool executor', () => {
       { recipeId: 'mixer.impeller', size: 'default', detail: 'medium' },
       {
         prompt:
-          '娉ユ祮鎼呮媽閮ㄤ欢锛屼竴鏍规潌瀛愶紝涓嬮潰涓夐潰妗ㄥ彾锛屼笁涓〃鍙惰鍚屼竴姘村钩',
+          '\u6ce5\u6d46\u6405\u62cc\u90e8\u4ef6\uff0c\u4e00\u6839\u6746\u5b50\uff0c\u4e0b\u9762\u4e09\u9762\u6868\u53f6\uff0c\u4e09\u4e2a\u6868\u53f6\u8981\u540c\u4e00\u6c34\u5e73',
       },
     )
 
@@ -2093,5 +2852,115 @@ describe('AI geometry tool executor', () => {
     expect(result.artifact).toBeDefined()
     expect(result.content).toContain('Validation: family=vehicle')
     expect(result.content).toContain('vehicle_tire:4')
+  })
+
+  test('executes create intent by deterministic planner args', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        geometryIntent: {
+          action: 'create',
+          scope: 'component',
+          family: 'bicycle',
+          component: 'wheel',
+          quantity: 1,
+          arrangement: 'single',
+        },
+      },
+      { prompt: '生成一个自行车轮子' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'bicycle_tire'),
+    ).toHaveLength(1)
+    expect(
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'bicycle_spoke'),
+    ).toHaveLength(8)
+    expect(result.artifact?.geometryBrief?.requiredRoles).toEqual([
+      'bicycle_tire',
+      'bicycle_rim',
+      'bicycle_hub',
+      'bicycle_spoke',
+    ])
+  })
+
+  test('executes vehicle wheel component intent as one wheel, not a full car wheel set', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        geometryIntent: {
+          action: 'create',
+          scope: 'component',
+          family: 'vehicle',
+          component: 'wheel',
+          quantity: 1,
+          arrangement: 'single',
+        },
+      },
+      { prompt: '生成一个汽车轮子' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'vehicle_tire'),
+    ).toHaveLength(1)
+    expect(
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'wheel_hub'),
+    ).toHaveLength(1)
+    expect(result.artifact?.geometryBrief?.requiredRoles).toEqual(['vehicle_tire', 'wheel_hub'])
+  })
+
+  test('executes revision intent through ArtifactFacts instead of LLM-authored selectors', () => {
+    const created = executeGeometryToolCall(
+      'compose_parts',
+      {
+        geometryBrief: { category: 'bicycle', requiredRoles: ['bicycle_tire'] },
+        parts: [
+          { id: 'bicycle_wheels', kind: 'wheel_set', semanticRole: 'bicycle_tire', count: 2 },
+        ],
+      },
+      { prompt: '生成一个自行车轮子' },
+    )
+
+    const revised = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        revisionIntent: {
+          action: 'revise',
+          target: { kind: 'latest' },
+          subject: { family: 'bicycle', component: 'wheel' },
+          operation: { kind: 'set_count', desiredCount: 1 },
+        },
+      },
+      {
+        prompt: '轮子只要一个，不要两个',
+        revisionTarget: created.artifact,
+        revisionOf: created.artifact?.id,
+        revisionVersion: created.artifact?.version,
+        blueprintRequiredRoles: [
+          'bicycle_tire:1',
+          'bicycle_rim:1',
+          'bicycle_hub:1',
+          'bicycle_spoke:8',
+        ],
+        blueprintCategory: 'bicycle_single_wheel',
+      },
+    )
+
+    expect(revised.content).toContain('Created draft')
+    expect(
+      revised.artifact?.shapes.filter((shape) => shape.semanticRole === 'bicycle_tire'),
+    ).toHaveLength(1)
+    expect(
+      revised.artifact?.shapes.filter((shape) => shape.semanticRole === 'bicycle_rim'),
+    ).toHaveLength(1)
+    expect(
+      revised.artifact?.shapes.filter((shape) => shape.semanticRole === 'bicycle_hub'),
+    ).toHaveLength(1)
+    expect(
+      revised.artifact?.shapes.filter((shape) => shape.semanticRole === 'bicycle_spoke'),
+    ).toHaveLength(8)
+    expect(revised.artifact?.editHistory?.at(-1)?.operations).toHaveLength(11)
   })
 })

@@ -1,6 +1,10 @@
 import { t } from '@pascal-app/editor'
 
-export function pn(key: string, fallback: string, params?: Record<string, string | number>): string {
+export function pn(
+  key: string,
+  fallback: string,
+  params?: Record<string, string | number>,
+): string {
   if (params) {
     return t(`nodes.${key}`, { fallback, params })
   }
@@ -8,9 +12,9 @@ export function pn(key: string, fallback: string, params?: Record<string, string
 }
 
 export const S = {
-  actions: () => pn('common.sections.actions', 'Actions'),
+  actions: () => pn('common.sections.actions', '\u64cd\u4f5c'),
   attachment: () => pn('common.sections.attachment', 'Attachment'),
-  dimensions: () => pn('common.sections.dimensions', 'Dimensions'),
+  dimensions: () => pn('common.sections.dimensions', '\u5c3a\u5bf8'),
   elevation: () => pn('common.sections.elevation', 'Elevation'),
   facing: () => pn('common.sections.facing', 'Facing'),
   fold: () => pn('common.sections.fold', 'Fold'),
@@ -23,13 +27,13 @@ export const S = {
   height: () => pn('common.sections.height', 'Height'),
   heights: () => pn('common.sections.heights', 'Heights'),
   holes: () => pn('common.sections.holes', 'Holes'),
-  info: () => pn('common.sections.info', 'Info'),
+  info: () => pn('common.sections.info', '\u4fe1\u606f'),
   opening: () => pn('common.sections.opening', 'Opening'),
   openingShape: () => pn('common.sections.openingShape', 'Opening Shape'),
-  position: () => pn('common.sections.position', 'Position'),
+  position: () => pn('common.sections.position', '\u4f4d\u7f6e'),
   preset: () => pn('common.sections.preset', 'Preset'),
-  rotation: () => pn('common.sections.rotation', 'Rotation'),
-  scale: () => pn('common.sections.scale', 'Scale'),
+  rotation: () => pn('common.sections.rotation', '\u65cb\u8f6c'),
+  scale: () => pn('common.sections.scale', '\u7f29\u653e'),
   segments: () => pn('common.sections.segments', 'Segments'),
   shape: () => pn('common.sections.shape', 'Shape'),
   sill: () => pn('common.sections.sill', 'Sill'),
@@ -40,7 +44,7 @@ export const S = {
   topShape: () => pn('common.sections.topShape', 'Top Shape'),
   transform: () => pn('common.sections.transform', 'Transform'),
   type: () => pn('common.sections.type', 'Type'),
-  collections: () => pn('common.sections.collections', 'Collections'),
+  collections: () => pn('common.sections.collections', '\u96c6\u5408'),
   contentPadding: () => pn('common.sections.contentPadding', 'Content Padding'),
   footprint: () => pn('common.sections.footprint', 'Footprint'),
   roofType: () => pn('common.sections.roofType', 'Roof Type'),
@@ -57,9 +61,9 @@ export const S = {
 }
 
 export const L = {
-  move: () => pn('common.labels.move', 'Move'),
-  duplicate: () => pn('common.labels.duplicate', 'Duplicate'),
-  delete: () => pn('common.labels.delete', 'Delete'),
+  move: () => pn('common.labels.move', '\u79fb\u52a8'),
+  duplicate: () => pn('common.labels.duplicate', '\u590d\u5236'),
+  delete: () => pn('common.labels.delete', '\u5220\u9664'),
   curve: () => pn('common.labels.curve', 'Curve'),
   width: () => pn('common.labels.width', 'Width'),
   height: () => pn('common.labels.height', 'Height'),
@@ -94,9 +98,9 @@ export const L = {
   sweep: () => pn('common.labels.sweep', 'Sweep'),
   speed: () => pn('common.labels.speed', 'Speed'),
   presets: () => pn('common.labels.presets', 'Presets'),
-  dimensions: () => pn('common.labels.dimensions', 'Dimensions'),
-  uniformScale: () => pn('common.labels.uniformScale', 'Uniform Scale'),
-  manageCollections: () => pn('common.labels.manageCollections', 'Manage collections…'),
+  dimensions: () => pn('common.labels.dimensions', '\u5c3a\u5bf8'),
+  uniformScale: () => pn('common.labels.uniformScale', '\u7b49\u6bd4\u7f29\u653e'),
+  manageCollections: () => pn('common.labels.manageCollections', '\u7ba1\u7406\u96c6\u5408\u2026'),
   addSegment: () => pn('common.labels.addSegment', 'Add Segment'),
   addFlight: () => pn('common.labels.addFlight', 'Add flight'),
   addLanding: () => pn('common.labels.addLanding', 'Add landing'),
@@ -152,10 +156,8 @@ export const L = {
   openingKind: () => pn('common.labels.opening', 'Opening'),
   levelFallback: (level: number) =>
     pn('common.labels.levelFallback', 'Level {level}', { level: level + 1 }),
-  segmentNamed: (index: number) =>
-    pn('common.labels.segmentNamed', 'Segment {index}', { index }),
-  holeNamed: (index: number) =>
-    pn('common.labels.holeNamed', 'Hole {index}', { index }),
+  segmentNamed: (index: number) => pn('common.labels.segmentNamed', 'Segment {index}', { index }),
+  holeNamed: (index: number) => pn('common.labels.holeNamed', 'Hole {index}', { index }),
   holeMeta: (area: string, points: number, source: string) =>
     pn('common.labels.holeMeta', '{area} m² · {points} pts · {source}', { area, points, source }),
 }

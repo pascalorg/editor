@@ -30,6 +30,20 @@ describe('dimension semantics', () => {
     expect(dimensions.height).toBeCloseTo(1.2)
   })
 
+  test('parses modern Chinese numeric and numeral dimensions', () => {
+    expect(
+      parseDimensionSemantics(
+        '\u751f\u6210\u4e00\u4e2a\u6ce2\u97f3717\u5ba2\u673a\uff0c\u957f\u5ea6\u4e94\u7c73',
+      ).length,
+    ).toBeCloseTo(5)
+
+    const dimensions = parseDimensionSemantics('\u957f5\u7c73 \u5bbd\u4e24\u7c73 \u9ad81.2\u7c73')
+
+    expect(dimensions.length).toBeCloseTo(5)
+    expect(dimensions.width).toBeCloseTo(2)
+    expect(dimensions.height).toBeCloseTo(1.2)
+  })
+
   test('maps desk length and width to real table footprint', () => {
     const input = applyDimensionSemanticsToObjectInput(
       { category: 'table' as const },
@@ -56,4 +70,3 @@ describe('dimension semantics', () => {
     expect(input.height).toBeCloseTo(1.6)
   })
 })
-

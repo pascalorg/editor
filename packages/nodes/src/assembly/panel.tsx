@@ -4,26 +4,16 @@ import { type AnyNode, type AnyNodeId, type AssemblyNode, useScene } from '@pasc
 import {
   ActionButton,
   ActionGroup,
-  MetricControl,
   PanelSection,
   PanelWrapper,
-  SliderControl,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { LogOut, Move, Pencil, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
-
-const POSITION_NUDGE = 0.1
-const ROTATION_NUDGE_DEGREES = 45
-const DEG_TO_RAD = Math.PI / 180
-const RAD_TO_DEG = 180 / Math.PI
-
-function rounded(value: number, precision = 2) {
-  const scale = 10 ** precision
-  return Math.round(value * scale) / scale
-}
+import { DataBindingSection } from '../shared/data-binding-section'
+import { TransformPanelSection } from '../shared/transform-panel-section'
 
 export default function AssemblyPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -87,32 +77,8 @@ export default function AssemblyPanel() {
     }
   }, [editingAssemblyId, node, setEditingAssemblyId, setSelection])
 
-  const handleNudgeY = useCallback(
-    (delta: number) => {
-      if (!node) return
-      triggerSFX('sfx:item-rotate')
-      const position = [...node.position] as [number, number, number]
-      position[1] = rounded(position[1] + delta)
-      handleUpdate({ position })
-    },
-    [handleUpdate, node],
-  )
-
-  const handleNudgeRotation = useCallback(
-    (degrees: number) => {
-      if (!node) return
-      triggerSFX('sfx:item-rotate')
-      const rotation = [...node.rotation] as [number, number, number]
-      rotation[1] = rounded(rotation[1] + degrees * DEG_TO_RAD, 4)
-      handleUpdate({ rotation })
-    },
-    [handleUpdate, node],
-  )
-
   if (!(node && node.type === 'assembly' && selectedId && selectedCount === 1)) return null
-
   const isEditingParts = editingAssemblyId === node.id
-  const angleDegrees = Math.round((node.rotation[1] ?? 0) * RAD_TO_DEG)
 
   return (
     <PanelWrapper
@@ -140,45 +106,14 @@ export default function AssemblyPanel() {
           />
         </ActionGroup>
       </PanelSection>
-
-      <PanelSection title="Whole transform">
-        <MetricControl
-          label="Height"
-          max={50}
-          min={-50}
-          onChange={(value) => {
-            const position = [...node.position] as [number, number, number]
-            position[1] = value
-            handleUpdate({ position })
-          }}
-          precision={2}
-          step={0.05}
-          unit="m"
-          value={rounded(node.position[1])}
-        />
-        <div className="flex items-center gap-1.5">
-          <ActionButton label="Down" onClick={() => handleNudgeY(-POSITION_NUDGE)} />
-          <ActionButton label="Up" onClick={() => handleNudgeY(POSITION_NUDGE)} />
-        </div>
-        <SliderControl
-          label="Angle"
-          max={180}
-          min={-180}
-          onChange={(degrees) => {
-            const rotation = [...node.rotation] as [number, number, number]
-            rotation[1] = degrees * DEG_TO_RAD
-            handleUpdate({ rotation })
-          }}
-          precision={0}
-          step={1}
-          unit="°"
-          value={angleDegrees}
-        />
-        <div className="flex items-center gap-1.5">
-          <ActionButton label="-45°" onClick={() => handleNudgeRotation(-ROTATION_NUDGE_DEGREES)} />
-          <ActionButton label="+45°" onClick={() => handleNudgeRotation(ROTATION_NUDGE_DEGREES)} />
-        </div>
-      </PanelSection>
+      <TransformPanelSection
+        node={node}
+        nodeId={selectedId as AnyNode['id']}
+        onUpdate={handleUpdate}
+        rotationAxes={[1]}
+        title="Whole transform"
+      />
+      <DataBindingSection node={node} onUpdate={handleUpdate} />
 
       <PanelSection title="Actions">
         <ActionGroup>

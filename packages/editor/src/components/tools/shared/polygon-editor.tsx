@@ -1,7 +1,13 @@
 import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { createPortal } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BufferGeometry, Float32BufferAttribute, type Line, type Object3D } from 'three'
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  type Line,
+  type Object3D,
+  type Vector3,
+} from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { snapToHalf } from '../item/placement-math'
@@ -41,6 +47,7 @@ export interface PolygonEditorProps {
 const MIN_HANDLE_HEIGHT = 0.15
 const EDGE_HANDLE_HEIGHT = 0.06
 const EDGE_HANDLE_THICKNESS = 0.12
+const EDGE_INSERT_VERTEX_GUARD_RADIUS = 0.3
 
 function getEdgeNormal(start: [number, number], end: [number, number]): [number, number] | null {
   const dx = end[0] - start[0]
@@ -215,6 +222,18 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       }
     },
     [polygon, previewPolygon, updatePreviewPolygon],
+  )
+
+  const getPointerPlanPosition = useCallback(
+    (point: { x: number; z: number; clone?: () => Vector3 }) => {
+      if (levelNode && typeof point.clone === 'function') {
+        const localPoint = levelNode.worldToLocal(point.clone())
+        return [snapToHalf(localPoint.x), snapToHalf(localPoint.z)] as [number, number]
+      }
+
+      return [snapToHalf(point.x), snapToHalf(point.z)] as [number, number]
+    },
+    [levelNode],
   )
 
   // Handle deleting a vertex
@@ -517,6 +536,83 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             </mesh>
           )
         })}
+
+      {!allowEdgeMove &&
+        !dragState &&
+        edgeHandles.map(({ index, length, midpoint, rotationY }) => (
+          <mesh
+            key={`edge-insert-${index}`}
+            layers={EDITOR_LAYER}
+            onClick={(e) => {
+              if (e.button !== 0) return
+              e.stopPropagation()
+            }}
+            onPointerDown={(e) => {
+              if (e.button !== 0) return
+              e.stopPropagation()
+
+              const insertPosition = getPointerPlanPosition(e.point)
+              const nearestVertex = displayPolygon.reduce<{
+                index: number
+                distance: number
+                point: [number, number]
+              } | null>((nearest, point, vertexIndex) => {
+                const distance = Math.hypot(
+                  insertPosition[0] - point[0],
+                  insertPosition[1] - point[1],
+                )
+                if (nearest && nearest.distance <= distance) {
+                  return nearest
+                }
+
+                return { index: vertexIndex, distance, point }
+              }, null)
+
+              if (nearestVertex && nearestVertex.distance <= EDGE_INSERT_VERTEX_GUARD_RADIUS) {
+                setDragState({
+                  isDragging: true,
+                  mode: 'vertex',
+                  vertexIndex: nearestVertex.index,
+                  initialPosition: nearestVertex.point,
+                  initialPolygon: displayPolygon.map(([px, pz]) => [px, pz] as [number, number]),
+                  pointerId: e.pointerId,
+                })
+                setHoveredEdge(null)
+                setHoveredMidpoint(null)
+                return
+              }
+
+              const insertedVertex = handleAddVertex(index, insertPosition)
+              setDragState({
+                isDragging: true,
+                mode: 'vertex',
+                vertexIndex: insertedVertex.vertexIndex,
+                initialPosition: insertPosition,
+                initialPolygon: insertedVertex.polygon,
+                pointerId: e.pointerId,
+              })
+              setHoveredEdge(null)
+              setHoveredMidpoint(null)
+            }}
+            onPointerEnter={(e) => {
+              e.stopPropagation()
+              setHoveredEdge(index)
+            }}
+            onPointerLeave={(e) => {
+              e.stopPropagation()
+              setHoveredEdge(null)
+            }}
+            position={[midpoint[0], edgeHandleY, midpoint[1]]}
+            rotation={[0, rotationY, 0]}
+          >
+            <boxGeometry args={[length, EDGE_HANDLE_HEIGHT, EDGE_HANDLE_THICKNESS]} />
+            <meshStandardMaterial
+              color={hoveredEdge === index ? '#22c55e' : color}
+              opacity={hoveredEdge === index ? 0.24 : 0}
+              transparent
+            />
+          </mesh>
+        ))}
 
       {/* Midpoint handles - smaller green cylinders for adding vertices (hidden while dragging) */}
       {!dragState &&

@@ -9,6 +9,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
+import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { ColumnTool } from './column/column-tool'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
@@ -57,9 +58,15 @@ export const ToolManager: React.FC = () => {
   const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
   const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
   const movingPipeEndpoint = useEditor((state) => state.movingPipeEndpoint)
+  const movingCableTrayEndpoint = useEditor((state) => state.movingCableTrayEndpoint)
+  const movingRoadEndpoint = useEditor((state) => state.movingRoadEndpoint)
+  const movingSteelBeamEndpoint = useEditor((state) => state.movingSteelBeamEndpoint)
   const curvingWall = useEditor((state) => state.curvingWall)
   const curvingFence = useEditor((state) => state.curvingFence)
   const curvingPipe = useEditor((state) => state.curvingPipe)
+  const curvingCableTray = useEditor((state) => state.curvingCableTray)
+  const curvingRoad = useEditor((state) => state.curvingRoad)
+  const curvingSteelBeam = useEditor((state) => state.curvingSteelBeam)
   const editingHole = useEditor((state) => state.editingHole)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
@@ -235,6 +242,42 @@ export const ToolManager: React.FC = () => {
               </Suspense>
             ) : null
           })()}
+        {movingCableTrayEndpoint &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(
+              movingCableTrayEndpoint.cableTray.type,
+              'move-endpoint',
+            )
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance target={movingCableTrayEndpoint} />
+              </Suspense>
+            ) : null
+          })()}
+        {movingRoadEndpoint &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(
+              movingRoadEndpoint.road.type,
+              'move-endpoint',
+            )
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance target={movingRoadEndpoint} />
+              </Suspense>
+            ) : null
+          })()}
+        {movingSteelBeamEndpoint &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(
+              movingSteelBeamEndpoint.steelBeam.type,
+              'move-endpoint',
+            )
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance target={movingSteelBeamEndpoint} />
+              </Suspense>
+            ) : null
+          })()}
         {curvingWall &&
           (() => {
             const Registry = getRegistryAffordanceTool(curvingWall.type, 'curve')
@@ -259,6 +302,33 @@ export const ToolManager: React.FC = () => {
             return RegistryAffordance ? (
               <Suspense fallback={null}>
                 <RegistryAffordance node={curvingPipe} />
+              </Suspense>
+            ) : null
+          })()}
+        {curvingCableTray &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(curvingCableTray.type, 'curve')
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance node={curvingCableTray} />
+              </Suspense>
+            ) : null
+          })()}
+        {curvingRoad &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(curvingRoad.type, 'curve')
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance node={curvingRoad} />
+              </Suspense>
+            ) : null
+          })()}
+        {curvingSteelBeam &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(curvingSteelBeam.type, 'curve')
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance node={curvingSteelBeam} />
               </Suspense>
             ) : null
           })()}
@@ -288,6 +358,7 @@ export const ToolManager: React.FC = () => {
         {!movingNode && BuildToolComponent && tool !== 'column' && tool !== 'elevator' ? (
           <BuildToolComponent />
         ) : null}
+        <OpeningGuides3DLayer />
       </group>
     </>
   )

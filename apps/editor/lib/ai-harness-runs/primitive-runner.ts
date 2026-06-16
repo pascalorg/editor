@@ -1,12 +1,20 @@
 import { callConfiguredAi } from '@/lib/ai-provider'
 import {
+  type AiChatHarnessMessage,
+  buildGeometryAnalysisContext,
+  buildGeometryContextResolverPrompt,
+  buildGeometryHarnessContext,
   buildPrimitiveRepairRetryMessages,
   DEFAULT_PRIMITIVE_REPAIR_STAGNATION_LIMIT,
+  type GeometryContextDecision,
   INITIAL_PRIMITIVE_REPAIR_STAGNATION_STATE,
+  inferCreateIntentFromBlueprint,
+  isLikelyGeometryRevisionRequest,
   nextPrimitiveRepairStagnationState,
   PRIMITIVE_STAGE1_ANALYST_PROMPT,
   PRIMITIVE_STAGE2_GENERATOR_PROMPT,
   type PrimitiveRepairRetryMessage,
+  planGeometryIntent,
   primitiveRepairCallBudget,
 } from '../../../../packages/editor/src/lib/ai-chat-harness'
 import type { GeneratedGeometryArtifact } from '../../../../packages/editor/src/lib/ai-generated-geometry-core'
@@ -49,6 +57,7 @@ type PartBlueprintItem = {
   id: string
   kind: string
   semanticRole?: string
+  count?: number
   alignAbove?: string
   alignBeside?: string
   side?: 'left' | 'right' | 'front' | 'back'
@@ -60,15 +69,40 @@ type PartBlueprintItem = {
   array?: { count: number; axis: 'x' | 'y' | 'z'; spacing: number }
   warningStripes?: boolean
   stripeCount?: number
-  dimensions?: { length?: number; width?: number; height?: number; radius?: number }
+  dimensions?: Record<string, unknown>
 }
 
 type PartBlueprint = {
-  route: 'compose_parts' | 'compose_assembly' | 'compose_recipe' | 'revise_geometry'
+  route:
+    | 'compose_parts'
+    | 'compose_assembly'
+    | 'compose_recipe'
+    | 'compose_primitive'
+    | 'revise_geometry'
   category?: string
-  constraints?: { length?: number; width?: number; height?: number; primaryColor?: string }
+  constraints?: Record<string, unknown>
   parts?: PartBlueprintItem[]
   requiredRoles?: string[]
+}
+
+type PrimitiveRouteMetrics = {
+  route: 'deterministic' | 'stage2_fallback'
+  stage1HasBlueprint: boolean
+  deterministicIntent: boolean
+  deterministicAttempted: boolean
+  deterministicSucceeded: boolean
+  stage2Called: boolean
+  fallbackReason?:
+    | 'no_blueprint'
+    | 'no_deterministic_intent'
+    | 'planner_issues'
+    | 'direct_execution_no_artifact'
+  family?: string
+  component?: string
+  deterministicTool?: string
+  plannerIssues?: string[]
+  stage2ToolCallCount: number
+  repairCallCount: number
 }
 
 const runningRuns = new Set<string>()
@@ -99,7 +133,7 @@ const PRIMITIVE_TOOLS: ComposeTool[] = [
   ),
   tool(
     'compose_parts',
-    'Create one editable object from the reusable building-block library. Prefer this when explicitly selecting parts or when compose_assembly does not support the requested family. Use generic kernels such as chimney_stack, aircraft_fuselage, wheel/wheel_set, window_panel/window_strip, body_shell, tube_frame, fork, light_pair, bar_pair, streamlined_body, lofted_panel, airfoil_blade, pyramid, pipe/flange/bolt parts, and assign semanticRole for context-specific meaning. For complete aircraft/airplanes/airliners, use parts:[{kind:"aircraft_fuselage", id:"aircraft_fuselage"}] with top-level length/primaryColor and let defaults add wings, engines, T-tail, windows, and landing gear; do not hand-place generic airfoil_blade/streamlined_body/wheel_set parts for complete aircraft. For industrial chimneys/smokestacks, use parts:[{kind:"chimney_stack", semanticRole:"chimney_body", height, radius, warningStripes:true}] and do not use vertical_pole/circular_base/cylinder. Use pyramid for square/rectangular pyramids, Egyptian-style pyramids, pointed rooftops, and cone-like shapes with a square base; set truncated:true or topScale to make a flat-top truncated pyramid. Prefer relationship fields over raw coordinates: alignAbove, alignBeside with side, centeredOn, connectTo with connectPoint/childPoint, around with aroundCount/aroundRadius, and array:{count,axis,spacing} for repeated linear parts.',
+    'Create one editable object from the reusable building-block library. Prefer this when explicitly selecting parts or when compose_assembly does not support the requested family. Use generic kernels such as chimney_stack, aircraft_fuselage, wheel/wheel_set, window_panel/window_strip, body_shell, tube_frame, fork, light_pair, bar_pair, streamlined_body, lofted_panel, airfoil_blade, pyramid, pipe/flange/bolt parts, and assign semanticRole for context-specific meaning. For a complete bicycle, use exactly wheel_set semanticRole:"bicycle_tire" count:2 + tube_frame semanticRole:"bicycle_frame" + fork semanticRole:"bicycle_fork" + handlebar + saddle + chain_loop; do not invent bicycle_crank/chainring/pedals part kinds. For complete aircraft/airplanes/airliners, use parts:[{kind:"aircraft_fuselage", id:"aircraft_fuselage"}] with top-level length/primaryColor and let defaults add wings, engines, T-tail, windows, and landing gear; do not hand-place generic airfoil_blade/streamlined_body/wheel_set parts for complete aircraft. For industrial chimneys/smokestacks, use parts:[{kind:"chimney_stack", semanticRole:"chimney_body", height, radius, warningStripes:true}] and do not use vertical_pole/circular_base/cylinder. Use pyramid for square/rectangular pyramids, Egyptian-style pyramids, pointed rooftops, and cone-like shapes with a square base; set truncated:true or topScale to make a flat-top truncated pyramid. Prefer relationship fields over raw coordinates: alignAbove, alignBeside with side, centeredOn, connectTo with connectPoint/childPoint, around with aroundCount/aroundRadius, and array:{count,axis,spacing} for repeated linear parts.',
   ),
   tool(
     'compose_robot_arm',
@@ -107,7 +141,7 @@ const PRIMITIVE_TOOLS: ComposeTool[] = [
   ),
   tool(
     'compose_primitive',
-    'Create one editable primitive object from custom primitive shapes. Use only when templates, recipes, and reusable parts do not cover the requested structure.',
+    'Create one editable primitive object from custom primitive shapes. Use only when templates, recipes, and reusable parts do not cover the requested structure. Pass shapes:[{kind:"torus"|"cylinder"|"box"|"capsule"|...}] and semanticRole on critical shapes; do not use primitives:[...] or kind:"primitive". For car steering wheel / 汽车方向盘 use torus wheel_rim, cylinder center_hub, and 3 spoke shapes.',
   ),
   tool(
     'revise_geometry',
@@ -254,13 +288,103 @@ function parseToolArguments(raw: string): Record<string, unknown> {
   }
 }
 
+const CONTEXT_RESOLVER_SYSTEM_PROMPT = [
+  'You are a context intent resolver for a 3D geometry tool harness.',
+  'Classify whether the current request should edit/regenerate the latest generated artifact, merely keep it as summary context, or ignore it.',
+  'Return strict JSON only. Do not call tools. Do not include markdown.',
+].join('\n')
+
+const CONTEXT_RELATIONSHIPS = new Set([
+  'modify_previous',
+  'regenerate_previous',
+  'different_object',
+  'new_unrelated_object',
+  'ambiguous',
+])
+
+const CONTEXT_POLICIES = new Set(['none', 'summary_only', 'include_full_artifact'])
+
+const CONTEXT_ROUTES = new Set([
+  'revise_geometry',
+  'fresh_replacement',
+  'new_geometry',
+  'model_decide',
+])
+
+function stringMember<T extends string>(value: unknown, allowed: Set<string>, fallback: T): T {
+  return typeof value === 'string' && allowed.has(value) ? (value as T) : fallback
+}
+
+function numberConfidence(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0.5
+}
+
+function normalizeContextDecision(value: unknown): GeometryContextDecision {
+  const record = isRecord(value) ? value : {}
+  const editIntent = isRecord(record.editIntent)
+    ? {
+        type: typeof record.editIntent.type === 'string' ? record.editIntent.type : undefined,
+        target: typeof record.editIntent.target === 'string' ? record.editIntent.target : undefined,
+        dimension:
+          typeof record.editIntent.dimension === 'string' ? record.editIntent.dimension : undefined,
+        strength:
+          typeof record.editIntent.strength === 'string' ? record.editIntent.strength : undefined,
+      }
+    : undefined
+
+  return {
+    relationshipToLatestArtifact: stringMember(
+      record.relationshipToLatestArtifact,
+      CONTEXT_RELATIONSHIPS,
+      'ambiguous',
+    ),
+    contextPolicy: stringMember(record.contextPolicy, CONTEXT_POLICIES, 'summary_only'),
+    recommendedRoute: stringMember(record.recommendedRoute, CONTEXT_ROUTES, 'model_decide'),
+    confidence: numberConfidence(record.confidence),
+    reason: typeof record.reason === 'string' ? record.reason.slice(0, 600) : 'Model decision.',
+    ...(editIntent ? { editIntent } : {}),
+  }
+}
+
+function parseContextDecision(content: string): GeometryContextDecision {
+  const source = normalizeToolArgumentsSource(content || '{}') || '{}'
+  try {
+    return normalizeContextDecision(JSON.parse(source))
+  } catch {
+    const firstObject = extractFirstBalancedJsonObject(source)
+    return normalizeContextDecision(firstObject ? JSON.parse(firstObject) : {})
+  }
+}
+
+function fallbackContextDecision(
+  userPrompt: string,
+  latestArtifact: GeneratedGeometryArtifact | null,
+): GeometryContextDecision {
+  const revision = isLikelyGeometryRevisionRequest(userPrompt, latestArtifact)
+  return {
+    relationshipToLatestArtifact: revision ? 'modify_previous' : 'ambiguous',
+    contextPolicy: revision ? 'include_full_artifact' : latestArtifact ? 'summary_only' : 'none',
+    recommendedRoute: revision ? 'revise_geometry' : 'model_decide',
+    confidence: revision ? 0.65 : 0.35,
+    reason: 'Fallback decision used because context resolver did not return usable JSON.',
+  }
+}
+
 function extractBlueprintFromAnalysis(analysis: string): PartBlueprint | null {
   const match = analysis.match(/```json\s*([\s\S]*?)\s*```/i)
-  if (!match?.[1]) return null
+  const source =
+    match?.[1] ?? extractFirstBalancedJsonObject(normalizeToolArgumentsSource(analysis))
+  if (!source) return null
   try {
-    const parsed = JSON.parse(match[1])
+    const parsed = JSON.parse(source)
     if (!isRecord(parsed) || typeof parsed.route !== 'string') return null
-    if (parsed.route !== 'revise_geometry' && !Array.isArray(parsed.parts)) return null
+    if (
+      parsed.route !== 'revise_geometry' &&
+      !Array.isArray(parsed.parts) &&
+      typeof parsed.category !== 'string'
+    ) {
+      return null
+    }
     return parsed as PartBlueprint
   } catch {
     return null
@@ -340,9 +464,64 @@ function stringFromContext(context: Record<string, unknown>, key: string) {
   return typeof value === 'string' ? value : undefined
 }
 
-function latestArtifactFromContext(context: Record<string, unknown>) {
-  const value = context.latestArtifact
+function latestArtifactFromContext(context: Record<string, unknown>, key = 'latestArtifact') {
+  const value = context[key]
   return isRecord(value) ? (value as unknown as GeneratedGeometryArtifact) : null
+}
+
+function harnessMessagesFromContext(context: Record<string, unknown>): AiChatHarnessMessage[] {
+  const value = context.recentMessages
+  if (!Array.isArray(value)) return []
+  return value.flatMap((message) => {
+    if (!isRecord(message)) return []
+    const role = typeof message.role === 'string' ? message.role : undefined
+    const content = typeof message.content === 'string' ? message.content : undefined
+    if (!role || content == null) return []
+    return [
+      {
+        role,
+        content,
+        isToolResult: message.isToolResult === true,
+        geometryArtifact: isRecord(message.geometryArtifact)
+          ? (message.geometryArtifact as unknown as GeneratedGeometryArtifact)
+          : undefined,
+      },
+    ]
+  })
+}
+
+async function resolveGeometryContextDecision({
+  messages,
+  latestArtifact,
+  userPrompt,
+  signal,
+}: {
+  messages: readonly AiChatHarnessMessage[]
+  latestArtifact: GeneratedGeometryArtifact | null
+  userPrompt: string
+  signal: AbortSignal
+}): Promise<GeometryContextDecision> {
+  if (!latestArtifact) return fallbackContextDecision(userPrompt, latestArtifact)
+  try {
+    const response = await callAi(
+      [
+        { role: 'system', content: CONTEXT_RESOLVER_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: buildGeometryContextResolverPrompt({
+            messages,
+            latestArtifact,
+            userRequest: userPrompt,
+          }),
+        },
+      ],
+      undefined,
+      signal,
+    )
+    return parseContextDecision(response.content ?? '')
+  } catch {
+    return fallbackContextDecision(userPrompt, latestArtifact)
+  }
 }
 
 function executeTool(
@@ -425,10 +604,43 @@ async function runPrimitiveRun(runId: string) {
   try {
     const { signal } = controller
     const context = contextRecord(run.context)
-    const harnessContext = stringFromContext(context, 'harnessContext') ?? run.prompt
-    const analysisContext = stringFromContext(context, 'analysisContext') ?? harnessContext
-    const revisionTarget = latestArtifactFromContext(context)
     const userPrompt = run.prompt
+    const recentMessages = harnessMessagesFromContext(context)
+    const latestArtifactCandidate =
+      latestArtifactFromContext(context, 'latestArtifactCandidate') ??
+      latestArtifactFromContext(context)
+    const contextDecision = await resolveGeometryContextDecision({
+      messages: recentMessages,
+      latestArtifact: latestArtifactCandidate,
+      userPrompt,
+      signal,
+    })
+    const revisionTarget =
+      contextDecision.contextPolicy === 'include_full_artifact' ? latestArtifactCandidate : null
+    const harnessContext =
+      latestArtifactCandidate || recentMessages.length
+        ? buildGeometryHarnessContext({
+            messages: recentMessages,
+            latestArtifact: latestArtifactCandidate,
+            userRequest: userPrompt,
+            contextDecision,
+          })
+        : (stringFromContext(context, 'harnessContext') ?? run.prompt)
+    const analysisContext =
+      latestArtifactCandidate || recentMessages.length
+        ? buildGeometryAnalysisContext({
+            messages: recentMessages,
+            latestArtifact: latestArtifactCandidate,
+            userRequest: userPrompt,
+            contextDecision,
+          })
+        : (stringFromContext(context, 'analysisContext') ?? harnessContext)
+
+    await appendRunEvent(runId, {
+      type: 'message',
+      message: JSON.stringify(contextDecision),
+      data: { stage: 'context-resolver', contextDecision },
+    })
 
     await appendRunEvent(runId, { type: 'progress', message: 'Analyzing geometry request...' })
     const analysisResponse = await callAi(
@@ -444,6 +656,135 @@ async function runPrimitiveRun(runId: string) {
     throwIfAborted(signal)
     await appendRunEvent(runId, { type: 'message', message: analysis, data: { stage: 'analysis' } })
 
+    const routeMetrics: PrimitiveRouteMetrics = {
+      route: 'stage2_fallback',
+      stage1HasBlueprint: Boolean(blueprint),
+      deterministicIntent: false,
+      deterministicAttempted: false,
+      deterministicSucceeded: false,
+      stage2Called: false,
+      fallbackReason: blueprint ? 'no_deterministic_intent' : 'no_blueprint',
+      stage2ToolCallCount: 0,
+      repairCallCount: 0,
+    }
+    const deterministicResults: string[] = []
+    let deterministicLastContent = ''
+    const deterministicCreateIntent = blueprint
+      ? inferCreateIntentFromBlueprint('compose_parts', {}, blueprint, userPrompt)
+      : undefined
+    if (deterministicCreateIntent) {
+      routeMetrics.deterministicIntent = true
+      routeMetrics.fallbackReason = undefined
+      routeMetrics.family = deterministicCreateIntent.family
+      routeMetrics.component = deterministicCreateIntent.component
+      const plan = planGeometryIntent(deterministicCreateIntent, { revisionTarget })
+      routeMetrics.deterministicTool = plan.tool
+      routeMetrics.plannerIssues = plan.issues
+      deterministicLastContent = `Deterministic geometry intent planned ${plan.tool}.`
+      await appendRunEvent(runId, {
+        type: 'message',
+        message: deterministicLastContent,
+        data: {
+          stage: 'deterministic-plan',
+          intent: deterministicCreateIntent,
+          tool: plan.tool,
+          issues: plan.issues,
+          metadata: plan.action === 'create' ? plan.metadata : undefined,
+        },
+      })
+
+      if (plan.issues.length === 0) {
+        routeMetrics.deterministicAttempted = true
+        const plannedArgs = {
+          ...plan.args,
+          geometryIntent: deterministicCreateIntent,
+        }
+        await appendRunEvent(runId, {
+          type: 'tool-call',
+          message: plan.tool,
+          data: {
+            name: plan.tool,
+            arguments: plannedArgs,
+            deterministic: true,
+          },
+        })
+        throwIfAborted(signal)
+        const directResult = executeTool(
+          plan.tool,
+          plannedArgs,
+          userPrompt,
+          revisionTarget,
+          blueprint,
+        )
+        deterministicResults.push(directResult.content)
+        await appendRunEvent(runId, {
+          type: 'tool-result',
+          message: directResult.content,
+          data: {
+            name: plan.tool,
+            artifact: directResult.artifact,
+            deterministic: true,
+          },
+        })
+        await appendRunEvent(runId, {
+          type: 'progress',
+          message: directResult.content,
+          data: {
+            stage: 'generate',
+            route: 'deterministic-intent',
+            results: deterministicResults,
+            artifact: directResult.artifact,
+          },
+        })
+
+        if (directResult.artifact) {
+          routeMetrics.route = 'deterministic'
+          routeMetrics.deterministicSucceeded = true
+          if (await shouldStopRun(runId, signal)) return
+          const result = {
+            contextDecision,
+            analysis,
+            results: deterministicResults,
+            lastContent: deterministicLastContent,
+            artifact: directResult.artifact,
+            metrics: { primitiveRoute: routeMetrics },
+          }
+          await appendRunEvent(runId, {
+            type: 'message',
+            message: 'Primitive route metrics',
+            data: { stage: 'route-metrics', primitiveRoute: routeMetrics },
+          })
+          await appendRunEvent(runId, { type: 'result', data: result })
+          await updateRun(runId, {
+            status: 'succeeded',
+            completedAt: new Date().toISOString(),
+            result,
+          })
+          await appendRunEvent(runId, {
+            type: 'status',
+            message: 'succeeded',
+            data: { status: 'succeeded' },
+          })
+          return
+        }
+        routeMetrics.fallbackReason = 'direct_execution_no_artifact'
+      } else {
+        routeMetrics.fallbackReason = 'planner_issues'
+        deterministicResults.push(
+          [
+            'Deterministic geometry intent could not be planned; falling back to Stage2 generator.',
+            ...plan.issues.map((issue) => `- ${issue}`),
+          ].join('\n'),
+        )
+      }
+    }
+
+    routeMetrics.stage2Called = true
+    await appendRunEvent(runId, {
+      type: 'message',
+      message: 'Primitive route metrics',
+      data: { stage: 'route-metrics', primitiveRoute: routeMetrics },
+    })
     await appendRunEvent(runId, { type: 'progress', message: 'Generating editable geometry...' })
     const baseGenMessages: TextApiMessage[] = [
       { role: 'system', content: PRIMITIVE_STAGE2_GENERATOR_PROMPT },
@@ -507,8 +848,8 @@ async function runPrimitiveRun(runId: string) {
 
     let response = await callAi(genMessages, PRIMITIVE_TOOLS, signal)
     let artifact: GeneratedGeometryArtifact | undefined
-    let lastContent = response.content ?? ''
-    const results: string[] = []
+    let lastContent = response.content ?? deterministicLastContent
+    const results: string[] = [...deterministicResults]
     const repairCallBudget = primitiveRepairCallBudget({
       userPrompt,
       harnessContext,
@@ -521,6 +862,7 @@ async function runPrimitiveRun(runId: string) {
       throwIfAborted(signal)
       const toolCalls = response.tool_calls ?? []
       if (toolCalls.length === 0) break
+      routeMetrics.stage2ToolCallCount += toolCalls.length
 
       const toolResultMessages: ApiMessage[] = []
       const selectedGeometryCall = chooseGeometryToolCall(toolCalls)
@@ -551,6 +893,13 @@ async function runPrimitiveRun(runId: string) {
             results.push(result)
             continue
           }
+          const geometryIntent = inferCreateIntentFromBlueprint(
+            call.function.name,
+            args,
+            blueprint,
+            userPrompt,
+          )
+          if (geometryIntent) args.geometryIntent = geometryIntent
           await appendRunEvent(runId, {
             type: 'tool-call',
             message: call.function.name,
@@ -597,6 +946,7 @@ async function runPrimitiveRun(runId: string) {
         )
         break
       }
+      routeMetrics.repairCallCount = repairCallNumber
 
       const failureResults = toolResultMessages.map((message) => String(message.content))
       stagnationState = nextPrimitiveRepairStagnationState(stagnationState, failureResults)
@@ -625,8 +975,37 @@ async function runPrimitiveRun(runId: string) {
     }
 
     if (await shouldStopRun(runId, signal)) return
-    const result = { analysis, results, lastContent, artifact }
+    const result = {
+      contextDecision,
+      analysis,
+      results,
+      lastContent,
+      artifact,
+      metrics: { primitiveRoute: routeMetrics },
+    }
+    await appendRunEvent(runId, {
+      type: 'message',
+      message: 'Primitive route metrics',
+      data: { stage: 'route-metrics', primitiveRoute: routeMetrics },
+    })
     await appendRunEvent(runId, { type: 'result', data: result })
+    if (!artifact) {
+      const message =
+        results.at(-1) ??
+        'Geometry generation completed without creating an editable geometry artifact.'
+      await updateRun(runId, {
+        status: 'failed',
+        completedAt: new Date().toISOString(),
+        error: message,
+        result,
+      })
+      await appendRunEvent(runId, {
+        type: 'status',
+        message: 'failed',
+        data: { status: 'failed' },
+      })
+      return
+    }
     await updateRun(runId, {
       status: 'succeeded',
       completedAt: new Date().toISOString(),

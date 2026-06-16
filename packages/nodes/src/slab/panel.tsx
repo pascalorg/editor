@@ -13,7 +13,7 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect } from 'react'
 import { L, N, S, slabL } from '../i18n/panel-labels'
 
 /**
@@ -37,12 +37,6 @@ export function SlabPanel() {
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as SlabNode | undefined) : undefined,
   )
-
-  // See "Panel slider-drag fix recipe" in plans/editor-node-registry.md.
-  // Stable handler refs across re-renders so slider drags don't trigger
-  // a Maximum update depth cascade on the panel's SliderControls.
-  const nodeRef = useRef(node)
-  nodeRef.current = node
 
   const handleUpdate = useCallback(
     (updates: Partial<SlabNode>) => {
@@ -151,6 +145,11 @@ export function SlabPanel() {
   }
 
   const area = calculateArea(node.polygon)
+  const lowerByStep = () => {
+    handleUpdate({
+      elevation: Math.max(-1, Math.round(((node.elevation ?? 0.05) - 0.15) * 1000) / 1000),
+    })
+  }
 
   return (
     <PanelWrapper
@@ -172,7 +171,7 @@ export function SlabPanel() {
         />
 
         <div className="mt-2 grid grid-cols-2 gap-1.5 px-1 pb-1">
-          <ActionButton label={slabL.sunken()} onClick={() => handleUpdate({ elevation: -0.15 })} />
+          <ActionButton label={slabL.sunken()} onClick={lowerByStep} />
           <ActionButton label={slabL.ground()} onClick={() => handleUpdate({ elevation: 0 })} />
           <ActionButton label={slabL.raised()} onClick={() => handleUpdate({ elevation: 0.05 })} />
           <ActionButton label={slabL.step()} onClick={() => handleUpdate({ elevation: 0.15 })} />

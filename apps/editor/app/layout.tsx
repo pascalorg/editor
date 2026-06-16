@@ -16,11 +16,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html
-      className={`${geistMono.variable} ${GeistPixelSquare.variable}`}
-      lang="zh-CN"
-    >
-      <body className="font-sans">
+    <html className={`${geistMono.variable} ${GeistPixelSquare.variable}`} lang="zh-CN">
+      <body className="font-sans" suppressHydrationWarning>
         <ClientBootstrap>{children}</ClientBootstrap>
         {process.env.NODE_ENV === 'development' &&
           process.env.NEXT_PUBLIC_ENABLE_AGENTATION === 'true' && <Agentation />}

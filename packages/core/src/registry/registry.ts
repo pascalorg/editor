@@ -85,6 +85,29 @@ export function isRegistrySelectable(kind: string): boolean {
   return nodeRegistry.get(kind)?.capabilities.selectable !== undefined
 }
 
+/**
+ * Whether the kind can be moved in the editor by any registered path.
+ * Includes 2D-only floorplan movers as well as 3D-mounted move tools.
+ */
+export function isRegistryMovable(kind: string): boolean {
+  const def = nodeRegistry.get(kind)
+  if (!def) return false
+  if (def.capabilities.movable !== undefined) return true
+  if (def.floorplanMoveTarget !== undefined) return true
+  if (def.affordanceTools?.move !== undefined) return true
+  return false
+}
+
+/**
+ * Whether the kind has a move path that mounts in the 3D viewport.
+ * This gates Ctrl/Meta direct move and press-drag move handles.
+ */
+export function hasRegistry3DMoveTool(kind: string): boolean {
+  const def = nodeRegistry.get(kind)
+  if (!def) return false
+  return def.capabilities.movable !== undefined || def.affordanceTools?.move !== undefined
+}
+
 export async function loadPlugin(plugin: Plugin): Promise<void> {
   if (plugin.apiVersion !== HOST_API_VERSION) {
     throw new Error(

@@ -18,8 +18,8 @@ import {
   buildGeometryAnalysisContext,
   buildGeometryHarnessContext,
   buildPrimitiveRepairStopMessage,
-  isLikelyGeometryRevisionRequest,
   latestGeneratedGeometryArtifact,
+  type GeometryContextDecision,
 } from '../../../../../lib/ai-chat-harness'
 import {
   clampD,
@@ -190,7 +190,7 @@ const COMPOSE_PRIMITIVE_TOOL = {
                 type: 'string',
                 enum: ['x', 'y', 'z'],
                 description:
-                  'Primary axis. For cylinder/hollow-cylinder/cone/frustum/capsule/half-cylinder/hemisphere it is the length/dome-up axis. For torus it is the ring normal/axle axis. "y"=vertical, "x"=left-right, "z"=front-back. Vehicle wheels should use torus or cylinder with axis="x".',
+                  'Primary axis. For cylinder/hollow-cylinder/cone/frustum/capsule/half-cylinder/hemisphere it is the length/dome-up axis. For torus it is the ring normal/axle axis. "y"=vertical, "x"=left-right, "z"=front-back. Bicycle/vehicle wheel_set tires use axis="z" so the wheel disk is vertical in the X/Y plane.',
               },
               radialSegments: {
                 type: 'number',
@@ -548,7 +548,7 @@ const COMPOSE_PARTS_TOOL = {
         parts: {
           type: 'array',
           description:
-            'Reusable parts to procedurally expand into primitives. For a standing fan use circular_base + vertical_pole + support_bracket + motor_housing + radial_blades + protective_grill + optional control_knob. For shaft + hub + propeller/impeller/mud-mixer blades use cylinder-like support parts plus propeller_blade_set; do not create a new recipe. For chimneys/smokestacks use chimney_stack with height/radius and warningStripes:true for red-white bands. For desks with visible drawers use desk_top + leg_set + drawer_stack. For electrical/control cabinets use electrical_cabinet + cable_tray + nameplate/warning details. For pipe systems use pipe_run + pipe_elbow + flange_ring/valve_body. For a bicycle use wheel_set count:2 semanticRole:bicycle_tire + tube_frame semanticRole:bicycle_frame + fork semanticRole:bicycle_fork + handlebar + saddle + chain_loop; legacy bicycle_wheels/bicycle_frame/bicycle_fork aliases remain accepted. For a car use body_shell semanticRole:vehicle_body + wheel_set count:4 semanticRole:vehicle_tire + window_strip semanticRole:vehicle_window variant:vehicle_glasshouse + light_pair + bar_pair; legacy vehicle_* aliases remain accepted. For complete aircraft/airplanes/airliners, use one aircraft_fuselage part with top-level length/primaryColor and let defaults add wings, engines, T-tail, windows, and landing gear; do not hand-place generic airfoil_blade/streamlined_body/wheel_set parts for complete aircraft. For a water pump / centrifugal blower use skid_base + ribbed_motor_body or rounded_machine_body + volute_casing + inlet_port + outlet_port + flange_ring + optional impeller_blades + control_box. For conveyors use conveyor_frame + roller_array + belt_surface. For tanks use cylindrical_tank plus pipe/flange details. For valves use valve_body plus optional handwheel; set valveStyle/handleStyle for variants such as ball valves instead of inventing internal parts. For factory scenes use gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, platform_ladder, electrical_cabinet, cable_tray, pipe_run, and pipe_elbow.',
+            'Reusable parts to procedurally expand into primitives. Complete family objects and family components are different intents: car steering wheel, car wheel, aircraft wing, pump impeller, and fan blade are single-component requests, not parent assemblies. If no dedicated part kind exists for a component, build it from generic compose_primitive shapes instead of inventing a parent family. For a standing fan use circular_base + vertical_pole + support_bracket + motor_housing + radial_blades + protective_grill + optional control_knob. For shaft + hub + propeller/impeller/mud-mixer blades use cylinder-like support parts plus propeller_blade_set; do not create a new recipe. For chimneys/smokestacks use chimney_stack with height/radius and warningStripes:true for red-white bands. For desks with visible drawers use desk_top + leg_set + drawer_stack. For electrical/control cabinets use electrical_cabinet + cable_tray + nameplate/warning details. For pipe systems use pipe_run + pipe_elbow + flange_ring/valve_body. For a complete bicycle use wheel_set semanticRole:bicycle_tire count:2 + tube_frame semanticRole:bicycle_frame + fork semanticRole:bicycle_fork + handlebar + saddle + chain_loop; do not invent bicycle_crank/chainring/pedals part kinds. For a complete car use body_shell semanticRole:vehicle_body + wheel_set count:4 semanticRole:vehicle_tire + window_strip semanticRole:vehicle_window variant:vehicle_glasshouse + light_pair + bar_pair; legacy vehicle_* aliases remain accepted. For complete aircraft/airplanes/airliners, use one aircraft_fuselage part with top-level length/primaryColor and let defaults add wings, engines, T-tail, windows, and landing gear; do not hand-place generic airfoil_blade/streamlined_body/wheel_set parts for complete aircraft. For a water pump / centrifugal blower use skid_base + ribbed_motor_body or rounded_machine_body + volute_casing + inlet_port + outlet_port + flange_ring + optional impeller_blades + control_box. For conveyors use conveyor_frame + roller_array + belt_surface. For tanks use cylindrical_tank plus pipe/flange details. For valves use valve_body plus optional handwheel; set valveStyle/handleStyle for variants such as ball valves instead of inventing internal parts. For factory scenes use gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, platform_ladder, electrical_cabinet, cable_tray, pipe_run, and pipe_elbow.',
           items: {
             type: 'object',
             properties: {
@@ -2277,7 +2277,7 @@ function GeneratedModelCard({
           </div>
         </div>
       }
-      hint={'??????????????????????????????????????????'}
+      hint={'\u4fdd\u5b58\u5230\u8d44\u6599\u5e93\u540e\uff0c\u53ef\u4ee5\u5728\u51e0\u4f55\u642d\u5efa\u4e2d\u91cd\u590d\u4f7f\u7528\u8fd9\u4e2a\u6a21\u578b'}
       meta={`${toolLabel} \u00b7 ${artifact.asset.category ?? 'equipment'}`}
       preview={<GeneratedModelPreview artifact={artifact} />}
       status={getModelArtifactStatus(artifact)}
@@ -2590,7 +2590,7 @@ export function AiChatPanel() {
   }, [])
 
   const handlePlaceGeometryArtifact = useCallback((artifact: GeneratedGeometryArtifact) => {
-    const result = placeGeneratedGeometryArtifact(artifact)
+    const result = placeGeneratedGeometryArtifact(artifact, { startPlacement: true })
     if (result.nodeIds.length === 0) {
       setMessages((prev) => [
         ...prev,
@@ -3464,8 +3464,8 @@ export function AiChatPanel() {
               currentRun && typeof currentRun.error === 'string'
                 ? currentRun.error
                 : status === 'cancelled'
-                  ? '??????'
-                  : '??????????'
+                  ? '???'
+                  : '\u751f\u6210\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5'
             setMessages((prev) =>
               prev.map((messageItem) =>
                 messageItem.generationRun?.id === run.id
@@ -3715,12 +3715,12 @@ export function AiChatPanel() {
         ...prev,
         {
           role: 'assistant',
-          content: asset.id ? `????????${asset.id}` : '????????',
+          content: asset.id ? `\u5df2\u4fdd\u5b58\u5230\u8d44\u6599\u5e93\uff1a${asset.id}` : '\u5df2\u4fdd\u5b58\u5230\u8d44\u6599\u5e93',
         },
       ])
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      setMessages((prev) => [...prev, { role: 'assistant', content: `?????????${message}` }])
+      setMessages((prev) => [...prev, { role: 'assistant', content: `\u4fdd\u5b58\u5931\u8d25\uff1a${message}` }])
     }
   }, [exportArticraftAsset, updateArticraftResult])
 
@@ -3887,9 +3887,9 @@ export function AiChatPanel() {
     activeAbortControllerRef.current = controller
     setInput('')
     setImageAttachment(undefined)
-    const prompt = text.trim() || '?????????????? 3D ???'
+    const prompt = text.trim() || '\u8bf7\u6839\u636e\u56fe\u7247\u751f\u6210\u4e00\u4e2a\u53ef\u52a8\u7684\u00203D\u0020\u6a21\u578b'
     const userMsg: ChatMessage = { role: 'user', content: prompt, image }
-    const progressHeader = t('aiChat.articraftGenerating', '???? Articraft ??...')
+    const progressHeader = t('aiChat.articraftGenerating', '\u6b63\u5728\u751f\u6210\u0020Articraft\u0020\u6a21\u578b...')
     const progressMsg: ChatMessage = {
       role: 'assistant',
       content: progressHeader,
@@ -3925,7 +3925,7 @@ export function AiChatPanel() {
         if (lastIdx >= 0 && updated[lastIdx]?.role === 'assistant') {
           updated[lastIdx] = {
             ...updated[lastIdx]!,
-            content: formatArticraftProgressMessage(progressHeader, ['????????????????...']),
+            content: formatArticraftProgressMessage(progressHeader, ['\u4efb\u52a1\u5df2\u63d0\u4ea4\uff0c\u6b63\u5728\u6392\u961f...']),
             generationRun: { id: runId, mode: 'articraft', status: 'queued' },
           }
         }
@@ -4185,21 +4185,26 @@ export function AiChatPanel() {
     if (latestGeometryArtifactCandidate) {
       latestGeometryArtifactRef.current = latestGeometryArtifactCandidate
     }
-    const latestGeometryArtifact = isLikelyGeometryRevisionRequest(
-      userContent,
-      latestGeometryArtifactCandidate,
-    )
-      ? latestGeometryArtifactCandidate
+    const preliminaryContextDecision: GeometryContextDecision | null = latestGeometryArtifactCandidate
+      ? {
+          relationshipToLatestArtifact: 'ambiguous',
+          contextPolicy: 'summary_only',
+          recommendedRoute: 'model_decide',
+          confidence: 0,
+          reason: 'Preliminary client context; server-side context resolver makes the final decision.',
+        }
       : null
     const modelUserContent = buildGeometryHarnessContext({
       messages,
-      latestArtifact: latestGeometryArtifact,
+      latestArtifact: latestGeometryArtifactCandidate,
       userRequest: userContent,
+      contextDecision: preliminaryContextDecision,
     })
     const analysisContext = buildGeometryAnalysisContext({
       messages,
-      latestArtifact: latestGeometryArtifact,
+      latestArtifact: latestGeometryArtifactCandidate,
       userRequest: userContent,
+      contextDecision: preliminaryContextDecision,
     })
     const userMsg: ChatMessage = { role: 'user', content: userContent }
     const progressMsg: ChatMessage = {
@@ -4220,7 +4225,8 @@ export function AiChatPanel() {
           context: {
             analysisContext,
             harnessContext: modelUserContent,
-            latestArtifact: latestGeometryArtifact,
+            latestArtifact: null,
+            latestArtifactCandidate: latestGeometryArtifactCandidate,
             recentMessages: messages,
           },
         }),
@@ -4294,8 +4300,8 @@ export function AiChatPanel() {
     generationMode === 'primitive'
       ? '\u63cf\u8ff0\u8981\u642d\u5efa\u7684\u51e0\u4f55\u4f53...'
       : generationMode === 'image-to-3d'
-        ? '????????????...'
-        : '?????????????...'
+        ? '\u4e0a\u4f20\u56fe\u7247\u5e76\u63cf\u8ff0\u6a21\u578b...'
+        : '\u63cf\u8ff0\u8981\u751f\u6210\u7684\u53ef\u52a8\u6a21\u578b...'
   const latestVisibleGeometryArtifactId = [...messages]
     .reverse()
     .find((message) => message.geometryArtifact && !message.geometryArtifact.supersededBy)

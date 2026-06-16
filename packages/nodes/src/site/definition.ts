@@ -29,6 +29,7 @@ export const siteDefinition: NodeDefinition<typeof SiteNode> = {
   },
 
   parametrics: siteParametrics,
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',

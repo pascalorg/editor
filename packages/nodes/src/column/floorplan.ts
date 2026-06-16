@@ -111,7 +111,8 @@ function getColumnPlanFootprint(column: ColumnNode): PlanPoint[] {
     column.supportStyle === 'tripod' ||
     column.supportStyle === 'trestle' ||
     column.supportStyle === 'portal-frame' ||
-    column.supportStyle === 'box-frame'
+    column.supportStyle === 'box-frame' ||
+    column.supportStyle === 'pipe-saddle'
   ) {
     const width = Math.max(
       column.supportStyle === 'a-frame' ||
@@ -121,7 +122,8 @@ function getColumnPlanFootprint(column: ColumnNode): PlanPoint[] {
         column.supportStyle === 'tripod' ||
         column.supportStyle === 'trestle' ||
         column.supportStyle === 'portal-frame' ||
-        column.supportStyle === 'box-frame'
+        column.supportStyle === 'box-frame' ||
+        column.supportStyle === 'pipe-saddle'
         ? (column.braceBottomSpread ?? 1.2)
         : 0,
       column.braceTopSpread ??
@@ -133,7 +135,8 @@ function getColumnPlanFootprint(column: ColumnNode): PlanPoint[] {
         column.supportStyle === 'tripod' ||
         column.supportStyle === 'trestle' ||
         column.supportStyle === 'portal-frame' ||
-        column.supportStyle === 'box-frame'
+        column.supportStyle === 'box-frame' ||
+        column.supportStyle === 'pipe-saddle'
           ? 1
           : 0),
       (column.braceWidth ?? column.width) * 2,
@@ -141,7 +144,8 @@ function getColumnPlanFootprint(column: ColumnNode): PlanPoint[] {
     const depth = Math.max(
       column.supportStyle === 'tripod' ||
         column.supportStyle === 'trestle' ||
-        column.supportStyle === 'box-frame'
+        column.supportStyle === 'box-frame' ||
+        column.supportStyle === 'pipe-saddle'
         ? (column.braceTopSpread ?? 1)
         : 0,
       column.braceDepth ?? column.depth,

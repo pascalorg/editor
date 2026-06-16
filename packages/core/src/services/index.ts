@@ -1,4 +1,27 @@
 export {
+  type AlignmentAnchor,
+  type AlignmentGuide,
+  type AlignmentGuideAxis,
+  type AnchorKind,
+  bboxAnchors,
+  bboxCornerAnchors,
+  type ResolveAlignmentInput,
+  type ResolveAlignmentResult,
+  resolveAlignment,
+} from './alignment'
+export {
+  collectAlignmentAnchors,
+  type FootprintAABB,
+  footprintAABB,
+  footprintAABBAt,
+  footprintAABBFrom,
+  movingAlignmentAnchors,
+  movingFootprintAnchors,
+  nodeAlignmentAnchors,
+  polygonAnchors,
+  wallSegmentAnchors,
+} from './alignment-anchors'
+export {
   createDragSession,
   type DragSession,
   type DragSessionInput,
@@ -23,6 +46,26 @@ export {
   moveToward,
   resolveMovable,
 } from './movement'
+export {
+  type AlongWallAlignment,
+  type AlongWallFeature,
+  computeEdgeGaps,
+  computeOpeningGuides,
+  DEFAULT_OPENING_GUIDE_TOLERANCES,
+  detectAlongWallAlignment,
+  detectEqualSpacing,
+  detectVerticalAlignment,
+  type EdgeGap,
+  type EqualSpacingRun,
+  type OpeningGuideInput,
+  type OpeningGuides,
+  type OpeningGuideTolerances,
+  type OpeningSpan,
+  type SillHeadGuide,
+  type VerticalAlignment,
+  type VerticalFeature,
+  type WallExtent,
+} from './opening-guides'
 export {
   DEFAULT_ANGLE_STEP,
   DEFAULT_GRID_STEP,

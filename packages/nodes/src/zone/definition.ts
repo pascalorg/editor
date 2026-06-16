@@ -33,6 +33,7 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   },
 
   parametrics: zoneParametrics,
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',

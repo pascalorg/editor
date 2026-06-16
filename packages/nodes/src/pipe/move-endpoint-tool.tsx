@@ -1,6 +1,6 @@
 'use client'
 
-import { type PipeNode, getPipeEndpoint3D, useScene } from '@pascal-app/core'
+import { getPipeEndpoint3D, type PipeNode, useScene } from '@pascal-app/core'
 import {
   CursorSphere,
   type MovingPipeEndpoint,
@@ -33,6 +33,7 @@ export const MovePipeEndpointTool: React.FC<{ target: MovingPipeEndpoint }> = ({
   useDragAction({
     active: true,
     action: movePipeEndpointDragAction,
+    activationGraceMs: 0,
     initial: {
       node: target.pipe,
       handleId: endpoint,

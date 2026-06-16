@@ -1,4 +1,5 @@
 import type {
+  PrimitiveEditableHints,
   PrimitiveGeometryBrief,
   PrimitiveMaterialInput,
   PrimitiveRevisionOperation,
@@ -16,6 +17,7 @@ export interface GeneratedGeometryShapeSpec {
   semanticGroup?: string
   sourcePartKind?: string
   sourcePartId?: string
+  editableHints?: PrimitiveEditableHints
   length?: number
   width?: number
   height?: number
@@ -31,6 +33,15 @@ export interface GeneratedGeometryShapeSpec {
   widthSegments?: number
   heightSegments?: number
   wallThickness?: number
+  surface?: string
+  side?: string
+  xStart?: number
+  xEnd?: number
+  verticalOffset?: number
+  surfaceRadiusY?: number
+  surfaceRadiusZ?: number
+  surfaceLength?: number
+  endTaper?: number
   radiusTop?: number
   radiusBottom?: number
   majorRadius?: number
@@ -52,7 +63,7 @@ export interface GeneratedGeometryShapeSpec {
   closed?: boolean
   material?: PrimitiveMaterialInput
   materialPreset?: string
-  attachTo?: number
+  attachTo?: number | string
   anchor?: string
   childAnchor?: string
 }
@@ -112,6 +123,10 @@ export function formatGeneratedShapeDetails(
         parts.push(`${s.length}x${s.width}x${s.height}, corner=${s.cornerRadius ?? 0}`)
       if (s.kind === 'rounded-panel')
         parts.push(`${s.length}x${s.width}x${s.thickness}, corner=${s.cornerRadius ?? 0}`)
+      if (s.kind === 'conformal-strip')
+        parts.push(
+          `x=${s.xStart ?? -((s.length ?? 1) / 2)}..${s.xEnd ?? (s.length ?? 1) / 2}, side=${s.side ?? 'left'}, w=${s.width}, t=${s.thickness}`,
+        )
       if (s.kind === 'cylinder' || s.kind === 'hollow-cylinder')
         parts.push(`axis=${s.axis}, r=${s.radius}, h=${s.height}`)
       if (s.kind === 'cone') parts.push(`axis=${s.axis}, r=${s.radius}, h=${s.height}`)
@@ -147,6 +162,11 @@ export function formatGeneratedShapeDetails(
       else if (s.material?.preset) parts.push(`material=${s.material.preset}`)
       else if (s.materialPreset) parts.push(`material=${s.materialPreset}`)
       if (s.semanticRole) parts.push(`role=${s.semanticRole}`)
+      if (s.semanticGroup) parts.push(`group=${s.semanticGroup}`)
+      if (s.sourcePartKind) parts.push(`source=${s.sourcePartKind}`)
+      if (s.editableHints?.primaryDimension) {
+        parts.push(`editable=${s.editableHints.primaryDimension}`)
+      }
       if (s.attachTo != null) parts.push(`attachTo=${s.attachTo} ${s.anchor}->${s.childAnchor}`)
       return parts.join(' ')
     })
@@ -205,6 +225,12 @@ export function normalizePrimitiveKind(value: unknown): string {
     case 'trapezoidal-prism':
     case 'trapezoidal prism':
       return 'trapezoid-prism'
+    case 'conformal_strip':
+    case 'conformal-strip':
+    case 'curved-strip':
+    case 'curved rectangle':
+    case 'curved-rectangle':
+      return 'conformal-strip'
     case 'ramp':
     case 'wedge':
       return 'wedge'

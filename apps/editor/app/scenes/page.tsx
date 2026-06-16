@@ -1,5 +1,6 @@
 import { headers } from 'next/headers'
 import Link from 'next/link'
+import { DeleteSceneButton } from '@/components/delete-scene-button'
 import { CreateSceneButton } from '@/components/save-button'
 import type { SceneMeta } from '@/components/scene-loader'
 import { t } from '@/i18n'
@@ -90,39 +91,45 @@ export default async function ScenesPage() {
           <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {scenes.map((scene) => (
               <li key={scene.id}>
-                <Link
-                  className="group block rounded-xl border border-border/60 bg-background p-4 transition-colors hover:border-border hover:bg-accent/30"
-                  href={`/scene/${scene.id}`}
-                >
-                  <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-accent/30">
-                    {scene.thumbnailUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        alt={scene.name}
-                        className="h-full w-full object-cover"
-                        src={scene.thumbnailUrl}
-                      />
-                    ) : (
-                      <span className="text-muted-foreground text-xs">
-                        {t('scenes.noThumbnail', 'No thumbnail')}
-                      </span>
-                    )}
+                <div className="group relative rounded-xl border border-border/60 bg-background p-4 transition-colors hover:border-border hover:bg-accent/30">
+                  <div className="absolute top-2 right-2 z-10">
+                    <DeleteSceneButton
+                      sceneId={scene.id}
+                      sceneName={scene.name}
+                      version={scene.version}
+                    />
                   </div>
-                  <div className="mt-3">
-                    <h2 className="truncate font-semibold text-sm group-hover:text-foreground">
-                      {scene.name}
-                    </h2>
-                    <div className="mt-1 flex items-center justify-between text-muted-foreground text-xs">
-                      <span>
-                        {t('scenes.nodeCount', {
-                          fallback: '{count} nodes',
-                          params: { count: scene.nodeCount },
-                        })}
-                      </span>
-                      <time dateTime={scene.updatedAt}>{formatDate(scene.updatedAt)}</time>
+                  <Link className="block" href={`/scene/${scene.id}`}>
+                    <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-accent/30">
+                      {scene.thumbnailUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          alt={scene.name}
+                          className="h-full w-full object-cover"
+                          src={scene.thumbnailUrl}
+                        />
+                      ) : (
+                        <span className="text-muted-foreground text-xs">
+                          {t('scenes.noThumbnail', 'No thumbnail')}
+                        </span>
+                      )}
                     </div>
-                  </div>
-                </Link>
+                    <div className="mt-3">
+                      <h2 className="truncate font-semibold text-sm group-hover:text-foreground">
+                        {scene.name}
+                      </h2>
+                      <div className="mt-1 flex items-center justify-between text-muted-foreground text-xs">
+                        <span>
+                          {t('scenes.nodeCount', {
+                            fallback: '{count} nodes',
+                            params: { count: scene.nodeCount },
+                          })}
+                        </span>
+                        <time dateTime={scene.updatedAt}>{formatDate(scene.updatedAt)}</time>
+                      </div>
+                    </div>
+                  </Link>
+                </div>
               </li>
             ))}
           </ul>

@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { wallSurfaceMaterialTargets } from '../shared/material-targets'
 import { buildWallFloorplan } from './floorplan'
 import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
 import { wallParametrics } from './parametrics'
@@ -57,6 +58,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   },
 
   parametrics: wallParametrics,
+  materialTargets: wallSurfaceMaterialTargets,
 
   // Stage D — all four wall drag affordances live in this folder.
   // curve / move-endpoint / move are 1:1 ports of the legacy tools
@@ -93,9 +95,9 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   },
 
   toolHints: [
-    { key: 'Left click', label: 'Set wall start / end' },
-    { key: 'Shift', label: 'Allow non-45° angles' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: '设置墙体起点 / 终点' },
+    { key: 'Shift', label: '按住关闭角度吸附' },
+    { key: 'Esc', label: '取消' },
   ],
 
   presentation: {

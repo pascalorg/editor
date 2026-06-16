@@ -1,9 +1,14 @@
 'use client'
 
-import { ChevronLeft, RotateCcw, X } from 'lucide-react'
+import { useViewer } from '@pascal-app/viewer'
+import { ChevronLeft, Pin, RotateCcw, X } from 'lucide-react'
 import Image from 'next/image'
+import { useEffect, useState } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { cn } from '../../../lib/utils'
+import { PanelSectionExpansionContext } from '../controls/panel-section'
+
+const INSPECTOR_SECTIONS_PINNED_KEY = 'pascal:inspector-sections-pinned'
 
 interface PanelWrapperProps {
   title: string
@@ -31,6 +36,27 @@ export function PanelWrapper({
   width = 320, // default width
 }: PanelWrapperProps) {
   const isMobile = useIsMobile()
+  const [inspectorSectionsPinned, setInspectorSectionsPinned] = useState(false)
+  const resetKey = useViewer(
+    (s) =>
+      (s.selection.selectedIds[0] ??
+        s.selection.zoneId ??
+        s.selection.levelId ??
+        s.selection.buildingId) ||
+      'none',
+  )
+
+  useEffect(() => {
+    setInspectorSectionsPinned(localStorage.getItem(INSPECTOR_SECTIONS_PINNED_KEY) === 'true')
+  }, [])
+
+  const toggleInspectorSectionsPinned = () => {
+    setInspectorSectionsPinned((current) => {
+      const next = !current
+      localStorage.setItem(INSPECTOR_SECTIONS_PINNED_KEY, String(next))
+      return next
+    })
+  }
 
   return (
     <div
@@ -80,6 +106,27 @@ export function PanelWrapper({
           </div>
 
           <div className="flex items-center gap-1">
+            <button
+              aria-label={
+                inspectorSectionsPinned
+                  ? 'Unpin inspector sections'
+                  : 'Pin inspector sections open'
+              }
+              aria-pressed={inspectorSectionsPinned}
+              className={cn(
+                'flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground',
+                inspectorSectionsPinned && 'bg-foreground/15 text-foreground',
+              )}
+              onClick={toggleInspectorSectionsPinned}
+              title={
+                inspectorSectionsPinned
+                  ? 'Pinned: new selections open expanded'
+                  : 'Unpinned: new selections start collapsed'
+              }
+              type="button"
+            >
+              <Pin className={cn('h-4 w-4', inspectorSectionsPinned && 'fill-current')} />
+            </button>
             {onReset && (
               <button
                 className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
@@ -103,7 +150,13 @@ export function PanelWrapper({
       )}
 
       {/* Content */}
-      <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+      <PanelSectionExpansionContext.Provider
+        value={{ pinned: inspectorSectionsPinned, resetKey: String(resetKey) }}
+      >
+        <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {children}
+        </div>
+      </PanelSectionExpansionContext.Provider>
     </div>
   )
 }

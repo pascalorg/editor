@@ -1,8 +1,28 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import type {
+  HandleDescriptor,
+  NodeDefinition,
+  WindowNode as WindowNodeType,
+} from '@pascal-app/core'
 import { buildWindowFloorplan } from './floorplan'
 import { windowFloorplanMoveTarget } from './floorplan-move'
 import { windowParametrics } from './parametrics'
 import { WindowNode } from './schema'
+
+const MOVE_HANDLE_LIFT = 0.12
+
+function windowMoveHandle(): HandleDescriptor<WindowNodeType> {
+  return {
+    kind: 'tap-action',
+    shape: 'move-cross',
+    plane: 'node-normal',
+    portal: 'grandparent',
+    cursor: 'move',
+    onActivate: (node, _scene, editor) => editor.engageMoveDrag(node),
+    placement: {
+      position: () => [0, 0, MOVE_HANDLE_LIFT],
+    },
+  }
+}
 
 /**
  * Window — Phase 5 batch kind. Mirrors door's shape: hosted on walls,
@@ -48,6 +68,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   // Stage C: floor-plan polygon. ctx.parent gives the wall for direction
   // + thickness — same shape as door.
   floorplan: buildWindowFloorplan,
+  handles: [windowMoveHandle()],
   // Stage D — placement + move-on-wall. Same recipe as door. See
   // `nodes/src/window/{tool,move-tool,window-math}.ts`.
   tool: () => import('./tool'),
@@ -58,8 +79,8 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   floorplanMoveTarget: windowFloorplanMoveTarget,
 
   toolHints: [
-    { key: 'Left click', label: 'Place window on wall' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: '放置窗户' },
+    { key: 'Esc', label: '取消' },
   ],
 
   presentation: {

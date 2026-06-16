@@ -3,14 +3,17 @@
 import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
+import { nodeRegistry } from '../registry/registry'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
+import { DoorNode as DoorNodeSchema } from '../schema/nodes/door'
 import { LevelNode } from '../schema/nodes/level'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { healSceneNodes } from '../utils/heal-scene-graph'
 import * as nodeActions from './actions/node-actions'
 import { resetSceneHistoryPauseDepth } from './history-control'
 
@@ -31,7 +34,7 @@ function getEnumValue<T extends readonly string[]>(
 }
 
 function getNullableString(value: unknown) {
-  return typeof value === 'string' ? value : null
+  return typeof value === 'string' && value.length > 0 ? value : null
 }
 
 function getStringArray(value: unknown) {
@@ -99,6 +102,11 @@ function normalizeStairSegmentNode(node: Record<string, unknown>) {
 
   const parsed = StairSegmentNodeSchema.safeParse(sanitized)
   return parsed.success ? parsed.data : null
+}
+
+function normalizeDoorNode(node: Record<string, unknown>) {
+  const parsed = DoorNodeSchema.safeParse(node)
+  return parsed.success ? { ...node, ...parsed.data } : null
 }
 
 function migrateWallSurfaceMaterials(node: Record<string, any>) {
@@ -285,7 +293,8 @@ function migrateRoofSurfaceMaterials(node: Record<string, any>) {
 }
 
 function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
-  const patchedNodes = { ...nodes }
+  const { nodes: healed } = healSceneNodes(nodes)
+  const patchedNodes = { ...healed } as Record<string, any>
   for (const [id, node] of Object.entries(patchedNodes)) {
     // 1. Item scale migration
     if (node.type === 'item' && !('scale' in node)) {
@@ -333,6 +342,13 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
 
     if (node.type === 'stair-segment') {
       const normalized = normalizeStairSegmentNode(node)
+      if (normalized) {
+        patchedNodes[id] = normalized
+      }
+    }
+
+    if (node.type === 'door') {
+      const normalized = normalizeDoorNode(node)
       if (normalized) {
         patchedNodes[id] = normalized
       }
@@ -616,6 +632,9 @@ const useScene: UseSceneStore = create<SceneState>()(
       },
 
       markDirty: (id) => {
+        const node = get().nodes[id]
+        const def = node ? nodeRegistry.get(node.type) : undefined
+        if (def?.dirtyTracking === false) return
         get().dirtyNodes.add(id)
       },
 

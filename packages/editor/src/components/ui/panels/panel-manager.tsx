@@ -11,11 +11,13 @@ import {
   type ElevatorNode,
   type FenceNode,
   type ItemNode,
+  type LadderNode,
   type RoofNode,
   type RoofSegmentNode,
   type SlabNode,
   type StairNode,
   type StairSegmentNode,
+  type SteelBeamNode,
   useScene,
   type WallNode,
   type WindowNode,
@@ -48,6 +50,8 @@ type MovableNode =
   | RoofSegmentNode
   | StairNode
   | StairSegmentNode
+  | LadderNode
+  | SteelBeamNode
   | BuildingNode
 
 const MOVABLE_TYPES = new Set<string>([
@@ -65,6 +69,8 @@ const MOVABLE_TYPES = new Set<string>([
   'roof-segment',
   'stair',
   'stair-segment',
+  'ladder',
+  'steel-beam',
   'building',
 ])
 
@@ -111,7 +117,7 @@ function MobilePanelLayer({
   }, [selectionKey])
 
   const clearSelection = useCallback(() => {
-    setSelection({ selectedIds: [] })
+    setSelection({ selectedIds: [], zoneId: null })
     setSelectedReferenceId(null)
   }, [setSelection, setSelectedReferenceId])
 
@@ -187,6 +193,7 @@ function MobilePanelLayer({
 export function PanelManager() {
   const isMobile = useIsMobile()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedZoneId = useViewer((s) => s.selection.zoneId)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const isPaintPanelOpen = useEditor((s) => s.isPaintPanelOpen)
   const mode = useEditor((s) => s.mode)
@@ -194,13 +201,13 @@ export function PanelManager() {
   // Only subscribe to the *type* of the single-selected node — string primitive
   // so we don't re-render on unrelated scene mutations.
   const selectedNodeType = useScene((s) => {
-    if (selectedIds.length !== 1) return null
-    const id = selectedIds[0]
+    if (selectedIds.length > 1) return null
+    const id = selectedIds[0] ?? selectedZoneId
     return id ? (s.nodes[id as AnyNodeId]?.type ?? null) : null
   })
   const selectedNode = useScene((s) => {
-    if (selectedIds.length !== 1) return null
-    const id = selectedIds[0]
+    if (selectedIds.length > 1) return null
+    const id = selectedIds[0] ?? selectedZoneId
     return id ? (s.nodes[id as AnyNodeId] ?? null) : null
   })
 

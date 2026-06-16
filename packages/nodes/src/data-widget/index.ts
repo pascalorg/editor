@@ -1,0 +1,1 @@
+export { dataWidgetDefinition } from './definition'

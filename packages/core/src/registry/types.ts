@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import type { Object3D } from 'three'
 import type { ZodObject, z } from 'zod'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import type { HandleList } from './handles'
 
 // ─── GeometryContext ─────────────────────────────────────────────────
 //
@@ -348,11 +349,32 @@ export type FloorplanGeometry =
    * width, draft preview).
    */
   | {
+      kind: 'move-arrow'
+      point: FloorplanPoint
+      angle: number
+      affordance?: string
+      payload?: unknown
+    }
+  | {
+      kind: 'rotate-arrow'
+      point: FloorplanPoint
+      angle: number
+      affordance: string
+      payload?: unknown
+      pivot?: FloorplanPoint
+    }
+  | {
       kind: 'dimension-label'
       cx: number
       cy: number
       text: string
       /** Rotation in radians. The renderer auto-flips to keep text upright. */
+      angle: number
+    }
+  | {
+      kind: 'equal-spacing-badge'
+      point: FloorplanPoint
+      text: string
       angle: number
     }
   /**
@@ -492,6 +514,7 @@ export type FloorplanMoveTargetSession = {
    * area, overlap detected, ...).
    */
   canCommit(): boolean
+  commit?(): void
 }
 
 export type FloorplanMoveTarget<N> = (args: {
@@ -511,6 +534,15 @@ export type Plugin = {
 
 export type AnyNodeDefinition = NodeDefinition<ZodObject<any>>
 
+export type SurfaceRole =
+  | 'wall'
+  | 'floor'
+  | 'ceiling'
+  | 'roof'
+  | 'joinery'
+  | 'glazing'
+  | 'furnishing'
+
 export type MaterialTargetKind = 'whole' | 'face' | 'part'
 
 export type MaterialTargetDescriptor = {
@@ -527,6 +559,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   schemaVersion: number
   schema: S
   category: NodeCategory
+  surfaceRole?: SurfaceRole
 
   defaults: () => Omit<z.infer<S>, 'id' | 'type'>
   migrate?: Record<number, (old: unknown) => unknown>
@@ -535,6 +568,13 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   relations?: Relations
   parametrics?: ParametricDescriptor<z.infer<S>>
   materialTargets?: readonly MaterialTargetDescriptor[]
+
+  /**
+   * Whether scene mutations add this kind to `dirtyNodes`. Default true.
+   * Set false for structural/organizational kinds that no dirty consumer
+   * rebuilds; otherwise their marks can accumulate for the whole session.
+   */
+  dirtyTracking?: boolean
 
   /**
    * Renderer for this kind. Optional under the three-checkbox composition
@@ -623,6 +663,12 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * unset and rely on the generic overlay path.
    */
   floorplanMoveTarget?: FloorplanMoveTarget<z.infer<S>>
+  /**
+   * In-world editor handles rendered by the generic 3D handle rig.
+   * Kinds keep the descriptor data here while editor-owned components
+   * handle raycasting, drag lifecycle, and scene writes.
+   */
+  handles?: HandleList<z.infer<S>>
   system?: SystemContribution
   tool?: LazyComponent
   /**
@@ -748,6 +794,7 @@ export type Capabilities = {
   selectable?: SelectableConfig
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
+  alignmentFootprint?: AlignmentFootprintConfig
 }
 
 export type CapabilityCtx = { node: AnyNode }
@@ -817,13 +864,40 @@ export type SelectableConfig = {
  * `applies` is an optional predicate to skip nodes that share a kind but
  * are mounted off-floor (items attached to a wall / ceiling).
  */
+export type FloorPlacedFootprint = {
+  dimensions: [number, number, number]
+  rotation: [number, number, number]
+  position?: [number, number, number]
+}
+
+export type FloorPlacedFootprintContext = {
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>
+}
+
+export type FloorPlacedFootprintResolver = (
+  node: AnyNode,
+  ctx?: FloorPlacedFootprintContext,
+) => FloorPlacedFootprint
+
+export type FloorPlacedFootprintsResolver = (
+  node: AnyNode,
+  ctx?: FloorPlacedFootprintContext,
+) => readonly FloorPlacedFootprint[]
+
 export type FloorPlacedConfig = {
-  footprint: (node: AnyNode) => {
-    dimensions: [number, number, number]
-    rotation: [number, number, number]
-  }
+  footprint?: FloorPlacedFootprintResolver
+  footprints?: FloorPlacedFootprintsResolver
   applies?: (node: AnyNode) => boolean
 }
+
+export type AlignmentFootprint =
+  | { shape: 'box'; dimensions: [number, number, number]; rotation: [number, number, number] }
+  | { shape: 'aabb'; minX: number; minZ: number; maxX: number; maxZ: number }
+
+export type AlignmentFootprintConfig = (
+  node: AnyNode,
+  nodes?: Readonly<Record<string, AnyNode>>,
+) => AlignmentFootprint | null
 
 // ─── Relations ───────────────────────────────────────────────────────
 

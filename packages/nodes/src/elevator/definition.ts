@@ -40,6 +40,13 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
   },
   floorplan: buildElevatorFloorplan,
 
+  toolHints: [
+    { key: 'Left click', label: '放置电梯' },
+    { key: 'R', label: '顺时针旋转' },
+    { key: 'T', label: '逆时针旋转' },
+    { key: 'Esc', label: '取消' },
+  ],
+
   presentation: {
     label: 'Elevator',
     description: 'A multi-level elevator shaft with configurable openings per level.',

@@ -30,6 +30,7 @@ export const buildingDefinition: NodeDefinition<typeof BuildingNode> = {
   },
 
   parametrics: buildingParametrics,
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',

@@ -91,3 +91,28 @@ export async function upsertGeneratedAsset(
     ...manifest.filter((item) => item.id !== asset.id),
   ])
 }
+
+export async function removeGeneratedAsset(manifestPath: string, assetId: string) {
+  const manifest = await readGeneratedAssets(manifestPath)
+  const nextManifest = manifest.filter((item) => item.id !== assetId)
+  if (nextManifest.length === manifest.length) return false
+  await writeGeneratedAssets(manifestPath, nextManifest)
+  return true
+}
+
+export function isSafeGeneratedAssetId(assetId: string) {
+  return sanitizeSegment(assetId, '') === assetId && !assetId.includes('/') && !assetId.includes('\\')
+}
+
+export async function removeGeneratedAssetDirectory(repoRoot: string, assetId: string) {
+  if (!isSafeGeneratedAssetId(assetId)) {
+    throw new Error('Invalid asset id')
+  }
+  const root = itemRoot(repoRoot)
+  const assetDir = path.resolve(root, assetId)
+  const resolvedRoot = path.resolve(root)
+  if (!(assetDir === resolvedRoot || assetDir.startsWith(`${resolvedRoot}${path.sep}`))) {
+    throw new Error('Asset directory escapes item root')
+  }
+  await fs.rm(assetDir, { recursive: true, force: true })
+}

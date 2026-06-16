@@ -62,9 +62,9 @@ export default async function ScenePage({ params }: { params: Promise<{ id: stri
             </Link>
             <Link
               className="rounded-md border border-border bg-background px-3 py-2 font-medium text-sm hover:bg-accent/40"
-              href="/"
+              href="/scenes"
             >
-              {t('scene.backToEditor', 'Back to editor')}
+              {t('scene.browseScenes', 'Browse scenes')}
             </Link>
           </div>
         </div>

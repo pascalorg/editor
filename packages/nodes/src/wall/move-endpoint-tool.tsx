@@ -1,6 +1,6 @@
 'use client'
 
-import { type GridEvent, type WallNode, useScene } from '@pascal-app/core'
+import { type GridEvent, useScene, type WallNode } from '@pascal-app/core'
 import {
   CursorSphere,
   formatAngleRadians,
@@ -132,6 +132,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
   useDragAction({
     active: true,
     action: moveWallEndpointDragAction,
+    activationGraceMs: 0,
     initial: {
       node: target.wall,
       handleId: endpoint,

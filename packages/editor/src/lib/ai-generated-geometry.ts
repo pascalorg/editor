@@ -5,6 +5,7 @@ import {
   BoxNode,
   CapsuleNode,
   ConeNode,
+  ConformalStripNode,
   CylinderNode,
   ExtrudeNode,
   FrustumNode,
@@ -21,6 +22,7 @@ import {
   WedgeNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import useEditor from '../store/use-editor'
 import type {
   GeneratedGeometryArtifact,
   GeneratedGeometryShapeSpec,
@@ -294,9 +296,10 @@ export function buildGeneratedGeometryNodes(artifact: GeneratedGeometryArtifact)
   for (let i = 0; i < artifact.shapes.length; i++) {
     const shape = artifact.shapes[i]
     const transform = artifact.transforms[i]
-    if (!shape || !transform) continue
+    if (!shape) continue
 
-    const { position: worldPosition, rotation } = transform
+    const worldPosition = transform?.position ?? shape.position
+    const rotation = transform?.rotation ?? shape.rotation ?? [0, 0, 0]
     const position = shouldCreateAssembly
       ? toAssemblyLocalPosition(worldPosition, artifact.assemblyPosition)
       : worldPosition
@@ -356,7 +359,7 @@ export function buildGeneratedGeometryNodes(artifact: GeneratedGeometryArtifact)
             radius: clampR(shape.radius, 0.5),
             height: clampD(shape.height, 1.0, 0.01, 20),
             radialSegments:
-              shape.radialSegments != null ? clampI(shape.radialSegments, 32, 8, 64) : undefined,
+              shape.radialSegments != null ? clampI(shape.radialSegments, 32, 3, 64) : undefined,
             material: shape.material,
             materialPreset: shape.materialPreset,
           })
@@ -370,7 +373,7 @@ export function buildGeneratedGeometryNodes(artifact: GeneratedGeometryArtifact)
             radiusBottom: clampD(shape.radiusBottom, 0.5, 0.001, 10),
             height: clampD(shape.height, 1.0, 0.01, 20),
             radialSegments:
-              shape.radialSegments != null ? clampI(shape.radialSegments, 32, 8, 64) : undefined,
+              shape.radialSegments != null ? clampI(shape.radialSegments, 32, 3, 64) : undefined,
             material: shape.material,
             materialPreset: shape.materialPreset,
           })
@@ -414,6 +417,30 @@ export function buildGeneratedGeometryNodes(artifact: GeneratedGeometryArtifact)
             cornerRadius: clampPanelCornerRadius(shape),
             cornerSegments:
               shape.cornerSegments != null ? clampI(shape.cornerSegments, 4, 1, 12) : undefined,
+            material: shape.material,
+            materialPreset: shape.materialPreset,
+          })
+          break
+        case 'conformal-strip':
+          node = ConformalStripNode.parse({
+            name: displayName,
+            position,
+            rotation,
+            surface: shape.surface === 'ellipsoid-cylinder' ? shape.surface : undefined,
+            side: shape.side === 'right' ? 'right' : 'left',
+            xStart: clampD(shape.xStart, -0.5, -50, 50),
+            xEnd: clampD(shape.xEnd, 0.5, -50, 50),
+            verticalOffset: clampD(shape.verticalOffset, 0, -20, 20),
+            width: clampD(shape.width, 0.04, 0.001, 20),
+            thickness: clampD(shape.thickness, 0.003, 0.0005, 1),
+            surfaceRadiusY: clampD(shape.surfaceRadiusY, 0.25, 0.001, 20),
+            surfaceRadiusZ: clampD(shape.surfaceRadiusZ, 0.25, 0.001, 20),
+            surfaceLength:
+              shape.surfaceLength != null ? clampD(shape.surfaceLength, 1, 0.001, 100) : undefined,
+            endTaper: shape.endTaper != null ? clampD(shape.endTaper, 0.28, 0, 0.95) : undefined,
+            segments: shape.segments != null ? clampI(shape.segments, 16, 1, 128) : undefined,
+            widthSegments:
+              shape.widthSegments != null ? clampI(shape.widthSegments, 2, 1, 16) : undefined,
             material: shape.material,
             materialPreset: shape.materialPreset,
           })
@@ -567,7 +594,38 @@ export function buildGeneratedGeometryNodes(artifact: GeneratedGeometryArtifact)
   return { created, createdNodes }
 }
 
-export function placeGeneratedGeometryArtifact(artifact: GeneratedGeometryArtifact) {
+type PlaceGeneratedGeometryOptions = {
+  startPlacement?: boolean
+}
+
+function markGeneratedPlacementDraft<T extends AnyNode>(node: T): T {
+  const metadata =
+    typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)
+      ? (node.metadata as Record<string, unknown>)
+      : {}
+
+  return {
+    ...node,
+    metadata: {
+      ...metadata,
+      isNew: true,
+    },
+  }
+}
+
+function beginGeneratedGeometryPlacement(root: AnyNode) {
+  const editor = useEditor.getState()
+  useViewer.getState().setSelection({ selectedIds: [] })
+  editor.setPhase('structure')
+  editor.setStructureLayer('elements')
+  editor.setMode('select')
+  editor.setMovingNode(root as never)
+}
+
+export function placeGeneratedGeometryArtifact(
+  artifact: GeneratedGeometryArtifact,
+  options: PlaceGeneratedGeometryOptions = {},
+) {
   const { created, createdNodes } = buildGeneratedGeometryNodes(artifact)
   if (!createdNodes.length) return { nodeIds: [] as string[], created }
 
@@ -575,7 +633,7 @@ export function placeGeneratedGeometryArtifact(artifact: GeneratedGeometryArtifa
   const scene = useScene.getState()
   const shouldCreateAssembly = Boolean(artifact.assemblyName) || createdNodes.length > 1
   if (shouldCreateAssembly) {
-    const assembly = AssemblyNode.parse({
+    const parsedAssembly = AssemblyNode.parse({
       name: artifact.assemblyName ?? artifact.title,
       position: artifact.assemblyPosition,
       metadata: {
@@ -585,20 +643,34 @@ export function placeGeneratedGeometryArtifact(artifact: GeneratedGeometryArtifa
         partCount: createdNodes.length,
       },
     })
+    const assembly = options.startPlacement
+      ? markGeneratedPlacementDraft(parsedAssembly)
+      : parsedAssembly
     scene.createNode(assembly, levelId ?? undefined)
     const createdNodeIds: string[] = [assembly.id]
     for (const node of createdNodes) {
       scene.createNode(node, assembly.id)
       createdNodeIds.push(node.id)
     }
-    useViewer.getState().setSelection({ selectedIds: [assembly.id] })
+    if (options.startPlacement) {
+      beginGeneratedGeometryPlacement(assembly)
+    } else {
+      useViewer.getState().setSelection({ selectedIds: [assembly.id] })
+    }
     return { nodeIds: createdNodeIds, created }
   }
 
-  for (const node of createdNodes) scene.createNode(node, levelId ?? undefined)
-  const firstNode = createdNodes[0]
-  if (firstNode) useViewer.getState().setSelection({ selectedIds: [firstNode.id] })
-  return { nodeIds: createdNodes.map((node) => node.id), created }
+  const nodesToCreate = options.startPlacement
+    ? createdNodes.map((node) => markGeneratedPlacementDraft(node))
+    : createdNodes
+  for (const node of nodesToCreate) scene.createNode(node, levelId ?? undefined)
+  const firstNode = nodesToCreate[0]
+  if (options.startPlacement && firstNode) {
+    beginGeneratedGeometryPlacement(firstNode)
+  } else if (firstNode) {
+    useViewer.getState().setSelection({ selectedIds: [firstNode.id] })
+  }
+  return { nodeIds: nodesToCreate.map((node) => node.id), created }
 }
 
 export function saveGeneratedGeometryArtifactToLocalLibrary(artifact: GeneratedGeometryArtifact) {

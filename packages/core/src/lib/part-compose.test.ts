@@ -1,6 +1,76 @@
 import { describe, expect, test } from 'bun:test'
 import { assessPartBlueprint, assessPartVisualDetails, composePartPrimitives } from './part-compose'
 
+function expectBladeRotationMatchesRadialPlacement(shape: {
+  position?: number[]
+  rotation?: number[]
+}) {
+  const [x = 0, , z = 0] = shape.position ?? []
+  const radialLength = Math.hypot(x, z)
+  expect(radialLength).toBeGreaterThan(0.001)
+  const expectedAngle = Math.atan2(z, x)
+  const actualY = shape.rotation?.[1] ?? 0
+  const actualZ = shape.rotation?.[2] ?? 0
+  const wrappedDelta = Math.atan2(
+    Math.sin(actualZ + expectedAngle),
+    Math.cos(actualZ + expectedAngle),
+  )
+  expect(actualY).toBeCloseTo(0, 4)
+  expect(wrappedDelta).toBeCloseTo(0, 4)
+}
+
+function expectLocalPlaneBladeRotationMatchesRadialPlacement(
+  shape: {
+    position?: number[]
+    rotation?: number[]
+  },
+  center: [number, number] = [0, 0],
+) {
+  const [x = 0, y = 0] = shape.position ?? []
+  const expectedAngle = Math.atan2(y - center[1], x - center[0])
+  const actualY = shape.rotation?.[1] ?? 0
+  const actualZ = shape.rotation?.[2] ?? 0
+  const wrappedDelta = Math.atan2(
+    Math.sin(actualZ - expectedAngle),
+    Math.cos(actualZ - expectedAngle),
+  )
+  expect(actualY).toBeCloseTo(0, 4)
+  expect(wrappedDelta).toBeCloseTo(0, 4)
+}
+
+function cylinderEndpoints(shape: {
+  position?: number[]
+  rotation?: number[]
+  height?: number
+}): [[number, number, number], [number, number, number]] {
+  const [x = 0, y = 0, z = 0] = shape.position ?? []
+  const yaw = shape.rotation?.[2] ?? 0
+  const half = (shape.height ?? 0) / 2
+  const dx = Math.cos(yaw) * half
+  const dy = Math.sin(yaw) * half
+  return [
+    [x - dx, y - dy, z],
+    [x + dx, y + dy, z],
+  ]
+}
+
+function cylinderEndpointByAxis(
+  shape: {
+    position?: number[]
+    rotation?: number[]
+    height?: number
+  },
+  axisIndex: 0 | 1 | 2,
+  side: 'min' | 'max',
+): [number, number, number] {
+  const endpoints = cylinderEndpoints(shape)
+  return (
+    endpoints.sort((a, b) =>
+      side === 'max' ? b[axisIndex] - a[axisIndex] : a[axisIndex] - b[axisIndex],
+    )[0] ?? [0, 0, 0]
+  )
+}
+
 describe('composePartPrimitives', () => {
   test('composes a standing fan from reusable mechanical parts', () => {
     const shapes = composePartPrimitives({
@@ -28,6 +98,9 @@ describe('composePartPrimitives', () => {
     expect(blades).toHaveLength(3)
     expect(blades.every((shape) => shape.kind === 'extrude')).toBe(true)
     expect(blades.every((shape) => (shape.profile?.length ?? 0) >= 8)).toBe(true)
+    blades.forEach((shape) => {
+      expectLocalPlaneBladeRotationMatchesRadialPlacement(shape, [0, 1.18])
+    })
     expect(shapes.filter((shape) => shape.name?.includes('blade root'))).toHaveLength(3)
     const frontRings = shapes.filter((shape) => shape.name?.includes('grill front ring'))
     expect(frontRings).toHaveLength(4)
@@ -37,6 +110,8 @@ describe('composePartPrimitives', () => {
     expect(shapes.filter((shape) => shape.name?.includes('grill spoke'))).toHaveLength(18)
     expect(shapes.some((shape) => shape.name?.includes('grill side rib'))).toBe(true)
     expect(shapes.some((shape) => shape.name?.includes('rear outer ring'))).toBe(true)
+    expect(shapes.some((shape) => shape.name?.includes('rear inner support ring'))).toBe(true)
+    expect(shapes.some((shape) => shape.name?.includes('grill center cap'))).toBe(true)
   })
 
   test('supports common aliases for part kinds', () => {
@@ -51,6 +126,160 @@ describe('composePartPrimitives', () => {
     const blades = shapes.filter((shape) => Boolean(shape.name?.match(/ blade \d+$/)))
     expect(blades).toHaveLength(4)
     expect(blades.every((shape) => shape.kind === 'extrude')).toBe(true)
+  })
+
+  test('composes pyramid parts as four-sided cones', () => {
+    const shapes = composePartPrimitives({
+      name: 'Pyramid marker',
+      primaryColor: '#d97706',
+      parts: [
+        {
+          kind: 'pyramid',
+          length: 2,
+          width: 1.2,
+          height: 1.5,
+          semanticRole: 'marker_pyramid',
+        },
+        {
+          kind: 'square-pyramid',
+          id: 'small_top',
+          length: 0.5,
+          height: 0.7,
+          alignAbove: 0,
+        },
+      ],
+    })
+
+    expect(shapes).toHaveLength(2)
+    expect(shapes[0]?.kind).toBe('cone')
+    expect(shapes[0]?.name).toContain('pyramid')
+    expect(shapes[0]?.semanticRole).toBe('marker_pyramid')
+    expect(shapes[0]?.sourcePartKind).toBe('pyramid')
+    expect(shapes[0]?.radialSegments).toBe(4)
+    expect(shapes[0]?.height).toBe(1.5)
+    expect(shapes[0]?.scale).toEqual([1, 1, 0.6])
+    expect(shapes[0]?.material?.properties?.color).toBe('#d97706')
+    expect(shapes[1]?.semanticRole).toBe('pyramid')
+    expect(shapes[1]?.sourcePartKind).toBe('pyramid')
+    expect(shapes[1]?.position?.[1]).toBeGreaterThan(shapes[0]?.position?.[1] ?? 0)
+  })
+
+  test('composes truncated pyramid parts as four-sided frustums', () => {
+    const shapes = composePartPrimitives({
+      name: 'Flat top pyramid marker',
+      parts: [
+        {
+          kind: 'pyramid',
+          truncated: true,
+          length: 2,
+          width: 1.2,
+          height: 1.5,
+        },
+        {
+          kind: 'pyramid',
+          topScale: 0.5,
+          length: 1,
+          width: 1,
+          height: 0.8,
+        },
+      ],
+    })
+
+    expect(shapes).toHaveLength(2)
+    expect(shapes[0]?.kind).toBe('frustum')
+    expect(shapes[0]?.radialSegments).toBe(4)
+    expect(shapes[0]?.radiusBottom).toBe(1)
+    expect(shapes[0]?.radiusTop).toBeCloseTo(0.35)
+    expect(shapes[0]?.scale).toEqual([1, 1, 0.6])
+    expect(shapes[1]?.kind).toBe('frustum')
+    expect(shapes[1]?.radiusTop).toBeCloseTo(0.25)
+  })
+
+  test('normalizes mixer propeller part blueprints without duplicating or adding fan details', () => {
+    const shapes = composePartPrimitives({
+      geometryBrief: { category: 'mixer' },
+      parts: [
+        { kind: 'vertical_pole', id: 'shaft', height: 1.4, radius: 0.025 },
+        { kind: 'circular_base', id: 'hub', radius: 0.07, height: 0.1, alignAbove: 'shaft' },
+        {
+          kind: 'propeller_blade_set',
+          id: 'blades',
+          count: 3,
+          hubRadius: 0.07,
+          bladeRadius: 0.38,
+          bladeWidth: 0.15,
+          bladeShape: 'taiji_half',
+          bladePitch: 0.55,
+          verticalCurve: 0.07,
+          around: 'hub',
+          aroundCount: 3,
+        },
+      ],
+      enhanceVisualDetails: true,
+    })
+
+    expect(shapes.filter((shape) => shape.semanticRole === 'mixer_shaft')).toHaveLength(1)
+    expect(shapes.filter((shape) => shape.semanticRole === 'mixer_hub')).toHaveLength(1)
+    expect(shapes.filter((shape) => shape.semanticRole === 'mixer_blade')).toHaveLength(3)
+    expect(shapes.some((shape) => shape.sourcePartKind === 'protective_grill')).toBe(false)
+    expect(shapes.some((shape) => shape.sourcePartKind === 'motor_housing')).toBe(false)
+  })
+
+  test('does not infer a fan from a standalone chimney pole blueprint', () => {
+    const shapes = composePartPrimitives({
+      name: 'large chimney',
+      geometryBrief: { category: 'industrial chimney', requiredRoles: ['chimney_body'] },
+      parts: [
+        {
+          id: 'chimney_shaft',
+          kind: 'vertical_pole',
+          semanticRole: 'chimney_body',
+          dimensions: { height: 10, radius: 0.5 },
+        },
+      ],
+    })
+
+    expect(shapes).toHaveLength(1)
+    expect(shapes[0]?.semanticRole).toBe('chimney_body')
+    expect(shapes[0]?.height).toBe(10)
+    expect(shapes[0]?.radius).toBe(0.5)
+    expect(shapes.some((shape) => shape.sourcePartKind === 'protective_grill')).toBe(false)
+    expect(shapes.some((shape) => shape.sourcePartKind === 'radial_blades')).toBe(false)
+    expect(shapes.some((shape) => shape.sourcePartKind === 'motor_housing')).toBe(false)
+  })
+
+  test('composes a tapered red-white industrial chimney stack', () => {
+    const shapes = composePartPrimitives({
+      name: 'red white factory chimney',
+      detail: 'medium',
+      parts: [
+        {
+          kind: 'smokestack',
+          height: 10,
+          radius: 0.55,
+          warningStripes: true,
+          stripeCount: 5,
+        },
+      ],
+    })
+
+    const shell = shapes.find((shape) => shape.semanticRole === 'chimney_body')
+    const redBands = shapes.filter((shape) => shape.semanticRole === 'chimney_warning_red_band')
+    const whiteBands = shapes.filter((shape) => shape.semanticRole === 'chimney_warning_white_band')
+
+    expect(shell?.kind).toBe('frustum')
+    expect(shell?.radiusBottom).toBeCloseTo(0.55)
+    expect(shell?.radiusTop).toBeLessThan(shell?.radiusBottom ?? 0)
+    expect(shapes.some((shape) => shape.semanticRole === 'chimney_base')).toBe(true)
+    expect(shapes.some((shape) => shape.semanticRole === 'chimney_top_rim')).toBe(true)
+    expect(shapes.some((shape) => shape.semanticRole === 'access_door')).toBe(true)
+    expect(
+      shapes.filter((shape) => shape.semanticRole === 'chimney_seam_ring').length,
+    ).toBeGreaterThan(4)
+    expect(redBands).toHaveLength(3)
+    expect(whiteBands).toHaveLength(2)
+    expect(redBands[0]?.material?.properties?.color).toBe('#b91c1c')
+    expect(whiteBands[0]?.material?.properties?.color).toBe('#f8fafc')
   })
 
   test('composes common factory pump and blower structures', () => {
@@ -86,12 +315,42 @@ describe('composePartPrimitives', () => {
     expect(shapes.some((shape) => shape.name?.includes('rounded machine body'))).toBe(true)
     expect(shapes.some((shape) => shape.name?.includes('volute scroll casing'))).toBe(true)
     expect(shapes.some((shape) => shape.name?.includes('volute discharge neck'))).toBe(true)
-    expect(shapes.filter((shape) => shape.name?.includes('impeller vane'))).toHaveLength(7)
+    const impellerVanes = shapes.filter((shape) => shape.name?.includes('impeller vane'))
+    expect(impellerVanes).toHaveLength(7)
+    impellerVanes.forEach((shape) => {
+      expectLocalPlaneBladeRotationMatchesRadialPlacement(shape, [0.22, 0.42])
+    })
     expect(shapes.some((shape) => shape.name?.includes('inlet port'))).toBe(true)
     expect(shapes.some((shape) => shape.name?.includes('outlet port'))).toBe(true)
     expect(shapes.some((shape) => shape.name?.includes('flange ring'))).toBe(true)
     expect(shapes.filter((shape) => shape.name?.includes('bolt'))).toHaveLength(12)
     expect(shapes.some((shape) => shape.name?.includes('control box'))).toBe(true)
+  })
+
+  test('composes stronger vent grilles and rounded industrial machine bodies', () => {
+    const shapes = composePartPrimitives({
+      name: 'Industrial body detail',
+      autoComplete: false,
+      detail: 'high',
+      parts: [
+        { kind: 'rounded_machine_body', length: 1, width: 0.5, height: 0.45 },
+        {
+          kind: 'vent_grill',
+          position: [0, 0.5, 0.28],
+          width: 0.42,
+          count: 7,
+          depth: 0.04,
+        },
+      ],
+    })
+
+    expect(shapes.some((shape) => shape.name?.includes('raised top service hatch'))).toBe(true)
+    expect(shapes.some((shape) => shape.name?.includes('lower shadow plinth'))).toBe(true)
+    expect(shapes.some((shape) => shape.name?.includes('front horizontal seam'))).toBe(true)
+    expect(shapes.some((shape) => shape.name?.includes('vent recess panel'))).toBe(true)
+    expect(shapes.some((shape) => shape.name?.includes('vent top frame'))).toBe(true)
+    expect(shapes.filter((shape) => shape.name?.includes('vent vertical mullion'))).toHaveLength(2)
+    expect(shapes.filter((shape) => shape.name?.includes('vent slat'))).toHaveLength(7)
   })
 
   test('places pipe rims on the open end and supports flange bolt control', () => {
@@ -119,6 +378,8 @@ describe('composePartPrimitives', () => {
 
     const rim = shapes.find((shape) => shape.name?.includes('pipe port rim'))
     expect(rim?.position?.[0]).toBeCloseTo(0.2)
+    expect(rim?.axis).toBe('x')
+    expect(shapes.find((shape) => shape.name?.includes('flange ring'))?.axis).toBe('x')
     expect(shapes.some((shape) => shape.name?.includes('flange gasket'))).toBe(true)
     expect(shapes.some((shape) => shape.name?.includes('flange bolt'))).toBe(false)
   })
@@ -226,6 +487,9 @@ describe('composePartPrimitives', () => {
     expect(chain?.path?.length).toBeGreaterThan(6)
     expect(bicycle.some((shape) => shape.name?.includes('front chainring'))).toBe(true)
     expect(bicycle.some((shape) => shape.name?.includes('rear sprocket'))).toBe(true)
+    expect(bicycle.some((shape) => shape.semanticRole === 'crank')).toBe(true)
+    expect(bicycle.some((shape) => shape.semanticRole === 'chainring')).toBe(true)
+    expect(bicycle.filter((shape) => shape.semanticRole === 'pedal')).toHaveLength(2)
 
     const duplicateWheelsetBicycle = composePartPrimitives({
       name: 'Duplicate wheelset bike',
@@ -237,20 +501,215 @@ describe('composePartPrimitives', () => {
       ),
     ).toHaveLength(2)
 
+    const singleBicycleWheel = composePartPrimitives({
+      name: 'single bicycle wheel',
+      parts: [
+        {
+          id: 'bicycle_wheel',
+          kind: 'wheel_set',
+          semanticRole: 'bicycle_wheel',
+          radius: 0.35,
+        },
+      ],
+    })
+    expect(
+      singleBicycleWheel.filter((shape) => shape.semanticRole === 'bicycle_tire'),
+    ).toHaveLength(1)
+    expect(singleBicycleWheel.filter((shape) => shape.semanticRole === 'bicycle_rim')).toHaveLength(
+      1,
+    )
+    expect(singleBicycleWheel.filter((shape) => shape.semanticRole === 'bicycle_hub')).toHaveLength(
+      1,
+    )
+    expect(
+      singleBicycleWheel.filter((shape) => shape.semanticRole === 'bicycle_spoke'),
+    ).toHaveLength(8)
+
+    const twoExplicitBicycleWheels = composePartPrimitives({
+      name: 'two bicycle wheels',
+      parts: [
+        {
+          id: 'bicycle_wheels',
+          kind: 'wheel_set',
+          semanticRole: 'bicycle_wheel',
+          count: 2,
+          radius: 0.35,
+        },
+      ],
+    })
+    expect(
+      twoExplicitBicycleWheels.filter((shape) => shape.semanticRole === 'bicycle_tire'),
+    ).toHaveLength(2)
+    expect(
+      twoExplicitBicycleWheels.filter((shape) => shape.semanticRole === 'bicycle_rim'),
+    ).toHaveLength(2)
+    expect(
+      twoExplicitBicycleWheels.filter((shape) => shape.semanticRole === 'bicycle_hub'),
+    ).toHaveLength(2)
+    expect(
+      twoExplicitBicycleWheels.filter((shape) => shape.semanticRole === 'bicycle_spoke'),
+    ).toHaveLength(16)
+
+    const llmAliasBicycle = composePartPrimitives({
+      name: 'red bicycle',
+      primaryColor: '#CC0000',
+      length: 2,
+      parts: [
+        { id: 'frame', kind: 'bicycle_frame', semanticRole: 'frame' },
+        { id: 'fork', kind: 'bicycle_fork', semanticRole: 'fork' },
+        { id: 'wheel_front', kind: 'bicycle_wheel', semanticRole: 'wheel', axis: 'x' },
+        { id: 'wheel_rear', kind: 'bicycle_wheel', semanticRole: 'wheel', axis: 'x' },
+        { id: 'handlebar', kind: 'bicycle_handlebar', semanticRole: 'handlebar' },
+        { id: 'seat', kind: 'bicycle_seat', semanticRole: 'seat' },
+        { id: 'crank', kind: 'bicycle_crank', semanticRole: 'crank' },
+        { id: 'chainring', kind: 'bicycle_chainring', semanticRole: 'chainring' },
+        { id: 'pedals', kind: 'bicycle_pedals', semanticRole: 'pedal' },
+        { id: 'chain', kind: 'bicycle_chain', semanticRole: 'chain' },
+      ],
+    })
+    expect(llmAliasBicycle.filter((shape) => shape.semanticRole === 'bicycle_tire')).toHaveLength(2)
+    const llmAliasBicycleTires = llmAliasBicycle.filter(
+      (shape) => shape.semanticRole === 'bicycle_tire',
+    )
+    expect(llmAliasBicycleTires.every((shape) => shape.axis === 'z')).toBe(true)
+    expect(
+      llmAliasBicycleTires.every(
+        (shape) => (shape.tubeRadius ?? 1) < (shape.majorRadius ?? 0) * 0.1,
+      ),
+    ).toBe(true)
+    expect(llmAliasBicycle.filter((shape) => shape.semanticRole === 'bicycle_spoke')).toHaveLength(
+      16,
+    )
+    expect(llmAliasBicycle.some((shape) => shape.semanticRole === 'bicycle_frame')).toBe(true)
+    expect(llmAliasBicycle.some((shape) => shape.semanticRole === 'bicycle_fork')).toBe(true)
+    expect(llmAliasBicycle.some((shape) => shape.semanticRole === 'saddle')).toBe(true)
+    expect(llmAliasBicycle.some((shape) => shape.semanticRole === 'chain_loop')).toBe(true)
+
+    const relationshipHeavyBicycle = composePartPrimitives({
+      name: 'blue bicycle',
+      primaryColor: '#2563EB',
+      length: 1.8,
+      width: 0.5,
+      height: 1,
+      geometryBrief: {
+        category: 'complete_bicycle',
+        requiredRoles: [
+          'bicycle_tire',
+          'bicycle_frame',
+          'bicycle_fork',
+          'handlebar',
+          'saddle',
+          'chain_loop',
+        ],
+      },
+      parts: [
+        { id: 'rear_wheel', kind: 'wheel_set', semanticRole: 'bicycle_tire', radius: 0.35 },
+        {
+          id: 'front_wheel',
+          kind: 'wheel_set',
+          semanticRole: 'bicycle_tire',
+          alignBeside: 'rear_wheel',
+          side: 'front',
+          radius: 0.35,
+        },
+        {
+          id: 'frame',
+          kind: 'tube_frame',
+          semanticRole: 'bicycle_frame',
+          alignAbove: 'rear_wheel',
+        },
+        {
+          id: 'fork',
+          kind: 'fork',
+          semanticRole: 'bicycle_fork',
+          connectTo: 'frame',
+          connectPoint: 'head_tube',
+        },
+        {
+          id: 'handlebar',
+          kind: 'handlebar',
+          semanticRole: 'handlebar',
+          connectTo: 'fork',
+          connectPoint: 'steerer_top',
+        },
+        {
+          id: 'saddle',
+          kind: 'saddle',
+          semanticRole: 'saddle',
+          connectTo: 'frame',
+          connectPoint: 'seat_tube_top',
+        },
+        { id: 'chain', kind: 'chain_loop', semanticRole: 'chain_loop' },
+      ],
+    })
+    const tires = relationshipHeavyBicycle.filter((shape) => shape.semanticRole === 'bicycle_tire')
+    expect(tires).toHaveLength(2)
+    expect(tires.every((shape) => shape.axis === 'z')).toBe(true)
+    expect(tires.every((shape) => (shape.tubeRadius ?? 1) < (shape.majorRadius ?? 0) * 0.1)).toBe(
+      true,
+    )
+    expect(
+      relationshipHeavyBicycle.filter((shape) => shape.semanticRole === 'bicycle_spoke'),
+    ).toHaveLength(16)
+    expect(tires[0]?.majorRadius).toBeCloseTo(0.32)
+    expect(tires.map((shape) => shape.position?.[0]).sort()).toEqual([
+      -0.5800000000000001, 0.5800000000000001,
+    ])
+    expect(tires.every((shape) => shape.position?.[1] === 0.32)).toBe(true)
+    const tireTop = (tires[0]?.position?.[1] ?? 0) + (tires[0]?.majorRadius ?? 0)
+    const topTube = relationshipHeavyBicycle.find((shape) => shape.name?.includes('top tube'))
+    const handlebar = relationshipHeavyBicycle.find((shape) =>
+      shape.name?.includes('handlebar crossbar'),
+    )
+    const handlebarStem = relationshipHeavyBicycle.find((shape) =>
+      shape.name?.includes('handlebar stem'),
+    )
+    const frontForkBlade = relationshipHeavyBicycle.find((shape) =>
+      shape.name?.includes('bicycle left fork blade'),
+    )
+    const steererTube = relationshipHeavyBicycle.find((shape) =>
+      shape.name?.includes('bicycle steerer tube'),
+    )
+    const saddle = relationshipHeavyBicycle.find((shape) => shape.name?.includes('saddle cushion'))
+    expect(topTube?.position?.[1]).toBeGreaterThan(tireTop + 0.2)
+    expect(handlebar?.position?.[1]).toBeGreaterThan(tireTop + 0.3)
+    expect(saddle?.position?.[1]).toBeGreaterThan(tireTop + 0.38)
+    expect(handlebar?.position?.[2]).toBe(0)
+    expect(saddle?.position?.[2]).toBe(0)
+    const frontTire = [...tires].sort(
+      (a, b) => (b.position?.[0] ?? Number.NEGATIVE_INFINITY) - (a.position?.[0] ?? 0),
+    )[0]
+    const forkAxle = cylinderEndpointByAxis(frontForkBlade ?? {}, 0, 'max')
+    expect(forkAxle[0]).toBeCloseTo(frontTire?.position?.[0] ?? 0, 4)
+    expect(forkAxle[1]).toBeCloseTo(frontTire?.position?.[1] ?? 0, 4)
+    const steererTop = cylinderEndpointByAxis(steererTube ?? {}, 1, 'max')
+    const stemBase = cylinderEndpointByAxis(handlebarStem ?? {}, 1, 'min')
+    expect(stemBase[0]).toBeCloseTo(steererTop[0], 4)
+    expect(stemBase[1]).toBeCloseTo(steererTop[1], 4)
+    expect(handlebar?.position?.[0]).toBeLessThan(frontTire?.position?.[0] ?? 0)
+
     const car = composePartPrimitives({
       name: 'Car',
       primaryColor: '#cc0000',
       parts: [{ kind: 'vehicle_body' }],
     })
     const bodyShell = car.find((shape) => shape.name?.includes('vehicle body shell'))
+    expect(bodyShell?.kind).toBe('trapezoid-prism')
     expect(bodyShell?.material?.properties?.color).toBe('#cc0000')
     expect(bodyShell?.semanticRole).toBe('vehicle_body')
+    expect(car.some((shape) => shape.name?.includes('vehicle rounded front nose'))).toBe(true)
+    expect(car.some((shape) => shape.name?.includes('vehicle tapered rear quarter'))).toBe(true)
     expect(car.some((shape) => shape.name?.includes('vehicle front deck'))).toBe(true)
     expect(car.some((shape) => shape.name?.includes('vehicle rear deck'))).toBe(true)
     expect(car.filter((shape) => shape.name?.includes('vehicle tire'))).toHaveLength(4)
-    expect(car.filter((shape) => shape.semanticRole === 'vehicle_tire')).toHaveLength(4)
+    const vehicleTires = car.filter((shape) => shape.semanticRole === 'vehicle_tire')
+    expect(vehicleTires).toHaveLength(4)
+    expect(
+      vehicleTires.every((shape) => (shape.tubeRadius ?? 0) > (shape.majorRadius ?? 1) * 0.18),
+    ).toBe(true)
     expect(car.some((shape) => shape.name?.includes('windshield'))).toBe(true)
     expect(car.some((shape) => shape.name?.includes('rear window'))).toBe(true)
+    expect(car.some((shape) => shape.name?.includes('rear quarter window'))).toBe(true)
     expect(car.some((shape) => shape.name?.includes('headlight'))).toBe(true)
     expect(car.some((shape) => shape.name?.includes('front bumper bar'))).toBe(true)
     expect(car.some((shape) => shape.name?.includes('rear bumper bar'))).toBe(true)
@@ -327,6 +786,12 @@ describe('composePartPrimitives', () => {
 
     const sideWindow = car.find((shape) => shape.name?.includes('side window left'))
     expect(sideWindow?.rotation?.[0]).toBeCloseTo(Math.PI / 2)
+    expect(
+      car.filter(
+        (shape) => shape.name?.includes('vehicle wheel arch lip') && shape.kind === 'torus',
+      ),
+    ).toHaveLength(4)
+    expect(car.filter((shape) => shape.name?.includes('vehicle wheel well shadow'))).toHaveLength(4)
 
     const frontBumper = car.find((shape) => shape.name?.includes('front bumper bar'))
     expect(frontBumper?.rotation).toBeUndefined()
@@ -394,11 +859,16 @@ describe('composePartPrimitives', () => {
     const rearWindow = car.find((shape) => shape.name?.includes('rear window'))
     expect(rearWindow?.rotation?.[2]).toBeGreaterThan(Math.PI / 2)
 
-    const sideWindow = car.find((shape) => shape.name?.includes('side window left'))
-    expect(sideWindow?.length).toBeGreaterThan((cabin?.length ?? 0) * 0.6)
-    expect(sideWindow?.width).toBeGreaterThan((windshield?.length ?? 0) * 0.7)
+    const sideWindows = car.filter(
+      (shape) => shape.name?.includes('side window left') && shape.kind === 'rounded-panel',
+    )
+    expect(sideWindows).toHaveLength(2)
+    expect(sideWindows.every((shape) => (shape.width ?? 0) > (windshield?.length ?? 0) * 0.7)).toBe(
+      true,
+    )
 
-    expect(car.some((shape) => shape.name?.includes('wheel arch shadow'))).toBe(false)
+    expect(car.some((shape) => shape.name?.includes('vehicle wheel arch lip'))).toBe(false)
+    expect(car.some((shape) => shape.name?.includes('vehicle wheel well shadow'))).toBe(false)
   })
 
   test('uses a tapered trapezoid cabin when vehicle roof corners are requested below 90 degrees', () => {
@@ -564,6 +1034,602 @@ describe('composePartPrimitives', () => {
     const outletPipe = shapes.find((shape) => shape.name?.includes('outlet-pipe outlet port'))
     expect(suctionFlange?.position?.[2]).toBeCloseTo(0.1215)
     expect(outletPipe?.position?.[0]).toBeCloseTo(0.532)
+  })
+
+  test('resolves compose_parts spatial relationship fields before manual coordinates', () => {
+    const shapes = composePartPrimitives({
+      name: 'Relation layout',
+      autoComplete: false,
+      parts: [
+        {
+          id: 'base',
+          name: 'base',
+          kind: 'skid_base',
+          length: 1,
+          width: 0.4,
+          height: 0.08,
+          position: [0, 0.04, 0],
+        },
+        {
+          id: 'motor',
+          name: 'motor',
+          kind: 'ribbed_motor_body',
+          centeredOn: 'base',
+          axis: 'x',
+          length: 0.4,
+          radius: 0.1,
+        },
+        {
+          id: 'controls',
+          name: 'controls',
+          kind: 'control_box',
+          alignAbove: 'base',
+          relationGap: 0.02,
+          width: 0.2,
+          depth: 0.08,
+          height: 0.16,
+        },
+        {
+          id: 'side-module',
+          name: 'side-module',
+          kind: 'control_box',
+          alignBeside: 'base',
+          side: 'right',
+          relationGap: 0.03,
+          width: 0.2,
+          depth: 0.08,
+          height: 0.16,
+        },
+      ],
+    })
+
+    const motor = shapes.find((shape) => shape.name?.includes('motor ribbed motor body'))
+    expect(motor?.position).toEqual([0, 0.42, 0])
+
+    const controls = shapes.find((shape) => shape.name?.includes('controls control box'))
+    expect(controls?.position?.[0]).toBeCloseTo(0)
+    expect(controls?.position?.[1]).toBeCloseTo(0.18)
+    expect(controls?.position?.[2]).toBeCloseTo(0)
+
+    const sideModule = shapes.find((shape) => shape.name?.includes('side-module control box'))
+    expect(sideModule?.position?.[0]).toBeCloseTo(0.63)
+    expect(sideModule?.position?.[1]).toBeCloseTo(0.04)
+    expect(sideModule?.position?.[2]).toBeCloseTo(0)
+  })
+
+  test('expands around relationship into evenly distributed circular parts', () => {
+    const shapes = composePartPrimitives({
+      name: 'Around layout',
+      autoComplete: false,
+      parts: [
+        {
+          id: 'tank',
+          name: 'tank',
+          kind: 'cylindrical_tank',
+          axis: 'y',
+          radius: 0.4,
+          length: 1,
+          position: [0, 0.5, 0],
+        },
+        {
+          id: 'foot',
+          name: 'support foot',
+          kind: 'control_box',
+          around: 'tank',
+          aroundCount: 4,
+          aroundRadius: 0.55,
+          width: 0.12,
+          depth: 0.08,
+          height: 0.16,
+        },
+      ],
+    })
+
+    const feet = shapes.filter((shape) => shape.name?.match(/support foot \d control box$/))
+    expect(feet).toHaveLength(4)
+    expect(feet[0]?.position?.[0]).toBeCloseTo(0.55)
+    expect(feet[0]?.position?.[2]).toBeCloseTo(0)
+    expect(feet[1]?.position?.[0]).toBeCloseTo(0)
+    expect(feet[1]?.position?.[2]).toBeCloseTo(0.55)
+    expect(feet[2]?.position?.[0]).toBeCloseTo(-0.55)
+    expect(feet[2]?.position?.[2]).toBeCloseTo(0)
+    expect(feet[3]?.position?.[0]).toBeCloseTo(0)
+    expect(feet[3]?.position?.[2]).toBeCloseTo(-0.55)
+  })
+
+  test('expands linear part arrays after relationship placement', () => {
+    const shapes = composePartPrimitives({
+      name: 'Array layout',
+      autoComplete: false,
+      parts: [
+        {
+          id: 'block',
+          name: 'block',
+          kind: 'rounded_machine_body',
+          length: 1,
+          width: 0.4,
+          height: 0.24,
+          position: [0, 0.12, 0],
+        },
+        {
+          id: 'cylinder',
+          name: 'cylinder head',
+          kind: 'control_box',
+          alignAbove: 'block',
+          width: 0.08,
+          depth: 0.08,
+          height: 0.1,
+          array: { count: 3, axis: 'x', spacing: 0.2 },
+        },
+      ],
+    })
+
+    const heads = shapes.filter((shape) => shape.name?.match(/cylinder head \d control box$/))
+    expect(heads).toHaveLength(3)
+    expect(heads[0]?.position?.[0]).toBeCloseTo(-0.2)
+    expect(heads[1]?.position?.[0]).toBeCloseTo(0)
+    expect(heads[2]?.position?.[0]).toBeCloseTo(0.2)
+    for (const head of heads) {
+      expect(head.position?.[1]).toBeCloseTo(0.29)
+      expect(head.position?.[2]).toBeCloseTo(0)
+    }
+  })
+
+  test('places around corner patterns on rectangular parent corners', () => {
+    const shapes = composePartPrimitives({
+      name: 'Corner layout',
+      autoComplete: false,
+      parts: [
+        {
+          id: 'base',
+          name: 'base',
+          kind: 'skid_base',
+          length: 1,
+          width: 0.6,
+          height: 0.08,
+          position: [0, 0.04, 0],
+        },
+        {
+          id: 'foot',
+          name: 'corner foot',
+          kind: 'control_box',
+          around: 'base',
+          cornerPattern: true,
+          width: 0.1,
+          depth: 0.1,
+          height: 0.12,
+        },
+      ],
+    })
+
+    const feet = shapes.filter((shape) => shape.name?.match(/corner foot \d control box$/))
+    expect(feet).toHaveLength(4)
+    expect(feet[0]?.position?.[0]).toBeCloseTo(-0.45)
+    expect(feet[0]?.position?.[2]).toBeCloseTo(-0.25)
+    expect(feet[1]?.position?.[0]).toBeCloseTo(0.45)
+    expect(feet[1]?.position?.[2]).toBeCloseTo(-0.25)
+    expect(feet[2]?.position?.[0]).toBeCloseTo(0.45)
+    expect(feet[2]?.position?.[2]).toBeCloseTo(0.25)
+    expect(feet[3]?.position?.[0]).toBeCloseTo(-0.45)
+    expect(feet[3]?.position?.[2]).toBeCloseTo(0.25)
+  })
+
+  test('links common mechanical parts with contextual defaults', () => {
+    const fan = composePartPrimitives({
+      name: 'Context fan',
+      autoComplete: false,
+      parts: [
+        {
+          id: 'blades',
+          name: 'blades',
+          kind: 'radial_blades',
+          radius: 0.3,
+          position: [0, 1.2, 0.04],
+        },
+        {
+          id: 'grill',
+          name: 'grill',
+          kind: 'protective_grill',
+        },
+      ],
+    })
+    const grillRing = fan.find((shape) => shape.name?.includes('grill front ring 4'))
+    expect(grillRing?.position?.[0]).toBeCloseTo(0)
+    expect(grillRing?.position?.[1]).toBeCloseTo(1.18)
+    expect(grillRing?.position?.[2]).toBeCloseTo(0.04)
+    expect(grillRing?.majorRadius).toBeCloseTo(0.354)
+
+    const pump = composePartPrimitives({
+      name: 'Context pump',
+      autoComplete: false,
+      parts: [
+        {
+          id: 'casing',
+          name: 'casing',
+          kind: 'volute_casing',
+          radius: 0.32,
+          depth: 0.16,
+          position: [0, 0.55, 0.2],
+        },
+        { id: 'suction', name: 'suction', kind: 'inlet_port', radius: 0.06, length: 0.2 },
+        { id: 'discharge', name: 'discharge', kind: 'outlet_port', radius: 0.05, length: 0.24 },
+      ],
+    })
+    const suction = pump.find((shape) => shape.name?.includes('suction inlet port'))
+    const discharge = pump.find((shape) => shape.name?.includes('discharge outlet port'))
+    expect(suction?.position?.[2]).toBeCloseTo(0.3864)
+    expect(discharge?.position?.[0]).toBeCloseTo(0.4267)
+  })
+
+  test('composes propeller blade sets as reusable taiji-half paddles', () => {
+    const shapes = composePartPrimitives({
+      name: 'Generic agitator',
+      autoComplete: false,
+      parts: [
+        {
+          kind: 'propeller_blade_set',
+          count: 3,
+          bladeRadius: 0.42,
+          bladeWidth: 0.16,
+          depth: 0.032,
+          bladePitch: 0.52,
+          bladeShape: 'taiji_half',
+          verticalCurve: 0.07,
+          wireRadius: 0.055,
+        },
+      ],
+    })
+
+    const blades = shapes.filter((shape) => shape.semanticRole === 'propeller_blade')
+    expect(blades).toHaveLength(3)
+    expect(blades.every((shape) => shape.sourcePartKind === 'propeller_blade_set')).toBe(true)
+    expect(blades.every((shape) => shape.name?.includes('taiji half propeller blade'))).toBe(true)
+    const profile = blades[0]?.profile ?? []
+    expect(profile.length).toBeGreaterThanOrEqual(26)
+    const maxY = Math.max(...profile.map(([, y]) => y))
+    const minY = Math.min(...profile.map(([, y]) => y))
+    expect(maxY).toBeGreaterThan(Math.abs(minY) * 0.8)
+    expect(blades.every((shape) => Math.abs((shape.rotation?.[0] ?? 0) + Math.PI / 2) > 0.18)).toBe(
+      true,
+    )
+    blades.forEach(expectBladeRotationMatchesRadialPlacement)
+  })
+
+  test('composes mixer blades through the reusable taiji-half blade set kernel', () => {
+    const shapes = composePartPrimitives({
+      name: 'Mud mixer',
+      autoComplete: false,
+      parts: [
+        {
+          kind: 'mixer_blades',
+          count: 3,
+          bladeRadius: 0.42,
+          bladeWidth: 0.16,
+          depth: 0.032,
+          bladePitch: 0.52,
+          wireRadius: 0.055,
+        },
+      ],
+    })
+
+    const blades = shapes.filter((shape) => shape.semanticRole === 'mixer_blade')
+    expect(blades).toHaveLength(3)
+    expect(blades.every((shape) => shape.kind === 'extrude')).toBe(true)
+    expect(blades.every((shape) => shape.name?.includes('taiji half mixer propeller blade'))).toBe(
+      true,
+    )
+    expect(blades.every((shape) => (shape.profile?.length ?? 0) >= 20)).toBe(true)
+    expect(blades.every((shape) => Math.abs((shape.rotation?.[0] ?? 0) + Math.PI / 2) > 0.25)).toBe(
+      true,
+    )
+    blades.forEach(expectBladeRotationMatchesRadialPlacement)
+    const profile = blades[0]?.profile ?? []
+    const minX = Math.min(...profile.map(([x]) => x))
+    const maxX = Math.max(...profile.map(([x]) => x))
+    const widestX = profile.reduce((best, [x]) => {
+      const widthAtBest = profile.filter(([px]) => px === best).map(([, y]) => y)
+      const widthAtX = profile.filter(([px]) => px === x).map(([, y]) => y)
+      return Math.max(...widthAtX) - Math.min(...widthAtX) >
+        Math.max(...widthAtBest) - Math.min(...widthAtBest)
+        ? x
+        : best
+    }, minX)
+    const widthAt = (xValue: number) => {
+      const ys = profile.filter(([x]) => x === xValue).map(([, y]) => y)
+      return Math.max(...ys) - Math.min(...ys)
+    }
+    expect(widthAt(widestX)).toBeGreaterThan(widthAt(minX) * 1.8)
+    expect(widthAt(widestX)).toBeGreaterThan(widthAt(maxX) * 1.8)
+  })
+
+  test('composes curved organic and aerodynamic reusable parts', () => {
+    const propeller = composePartPrimitives({
+      name: 'Curved propeller',
+      autoComplete: false,
+      parts: [
+        {
+          kind: 'airfoil_blade',
+          name: 'propeller',
+          count: 3,
+          length: 0.6,
+          rootWidth: 0.18,
+          tipWidth: 0.06,
+          thickness: 0.025,
+          pitch: 0.42,
+          camber: 0.04,
+        },
+      ],
+    })
+    const blades = propeller.filter((shape) => shape.semanticRole === 'airfoil_blade')
+    expect(blades).toHaveLength(3)
+    expect(blades.every((shape) => shape.kind === 'extrude')).toBe(true)
+    expect(blades.every((shape) => (shape.profile?.length ?? 0) >= 20)).toBe(true)
+    blades.forEach(expectBladeRotationMatchesRadialPlacement)
+    expect(propeller.some((shape) => shape.semanticRole === 'airfoil_hub')).toBe(true)
+
+    const lens = composePartPrimitives({
+      name: 'Frog sunglasses',
+      autoComplete: false,
+      parts: [
+        {
+          kind: 'curved_lens_panel',
+          name: 'frog lens',
+          lensShape: 'frog',
+          width: 0.34,
+          height: 0.2,
+          curvature: 0.12,
+          color: '#111827',
+        },
+      ],
+    })
+    const lensPanel = lens.find((shape) => shape.semanticRole === 'curved_lens')
+    expect(lensPanel?.kind).toBe('extrude')
+    expect(lensPanel?.material?.properties?.transparent).toBe(true)
+    expect(lens.some((shape) => shape.semanticRole === 'lens_rim')).toBe(true)
+
+    const mouse = composePartPrimitives({
+      name: 'Mouse',
+      autoComplete: false,
+      parts: [{ kind: 'ergonomic_shell', name: 'mouse shell', style: 'mouse' }],
+    })
+    expect(mouse.some((shape) => shape.semanticRole === 'ergonomic_shell')).toBe(true)
+    expect(mouse.filter((shape) => shape.semanticRole === 'mouse_button')).toHaveLength(2)
+    expect(mouse.some((shape) => shape.semanticRole === 'scroll_wheel')).toBe(true)
+
+    const helmet = composePartPrimitives({
+      name: 'Helmet shell',
+      autoComplete: false,
+      parts: [
+        {
+          kind: 'ellipsoid_shell',
+          name: 'helmet',
+          length: 0.34,
+          width: 0.24,
+          height: 0.18,
+          shellThickness: 0.012,
+        },
+      ],
+    })
+    expect(helmet.some((shape) => shape.semanticRole === 'ellipsoid_shell')).toBe(true)
+    expect(helmet.some((shape) => shape.semanticRole === 'ellipsoid_shell_rim')).toBe(true)
+    expect(helmet.some((shape) => shape.semanticRole === 'ellipsoid_shell_opening')).toBe(true)
+
+    const curvedPanel = composePartPrimitives({
+      name: 'Curved machine panel',
+      autoComplete: false,
+      parts: [{ kind: 'curved_panel', width: 0.4, height: 0.22, curvature: 0.16 }],
+    })
+    expect(curvedPanel.some((shape) => shape.sourcePartKind === 'curved_lens_panel')).toBe(true)
+  })
+
+  test('composes streamlined bodies and lofted panels from reusable curved parts', () => {
+    const aircraft = composePartPrimitives({
+      name: 'Aircraft body',
+      autoComplete: false,
+      parts: [
+        {
+          kind: 'streamlined_body',
+          name: 'fuselage',
+          length: 1.6,
+          width: 0.32,
+          height: 0.22,
+          noseRoundness: 0.75,
+          tailTaper: 0.45,
+          roofArc: 0.18,
+        },
+      ],
+    })
+    expect(aircraft.some((shape) => shape.semanticRole === 'streamlined_body')).toBe(true)
+    expect(aircraft.some((shape) => shape.semanticRole === 'streamlined_nose')).toBe(true)
+    expect(aircraft.some((shape) => shape.semanticRole === 'streamlined_tail')).toBe(true)
+    expect(aircraft.some((shape) => shape.semanticRole === 'streamlined_roof_arc')).toBe(true)
+
+    const loft = composePartPrimitives({
+      name: 'Transition fairing',
+      autoComplete: false,
+      parts: [
+        {
+          kind: 'lofted_shell',
+          name: 'fairing',
+          length: 0.9,
+          width: 0.34,
+          height: 0.16,
+          thickness: 0.018,
+          sections: [
+            { x: -0.45, width: 0.4, height: 0.12 },
+            { x: 0, width: 0.3, height: 0.18, y: 0.02 },
+            { x: 0.45, width: 0.12, height: 0.08 },
+          ],
+        },
+      ],
+    })
+    expect(loft.filter((shape) => shape.semanticRole === 'lofted_panel_segment')).toHaveLength(2)
+    expect(loft.some((shape) => shape.semanticRole === 'lofted_panel_root')).toBe(true)
+    expect(loft.some((shape) => shape.semanticRole === 'lofted_panel_tip')).toBe(true)
+  })
+
+  test('auto-completes a Boeing 717 style airliner from aircraft intent', () => {
+    const shapes = composePartPrimitives({
+      name: '生成一架波音717客机',
+      detail: 'medium',
+      parts: [],
+    })
+
+    const fuselage = shapes.find((shape) => shape.semanticRole === 'aircraft_fuselage')
+    expect(fuselage).toBeDefined()
+    const wings = shapes.filter((shape) => shape.semanticRole === 'aircraft_wing')
+    expect(wings).toHaveLength(2)
+    expect(wings.every((shape) => shape.kind === 'extrude')).toBe(true)
+    expect(wings.every((shape) => (shape.profile?.length ?? 0) >= 4)).toBe(true)
+    expect(wings.map((shape) => Math.sign(shape.position?.[2] ?? 0)).sort()).toEqual([-1, 1])
+    expect(shapes.filter((shape) => shape.semanticRole === 'aircraft_winglet')).toHaveLength(2)
+    expect(shapes.filter((shape) => shape.semanticRole === 'engine_nacelle_left')).toHaveLength(1)
+    expect(shapes.filter((shape) => shape.semanticRole === 'engine_nacelle_right')).toHaveLength(1)
+    expect(shapes.some((shape) => shape.semanticRole === 'vertical_stabilizer')).toBe(true)
+    expect(shapes.filter((shape) => shape.semanticRole === 'horizontal_stabilizer')).toHaveLength(2)
+    expect(
+      shapes.filter((shape) => shape.semanticRole === 'aircraft_landing_gear_nose'),
+    ).toHaveLength(2)
+    expect(
+      shapes.filter((shape) => shape.semanticRole === 'aircraft_landing_gear_main'),
+    ).toHaveLength(4)
+    const inferredAircraftLength = ((fuselage?.scale?.[0] as number | undefined) ?? 1) / 0.78
+    const cabinWindows = shapes.filter((shape) => shape.semanticRole === 'cabin_window')
+    expect(cabinWindows.length).toBeGreaterThan(20)
+    expect(
+      cabinWindows.every(
+        (shape) =>
+          shape.kind === 'conformal-strip' &&
+          shape.xStart != null &&
+          shape.xEnd != null &&
+          shape.xEnd - shape.xStart < inferredAircraftLength * 0.03 &&
+          shape.xEnd / inferredAircraftLength < 0.22 &&
+          (shape.width ?? 0) < inferredAircraftLength * 0.035 &&
+          (shape.material?.properties?.opacity ?? 0) >= 0.85,
+      ),
+    ).toBe(true)
+    expect(shapes.some((shape) => shape.semanticRole === 'cockpit_window')).toBe(true)
+    const cockpitWindows = shapes.filter((shape) => shape.semanticRole === 'cockpit_window')
+    expect(cockpitWindows).toHaveLength(4)
+    expect(
+      cockpitWindows.every(
+        (shape) =>
+          shape.kind === 'conformal-strip' &&
+          shape.surface === 'ellipsoid-cylinder' &&
+          shape.xStart != null &&
+          shape.xEnd != null &&
+          shape.xStart / inferredAircraftLength > 0.26 &&
+          shape.xEnd / inferredAircraftLength < 0.35 &&
+          shape.verticalOffset != null &&
+          shape.verticalOffset > 0 &&
+          shape.surfaceRadiusY != null &&
+          shape.surfaceRadiusZ != null &&
+          shape.rotation == null,
+      ),
+    ).toBe(true)
+    expect(
+      cockpitWindows.every((shape) => (shape.material?.properties?.opacity ?? 0) >= 0.85),
+    ).toBe(true)
+    expect(shapes.some((shape) => shape.semanticRole === 'aircraft_nose')).toBe(false)
+    expect(shapes.some((shape) => shape.semanticRole === 'streamlined_roof_arc')).toBe(false)
+    const stripes = shapes.filter((shape) => shape.semanticRole === 'aircraft_livery_stripe')
+    expect(stripes).toHaveLength(2)
+    expect(stripes.every((shape) => shape.kind === 'conformal-strip')).toBe(true)
+    expect(stripes.map((shape) => shape.side).sort()).toEqual(['left', 'right'])
+    expect(stripes.every((shape) => shape.surfaceRadiusY && shape.surfaceRadiusZ)).toBe(true)
+    expect(stripes.every((shape) => shape.surfaceLength)).toBe(true)
+    expect(stripes.every((shape) => shape.endTaper === 0.42 && shape.widthSegments === 4)).toBe(
+      true,
+    )
+
+    const assessment = assessPartBlueprint({
+      name: 'Boeing 717 airliner',
+      parts: [{ kind: 'fuselage_tube' }, { kind: 'low_mounted_wings' }],
+    })
+    expect(assessment.family).toBe('aircraft')
+    expect(assessment.missing).toContain('aircraft_engine')
+  })
+
+  test('scales aircraft default blueprint from top-level length', () => {
+    const shapes = composePartPrimitives({
+      name: 'Boeing 717 airliner',
+      length: 5,
+      geometryBrief: { category: 'aircraft', expectedDimensions: { length: 5 } },
+      parts: [],
+    })
+
+    const fuselage = shapes.find((shape) => shape.semanticRole === 'aircraft_fuselage')
+    const wing = shapes.find((shape) => shape.semanticRole === 'aircraft_wing')
+
+    expect(fuselage?.scale?.[0]).toBeCloseTo(3.9)
+    expect(wing?.kind).toBe('extrude')
+    expect(wing?.profile?.length).toBeGreaterThanOrEqual(4)
+    expect(Math.max(...(wing?.profile ?? []).map(([, y]) => Math.abs(y)))).toBeGreaterThan(1)
+  })
+
+  test('preserves 10 meter aircraft length in default blueprint', () => {
+    const shapes = composePartPrimitives({
+      name: '10 meter aircraft',
+      length: 10,
+      geometryBrief: { category: 'aircraft', expectedDimensions: { length: 10 } },
+      parts: [{ kind: 'aircraft_fuselage' }],
+    })
+
+    const fuselage = shapes.find((shape) => shape.semanticRole === 'aircraft_fuselage')
+    const wing = shapes.find((shape) => shape.semanticRole === 'aircraft_wing')
+    const engine = shapes.find((shape) => shape.semanticRole === 'engine_nacelle_left')
+
+    expect(fuselage?.scale?.[0]).toBeCloseTo(7.8)
+    expect(shapes.some((shape) => shape.semanticRole === 'aircraft_nose')).toBe(false)
+    expect(wing?.kind).toBe('extrude')
+    expect(wing?.depth).toBeLessThanOrEqual(0.08)
+    expect(Math.max(...(wing?.profile ?? []).map(([, y]) => Math.abs(y)))).toBeGreaterThan(2)
+    expect(shapes.some((shape) => shape.semanticRole === 'aircraft_winglet')).toBe(true)
+    expect(engine?.radius).toBeLessThan(0.36)
+  })
+
+  test('applies compose_parts dimensions to the primary explicit part', () => {
+    const shapes = composePartPrimitives({
+      name: 'Boeing 717 airliner',
+      geometryBrief: { category: 'aircraft', expectedDimensions: { length: 5 } },
+      parts: [{ kind: 'aircraft_fuselage' }],
+    })
+
+    const fuselage = shapes.find((shape) => shape.semanticRole === 'aircraft_fuselage')
+
+    expect(fuselage?.scale?.[0]).toBeCloseTo(3.9)
+  })
+
+  test('keeps aircraft default parts aligned when the LLM supplies only a fuselage part', () => {
+    const shapes = composePartPrimitives({
+      name: 'Boeing 717 airliner',
+      length: 8,
+      geometryBrief: { category: 'aircraft', expectedDimensions: { length: 8 } },
+      parts: [{ kind: 'aircraft_fuselage' }],
+    })
+
+    const fuselage = shapes.find((shape) => shape.semanticRole === 'aircraft_fuselage')
+    const wing = shapes.find((shape) => shape.semanticRole === 'aircraft_wing')
+    const engine = shapes.find((shape) => shape.semanticRole === 'engine_nacelle_left')
+    const verticalTail = shapes.find((shape) => shape.semanticRole === 'vertical_stabilizer')
+    const horizontalTail = shapes.find((shape) => shape.semanticRole === 'horizontal_stabilizer')
+    const horizontalTails = shapes.filter((shape) => shape.semanticRole === 'horizontal_stabilizer')
+    const noseGear = shapes.find((shape) => shape.semanticRole === 'aircraft_landing_gear_nose')
+
+    expect(fuselage?.scale?.[0]).toBeCloseTo(6.24)
+    expect(wing?.position?.[1]).toBeLessThan(fuselage?.position?.[1] ?? 0)
+    expect(wing?.position?.[1]).toBeGreaterThan((fuselage?.position?.[1] ?? 0) - 0.35)
+    expect(engine?.position?.[1]).toBeLessThan(wing?.position?.[1] ?? 0)
+    expect(Math.abs(engine?.position?.[2] ?? 0)).toBeGreaterThan(
+      ((fuselage?.scale?.[2] as number | undefined) ?? 0) * 0.7,
+    )
+    expect(verticalTail?.position?.[1]).toBeGreaterThan(fuselage?.position?.[1] ?? 0)
+    expect(horizontalTail?.position?.[1]).toBeGreaterThan(verticalTail?.position?.[1] ?? 0)
+    expect(horizontalTails.map((shape) => Math.sign(shape.position?.[2] ?? 0)).sort()).toEqual([
+      -1, 1,
+    ])
+    expect(noseGear?.position?.[1]).toBeLessThan((fuselage?.position?.[1] ?? 0) - 0.8)
+    expect(noseGear?.position?.[1]).toBeGreaterThan(0)
   })
 
   test('assesses alternative required parts and auto-completes stronger family structures', () => {

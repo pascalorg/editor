@@ -6,19 +6,24 @@ import {
   type AssemblyNode,
   type BoxNode,
   type BuildingNode,
+  type CableTrayNode,
   type CapsuleNode,
   type CeilingNode,
   type ColumnNode,
   type CylinderNode,
+  type DataWidgetNode,
   type DoorNode,
   type ElevatorNode,
   type ExtrudeNode,
   type FenceNode,
   type HalfCylinderNode,
   type ItemNode,
+  type LadderNode,
   type LatheNode,
   type LevelNode,
+  type PipeFittingNode,
   type PipeNode,
+  type RoadNode,
   type RoofNode,
   type RoofSegmentNode,
   type RoofSurfaceMaterialRole,
@@ -30,7 +35,9 @@ import {
   type StairNode,
   type StairSegmentNode,
   type StairSurfaceMaterialRole,
+  type SteelBeamNode,
   type SweepNode,
+  type TankNode,
   useScene,
   type WallNode,
   type WallSurfaceSide,
@@ -63,7 +70,12 @@ export type Mode = 'select' | 'edit' | 'delete' | 'build' | 'material-paint'
 export type StructureTool =
   | 'wall'
   | 'fence'
+  | 'pipe-fitting'
   | 'pipe'
+  | 'cable-tray'
+  | 'ladder'
+  | 'steel-beam'
+  | 'road'
   | 'room'
   | 'custom-room'
   | 'slab'
@@ -78,6 +90,8 @@ export type StructureTool =
   | 'window'
   | 'door'
   | 'shelf'
+  | 'tank'
+  | 'data-widget'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'
@@ -86,30 +100,27 @@ export type FurnishTool = 'item'
 export type SiteTool = 'property-line'
 
 // Catalog categories for furnish mode items
-export type CatalogCategory =
-  | 'safety'
-  | 'lighting'
-  | 'electronics'
-  | 'equipment'
-  | 'structural'
-  | 'opening'
-  | 'outdoor'
-  | 'mine'
+export type CatalogCategory = 'electronics' | 'equipment' | 'structural' | 'outdoor' | 'mine'
 
 const FURNISH_CATALOG_CATEGORIES: CatalogCategory[] = [
-  'safety',
-  'lighting',
   'electronics',
   'equipment',
   'structural',
-  'opening',
   'outdoor',
   'mine',
 ]
 
 function normalizeFurnishCatalogCategory(category: unknown): CatalogCategory {
-  if (category === 'electrical' || category === 'hvac') {
+  if (
+    category === 'safety' ||
+    category === 'lighting' ||
+    category === 'electrical' ||
+    category === 'hvac'
+  ) {
     return 'electronics'
+  }
+  if (category === 'opening') {
+    return 'structural'
   }
   if (category === 'infrastructure' || category === 'nature') {
     return 'outdoor'
@@ -125,10 +136,11 @@ function normalizeFurnishCatalogCategory(category: unknown): CatalogCategory {
     return category as CatalogCategory
   }
 
-  return 'safety'
+  return 'electronics'
 }
 
-export type StructureLayer = 'zones' | 'elements'
+export type StructureLayer = 'zones' | 'elements' | 'industrial' | 'data'
+export type StairPlacementType = 'straight' | 'curved' | 'spiral'
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
 export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
@@ -151,6 +163,21 @@ export type MovingPipeEndpoint = {
   endpoint: 'start' | 'end'
 }
 
+export type MovingCableTrayEndpoint = {
+  cableTray: CableTrayNode
+  endpoint: 'start' | 'end'
+}
+
+export type MovingRoadEndpoint = {
+  road: RoadNode
+  endpoint: 'start' | 'end'
+}
+
+export type MovingSteelBeamEndpoint = {
+  steelBeam: SteelBeamNode
+  endpoint: 'start' | 'end'
+}
+
 export type MaterialTargetRole =
   | WallSurfaceSide
   | StairSurfaceMaterialRole
@@ -161,6 +188,41 @@ export type SelectedMaterialTarget = {
   nodeId: AnyNodeId
   role: MaterialTargetRole
 }
+
+export type MovingNode =
+  | AssemblyNode
+  | ItemNode
+  | WindowNode
+  | DoorNode
+  | ElevatorNode
+  | CeilingNode
+  | ColumnNode
+  | SlabNode
+  | WallNode
+  | FenceNode
+  | PipeFittingNode
+  | PipeNode
+  | CableTrayNode
+  | RoadNode
+  | RoofNode
+  | RoofSegmentNode
+  | SpawnNode
+  | StairNode
+  | StairSegmentNode
+  | BuildingNode
+  | BoxNode
+  | CylinderNode
+  | SphereNode
+  | LatheNode
+  | CapsuleNode
+  | HalfCylinderNode
+  | RoundedPanelNode
+  | ExtrudeNode
+  | SweepNode
+  | TankNode
+  | DataWidgetNode
+  | LadderNode
+  | SteelBeamNode
 
 type MaterialPaintSelectionSnapshot = {
   selectedId: string | null
@@ -180,84 +242,48 @@ type EditorState = {
   setMode: (mode: Mode) => void
   tool: Tool | null
   setTool: (tool: Tool | null) => void
+  stairPlacementType: StairPlacementType
+  setStairPlacementType: (type: StairPlacementType) => void
   structureLayer: StructureLayer
   setStructureLayer: (layer: StructureLayer) => void
   catalogCategory: CatalogCategory | null
   setCatalogCategory: (category: CatalogCategory | null) => void
   selectedItem: AssetInput | null
-  setSelectedItem: (item: AssetInput) => void
+  setSelectedItem: (item: AssetInput | null) => void
   editingAssemblyId: AnyNodeId | null
   setEditingAssemblyId: (id: AnyNodeId | null) => void
-  movingNode:
-    | AssemblyNode
-    | ItemNode
-    | WindowNode
-    | DoorNode
-    | ElevatorNode
-    | CeilingNode
-    | ColumnNode
-    | SlabNode
-    | WallNode
-    | FenceNode
-    | PipeNode
-    | RoofNode
-    | RoofSegmentNode
-    | SpawnNode
-    | StairNode
-    | StairSegmentNode
-    | BuildingNode
-    | BoxNode
-    | CylinderNode
-    | SphereNode
-    | LatheNode
-    | CapsuleNode
-    | HalfCylinderNode
-    | RoundedPanelNode
-    | ExtrudeNode
-    | SweepNode
-    | null
-  setMovingNode: (
-    node:
-      | AssemblyNode
-      | ItemNode
-      | WindowNode
-      | DoorNode
-      | ElevatorNode
-      | CeilingNode
-      | ColumnNode
-      | SlabNode
-      | WallNode
-      | FenceNode
-      | PipeNode
-      | RoofNode
-      | RoofSegmentNode
-      | SpawnNode
-      | StairNode
-      | StairSegmentNode
-      | BuildingNode
-      | BoxNode
-      | CylinderNode
-      | SphereNode
-      | LatheNode
-      | CapsuleNode
-      | HalfCylinderNode
-      | RoundedPanelNode
-      | ExtrudeNode
-      | SweepNode
-      | null,
-  ) => void
+  movingNode: MovingNode | null
+  setMovingNode: (node: MovingNode | null) => void
+  placementDragMode: boolean
+  setPlacementDragMode: (dragMode: boolean) => void
+  movingNodeOrigin: '2d' | '3d' | null
+  setMovingNodeOrigin: (origin: '2d' | '3d' | null) => void
   movingWallEndpoint: MovingWallEndpoint | null
   setMovingWallEndpoint: (value: MovingWallEndpoint | null) => void
   movingFenceEndpoint: MovingFenceEndpoint | null
   setMovingFenceEndpoint: (value: MovingFenceEndpoint | null) => void
   movingPipeEndpoint: MovingPipeEndpoint | null
   setMovingPipeEndpoint: (value: MovingPipeEndpoint | null) => void
+  movingCableTrayEndpoint: MovingCableTrayEndpoint | null
+  setMovingCableTrayEndpoint: (value: MovingCableTrayEndpoint | null) => void
+  movingRoadEndpoint: MovingRoadEndpoint | null
+  setMovingRoadEndpoint: (value: MovingRoadEndpoint | null) => void
+  movingSteelBeamEndpoint: MovingSteelBeamEndpoint | null
+  setMovingSteelBeamEndpoint: (value: MovingSteelBeamEndpoint | null) => void
+  activeHandleDrag: { nodeId: AnyNodeId; label: string } | null
+  setActiveHandleDrag: (drag: { nodeId: AnyNodeId; label: string } | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
   curvingFence: FenceNode | null
   setCurvingFence: (fence: FenceNode | null) => void
   curvingPipe: PipeNode | null
   setCurvingPipe: (pipe: PipeNode | null) => void
+  curvingCableTray: CableTrayNode | null
+  setCurvingCableTray: (cableTray: CableTrayNode | null) => void
+  curvingRoad: RoadNode | null
+  setCurvingRoad: (road: RoadNode | null) => void
+  curvingSteelBeam: SteelBeamNode | null
+  setCurvingSteelBeam: (steelBeam: SteelBeamNode | null) => void
   selectedMaterialTarget: SelectedMaterialTarget | null
   setSelectedMaterialTarget: (target: SelectedMaterialTarget | null) => void
   activePaintMaterial: ActivePaintMaterial | null
@@ -302,6 +328,8 @@ type EditorState = {
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
   gridSnapStep: GridSnapStep
   setGridSnapStep: (step: GridSnapStep) => void
+  magneticSnap: boolean
+  setMagneticSnap: (enabled: boolean) => void
   showReferenceFloor: boolean
   toggleReferenceFloor: () => void
   setShowReferenceFloor: (show: boolean) => void
@@ -343,6 +371,7 @@ type PersistedEditorLayoutState = Pick<
   | 'splitOrientation'
   | 'floorplanSelectionTool'
   | 'gridSnapStep'
+  | 'magneticSnap'
   | 'showReferenceFloor'
   | 'referenceFloorOffset'
   | 'referenceFloorOpacity'
@@ -365,6 +394,7 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   splitOrientation: 'horizontal',
   floorplanSelectionTool: 'click',
   gridSnapStep: 0.5,
+  magneticSnap: true,
   showReferenceFloor: false,
   referenceFloorOffset: 1,
   referenceFloorOpacity: 0.35,
@@ -373,11 +403,7 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
 
 function normalizeModeForPhase(phase: Phase, mode: Mode | undefined): Mode {
-  if (phase === 'site') {
-    return 'select'
-  }
-
-  return mode === 'build' || mode === 'delete' || mode === 'material-paint' ? mode : 'select'
+  return 'select'
 }
 
 function normalizeFloorplanPaneRatio(value: unknown): number {
@@ -426,7 +452,14 @@ export function normalizePersistedEditorUiState(
     }
   }
 
-  const structureLayer = state?.structureLayer === 'zones' ? 'zones' : 'elements'
+  const structureLayer =
+    state?.structureLayer === 'zones'
+      ? 'zones'
+      : state?.structureLayer === 'industrial'
+        ? 'industrial'
+        : state?.structureLayer === 'data'
+          ? 'data'
+          : 'elements'
 
   if (mode !== 'build') {
     return {
@@ -445,6 +478,38 @@ export function normalizePersistedEditorUiState(
       phase,
       mode,
       tool: 'zone',
+      structureLayer,
+      catalogCategory: null,
+      viewMode,
+      isFloorplanOpen,
+    }
+  }
+
+  if (structureLayer === 'industrial') {
+    const industrialTool = state?.tool
+    return {
+      phase,
+      mode,
+      tool:
+        industrialTool === 'pipe' ||
+        industrialTool === 'pipe-fitting' ||
+        industrialTool === 'tank' ||
+        industrialTool === 'cable-tray' ||
+        industrialTool === 'steel-beam'
+          ? industrialTool
+          : 'tank',
+      structureLayer,
+      catalogCategory: null,
+      viewMode,
+      isFloorplanOpen,
+    }
+  }
+
+  if (structureLayer === 'data') {
+    return {
+      phase,
+      mode,
+      tool: 'data-widget',
       structureLayer,
       catalogCategory: null,
       viewMode,
@@ -479,6 +544,7 @@ function normalizePersistedEditorLayoutState(
     gridSnapStep: GRID_SNAP_STEPS.includes(state?.gridSnapStep as GridSnapStep)
       ? (state?.gridSnapStep as GridSnapStep)
       : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
+    magneticSnap: state?.magneticSnap !== false,
     showReferenceFloor: state?.showReferenceFloor === true,
     referenceFloorOffset:
       typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
@@ -571,10 +637,14 @@ const useEditor = create<EditorState>()(
             set({ tool: 'property-line', catalogCategory: null })
           } else if (phase === 'structure' && structureLayer === 'zones') {
             set({ tool: 'zone', catalogCategory: null })
+          } else if (phase === 'structure' && structureLayer === 'industrial') {
+            set({ tool: 'tank', catalogCategory: null })
+          } else if (phase === 'structure' && structureLayer === 'data') {
+            set({ tool: 'data-widget', catalogCategory: null })
           } else if (phase === 'structure') {
             set({ tool: 'wall', catalogCategory: null })
           } else if (phase === 'furnish') {
-            set({ tool: 'item', catalogCategory: 'safety' })
+            set({ tool: 'item', catalogCategory: 'electronics' })
           }
         } else {
           // Reset to select mode and clear tool/catalog when switching phases
@@ -611,10 +681,14 @@ const useEditor = create<EditorState>()(
           if (!tool) {
             if (phase === 'structure' && structureLayer === 'zones') {
               set({ tool: 'zone' })
+            } else if (phase === 'structure' && structureLayer === 'industrial') {
+              set({ tool: 'tank' })
+            } else if (phase === 'structure' && structureLayer === 'data') {
+              set({ tool: 'data-widget' })
             } else if (phase === 'structure' && structureLayer === 'elements') {
               set({ tool: 'wall' })
             } else if (phase === 'furnish') {
-              set({ tool: 'item', catalogCategory: 'safety' })
+              set({ tool: 'item', catalogCategory: 'electronics' })
             }
           }
         } else if (mode === 'material-paint') {
@@ -627,13 +701,22 @@ const useEditor = create<EditorState>()(
       },
       tool: DEFAULT_PERSISTED_EDITOR_UI_STATE.tool,
       setTool: (tool) => set({ tool }),
+      stairPlacementType: 'straight',
+      setStairPlacementType: (type) => set({ stairPlacementType: type }),
       structureLayer: DEFAULT_PERSISTED_EDITOR_UI_STATE.structureLayer,
       setStructureLayer: (layer) => {
         set({ editingAssemblyId: null })
         const { mode } = get()
 
         if (mode === 'build') {
-          const tool = layer === 'zones' ? 'zone' : 'wall'
+          const tool =
+            layer === 'zones'
+              ? 'zone'
+              : layer === 'industrial'
+                ? 'tank'
+                : layer === 'data'
+                  ? 'data-widget'
+                  : 'wall'
           set({ structureLayer: layer, tool })
         } else {
           set({ structureLayer: layer, mode: 'select', tool: null })
@@ -651,47 +734,43 @@ const useEditor = create<EditorState>()(
       setSelectedItem: (item) => set({ selectedItem: item }),
       editingAssemblyId: null,
       setEditingAssemblyId: (id) => set({ editingAssemblyId: id }),
-      movingNode: null as
-        | AssemblyNode
-        | ItemNode
-        | WindowNode
-        | DoorNode
-        | ElevatorNode
-        | CeilingNode
-        | ColumnNode
-        | SlabNode
-        | WallNode
-        | FenceNode
-        | PipeNode
-        | RoofNode
-        | RoofSegmentNode
-        | SpawnNode
-        | StairNode
-        | StairSegmentNode
-        | BuildingNode
-        | BoxNode
-        | CylinderNode
-        | SphereNode
-        | LatheNode
-        | CapsuleNode
-        | HalfCylinderNode
-        | RoundedPanelNode
-        | ExtrudeNode
-        | SweepNode
-        | null,
-      setMovingNode: (node) => set({ movingNode: node }),
+      movingNode: null as MovingNode | null,
+      placementDragMode: false,
+      setPlacementDragMode: (dragMode) => set({ placementDragMode: dragMode }),
+      setMovingNode: (node) =>
+        set(
+          node === null
+            ? { movingNode: null, placementDragMode: false }
+            : { movingNode: node, movingNodeOrigin: null },
+        ),
+      movingNodeOrigin: null as '2d' | '3d' | null,
+      setMovingNodeOrigin: (origin) => set({ movingNodeOrigin: origin }),
       movingWallEndpoint: null,
       setMovingWallEndpoint: (value) => set({ movingWallEndpoint: value }),
       movingFenceEndpoint: null,
       setMovingFenceEndpoint: (value) => set({ movingFenceEndpoint: value }),
       movingPipeEndpoint: null,
       setMovingPipeEndpoint: (value) => set({ movingPipeEndpoint: value }),
+      movingCableTrayEndpoint: null,
+      setMovingCableTrayEndpoint: (value) => set({ movingCableTrayEndpoint: value }),
+      movingRoadEndpoint: null,
+      setMovingRoadEndpoint: (value) => set({ movingRoadEndpoint: value }),
+      movingSteelBeamEndpoint: null,
+      setMovingSteelBeamEndpoint: (value) => set({ movingSteelBeamEndpoint: value }),
+      activeHandleDrag: null,
+      setActiveHandleDrag: (drag) => set({ activeHandleDrag: drag }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       curvingFence: null,
       setCurvingFence: (fence) => set({ curvingFence: fence }),
       curvingPipe: null,
       setCurvingPipe: (pipe) => set({ curvingPipe: pipe }),
+      curvingCableTray: null,
+      setCurvingCableTray: (cableTray) => set({ curvingCableTray: cableTray }),
+      curvingRoad: null,
+      setCurvingRoad: (road) => set({ curvingRoad: road }),
+      curvingSteelBeam: null,
+      setCurvingSteelBeam: (steelBeam) => set({ curvingSteelBeam: steelBeam }),
       selectedMaterialTarget: null,
       setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
       activePaintMaterial: null,
@@ -806,6 +885,8 @@ const useEditor = create<EditorState>()(
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
       gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
       setGridSnapStep: (step) => set({ gridSnapStep: step }),
+      magneticSnap: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.magneticSnap,
+      setMagneticSnap: (enabled) => set({ magneticSnap: enabled }),
       showReferenceFloor: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showReferenceFloor,
       toggleReferenceFloor: () =>
         set((state) => ({ showReferenceFloor: !state.showReferenceFloor })),
@@ -864,7 +945,14 @@ const useEditor = create<EditorState>()(
           phase: 'structure',
           mode: 'build',
           structureLayer: layer,
-          tool: layer === 'zones' ? 'zone' : 'wall',
+          tool:
+            layer === 'zones'
+              ? 'zone'
+              : layer === 'industrial'
+                ? 'tank'
+                : layer === 'data'
+                  ? 'data-widget'
+                  : 'wall',
           catalogCategory: null,
           ...(openSitePanel ? { activeSidebarPanel: 'site' } : {}),
         })
@@ -883,6 +971,7 @@ const useEditor = create<EditorState>()(
         ...normalizePersistedEditorUiState(persistedState as Partial<PersistedEditorState>),
         ...normalizePersistedEditorLayoutState(persistedState as Partial<PersistedEditorState>),
       }),
+      skipHydration: true,
       partialize: (state) => ({
         phase: state.phase,
         mode: state.mode,
@@ -896,6 +985,7 @@ const useEditor = create<EditorState>()(
         splitOrientation: state.splitOrientation,
         floorplanSelectionTool: state.floorplanSelectionTool,
         gridSnapStep: state.gridSnapStep,
+        magneticSnap: state.magneticSnap,
         showReferenceFloor: state.showReferenceFloor,
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,

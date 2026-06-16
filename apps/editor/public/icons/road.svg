@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Road">
+  <path d="M23 58 29 6h6l6 52Z" fill="#111827"/>
+  <path d="M29 58 31 6h2l2 52Z" fill="#374151"/>
+  <path d="M31 12h2v8h-2Zm0 14h2v8h-2Zm0 14h2v8h-2Z" fill="#f8fafc"/>
+  <path d="M23 58 29 6h6l6 52" fill="none" stroke="#64748b" stroke-linejoin="round" stroke-width="2"/>
+</svg>

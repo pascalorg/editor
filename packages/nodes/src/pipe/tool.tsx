@@ -29,7 +29,7 @@ import {
   Vector3,
 } from 'three'
 
-const DEFAULT_ELEVATION = 3
+const DEFAULT_ELEVATION = 1
 const DEFAULT_DIAMETER = 0.15
 const DRAFT_LABEL_Y = DEFAULT_ELEVATION + 0.35
 

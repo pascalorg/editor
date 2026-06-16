@@ -1,19 +1,17 @@
 import '../../../three-types'
 
 import {
-  COLUMN_PRESETS,
-  ColumnNode,
   type ColumnNode as ColumnNodeType,
-  type ColumnPresetId,
   emitter,
   type GridEvent,
   type LevelNode,
   useScene,
 } from '@pascal-app/core'
-import { useEffect, useRef, useState } from 'react'
-import type { Group } from 'three'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type * as THREE from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
+import { createColumnFromPreset, DEFAULT_COLUMN_PRESET_ID } from './column-defaults'
 
 const COLUMN_ICON = (
   // eslint-disable-next-line @next/next/no-img-element
@@ -24,18 +22,9 @@ const COLUMN_ICON = (
   />
 )
 
+const GRID_OFFSET = 0.02
 const roundToHalf = (value: number) => Math.round(value * 2) / 2
-const DEFAULT_COLUMN_PRESET_ID = 'basicPillar' satisfies ColumnPresetId
-
-function createColumnFromPreset(presetId: ColumnPresetId, position: [number, number, number]) {
-  const { label, ...preset } = COLUMN_PRESETS[presetId]
-  return ColumnNode.parse({
-    name: label,
-    position,
-    rotation: 0,
-    ...preset,
-  })
-}
+const disablePreviewRaycast = () => null
 
 type ColumnToolProps = {
   currentLevelId: LevelNode['id'] | null
@@ -44,7 +33,24 @@ type ColumnToolProps = {
 
 export const ColumnTool: React.FC<ColumnToolProps> = ({ currentLevelId, onPlaced }) => {
   const [, setCursorPosition] = useState<[number, number, number] | null>(null)
-  const cursorRef = useRef<Group>(null)
+  const cursorRef = useRef<THREE.Group>(null)
+  const previewRef = useRef<THREE.Group>(null)
+  const previewColumn = useMemo(
+    () => createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, [0, 0, 0]),
+    [],
+  )
+  const isRoundPreview =
+    previewColumn.crossSection === 'round' ||
+    previewColumn.crossSection === 'octagonal' ||
+    previewColumn.crossSection === 'sixteen-sided'
+  const previewSegments =
+    previewColumn.crossSection === 'octagonal'
+      ? 8
+      : previewColumn.crossSection === 'sixteen-sided'
+        ? 16
+        : 32
+  const previewWidth = isRoundPreview ? previewColumn.radius * 2 : previewColumn.width
+  const previewDepth = isRoundPreview ? previewColumn.radius * 2 : previewColumn.depth
 
   useEffect(() => {
     if (!currentLevelId) return
@@ -56,7 +62,12 @@ export const ColumnTool: React.FC<ColumnToolProps> = ({ currentLevelId, onPlaced
         roundToHalf(event.localPosition[2]),
       ]
       setCursorPosition(nextPosition)
-      cursorRef.current?.position.set(nextPosition[0], event.localPosition[1], nextPosition[2])
+      cursorRef.current?.position.set(
+        nextPosition[0],
+        event.localPosition[1] + GRID_OFFSET,
+        nextPosition[2],
+      )
+      previewRef.current?.position.set(nextPosition[0], event.localPosition[1], nextPosition[2])
     }
 
     const onGridClick = (event: GridEvent) => {
@@ -83,12 +94,35 @@ export const ColumnTool: React.FC<ColumnToolProps> = ({ currentLevelId, onPlaced
   if (!currentLevelId) return null
 
   return (
-    <CursorSphere
-      color="#a78bfa"
-      height={2.5}
-      ref={cursorRef}
-      showTooltip
-      tooltipContent={COLUMN_ICON}
-    />
+    <group>
+      <CursorSphere
+        color="#a78bfa"
+        height={previewColumn.height}
+        ref={cursorRef}
+        showTooltip
+        tooltipContent={COLUMN_ICON}
+      />
+      <group ref={previewRef}>
+        <mesh
+          castShadow
+          position={[0, previewColumn.height / 2, 0]}
+          raycast={disablePreviewRaycast}
+        >
+          {isRoundPreview ? (
+            <cylinderGeometry
+              args={[
+                previewColumn.radius,
+                previewColumn.radius,
+                previewColumn.height,
+                previewSegments,
+              ]}
+            />
+          ) : (
+            <boxGeometry args={[previewWidth, previewColumn.height, previewDepth]} />
+          )}
+          <meshStandardMaterial color="#a78bfa" depthWrite={false} opacity={0.35} transparent />
+        </mesh>
+      </group>
+    </group>
   )
 }

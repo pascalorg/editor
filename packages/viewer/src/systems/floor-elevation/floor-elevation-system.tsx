@@ -1,10 +1,10 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getFloorPlacedElevation,
   nodeRegistry,
   resolveLevelId,
   sceneRegistry,
-  spatialGridManager,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
@@ -60,13 +60,13 @@ export const FloorElevationSystem = () => {
       const levelId = resolveLevelId(node, nodes)
       if (!levelId) return
 
-      const { dimensions, rotation } = floorPlaced.footprint(node as AnyNode)
-      const slabElevation = spatialGridManager.getSlabElevationForItem(
+      const slabElevation = getFloorPlacedElevation({
+        node: node as AnyNode,
+        nodes,
+        rotation: (node as { rotation?: number }).rotation,
         levelId,
         position,
-        dimensions,
-        rotation,
-      )
+      })
       mesh.position.y = slabElevation + position[1]
     })
   }, 1)

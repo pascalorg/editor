@@ -43,6 +43,8 @@ export function NodeMaterialSection({ nodeId: explicitNodeId }: NodeMaterialSect
   const nodeId = explicitNodeId ?? selectedId
   const node = useScene((state) => (nodeId ? state.nodes[nodeId] : undefined))
   const updateNode = useScene((state) => state.updateNode)
+  const selectedMaterialTarget = useEditor((state) => state.selectedMaterialTarget)
+  const setSelectedMaterialTarget = useEditor((state) => state.setSelectedMaterialTarget)
   const [activeTargetKey, setActiveTargetKey] = useState<string>('surface')
 
   const targets = useMemo(() => getMaterialTargetsForNode(node), [node])
@@ -50,19 +52,44 @@ export function NodeMaterialSection({ nodeId: explicitNodeId }: NodeMaterialSect
     () => targets.find((target) => target.key === activeTargetKey) ?? targets[0] ?? null,
     [activeTargetKey, targets],
   )
+  const selectMaterialTargetKey = useCallback(
+    (targetKey: string) => {
+      setActiveTargetKey(targetKey)
+      if (nodeId && isMaterialTargetRole(targetKey)) {
+        setSelectedMaterialTarget({
+          nodeId,
+          role: targetKey,
+        })
+      }
+    },
+    [nodeId, setSelectedMaterialTarget],
+  )
 
   useEffect(() => {
-    if (activeTarget || targets.length === 0) return
+    if (targets.length === 0 || targets.some((target) => target.key === activeTargetKey)) return
     setActiveTargetKey(targets[0]?.key ?? 'surface')
-  }, [activeTarget, targets])
+  }, [activeTargetKey, targets])
 
   useEffect(() => {
-    if (!(nodeId && activeTarget?.key === 'surface')) return
-    useEditor.getState().setSelectedMaterialTarget({
+    if (!(nodeId && selectedMaterialTarget?.nodeId === nodeId)) return
+    const selectedTarget = targets.find((target) => target.key === selectedMaterialTarget.role)
+    if (selectedTarget && selectedTarget.key !== activeTargetKey) {
+      setActiveTargetKey(selectedTarget.key)
+    }
+  }, [activeTargetKey, nodeId, selectedMaterialTarget, targets])
+
+  useEffect(() => {
+    if (!(nodeId && activeTarget && isMaterialTargetRole(activeTarget.key))) return
+    const currentTarget = useEditor.getState().selectedMaterialTarget
+    if (currentTarget?.nodeId === nodeId) {
+      if (currentTarget.role === activeTarget.key) return
+      if (targets.some((target) => target.key === currentTarget.role)) return
+    }
+    setSelectedMaterialTarget({
       nodeId,
-      role: 'surface',
+      role: activeTarget.key,
     })
-  }, [activeTarget?.key, nodeId])
+  }, [activeTarget, nodeId, setSelectedMaterialTarget, targets])
 
   const values = useMemo(
     () => (node && activeTarget ? readTargetValues(node, activeTarget) : {}),
@@ -118,7 +145,7 @@ export function NodeMaterialSection({ nodeId: explicitNodeId }: NodeMaterialSect
       {targets.length > 1 ? (
         <div className="px-3 py-2">
           <SegmentedControl
-            onChange={setActiveTargetKey}
+            onChange={selectMaterialTargetKey}
             options={targets.map((target) => ({ label: target.label, value: target.key }))}
             value={activeTarget.key}
           />
@@ -182,6 +209,31 @@ export function NodeMaterialSection({ nodeId: explicitNodeId }: NodeMaterialSect
         </div>
       </div>
     </PanelSection>
+  )
+}
+
+function isMaterialTargetRole(
+  value: string,
+): value is
+  | 'interior'
+  | 'exterior'
+  | 'top'
+  | 'edge'
+  | 'wall'
+  | 'railing'
+  | 'tread'
+  | 'side'
+  | 'surface' {
+  return (
+    value === 'interior' ||
+    value === 'exterior' ||
+    value === 'top' ||
+    value === 'edge' ||
+    value === 'wall' ||
+    value === 'railing' ||
+    value === 'tread' ||
+    value === 'side' ||
+    value === 'surface'
   )
 }
 

@@ -16,6 +16,7 @@ import {
   getSideFromNormal,
   isValidWallSideFace,
   snapToHalf,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -23,6 +24,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { clearOpeningGuides3D, publishOpeningGuidesForWallEvent } from '../shared/opening-guides-runtime'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
 
 const edgeMaterial = new LineBasicNodeMaterial({
@@ -94,6 +96,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
+      clearOpeningGuides3D()
     }
 
     const updateCursor = (
@@ -177,6 +180,17 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         cursorRotation,
         valid,
       )
+      publishOpeningGuidesForWallEvent({
+        wall: event.node,
+        movingId: movingDoorNode.id,
+        centerS: clampedX,
+        centerY: clampedY,
+        width: movingDoorNode.width,
+        height: movingDoorNode.height,
+        includeVertical: false,
+        levelYOffset: getLevelYOffset(),
+        slabElevation: getSlabElevation(event),
+      })
       event.stopPropagation()
     }
 
@@ -245,6 +259,17 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         cursorRotation,
         valid,
       )
+      publishOpeningGuidesForWallEvent({
+        wall: event.node,
+        movingId: movingDoorNode.id,
+        centerS: clampedX,
+        centerY: clampedY,
+        width: movingDoorNode.width,
+        height: movingDoorNode.height,
+        includeVertical: false,
+        levelYOffset: getLevelYOffset(),
+        slabElevation: getSlabElevation(event),
+      })
       event.stopPropagation()
     }
 
@@ -281,6 +306,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
         const cloned = structuredClone(movingDoorNode) as any
         delete cloned.id
+        cloned.metadata = stripPlacementMetadataFlags(cloned.metadata)
         const node = DoorNode.parse({
           ...cloned,
           position: [clampedX, clampedY, 0],
@@ -414,6 +440,8 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     boxGeo.dispose()
     return geo
   }, [movingDoorNode])
+
+  useEffect(() => () => edgesGeo.dispose(), [edgesGeo])
 
   return (
     <group ref={cursorGroupRef} visible={false}>

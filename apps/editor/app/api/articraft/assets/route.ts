@@ -20,6 +20,7 @@ type SavedAsset = {
   src: string
   dimensions: [number, number, number]
   tags: string[]
+  articraft?: Record<string, unknown>
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -56,6 +57,10 @@ function sanitizeSegment(value: string, fallback: string) {
     .replace(/^-+|-+$/g, '')
     .slice(0, 96)
   return normalized || fallback
+}
+
+function isSafeAssetId(assetId: string) {
+  return sanitizeSegment(assetId, '') === assetId && !assetId.includes('/') && !assetId.includes('\\')
 }
 
 function positiveDimensions(value: unknown): [number, number, number] {
@@ -104,7 +109,7 @@ async function exportModelGlb(
     )
   }
   const { stdout, stderr } = await execFileAsync(
-    process.platform === 'win32' ? 'uv.cmd' : 'uv',
+    'uv',
     [
       'run',
       'python',
@@ -122,6 +127,7 @@ async function exportModelGlb(
       cwd: articraftRoot,
       encoding: 'utf8',
       maxBuffer: 1024 * 1024 * 8,
+      shell: process.platform === 'win32',
       windowsHide: true,
     },
   )
@@ -144,6 +150,32 @@ export async function GET() {
   )
   const assets = await readManifest(manifestPath)
   return NextResponse.json({ assets })
+}
+
+export async function DELETE(req: NextRequest) {
+  const assetId = req.nextUrl.searchParams.get('id')?.trim() ?? ''
+  if (!assetId || !isSafeAssetId(assetId)) {
+    return NextResponse.json({ error: 'Valid asset id is required' }, { status: 400 })
+  }
+
+  const repoRoot = await findRepoRoot()
+  const itemRoot = path.join(repoRoot, 'apps', 'editor', 'public', 'items')
+  const manifestPath = path.join(itemRoot, 'articraft-assets.json')
+  const manifest = await readManifest(manifestPath)
+  const nextManifest = manifest.filter((item) => item.id !== assetId)
+  if (nextManifest.length === manifest.length) {
+    return NextResponse.json({ error: 'Asset not found' }, { status: 404 })
+  }
+  await writeManifest(manifestPath, nextManifest)
+
+  const assetDir = path.resolve(itemRoot, assetId)
+  const resolvedRoot = path.resolve(itemRoot)
+  if (!(assetDir === resolvedRoot || assetDir.startsWith(`${resolvedRoot}${path.sep}`))) {
+    return NextResponse.json({ error: 'Invalid asset path' }, { status: 400 })
+  }
+  await fs.rm(assetDir, { recursive: true, force: true })
+
+  return NextResponse.json({ ok: true, id: assetId })
 }
 
 export async function POST(req: NextRequest) {
@@ -192,10 +224,19 @@ export async function POST(req: NextRequest) {
   const prompt = typeof body.prompt === 'string' ? body.prompt : ''
   const recordPath = typeof body.recordPath === 'string' ? body.recordPath : ''
   const joints = Array.isArray(body.joints) ? body.joints : []
+  const modelData = isRecord(body.data) ? body.data : null
+  const saveToLibrary = body.save !== false
+  const articraftMetadata = {
+    recordId,
+    recordPath,
+    prompt,
+    joints,
+    ...(modelData ? { modelData } : {}),
+  }
 
   await fs.writeFile(
     path.join(assetDir, 'articraft.json'),
-    `${JSON.stringify({ recordId, recordPath, prompt, joints, createdAt }, null, 2)}\n`,
+    `${JSON.stringify({ ...articraftMetadata, createdAt }, null, 2)}\n`,
     'utf8',
   )
 
@@ -209,11 +250,18 @@ export async function POST(req: NextRequest) {
     src: `/items/${assetId}/model.glb`,
     dimensions: positiveDimensions(exportInfo.dimensions),
     tags: ['floor', 'articraft', 'generated'],
+    articraft: articraftMetadata,
   }
 
-  const manifest = await readManifest(manifestPath)
-  const nextManifest = [asset, ...manifest.filter((item) => item.id !== assetId)]
-  await writeManifest(manifestPath, nextManifest)
+  if (saveToLibrary) {
+    const manifest = await readManifest(manifestPath)
+    const nextManifest = [asset, ...manifest.filter((item) => item.id !== assetId)]
+    await writeManifest(manifestPath, nextManifest)
+  }
 
-  return NextResponse.json({ asset, assetDir })
+  return NextResponse.json({
+    asset,
+    assetDir,
+    ...(saveToLibrary ? { savedAt: createdAt } : {}),
+  })
 }

@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { resolvePrimitiveWorldTransforms } from './primitive-compose'
+import {
+  expandPrimitiveShapeArrays,
+  type PrimitiveArrayExpandableShape,
+  resolvePrimitiveWorldTransforms,
+} from './primitive-compose'
 
 function expectVecClose(actual: [number, number, number], expected: [number, number, number]) {
   expect(actual[0]).toBeCloseTo(expected[0], 6)
@@ -8,6 +12,45 @@ function expectVecClose(actual: [number, number, number], expected: [number, num
 }
 
 describe('resolvePrimitiveWorldTransforms', () => {
+  test('expands linear primitive arrays in core', () => {
+    const shapes = expandPrimitiveShapeArrays<PrimitiveArrayExpandableShape>([
+      {
+        kind: 'rounded-panel',
+        name: 'louver blade',
+        position: [0, 1, 0],
+        length: 0.7,
+        width: 0.04,
+        thickness: 0.02,
+        array: { count: 4, step: [0, 0.08, 0] },
+      },
+    ])
+
+    expect(shapes).toHaveLength(4)
+    expect(shapes.map((shape) => shape.position?.[1])).toEqual([1, 1.08, 1.16, 1.24])
+    expect(shapes.every((shape) => shape.array == null)).toBe(true)
+  })
+
+  test('expands grid primitive arrays and strips nested params array fields', () => {
+    const shapes = expandPrimitiveShapeArrays<PrimitiveArrayExpandableShape>([
+      {
+        kind: 'box',
+        params: {
+          position: [1, 2, 3],
+          array: { columns: 2, rows: 2, spacing: [0.4, 0, 0.3] },
+        },
+      },
+    ])
+
+    expect(shapes).toHaveLength(4)
+    expect(shapes.map((shape) => shape.position)).toEqual([
+      [1, 2, 3],
+      [1.4, 2, 3],
+      [1, 2, 3.3],
+      [1.4, 2, 3.3],
+    ])
+    expect(shapes.every((shape) => !('array' in (shape.params ?? {})))).toBe(true)
+  })
+
   test('connects child bottom to parent top without manual half-height offset', () => {
     const [base, child] = resolvePrimitiveWorldTransforms([
       { kind: 'box', position: [0, 0.5, 0], length: 1, width: 1, height: 1 },

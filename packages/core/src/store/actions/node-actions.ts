@@ -520,6 +520,7 @@ export const deleteNodesAction = (
   if (get().readOnly) return
   const parentsToMarkDirty = new Set<AnyNodeId>()
   const nodesToMarkDirty = new Set<AnyNodeId>()
+  const deletedIds = new Set<AnyNodeId>()
   const mergePlans = buildWallMergePlans(get().nodes, ids)
 
   set((state) => {
@@ -544,6 +545,9 @@ export const deleteNodesAction = (
     for (const id of ids) collect(id)
     for (const plan of mergePlans) {
       allIds.add(plan.secondaryWallId)
+    }
+    for (const id of allIds) {
+      deletedIds.add(id)
     }
 
     for (const plan of mergePlans) {
@@ -605,6 +609,10 @@ export const deleteNodesAction = (
 
     return { nodes: nextNodes, rootNodeIds: nextRootIds, collections: nextCollections }
   })
+
+  for (const id of deletedIds) {
+    get().clearDirty(id)
+  }
 
   // Mark affected nodes dirty: parents of deleted nodes and their remaining children
   // (e.g. deleting a slab affects sibling walls via level elevation changes)

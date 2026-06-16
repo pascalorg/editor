@@ -5,6 +5,11 @@ import type { Object3D } from 'three'
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { EdgeMode } from '../lib/edge-style'
+import type { ColorPreset, RenderShading } from '../lib/materials'
+import { getSceneTheme, SCENE_THEME_IDS } from '../lib/scene-themes'
+
+export type RenderContext = 'editor' | 'viewer'
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -30,8 +35,29 @@ type ViewerState = {
   cameraMode: 'perspective' | 'orthographic'
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
 
+  sceneTheme: string
+  setSceneTheme: (id: string) => void
   theme: 'light' | 'dark'
   setTheme: (theme: 'light' | 'dark') => void
+
+  renderContext: RenderContext
+  setRenderContext: (context: RenderContext) => void
+
+  shading: RenderShading
+  shadingByContext: Partial<Record<RenderContext, RenderShading>>
+  setShading: (shading: RenderShading) => void
+
+  textures: boolean
+  setTextures: (textures: boolean) => void
+
+  colorPreset: ColorPreset
+  setColorPreset: (preset: ColorPreset) => void
+
+  edges: EdgeMode
+  setEdges: (edges: EdgeMode) => void
+
+  shadows: boolean
+  setShadows: (shadows: boolean) => void
 
   unit: 'metric' | 'imperial'
   setUnit: (unit: 'metric' | 'imperial') => void
@@ -76,6 +102,103 @@ type ViewerState = {
 
   cameraDragging: boolean
   setCameraDragging: (dragging: boolean) => void
+
+  /**
+   * True while a host-driven drag is in progress (editor handles —
+   * height arrow, width arrow, etc.). Suppresses node pointer event
+   * routing so the synthetic click on pointerup doesn't reroute
+   * selection to whatever mesh the cursor lands on at release.
+   * Conceptually a sibling of `cameraDragging` — both mean "user is
+   * dragging; don't treat the next pointerup as a click on the
+   * scene." Set by the host (e.g. `NodeArrowHandles` in the editor);
+   * the viewer only reads it.
+   */
+  inputDragging: boolean
+  setInputDragging: (dragging: boolean) => void
+}
+
+type PersistedViewerState = Partial<
+  Pick<
+    ViewerState,
+    | 'cameraMode'
+    | 'sceneTheme'
+    | 'theme'
+    | 'shadingByContext'
+    | 'textures'
+    | 'colorPreset'
+    | 'edges'
+    | 'shadows'
+    | 'levelMode'
+    | 'wallMode'
+    | 'projectPreferences'
+  >
+>
+
+const CAMERA_MODES = ['perspective', 'orthographic'] as const
+const RENDER_SHADINGS = ['solid', 'rendered'] as const
+const COLOR_PRESETS = ['clay', 'white', 'mono', 'blueprint'] as const
+const EDGE_MODES = ['off', 'soft', 'strong'] as const
+const LEVEL_MODES = ['stacked', 'exploded', 'solo', 'manual'] as const
+const WALL_MODES = ['up', 'cutaway', 'down'] as const
+
+function pickString<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return typeof value === 'string' && allowed.includes(value as T) ? (value as T) : fallback
+}
+
+function normalizeShadingByContext(value: unknown): ViewerState['shadingByContext'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+
+  const next: ViewerState['shadingByContext'] = {}
+  for (const [context, shading] of Object.entries(value)) {
+    if (context !== 'editor' && context !== 'viewer') continue
+    next[context] = pickString<RenderShading>(shading, RENDER_SHADINGS, 'rendered')
+  }
+  return next
+}
+
+function normalizeProjectPreferences(value: unknown): ViewerState['projectPreferences'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+
+  const next: ViewerState['projectPreferences'] = {}
+  for (const [projectId, preferences] of Object.entries(value)) {
+    if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) continue
+    const record = preferences as Record<string, unknown>
+    next[projectId] = {
+      ...(typeof record.showScans === 'boolean' ? { showScans: record.showScans } : {}),
+      ...(typeof record.showGuides === 'boolean' ? { showGuides: record.showGuides } : {}),
+      ...(typeof record.showGrid === 'boolean' ? { showGrid: record.showGrid } : {}),
+    }
+  }
+  return next
+}
+
+function normalizePersistedViewerState(value: unknown): PersistedViewerState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const state = value as Record<string, unknown>
+
+  const sceneTheme = pickString(
+    state.sceneTheme,
+    SCENE_THEME_IDS,
+    state.theme === 'dark' ? 'night' : 'studio',
+  )
+
+  return {
+    cameraMode: pickString<ViewerState['cameraMode']>(
+      state.cameraMode,
+      CAMERA_MODES,
+      'perspective',
+    ),
+    sceneTheme,
+    theme: getSceneTheme(sceneTheme).appearance === 'dark' ? 'dark' : 'light',
+    shadingByContext: normalizeShadingByContext(state.shadingByContext),
+    textures: typeof state.textures === 'boolean' ? state.textures : true,
+    colorPreset: pickString<ColorPreset>(state.colorPreset, COLOR_PRESETS, 'clay'),
+    edges: pickString<EdgeMode>(state.edges, EDGE_MODES, 'soft'),
+    shadows: typeof state.shadows === 'boolean' ? state.shadows : true,
+    levelMode: pickString<ViewerState['levelMode']>(state.levelMode, LEVEL_MODES, 'stacked'),
+    wallMode: pickString<ViewerState['wallMode']>(state.wallMode, WALL_MODES, 'up'),
+    projectPreferences: normalizeProjectPreferences(state.projectPreferences),
+  }
 }
 
 const useViewer = create<ViewerState>()(
@@ -93,11 +216,37 @@ const useViewer = create<ViewerState>()(
       cameraMode: 'perspective',
       setCameraMode: (mode) => set({ cameraMode: mode }),
 
+      sceneTheme: 'studio',
+      setSceneTheme: (id) =>
+        set({ sceneTheme: id, theme: getSceneTheme(id).appearance === 'dark' ? 'dark' : 'light' }),
       theme: 'light',
-      setTheme: (theme) => set({ theme }),
+      setTheme: (theme) => set({ theme, sceneTheme: theme === 'dark' ? 'night' : 'studio' }),
+
+      renderContext: 'editor',
+      setRenderContext: (context) => set({ renderContext: context }),
+
+      shading: 'rendered',
+      shadingByContext: {},
+      setShading: (shading) =>
+        set((state) => ({
+          shading,
+          shadingByContext: { ...state.shadingByContext, [state.renderContext]: shading },
+        })),
+
+      textures: true,
+      setTextures: (textures) => set({ textures }),
+
+      colorPreset: 'clay',
+      setColorPreset: (preset) => set({ colorPreset: preset }),
+
+      edges: 'soft',
+      setEdges: (edges) => set({ edges }),
+
+      shadows: true,
+      setShadows: (shadows) => set({ shadows }),
 
       unit: 'metric',
-      setUnit: (unit) => set({ unit }),
+      setUnit: () => set({ unit: 'metric' }),
 
       levelMode: 'stacked',
       setLevelMode: (mode) => set({ levelMode: mode }),
@@ -203,13 +352,24 @@ const useViewer = create<ViewerState>()(
 
       cameraDragging: false,
       setCameraDragging: (dragging) => set({ cameraDragging: dragging }),
+      inputDragging: false,
+      setInputDragging: (dragging) => set({ inputDragging: dragging }),
     }),
     {
       name: 'viewer-preferences',
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...normalizePersistedViewerState(persistedState),
+      }),
       partialize: (state) => ({
         cameraMode: state.cameraMode,
+        sceneTheme: state.sceneTheme,
         theme: state.theme,
-        unit: state.unit,
+        shadingByContext: state.shadingByContext,
+        textures: state.textures,
+        colorPreset: state.colorPreset,
+        edges: state.edges,
+        shadows: state.shadows,
         levelMode: state.levelMode,
         wallMode: state.wallMode,
         projectPreferences: state.projectPreferences,

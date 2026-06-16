@@ -2,8 +2,16 @@
 
 import { ChevronDown } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { cn } from '../../../lib/utils'
+
+type PanelSectionExpansionContextValue = {
+  pinned: boolean
+  resetKey: string
+}
+
+export const PanelSectionExpansionContext =
+  createContext<PanelSectionExpansionContextValue | null>(null)
 
 interface PanelSectionProps {
   title: string
@@ -18,7 +26,17 @@ export function PanelSection({
   defaultExpanded = true,
   className,
 }: PanelSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded)
+  const expansion = useContext(PanelSectionExpansionContext)
+  const hasExpansion = !!expansion
+  const expansionPinned = expansion?.pinned ?? null
+  const expansionResetKey = expansion?.resetKey ?? null
+  const preferredExpanded = expansion ? expansion.pinned && defaultExpanded : defaultExpanded
+  const [isExpanded, setIsExpanded] = useState(preferredExpanded)
+
+  useEffect(() => {
+    if (!hasExpansion) return
+    setIsExpanded(expansionPinned === true && defaultExpanded)
+  }, [defaultExpanded, expansionPinned, expansionResetKey, hasExpansion])
 
   return (
     <motion.div

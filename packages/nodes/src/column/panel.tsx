@@ -96,6 +96,7 @@ const SUPPORT_STYLE_OPTIONS: Array<{ label: string; value: ColumnNode['supportSt
   { label: 'Trestle', value: 'trestle' },
   { label: 'Portal Frame', value: 'portal-frame' },
   { label: 'Box Frame', value: 'box-frame' },
+  { label: 'Pipe Saddle', value: 'pipe-saddle' },
 ]
 
 function clamp(value: number, min: number, max: number) {
@@ -224,6 +225,7 @@ export default function ColumnPanel() {
   if (!(node && node.type === 'column' && selectedId && selectedCount === 1)) return null
   const shaftProfile = node.shaftProfile ?? 'straight'
   const supportStyle = node.supportStyle ?? 'vertical'
+  const isPipeSupport = supportStyle === 'pipe-saddle'
   const isBraceSupport =
     supportStyle === 'a-frame' ||
     supportStyle === 'y-frame' ||
@@ -234,7 +236,8 @@ export default function ColumnPanel() {
     supportStyle === 'tripod' ||
     supportStyle === 'trestle' ||
     supportStyle === 'portal-frame' ||
-    supportStyle === 'box-frame'
+    supportStyle === 'box-frame' ||
+    isPipeSupport
 
   const supportStyleOptions = SUPPORT_STYLE_OPTIONS.map((option) => ({
     ...option,
@@ -392,67 +395,70 @@ export default function ColumnPanel() {
         />
         {isBraceSupport ? (
           <>
-            {(supportStyle === 'a-frame' ||
-              supportStyle === 'x-brace' ||
-              supportStyle === 'k-brace' ||
-              supportStyle === 'single-strut' ||
-              supportStyle === 'tripod' ||
-              supportStyle === 'trestle' ||
-              supportStyle === 'portal-frame' ||
-              supportStyle === 'box-frame') && (
-              <SliderControl
-                label={columnL.bottomSpread()}
-                max={4}
-                min={0.2}
-                onChange={(value) =>
-                  handleUpdate({
-                    braceBottomSpread: value,
-                    braceTopSpread:
-                      supportStyle === 'a-frame'
-                        ? Math.min(node.braceTopSpread ?? 0.12, value)
-                        : (node.braceTopSpread ?? 1),
-                  })
-                }
-                precision={2}
-                step={0.05}
-                unit="m"
-                value={node.braceBottomSpread ?? 1.2}
-              />
-            )}
-            <SliderControl
-              label={supportStyle === 'y-frame' ? columnL.forkSpread() : columnL.topSpread()}
-              max={
-                supportStyle === 'y-frame' ||
-                supportStyle === 'v-frame' ||
-                supportStyle === 'x-brace' ||
-                supportStyle === 'k-brace' ||
-                supportStyle === 'single-strut' ||
-                supportStyle === 'tripod' ||
-                supportStyle === 'trestle' ||
-                supportStyle === 'box-frame'
-                  ? 4
-                  : Math.max(0.2, node.braceBottomSpread ?? 1.2)
-              }
-              min={0}
-              onChange={(value) => handleUpdate({ braceTopSpread: value })}
-              precision={2}
-              step={0.02}
-              unit="m"
-              value={
-                node.braceTopSpread ??
-                (supportStyle === 'y-frame' ||
-                supportStyle === 'v-frame' ||
+            {!isPipeSupport &&
+              (supportStyle === 'a-frame' ||
                 supportStyle === 'x-brace' ||
                 supportStyle === 'k-brace' ||
                 supportStyle === 'single-strut' ||
                 supportStyle === 'tripod' ||
                 supportStyle === 'trestle' ||
                 supportStyle === 'portal-frame' ||
-                supportStyle === 'box-frame'
-                  ? 1
-                  : 0.12)
-              }
-            />
+                supportStyle === 'box-frame') && (
+                <SliderControl
+                  label={columnL.bottomSpread()}
+                  max={4}
+                  min={0.2}
+                  onChange={(value) =>
+                    handleUpdate({
+                      braceBottomSpread: value,
+                      braceTopSpread:
+                        supportStyle === 'a-frame'
+                          ? Math.min(node.braceTopSpread ?? 0.12, value)
+                          : (node.braceTopSpread ?? 1),
+                    })
+                  }
+                  precision={2}
+                  step={0.05}
+                  unit="m"
+                  value={node.braceBottomSpread ?? 1.2}
+                />
+              )}
+            {!isPipeSupport && (
+              <SliderControl
+                label={supportStyle === 'y-frame' ? columnL.forkSpread() : columnL.topSpread()}
+                max={
+                  supportStyle === 'y-frame' ||
+                  supportStyle === 'v-frame' ||
+                  supportStyle === 'x-brace' ||
+                  supportStyle === 'k-brace' ||
+                  supportStyle === 'single-strut' ||
+                  supportStyle === 'tripod' ||
+                  supportStyle === 'trestle' ||
+                  supportStyle === 'box-frame'
+                    ? 4
+                    : Math.max(0.2, node.braceBottomSpread ?? 1.2)
+                }
+                min={0}
+                onChange={(value) => handleUpdate({ braceTopSpread: value })}
+                precision={2}
+                step={0.02}
+                unit="m"
+                value={
+                  node.braceTopSpread ??
+                  (supportStyle === 'y-frame' ||
+                  supportStyle === 'v-frame' ||
+                  supportStyle === 'x-brace' ||
+                  supportStyle === 'k-brace' ||
+                  supportStyle === 'single-strut' ||
+                  supportStyle === 'tripod' ||
+                  supportStyle === 'trestle' ||
+                  supportStyle === 'portal-frame' ||
+                  supportStyle === 'box-frame'
+                    ? 1
+                    : 0.12)
+                }
+              />
+            )}
             <ToggleControl
               checked={node.bracePlateEnabled ?? true}
               label={columnL.connectorPlates()}

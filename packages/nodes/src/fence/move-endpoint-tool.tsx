@@ -100,6 +100,7 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
   useDragAction({
     active: true,
     action: moveFenceEndpointDragAction,
+    activationGraceMs: 0,
     initial: {
       node: target.fence,
       handleId: endpoint,

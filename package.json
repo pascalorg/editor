@@ -20,7 +20,8 @@
     "release:editor": "gh workflow run release.yml -f package=editor -f bump=patch",
     "release:mcp": "gh workflow run release.yml -f package=mcp -f bump=patch",
     "release:minor": "gh workflow run release.yml -f package=all -f bump=minor",
-    "release:major": "gh workflow run release.yml -f package=all -f bump=major"
+    "release:major": "gh workflow run release.yml -f package=all -f bump=major",
+    "check:mojibake": "node scripts/check-mojibake.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",

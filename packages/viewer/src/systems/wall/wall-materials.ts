@@ -63,14 +63,14 @@ const dotPattern = Fn(() => {
 
 function getSurfaceVisibleMaterial(spec: WallSurfaceMaterialSpec): Material {
   if (spec.materialPreset) {
-    return createMaterialFromPresetRef(spec.materialPreset) ?? baseMaterial
+    return createMaterialFromPresetRef(spec.materialPreset) ?? baseMaterial()
   }
 
   if (spec.material) {
     return createMaterial(spec.material)
   }
 
-  return baseMaterial
+  return baseMaterial()
 }
 
 function getSurfaceColor(spec: WallSurfaceMaterialSpec, fallback = DEFAULT_WALL_COLOR): string {
@@ -182,7 +182,7 @@ export function getMaterialsForWall(wallNode: WallNode): WallMaterials {
   const exteriorSpec = getEffectiveWallSurfaceMaterial(wallNode, 'exterior')
 
   const visible: WallMaterialArray = [
-    baseMaterial,
+    baseMaterial(),
     getSurfaceVisibleMaterial(interiorSpec),
     getSurfaceVisibleMaterial(exteriorSpec),
   ]

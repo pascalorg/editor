@@ -13,7 +13,7 @@ export const FrustumNode = BaseNode.extend({
   radiusTop: z.number().min(0.001).max(10).default(0.25),
   radiusBottom: z.number().min(0.001).max(10).default(0.5),
   height: z.number().min(0.01).max(20).default(1),
-  radialSegments: z.number().int().min(8).max(64).default(32),
+  radialSegments: z.number().int().min(3).max(64).default(32),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
 }).describe(

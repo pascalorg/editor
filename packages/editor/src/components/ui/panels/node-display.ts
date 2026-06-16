@@ -21,6 +21,9 @@ const TYPE_DEFAULTS: Record<string, NodeDisplay> = {
   'stair-segment': { icon: '/icons/stair.png', label: 'Stair segment' },
   scan: { icon: '/icons/mesh.png', label: '3D Scan' },
   guide: { icon: '/icons/floorplan.png', label: 'Guide image' },
+  'cable-tray': { icon: '/icons/pipe.svg', label: 'Cable tray' },
+  ladder: { icon: '/icons/stairs.png', label: 'Ladder' },
+  'steel-beam': { icon: '/icons/column.png', label: 'Steel beam' },
 }
 
 export function getNodeDisplay(node: AnyNode | null | undefined): NodeDisplay {

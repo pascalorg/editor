@@ -1,4 +1,4 @@
-import type { PrimitiveShapeInput, Vec3 } from './primitive-compose'
+import type { PrimitiveMaterialInput, PrimitiveShapeInput, Vec3 } from './primitive-compose'
 
 export type RobotArmStyle = 'industrial' | 'collaborative' | 'fanuc'
 export type RobotArmPose = 'rest' | 'reach-forward' | 'work-ready'
@@ -15,6 +15,10 @@ export interface RobotArmComposeInput {
   baseHeight?: number
   detail?: 'low' | 'medium' | 'high' | string
   materialPreset?: string
+  primaryColor?: string
+  secondaryColor?: string
+  darkColor?: string
+  metalColor?: string
 }
 
 function clamp(value: unknown, fallback: number, min: number, max: number): number {
@@ -39,6 +43,10 @@ function styleMaterial(style: RobotArmComposeInput['style'], materialPreset: str
   return undefined
 }
 
+function material(color: string | undefined, roughness = 0.82, metalness = 0.04): PrimitiveMaterialInput | undefined {
+  return color ? { properties: { color, roughness, metalness } } : undefined
+}
+
 export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): PrimitiveShapeInput[] {
   const reach = clamp(input.reach, 2.4, 0.8, 8)
   const baseHeight = clamp(input.baseHeight, reach * 0.16, 0.12, reach * 0.35)
@@ -56,6 +64,15 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
   const position = input.position ?? [0, 0, 0]
   const name = input.name ?? (input.style === 'fanuc' ? 'FANUC robot arm draft' : 'Robot arm draft')
   const materialPreset = styleMaterial(input.style, input.materialPreset)
+  const primaryColor = input.primaryColor ?? (input.style === 'fanuc' ? '#f8fafc' : undefined)
+  const secondaryColor = input.secondaryColor ?? (input.style === 'fanuc' ? '#facc15' : primaryColor)
+  const darkColor = input.darkColor ?? '#111827'
+  const metalColor = input.metalColor ?? '#cbd5e1'
+  const primaryMaterial = material(primaryColor)
+  const secondaryMaterial = material(secondaryColor)
+  const darkMaterial = material(darkColor, 0.78, 0.12)
+  const metalMaterial = material(metalColor, 0.42, 0.55)
+  const axisCount = Math.max(3, Math.round(typeof input.axisCount === 'number' ? input.axisCount : 3))
 
   const shoulderPitch = input.pose === 'reach-forward' ? -0.28 : input.pose === 'work-ready' ? -0.52 : -0.16
   const elbowPitch = input.pose === 'reach-forward' ? 0.18 : input.pose === 'work-ready' ? 0.62 : 0.38
@@ -71,6 +88,7 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       height: baseHeight,
       radialSegments: segments,
       materialPreset,
+      material: darkMaterial,
       semanticRole: 'robot_base',
     },
     {
@@ -85,6 +103,7 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       height: turntableHeight,
       radialSegments: segments,
       materialPreset,
+      material: secondaryMaterial,
       semanticRole: 'base_joint',
     },
     {
@@ -98,6 +117,7 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       widthSegments: segments,
       heightSegments: Math.max(16, Math.round(segments * 0.6)),
       materialPreset,
+      material: secondaryMaterial,
       semanticRole: 'shoulder_joint',
     },
     {
@@ -113,6 +133,7 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       height: upperArmLength,
       radialSegments: segments,
       materialPreset,
+      material: primaryMaterial,
       semanticRole: 'upper_arm',
     },
     {
@@ -126,6 +147,7 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       widthSegments: segments,
       heightSegments: Math.max(16, Math.round(segments * 0.6)),
       materialPreset,
+      material: secondaryMaterial,
       semanticRole: 'elbow_joint',
     },
     {
@@ -141,57 +163,103 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       height: forearmLength,
       radialSegments: segments,
       materialPreset,
+      material: primaryMaterial,
       semanticRole: 'forearm',
     },
-    {
-      kind: 'sphere',
-      name: `${name} wrist joint`,
-      attachTo: 5,
-      anchor: 'front',
-      childAnchor: 'center',
-      position: [0, 0, 0],
-      radius: wristRadius,
-      widthSegments: segments,
-      heightSegments: Math.max(12, Math.round(segments * 0.5)),
-      materialPreset,
-      semanticRole: 'wrist_joint',
-    },
-    {
-      kind: 'cylinder',
-      name: `${name} wrist flange`,
-      attachTo: 6,
-      anchor: 'front',
-      childAnchor: 'back',
-      position: [0, 0, 0],
-      rotation: [wristPitch, 0, 0],
-      axis: 'z',
-      radius: wristRadius * 0.62,
-      height: wristLength,
-      radialSegments: segments,
-      materialPreset,
-      semanticRole: 'tool_flange',
-    },
-    {
-      kind: 'box',
-      name: `${name} gripper palm`,
-      attachTo: 7,
-      anchor: 'front',
-      childAnchor: 'back',
-      position: [0, 0, 0],
-      length: armRadius * 2.8,
-      width: toolLength,
-      height: armRadius * 1.5,
-      materialPreset,
-      semanticRole: 'end_effector',
-    },
   ]
+
+  let wristAttachTo = 5
+  if (axisCount >= 6) {
+    shapes.push(
+      {
+        kind: 'cylinder',
+        name: `${name} J4 wrist roll joint`,
+        attachTo: wristAttachTo,
+        anchor: 'front',
+        childAnchor: 'back',
+        position: [0, 0, 0],
+        rotation: [wristPitch * 0.5, 0, 0],
+        axis: 'z',
+        radius: wristRadius * 0.9,
+        height: wristLength * 0.42,
+        radialSegments: segments,
+        materialPreset,
+        material: secondaryMaterial,
+        semanticRole: 'wrist_roll_joint',
+      },
+      {
+        kind: 'sphere',
+        name: `${name} J5 wrist pitch joint`,
+        attachTo: shapes.length,
+        anchor: 'front',
+        childAnchor: 'center',
+        position: [0, 0, 0],
+        radius: wristRadius * 0.82,
+        widthSegments: segments,
+        heightSegments: Math.max(12, Math.round(segments * 0.5)),
+        materialPreset,
+        material: primaryMaterial,
+        semanticRole: 'wrist_pitch_joint',
+      },
+    )
+    wristAttachTo = shapes.length - 1
+  }
+
+  shapes.push({
+    kind: 'sphere',
+    name: `${name} ${axisCount >= 6 ? 'J6 ' : ''}wrist joint`,
+    attachTo: wristAttachTo,
+    anchor: 'front',
+    childAnchor: 'center',
+    position: [0, 0, 0],
+    radius: wristRadius,
+    widthSegments: segments,
+    heightSegments: Math.max(12, Math.round(segments * 0.5)),
+    materialPreset,
+    material: secondaryMaterial,
+    semanticRole: 'wrist_joint',
+  })
+  const wristJointIndex = shapes.length - 1
+  shapes.push({
+    kind: 'cylinder',
+    name: `${name} wrist tool flange`,
+    attachTo: wristJointIndex,
+    anchor: 'front',
+    childAnchor: 'back',
+    position: [0, 0, 0],
+    rotation: [wristPitch, 0, 0],
+    axis: 'z',
+    radius: wristRadius * 0.62,
+    height: wristLength,
+    radialSegments: segments,
+    materialPreset,
+    material: metalMaterial,
+    semanticRole: 'tool_flange',
+  })
+  const flangeIndex = shapes.length - 1
+  shapes.push({
+    kind: 'cylinder',
+    name: `${name} end effector mounting face`,
+    attachTo: flangeIndex,
+    anchor: 'front',
+    childAnchor: 'back',
+    position: [0, 0, 0],
+    axis: 'z',
+    radius: wristRadius * 0.66,
+    height: Math.max(0.025, wristLength * 0.18),
+    radialSegments: segments,
+    materialPreset,
+    material: metalMaterial,
+    semanticRole: 'end_effector',
+  })
+  const endEffectorIndex = shapes.length - 1
 
   if (input.endEffector !== 'tool-flange' && input.endEffector !== 'suction') {
     shapes.push(
       {
         kind: 'box',
         name: `${name} left gripper finger`,
-        attachTo: 8,
+        attachTo: endEffectorIndex,
         anchor: 'front',
         childAnchor: 'back',
         position: [armRadius * 0.72, 0, 0],
@@ -199,12 +267,13 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
         width: toolLength * 0.9,
         height: armRadius * 1.15,
         materialPreset,
+        material: metalMaterial,
         semanticRole: 'gripper_finger',
       },
       {
         kind: 'box',
         name: `${name} right gripper finger`,
-        attachTo: 8,
+        attachTo: endEffectorIndex,
         anchor: 'front',
         childAnchor: 'back',
         position: [-armRadius * 0.72, 0, 0],
@@ -212,6 +281,7 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
         width: toolLength * 0.9,
         height: armRadius * 1.15,
         materialPreset,
+        material: metalMaterial,
         semanticRole: 'gripper_finger',
       },
     )

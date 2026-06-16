@@ -9,3 +9,20 @@ export const overallMaterialTarget = [
     materialPresetKey: 'materialPreset',
   },
 ] as const satisfies readonly MaterialTargetDescriptor[]
+
+export const wallSurfaceMaterialTargets = [
+  {
+    key: 'interior',
+    label: 'Interior',
+    kind: 'face',
+    materialKey: 'interiorMaterial',
+    materialPresetKey: 'interiorMaterialPreset',
+  },
+  {
+    key: 'exterior',
+    label: 'Exterior',
+    kind: 'face',
+    materialKey: 'exteriorMaterial',
+    materialPresetKey: 'exteriorMaterialPreset',
+  },
+] as const satisfies readonly MaterialTargetDescriptor[]

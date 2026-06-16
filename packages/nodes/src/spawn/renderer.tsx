@@ -5,7 +5,7 @@ import { useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useMemo, useRef } from 'react'
 import { Color, type Group, Shape } from 'three'
 
-const SPAWN_COLOR = new Color('#22c55e')
+const SPAWN_COLOR = new Color('#818cf8')
 
 /**
  * Registry-driven spawn renderer. Behaviorally identical to the legacy

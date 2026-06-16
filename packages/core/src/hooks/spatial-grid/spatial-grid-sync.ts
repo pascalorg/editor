@@ -1,4 +1,5 @@
 import { nodeRegistry } from '../../registry'
+import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import type { AnyNode, AnyNodeId, SlabNode, WallNode } from '../../schema'
 import { getSceneHistoryPauseDepth } from '../../store/history-control'
 import useScene from '../../store/use-scene'
@@ -27,6 +28,27 @@ export function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): s
   }
 
   return 'default' // fallback for orphaned items
+}
+
+export function resolveBuildingForLevel(
+  levelId: AnyNodeId,
+  nodes: Record<AnyNodeId, AnyNode>,
+): AnyNodeId | null {
+  const level = nodes[levelId] as AnyNode | undefined
+  if (!level) return null
+  const directParent = (level as { parentId?: AnyNodeId | null }).parentId ?? null
+  if (directParent) {
+    const candidate = nodes[directParent]
+    if (candidate?.type === 'building') return candidate.id as AnyNodeId
+  }
+  for (const candidate of Object.values(nodes)) {
+    if (candidate?.type !== 'building') continue
+    const children = (candidate as { children?: AnyNodeId[] }).children
+    if (Array.isArray(children) && children.includes(levelId)) {
+      return candidate.id as AnyNodeId
+    }
+  }
+  return null
 }
 
 // Call this once at app initialization. Returns an unsubscribe function that
@@ -188,8 +210,16 @@ function markNodesOverlappingSlab(
     if (resolveLevelId(node, nodes) !== slabLevelId) continue
     const position = (node as { position?: [number, number, number] }).position
     if (!position) continue
-    const { dimensions, rotation } = floorPlaced.footprint(node)
-    if (itemOverlapsPolygon(position, dimensions, rotation, slab.polygon, 0.01)) {
+    const overlaps = getFloorPlacedFootprints(floorPlaced, node, { nodes }).some((footprint) =>
+      itemOverlapsPolygon(
+        footprint.position ?? position,
+        footprint.dimensions,
+        footprint.rotation,
+        slab.polygon,
+        0.01,
+      ),
+    )
+    if (overlaps) {
       markDirty(node.id)
     }
   }

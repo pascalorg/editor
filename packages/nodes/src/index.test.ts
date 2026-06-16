@@ -97,6 +97,7 @@ describe('builtinPlugin', () => {
       'box',
       'cylinder',
       'cone',
+      'conformal-strip',
       'frustum',
       'hemisphere',
       'torus',
@@ -127,5 +128,25 @@ describe('builtinPlugin', () => {
         },
       ])
     }
+  })
+
+  test('wall declares editable interior and exterior material targets', async () => {
+    await loadPlugin(builtinPlugin)
+    expect(nodeRegistry.get('wall')?.materialTargets).toEqual([
+      {
+        key: 'interior',
+        label: 'Interior',
+        kind: 'face',
+        materialKey: 'interiorMaterial',
+        materialPresetKey: 'interiorMaterialPreset',
+      },
+      {
+        key: 'exterior',
+        label: 'Exterior',
+        kind: 'face',
+        materialKey: 'exteriorMaterial',
+        materialPresetKey: 'exteriorMaterialPreset',
+      },
+    ])
   })
 })

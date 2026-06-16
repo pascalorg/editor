@@ -85,6 +85,7 @@ import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-
 import { FloorplanRegistryLayer } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
+import { createColumnFromPreset, DEFAULT_COLUMN_PRESET_ID } from '../tools/column/column-defaults'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
@@ -147,6 +148,7 @@ const FLOORPLAN_POLYGON_VERTEX_RADIUS_PX = 6.5
 const FLOORPLAN_POLYGON_VERTEX_ACTIVE_RADIUS_PX = 7.5
 const FLOORPLAN_POLYGON_VERTEX_DOT_RADIUS_PX = 2.5
 const FLOORPLAN_POLYGON_VERTEX_ACTIVE_DOT_RADIUS_PX = 3
+const FLOORPLAN_POLYGON_VERTEX_HIT_RADIUS_PX = 14
 const FLOORPLAN_POLYGON_MIDPOINT_RADIUS_PX = 4
 const FLOORPLAN_POLYGON_MIDPOINT_HOVER_RADIUS_PX = 4.6
 const FLOORPLAN_POLYGON_MIDPOINT_DOT_RADIUS_PX = 1.8
@@ -1637,7 +1639,8 @@ function getColumnPlanFootprint(column: ColumnNode): Point2D[] {
     column.supportStyle === 'tripod' ||
     column.supportStyle === 'trestle' ||
     column.supportStyle === 'portal-frame' ||
-    column.supportStyle === 'box-frame'
+    column.supportStyle === 'box-frame' ||
+    column.supportStyle === 'pipe-saddle'
   ) {
     const width = Math.max(
       column.supportStyle === 'a-frame' ||
@@ -1647,7 +1650,8 @@ function getColumnPlanFootprint(column: ColumnNode): Point2D[] {
         column.supportStyle === 'tripod' ||
         column.supportStyle === 'trestle' ||
         column.supportStyle === 'portal-frame' ||
-        column.supportStyle === 'box-frame'
+        column.supportStyle === 'box-frame' ||
+        column.supportStyle === 'pipe-saddle'
         ? (column.braceBottomSpread ?? 1.2)
         : 0,
       column.braceTopSpread ??
@@ -1659,7 +1663,8 @@ function getColumnPlanFootprint(column: ColumnNode): Point2D[] {
         column.supportStyle === 'tripod' ||
         column.supportStyle === 'trestle' ||
         column.supportStyle === 'portal-frame' ||
-        column.supportStyle === 'box-frame'
+        column.supportStyle === 'box-frame' ||
+        column.supportStyle === 'pipe-saddle'
           ? 1
           : 0),
       (column.braceWidth ?? column.width) * 2,
@@ -1667,7 +1672,8 @@ function getColumnPlanFootprint(column: ColumnNode): Point2D[] {
     const depth = Math.max(
       column.supportStyle === 'tripod' ||
         column.supportStyle === 'trestle' ||
-        column.supportStyle === 'box-frame'
+        column.supportStyle === 'box-frame' ||
+        column.supportStyle === 'pipe-saddle'
         ? (column.braceTopSpread ?? 1)
         : 0,
       column.braceDepth ?? column.depth,
@@ -3691,6 +3697,7 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
           (isActive
             ? FLOORPLAN_POLYGON_VERTEX_ACTIVE_DOT_RADIUS_PX
             : FLOORPLAN_POLYGON_VERTEX_DOT_RADIUS_PX) * unitsPerPixel
+        const hitRadius = FLOORPLAN_POLYGON_VERTEX_HIT_RADIUS_PX * unitsPerPixel
         const svgPoint = toSvgPlanPoint(point)
 
         return (
@@ -3749,7 +3756,7 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
                 onVertexPointerDown(nodeId, vertexIndex, event)
               }}
               pointerEvents="all"
-              r={outerRadius}
+              r={Math.max(outerRadius, hitRadius)}
               stroke="transparent"
               strokeWidth={FLOORPLAN_ENDPOINT_HIT_STROKE_WIDTH}
               style={{ cursor: EDITOR_CURSOR }}
@@ -4066,6 +4073,7 @@ export function FloorplanPanel() {
   )
   const [stairBuildPreviewPoint, setStairBuildPreviewPoint] = useState<WallPlanPoint | null>(null)
   const [stairBuildPreviewRotation, setStairBuildPreviewRotation] = useState(0)
+  const [columnBuildPreviewPoint, setColumnBuildPreviewPoint] = useState<WallPlanPoint | null>(null)
   const [isPanning, setIsPanning] = useState(false)
   const [isDraggingPanel, setIsDraggingPanel] = useState(false)
   const [isMacPlatform, setIsMacPlatform] = useState(true)
@@ -4572,6 +4580,7 @@ export function FloorplanPanel() {
   const isFenceBuildActive = phase === 'structure' && mode === 'build' && tool === 'fence'
   const isRoofBuildActive = phase === 'structure' && mode === 'build' && tool === 'roof'
   const isStairBuildActive = phase === 'structure' && mode === 'build' && tool === 'stair'
+  const isColumnBuildActive = phase === 'structure' && mode === 'build' && tool === 'column'
   const isStairMoveActive = movingNode?.type === 'stair'
   const isRoofMoveActive = movingNode?.type === 'roof' || movingNode?.type === 'roof-segment'
   const isSlabMoveActive = movingNode?.type === 'slab'
@@ -4598,6 +4607,7 @@ export function FloorplanPanel() {
     isRoofBuildActive ||
     isCeilingBuildActive ||
     isStairBuildActive ||
+    isColumnBuildActive ||
     isStairMoveActive ||
     isRoofMoveActive ||
     isSlabMoveActive ||
@@ -4678,6 +4688,27 @@ export function FloorplanPanel() {
         : floorplanStairEntries,
     [floorplanPreviewStairEntry, floorplanStairEntries],
   )
+  const floorplanPreviewColumnEntry = useMemo(() => {
+    if (!(isColumnBuildActive && columnBuildPreviewPoint)) {
+      return null
+    }
+
+    const previewColumn = createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, [
+      columnBuildPreviewPoint[0],
+      0,
+      columnBuildPreviewPoint[1],
+    ])
+    const polygon = getColumnPlanFootprint(previewColumn)
+    if (polygon.length < 3) {
+      return null
+    }
+
+    return {
+      column: previewColumn,
+      points: formatPolygonPoints(polygon),
+      polygon,
+    }
+  }, [columnBuildPreviewPoint, isColumnBuildActive])
   const floorplanOpeningLocalY = useMemo(() => {
     if (movingNode?.type === 'door' || movingNode?.type === 'window') {
       return snapToHalf(movingNode.position[1])
@@ -4815,6 +4846,21 @@ export function FloorplanPanel() {
           (point.x + (nextPoint?.x ?? point.x)) / 2,
           (point.y + (nextPoint?.y ?? point.y)) / 2,
         ] as WallPlanPoint,
+      }
+    })
+  }, [shouldShowSiteBoundaryHandles, siteVertexDragState, visibleSitePolygon])
+  const siteEdgeHandles = useMemo(() => {
+    if (!(shouldShowSiteBoundaryHandles && visibleSitePolygon && !siteVertexDragState)) {
+      return []
+    }
+
+    return visibleSitePolygon.polygon.map((point, edgeIndex, polygon) => {
+      const nextPoint = polygon[(edgeIndex + 1) % polygon.length] ?? point
+      return {
+        nodeId: visibleSitePolygon.site.id,
+        edgeIndex,
+        start: toWallPlanPoint(point),
+        end: toWallPlanPoint(nextPoint),
       }
     })
   }, [shouldShowSiteBoundaryHandles, siteVertexDragState, visibleSitePolygon])
@@ -6046,6 +6092,25 @@ export function FloorplanPanel() {
       emitter.off('grid:move', handleGridMove)
     }
   }, [isStairBuildActive])
+
+  useEffect(() => {
+    if (!isColumnBuildActive) {
+      setColumnBuildPreviewPoint(null)
+      return
+    }
+
+    const handleGridMove = (event: GridEvent) => {
+      setColumnBuildPreviewPoint(
+        getSnappedFloorplanPoint([event.localPosition[0], event.localPosition[2]]),
+      )
+    }
+
+    emitter.on('grid:move', handleGridMove)
+
+    return () => {
+      emitter.off('grid:move', handleGridMove)
+    }
+  }, [isColumnBuildActive])
 
   useEffect(() => {
     if (!isItemPlacementPreviewActive) {
@@ -7788,6 +7853,81 @@ export function FloorplanPanel() {
     },
     [displaySitePolygon],
   )
+  const handleSiteEdgePointerDown = useCallback(
+    (siteId: SiteNode['id'], edgeIndex: number, event: ReactPointerEvent<SVGLineElement>) => {
+      if (event.button !== 0) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      setHoveredSiteHandleId(null)
+
+      if (!(displaySitePolygon && displaySitePolygon.site.id === siteId)) {
+        return
+      }
+
+      const planPoint = getPlanPointFromClientPoint(event.clientX, event.clientY)
+      if (!planPoint) {
+        return
+      }
+
+      const basePolygon = displaySitePolygon.polygon.map(toWallPlanPoint)
+      const startPoint = basePolygon[edgeIndex]
+      const endPoint = basePolygon[(edgeIndex + 1) % basePolygon.length]
+      if (!(startPoint && endPoint)) {
+        return
+      }
+
+      const insertedPoint: WallPlanPoint = [snapToHalf(planPoint[0]), snapToHalf(planPoint[1])]
+      const vertexHitRadius = FLOORPLAN_POLYGON_VERTEX_HIT_RADIUS_PX * floorplanUnitsPerPixel
+      const nearestVertex = basePolygon.reduce<{
+        index: number
+        distance: number
+        point: WallPlanPoint
+      } | null>((nearest, point, index) => {
+        const distance = Math.hypot(insertedPoint[0] - point[0], insertedPoint[1] - point[1])
+        if (nearest && nearest.distance <= distance) {
+          return nearest
+        }
+
+        return { index, distance, point }
+      }, null)
+
+      if (nearestVertex && nearestVertex.distance <= vertexHitRadius) {
+        setSiteBoundaryDraft({
+          siteId,
+          polygon: basePolygon,
+        })
+        setSiteVertexDragState({
+          pointerId: event.pointerId,
+          siteId,
+          vertexIndex: nearestVertex.index,
+        })
+        setCursorPoint(nearestVertex.point)
+        return
+      }
+
+      const insertIndex = edgeIndex + 1
+      const nextPolygon = [
+        ...basePolygon.slice(0, insertIndex),
+        insertedPoint,
+        ...basePolygon.slice(insertIndex),
+      ]
+
+      setSiteBoundaryDraft({
+        siteId,
+        polygon: nextPolygon,
+      })
+      setSiteVertexDragState({
+        pointerId: event.pointerId,
+        siteId,
+        vertexIndex: insertIndex,
+      })
+      setCursorPoint(insertedPoint)
+    },
+    [displaySitePolygon, floorplanUnitsPerPixel, getPlanPointFromClientPoint],
+  )
 
   const handlePointerLeave = useCallback(() => {
     if (!(panStateRef.current || wallEndpointDragRef.current || siteVertexDragState)) {
@@ -8476,6 +8616,19 @@ export function FloorplanPanel() {
                 selectedIdSet={selectedIdSet}
                 stairEntries={renderedFloorplanStairEntries}
               />
+              {floorplanPreviewColumnEntry && (
+                <polygon
+                  fill="rgba(167, 139, 250, 0.24)"
+                  pointerEvents="none"
+                  points={floorplanPreviewColumnEntry.points}
+                  stroke="rgba(124, 58, 237, 0.8)"
+                  strokeDasharray={`${Math.max(floorplanUnitsPerPixel * 4, 0.08)} ${Math.max(
+                    floorplanUnitsPerPixel * 3,
+                    0.06,
+                  )}`}
+                  strokeWidth={Math.max(floorplanUnitsPerPixel * 1.6, 0.04)}
+                />
+              )}
 
               <FloorplanReferenceScaleLayer
                 draft={referenceScaleDraft}
@@ -8487,8 +8640,13 @@ export function FloorplanPanel() {
               />
 
               <FloorplanPolygonHandleLayer
+                edgeHandles={siteEdgeHandles}
                 hoveredHandleId={hoveredSiteHandleId}
+                midpointStyle="add"
                 midpointHandles={siteMidpointHandles}
+                onEdgePointerDown={(nodeId, edgeIndex, event) =>
+                  handleSiteEdgePointerDown(nodeId as SiteNode['id'], edgeIndex, event)
+                }
                 onHandleHoverChange={setHoveredSiteHandleId}
                 onMidpointPointerDown={(nodeId, edgeIndex, event) =>
                   handleSiteMidpointPointerDown(nodeId as SiteNode['id'], edgeIndex, event)

@@ -109,6 +109,7 @@ const assetSchema = z.object({
     })
     .optional(), // undefined = can't place things on it
   interactive: interactiveSchema.optional(),
+  articraft: z.json().optional(),
 })
 
 export type AssetInput = z.input<typeof assetSchema>

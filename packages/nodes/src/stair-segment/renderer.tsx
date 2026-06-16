@@ -7,13 +7,10 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import {
-  createSafeEmptyGeometry,
-  getStraightStairSegmentBodyMaterials,
-  useNodeEvents,
-} from '@pascal-app/viewer'
+import { getStraightStairSegmentBodyMaterials, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type * as THREE from 'three'
+import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 
 export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
   const ref = useRef<THREE.Mesh>(null!)
@@ -26,13 +23,19 @@ export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
   }, [node.id])
 
   const handlers = useNodeEvents(node, 'stair-segment')
+  const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset = useViewer((s) => s.colorPreset)
   const parentNode = node.parentId
     ? (nodes[node.parentId as AnyNodeId] as StairNode | undefined)
     : undefined
 
   const material = useMemo(() => {
-    return getStraightStairSegmentBodyMaterials(node, parentNode)
+    return getStraightStairSegmentBodyMaterials(node, parentNode, shading, textures, colorPreset)
   }, [
+    shading,
+    textures,
+    colorPreset,
     node.materialPreset,
     node.material,
     node.material?.preset,
@@ -53,13 +56,8 @@ export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
     parentNode,
   ])
 
-  const placeholderGeometry = useMemo(() => {
-    const geometry = createSafeEmptyGeometry()
-    geometry.clearGroups()
-    geometry.addGroup(0, 0, 0)
-    geometry.addGroup(0, 0, 1)
-    return geometry
-  }, [])
+  // 2 groups map 1:1 to the stair segment's 2-material array (body + tread).
+  const placeholderGeometry = useMemo(() => createPlaceholderGeometry(2), [])
 
   useEffect(() => {
     return () => {

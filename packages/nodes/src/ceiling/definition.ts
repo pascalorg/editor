@@ -99,9 +99,9 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   },
 
   toolHints: [
-    { key: 'Left click', label: 'Trace ceiling outline' },
-    { key: 'Enter', label: 'Finish ceiling' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: '添加天花顶点' },
+    { key: 'Enter', label: '完成天花' },
+    { key: 'Esc', label: '取消' },
   ],
 
   presentation: {

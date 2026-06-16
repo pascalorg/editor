@@ -3,6 +3,7 @@ import {
   findIndustrialArchetype,
   type IndustrialArchetypeEntry,
 } from '@pascal-app/core/lib/industrial-archetype-registry'
+import { hasComponentPartIntent } from '@pascal-app/core/lib/primitive-part-intent'
 
 export type GeometryCapabilityRoute =
   | 'parametric_gear'
@@ -83,6 +84,9 @@ export function isOpenAssemblyCapabilityRequest(
   args: Record<string, unknown>,
   prompt: string,
 ): boolean {
+  if (hasComponentPartIntent(prompt || JSON.stringify(args))) {
+    return false
+  }
   if (isOpenAssemblyRecipeId(args.recipeId ?? args.recipe ?? args.id ?? args.objectType)) {
     return true
   }
@@ -165,6 +169,21 @@ function hasPerforatedPlateRecipeIntent(text: string) {
 }
 
 function hasMixerPartsIntent(text: string) {
+  if (
+    includesAny(text, [
+      'reactor',
+      'reaction kettle',
+      'reaction vessel',
+      'tower crane',
+      '\u53cd\u5e94\u91dc',
+      '\u53cd\u61c9\u91dc',
+      '\u53cd\u5e94\u5668',
+      '\u53cd\u61c9\u5668',
+    ])
+  ) {
+    return false
+  }
+
   if (
     includesAny(text, [
       'impeller',
@@ -292,6 +311,35 @@ export function planGeometryCapabilities(userRequest: string): GeometryCapabilit
     }
   }
 
+  if (hasMixerPartsIntent(text)) {
+    return {
+      intent: 'mixer impeller',
+      requiredCapabilities: [
+        'vertical_shaft',
+        'radial_flat_blades',
+        'blade_tilt',
+        'hub_connection',
+      ],
+      availableCapabilities: ['compose_parts:propeller_blade_set'],
+      missingCapabilities: [],
+      route: 'mixer_parts',
+      recommendation:
+        'Use compose_parts with vertical_pole, circular_base, and propeller_blade_set for mud mixer / agitator / impeller requests. Do not create/use a whole-object recipe for shaft + hub + blades; let the part kernel compute blade placement and orientation.',
+    }
+  }
+
+  if (hasComponentPartIntent(userRequest)) {
+    return {
+      intent: 'single component',
+      requiredCapabilities: ['single_requested_part', 'no_parent_assembly_expansion'],
+      availableCapabilities: ['compose_parts', 'generic_part_taxonomy'],
+      missingCapabilities: [],
+      route: 'primitive',
+      recommendation:
+        'Use compose_parts or compose_primitive for the requested single reusable part/component. Treat family words as context only; do not expand a steering wheel, car wheel, aircraft wing, pump impeller, fan blade, or similar component request into the complete parent assembly. If no dedicated part kind exists, build the component from generic primitives.',
+    }
+  }
+
   if (
     includesAnyWord(text, ['car', 'sedan', 'suv', 'truck', 'vehicle']) ||
     includesAny(text, ['\u6c7d\u8f66', '\u5c0f\u6c7d\u8f66', '\u8f7f\u8f66'])
@@ -416,23 +464,6 @@ export function planGeometryCapabilities(userRequest: string): GeometryCapabilit
       route: 'assembly',
       recommendation:
         'Use compose_assembly with family:"distillation_tower"; map user diameter to diameter/width and height to a vertical Y-axis column, not a horizontal tank.',
-    }
-  }
-
-  if (hasMixerPartsIntent(text)) {
-    return {
-      intent: 'mixer impeller',
-      requiredCapabilities: [
-        'vertical_shaft',
-        'radial_flat_blades',
-        'blade_tilt',
-        'hub_connection',
-      ],
-      availableCapabilities: ['compose_parts:propeller_blade_set'],
-      missingCapabilities: [],
-      route: 'mixer_parts',
-      recommendation:
-        'Use compose_parts with vertical_pole, circular_base, and propeller_blade_set for mud mixer / agitator / impeller requests. Do not create/use a whole-object recipe for shaft + hub + blades; let the part kernel compute blade placement and orientation.',
     }
   }
 

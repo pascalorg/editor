@@ -2,46 +2,133 @@ import {
   type AnyNodeId,
   clampDoorOperationState,
   type DoorNode,
+  DoorNode as DoorNodeSchema,
   getDoorRenderOpenAmount,
+  getEffectiveNode,
   sceneRegistry,
   useInteractive,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { baseMaterial, glassMaterial } from '../../lib/materials'
+import {
+  createSurfaceRoleMaterial,
+  glassMaterial as defaultGlassMaterial,
+  createBaseMaterial as getBaseMaterial,
+} from '../../lib/materials'
+import useViewer from '../../store/use-viewer'
 
 // Invisible material for root mesh — used as selection hitbox only
-const hitboxMaterial = new THREE.MeshLambertMaterial({ visible: false })
-const revealMaterial = new THREE.MeshLambertMaterial({ color: '#7f766c' })
+const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
+const defaultRevealMaterial = new THREE.MeshBasicMaterial({ color: '#7f766c' })
+let baseMaterial = getBaseMaterial()
+let revealMaterial: THREE.Material = defaultRevealMaterial
+let glassMaterial: THREE.Material = defaultGlassMaterial
+
+const DOOR_RENDER_DEFAULTS = DoorNodeSchema.parse({ id: 'door_render_default' })
+const MAX_DOOR_REBUILDS_PER_FRAME = 16
+const DOOR_PROGRESSIVE_DIRTY_THRESHOLD = MAX_DOOR_REBUILDS_PER_FRAME
+const DOOR_PROGRESSIVE_TIME_BUDGET_MS = 8
+
+// Legacy/unparsed door nodes can miss schema-defaulted fields (segments,
+// columnRatios, dividerThickness, …) and crash the geometry build. Re-apply the
+// Zod defaults; if the node is structurally invalid (e.g. a segment missing a
+// required field) drop the bad segments, then fall back to defaults entirely.
+function normalizeDoorNodeForRender(node: DoorNode): DoorNode {
+  const parsed = DoorNodeSchema.safeParse(node)
+  if (parsed.success) return parsed.data
+  const retry = DoorNodeSchema.safeParse({ ...node, segments: undefined })
+  if (retry.success) return retry.data
+  return { ...DOOR_RENDER_DEFAULTS, id: node.id, parentId: node.parentId }
+}
 
 export const DoorSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
+  const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
+  const materialRevisionRef = useRef<string | null>(null)
+  // Subscribe so an override-only update (no scene write) still re-runs
+  // the component, letting the gate below pick up the latest dirtyNodes
+  // set from the same render pass that received the override-publishing
+  // `markDirty` call. Mirrors WallSystem.
+  useLiveNodeOverrides((s) => s.overrides)
+
+  const joineryMaterial = createSurfaceRoleMaterial('joinery', colorPreset)
+  baseMaterial = textures ? getBaseMaterial(shading) : joineryMaterial
+  revealMaterial = textures ? defaultRevealMaterial : joineryMaterial
+  glassMaterial = textures ? defaultGlassMaterial : joineryMaterial
+
+  useEffect(() => {
+    const materialRevision = `${shading}:${textures ? 'textures' : 'solid'}:${colorPreset}`
+    if (materialRevisionRef.current === materialRevision) return
+    materialRevisionRef.current = materialRevision
+
+    const nodes = useScene.getState().nodes
+    for (const node of Object.values(nodes)) {
+      if (node?.type === 'door') {
+        useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
+      }
+    }
+  })
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
+    const frameJoineryMaterial = createSurfaceRoleMaterial('joinery', colorPreset)
+    baseMaterial = textures ? getBaseMaterial(shading) : frameJoineryMaterial
+    revealMaterial = textures ? defaultRevealMaterial : frameJoineryMaterial
+    glassMaterial = textures ? defaultGlassMaterial : frameJoineryMaterial
 
     const nodes = useScene.getState().nodes
+    const dirtyDoorIds: AnyNodeId[] = []
 
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
       if (!node || node.type !== 'door') return
+      dirtyDoorIds.push(id as AnyNodeId)
+    })
 
+    const useProgressiveDoorRebuilds = dirtyDoorIds.length > DOOR_PROGRESSIVE_DIRTY_THRESHOLD
+    const frameStartedAt = performance.now()
+    let rebuiltDoorsThisFrame = 0
+
+    for (const id of dirtyDoorIds) {
+      if (useProgressiveDoorRebuilds) {
+        if (rebuiltDoorsThisFrame >= MAX_DOOR_REBUILDS_PER_FRAME) {
+          break
+        }
+        if (
+          rebuiltDoorsThisFrame > 0 &&
+          performance.now() - frameStartedAt >= DOOR_PROGRESSIVE_TIME_BUDGET_MS
+        ) {
+          break
+        }
+      }
+
+      const node = nodes[id]
+      if (!node || node.type !== 'door') continue
       const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
-      if (!mesh) return // Keep dirty until mesh mounts
+      if (!mesh) continue // Keep dirty until mesh mounts
 
-      updateDoorMesh(node as DoorNode, mesh)
+      // Merge any live override (width / height / position) so the mesh
+      // rebuild reflects the in-flight drag without zustand churn. When
+      // no override is set this returns the scene node unchanged.
+      const effectiveNode = getEffectiveNode(node as DoorNode)
+      updateDoorMesh(effectiveNode, mesh)
       clearDirty(id as AnyNodeId)
+      rebuiltDoorsThisFrame += 1
 
       // Rebuild the parent wall so its cutout reflects the updated door geometry
       // Avoid triggering expensive wall CSG rebuilds while the door is being interactively moved/duplicated.
       // The editor tools will request a final wall rebuild on commit.
       const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
-      if (!isTransient && (node as DoorNode).parentId) {
-        useScene.getState().dirtyNodes.add((node as DoorNode).parentId as AnyNodeId)
+      if (!isTransient && effectiveNode.parentId) {
+        useScene.getState().dirtyNodes.add(effectiveNode.parentId as AnyNodeId)
       }
-    })
+    }
   }, 3)
 
   return null
@@ -1862,7 +1949,9 @@ function getEffectiveOpeningShape(node: DoorNode): DoorNode['openingShape'] {
     : (node.openingShape ?? 'rectangle')
 }
 
-function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
+function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
+  const node = normalizeDoorNodeForRender(rawNode)
+
   // Root mesh is an invisible hitbox; all visuals live in child meshes
   mesh.geometry.dispose()
   mesh.geometry = new THREE.BoxGeometry(node.width, node.height, node.frameDepth)
@@ -2218,6 +2307,22 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   }
 
   syncDoorCutout(node, mesh)
+
+  // Guard: some degenerate door configs can leave a child mesh with an
+  // empty (0-vertex) geometry — e.g. a zero-area extruded leaf frame.
+  // Submitting such a mesh trips a WebGPU error ("Vertex buffer slot 0
+  // … was not set" on a Draw(0, …)). Hide any empty mesh so it is never
+  // drawn (it would render nothing anyway).
+  hideEmptyGeometryMeshes(mesh)
+}
+
+function hideEmptyGeometryMeshes(root: THREE.Object3D) {
+  root.traverse((obj) => {
+    const child = obj as THREE.Mesh
+    if (!child.isMesh || !child.geometry) return
+    const position = child.geometry.getAttribute('position')
+    if (!position || position.count === 0) child.visible = false
+  })
 }
 
 function syncDoorCutout(node: DoorNode, mesh: THREE.Mesh) {

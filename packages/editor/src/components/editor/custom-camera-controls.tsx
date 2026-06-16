@@ -7,7 +7,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useViewer, ZONE_LAYER } from '@pascal-app/viewer'
+import { GRID_LAYER, useViewer, ZONE_LAYER } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -40,6 +40,7 @@ export const CustomCameraControls = () => {
   const raycaster = useThree((state) => state.raycaster)
   useEffect(() => {
     camera.layers.enable(EDITOR_LAYER)
+    camera.layers.enable(GRID_LAYER)
     raycaster.layers.enable(EDITOR_LAYER)
     raycaster.layers.enable(ZONE_LAYER)
   }, [camera, raycaster])
@@ -138,9 +139,21 @@ export const CustomCameraControls = () => {
   const movingNode = useEditor((s) => s.movingNode)
   const movingWallEndpoint = useEditor((s) => s.movingWallEndpoint)
   const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
+  const movingPipeEndpoint = useEditor((s) => s.movingPipeEndpoint)
+  const movingCableTrayEndpoint = useEditor((s) => s.movingCableTrayEndpoint)
+  const movingRoadEndpoint = useEditor((s) => s.movingRoadEndpoint)
+  const movingSteelBeamEndpoint = useEditor((s) => s.movingSteelBeamEndpoint)
   const isBoxSelectActive = mode === 'select' && selectionTool === 'marquee'
   const isInteracting = Boolean(
-    tool || movingNode || movingWallEndpoint || movingFenceEndpoint || isBoxSelectActive,
+    tool ||
+      movingNode ||
+      movingWallEndpoint ||
+      movingFenceEndpoint ||
+      movingPipeEndpoint ||
+      movingCableTrayEndpoint ||
+      movingRoadEndpoint ||
+      movingSteelBeamEndpoint ||
+      isBoxSelectActive,
   )
   const touches = useMemo(() => {
     const twoFingerAction =

@@ -1,7 +1,19 @@
 'use client'
 
-import { emitter, type GridEvent, type LevelNode, useScene } from '@pascal-app/core'
-import { CursorSphere, EDITOR_LAYER, markToolCancelConsumed, triggerSFX } from '@pascal-app/editor'
+import {
+  emitter,
+  type GridEvent,
+  type LevelNode,
+  snapPointToGrid,
+  useScene,
+} from '@pascal-app/core'
+import {
+  CursorSphere,
+  EDITOR_LAYER,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
@@ -72,9 +84,11 @@ export const SlabTool: React.FC = () => {
 
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
-      const gridPosition: [number, number] = [gridX, gridZ]
+      const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
+      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
+      const gridPosition: [number, number] = bypassSnap
+        ? rawPoint
+        : [...snapPointToGrid(rawPoint, useEditor.getState().gridSnapStep)]
       setCursorPosition(gridPosition)
       setLevelY(event.localPosition[1])
       const lastPoint = points[points.length - 1]

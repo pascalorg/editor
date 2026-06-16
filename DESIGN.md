@@ -2,7 +2,7 @@
 
 ## Source of truth
 - Status: Draft
-- Last refreshed: 2026-05-29
+- Last refreshed: 2026-06-11
 - Primary product surfaces: AI sidebar / LLM chat panel, generated geometry preview card, generated asset placement and saving.
 - Evidence reviewed:
   - `README.md` — Pascal is a React Three Fiber/WebGPU 3D building editor with separated core/viewer/editor responsibilities.
@@ -262,6 +262,32 @@
   - Selecting a wall/stair does not show irrelevant dynamic controls.
   - Selecting an AI-generated rotating fan assembly shows `动态` with rotation controls.
   - A dynamic config can be saved/loaded with the scene and remains editable.
+
+
+## Items GLB import discoverability design
+- Product intent:
+  - Make importing a local GLB feel like a clear user-owned asset creation path.
+  - Users should understand that imported GLB files become reusable assets under `Items -> Mine` and can be placed immediately.
+- Current evidence:
+  - `packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx` owns the Items panel import affordance.
+  - `packages/editor/src/components/ui/item-catalog/item-catalog.tsx` classifies imported GLB assets as `????` inside the `Mine`/`??` category.
+- Recommended IA:
+  - Do not show a global GLB import entry in every Items category.
+  - Show a single import card only in `?? / Mine`, because that is where user-owned/imported assets live.
+  - Keep the card visually prominent enough to work as the import entry point when users enter `Mine`.
+- Recommended visual hierarchy:
+  - In `Mine`: show a full-width compact CTA card above the asset grid.
+  - Card content: `????` + `????????????????` + primary `?? GLB` button.
+  - Search remains secondary and should not contain the GLB import action.
+- Interaction states:
+  - Idle: upload icon + `?? GLB`.
+  - Importing: `????` with spinner, disabled.
+  - Success: stay/switch to `Mine`, select the imported asset, show `??????????????`.
+  - Error: keep error directly under the search/import area.
+- Acceptance criteria:
+  - The Items panel does not show a global `????` block outside `Mine`.
+  - `Mine` clearly invites GLB import.
+  - After import, users know where the model went and can place it immediately.
 
 ## Open questions
 - [ ] Should `存入素材` preserve editability as Pascal geometry, or export a GLB-style item asset for compatibility?

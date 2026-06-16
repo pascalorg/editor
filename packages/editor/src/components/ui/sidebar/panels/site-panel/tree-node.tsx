@@ -61,6 +61,7 @@ import { ColumnTreeNode } from './column-tree-node'
 import { DoorTreeNode } from './door-tree-node'
 import { ElevatorTreeNode } from './elevator-tree-node'
 import { FenceTreeNode } from './fence-tree-node'
+import { PipeFittingTreeNode } from './pipe-fitting-tree-node'
 import { PipeTreeNode } from './pipe-tree-node'
 import { ItemTreeNode } from './item-tree-node'
 import { LevelTreeNode } from './level-tree-node'
@@ -69,6 +70,7 @@ import { ShelfTreeNode } from './shelf-tree-node'
 import { SlabTreeNode } from './slab-tree-node'
 import { SpawnTreeNode } from './spawn-tree-node'
 import { StairTreeNode } from './stair-tree-node'
+import { TankTreeNode } from './tank-tree-node'
 import { WallTreeNode } from './wall-tree-node'
 import { WindowTreeNode } from './window-tree-node'
 import { ZoneTreeNode } from './zone-tree-node'
@@ -117,7 +119,9 @@ const treeNodeByType: Record<
   }>,
   wall: WallTreeNode,
   fence: FenceTreeNode,
+  'pipe-fitting': PipeFittingTreeNode,
   pipe: PipeTreeNode,
+  tank: TankTreeNode,
   roof: RoofTreeNode,
   stair: StairTreeNode,
   door: DoorTreeNode,

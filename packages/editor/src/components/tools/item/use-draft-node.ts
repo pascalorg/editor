@@ -61,6 +61,7 @@ export function useDraftNode(): DraftNodeHandle {
       const currentLevelId = useViewer.getState().selection.levelId
       if (!currentLevelId) return null
 
+      const assetRecord = asset as AssetInput & { articraft?: unknown }
       const node = ItemNode.parse({
         position: [gridPosition.x, gridPosition.y, gridPosition.z],
         rotation: rotation ?? [0, 0, 0],
@@ -68,7 +69,10 @@ export function useDraftNode(): DraftNodeHandle {
         name: asset.name,
         asset,
         parentId: currentLevelId,
-        metadata: { isTransient: true },
+        metadata: {
+          isTransient: true,
+          ...(assetRecord.articraft ? { articraft: assetRecord.articraft } : {}),
+        },
       })
 
       useScene.getState().createNode(node, currentLevelId)
@@ -128,6 +132,7 @@ export function useDraftNode(): DraftNodeHandle {
       useScene.temporal.getState().resume()
 
       useScene.getState().updateNode(draft.id, {
+        asset: updateProps.asset ?? draft.asset,
         position: updateProps.position ?? draft.position,
         rotation: updateProps.rotation ?? draft.rotation,
         side: updateProps.side ?? draft.side,
@@ -158,7 +163,7 @@ export function useDraftNode(): DraftNodeHandle {
 
     const finalNode = ItemNode.parse({
       name: draft.name,
-      asset: draft.asset,
+      asset: updateProps.asset ?? draft.asset,
       position: updateProps.position ?? draft.position,
       rotation: updateProps.rotation ?? draft.rotation,
       scale: updateProps.scale ?? draft.scale,

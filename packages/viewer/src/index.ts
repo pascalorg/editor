@@ -23,15 +23,19 @@ export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useNodeEvents } from './hooks/use-node-events'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
 export { createCylinderGeometry } from './lib/create-cylinder-geometry'
-export { SCENE_LAYER, ZONE_LAYER } from './lib/layers'
+export type { EdgeMode } from './lib/edge-style'
+export { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from './lib/layers'
 export { clearViewerMaterialCaches, getViewerMaterialCacheSize } from './lib/material-cache'
 export {
   applyMaterialPresetToMaterials,
   baseMaterial,
+  type ColorPreset,
   clearMaterialCache,
+  createBaseMaterial,
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
   DEFAULT_CEILING_MATERIAL,
   DEFAULT_DOOR_MATERIAL,
   DEFAULT_ROOF_MATERIAL,
@@ -42,6 +46,7 @@ export {
   DEFAULT_WINDOW_MATERIAL,
   disposeMaterial,
   glassMaterial,
+  type RenderShading,
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export { unionPolygons } from './lib/polygon-union'
@@ -51,6 +56,12 @@ export {
   ensureObjectWebGPUCompatibleGeometry,
   ensureWebGPUCompatibleGeometry,
 } from './lib/safe-geometry'
+export {
+  getSceneTheme,
+  SCENE_THEMES,
+  type SceneSurfaceRole,
+  type SceneTheme,
+} from './lib/scene-themes'
 export { useItemLightPool } from './store/use-item-light-pool'
 export { default as useViewer } from './store/use-viewer'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'

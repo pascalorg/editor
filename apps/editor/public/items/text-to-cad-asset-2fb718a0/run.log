@@ -1,4 +1,0 @@
-[2026-06-02T11:30:36.632Z] cad-worker generated parametric bracket preview.
-prompt: 生成一个带四个安装孔的电机支架
-intent: {"family":"motor_bracket","color":"gray","dimensions":{"length":0.3,"width":0.2,"baseThickness":0.03,"wallHeight":0.1,"wallThickness":0.03},"mountingHoles":{"count":4,"diameter":0.02,"marginX":0.05,"marginZ":0.05}}
-outputs: model.glb, model.step, source.py, thumbnail.png

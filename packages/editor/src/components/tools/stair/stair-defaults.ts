@@ -13,5 +13,5 @@ export const DEFAULT_SPIRAL_TOP_LANDING_MODE = 'none' as const
 export const DEFAULT_SPIRAL_TOP_LANDING_DEPTH = 0.9
 export const DEFAULT_SPIRAL_SHOW_CENTER_COLUMN = true
 export const DEFAULT_SPIRAL_SHOW_STEP_SUPPORTS = true
-export const DEFAULT_STAIR_RAILING_MODE = 'right' as const
+export const DEFAULT_STAIR_RAILING_MODE = 'both' as const
 export const DEFAULT_STAIR_RAILING_HEIGHT = 0.92

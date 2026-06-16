@@ -2,10 +2,12 @@
 
 import { useRegistry, useScene, type WedgeNode } from '@pascal-app/core'
 import {
+  createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
   ensureWebGPUCompatibleGeometry,
   useNodeEvents,
+  useViewer,
 } from '@pascal-app/viewer'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -119,19 +121,21 @@ export const WedgeRenderer = ({ node }: { node: WedgeNode }) => {
   }, [node.id])
 
   const handlers = useNodeEvents(node, 'wedge')
+  const shading = useViewer((state) => state.shading)
 
   const material = useMemo(() => {
-    const presetMaterial = createMaterialFromPresetRef(node.materialPreset)
+    const presetMaterial = createMaterialFromPresetRef(node.materialPreset, shading)
     if (presetMaterial) return presetMaterial
     const mat = node.material
-    if (!mat) return new THREE.MeshStandardMaterial({ color: 0xcccccc })
-    return createMaterial(mat)
+    if (!mat) return createDefaultMaterial('#cccccc', 1, shading)
+    return createMaterial(mat, shading)
   }, [
     node.materialPreset,
     node.material,
     node.material?.preset,
     node.material?.properties,
     node.material?.texture,
+    shading,
   ])
 
   const geometry = useMemo(

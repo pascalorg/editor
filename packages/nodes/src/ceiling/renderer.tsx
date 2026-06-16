@@ -94,7 +94,7 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
         scale={0}
         visible={false}
       />
-      {node.children.map((childId) => (
+      {(node.children ?? []).map((childId) => (
         <NodeRenderer key={childId} nodeId={childId} />
       ))}
     </mesh>

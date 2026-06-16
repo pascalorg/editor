@@ -26,6 +26,7 @@ export function useGridEvents(gridY: number) {
   const pointer = useRef(new Vector2())
   const groundPlane = useRef(new Plane(new Vector3(0, 1, 0), 0))
   const intersectionPoint = useRef(new Vector3())
+  const localPoint = useRef(new Vector3())
 
   // Update ground plane when grid Y changes
   useEffect(() => {
@@ -46,7 +47,7 @@ export function useGridEvents(gridY: number) {
 
       // Intersect with ground plane
       if (raycaster.current.ray.intersectPlane(groundPlane.current, intersectionPoint.current)) {
-        return intersectionPoint.current.clone()
+        return intersectionPoint.current
       }
 
       return null
@@ -59,12 +60,12 @@ export function useGridEvents(gridY: number) {
       // Convert world-space point to building-local for tools that live inside a building.
       const buildingId = useViewer.getState().selection.buildingId
       const buildingMesh = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
-      const localPoint = buildingMesh ? buildingMesh.worldToLocal(point.clone()) : point
+      const local = buildingMesh ? buildingMesh.worldToLocal(localPoint.current.copy(point)) : point
 
       const eventKey = `grid:${suffix}` as `grid:${EventSuffix}`
       const payload: GridEvent = {
         position: [point.x, point.y, point.z],
-        localPosition: [localPoint.x, localPoint.y, localPoint.z],
+        localPosition: [local.x, local.y, local.z],
         nativeEvent: nativeEvent as any, // Type compatibility with ThreeEvent
       }
 
@@ -75,27 +76,47 @@ export function useGridEvents(gridY: number) {
       }
     }
 
+    let pendingMoveEvent: PointerEvent | null = null
+    let pendingMoveFrame: number | null = null
+
+    const flushPointerMove = () => {
+      if (pendingMoveFrame !== null) {
+        cancelAnimationFrame(pendingMoveFrame)
+      }
+      pendingMoveFrame = null
+      const event = pendingMoveEvent
+      pendingMoveEvent = null
+      if (event) {
+        // Emit move even if camera is dragging, so tools like PolygonEditor still work
+        emit('move', event)
+      }
+    }
+
     const handlePointerDown = (e: PointerEvent) => {
       if (useViewer.getState().cameraDragging) return
       if (e.button !== 0) return
+      flushPointerMove()
       emit('pointerdown', e)
     }
 
     const handlePointerUp = (e: PointerEvent) => {
       if (useViewer.getState().cameraDragging) return
       if (e.button !== 0) return
+      flushPointerMove()
       emit('pointerup', e)
     }
 
     const handleClick = (e: PointerEvent) => {
       if (useViewer.getState().cameraDragging) return
       if (e.button !== 0) return
+      flushPointerMove()
       emit('click', e)
     }
 
     const handlePointerMove = (e: PointerEvent) => {
-      // Emit move even if camera is dragging, so tools like PolygonEditor still work
-      emit('move', e)
+      pendingMoveEvent = e
+      if (pendingMoveFrame !== null) return
+      pendingMoveFrame = requestAnimationFrame(flushPointerMove)
     }
 
     const handleDoubleClick = (e: MouseEvent) => {
@@ -115,6 +136,7 @@ export function useGridEvents(gridY: number) {
     canvas.addEventListener('pointermove', handlePointerMove)
     canvas.addEventListener('dblclick', handleDoubleClick)
     canvas.addEventListener('contextmenu', handleContextMenu)
+    window.addEventListener('pointerup', flushPointerMove, { capture: true })
 
     return () => {
       canvas.removeEventListener('pointerdown', handlePointerDown)
@@ -123,6 +145,10 @@ export function useGridEvents(gridY: number) {
       canvas.removeEventListener('pointermove', handlePointerMove)
       canvas.removeEventListener('dblclick', handleDoubleClick)
       canvas.removeEventListener('contextmenu', handleContextMenu)
+      window.removeEventListener('pointerup', flushPointerMove, { capture: true })
+      if (pendingMoveFrame !== null) {
+        cancelAnimationFrame(pendingMoveFrame)
+      }
     }
   }, [camera, gl])
 }

@@ -98,6 +98,15 @@ export function getPrimitiveShapeHalfExtents(shape: PrimitiveShapeInput): Vec3 {
         (numeric(shape.thickness ?? shape.height, 0.04) * sy) / 2,
         (numeric(shape.width, 0.5) * sz) / 2,
       ]
+    case 'conformal-strip': {
+      const xStart = numeric(shape.xStart, -numeric(shape.length, 1) / 2)
+      const xEnd = numeric(shape.xEnd, numeric(shape.length, 1) / 2)
+      return [
+        Math.max(0.005, Math.abs(xEnd - xStart) / 2) * sx,
+        (numeric(shape.surfaceRadiusY, 0.25) + numeric(shape.thickness, 0.003)) * sy,
+        (numeric(shape.surfaceRadiusZ, 0.25) + numeric(shape.thickness, 0.003)) * sz,
+      ]
+    }
     case 'cylinder':
     case 'hollow-cylinder':
     case 'cone':

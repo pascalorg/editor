@@ -1,8 +1,10 @@
-import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { closeDoorOpenState, toggleDoorOpenState } from '../lib/door-interaction'
 import { runRedo, runUndo } from '../lib/history'
+import { groupSelectedNodes, ungroupAssembly } from '../lib/manual-assembly-actions'
+import { isPlanDragMovableNode } from '../lib/plan-drag'
 import {
   copySelectedNodesToEditorClipboard,
   pasteEditorClipboardToLevel,
@@ -26,6 +28,57 @@ function isEditableTarget(target: EventTarget | null) {
 function hasBrowserTextSelection() {
   const selection = window.getSelection()
   return Boolean(selection && !selection.isCollapsed && selection.toString().trim())
+}
+
+const ARROW_NUDGE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'])
+
+function getPlanNudgeDelta(key: string, step: number): [number, number, number] | null {
+  if (key === 'ArrowLeft') return [-step, 0, 0]
+  if (key === 'ArrowRight') return [step, 0, 0]
+  if (key === 'ArrowUp') return [0, 0, -step]
+  if (key === 'ArrowDown') return [0, 0, step]
+  return null
+}
+
+function getPositionPatchForPlanNudge(node: AnyNode, delta: [number, number, number]) {
+  if (!isPlanDragMovableNode(node)) return null
+
+  if (
+    node.type === 'cable-tray' ||
+    node.type === 'pipe' ||
+    node.type === 'road' ||
+    node.type === 'steel-beam' ||
+    node.type === 'wall' ||
+    node.type === 'fence'
+  ) {
+    return {
+      start: [node.start[0] + delta[0], node.start[1] + delta[2]] as [number, number],
+      end: [node.end[0] + delta[0], node.end[1] + delta[2]] as [number, number],
+    }
+  }
+
+  const position = (node as { position?: unknown }).position
+  if (!Array.isArray(position) || position.length < 3) return null
+  const [x, y, z] = position
+  if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') return null
+  return { position: [x + delta[0], y, z + delta[2]] as [number, number, number] }
+}
+
+function nudgeSelectedNodesOnPlan(key: string, step: number): boolean {
+  const delta = getPlanNudgeDelta(key, step)
+  if (!delta) return false
+
+  const scene = useScene.getState()
+  const selectedIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
+  const updates = selectedIds.flatMap((id) => {
+    const node = scene.nodes[id]
+    const data = node ? getPositionPatchForPlanNudge(node, delta) : null
+    return data ? [{ id, data }] : []
+  })
+
+  if (updates.length === 0) return false
+  scene.updateNodes(updates)
+  return true
 }
 
 export const useKeyboard = ({
@@ -73,6 +126,7 @@ export const useKeyboard = ({
             useEditor.getState().setMode('select')
           }
 
+          useEditor.getState().setSelectedItem(null)
           useEditor.getState().setFloorplanSelectionTool('click')
 
           // Clear selections to close UI panels, but KEEP the active building and level context.
@@ -94,7 +148,9 @@ export const useKeyboard = ({
       } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        useEditor.getState().enterFurnishBuildMode()
+        useEditor.getState().setPhase('structure')
+        useEditor.getState().setStructureLayer('industrial')
+        useEditor.getState().setMode('build')
       } else if (e.key === 'z' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
@@ -116,13 +172,18 @@ export const useKeyboard = ({
         if (isVersionPreviewMode) return
         e.preventDefault()
         useEditor.getState().setMode('delete')
-      } else if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
+      } else if (e.key.toLowerCase() === 'g' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         if (isVersionPreviewMode) return
-        e.preventDefault()
-        useEditor.getState().primeMaterialPaintFromSelection()
-        useEditor.getState().setPhase('structure')
-        useEditor.getState().setStructureLayer('elements')
-        useEditor.getState().setMode('material-paint')
+        if (groupSelectedNodes()) {
+          e.preventDefault()
+          sfxEmitter.emit('sfx:item-place')
+        }
+      } else if (e.key.toLowerCase() === 'u' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (isVersionPreviewMode) return
+        if (ungroupAssembly()) {
+          e.preventDefault()
+          sfxEmitter.emit('sfx:structure-delete')
+        }
       } else if (e.key === 'c' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
@@ -142,6 +203,18 @@ export const useKeyboard = ({
         if (isVersionPreviewMode) return
         e.preventDefault()
         runRedo()
+      } else if (
+        ARROW_NUDGE_KEYS.has(e.key) &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        useEditor.getState().mode === 'select' &&
+        !useEditor.getState().movingNode
+      ) {
+        if (isVersionPreviewMode) return
+        const step = e.altKey ? 0.01 : e.shiftKey ? 0.25 : 0.05
+        if (nudgeSelectedNodesOnPlan(e.key, step)) {
+          e.preventDefault()
+        }
       } else if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         const { buildingId, levelId } = useViewer.getState().selection

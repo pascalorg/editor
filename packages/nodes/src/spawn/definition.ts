@@ -50,8 +50,8 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
   floorplan: buildSpawnFloorplan,
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Left click', label: 'Place spawn point' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: '放置出生点' },
+    { key: 'Esc', label: '取消' },
   ],
 
   presentation: {

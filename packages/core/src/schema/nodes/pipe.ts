@@ -12,7 +12,7 @@ export const PipeNode = BaseNode.extend({
   curveOffset: z.number().optional(),
   diameter: z.number().default(0.15),
   /** Start height of the pipe centerline (meters above level origin). */
-  elevation: z.number().default(3),
+  elevation: z.number().default(1),
   /** Tilt from horizontal in degrees. 0 = horizontal run, 90 = vertical. */
   rotate: z.number().default(0),
   insulated: z.boolean().default(true),

@@ -23,6 +23,11 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import {
+  clearOpeningGuides3D,
+  publishOpeningGuidesForWallEvent,
+  resolveSillSnap,
+} from '../shared/opening-guides-runtime'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
 
 const edgeMaterial = new LineBasicNodeMaterial({
@@ -108,6 +113,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
+      clearOpeningGuides3D()
     }
 
     const updateCursor = (
@@ -138,10 +144,20 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
       const localX = snapToHalf(event.localPosition[0])
       const localY = snapToHalf(event.localPosition[1])
+      const snappedY =
+        resolveSillSnap({
+          wall: event.node,
+          movingId: movingWindowNode.id,
+          localX,
+          localY,
+          width: movingWindowNode.width,
+          height: movingWindowNode.height,
+          nodes: useScene.getState().nodes,
+        }) ?? localY
       const { clampedX, clampedY } = clampToWall(
         event.node,
         localX,
-        localY,
+        snappedY,
         movingWindowNode.width,
         movingWindowNode.height,
       )
@@ -184,6 +200,17 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         cursorRotation,
         valid,
       )
+      publishOpeningGuidesForWallEvent({
+        wall: event.node,
+        movingId: movingWindowNode.id,
+        centerS: clampedX,
+        centerY: clampedY,
+        width: movingWindowNode.width,
+        height: movingWindowNode.height,
+        includeVertical: true,
+        levelYOffset: getLevelYOffset(),
+        slabElevation: getSlabElevation(event),
+      })
       event.stopPropagation()
     }
 
@@ -202,10 +229,20 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
       const localX = snapToHalf(event.localPosition[0])
       const localY = snapToHalf(event.localPosition[1])
+      const snappedY =
+        resolveSillSnap({
+          wall: event.node,
+          movingId: movingWindowNode.id,
+          localX,
+          localY,
+          width: movingWindowNode.width,
+          height: movingWindowNode.height,
+          nodes: useScene.getState().nodes,
+        }) ?? localY
       const { clampedX, clampedY } = clampToWall(
         event.node,
         localX,
-        localY,
+        snappedY,
         movingWindowNode.width,
         movingWindowNode.height,
       )
@@ -257,6 +294,17 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         cursorRotation,
         valid,
       )
+      publishOpeningGuidesForWallEvent({
+        wall: event.node,
+        movingId: movingWindowNode.id,
+        centerS: clampedX,
+        centerY: clampedY,
+        width: movingWindowNode.width,
+        height: movingWindowNode.height,
+        includeVertical: true,
+        levelYOffset: getLevelYOffset(),
+        slabElevation: getSlabElevation(event),
+      })
       event.stopPropagation()
     }
 
@@ -271,10 +319,20 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
       const localX = snapToHalf(event.localPosition[0])
       const localY = snapToHalf(event.localPosition[1])
+      const snappedY =
+        resolveSillSnap({
+          wall: event.node,
+          movingId: movingWindowNode.id,
+          localX,
+          localY,
+          width: movingWindowNode.width,
+          height: movingWindowNode.height,
+          nodes: useScene.getState().nodes,
+        }) ?? localY
       const { clampedX, clampedY } = clampToWall(
         event.node,
         localX,
-        localY,
+        snappedY,
         movingWindowNode.width,
         movingWindowNode.height,
       )
@@ -441,6 +499,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     boxGeo.dispose()
     return geo
   }, [movingWindowNode])
+
+  useEffect(() => () => edgesGeo.dispose(), [edgesGeo])
 
   return (
     <group ref={cursorGroupRef} visible={false}>

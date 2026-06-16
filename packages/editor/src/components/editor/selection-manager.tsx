@@ -801,6 +801,19 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
   }
 
   if (
+    node.type === 'pipe' ||
+    node.type === 'pipe-fitting' ||
+    node.type === 'tank' ||
+    node.type === 'cable-tray' ||
+    node.type === 'steel-beam'
+  ) {
+    return {
+      phase: 'structure',
+      structureLayer: 'industrial',
+    }
+  }
+
+  if (
     node.type === 'wall' ||
     node.type === 'assembly' ||
     node.type === 'fence' ||
@@ -812,6 +825,7 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
     node.type === 'roof-segment' ||
     node.type === 'stair' ||
     node.type === 'stair-segment' ||
+    node.type === 'ladder' ||
     node.type === 'spawn' ||
     node.type === 'window' ||
     node.type === 'door' ||
@@ -1045,7 +1059,7 @@ export const SelectionManager = () => {
     }
 
     const onEnter = (event: NodeEvent) => {
-      if (boxSelectHandled) return
+      if (boxSelectHandled || useViewer.getState().inputDragging) return
 
       const interaction = getPaintInteraction(event)
       if (!interaction) return
@@ -1413,6 +1427,7 @@ export const SelectionManager = () => {
     if (movingNode || curvingWall || curvingFence) return
 
     const onEnter = (event: NodeEvent) => {
+      if (useViewer.getState().inputDragging) return
       const node = resolveSelectionNode(event.node, event.nativeEvent)
       const currentPhase = useEditor.getState().phase
 
@@ -1440,6 +1455,7 @@ export const SelectionManager = () => {
     }
 
     const onLeave = (event: NodeEvent) => {
+      if (useViewer.getState().inputDragging) return
       const nodeId = event?.node ? resolveSelectionNode(event.node, event.nativeEvent).id : null
       if (nodeId && useViewer.getState().hoveredId === nodeId) {
         useViewer.setState({ hoveredId: null })

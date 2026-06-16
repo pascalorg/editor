@@ -6,31 +6,29 @@ import {
   createGeneratedAssetId,
   findRepoRoot,
   generatedManifestPath,
+  isSafeGeneratedAssetId,
   itemRoot,
   readGeneratedAssets,
+  removeGeneratedAsset,
+  removeGeneratedAssetDirectory,
   upsertGeneratedAsset,
 } from '@/lib/generated-assets/manifest'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const MAX_GLB_BYTES = 25 * 1024 * 1024
+const MAX_GLB_BYTES = 50 * 1024 * 1024
 const MAX_TRIANGLES = 500_000
 const MAX_MESHES = 120
 const MAX_MATERIALS = 80
 const MAX_TEXTURE_SIZE = 4096
-const CATALOG_CATEGORIES = new Set([
-  'safety',
-  'lighting',
-  'electronics',
-  'equipment',
-  'structural',
-  'opening',
-  'outdoor',
-])
+const CATALOG_CATEGORIES = new Set(['electronics', 'equipment', 'structural', 'outdoor'])
 const CATALOG_CATEGORY_ALIASES = new Map([
+  ['safety', 'electronics'],
+  ['lighting', 'electronics'],
   ['electrical', 'electronics'],
   ['hvac', 'electronics'],
+  ['opening', 'structural'],
   ['infrastructure', 'outdoor'],
   ['nature', 'outdoor'],
   ['vehicle', 'outdoor'],
@@ -238,6 +236,23 @@ export async function GET() {
   return NextResponse.json({ assets })
 }
 
+export async function DELETE(req: NextRequest) {
+  const assetId = req.nextUrl.searchParams.get('id')?.trim() ?? ''
+  if (!assetId || !isSafeGeneratedAssetId(assetId)) {
+    return NextResponse.json({ error: 'Valid asset id is required' }, { status: 400 })
+  }
+
+  const repoRoot = await findRepoRoot()
+  const manifestPath = generatedManifestPath(repoRoot)
+  const removed = await removeGeneratedAsset(manifestPath, assetId)
+  if (!removed) {
+    return NextResponse.json({ error: 'Asset not found' }, { status: 404 })
+  }
+
+  await removeGeneratedAssetDirectory(repoRoot, assetId)
+  return NextResponse.json({ ok: true, id: assetId })
+}
+
 export async function POST(req: NextRequest) {
   let form: FormData
   try {
@@ -257,7 +272,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'GLB file is empty' }, { status: 400 })
   }
   if (model.size > MAX_GLB_BYTES) {
-    return NextResponse.json({ error: 'GLB 文件不能超过 25MB' }, { status: 413 })
+    return NextResponse.json({ error: 'GLB 文件不能超过 50MB' }, { status: 413 })
   }
 
   const modelBuffer = Buffer.from(await model.arrayBuffer())

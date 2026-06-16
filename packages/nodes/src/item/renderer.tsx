@@ -11,13 +11,17 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
-  baseMaterial,
+  type ColorPreset,
+  createDefaultMaterial,
+  createSurfaceRoleMaterial,
   ErrorBoundary,
   glassMaterial,
   NodeRenderer,
+  type RenderShading,
   resolveCdnUrl,
   useItemLightPool,
   useNodeEvents,
+  useViewer,
 } from '@pascal-app/viewer'
 import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
@@ -25,25 +29,49 @@ import { useGLTF } from '@react-three/drei/core/Gltf'
 import { useFrame } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
 import type { AnimationAction, Group, Material, Mesh } from 'three'
-import { MathUtils, MeshStandardMaterial } from 'three'
+import { MathUtils } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
-import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { getItemColorOverride, isImportedGlbAsset } from './color-metadata'
 
-const getMaterialForOriginal = (original: Material): Material => {
+type MutableMaterial = Material & {
+  depthTest?: boolean
+  metalness?: number
+  opacity?: number
+  opacityNode?: unknown
+  transparent?: boolean
+  wireframe?: boolean
+}
+
+const getMaterialForOriginal = (
+  original: Material,
+  shading: RenderShading,
+  textures: boolean,
+  colorPreset: ColorPreset,
+): Material => {
   if (original.name.toLowerCase() === 'glass') {
     return glassMaterial
   }
-  return baseMaterial
+  if (!textures) return createSurfaceRoleMaterial('furnishing', colorPreset)
+  return createDefaultMaterial('#f2f0ed', 0.5, shading)
 }
 
 const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
   const handlers = useNodeEvents(node, 'item')
+  const shading = useViewer((state) => state.shading)
   const [w, h, d] = node.asset.dimensions
+  const material = useMemo(() => {
+    const next = createDefaultMaterial('#ef4444', 1, shading) as MutableMaterial
+    next.opacity = 0.6
+    next.transparent = true
+    next.wireframe = true
+    next.needsUpdate = true
+    return next
+  }, [shading])
+
   return (
     <mesh position-y={h / 2} {...handlers}>
       <boxGeometry args={[w, h, d]} />
-      <meshStandardMaterial color="#ef4444" opacity={0.6} transparent wireframe />
+      <primitive attach="material" object={material} />
     </mesh>
   )
 }
@@ -81,21 +109,26 @@ export const ItemRenderer = ({ node }: { node: ItemNode }) => {
   )
 }
 
-const previewMaterial = new MeshStandardNodeMaterial({
-  color: '#cccccc',
-  roughness: 1,
-  metalness: 0,
-  depthTest: false,
-})
-
 const previewOpacity = smoothstep(0.42, 0.55, positionLocal.y.add(time.mul(-0.2)).mul(10).fract())
 
-previewMaterial.opacityNode = previewOpacity
-previewMaterial.transparent = true
+const previewMaterialCache = new Map<RenderShading, Material>()
+
+function getPreviewMaterial(shading: RenderShading) {
+  const cached = previewMaterialCache.get(shading)
+  if (cached) return cached
+  const material = createDefaultMaterial('#cccccc', 1, shading) as MutableMaterial
+  material.depthTest = false
+  material.opacityNode = previewOpacity
+  material.transparent = true
+  material.needsUpdate = true
+  previewMaterialCache.set(shading, material)
+  return material
+}
 
 const PreviewModel = ({ node }: { node: ItemNode }) => {
+  const shading = useViewer((state) => state.shading)
   return (
-    <mesh material={previewMaterial} position-y={node.asset.dimensions[1] / 2}>
+    <mesh material={getPreviewMaterial(shading)} position-y={node.asset.dimensions[1] / 2}>
       <boxGeometry
         args={[node.asset.dimensions[0], node.asset.dimensions[1], node.asset.dimensions[2]]}
       />
@@ -119,6 +152,9 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   const ref = useRef<Group>(null!)
   const { actions } = useAnimations(animations, ref)
   const colorOverride = getItemColorOverride(node)
+  const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
   // Freeze the interactive definition at mount — asset schemas don't change at runtime
   const interactiveRef = useRef(node.asset.interactive)
 
@@ -143,27 +179,15 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   const preparedScene = useMemo(() => {
     const clonedScene = scene.clone(true)
     const colorMaterial = colorOverride
-      ? new MeshStandardMaterial({
-          color: colorOverride,
-          metalness: 0.05,
-          roughness: 0.72,
-        })
+      ? (createDefaultMaterial(colorOverride, 0.72, shading) as MutableMaterial)
       : null
+    if (colorMaterial && 'metalness' in colorMaterial) colorMaterial.metalness = 0.05
 
     clonedScene.traverse((child) => {
       if ((child as Mesh).isMesh) {
         const mesh = child as Mesh
         if (!importedGlb && mesh.name === 'cutout') {
           child.visible = false
-          return
-        }
-
-        if (importedGlb) {
-          if (colorMaterial) {
-            mesh.material = colorMaterial
-          }
-          mesh.castShadow = false
-          mesh.receiveShadow = false
           return
         }
 
@@ -178,7 +202,9 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
 
         // Handle both single material and material array cases
         if (Array.isArray(mesh.material)) {
-          mesh.material = mesh.material.map((mat) => getMaterialForOriginal(mat))
+          mesh.material = mesh.material.map((mat) =>
+            getMaterialForOriginal(mat, shading, textures, colorPreset),
+          )
           hasGlass = mesh.material.some((mat) => mat.name === 'glass')
 
           // Fix geometry groups that reference materialIndex beyond the material
@@ -193,7 +219,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
             }
           }
         } else {
-          mesh.material = getMaterialForOriginal(mesh.material)
+          mesh.material = getMaterialForOriginal(mesh.material, shading, textures, colorPreset)
           hasGlass = mesh.material.name === 'glass'
         }
         mesh.castShadow = !hasGlass
@@ -201,7 +227,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
       }
     })
     return clonedScene
-  }, [scene, importedGlb, colorOverride])
+  }, [scene, importedGlb, colorOverride, shading, textures, colorPreset])
 
   const interactive = interactiveRef.current
   const animEffect =

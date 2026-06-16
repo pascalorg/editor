@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type CableTrayNode,
   type CeilingNode,
   ColumnNode,
   DoorNode,
@@ -15,11 +16,13 @@ import {
   isRegistrySelectable,
   nodeRegistry,
   PipeNode,
+  type RoadNode,
   RoofSegmentNode,
   type SlabNode,
   SpawnNode,
   StairNode,
   StairSegmentNode,
+  type SteelBeamNode,
   sceneRegistry,
   useScene,
   WallNode,
@@ -52,6 +55,9 @@ const ALLOWED_TYPES = [
   'wall',
   'fence',
   'pipe',
+  'cable-tray',
+  'road',
+  'steel-beam',
   'column',
   'slab',
   'ceiling',
@@ -59,6 +65,69 @@ const ALLOWED_TYPES = [
 ]
 const DELETE_ONLY_TYPES: string[] = []
 const HOLE_TYPES = ['slab', 'ceiling']
+const ENDPOINT_BUTTON_BASE_CLASS =
+  'pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors'
+const ENDPOINT_BUTTON_WALL_CLASS =
+  'border-violet-400/60 bg-violet-500/10 text-violet-400 hover:border-violet-300/80 hover:bg-violet-500/20 hover:text-violet-200'
+const ENDPOINT_BUTTON_DETACH_CLASS =
+  'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
+
+function getEndpointMoveLabel(
+  nodeType: string,
+  endpoint: 'start' | 'end',
+  detachHint: boolean,
+): string {
+  const isStart = endpoint === 'start'
+  switch (nodeType) {
+    case 'wall':
+      return detachHint
+        ? t(
+            isStart ? 'actionMenu.moveWallStartDetach' : 'actionMenu.moveWallEndDetach',
+            isStart ? 'Move wall start (Alt to detach)' : 'Move wall end (Alt to detach)',
+          )
+        : t(
+            isStart ? 'actionMenu.moveWallStart' : 'actionMenu.moveWallEnd',
+            isStart ? 'Move wall start' : 'Move wall end',
+          )
+    case 'fence':
+      return detachHint
+        ? t(
+            isStart ? 'actionMenu.moveFenceStartDetach' : 'actionMenu.moveFenceEndDetach',
+            isStart ? 'Move fence start (Alt to detach)' : 'Move fence end (Alt to detach)',
+          )
+        : t(
+            isStart ? 'actionMenu.moveFenceStart' : 'actionMenu.moveFenceEnd',
+            isStart ? 'Move fence start' : 'Move fence end',
+          )
+    case 'pipe':
+      return detachHint
+        ? t(
+            isStart ? 'actionMenu.movePipeStartDetach' : 'actionMenu.movePipeEndDetach',
+            isStart ? 'Move pipe start (Alt to detach)' : 'Move pipe end (Alt to detach)',
+          )
+        : t(
+            isStart ? 'actionMenu.movePipeStart' : 'actionMenu.movePipeEnd',
+            isStart ? 'Move pipe start' : 'Move pipe end',
+          )
+    case 'road':
+      return t(
+        isStart ? 'actionMenu.moveRoadStart' : 'actionMenu.moveRoadEnd',
+        isStart ? 'Move road start' : 'Move road end',
+      )
+    case 'cable-tray':
+      return t(
+        isStart ? 'actionMenu.moveCableTrayStart' : 'actionMenu.moveCableTrayEnd',
+        isStart ? 'Move cable tray start' : 'Move cable tray end',
+      )
+    case 'steel-beam':
+      return t(
+        isStart ? 'actionMenu.moveSteelBeamStart' : 'actionMenu.moveSteelBeamEnd',
+        isStart ? 'Move steel beam start' : 'Move steel beam end',
+      )
+    default:
+      return isStart ? 'Move start' : 'Move end'
+  }
+}
 
 export function FloatingActionMenu() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -69,15 +138,27 @@ export function FloatingActionMenu() {
   const movingWallEndpoint = useEditor((s) => s.movingWallEndpoint)
   const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
   const movingPipeEndpoint = useEditor((s) => s.movingPipeEndpoint)
+  const movingCableTrayEndpoint = useEditor((s) => s.movingCableTrayEndpoint)
+  const movingRoadEndpoint = useEditor((s) => s.movingRoadEndpoint)
+  const movingSteelBeamEndpoint = useEditor((s) => s.movingSteelBeamEndpoint)
   const curvingFence = useEditor((s) => s.curvingFence)
   const curvingPipe = useEditor((s) => s.curvingPipe)
+  const curvingCableTray = useEditor((s) => s.curvingCableTray)
+  const curvingRoad = useEditor((s) => s.curvingRoad)
+  const curvingSteelBeam = useEditor((s) => s.curvingSteelBeam)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingWallEndpoint = useEditor((s) => s.setMovingWallEndpoint)
   const setMovingFenceEndpoint = useEditor((s) => s.setMovingFenceEndpoint)
   const setMovingPipeEndpoint = useEditor((s) => s.setMovingPipeEndpoint)
+  const setMovingCableTrayEndpoint = useEditor((s) => s.setMovingCableTrayEndpoint)
+  const setMovingRoadEndpoint = useEditor((s) => s.setMovingRoadEndpoint)
+  const setMovingSteelBeamEndpoint = useEditor((s) => s.setMovingSteelBeamEndpoint)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
   const setCurvingFence = useEditor((s) => s.setCurvingFence)
   const setCurvingPipe = useEditor((s) => s.setCurvingPipe)
+  const setCurvingCableTray = useEditor((s) => s.setCurvingCableTray)
+  const setCurvingRoad = useEditor((s) => s.setCurvingRoad)
+  const setCurvingSteelBeam = useEditor((s) => s.setCurvingSteelBeam)
   const setSelection = useViewer((s) => s.setSelection)
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
@@ -99,6 +180,10 @@ export function FloatingActionMenu() {
     ? ALLOWED_TYPES.includes(node.type) || isRegistrySelectable(node.type)
     : false
   const isDirectPlanDraggable = node ? isPlanDragMovableNode(node) : false
+  const canDetachEndpoint = node?.type === 'wall' || node?.type === 'fence' || node?.type === 'pipe'
+  const endpointButtonClass = `${ENDPOINT_BUTTON_BASE_CLASS} ${
+    altPressed && canDetachEndpoint ? ENDPOINT_BUTTON_DETACH_CLASS : ENDPOINT_BUTTON_WALL_CLASS
+  }`
 
   // Boolean selector, only re-renders when curving availability actually flips.
   const canCurveSelectedWall = useScene((s) => {
@@ -160,9 +245,22 @@ export function FloatingActionMenu() {
         groupRef.current.position.set(center.x, box.max.y + yOffset, center.z)
       }
 
-      if (node?.type === 'wall' || node?.type === 'fence' || node?.type === 'pipe') {
-        const segment = node as WallNode | FenceNode | PipeNode
-        const endpointYOffset = node.type === 'pipe' ? 0.35 : 0.35
+      if (
+        node?.type === 'wall' ||
+        node?.type === 'fence' ||
+        node?.type === 'pipe' ||
+        node?.type === 'cable-tray' ||
+        node?.type === 'road' ||
+        node?.type === 'steel-beam'
+      ) {
+        const segment = node as
+          | WallNode
+          | FenceNode
+          | PipeNode
+          | CableTrayNode
+          | RoadNode
+          | SteelBeamNode
+        const endpointYOffset = 0.35
         const startWorld =
           node.type === 'wall'
             ? obj.localToWorld(new THREE.Vector3(0, 0, 0))
@@ -190,11 +288,15 @@ export function FloatingActionMenu() {
         const startY =
           node.type === 'pipe'
             ? getPipeEndpoint3D(node as PipeNode, 'start').y + endpointYOffset
-            : startWorld.y + endpointYOffset
+            : node.type === 'cable-tray' || node.type === 'steel-beam'
+              ? ((node as CableTrayNode | SteelBeamNode).elevation ?? 0) + endpointYOffset
+              : startWorld.y + endpointYOffset
         const endY =
           node.type === 'pipe'
             ? getPipeEndpoint3D(node as PipeNode, 'end').y + endpointYOffset
-            : endWorld.y + endpointYOffset
+            : node.type === 'cable-tray' || node.type === 'steel-beam'
+              ? ((node as CableTrayNode | SteelBeamNode).elevation ?? 0) + endpointYOffset
+              : endWorld.y + endpointYOffset
 
         if (startEndpointGroupRef.current) {
           startEndpointGroupRef.current.position.set(startWorld.x, startY, startWorld.z)
@@ -250,15 +352,32 @@ export function FloatingActionMenu() {
         setCurvingFence(node)
       } else if (node.type === 'pipe' && !isPipeNearlyVertical(node)) {
         setCurvingPipe(node)
+      } else if (node.type === 'cable-tray') {
+        setCurvingCableTray(node)
+      } else if (node.type === 'road') {
+        setCurvingRoad(node)
+      } else if (node.type === 'steel-beam') {
+        setCurvingSteelBeam(node)
       } else {
         return
       }
       setSelection({ selectedIds: [] })
     },
-    [canCurveSelectedWall, node, setCurvingFence, setCurvingPipe, setCurvingWall, setSelection],
+    [
+      canCurveSelectedWall,
+      node,
+      setCurvingCableTray,
+      setCurvingFence,
+      setCurvingPipe,
+      setCurvingRoad,
+      setCurvingSteelBeam,
+      setCurvingWall,
+      setSelection,
+    ],
   )
   const handleEndpointMove = useCallback(
-    (endpoint: 'start' | 'end', e: React.MouseEvent) => {
+    (endpoint: 'start' | 'end', e: React.MouseEvent | React.PointerEvent) => {
+      e.preventDefault()
       e.stopPropagation()
       if (!node) return
       sfxEmitter.emit('sfx:item-pick')
@@ -268,13 +387,41 @@ export function FloatingActionMenu() {
         setMovingFenceEndpoint({ fence: node, endpoint })
       } else if (node.type === 'pipe') {
         setMovingPipeEndpoint({ pipe: node, endpoint })
+      } else if (node.type === 'cable-tray') {
+        setMovingCableTrayEndpoint({ cableTray: node, endpoint })
+      } else if (node.type === 'road') {
+        setMovingRoadEndpoint({ road: node, endpoint })
+      } else if (node.type === 'steel-beam') {
+        setMovingSteelBeamEndpoint({ steelBeam: node, endpoint })
       } else {
         return
       }
       setSelection({ selectedIds: [] })
     },
-    [node, setMovingFenceEndpoint, setMovingPipeEndpoint, setMovingWallEndpoint, setSelection],
+    [
+      node,
+      setMovingCableTrayEndpoint,
+      setMovingFenceEndpoint,
+      setMovingPipeEndpoint,
+      setMovingRoadEndpoint,
+      setMovingSteelBeamEndpoint,
+      setMovingWallEndpoint,
+      setSelection,
+    ],
   )
+
+  const handleEndpointPointerDown = useCallback(
+    (endpoint: 'start' | 'end', e: React.PointerEvent<HTMLButtonElement>) => {
+      if (e.button !== 0) return
+      handleEndpointMove(endpoint, e)
+    },
+    [handleEndpointMove],
+  )
+
+  const handleEndpointClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
 
   const handleDuplicate = useCallback(
     (e: React.MouseEvent) => {
@@ -505,8 +652,14 @@ export function FloatingActionMenu() {
     movingWallEndpoint ||
     movingFenceEndpoint ||
     movingPipeEndpoint ||
+    movingCableTrayEndpoint ||
+    movingRoadEndpoint ||
+    movingSteelBeamEndpoint ||
     curvingFence ||
-    curvingPipe
+    curvingPipe ||
+    curvingCableTray ||
+    curvingRoad ||
+    curvingSteelBeam
   )
     return null
 
@@ -530,6 +683,9 @@ export function FloatingActionMenu() {
             onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
             onCurve={
               node?.type === 'fence' ||
+              node?.type === 'cable-tray' ||
+              node?.type === 'road' ||
+              node?.type === 'steel-beam' ||
               (node?.type === 'pipe' && !isPipeNearlyVertical(node)) ||
               (node?.type === 'wall' && canCurveSelectedWall)
                 ? handleCurve
@@ -559,7 +715,12 @@ export function FloatingActionMenu() {
           />
         </Html>
       </group>
-      {(node?.type === 'wall' || node?.type === 'fence' || node?.type === 'pipe') && (
+      {(node?.type === 'wall' ||
+        node?.type === 'fence' ||
+        node?.type === 'pipe' ||
+        node?.type === 'cable-tray' ||
+        node?.type === 'road' ||
+        node?.type === 'steel-beam') && (
         <>
           <group ref={startEndpointGroupRef}>
             <Html
@@ -568,30 +729,14 @@ export function FloatingActionMenu() {
               zIndexRange={[100, 0]}
             >
               <button
-                aria-label={
-                  node.type === 'wall'
-                    ? t('actionMenu.moveWallStart', 'Move wall start')
-                    : node.type === 'pipe'
-                      ? t('actionMenu.movePipeStart', 'Move pipe start')
-                      : t('actionMenu.moveFenceStart', 'Move fence start')
-                }
-                className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors ${
-                  altPressed
-                    ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
-                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-                }`}
-                onClick={(e) => handleEndpointMove('start', e)}
-                onPointerDown={(e) => e.stopPropagation()}
-                title={
-                  node.type === 'wall'
-                    ? t('actionMenu.moveWallStartDetach', 'Move wall start (Alt to detach)')
-                    : node.type === 'pipe'
-                      ? t('actionMenu.movePipeStartDetach', 'Move pipe start (Alt to detach)')
-                      : t('actionMenu.moveFenceStartDetach', 'Move fence start (Alt to detach)')
-                }
+                aria-label={getEndpointMoveLabel(node.type, 'start', false)}
+                className={endpointButtonClass}
+                onClick={handleEndpointClick}
+                onPointerDown={(e) => handleEndpointPointerDown('start', e)}
+                title={getEndpointMoveLabel(node.type, 'start', true)}
                 type="button"
               >
-                <Move className="h-4 w-4" />
+                <Move className="h-3 w-3" />
               </button>
             </Html>
           </group>
@@ -602,30 +747,14 @@ export function FloatingActionMenu() {
               zIndexRange={[100, 0]}
             >
               <button
-                aria-label={
-                  node.type === 'wall'
-                    ? t('actionMenu.moveWallEnd', 'Move wall end')
-                    : node.type === 'pipe'
-                      ? t('actionMenu.movePipeEnd', 'Move pipe end')
-                      : t('actionMenu.moveFenceEnd', 'Move fence end')
-                }
-                className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors ${
-                  altPressed
-                    ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
-                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-                }`}
-                onClick={(e) => handleEndpointMove('end', e)}
-                onPointerDown={(e) => e.stopPropagation()}
-                title={
-                  node.type === 'wall'
-                    ? t('actionMenu.moveWallEndDetach', 'Move wall end (Alt to detach)')
-                    : node.type === 'pipe'
-                      ? t('actionMenu.movePipeEndDetach', 'Move pipe end (Alt to detach)')
-                      : t('actionMenu.moveFenceEndDetach', 'Move fence end (Alt to detach)')
-                }
+                aria-label={getEndpointMoveLabel(node.type, 'end', false)}
+                className={endpointButtonClass}
+                onClick={handleEndpointClick}
+                onPointerDown={(e) => handleEndpointPointerDown('end', e)}
+                title={getEndpointMoveLabel(node.type, 'end', true)}
                 type="button"
               >
-                <Move className="h-4 w-4" />
+                <Move className="h-3 w-3" />
               </button>
             </Html>
           </group>

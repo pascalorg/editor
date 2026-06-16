@@ -14,9 +14,8 @@ import { useViewer } from '@pascal-app/viewer'
 import { Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { L, S } from '../i18n/panel-labels'
-
-const POSITION_NUDGE = 0.1
-const ROTATION_NUDGE = Math.PI / 4
+import { DataBindingSection } from '../shared/data-binding-section'
+import { TransformPanelSection } from '../shared/transform-panel-section'
 
 export default function LathePanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -35,29 +34,6 @@ export default function LathePanel() {
     },
     [selectedId, updateNode],
   )
-
-  const handleNudgePosition = useCallback(
-    (axis: number, delta: number) => {
-      if (!node) return
-      triggerSFX('sfx:item-rotate')
-      const pos = [...node.position] as [number, number, number]
-      pos[axis] = Math.round((pos[axis]! + delta) * 100) / 100
-      handleUpdate({ position: pos })
-    },
-    [node, handleUpdate],
-  )
-
-  const handleNudgeRotation = useCallback(
-    (axis: number, delta: number) => {
-      if (!node) return
-      triggerSFX('sfx:item-rotate')
-      const rot = [...node.rotation] as [number, number, number]
-      rot[axis] = Math.round((rot[axis]! + delta) * 100) / 100
-      handleUpdate({ rotation: rot })
-    },
-    [node, handleUpdate],
-  )
-
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
@@ -100,95 +76,13 @@ export default function LathePanel() {
       </PanelSection>
 
       <NodeMaterialSection />
-
-      <PanelSection title={S.position()}>
-        <div className="flex items-center gap-1.5">
-          <ActionButton label={L.left()} onClick={() => handleNudgePosition(0, -POSITION_NUDGE)} />
-          <SliderControl
-            label={L.x()}
-            max={50}
-            min={-50}
-            onChange={(v) => {
-              const pos = [...node.position] as [number, number, number]
-              pos[0] = v
-              handleUpdate({ position: pos })
-            }}
-            precision={2}
-            step={0.05}
-            unit="m"
-            value={Math.round(node.position[0] * 100) / 100}
-          />
-          <ActionButton label={L.right()} onClick={() => handleNudgePosition(0, POSITION_NUDGE)} />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <ActionButton label="Back" onClick={() => handleNudgePosition(2, -POSITION_NUDGE)} />
-          <SliderControl
-            label={L.z()}
-            max={50}
-            min={-50}
-            onChange={(v) => {
-              const pos = [...node.position] as [number, number, number]
-              pos[2] = v
-              handleUpdate({ position: pos })
-            }}
-            precision={2}
-            step={0.05}
-            unit="m"
-            value={Math.round(node.position[2] * 100) / 100}
-          />
-          <ActionButton label={L.front()} onClick={() => handleNudgePosition(2, POSITION_NUDGE)} />
-        </div>
-      </PanelSection>
-
-      <PanelSection title={S.elevation()}>
-        <div className="flex items-center gap-1.5">
-          <ActionButton label={L.down()} onClick={() => handleNudgePosition(1, -POSITION_NUDGE)} />
-          <SliderControl
-            label={L.y()}
-            max={50}
-            min={-50}
-            onChange={(v) => {
-              const pos = [...node.position] as [number, number, number]
-              pos[1] = v
-              handleUpdate({ position: pos })
-            }}
-            precision={2}
-            step={0.05}
-            unit="m"
-            value={Math.round(node.position[1] * 100) / 100}
-          />
-          <ActionButton label={L.up()} onClick={() => handleNudgePosition(1, POSITION_NUDGE)} />
-        </div>
-      </PanelSection>
-
-      <PanelSection title={S.rotation()}>
-        {[0, 1, 2].map((axis) => (
-          <div className="flex items-center gap-1.5" key={axis}>
-            <ActionButton
-              label={L.rotateMinus45()}
-              onClick={() => handleNudgeRotation(axis, -ROTATION_NUDGE)}
-            />
-            <SliderControl
-              label={axis === 0 ? L.x() : axis === 1 ? L.y() : L.z()}
-              max={180}
-              min={-180}
-              onChange={(degrees) => {
-                const rot = [...node.rotation] as [number, number, number]
-                rot[axis] = (degrees * Math.PI) / 180
-                handleUpdate({ rotation: rot })
-              }}
-              precision={0}
-              step={1}
-              unit="deg"
-              value={Math.round((node.rotation[axis]! * 180) / Math.PI)}
-            />
-            <ActionButton
-              label={L.rotatePlus45()}
-              onClick={() => handleNudgeRotation(axis, ROTATION_NUDGE)}
-            />
-          </div>
-        ))}
-      </PanelSection>
+      <TransformPanelSection
+        includePlanarPosition
+        node={node}
+        nodeId={selectedId as AnyNode['id']}
+        onUpdate={handleUpdate}
+      />
+      <DataBindingSection node={node} onUpdate={handleUpdate} />
 
       <PanelSection title={S.actions()}>
         <ActionGroup>

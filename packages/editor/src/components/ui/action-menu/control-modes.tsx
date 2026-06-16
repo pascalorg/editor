@@ -7,7 +7,7 @@ import { type LucideIcon, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import { cn } from './../../../lib/utils'
 import { t } from '../../../i18n'
-import useEditor from './../../../store/use-editor'
+import useEditor, { selectDefaultBuildingAndLevel } from './../../../store/use-editor'
 import { ActionButton } from './action-button'
 
 type ControlId =
@@ -15,8 +15,8 @@ type ControlId =
   | 'box-select'
   | 'site-edit'
   | 'build'
-  | 'material-paint'
   | 'furnish'
+  | 'data'
   | 'zone'
   | 'delete'
 
@@ -60,18 +60,17 @@ const controls: Omit<ControlConfig, 'label'>[] = [
     activeColor: 'bg-green-500/20 text-green-400',
   },
   {
-    id: 'material-paint',
-    imageSrc: '/icons/paint.png',
-    shortcut: 'P',
-    color: 'hover:bg-amber-500/20 hover:text-amber-400',
-    activeColor: 'bg-amber-500/20 text-amber-400',
+    id: 'furnish',
+    imageSrc: '/icons/things.svg',
+    shortcut: 'F',
+    color: 'hover:bg-violet-500/20 hover:text-violet-400',
+    activeColor: 'bg-violet-500/20 text-violet-400',
   },
   {
-    id: 'furnish',
-    imageSrc: '/icons/cube.png',
-    shortcut: 'F',
-    color: 'hover:bg-green-500/20 hover:text-green-400',
-    activeColor: 'bg-green-500/20 text-green-400',
+    id: 'data',
+    imageSrc: '/icons/data-widget.svg',
+    color: 'hover:bg-violet-500/20 hover:text-violet-400',
+    activeColor: 'bg-violet-500/20 text-violet-400',
   },
   {
     id: 'zone',
@@ -95,12 +94,15 @@ function getControlLabel(id: ControlId): string {
     'box-select': 'Box select',
     'site-edit': 'Edit site',
     build: 'Build',
-    'material-paint': 'Material Paint',
-    furnish: 'Items',
+    furnish: '品件',
+    data: '数据',
     zone: 'Zone',
     delete: 'Delete',
   }
-  return t(`actionMenu.${id === 'box-select' ? 'boxSelect' : id === 'site-edit' ? 'editSite' : id === 'material-paint' ? 'materialPaint' : id}`, fallbacks[id])
+  return t(
+    `actionMenu.${id === 'box-select' ? 'boxSelect' : id === 'site-edit' ? 'editSite' : id}`,
+    fallbacks[id],
+  )
 }
 
 export function ControlModes() {
@@ -111,9 +113,6 @@ export function ControlModes() {
   const setPhase = useEditor((state) => state.setPhase)
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setSelectionTool = useEditor((state) => state.setFloorplanSelectionTool)
-  const primeMaterialPaintFromSelection = useEditor(
-    (state) => state.primeMaterialPaintFromSelection,
-  )
   const levelId = useViewer((s) => s.selection.levelId)
 
   // Only subscribe to the primitive `level` number — when walls are added to
@@ -138,8 +137,9 @@ export function ControlModes() {
     if (id === 'site-edit') return false
     if (id === 'build')
       return mode === 'build' && phase === 'structure' && structureLayer === 'elements'
-    if (id === 'material-paint') return mode === 'material-paint'
-    if (id === 'furnish') return mode === 'build' && phase === 'furnish'
+    if (id === 'furnish')
+      return mode === 'build' && phase === 'structure' && structureLayer === 'industrial'
+    if (id === 'data') return mode === 'build' && phase === 'structure' && structureLayer === 'data'
     if (id === 'zone')
       return mode === 'build' && phase === 'structure' && structureLayer === 'zones'
     return mode === id
@@ -180,24 +180,43 @@ export function ControlModes() {
       if (getIsActive('build')) {
         setMode('select')
       } else {
-        setPhase('structure')
-        setStructureLayer('elements')
-        setMode('build')
-      }
-    } else if (id === 'material-paint') {
-      if (getIsActive('material-paint')) {
-        setMode('select')
-      } else {
-        primeMaterialPaintFromSelection()
-        setPhase('structure')
-        setStructureLayer('elements')
-        setMode('material-paint')
+        selectDefaultBuildingAndLevel()
+        useEditor.setState({
+          phase: 'structure',
+          structureLayer: 'elements',
+          mode: 'build',
+          tool: null,
+          catalogCategory: null,
+          editingAssemblyId: null,
+        })
       }
     } else if (id === 'furnish') {
       if (getIsActive('furnish')) {
         setMode('select')
       } else {
-        useEditor.getState().enterFurnishBuildMode()
+        selectDefaultBuildingAndLevel()
+        useEditor.setState({
+          phase: 'structure',
+          structureLayer: 'industrial',
+          mode: 'build',
+          tool: null,
+          catalogCategory: null,
+          editingAssemblyId: null,
+        })
+      }
+    } else if (id === 'data') {
+      if (getIsActive('data')) {
+        setMode('select')
+      } else {
+        selectDefaultBuildingAndLevel()
+        useEditor.setState({
+          phase: 'structure',
+          structureLayer: 'data',
+          mode: 'build',
+          tool: null,
+          catalogCategory: null,
+          editingAssemblyId: null,
+        })
       }
     } else if (id === 'zone') {
       if (getIsActive('zone')) {
@@ -217,6 +236,7 @@ export function ControlModes() {
       {controls.map((c) => {
         const ModeIcon = c.icon
         const isImageMode = Boolean(c.imageSrc)
+        const usesMaskIcon = c.id === 'furnish' || c.id === 'data'
         const isSiteButton = c.id === 'site-edit'
         const isActive = getIsActive(c.id)
         const isDisabled = isSiteButton && !canEnterSiteEdit
@@ -234,8 +254,9 @@ export function ControlModes() {
                     : 'cursor-not-allowed opacity-35 grayscale'
                 : !(isImageMode || isActive) && c.color,
               !(isSiteButton || isImageMode) && isActive && c.activeColor,
-              !isSiteButton && isImageMode && isActive && 'bg-white/10 hover:bg-white/10',
-              !isSiteButton && isImageMode && !isActive && 'hover:bg-white/5',
+              usesMaskIcon && (isActive ? c.activeColor : c.color),
+              !usesMaskIcon && !isSiteButton && isImageMode && isActive && 'bg-white/10 hover:bg-white/10',
+              !usesMaskIcon && !isSiteButton && isImageMode && !isActive && 'hover:bg-white/5',
             )}
             disabled={isDisabled}
             key={c.id}
@@ -253,7 +274,21 @@ export function ControlModes() {
             size="icon"
             variant="ghost"
           >
-            {c.imageSrc ? (
+            {usesMaskIcon && c.imageSrc ? (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'bg-current transition-[opacity,background-color] duration-200',
+                  c.id === 'furnish' ? 'h-5 w-5' : c.id === 'data' ? 'h-5 w-5' : 'h-[28px] w-[28px]',
+                  c.id === 'data' && '-translate-y-0.5',
+                  isActive ? 'opacity-100' : 'opacity-60 group-hover:opacity-100',
+                )}
+                style={{
+                  mask: `url(${c.imageSrc}) center / contain no-repeat`,
+                  WebkitMask: `url(${c.imageSrc}) center / contain no-repeat`,
+                }}
+              />
+            ) : c.imageSrc ? (
               <Image
                 alt={label}
                 className={cn(

@@ -36,6 +36,11 @@
       "import": "./dist/material-library.js",
       "default": "./dist/material-library.js"
     },
+    "./lib/*": {
+      "types": "./dist/lib/*.d.ts",
+      "import": "./dist/lib/*.js",
+      "default": "./dist/lib/*.js"
+    },
     "./spatial-grid": {
       "types": "./dist/hooks/spatial-grid/spatial-grid-manager.d.ts",
       "import": "./dist/hooks/spatial-grid/spatial-grid-manager.js",

@@ -1,6 +1,10 @@
 import {
   type AnyNodeId,
+  getEffectiveNode,
   getRenderableSlabPolygon,
+  type PolygonPoint2D,
+  pointInPolygon2D,
+  polygonsIntersect,
   type SlabNode,
   sceneRegistry,
   useScene,
@@ -8,6 +12,7 @@ import {
 import { useFrame } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
+import { subtractPolygonsFromPolygon } from '../../lib/polygon-union'
 import { createSafeEmptyGeometry, ensureWebGPUCompatibleGeometry } from '../../lib/safe-geometry'
 import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
 
@@ -17,6 +22,27 @@ function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
 
   geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
 }
+
+const polygonBounds = (polygon: ReadonlyArray<readonly [number, number]>) => {
+  let minX = Number.POSITIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  for (const [x, z] of polygon) {
+    minX = Math.min(minX, x)
+    minZ = Math.min(minZ, z)
+    maxX = Math.max(maxX, x)
+    maxZ = Math.max(maxZ, z)
+  }
+  return { minX, minZ, maxX, maxZ, width: maxX - minX, depth: maxZ - minZ }
+}
+
+const signedArea2 = (polygon: ReadonlyArray<readonly [number, number]>) =>
+  polygon.reduce((sum, point, index) => {
+    const next = polygon[(index + 1) % polygon.length]
+    if (!next) return sum
+    return sum + point[0] * next[1] - next[0] * point[1]
+  }, 0)
 
 // ============================================================================
 // SLAB SYSTEM
@@ -48,7 +74,7 @@ export const SlabSystem = () => {
 
       const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
       if (mesh) {
-        updateSlabGeometry(node as SlabNode, mesh)
+        updateSlabGeometry(getEffectiveNode(node as SlabNode), mesh)
         clearDirty(id as AnyNodeId)
       }
       // If mesh not found, keep it dirty for next frame
@@ -72,6 +98,32 @@ function updateSlabGeometry(node: SlabNode, mesh: THREE.Mesh) {
   // rather than at Y=0. Positive elevation stays at Y=0 (slab sits at floor level).
   const elevation = node.elevation ?? 0.05
   mesh.position.y = elevation < 0 ? elevation : 0
+
+  newGeo.computeBoundingBox()
+  mesh.updateMatrixWorld(true)
+  const meshWorldBox = new THREE.Box3().setFromObject(mesh)
+  console.log('[pascal:slab:update]', {
+    id: node.id,
+    parentId: node.parentId,
+    elevation,
+    meshY: mesh.position.y,
+    holeCount: node.holes?.length ?? 0,
+    holes: node.holes ?? [],
+    rawPolygonBounds: polygonBounds(node.polygon),
+    rawPolygon: node.polygon,
+    geometryBoundingBox: newGeo.boundingBox
+      ? {
+          min: newGeo.boundingBox.min.toArray(),
+          max: newGeo.boundingBox.max.toArray(),
+        }
+      : null,
+    meshWorldBoundingBox: meshWorldBox.isEmpty()
+      ? null
+      : {
+          min: meshWorldBox.min.toArray(),
+          max: meshWorldBox.max.toArray(),
+        },
+  })
 }
 
 /**
@@ -82,33 +134,117 @@ export function generateSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry {
   return elevation < 0 ? generatePoolGeometry(slabNode) : generatePositiveSlabGeometry(slabNode)
 }
 
+function ensureCounterClockwisePolygon(polygon: Array<[number, number]>): Array<[number, number]> {
+  let area2 = 0
+  for (let i = 0; i < polygon.length; i++) {
+    const j = (i + 1) % polygon.length
+    area2 += polygon[i]![0] * polygon[j]![1] - polygon[j]![0] * polygon[i]![1]
+  }
+  return area2 < 0 ? [...polygon].reverse() : polygon
+}
+
+function isStrictInteriorHole(contour: PolygonPoint2D[], hole: PolygonPoint2D[]) {
+  return (
+    hole.every((point) => pointInPolygon2D(point, contour, { includeBoundary: false })) &&
+    !polygonsIntersect(contour, hole)
+  )
+}
+
+function affectsContour(contour: PolygonPoint2D[], hole: PolygonPoint2D[]) {
+  return (
+    polygonsIntersect(contour, hole) ||
+    hole.some((point) => pointInPolygon2D(point, contour, { includeBoundary: false })) ||
+    contour.some((point) => pointInPolygon2D(point, hole, { includeBoundary: false }))
+  )
+}
+
+function buildSlabRegions(contour: PolygonPoint2D[], holes: PolygonPoint2D[][]) {
+  const containedHoles: PolygonPoint2D[][] = []
+  const edgeCutouts: PolygonPoint2D[][] = []
+
+  for (const hole of holes) {
+    if (hole.length < 3) continue
+    if (isStrictInteriorHole(contour, hole)) containedHoles.push(hole)
+    else if (affectsContour(contour, hole)) edgeCutouts.push(hole)
+  }
+
+  const contours =
+    edgeCutouts.length > 0 ? subtractPolygonsFromPolygon(contour, edgeCutouts) : [contour]
+
+  return contours.map((regionContour) => ({
+    contour: regionContour,
+    holes: containedHoles.filter((hole) => isStrictInteriorHole(regionContour, hole)),
+  }))
+}
+
 /**
  * Standard slab: flat extrusion upward from Y=0 by elevation thickness.
  */
 function generatePositiveSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry {
-  const polygon = getRenderableSlabPolygon(slabNode)
+  const polygon = ensureCounterClockwisePolygon(getRenderableSlabPolygon(slabNode))
   const elevation = slabNode.elevation ?? 0.05
   const holePolygons = mergeSurfaceHolePolygons(slabNode.holes ?? [])
 
   if (polygon.length < 3) return createSafeEmptyGeometry()
 
-  const shape = new THREE.Shape()
-  shape.moveTo(polygon[0]![0], -polygon[0]![1])
-  for (let i = 1; i < polygon.length; i++) shape.lineTo(polygon[i]![0], -polygon[i]![1])
-  shape.closePath()
+  const positions: number[] = []
+  const uvs: number[] = []
+  const indices: number[] = []
 
-  for (const holePolygon of holePolygons) {
-    if (holePolygon.length < 3) continue
-    const holePath = new THREE.Path()
-    holePath.moveTo(holePolygon[0]![0], -holePolygon[0]![1])
-    for (let i = 1; i < holePolygon.length; i++)
-      holePath.lineTo(holePolygon[i]![0], -holePolygon[i]![1])
-    holePath.closePath()
-    shape.holes.push(holePath)
+  const addWall = (a: THREE.Vector2, b: THREE.Vector2, flip = false) => {
+    const base = positions.length / 3
+    const length = Math.max(a.distanceTo(b), 0.001)
+    positions.push(a.x, 0, a.y, b.x, 0, b.y, b.x, elevation, b.y, a.x, elevation, a.y)
+    uvs.push(0, 0, length, 0, length, elevation, 0, elevation)
+    if (flip) indices.push(base, base + 2, base + 1, base, base + 3, base + 2)
+    else indices.push(base, base + 1, base + 2, base, base + 2, base + 3)
   }
 
-  const geometry = new THREE.ExtrudeGeometry(shape, { depth: elevation, bevelEnabled: false })
-  geometry.rotateX(-Math.PI / 2)
+  for (const region of buildSlabRegions(polygon, holePolygons)) {
+    const contour2d = ensureCounterClockwisePolygon(region.contour).map(
+      ([x, z]) => new THREE.Vector2(x, z),
+    )
+    const holes2d = region.holes
+      .filter((h) => h.length >= 3)
+      .map((h) => h.map(([x, z]) => new THREE.Vector2(x, z)))
+
+    const capPoints = [...contour2d, ...holes2d.flat()]
+    const topBase = positions.length / 3
+    for (const point of capPoints) {
+      positions.push(point.x, elevation, point.y)
+      uvs.push(point.x, -point.y)
+    }
+    const bottomBase = positions.length / 3
+    for (const point of capPoints) {
+      positions.push(point.x, 0, point.y)
+      uvs.push(point.x, -point.y)
+    }
+
+    const capTris = THREE.ShapeUtils.triangulateShape(contour2d, holes2d)
+    for (const tri of capTris) {
+      const [a, b, c] = [tri[0]!, tri[1]!, tri[2]!]
+      indices.push(topBase + a, topBase + c, topBase + b)
+      indices.push(bottomBase + a, bottomBase + b, bottomBase + c)
+    }
+
+    for (let i = 0; i < contour2d.length; i++) {
+      addWall(contour2d[i]!, contour2d[(i + 1) % contour2d.length]!, false)
+    }
+
+    for (const hole of holes2d) {
+      for (let i = 0; i < hole.length; i++) {
+        const a = hole[i]!
+        const b = hole[(i + 1) % hole.length]!
+        addWall(a, b, false)
+        addWall(a, b, true)
+      }
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  geometry.setIndex(indices)
   geometry.computeVertexNormals()
   return ensureWebGPUCompatibleGeometry(geometry)
 }
@@ -123,7 +259,10 @@ function generatePositiveSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry 
  *   - walls from Y=0 to Y=depth, inward-facing normals (visible from inside pool)
  */
 function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
-  const polygon = getRenderableSlabPolygon(slabNode)
+  const rawRenderablePolygon = slabNode.autoFromWalls
+    ? getRenderableSlabPolygon(slabNode)
+    : slabNode.polygon
+  const polygon = ensureCounterClockwisePolygon(rawRenderablePolygon)
   const depth = Math.abs(slabNode.elevation ?? 0.05)
   const holePolygons = mergeSurfaceHolePolygons(slabNode.holes ?? [])
 
@@ -132,7 +271,7 @@ function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
   const positions: number[] = []
   const uvs: number[] = []
   const indices: number[] = []
-  const n = polygon.length
+  let floorTriCount = 0
   const bounds = new THREE.Box2()
 
   for (const [x, z] of polygon) {
@@ -157,37 +296,42 @@ function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
     uvs.push(u, v)
   }
 
-  // --- Floor at Y=0 ---
-  for (const [x, z] of polygon) pushFloorVertex(x!, 0, z!)
+  for (const region of buildSlabRegions(polygon, holePolygons)) {
+    const contour = ensureCounterClockwisePolygon(region.contour)
+    const floorBase = positions.length / 3
 
-  const pts2d = polygon.map(([x, z]) => new THREE.Vector2(x!, z!))
-  const holesPts2d = holePolygons.map((h) => h.map(([x, z]) => new THREE.Vector2(x!, z!)))
-  for (const hole of holePolygons) {
-    for (const [x, z] of hole) pushFloorVertex(x!, 0, z!)
-  }
+    // --- Floor at Y=0 ---
+    for (const [x, z] of contour) pushFloorVertex(x, 0, z)
+    const pts2d = contour.map(([x, z]) => new THREE.Vector2(x, z))
+    const holesPts2d = region.holes.map((h) => h.map(([x, z]) => new THREE.Vector2(x, z)))
+    for (const hole of region.holes) {
+      for (const [x, z] of hole) pushFloorVertex(x, 0, z)
+    }
 
-  const floorTris = THREE.ShapeUtils.triangulateShape(pts2d, holesPts2d)
-  for (const tri of floorTris) {
-    // Reversed winding → normals point +Y (upward) in XZ plane
-    indices.push(tri[0]!, tri[2]!, tri[1]!)
-  }
+    const floorTris = THREE.ShapeUtils.triangulateShape(pts2d, holesPts2d)
+    floorTriCount += floorTris.length
+    for (const tri of floorTris) {
+      // Reversed winding ? normals point +Y (upward) in XZ plane
+      indices.push(floorBase + tri[0]!, floorBase + tri[2]!, floorBase + tri[1]!)
+    }
 
-  // --- Inner walls (no top cap at Y=depth) ---
-  // Standard winding on a CCW polygon in XZ gives inward-facing normals.
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n
-    const [x0, z0] = polygon[i]!
-    const [x1, z1] = polygon[j]!
-    const vBase = positions.length / 3
-    const segmentLength = Math.max(Math.hypot(x1 - x0, z1 - z0), 0.001)
+    // --- Inner walls (no top cap at Y=depth) ---
+    // Standard winding on a CCW polygon in XZ gives inward-facing normals.
+    for (let i = 0; i < contour.length; i++) {
+      const j = (i + 1) % contour.length
+      const [x0, z0] = contour[i]!
+      const [x1, z1] = contour[j]!
+      const vBase = positions.length / 3
+      const segmentLength = Math.max(Math.hypot(x1 - x0, z1 - z0), 0.001)
 
-    pushWallVertex(x0!, 0, z0!, 0, 0) // v0 — floor level
-    pushWallVertex(x1!, 0, z1!, segmentLength, 0) // v1 — floor level
-    pushWallVertex(x1!, depth, z1!, segmentLength, depth) // v2 — ground level
-    pushWallVertex(x0!, depth, z0!, 0, depth) // v3 — ground level
+      pushWallVertex(x0, 0, z0, 0, 0)
+      pushWallVertex(x1, 0, z1, segmentLength, 0)
+      pushWallVertex(x1, depth, z1, segmentLength, depth)
+      pushWallVertex(x0, depth, z0, 0, depth)
 
-    indices.push(vBase, vBase + 1, vBase + 2)
-    indices.push(vBase, vBase + 2, vBase + 3)
+      indices.push(vBase, vBase + 1, vBase + 2)
+      indices.push(vBase, vBase + 2, vBase + 3)
+    }
   }
 
   const geo = new THREE.BufferGeometry()
@@ -195,5 +339,33 @@ function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
   geo.setIndex(indices)
   geo.computeVertexNormals()
+  geo.computeBoundingBox()
+  console.log('[pascal:slab:pool-geometry]', {
+    id: slabNode.id,
+    parentId: slabNode.parentId,
+    elevation: slabNode.elevation ?? 0.05,
+    depth,
+    rawPolygonBounds: polygonBounds(slabNode.polygon),
+    rawPolygonArea2: signedArea2(slabNode.polygon),
+    rawPolygon: slabNode.polygon,
+    renderablePolygonBounds: polygonBounds(rawRenderablePolygon),
+    renderablePolygonArea2: signedArea2(rawRenderablePolygon),
+    renderablePolygon: rawRenderablePolygon,
+    holePolygons,
+    normalizedPolygonBounds: polygonBounds(polygon),
+    normalizedPolygonArea2: signedArea2(polygon),
+    normalizedPolygon: polygon,
+    holeCount: holePolygons.length,
+    floorTriCount,
+    vertexCount: positions.length / 3,
+    indexCount: indices.length,
+    geometryBoundingBox: geo.boundingBox
+      ? {
+          min: geo.boundingBox.min.toArray(),
+          max: geo.boundingBox.max.toArray(),
+        }
+      : null,
+  })
+
   return ensureWebGPUCompatibleGeometry(geo)
 }

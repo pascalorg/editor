@@ -1,18 +1,23 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { CableTrayNode } from './cable-tray'
 import { CeilingNode } from './ceiling'
 import { ColumnNode } from './column'
 import { FenceNode } from './fence'
-import { PipeNode } from './pipe'
 import { GuideNode } from './guide'
 import { ItemNode } from './item'
+import { PipeNode } from './pipe'
+import { PipeFittingNode } from './pipe-fitting'
+import { RoadNode } from './road'
 import { RoofNode } from './roof'
 import { ScanNode } from './scan'
 import { ShelfNode } from './shelf'
 import { SlabNode } from './slab'
 import { SpawnNode } from './spawn'
 import { StairNode } from './stair'
+import { SteelBeamNode } from './steel-beam'
+import { TankNode } from './tank'
 import { WallNode } from './wall'
 import { ZoneNode } from './zone'
 
@@ -24,7 +29,11 @@ export const LevelNode = BaseNode.extend({
       z.union([
         WallNode.shape.id,
         FenceNode.shape.id,
+        CableTrayNode.shape.id,
+        PipeFittingNode.shape.id,
         PipeNode.shape.id,
+        RoadNode.shape.id,
+        SteelBeamNode.shape.id,
         ColumnNode.shape.id,
         ItemNode.shape.id,
         ZoneNode.shape.id,
@@ -36,6 +45,7 @@ export const LevelNode = BaseNode.extend({
         GuideNode.shape.id,
         SpawnNode.shape.id,
         ShelfNode.shape.id,
+        TankNode.shape.id,
       ]),
     )
     .default([]),

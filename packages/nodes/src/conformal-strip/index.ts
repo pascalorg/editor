@@ -1,0 +1,1 @@
+﻿export { conformalStripDefinition } from './definition'

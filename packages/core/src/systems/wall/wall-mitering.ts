@@ -35,6 +35,17 @@ type JunctionData = Map<string, WallIntersections>
 
 const TOLERANCE = 0.001
 
+// Miter joints are line-line intersections, so the joint point sits a distance
+// ≈ halfThickness / sin(θ) from the junction, where θ is the angle between the
+// two walls. As θ → 0 (two walls nearly collinear — e.g. a room-preset preview
+// dragged on top of an existing wall, or a freshly-drawn wall almost parallel
+// to its neighbour) that distance runs away to infinity and the wall renders as
+// an infinite spike. Cap the joint at this multiple of the wall half-thickness;
+// beyond it we fall back to a square (butt) joint, exactly like the existing
+// parallel-walls guard. 10× preserves every realistic corner (a 0.1 m wall keeps
+// mitering down to ~11°) while bounding the pathological near-collinear case.
+const MITER_LIMIT = 10
+
 function pointToKey(p: Point2D, tolerance = TOLERANCE): string {
   const snap = 1 / tolerance
   return `${Math.round(p.x * snap)},${Math.round(p.y * snap)}`
@@ -198,6 +209,7 @@ interface ProcessedWall {
   edgeA: LineEquation // Left edge
   edgeB: LineEquation // Right edge
   isPassthrough: boolean // True if wall passes through junction (T-junction)
+  halfThickness: number // Used to bound the miter joint against runaway spikes
 }
 
 function calculateJunctionIntersections(
@@ -228,7 +240,14 @@ function calculateJunctionIntersections(
         const edgeB = createLineFromPointAndVector(pB, v)
         const angle = Math.atan2(v.y, v.x)
 
-        processedWalls.push({ wallId: wall.id, angle, edgeA, edgeB, isPassthrough: true })
+        processedWalls.push({
+          wallId: wall.id,
+          angle,
+          edgeA,
+          edgeB,
+          isPassthrough: true,
+          halfThickness: halfT,
+        })
       }
     } else {
       // Normal wall endpoint (start or end)
@@ -245,7 +264,14 @@ function calculateJunctionIntersections(
       const edgeB = createLineFromPointAndVector(pB, v)
       const angle = Math.atan2(v.y, v.x)
 
-      processedWalls.push({ wallId: wall.id, angle, edgeA, edgeB, isPassthrough: false })
+      processedWalls.push({
+        wallId: wall.id,
+        angle,
+        edgeA,
+        edgeB,
+        isPassthrough: false,
+        halfThickness: halfT,
+      })
     }
   }
 
@@ -273,6 +299,21 @@ function calculateJunctionIntersections(
     const p = {
       x: (wall1.edgeA.b * wall2.edgeB.c - wall2.edgeB.b * wall1.edgeA.c) / det,
       y: (wall2.edgeB.a * wall1.edgeA.c - wall1.edgeA.a * wall2.edgeB.c) / det,
+    }
+
+    // Miter limit: `det` only catches walls that are *exactly* parallel. Two
+    // walls meeting at a shallow angle have a small-but-nonzero `det`, so `p`
+    // lands far from the junction (∝ 1/sin θ) and the wall renders as an
+    // infinite spike. Reject any joint farther than MITER_LIMIT half-thicknesses
+    // from the meeting point — those walls fall back to a square joint.
+    const maxMiter = MITER_LIMIT * Math.max(wall1.halfThickness, wall2.halfThickness)
+    const dx = p.x - meetingPoint.x
+    const dy = p.y - meetingPoint.y
+    if (
+      !(Number.isFinite(p.x) && Number.isFinite(p.y)) ||
+      dx * dx + dy * dy > maxMiter * maxMiter
+    ) {
+      continue
     }
 
     // Only assign intersection to non-passthrough walls

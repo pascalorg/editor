@@ -27,6 +27,7 @@ export {
 export { AssemblyNode } from './nodes/assembly'
 export { BoxNode } from './nodes/box'
 export { BuildingNode } from './nodes/building'
+export { CableTrayNode } from './nodes/cable-tray'
 export { CapsuleNode } from './nodes/capsule'
 export { CeilingNode } from './nodes/ceiling'
 export {
@@ -45,7 +46,9 @@ export {
   ColumnSupportStyle,
 } from './nodes/column'
 export { ConeNode } from './nodes/cone'
+export { ConformalStripNode } from './nodes/conformal-strip'
 export { CylinderNode } from './nodes/cylinder'
+export { DataWidgetKind, DataWidgetNode } from './nodes/data-widget'
 export { DoorNode, DoorSegment } from './nodes/door'
 export {
   ElevatorDoorPanelStyle,
@@ -80,9 +83,16 @@ export {
   isPlanDragMovableItem,
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
+export { LadderNode } from './nodes/ladder'
 export { LatheNode } from './nodes/lathe'
 export { LevelNode } from './nodes/level'
 export { PipeMedium, PipeNode } from './nodes/pipe'
+export {
+  PipeFittingKind,
+  PipeFittingNode,
+  PipeValveStyle,
+} from './nodes/pipe-fitting'
+export { RoadNode } from './nodes/road'
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export { RoofSegmentNode, RoofType } from './nodes/roof-segment'
@@ -104,8 +114,10 @@ export {
   StairType,
 } from './nodes/stair'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
+export { SteelBeamNode, SteelBeamProfile } from './nodes/steel-beam'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { SweepNode } from './nodes/sweep'
+export { TankKind, TankNode } from './nodes/tank'
 export { TorusNode } from './nodes/torus'
 export { TrapezoidPrismNode } from './nodes/trapezoid-prism'
 export type { WallSurfaceMaterialSpec, WallSurfaceSide } from './nodes/wall'

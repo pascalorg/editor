@@ -16,16 +16,24 @@ import {
   PanelWrapper,
   SegmentedControl,
   SliderControl,
+  ToggleControl,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
-import { L, N, S, stairSegmentTypeLabel } from '../i18n/panel-labels'
 
-const SEGMENT_TYPE_VALUES: StairSegmentType[] = ['stair', 'landing']
-const ATTACHMENT_SIDE_VALUES: AttachmentSide[] = ['front', 'left', 'right']
+const SEGMENT_TYPE_OPTIONS: { label: string; value: StairSegmentType }[] = [
+  { label: '梯段', value: 'stair' },
+  { label: '平台', value: 'landing' },
+]
+
+const ATTACHMENT_SIDE_OPTIONS: { label: string; value: AttachmentSide }[] = [
+  { label: '前方', value: 'front' },
+  { label: '左侧', value: 'left' },
+  { label: '右侧', value: 'right' },
+]
 
 export default function StairSegmentPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -111,25 +119,15 @@ export default function StairSegmentPanel() {
 
   if (!(node && node.type === 'stair-segment' && selectedId)) return null
 
-  const segmentTypeOptions = SEGMENT_TYPE_VALUES.map((value) => ({
-    label: stairSegmentTypeLabel(value),
-    value,
-  }))
-  const attachmentSideOptions = [
-    { label: L.front(), value: 'front' as AttachmentSide },
-    { label: L.left(), value: 'left' as AttachmentSide },
-    { label: L.right(), value: 'right' as AttachmentSide },
-  ]
-
   return (
     <PanelWrapper
       icon="/icons/stairs.png"
       onBack={handleBack}
       onClose={handleClose}
-      title={node.name || N.stairSegment()}
+      title={node.name || '楼梯分段'}
       width={300}
     >
-      <PanelSection title={S.type()}>
+      <PanelSection title="类型">
         <SegmentedControl
           onChange={(v) => {
             const updates: Partial<StairSegmentNode> = { segmentType: v }
@@ -144,24 +142,24 @@ export default function StairSegmentPanel() {
             }
             handleUpdate(updates)
           }}
-          options={segmentTypeOptions}
+          options={SEGMENT_TYPE_OPTIONS}
           value={node.segmentType}
         />
       </PanelSection>
 
       {!isFirstSegment && (
-        <PanelSection title={S.attachment()}>
+        <PanelSection title="连接方向">
           <SegmentedControl
             onChange={(v) => handleUpdate({ attachmentSide: v })}
-            options={attachmentSideOptions}
+            options={ATTACHMENT_SIDE_OPTIONS}
             value={node.attachmentSide}
           />
         </PanelSection>
       )}
 
-      <PanelSection title={S.dimensions()}>
+      <PanelSection title="尺寸">
         <SliderControl
-          label={L.width()}
+          label="宽度"
           max={5}
           min={0.5}
           onChange={(v) => handleUpdate({ width: v })}
@@ -171,7 +169,7 @@ export default function StairSegmentPanel() {
           value={Math.round(node.width * 100) / 100}
         />
         <SliderControl
-          label={L.length()}
+          label="长度"
           max={10}
           min={0.5}
           onChange={(v) => handleUpdate({ length: v })}
@@ -183,7 +181,7 @@ export default function StairSegmentPanel() {
         {node.segmentType === 'stair' && (
           <>
             <SliderControl
-              label={L.height()}
+              label="高度"
               max={10}
               min={0.5}
               onChange={(v) => handleUpdate({ height: v })}
@@ -193,7 +191,7 @@ export default function StairSegmentPanel() {
               value={Math.round(node.height * 100) / 100}
             />
             <SliderControl
-              label={L.steps()}
+              label="台阶数"
               max={30}
               min={2}
               onChange={(v) => handleUpdate({ stepCount: Math.round(v) })}
@@ -206,40 +204,31 @@ export default function StairSegmentPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title={S.structure()}>
-        <div className="flex items-center justify-between px-1 py-1">
-          <span className="text-muted-foreground text-xs">{L.fillToFloor()}</span>
-          <button
-            className={`relative h-5 w-10 rounded-full transition-colors ${
-              node.fillToFloor ? 'bg-blue-500' : 'bg-[#3e3e3e]'
-            }`}
-            onClick={() => handleUpdate({ fillToFloor: !node.fillToFloor })}
-            type="button"
-          >
-            <div
-              className={`absolute top-1 h-3 w-3 rounded-full bg-white transition-transform ${
-                node.fillToFloor ? 'left-6' : 'left-1'
-              }`}
-            />
-          </button>
-        </div>
-        {!node.fillToFloor && (
-          <SliderControl
-            label={L.thickness()}
-            max={1}
-            min={0.05}
-            onChange={(v) => handleUpdate({ thickness: v })}
-            precision={2}
-            step={0.05}
-            unit="m"
-            value={Math.round((node.thickness ?? 0.25) * 100) / 100}
+      <PanelSection title="结构">
+        <div className="space-y-3">
+          <ToggleControl
+            checked={node.fillToFloor}
+            label="贴合楼层"
+            onChange={(checked) => handleUpdate({ fillToFloor: checked })}
           />
-        )}
+          {!node.fillToFloor && (
+            <SliderControl
+              label="厚度"
+              max={1}
+              min={0.05}
+              onChange={(v) => handleUpdate({ thickness: v })}
+              precision={2}
+              step={0.05}
+              unit="m"
+              value={Math.round((node.thickness ?? 0.25) * 100) / 100}
+            />
+          )}
+        </div>
       </PanelSection>
 
-      <PanelSection title={S.position()}>
+      <PanelSection title="位置">
         <SliderControl
-          label={L.x()}
+          label="X"
           max={50}
           min={-50}
           onChange={(v) => {
@@ -253,7 +242,7 @@ export default function StairSegmentPanel() {
           value={Math.round(node.position[0] * 100) / 100}
         />
         <SliderControl
-          label={L.y()}
+          label="Y"
           max={50}
           min={-50}
           onChange={(v) => {
@@ -267,7 +256,7 @@ export default function StairSegmentPanel() {
           value={Math.round(node.position[1] * 100) / 100}
         />
         <SliderControl
-          label={L.z()}
+          label="Z"
           max={50}
           min={-50}
           onChange={(v) => {
@@ -281,7 +270,7 @@ export default function StairSegmentPanel() {
           value={Math.round(node.position[2] * 100) / 100}
         />
         <SliderControl
-          label={L.rotation()}
+          label="旋转"
           max={180}
           min={-180}
           onChange={(degrees) => {
@@ -294,14 +283,14 @@ export default function StairSegmentPanel() {
         />
         <div className="flex gap-1.5 px-1 pt-2 pb-1">
           <ActionButton
-            label={L.rotateMinus45()}
+            label="-45°"
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               handleUpdate({ rotation: node.rotation - Math.PI / 4 })
             }}
           />
           <ActionButton
-            label={L.rotatePlus45()}
+            label="+45°"
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               handleUpdate({ rotation: node.rotation + Math.PI / 4 })
@@ -310,18 +299,18 @@ export default function StairSegmentPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title={S.actions()}>
+      <PanelSection title="操作">
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={L.move()} onClick={handleMove} />
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="移动" onClick={handleMove} />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label={L.duplicate()}
+            label="复制"
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label={L.delete()}
+            label="删除"
             onClick={handleDelete}
           />
         </ActionGroup>

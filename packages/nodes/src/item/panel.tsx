@@ -141,7 +141,7 @@ export default function ItemPanel() {
         <SliderControl
           label={
             <>
-              X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+              X<sub className="ml-[1px] text-[11px] opacity-70">位置</sub>
             </>
           }
           max={node.position[0] + 2}
@@ -157,7 +157,7 @@ export default function ItemPanel() {
         <SliderControl
           label={
             <>
-              Y<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+              Y<sub className="ml-[1px] text-[11px] opacity-70">位置</sub>
             </>
           }
           max={node.position[1] + 2}
@@ -173,7 +173,7 @@ export default function ItemPanel() {
         <SliderControl
           label={
             <>
-              Z<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+              Z<sub className="ml-[1px] text-[11px] opacity-70">位置</sub>
             </>
           }
           max={node.position[2] + 2}
@@ -192,7 +192,7 @@ export default function ItemPanel() {
         <SliderControl
           label={
             <>
-              Y<sub className="ml-[1px] text-[11px] opacity-70">rot</sub>
+              Y<sub className="ml-[1px] text-[11px] opacity-70">旋转</sub>
             </>
           }
           max={Math.round((node.rotation[1] * 180) / Math.PI) + 45}
@@ -250,7 +250,7 @@ export default function ItemPanel() {
           <SliderControl
             label={
               <>
-                XYZ<sub className="ml-[1px] text-[11px] opacity-70">scale</sub>
+                XYZ<sub className="ml-[1px] text-[11px] opacity-70">缩放</sub>
               </>
             }
             max={10}
@@ -268,7 +268,7 @@ export default function ItemPanel() {
             <SliderControl
               label={
                 <>
-                  X<sub className="ml-[1px] text-[11px] opacity-70">scale</sub>
+                  X<sub className="ml-[1px] text-[11px] opacity-70">缩放</sub>
                 </>
               }
               max={10}
@@ -283,7 +283,7 @@ export default function ItemPanel() {
             <SliderControl
               label={
                 <>
-                  Y<sub className="ml-[1px] text-[11px] opacity-70">scale</sub>
+                  Y<sub className="ml-[1px] text-[11px] opacity-70">缩放</sub>
                 </>
               }
               max={10}
@@ -298,7 +298,7 @@ export default function ItemPanel() {
             <SliderControl
               label={
                 <>
-                  Z<sub className="ml-[1px] text-[11px] opacity-70">scale</sub>
+                  Z<sub className="ml-[1px] text-[11px] opacity-70">缩放</sub>
                 </>
               }
               max={10}

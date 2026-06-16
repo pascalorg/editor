@@ -11,7 +11,9 @@
     "reload": "重新加载",
     "dismiss": "关闭",
     "visible": "显示",
-    "hidden": "隐藏"
+    "hidden": "隐藏",
+    "on": "开",
+    "off": "关"
   },
   "home": {
     "localEditorNotice": "本地编辑器 — 场景不会保存。",
@@ -164,12 +166,9 @@
       }
     },
     "furnishCategories": {
-      "safety": "安全消防",
-      "lighting": "照明",
       "electronics": "常用设备",
       "equipment": "工业设备",
       "structural": "结构",
-      "opening": "门窗",
       "outdoor": "户外",
       "mine": "我的"
     }
@@ -203,7 +202,8 @@
     "siteEditingGroundOnly": "场地编辑（仅地面层）",
     "build": "建造",
     "materialPaint": "材质涂刷",
-    "furnish": "物品",
+    "furnish": "品件",
+    "data": "数据",
     "zone": "区域",
     "toggleTheme": "切换主题",
     "untitled": "未命名",
@@ -250,6 +250,7 @@
       "stair": "楼梯",
       "roof": "人字屋顶",
       "fence": "围栏",
+      "road": "道路",
       "pipe": "管道",
       "column": "柱",
       "elevator": "电梯",
@@ -257,7 +258,12 @@
       "ceiling": "天花板",
       "zone": "区域",
       "spawn": "出生点",
-      "shelf": "搁板"
+      "shelf": "搁板",
+      "tank": "储罐",
+      "pipeFitting": "管件",
+      "cableTray": "桥架",
+      "ladder": "爬梯",
+      "steelBeam": "钢梁"
     },
     "wallMode": {
       "fullHeight": "全高",
@@ -301,12 +307,49 @@
       "down": "低墙"
     },
     "grid": "网格：{state}",
+    "gridLabel": "网格",
+    "magneticSnap": "磁吸对齐",
+    "shadows": "阴影",
+    "camera": "相机",
+    "units": "单位",
     "metric": "公制 (m)",
     "imperial": "英制 (ft)",
+    "metricShort": "公制",
+    "imperialShort": "英制",
     "dark": "深色",
     "light": "浅色",
     "perspective": "透视",
     "orthographic": "正交",
+    "displaySettings": "显示设置",
+    "display": "显示",
+    "render": "渲染",
+    "renderModes": {
+      "solid": "实体",
+      "solidDetail": "扁平且流畅",
+      "rendered": "渲染",
+      "renderedDetail": "完整环境光遮蔽"
+    },
+    "edges": "边线",
+    "edgeModes": {
+      "off": "关闭",
+      "offDetail": "不显示边线",
+      "soft": "柔和",
+      "softDetail": "淡化轮廓线",
+      "strong": "清晰",
+      "strongDetail": "清晰轮廓线"
+    },
+    "theme": "主题",
+    "themeNames": {
+      "studio": "工作室",
+      "paper": "纸面",
+      "sunset": "日落",
+      "overcast": "阴天",
+      "blueprint": "蓝图",
+      "mediterranean": "地中海",
+      "twilight": "暮色",
+      "night": "夜间",
+      "verdant": "绿意"
+    },
     "walkthrough": "漫游",
     "previewMode": "预览模式",
     "preview": "预览"
@@ -634,7 +677,8 @@
         "tripod": "三脚",
         "trestle": "支架",
         "portal-frame": "门式框架",
-        "box-frame": "箱形框架"
+        "box-frame": "箱形框架",
+        "pipe-saddle": "管托"
       },
       "braceWidth": "撑宽",
       "braceDepth": "撑深",

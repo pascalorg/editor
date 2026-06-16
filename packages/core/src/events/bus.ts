@@ -5,11 +5,14 @@ import type {
   AssemblyNode,
   BoxNode,
   BuildingNode,
+  CableTrayNode,
   CapsuleNode,
   CeilingNode,
   ColumnNode,
   ConeNode,
+  ConformalStripNode,
   CylinderNode,
+  DataWidgetNode,
   DoorNode,
   ElevatorNode,
   ExtrudeNode,
@@ -19,9 +22,12 @@ import type {
   HalfCylinderNode,
   HemisphereNode,
   ItemNode,
+  LadderNode,
   LatheNode,
   LevelNode,
+  PipeFittingNode,
   PipeNode,
+  RoadNode,
   RoofNode,
   RoofSegmentNode,
   RoundedPanelNode,
@@ -33,7 +39,9 @@ import type {
   SphereNode,
   StairNode,
   StairSegmentNode,
+  SteelBeamNode,
   SweepNode,
+  TankNode,
   TorusNode,
   TrapezoidPrismNode,
   WallNode,
@@ -78,8 +86,11 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 
 export type BoxEvent = NodeEvent<BoxNode>
 export type AssemblyEvent = NodeEvent<AssemblyNode>
+export type CableTrayEvent = NodeEvent<CableTrayNode>
 export type CylinderEvent = NodeEvent<CylinderNode>
+export type DataWidgetEvent = NodeEvent<DataWidgetNode>
 export type ConeEvent = NodeEvent<ConeNode>
+export type ConformalStripEvent = NodeEvent<ConformalStripNode>
 export type FrustumEvent = NodeEvent<FrustumNode>
 export type SphereEvent = NodeEvent<SphereNode>
 export type HemisphereEvent = NodeEvent<HemisphereNode>
@@ -92,9 +103,12 @@ export type HalfCylinderEvent = NodeEvent<HalfCylinderNode>
 export type RoundedPanelEvent = NodeEvent<RoundedPanelNode>
 export type ExtrudeEvent = NodeEvent<ExtrudeNode>
 export type SweepEvent = NodeEvent<SweepNode>
+export type TankEvent = NodeEvent<TankNode>
 export type WallEvent = NodeEvent<WallNode>
 export type FenceEvent = NodeEvent<FenceNode>
+export type PipeFittingEvent = NodeEvent<PipeFittingNode>
 export type PipeEvent = NodeEvent<PipeNode>
+export type RoadEvent = NodeEvent<RoadNode>
 export type ItemEvent = NodeEvent<ItemNode>
 export type SiteEvent = NodeEvent<SiteNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
@@ -112,8 +126,10 @@ export type StairSegmentEvent = NodeEvent<StairSegmentNode>
 export type WindowEvent = NodeEvent<WindowNode>
 export type DoorEvent = NodeEvent<DoorNode>
 export type ElevatorEvent = NodeEvent<ElevatorNode>
+export type LadderEvent = NodeEvent<LadderNode>
 export type ScanEvent = NodeEvent<ScanNode>
 export type GuideEvent = NodeEvent<GuideNode>
+export type SteelBeamEvent = NodeEvent<SteelBeamNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -228,8 +244,11 @@ type AIChatEvents = {
 type EditorEvents = GridEvents &
   NodeEvents<'assembly', AssemblyEvent> &
   NodeEvents<'box', BoxEvent> &
+  NodeEvents<'cable-tray', CableTrayEvent> &
   NodeEvents<'cylinder', CylinderEvent> &
+  NodeEvents<'data-widget', DataWidgetEvent> &
   NodeEvents<'cone', ConeEvent> &
+  NodeEvents<'conformal-strip', ConformalStripEvent> &
   NodeEvents<'frustum', FrustumEvent> &
   NodeEvents<'hemisphere', HemisphereEvent> &
   NodeEvents<'torus', TorusEvent> &
@@ -242,14 +261,18 @@ type EditorEvents = GridEvents &
   NodeEvents<'rounded-panel', RoundedPanelEvent> &
   NodeEvents<'extrude', ExtrudeEvent> &
   NodeEvents<'sweep', SweepEvent> &
+  NodeEvents<'tank', TankEvent> &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
+  NodeEvents<'pipe-fitting', PipeFittingEvent> &
   NodeEvents<'pipe', PipeEvent> &
+  NodeEvents<'road', RoadEvent> &
   NodeEvents<'item', ItemEvent> &
   NodeEvents<'site', SiteEvent> &
   NodeEvents<'building', BuildingEvent> &
   NodeEvents<'elevator', ElevatorEvent> &
   NodeEvents<'level', LevelEvent> &
+  NodeEvents<'ladder', LadderEvent> &
   NodeEvents<'zone', ZoneEvent> &
   NodeEvents<'slab', SlabEvent> &
   NodeEvents<'shelf', ShelfEvent> &
@@ -260,6 +283,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'roof-segment', RoofSegmentEvent> &
   NodeEvents<'stair', StairEvent> &
   NodeEvents<'stair-segment', StairSegmentEvent> &
+  NodeEvents<'steel-beam', SteelBeamEvent> &
   NodeEvents<'window', WindowEvent> &
   NodeEvents<'door', DoorEvent> &
   NodeEvents<'scan', ScanEvent> &

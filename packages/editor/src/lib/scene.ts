@@ -256,6 +256,12 @@ export function syncEditorSelectionFromCurrentScene() {
   const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
   const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
   const restoredEditorUiState = normalizePersistedEditorUiState(useEditor.getState())
+  const restoredEditorUiStateWithSelectTool = {
+    ...restoredEditorUiState,
+    mode: 'select' as const,
+    tool: null,
+    catalogCategory: null,
+  }
   const shouldRestoreEditorUiState = hasCustomPersistedEditorUiState(restoredEditorUiState)
   const restoredSelection = getRestoredSelectionForScene(sceneNodes)
   const selectionDrivenEditorUiState = restoredSelection
@@ -265,8 +271,9 @@ export function syncEditorSelectionFromCurrentScene() {
   if (firstBuilding && firstLevel) {
     const isEmptyLevel = !firstLevel.children || firstLevel.children.length === 0
 
-    // For empty projects (new/blank), always start in structure/build/wall
-    // regardless of persisted state from a previous project
+    // For empty projects (new/blank), start in the selected level but keep the
+    // pointer in Select. A persisted build tool from another project should not
+    // make a refresh immediately arm wall drawing.
     if (isEmptyLevel) {
       useViewer.getState().setSelection({
         buildingId: firstBuilding.id,
@@ -276,8 +283,7 @@ export function syncEditorSelectionFromCurrentScene() {
       })
       useEditor.getState().setPhase('structure')
       useEditor.getState().setStructureLayer('elements')
-      useEditor.getState().setMode('build')
-      useEditor.getState().setTool('wall')
+      useEditor.getState().setMode('select')
       return
     }
 
@@ -290,12 +296,12 @@ export function syncEditorSelectionFromCurrentScene() {
         useViewer.getState().setSelection(restoredSelection as never)
         useEditor.setState(
           restoredEditorUiState.phase === 'site'
-            ? (selectionDrivenEditorUiState ?? restoredEditorUiState)
-            : restoredEditorUiState,
+            ? (selectionDrivenEditorUiState ?? restoredEditorUiStateWithSelectTool)
+            : restoredEditorUiStateWithSelectTool,
         )
       } else if (restoredEditorUiState.phase === 'site') {
         useViewer.getState().resetSelection()
-        useEditor.setState(restoredEditorUiState)
+        useEditor.setState(restoredEditorUiStateWithSelectTool)
       } else {
         useViewer.getState().setSelection({
           buildingId: firstBuilding.id,
@@ -303,7 +309,7 @@ export function syncEditorSelectionFromCurrentScene() {
           selectedIds: [],
           zoneId: null,
         })
-        useEditor.setState(restoredEditorUiState)
+        useEditor.setState(restoredEditorUiStateWithSelectTool)
       }
       return
     }

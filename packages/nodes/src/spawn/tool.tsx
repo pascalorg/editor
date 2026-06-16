@@ -1,12 +1,19 @@
 'use client'
 
-import { emitter, type GridEvent, SpawnNode, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  emitter,
+  type GridEvent,
+  SpawnNode,
+  sceneRegistry,
+  snapScalar,
+  useScene,
+} from '@pascal-app/core'
 import { CursorSphere, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { type Group, Vector3 } from 'three'
 
-const roundToHalf = (value: number) => Math.round(value * 2) / 2
+const snapToGrid = (value: number) => snapScalar(value, useEditor.getState().gridSnapStep)
 const worldVector = new Vector3()
 
 function getExistingSpawnIds() {
@@ -19,17 +26,22 @@ function getExistingSpawnIds() {
 
 function getLevelLocalPosition(levelId: string, event: GridEvent): [number, number, number] {
   const levelObject = sceneRegistry.nodes.get(levelId)
+  const bypassSnap = event.nativeEvent?.shiftKey === true
   if (!levelObject) {
     return [
-      roundToHalf(event.localPosition[0]),
+      bypassSnap ? event.localPosition[0] : snapToGrid(event.localPosition[0]),
       event.localPosition[1],
-      roundToHalf(event.localPosition[2]),
+      bypassSnap ? event.localPosition[2] : snapToGrid(event.localPosition[2]),
     ]
   }
   worldVector.set(event.position[0], event.position[1], event.position[2])
   levelObject.updateWorldMatrix(true, false)
   levelObject.worldToLocal(worldVector)
-  return [roundToHalf(worldVector.x), worldVector.y, roundToHalf(worldVector.z)]
+  return [
+    bypassSnap ? worldVector.x : snapToGrid(worldVector.x),
+    worldVector.y,
+    bypassSnap ? worldVector.z : snapToGrid(worldVector.z),
+  ]
 }
 
 /**
@@ -49,10 +61,11 @@ const SpawnTool = () => {
 
     const onGridMove = (event: GridEvent) => {
       // Cursor lives in the ToolManager's building-local group. Use
-      // event.localPosition directly (already building-local) with the
-      // same half-meter snap the legacy tool uses.
-      const nextX = roundToHalf(event.localPosition[0])
-      const nextZ = roundToHalf(event.localPosition[2])
+      // event.localPosition directly (already building-local), snapped to the
+      // editor's configured grid step.
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const nextX = bypassSnap ? event.localPosition[0] : snapToGrid(event.localPosition[0])
+      const nextZ = bypassSnap ? event.localPosition[2] : snapToGrid(event.localPosition[2])
       cursorRef.current?.position.set(nextX, event.localPosition[1], nextZ)
 
       // Fire grid-snap SFX only when the snapped position crosses a cell,
@@ -107,7 +120,7 @@ const SpawnTool = () => {
 
   if (!activeLevelId) return null
 
-  return <CursorSphere color="#60a5fa" height={2.2} ref={cursorRef} />
+  return <CursorSphere color="#818cf8" height={2.2} ref={cursorRef} />
 }
 
 export default SpawnTool

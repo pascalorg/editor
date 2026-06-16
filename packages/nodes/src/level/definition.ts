@@ -33,6 +33,7 @@ export const levelDefinition: NodeDefinition<typeof LevelNode> = {
   },
 
   parametrics: levelParametrics,
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',

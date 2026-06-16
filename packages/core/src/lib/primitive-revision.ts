@@ -1,4 +1,5 @@
 import {
+  type PrimitiveEditableDimension,
   type PrimitiveMaterialInput,
   type PrimitiveShapeInput,
   resolvePrimitiveWorldTransforms,
@@ -12,6 +13,7 @@ import {
 
 export type PrimitiveShapeSelector = {
   index?: number
+  occurrence?: number
   semanticRole?: string
   semanticGroup?: string
   sourcePartKind?: string
@@ -56,9 +58,22 @@ export type PrimitiveRevisionOperation =
       tubeRadius?: number
     }
   | {
+      op: 'scaleSemantic'
+      selector: PrimitiveShapeSelector
+      dimension?: PrimitiveEditableDimension | string
+      factor: number
+    }
+  | {
       op: 'materialFrom'
       selector: PrimitiveShapeSelector
       from: PrimitiveShapeSelector
+    }
+  | {
+      op: 'setMaterial'
+      selector: PrimitiveShapeSelector
+      color?: string
+      material?: PrimitiveMaterialInput
+      materialPreset?: string
     }
   | {
       op: 'align'
@@ -92,10 +107,61 @@ function cloneShape(shape: PrimitiveShapeInput): PrimitiveShapeInput {
           properties: shape.material.properties ? { ...shape.material.properties } : undefined,
         }
       : undefined,
-    profile: shape.profile?.map((point) => [...point] as [number, number]),
-    holes: shape.holes?.map((hole) => hole.map((point) => [...point] as [number, number])),
-    path: shape.path?.map((point) => [...point] as Vec3),
+    editableHints: shape.editableHints
+      ? {
+          ...shape.editableHints,
+          canScale: shape.editableHints.canScale ? [...shape.editableHints.canScale] : undefined,
+        }
+      : undefined,
+    profile: cloneProfile(shape.profile),
+    holes: cloneHoles(shape.holes),
+    path: clonePath(shape.path),
   }
+}
+
+function isFiniteTuple2(value: unknown): value is [number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    typeof value[0] === 'number' &&
+    Number.isFinite(value[0]) &&
+    typeof value[1] === 'number' &&
+    Number.isFinite(value[1])
+  )
+}
+
+function isFiniteTuple3(value: unknown): value is Vec3 {
+  return (
+    Array.isArray(value) &&
+    value.length >= 3 &&
+    typeof value[0] === 'number' &&
+    Number.isFinite(value[0]) &&
+    typeof value[1] === 'number' &&
+    Number.isFinite(value[1]) &&
+    typeof value[2] === 'number' &&
+    Number.isFinite(value[2])
+  )
+}
+
+function cloneProfile(value: unknown): [number, number][] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const points = value.filter(isFiniteTuple2).map(([x, y]) => [x, y] as [number, number])
+  return points.length > 0 ? points : undefined
+}
+
+function cloneHoles(value: unknown): [number, number][][] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const holes = value
+    .filter(Array.isArray)
+    .map((hole) => cloneProfile(hole))
+    .filter((hole): hole is [number, number][] => Array.isArray(hole) && hole.length > 0)
+  return holes.length > 0 ? holes : undefined
+}
+
+function clonePath(value: unknown): Vec3[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const points = value.filter(isFiniteTuple3).map(([x, y, z]) => [x, y, z] as Vec3)
+  return points.length > 0 ? points : undefined
 }
 
 function cloneMaterial(
@@ -121,9 +187,6 @@ export function selectPrimitiveShapeIndexes(
   selector: PrimitiveShapeSelector | undefined,
 ): number[] {
   if (!selector) return []
-  if (typeof selector.index === 'number' && Number.isInteger(selector.index)) {
-    return selector.index >= 0 && selector.index < shapes.length ? [selector.index] : []
-  }
 
   const nameNeedle = normalizeText(selector.nameIncludes)
   const role = normalizeText(selector.semanticRole)
@@ -132,7 +195,8 @@ export function selectPrimitiveShapeIndexes(
   const sourceId = normalizeText(selector.sourcePartId)
   const kind = normalizeText(selector.kind)
 
-  return shapes.flatMap((shape, index) => {
+  const hasMetadataSelector = Boolean(role || group || sourceKind || sourceId || kind || nameNeedle)
+  const matches = shapes.flatMap((shape, index) => {
     if (role && normalizeText(shape.semanticRole) !== role) return []
     if (group && normalizeText(shape.semanticGroup) !== group) return []
     if (sourceKind && normalizeText(shape.sourcePartKind) !== sourceKind) return []
@@ -141,6 +205,24 @@ export function selectPrimitiveShapeIndexes(
     if (nameNeedle && !normalizeText(shape.name).includes(nameNeedle)) return []
     return [index]
   })
+
+  const ordinal =
+    typeof selector.occurrence === 'number' && Number.isInteger(selector.occurrence)
+      ? selector.occurrence
+      : hasMetadataSelector &&
+          typeof selector.index === 'number' &&
+          Number.isInteger(selector.index)
+        ? selector.index
+        : undefined
+
+  if (ordinal != null) {
+    const match = matches[ordinal]
+    return match != null ? [match] : []
+  }
+  if (typeof selector.index === 'number' && Number.isInteger(selector.index)) {
+    return selector.index >= 0 && selector.index < shapes.length ? [selector.index] : []
+  }
+  return matches
 }
 
 function eulerToMatrix(
@@ -387,13 +469,13 @@ function scalePrimitiveShapeGeometry(shape: PrimitiveShapeInput, scale: Vec3): P
     case 'lathe':
       return {
         ...shape,
-        profile: shape.profile?.map(([radius, y]) => [radius * xz, y * sy]),
+        profile: scaleProfile(shape.profile, xz, sy),
       }
     case 'extrude':
       return {
         ...shape,
-        profile: shape.profile?.map(([x, y]) => [x * sx, y * sy]),
-        holes: shape.holes?.map((hole) => hole.map(([x, y]) => [x * sx, y * sy])),
+        profile: scaleProfile(shape.profile, sx, sy),
+        holes: scaleHoles(shape.holes, sx, sy),
         depth: scaleNumber(shape.depth, sz),
         bevelSize: scaleNumber(shape.bevelSize, uniform),
         bevelThickness: scaleNumber(shape.bevelThickness, uniform),
@@ -401,11 +483,223 @@ function scalePrimitiveShapeGeometry(shape: PrimitiveShapeInput, scale: Vec3): P
     case 'sweep':
       return {
         ...shape,
-        path: shape.path?.map((point) => [point[0] * sx, point[1] * sy, point[2] * sz]),
+        path: clonePath(shape.path)?.map((point) => [point[0] * sx, point[1] * sy, point[2] * sz]),
         radius: scaleNumber(shape.radius, uniform),
       }
     default:
       return { ...shape, scale: scaleVec3(shape.scale ?? [1, 1, 1], scale) }
+  }
+}
+
+function normalizeEditableDimension(value: unknown): PrimitiveEditableDimension | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = value
+    .trim()
+    .replace(/[\s_-]+/g, '')
+    .toLowerCase()
+  switch (normalized) {
+    case 'primary':
+      return 'primary'
+    case 'uniform':
+    case 'all':
+    case 'overall':
+      return 'uniform'
+    case 'length':
+    case 'long':
+    case 'longer':
+      return 'length'
+    case 'width':
+    case 'wide':
+    case 'wider':
+      return 'width'
+    case 'height':
+    case 'tall':
+    case 'taller':
+      return 'height'
+    case 'depth':
+      return 'depth'
+    case 'thickness':
+    case 'thick':
+    case 'thicker':
+      return 'thickness'
+    case 'radius':
+      return 'radius'
+    case 'diameter':
+      return 'diameter'
+    case 'majorradius':
+      return 'majorRadius'
+    case 'tuberadius':
+      return 'tubeRadius'
+    case 'axislength':
+      return 'axisLength'
+    case 'profilex':
+      return 'profileX'
+    case 'profiley':
+      return 'profileY'
+    default:
+      return undefined
+  }
+}
+
+function defaultPrimaryDimension(shape: PrimitiveShapeInput): PrimitiveEditableDimension {
+  switch (shape.kind) {
+    case 'box':
+    case 'rounded-panel':
+    case 'wedge':
+    case 'trapezoid-prism':
+      return 'length'
+    case 'cylinder':
+    case 'hollow-cylinder':
+    case 'cone':
+    case 'frustum':
+    case 'capsule':
+    case 'half-cylinder':
+      return 'axisLength'
+    case 'torus':
+      return 'majorRadius'
+    case 'sphere':
+    case 'hemisphere':
+      return 'radius'
+    case 'extrude':
+      return 'profileX'
+    case 'lathe':
+      return 'profileY'
+    default:
+      return 'uniform'
+  }
+}
+
+function resolveEditableDimension(
+  shape: PrimitiveShapeInput,
+  requested: unknown,
+): PrimitiveEditableDimension {
+  const requestedDimension = normalizeEditableDimension(requested)
+  if (requestedDimension && requestedDimension !== 'primary') return requestedDimension
+  const hinted = normalizeEditableDimension(shape.editableHints?.primaryDimension)
+  return hinted && hinted !== 'primary' ? hinted : defaultPrimaryDimension(shape)
+}
+
+function clampEditableFactor(shape: PrimitiveShapeInput, factor: number): number {
+  const fallbackMin = 0.2
+  const fallbackMax = 4
+  const min =
+    typeof shape.editableHints?.minFactor === 'number' &&
+    Number.isFinite(shape.editableHints.minFactor)
+      ? shape.editableHints.minFactor
+      : fallbackMin
+  const max =
+    typeof shape.editableHints?.maxFactor === 'number' &&
+    Number.isFinite(shape.editableHints.maxFactor)
+      ? shape.editableHints.maxFactor
+      : fallbackMax
+  return Math.max(min, Math.min(max, validScale(factor)))
+}
+
+function canScaleDimension(shape: PrimitiveShapeInput, dimension: PrimitiveEditableDimension) {
+  const allowed = shape.editableHints?.canScale
+    ?.map((entry) => normalizeEditableDimension(entry))
+    .filter(Boolean)
+  return !allowed?.length || allowed.includes(dimension) || allowed.includes('primary')
+}
+
+function scaleProfile(
+  profile: [number, number][] | undefined,
+  xFactor: number,
+  yFactor: number,
+): [number, number][] | undefined {
+  return cloneProfile(profile)?.map(([x, y]) => [x * xFactor, y * yFactor])
+}
+
+function scaleHoles(
+  holes: [number, number][][] | undefined,
+  xFactor: number,
+  yFactor: number,
+): [number, number][][] | undefined {
+  return cloneHoles(holes)?.map((hole) => hole.map(([x, y]) => [x * xFactor, y * yFactor]))
+}
+
+function scalePrimitiveShapeDimension(
+  shape: PrimitiveShapeInput,
+  requestedDimension: unknown,
+  rawFactor: number,
+): { shape: PrimitiveShapeInput; issue?: string } {
+  const dimension = resolveEditableDimension(shape, requestedDimension)
+  if (!canScaleDimension(shape, dimension)) {
+    return {
+      shape,
+      issue: `${shape.name ?? shape.kind}: editableHints do not allow scaling dimension "${dimension}".`,
+    }
+  }
+
+  const factor = clampEditableFactor(shape, rawFactor)
+  switch (dimension) {
+    case 'uniform':
+      return { shape: scalePrimitiveShapeGeometry(shape, [factor, factor, factor]) }
+    case 'length':
+      return { shape: { ...shape, length: scaleNumber(shape.length, factor) } }
+    case 'width':
+      return { shape: { ...shape, width: scaleNumber(shape.width, factor) } }
+    case 'height':
+      return { shape: { ...shape, height: scaleNumber(shape.height, factor) } }
+    case 'depth':
+      return { shape: { ...shape, depth: scaleNumber(shape.depth, factor) } }
+    case 'thickness':
+      return {
+        shape: {
+          ...shape,
+          thickness: scaleNumber(shape.thickness ?? shape.height, factor),
+          ...(shape.thickness == null ? { height: scaleNumber(shape.height, factor) } : {}),
+        },
+      }
+    case 'axisLength':
+      return { shape: { ...shape, height: scaleNumber(shape.height, factor) } }
+    case 'radius':
+      return {
+        shape: {
+          ...shape,
+          radius: scaleNumber(shape.radius, factor),
+          radiusTop: scaleNumber(shape.radiusTop, factor),
+          radiusBottom: scaleNumber(shape.radiusBottom, factor),
+        },
+      }
+    case 'diameter':
+      return {
+        shape: {
+          ...shape,
+          radius: scaleNumber(shape.radius, factor),
+          radiusTop: scaleNumber(shape.radiusTop, factor),
+          radiusBottom: scaleNumber(shape.radiusBottom, factor),
+          majorRadius: scaleNumber(shape.majorRadius, factor),
+        },
+      }
+    case 'majorRadius':
+      return {
+        shape: {
+          ...shape,
+          majorRadius: scaleNumber(shape.majorRadius ?? shape.radius, factor),
+          radius: shape.majorRadius == null ? scaleNumber(shape.radius, factor) : shape.radius,
+        },
+      }
+    case 'tubeRadius':
+      return { shape: { ...shape, tubeRadius: scaleNumber(shape.tubeRadius, factor) } }
+    case 'profileX':
+      return {
+        shape: {
+          ...shape,
+          profile: scaleProfile(shape.profile, factor, 1),
+          holes: scaleHoles(shape.holes, factor, 1),
+        },
+      }
+    case 'profileY':
+      return {
+        shape: {
+          ...shape,
+          profile: scaleProfile(shape.profile, 1, factor),
+          holes: scaleHoles(shape.holes, 1, factor),
+        },
+      }
+    default:
+      return { shape: scalePrimitiveShapeGeometry(shape, [factor, factor, factor]) }
   }
 }
 
@@ -414,8 +708,33 @@ export function applyPrimitiveRevision(input: PrimitiveRevisionInput): Primitive
   let changedShapeCount = 0
   let shapes = input.shapes.map(cloneShape)
 
-  for (const [operationIndex, operation] of input.operations.entries()) {
+  for (let operationIndex = 0; operationIndex < input.operations.length; operationIndex += 1) {
+    const operation = input.operations[operationIndex] as PrimitiveRevisionOperation
     const label = `operation ${operationIndex + 1} (${operation.op})`
+
+    if (operation.op === 'remove') {
+      const removeSet = new Set<number>()
+      let cursor = operationIndex
+      while (cursor < input.operations.length) {
+        const removeOperation = input.operations[cursor]
+        if (removeOperation?.op !== 'remove') break
+        const removeLabel = `operation ${cursor + 1} (${removeOperation.op})`
+        const indexes = selectPrimitiveShapeIndexes(shapes, removeOperation.selector)
+        if (indexes.length === 0) {
+          issues.push(
+            `${removeLabel}: selector matched no shapes: ${selectorLabel(removeOperation.selector)}`,
+          )
+        }
+        for (const index of indexes) removeSet.add(index)
+        cursor += 1
+      }
+      if (removeSet.size > 0) {
+        shapes = shapes.filter((_, index) => !removeSet.has(index))
+        changedShapeCount += removeSet.size
+      }
+      operationIndex = cursor - 1
+      continue
+    }
 
     if (operation.op === 'add') {
       const added = operationShapes(operation.shapes)
@@ -431,13 +750,6 @@ export function applyPrimitiveRevision(input: PrimitiveRevisionInput): Primitive
     const indexes = selectPrimitiveShapeIndexes(shapes, operation.selector)
     if (indexes.length === 0) {
       issues.push(`${label}: selector matched no shapes: ${selectorLabel(operation.selector)}`)
-      continue
-    }
-
-    if (operation.op === 'remove') {
-      const removeSet = new Set(indexes)
-      shapes = shapes.filter((_, index) => !removeSet.has(index))
-      changedShapeCount += removeSet.size
       continue
     }
 
@@ -511,6 +823,25 @@ export function applyPrimitiveRevision(input: PrimitiveRevisionInput): Primitive
       continue
     }
 
+    if (operation.op === 'scaleSemantic') {
+      if (typeof operation.factor !== 'number' || !Number.isFinite(operation.factor)) {
+        issues.push(`${label}: scaleSemantic requires a finite factor.`)
+        continue
+      }
+      for (const index of indexes) {
+        const shape = shapes[index]
+        if (!shape) continue
+        const scaled = scalePrimitiveShapeDimension(shape, operation.dimension, operation.factor)
+        if (scaled.issue) {
+          issues.push(`${label}: ${scaled.issue}`)
+          continue
+        }
+        shapes[index] = scaled.shape
+        changedShapeCount += 1
+      }
+      continue
+    }
+
     if (operation.op === 'materialFrom') {
       const sourceIndex = selectPrimitiveShapeIndexes(shapes, operation.from)[0]
       const material =
@@ -526,6 +857,30 @@ export function applyPrimitiveRevision(input: PrimitiveRevisionInput): Primitive
         const shape = shapes[index]
         if (!shape) continue
         shapes[index] = { ...shape, material, materialPreset }
+        changedShapeCount += 1
+      }
+      continue
+    }
+
+    if (operation.op === 'setMaterial') {
+      const material =
+        operation.material != null
+          ? cloneMaterial(operation.material)
+          : operation.color
+            ? { type: 'standard' as const, properties: { color: operation.color } }
+            : undefined
+      if (!material && !operation.materialPreset) {
+        issues.push(`${label}: setMaterial requires color, material, or materialPreset.`)
+        continue
+      }
+      for (const index of indexes) {
+        const shape = shapes[index]
+        if (!shape) continue
+        shapes[index] = {
+          ...shape,
+          material,
+          materialPreset: operation.materialPreset,
+        }
         changedShapeCount += 1
       }
       continue

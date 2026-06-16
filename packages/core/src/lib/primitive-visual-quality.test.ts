@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { composeAssemblyPrimitives } from './assembly-compose'
 import { composePartPrimitives } from './part-compose'
 import type { PrimitiveShapeInput } from './primitive-compose'
 import { resolvePrimitiveWorldTransforms } from './primitive-compose'
@@ -88,7 +89,9 @@ describe('assessPrimitiveVisualQuality', () => {
 
     expect(result.family).toBe('vehicle')
     expect(result.score).toBeLessThan(0.65)
-    expect(result.issues).toContain('vehicle needs a separate cabin/roof mass, not one plain body block.')
+    expect(result.issues).toContain(
+      'vehicle needs a separate cabin/roof mass, not one plain body block.',
+    )
     expect(result.issues).toContain('vehicle needs separated windshield/rear/side windows, got 1.')
   })
 
@@ -129,5 +132,70 @@ describe('assessPrimitiveVisualQuality', () => {
     expect(result.score).toBeGreaterThanOrEqual(0.8)
     expect(result.issues).toEqual([])
     expect(result.metrics.jointCount).toBeGreaterThanOrEqual(3)
+  })
+
+  test('scores standing fan grill depth and blade readability', () => {
+    const shapes = composePartPrimitives({
+      name: 'Standing fan',
+      parts: [{ kind: 'protective_grill' }],
+    })
+
+    const result = assessPrimitiveVisualQuality(
+      shapes,
+      resolvePrimitiveWorldTransforms(shapes, { positionMode: 'world-center' }),
+      {
+        prompt: 'standing electric fan',
+        geometryBrief: { category: 'fan' },
+      },
+    )
+
+    expect(result.family).toBe('fan')
+    expect(result.score).toBeGreaterThanOrEqual(0.8)
+    expect(result.issues).toEqual([])
+    expect(result.metrics.grillRingCount).toBeGreaterThanOrEqual(4)
+    expect(result.metrics.grillSideRibCount).toBeGreaterThanOrEqual(6)
+  })
+
+  test('flags under-specified industrial equipment and accepts industrial assembly', () => {
+    const boxOnly: PrimitiveShapeInput[] = [
+      {
+        kind: 'box',
+        name: 'plain cnc machine block',
+        semanticRole: 'machine_base',
+        position: [0, 0.5, 0],
+        length: 2,
+        width: 1,
+        height: 1,
+      },
+    ]
+    const poor = assessPrimitiveVisualQuality(
+      boxOnly,
+      resolvePrimitiveWorldTransforms(boxOnly, { positionMode: 'world-center' }),
+      {
+        prompt: 'cnc industrial machine',
+        geometryBrief: { category: 'industrial_equipment' },
+      },
+    )
+    expect(poor.family).toBe('industrial_equipment')
+    expect(poor.score).toBeLessThan(0.7)
+    expect(poor.issues).toContain(
+      'industrial equipment silhouette is under-specified with only 1 shapes.',
+    )
+
+    const shapes = composeAssemblyPrimitives({
+      family: 'machine_tool',
+      object: 'machining center',
+    })
+    const good = assessPrimitiveVisualQuality(
+      shapes,
+      resolvePrimitiveWorldTransforms(shapes, { positionMode: 'world-center' }),
+      {
+        prompt: 'cnc machining center',
+        geometryBrief: { category: 'industrial_equipment' },
+      },
+    )
+    expect(good.family).toBe('industrial_equipment')
+    expect(good.score).toBeGreaterThanOrEqual(0.8)
+    expect(good.issues).toEqual([])
   })
 })

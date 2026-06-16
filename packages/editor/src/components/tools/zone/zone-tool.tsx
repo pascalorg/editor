@@ -9,6 +9,11 @@ import { CursorSphere } from '../shared/cursor-sphere'
 
 const Y_OFFSET = 0.02
 
+const snapToGridStep = (value: number, step: number) => {
+  const safeStep = step > 0 ? step : 0.5
+  return Math.round(value / safeStep) * safeStep
+}
+
 /**
  * Snaps a point to the nearest axis-aligned or 45-degree diagonal from the last point
  */
@@ -178,9 +183,9 @@ export const ZoneTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
 
-      // Snap to 0.5 grid
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const gridSnapStep = useEditor.getState().gridSnapStep
+      const gridX = snapToGridStep(event.localPosition[0], gridSnapStep)
+      const gridZ = snapToGridStep(event.localPosition[2], gridSnapStep)
       cursorPosition = [gridX, gridZ]
       levelYRef.current = event.localPosition[1]
 
@@ -209,8 +214,9 @@ export const ZoneTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!currentLevelId) return
 
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const gridSnapStep = useEditor.getState().gridSnapStep
+      const gridX = snapToGridStep(event.localPosition[0], gridSnapStep)
+      const gridZ = snapToGridStep(event.localPosition[2], gridSnapStep)
       let clickPoint: [number, number] = [gridX, gridZ]
 
       // Snap to axis from last point

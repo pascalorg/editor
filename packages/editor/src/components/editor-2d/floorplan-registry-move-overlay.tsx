@@ -7,6 +7,7 @@ import {
   type FenceNode,
   type LevelNode,
   type PipeNode,
+  type RoadNode,
   nodeRegistry,
   pauseSceneHistory,
   resumeSceneHistory,
@@ -17,8 +18,9 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
-import { snapPipeDraftPoint } from '../../components/tools/pipe/pipe-drafting'
 import { snapFenceDraftPoint } from '../../components/tools/fence/fence-drafting'
+import { snapPipeDraftPoint } from '../../components/tools/pipe/pipe-drafting'
+import { getWallGridStep, snapScalarToGrid } from '../../components/tools/wall/wall-drafting'
 import { floorItemDragSuppressClickRef } from '../../lib/floor-item-drag'
 import { getLinkedPipeSnapshots } from '../../lib/pipe-plan-move'
 import {
@@ -27,7 +29,6 @@ import {
   getLinkedSegmentSnapshots,
   getSegmentPlanMidpoint,
 } from '../../lib/segment-plan-move'
-import { getWallGridStep, snapScalarToGrid } from '../../components/tools/wall/wall-drafting'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 
@@ -359,10 +360,11 @@ export function FloorplanRegistryMoveOverlay() {
     // ── Path 1b — whole-segment translate (pipe / wall / fence) ─────
     if (
       movingNode.type === 'pipe' ||
+      movingNode.type === 'road' ||
       movingNode.type === 'wall' ||
       movingNode.type === 'fence'
     ) {
-      type SegmentNode = PipeNode | WallNode | FenceNode
+      type SegmentNode = PipeNode | RoadNode | WallNode | FenceNode
       const segment = movingNode as SegmentNode
       const originalStart = [...segment.start] as [number, number]
       const originalEnd = [...segment.end] as [number, number]
@@ -377,7 +379,7 @@ export function FloorplanRegistryMoveOverlay() {
           : getLinkedSegmentSnapshots({
               segmentId: segment.id,
               segmentParentId: segment.parentId ?? null,
-              segmentType: segment.type,
+            segmentType: segment.type,
               originalStart,
               originalEnd,
             })

@@ -7,14 +7,15 @@ import {
   type AnyNodeId,
   type EventSuffix,
   emitter,
-  getSelectableKinds,
   type GridEvent,
+  getSelectableKinds,
   type NodeEvent,
   nodeRegistry,
   sceneRegistry,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { lastGridMoveRef } from '../../../hooks/use-grid-events'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
@@ -23,6 +24,41 @@ import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
 const roundToHalf = (value: number) => Math.round(value * 2) / 2
+
+function getMetadataRecord(node: AnyNode): Record<string, unknown> {
+  return typeof node.metadata === 'object' &&
+    node.metadata !== null &&
+    !Array.isArray(node.metadata)
+    ? (node.metadata as Record<string, unknown>)
+    : {}
+}
+
+function stripPlacementMetadata(node: AnyNode) {
+  const metadata = { ...getMetadataRecord(node) }
+  delete metadata.isNew
+  delete metadata.isTransient
+  return metadata
+}
+
+function isNewPlacementNode(node: AnyNode): boolean {
+  const metadata = getMetadataRecord(node)
+  return metadata.isNew === true
+}
+
+function patchRotation(node: AnyNode, rotationY: number): Partial<AnyNode> {
+  if (!('rotation' in node)) return {}
+
+  const rotation = (node as { rotation?: unknown }).rotation
+  if (typeof rotation === 'number') {
+    return { rotation: rotationY } as Partial<AnyNode>
+  }
+  if (Array.isArray(rotation)) {
+    return {
+      rotation: [rotation[0] ?? 0, rotationY, rotation[2] ?? 0],
+    } as Partial<AnyNode>
+  }
+  return {}
+}
 
 /**
  * Generic move tool for any registry-backed kind.
@@ -97,6 +133,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   }, [node])
   const [cursorPosition, setCursorPosition] = useState<[number, number, number]>(originalPosition)
   const previousSnapRef = useRef<[number, number] | null>(null)
+  const currentRotationYRef = useRef(originalRotationY)
   /**
    * The latest snapped cursor position from `grid:move`. We commit at
    * THIS position regardless of which event variant fires the click —
@@ -115,7 +152,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   useEffect(() => {
     useScene.temporal.getState().pause()
     previousSnapRef.current = null
+    currentRotationYRef.current = originalRotationY
     let committed = false
+    const isNewPlacement = isNewPlacementNode(node)
 
     // Disable raycast on the moved node's meshes for the duration of
     // the drag. As the shelf follows the cursor, the cursor ray would
@@ -158,7 +197,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // their floor-plan move-targets handle the override themselves.
       useLiveTransforms.getState().set(node.id, {
         position: [x, y, z],
-        rotation: originalRotationY,
+        rotation: currentRotationYRef.current,
       })
 
       const prev = previousSnapRef.current
@@ -189,7 +228,11 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
       if (useScene.getState().nodes[node.id]) {
         useScene.temporal.getState().resume()
-        useScene.getState().updateNode(node.id, { position } as Partial<AnyNode>)
+        useScene.getState().updateNode(node.id, {
+          position,
+          metadata: stripPlacementMetadata(node),
+          ...patchRotation(node, currentRotationYRef.current),
+        } as Partial<AnyNode>)
         useScene.temporal.getState().pause()
         committed = true
       } else if (node.parentId) {
@@ -201,6 +244,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
             id: undefined,
             metadata: {},
             position,
+            ...patchRotation(node, currentRotationYRef.current),
           })
           useScene.temporal.getState().resume()
           useScene.getState().createNode(reparsed as AnyNode, node.parentId as AnyNodeId)
@@ -220,6 +264,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       useLiveTransforms.getState().clear(node.id)
 
       sfxEmitter.emit('sfx:item-place')
+      useViewer.getState().setSelection({ selectedIds: [node.id] })
       exitMoveMode()
 
       // Stop further propagation so other listeners (e.g. a selection
@@ -244,9 +289,34 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       commitAtCursor(event)
     }
 
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      let rotationDelta = 0
+      if ((event.key === 'r' || event.key === 'R') && !event.metaKey && !event.ctrlKey) {
+        rotationDelta = Math.PI / 2
+      } else if ((event.key === 't' || event.key === 'T') && !event.metaKey && !event.ctrlKey) {
+        rotationDelta = -Math.PI / 2
+      }
+
+      if (rotationDelta === 0) return
+
+      event.preventDefault()
+      currentRotationYRef.current += rotationDelta
+      sceneRegistry.nodes.get(node.id)?.rotation.set(0, currentRotationYRef.current, 0)
+      useLiveTransforms.getState().set(node.id, {
+        position: [...lastCursorRef.current],
+        rotation: currentRotationYRef.current,
+      })
+      sfxEmitter.emit('sfx:item-rotate')
+    }
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', commitAtCursor)
     window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('keydown', onKeyDown)
 
     // Listen on every common + registry-selectable kind's click event too.
     // The registry part keeps newly added primitives from needing another
@@ -264,6 +334,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         .get(node.id)
         ?.position.set(originalPosition[0], originalPosition[1], originalPosition[2])
       useLiveTransforms.getState().clear(node.id)
+      if (isNewPlacement) {
+        useScene.getState().deleteNode(node.id as AnyNodeId)
+      }
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
       exitMoveMode()
@@ -274,6 +347,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', commitAtCursor)
       window.removeEventListener('pointerup', onPointerUp)
+      window.removeEventListener('keydown', onKeyDown)
       for (const kind of clickTriggerKinds) {
         const key = `${kind}:click` as `${string}:${EventSuffix}`
         emitter.off(key as never, commitAtCursor as never)

@@ -69,6 +69,11 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   },
   floorplan: buildColumnFloorplan,
 
+  toolHints: [
+    { key: 'Left click', label: '放置柱子' },
+    { key: 'Esc', label: '取消' },
+  ],
+
   presentation: {
     label: 'Column',
     description: 'A parametric column with configurable cross-section, base, and capital.',

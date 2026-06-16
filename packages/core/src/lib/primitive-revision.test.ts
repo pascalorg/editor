@@ -59,6 +59,133 @@ describe('primitive revision DSL', () => {
     expect(selectPrimitiveShapeIndexes(carShapes, { nameIncludes: 'roof' })).toEqual([3])
   })
 
+  test('treats index with semantic metadata as an occurrence selector when global index does not match', () => {
+    expect(
+      selectPrimitiveShapeIndexes(carShapes, { semanticRole: 'vehicle_window', index: 0 }),
+    ).toEqual([2])
+    expect(
+      selectPrimitiveShapeIndexes(carShapes, { sourcePartKind: 'vehicle_body', occurrence: 2 }),
+    ).toEqual([3])
+  })
+
+  test('removes repeated semantic selections against stable pre-removal indexes', () => {
+    const wheelShapes: PrimitiveShapeInput[] = [
+      {
+        kind: 'torus',
+        name: 'rear tire',
+        semanticRole: 'bicycle_tire',
+        position: [-1, 0, 0],
+        majorRadius: 1,
+        tubeRadius: 0.1,
+      },
+      {
+        kind: 'torus',
+        name: 'rear rim',
+        semanticRole: 'bicycle_rim',
+        position: [-1, 0, 0],
+        majorRadius: 0.8,
+        tubeRadius: 0.05,
+      },
+      {
+        kind: 'cylinder',
+        name: 'rear hub',
+        semanticRole: 'bicycle_hub',
+        position: [-1, 0, 0],
+        axis: 'z',
+        radius: 0.1,
+        height: 0.2,
+      },
+      ...Array.from({ length: 8 }, (_, index) => ({
+        kind: 'cylinder' as const,
+        name: `rear spoke ${index + 1}`,
+        semanticRole: 'bicycle_spoke',
+        position: [-1, 0, 0] as [number, number, number],
+        axis: 'x' as const,
+        radius: 0.01,
+        height: 0.5,
+      })),
+      {
+        kind: 'torus',
+        name: 'front tire',
+        semanticRole: 'bicycle_tire',
+        position: [1, 0, 0],
+        majorRadius: 1,
+        tubeRadius: 0.1,
+      },
+      {
+        kind: 'torus',
+        name: 'front rim',
+        semanticRole: 'bicycle_rim',
+        position: [1, 0, 0],
+        majorRadius: 0.8,
+        tubeRadius: 0.05,
+      },
+      {
+        kind: 'cylinder',
+        name: 'front hub',
+        semanticRole: 'bicycle_hub',
+        position: [1, 0, 0],
+        axis: 'z',
+        radius: 0.1,
+        height: 0.2,
+      },
+      ...Array.from({ length: 8 }, (_, index) => ({
+        kind: 'cylinder' as const,
+        name: `front spoke ${index + 1}`,
+        semanticRole: 'bicycle_spoke',
+        position: [1, 0, 0] as [number, number, number],
+        axis: 'x' as const,
+        radius: 0.01,
+        height: 0.5,
+      })),
+    ]
+
+    const result = applyPrimitiveRevision({
+      shapes: wheelShapes,
+      operations: [
+        { op: 'remove', selector: { semanticRole: 'bicycle_tire', index: 1 } },
+        { op: 'remove', selector: { semanticRole: 'bicycle_rim', index: 1 } },
+        { op: 'remove', selector: { semanticRole: 'bicycle_hub', index: 1 } },
+        ...Array.from({ length: 8 }, (_, offset) => ({
+          op: 'remove' as const,
+          selector: { semanticRole: 'bicycle_spoke', index: 8 + offset },
+        })),
+      ],
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.shapes).toHaveLength(11)
+    expect(result.shapes.some((shape) => shape.name?.includes('front'))).toBe(false)
+    expect(result.shapes.filter((shape) => shape.semanticRole === 'bicycle_spoke')).toHaveLength(8)
+  })
+
+  test('does not throw when legacy shapes contain malformed profile data', () => {
+    const malformed: PrimitiveShapeInput[] = [
+      {
+        kind: 'extrude',
+        name: 'bad legacy extrude',
+        semanticRole: 'water_surface',
+        profile: { curve: 'sine' } as unknown as [number, number][],
+        depth: 0.1,
+      },
+    ]
+
+    const result = applyPrimitiveRevision({
+      shapes: malformed,
+      operations: [
+        {
+          op: 'transform',
+          selector: { semanticRole: 'water_surface' },
+          scale: [1.2, 1, 1.2],
+        },
+      ],
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.shapes[0]?.profile).toBeUndefined()
+    expect(result.shapes[0]?.position).toEqual([0, 0, 0])
+  })
+
   test('replaces a subassembly and inherits body material for added pillars', () => {
     const result = applyPrimitiveRevision({
       shapes: carShapes,
@@ -248,5 +375,52 @@ describe('primitive revision DSL', () => {
     expect(result.shapes[1]?.tubeRadius).toBeCloseTo(0.112)
     expect(result.shapes[2]?.majorRadius).toBeCloseTo(0.392)
     expect(result.shapes[2]?.tubeRadius).toBeCloseTo(0.112)
+  })
+
+  test('scales selected semantic parts through editable primary dimensions', () => {
+    const result = applyPrimitiveRevision({
+      shapes: [
+        {
+          kind: 'box',
+          name: 'outdoor ac fan blade 1',
+          semanticRole: 'fan_blade',
+          semanticGroup: 'front_fan',
+          sourcePartKind: 'radial_blades',
+          position: [0.05, 0.4, 0.2],
+          length: 0.12,
+          width: 0.01,
+          height: 0.02,
+          editableHints: {
+            primaryDimension: 'length',
+            canScale: ['length', 'width', 'height'],
+          },
+        },
+        {
+          kind: 'cylinder',
+          name: 'outdoor ac fan hub',
+          semanticRole: 'fan_hub',
+          semanticGroup: 'front_fan',
+          sourcePartKind: 'radial_blades',
+          position: [0, 0.4, 0.2],
+          axis: 'z',
+          radius: 0.03,
+          height: 0.02,
+        },
+      ],
+      operations: [
+        {
+          op: 'scaleSemantic',
+          selector: { semanticRole: 'fan_blade' },
+          dimension: 'primary',
+          factor: 1.35,
+        },
+      ],
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.changedShapeCount).toBe(1)
+    expect(result.shapes[0]?.length).toBeCloseTo(0.162)
+    expect(result.shapes[0]?.width).toBeCloseTo(0.01)
+    expect(result.shapes[1]?.radius).toBeCloseTo(0.03)
   })
 })

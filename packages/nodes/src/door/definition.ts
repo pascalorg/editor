@@ -1,8 +1,24 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import type { DoorNode as DoorNodeType, HandleDescriptor, NodeDefinition } from '@pascal-app/core'
 import { buildDoorFloorplan } from './floorplan'
 import { doorFloorplanMoveTarget } from './floorplan-move'
 import { doorParametrics } from './parametrics'
 import { DoorNode } from './schema'
+
+const MOVE_HANDLE_LIFT = 0.12
+
+function doorMoveHandle(): HandleDescriptor<DoorNodeType> {
+  return {
+    kind: 'tap-action',
+    shape: 'move-cross',
+    plane: 'node-normal',
+    portal: 'grandparent',
+    cursor: 'move',
+    onActivate: (node, _scene, editor) => editor.engageMoveDrag(node),
+    placement: {
+      position: () => [0, 0, MOVE_HANDLE_LIFT],
+    },
+  }
+}
 
 /**
  * Door — Phase 5 batch kind. Hosted on walls, cuts holes in them,
@@ -59,6 +75,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // Stage C: floor-plan polygon. Needs ctx.parent (the wall) to compute
   // direction + perpendicular for the cutout footprint.
   floorplan: buildDoorFloorplan,
+  handles: [doorMoveHandle()],
   // Stage D — placement (`def.tool`) + move-on-wall (`def.
   // affordanceTools.move`). Both ports of the legacy tools at
   // `editor/components/tools/door/`, relocated into the kind folder and
@@ -78,8 +95,8 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   floorplanMoveTarget: doorFloorplanMoveTarget,
 
   toolHints: [
-    { key: 'Left click', label: 'Place door on wall' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: '放置门' },
+    { key: 'Esc', label: '取消' },
   ],
 
   presentation: {

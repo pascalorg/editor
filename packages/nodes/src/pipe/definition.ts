@@ -18,7 +18,7 @@ export const pipeDefinition: NodeDefinition<typeof PipeNode> = {
     start: [0, 0],
     end: [4, 0],
     diameter: 0.15,
-    elevation: 3,
+    elevation: 1,
     rotate: 0,
     insulated: true,
     insulationThickness: 0.05,
@@ -55,9 +55,9 @@ export const pipeDefinition: NodeDefinition<typeof PipeNode> = {
   },
 
   toolHints: [
-    { key: 'Left click', label: 'Set pipe start / end' },
-    { key: 'Shift', label: 'Allow non-45° angles' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: '设置管道起点 / 终点' },
+    { key: 'Shift', label: '按住关闭角度吸附' },
+    { key: 'Esc', label: '取消' },
   ],
 
   presentation: {

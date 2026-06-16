@@ -12,7 +12,7 @@ export const ConeNode = BaseNode.extend({
   ),
   radius: z.number().min(0.01).max(10).default(0.5),
   height: z.number().min(0.01).max(20).default(1),
-  radialSegments: z.number().int().min(8).max(64).default(32),
+  radialSegments: z.number().int().min(3).max(64).default(32),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
 }).describe(

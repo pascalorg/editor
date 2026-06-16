@@ -16,6 +16,7 @@ export type ObjectComposeDetail = 'low' | 'medium' | 'high'
 export interface ObjectComposeInput {
   name?: string
   category?: ObjectComposeCategory | string
+  objectType?: ObjectComposeCategory | string
   model?: string
   style?: string
   position?: Vec3
@@ -40,7 +41,7 @@ function clamp(value: unknown, fallback: number, min: number, max: number): numb
 
 function normalizeCategory(input: ObjectComposeInput): ObjectComposeCategory {
   const text =
-    `${input.category ?? ''} ${input.model ?? ''} ${input.name ?? ''} ${input.style ?? ''}`.toLowerCase()
+    `${input.category ?? ''} ${input.objectType ?? ''} ${input.model ?? ''} ${input.name ?? ''} ${input.style ?? ''}`.toLowerCase()
   if (/(tesla|model\s*y|model-y|car|vehicle|sedan|suv|crossover|truck|汽车|车辆|车)/.test(text))
     return 'vehicle'
   if (/(chair|stool|seat|椅|凳)/.test(text)) return 'chair'
@@ -330,6 +331,9 @@ function composeOutdoorAc(input: ObjectComposeInput): PrimitiveShapeInput[] {
     {
       kind: 'cylinder',
       name: `${name} circular fan grille`,
+      semanticRole: 'vent_grill',
+      semanticGroup: 'front_fan',
+      sourcePartKind: 'vent_grill',
       position: [fanX, centerY, zFront + depth * 0.025],
       axis: 'z',
       radius: fanRadius,
@@ -341,6 +345,15 @@ function composeOutdoorAc(input: ObjectComposeInput): PrimitiveShapeInput[] {
     ...[0, Math.PI / 2, Math.PI, (Math.PI * 3) / 2].map((angle, index) => ({
       kind: 'box' as const,
       name: `${name} fan blade ${index + 1}`,
+      semanticRole: 'fan_blade',
+      semanticGroup: 'front_fan',
+      sourcePartKind: 'radial_blades',
+      editableHints: {
+        primaryDimension: 'length',
+        canScale: ['length', 'width', 'height'],
+        minFactor: 0.35,
+        maxFactor: 2.2,
+      },
       position: [
         fanX + Math.cos(angle) * fanRadius * 0.24,
         centerY + Math.sin(angle) * fanRadius * 0.24,
@@ -357,6 +370,9 @@ function composeOutdoorAc(input: ObjectComposeInput): PrimitiveShapeInput[] {
     {
       kind: 'cylinder',
       name: `${name} fan hub`,
+      semanticRole: 'fan_hub',
+      semanticGroup: 'front_fan',
+      sourcePartKind: 'radial_blades',
       position: [fanX, centerY, zFront + depth * 0.07],
       axis: 'z',
       radius: Math.min(width, height) * 0.06,

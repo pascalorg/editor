@@ -92,6 +92,7 @@ const getNodeName = (node: AnyNode): string => {
   if ('name' in node && node.name) return node.name
   if (node.type === 'wall') return 'Wall'
   if (node.type === 'fence') return 'Fence'
+  if (node.type === 'road') return 'Road'
   if (node.type === 'item') return (node as { asset: { name: string } }).asset?.name || 'Item'
   if (node.type === 'slab') return 'Slab'
   if (node.type === 'ceiling') return 'Ceiling'

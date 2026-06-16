@@ -17,10 +17,21 @@ type LiveTransformState = {
   clearAll(): void
 }
 
+function sameLiveTransform(a: LiveTransform | undefined, b: LiveTransform): boolean {
+  return (
+    !!a &&
+    a.rotation === b.rotation &&
+    a.position[0] === b.position[0] &&
+    a.position[1] === b.position[1] &&
+    a.position[2] === b.position[2]
+  )
+}
+
 const useLiveTransforms = create<LiveTransformState>((set, get) => ({
   transforms: new Map(),
   set: (nodeId, transform) =>
     set((state) => {
+      if (sameLiveTransform(state.transforms.get(nodeId), transform)) return state
       const next = new Map(state.transforms)
       next.set(nodeId, transform)
       return { transforms: next }
@@ -28,6 +39,7 @@ const useLiveTransforms = create<LiveTransformState>((set, get) => ({
   get: (nodeId) => get().transforms.get(nodeId),
   clear: (nodeId) =>
     set((state) => {
+      if (!state.transforms.has(nodeId)) return state
       const next = new Map(state.transforms)
       next.delete(nodeId)
       return { transforms: next }

@@ -7,19 +7,14 @@ import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useMemo, useRef, useState } from 'react'
 import type { Object3D } from 'three'
+import useEditor from '../../store/use-editor'
 
-function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
-  if (unit === 'imperial') {
-    const feet = value * 3.280_84
-    const wholeFeet = Math.floor(feet)
-    const inches = Math.round((feet - wholeFeet) * 12)
-    if (inches === 12) return `${wholeFeet + 1}'0"`
-    return `${wholeFeet}'${inches}"`
-  }
+function formatMeters(value: number) {
   return `${Number.parseFloat(value.toFixed(2))}m`
 }
 
 export function SiteEdgeLabels() {
+  const phase = useEditor((state) => state.phase)
   // Narrow subscription to just the site node — subscribing to the full
   // s.nodes dict re-rendered this on every wall/level mutation even though
   // the site itself rarely changes.
@@ -29,7 +24,6 @@ export function SiteEdgeLabels() {
     const node = state.nodes[firstRoot]
     return node?.type === 'site' ? (node as SiteNode) : null
   })
-  const unit = useViewer((state) => state.unit)
   const theme = useViewer((state) => state.theme)
 
   const siteNodeId = siteNode?.id
@@ -66,7 +60,7 @@ export function SiteEdgeLabels() {
     })
   }, [siteNode?.polygon?.points])
 
-  if (!siteObj || edges.length === 0) return null
+  if (phase !== 'site' || !siteObj || edges.length === 0) return null
 
   return createPortal(
     <>
@@ -80,13 +74,13 @@ export function SiteEdgeLabels() {
           zIndexRange={[10, 0]}
         >
           <div
-            className="whitespace-nowrap font-bold font-mono text-[15px]"
+            className="whitespace-nowrap font-mono text-[12px]"
             style={{
               color,
               textShadow: `-1.5px -1.5px 0 ${shadowColor}, 1.5px -1.5px 0 ${shadowColor}, -1.5px 1.5px 0 ${shadowColor}, 1.5px 1.5px 0 ${shadowColor}, 0 0 4px ${shadowColor}, 0 0 4px ${shadowColor}`,
             }}
           >
-            {formatMeasurement(edge.dist, unit)}
+            {formatMeters(edge.dist)}
           </div>
         </Html>
       ))}

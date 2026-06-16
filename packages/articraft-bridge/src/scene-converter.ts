@@ -144,6 +144,8 @@ interface ConvertOptions {
   materialPreset?: string
   /** Optional level/site parent ID for the root nodes */
   parentId?: string
+  /** Optional position offset applied to root link nodes when converting a placed asset */
+  rootPosition?: Vec3
 }
 
 /**
@@ -152,8 +154,8 @@ interface ConvertOptions {
  * Strategy:
  * - Each link becomes a "link group" represented by one or more nodes.
  * - Primitives (box/cylinder/sphere) are converted to editor primitive nodes.
- * - Mesh visuals are converted as best-effort (wrapped as sphere placeholders
- *   for now; full mesh support requires OBJ/glb import on the editor side).
+ * - Mesh visuals are converted as best-effort primitive approximations; unsupported
+ *   mesh visuals still use tiny placeholders until per-link mesh import exists.
  * - Joint metadata is attached to the child link's nodes when articulationMode is true.
  * - Links without a parent joint become "root" nodes.
  * - Parent-child relationships are stored via parentId.
@@ -199,19 +201,26 @@ export function convertToSceneNodes(
       let node: AnyNode | null = null
 
       if (visual.geometry.type === 'mesh') {
-        // For mesh visuals, try to approximate with primitives from params.
-        // If params has primitive-like fields, use them.
         const p = visual.geometry.params
-        if (p.radius !== undefined && p.length !== undefined) {
-          visual.geometry.type = 'cylinder'
-        } else if (p.size !== undefined || (p.sx !== undefined && p.sy !== undefined)) {
-          visual.geometry.type = 'box'
+        if (p.radius !== undefined && (p.length !== undefined || p.height !== undefined)) {
+          node = visualToPrimitiveNode(
+            { ...visual, geometry: { ...visual.geometry, type: 'cylinder' } },
+            nodeName,
+            materialPreset,
+          )
+        } else if (p.size !== undefined || p.length !== undefined || p.sx !== undefined) {
+          node = visualToPrimitiveNode(
+            { ...visual, geometry: { ...visual.geometry, type: 'box' } },
+            nodeName,
+            materialPreset,
+          )
         } else {
-          // Add a small sphere as placeholder for mesh geometry
-          visual.geometry.type = 'sphere'
-          visual.geometry.params = { radius: 0.05 }
+          node = visualToPrimitiveNode(
+            { ...visual, geometry: { ...visual.geometry, type: 'sphere', params: { radius: 0.05 } } },
+            nodeName,
+            materialPreset,
+          )
         }
-        node = visualToPrimitiveNode(visual, nodeName, materialPreset)
       } else {
         node = visualToPrimitiveNode(visual, nodeName, materialPreset)
       }
@@ -226,13 +235,13 @@ export function convertToSceneNodes(
         }
         nodes.push(node)
         // Map first visual node as the canonical link representative
-        if (vi === 0) {
+        if (!nodeIdByLink.has(link.name)) {
           nodeIdByLink.set(link.name, node.id)
         }
       }
     }
 
-    // If no visuals produced a valid node, create a small sphere placeholder
+    // If no visuals produced a valid node, create a small placeholder so joint metadata can still attach.
     if (!nodeIdByLink.has(link.name)) {
       const placeholder = SphereNode.parse({
         name: link.name,
@@ -286,6 +295,20 @@ export function createModelNodes(
     }
   }
 
+  const withRootOffset = (node: AnyNode): AnyNode => {
+    if (!options.rootPosition) return node
+    const position = (node as { position?: unknown }).position
+    if (!Array.isArray(position) || position.length < 3) return node
+    return {
+      ...node,
+      position: [
+        Number(position[0] ?? 0) + options.rootPosition[0],
+        Number(position[1] ?? 0) + options.rootPosition[1],
+        Number(position[2] ?? 0) + options.rootPosition[2],
+      ],
+    } as AnyNode
+  }
+
   // First pass: create nodes for links that have no parent or whose parent is a root
   for (const node of nodes) {
     const linkName = inferLinkName(node, data)
@@ -299,9 +322,10 @@ export function createModelNodes(
     const parentJoint = data.joints.find((j) => j.child === linkName)
     if (!parentJoint) {
       // Root link → create directly
-      const id = createNode(node, options.parentId as AnyNodeId | undefined)
+      const nodeWithOffset = withRootOffset(node)
+      const id = createNode(nodeWithOffset, options.parentId as AnyNodeId | undefined)
       createdIds.push(id as string)
-      rememberCreatedLinkNode(linkName, node, id)
+      rememberCreatedLinkNode(linkName, nodeWithOffset, id)
       if (!rootLinkIds.has(linkName)) {
         rootNodeIds.push(id as string)
         rootLinkIds.add(linkName)

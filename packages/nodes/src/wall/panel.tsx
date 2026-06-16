@@ -13,6 +13,7 @@ import {
 import {
   ActionButton,
   ActionGroup,
+  NodeMaterialSection,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -172,9 +173,15 @@ export default function WallPanel() {
         )}
       </PanelSection>
 
+      <NodeMaterialSection />
+
       <PanelSection title={S.actions()}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={L.move()} onClick={handleMove} />
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label={L.move()}
+            onClick={handleMove}
+          />
           {!hasWallChildrenBlockingCurve && (
             <ActionButton
               icon={<Spline className="h-3.5 w-3.5" />}

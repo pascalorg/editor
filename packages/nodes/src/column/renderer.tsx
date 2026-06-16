@@ -2,19 +2,23 @@
 
 import { type ColumnNode, useLiveTransforms, useRegistry } from '@pascal-app/core'
 import {
-  baseMaterial,
+  type ColorPreset,
   createColumnBoxGeometry,
   createColumnCylinderGeometry,
   createColumnSphereGeometry,
   createColumnTorusGeometry,
+  createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
+  type RenderShading,
   useNodeEvents,
+  useViewer,
 } from '@pascal-app/viewer'
 import { createContext, useContext, useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, type Material } from 'three'
 
-const ColumnMaterialContext = createContext<Material>(baseMaterial as Material)
+const ColumnMaterialContext = createContext<Material>(createDefaultMaterial('#f2f0ed', 0.5))
 const ColumnEdgeSoftnessContext = createContext(0.025)
 
 function ColumnMaterial() {
@@ -23,13 +27,21 @@ function ColumnMaterial() {
 }
 
 function createColumnMaterial({
+  colorPreset,
   material,
   materialPreset,
-}: Pick<ColumnNode, 'material' | 'materialPreset'>) {
-  const presetMaterial = createMaterialFromPresetRef(materialPreset)
+  shading,
+  textures,
+}: Pick<ColumnNode, 'material' | 'materialPreset'> & {
+  colorPreset: ColorPreset
+  shading: RenderShading
+  textures: boolean
+}) {
+  if (!textures) return createSurfaceRoleMaterial('wall', colorPreset)
+  const presetMaterial = createMaterialFromPresetRef(materialPreset, shading)
   if (presetMaterial) return presetMaterial
-  if (material) return createMaterial(material)
-  return baseMaterial
+  if (material) return createMaterial(material, shading)
+  return createDefaultMaterial('#f2f0ed', 0.5, shading)
 }
 
 function getSegments(node: ColumnNode) {
@@ -118,7 +130,7 @@ function MappedBox({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position} rotation={rotation}>
+    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -226,7 +238,7 @@ function FlatEndedBeam({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null}>
+    <mesh castShadow dispose={null} receiveShadow>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -760,7 +772,7 @@ function MappedCylinder({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position} rotation={rotation}>
+    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -797,7 +809,7 @@ function MappedCone({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position} rotation={rotation}>
+    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -823,7 +835,7 @@ function MappedSphere({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position}>
+    <mesh castShadow dispose={null} position={position} receiveShadow>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -864,7 +876,7 @@ function MappedTorus({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position} rotation={rotation}>
+    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -2058,22 +2070,72 @@ function Capital({ node, y, height }: { node: ColumnNode; y: number; height: num
   )
 }
 
+function PipeSupport({ node }: { node: ColumnNode }) {
+  const height = Math.max(0.12, node.height)
+  const width = clamp(node.braceWidth ?? node.width, 0.04, 1.6)
+  const depth = clamp(node.braceDepth ?? node.depth, 0.04, 1.6)
+  const span = Math.max(node.braceBottomSpread ?? Math.max(width * 4, 0.7), width * 2.5)
+  const baseThickness = Math.max(0.035, Math.min(0.08, width * 0.45))
+  const postWidth = Math.max(width * 0.55, 0.035)
+  const topBlockHeight = Math.max(baseThickness * 1.4, depth * 0.35)
+  const topBlockDepth = Math.max(depth * 1.5, postWidth * 2.2)
+  const postHeight = Math.max(0.04, height - topBlockHeight - baseThickness)
+
+  return (
+    <group>
+      <MappedBox
+        depth={Math.max(depth * 1.35, 0.18)}
+        height={baseThickness}
+        position={[0, baseThickness / 2, 0]}
+        width={span * 1.12}
+      />
+      <MappedBox
+        depth={postWidth}
+        height={postHeight}
+        position={[-span * 0.28, baseThickness + postHeight / 2, 0]}
+        width={postWidth}
+      />
+      <MappedBox
+        depth={postWidth}
+        height={postHeight}
+        position={[span * 0.28, baseThickness + postHeight / 2, 0]}
+        width={postWidth}
+      />
+      <MappedBox
+        depth={topBlockDepth}
+        height={topBlockHeight}
+        position={[0, height - topBlockHeight / 2, 0]}
+        width={span * 0.78}
+      />
+    </group>
+  )
+}
+
 export const ColumnRenderer = ({ node }: { node: ColumnNode }) => {
   const ref = useRef<Group>(null!)
   const handlers = useNodeEvents(node, 'column')
+  const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
   const material = useMemo(
     () =>
       createColumnMaterial({
+        colorPreset,
         material: node.material,
         materialPreset: node.materialPreset,
+        shading,
+        textures,
       }),
     [
+      colorPreset,
       node.material,
       node.material?.preset,
       node.material?.properties,
       node.material?.texture,
       node.materialPreset,
+      shading,
+      textures,
     ],
   )
 
@@ -2117,6 +2179,8 @@ export const ColumnRenderer = ({ node }: { node: ColumnNode }) => {
             <PortalFrameSupport node={node} />
           ) : node.supportStyle === 'box-frame' ? (
             <BoxFrameSupport node={node} />
+          ) : node.supportStyle === 'pipe-saddle' ? (
+            <PipeSupport node={node} />
           ) : (
             <>
               <Base height={shaftLayout.baseHeight} node={node} />

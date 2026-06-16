@@ -1182,116 +1182,115 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
   }
 
   return (
-    <div
-      className={cn(
-        'group/row relative flex h-8 cursor-pointer select-none items-center border-border/50 border-b px-3 text-sm transition-all duration-200',
-        isSelected
-          ? 'bg-accent/50 text-foreground'
-          : isHovered
-            ? 'bg-accent/30 text-foreground'
-            : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
-      )}
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      onMouseEnter={() => setHoveredId(zone.id)}
-      onMouseLeave={() => setHoveredId(null)}
-      ref={itemRef}
-    >
-      {/* Vertical tree line */}
+    <div className="flex flex-col">
       <div
         className={cn(
-          'pointer-events-none absolute w-px bg-border/50',
-          isLast ? 'top-0 bottom-1/2' : 'top-0 bottom-0',
+          'group/row relative flex h-8 cursor-pointer select-none items-center border-border/50 border-b px-3 text-sm transition-all duration-200',
+          isSelected
+            ? 'bg-accent/50 text-foreground'
+            : isHovered
+              ? 'bg-accent/30 text-foreground'
+              : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
         )}
-        style={{ left: 8 }}
-      />
-      {/* Horizontal branch line */}
-      <div
-        className="pointer-events-none absolute top-1/2 h-px bg-border/50"
-        style={{ left: 8, width: 4 }}
-      />
-
-      <span className={cn('mr-2', !isSelected && 'opacity-40')}>
-        <ColorDot color={zone.color} onChange={handleColorChange} />
-      </span>
-      <div className="min-w-0 flex-1 pr-1">
-        <InlineRenameInput
-          defaultName={defaultName}
-          isEditing={isEditing}
-          nodeId={zone.id}
-          onStartEditing={() => setIsEditing(true)}
-          onStopEditing={() => setIsEditing(false)}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onMouseEnter={() => setHoveredId(zone.id)}
+        onMouseLeave={() => setHoveredId(null)}
+        ref={itemRef}
+      >
+        <div
+          className={cn(
+            'pointer-events-none absolute w-px bg-border/50',
+            isLast && !isSelected ? 'top-0 bottom-1/2' : 'top-0 bottom-0',
+          )}
+          style={{ left: 8 }}
         />
-      </div>
-      <div className="flex items-center gap-0.5">
-        {/* Camera snapshot button */}
-        <Popover onOpenChange={setCameraPopoverOpen} open={cameraPopoverOpen}>
-          <PopoverTrigger asChild>
-            <button
-              className="relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
+        <div
+          className="pointer-events-none absolute top-1/2 h-px bg-border/50"
+          style={{ left: 8, width: 4 }}
+        />
+
+        <span className={cn('mr-2', !isSelected && 'opacity-40')}>
+          <ColorDot color={zone.color} onChange={handleColorChange} />
+        </span>
+        <div className="min-w-0 flex-1 pr-1">
+          <InlineRenameInput
+            defaultName={defaultName}
+            isEditing={isEditing}
+            nodeId={zone.id}
+            onStartEditing={() => setIsEditing(true)}
+            onStopEditing={() => setIsEditing(false)}
+          />
+        </div>
+        <div className="flex items-center gap-0.5">
+          <Popover onOpenChange={setCameraPopoverOpen} open={cameraPopoverOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className="relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
+                onClick={(e) => e.stopPropagation()}
+                title={lblCameraSnapshot()}
+              >
+                <Camera className="h-3 w-3" />
+                {zone.camera && (
+                  <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              className="w-auto p-1"
               onClick={(e) => e.stopPropagation()}
-              title={lblCameraSnapshot()}
+              side="right"
             >
-              <Camera className="h-3 w-3" />
-              {zone.camera && (
-                <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
-              )}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="start"
-            className="w-auto p-1"
-            onClick={(e) => e.stopPropagation()}
-            side="right"
-          >
-            <div className="flex flex-col gap-0.5">
-              {zone.camera && (
+              <div className="flex flex-col gap-0.5">
+                {zone.camera && (
+                  <button
+                    className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-popover-foreground text-sm hover:bg-accent"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      emitter.emit('camera-controls:view', { nodeId: zone.id })
+                      setCameraPopoverOpen(false)
+                    }}
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                    {lblViewSnapshot()}
+                  </button>
+                )}
                 <button
                   className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-popover-foreground text-sm hover:bg-accent"
                   onClick={(e) => {
                     e.stopPropagation()
-                    emitter.emit('camera-controls:view', { nodeId: zone.id })
+                    emitter.emit('camera-controls:capture', { nodeId: zone.id })
                     setCameraPopoverOpen(false)
                   }}
                 >
                   <Camera className="h-3.5 w-3.5" />
-                  {lblViewSnapshot()}
+                  {lblTakeOrUpdateSnapshot(!!zone.camera)}
                 </button>
-              )}
-              <button
-                className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-popover-foreground text-sm hover:bg-accent"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  emitter.emit('camera-controls:capture', { nodeId: zone.id })
-                  setCameraPopoverOpen(false)
-                }}
-              >
-                <Camera className="h-3.5 w-3.5" />
-                {lblTakeOrUpdateSnapshot(!!zone.camera)}
-              </button>
-              {zone.camera && (
-                <button
-                  className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-popover-foreground text-sm hover:bg-destructive hover:text-destructive-foreground"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    updateNode(zone.id, { camera: undefined })
-                    setCameraPopoverOpen(false)
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {lblClearSnapshot()}
-                </button>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-        <button
-          className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
-          onClick={handleDelete}
-          title={t('sidebar.delete', 'Delete')}
-        >
-          <Trash2 className="h-3 w-3" />
-        </button>
+                {zone.camera && (
+                  <button
+                    className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-popover-foreground text-sm hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      updateNode(zone.id, { camera: undefined })
+                      setCameraPopoverOpen(false)
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {lblClearSnapshot()}
+                  </button>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+          <button
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
+            onClick={handleDelete}
+            title={t('sidebar.delete', 'Delete')}
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -27,6 +27,7 @@ export const guideDefinition: NodeDefinition<typeof GuideNode> = {
   },
 
   parametrics: guideParametrics,
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',

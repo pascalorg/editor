@@ -398,7 +398,9 @@ export const WallTool: React.FC = () => {
 
     const stopDrafting = () => {
       buildingState.current = 0
-      wallPreviewRef.current.visible = false
+      if (wallPreviewRef.current) {
+        wallPreviewRef.current.visible = false
+      }
       setDraftMeasurement(null)
     }
 
@@ -477,6 +479,7 @@ export const WallTool: React.FC = () => {
           snappedEnd,
         )
         if (!createdWall) return
+        useViewer.getState().setSelection({ selectedIds: [createdWall.id] })
 
         const nextStart = createdWall.end
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])

@@ -1,7 +1,13 @@
 'use client'
 
 import { type SweepNode, useRegistry, useScene } from '@pascal-app/core'
-import { createMaterial, createMaterialFromPresetRef, useNodeEvents } from '@pascal-app/viewer'
+import {
+  createDefaultMaterial,
+  createMaterial,
+  createMaterialFromPresetRef,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 
@@ -26,19 +32,21 @@ export const SweepRenderer = ({ node }: { node: SweepNode }) => {
   }, [node.id])
 
   const handlers = useNodeEvents(node, 'sweep')
+  const shading = useViewer((state) => state.shading)
 
   const material = useMemo(() => {
-    const presetMaterial = createMaterialFromPresetRef(node.materialPreset)
+    const presetMaterial = createMaterialFromPresetRef(node.materialPreset, shading)
     if (presetMaterial) return presetMaterial
     const mat = node.material
-    if (!mat) return new THREE.MeshStandardMaterial({ color: 0xcccccc })
-    return createMaterial(mat)
+    if (!mat) return createDefaultMaterial('#cccccc', 1, shading)
+    return createMaterial(mat, shading)
   }, [
     node.materialPreset,
     node.material,
     node.material?.preset,
     node.material?.properties,
     node.material?.texture,
+    shading,
   ])
 
   const geometry = useMemo(() => {
@@ -59,7 +67,6 @@ export const SweepRenderer = ({ node }: { node: SweepNode }) => {
     centerGeometry(geo)
     return geo
   }, [node.path, node.radius, node.tubularSegments, node.radialSegments, node.closed])
-
 
   return (
     <group

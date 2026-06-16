@@ -178,11 +178,6 @@ const isNodeInZone = (node: AnyNode, levelId: string, zoneId: string): boolean =
     return true
   }
 
-  if (node.type === 'box' || node.type === 'cylinder' || node.type === 'sphere') {
-    const prim = node as { position: [number, number, number] }
-    return pointInPolygonWithTolerance(prim.position[0], prim.position[2], zone.polygon)
-  }
-
   return false
 }
 
@@ -294,9 +289,6 @@ const getStrategy = (): SelectionStrategy | null => {
         'roof-segment',
         'window',
         'door',
-        'box',
-        'cylinder',
-        'sphere',
       ]
       if (!validTypes.includes(node.type)) return false
       return isNodeInZone(node, levelId, zoneId)
@@ -406,7 +398,8 @@ const PointerMissedHandler = ({
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
       // Only handle left clicks
-      if (useViewer.getState().cameraDragging) return
+      const viewerState = useViewer.getState()
+      if (viewerState.cameraDragging || viewerState.inputDragging) return
       if (event.button !== 0) return
 
       // Use requestAnimationFrame to check after R3F event handlers

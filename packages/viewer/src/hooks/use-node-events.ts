@@ -36,42 +36,48 @@ export function useNodeEvents<K extends AnyNodeType>(node: NodeByKind<K>, type: 
     emitter.emit(eventKey, payload as never)
   }
 
+  const spatialSuppressed = () => useViewer.getState().cameraDragging
+  const selectionSuppressed = () => {
+    const state = useViewer.getState()
+    return state.cameraDragging || state.inputDragging
+  }
+
   return {
     onPointerDown: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (selectionSuppressed()) return
       if (e.button !== 0) return
       emit('pointerdown', e)
     },
     onPointerUp: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (selectionSuppressed()) return
       if (e.button !== 0) return
       emit('pointerup', e)
       // Synthesize a click event on pointer up to be more forgiving than R3F's default onClick
       // which often fails if the mouse moves even 1 pixel.
       emit('click', e)
     },
-    onClick: (e: ThreeEvent<PointerEvent>) => {
+    onClick: (_e: ThreeEvent<PointerEvent>) => {
       // Disable default R3F click since we synthesize it on pointerup
       // This prevents double-clicks from firing twice.
     },
     onPointerEnter: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (spatialSuppressed()) return
       emit('enter', e)
     },
     onPointerLeave: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (spatialSuppressed()) return
       emit('leave', e)
     },
     onPointerMove: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (spatialSuppressed()) return
       emit('move', e)
     },
     onDoubleClick: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (selectionSuppressed()) return
       emit('double-click', e)
     },
     onContextMenu: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (selectionSuppressed()) return
       emit('context-menu', e)
     },
   }

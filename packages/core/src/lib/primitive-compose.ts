@@ -15,6 +15,7 @@ export type PrimitiveShapeKind =
   | 'capsule'
   | 'half-cylinder'
   | 'rounded-panel'
+  | 'conformal-strip'
   | 'extrude'
   | 'sweep'
 export type PrimitiveAnchor = 'top' | 'bottom' | 'center' | 'front' | 'back' | 'left' | 'right'
@@ -49,6 +50,39 @@ export interface PrimitiveGeometryBrief {
   assumptions?: string[]
 }
 
+export interface PrimitiveArrayInput {
+  count?: number
+  columns?: number
+  rows?: number
+  layers?: number
+  spacing?: Vec3 | number
+  step?: Vec3
+  axis?: PrimitiveAxis | string
+}
+
+export type PrimitiveEditableDimension =
+  | 'primary'
+  | 'uniform'
+  | 'length'
+  | 'width'
+  | 'height'
+  | 'depth'
+  | 'thickness'
+  | 'radius'
+  | 'diameter'
+  | 'majorRadius'
+  | 'tubeRadius'
+  | 'axisLength'
+  | 'profileX'
+  | 'profileY'
+
+export interface PrimitiveEditableHints {
+  primaryDimension?: PrimitiveEditableDimension | string
+  canScale?: Array<PrimitiveEditableDimension | string>
+  minFactor?: number
+  maxFactor?: number
+}
+
 export interface PrimitiveShapeInput {
   kind: PrimitiveShapeKind | string
   name?: string
@@ -56,6 +90,9 @@ export interface PrimitiveShapeInput {
   semanticGroup?: string
   sourcePartKind?: string
   sourcePartId?: string
+  editableHints?: PrimitiveEditableHints
+  industrialArchetype?: string
+  industrialVariant?: string
   position?: Vec3
   rotation?: Vec3
   scale?: Vec3
@@ -82,10 +119,19 @@ export interface PrimitiveShapeInput {
   topWidthScale?: number
   slopeAxis?: 'x' | 'z' | string
   slopeDirection?: 'positive' | 'negative' | string
-  attachTo?: number
+  attachTo?: number | string
   anchor?: PrimitiveAnchor | string
   childAnchor?: PrimitiveAnchor | string
   wallThickness?: number
+  surface?: string
+  side?: 'left' | 'right' | string
+  xStart?: number
+  xEnd?: number
+  verticalOffset?: number
+  surfaceRadiusY?: number
+  surfaceRadiusZ?: number
+  surfaceLength?: number
+  endTaper?: number
   materialPreset?: string
   material?: PrimitiveMaterialInput
   profile?: [number, number][]
@@ -98,6 +144,20 @@ export interface PrimitiveShapeInput {
   bevelSegments?: number
   curveSegments?: number
   closed?: boolean
+  array?: PrimitiveArrayInput
+  arrayCount?: number
+  arrayStep?: Vec3
+  arrayAxis?: PrimitiveAxis | string
+  arrayColumns?: number
+  arrayRows?: number
+  arrayLayers?: number
+  arraySpacing?: Vec3 | number
+}
+
+export type PrimitiveArrayExpandableShape = Omit<Partial<PrimitiveShapeInput>, 'material'> & {
+  material?: unknown
+  params?: Record<string, unknown>
+  [key: string]: unknown
 }
 
 export interface ResolvedPrimitiveTransform {
@@ -109,6 +169,154 @@ interface HalfExtents {
   x: number
   y: number
   z: number
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function numberField(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function integerField(value: unknown, fallback: number, min: number, max: number): number {
+  const resolved = numberField(value) ?? fallback
+  return Math.max(min, Math.min(max, Math.round(resolved)))
+}
+
+function vec3Field(value: unknown): Vec3 | undefined {
+  return Array.isArray(value) &&
+    value.length >= 3 &&
+    value.slice(0, 3).every((entry) => typeof entry === 'number' && Number.isFinite(entry))
+    ? [value[0] as number, value[1] as number, value[2] as number]
+    : undefined
+}
+
+function arrayStepFromAxis(axis: unknown, spacing: unknown): Vec3 | undefined {
+  const distance = numberField(spacing)
+  if (distance == null) return undefined
+  switch (typeof axis === 'string' ? axis.toLowerCase() : 'x') {
+    case 'y':
+      return [0, distance, 0]
+    case 'z':
+      return [0, 0, distance]
+    default:
+      return [distance, 0, 0]
+  }
+}
+
+function stripPrimitiveArrayFields<T extends PrimitiveArrayExpandableShape>(shape: T): T {
+  const {
+    array: _array,
+    arrayCount: _arrayCount,
+    arrayStep: _arrayStep,
+    arrayAxis: _arrayAxis,
+    arrayColumns: _arrayColumns,
+    arrayRows: _arrayRows,
+    arrayLayers: _arrayLayers,
+    arraySpacing: _arraySpacing,
+    params: rawParams,
+    ...rest
+  } = shape
+  const params = isRecord(rawParams)
+    ? Object.fromEntries(
+        Object.entries(rawParams).filter(
+          ([key]) =>
+            ![
+              'array',
+              'arrayCount',
+              'arrayStep',
+              'arrayAxis',
+              'arrayColumns',
+              'arrayRows',
+              'arrayLayers',
+              'arraySpacing',
+            ].includes(key),
+        ),
+      )
+    : rawParams
+  return {
+    ...rest,
+    ...(isRecord(params) && Object.keys(params).length > 0 ? { params } : {}),
+  } as T
+}
+
+export function expandPrimitiveShapeArrays<T extends PrimitiveArrayExpandableShape>(
+  rawShapes: T[],
+  options: { maxExpandedPerShape?: number } = {},
+): T[] {
+  const maxExpandedPerShape = integerField(options.maxExpandedPerShape, 80, 1, 1000)
+  const expanded: T[] = []
+  for (const shape of rawShapes) {
+    const record = shape as Record<string, unknown>
+    const params = isRecord(record.params) ? record.params : {}
+    const array = isRecord(record.array) ? record.array : isRecord(params.array) ? params.array : {}
+    const read = (key: string) => record[key] ?? params[key] ?? array[key]
+    const columns = integerField(read('columns') ?? read('arrayColumns'), 1, 1, 24)
+    const rows = integerField(read('rows') ?? read('arrayRows'), 1, 1, 24)
+    const layers = integerField(read('layers') ?? read('arrayLayers'), 1, 1, 12)
+    const explicitCount = numberField(read('arrayCount') ?? read('count'))
+    const linearCount = explicitCount != null ? integerField(explicitCount, 1, 1, 80) : 1
+    const total = columns * rows * layers > 1 ? columns * rows * layers : linearCount
+    if (total <= 1) {
+      expanded.push(stripPrimitiveArrayFields(shape))
+      continue
+    }
+
+    const spacing = vec3Field(read('spacing') ?? read('arraySpacing'))
+    const spacingScalar = numberField(read('spacing') ?? read('arraySpacing'))
+    const step =
+      vec3Field(read('step') ?? read('arrayStep')) ??
+      (columns * rows * layers > 1
+        ? [
+            spacing?.[0] ?? spacingScalar ?? 0.25,
+            spacing?.[1] ?? spacingScalar ?? 0,
+            spacing?.[2] ?? spacingScalar ?? 0.25,
+          ]
+        : arrayStepFromAxis(read('axis') ?? read('arrayAxis'), spacingScalar ?? 0.25))
+    const resolvedStep: Vec3 = step ?? [0.25, 0, 0]
+    const basePosition = vec3Field(record.position ?? params.position) ?? [0, 0, 0]
+    const baseName =
+      typeof (record.name ?? params.name) === 'string'
+        ? ((record.name ?? params.name) as string)
+        : undefined
+    const baseShape = stripPrimitiveArrayFields(shape)
+
+    if (columns * rows * layers <= 1) {
+      for (let index = 0; index < Math.min(total, maxExpandedPerShape); index += 1) {
+        expanded.push({
+          ...baseShape,
+          position: [
+            basePosition[0] + index * resolvedStep[0],
+            basePosition[1] + index * resolvedStep[1],
+            basePosition[2] + index * resolvedStep[2],
+          ],
+          ...(baseName ? { name: `${baseName} ${index + 1}` } : {}),
+        } as T)
+      }
+      continue
+    }
+
+    let emitted = 0
+    for (let layer = 0; layer < layers; layer += 1) {
+      for (let row = 0; row < rows; row += 1) {
+        for (let column = 0; column < columns; column += 1) {
+          if (emitted >= total || emitted >= maxExpandedPerShape) break
+          expanded.push({
+            ...baseShape,
+            position: [
+              basePosition[0] + column * resolvedStep[0],
+              basePosition[1] + layer * resolvedStep[1],
+              basePosition[2] + row * resolvedStep[2],
+            ],
+            ...(baseName ? { name: `${baseName} ${emitted + 1}` } : {}),
+          } as T)
+          emitted += 1
+        }
+      }
+    }
+  }
+  return expanded
 }
 
 function getHalfExtents(spec: PrimitiveShapeInput): HalfExtents {
@@ -156,6 +364,15 @@ function getHalfExtents(spec: PrimitiveShapeInput): HalfExtents {
         y: (spec.thickness ?? spec.height ?? 0.04) / 2,
         z: (spec.width ?? 0.5) / 2,
       }
+    case 'conformal-strip': {
+      const xStart = spec.xStart ?? -((spec.length ?? 1) / 2)
+      const xEnd = spec.xEnd ?? (spec.length ?? 1) / 2
+      return {
+        x: Math.max(0.005, Math.abs(xEnd - xStart) / 2),
+        y: (spec.surfaceRadiusY ?? 0.25) + (spec.thickness ?? 0.003),
+        z: (spec.surfaceRadiusZ ?? 0.25) + (spec.thickness ?? 0.003),
+      }
+    }
     case 'sphere': {
       const r = spec.radius ?? 0.5
       const sx = spec.scale?.[0] ?? 1
@@ -452,7 +669,7 @@ export function resolvePrimitiveWorldTransforms(
     const semanticRotationMatrix = getSemanticRotationMatrix(shape)
     const localRotation = matrixToEuler(localRotationMatrix)
 
-    if (shape.attachTo === undefined || shape.attachTo >= i) {
+    if (typeof shape.attachTo !== 'number' || shape.attachTo >= i) {
       results[i] = { position, rotation: localRotation }
       semanticRotations[i] = semanticRotationMatrix
       continue

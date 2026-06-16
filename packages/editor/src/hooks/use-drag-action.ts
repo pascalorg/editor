@@ -95,6 +95,10 @@ export function useDragAction<Ctx, Draft>(args: UseDragActionArgs<Ctx, Draft>) {
     const commitFromPointerUp = (event: PointerEvent) => {
       if (event.button !== 0) return
       if (Date.now() - activatedAt < graceMs && !hasMovedSinceStart) return
+      if (!hasMovedSinceStart) {
+        session.cancel()
+        return
+      }
       session.commit()
     }
 

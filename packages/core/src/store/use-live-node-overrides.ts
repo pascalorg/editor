@@ -7,6 +7,7 @@ type LiveNodeOverrideState = {
   set(nodeId: string, values: LiveNodeOverrides): void
   get(nodeId: string): LiveNodeOverrides | undefined
   clear(nodeId: string): void
+  clearFields(nodeId: string, keys: readonly string[]): void
   clearAll(): void
 }
 
@@ -25,7 +26,31 @@ const useLiveNodeOverrides = create<LiveNodeOverrideState>((set, get) => ({
       next.delete(nodeId)
       return { overrides: next }
     }),
+  clearFields: (nodeId, keys) =>
+    set((state) => {
+      const current = state.overrides.get(nodeId)
+      if (!current) return state
+
+      const nextValues = { ...current }
+      for (const key of keys) {
+        delete nextValues[key]
+      }
+
+      const next = new Map(state.overrides)
+      if (Object.keys(nextValues).length === 0) {
+        next.delete(nodeId)
+      } else {
+        next.set(nodeId, nextValues)
+      }
+      return { overrides: next }
+    }),
   clearAll: () => set({ overrides: new Map() }),
 }))
+
+export function getEffectiveNode<T extends { id: string }>(node: T): T {
+  const override = useLiveNodeOverrides.getState().overrides.get(node.id)
+  if (!override || Object.keys(override).length === 0) return node
+  return { ...node, ...override } as T
+}
 
 export default useLiveNodeOverrides

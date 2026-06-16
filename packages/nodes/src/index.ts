@@ -2,11 +2,14 @@ import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
 import { assemblyDefinition } from './assembly'
 import { boxDefinition } from './box'
 import { buildingDefinition } from './building'
+import { cableTrayDefinition } from './cable-tray'
 import { capsuleDefinition } from './capsule'
 import { ceilingDefinition } from './ceiling'
 import { columnDefinition } from './column'
 import { coneDefinition } from './cone'
+import { conformalStripDefinition } from './conformal-strip'
 import { cylinderDefinition } from './cylinder'
+import { dataWidgetDefinition } from './data-widget'
 import { doorDefinition } from './door'
 import { elevatorDefinition } from './elevator'
 import { extrudeDefinition } from './extrude'
@@ -16,9 +19,12 @@ import { guideDefinition } from './guide'
 import { halfCylinderDefinition } from './half-cylinder'
 import { hemisphereDefinition } from './hemisphere'
 import { itemDefinition } from './item'
+import { ladderDefinition } from './ladder'
 import { latheDefinition } from './lathe'
 import { levelDefinition } from './level'
 import { pipeDefinition } from './pipe'
+import { pipeFittingDefinition } from './pipe-fitting'
+import { roadDefinition } from './road'
 import { roofDefinition } from './roof'
 import { roofSegmentDefinition } from './roof-segment'
 import { roundedPanelDefinition } from './rounded-panel'
@@ -30,7 +36,9 @@ import { spawnDefinition } from './spawn'
 import { sphereDefinition } from './sphere'
 import { stairDefinition } from './stair'
 import { stairSegmentDefinition } from './stair-segment'
+import { steelBeamDefinition } from './steel-beam'
 import { sweepDefinition } from './sweep'
+import { tankDefinition } from './tank'
 import { torusDefinition } from './torus'
 import { trapezoidPrismDefinition } from './trapezoid-prism'
 import { wallDefinition } from './wall'
@@ -60,11 +68,17 @@ export const builtinPlugin: Plugin = {
   nodes: [
     // Stage E-complete (full registry path)
     assemblyDefinition as unknown as AnyNodeDefinition,
+    dataWidgetDefinition as unknown as AnyNodeDefinition,
     shelfDefinition as unknown as AnyNodeDefinition,
     spawnDefinition as unknown as AnyNodeDefinition,
     wallDefinition as unknown as AnyNodeDefinition,
     fenceDefinition as unknown as AnyNodeDefinition,
+    pipeFittingDefinition as unknown as AnyNodeDefinition,
     pipeDefinition as unknown as AnyNodeDefinition,
+    cableTrayDefinition as unknown as AnyNodeDefinition,
+    ladderDefinition as unknown as AnyNodeDefinition,
+    steelBeamDefinition as unknown as AnyNodeDefinition,
+    roadDefinition as unknown as AnyNodeDefinition,
     slabDefinition as unknown as AnyNodeDefinition,
     ceilingDefinition as unknown as AnyNodeDefinition,
     doorDefinition as unknown as AnyNodeDefinition,
@@ -75,6 +89,7 @@ export const builtinPlugin: Plugin = {
     boxDefinition as unknown as AnyNodeDefinition,
     cylinderDefinition as unknown as AnyNodeDefinition,
     coneDefinition as unknown as AnyNodeDefinition,
+    conformalStripDefinition as unknown as AnyNodeDefinition,
     frustumDefinition as unknown as AnyNodeDefinition,
     hemisphereDefinition as unknown as AnyNodeDefinition,
     torusDefinition as unknown as AnyNodeDefinition,
@@ -87,6 +102,7 @@ export const builtinPlugin: Plugin = {
     roundedPanelDefinition as unknown as AnyNodeDefinition,
     extrudeDefinition as unknown as AnyNodeDefinition,
     sweepDefinition as unknown as AnyNodeDefinition,
+    tankDefinition as unknown as AnyNodeDefinition,
     columnDefinition as unknown as AnyNodeDefinition,
     elevatorDefinition as unknown as AnyNodeDefinition,
     roofDefinition as unknown as AnyNodeDefinition,
@@ -105,11 +121,14 @@ export const builtinPlugin: Plugin = {
 export { assemblyDefinition } from './assembly'
 export { boxDefinition } from './box'
 export { buildingDefinition } from './building'
+export { cableTrayDefinition } from './cable-tray'
 export { capsuleDefinition } from './capsule'
 export { ceilingDefinition } from './ceiling'
 export { columnDefinition } from './column'
 export { coneDefinition } from './cone'
+export { conformalStripDefinition } from './conformal-strip'
 export { cylinderDefinition } from './cylinder'
+export { dataWidgetDefinition } from './data-widget'
 export { doorDefinition } from './door'
 export { elevatorDefinition } from './elevator'
 export { extrudeDefinition } from './extrude'
@@ -119,9 +138,12 @@ export { guideDefinition } from './guide'
 export { halfCylinderDefinition } from './half-cylinder'
 export { hemisphereDefinition } from './hemisphere'
 export { itemDefinition } from './item'
+export { ladderDefinition } from './ladder'
 export { latheDefinition } from './lathe'
 export { levelDefinition } from './level'
 export { pipeDefinition } from './pipe'
+export { pipeFittingDefinition } from './pipe-fitting'
+export { roadDefinition } from './road'
 export { roofDefinition } from './roof'
 export { roofSegmentDefinition } from './roof-segment'
 export { roundedPanelDefinition } from './rounded-panel'
@@ -133,7 +155,9 @@ export { spawnDefinition } from './spawn'
 export { sphereDefinition } from './sphere'
 export { stairDefinition } from './stair'
 export { stairSegmentDefinition } from './stair-segment'
+export { steelBeamDefinition } from './steel-beam'
 export { sweepDefinition } from './sweep'
+export { tankDefinition } from './tank'
 export { torusDefinition } from './torus'
 export { trapezoidPrismDefinition } from './trapezoid-prism'
 export { wallDefinition } from './wall'

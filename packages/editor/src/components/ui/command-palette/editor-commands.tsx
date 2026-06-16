@@ -23,7 +23,6 @@ import {
   Moon,
   MousePointer2,
   Package,
-  PaintBucket,
   PencilLine,
   Plus,
   Redo2,
@@ -66,7 +65,6 @@ export function EditorCommands() {
   const setMode = useEditor((s) => s.setMode)
   const setTool = useEditor((s) => s.setTool)
   const setStructureLayer = useEditor((s) => s.setStructureLayer)
-  const primeMaterialPaintFromSelection = useEditor((s) => s.primeMaterialPaintFromSelection)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const setPreviewMode = useEditor((s) => s.setPreviewMode)
 
@@ -160,6 +158,51 @@ export function EditorCommands() {
         execute: () => activateTool('zone'),
       },
       {
+        id: 'editor.tool.cable-tray',
+        label: t('command.tools.cableTray', 'Cable Tray Tool'),
+        group: groupScene,
+        icon: <SquareStack className="h-4 w-4" />,
+        keywords: ['industrial', 'factory', 'cable', 'tray', 'conduit'],
+        execute: () => {
+          run(() => {
+            setPhase('structure')
+            setMode('build')
+            setStructureLayer('industrial')
+            setTool('cable-tray')
+          })
+        },
+      },
+      {
+        id: 'editor.tool.ladder',
+        label: t('command.tools.ladder', 'Ladder Tool'),
+        group: groupScene,
+        icon: <ArrowRight className="h-4 w-4" />,
+        keywords: ['industrial', 'factory', 'ladder', 'climb'],
+        execute: () => {
+          run(() => {
+            setPhase('structure')
+            setMode('build')
+            setStructureLayer('elements')
+            setTool('ladder')
+          })
+        },
+      },
+      {
+        id: 'editor.tool.steel-beam',
+        label: t('command.tools.steelBeam', 'Steel Beam Tool'),
+        group: groupScene,
+        icon: <Building2 className="h-4 w-4" />,
+        keywords: ['industrial', 'factory', 'beam', 'steel', 'column'],
+        execute: () => {
+          run(() => {
+            setPhase('structure')
+            setMode('build')
+            setStructureLayer('industrial')
+            setTool('steel-beam')
+          })
+        },
+      },
+      {
         id: 'editor.delete-selection',
         label: t('command.tools.deleteSelection', 'Delete Selection'),
         group: groupScene,
@@ -173,22 +216,6 @@ export function EditorCommands() {
             useScene.getState().deleteNodes(selectedIds as any[])
           }),
       },
-      {
-        id: 'editor.mode.material-paint',
-        label: t('command.tools.materialPaint', 'Material Paint'),
-        group: groupScene,
-        icon: <PaintBucket className="h-4 w-4" />,
-        keywords: ['paint', 'material', 'texture', 'bucket', 'surface'],
-        shortcut: ['P'],
-        execute: () =>
-          run(() => {
-            primeMaterialPaintFromSelection()
-            setPhase('structure')
-            setStructureLayer('elements')
-            setMode('material-paint')
-          }),
-      },
-
       {
         id: 'editor.level.goto',
         label: t('command.levels.goto', 'Go to Level'),
@@ -439,7 +466,6 @@ export function EditorCommands() {
     isPreviewMode,
     setPreviewMode,
     exportScene,
-    primeMaterialPaintFromSelection,
   ])
 
   return null

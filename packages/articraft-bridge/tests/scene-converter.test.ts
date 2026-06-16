@@ -97,4 +97,24 @@ describe('Articraft scene converter', () => {
     expect(claw?.parentId).toBe(arm?.node.id)
     expect(result.rootNodeIds).toEqual([base?.node.id])
   })
+
+  test('applies rootPosition to converted root nodes only', () => {
+    const created = new Map<AnyNodeId, { node: AnyNode; parentId?: AnyNodeId }>()
+
+    createModelNodes(
+      model,
+      (node, parentId) => {
+        created.set(node.id, { node, parentId })
+        return node.id
+      },
+      { articulationMode: true, parentId: 'level-1' as AnyNodeId, rootPosition: [10, 2, -3] },
+    )
+
+    const base = [...created.values()].find(({ node }) => node.name === 'base')
+    const arm = [...created.values()].find(({ node }) => node.name === 'arm')
+
+    expect(base?.node.position).toEqual([10, 2, -3])
+    expect(arm?.node.position).toEqual([0.5, 0.5, -0])
+  })
+
 })

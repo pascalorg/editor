@@ -1,17 +1,26 @@
 import {
   type AnyNodeId,
+  getEffectiveNode,
   sceneRegistry,
   useInteractive,
+  useLiveNodeOverrides,
   useScene,
   type WindowNode,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { baseMaterial, glassMaterial } from '../../lib/materials'
-import { ensureWebGPUCompatibleGeometry } from '../../lib/safe-geometry'
+import {
+  createSurfaceRoleMaterial,
+  glassMaterial as defaultGlassMaterial,
+  createBaseMaterial as getBaseMaterial,
+} from '../../lib/materials'
+import useViewer from '../../store/use-viewer'
 
 // Invisible material for root mesh — used as selection hitbox only
-const hitboxMaterial = new THREE.MeshLambertMaterial({ visible: false })
+const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
+let baseMaterial = getBaseMaterial()
+let glassMaterial: THREE.Material = defaultGlassMaterial
 export const CASEMENT_WINDOW_SASH_NAME = 'casement-window-sash'
 export const FRENCH_CASEMENT_LEFT_SASH_NAME = 'french-casement-left-sash'
 export const FRENCH_CASEMENT_RIGHT_SASH_NAME = 'french-casement-right-sash'
@@ -23,33 +32,97 @@ export const LOUVERED_WINDOW_SLATS_NAME = 'louvered-window-slats'
 export const AWNING_WINDOW_SASH_NAME = 'awning-window-sash'
 export const HOPPER_WINDOW_SASH_NAME = 'hopper-window-sash'
 
+const MAX_WINDOW_REBUILDS_PER_FRAME = 16
+const WINDOW_PROGRESSIVE_DIRTY_THRESHOLD = MAX_WINDOW_REBUILDS_PER_FRAME
+const WINDOW_PROGRESSIVE_TIME_BUDGET_MS = 8
+
 export const WindowSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
+  const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
+  const materialRevisionRef = useRef<string | null>(null)
+  // Subscribe so override-only updates re-run this component. Mirrors
+  // WallSystem + DoorSystem.
+  useLiveNodeOverrides((s) => s.overrides)
+
+  baseMaterial = textures
+    ? getBaseMaterial(shading)
+    : createSurfaceRoleMaterial('joinery', colorPreset)
+  glassMaterial = textures
+    ? defaultGlassMaterial
+    : createSurfaceRoleMaterial('glazing', colorPreset)
+
+  useEffect(() => {
+    const materialRevision = `${shading}:${textures ? 'textures' : 'solid'}:${colorPreset}`
+    if (materialRevisionRef.current === materialRevision) return
+    materialRevisionRef.current = materialRevision
+
+    const nodes = useScene.getState().nodes
+    for (const node of Object.values(nodes)) {
+      if (node?.type === 'window') {
+        useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
+      }
+    }
+  })
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
+    baseMaterial = textures
+      ? getBaseMaterial(shading)
+      : createSurfaceRoleMaterial('joinery', colorPreset)
+    glassMaterial = textures
+      ? defaultGlassMaterial
+      : createSurfaceRoleMaterial('glazing', colorPreset)
 
     const nodes = useScene.getState().nodes
+    const dirtyWindowIds: AnyNodeId[] = []
 
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
       if (!node || node.type !== 'window') return
+      dirtyWindowIds.push(id as AnyNodeId)
+    })
+
+    const useProgressiveWindowRebuilds = dirtyWindowIds.length > WINDOW_PROGRESSIVE_DIRTY_THRESHOLD
+    const frameStartedAt = performance.now()
+    let rebuiltWindowsThisFrame = 0
+
+    for (const id of dirtyWindowIds) {
+      if (useProgressiveWindowRebuilds) {
+        if (rebuiltWindowsThisFrame >= MAX_WINDOW_REBUILDS_PER_FRAME) {
+          break
+        }
+        if (
+          rebuiltWindowsThisFrame > 0 &&
+          performance.now() - frameStartedAt >= WINDOW_PROGRESSIVE_TIME_BUDGET_MS
+        ) {
+          break
+        }
+      }
+
+      const node = nodes[id]
+      if (!node || node.type !== 'window') continue
 
       const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
-      if (!mesh) return // Keep dirty until mesh mounts
+      if (!mesh) continue // Keep dirty until mesh mounts
 
-      updateWindowMesh(node as WindowNode, mesh)
+      // Merge any live override (width / height / position) so the mesh
+      // rebuild reflects the in-flight drag without zustand churn.
+      const effectiveNode = getEffectiveNode(node as WindowNode)
+      updateWindowMesh(effectiveNode, mesh)
       clearDirty(id as AnyNodeId)
+      rebuiltWindowsThisFrame += 1
 
       // Rebuild the parent wall so its cutout reflects the updated window geometry
       // Avoid triggering expensive wall CSG rebuilds while the window is being interactively moved/duplicated.
       // The editor tools will request a final wall rebuild on commit.
       const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
-      if (!isTransient && (node as WindowNode).parentId) {
-        useScene.getState().dirtyNodes.add((node as WindowNode).parentId as AnyNodeId)
+      if (!isTransient && effectiveNode.parentId) {
+        useScene.getState().dirtyNodes.add(effectiveNode.parentId as AnyNodeId)
       }
-    })
+    }
   }, 3)
 
   return null
@@ -2615,7 +2688,7 @@ function addBayWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
       geometry.setIndex(indices)
       geometry.computeVertexNormals()
-      mesh.add(new THREE.Mesh(ensureWebGPUCompatibleGeometry(geometry), baseMaterial))
+      mesh.add(new THREE.Mesh(geometry, baseMaterial))
     }
 
     const center = new THREE.Group()
@@ -2732,7 +2805,7 @@ function addBowWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
       geometry.setIndex(indices)
       geometry.computeVertexNormals()
-      return ensureWebGPUCompatibleGeometry(geometry)
+      return geometry
     }
 
     const createCurvedCap = (centerY: number, thickness: number) => {
@@ -2782,7 +2855,7 @@ function addBowWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
       geometry.setIndex(indices)
       geometry.computeVertexNormals()
-      return ensureWebGPUCompatibleGeometry(geometry)
+      return geometry
     }
 
     const addCurvedMesh = (material: THREE.Material, geometry: THREE.BufferGeometry) => {

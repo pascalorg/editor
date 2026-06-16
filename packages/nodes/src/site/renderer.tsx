@@ -1,14 +1,9 @@
 'use client'
 
-import {
-  type AnyNodeId,
-  type SiteNode,
-  type SlabNode,
-  useRegistry,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNodeId, type SiteNode, useRegistry, useScene } from '@pascal-app/core'
 import {
   createSafeEmptyGeometry,
+  getSceneTheme,
   NodeRenderer,
   unionPolygons,
   useNodeEvents,
@@ -23,8 +18,27 @@ import {
   Shape,
   ShapeGeometry,
 } from 'three'
+import { MeshLambertNodeMaterial } from 'three/webgpu'
+import { collectRecessedSlabGroundHolePolygons } from './ground-holes'
 
 const Y_OFFSET = 0.01
+
+const signedArea2 = (polygon: ReadonlyArray<readonly [number, number]>) =>
+  polygon.reduce((sum, point, index) => {
+    const next = polygon[(index + 1) % polygon.length]
+    if (!next) return sum
+    return sum + point[0] * next[1] - next[0] * point[1]
+  }, 0)
+
+const ensureWinding = (
+  polygon: ReadonlyArray<readonly [number, number]>,
+  winding: 'ccw' | 'cw',
+): [number, number][] => {
+  const points = polygon.map(([x, z]) => [x, z] as [number, number])
+  const area2 = signedArea2(points)
+  const isCcw = area2 > 0
+  return (winding === 'ccw' && !isCcw) || (winding === 'cw' && isCcw) ? points.reverse() : points
+}
 
 /**
  * Creates simple line geometry for site boundary
@@ -49,65 +63,52 @@ const createBoundaryLineGeometry = (points: Array<[number, number]>): BufferGeom
   return geometry
 }
 
-type S = ReturnType<typeof useScene.getState>
-
 export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   const ref = useRef<Group>(null!)
+  const slabPolygonsCache = useRef<[number, number][][]>([])
 
   useRegistry(node.id, 'site', ref)
 
-  const theme = useViewer((state) => state.theme)
-  const bgColor = theme === 'dark' ? '#1f2433' : '#fafafa'
+  const bgColor = useViewer((state) => getSceneTheme(state.sceneTheme).ground)
+  const groundMaterial = useMemo(() => {
+    const material = new MeshLambertNodeMaterial({ color: bgColor })
+    material.polygonOffset = true
+    material.polygonOffsetFactor = 1
+    material.polygonOffsetUnits = 1
+    return material
+  }, [bgColor])
 
-  // Cache slab polygon references to keep the selector stable across unrelated store updates
-  const slabPolygonsCache = useRef<[number, number][][]>([])
-  const slabPolygons = useScene((state: S) => {
-    const nodeList = Object.values(state.nodes)
-
-    const levelIndexById = new Map<string, number>()
-    let lowestLevelIndex = Number.POSITIVE_INFINITY
-    nodeList.forEach((n) => {
-      if (n.type !== 'level') return
-      levelIndexById.set(n.id, n.level)
-      lowestLevelIndex = Math.min(lowestLevelIndex, n.level)
-    })
-
-    const next = nodeList
-      .filter(
-        (n): n is SlabNode =>
-          n.type === 'slab' &&
-          n.visible &&
-          n.polygon.length >= 3 &&
-          // Only recessed slabs should punch through the site ground.
-          // Positive slabs are real floor geometry and should not create a
-          // ghost footprint in the background ground fill.
-          (n.elevation ?? 0.05) < 0,
-      )
-      .filter((n) => {
-        if (!Number.isFinite(lowestLevelIndex)) return true
-        const parentLevel = n.parentId ? levelIndexById.get(n.parentId as string) : undefined
-        return parentLevel === lowestLevelIndex
-      })
-      .map((n) => n.polygon as [number, number][])
-
+  const slabPolygons = useScene((state) => {
+    const next = collectRecessedSlabGroundHolePolygons(state.nodes)
     const prev = slabPolygonsCache.current
-    if (next.length === prev.length && next.every((p, i) => p === prev[i])) return prev
+
+    if (next.length === prev.length && next.every((polygon, index) => polygon === prev[index])) {
+      return prev
+    }
+
     slabPolygonsCache.current = next
     return next
   })
 
-  // Ground shape: site polygon with slab footprints punched as holes
+  // Ground shape: site polygon with recessed slab footprints punched as holes
   const groundShape = useMemo(() => {
     if (!node?.polygon?.points || node.polygon.points.length < 3) return null
 
-    const pts = node.polygon.points
+    const pts = ensureWinding(node.polygon.points, 'ccw')
     const shape = new Shape()
     shape.moveTo(pts[0]![0], -pts[0]![1])
     for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i]![0], -pts[i]![1])
     shape.closePath()
 
     if (slabPolygons.length > 0) {
-      for (const ring of unionPolygons(slabPolygons.map((p) => p.map((pt) => [pt[0], -pt[1]])))) {
+      const shapeHoleInputs = slabPolygons.map((polygon) =>
+        polygon.map((point) => [point[0], -point[1]] as [number, number]),
+      )
+      const holeRingsRaw =
+        shapeHoleInputs.length === 1 ? shapeHoleInputs : unionPolygons(shapeHoleInputs)
+      const holeRings = holeRingsRaw.map((ring) => ensureWinding(ring, 'cw'))
+
+      for (const ring of holeRings) {
         if (ring.length < 3) continue
         const hole = new Path()
         hole.moveTo(ring[0]![0], ring[0]![1])
@@ -153,20 +154,19 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   return (
     <group ref={ref} {...handlers}>
       {/* Render children (buildings and items) */}
-      {node.children.map((childId) => (
+      {(node.children ?? []).map((childId) => (
         <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />
       ))}
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
       {groundGeometry && (
-        <mesh geometry={groundGeometry} position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <meshBasicMaterial
-            color={bgColor}
-            polygonOffset={true}
-            polygonOffsetFactor={1}
-            polygonOffsetUnits={1}
-          />
-        </mesh>
+        <mesh
+          geometry={groundGeometry}
+          material={groundMaterial}
+          position={[0, -0.05, 0]}
+          receiveShadow
+          rotation={[-Math.PI / 2, 0, 0]}
+        />
       )}
 
       {/* Simple boundary line */}

@@ -62,6 +62,7 @@ export const useSidebarStore = create<SidebarStore>()(
     }),
     {
       name: 'sidebar-preferences',
+      skipHydration: true,
       partialize: (state) => ({ width: state.width, isCollapsed: state.isCollapsed }),
     },
   ),

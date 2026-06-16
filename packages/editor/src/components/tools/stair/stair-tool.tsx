@@ -1,16 +1,30 @@
 import {
+  type AnyNode,
+  collectAlignmentAnchors,
+  createSurfaceOpeningPreviewController,
+  type EventSuffix,
   emitter,
   type GridEvent,
   type LevelNode,
+  movingAlignmentAnchors,
+  type NodeEvent,
+  resolveAlignment,
   StairNode,
   StairSegmentNode,
+  syncAutoStairOpenings,
   useScene,
 } from '@pascal-app/core'
+import { type StairPlacementType, useAlignmentGuides, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import {
+  resolveStairDestinationLevel,
+  resolveStairPlacementLevelId,
+} from '../../../lib/stair-levels'
 import { CursorSphere } from '../shared/cursor-sphere'
+import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
   DEFAULT_CURVED_STAIR_INNER_RADIUS,
   DEFAULT_CURVED_STAIR_SWEEP_ANGLE,
@@ -26,11 +40,27 @@ import {
   DEFAULT_STAIR_RAILING_MODE,
   DEFAULT_STAIR_STEP_COUNT,
   DEFAULT_STAIR_THICKNESS,
-  DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
 } from './stair-defaults'
 
 const GRID_OFFSET = 0.02
+/** Figma-style alignment-snap threshold (meters), matching the move tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
+type ClickTriggerEvent = GridEvent | NodeEvent<AnyNode>
+
+const CLICK_TRIGGER_KINDS = [
+  'shelf',
+  'item',
+  'slab',
+  'ceiling',
+  'wall',
+  'fence',
+  'column',
+  'roof',
+  'roof-segment',
+  'stair',
+  'stair-segment',
+] as const
 
 /**
  * Generates the step-profile geometry for the ghost preview.
@@ -68,19 +98,10 @@ function createStairPreviewGeometry(): THREE.BufferGeometry {
 }
 
 /**
- * Creates a stair group with one default stair segment at the given position/rotation.
+ * Creates a default straight stair segment.
  */
-function commitStairPlacement(
-  levelId: LevelNode['id'],
-  position: [number, number, number],
-  rotation: number,
-): void {
-  const { createNodes, nodes } = useScene.getState()
-
-  const stairCount = Object.values(nodes).filter((n) => n.type === 'stair').length
-  const name = `Staircase ${stairCount + 1}`
-
-  const segment = StairSegmentNode.parse({
+function createDefaultStairSegment() {
+  return StairSegmentNode.parse({
     segmentType: 'stair',
     width: DEFAULT_STAIR_WIDTH,
     length: DEFAULT_STAIR_LENGTH,
@@ -91,18 +112,30 @@ function commitStairPlacement(
     thickness: DEFAULT_STAIR_THICKNESS,
     position: [0, 0, 0],
   })
+}
 
-  const sortedLevels = Object.values(nodes)
-    .filter((node): node is LevelNode => node.type === 'level')
-    .sort((left, right) => left.level - right.level)
-  const currentLevelIndex = sortedLevels.findIndex((level) => level.id === levelId)
-  const nextLevelId = sortedLevels[currentLevelIndex + 1]?.id ?? levelId
-
-  const stair = StairNode.parse({
+function createDefaultStairNode({
+  name,
+  levelId,
+  nextLevelId,
+  position,
+  rotation,
+  stairType,
+  segmentId,
+}: {
+  name: string
+  levelId: LevelNode['id']
+  nextLevelId: LevelNode['id']
+  position: [number, number, number]
+  rotation: number
+  stairType: StairPlacementType
+  segmentId?: StairSegmentNode['id']
+}) {
+  return StairNode.parse({
     name,
     position,
     rotation,
-    stairType: DEFAULT_STAIR_TYPE,
+    stairType,
     fromLevelId: levelId,
     toLevelId: nextLevelId,
     slabOpeningMode: 'destination',
@@ -120,12 +153,58 @@ function commitStairPlacement(
     showStepSupports: DEFAULT_SPIRAL_SHOW_STEP_SUPPORTS,
     railingHeight: DEFAULT_STAIR_RAILING_HEIGHT,
     railingMode: DEFAULT_STAIR_RAILING_MODE,
-    children: [segment.id],
+    children: segmentId ? [segmentId] : [],
+  })
+}
+
+/**
+ * Creates a stair group with one default stair segment at the given position/rotation.
+ */
+function commitStairPlacement(
+  levelId: LevelNode['id'],
+  position: [number, number, number],
+  rotation: number,
+  stairType: StairPlacementType,
+): void {
+  const { createNodes, nodes } = useScene.getState()
+  const placementLevelId = resolveStairPlacementLevelId(
+    nodes,
+    levelId,
+    useViewer.getState().selection.buildingId,
+  )
+  if (!placementLevelId) return
+
+  const stairCount = Object.values(nodes).filter((n) => n.type === 'stair').length
+  const name = `楼梯 ${stairCount + 1}`
+  const segment = stairType === 'straight' ? createDefaultStairSegment() : null
+
+  const destinationPlan = resolveStairDestinationLevel({
+    createMissing: true,
+    fromLevelId: placementLevelId,
+    nodes,
+  })
+  const nextLevelId = destinationPlan?.toLevel.id ?? placementLevelId
+
+  const stair = createDefaultStairNode({
+    name,
+    levelId: placementLevelId,
+    nextLevelId,
+    position,
+    rotation,
+    stairType,
+    segmentId: segment?.id,
   })
 
+  const createdLevel = destinationPlan?.createdLevel
+  const levelCreateOps =
+    createdLevel && destinationPlan.buildingId
+      ? [{ node: createdLevel, parentId: destinationPlan.buildingId }]
+      : []
+
   createNodes([
-    { node: stair, parentId: levelId },
-    { node: segment, parentId: stair.id },
+    ...levelCreateOps,
+    { node: stair, parentId: placementLevelId },
+    ...(segment ? [{ node: segment, parentId: stair.id }] : []),
   ])
 
   sfxEmitter.emit('sfx:structure-build')
@@ -136,31 +215,158 @@ export const StairTool: React.FC = () => {
   const previewRef = useRef<THREE.Group>(null)
   const rotationRef = useRef(0)
   const previousGridPosRef = useRef<[number, number] | null>(null)
+  const lastCanonicalPositionRef = useRef<[number, number, number] | null>(null)
   const currentLevelId = useViewer((state) => state.selection.levelId)
+  const stairPlacementType = useEditor((state) => state.stairPlacementType)
 
   const previewGeometry = useMemo(() => createStairPreviewGeometry(), [])
 
   useEffect(() => {
     if (!currentLevelId) return
 
+    const openingPreview = createSurfaceOpeningPreviewController()
+
     // Reset rotation when tool activates
     rotationRef.current = 0
     if (previewRef.current) previewRef.current.rotation.y = 0
+    lastCanonicalPositionRef.current = null
 
-    const onGridMove = (event: GridEvent) => {
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
-      const y = event.localPosition[1]
+    const buildPreviewScene = (position: [number, number, number], rotation: number) => {
+      const nodes = useScene.getState().nodes
+      const placementLevelId = resolveStairPlacementLevelId(
+        nodes,
+        currentLevelId,
+        useViewer.getState().selection.buildingId,
+      )
+      if (!placementLevelId) return null
 
+      const destinationPlan = resolveStairDestinationLevel({
+        createMissing: true,
+        fromLevelId: placementLevelId,
+        nodes,
+      })
+      const nextLevelId = destinationPlan?.toLevel.id ?? placementLevelId
+      const segment = stairPlacementType === 'straight' ? createDefaultStairSegment() : null
+      const stair = createDefaultStairNode({
+        name: '楼梯预览',
+        levelId: placementLevelId,
+        nextLevelId,
+        position,
+        rotation,
+        stairType: stairPlacementType,
+        segmentId: segment?.id,
+      })
+      const previewNodes = {
+        ...nodes,
+        ...(destinationPlan?.createdLevel
+          ? { [destinationPlan.createdLevel.id]: destinationPlan.createdLevel }
+          : {}),
+        [stair.id]: { ...stair, parentId: placementLevelId },
+        ...(segment ? { [segment.id]: { ...segment, parentId: stair.id } } : {}),
+      } as Record<string, AnyNode>
+
+      return { placementLevelId, previewNodes, stair }
+    }
+
+    const applyDraftPreview = (position: [number, number, number], rotation: number) => {
+      const preview = buildPreviewScene(position, rotation)
+      const visualPosition = preview
+        ? getFloorStackPreviewPosition({
+            node: preview.stair,
+            position,
+            rotation,
+            levelId: preview.placementLevelId,
+            nodes: preview.previewNodes,
+          })
+        : position
       if (cursorRef.current) {
-        cursorRef.current.position.set(gridX, y + GRID_OFFSET, gridZ)
+        cursorRef.current.position.set(
+          visualPosition[0],
+          visualPosition[1] + GRID_OFFSET,
+          visualPosition[2],
+        )
       }
 
       if (previewRef.current) {
-        previewRef.current.position.set(gridX, y, gridZ)
+        previewRef.current.position.set(...visualPosition)
+        previewRef.current.rotation.y = rotation
       }
 
+      if (!preview) {
+        openingPreview.clear()
+        return
+      }
+
+      openingPreview.apply(syncAutoStairOpenings(preview.previewNodes))
+    }
+
+    // Alignment candidates — anchors of every alignable object; refreshed
+    // after each placement. The moving stair aligns by its footprint edges so
+    // users can snap the run side against walls, slabs, elevators, or another
+    // stair instead of only lining up the invisible origin point.
+    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
+    const resolveStairFootprintAlignment = (
+      x: number,
+      z: number,
+      rotation: number,
+    ): ReturnType<typeof resolveAlignment> | null => {
+      const preview = buildPreviewScene([x, 0, z], rotation)
+      const moving = preview
+        ? movingAlignmentAnchors(preview.stair, preview.previewNodes, x, z, rotation)
+        : []
+      if (moving.length === 0) return null
+      return resolveAlignment({
+        moving,
+        candidates: alignmentCandidates,
+        threshold: ALIGNMENT_THRESHOLD_M,
+      })
+    }
+    // The probe is the RAW cursor, not the grid-snapped point: resolving
+    // against the grid point would only catch anchors that happen to sit near
+    // a grid line. Matched axes use the raw probe + snap delta; unmatched axes
+    // keep the normal grid snap. Alt bypasses.
+    const alignPoint = (
+      gridX: number,
+      gridZ: number,
+      rawX: number,
+      rawZ: number,
+      bypass: boolean,
+    ): [number, number] => {
+      if (bypass || alignmentCandidates.length === 0) {
+        useAlignmentGuides.getState().clear()
+        return [gridX, gridZ]
+      }
+      const ar = resolveStairFootprintAlignment(rawX, rawZ, rotationRef.current)
+      if (!ar || ar.guides.length === 0) {
+        useAlignmentGuides.getState().clear()
+        return [gridX, gridZ]
+      }
+      let x = gridX
+      let z = gridZ
+      if (ar.snap) {
+        if (ar.guides.some((guide) => guide.axis === 'x')) x = rawX + ar.snap.dx
+        if (ar.guides.some((guide) => guide.axis === 'z')) z = rawZ + ar.snap.dz
+      }
+      const finalAlignment = resolveStairFootprintAlignment(x, z, rotationRef.current)
+      useAlignmentGuides.getState().set(finalAlignment?.guides ?? ar.guides)
+      return [x, z]
+    }
+
+    const onGridMove = (event: GridEvent) => {
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const [gridX, gridZ] = alignPoint(
+        bypassSnap ? event.localPosition[0] : Math.round(event.localPosition[0] * 2) / 2,
+        bypassSnap ? event.localPosition[2] : Math.round(event.localPosition[2] * 2) / 2,
+        event.localPosition[0],
+        event.localPosition[2],
+        event.nativeEvent?.altKey === true || bypassSnap,
+      )
+      const position: [number, number, number] = [gridX, 0, gridZ]
+      lastCanonicalPositionRef.current = position
+      applyDraftPreview(position, rotationRef.current)
+
       if (
+        !bypassSnap &&
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
       ) {
@@ -170,12 +376,35 @@ export const StairTool: React.FC = () => {
       previousGridPosRef.current = [gridX, gridZ]
     }
 
-    const onGridClick = (event: GridEvent) => {
-      if (!currentLevelId) return
+    const getAlignedGridPosition = (event: GridEvent): [number, number, number] => {
+      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const [gridX, gridZ] = alignPoint(
+        bypassSnap ? event.localPosition[0] : Math.round(event.localPosition[0] * 2) / 2,
+        bypassSnap ? event.localPosition[2] : Math.round(event.localPosition[2] * 2) / 2,
+        event.localPosition[0],
+        event.localPosition[2],
+        event.nativeEvent?.altKey === true || bypassSnap,
+      )
+      return [gridX, 0, gridZ]
+    }
 
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
-      commitStairPlacement(currentLevelId, [gridX, 0, gridZ], rotationRef.current)
+    const commitAtCursor = (event: ClickTriggerEvent) => {
+      if (!currentLevelId) return
+      const nodeEvent = 'node' in event ? (event as NodeEvent<AnyNode>) : null
+      if (nodeEvent) {
+        nodeEvent.stopPropagation()
+        nodeEvent.nativeEvent.stopPropagation()
+      }
+
+      const position = nodeEvent
+        ? lastCanonicalPositionRef.current
+        : getAlignedGridPosition(event as GridEvent)
+      if (!position) return
+
+      commitStairPlacement(currentLevelId, position, rotationRef.current, stairPlacementType)
+      openingPreview.clear()
+      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
+      useAlignmentGuides.getState().clear()
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -192,22 +421,36 @@ export const StairTool: React.FC = () => {
         event.preventDefault()
         sfxEmitter.emit('sfx:item-rotate')
         rotationRef.current += rotationDelta
-        if (previewRef.current) {
+        if (lastCanonicalPositionRef.current) {
+          applyDraftPreview(lastCanonicalPositionRef.current, rotationRef.current)
+        } else if (previewRef.current) {
           previewRef.current.rotation.y = rotationRef.current
         }
       }
     }
 
     emitter.on('grid:move', onGridMove)
-    emitter.on('grid:click', onGridClick)
+    emitter.on('grid:click', commitAtCursor)
+    type SuffixedKey<K extends string> = `${K}:${EventSuffix}`
+    type ClickKey = SuffixedKey<(typeof CLICK_TRIGGER_KINDS)[number]>
+    for (const kind of CLICK_TRIGGER_KINDS) {
+      const key = `${kind}:click` as ClickKey
+      emitter.on(key, commitAtCursor as never)
+    }
     window.addEventListener('keydown', onKeyDown)
 
     return () => {
       emitter.off('grid:move', onGridMove)
-      emitter.off('grid:click', onGridClick)
+      emitter.off('grid:click', commitAtCursor)
+      for (const kind of CLICK_TRIGGER_KINDS) {
+        const key = `${kind}:click` as ClickKey
+        emitter.off(key, commitAtCursor as never)
+      }
       window.removeEventListener('keydown', onKeyDown)
+      useAlignmentGuides.getState().clear()
+      openingPreview.clear()
     }
-  }, [currentLevelId])
+  }, [currentLevelId, stairPlacementType])
 
   return (
     <group>

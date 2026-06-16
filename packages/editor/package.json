@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/index.tsx",
     "./i18n": "./src/i18n/index.ts",
-    "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx"
+    "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx",
+    "./floorplan": "./src/lib/floorplan/index.ts",
+    "./svg-paths": "./src/components/editor-2d/svg-paths.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit"

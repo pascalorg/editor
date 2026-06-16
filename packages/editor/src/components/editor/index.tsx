@@ -38,6 +38,7 @@ import { initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
+import { LiveDataBindingRuntime } from '../systems/live-data/live-data-binding-runtime'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
 import { StairEditSystem } from '../systems/stair/stair-edit-system'
 import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
@@ -67,15 +68,16 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
+import { NodeArrowHandles } from './node-arrow-handles'
 import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
 import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
-import { WallMeasurementLabel } from './wall-measurement-label'
 import { WallMoveSideHandles } from './wall-move-side-handles'
 
 const CAMERA_CONTROLS_HINT_DISMISSED_STORAGE_KEY = 'editor-camera-controls-hint-dismissed:v1'
+const CAMERA_CONTROLS_HINT_ICON_COLOR = '#bfbfbf'
 const DELETE_CURSOR_BADGE_COLOR = '#ef4444'
 const DELETE_CURSOR_BADGE_OFFSET_X = 14
 const DELETE_CURSOR_BADGE_OFFSET_Y = 14
@@ -93,6 +95,11 @@ const EDITOR_HOVER_STYLES: HoverStyles = {
     strength: 4,
     pulse: false,
   },
+}
+
+function SnapAwareGrid() {
+  const gridSnapStep = useEditor((s) => s.gridSnapStep)
+  return <Grid cellColor="#aaa" cellSize={gridSnapStep} fadeDistance={500} sectionColor="#ccc" />
 }
 
 /**
@@ -339,39 +346,48 @@ type CameraControlHint = {
 
 const EDITOR_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   {
-    action: 'Pan',
+    action: '平移',
     keys: [{ value: 'Space' }, { value: 'Left click' }],
   },
-  { action: 'Rotate', keys: [{ value: 'Right click' }] },
-  { action: 'Zoom', keys: [{ value: 'Scroll' }] },
+  { action: '旋转', keys: [{ value: 'Right click' }] },
+  { action: '缩放', keys: [{ value: 'Scroll' }] },
+  {
+    action: '选中移动',
+    keys: [{ value: 'ArrowKeys' }],
+  },
 ]
 
 const PREVIEW_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
-  { action: 'Pan', keys: [{ value: 'Left click' }] },
-  { action: 'Rotate', keys: [{ value: 'Right click' }] },
-  { action: 'Zoom', keys: [{ value: 'Scroll' }] },
+  { action: '平移', keys: [{ value: 'Left click' }] },
+  { action: '旋转', keys: [{ value: 'Right click' }] },
+  { action: '缩放', keys: [{ value: 'Scroll' }] },
 ]
 
 const CAMERA_SHORTCUT_KEY_META: Record<string, { icon?: string; label: string; text?: string }> = {
   'Left click': {
     icon: 'ph:mouse-left-click-fill',
-    label: 'Left click',
+    label: '鼠标左键',
   },
   'Middle click': {
     icon: 'qlementine-icons:mouse-middle-button-16',
-    label: 'Middle click',
+    label: '鼠标中键',
   },
   'Right click': {
     icon: 'ph:mouse-right-click-fill',
-    label: 'Right click',
+    label: '鼠标右键',
   },
   Scroll: {
     icon: 'qlementine-icons:mouse-middle-button-16',
-    label: 'Scroll wheel',
+    label: '鼠标滚轮',
   },
   Space: {
     icon: 'lucide:space',
-    label: 'Space',
+    label: '空格键',
+    text: '空格',
+  },
+  ArrowKeys: {
+    icon: 'icon-park-outline:arrow-keys',
+    label: '方向键',
   },
 }
 
@@ -413,7 +429,13 @@ function InlineShortcutKey({ shortcutKey }: { shortcutKey: ShortcutKey }) {
         role="img"
         title={meta.label}
       >
-        <Icon aria-hidden="true" color="currentColor" height={16} icon={meta.icon} width={16} />
+        <Icon
+          aria-hidden="true"
+          color={CAMERA_CONTROLS_HINT_ICON_COLOR}
+          height={16}
+          icon={meta.icon}
+          width={16}
+        />
         <span className="sr-only">{meta.label}</span>
       </span>
     )
@@ -473,7 +495,11 @@ function ViewerCanvasControlsHint({
         aria-label="Camera controls hint"
         className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/35 bg-background/90 px-3.5 py-2.5 shadow-elevation-4 backdrop-blur-xl"
       >
-        <div className="grid min-w-0 flex-1 grid-cols-3 items-start divide-x divide-border/18">
+        <div
+          className={`grid min-w-0 flex-1 items-start divide-x divide-border/18 ${
+            hints.length > 3 ? 'grid-cols-4' : 'grid-cols-3'
+          }`}
+        >
           {hints.map((hint) => (
             <CameraControlHintItem hint={hint} key={hint.action} />
           ))}
@@ -488,7 +514,7 @@ function ViewerCanvasControlsHint({
             >
               <Icon
                 aria-hidden="true"
-                color="currentColor"
+                color={CAMERA_CONTROLS_HINT_ICON_COLOR}
                 height={14}
                 icon="lucide:x"
                 width={14}
@@ -496,7 +522,7 @@ function ViewerCanvasControlsHint({
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={8}>
-            Dismiss
+            关闭提示
           </TooltipContent>
         </Tooltip>
       </section>
@@ -594,25 +620,24 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
     <>
       {!isFirstPersonMode && <SelectionManager />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <BoxSelectTool />}
+      {!(isVersionPreviewMode || isFirstPersonMode) && <NodeArrowHandles />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <WallMoveSideHandles />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingActionMenu />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingBuildingActionMenu />}
-      {!isFirstPersonMode && <WallMeasurementLabel />}
       <ExportManager />
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
       <CeilingSystem />
       <CeilingSelectionAffordanceSystem />
       <RoofEditSystem />
       <StairEditSystem />
-      {!(isLoading || isFirstPersonMode) && (
-        <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />
-      )}
+      <LiveDataBindingRuntime />
+      {!isFirstPersonMode && <SiteEdgeLabels />}
+      {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
       {!(isLoading || isVersionPreviewMode || isFirstPersonMode) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
-      {!isFirstPersonMode && <SiteEdgeLabels />}
       <InteractiveSystem />
     </>
   )
@@ -1085,6 +1110,7 @@ export default function Editor({
       <CeilingSystem />
       <RoofEditSystem />
       <StairEditSystem />
+      <LiveDataBindingRuntime />
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />

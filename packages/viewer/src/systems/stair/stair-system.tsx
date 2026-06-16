@@ -1,17 +1,16 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  resolveLevelId,
+  getEffectiveNode,
+  getFloorStackedPosition,
   type StairNode,
   type StairSegmentNode,
   sceneRegistry,
-  spatialGridManager,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { createSafeEmptyGeometry } from '../../lib/safe-geometry'
 
 const pendingStairUpdates = new Set<AnyNodeId>()
 const MAX_STAIRS_PER_FRAME = 2
@@ -54,16 +53,21 @@ export const StairSystem = () => {
         if (mesh) {
           const isVisible = mesh.parent?.visible !== false
           if (isVisible && segmentsProcessed < MAX_SEGMENTS_PER_FRAME) {
-            // Geometry will be updated; chained position is applied in the parent sync pass below
-            updateStairSegmentGeometry(node as StairSegmentNode, mesh)
+            // Geometry will be updated; chained position is applied in the parent sync pass below.
+            // Merge live overrides so width / length / height drags update the
+            // mesh in real time — the resize arrows publish to
+            // `useLiveNodeOverrides` and only commit to scene on pointer-up, so
+            // without this the geometry would rebuild from the pre-drag values.
+            const effectiveSegment = getEffectiveNode(node as StairSegmentNode)
+            updateStairSegmentGeometry(effectiveSegment, mesh)
             if (node.parentId) parentsNeedingSegmentSync.add(node.parentId as AnyNodeId)
             segmentsProcessed++
           } else if (isVisible) {
             return // Over budget — keep dirty, process next frame
           } else if (mesh.geometry.type === 'BoxGeometry') {
-            // Replace BoxGeometry placeholder with empty geometry
+            // Replace BoxGeometry placeholder with a non-drawing degenerate one.
             mesh.geometry.dispose()
-            mesh.geometry = createSafeEmptyGeometry()
+            mesh.geometry = createEmptyGeometry()
           }
           clearDirty(id as AnyNodeId)
         } else {
@@ -83,13 +87,21 @@ export const StairSystem = () => {
 
     // --- Pass 1b: Sync chained transforms to individual segment meshes (edit mode) ---
     for (const stairId of parentsNeedingSegmentSync) {
-      const stairNode = nodes[stairId]
-      if (!stairNode || stairNode.type !== 'stair') continue
+      const baseStairNode = nodes[stairId]
+      if (!baseStairNode || baseStairNode.type !== 'stair') continue
+      // Merge any in-flight drag override (e.g. parent-stair rotate handle)
+      // so slab-elevation spatial queries match where the segments are
+      // actually being rendered. Without this, dragging the rotate gizmo
+      // looks up slabs at the pre-drag world XZ — if rotation carries a
+      // segment off the original slab footprint, the floor-stack
+      // resolver would otherwise read the pre-drag footprint and drop
+      // the flight or landing below the floor mid-drag.
+      const stairNode = getEffectiveNode(baseStairNode as StairNode)
       const group = sceneRegistry.nodes.get(stairId) as THREE.Group | undefined
       if (group) {
-        syncStairGroupElevation(stairNode as StairNode, group, nodes)
+        syncStairGroupElevation(stairNode, group, nodes)
       }
-      syncSegmentMeshTransforms(stairNode as StairNode, nodes)
+      syncSegmentMeshTransforms(stairNode, nodes)
     }
 
     // --- Pass 2: Process pending merged-stair updates (throttled) ---
@@ -229,9 +241,14 @@ function updateStairSegmentGeometry(node: StairSegmentNode, mesh: THREE.Mesh) {
  * not by the node's stored position field.
  */
 function syncSegmentMeshTransforms(stairNode: StairNode, nodes: Record<string, AnyNode>) {
+  // Merge live overrides into each segment so the chain math reflects the
+  // in-flight drag (a width / length change shifts every downstream segment's
+  // anchor). Without this, dragging a width handle would resize the dragged
+  // segment's mesh but leave subsequent segments at their pre-drag positions.
   const segments = (stairNode.children ?? [])
     .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
     .filter((n): n is StairSegmentNode => n?.type === 'stair-segment')
+    .map((n) => getEffectiveNode(n))
 
   if (segments.length === 0) return
 
@@ -253,55 +270,20 @@ function syncStairGroupElevation(
   group: THREE.Group,
   nodes: Record<string, AnyNode>,
 ) {
-  const levelId = resolveLevelId(stairNode, nodes)
-  const slabElevation = getStairSlabElevation(levelId, stairNode, nodes)
-  group.position.y = stairNode.position[1] + slabElevation
-}
-
-function getStairSlabElevation(
-  levelId: string,
-  stairNode: StairNode,
-  nodes: Record<string, AnyNode>,
-): number {
-  const segments = (stairNode.children ?? [])
-    .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
-    .filter((n): n is StairSegmentNode => n?.type === 'stair-segment')
-
-  if (segments.length === 0) return 0
-
-  const transforms = computeSegmentTransforms(segments)
-  let maxElevation = Number.NEGATIVE_INFINITY
-
-  for (let i = 0; i < segments.length; i++) {
-    const segment = segments[i]!
-    const transform = transforms[i]!
-
-    const [centerOffsetX, centerOffsetZ] = rotateXZ(0, segment.length / 2, transform.rotation)
-    const centerInGroupX = transform.position[0] + centerOffsetX
-    const centerInGroupZ = transform.position[2] + centerOffsetZ
-    const [centerOffsetWorldX, centerOffsetWorldZ] = rotateXZ(
-      centerInGroupX,
-      centerInGroupZ,
-      stairNode.rotation,
-    )
-
-    const slabElevation = spatialGridManager.getSlabElevationForItem(
-      levelId,
-      [
-        stairNode.position[0] + centerOffsetWorldX,
-        stairNode.position[1] + transform.position[1],
-        stairNode.position[2] + centerOffsetWorldZ,
-      ],
-      [segment.width, Math.max(segment.height, segment.thickness, 0.01), segment.length],
-      [0, stairNode.rotation + transform.rotation, 0],
-    )
-
-    if (slabElevation > maxElevation) {
-      maxElevation = slabElevation
+  const effectiveNodes: Record<string, AnyNode> = { ...nodes, [stairNode.id]: stairNode }
+  for (const childId of stairNode.children ?? []) {
+    const segment = nodes[childId as AnyNodeId]
+    if (segment?.type === 'stair-segment') {
+      effectiveNodes[segment.id] = getEffectiveNode(segment as StairSegmentNode)
     }
   }
-
-  return maxElevation === Number.NEGATIVE_INFINITY ? 0 : maxElevation
+  const visualPosition = getFloorStackedPosition({
+    node: stairNode,
+    nodes: effectiveNodes,
+    position: stairNode.position,
+    rotation: stairNode.rotation,
+  })
+  group.position.y = visualPosition[1]
 }
 
 // ============================================================================
@@ -328,9 +310,14 @@ function updateMergedStairGeometry(
   }
 
   const children = stairNode.children ?? []
+  // Merge live overrides — same reason as `syncSegmentMeshTransforms`: a
+  // width / length / height drag publishes the new value to
+  // `useLiveNodeOverrides`, so the merged geometry has to read through that
+  // overlay or the merged mesh stays at pre-drag values until pointer-up.
   const segments = children
     .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
     .filter((n): n is StairSegmentNode => n?.type === 'stair-segment')
+    .map((n) => getEffectiveNode(n))
 
   if (segments.length === 0) {
     replaceMeshGeometry(mergedMesh, createEmptyGeometry())
@@ -538,7 +525,15 @@ function rotateXZ(x: number, z: number, angle: number): [number, number] {
 }
 
 function createEmptyGeometry(): THREE.BufferGeometry {
-  const geometry = createSafeEmptyGeometry()
+  const geometry = new THREE.BufferGeometry()
+  // Three zero-vertices (one degenerate, invisible triangle), not an empty
+  // attribute: an empty position (count 0) leaves WebGPU vertex buffer slot 0
+  // unbound and the draw is rejected ("Vertex buffer slot 0 … was not set"),
+  // poisoning the command encoder. The count-0 groups keep nothing drawn.
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(6), 2))
+  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(new Float32Array(6), 2))
   geometry.addGroup(0, 0, STAIR_TREAD_MATERIAL_INDEX)
   geometry.addGroup(0, 0, STAIR_SIDE_MATERIAL_INDEX)
   return geometry

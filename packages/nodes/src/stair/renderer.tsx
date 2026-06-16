@@ -4,23 +4,25 @@ import {
   type AnyNodeId,
   type StairNode,
   type StairSegmentNode,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
 import {
   createMaterial,
   createMaterialFromPresetRef,
-  createSafeEmptyGeometry,
+  createSurfaceRoleMaterial,
   DEFAULT_STAIR_MATERIAL,
-  ensureWebGPUCompatibleGeometry,
   getStairBodyMaterials,
   getStairRailingMaterial,
   NodeRenderer,
   type StairBodyMaterials,
   useNodeEvents,
+  useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 
 type SegmentTransform = {
   position: [number, number, number]
@@ -52,8 +54,18 @@ type LandingChainNextStair = {
   isTerminalLandingBeforeStair: boolean
 }
 
-export const StairRenderer = ({ node }: { node: StairNode }) => {
+export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
   const ref = useRef<THREE.Group>(null!)
+  // Merge any live drag override into the node so curved/spiral geometry
+  // (built declaratively in JSX below) rebuilds on every drag tick. The
+  // resize arrows publish to `useLiveNodeOverrides` and only commit to
+  // zustand on release — subscribing here turns those override writes
+  // into the React re-renders that drive the visible mesh update.
+  const liveOverride = useLiveNodeOverrides((s) => s.overrides.get(rawNode.id))
+  const node = useMemo<StairNode>(
+    () => (liveOverride ? ({ ...rawNode, ...liveOverride } as StairNode) : rawNode),
+    [rawNode, liveOverride],
+  )
   const isSegmentBasedStair = node.stairType === 'straight'
 
   useRegistry(node.id, 'stair', ref)
@@ -63,32 +75,40 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
   }, [node.id])
 
   const handlers = useNodeEvents(node, 'stair')
+  const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset = useViewer((s) => s.colorPreset)
 
   const material = useMemo(() => {
-    const presetMaterial = createMaterialFromPresetRef(node.materialPreset)
+    if (!textures) return createSurfaceRoleMaterial('joinery', colorPreset)
+    const presetMaterial = createMaterialFromPresetRef(node.materialPreset, shading)
     if (presetMaterial) return presetMaterial
     const mat = node.material
-    if (!mat) return DEFAULT_STAIR_MATERIAL
-    return createMaterial(mat)
+    if (!mat) return DEFAULT_STAIR_MATERIAL(shading)
+    return createMaterial(mat, shading)
   }, [
+    shading,
     node.materialPreset,
     node.material,
     node.material?.preset,
     node.material?.properties,
     node.material?.texture,
+    textures,
+    colorPreset,
   ])
 
-  const straightBodyMaterials = useMemo(() => getStairBodyMaterials(node), [node])
+  const straightBodyMaterials = useMemo(
+    () => getStairBodyMaterials(node, shading, textures, colorPreset),
+    [node, shading, textures, colorPreset],
+  )
 
-  const railingMaterial = useMemo(() => getStairRailingMaterial(node), [node])
+  const railingMaterial = useMemo(
+    () => getStairRailingMaterial(node, shading, textures, colorPreset),
+    [node, shading, textures, colorPreset],
+  )
 
-  const straightPlaceholderGeometry = useMemo(() => {
-    const geometry = createSafeEmptyGeometry()
-    geometry.clearGroups()
-    geometry.addGroup(0, 0, 0)
-    geometry.addGroup(0, 0, 1)
-    return geometry
-  }, [])
+  // 2 groups map 1:1 to the stair body's 2-material array (body + tread).
+  const straightPlaceholderGeometry = useMemo(() => createPlaceholderGeometry(2), [])
 
   useEffect(() => {
     return () => {
@@ -131,16 +151,26 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
 
 function StairRailings({ stair, material }: { stair: StairNode; material: THREE.Material }) {
   const nodes = useScene((state) => state.nodes)
+  // Stair segments' width/length/height arrow handles publish drag values to
+  // `useLiveNodeOverrides` and only commit to zustand on release. Subscribing
+  // here and merging each child segment's override means the railing tracks
+  // the drag in real time instead of freezing at the pre-drag values.
+  const overrides = useLiveNodeOverrides((s) => s.overrides)
 
   const segments = useMemo(
     () =>
       (stair.children ?? [])
-        .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
+        .map((childId) => {
+          const base = nodes[childId as AnyNodeId] as StairSegmentNode | undefined
+          if (!base) return undefined
+          const override = overrides.get(childId as AnyNodeId)
+          return (override ? { ...base, ...override } : base) as StairSegmentNode
+        })
         .filter(
           (node): node is StairSegmentNode =>
             node?.type === 'stair-segment' && node.visible !== false,
         ),
-    [nodes, stair.children],
+    [nodes, overrides, stair.children],
   )
 
   const railPaths = useMemo(
@@ -451,17 +481,11 @@ function CurvedStairBody({
   return (
     <group name={isSpiral ? 'spiral-stair' : 'curved-stair'}>
       {isSpiral && (stair.showCenterColumn ?? true) ? (
-        <mesh
-          castShadow
+        <SpiralColumnMesh
+          height={spiralColumnHeight}
           material={sideMaterial}
-          name="stair-side"
-          position={[0, spiralColumnHeight / 2, 0]}
-          receiveShadow
-        >
-          <cylinderGeometry
-            args={[spiralColumnRadius, spiralColumnRadius, spiralColumnHeight, 10]}
-          />
-        </mesh>
+          radius={spiralColumnRadius}
+        />
       ) : null}
       {Array.from({ length: stepCount }).map((_, index) => {
         const currentHeight = stepHeight * (index + 1)
@@ -485,32 +509,13 @@ function CurvedStairBody({
             position-y={stepY}
           >
             {isSpiral && (stair.showStepSupports ?? true) ? (
-              <mesh
-                castShadow
+              <SpiralStepSupportMesh
+                innerRadius={innerRadius}
                 material={sideMaterial}
-                name="stair-side"
-                position={[
-                  Math.cos(midAngle) *
-                    (spiralColumnRadius +
-                      Math.max(0.04, innerRadius - spiralColumnRadius + 0.04) / 2 -
-                      0.02),
-                  Math.max(thickness * 0.55, 0.025) / 2,
-                  Math.sin(midAngle) *
-                    (spiralColumnRadius +
-                      Math.max(0.04, innerRadius - spiralColumnRadius + 0.04) / 2 -
-                      0.02),
-                ]}
-                receiveShadow
-                rotation-y={-midAngle}
-              >
-                <boxGeometry
-                  args={[
-                    Math.max(0.04, innerRadius - spiralColumnRadius + 0.04),
-                    Math.max(thickness * 0.55, 0.025),
-                    Math.max(0.04, Math.min(0.12, Math.max(thickness * 0.55, 0.025) * 1.5)),
-                  ]}
-                />
-              </mesh>
+                midAngle={midAngle}
+                spiralColumnRadius={spiralColumnRadius}
+                thickness={thickness}
+              />
             ) : null}
             <CurvedStepMesh
               endAngle={endAngle}
@@ -572,8 +577,104 @@ function CurvedStepMesh({
     [endAngle, innerRadius, outerRadius, startAngle, stepHeight, thickness],
   )
 
+  // Dispose the prior BufferGeometry as soon as a new one supersedes it.
+  // Resize drags (in 2D or 3D) rebuild this geometry every pointer move;
+  // without explicit disposal, WebGPU keeps a stale pipeline reference to
+  // the old vertex buffer and flags "Vertex buffer slot 0 required by
+  // [RenderPipeline ...MeshLambertNodeMaterial...] was not set" on the
+  // submit after the swap. Same mitigation as guide/renderer.tsx.
+  useEffect(
+    () => () => {
+      geometry.dispose()
+    },
+    [geometry],
+  )
+
   return (
     <mesh castShadow geometry={geometry} material={material} position-y={positionY} receiveShadow />
+  )
+}
+
+/**
+ * Spiral center column. The cylinder is rebuilt whenever
+ * `spiralColumnRadius` changes — i.e. on every tick of an inner-radius
+ * drag. We pass the geometry as a prop (avoiding R3F's empty-placeholder
+ * frame from inline JSX) and dispose the prior one on swap, matching the
+ * pattern in guide/renderer.tsx. Without this WebGPU flags
+ * "Vertex buffer slot 0 ... was not set" on Lambert mid-resize.
+ */
+function SpiralColumnMesh({
+  radius,
+  height,
+  material,
+}: {
+  radius: number
+  height: number
+  material: THREE.Material | THREE.Material[]
+}) {
+  const geometry = useMemo(
+    () => new THREE.CylinderGeometry(radius, radius, height, 10),
+    [radius, height],
+  )
+  useEffect(
+    () => () => {
+      geometry.dispose()
+    },
+    [geometry],
+  )
+  return (
+    <mesh
+      castShadow
+      geometry={geometry}
+      material={material}
+      name="stair-side"
+      position={[0, height / 2, 0]}
+      receiveShadow
+    />
+  )
+}
+
+/**
+ * Spiral step support — the small box wedged between the column and the
+ * inner rim of each step. Same prop-+-dispose pattern as
+ * `SpiralColumnMesh`: the box dimensions change every inner-radius tick
+ * (`innerRadius - spiralColumnRadius`), so inline-JSX geometry would
+ * trigger the Lambert vertex-buffer error.
+ */
+function SpiralStepSupportMesh({
+  innerRadius,
+  spiralColumnRadius,
+  midAngle,
+  thickness,
+  material,
+}: {
+  innerRadius: number
+  spiralColumnRadius: number
+  midAngle: number
+  thickness: number
+  material: THREE.Material | THREE.Material[]
+}) {
+  const sizeX = Math.max(0.04, innerRadius - spiralColumnRadius + 0.04)
+  const sizeY = Math.max(thickness * 0.55, 0.025)
+  const sizeZ = Math.max(0.04, Math.min(0.12, sizeY * 1.5))
+  const geometry = useMemo(() => new THREE.BoxGeometry(sizeX, sizeY, sizeZ), [sizeX, sizeY, sizeZ])
+  useEffect(
+    () => () => {
+      geometry.dispose()
+    },
+    [geometry],
+  )
+  const radial = spiralColumnRadius + sizeX / 2 - 0.02
+  return (
+    <mesh
+      castShadow
+      geometry={geometry}
+      material={material}
+      name="stair-side"
+      position={[Math.cos(midAngle) * radial, sizeY / 2, Math.sin(midAngle) * radial]}
+      receiveShadow
+      rotation-y={-midAngle}
+    />
   )
 }
 
@@ -778,7 +879,7 @@ function buildCurvedStepGeometry(
   }
   geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(uvs.slice(), 2))
   geometry.computeVertexNormals()
-  return ensureWebGPUCompatibleGeometry(geometry)
+  return geometry
 }
 
 function buildStairRailPaths(

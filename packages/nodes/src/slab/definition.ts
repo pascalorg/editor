@@ -97,9 +97,9 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   },
 
   toolHints: [
-    { key: 'Left click', label: 'Trace slab outline' },
-    { key: 'Enter', label: 'Finish slab' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: '添加楼板顶点' },
+    { key: 'Enter', label: '完成楼板' },
+    { key: 'Esc', label: '取消' },
   ],
 
   presentation: {

@@ -40,6 +40,11 @@ function ItemPlacementContent({ selectedItem }: { selectedItem: AssetInput }) {
       // "repeat-on-click" UX of the legacy tool.
       return true
     },
+    onCancel: () => {
+      draftNode.destroy()
+      useEditor.getState().setSelectedItem(null)
+      useEditor.getState().setMode('select')
+    },
   })
 
   return <>{cursor}</>

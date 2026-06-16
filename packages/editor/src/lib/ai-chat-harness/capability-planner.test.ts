@@ -45,6 +45,27 @@ describe('geometry capability planner', () => {
     expect(plan.availableCapabilities).toContain('compose_assembly:vehicle')
   })
 
+  test('routes family-qualified component requests to reusable parts', () => {
+    const carWheel = planGeometryCapabilities('做个汽车轮子')
+    expect(carWheel.route).toBe('primitive')
+    expect(carWheel.availableCapabilities).toContain('compose_parts')
+    expect(carWheel.recommendation).toContain('single reusable part')
+
+    const steeringWheel = planGeometryCapabilities('generate a steering wheel')
+    expect(steeringWheel.route).toBe('primitive')
+    expect(steeringWheel.availableCapabilities).toContain('compose_parts')
+    expect(steeringWheel.recommendation).toContain('generic primitives')
+
+    const carSteeringWheel = planGeometryCapabilities('generate a car steering wheel')
+    expect(carSteeringWheel.route).toBe('primitive')
+    expect(carSteeringWheel.availableCapabilities).toContain('compose_parts')
+    expect(carSteeringWheel.recommendation).toContain('parent assembly')
+
+    const aircraftWing = planGeometryCapabilities('make an aircraft wing')
+    expect(aircraftWing.route).toBe('primitive')
+    expect(aircraftWing.availableCapabilities).toContain('compose_parts')
+  })
+
   test('routes mud mixer impellers to reusable propeller blade parts', () => {
     const plan = planGeometryCapabilities(
       'generate a mud mixer component with one rod and three inclined flat blades',
@@ -139,5 +160,12 @@ describe('geometry capability planner', () => {
     expect(isOpenAssemblyCapabilityRequest({ recipeId: 'process.grate_cooler' }, '')).toBe(true)
     expect(isOpenAssemblyCapabilityRequest({}, 'generate a grate cooler')).toBe(true)
     expect(isOpenAssemblyCapabilityRequest({ recipeId: 'gear.spur' }, 'spur gear')).toBe(false)
+    expect(isOpenAssemblyCapabilityRequest({ family: 'vehicle' }, '做个汽车轮子')).toBe(false)
+    expect(
+      isOpenAssemblyCapabilityRequest({ family: 'vehicle' }, 'generate a steering wheel'),
+    ).toBe(false)
+    expect(
+      isOpenAssemblyCapabilityRequest({ family: 'vehicle' }, 'generate a car steering wheel'),
+    ).toBe(false)
   })
 })

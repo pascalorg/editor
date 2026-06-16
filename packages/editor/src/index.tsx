@@ -22,11 +22,6 @@ export {
   type FencePlanPoint,
   snapFenceDraftPoint,
 } from './components/tools/fence/fence-drafting'
-export {
-  createPipeOnCurrentLevel,
-  type PipePlanPoint,
-  snapPipeDraftPoint,
-} from './components/tools/pipe/pipe-drafting'
 // Placement-math helpers — shared by kind-owned placement tools in
 // `@pascal-app/nodes` (wall curve sagitta snap, door / window placement,
 // item drop) so kinds don't reach into editor internals.
@@ -38,6 +33,7 @@ export {
   snapToGrid,
   snapToHalf,
   snapUpToGridStep,
+  stripPlacementMetadataFlags,
   stripTransient,
 } from './components/tools/item/placement-math'
 export type { PlacementState } from './components/tools/item/placement-types'
@@ -50,6 +46,11 @@ export {
   type PlacementCoordinatorConfig,
   usePlacementCoordinator,
 } from './components/tools/item/use-placement-coordinator'
+export {
+  createPipeOnCurrentLevel,
+  type PipePlanPoint,
+  snapPipeDraftPoint,
+} from './components/tools/pipe/pipe-drafting'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
 // Phase 5 Stage D — PolygonEditor for slab/ceiling boundary + hole editors.
 export {
@@ -116,12 +117,22 @@ export { PanelWrapper } from './components/ui/panels/panel-wrapper'
 // hardware / type / opening presets.
 export { PresetsPopover } from './components/ui/panels/presets/presets-popover'
 export { PALETTE_COLORS } from './components/ui/primitives/color-dot'
+export {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from './components/ui/primitives/dropdown-menu'
 export { useSidebarStore } from './components/ui/primitives/sidebar'
 export { Slider } from './components/ui/primitives/slider'
 export { SceneLoader } from './components/ui/scene-loader'
 export type { ExtraPanel } from './components/ui/sidebar/icon-rail'
-export { ItemsPanel } from './components/ui/sidebar/panels/items-panel'
 export { AiChatPanel } from './components/ui/sidebar/panels/ai-chat-panel'
+export { ItemsPanel } from './components/ui/sidebar/panels/items-panel'
 export {
   type ProjectVisibility,
   SettingsPanel,
@@ -136,26 +147,12 @@ export type { SaveStatus } from './hooks/use-auto-save'
 // primitive. Public so registry-driven kinds (Phase 5+ Stage D ports)
 // can express their affordances declaratively in their own folder.
 export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
+export { lastGridMoveRef } from './hooks/use-grid-events'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
 export { markToolCancelConsumed } from './hooks/use-keyboard'
-export { floorItemDragSuppressClickRef } from './lib/floor-item-drag'
-export { lastGridMoveRef } from './hooks/use-grid-events'
-export { usePlanGridDrag, type UsePlanGridDragOptions } from './hooks/use-plan-grid-drag'
-export {
-  applySegmentEndpointPreview,
-  computeSegmentDragEndpoints,
-  getLinkedSegmentSnapshots,
-  getLinkedSegmentUpdates,
-  getSegmentPlanMidpoint,
-  type SegmentEndpointSnapshot,
-} from './lib/segment-plan-move'
-export {
-  applyPipeEndpointPreview,
-  computePipeDragEndpoints,
-  getLinkedPipeSnapshots,
-  getPipePlanMidpoint,
-  type LinkedPipeSnapshot,
-} from './lib/pipe-plan-move'
+export { type UsePlanGridDragOptions, usePlanGridDrag } from './hooks/use-plan-grid-drag'
+export type { TOptions, TParams } from './i18n'
+export { setMessages, t } from './i18n'
 export { EDITOR_LAYER } from './lib/constants'
 // Helper libs used by the kind-owned roof / stair / elevator panels.
 export {
@@ -164,6 +161,7 @@ export {
   resolveElevatorSupportLevelId,
   resolveElevatorSupportY,
 } from './lib/elevator-support'
+export { floorItemDragSuppressClickRef } from './lib/floor-item-drag'
 // Floor-plan stair helpers — the cumulative-transform walk
 // (`computeFloorplanStairSegmentTransforms`) and the rich segment-entry
 // builder (`buildFloorplanStairEntry`) used by the kind-owned stair
@@ -186,28 +184,59 @@ export {
   getActivePaintMaterialLabel,
   hasActivePaintMaterial,
 } from './lib/material-paint'
+export {
+  applyPipeEndpointPreview,
+  computePipeDragEndpoints,
+  getLinkedPipeSnapshots,
+  getPipePlanMidpoint,
+  type LinkedPipeSnapshot,
+} from './lib/pipe-plan-move'
 export { duplicateRoofSubtree } from './lib/roof-duplication'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
+export {
+  applySegmentEndpointPreview,
+  computeSegmentDragEndpoints,
+  getLinkedSegmentSnapshots,
+  getLinkedSegmentUpdates,
+  getSegmentPlanMidpoint,
+  type SegmentEndpointSnapshot,
+} from './lib/segment-plan-move'
 export { triggerSFX } from './lib/sfx-bus'
 export { duplicateStairSubtree } from './lib/stair-duplication'
+export {
+  getBuildingLevelsForLevel,
+  getStairLevelOptions,
+  resolveStairDestinationLevel,
+  resolveStairFromLevelId,
+  resolveStairPlacementLevelId,
+  resolveStairToLevelId,
+} from './lib/stair-levels'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
 export { cn } from './lib/utils'
-export { setMessages, t } from './i18n'
-export type { TOptions, TParams } from './i18n'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type {
   FloorplanSelectionTool,
+  MovingCableTrayEndpoint,
   MovingFenceEndpoint,
   MovingPipeEndpoint,
+  MovingRoadEndpoint,
+  MovingSteelBeamEndpoint,
   MovingWallEndpoint,
   SplitOrientation,
+  StairPlacementType,
   ViewMode,
 } from './store/use-editor'
 export { default as useEditor } from './store/use-editor'
+export { useAlignmentGuides } from '@pascal-app/core'
+export {
+  default as useOpeningGuides,
+  type OpeningGuide3D,
+  type OpeningGuideVec3,
+} from './store/use-opening-guides'
 export {
   type PaletteView,
   type PaletteViewProps,

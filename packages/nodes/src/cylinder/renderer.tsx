@@ -3,12 +3,14 @@
 import { type CylinderNode, useRegistry, useScene } from '@pascal-app/core'
 import {
   createCylinderGeometry,
+  createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
   useNodeEvents,
+  useViewer,
 } from '@pascal-app/viewer'
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import * as THREE from 'three'
+import type * as THREE from 'three'
 
 export const CylinderRenderer = ({ node }: { node: CylinderNode }) => {
   const ref = useRef<THREE.Group>(null!)
@@ -20,25 +22,33 @@ export const CylinderRenderer = ({ node }: { node: CylinderNode }) => {
   }, [node.id])
 
   const handlers = useNodeEvents(node, 'cylinder')
+  const shading = useViewer((state) => state.shading)
 
   const material = useMemo(() => {
-    const presetMaterial = createMaterialFromPresetRef(node.materialPreset)
+    const presetMaterial = createMaterialFromPresetRef(node.materialPreset, shading)
     if (presetMaterial) return presetMaterial
     const mat = node.material
-    if (!mat) return new THREE.MeshStandardMaterial({ color: 0xcccccc })
-    return createMaterial(mat)
-  }, [node.materialPreset, node.material, node.material?.preset, node.material?.properties, node.material?.texture])
+    if (!mat) return createDefaultMaterial('#cccccc', 1, shading)
+    return createMaterial(mat, shading)
+  }, [
+    node.materialPreset,
+    node.material,
+    node.material?.preset,
+    node.material?.properties,
+    node.material?.texture,
+    shading,
+  ])
 
   const geometry = useMemo(
-    () => createCylinderGeometry({
-      radius: node.radius ?? 0.5,
-      height: node.height ?? 1.0,
-      radialSegments: node.radialSegments ?? 32,
-      wallThickness: node.wallThickness,
-    }),
+    () =>
+      createCylinderGeometry({
+        radius: node.radius ?? 0.5,
+        height: node.height ?? 1.0,
+        radialSegments: node.radialSegments ?? 32,
+        wallThickness: node.wallThickness,
+      }),
     [node.radius, node.height, node.radialSegments, node.wallThickness],
   )
-
 
   return (
     <group
