@@ -112,8 +112,12 @@ export function analyzePortConnectivity(
     // Generalised across every distribution family (HVAC duct + DWV pipe):
     // `run` partners stretch an endpoint, `fitting` partners follow rigidly.
     // Terminals/equipment mount to surfaces and are intentionally NOT dragged.
+    // Fittings that declare `portConnectivityFollow: false` are anchored
+    // fixtures (e.g. pipe-trap) — moving a connected run stretches the arm.
     const otherRole = roleOf(other)
     if (otherRole !== 'run' && otherRole !== 'fitting') continue
+    const otherDef = nodeRegistry.get(other.type)
+    if (otherRole === 'fitting' && otherDef?.portConnectivityFollow === false) continue
     const otherPorts = portsOf(other)
     if (!otherPorts) continue
 

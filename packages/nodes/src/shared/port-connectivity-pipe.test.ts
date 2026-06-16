@@ -1,64 +1,77 @@
-import { beforeAll, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
-  analyzePortConnectivity,
   type AnyNode,
+  analyzePortConnectivity,
+  DuctSegmentNode,
   loadPlugin,
   nodeRegistry,
   PipeFittingNode,
   PipeSegmentNode,
+  PipeTrapNode,
   resolveConnectivityUpdates,
 } from '@pascal-app/core'
 import { builtinPlugin } from '../index'
+
+type Port = { id: string; position: [number, number, number] }
+
+function portsOf(kind: string, node: AnyNode): ReadonlyArray<Port> {
+  return nodeRegistry.get(kind)!.ports!(node) as ReadonlyArray<Port>
+}
+
+function wasteTee(): PipeFittingNode {
+  return PipeFittingNode.parse({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    fittingType: 'sanitary-tee',
+    diameter: 2,
+    diameter2: 2,
+    pipeMaterial: 'pvc',
+    system: 'waste',
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+  })
+}
+
+function pipeRunFrom(point: [number, number, number], system: 'waste' | 'vent' = 'waste') {
+  return PipeSegmentNode.parse({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    diameter: 2,
+    pipeMaterial: 'pvc',
+    system,
+    path: [point, [point[0] + 3, point[1], point[2]]],
+  })
+}
 
 /**
  * Regression coverage for the generalized (HVAC duct + DWV pipe)
  * port-connectivity service. Before PR #402's follow-up fix the service
  * only tracked `duct-segment` / `duct-fitting`, so moving a `pipe-fitting`
  * left attached `pipe-segment` endpoints behind. These tests assert the
- * role-based generalization carries pipe runs along.
+ * role-based generalization carries pipe runs along without fusing unrelated
+ * systems or anchored trap fixtures.
  */
 describe('port connectivity — DWV pipe family', () => {
-  beforeAll(async () => {
+  beforeEach(async () => {
     nodeRegistry._reset()
     await loadPlugin(builtinPlugin)
   })
 
+  afterEach(() => {
+    nodeRegistry._reset()
+  })
+
   test('moving a pipe-fitting stretches the connected pipe-segment endpoint', () => {
     // A sanitary tee at the origin; its run ports sit on ±X at the hub legs.
-    const fitting = PipeFittingNode.parse({
-      object: 'node',
-      parentId: null,
-      visible: true,
-      metadata: {},
-      fittingType: 'sanitary-tee',
-      diameter: 2,
-      diameter2: 2,
-      pipeMaterial: 'pvc',
-      system: 'waste',
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-    })
-
-    const fittingPorts = nodeRegistry.get('pipe-fitting')!.ports!(fitting) as ReadonlyArray<{
-      id: string
-      position: [number, number, number]
-    }>
-    const outlet = fittingPorts.find((p) => p.id === 'outlet')!
+    const fitting = wasteTee()
+    const outlet = portsOf('pipe-fitting', fitting as AnyNode).find((p) => p.id === 'outlet')!
 
     // A pipe run whose START port coincides with the fitting's outlet collar.
-    const run = PipeSegmentNode.parse({
-      object: 'node',
-      parentId: null,
-      visible: true,
-      metadata: {},
-      diameter: 2,
-      pipeMaterial: 'pvc',
-      system: 'waste',
-      path: [
-        [outlet.position[0], outlet.position[1], outlet.position[2]],
-        [outlet.position[0] + 3, outlet.position[1], outlet.position[2]],
-      ],
-    })
+    const run = pipeRunFrom(outlet.position)
 
     const nodes: Record<string, AnyNode> = {
       [fitting.id]: fitting as AnyNode,
@@ -84,45 +97,55 @@ describe('port connectivity — DWV pipe family', () => {
   })
 
   test('incompatible systems do not fuse (a supply duct is not dragged by a waste fitting)', () => {
-    const fitting = PipeFittingNode.parse({
-      object: 'node',
-      parentId: null,
-      visible: true,
-      metadata: {},
-      fittingType: 'sanitary-tee',
-      diameter: 2,
-      diameter2: 2,
-      pipeMaterial: 'pvc',
-      system: 'waste',
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-    })
-    const fittingPorts = nodeRegistry.get('pipe-fitting')!.ports!(fitting) as ReadonlyArray<{
-      id: string
-      position: [number, number, number]
-    }>
-    const outlet = fittingPorts.find((p) => p.id === 'outlet')!
+    const fitting = wasteTee()
+    const outlet = portsOf('pipe-fitting', fitting as AnyNode).find((p) => p.id === 'outlet')!
 
-    // A vent pipe sharing the same point but a different system.
-    const ventRun = PipeSegmentNode.parse({
+    // A supply duct sharing the same point but a different distribution system.
+    const duct = DuctSegmentNode.parse({
       object: 'node',
       parentId: null,
       visible: true,
       metadata: {},
-      diameter: 2,
-      pipeMaterial: 'pvc',
-      system: 'vent',
-      path: [
-        [outlet.position[0], outlet.position[1], outlet.position[2]],
-        [outlet.position[0] + 3, outlet.position[1], outlet.position[2]],
-      ],
+      diameter: 6,
+      ductMaterial: 'flex',
+      system: 'supply',
+      path: [outlet.position, [outlet.position[0] + 3, outlet.position[1], outlet.position[2]]],
     })
 
     const nodes: Record<string, AnyNode> = {
       [fitting.id]: fitting as AnyNode,
-      [ventRun.id]: ventRun as AnyNode,
+      [duct.id]: duct as AnyNode,
     }
     const connectivity = analyzePortConnectivity(fitting as AnyNode, nodes)
-    expect(connectivity.connections.find((c) => c.nodeId === ventRun.id)).toBeUndefined()
+    expect(connectivity.connections.find((c) => c.nodeId === duct.id)).toBeUndefined()
+  })
+
+  test('pipe-trap is anchored when a connected pipe endpoint moves', () => {
+    const trap = PipeTrapNode.parse({
+      object: 'node',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      position: [0, 0, 0],
+      rotation: 0,
+      diameter: 1.5,
+      pipeMaterial: 'pvc',
+      armLengthM: 0,
+    })
+    const outlet = portsOf('pipe-trap', trap as AnyNode).find((p) => p.id === 'outlet')!
+    const run = pipeRunFrom(outlet.position)
+
+    const nodes: Record<string, AnyNode> = {
+      [trap.id]: trap as AnyNode,
+      [run.id]: run as AnyNode,
+    }
+
+    // Moving the run endpoint must not translate the fixed-position trap.
+    const runConnectivity = analyzePortConnectivity(run as AnyNode, nodes)
+    expect(runConnectivity.connections.find((c) => c.nodeId === trap.id)).toBeUndefined()
+
+    // Moving the trap itself still stretches the connected run endpoint.
+    const trapConnectivity = analyzePortConnectivity(trap as AnyNode, nodes)
+    expect(trapConnectivity.connections.find((c) => c.nodeId === run.id)).toBeDefined()
   })
 })

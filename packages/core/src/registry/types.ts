@@ -720,6 +720,20 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * Kinds outside any distribution system leave this unset.
    */
   distributionRole?: DistributionRole
+  /**
+   * When `distributionRole` is `'fitting'`, controls whether this fitting
+   * is dragged as a rigid follower when a connected run endpoint moves.
+   *
+   * - `true` (default for `distributionRole === 'fitting'`): the fitting
+   *   translates rigidly so its mated collar stays on the moved port — the
+   *   right behaviour for in-line fittings (elbows, tees, wyes, crosses).
+   * - `false`: the fitting is anchored in space; moving a connected run
+   *   endpoint stretches the run arm, not the fitting. Use this for
+   *   fixed-position fixtures like `pipe-trap`.
+   *
+   * Has no effect when `distributionRole` is not `'fitting'`.
+   */
+  portConnectivityFollow?: boolean
 
   defaults: () => Omit<z.infer<S>, 'id' | 'type'>
   migrate?: Record<number, (old: unknown) => unknown>
