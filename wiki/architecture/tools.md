@@ -99,6 +99,18 @@ export function MyTool() {
 3. Add the tool identifier to the `useEditor` tool union type.
 4. If the tool requires new node types, add schema + renderer + system first.
 
+## 2D ↔ 3D behavioral parity (default expectation)
+
+The 2D floor-plan view and the 3D view are two presentations of the **same** edit. Whenever a behavior is applicable to both, it must exist in both — the *mechanism* may differ (a 3D raycast hover vs a plan-space nearest-wall query; a real mesh ghost vs an SVG symbol), but the *felt behavior* should match. When you add or change an interaction in one view, port it to the other in the same change, or write down why it genuinely doesn't apply.
+
+Concretely, door/window placement/move keeps these in lockstep across `{door,window}/move-tool.tsx` (3D) and `{door,window}/floorplan-move.ts` (2D):
+
+- **Snap target**: nearest wall to the true cursor (shared `findClosestWallInPlan` / wall raycast), free-follow off-wall, commit only on a host.
+- **Move SFX**: a soft `sfx:grid-snap` click per grid step while sliding (free-follow plan XZ or on-wall along-X, quantized + deduped so it isn't a machine-gun) and a soft `sfx:item-pick` cue on the floor→wall snap. Both tools carry an identical `tickGridStep` / `tickWallSnap` pair — keep them in sync.
+- **R-flip** facing mid-placement, **Shift** to free snap/alignment (guides stay visible) and force-place over collisions, faithful ghost/symbol, deterministic single-undo commit.
+
+Tells that you've broken parity: a sound/guide/snap that fires in 3D but is silent in 2D (or vice-versa), or a fix landed in one move file but not its sibling. The two move files are deliberately near-mirrors; diff them when in doubt.
+
 ## Move coexistence: 2D `FloorplanRegistryMoveOverlay` + legacy 3D mover
 
 While a kind is mid-migration its move can run through two paths at once: the registry-driven 2D `FloorplanRegistryMoveOverlay` (`def.floorplanMoveTarget`) and the legacy 3D mover (e.g. `MoveItemContent`). Both react to `setMovingNode(node)`, both mount, both want to commit. Two pitfalls surfaced and have stable fixes; replicate the patterns when porting another kind to coexist.

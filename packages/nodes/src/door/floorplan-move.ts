@@ -8,12 +8,13 @@ import {
   type WallNode,
   WallNode as WallNodeSchema,
 } from '@pascal-app/core'
-import { snapToHalf, usePlacementPreview } from '@pascal-app/editor'
+import { snapToHalf, triggerSFX, usePlacementPreview } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import { getOpeningHostLevelId, getRoofHostedOpeningPlanPoint } from '../shared/roof-opening-host'
 import {
   findClosestWallInPlan,
   projectWallLocalPointToPlan,
+  resolveOpeningPlacement,
   snapLocalXToNeighbors,
 } from '../shared/wall-attach-target'
 import { clampToWall, hasWallChildOverlap } from './door-math'
@@ -87,6 +88,25 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
   // the cursor as a ghost (like the 3D move) and is NOT committable — a door
   // needs a wall. Starts true so a click before any move keeps the door put.
   let onWall = true
+  // Shift force-place (last apply's modifier) — lets `canCommit` allow an
+  // overlapping placement, matching the 3D move. Read in `canCommit` so a Shift-
+  // held commit over a collision lands instead of reverting.
+  let forcePlace = false
+
+  // Move SFX — parity with the 3D `MoveDoorTool`: ONE soft `sfx:grid-snap` click
+  // per grid step, identical free-following or sliding on a wall, keyed on the
+  // RAW cursor (not the snapped along-wall value). No separate floor→wall cue —
+  // that distinct sound was the "double" the user heard. 2D `apply` runs once per
+  // pointermove, so the step-key dedup is sufficient (no per-frame guard needed).
+  const STEP_M = 0.1
+  let lastStepKey: string | null = null
+  const tickGridStep = (...coords: number[]) => {
+    const key = coords.map((c) => Math.round(c / STEP_M)).join(',')
+    if (key !== lastStepKey) {
+      lastStepKey = key
+      triggerSFX('sfx:grid-snap')
+    }
+  }
 
   // Off-wall: float the faithful door symbol at the cursor (via a synthetic
   // wall fed to the placement-preview layer) and hide the real node, so the
@@ -104,14 +124,23 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       end: [planPoint[0] + half, planPoint[1]],
       thickness: 0.1,
     })
+    // Reflect the R-flip on the floating ghost so its swing-arc faces the side
+    // that will be committed (the synthetic wall is plan-X aligned, so a back
+    // facing is a π yaw; the symbol builder also reads `side`).
+    const ghostSide: DoorNode['side'] = flipped
+      ? node.side === 'front'
+        ? 'back'
+        : 'front'
+      : node.side
     const ghost = {
       ...node,
+      side: ghostSide,
       parentId: wall.id,
       wallId: wall.id,
       roofSegmentId: undefined,
       roofFace: undefined,
       position: [half, node.position[1], 0] as [number, number, number],
-      rotation: [0, 0, 0] as [number, number, number],
+      rotation: [0, flipped ? Math.PI : 0, 0] as [number, number, number],
       visible: true,
     } as DoorNode
     usePlacementPreview.getState().set(ghost, wall)
@@ -125,6 +154,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
     },
     apply({ planPoint, modifiers }) {
       lastApply = { planPoint, modifiers }
+      forcePlace = modifiers.shiftKey === true
       // Drop any stale live transform left by the 3D `MoveDoorTool` (it
       // publishes one on every wall hover). The 2D registry layer renders
       // door/window from `useLiveTransforms` IN PREFERENCE to the scene node,
@@ -140,7 +170,9 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       const resolvedPlanPoint = resolveCursor(planPoint)
       const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)
       if (!hit) {
-        // Off any wall — free-follow the cursor (not committable).
+        // Off any wall — free-follow the cursor (not committable). Click per grid
+        // cell as the ghost slides over open floor.
+        tickGridStep(resolvedPlanPoint[0], resolvedPlanPoint[1])
         freeFollow(resolvedPlanPoint)
         return
       }
@@ -167,6 +199,11 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
             })
       const snappedLocalX = neighborX ?? (modifiers.shiftKey ? hit.localX : snapToHalf(hit.localX))
       const { clampedX, clampedY } = clampToWall(hit.wall, snappedLocalX, node.width, node.height)
+
+      // One click per grid step, keyed on the RAW along-wall cursor (`hit.localX`,
+      // not the snapped value) so the wall slide ticks at the same cadence as the
+      // off-wall ghost — the same SFX, no separate snap cue.
+      tickGridStep(hit.localX)
 
       // Apply the R-flip on top of the wall-derived side.
       const side: DoorNode['side'] = flipped ? (hit.side === 'front' ? 'back' : 'front') : hit.side
@@ -204,9 +241,10 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       if (!onWall) return false
       const live = useScene.getState().nodes[node.id as AnyNodeId] as DoorNode | undefined
       if (!live || live.type !== 'door') return false
-      // Block commit if the door overlaps any other wall child at its
-      // current position. The 3D port has the same guard.
-      const overlapping = hasWallChildOverlap(
+      // Block commit if the door overlaps another wall child — UNLESS Shift
+      // force-places (same `placeable` rule as the 3D move + the shared
+      // `resolveOpeningPlacement`).
+      const collides = hasWallChildOverlap(
         live.parentId as string,
         live.position[0],
         live.position[1],
@@ -214,7 +252,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
         live.height,
         live.id,
       )
-      return !overlapping
+      return resolveOpeningPlacement({ collides, forcePlace }).placeable
     },
     commit() {
       // Own the atomic write so the overlay takes the deterministic

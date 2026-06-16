@@ -39,8 +39,14 @@ import {
   worldToSelectedBuildingLocal,
 } from '../shared/roof-wall-opening-placement'
 import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
+import { WindowFloorProjection } from './floor-projection'
 import WindowPreview from './preview'
-import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
+import {
+  clampToWall,
+  DEFAULT_WINDOW_SILL_M,
+  hasWallChildOverlap,
+  wallLocalToWorld,
+} from './window-math'
 
 // Shared edge material — reuse across renders, just toggle color
 const edgeMaterial = new LineBasicNodeMaterial({
@@ -52,10 +58,12 @@ const edgeMaterial = new LineBasicNodeMaterial({
 
 const FALLBACK_WIDTH = 1.5
 const FALLBACK_HEIGHT = 1.5
-const FALLBACK_SILL_LIFT = 0.45
+// Off-wall ghost lift = the default sill, so the floating preview matches the
+// sill the floor-cursor placement commits at.
+const FALLBACK_SILL_LIFT = DEFAULT_WINDOW_SILL_M
 // Default sill centre for a window snapped from the floor (the floor cursor
-// carries no wall-face height). 0.9 m sill + half the 1.5 m default height.
-const DEFAULT_SILL_CENTER_Y = 0.9 + FALLBACK_HEIGHT / 2
+// carries no wall-face height): the default sill + half the default height.
+const DEFAULT_SILL_CENTER_Y = DEFAULT_WINDOW_SILL_M + FALLBACK_HEIGHT / 2
 const roofFallbackPoint = new Vector3()
 
 // What currently owns the cursor frame: a wall/roof mesh hover, or null when
@@ -79,14 +87,24 @@ const WindowTool: React.FC = () => {
 
   // Off-host floating ghost: the real window geometry follows the cursor
   // over the grid (tinted invalid). Mutually exclusive with the on-host draft.
+  // `floorY` feeds the floor "shadow" projection; `side` carries the R-flip so
+  // the floating ghost faces the side that will be committed.
   const [fallbackPose, setFallbackPose] = useState<{
     position: [number, number, number]
     rotationY: number
+    floorY: number
+    side: WindowNode['side']
   } | null>(null)
 
+  // Ghost preview node — zeroed transform + the live facing side (rebuilds on R).
   const ghostStub = useMemo(
-    () => WindowNode.parse({ position: [0, 0, 0], rotation: [0, 0, 0] }),
-    [],
+    () =>
+      WindowNode.parse({
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        side: fallbackPose?.side ?? 'front',
+      }),
+    [fallbackPose?.side],
   )
 
   useEffect(() => {
@@ -104,6 +122,9 @@ const WindowTool: React.FC = () => {
     // to the last wall hover so the flip shows live before commit.
     let sideFlip = false
     let lastWallEvent: WallEvent | null = null
+    // Last open-floor cursor point (level-local X/Z) + floor Y, so an R-flip
+    // while free-following can re-render the floating ghost with the new facing.
+    let lastFloorPoint: { pos: [number, number, number]; floorY: number } | null = null
 
     const getLevelId = () => useViewer.getState().selection.levelId
     const getLevelYOffset = () => {
@@ -157,21 +178,34 @@ const WindowTool: React.FC = () => {
 
     // Off-host fallback: hide the wireframe outline and float the real window
     // geometry (tinted invalid) at the cursor so the armed tool is visible.
-    const showGhostAt = (position: [number, number, number]) => {
+    const showGhostAt = (position: [number, number, number], floorY: number) => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
-      setFallbackPose({ position, rotationY: 0 })
+      lastFloorPoint = { pos: position, floorY }
+      // `sideFlip` (R) flips the facing — back is a π yaw on the floating ghost.
+      setFallbackPose({
+        position,
+        rotationY: sideFlip ? Math.PI : 0,
+        floorY,
+        side: sideFlip ? 'back' : 'front',
+      })
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
     }
 
     const showRoofFallbackCursor = (event: RoofEvent) => {
       const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
-      showGhostAt([x, getLevelYOffset() + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z])
+      showGhostAt(
+        [x, getLevelYOffset() + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z],
+        getLevelYOffset(),
+      )
     }
 
     const showWallFallbackCursor = (event: WallEvent) => {
       const [x, , z] = worldToSelectedBuildingLocal(roofFallbackPoint.set(...event.position))
-      showGhostAt([x, getLevelYOffset() + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z])
+      showGhostAt(
+        [x, getLevelYOffset() + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z],
+        getLevelYOffset(),
+      )
     }
 
     // Sill alignment (snap + guide): a sibling sill/centre/top wins over the
@@ -211,13 +245,16 @@ const WindowTool: React.FC = () => {
       bypassSnap: boolean,
       ignoreId?: string,
     ) => {
+      // bypassSnap is set by Shift (see callers). Shift = free-place: land at the
+      // raw cursor but keep the along-wall guides visible. bypass (Alt) still
+      // hard-disables alignment.
       const localX = resolveWallSlideAlignment({
         wallNode: wall,
         rawLocalX,
         width,
         candidates: alignmentCandidates,
-        bypass,
-        bypassSnap,
+        bypass: bypass && !bypassSnap,
+        freePlace: bypassSnap,
       })
       const localY = resolvePlacementY({
         wall,
@@ -454,7 +491,8 @@ const WindowTool: React.FC = () => {
         bypassSnap,
         draftRef.current.id,
       )
-      if (!valid) return
+      // Shift force-places over a collision (the draft stays red as a warning).
+      if (!valid && !bypassSnap) return
 
       commitWindowAtWall(event.node, clampedX, clampedY, side, itemRotation)
       event.stopPropagation()
@@ -485,7 +523,7 @@ const WindowTool: React.FC = () => {
       lastWallEvent = null
       const [x, y, z] = event.localPosition
       destroyDraft()
-      showGhostAt([x, y + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z])
+      showGhostAt([x, y + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z], y)
     }
 
     // ── Roof-segment wall faces ─────────────────────────────────────
@@ -553,7 +591,9 @@ const WindowTool: React.FC = () => {
     const onRoofClick = (event: RoofEvent) => {
       if (!draftRef.current?.roofSegmentId) return
       const target = resolveRoofTarget(event)
-      if (!target?.valid) return
+      // Shift force-places over a colliding roof-face target (see onWallClick).
+      if (!target) return
+      if (!target.valid && event.nativeEvent?.shiftKey !== true) return
       const { segment, face, position } = target
 
       const draft = draftRef.current
@@ -617,19 +657,24 @@ const WindowTool: React.FC = () => {
       hostKind = null
     }
 
-    // R flips the window's facing side mid-placement (front ↔ back), like the
-    // committed-selected R flip. Only meaningful while snapped to a wall (the
-    // off-wall ghost has no orientation), so it acts only then — re-applying
-    // the last wall hover so the snapped preview flips live.
+    // R flips the window's facing side mid-placement (front ↔ back). ALWAYS
+    // toggles the persistent flip intent — never a no-op (the old `!lastWallEvent`
+    // guard dropped R off-wall / before the first hover). Then re-renders the
+    // current preview so the flip shows live and matches commit.
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'r' && e.key !== 'R') return
-      if (!lastWallEvent) return
+      if (e.repeat) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
       e.preventDefault()
       sideFlip = !sideFlip
       triggerSFX('sfx:item-rotate')
-      onWallHover(lastWallEvent)
+      if (lastWallEvent) {
+        onWallHover(lastWallEvent)
+      } else if (lastFloorPoint) {
+        showGhostAt(lastFloorPoint.pos, lastFloorPoint.floorY)
+      }
+      // else: no preview yet — `sideFlip` is set, so the first hover/follow uses it.
     }
 
     emitter.on('wall:enter', onWallHover)
@@ -689,6 +734,18 @@ const WindowTool: React.FC = () => {
         <group position={fallbackPose.position} rotation-y={fallbackPose.rotationY}>
           <WindowPreview invalid node={ghostStub} />
         </group>
+      )}
+      {/* Floor "shadow" projection for the off-host ghost (drop-line + footprint)
+          so the elevated window's plan position is legible while placing. */}
+      {fallbackPose && (
+        <WindowFloorProjection
+          centerX={fallbackPose.position[0]}
+          centerY={fallbackPose.position[1]}
+          centerZ={fallbackPose.position[2]}
+          floorY={fallbackPose.floorY}
+          rotationY={fallbackPose.rotationY}
+          width={FALLBACK_WIDTH}
+        />
       )}
     </>
   )

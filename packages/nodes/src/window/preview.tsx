@@ -16,8 +16,15 @@ import type { WindowNode } from './schema'
  * The root mesh's layer is set to EDITOR_LAYER because the invisible hitbox
  * material on SCENE_LAYER would poison the WebGPU MRT pass (project gotcha).
  */
-const WindowPreview = ({ node, invalid }: { node: WindowNode; invalid?: boolean }) => {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
+const WindowPreview = ({
+  node,
+  invalid,
+  valid,
+}: {
+  node: WindowNode
+  invalid?: boolean
+  valid?: boolean
+}) => {
   const mesh = useMemo(() => {
     const m = buildWindowPreviewMesh(node)
     m.layers.set(EDITOR_LAYER)
@@ -33,9 +40,9 @@ const WindowPreview = ({ node, invalid }: { node: WindowNode; invalid?: boolean 
     node.sillThickness,
   ])
 
-  // Ghost treatment (clone + tint + raycast-off) re-applies if `invalid`
-  // flips; its cleanup only disposes the clones it made.
-  useEffect(() => applyGhost(mesh, { invalid }), [mesh, invalid])
+  // Ghost treatment (clone + tint + raycast-off) re-applies if the tint flips;
+  // its cleanup only disposes the clones it made.
+  useEffect(() => applyGhost(mesh, { invalid, valid }), [mesh, invalid, valid])
 
   // Geometry is freshly built per `mesh` and owned here — dispose it only
   // when the mesh itself is replaced/unmounted, never on an `invalid` toggle.
