@@ -9,8 +9,8 @@ import {
   type MaterialTarget,
   toLibraryMaterialRef,
 } from '@pascal-app/core'
-import { useEffect, useRef, useState } from 'react'
-import { CURATED_COLORS } from '../../../lib/colors'
+import { useEffect, useState } from 'react'
+import { triggerSFX } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 
 type MaterialPickerProps = {
@@ -24,7 +24,6 @@ type MaterialPickerProps = {
 }
 
 function getCategoryLabel(category: (typeof MATERIAL_CATEGORIES)[number]) {
-  if (category === 'roof') return 'Roofing'
   return category.charAt(0).toUpperCase() + category.slice(1)
 }
 
@@ -40,11 +39,10 @@ export function MaterialPicker({
   const [selectedCategory, setSelectedCategory] = useState<(typeof MATERIAL_CATEGORIES)[number]>(
     MATERIAL_CATEGORIES[0],
   )
-  const categoryScrollRef = useRef<HTMLDivElement>(null)
-  const catalogItems =
-    selectedCategory === 'other'
-      ? getMaterialsForCategory('other')
-      : getMaterialsForCategory(selectedCategory)
+  const availableCategories = MATERIAL_CATEGORIES.filter(
+    (category) => getMaterialsForCategory(category).length > 0,
+  )
+  const catalogItems = getMaterialsForCategory(selectedCategory)
 
   useEffect(() => {
     setShowCustom(!!value?.properties && !selectedMaterialPreset)
@@ -52,7 +50,7 @@ export function MaterialPicker({
 
   useEffect(() => {
     if (!selectedMaterialPreset && value?.properties) {
-      setSelectedCategory('other')
+      setSelectedCategory('colors')
       return
     }
 
@@ -68,7 +66,6 @@ export function MaterialPicker({
     selectedMaterialPreset ?? (value?.id ? toLibraryMaterialRef(value.id) : undefined)
   const selectedCatalogMaterialId = getLibraryMaterialIdFromRef(selectedCatalogId) ?? undefined
   const selectedCatalogEntry = getCatalogMaterialById(selectedCatalogMaterialId)
-  const selectedColor = value?.properties?.color.toLowerCase()
 
   const handleCatalogSelect = (materialId: string) => {
     if (disabled) return
@@ -76,44 +73,6 @@ export function MaterialPicker({
     setPaintPanelOpen(false)
     onSelectMaterialPreset?.(toLibraryMaterialRef(materialId))
   }
-
-  const handleColorSelect = (hex: string) => {
-    if (disabled) return
-    setShowCustom(false)
-    setPaintPanelOpen(false)
-    onChange?.({
-      preset: 'custom',
-      properties: {
-        color: hex,
-        roughness: 0.6,
-        metalness: 0,
-        opacity: 1,
-        transparent: false,
-        side: 'front',
-      },
-    })
-  }
-
-  useEffect(() => {
-    const container = categoryScrollRef.current
-    if (!container) return
-
-    const handleWheel = (event: WheelEvent) => {
-      const deltaX = event.deltaX
-      const deltaY = event.deltaY
-      const nextScrollLeft = container.scrollLeft + deltaX + deltaY
-
-      if (nextScrollLeft === container.scrollLeft) return
-
-      event.preventDefault()
-      container.scrollLeft = nextScrollLeft
-    }
-
-    container.addEventListener('wheel', handleWheel, { passive: false })
-    return () => {
-      container.removeEventListener('wheel', handleWheel)
-    }
-  }, [])
 
   const handleCustomOpen = () => {
     if (disabled) return
@@ -139,108 +98,87 @@ export function MaterialPicker({
     <div className={`min-w-0 space-y-3 ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
       {(catalogItems.length > 0 || onChange) && (
         <div className="min-w-0 space-y-1">
-          {onChange ? (
-            <div className="space-y-1.5">
-              <div className="font-medium text-[11px] text-muted-foreground uppercase tracking-[0.12em]">
-                Colors
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {CURATED_COLORS.map((color) => {
-                  const isSelected = selectedColor === color.hex.toLowerCase()
-                  return (
-                    <button
-                      aria-label={color.name}
-                      className={`h-7 w-7 rounded-md border transition-all ${
-                        isSelected
-                          ? 'border-blue-500 ring-2 ring-blue-500/30'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                      key={color.hex}
-                      onClick={() => handleColorSelect(color.hex)}
-                      style={{ backgroundColor: color.hex }}
-                      title={color.name}
-                      type="button"
-                    />
-                  )
-                })}
-              </div>
-            </div>
-          ) : null}
-          <div
-            className="w-full max-w-full overflow-x-auto overflow-y-hidden"
-            ref={categoryScrollRef}
-            style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}
-          >
-            <div className="flex min-w-max gap-1 pb-1">
-              {MATERIAL_CATEGORIES.map((category) => (
-                <button
-                  className={`shrink-0 px-2 font-medium text-[11px] uppercase tracking-[0.12em] transition-all ${
-                    selectedCategory === category
-                      ? 'bg-transparent text-foreground'
-                      : 'bg-transparent text-muted-foreground opacity-70 hover:text-foreground hover:opacity-100'
-                  }`}
-                  key={category}
-                  onClick={() => {
-                    setSelectedCategory(category)
-                    if (showCustom) {
-                      setShowCustom(false)
-                    }
-                    if (category !== 'other') {
-                      setPaintPanelOpen(false)
-                    }
-                  }}
-                  type="button"
-                >
-                  {getCategoryLabel(category)}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div
-            className="grid gap-1.5 pb-1"
-            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))' }}
-          >
-            {catalogItems.map((item) => (
+          <div className="flex flex-wrap gap-1 pb-1">
+            {availableCategories.map((category) => (
               <button
-                className={`relative aspect-square w-full overflow-hidden rounded-lg border transition-all ${
-                  selectedCatalogId === toLibraryMaterialRef(item.id)
-                    ? 'border-blue-500 ring-2 ring-blue-500/30'
-                    : 'border-gray-300 hover:border-gray-400'
+                className={`rounded-full px-3 py-1 font-medium text-xs transition-colors ${
+                  selectedCategory === category
+                    ? 'bg-foreground text-background'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
-                key={item.id}
-                onClick={() => handleCatalogSelect(item.id)}
-                title={item.label}
+                key={category}
+                onClick={() => {
+                  setSelectedCategory(category)
+                  if (showCustom) {
+                    setShowCustom(false)
+                  }
+                  if (category !== 'colors') {
+                    setPaintPanelOpen(false)
+                  }
+                }}
                 type="button"
               >
-                <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-white/12 ring-inset" />
-                {item.previewThumbnailUrl ? (
-                  <img
-                    alt={item.label}
-                    className="h-full w-full object-cover"
-                    src={item.previewThumbnailUrl}
-                  />
-                ) : item.previewColor ? (
-                  <div
-                    className="h-full w-full"
-                    style={{ backgroundColor: item.previewColor }}
-                  />
-                ) : (
-                  <div className="h-full w-full bg-gray-100" />
-                )}
+                {getCategoryLabel(category)}
               </button>
             ))}
-            {selectedCategory === 'other' && onChange ? (
+          </div>
+          <div
+            className="grid gap-2 pb-1"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))' }}
+          >
+            {catalogItems.map((item) => {
+              const isSelected = selectedCatalogId === toLibraryMaterialRef(item.id)
+              return (
+                <button
+                  className={`group relative flex flex-col gap-1.5 rounded-xl p-1.5 transition-colors hover:cursor-pointer hover:bg-sidebar-accent ${
+                    isSelected ? 'bg-sidebar-accent ring-2 ring-primary-foreground' : ''
+                  }`}
+                  key={item.id}
+                  onClick={() => {
+                    triggerSFX('sfx:menu-click')
+                    handleCatalogSelect(item.id)
+                  }}
+                  onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                  type="button"
+                >
+                  <div className="relative aspect-square w-full overflow-hidden rounded-lg">
+                    {item.previewThumbnailUrl ? (
+                      <img
+                        alt={item.label}
+                        className="h-full w-full object-cover"
+                        src={item.previewThumbnailUrl}
+                      />
+                    ) : (
+                      <div
+                        className="h-full w-full"
+                        style={{ backgroundColor: item.previewColor ?? '#f3f4f6' }}
+                      />
+                    )}
+                  </div>
+                  <span className="truncate px-0.5 text-left font-medium text-[11px] text-muted-foreground group-hover:text-foreground">
+                    {item.label}
+                  </span>
+                </button>
+              )
+            })}
+            {selectedCategory === 'colors' && onChange ? (
               <button
-                className={`flex aspect-square w-full items-center justify-center rounded-lg border font-medium text-[10px] transition-all ${
-                  showCustom
-                    ? 'border-blue-500 ring-2 ring-blue-500/30'
-                    : 'border-gray-300 hover:border-gray-400'
+                className={`group relative flex flex-col gap-1.5 rounded-xl p-1.5 transition-colors hover:cursor-pointer hover:bg-sidebar-accent ${
+                  showCustom ? 'bg-sidebar-accent ring-2 ring-primary-foreground' : ''
                 }`}
-                onClick={handleCustomOpen}
-                title="Custom"
+                onClick={() => {
+                  triggerSFX('sfx:menu-click')
+                  handleCustomOpen()
+                }}
+                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
                 type="button"
               >
-                Custom
+                <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-muted text-lg text-muted-foreground group-hover:text-foreground">
+                  +
+                </div>
+                <span className="truncate px-0.5 text-left font-medium text-[11px] text-muted-foreground group-hover:text-foreground">
+                  Custom
+                </span>
               </button>
             ) : null}
           </div>
