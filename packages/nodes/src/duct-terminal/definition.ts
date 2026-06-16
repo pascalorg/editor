@@ -44,6 +44,17 @@ export const ductTerminalDefinition: NodeDefinition<typeof DuctTerminalNode> = {
     rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] },
     duplicable: true,
     deletable: true,
+    // A floor register rests on top of whatever slab is under it — the
+    // generic FloorElevationSystem lifts its mesh Y by the slab's elevation
+    // so the face sits on the slab surface instead of sinking into it.
+    // Ceiling / wall mounts derive their Y elsewhere, so `applies` skips them.
+    floorPlaced: {
+      footprint: (node) => {
+        const t = node as DuctTerminalNode
+        return { dimensions: [t.width, 0, t.depth], rotation: [0, t.rotation, 0] }
+      },
+      applies: (node) => (node as DuctTerminalNode).mount === 'floor',
+    },
   },
 
   parametrics: ductTerminalParametrics,

@@ -4,12 +4,13 @@ import {
   type AnyNodeId,
   DuctTerminalNode,
   emitter,
+  pointInPolygon,
   resolveLevelId,
   sceneRegistry,
   useScene,
   type WallEvent,
 } from '@pascal-app/core'
-import { CursorSphere, triggerSFX, useEditor } from '@pascal-app/editor'
+import { CursorSphere, getFloorStackPreviewPosition, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
@@ -25,7 +26,7 @@ import { COLLAR_LENGTH, mountQuaternion } from './ports'
 const PREVIEW_OPACITY = 0.55
 /** R/T yaw step — 45°. */
 const ROTATE_STEP_RAD = Math.PI / 4
-/** Fallback ceiling height (meters) when no walls/ceilings inform one. */
+/** Fallback height (meters) for a ceiling node that carries no `height`. */
 const DEFAULT_CEILING_HEIGHT = 2.5
 /** Snap radius (meters) for mating the collar onto a nearby duct port. */
 const PORT_SNAP_RADIUS_M = 0.5
@@ -57,30 +58,6 @@ function collarOffset(mount: Mount, yaw: number): Vector3 {
 function activeLevelMesh() {
   const levelId = useViewer.getState().selection.levelId
   return levelId ? (sceneRegistry.nodes.get(levelId as AnyNodeId) ?? null) : null
-}
-
-/**
- * Ceiling height for the active level, in level-local meters: the tallest
- * ceiling node if any exist, else the tallest wall, else the default. Used
- * as the horizontal plane a ceiling-mounted terminal snaps onto when the
- * mount is `ceiling` (a "virtual ceiling" derived from the walls, so the
- * terminal lands at hang height even before a ceiling node is drawn).
- */
-function resolveCeilingHeight(activeLevelId: string): number {
-  const nodes = useScene.getState().nodes
-  let ceilingMax = 0
-  let wallMax = 0
-  for (const node of Object.values(nodes)) {
-    if (!node) continue
-    if (node.type !== 'ceiling' && node.type !== 'wall') continue
-    if (resolveLevelId(node, nodes) !== activeLevelId) continue
-    const h = (node as { height?: number }).height ?? DEFAULT_CEILING_HEIGHT
-    if (node.type === 'ceiling') ceilingMax = Math.max(ceilingMax, h)
-    else wallMax = Math.max(wallMax, h)
-  }
-  if (ceilingMax > 0) return ceilingMax
-  if (wallMax > 0) return wallMax
-  return DEFAULT_CEILING_HEIGHT
 }
 
 type Placement = {
@@ -227,9 +204,52 @@ const DuctTerminalTool = () => {
       return ray.intersectPlane(plane, hit) ? hit : null
     }
 
+    /**
+     * Ceiling mount only lands where the cursor ray actually hits a real
+     * ceiling. Walk the active level's ceiling nodes, raycast each against a
+     * plane at its own height, and keep the lowest one whose polygon (minus
+     * holes) contains the hit — the surface you'd see looking up. Null when
+     * the ray misses every ceiling, so a ceiling register never drops onto a
+     * fixed virtual plane; the height comes from the ceiling itself.
+     */
+    const resolveCeilingHit = (
+      nativeEvent: PointerEvent | MouseEvent,
+    ): { hit: Vector3; height: number } | null => {
+      const nodes = useScene.getState().nodes
+      let best: { hit: Vector3; height: number } | null = null
+      for (const node of Object.values(nodes)) {
+        if (!node || node.type !== 'ceiling') continue
+        if (resolveLevelId(node, nodes) !== activeLevelId) continue
+        const ceiling = node as {
+          height?: number
+          polygon: Array<[number, number]>
+          holes?: Array<Array<[number, number]>>
+        }
+        const height = ceiling.height ?? DEFAULT_CEILING_HEIGHT
+        const hit = hitLocalPlane(nativeEvent, height)
+        if (!hit) continue
+        if (!pointInPolygon(hit.x, hit.z, ceiling.polygon)) continue
+        if (ceiling.holes?.some((h) => h.length >= 3 && pointInPolygon(hit.x, hit.z, h))) continue
+        if (!best || height < best.height) best = { hit, height }
+      }
+      return best
+    }
+
     const resolvePlanar = (nativeEvent: PointerEvent | MouseEvent): Placement | null => {
-      const y = mountRef.current === 'ceiling' ? resolveCeilingHeight(activeLevelId) : 0
-      const hit = hitLocalPlane(nativeEvent, y)
+      // Floor sits on the grid (y=0; the slab lift is applied to the committed
+      // mesh by FloorElevationSystem). Ceiling resolves the real ceiling the
+      // ray hits and takes that surface's height — no fixed fallback plane.
+      let hit: Vector3 | null
+      let y: number
+      if (mountRef.current === 'ceiling') {
+        const ceiling = resolveCeilingHit(nativeEvent)
+        if (!ceiling) return null
+        hit = ceiling.hit
+        y = ceiling.height
+      } else {
+        y = 0
+        hit = hitLocalPlane(nativeEvent, y)
+      }
       if (!hit) return null
       const step = nativeEvent.shiftKey ? 0 : useEditor.getState().gridSnapStep
       // Grid-snap, then layer Figma-style alignment so a floor / ceiling
@@ -358,19 +378,32 @@ const DuctTerminalTool = () => {
 
   const mountLabel = effectiveMount.charAt(0).toUpperCase() + effectiveMount.slice(1)
 
+  // The committed mesh's slab lift is applied by FloorElevationSystem, but the
+  // ghost renders here directly — preview it on the slab top too so a floor
+  // register doesn't appear to sink in before the click.
+  const previewPosition =
+    effectiveMount === 'floor'
+      ? getFloorStackPreviewPosition({
+          node: previewNode,
+          position: placement.position,
+          rotation: placement.yaw,
+          levelId: activeLevelId,
+        })
+      : placement.position
+
   return (
     <LevelOffsetGroup>
       {/* Same ground ring + vertical line + tool-icon badge the duct draw
           tool shows in 3D (icon resolved from the active `duct-terminal`
           structure-tools entry). In 2D the floorplan overlay draws this for
           every tool; in 3D each tool renders its own. */}
-      <CursorSphere position={placement.position} />
-      <group position={placement.position} rotation={[0, placement.yaw, 0]}>
+      <CursorSphere position={previewPosition} />
+      <group position={previewPosition} rotation={[0, placement.yaw, 0]}>
         <primitive object={ghost} />
       </group>
       <Html
         center
-        position={[placement.position[0], placement.position[1] + 0.45, placement.position[2]]}
+        position={[previewPosition[0], previewPosition[1] + 0.45, previewPosition[2]]}
         style={{ pointerEvents: 'none', userSelect: 'none' }}
         zIndexRange={[100, 0]}
       >
