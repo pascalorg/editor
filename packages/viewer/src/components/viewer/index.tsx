@@ -13,6 +13,7 @@ import * as THREE from 'three/webgpu'
 import { hasDrawableGeometry } from '../../lib/drawable-geometry'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
+import { ensureKtx2Support } from '../../lib/ktx2-loader'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
@@ -144,6 +145,11 @@ function GPUDeviceWatcher() {
   const gl = useThree((s) => s.gl)
 
   useEffect(() => {
+    // Detect KTX2 transcode support as soon as the renderer exists, so catalog
+    // `.ktx2` finish textures load even in scenes with no GLB items (whose
+    // loader would otherwise be the only thing to call this).
+    ensureKtx2Support(gl)
+
     const backend = (gl as any).backend
     const device = backend?.device as WebGPUDeviceLike | undefined
 

@@ -14,6 +14,7 @@ import * as THREE from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 
 import { resolveCdnUrl } from './asset-url'
+import { isKtx2Url, ktx2Loader } from './ktx2-loader'
 import { getSceneTheme } from './scene-themes'
 
 export type RenderShading = 'solid' | 'rendered'
@@ -105,6 +106,14 @@ const surfaceRoleMaterialCache = new Map<string, THREE.Material>()
 const textureCache = new Map<string, THREE.Texture>()
 const textureLoadPromises = new Map<string, Promise<THREE.Texture | null>>()
 const textureLoader = new THREE.TextureLoader()
+
+// `.ktx2` finish maps transcode through the shared KTX2 loader (support is
+// detected once at viewer init); everything else loads as a normal image.
+function pickTextureLoader(url: string): THREE.TextureLoader {
+  // KTX2Loader's load/loadAsync are call-compatible with TextureLoader (url →
+  // Texture / Promise<Texture>); cast for typing.
+  return isKtx2Url(url) ? (ktx2Loader as unknown as THREE.TextureLoader) : textureLoader
+}
 const wrapMap = {
   Repeat: THREE.RepeatWrapping,
   ClampToEdge: THREE.ClampToEdgeWrapping,
@@ -183,7 +192,7 @@ function getTexture(material?: MaterialSchema): THREE.Texture | undefined {
   const cached = textureCache.get(cacheKey)
   if (cached) return cached
 
-  const texture = textureLoader.load(textureConfig.url)
+  const texture = pickTextureLoader(textureConfig.url).load(textureConfig.url)
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
 
@@ -251,7 +260,7 @@ function getPresetTexture(
   const cached = textureCache.get(cacheKey)
   if (cached) return cached
 
-  const texture = textureLoader.load(resolvedPath)
+  const texture = pickTextureLoader(resolvedPath).load(resolvedPath)
   applyTextureProperties(texture, props, slot)
   setTextureCacheKey(texture, cacheKey)
   textureCache.set(cacheKey, texture)
@@ -295,7 +304,7 @@ async function loadPresetTexture(
   const existingPromise = textureLoadPromises.get(cacheKey)
   if (existingPromise) return existingPromise
 
-  const promise = textureLoader
+  const promise = pickTextureLoader(resolvedPath)
     .loadAsync(resolvedPath)
     .then((texture) => {
       applyTextureProperties(texture, props, slot)
