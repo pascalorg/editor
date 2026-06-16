@@ -419,6 +419,14 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
   // any per-type migration runs, so already-saved scenes load cleanly.
   const { nodes: healed } = healSceneNodes(nodes)
   const patchedNodes = { ...healed } as Record<string, any>
+
+  // Pass 1: all node types except elevator.
+  // Elevator migration (migrateElevatorParent) mutates level.children to remove
+  // the elevator ID. If the elevator is processed before its parent level in
+  // Object.entries order, the level migration in this same pass would then see
+  // a children array that still contains the elevator ID and filter it out as
+  // "missing" — corrupting the level. Running elevators in a second pass after
+  // all levels are stable avoids the race entirely.
   for (const [id, node] of Object.entries(patchedNodes)) {
     // 1. Item scale migration
     if (node.type === 'item' && !('scale' in node)) {
@@ -525,14 +533,6 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       }
     }
 
-    if (node.type === 'elevator') {
-      const parentMigrated = migrateElevatorParent(id, node, patchedNodes)
-      const normalized = normalizeElevatorNode(parentMigrated)
-      if (normalized) {
-        patchedNodes[id] = normalized
-      }
-    }
-
     // Roof-segment hosting was added in this migration cycle (the same
     // pattern as shelf above). Older segments saved before the schema
     // gained `children` need the field initialised so
@@ -621,7 +621,59 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
         patchedNodes[id] = { ...node, children: flattened }
       }
     }
+
+    // Level children normalization.
+    // Pre-0.9.1 JSONs may carry child IDs that no longer exist in the node
+    // map (e.g. elevator IDs that lived under a level before the elevator
+    // parent migration moved them up to building). If those dangling IDs are
+    // left in place, collectReachableNodeIds marks the level as having
+    // reachable children that don't exist, which corrupts the scene graph
+    // traversal and leaves the LevelNode in a broken state — making floors
+    // impossible to drag or delete after import.
+    // We intentionally do NOT filter by type prefix here; being permissive
+    // about which types are allowed as children prevents data loss when new
+    // child types are added to the schema in the future.
+    if (node.type === 'level') {
+      const rawChildren = getStringArray(node.children)
+      const validChildren = rawChildren.filter((childId) => {
+        const exists = Boolean(patchedNodes[childId])
+        if (!exists) {
+          console.warn(
+            '[migrateNodes] level',
+            id,
+            'references missing child',
+            childId,
+            '— dropping',
+          )
+        }
+        return exists
+      })
+      const levelNumber = getFiniteNumber(node.level, 0)
+      patchedNodes[id] = {
+        ...node,
+        level: levelNumber,
+        children: validChildren,
+      }
+    }
   }
+
+  // Pass 2: elevator migration.
+  // migrateElevatorParent mutates the parent level's children array (removes
+  // the elevator ID from it). Running this after Pass 1 guarantees that the
+  // level normalization above has already seen a clean children list — if we
+  // ran elevator migration inside Pass 1, the order of Object.entries
+  // iteration would be non-deterministic: processing an elevator before its
+  // parent level would mutate the level's children mid-iteration, potentially
+  // causing the level branch above to see a stale node reference.
+  for (const [id, node] of Object.entries(patchedNodes)) {
+    if (node.type !== 'elevator') continue
+    const parentMigrated = migrateElevatorParent(id, node, patchedNodes)
+    const normalized = normalizeElevatorNode(parentMigrated)
+    if (normalized) {
+      patchedNodes[id] = normalized
+    }
+  }
+
   return patchedNodes as Record<string, AnyNode>
 }
 
