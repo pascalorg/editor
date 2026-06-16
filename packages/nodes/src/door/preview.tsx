@@ -16,16 +16,24 @@ import type { DoorNode } from './schema'
  * The root mesh's layer is set to EDITOR_LAYER because the invisible hitbox
  * material on SCENE_LAYER would poison the WebGPU MRT pass (project gotcha).
  */
-const DoorPreview = ({ node, invalid }: { node: DoorNode; invalid?: boolean }) => {
+const DoorPreview = ({
+  node,
+  invalid,
+  valid,
+}: {
+  node: DoorNode
+  invalid?: boolean
+  valid?: boolean
+}) => {
   const mesh = useMemo(() => {
     const m = buildDoorPreviewMesh(node)
     m.layers.set(EDITOR_LAYER)
     return m
   }, [node.width, node.height, node.frameDepth, node.openingShape, node.doorType, node.leafCount])
 
-  // Ghost treatment (clone + tint + raycast-off) re-applies if `invalid`
-  // flips; its cleanup only disposes the clones it made.
-  useEffect(() => applyGhost(mesh, { invalid }), [mesh, invalid])
+  // Ghost treatment (clone + tint + raycast-off) re-applies if the tint flips;
+  // its cleanup only disposes the clones it made.
+  useEffect(() => applyGhost(mesh, { invalid, valid }), [mesh, invalid, valid])
 
   // Geometry is freshly built per `mesh` and owned here — dispose it only
   // when the mesh itself is replaced/unmounted, never on an `invalid` toggle.

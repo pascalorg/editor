@@ -3,6 +3,7 @@
 import type { Material, Mesh, Object3D, Raycaster } from 'three'
 
 export const INVALID_GHOST_COLOR = 0xef_44_44
+export const VALID_GHOST_COLOR = 0x22_c5_5e
 
 const NO_RAYCAST = (_raycaster: Raycaster, _intersects: unknown[]) => {}
 
@@ -12,8 +13,11 @@ const NO_RAYCAST = (_raycaster: Raycaster, _intersects: unknown[]) => {}
  * Traverses the object tree, disables raycasting on all descendants (prevents
  * cursor-ray starvation), and clones visible mesh materials to set translucency.
  *
- * When `invalid` is true, sets color/emissive to INVALID_GHOST_COLOR and opacity ~0.4.
- * Otherwise sets opacity ~0.5 while preserving the original color.
+ * Tint by state:
+ *   - `invalid` (red, opacity ~0.4): off-host or colliding — can't place here.
+ *   - `valid` (green, opacity ~0.45): on a host and placeable — the "go" cue.
+ *   - neither (opacity ~0.5, original color): a plain translucent preview.
+ * `invalid` wins if both are passed.
  *
  * Skips: meshes whose material.visible === false (door/window root hitbox) and
  * children named 'cutout'.
@@ -21,11 +25,15 @@ const NO_RAYCAST = (_raycaster: Raycaster, _intersects: unknown[]) => {}
  * Returns cleanup that disposes only the cloned materials (never originals or geometry).
  *
  * @param root - The preview mesh tree (typically from buildDoorPreviewMesh / buildWindowPreviewMesh)
- * @param opts - { invalid?: boolean } whether to tint red for invalid placement
+ * @param opts - { invalid?, valid? } placement-state tint
  * @returns Cleanup function that disposes the cloned materials
  */
-export function applyGhost(root: Object3D, opts?: { invalid?: boolean }): () => void {
+export function applyGhost(
+  root: Object3D,
+  opts?: { invalid?: boolean; valid?: boolean },
+): () => void {
   const invalid = opts?.invalid ?? false
+  const valid = !invalid && (opts?.valid ?? false)
   const cloned: Material[] = []
 
   root.traverse((obj) => {
@@ -51,6 +59,12 @@ export function applyGhost(root: Object3D, opts?: { invalid?: boolean }): () => 
           INVALID_GHOST_COLOR,
         )
         clone.opacity = 0.4
+      } else if (valid) {
+        ;(clone as { color?: { setHex: (c: number) => void } }).color?.setHex(VALID_GHOST_COLOR)
+        ;(clone as { emissive?: { setHex: (c: number) => void } }).emissive?.setHex(
+          VALID_GHOST_COLOR,
+        )
+        clone.opacity = 0.45
       } else {
         clone.opacity = 0.5
       }

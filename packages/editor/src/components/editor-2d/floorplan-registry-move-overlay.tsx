@@ -124,6 +124,14 @@ export function FloorplanRegistryMoveOverlay() {
       // to be consumed. That legacy flow is gone in the registry layer;
       // all entries use the action menu now.
       let hasMovedSinceStart = false
+      // Live cursor location — updated on EVERY pointermove (even over the 3D
+      // canvas) so R-key ownership can follow the pointer's CURRENT pane rather
+      // than the sticky `hasMovedSinceStart`. Without this, once the user touched
+      // the 2D pane the overlay claimed R forever and the 3D flip went dead.
+      let pointerOverFloorplan = false
+      const onPointerTrack = (event: PointerEvent) => {
+        pointerOverFloorplan = isPointerOverFloorplanScene(event.clientX, event.clientY)
+      }
 
       const onMove = (event: PointerEvent) => {
         // Skip 3D-canvas / other-UI cursor moves so the overlay only
@@ -288,18 +296,24 @@ export function FloorplanRegistryMoveOverlay() {
         // apply so the 2D symbol updates immediately; kinds without a facing
         // leave `flipSide` unset and R falls through to the global handler.
         //
-        // Only when THIS overlay is the active mover — i.e. the user has moved
-        // the pointer over the 2D pane (`hasMovedSinceStart`). The 3D move tool
-        // also listens for R while a door/window `movingNode` is placed (split
-        // / 3D-only view); gating on `hasMovedSinceStart` keeps the two from
-        // both flipping (or double-playing the cue) on a single R press.
+        // Ownership follows the CURRENT pointer pane, not a sticky flag: the 3D
+        // move tool ALSO listens for R on `window`. We own R only while the
+        // cursor is over the 2D floor-plan pane (`pointerOverFloorplan`) AND the
+        // 2D mover has actually engaged (`hasMovedSinceStart`); then we
+        // `stopImmediatePropagation` (this handler is CAPTURE-phase, so it runs
+        // first) so the 3D tool can't also flip. When the cursor is over the 3D
+        // pane we yield — the 3D tool owns R there. (The old sticky
+        // `hasMovedSinceStart`-only gate made the overlay claim R forever after
+        // the first 2D move, killing the 3D flip.)
         if (event.key === 'r' || event.key === 'R') {
-          if (!(session.flipSide && hasMovedSinceStart)) return
+          if (!(session.flipSide && hasMovedSinceStart && pointerOverFloorplan)) return
+          if (event.repeat) return
           const t = event.target as HTMLElement | null
           if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
             return
           }
           event.preventDefault()
+          event.stopImmediatePropagation()
           session.flipSide()
           sfxEmitter.emit('sfx:item-rotate')
           return
@@ -349,13 +363,18 @@ export function FloorplanRegistryMoveOverlay() {
         setMovingNode(null)
       }
 
+      window.addEventListener('pointermove', onPointerTrack)
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onPointerUp)
-      window.addEventListener('keydown', onKey)
+      // Capture phase so this runs BEFORE the 3D move tool's bubble-phase R
+      // listener — when the cursor is over the 2D pane, `stopImmediatePropagation`
+      // then pre-empts it so only one handler flips.
+      window.addEventListener('keydown', onKey, true)
       return () => {
+        window.removeEventListener('pointermove', onPointerTrack)
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onPointerUp)
-        window.removeEventListener('keydown', onKey)
+        window.removeEventListener('keydown', onKey, true)
         // Unmount cleanup. `historyPaused === true` here means none of
         // our terminal paths (commit, Esc) ran in this overlay — they
         // each call `resumeSceneHistory` and flip the flag.

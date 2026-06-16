@@ -74,13 +74,25 @@ const DoorTool: React.FC = () => {
 
   // Off-host floating ghost: the real door geometry follows the cursor over
   // the grid (tinted invalid). Mutually exclusive with the on-host draft —
-  // when a draft + wireframe is shown this is null and vice-versa.
+  // when a draft + wireframe is shown this is null and vice-versa. `side`
+  // carries the R-flip so the floating ghost faces the side that will be
+  // committed (its swing/hinge geometry depends on `side`).
   const [fallbackPose, setFallbackPose] = useState<{
     position: [number, number, number]
     rotationY: number
+    side: DoorNode['side']
   } | null>(null)
 
-  const ghostStub = useMemo(() => DoorNode.parse({ position: [0, 0, 0], rotation: [0, 0, 0] }), [])
+  // Ghost preview node — zeroed transform + the live facing side (rebuilds on R).
+  const ghostStub = useMemo(
+    () =>
+      DoorNode.parse({
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        side: fallbackPose?.side ?? 'front',
+      }),
+    [fallbackPose?.side],
+  )
 
   useEffect(() => {
     useScene.temporal.getState().pause()
@@ -98,6 +110,9 @@ const DoorTool: React.FC = () => {
     // re-applied to the last wall hover so the flip shows live before commit.
     let sideFlip = false
     let lastWallEvent: WallEvent | null = null
+    // Last open-floor cursor point (level-local X/Z) so an R-flip while
+    // free-following can re-render the floating ghost with the new facing.
+    let lastFloorPoint: [number, number, number] | null = null
 
     const getLevelId = () => useViewer.getState().selection.levelId
     const getLevelYOffset = () => {
@@ -149,9 +164,15 @@ const DoorTool: React.FC = () => {
 
     // Off-host fallback: hide the wireframe outline and float the real door
     // geometry (tinted invalid) at the cursor so the armed tool is visible.
+    // `sideFlip` (R) flips the facing: a back facing is a π yaw on the floating
+    // ghost, and the door swing/hinge geometry reads `side`.
     const showGhostAt = (position: [number, number, number]) => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
-      setFallbackPose({ position, rotationY: 0 })
+      setFallbackPose({
+        position,
+        rotationY: sideFlip ? Math.PI : 0,
+        side: sideFlip ? 'back' : 'front',
+      })
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
     }
@@ -176,13 +197,16 @@ const DoorTool: React.FC = () => {
       bypassSnap: boolean,
       ignoreId?: string,
     ) => {
+      // bypassSnap is set by Shift (see callers). Shift = free-place: land at the
+      // raw cursor but keep the along-wall guides visible. bypass (Alt) still
+      // hard-disables alignment.
       const localX = resolveWallSlideAlignment({
         wallNode: wall,
         rawLocalX,
         width,
         candidates: alignmentCandidates,
-        bypass,
-        bypassSnap,
+        bypass: bypass && !bypassSnap,
+        freePlace: bypassSnap,
       })
       const { clampedX, clampedY } = clampToWall(wall, localX, width, height)
       const valid = !hasWallChildOverlap(wall.id, clampedX, clampedY, width, height, ignoreId)
@@ -403,7 +427,8 @@ const DoorTool: React.FC = () => {
         bypassSnap,
         draftRef.current.id,
       )
-      if (!valid) return
+      // Shift force-places over a collision (the draft stays red as a warning).
+      if (!valid && !bypassSnap) return
 
       commitDoorAtWall(event.node, clampedX, clampedY, side, itemRotation)
       event.stopPropagation()
@@ -433,8 +458,9 @@ const DoorTool: React.FC = () => {
       hostKind = null
       lastWallEvent = null
       const [x, y, z] = event.localPosition
+      lastFloorPoint = [x, y + FALLBACK_HEIGHT / 2, z]
       destroyDraft()
-      showGhostAt([x, y + FALLBACK_HEIGHT / 2, z])
+      showGhostAt(lastFloorPoint)
     }
 
     // ── Roof-segment wall faces ─────────────────────────────────────
@@ -497,7 +523,9 @@ const DoorTool: React.FC = () => {
     const onRoofClick = (event: RoofEvent) => {
       if (!draftRef.current?.roofSegmentId) return
       const target = resolveRoofTarget(event)
-      if (!target?.valid) return
+      // Shift force-places over a colliding roof-face target (see onWallClick).
+      if (!target) return
+      if (!target.valid && event.nativeEvent?.shiftKey !== true) return
       const { segment, face, position } = target
 
       const draft = draftRef.current
@@ -568,18 +596,26 @@ const DoorTool: React.FC = () => {
     }
 
     // R flips the door's facing side mid-placement (front ↔ back), like the
-    // committed-selected R flip. Only meaningful while snapped to a wall (the
-    // off-wall ghost has no orientation), so it acts only then — re-applying
-    // the last wall hover so the snapped preview flips live.
+    // committed-selected R flip. ALWAYS toggles the persistent flip intent —
+    // never a no-op (the old `!lastWallEvent` guard dropped R off-wall and before
+    // the first wall hover, so it "needed two presses"). Then re-renders whatever
+    // preview is current so the flip shows live and matches commit.
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'r' && e.key !== 'R') return
-      if (!lastWallEvent) return
+      if (e.repeat) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
       e.preventDefault()
       sideFlip = !sideFlip
       triggerSFX('sfx:item-rotate')
-      onWallHover(lastWallEvent)
+      if (lastWallEvent) {
+        // On a wall: re-resolve + re-preview with the flipped side.
+        onWallHover(lastWallEvent)
+      } else if (lastFloorPoint) {
+        // Off-wall: re-render the floating ghost (showGhostAt reads `sideFlip`).
+        showGhostAt(lastFloorPoint)
+      }
+      // else: no preview yet — `sideFlip` is set, so the first hover/follow uses it.
     }
 
     emitter.on('wall:enter', onWallHover)
