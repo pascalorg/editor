@@ -242,7 +242,14 @@ function buildBookshelf(group: Group, node: ShelfNode, materials: ShelfSlotMater
     for (let c = 1; c < node.columns; c++) {
       const x = -innerWidth / 2 + c * colStep
       const divider = stampShelfSlot(
-        new Mesh(new BoxGeometry(node.thickness, fy.height, node.depth), materials.frame),
+        // A full-height divider crosses the shelves, so its depth must sit
+        // INSIDE the boards' (already recessed) depth: embedded at each crossing
+        // (the board occludes it — no coplanar fight) and tucked inside the back
+        // panel, rather than proud at the front / coplanar with the back.
+        new Mesh(
+          new BoxGeometry(node.thickness, fy.height, node.depth - 4 * BOARD_INSET),
+          materials.frame,
+        ),
         'frame',
       )
       divider.name = `shelf-divider-col-${c}`
@@ -343,7 +350,9 @@ function buildCubby(group: Group, node: ShelfNode, materials: ShelfSlotMaterials
     const colStep = innerWidth / node.columns
     const rowStep = node.height / node.rows
     for (let r = 0; r < node.rows; r++) {
-      const cellBottomY = node.thickness + r * rowStep
+      // Without a bottom board the lowest cell opens onto the floor, so its
+      // divider must reach y=0 rather than rest on a (missing) board top.
+      const cellBottomY = r === 0 && !node.withBottom ? 0 : node.thickness + r * rowStep
       const cellTopY = node.thickness + (r + 1) * rowStep
       const dividerHeight = cellTopY - cellBottomY - node.thickness
       if (dividerHeight <= 0) continue
