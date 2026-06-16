@@ -2,7 +2,8 @@ import { nodeRegistry } from '../registry'
 import type { AnyNode, AnyNodeId } from '../schema'
 
 /**
- * Connectivity-aware editing for port-bearing kinds (HVAC ductwork).
+ * Connectivity-aware editing for port-bearing distribution kinds
+ * (HVAC ductwork AND DWV plumbing).
  *
  * Two nodes are "connected" when a port of one coincides in space with a
  * port of the other — exactly how the placement tools mate a fitting onto
@@ -62,10 +63,17 @@ export type PortConnectivity = {
   connections: PortConnection[]
 }
 
-function portsOf(node: AnyNode): ReadonlyArray<{ id: string; position: Point }> | undefined {
+function portsOf(
+  node: AnyNode,
+): ReadonlyArray<{ id: string; position: Point; system?: string }> | undefined {
   return nodeRegistry.get(node.type)?.ports?.(node) as
-    | ReadonlyArray<{ id: string; position: Point }>
+    | ReadonlyArray<{ id: string; position: Point; system?: string }>
     | undefined
+}
+
+/** A node's distribution role from the registry (run / fitting / …). */
+function roleOf(node: AnyNode): string | undefined {
+  return nodeRegistry.get(node.type)?.distributionRole
 }
 
 function distSq(a: Point, b: Point): number {
@@ -80,9 +88,9 @@ function distSq(a: Point, b: Point): number {
  * start of a move/resize. Call once before the drag; feed the result to
  * `resolveConnectivityUpdates` on every frame.
  *
- * Only duct-segment (endpoint stretch) and duct-fitting (rigid follow)
- * partners are tracked — terminals and equipment usually mount to a
- * surface and shouldn't be yanked off it when an adjacent fitting nudges.
+ * Only `run`-role partners (segments — endpoint stretch) and `fitting`-role
+ * partners (rigid follow) are tracked — terminals and equipment usually mount
+ * to a surface and shouldn't be yanked off it when an adjacent fitting nudges.
  */
 export function analyzePortConnectivity(
   movedNode: AnyNode,
@@ -90,14 +98,22 @@ export function analyzePortConnectivity(
 ): PortConnectivity {
   const movedPorts = portsOf(movedNode) ?? []
   const startMovedPorts: Record<string, Point> = {}
-  for (const p of movedPorts) startMovedPorts[p.id] = p.position
+  const movedPortSystem: Record<string, string | undefined> = {}
+  for (const p of movedPorts) {
+    startMovedPorts[p.id] = p.position
+    movedPortSystem[p.id] = p.system
+  }
 
   const connections: PortConnection[] = []
   const epsSq = COINCIDENT_EPS_M * COINCIDENT_EPS_M
 
   for (const other of Object.values(nodes)) {
     if (!other || other.id === movedNode.id) continue
-    if (other.type !== 'duct-segment' && other.type !== 'duct-fitting') continue
+    // Generalised across every distribution family (HVAC duct + DWV pipe):
+    // `run` partners stretch an endpoint, `fitting` partners follow rigidly.
+    // Terminals/equipment mount to surfaces and are intentionally NOT dragged.
+    const otherRole = roleOf(other)
+    if (otherRole !== 'run' && otherRole !== 'fitting') continue
     const otherPorts = portsOf(other)
     if (!otherPorts) continue
 
@@ -105,15 +121,19 @@ export function analyzePortConnectivity(
       // Find which of the moved node's ports this partner port sits on.
       let matchedId: string | null = null
       for (const mp of movedPorts) {
-        if (distSq(op.position, mp.position) <= epsSq) {
-          matchedId = mp.id
-          break
-        }
+        if (distSq(op.position, mp.position) > epsSq) continue
+        // Don't fuse ports from incompatible systems (e.g. a supply duct
+        // and a waste pipe that happen to cross): only mate when both
+        // ports declare the same system, or at least one is unscoped.
+        const ms = movedPortSystem[mp.id]
+        if (ms && op.system && ms !== op.system) continue
+        matchedId = mp.id
+        break
       }
       if (!matchedId) continue
 
-      if (other.type === 'duct-segment') {
-        const path = (other as unknown as { path: Point[] }).path
+      if (otherRole === 'run') {
+        const path = (other as unknown as { path?: Point[] }).path
         if (!Array.isArray(path) || path.length < 2) continue
         // Port id 'start' → first point, 'end' → last point.
         const pathIndex = op.id === 'start' ? 0 : path.length - 1

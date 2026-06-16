@@ -6,6 +6,7 @@ import {
   emitter,
   type GridEvent,
   getLevelHeight,
+  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -551,7 +552,9 @@ const DuctSegmentTool = () => {
     // ceiling (centerline = ceiling height − radius).
     const resolveBaseY = (): number => {
       if (!ceilingModeRef.current) return 0
-      const ceiling = getLevelHeight(activeLevelId, useScene.getState().nodes)
+      const ceiling = getLevelHeight(activeLevelId, useScene.getState().nodes, (wallId) =>
+        sceneRegistry.nodes.get(wallId)?.position.y,
+      )
       const p = profileRef.current
       const verticalIn = p.shape === 'round' ? p.diameter : p.height
       return Math.max(0, ceiling - (verticalIn * 0.0254) / 2)

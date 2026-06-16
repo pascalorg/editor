@@ -64,23 +64,25 @@ describe('planPipeBranchTap', () => {
     return { nodeId: node.id, segmentIndex, point }
   }
 
-  test('horizontal drain tap → wye, branch leaning 45° downstream', () => {
+  test('horizontal drain tap → square sanitary tee', () => {
     const run = drain([
       [0, 0, 0],
       [6, -0.125, 0],
     ])
     const plan = planPipeBranchTap(run, hit(run, 0, [3, -0.0625, 0]), [0, 0, 1], 2)
     expect(plan).not.toBeNull()
-    expect(plan!.fitting.fittingType).toBe('wye')
+    // DWV side taps mint a SQUARE sanitary tee (see planPipeBranchTap /
+    // PipeFittingNode schema): the branch enters perpendicular to the run
+    // regardless of the drawn lead-in angle, matching the duct tee tap.
+    expect(plan!.fitting.fittingType).toBe('sanitary-tee')
 
     const ports = getPipeFittingPorts(plan!.fitting)
     const branch = ports.find((p) => p.id === 'branch')!
     const inlet = ports.find((p) => p.id === 'inlet')!
     const outlet = ports.find((p) => p.id === 'outlet')!
-    // Branch leaves at 45° between the run axis and the drawn direction —
-    // i.e. leaning downstream, the code-correct wye entry.
+    // Branch leaves square to the run axis (the projected-perpendicular entry).
     const axis = [6 / Math.hypot(6, 0.125), -0.125 / Math.hypot(6, 0.125), 0]
-    expect(dot(branch.direction, axis)).toBeCloseTo(Math.SQRT1_2, 3)
+    expect(Math.abs(dot(branch.direction, axis))).toBeLessThan(1e-6)
     expect(branch.direction[2]).toBeGreaterThan(0.6)
     // Split halves mate the run collars.
     const upstream = plan!.runUpdate.data.path

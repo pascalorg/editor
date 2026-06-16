@@ -91,7 +91,7 @@ export function validateDwv(nodes: Readonly<Record<AnyNodeId, AnyNode>>): DwvFin
 
   // ── Per-segment slope (waste only) ──────────────────────────────
   for (const node of Object.values(nodes)) {
-    if (!node || node.type !== 'pipe-segment' || node.system !== 'waste') continue
+    if (node?.type !== 'pipe-segment' || node.system !== 'waste') continue
     const path = node.path as Vec3[]
     const minSlope = minSlopeFor(node.diameter)
     const maxSlope = node.diameter / 12 // 1 pipe-diameter per foot → siphoning

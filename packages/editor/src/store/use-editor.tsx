@@ -114,6 +114,7 @@ export type StructureTool =
   | 'liquid-line'
   | 'pipe-segment'
   | 'pipe-fitting'
+  | 'pipe-trap'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'
