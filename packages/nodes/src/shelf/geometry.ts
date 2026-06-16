@@ -63,6 +63,21 @@ function stampShelfSlot(mesh: Mesh, slotId: ShelfSlotId): Mesh {
   return mesh
 }
 
+// Plates (boards) span the full footprint, so their end / front / back faces
+// land exactly on the frame's (posts / sides / back) outer faces — coplanar
+// surfaces the depth buffer can't separate, which flickers as z-fighting. Recess
+// every board 1mm on width + depth so it sits just inside the frame: the meshes
+// still overlap (no visible gap), but no two faces are coplanar.
+const BOARD_INSET = 0.001
+
+function boardGeometry(width: number, thickness: number, depth: number): BoxGeometry {
+  return new BoxGeometry(
+    Math.max(width - 2 * BOARD_INSET, 0.001),
+    thickness,
+    Math.max(depth - 2 * BOARD_INSET, 0.001),
+  )
+}
+
 export function buildShelfGeometry(
   rawNode: ShelfNode,
   ctx?: GeometryContext,
@@ -113,7 +128,7 @@ export function buildShelfGeometry(
 function buildWallShelf(group: Group, node: ShelfNode, materials: ShelfSlotMaterials) {
   for (const y of boardCenterYs(node)) {
     const board = stampShelfSlot(
-      new Mesh(new BoxGeometry(node.width, node.thickness, node.depth), materials.shelves),
+      new Mesh(boardGeometry(node.width, node.thickness, node.depth), materials.shelves),
       'shelves',
     )
     board.name = `shelf-board-${boardRowIndex(node, y)}`
@@ -155,7 +170,7 @@ function buildBookshelf(group: Group, node: ShelfNode, materials: ShelfSlotMater
   // Top + bottom + intermediate boards
   for (const y of boardCenterYs(node)) {
     const board = stampShelfSlot(
-      new Mesh(new BoxGeometry(innerWidth, node.thickness, node.depth), materials.shelves),
+      new Mesh(boardGeometry(innerWidth, node.thickness, node.depth), materials.shelves),
       'shelves',
     )
     board.name = `shelf-board-${boardRowIndex(node, y)}`
@@ -165,7 +180,7 @@ function buildBookshelf(group: Group, node: ShelfNode, materials: ShelfSlotMater
 
   if (node.withBottom) {
     const bottom = stampShelfSlot(
-      new Mesh(new BoxGeometry(innerWidth, node.thickness, node.depth), materials.shelves),
+      new Mesh(boardGeometry(innerWidth, node.thickness, node.depth), materials.shelves),
       'shelves',
     )
     bottom.name = 'shelf-board-bottom'
@@ -226,7 +241,7 @@ function buildOpenRack(group: Group, node: ShelfNode, materials: ShelfSlotMateri
 
   for (const y of boardCenterYs(node)) {
     const board = stampShelfSlot(
-      new Mesh(new BoxGeometry(innerWidth, boardThickness, node.depth), materials.shelves),
+      new Mesh(boardGeometry(innerWidth, boardThickness, node.depth), materials.shelves),
       'shelves',
     )
     board.name = `shelf-board-${boardRowIndex(node, y)}`
@@ -264,7 +279,7 @@ function buildCubby(group: Group, node: ShelfNode, materials: ShelfSlotMaterials
 
   for (const y of boardCenterYs(node)) {
     const board = stampShelfSlot(
-      new Mesh(new BoxGeometry(innerWidth, node.thickness, node.depth), materials.shelves),
+      new Mesh(boardGeometry(innerWidth, node.thickness, node.depth), materials.shelves),
       'shelves',
     )
     board.name = `shelf-board-${boardRowIndex(node, y)}`
@@ -274,7 +289,7 @@ function buildCubby(group: Group, node: ShelfNode, materials: ShelfSlotMaterials
 
   if (node.withBottom) {
     const bottom = stampShelfSlot(
-      new Mesh(new BoxGeometry(innerWidth, node.thickness, node.depth), materials.shelves),
+      new Mesh(boardGeometry(innerWidth, node.thickness, node.depth), materials.shelves),
       'shelves',
     )
     bottom.name = 'shelf-board-bottom'
