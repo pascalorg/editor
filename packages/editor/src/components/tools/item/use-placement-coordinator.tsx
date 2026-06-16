@@ -192,8 +192,10 @@ export interface PlacementCoordinatorConfig {
   initialState?: PlacementState
   /** Scale to use when lazily creating a draft (e.g. for wall/ceiling duplicates). Defaults to [1,1,1]. */
   defaultScale?: [number, number, number]
-  /** Move-mode sessions for floor items keep the grabbed item offset from the first floor-plane hit. */
-  preserveFloorDragOffset?: boolean
+  /** Move-mode sessions keep the grabbed item offset from the first surface hit
+   *  (floor / wall / ceiling / item-surface / shelf) instead of snapping the
+   *  item's origin under the cursor. */
+  preserveDragOffset?: boolean
 }
 
 export function usePlacementCoordinator(config: PlacementCoordinatorConfig): React.ReactNode {
@@ -461,6 +463,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       return buildingMesh ? buildingMesh.worldToLocal(new Vector3(x, y, z)) : new Vector3(x, y, z)
     }
 
+    const buildingLocalToWorld = (x: number, y: number, z: number): Vector3 => {
+      const buildingId = useViewer.getState().selection.buildingId
+      const buildingMesh = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
+      return buildingMesh ? buildingMesh.localToWorld(new Vector3(x, y, z)) : new Vector3(x, y, z)
+    }
+
     const applyTransition = (result: TransitionResult) => {
       // Alignment guides are floor-only; clear them when the cursor moves
       // onto a wall / ceiling / item surface (only those paths call this).
@@ -528,11 +536,67 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Init draft ----
     configRef.current.initDraft(gridPosition.current)
-    const preserveFloorDragOffset =
-      configRef.current.preserveFloorDragOffset === true &&
-      placementState.current.surface === 'floor' &&
-      !asset.attachTo
-    const relativeFloorStart = preserveFloorDragOffset ? gridPosition.current.clone() : null
+    const preserveDragOffset = configRef.current.preserveDragOffset === true
+    const relativeFloorStart =
+      preserveDragOffset && placementState.current.surface === 'floor' && !asset.attachTo
+        ? gridPosition.current.clone()
+        : null
+
+    // Grab anchors for the non-floor surfaces. Each captures the cursor's
+    // surface-local position and the item's stored position on the first move
+    // for a given host, then offsets every later move by
+    // `start + (raw - anchor)` — mirroring the floor path and the door/window
+    // move tools so the item tracks the grabbed point instead of teleporting
+    // its origin under the cursor. Reset on host change (re-seeded from the
+    // item's then-current position) by the surface leave handlers.
+    let wallDragAnchor: {
+      wallId: string
+      rawX: number
+      rawY: number
+      startX: number
+      startY: number
+    } | null = null
+    let ceilingDragAnchor: {
+      ceilingId: string
+      rawX: number
+      rawZ: number
+      startX: number
+      startZ: number
+    } | null = null
+    let hostSurfaceDragAnchor: {
+      hostId: string
+      rawX: number
+      rawZ: number
+      startX: number
+      startZ: number
+    } | null = null
+
+    // Item-surface / shelf moves snap from a WORLD cursor hit projected into the
+    // host's local frame. Re-project the offset-corrected local point back to
+    // world so the strategy (which re-derives both the stored position and the
+    // visual cursor from `event.position`) stays self-consistent.
+    const resolveHostSurfaceWorld = (
+      hostId: string,
+      worldPos: readonly [number, number, number],
+    ): [number, number, number] | null => {
+      const draft = draftNode.current
+      const hostMesh = sceneRegistry.nodes.get(hostId)
+      if (!(preserveDragOffset && draft && hostMesh)) return null
+      const rawLocal = hostMesh.worldToLocal(new Vector3(worldPos[0], worldPos[1], worldPos[2]))
+      if (!hostSurfaceDragAnchor || hostSurfaceDragAnchor.hostId !== hostId) {
+        hostSurfaceDragAnchor = {
+          hostId,
+          rawX: rawLocal.x,
+          rawZ: rawLocal.z,
+          startX: draft.position[0],
+          startZ: draft.position[2],
+        }
+      }
+      const correctedX = hostSurfaceDragAnchor.startX + (rawLocal.x - hostSurfaceDragAnchor.rawX)
+      const correctedZ = hostSurfaceDragAnchor.startZ + (rawLocal.z - hostSurfaceDragAnchor.rawZ)
+      const world = hostMesh.localToWorld(new Vector3(correctedX, rawLocal.y, correctedZ))
+      return [world.x, world.y, world.z]
+    }
 
     // Sync cursor to the draft mesh's world position and rotation
     if (draftNode.current) {
@@ -663,13 +727,32 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
               const rawZ = event.localPosition[2]
               const anchor = floorDragAnchor ?? [rawX, rawZ]
               floorDragAnchor = anchor
+              // Shift the cursor by the grab offset so the item tracks the point
+              // the user grabbed, not its origin teleporting under the cursor.
+              // `floorStrategy.move` snaps on the WORLD grid (`event.position`)
+              // on its default path and only reads `event.localPosition` when
+              // Shift is held, so BOTH frames must carry the offset — patching
+              // localPosition alone leaves the non-Shift drag teleporting.
+              // Deriving the world point from the corrected local point keeps
+              // the two fields describing the same location.
+              const correctedLocal: [number, number, number] = [
+                relativeFloorStart.x + (rawX - anchor[0]),
+                event.localPosition[1],
+                relativeFloorStart.z + (rawZ - anchor[1]),
+              ]
+              const correctedWorld = buildingLocalToWorld(
+                correctedLocal[0],
+                correctedLocal[1],
+                correctedLocal[2],
+              )
               return {
                 ...event,
-                localPosition: [
-                  relativeFloorStart.x + (rawX - anchor[0]),
-                  event.localPosition[1],
-                  relativeFloorStart.z + (rawZ - anchor[1]),
-                ] as [number, number, number],
+                position: [correctedWorld.x, event.position[1], correctedWorld.z] as [
+                  number,
+                  number,
+                  number,
+                ],
+                localPosition: correctedLocal,
               }
             })()
           : event
@@ -865,7 +948,40 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         return
       }
 
-      const result = wallStrategy.move(ctx, event, getActiveValidators())
+      let wallMoveEvent = event
+      if (preserveDragOffset && draftNode.current) {
+        const rawX = event.localPosition[0]
+        const rawY = event.localPosition[1]
+        if (!wallDragAnchor || wallDragAnchor.wallId !== event.node.id) {
+          wallDragAnchor = {
+            wallId: event.node.id,
+            rawX,
+            rawY,
+            startX: draftNode.current.position[0],
+            startY: draftNode.current.position[1],
+          }
+        }
+        const correctedX = wallDragAnchor.startX + (rawX - wallDragAnchor.rawX)
+        const correctedY = wallDragAnchor.startY + (rawY - wallDragAnchor.rawY)
+        const wallMesh = sceneRegistry.nodes.get(event.node.id)
+        const correctedWorld = wallMesh
+          ? wallMesh.localToWorld(new Vector3(correctedX, correctedY, event.localPosition[2]))
+          : null
+        wallMoveEvent = {
+          ...event,
+          localPosition: [correctedX, correctedY, event.localPosition[2]],
+          ...(correctedWorld
+            ? {
+                position: [correctedWorld.x, correctedWorld.y, correctedWorld.z] as [
+                  number,
+                  number,
+                  number,
+                ],
+              }
+            : {}),
+        }
+      }
+      const result = wallStrategy.move(ctx, wallMoveEvent, getActiveValidators())
       if (!result) return
 
       event.stopPropagation()
@@ -962,6 +1078,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onWallLeave = (event: WallEvent) => {
+      wallDragAnchor = null
       const result = wallStrategy.leave(getContext())
       if (!result) return
 
@@ -1133,6 +1250,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // ---- Item Surface Handlers ----
 
     const detachItemSurfaceToFloor = (event: ItemEvent) => {
+      hostSurfaceDragAnchor = null
       const buildingLocalPoint = worldToBuildingLocal(
         event.position[0],
         event.position[1],
@@ -1233,8 +1351,17 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         return
       }
 
-      lastRawPos.current.set(event.position[0], event.position[1], event.position[2])
-      const result = itemSurfaceStrategy.move(ctx, event)
+      const surfaceWorld =
+        ctx.state.surfaceItemId !== null
+          ? resolveHostSurfaceWorld(ctx.state.surfaceItemId, event.position)
+          : null
+      const itemMoveEvent = surfaceWorld ? { ...event, position: surfaceWorld } : event
+      lastRawPos.current.set(
+        itemMoveEvent.position[0],
+        itemMoveEvent.position[1],
+        itemMoveEvent.position[2],
+      )
+      const result = itemSurfaceStrategy.move(ctx, itemMoveEvent)
       if (!result) return
 
       event.stopPropagation()
@@ -1428,8 +1555,34 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         return
       }
 
-      lastRawPos.current.set(event.localPosition[0], event.localPosition[1], event.localPosition[2])
-      const result = ceilingStrategy.move(getContext(), event)
+      let ceilingMoveEvent = event
+      if (preserveDragOffset && draftNode.current) {
+        const rawX = event.localPosition[0]
+        const rawZ = event.localPosition[2]
+        if (!ceilingDragAnchor || ceilingDragAnchor.ceilingId !== event.node.id) {
+          ceilingDragAnchor = {
+            ceilingId: event.node.id,
+            rawX,
+            rawZ,
+            startX: draftNode.current.position[0],
+            startZ: draftNode.current.position[2],
+          }
+        }
+        ceilingMoveEvent = {
+          ...event,
+          localPosition: [
+            ceilingDragAnchor.startX + (rawX - ceilingDragAnchor.rawX),
+            event.localPosition[1],
+            ceilingDragAnchor.startZ + (rawZ - ceilingDragAnchor.rawZ),
+          ],
+        }
+      }
+      lastRawPos.current.set(
+        ceilingMoveEvent.localPosition[0],
+        ceilingMoveEvent.localPosition[1],
+        ceilingMoveEvent.localPosition[2],
+      )
+      const result = ceilingStrategy.move(getContext(), ceilingMoveEvent)
       if (!result) return
 
       event.stopPropagation()
@@ -1493,6 +1646,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onCeilingLeave = (event: CeilingEvent) => {
+      ceilingDragAnchor = null
       const result = ceilingStrategy.leave(getContext())
       if (!result) return
 
@@ -1566,7 +1720,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         }
         return
       }
-      const result = shelfSurfaceStrategy.move(ctx, event)
+      const shelfWorld =
+        ctx.state.shelfId !== null
+          ? resolveHostSurfaceWorld(ctx.state.shelfId, event.position)
+          : null
+      const shelfMoveEvent = shelfWorld ? { ...event, position: shelfWorld } : event
+      const result = shelfSurfaceStrategy.move(ctx, shelfMoveEvent)
       if (!result) return
 
       event.stopPropagation()
@@ -1905,6 +2064,16 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const draft = draftNode.current
     if (!(draft && viewerLevelId) || asset.attachTo) return
     if (draft.parentId === viewerLevelId) return
+    // A non-attach item resting on a host surface (table / counter / shelf) is
+    // intentionally parented to that host while it's moved — the surface move
+    // handlers keep it hosted and the commit writes the host parent back. Only
+    // free floor items get re-homed to the level here; yanking a hosted item
+    // onto the level would re-interpret its host-local position in level space
+    // and float the dragged mesh off the host toward the building origin.
+    const draftParent = draft.parentId
+      ? useScene.getState().nodes[draft.parentId as AnyNodeId]
+      : undefined
+    if (draftParent?.type === 'item' || draftParent?.type === 'shelf') return
     draft.parentId = viewerLevelId
     useScene.getState().updateNode(draft.id as AnyNodeId, { parentId: viewerLevelId })
   }, [viewerLevelId, draftNode, asset])
