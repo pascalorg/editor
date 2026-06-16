@@ -350,7 +350,13 @@ function buildCubby(group: Group, node: ShelfNode, materials: ShelfSlotMaterials
       for (let c = 1; c < node.columns; c++) {
         const x = -innerWidth / 2 + c * colStep
         const divider = stampShelfSlot(
-          new Mesh(new BoxGeometry(node.thickness, dividerHeight, node.depth), materials.frame),
+          // Extend 1mm into the boards above + below (centre unchanged) so the
+          // divider tucks under the top board and onto the bottom board instead
+          // of meeting them on a coplanar face (which shimmers / reads merged).
+          new Mesh(
+            new BoxGeometry(node.thickness, dividerHeight + 2 * BOARD_INSET, node.depth),
+            materials.frame,
+          ),
           'frame',
         )
         divider.name = `shelf-divider-${r}-${c}`
