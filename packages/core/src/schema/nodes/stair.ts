@@ -31,6 +31,9 @@ export const StairNode = BaseNode.extend({
   treadMaterialPreset: z.string().optional(),
   sideMaterial: MaterialSchema.optional(),
   sideMaterialPreset: z.string().optional(),
+  // Unified paint-slot refs (`scene:`/`library:` MaterialRef per slot id),
+  // matching the slot model items/slab/shelf use. Absent = declared default.
+  slots: z.record(z.string(), z.string()).optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around Y axis in radians
   rotation: z.number().default(0),
