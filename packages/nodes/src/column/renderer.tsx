@@ -5,6 +5,7 @@ import {
   useLiveNodeOverrides,
   useLiveTransforms,
   useRegistry,
+  useScene,
 } from '@pascal-app/core'
 import {
   baseMaterial,
@@ -17,21 +18,52 @@ import {
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
   type RenderShading,
+  resolveMaterialRef,
+  resolveSlotDefaultMaterial,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
-import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, type Material } from 'three'
+import {
+  COLUMN_BASE_DEFAULT,
+  COLUMN_CAPITAL_DEFAULT,
+  COLUMN_FRAME_DEFAULT,
+  COLUMN_SHAFT_DEFAULT,
+  type ColumnSlotId,
+} from './slots'
 
-const ColumnMaterialContext = createContext<Material>(baseMaterial())
+type ColumnSlotMaterials = Record<ColumnSlotId, Material>
+type SceneMaterials = ReturnType<typeof useScene.getState>['materials']
+
+const DEFAULT_COLUMN_MATERIAL = baseMaterial()
+const DEFAULT_COLUMN_SLOT_MATERIALS = createSingleColumnMaterialMap(DEFAULT_COLUMN_MATERIAL)
+
+const ColumnMaterialContext = createContext<ColumnSlotMaterials>(DEFAULT_COLUMN_SLOT_MATERIALS)
+const ColumnSlotContext = createContext<ColumnSlotId>('shaft')
 const ColumnEdgeSoftnessContext = createContext(0.025)
 
 function ColumnMaterial() {
-  const material = useContext(ColumnMaterialContext)
+  const slotId = useContext(ColumnSlotContext)
+  const materials = useContext(ColumnMaterialContext)
+  const material = materials[slotId] ?? materials.shaft
   return <primitive attach="material" object={material} />
 }
 
-function createColumnMaterial({
+function ColumnSlot({ children, slotId }: { children: ReactNode; slotId: ColumnSlotId }) {
+  return <ColumnSlotContext.Provider value={slotId}>{children}</ColumnSlotContext.Provider>
+}
+
+function createSingleColumnMaterialMap(material: Material): ColumnSlotMaterials {
+  return {
+    shaft: material,
+    base: material,
+    capital: material,
+    frame: material,
+  }
+}
+
+function createLegacyColumnMaterial({
   material,
   materialPreset,
   shading,
@@ -48,6 +80,99 @@ function createColumnMaterial({
   if (presetMaterial) return presetMaterial
   if (material) return createMaterial(material, shading)
   return baseMaterial(shading)
+}
+
+function resolveColumnSlotMaterial({
+  colorPreset,
+  legacyMaterial,
+  node,
+  sceneMaterials,
+  shading,
+  slotId,
+  textures,
+}: {
+  colorPreset: ColorPreset
+  legacyMaterial: Material | null
+  node: ColumnNode
+  sceneMaterials: SceneMaterials
+  shading: RenderShading
+  slotId: ColumnSlotId
+  textures: boolean
+}): Material {
+  if (!textures) return createSurfaceRoleMaterial('wall', colorPreset)
+
+  const slotRef = node.slots?.[slotId]
+  if (slotRef) {
+    const resolved = resolveMaterialRef(slotRef, sceneMaterials, shading)
+    if (resolved) return resolved
+  }
+
+  if (legacyMaterial) return legacyMaterial
+
+  if (slotId === 'frame') return resolveSlotDefaultMaterial(COLUMN_FRAME_DEFAULT, shading)
+  if (slotId === 'base') return resolveSlotDefaultMaterial(COLUMN_BASE_DEFAULT, shading)
+  if (slotId === 'capital') return resolveSlotDefaultMaterial(COLUMN_CAPITAL_DEFAULT, shading)
+  return resolveSlotDefaultMaterial(COLUMN_SHAFT_DEFAULT, shading)
+}
+
+function createColumnSlotMaterials({
+  colorPreset,
+  material,
+  materialPreset,
+  node,
+  sceneMaterials,
+  shading,
+  textures,
+}: Pick<ColumnNode, 'material' | 'materialPreset'> & {
+  colorPreset: ColorPreset
+  node: ColumnNode
+  sceneMaterials: SceneMaterials
+  shading: RenderShading
+  textures: boolean
+}): ColumnSlotMaterials {
+  const legacyMaterial =
+    materialPreset || material
+      ? createLegacyColumnMaterial({ colorPreset, material, materialPreset, shading, textures })
+      : null
+
+  return {
+    shaft: resolveColumnSlotMaterial({
+      colorPreset,
+      legacyMaterial,
+      node,
+      sceneMaterials,
+      shading,
+      slotId: 'shaft',
+      textures,
+    }),
+    base: resolveColumnSlotMaterial({
+      colorPreset,
+      legacyMaterial,
+      node,
+      sceneMaterials,
+      shading,
+      slotId: 'base',
+      textures,
+    }),
+    capital: resolveColumnSlotMaterial({
+      colorPreset,
+      legacyMaterial,
+      node,
+      sceneMaterials,
+      shading,
+      slotId: 'capital',
+      textures,
+    }),
+    frame: resolveColumnSlotMaterial({
+      colorPreset,
+      legacyMaterial,
+      node,
+      sceneMaterials,
+      shading,
+      slotId: 'frame',
+      textures,
+    }),
+  }
 }
 
 function getSegments(node: ColumnNode) {
@@ -126,6 +251,7 @@ function MappedBox({
   width: number
 }) {
   const edgeSoftness = useContext(ColumnEdgeSoftnessContext)
+  const slotId = useContext(ColumnSlotContext)
   const minDimension = Math.max(0, Math.min(width, height, depth))
   const bevelRadius = softenEdges ? Math.min(Math.max(0, edgeSoftness), minDimension * 0.35) : 0
   const geometry = useMemo(() => {
@@ -136,7 +262,14 @@ function MappedBox({
   if (!geometry) return null
 
   return (
-    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
+    <mesh
+      castShadow
+      dispose={null}
+      position={position}
+      receiveShadow
+      rotation={rotation}
+      userData={{ slotId }}
+    >
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -154,6 +287,7 @@ function FlatEndedBeam({
   start: VectorTuple
   width: number
 }) {
+  const slotId = useContext(ColumnSlotContext)
   const dx = end[0] - start[0]
   const dy = end[1] - start[1]
   const dz = end[2] - start[2]
@@ -244,7 +378,7 @@ function FlatEndedBeam({
   if (!geometry) return null
 
   return (
-    <mesh castShadow dispose={null} receiveShadow>
+    <mesh castShadow dispose={null} receiveShadow userData={{ slotId }}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -763,6 +897,7 @@ function MappedCylinder({
   rotation?: VectorTuple
   segments?: number
 }) {
+  const slotId = useContext(ColumnSlotContext)
   const geometry = useMemo(() => {
     if (height <= 0 || radius <= 0 || radiusBottom < 0 || radiusTop < 0) return null
     return createColumnCylinderGeometry({
@@ -778,7 +913,14 @@ function MappedCylinder({
   if (!geometry) return null
 
   return (
-    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
+    <mesh
+      castShadow
+      dispose={null}
+      position={position}
+      receiveShadow
+      rotation={rotation}
+      userData={{ slotId }}
+    >
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -800,6 +942,7 @@ function MappedCone({
   rotation?: VectorTuple
   segments?: number
 }) {
+  const slotId = useContext(ColumnSlotContext)
   const geometry = useMemo(() => {
     if (height <= 0 || radiusX <= 0 || radiusZ <= 0) return null
     return createColumnCylinderGeometry({
@@ -815,7 +958,14 @@ function MappedCone({
   if (!geometry) return null
 
   return (
-    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
+    <mesh
+      castShadow
+      dispose={null}
+      position={position}
+      receiveShadow
+      rotation={rotation}
+      userData={{ slotId }}
+    >
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -833,6 +983,7 @@ function MappedSphere({
   segments?: number
   verticalSegments?: number
 }) {
+  const slotId = useContext(ColumnSlotContext)
   const geometry = useMemo(() => {
     if (radius <= 0) return null
     return createColumnSphereGeometry(radius, segments, verticalSegments)
@@ -841,7 +992,7 @@ function MappedSphere({
   if (!geometry) return null
 
   return (
-    <mesh castShadow dispose={null} position={position} receiveShadow>
+    <mesh castShadow dispose={null} position={position} receiveShadow userData={{ slotId }}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -867,6 +1018,7 @@ function MappedTorus({
   scaleZ?: number
   tubeRadius: number
 }) {
+  const slotId = useContext(ColumnSlotContext)
   const geometry = useMemo(() => {
     if (ringRadius <= 0 || tubeRadius <= 0) return null
     return createColumnTorusGeometry({
@@ -882,7 +1034,14 @@ function MappedTorus({
   if (!geometry) return null
 
   return (
-    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
+    <mesh
+      castShadow
+      dispose={null}
+      position={position}
+      receiveShadow
+      rotation={rotation}
+      userData={{ slotId }}
+    >
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -2094,55 +2253,75 @@ function ColumnBody({ node }: { node: ColumnNode }) {
     return { baseHeight, capitalHeight, shaftY: baseHeight, shaftHeight }
   }, [node.baseHeight, node.baseStyle, node.capitalHeight, node.capitalStyle, node.height])
 
-  return node.supportStyle === 'a-frame' ? (
-    <AFrameSupport node={node} />
-  ) : node.supportStyle === 'y-frame' ? (
-    <YFrameSupport node={node} />
-  ) : node.supportStyle === 'v-frame' ? (
-    <VFrameSupport node={node} />
-  ) : node.supportStyle === 'x-brace' ? (
-    <XBraceSupport node={node} />
-  ) : node.supportStyle === 'k-brace' ? (
-    <KBraceSupport node={node} />
-  ) : node.supportStyle === 'single-strut' ? (
-    <SingleStrutSupport node={node} />
-  ) : node.supportStyle === 'tripod' ? (
-    <TripodSupport node={node} />
-  ) : node.supportStyle === 'trestle' ? (
-    <TrestleSupport node={node} />
-  ) : node.supportStyle === 'portal-frame' ? (
-    <PortalFrameSupport node={node} />
-  ) : node.supportStyle === 'box-frame' ? (
-    <BoxFrameSupport node={node} />
-  ) : (
+  if (node.supportStyle !== 'vertical') {
+    const support =
+      node.supportStyle === 'a-frame' ? (
+        <AFrameSupport node={node} />
+      ) : node.supportStyle === 'y-frame' ? (
+        <YFrameSupport node={node} />
+      ) : node.supportStyle === 'v-frame' ? (
+        <VFrameSupport node={node} />
+      ) : node.supportStyle === 'x-brace' ? (
+        <XBraceSupport node={node} />
+      ) : node.supportStyle === 'k-brace' ? (
+        <KBraceSupport node={node} />
+      ) : node.supportStyle === 'single-strut' ? (
+        <SingleStrutSupport node={node} />
+      ) : node.supportStyle === 'tripod' ? (
+        <TripodSupport node={node} />
+      ) : node.supportStyle === 'trestle' ? (
+        <TrestleSupport node={node} />
+      ) : node.supportStyle === 'portal-frame' ? (
+        <PortalFrameSupport node={node} />
+      ) : (
+        <BoxFrameSupport node={node} />
+      )
+    return <ColumnSlot slotId="frame">{support}</ColumnSlot>
+  }
+
+  return (
     <>
-      <Base height={shaftLayout.baseHeight} node={node} />
-      <BaseCarvings height={shaftLayout.baseHeight} node={node} />
-      <Shaft height={shaftLayout.shaftHeight} node={node} y={shaftLayout.shaftY} />
-      <Rings node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
-      <LatheBands node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
-      <Flutes node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
-      <LowerCarvedBand
-        node={node}
-        shaftHeight={shaftLayout.shaftHeight}
-        shaftY={shaftLayout.shaftY}
-      />
-      <DravidianShaftPanels
-        node={node}
-        shaftHeight={shaftLayout.shaftHeight}
-        shaftY={shaftLayout.shaftY}
-      />
-      <SpiralRibs node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
-      <Capital
-        height={shaftLayout.capitalHeight}
-        node={node}
-        y={shaftLayout.baseHeight + shaftLayout.shaftHeight}
-      />
-      <CapitalCarvings
-        capitalHeight={shaftLayout.capitalHeight}
-        capitalY={shaftLayout.baseHeight + shaftLayout.shaftHeight}
-        node={node}
-      />
+      <ColumnSlot slotId="base">
+        <Base height={shaftLayout.baseHeight} node={node} />
+        <BaseCarvings height={shaftLayout.baseHeight} node={node} />
+      </ColumnSlot>
+      <ColumnSlot slotId="shaft">
+        <Shaft height={shaftLayout.shaftHeight} node={node} y={shaftLayout.shaftY} />
+        <Rings node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
+        <LatheBands
+          node={node}
+          shaftHeight={shaftLayout.shaftHeight}
+          shaftY={shaftLayout.shaftY}
+        />
+        <Flutes node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
+        <LowerCarvedBand
+          node={node}
+          shaftHeight={shaftLayout.shaftHeight}
+          shaftY={shaftLayout.shaftY}
+        />
+        <DravidianShaftPanels
+          node={node}
+          shaftHeight={shaftLayout.shaftHeight}
+          shaftY={shaftLayout.shaftY}
+        />
+        <SpiralRibs
+          node={node}
+          shaftHeight={shaftLayout.shaftHeight}
+          shaftY={shaftLayout.shaftY}
+        />
+      </ColumnSlot>
+      <ColumnSlot slotId="capital">
+        <Capital
+          height={shaftLayout.capitalHeight}
+          node={node}
+          y={shaftLayout.baseHeight + shaftLayout.shaftHeight}
+        />
+        <CapitalCarvings
+          capitalHeight={shaftLayout.capitalHeight}
+          capitalY={shaftLayout.baseHeight + shaftLayout.shaftHeight}
+          node={node}
+        />
+      </ColumnSlot>
     </>
   )
 }
@@ -2152,7 +2331,7 @@ function ColumnBody({ node }: { node: ColumnNode }) {
  * cursor preview, mirroring `ShelfPreview`. Builds the same geometry tree
  * as the real renderer via `<ColumnBody>` but:
  *   - clones the material and makes it transparent (cloning is required:
- *     `createColumnMaterial` can hand back a shared/cached instance, and
+ *     `createLegacyColumnMaterial` can hand back a shared/cached instance, and
  *     mutating it would turn every committed column see-through);
  *   - disables raycast on every mesh so the ghost doesn't intercept the
  *     placement cursor ray (which would stall `grid:move`);
@@ -2164,8 +2343,8 @@ export const ColumnPreview = ({ node }: { node: ColumnNode }) => {
   const colorPreset = useViewer((state) => state.colorPreset)
   const groupRef = useRef<Group>(null)
 
-  const material = useMemo(() => {
-    const ghost = createColumnMaterial({
+  const materials = useMemo(() => {
+    const ghost = createLegacyColumnMaterial({
       material: node.material,
       materialPreset: node.materialPreset,
       shading,
@@ -2175,10 +2354,15 @@ export const ColumnPreview = ({ node }: { node: ColumnNode }) => {
     ghost.transparent = true
     ghost.opacity = 0.5
     ghost.depthWrite = false
-    return ghost
+    return createSingleColumnMaterialMap(ghost)
   }, [shading, textures, colorPreset, node.material, node.materialPreset])
 
-  useEffect(() => () => material.dispose(), [material])
+  useEffect(
+    () => () => {
+      for (const material of new Set(Object.values(materials))) material.dispose()
+    },
+    [materials],
+  )
 
   // Strip pointer events off the freshly-built meshes every render — the
   // geometry tree rebuilds when the ghost's dimensions change, so a one-shot
@@ -2190,7 +2374,7 @@ export const ColumnPreview = ({ node }: { node: ColumnNode }) => {
   })
 
   return (
-    <ColumnMaterialContext.Provider value={material}>
+    <ColumnMaterialContext.Provider value={materials}>
       <ColumnEdgeSoftnessContext.Provider value={node.edgeSoftness ?? 0.025}>
         <group ref={groupRef}>
           <ColumnBody node={node} />
@@ -2216,11 +2400,14 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
   const shading = useViewer((state) => state.shading)
   const textures = useViewer((state) => state.textures)
   const colorPreset = useViewer((state) => state.colorPreset)
-  const material = useMemo(
+  const sceneMaterials = useScene((state) => state.materials)
+  const materials = useMemo(
     () =>
-      createColumnMaterial({
+      createColumnSlotMaterials({
         material: node.material,
         materialPreset: node.materialPreset,
+        node,
+        sceneMaterials,
         shading,
         textures,
         colorPreset,
@@ -2234,13 +2421,15 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
       node.material?.properties,
       node.material?.texture,
       node.materialPreset,
+      node.slots,
+      sceneMaterials,
     ],
   )
 
   useRegistry(node.id, node.type, ref)
 
   return (
-    <ColumnMaterialContext.Provider value={material}>
+    <ColumnMaterialContext.Provider value={materials}>
       <ColumnEdgeSoftnessContext.Provider value={node.edgeSoftness ?? 0.025}>
         <group
           position={liveTransform?.position ?? node.position}
