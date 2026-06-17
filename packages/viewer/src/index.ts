@@ -18,6 +18,7 @@ export {
   DEFAULT_HOVER_STYLES,
   SSGI_PARAMS,
 } from './components/viewer/post-processing'
+export { SceneEnvironment } from './components/viewer/scene-environment'
 export { WalkthroughControls } from './components/viewer/walkthrough-controls'
 export { useAssetUrl } from './hooks/use-asset-url'
 export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'

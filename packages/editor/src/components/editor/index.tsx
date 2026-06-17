@@ -7,7 +7,13 @@ import {
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
-import { type HoverStyles, InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
+import {
+  type HoverStyles,
+  InteractiveSystem,
+  SceneEnvironment,
+  useViewer,
+  Viewer,
+} from '@pascal-app/viewer'
 import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
@@ -21,7 +27,6 @@ import {
 } from '../../lib/scene'
 import { initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
-import { EditorEnvironment } from '../editor-environment'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
@@ -603,7 +608,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   const noEditing = isVersionPreviewMode || isFirstPersonMode || isStudioMode
   return (
     <>
-      <EditorEnvironment />
+      <SceneEnvironment />
       {!(isFirstPersonMode || isStudioMode) && <SelectionManager />}
       {!noEditing && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
