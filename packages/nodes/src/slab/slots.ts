@@ -2,10 +2,12 @@ import type { SlotDeclaration } from '@pascal-app/core'
 
 export type SlabSlotId = 'surface'
 
-// Visual parity with the retired DEFAULT_SLAB_MATERIAL (light grey).
-export const SLAB_SLOT_DEFAULT_COLOR = '#e5e5e5'
+// Declared default appearance for an unpainted slab surface in colored mode —
+// a catalog `library:<id>` finish or a `#rrggbb` colour. Textures-off collapses
+// to the themed floor role (the escape hatch).
+export const SLAB_SLOT_DEFAULT = 'library:wood-woodplank48'
 
 /** A slab exposes a single paintable floor surface. */
 export function slabSlots(): SlotDeclaration[] {
-  return [{ slotId: 'surface', label: 'Surface', default: SLAB_SLOT_DEFAULT_COLOR }]
+  return [{ slotId: 'surface', label: 'Surface', default: SLAB_SLOT_DEFAULT }]
 }

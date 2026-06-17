@@ -8,9 +8,10 @@ import {
   generateSlabGeometry,
   type RenderShading,
   resolveMaterialRef,
+  resolveSlotDefaultMaterial,
 } from '@pascal-app/viewer'
 import { FrontSide, Group, type Material, Mesh, type Texture } from 'three'
-import { SLAB_SLOT_DEFAULT_COLOR } from './slots'
+import { SLAB_SLOT_DEFAULT } from './slots'
 
 /**
  * Stage B builder for slab. Reuses `generateSlabGeometry` (pure
@@ -62,8 +63,8 @@ function getSlabMaterial(
     return getLegacySlabMaterial(node, shading)
   }
 
-  // Declared slot default (visual parity with the retired DEFAULT_SLAB_MATERIAL).
-  return createDefaultMaterial(SLAB_SLOT_DEFAULT_COLOR, 0.8, shading)
+  // Declared slot default — a catalog `library:` finish or a flat colour.
+  return resolveSlotDefaultMaterial(SLAB_SLOT_DEFAULT, shading, 0.8)
 }
 
 function getLegacySlabMaterial(node: SlabNode, shading: RenderShading): Material {
@@ -83,7 +84,7 @@ function getLegacySlabMaterial(node: SlabNode, shading: RenderShading): Material
     ? createDefaultMaterial('#ffffff', 0.5, shading)
     : node.material
       ? createMaterial(node.material, shading).clone()
-      : createDefaultMaterial(SLAB_SLOT_DEFAULT_COLOR, 0.8, shading)
+      : createDefaultMaterial('#e5e5e5', 0.8, shading)
 
   if (preset) {
     applyMaterialPresetToMaterials(material, preset)

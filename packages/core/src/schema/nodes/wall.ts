@@ -52,8 +52,8 @@ export type WallSurfaceSide = 'interior' | 'exterior'
 // May be a `#rrggbb` colour or a `library:<id>` ref. Textures-off still
 // collapses to the themed wall role (the escape hatch).
 export const WALL_SLOT_DEFAULT: Record<WallSurfaceSide, string> = {
-  interior: '#ffffff',
-  exterior: '#ffffff',
+  interior: 'library:concrete-plate',
+  exterior: 'library:concrete-plate',
 }
 
 export type WallSurfaceMaterialSpec = {

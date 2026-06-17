@@ -516,6 +516,26 @@ export function resolveMaterialRef(
   return createMaterial(sceneMaterial.material, shading)
 }
 
+/**
+ * Resolve a node kind's declared slot default — either a catalog `library:<id>`
+ * finish or a flat `#rrggbb` colour — to a renderable material. Shared by the
+ * procedural kinds whose colored-mode unpainted appearance comes from a
+ * declarative default (slab, wall).
+ */
+export function resolveSlotDefaultMaterial(
+  slotDefault: string,
+  shading: RenderShading = 'rendered',
+  roughness = 0.9,
+): THREE.Material {
+  if (parseMaterialRef(slotDefault)?.kind === 'library') {
+    return (
+      createMaterialFromPresetRef(slotDefault, shading) ??
+      createDefaultMaterial('#ffffff', roughness, shading)
+    )
+  }
+  return createDefaultMaterial(slotDefault, roughness, shading)
+}
+
 export function createDefaultMaterial(
   color = '#ffffff',
   roughness = 0.9,

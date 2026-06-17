@@ -2,8 +2,9 @@ import type { SlotDeclaration } from '@pascal-app/core'
 
 export type CeilingSlotId = 'surface'
 
-// Visual parity with the retired DEFAULT_CEILING_MATERIAL (warm beige).
-export const CEILING_SLOT_DEFAULT_COLOR = '#f5f5dc'
+// Soft white — the default underside colour for an unpainted ceiling. (A
+// ceiling renders flat-tinted, so this is a colour, not a `library:` finish.)
+export const CEILING_SLOT_DEFAULT_COLOR = '#f2eee6'
 
 /** A ceiling exposes a single paintable underside surface. */
 export function ceilingSlots(): SlotDeclaration[] {

@@ -69,6 +69,7 @@ export {
   PRESET_PALETTES,
   type RenderShading,
   resolveMaterialRef,
+  resolveSlotDefaultMaterial,
   resolveSurfaceColor,
   WHITE_PALETTE,
 } from './lib/materials'
