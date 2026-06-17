@@ -63,8 +63,8 @@ type ViewerState = {
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
   setLevelMode: (mode: 'stacked' | 'exploded' | 'solo' | 'manual') => void
 
-  wallMode: 'up' | 'cutaway' | 'down'
-  setWallMode: (mode: 'up' | 'cutaway' | 'down') => void
+  wallMode: 'up' | 'cutaway' | 'down' | 'translucent'
+  setWallMode: (mode: 'up' | 'cutaway' | 'down' | 'translucent') => void
 
   showScans: boolean
   setShowScans: (show: boolean) => void
@@ -138,7 +138,7 @@ const COLOR_PRESETS = ['clay', 'white', 'mono', 'blueprint'] as const
 const EDGE_MODES = ['off', 'soft', 'strong'] as const
 const UNITS = ['metric', 'imperial'] as const
 const LEVEL_MODES = ['stacked', 'exploded', 'solo', 'manual'] as const
-const WALL_MODES = ['up', 'cutaway', 'down'] as const
+const WALL_MODES = ['up', 'cutaway', 'down', 'translucent'] as const
 
 function pickString<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return typeof value === 'string' && allowed.includes(value as T) ? (value as T) : fallback

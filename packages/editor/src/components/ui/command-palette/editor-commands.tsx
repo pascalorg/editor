@@ -245,10 +245,10 @@ export function EditorCommands() {
         label: 'Wall Mode',
         group: 'Viewer Controls',
         icon: <Layers className="h-4 w-4" />,
-        keywords: ['wall', 'cutaway', 'up', 'down', 'view'],
+        keywords: ['wall', 'cutaway', 'up', 'down', 'translucent', 'view'],
         badge: () => {
           const mode = useViewer.getState().wallMode
-          return { cutaway: 'Cutaway', up: 'Up', down: 'Down' }[mode]
+          return { cutaway: 'Cutaway', up: 'Up', down: 'Down', translucent: 'Translucent' }[mode]
         },
         navigate: true,
         execute: () => navigateTo('wall-mode'),

@@ -16,11 +16,15 @@ import type { AnyNode, AnyNodeId } from '../schema'
  * core and is consumed by the editor's move tool and the duct-segment
  * system alike.
  *
- * Propagation is intentionally **one hop**: a moved fitting stretches the
- * ducts touching it (their near endpoint follows) and rigidly drags any
- * fitting mated collar-to-collar, but it does NOT chase the far end of
- * those ducts or anything beyond. Bounded and predictable — no runaway
- * network rearrangement.
+ * Propagation is intentionally bounded. A moved node stretches the ducts
+ * touching it (their near endpoint follows) and rigidly drags any fitting
+ * mated collar-to-collar. It also carries the *sibling* ducts on that
+ * dragged-along fitting — the other runs sharing the fitting's collars —
+ * so dragging one duct's corner moves the whole joint together instead of
+ * tearing the fitting away from its other legs. Their near endpoints
+ * translate with the fitting; their far ends stay put (they stretch). It
+ * stops there: it does NOT chase those far ends or hop onward through the
+ * next fitting. Bounded and predictable — no runaway network rearrangement.
  */
 
 type Point = readonly [number, number, number]
@@ -53,6 +57,22 @@ export type PortConnection =
       movedPortId: string
       /** Partner node's `position` at edit-start. */
       startPosition: Point
+    }
+  | {
+      /** A sibling duct hanging off one of the dragged-along fitting's OTHER
+       *  collars (second hop). The fitting follows the moved port rigidly, so
+       *  this run's near endpoint translates by that same delta to stay welded
+       *  to its collar — the whole joint moves together. The far endpoint
+       *  stays put (the run stretches). */
+      kind: 'duct-endpoint-follow'
+      nodeId: AnyNodeId
+      /** Index in the run's `path` that rides the fitting. */
+      pathIndex: number
+      /** The moved node's port id whose delta drives the fitting (and so this
+       *  run's endpoint). */
+      movedPortId: string
+      /** The run's full path at edit-start (other points are preserved). */
+      startPath: Point[]
     }
 
 export type PortConnectivity = {
@@ -161,6 +181,43 @@ export function analyzePortConnectivity(
     }
   }
 
+  // Second hop: each fitting we drag rigidly carries its OTHER runs along.
+  // Find every run endpoint sitting on one of that fitting's collars (apart
+  // from the run we're already moving) and drive it by the same port delta,
+  // so the whole joint translates together instead of the fitting peeling
+  // off its other legs.
+  const rigidFittings = connections.filter(
+    (c): c is Extract<PortConnection, { kind: 'rigid-node' }> => c.kind === 'rigid-node',
+  )
+  const alreadyTracked = new Set(connections.map((c) => c.nodeId))
+  alreadyTracked.add(movedNode.id as AnyNodeId)
+  for (const fittingConn of rigidFittings) {
+    const fitting = nodes[fittingConn.nodeId]
+    if (!fitting) continue
+    const fittingPorts = portsOf(fitting) ?? []
+    for (const fp of fittingPorts) {
+      for (const other of Object.values(nodes)) {
+        if (!other || alreadyTracked.has(other.id as AnyNodeId)) continue
+        if (roleOf(other) !== 'run') continue
+        const path = (other as unknown as { path?: Point[] }).path
+        if (!Array.isArray(path) || path.length < 2) continue
+        const otherPorts = portsOf(other)
+        if (!otherPorts) continue
+        const ep = otherPorts.find((p) => distSq(p.position, fp.position) <= epsSq)
+        if (!ep) continue
+        if (ep.system && fp.system && ep.system !== fp.system) continue
+        connections.push({
+          kind: 'duct-endpoint-follow',
+          nodeId: other.id,
+          pathIndex: ep.id === 'start' ? 0 : path.length - 1,
+          movedPortId: fittingConn.movedPortId,
+          startPath: path.map((p) => [...p] as Point),
+        })
+        alreadyTracked.add(other.id as AnyNodeId)
+      }
+    }
+  }
+
   return { movedNodeId: movedNode.id as AnyNodeId, connections, startMovedPorts }
 }
 
@@ -191,6 +248,16 @@ export function resolveConnectivityUpdates(
     if (conn.kind === 'duct-endpoint') {
       const path = conn.startPath.map((p, i) =>
         i === conn.pathIndex ? ([now[0], now[1], now[2]] as Point) : ([...p] as Point),
+      )
+      updates.push({ id: conn.nodeId, data: { path } as Partial<AnyNode> })
+    } else if (conn.kind === 'duct-endpoint-follow') {
+      // Sibling run on a dragged-along fitting: translate its near endpoint by
+      // the same port delta the fitting follows. Far end stays put (stretch).
+      const dx = now[0] - start[0]
+      const dy = now[1] - start[1]
+      const dz = now[2] - start[2]
+      const path = conn.startPath.map((p, i) =>
+        i === conn.pathIndex ? ([p[0] + dx, p[1] + dy, p[2] + dz] as Point) : ([...p] as Point),
       )
       updates.push({ id: conn.nodeId, data: { path } as Partial<AnyNode> })
     } else {

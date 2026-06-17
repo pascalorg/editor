@@ -119,11 +119,12 @@ const levelModeLabels: Record<string, string> = {
   solo: 'Solo',
 }
 
-const wallModeOrder = ['cutaway', 'up', 'down'] as const
+const wallModeOrder = ['cutaway', 'up', 'down', 'translucent'] as const
 const wallModeConfig: Record<string, { icon: string; label: string }> = {
   up: { icon: '/icons/room.png', label: 'Full height' },
   cutaway: { icon: '/icons/wallcut.png', label: 'Cutaway' },
   down: { icon: '/icons/walllow.png', label: 'Low' },
+  translucent: { icon: '/icons/wall.png', label: 'Translucent' },
 }
 
 const SHADING_OPTIONS = [

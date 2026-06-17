@@ -43,6 +43,8 @@ export {
 } from './hosting'
 export {
   DEFAULT_LEVEL_HEIGHT,
+  getCeilingAt,
+  getCeilingHeightAt,
   getLevelHeight,
 } from './level-height'
 export {

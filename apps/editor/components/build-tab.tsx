@@ -99,7 +99,6 @@ const MEP_ITEMS: MepItem[] = [
   { id: 'lineset', label: 'Lineset', iconSrc: '/icons/lineset.png', kind: 'lineset' },
   { id: 'liquid-line', label: 'Liquid Line', iconSrc: '/icons/lineset.png', kind: 'liquid-line' },
   { id: 'pipe-segment', label: 'DWV Pipe', iconSrc: '/icons/dwv-pipes.png', kind: 'pipe-segment' },
-  { id: 'pipe-trap', label: 'Trap', iconSrc: '/icons/dwv-pipes.png', kind: 'pipe-trap' },
 ]
 
 /**
@@ -168,7 +167,8 @@ export function BuildTab() {
   const ductContext =
     mode === 'build' && (activeTool === 'duct-segment' || activeTool === 'duct-fitting')
   const pipeContext =
-    mode === 'build' && (activeTool === 'pipe-segment' || activeTool === 'pipe-fitting')
+    mode === 'build' &&
+    (activeTool === 'pipe-segment' || activeTool === 'pipe-fitting' || activeTool === 'pipe-trap')
   const liquidLineContext = mode === 'build' && activeTool === 'liquid-line'
 
   const isMepItemActive = (item: MepItem) =>
@@ -420,6 +420,30 @@ export function BuildTab() {
                   width={16}
                 />
                 Add Fitting
+              </button>
+              <button
+                className={cn(
+                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
+                  activeTool === 'pipe-trap'
+                    ? 'bg-primary/10 ring-1 ring-primary/50'
+                    : 'bg-muted/40 hover:bg-muted',
+                )}
+                onClick={() => {
+                  triggerSFX('sfx:menu-click')
+                  activateBuildTool(activeTool === 'pipe-trap' ? 'pipe-segment' : 'pipe-trap')
+                }}
+                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                type="button"
+              >
+                <Image
+                  alt=""
+                  aria-hidden
+                  className="size-4 object-contain"
+                  height={16}
+                  src="/icons/dwv-pipes.png"
+                  width={16}
+                />
+                Add Trap
               </button>
             </div>
           ) : null}

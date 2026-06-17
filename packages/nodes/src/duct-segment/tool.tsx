@@ -2,11 +2,12 @@
 
 import {
   type AnyNode,
+  type CeilingNode,
   DuctSegmentNode,
   emitter,
   type GridEvent,
-  getLevelHeight,
-  sceneRegistry,
+  getCeilingAt,
+  getCeilingHeightAt,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -19,8 +20,17 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { useEffect, useRef, useState } from 'react'
-import { type Group, Matrix4, Vector3 } from 'three'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type BufferGeometry,
+  DoubleSide,
+  type Group,
+  Matrix4,
+  Path,
+  Shape,
+  ShapeGeometry,
+  Vector3,
+} from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import {
   planCrossAtRunBody,
@@ -69,9 +79,10 @@ import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
  *     vertical mouse motion drives Y. Click commits the riser segment.
  *   - **[ / ]** step the duct diameter through nominal US sizes; the
  *     ghost preview and the committed node both use it.
- *   - **C** toggles ceiling-level placement: the start point lands at
- *     the level's ceiling height (duct top hugging the ceiling) instead
- *     of the floor. Subsequent points inherit the start's Y as usual.
+ *   - **C** toggles ceiling-level placement: each point lands just below
+ *     the ceiling actually covering it (duct top hugging that ceiling)
+ *     instead of the floor, so a run tracks per-room ceiling heights.
+ *     Points not under any ceiling fall back to the floor.
  *   - Esc clears an anchored start point.
  */
 const PREVIEW_OPACITY = 0.55
@@ -288,6 +299,10 @@ const DuctSegmentTool = () => {
   // When the cursor is within snap range of an existing duct's endpoint we
   // surface a brighter indicator and commit at the endpoint's exact coords.
   const [snapTarget, setSnapTarget] = useState<[number, number, number] | null>(null)
+  // In ceiling mode, the ceiling the cursor is currently under — rendered as
+  // a translucent overlay so the duct reads as hung against a real surface
+  // rather than a dot floating in space. Null when off-ceiling.
+  const [hoverCeiling, setHoverCeiling] = useState<CeilingNode | null>(null)
   // True while Alt is held with a last point on the draft — drives the
   // vertical-cylinder ghost and the cursor HUD label.
   const [altActive, setAltActive] = useState(false)
@@ -547,16 +562,17 @@ const DuctSegmentTool = () => {
       setAltActive(false)
     }
 
-    // Base Y for a fresh run's first point: floor (0) by default, or just
-    // below the level's ceiling in ceiling mode so the duct's top hugs the
-    // ceiling (centerline = ceiling height − radius).
-    const resolveBaseY = (): number => {
+    // Y for a point at level-local `[x, z]`. Floor (0) when ceiling mode is
+    // off. In ceiling mode, query the ceiling actually covering that point
+    // and hang the duct just below it (centerline = ceiling underside −
+    // half the duct's vertical dimension) so its top hugs the ceiling. Each
+    // point follows its own ceiling, so a run stepping into a room with a
+    // different ceiling height tracks that change. Points not under any
+    // ceiling fall back to the floor.
+    const resolveCeilingY = (x: number, z: number): number => {
       if (!ceilingModeRef.current) return 0
-      const ceiling = getLevelHeight(
-        activeLevelId,
-        useScene.getState().nodes,
-        (wallId) => sceneRegistry.nodes.get(wallId)?.position.y,
-      )
+      const ceiling = getCeilingHeightAt(activeLevelId, useScene.getState().nodes, x, z)
+      if (ceiling === null) return 0
       const p = profileRef.current
       const verticalIn = p.shape === 'round' ? p.diameter : p.height
       return Math.max(0, ceiling - (verticalIn * 0.0254) / 2)
@@ -571,11 +587,11 @@ const DuctSegmentTool = () => {
       body: RunBodyHit | null
     } => {
       const last = draftRef.current.at(-1)
-      // First point of the run: grid-snapped placement at the base Y (floor,
-      // or ceiling height in ceiling mode). Endpoint snap can still join an
-      // existing run.
+      // First point of the run: grid-snapped placement. Y follows the
+      // ceiling under the cursor in ceiling mode (floor otherwise).
+      // Endpoint snap can still join an existing run.
       if (!last) {
-        const baseY = resolveBaseY()
+        const baseY = resolveCeilingY(event.localPosition[0], event.localPosition[2])
         const raw: [number, number, number] = [
           event.localPosition[0],
           baseY,
@@ -601,15 +617,20 @@ const DuctSegmentTool = () => {
           const body = findNearestRunBodyXZ(probe, BODY_SNAP_RADIUS_M)
           if (body) return { point: body.point, snapped: body.point, port: null, body }
         }
+        const sx = snap(raw[0], step)
+        const sz = snap(raw[2], step)
         return {
-          point: [snap(raw[0], step), baseY, snap(raw[2], step)],
+          point: [sx, resolveCeilingY(sx, sz), sz],
           snapped: null,
           port: null,
           body: null,
         }
       }
       // Subsequent points: angle-locked to 45° from `last` (Shift releases).
-      // Y stays at `last[1]` — depth changes come from Shift+click risers.
+      // Y inherits `last[1]` for the angle/probe math; the free placement
+      // below re-resolves it from the ceiling under the point in ceiling
+      // mode, so a run stepping into a room with a different ceiling height
+      // tracks that change. Depth changes otherwise come from Alt risers.
       const rawXZ: [number, number, number] = [
         event.localPosition[0],
         last[1],
@@ -638,8 +659,11 @@ const DuctSegmentTool = () => {
         const body = findNearestRunBodyXZ(probe, BODY_SNAP_RADIUS_M)
         if (body) return { point: body.point, snapped: body.point, port: null, body }
       }
+      const fx = snap(angled[0], step)
+      const fz = snap(angled[2], step)
+      const fy = ceilingModeRef.current ? resolveCeilingY(fx, fz) : angled[1]
       return {
-        point: [snap(angled[0], step), angled[1], snap(angled[2], step)],
+        point: [fx, fy, fz],
         snapped: null,
         port: null,
         body: null,
@@ -681,6 +705,17 @@ const DuctSegmentTool = () => {
       return { ...r, point }
     }
 
+    // The ceiling the cursor is under (ceiling mode only) — drives the
+    // translucent surface overlay so the in-flight point reads as hung
+    // against a real ceiling. Cleared when off-ceiling or out of mode.
+    const updateHoverCeiling = (x: number, z: number) => {
+      if (!ceilingModeRef.current) {
+        setHoverCeiling(null)
+        return
+      }
+      setHoverCeiling(getCeilingAt(activeLevelId, useScene.getState().nodes, x, z))
+    }
+
     const onMove = (event: GridEvent) => {
       const clientY = (event.nativeEvent as { clientY?: number } | undefined)?.clientY
       if (typeof clientY === 'number') lastClientYRef.current = clientY
@@ -691,12 +726,14 @@ const DuctSegmentTool = () => {
           clearDrawAlignment()
           setCursorPos(point)
           setSnapTarget(null)
+          updateHoverCeiling(point[0], point[2])
           return
         }
       }
       const { point, snapped } = resolveAlignedPoint(event)
       setCursorPos(point)
       setSnapTarget(snapped)
+      updateHoverCeiling(point[0], point[2])
     }
 
     const onClick = (event: GridEvent) => {
@@ -783,12 +820,14 @@ const DuctSegmentTool = () => {
         setProfile((p) => ({ ...p, shape: p.shape === 'round' ? 'rect' : 'round' }))
         triggerSFX('sfx:grid-snap')
       } else if (e.key === 'c' || e.key === 'C') {
-        // Toggle ceiling mode. Only the first point reads the base Y, so
-        // toggling mid-run is a no-op until the next fresh segment — flip
-        // it only while unanchored to keep the behaviour predictable.
+        // Toggle ceiling mode: points hang from the ceiling above them
+        // (duct top hugging the ceiling) instead of sitting on the floor.
+        // Only flip while unanchored — already-placed points keep their Y,
+        // so a mid-run toggle would split a run across two height regimes.
         if (draftRef.current.length > 0) return
         e.preventDefault()
         setCeilingMode((m) => !m)
+        setHoverCeiling(null)
         triggerSFX('sfx:grid-snap')
       }
     }
@@ -807,6 +846,7 @@ const DuctSegmentTool = () => {
       setDraftPoints([])
       setCursorPos(null)
       setSnapTarget(null)
+      setHoverCeiling(null)
       startPortRef.current = null
       startBodyRef.current = null
     }
@@ -868,30 +908,60 @@ const DuctSegmentTool = () => {
           : 'z'
       : undefined
 
+  // When the in-flight point hangs above the floor (ceiling mode, or an
+  // Alt riser), the cursor marker itself rides AT the point (where the
+  // mouse is aiming and the next click commits), and a plumb line drops
+  // straight down to a faint ground ring on the floor below — so the plan
+  // position stays legible from any angle. A floor-level point keeps the
+  // standard fixed-height cursor look.
+  const cursorElevation = cursorPos ? cursorPos[1] : 0
+  const isElevated = cursorElevation > 0.001
+  const cursorGround: [number, number, number] | null = cursorPos
+    ? [cursorPos[0], 0, cursorPos[2]]
+    : null
+
   return (
     <LevelOffsetGroup>
+      {/* Ceiling-mode surface highlight — the ceiling the cursor is under,
+          tinted at its own elevation so the duct reads as hung against a
+          real surface instead of a point floating in space. */}
+      {ceilingMode && hoverCeiling && <CeilingHighlight ceiling={hoverCeiling} />}
       {/* Cursor marker — the same ground ring + vertical line + tool-icon
           badge walls and items show while drawing (icon resolved from the
           active `duct-segment` structure-tools entry). The dimension pill
           rides just above the cursor. */}
-      {cursorPos && (
+      {cursorPos && cursorGround && (
         <>
-          <CursorSphere position={cursorPos} ref={cursorRef} />
+          {/* In ceiling mode (or any elevated point) the ground ring sits on
+              the floor below the cursor and the line rises to the placement
+              point, with the bright dot + tool badge at its tip — exactly
+              where the next click commits. At floor level it's the standard
+              fixed-height cursor. */}
+          {isElevated ? (
+            <CursorSphere
+              dotAtTip
+              height={cursorElevation}
+              position={cursorGround}
+              ref={cursorRef}
+            />
+          ) : (
+            <CursorSphere position={cursorPos} ref={cursorRef} />
+          )}
           {pillParts && (
             <group position={cursorPos}>
               <Html
                 center
-                position={[0, 0.35, 0]}
+                position={[0, 1.45, 0]}
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
                 zIndexRange={[100, 0]}
               >
-                <div className="flex flex-col items-center gap-1">
-                  <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
+                <div className="flex flex-col items-center gap-2">
                   {ceilingMode && !last && (
                     <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
                       Ceiling · C to toggle
                     </div>
                   )}
+                  <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
                 </div>
               </Html>
             </group>
@@ -925,6 +995,86 @@ const DuctSegmentTool = () => {
         />
       ))}
     </LevelOffsetGroup>
+  )
+}
+
+/**
+ * Build a horizontal `ShapeGeometry` for a ceiling polygon (with holes) in
+ * level-local XZ, laid flat in the XZ plane. Mirrors the ceiling renderer /
+ * move-tool convention (Z negated, then rotated onto the floor plane).
+ */
+function buildCeilingShape(
+  polygon: Array<[number, number]>,
+  holes: Array<Array<[number, number]>>,
+): BufferGeometry | null {
+  if (polygon.length < 3) return null
+  const shape = new Shape()
+  const first = polygon[0]!
+  shape.moveTo(first[0], -first[1])
+  for (let i = 1; i < polygon.length; i++) {
+    const pt = polygon[i]!
+    shape.lineTo(pt[0], -pt[1])
+  }
+  shape.closePath()
+  for (const holePolygon of holes) {
+    if (holePolygon.length < 3) continue
+    const hole = new Path()
+    const hf = holePolygon[0]!
+    hole.moveTo(hf[0], -hf[1])
+    for (let i = 1; i < holePolygon.length; i++) {
+      const pt = holePolygon[i]!
+      hole.lineTo(pt[0], -pt[1])
+    }
+    hole.closePath()
+    shape.holes.push(hole)
+  }
+  const geometry = new ShapeGeometry(shape)
+  geometry.rotateX(-Math.PI / 2)
+  return geometry
+}
+
+/**
+ * Translucent overlay of the ceiling the cursor is under, drawn at the
+ * ceiling's own height. Gives the in-flight duct point a real surface to
+ * read against, so "hung against the ceiling" is visible from any angle
+ * instead of being a dot floating in space.
+ */
+function CeilingHighlight({ ceiling }: { ceiling: CeilingNode }) {
+  const geometry = useMemo(
+    () => buildCeilingShape(ceiling.polygon, ceiling.holes),
+    [ceiling.polygon, ceiling.holes],
+  )
+  const outline = useMemo(() => {
+    if (ceiling.polygon.length < 2) return null
+    const pts = ceiling.polygon.map(([x, z]) => new Vector3(x, 0, z))
+    const f = ceiling.polygon[0]!
+    pts.push(new Vector3(f[0], 0, f[1]))
+    return pts
+  }, [ceiling.polygon])
+  if (!geometry) return null
+  const y = ceiling.height ?? 2.5
+  return (
+    <group position={[0, y, 0]}>
+      <mesh geometry={geometry} layers={EDITOR_LAYER} renderOrder={1}>
+        <meshBasicMaterial
+          color="#818cf8"
+          depthWrite={false}
+          opacity={0.15}
+          side={DoubleSide}
+          transparent
+        />
+      </mesh>
+      {outline && (
+        <line>
+          <bufferGeometry
+            ref={(g) => {
+              if (g) g.setFromPoints(outline)
+            }}
+          />
+          <lineBasicMaterial color="#818cf8" opacity={0.6} transparent />
+        </line>
+      )}
+    </group>
   )
 }
 

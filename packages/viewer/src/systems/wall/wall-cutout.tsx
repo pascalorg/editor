@@ -106,7 +106,13 @@ export const WallCutout = () => {
         const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
         const materials = getMaterialsForWall(wallNode, shading, textures, colorPreset, sceneTheme)
 
-        if (hideWall) {
+        if (wallMode === 'translucent') {
+          ;(wallMesh as Mesh).material = isDeleteHighlighted
+            ? materials.deleteTranslucent
+            : isSelectionHighlighted
+              ? materials.highlightedTranslucent
+              : materials.translucent
+        } else if (hideWall) {
           ;(wallMesh as Mesh).material = isDeleteHighlighted
             ? materials.deleteInvisible
             : isSelectionHighlighted
@@ -152,6 +158,8 @@ export const WallCutout = () => {
           wallMesh.material = mats.visible
         } else if (current === mats.highlightedInvisible || current === mats.deleteInvisible) {
           wallMesh.material = mats.invisible
+        } else if (current === mats.highlightedTranslucent || current === mats.deleteTranslucent) {
+          wallMesh.material = mats.translucent
         }
       })
     }

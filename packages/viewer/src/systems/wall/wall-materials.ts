@@ -43,10 +43,13 @@ export type WallMaterialArray = [Material, Material, Material]
 export interface WallMaterials {
   visible: WallMaterialArray
   invisible: WallMaterialArray
+  translucent: WallMaterialArray
   deleteVisible: WallMaterialArray
   deleteInvisible: WallMaterialArray
+  deleteTranslucent: WallMaterialArray
   highlightedVisible: WallMaterialArray
   highlightedInvisible: WallMaterialArray
+  highlightedTranslucent: WallMaterialArray
   materialHash: string
 }
 
@@ -154,6 +157,25 @@ function createInvisibleWallMaterial(color: string, shading: RenderShading): Mat
   return material
 }
 
+function createTranslucentWallMaterial(color: string, shading: RenderShading): Material {
+  const material =
+    shading === 'solid'
+      ? new MeshLambertNodeMaterial({
+          transparent: true,
+          color,
+          opacity: 0.35,
+          depthWrite: false,
+        })
+      : new MeshStandardNodeMaterial({
+          transparent: true,
+          color,
+          opacity: 0.35,
+          depthWrite: false,
+        })
+
+  return material
+}
+
 function mapWallMaterialArray(
   materials: WallMaterialArray,
   iteratee: (material: Material, index: number) => Material,
@@ -205,10 +227,13 @@ export function getMaterialsForWall(
   if (existing) {
     disposeOwnedMaterials([
       existing.invisible,
+      existing.translucent,
       existing.deleteVisible,
       existing.deleteInvisible,
+      existing.deleteTranslucent,
       existing.highlightedVisible,
       existing.highlightedInvisible,
+      existing.highlightedTranslucent,
     ])
   }
 
@@ -243,10 +268,25 @@ export function getMaterialsForWall(
     ),
   ]
 
+  const translucent: WallMaterialArray = [
+    createTranslucentWallMaterial(wallRoleColor, textures ? shading : 'solid'),
+    createTranslucentWallMaterial(
+      textures ? getSurfaceColor(interiorSpec, wallRoleColor) : wallRoleColor,
+      textures ? shading : 'solid',
+    ),
+    createTranslucentWallMaterial(
+      textures ? getSurfaceColor(exteriorSpec, wallRoleColor) : wallRoleColor,
+      textures ? shading : 'solid',
+    ),
+  ]
+
   const highlightedVisible = mapWallMaterialArray(visible, (material) =>
     createHighlightedWallMaterial(material, 'selection'),
   )
   const highlightedInvisible = mapWallMaterialArray(invisible, (material) =>
+    createHighlightedWallMaterial(material, 'selection'),
+  )
+  const highlightedTranslucent = mapWallMaterialArray(translucent, (material) =>
     createHighlightedWallMaterial(material, 'selection'),
   )
   const deleteVisible = mapWallMaterialArray(visible, (material) =>
@@ -255,14 +295,20 @@ export function getMaterialsForWall(
   const deleteInvisible = mapWallMaterialArray(invisible, (material) =>
     createHighlightedWallMaterial(material, 'delete'),
   )
+  const deleteTranslucent = mapWallMaterialArray(translucent, (material) =>
+    createHighlightedWallMaterial(material, 'delete'),
+  )
 
   const result: WallMaterials = {
     visible,
     invisible,
+    translucent,
     deleteVisible,
     deleteInvisible,
+    deleteTranslucent,
     highlightedVisible,
     highlightedInvisible,
+    highlightedTranslucent,
     materialHash,
   }
 

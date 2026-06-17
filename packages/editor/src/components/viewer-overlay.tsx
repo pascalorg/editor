@@ -25,13 +25,16 @@ import {
   Check,
   ChevronRight,
   Diamond,
+  Footprints,
   Layers,
   PenLine,
   Sparkles,
 } from 'lucide-react'
 import Link from 'next/link'
+import { flushSync } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { cn } from '../lib/utils'
+import useEditor from '../store/use-editor'
 import { ActionButton } from './ui/action-menu/action-button'
 import {
   DropdownMenu,
@@ -46,6 +49,24 @@ type ProjectOwner = {
   name: string
   username: string | null
   image: string | null
+}
+
+function requestWalkthroughPointerLock() {
+  const canvas = document.querySelector<HTMLCanvasElement>('[data-pascal-viewer-3d] canvas')
+  if (!canvas) return
+
+  if (!canvas.hasAttribute('tabindex')) {
+    canvas.tabIndex = -1
+  }
+  canvas.focus({ preventScroll: true })
+
+  if (document.pointerLockElement === canvas) return
+
+  try {
+    canvas.requestPointerLock?.()
+  } catch {
+    return
+  }
 }
 
 const levelModeLabels: Record<'stacked' | 'exploded' | 'solo', string> = {
@@ -79,6 +100,12 @@ const wallModeConfig = {
       <img alt="Low" height={28} src="/icons/walllow.png" width={28} {...props} />
     ),
     label: 'Low',
+  },
+  translucent: {
+    icon: (props: any) => (
+      <img alt="Translucent" height={28} src="/icons/wall.png" width={28} {...props} />
+    ),
+    label: 'Translucent',
   },
 }
 
@@ -554,7 +581,12 @@ export const ViewerOverlay = ({
               }
               label={`Walls: ${wallModeConfig[wallMode as keyof typeof wallModeConfig].label}`}
               onClick={() => {
-                const modes: ('cutaway' | 'up' | 'down')[] = ['cutaway', 'up', 'down']
+                const modes: ('cutaway' | 'up' | 'down' | 'translucent')[] = [
+                  'cutaway',
+                  'up',
+                  'down',
+                  'translucent',
+                ]
                 const nextIndex = (modes.indexOf(wallMode as any) + 1) % modes.length
                 useViewer.getState().setWallMode(modes[nextIndex] ?? 'cutaway')
               }}
@@ -614,6 +646,23 @@ export const ViewerOverlay = ({
                 className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
                 src="/icons/topview.png"
               />
+            </ActionButton>
+
+            <div className="mx-1 h-5 w-px bg-border/40" />
+
+            {/* First-person walkthrough */}
+            <ActionButton
+              className="hover:bg-white/5 hover:text-emerald-400"
+              label="Walkthrough"
+              onClick={() => {
+                flushSync(() => useEditor.getState().setFirstPersonMode(true))
+                requestWalkthroughPointerLock()
+              }}
+              size="icon"
+              tooltipSide="top"
+              variant="ghost"
+            >
+              <Footprints className="h-6 w-6" />
             </ActionButton>
           </div>
         </TooltipProvider>
