@@ -64,19 +64,19 @@ const levelModeBadgeLabels: Record<'manual' | 'stacked' | 'exploded' | 'solo', s
 const wallModeConfig = {
   up: {
     icon: (props: any) => (
-      <img alt="Full Height" height={28} src="/icons/room.png" width={28} {...props} />
+      <img alt="Full Height" height={28} src="/icons/room.webp" width={28} {...props} />
     ),
     label: 'Full Height',
   },
   cutaway: {
     icon: (props: any) => (
-      <img alt="Cutaway" height={28} src="/icons/wallcut.png" width={28} {...props} />
+      <img alt="Cutaway" height={28} src="/icons/wallcut.webp" width={28} {...props} />
     ),
     label: 'Cutaway',
   },
   down: {
     icon: (props: any) => (
-      <img alt="Low" height={28} src="/icons/walllow.png" width={28} {...props} />
+      <img alt="Low" height={28} src="/icons/walllow.webp" width={28} {...props} />
     ),
     label: 'Low',
   },
@@ -455,7 +455,7 @@ export const ViewerOverlay = ({
                 <img
                   alt="Scans"
                   className="h-[28px] w-[28px] object-contain"
-                  src="/icons/mesh.png"
+                  src="/icons/mesh.webp"
                 />
               </ActionButton>
             )}
@@ -476,7 +476,7 @@ export const ViewerOverlay = ({
                 <img
                   alt="Guides"
                   className="h-[28px] w-[28px] object-contain"
-                  src="/icons/floorplan.png"
+                  src="/icons/floorplan.webp"
                 />
               </ActionButton>
             )}
@@ -582,7 +582,7 @@ export const ViewerOverlay = ({
               <img
                 alt="Orbit Left"
                 className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
-                src="/icons/rotate.png"
+                src="/icons/rotate.webp"
               />
             </ActionButton>
 
@@ -597,7 +597,7 @@ export const ViewerOverlay = ({
               <img
                 alt="Orbit Right"
                 className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
-                src="/icons/rotate.png"
+                src="/icons/rotate.webp"
               />
             </ActionButton>
 
@@ -612,7 +612,7 @@ export const ViewerOverlay = ({
               <img
                 alt="Top View"
                 className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
-                src="/icons/topview.png"
+                src="/icons/topview.webp"
               />
             </ActionButton>
           </div>

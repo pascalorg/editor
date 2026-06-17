@@ -383,7 +383,7 @@ export default function WindowPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/window.png"
+      icon="/icons/window.webp"
       onClose={handleClose}
       title={node.name || 'Window'}
       width={320}

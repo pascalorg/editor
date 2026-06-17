@@ -118,7 +118,7 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
     label: 'DWV Pipe',
     description:
       'Drain / waste / vent pipe run — waste lines fall at ¼″ per foot, vents run level or vertical.',
-    icon: { kind: 'url', src: '/icons/dwv-pipes.png' },
+    icon: { kind: 'url', src: '/icons/dwv-pipes.webp' },
     paletteSection: 'structure',
     paletteOrder: 95,
   },

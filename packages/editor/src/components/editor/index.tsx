@@ -569,7 +569,7 @@ function PaintCursorBadge({
           alt=""
           aria-hidden="true"
           className="h-5 w-5 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-          src="/icons/paint.png"
+          src="/icons/paint.webp"
         />
       </div>
     </div>
@@ -601,10 +601,14 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
 }) {
   // Studio mode is a clean render/snapshot surface — no selection or editing
   // affordances. It mirrors version-preview's chrome gating on the canvas.
-  const noEditing = isVersionPreviewMode || isFirstPersonMode || isStudioMode
+  // Capture (snapshot) mode is camera-only for the same reason: suppress
+  // selection, editing handles, and the tool manager (which mounts the site
+  // boundary flags) so the framed shot stays clean.
+  const isCaptureMode = useEditor((s) => s.isCaptureMode)
+  const noEditing = isVersionPreviewMode || isFirstPersonMode || isStudioMode || isCaptureMode
   return (
     <>
-      {!(isFirstPersonMode || isStudioMode) && <SelectionManager />}
+      {!(isFirstPersonMode || isStudioMode || isCaptureMode) && <SelectionManager />}
       {!noEditing && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
       {!noEditing && <GroupRotateHandle />}

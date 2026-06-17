@@ -112,7 +112,7 @@ export const liquidLineDefinition: NodeDefinition<typeof LiquidLineNode> = {
     label: 'Liquid Line',
     description:
       'Standalone refrigerant liquid line — a thin bare-copper run; Follow mode traces an existing lineset.',
-    icon: { kind: 'url', src: '/icons/lineset.png' },
+    icon: { kind: 'url', src: '/icons/lineset.webp' },
     paletteSection: 'structure',
     paletteOrder: 94,
   },

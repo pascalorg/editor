@@ -176,7 +176,7 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   presentation: {
     label: 'Duct',
     description: 'HVAC duct run — polyline of round, rect, or flat-oval sections.',
-    icon: { kind: 'url', src: '/icons/duct.png' },
+    icon: { kind: 'url', src: '/icons/duct.webp' },
     paletteSection: 'structure',
     paletteOrder: 90,
   },

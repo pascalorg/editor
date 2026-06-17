@@ -94,7 +94,7 @@ export const hvacEquipmentDefinition: NodeDefinition<typeof HvacEquipmentNode> =
     label: 'HVAC Unit',
     description:
       'Furnace, air handler, or condenser — duct runs connect to its supply/return collars.',
-    icon: { kind: 'url', src: '/icons/HVAC.png' },
+    icon: { kind: 'url', src: '/icons/HVAC.webp' },
     paletteSection: 'structure',
     paletteOrder: 92,
   },

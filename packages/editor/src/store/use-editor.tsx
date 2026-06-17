@@ -688,6 +688,11 @@ export function selectSiteFloorplanContext() {
   })
 }
 
+// Stashes the view mode the user was in before entering capture, so we can
+// restore it on exit. Snapshot capture always frames in 3D — the 2D/split
+// floorplan panes render nothing meaningful for a thumbnail.
+let viewModeBeforeCapture: ViewMode | null = null
+
 const useEditor = create<EditorState>()(
   persist(
     (set, get) => ({
@@ -947,7 +952,35 @@ const useEditor = create<EditorState>()(
       setCaptureMode: (next) => {
         const resolved: CaptureMode =
           typeof next === 'boolean' ? { mode: next ? 'standard' : 'idle' } : next
-        set({ captureMode: resolved, isCaptureMode: resolved.mode !== 'idle' })
+        const entering = resolved.mode !== 'idle'
+        set((state) => {
+          if (entering) {
+            // Force 3D for the shot. Remember the prior mode only on the first
+            // entry (viewMode is already '3d' on re-entry), so we restore the
+            // user's real choice — not the forced '3d' — when capture ends.
+            if (state.viewMode !== '3d') {
+              viewModeBeforeCapture = state.viewMode
+              return {
+                captureMode: resolved,
+                isCaptureMode: true,
+                viewMode: '3d',
+                isFloorplanOpen: false,
+              }
+            }
+            return { captureMode: resolved, isCaptureMode: true }
+          }
+          const restore = viewModeBeforeCapture
+          viewModeBeforeCapture = null
+          if (restore && restore !== '3d') {
+            return {
+              captureMode: resolved,
+              isCaptureMode: false,
+              viewMode: restore,
+              isFloorplanOpen: true,
+            }
+          }
+          return { captureMode: resolved, isCaptureMode: false }
+        })
       },
       viewMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode,
       setViewMode: (mode) => set({ viewMode: mode, isFloorplanOpen: mode !== '3d' }),

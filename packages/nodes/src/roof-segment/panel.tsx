@@ -121,7 +121,7 @@ export default function RoofSegmentPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/roof.png"
+      icon="/icons/roof.webp"
       onBack={handleBack}
       onClose={handleClose}
       title={node.name || 'Roof Segment'}
