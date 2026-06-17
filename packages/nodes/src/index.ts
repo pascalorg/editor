@@ -8,13 +8,22 @@ import { cupolaDefinition } from './cupola'
 import { doorDefinition } from './door'
 import { dormerDefinition } from './dormer'
 import { downspoutDefinition } from './downspout'
+import { ductFittingDefinition } from './duct-fitting'
+import { ductSegmentDefinition } from './duct-segment'
+import { ductTerminalDefinition } from './duct-terminal'
 import { elevatorDefinition } from './elevator'
 import { eyebrowVentDefinition } from './eyebrow-vent'
 import { fenceDefinition } from './fence'
 import { guideDefinition } from './guide'
 import { gutterDefinition } from './gutter'
+import { hvacEquipmentDefinition } from './hvac-equipment'
 import { itemDefinition } from './item'
 import { levelDefinition } from './level'
+import { linesetDefinition } from './lineset'
+import { liquidLineDefinition } from './liquid-line'
+import { pipeFittingDefinition } from './pipe-fitting'
+import { pipeSegmentDefinition } from './pipe-segment'
+import { pipeTrapDefinition } from './pipe-trap'
 import { ridgeVentDefinition } from './ridge-vent'
 import { roofDefinition } from './roof'
 import { roofSegmentDefinition } from './roof-segment'
@@ -88,6 +97,17 @@ export const builtinPlugin: Plugin = {
     dormerDefinition as unknown as AnyNodeDefinition,
     gutterDefinition as unknown as AnyNodeDefinition,
     downspoutDefinition as unknown as AnyNodeDefinition,
+    // HVAC — Phase 1: round duct segment polyline. Phase 2: fittings + ports.
+    ductSegmentDefinition as unknown as AnyNodeDefinition,
+    ductFittingDefinition as unknown as AnyNodeDefinition,
+    ductTerminalDefinition as unknown as AnyNodeDefinition,
+    hvacEquipmentDefinition as unknown as AnyNodeDefinition,
+    linesetDefinition as unknown as AnyNodeDefinition,
+    liquidLineDefinition as unknown as AnyNodeDefinition,
+    // DWV plumbing — Phase 2 of the research doc's plan.
+    pipeSegmentDefinition as unknown as AnyNodeDefinition,
+    pipeFittingDefinition as unknown as AnyNodeDefinition,
+    pipeTrapDefinition as unknown as AnyNodeDefinition,
   ],
 }
 
@@ -100,13 +120,22 @@ export { cupolaDefinition } from './cupola'
 export { doorDefinition } from './door'
 export { dormerDefinition } from './dormer'
 export { downspoutDefinition } from './downspout'
+export { ductFittingDefinition } from './duct-fitting'
+export { ductSegmentDefinition } from './duct-segment'
+export { ductTerminalDefinition } from './duct-terminal'
 export { elevatorDefinition } from './elevator'
 export { eyebrowVentDefinition } from './eyebrow-vent'
 export { fenceDefinition } from './fence'
 export { guideDefinition } from './guide'
 export { gutterDefinition } from './gutter'
+export { hvacEquipmentDefinition } from './hvac-equipment'
 export { itemDefinition } from './item'
 export { levelDefinition } from './level'
+export { linesetDefinition } from './lineset'
+export { liquidLineDefinition, useLiquidLineToolOptions } from './liquid-line'
+export { pipeFittingDefinition } from './pipe-fitting'
+export { pipeSegmentDefinition } from './pipe-segment'
+export { pipeTrapDefinition } from './pipe-trap'
 export { ridgeVentDefinition } from './ridge-vent'
 export { roofDefinition } from './roof'
 export { roofSegmentDefinition } from './roof-segment'

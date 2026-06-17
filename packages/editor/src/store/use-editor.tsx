@@ -106,6 +106,15 @@ export type StructureTool =
   | 'dormer'
   | 'gutter'
   | 'downspout'
+  | 'duct-segment'
+  | 'duct-fitting'
+  | 'duct-terminal'
+  | 'hvac-equipment'
+  | 'lineset'
+  | 'liquid-line'
+  | 'pipe-segment'
+  | 'pipe-fitting'
+  | 'pipe-trap'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'
@@ -291,6 +300,14 @@ type EditorState = {
    */
   activeHandleDrag: { nodeId: AnyNodeId; label: string } | null
   setActiveHandleDrag: (drag: { nodeId: AnyNodeId; label: string } | null) => void
+  /**
+   * World axis the R/T keyboard rotation turns around, for kinds with
+   * full 3D orientation (duct fittings). Alt cycles it Y → X → Z; the
+   * kind's tool / keyboard actions read it, and the floating action
+   * menu surfaces it in a pill above the selected node.
+   */
+  rotationAxis: 'x' | 'y' | 'z'
+  cycleRotationAxis: () => 'x' | 'y' | 'z'
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
   curvingFence: FenceNode | null
@@ -348,6 +365,10 @@ type EditorState = {
   toggleFloorplanOpen: () => void
   isFloorplanHovered: boolean
   setFloorplanHovered: (hovered: boolean) => void
+  // Toggleable DWV riser-diagram (plumbing isometric) overlay.
+  isRiserOpen: boolean
+  setRiserOpen: (open: boolean) => void
+  toggleRiserOpen: () => void
   navigationSyncPose: NavigationSyncPose | null
   publishNavigationSyncPose: (pose: NavigationSyncPoseInput) => void
   floorplanSelectionTool: FloorplanSelectionTool
@@ -369,6 +390,11 @@ type EditorState = {
   // Development-only camera debug flag for inspecting underside geometry
   allowUndergroundCamera: boolean
   setAllowUndergroundCamera: (enabled: boolean) => void
+  // Development-only debug overlay: draw each wall's opening-snap hit area
+  // (the capsule of points within the snap radius of its centerline). Lets us
+  // see why a door/window snaps where it does.
+  show2dVoronoi: boolean
+  setShow2dVoronoi: (enabled: boolean) => void
   // First-person walkthrough mode (street view)
   isFirstPersonMode: boolean
   _viewModeBeforeFirstPerson: ViewMode | null
@@ -803,6 +829,13 @@ const useEditor = create<EditorState>()(
       setMovingFenceEndpoint: (value) => set({ movingFenceEndpoint: value }),
       activeHandleDrag: null,
       setActiveHandleDrag: (drag) => set({ activeHandleDrag: drag }),
+      rotationAxis: 'y',
+      cycleRotationAxis: () => {
+        const order = ['y', 'x', 'z'] as const
+        const next = order[(order.indexOf(get().rotationAxis as 'y' | 'x' | 'z') + 1) % 3]!
+        set({ rotationAxis: next })
+        return next
+      },
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       curvingFence: null,
@@ -929,6 +962,9 @@ const useEditor = create<EditorState>()(
         }),
       isFloorplanHovered: false,
       setFloorplanHovered: (hovered) => set({ isFloorplanHovered: hovered }),
+      isRiserOpen: false,
+      setRiserOpen: (open) => set({ isRiserOpen: open }),
+      toggleRiserOpen: () => set((state) => ({ isRiserOpen: !state.isRiserOpen })),
       navigationSyncPose: null,
       publishNavigationSyncPose: (pose) =>
         set((state) => ({
@@ -955,6 +991,8 @@ const useEditor = create<EditorState>()(
         set({ referenceFloorOpacity: Math.min(0.8, Math.max(0.1, opacity)) }),
       allowUndergroundCamera: false,
       setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
+      show2dVoronoi: false,
+      setShow2dVoronoi: (enabled) => set({ show2dVoronoi: enabled }),
       isFirstPersonMode: false,
       _viewModeBeforeFirstPerson: null as ViewMode | null,
       setFirstPersonMode: (enabled) => {

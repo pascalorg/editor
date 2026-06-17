@@ -124,6 +124,14 @@ export function FloorplanRegistryMoveOverlay() {
       // to be consumed. That legacy flow is gone in the registry layer;
       // all entries use the action menu now.
       let hasMovedSinceStart = false
+      // Live cursor location — updated on EVERY pointermove (even over the 3D
+      // canvas) so R-key ownership can follow the pointer's CURRENT pane rather
+      // than the sticky `hasMovedSinceStart`. Without this, once the user touched
+      // the 2D pane the overlay claimed R forever and the 3D flip went dead.
+      let pointerOverFloorplan = false
+      const onPointerTrack = (event: PointerEvent) => {
+        pointerOverFloorplan = isPointerOverFloorplanScene(event.clientX, event.clientY)
+      }
 
       const onMove = (event: PointerEvent) => {
         // Skip 3D-canvas / other-UI cursor moves so the overlay only
@@ -283,6 +291,33 @@ export function FloorplanRegistryMoveOverlay() {
       }
 
       const onKey = (event: KeyboardEvent) => {
+        // R flips a directional kind's facing mid-placement (door / window:
+        // front ↔ back). The session records the flip and re-runs its last
+        // apply so the 2D symbol updates immediately; kinds without a facing
+        // leave `flipSide` unset and R falls through to the global handler.
+        //
+        // Ownership follows the CURRENT pointer pane, not a sticky flag: the 3D
+        // move tool ALSO listens for R on `window`. We own R only while the
+        // cursor is over the 2D floor-plan pane (`pointerOverFloorplan`) AND the
+        // 2D mover has actually engaged (`hasMovedSinceStart`); then we
+        // `stopImmediatePropagation` (this handler is CAPTURE-phase, so it runs
+        // first) so the 3D tool can't also flip. When the cursor is over the 3D
+        // pane we yield — the 3D tool owns R there. (The old sticky
+        // `hasMovedSinceStart`-only gate made the overlay claim R forever after
+        // the first 2D move, killing the 3D flip.)
+        if (event.key === 'r' || event.key === 'R') {
+          if (!(session.flipSide && hasMovedSinceStart && pointerOverFloorplan)) return
+          if (event.repeat) return
+          const t = event.target as HTMLElement | null
+          if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
+            return
+          }
+          event.preventDefault()
+          event.stopImmediatePropagation()
+          session.flipSide()
+          sfxEmitter.emit('sfx:item-rotate')
+          return
+        }
         if (event.key !== 'Escape') return
         // Claim teardown ownership so the 3D move tool's cleanup skips
         // its own restore — without this, both sides would race to
@@ -328,13 +363,18 @@ export function FloorplanRegistryMoveOverlay() {
         setMovingNode(null)
       }
 
+      window.addEventListener('pointermove', onPointerTrack)
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onPointerUp)
-      window.addEventListener('keydown', onKey)
+      // Capture phase so this runs BEFORE the 3D move tool's bubble-phase R
+      // listener — when the cursor is over the 2D pane, `stopImmediatePropagation`
+      // then pre-empts it so only one handler flips.
+      window.addEventListener('keydown', onKey, true)
       return () => {
+        window.removeEventListener('pointermove', onPointerTrack)
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onPointerUp)
-        window.removeEventListener('keydown', onKey)
+        window.removeEventListener('keydown', onKey, true)
         // Unmount cleanup. `historyPaused === true` here means none of
         // our terminal paths (commit, Esc) ran in this overlay — they
         // each call `resumeSceneHistory` and flip the flag.
@@ -389,11 +429,32 @@ export function FloorplanRegistryMoveOverlay() {
     const entry = scene.querySelector(`[data-node-id="${movingNode.id}"]`) as SVGGElement | null
     if (!entry) return
 
-    const originalPosition = ((
-      movingNode as unknown as {
-        position?: [number, number, number]
-      }
-    ).position ?? [0, 0, 0]) as [number, number, number]
+    // Polyline kinds (duct / pipe / lineset) carry a `path`, not a
+    // `position` — translating a `position` here would write a field their
+    // schema ignores and snap the run back. For those we move every path
+    // point by the cursor delta and commit the translated `path` instead.
+    // The reference origin is the path centre so the SVG `translate` delta
+    // matches the geometry's actual location (which isn't at [0,0,0]).
+    const originalPath =
+      'path' in movingNode && Array.isArray((movingNode as { path?: unknown }).path)
+        ? (movingNode as { path: [number, number, number][] }).path.map(
+            (p) => [...p] as [number, number, number],
+          )
+        : null
+    const originalPosition: [number, number, number] = originalPath
+      ? (() => {
+          let cx = 0
+          let cz = 0
+          for (const p of originalPath) {
+            cx += p[0]
+            cz += p[2]
+          }
+          const n = originalPath.length || 1
+          return [cx / n, originalPath[0]?.[1] ?? 0, cz / n]
+        })()
+      : (((movingNode as unknown as { position?: [number, number, number] }).position ?? [
+          0, 0, 0,
+        ]) as [number, number, number])
     const isFreshPlacement = isFreshPlacementMetadata(
       (movingNode as { metadata?: unknown }).metadata,
     )
@@ -410,12 +471,33 @@ export function FloorplanRegistryMoveOverlay() {
       const otherId = el.getAttribute('data-node-id')
       if (!otherId || otherId === movingNode.id) continue
       const b = (el as SVGGraphicsElement).getBBox()
-      if (b.width <= 0 || b.height <= 0) continue
+      // Skip only fully-degenerate (point) entries. A thin run (duct / pipe /
+      // lineset drawn as a line) has one zero dimension but is still a valid
+      // alignment target — its endpoints become line anchors.
+      if (b.width <= 0 && b.height <= 0) continue
       candidateAnchors.push(...bboxAnchors(otherId, b.x, b.y, b.x + b.width, b.y + b.height))
     }
 
     let lastSnapped: [number, number] | null = null
     let dragAnchor: [number, number] | null = null
+
+    // Footprint bounding box drawn around the dragged entry — the 2D
+    // counterpart of the 3D `DragBoundingBox`, so a moved / duplicated node
+    // reads the same in both views. Green wireframe rect over the entry's
+    // own bbox, translated in lockstep with it. The entry stays visible the
+    // whole drag (no hide-until-move) so it never appears to vanish.
+    const SVG_NS = 'http://www.w3.org/2000/svg'
+    const boxEl = document.createElementNS(SVG_NS, 'rect')
+    boxEl.setAttribute('x', String(movingLocalBBox.x))
+    boxEl.setAttribute('y', String(movingLocalBBox.y))
+    boxEl.setAttribute('width', String(movingLocalBBox.width))
+    boxEl.setAttribute('height', String(movingLocalBBox.height))
+    boxEl.setAttribute('fill', 'none')
+    boxEl.setAttribute('stroke', '#22c55e')
+    boxEl.setAttribute('stroke-width', '1.5')
+    boxEl.setAttribute('vector-effect', 'non-scaling-stroke')
+    boxEl.setAttribute('pointer-events', 'none')
+    scene.appendChild(boxEl)
 
     const onMove = (event: PointerEvent) => {
       // Same target guard as Path 1 — pointer must be over the floor
@@ -487,6 +569,7 @@ export function FloorplanRegistryMoveOverlay() {
       const dx = finalX - originalPosition[0]
       const dz = finalZ - originalPosition[2]
       entry.setAttribute('transform', `translate(${dx} ${dz})`)
+      boxEl.setAttribute('transform', `translate(${dx} ${dz})`)
       lastSnapped = [finalX, finalZ]
     }
 
@@ -500,6 +583,33 @@ export function FloorplanRegistryMoveOverlay() {
       const [, oldY] = originalPosition
       setMovingNodeOrigin('2d')
       let selectedId = movingNode.id as AnyNodeId
+      if (originalPath) {
+        // Polyline kinds: shift every point by the committed delta and
+        // write `path`. Strip the fresh-placement flags on first drop.
+        const dx = sx - originalPosition[0]
+        const dz = sz - originalPosition[2]
+        const nextPath = originalPath.map(
+          ([x, y, z]) => [x + dx, y, z + dz] as [number, number, number],
+        )
+        useScene.getState().updateNode(
+          movingNode.id as AnyNodeId,
+          (isFreshPlacement
+            ? {
+                path: nextPath,
+                metadata: stripPlacementMetadataFlags(
+                  (movingNode as { metadata?: unknown }).metadata,
+                ),
+                visible: true,
+              }
+            : { path: nextPath }) as Partial<AnyNode>,
+        )
+        useViewer.getState().setSelection({ selectedIds: [movingNode.id as AnyNodeId] })
+        entry.removeAttribute('transform')
+        useAlignmentGuides.getState().clear()
+        setMovingNode(null)
+        swallowNextClick()
+        return
+      }
       if (isFreshPlacement) {
         selectedId =
           commitFreshPlacementSubtree(
@@ -552,6 +662,10 @@ export function FloorplanRegistryMoveOverlay() {
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('keydown', onKey)
       entry.removeAttribute('transform')
+      // Always un-hide on teardown so a committed copy shows and a
+      // never-revealed entry doesn't leak a hidden style onto a reused node.
+      entry.style.visibility = ''
+      boxEl.remove()
       useAlignmentGuides.getState().clear()
     }
   }, [isActive, movingNode, setMovingNode, setMovingNodeOrigin, hasMoveTarget, def])

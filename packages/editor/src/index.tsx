@@ -12,7 +12,12 @@ export { default as Editor } from './components/editor'
 // surface uses the shorter, shell-friendly names from the unified
 // preset-system spec.
 export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
-export { formatMeasurement, MeasurementPill } from './components/editor/measurement-pill'
+export {
+  DimensionPill,
+  type DimensionPillPart,
+  formatMeasurement,
+  MeasurementPill,
+} from './components/editor/measurement-pill'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,
@@ -300,6 +305,11 @@ export type {
   WorkspaceMode,
 } from './store/use-editor'
 export { default as useEditor } from './store/use-editor'
+export {
+  default as useOpeningGuides,
+  type OpeningGuide3D,
+  type OpeningGuideVec3,
+} from './store/use-opening-guides'
 export {
   type PaletteView,
   type PaletteViewProps,

@@ -3457,3 +3457,13 @@ function syncWindowCutout(node: WindowNode, mesh: THREE.Mesh) {
   }
   cutout.visible = false
 }
+
+/**
+ * Build a fresh window mesh for preview/ghost rendering.
+ * Returns a mesh with an invisible hitbox root and visible children (frame, glass, sash, hardware).
+ */
+export function buildWindowPreviewMesh(node: WindowNode): THREE.Mesh {
+  const mesh = new THREE.Mesh()
+  updateWindowMesh(node, mesh)
+  return mesh
+}

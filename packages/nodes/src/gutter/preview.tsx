@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
 import { buildGutterGeometry } from './geometry'
 import type { GutterNode } from './schema'
 
@@ -20,7 +21,8 @@ import type { GutterNode } from './schema'
  * of the trough walls and visually thicken the ghost relative to the
  * placed gutter.
  */
-const GutterPreview = ({ node }: { node: GutterNode }) => {
+const GutterPreview = ({ node, invalid }: { node: GutterNode; invalid?: boolean }) => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildGutterGeometry(node),
     [
@@ -39,17 +41,17 @@ const GutterPreview = ({ node }: { node: GutterNode }) => {
   const material = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: 0xff_ff_ff,
-        emissive: 0xff_ff_ff,
+        color: invalid ? INVALID_GHOST_COLOR : 0xff_ff_ff,
+        emissive: invalid ? INVALID_GHOST_COLOR : 0xff_ff_ff,
         emissiveIntensity: 0.12,
         roughness: 0.7,
         metalness: 0.2,
         transparent: true,
-        opacity: 0.55,
+        opacity: invalid ? 0.4 : 0.55,
         depthWrite: false,
         side: THREE.FrontSide,
       }),
-    [],
+    [invalid],
   )
 
   const edgesGeometry = useMemo(() => new THREE.EdgesGeometry(geometry, 25), [geometry])

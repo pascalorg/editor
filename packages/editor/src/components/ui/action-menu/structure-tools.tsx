@@ -25,4 +25,13 @@ export const tools: ToolConfig[] = [
   { id: 'zone', iconSrc: '/icons/zone.png', label: 'Zone' },
   { id: 'spawn', iconSrc: '/icons/spawn-point.png', label: 'Spawn Point' },
   { id: 'shelf', iconSrc: '/icons/shelf.png', label: 'Shelf' },
+  { id: 'duct-segment', iconSrc: '/icons/duct.png', label: 'Duct' },
+  { id: 'duct-fitting', iconSrc: '/icons/duct-fitting.png', label: 'Duct Fitting' },
+  { id: 'duct-terminal', iconSrc: '/icons/registers.png', label: 'Register' },
+  { id: 'hvac-equipment', iconSrc: '/icons/HVAC.png', label: 'HVAC Unit' },
+  { id: 'pipe-segment', iconSrc: '/icons/dwv-pipes.png', label: 'DWV Pipe' },
+  { id: 'pipe-trap', iconSrc: '/icons/dwv-pipes.png', label: 'Trap' },
+  { id: 'pipe-fitting', iconSrc: '/icons/duct-fitting.png', label: 'Pipe Fitting' },
+  { id: 'lineset', iconSrc: '/icons/lineset.png', label: 'Lineset' },
+  { id: 'liquid-line', iconSrc: '/icons/lineset.png', label: 'Liquid Line' },
 ]

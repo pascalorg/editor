@@ -10,6 +10,7 @@ import {
   calculateLevelMiters,
   DEFAULT_ANGLE_STEP,
   type DoorNode,
+  DoorNode as DoorNodeSchema,
   type ElevatorNode,
   emitter,
   type FenceNode,
@@ -45,7 +46,9 @@ import {
   useLiveTransforms,
   useScene,
   type WallNode,
+  WallNode as WallNodeSchema,
   type WindowNode,
+  WindowNode as WindowNodeSchema,
   ZoneNode as ZoneNodeSchema,
   type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
@@ -85,6 +88,7 @@ import { cn } from '../../lib/utils'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
 import useEditor, { selectSiteFloorplanContext } from '../../store/use-editor'
+import usePlacementPreview from '../../store/use-placement-preview'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
@@ -102,6 +106,7 @@ import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-
 import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
 import { FloorplanRegistryLayer } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
+import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { snapToHalf } from '../tools/item/placement-math'
@@ -5501,6 +5506,63 @@ export function FloorplanPanel({
 
     return 0
   }, [isWindowBuildActive, movingNode, shiftPressed])
+  // Float the faithful door/window symbol at the cursor while it isn't over a
+  // wall (the off-wall placement ghost), by publishing a transient opening on a
+  // synthetic wall to `usePlacementPreview` — `FloorplanPlacementPreviewLayer`
+  // renders it through the real `def.floorplan` builder (swing arc / panes), so
+  // it reads as a real door/window, not a bare rectangle. Off any wall there's
+  // no orientation to inherit, so the synthetic wall runs along plan-X.
+  const showOpeningGhost = useCallback(
+    (planPoint: WallPlanPoint) => {
+      const isDoor = movingOpeningType === 'door' || (isDoorBuildActive && !movingOpeningType)
+      // Synthetic wall centred at the cursor; the opening sits at its midpoint.
+      const half =
+        (isDoor
+          ? movingNode?.type === 'door'
+            ? movingNode.width
+            : 0.9
+          : movingNode?.type === 'window'
+            ? movingNode.width
+            : 1.5) /
+          2 +
+        0.5
+      const wall = WallNodeSchema.parse({
+        start: [planPoint[0] - half, planPoint[1]],
+        end: [planPoint[0] + half, planPoint[1]],
+        thickness: 0.1,
+      })
+      // Clone the moving opening (carries width / type / hinge / swing) onto the
+      // synthetic wall, or parse a default for build mode. position[0] = the
+      // along-wall midpoint so the symbol centres on the cursor.
+      const base =
+        movingNode?.type === 'door' || movingNode?.type === 'window'
+          ? { ...movingNode }
+          : isDoor
+            ? DoorNodeSchema.parse({})
+            : WindowNodeSchema.parse({})
+      const ghost = {
+        ...base,
+        parentId: wall.id,
+        wallId: wall.id,
+        roofSegmentId: undefined,
+        roofFace: undefined,
+        position: [half, floorplanOpeningLocalY, 0] as [number, number, number],
+        rotation: [0, 0, 0] as [number, number, number],
+      } as AnyNode
+      usePlacementPreview.getState().set(ghost, wall)
+    },
+    [floorplanOpeningLocalY, isDoorBuildActive, movingNode, movingOpeningType],
+  )
+  // Drop the floating opening ghost whenever opening placement ends (commit,
+  // tool change, mode switch, cancel) or the active level changes, so a stale
+  // ghost never lingers on the wrong level.
+  useEffect(() => {
+    if (!isOpeningPlacementActive) usePlacementPreview.getState().clear()
+  }, [isOpeningPlacementActive])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `levelId` is an intentional re-run trigger; the effect drops the placement ghost when the active level changes.
+  useEffect(() => {
+    usePlacementPreview.getState().clear()
+  }, [levelId])
   const isMarqueeSelectionToolActive =
     mode === 'select' &&
     floorplanSelectionTool === 'marquee' &&
@@ -8568,7 +8630,16 @@ export function FloorplanPanel({
       // `wall:move` events the door / window placement tools listen for.
       // Same reason `handleBackgroundPlacementClick` runs its opening
       // branch before its grid catch-all.
-      if (isOpeningPlacementActive) {
+      //
+      // Only the pure BUILD case (a door/window tool armed with no
+      // `movingNode`) drives placement through these synthesized `wall:*`
+      // events. When a door/window `movingNode` is set — the community
+      // preset / catalog flow — `FloorplanRegistryMoveOverlay` owns 2D
+      // placement end-to-end via `def.floorplanMoveTarget` (faithful symbol,
+      // plan-space snap, single-undo commit, R-flip). Running both at once
+      // made them fight (R-flip overwritten on the next move, click-commit
+      // dropped), so the move case is excluded here.
+      if (isOpeningBuildActive && !isOpeningMoveActive) {
         const closest = findClosestWallPoint(planPoint, walls, {
           canUseWall: (wall) => !isCurvedWall(wall),
         })
@@ -8595,9 +8666,23 @@ export function FloorplanPanel({
           } else {
             emitter.emit('wall:move', wallEvent as any)
           }
-        } else if (hoveredWallIdRef.current) {
-          emitFloorplanWallLeave(hoveredWallIdRef.current)
-          hoveredWallIdRef.current = null
+          // Snapped to a wall — the real on-wall draft is the preview; drop
+          // the loose free-follow ghost.
+          usePlacementPreview.getState().clear()
+        } else {
+          if (hoveredWallIdRef.current) {
+            emitFloorplanWallLeave(hoveredWallIdRef.current)
+            hoveredWallIdRef.current = null
+          }
+          // Off any wall — float the FAITHFUL door/window symbol (swing arc /
+          // panes) following the cursor, not a bare rectangle. The glyph
+          // builder needs a wall for `ctx.parent`, so we publish the opening on
+          // a SYNTHETIC wall segment centred at the cursor (plan-X aligned) to
+          // `usePlacementPreview`; `FloorplanPlacementPreviewLayer` renders it
+          // through the real `def.floorplan` builder. Shift bypasses grid snap.
+          const snappedPoint =
+            shiftPressed || event.shiftKey ? planPoint : getSnappedFloorplanPoint(planPoint)
+          showOpeningGhost(snappedPoint)
         }
         return
       }
@@ -8622,7 +8707,13 @@ export function FloorplanPanel({
       // window are also registered kinds, but need wall events — see
       // comment there). Wall build skips this so its own branch below
       // updates local `draftEnd` state alongside the registry tool.
-      if (!isWallBuildActive && isFloorplanGridInteractionActive) {
+      //
+      // A door/window MOVE (community preset) is owned by
+      // `FloorplanRegistryMoveOverlay`; `isRegistryToolBuildActive` is true
+      // for it (build mode + a registered `door`/`window` tool), so without
+      // this exclusion the catch-all would emit `grid:move` and re-drive the
+      // 3D MoveDoorTool's free-follow, fighting the overlay again.
+      if (!isWallBuildActive && !isOpeningMoveActive && isFloorplanGridInteractionActive) {
         const snappedPoint = event.shiftKey ? planPoint : getSnappedFloorplanPoint(planPoint)
         emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
@@ -8715,7 +8806,14 @@ export function FloorplanPanel({
       isFenceBuildActive,
       isFloorplanGridInteractionActive,
       isMarqueeSelectionToolActive,
-      isOpeningPlacementActive,
+      isOpeningBuildActive,
+      isOpeningMoveActive,
+      // The off-wall opening ghost is published through this memoised
+      // callback, whose glyph (door swing-arc vs window panes) is bound to
+      // `isDoorBuildActive`. It must be a dependency or a door→window tool
+      // switch (which changes none of the other listed deps) would keep the
+      // stale closure and float a door symbol while the window tool is armed.
+      showOpeningGhost,
       isPolygonBuildActive,
       isRoofBuildActive,
       isSlabBuildActive,
@@ -8969,8 +9067,15 @@ export function FloorplanPanel({
     isCeilingBuildActive,
     isCeilingItemPlacementActive,
     isFenceBuildActive,
-    isFloorplanGridInteractionActive,
-    isOpeningPlacementActive,
+    // Exclude the door/window MOVE case: `isRegistryToolBuildActive` makes the
+    // grid catch-all true for it, but the overlay owns its commit (its own
+    // pointerup). Letting the catch-all emit `grid:click` here would consume
+    // the commit click and fight the overlay.
+    isFloorplanGridInteractionActive: isFloorplanGridInteractionActive && !isOpeningMoveActive,
+    // Only the pure-build opening case (tool armed, no movingNode) commits via
+    // the synthesized `wall:click`; the move case (community preset) is owned
+    // by FloorplanRegistryMoveOverlay, which commits on its own pointerup.
+    isOpeningPlacementActive: isOpeningBuildActive && !isOpeningMoveActive,
     isPolygonBuildActive,
     isRoofBuildActive,
     isSlabBuildActive,
@@ -10411,6 +10516,13 @@ export function FloorplanPanel({
                 palette={palette}
                 showGrid={showGrid}
               />
+
+              {/* Dev-only: draw each wall's opening-snap hit area (the
+                  capsule of points within the snap radius of its centerline).
+                  Gated on the developer-menu toggle. Painted right after the
+                  grid so the translucent capsules sit under the wall / opening
+                  glyphs. */}
+              <FloorplanVoronoiLayer />
 
               <FloorplanReferenceFloorLayer
                 data={referenceFloorData}

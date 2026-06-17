@@ -1,4 +1,5 @@
 import { AnyNode, type AnyNodeType } from '../schema/types'
+import { healSceneNodes } from '../utils/heal-scene-graph'
 
 export type ValidationSeverity = 'error' | 'warning'
 
@@ -127,8 +128,21 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
     }
   }
 
-  const nodes = nodesRaw as Record<string, unknown>
+  // Heal known pre-existing corruption (null children, zero-length walls) up
+  // front, so a scene saved before the source fixes still imports instead of
+  // hard-failing schema validation. `parsed` below carries the repaired nodes.
+  const { nodes, droppedWallIds, strippedChildRefs } = healSceneNodes(
+    nodesRaw as Record<string, unknown>,
+  )
   const rootNodeIds = rootNodeIdsRaw as string[]
+
+  if (strippedChildRefs > 0 || droppedWallIds.length > 0) {
+    warnings.push({
+      severity: 'warning',
+      code: 'auto_repaired',
+      message: `Repaired on import: removed ${strippedChildRefs} invalid child reference${strippedChildRefs === 1 ? '' : 's'} and ${droppedWallIds.length} zero-length wall${droppedWallIds.length === 1 ? '' : 's'}.`,
+    })
+  }
 
   if (rootNodeIds.length === 0) {
     errors.push({

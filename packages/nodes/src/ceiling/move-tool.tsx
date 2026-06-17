@@ -9,6 +9,7 @@ import {
   polygonAnchors,
   resolveAlignment,
   sceneRegistry,
+  snapScalar,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
@@ -36,10 +37,10 @@ import { BufferGeometry, DoubleSide, Path, Shape, ShapeGeometry, Vector3 } from 
  * mesh's X/Z position on rebuild (`mesh.position.x = 0`,
  * `mesh.position.z = 0`) so the visual transitions smoothly.
  *
- * 0.5m grid snap (matches legacy).
+ * Snaps to the editor's configured grid step (Shift bypasses).
  */
 function snap(value: number) {
-  return Math.round(value * 2) / 2
+  return snapScalar(value, useEditor.getState().gridSnapStep)
 }
 
 /** Figma-style alignment-snap threshold (meters), matching the other tools. */

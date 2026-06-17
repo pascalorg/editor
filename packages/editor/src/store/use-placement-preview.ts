@@ -18,14 +18,22 @@ type PlacementPreviewState = {
   /** Transient preview node, already positioned + rotated at the (snapped,
    *  aligned) cursor. `null` when no placement is active. */
   node: AnyNode | null
-  set(node: AnyNode | null): void
+  /** Optional synthetic parent for the preview's `def.floorplan` context.
+   *  Door / window glyph builders need `ctx.parent` to be a wall to draw their
+   *  real symbol (swing arc / panes); off any real wall we hand them a
+   *  synthetic wall segment centred at the cursor so the floating ghost shows
+   *  the faithful blueprint symbol instead of a bare rectangle. `null` for
+   *  self-contained kinds (column / elevator). */
+  parentNode: AnyNode | null
+  set(node: AnyNode | null, parentNode?: AnyNode | null): void
   clear(): void
 }
 
 const usePlacementPreview = create<PlacementPreviewState>((set) => ({
   node: null,
-  set: (node) => set({ node }),
-  clear: () => set({ node: null }),
+  parentNode: null,
+  set: (node, parentNode = null) => set({ node, parentNode }),
+  clear: () => set({ node: null, parentNode: null }),
 }))
 
 export default usePlacementPreview

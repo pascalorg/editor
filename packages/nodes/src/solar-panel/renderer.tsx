@@ -98,6 +98,7 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
       : segment
     : undefined
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildSolarPanelGeometry(node),
     [
@@ -138,6 +139,7 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
   // the tilt normal flow from here, so a wall-height or pitch change
   // re-seats and re-orients the panel automatically. `segmentOverrides`
   // is in the deps so a live drag re-derives the frame mid-drag.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const surfaceFrame = useMemo(() => {
     if (!effectiveSegment) {
       return { point: new THREE.Vector3(), normal: new THREE.Vector3(0, 1, 0) }

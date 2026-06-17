@@ -24,6 +24,7 @@ import useEditor from '../../store/use-editor'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
+import { SelectionAffordanceManager } from '../systems/selection-affordance-manager'
 import { StairEditSystem } from '../systems/stair/stair-edit-system'
 import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
 import { ZoneSystem } from '../systems/zone/zone-system'
@@ -55,6 +56,7 @@ import { Grid } from './grid'
 import { GroupMoveHandle } from './group-move-handle'
 import { GroupRotateHandle } from './group-rotate-handle'
 import { NodeArrowHandles } from './node-arrow-handles'
+import { RiserDiagramPanel } from './riser-diagram-panel'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
 import { SlabHoleHighlights } from './slab-hole-highlights'
@@ -617,6 +619,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
       <CeilingSystem />
       <CeilingSelectionAffordanceSystem />
+      {!noEditing && <SelectionAffordanceManager />}
       <RoofEditSystem />
       <StairEditSystem />
       {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
@@ -1287,6 +1290,7 @@ export default function Editor({
             <div className="pointer-events-auto">
               <HelperManager />
             </div>
+            <RiserDiagramPanel />
             {isFirstPersonMode && (
               <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
             )}
