@@ -6,9 +6,9 @@ export type SnapTarget = 'wall' | 'ceiling' | 'roof'
 export type SnapTargetBadgeSize = 'tile' | 'tree'
 
 const SNAP_TARGET_ICONS: Record<SnapTarget, string> = {
-  wall: '/icons/wall.png',
-  ceiling: '/icons/ceiling.png',
-  roof: '/icons/roof.png',
+  wall: '/icons/wall.webp',
+  ceiling: '/icons/ceiling.webp',
+  roof: '/icons/roof.webp',
 }
 
 const SNAP_TARGET_LABELS: Record<SnapTarget, string> = {

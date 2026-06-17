@@ -496,7 +496,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
     label: 'Stair',
     description:
       'A stair composed of one or more flights with configurable treads, risers, railings.',
-    icon: { kind: 'url', src: '/icons/stairs.png' },
+    icon: { kind: 'url', src: '/icons/stairs.webp' },
     paletteSection: 'structure',
     paletteOrder: 110,
   },

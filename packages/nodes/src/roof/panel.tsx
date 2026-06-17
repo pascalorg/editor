@@ -249,7 +249,7 @@ export default function RoofPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/roof.png"
+      icon="/icons/roof.webp"
       onClose={handleClose}
       title={node.name || 'Roof'}
       width={300}

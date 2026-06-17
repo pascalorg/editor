@@ -40,7 +40,7 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
 
   const presentation = node ? nodeRegistry.get(node.type)?.presentation : undefined
   const icon = presentation?.icon
-  const iconSrc = icon?.kind === 'url' ? icon.src : '/icons/roof.png'
+  const iconSrc = icon?.kind === 'url' ? icon.src : '/icons/roof.webp'
   const snapTarget = resolveNodeSnapTarget(node)
   const defaultName = node?.name || presentation?.label || 'Node'
 

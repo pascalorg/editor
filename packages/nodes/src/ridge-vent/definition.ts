@@ -205,7 +205,7 @@ export const ridgeVentDefinition: NodeDefinition<typeof RidgeVentNode> = {
   presentation: {
     label: 'Ridge Vent',
     description: 'Ventilation strip running along the ridge of a roof segment.',
-    icon: { kind: 'url', src: '/icons/roof.png' },
+    icon: { kind: 'url', src: '/icons/roof.webp' },
     paletteSection: 'structure',
     paletteOrder: 121,
   },
