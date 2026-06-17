@@ -2,6 +2,7 @@ import {
   type ColorPreset,
   createDefaultMaterial,
   createSurfaceRoleMaterial,
+  resolveSlotDefaultMaterial,
   type RenderShading,
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
@@ -24,7 +25,7 @@ export function getRoofMaterials(
         createDefaultMaterial('white', 1, shading, THREE.DoubleSide), // 0: Wall/Trim
         createDefaultMaterial('#e5e5e5', 1, shading, THREE.FrontSide), // 1: Deck
         createDefaultMaterial('white', 1, shading, THREE.DoubleSide), // 2: Interior
-        createDefaultMaterial('#e5e5e5', 0.9, shading, THREE.FrontSide), // 3: Shingle
+        resolveSlotDefaultMaterial('library:roof-weatheredshingles', shading), // 3: Shingle
       ]
     : [
         createSurfaceRoleMaterial('roof', colorPreset),
