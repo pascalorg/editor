@@ -5,6 +5,8 @@ import {
   DoorNode as DoorNodeSchema,
   getDoorRenderOpenAmount,
   getEffectiveNode,
+  type SceneMaterial,
+  type SceneMaterialId,
   sceneRegistry,
   useInteractive,
   useLiveNodeOverrides,
@@ -14,9 +16,12 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import {
+  type ColorPreset,
   createSurfaceRoleMaterial,
   glassMaterial as defaultGlassMaterial,
   baseMaterial as getBaseMaterial,
+  type RenderShading,
+  resolveMaterialRef,
 } from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
 
@@ -26,6 +31,12 @@ const defaultRevealMaterial = new THREE.MeshBasicMaterial({ color: '#7f766c' })
 let baseMaterial = getBaseMaterial()
 let revealMaterial: THREE.Material = defaultRevealMaterial
 let glassMaterial: THREE.Material = defaultGlassMaterial
+// Per-frame viewer state, captured so the per-node mesh builder (which runs
+// outside React) can resolve each door's slot materials.
+let currentShading: RenderShading = 'rendered'
+let currentTextures = true
+let currentColorPreset: ColorPreset = 'clay'
+let currentSceneMaterials: Record<SceneMaterialId, SceneMaterial> | undefined
 
 const DOOR_RENDER_DEFAULTS = DoorNodeSchema.parse({ id: 'door_render_default' })
 const MAX_DOOR_REBUILDS_PER_FRAME = 16
@@ -50,6 +61,7 @@ export const DoorSystem = () => {
   const shading = useViewer((state) => state.shading)
   const textures = useViewer((state) => state.textures)
   const colorPreset = useViewer((state) => state.colorPreset)
+  const sceneMaterials = useScene((state) => state.materials)
   const materialRevisionRef = useRef<string | null>(null)
   // Subscribe so an override-only update (no scene write) still re-runs
   // the component, letting the gate below pick up the latest dirtyNodes
@@ -75,12 +87,27 @@ export const DoorSystem = () => {
     }
   })
 
+  // Editing a scene material a door slot references must rebuild that door
+  // (door meshes are built by this system, not <GeometrySystem>).
+  useEffect(() => {
+    const nodes = useScene.getState().nodes
+    for (const node of Object.values(nodes)) {
+      if (node?.type !== 'door') continue
+      if (!nodeReferencesSceneMaterial(node)) continue
+      useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
+    }
+  }, [sceneMaterials])
+
   useFrame(() => {
     if (dirtyNodes.size === 0) return
     const frameJoineryMaterial = createSurfaceRoleMaterial('joinery', colorPreset)
     baseMaterial = textures ? getBaseMaterial(shading) : frameJoineryMaterial
     revealMaterial = textures ? defaultRevealMaterial : frameJoineryMaterial
     glassMaterial = textures ? defaultGlassMaterial : frameJoineryMaterial
+    currentShading = shading
+    currentTextures = textures
+    currentColorPreset = colorPreset
+    currentSceneMaterials = sceneMaterials
 
     const nodes = useScene.getState().nodes
     const dirtyDoorIds: AnyNodeId[] = []
@@ -134,6 +161,40 @@ export const DoorSystem = () => {
   return null
 }
 
+// A door exposes two slots: `panel` (the door body — frame casing + leaf, all
+// built with `baseMaterial`) and `glass`. The reveal (opening depth) is left on
+// its own material and isn't painted. Tag each mesh by which material it got.
+function tagDoorSlot(mesh: THREE.Mesh): THREE.Mesh {
+  if (mesh.material === glassMaterial) mesh.userData.slotId = 'glass'
+  else if (mesh.material === baseMaterial) mesh.userData.slotId = 'panel'
+  return mesh
+}
+
+function nodeReferencesSceneMaterial(node: { slots?: Record<string, string> }): boolean {
+  const slots = node.slots
+  if (!slots) return false
+  for (const ref of Object.values(slots)) {
+    if (typeof ref === 'string' && ref.startsWith('scene:')) return true
+  }
+  return false
+}
+
+function doorSlotDefault(slotId: 'panel' | 'glass'): THREE.Material {
+  if (!currentTextures) return createSurfaceRoleMaterial('joinery', currentColorPreset)
+  return slotId === 'glass' ? defaultGlassMaterial : getBaseMaterial(currentShading)
+}
+
+// Resolve a door's slot to a material: the `node.slots` override (colored mode
+// only) → the body/glass default. Textures-off ignores overrides — the
+// monochrome escape hatch.
+function resolveDoorSlotMaterial(node: DoorNode, slotId: 'panel' | 'glass'): THREE.Material {
+  const fallback = doorSlotDefault(slotId)
+  if (!currentTextures) return fallback
+  const ref = node.slots?.[slotId]
+  if (!ref) return fallback
+  return resolveMaterialRef(ref, currentSceneMaterials, currentShading) ?? fallback
+}
+
 function addBox(
   parent: THREE.Object3D,
   material: THREE.Material,
@@ -146,6 +207,7 @@ function addBox(
 ) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
   m.position.set(x, y, z)
+  tagDoorSlot(m)
   parent.add(m)
 }
 
@@ -163,6 +225,7 @@ function addRotatedBox(
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
   m.position.set(x, y, z)
   m.rotation.y = rotationY
+  tagDoorSlot(m)
   parent.add(m)
 }
 
@@ -180,6 +243,7 @@ function addBoxWithRotation(
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
   m.position.set(x, y, z)
   m.rotation.set(rotation[0], rotation[1], rotation[2])
+  tagDoorSlot(m)
   parent.add(m)
 }
 
@@ -196,6 +260,7 @@ function addShape(
   })
   geometry.translate(0, 0, -depth / 2)
   const mesh = new THREE.Mesh(geometry, material)
+  tagDoorSlot(mesh)
   parent.add(mesh)
 }
 
@@ -215,6 +280,7 @@ function addShapeAt(
   })
   geometry.translate(x, y, z - depth / 2)
   const mesh = new THREE.Mesh(geometry, material)
+  tagDoorSlot(mesh)
   parent.add(mesh)
 }
 
@@ -1967,6 +2033,12 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
     disposeObject(child)
     mesh.remove(child)
   }
+
+  // Point the builder-facing body/glass materials at this door's slot overrides
+  // for the duration of its build (recomputed per node, so the next door resets
+  // cleanly without a restore). Reveal keeps its own material.
+  baseMaterial = resolveDoorSlotMaterial(node, 'panel')
+  glassMaterial = resolveDoorSlotMaterial(node, 'glass')
 
   const {
     width,

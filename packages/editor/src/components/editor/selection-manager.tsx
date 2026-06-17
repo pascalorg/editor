@@ -1088,7 +1088,7 @@ export const SelectionManager = () => {
         }
       }
 
-      const disabledNodeTypes = ['window', 'door', 'zone']
+      const disabledNodeTypes = ['zone']
       if (disabledNodeTypes.includes(node.type)) {
         return {
           key: `${node.type}:${node.id}:unsupported`,

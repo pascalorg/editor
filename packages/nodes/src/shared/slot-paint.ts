@@ -169,6 +169,34 @@ export function previewGeometrySlot(args: PaintPreviewArgs): (() => void) | null
   }
 }
 
+/**
+ * Preview for kinds whose meshes are built by a viewer system (window, door)
+ * and tagged with `userData.slotId` — no `__fromGeometry` marker and no hosted
+ * children to guard against, so it swaps every mesh whose slot matches `role`.
+ */
+export function previewSlotByUserData(args: PaintPreviewArgs): (() => void) | null {
+  const { role, root, material, materialPreset } = args
+  const preview = buildSlotPreviewMaterial(material, materialPreset)
+  if (!preview) return () => {}
+
+  const restores: Array<() => void> = []
+  ;(root as Object3D).traverse((object) => {
+    const mesh = object as Mesh
+    if (!mesh.isMesh) return
+    if ((mesh.userData as { slotId?: string | null }).slotId !== role) return
+    const previous = mesh.material
+    mesh.material = preview
+    restores.push(() => {
+      mesh.material = previous
+    })
+  })
+
+  if (restores.length === 0) return null
+  return () => {
+    for (let index = restores.length - 1; index >= 0; index -= 1) restores[index]?.()
+  }
+}
+
 export type SlotPaintConfig = {
   /** Resolve the slot id for a pointer hit (`null` = not paintable here). */
   resolveRole: (args: PaintResolveArgs) => string | null

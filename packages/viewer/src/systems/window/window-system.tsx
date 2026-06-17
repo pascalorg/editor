@@ -1,6 +1,8 @@
 import {
   type AnyNodeId,
   getEffectiveNode,
+  type SceneMaterial,
+  type SceneMaterialId,
   sceneRegistry,
   useInteractive,
   useLiveNodeOverrides,
@@ -11,9 +13,12 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import {
+  type ColorPreset,
   createSurfaceRoleMaterial,
   glassMaterial as defaultGlassMaterial,
   baseMaterial as getBaseMaterial,
+  type RenderShading,
+  resolveMaterialRef,
 } from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
 
@@ -21,6 +26,12 @@ import useViewer from '../../store/use-viewer'
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
 let baseMaterial = getBaseMaterial()
 let glassMaterial: THREE.Material = defaultGlassMaterial
+// Per-frame viewer state, captured so the per-node mesh builder (which runs
+// outside React) can resolve each window's slot materials.
+let currentShading: RenderShading = 'rendered'
+let currentTextures = true
+let currentColorPreset: ColorPreset = 'clay'
+let currentSceneMaterials: Record<SceneMaterialId, SceneMaterial> | undefined
 export const CASEMENT_WINDOW_SASH_NAME = 'casement-window-sash'
 export const FRENCH_CASEMENT_LEFT_SASH_NAME = 'french-casement-left-sash'
 export const FRENCH_CASEMENT_RIGHT_SASH_NAME = 'french-casement-right-sash'
@@ -42,6 +53,7 @@ export const WindowSystem = () => {
   const shading = useViewer((state) => state.shading)
   const textures = useViewer((state) => state.textures)
   const colorPreset = useViewer((state) => state.colorPreset)
+  const sceneMaterials = useScene((state) => state.materials)
   const materialRevisionRef = useRef<string | null>(null)
   // Subscribe so override-only updates re-run this component. Mirrors
   // WallSystem + DoorSystem.
@@ -67,6 +79,18 @@ export const WindowSystem = () => {
     }
   })
 
+  // Editing a scene material a window slot references must rebuild that window
+  // (window meshes are built by this system, not <GeometrySystem>, so its
+  // scene-material re-dirty doesn't cover them).
+  useEffect(() => {
+    const nodes = useScene.getState().nodes
+    for (const node of Object.values(nodes)) {
+      if (node?.type !== 'window') continue
+      if (!nodeReferencesSceneMaterial(node)) continue
+      useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
+    }
+  }, [sceneMaterials])
+
   useFrame(() => {
     if (dirtyNodes.size === 0) return
     baseMaterial = textures
@@ -75,6 +99,10 @@ export const WindowSystem = () => {
     glassMaterial = textures
       ? defaultGlassMaterial
       : createSurfaceRoleMaterial('glazing', colorPreset)
+    currentShading = shading
+    currentTextures = textures
+    currentColorPreset = colorPreset
+    currentSceneMaterials = sceneMaterials
 
     const nodes = useScene.getState().nodes
     const dirtyWindowIds: AnyNodeId[] = []
@@ -128,6 +156,46 @@ export const WindowSystem = () => {
   return null
 }
 
+// A window exposes two slots: `frame` (every joinery member) and `glass`. The
+// builders pass `baseMaterial` / `glassMaterial`, so tag each mesh by which one
+// it got — that's what `(nodeId, slotId)` paint resolves against.
+function tagWindowSlot(mesh: THREE.Mesh): THREE.Mesh {
+  if (mesh.material === glassMaterial) mesh.userData.slotId = 'glass'
+  else if (mesh.material === baseMaterial) mesh.userData.slotId = 'frame'
+  return mesh
+}
+
+function nodeReferencesSceneMaterial(node: { slots?: Record<string, string> }): boolean {
+  const slots = node.slots
+  if (!slots) return false
+  for (const ref of Object.values(slots)) {
+    if (typeof ref === 'string' && ref.startsWith('scene:')) return true
+  }
+  return false
+}
+
+function windowSlotDefault(slotId: 'frame' | 'glass'): THREE.Material {
+  if (slotId === 'glass') {
+    return currentTextures
+      ? defaultGlassMaterial
+      : createSurfaceRoleMaterial('glazing', currentColorPreset)
+  }
+  return currentTextures
+    ? getBaseMaterial(currentShading)
+    : createSurfaceRoleMaterial('joinery', currentColorPreset)
+}
+
+// Resolve a window's slot to a material: the `node.slots` override (colored mode
+// only) → the role/base default. Textures-off ignores overrides — the monochrome
+// escape hatch.
+function resolveWindowSlotMaterial(node: WindowNode, slotId: 'frame' | 'glass'): THREE.Material {
+  const fallback = windowSlotDefault(slotId)
+  if (!currentTextures) return fallback
+  const ref = node.slots?.[slotId]
+  if (!ref) return fallback
+  return resolveMaterialRef(ref, currentSceneMaterials, currentShading) ?? fallback
+}
+
 function addBox(
   parent: THREE.Object3D,
   material: THREE.Material,
@@ -140,6 +208,7 @@ function addBox(
 ) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
   m.position.set(x, y, z)
+  tagWindowSlot(m)
   parent.add(m)
 }
 
@@ -157,6 +226,7 @@ function addShape(
   })
   geometry.translate(0, 0, -depth / 2 + z)
   const mesh = new THREE.Mesh(geometry, material)
+  tagWindowSlot(mesh)
   parent.add(mesh)
 }
 
@@ -3169,6 +3239,12 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
     disposeObjectGeometry(child)
     mesh.remove(child)
   }
+
+  // Point the builder-facing frame/glass materials at this window's slot
+  // overrides for the duration of its build (recomputed per node, so the next
+  // window resets cleanly without a restore).
+  baseMaterial = resolveWindowSlotMaterial(node, 'frame')
+  glassMaterial = resolveWindowSlotMaterial(node, 'glass')
 
   const {
     width,
