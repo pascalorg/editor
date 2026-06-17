@@ -21,6 +21,7 @@ import {
 } from '../../lib/scene'
 import { initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { EditorEnvironment } from '../editor-environment'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
@@ -602,6 +603,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   const noEditing = isVersionPreviewMode || isFirstPersonMode || isStudioMode
   return (
     <>
+      <EditorEnvironment />
       {!(isFirstPersonMode || isStudioMode) && <SelectionManager />}
       {!noEditing && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
