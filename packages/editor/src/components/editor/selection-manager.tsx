@@ -871,14 +871,6 @@ export const SelectionManager = () => {
       const activePaintMaterial = resolveActivePaintMaterial()
       const node = event.node
 
-      // TEMP paint debug
-      if (node.type === 'window' || node.type === 'door') {
-        // biome-ignore lint/suspicious/noConsole: temporary paint diagnostics
-        console.log('[paint-debug] event arrived', node.type, {
-          inLevel: isNodeInCurrentLevel(node),
-        })
-      }
-
       if (!isNodeInCurrentLevel(node)) return null
 
       // The eraser clears a surface back to its default by painting with an
@@ -906,18 +898,6 @@ export const SelectionManager = () => {
       // roof / stair / single-surface arms below stay until they
       // migrate too.
       const paintCap = nodeRegistry.get(node.type)?.capabilities?.paint
-      // TEMP paint debug
-      if (node.type === 'window' || node.type === 'door') {
-        const ho = getEventObject(event)
-        // biome-ignore lint/suspicious/noConsole: temporary paint diagnostics
-        console.log('[paint-debug] getPaintInteraction', node.type, {
-          hasPaintCap: !!paintCap,
-          hitObjName: ho?.name,
-          hitSlotId: (ho?.userData as { slotId?: string } | undefined)?.slotId,
-          eventObjName: event.nativeEvent.object?.name,
-          paintEnabled,
-        })
-      }
       if (paintCap) {
         const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
         const role = paintCap.resolveRole({
@@ -927,11 +907,8 @@ export const SelectionManager = () => {
           localPosition: event.localPosition as readonly [number, number, number] | undefined,
           hitObjectName: event.nativeEvent.object?.name,
           hitObject: getEventObject(event),
+          ray: event.nativeEvent.ray,
         })
-        if (node.type === 'window' || node.type === 'door') {
-          // biome-ignore lint/suspicious/noConsole: temporary paint diagnostics
-          console.log('[paint-debug] resolved role', node.type, role)
-        }
         const compatible = role !== null && paintEnabled
         return {
           key: `${node.type}:${node.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
@@ -1209,6 +1186,11 @@ export const SelectionManager = () => {
 
     for (const type of subscribedKinds) {
       emitter.on(`${type}:enter` as any, onEnter as any)
+      // Re-evaluate on move so the hover preview tracks the cursor across a
+      // kind's sub-parts (door/window panel↔frame↔glass↔hardware, wall
+      // interior↔exterior) — not just on the initial enter. onEnter is
+      // idempotent (no-ops when the resolved part is unchanged).
+      emitter.on(`${type}:move` as any, onEnter as any)
       emitter.on(`${type}:leave` as any, onLeave as any)
       emitter.on(`${type}:click` as any, onClick as any)
     }
@@ -1216,6 +1198,7 @@ export const SelectionManager = () => {
     return () => {
       for (const type of subscribedKinds) {
         emitter.off(`${type}:enter` as any, onEnter as any)
+        emitter.off(`${type}:move` as any, onEnter as any)
         emitter.off(`${type}:leave` as any, onLeave as any)
         emitter.off(`${type}:click` as any, onClick as any)
       }
@@ -1576,6 +1559,7 @@ export const SelectionManager = () => {
               localPosition: event.localPosition as readonly [number, number, number] | undefined,
               hitObjectName: event.nativeEvent.object?.name,
               hitObject: getEventObject(event),
+              ray: event.nativeEvent.ray,
             })
             if (role) {
               setSelectedMaterialTargetForNode(nodeToSelect, role as MaterialTargetRole)

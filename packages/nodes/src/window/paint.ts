@@ -1,17 +1,16 @@
-import type { PaintResolveArgs } from '@pascal-app/core'
-import { createSlotPaintCapability, previewSlotByUserData } from '../shared/slot-paint'
+import {
+  createSlotPaintCapability,
+  previewSlotByUserData,
+  resolveSlotByReRaycast,
+} from '../shared/slot-paint'
 
 /**
- * Window paint on the unified slot model. The window's viewer system tags each
- * built mesh with `userData.slotId` (`frame` / `glass`), so the role resolves
- * straight from the pointer hit; commit writes `node.slots[slotId]`.
+ * Window paint on the unified slot model. The window's opening proxy (a proud,
+ * invisible cutout) wins the shared scene raycast over the wall in front of the
+ * recessed window, so `resolveSlotByReRaycast` re-raycasts the window's own
+ * subtree to find the part (frame / glass) under the cursor.
  */
-function resolveWindowRole(args: PaintResolveArgs): string | null {
-  const slotId = (args.hitObject?.userData as { slotId?: string | null } | undefined)?.slotId
-  return typeof slotId === 'string' ? slotId : null
-}
-
 export const windowPaint = createSlotPaintCapability({
-  resolveRole: resolveWindowRole,
+  resolveRole: resolveSlotByReRaycast,
   applyPreview: previewSlotByUserData,
 })

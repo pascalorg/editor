@@ -9,11 +9,12 @@ import {
   parseMaterialRef,
   type SceneMaterial,
   type SceneMaterialId,
+  sceneRegistry,
   toSceneMaterialRef,
   useScene,
 } from '@pascal-app/core'
 import { createMaterial, createMaterialFromPresetRef, useViewer } from '@pascal-app/viewer'
-import type { Material, Mesh, Object3D } from 'three'
+import { type Material, type Mesh, type Object3D, Raycaster } from 'three'
 
 /**
  * Shared paint capability for procedural kinds on the unified slot model
@@ -195,6 +196,30 @@ export function previewSlotByUserData(args: PaintPreviewArgs): (() => void) | nu
   return () => {
     for (let index = restores.length - 1; index >= 0; index -= 1) restores[index]?.()
   }
+}
+
+// Reused across calls — set from the pointer ray each time.
+const subtreeRaycaster = new Raycaster()
+
+/**
+ * Resolve the slot for a kind whose paint hit lands on a proud opening proxy
+ * (door/window: a 1m-deep invisible cutout that wins the scene raycast over the
+ * wall in front of the recessed body) rather than the part itself. Re-raycasts
+ * the kind's OWN registered subtree (ignoring everything else) and returns the
+ * first tagged sub-mesh under the cursor; falls back to the direct hit's slot
+ * (e.g. a proud part the scene raycast hit directly).
+ */
+export function resolveSlotByReRaycast(args: PaintResolveArgs): string | null {
+  const direct = (args.hitObject?.userData as { slotId?: string } | undefined)?.slotId
+  if (typeof direct === 'string') return direct
+  const root = sceneRegistry.nodes.get(args.node.id as AnyNodeId)
+  if (!root || !args.ray) return null
+  subtreeRaycaster.ray.copy(args.ray)
+  for (const hit of subtreeRaycaster.intersectObject(root, true)) {
+    const slot = (hit.object.userData as { slotId?: string }).slotId
+    if (typeof slot === 'string') return slot
+  }
+  return null
 }
 
 export type SlotPaintConfig = {

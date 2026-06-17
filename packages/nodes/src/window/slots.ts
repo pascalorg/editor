@@ -4,8 +4,8 @@ export type WindowSlotId = 'frame' | 'glass'
 
 // Picker swatches. Rendering falls back to the live frame/glass defaults (which
 // already track shading + theme), so these are just the indicator colours.
-const FRAME_DEFAULT = '#f2f0ed'
-const GLASS_DEFAULT = '#87ceeb'
+const FRAME_DEFAULT = 'library:preset-softwhite'
+const GLASS_DEFAULT = 'library:preset-glass'
 
 /** A window exposes two paintable slots: the joinery frame and the glass. */
 export function windowSlots(): SlotDeclaration[] {
