@@ -2905,33 +2905,21 @@ export const CATALOG_ITEMS: AssetInput[] = [
     scale: [1, 1, 1],
   },
 
+
+
+
   {
-    id: 'bingxiang',
-    category: 'appliance',
-    name: '冰箱',
-    tags: [
-      'floor',
-      'custom',
-    ],
-    thumbnail: '/icons/couch.png',
-    src: 'https://madori-navi.jp/glb/tree.glb',
-    dimensions: [1.9964, 2.691, 1.9989],
-    offset: [-0.9982, 0, 0.9995],
-    rotation: [0, 0, 0],
-    scale: [1, 1, 1],
-  },
-  {
-    id: 'taideng',
+    id: 'officechair',
     category: 'furniture',
-    name: '台灯',
+    name: 'OfficeChair',
     tags: [
       'floor',
       'custom',
     ],
     thumbnail: '/icons/couch.png',
-    src: 'https://madori-navi.jp/glb/tree.glb',
-    dimensions: [1.9964, 2.691, 1.9989],
-    offset: [-0.9982, 0, 0.9995],
+    src: 'https://madori-navi.jp/glb/OfficeChair.glb',
+    dimensions: [1, 1, 1.4013],
+    offset: [-0.01, 0.9766, 0.007],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
   },

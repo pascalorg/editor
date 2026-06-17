@@ -14,6 +14,15 @@ type PanelMode = GenerateMode | 'both'
 type PlanPoint = { x: number; y: number }
 type PlanWall = { start: [number, number]; end: [number, number] }
 type PlanZone = { polygon: [number, number][]; color?: string }
+type PanoramaManifestItem = {
+  id?: string
+  label?: string
+  screen?: PlanPoint
+  image?: string
+}
+type PanoramaManifest = {
+  items?: PanoramaManifestItem[]
+}
 
 function StatusButton({
   icon,
@@ -48,6 +57,56 @@ function readSceneIdFromPath(): string | null {
 
   const match = window.location.pathname.match(/\/(?:_pascal\/)?scene\/([^/]+)/)
   return match?.[1] ?? null
+}
+
+function buildStaticFileUrl(sceneId: string, filePath: string, revision: number) {
+  const safePath = filePath
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/')
+  return `/api/pascal-function-static/${encodeURIComponent(sceneId)}/${safePath}?v=${revision}`
+}
+
+function isValidManifestItem(item: PanoramaManifestItem): item is Required<Pick<PanoramaManifestItem, 'screen' | 'image'>> &
+  PanoramaManifestItem {
+  return (
+    typeof item.image === 'string' &&
+    item.image.length > 0 &&
+    !item.image.split('/').some((part) => part === '' || part === '.' || part === '..') &&
+    typeof item.screen?.x === 'number' &&
+    typeof item.screen.y === 'number' &&
+    Number.isFinite(item.screen.x) &&
+    Number.isFinite(item.screen.y)
+  )
+}
+
+async function loadPanoramaManifest(sceneId: string, revision: number): Promise<PanoramaManifestItem[]> {
+  const response = await fetch(buildStaticFileUrl(sceneId, 'panorama-manifest.json', revision), {
+    cache: 'no-store',
+  })
+  if (!response.ok) return []
+
+  const payload = (await response.json()) as PanoramaManifest
+  return (payload.items ?? []).filter(isValidManifestItem)
+}
+
+function findNearestPanorama(items: PanoramaManifestItem[], point: PlanPoint): PanoramaManifestItem | null {
+  let nearest: PanoramaManifestItem | null = null
+  let nearestDistance = Number.POSITIVE_INFINITY
+
+  for (const item of items) {
+    if (!isValidManifestItem(item)) continue
+
+    const dx = item.screen.x - point.x
+    const dy = item.screen.y - point.y
+    const distance = dx * dx + dy * dy
+    if (distance < nearestDistance) {
+      nearest = item
+      nearestDistance = distance
+    }
+  }
+
+  return nearest
 }
 
 function isWallNode(node: unknown): node is PlanWall & { type: 'wall' } {
@@ -358,15 +417,16 @@ export function PanoramaWalkthroughPanel({
   const [showVideo, setShowVideo] = useState(false)
   const [panoramaRevision, setPanoramaRevision] = useState(0)
   const [videoRevision, setVideoRevision] = useState(0)
+  const [selectedPanoramaUrl, setSelectedPanoramaUrl] = useState<string | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [selectionMode, setSelectionMode] = useState<GenerateMode | null>(null)
   const [floorplanImageUrl, setFloorplanImageUrl] = useState<string | null>(null)
 
   const panoramaUrl = resolvedSceneId
-    ? `/api/pascal-function-static/${encodeURIComponent(resolvedSceneId)}/panorama.jpg?v=${panoramaRevision}`
+    ? selectedPanoramaUrl ?? buildStaticFileUrl(resolvedSceneId, 'panorama.jpg', panoramaRevision)
     : null
   const walkthroughUrl = resolvedSceneId
-    ? `/api/pascal-function-static/${encodeURIComponent(resolvedSceneId)}/walkthrough.mp4?v=${videoRevision}`
+    ? buildStaticFileUrl(resolvedSceneId, 'walkthrough.mp4', videoRevision)
     : null
   const showPanoramaSection = mode === 'both' || mode === 'panorama'
   const showWalkthroughSection = mode === 'both' || mode === 'walkthrough'
@@ -391,16 +451,29 @@ export function PanoramaWalkthroughPanel({
     }, 700)
   }
 
-  const handleGenerateFromPoints = (mode: GenerateMode, points: PlanPoint[]) => {
+  const handleGenerateFromPoints = async (mode: GenerateMode, points: PlanPoint[]) => {
     setSelectionMode(null)
     if (mode === 'panorama') {
+      let nextPanoramaUrl: string | null = null
+      if (resolvedSceneId && points[0]) {
+        const manifestItems = await loadPanoramaManifest(resolvedSceneId, panoramaRevision + 1)
+        const nearest = findNearestPanorama(manifestItems, points[0])
+        if (nearest?.image) {
+          nextPanoramaUrl = buildStaticFileUrl(resolvedSceneId, nearest.image, panoramaRevision + 1)
+        }
+      }
+
       runFakeAction(
         setPanoramaState,
         `Generating panorama from ${points.length} selected position...`,
         'Panorama generated',
         () => {
           setPanoramaMissing(false)
-          setPanoramaRevision((current) => current + 1)
+          setPanoramaRevision((current) => {
+            const next = current + 1
+            if (nextPanoramaUrl) setSelectedPanoramaUrl(nextPanoramaUrl)
+            return next
+          })
           setShowPanorama(true)
         },
       )
@@ -551,7 +624,7 @@ export function PanoramaWalkthroughPanel({
           floorplanImageUrl={floorplanImageUrl}
           mode={selectionMode}
           onClose={() => setSelectionMode(null)}
-          onConfirm={(points) => handleGenerateFromPoints(selectionMode, points)}
+          onConfirm={(points) => void handleGenerateFromPoints(selectionMode, points)}
         />
       ) : null}
     </div>
