@@ -7,8 +7,10 @@ import {
 import { buildColumnFloorplan } from './floorplan'
 import { columnResizeAffordance, columnRotateAffordance } from './floorplan-affordances'
 import { columnFloorplanMoveTarget } from './floorplan-move'
+import { columnPaint } from './paint'
 import { columnParametrics } from './parametrics'
 import { ColumnNode } from './schema'
+import { columnSlots } from './slots'
 
 // Limits + offsets shared with the in-world arrows. Mirrors the floors
 // the renderer clamps to (`Math.max(0.2, node.height)` etc.) so a drag
@@ -325,6 +327,8 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    slots: (node) => columnSlots(node as ColumnNodeType),
+    paint: columnPaint,
     // Slab elevation lift via the generic `<FloorElevationSystem>`.
     floorPlaced: {
       footprint: (node) => {
