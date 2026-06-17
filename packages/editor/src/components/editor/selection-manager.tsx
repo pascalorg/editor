@@ -871,6 +871,14 @@ export const SelectionManager = () => {
       const activePaintMaterial = resolveActivePaintMaterial()
       const node = event.node
 
+      // TEMP paint debug
+      if (node.type === 'window' || node.type === 'door') {
+        // biome-ignore lint/suspicious/noConsole: temporary paint diagnostics
+        console.log('[paint-debug] event arrived', node.type, {
+          inLevel: isNodeInCurrentLevel(node),
+        })
+      }
+
       if (!isNodeInCurrentLevel(node)) return null
 
       // The eraser clears a surface back to its default by painting with an
@@ -898,6 +906,18 @@ export const SelectionManager = () => {
       // roof / stair / single-surface arms below stay until they
       // migrate too.
       const paintCap = nodeRegistry.get(node.type)?.capabilities?.paint
+      // TEMP paint debug
+      if (node.type === 'window' || node.type === 'door') {
+        const ho = getEventObject(event)
+        // biome-ignore lint/suspicious/noConsole: temporary paint diagnostics
+        console.log('[paint-debug] getPaintInteraction', node.type, {
+          hasPaintCap: !!paintCap,
+          hitObjName: ho?.name,
+          hitSlotId: (ho?.userData as { slotId?: string } | undefined)?.slotId,
+          eventObjName: event.nativeEvent.object?.name,
+          paintEnabled,
+        })
+      }
       if (paintCap) {
         const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
         const role = paintCap.resolveRole({
@@ -908,6 +928,10 @@ export const SelectionManager = () => {
           hitObjectName: event.nativeEvent.object?.name,
           hitObject: getEventObject(event),
         })
+        if (node.type === 'window' || node.type === 'door') {
+          // biome-ignore lint/suspicious/noConsole: temporary paint diagnostics
+          console.log('[paint-debug] resolved role', node.type, role)
+        }
         const compatible = role !== null && paintEnabled
         return {
           key: `${node.type}:${node.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
