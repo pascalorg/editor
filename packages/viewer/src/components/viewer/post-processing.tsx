@@ -280,7 +280,6 @@ const PostProcessingPasses = ({
       denoise: denoiseEnabled,
       outline: outlineEnabled,
       perfDisable,
-      hoverHighlightMode,
       projectId,
       shading,
       rendererCtor: (renderer as any).constructor?.name,
@@ -487,9 +486,12 @@ const PostProcessingPasses = ({
       renderPipelineRef.current = null
     }
   }, [
+    // NOTE: hoverHighlightMode intentionally excluded — the hover style is
+    // pushed to uniforms in a separate effect, so a hover must NOT rebuild the
+    // whole pipeline. The uniform refs below are stable (useMemo), so they
+    // never trigger a rebuild either.
     camera,
     hoverHiddenColor,
-    hoverHighlightMode,
     hoverPulseMix,
     hoverStrength,
     hoverVisibleColor,

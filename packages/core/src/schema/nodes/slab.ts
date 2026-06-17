@@ -9,6 +9,10 @@ export const SlabNode = BaseNode.extend({
   type: nodeType('slab'),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
+  // Per-slot material overrides on the unified slot model, mirroring
+  // `ShelfNode.slots`. Key = slot id (`surface`), value = a `MaterialRef`
+  // (`library:<id>` / `scene:<id>`). Absent = the declared slot default.
+  slots: z.record(z.string(), z.string()).optional(),
   polygon: z.array(z.tuple([z.number(), z.number()])),
   holes: z.array(z.array(z.tuple([z.number(), z.number()]))).default([]),
   holeMetadata: z.array(SurfaceHoleMetadata).default([]),

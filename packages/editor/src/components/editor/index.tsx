@@ -7,7 +7,13 @@ import {
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
-import { type HoverStyles, InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
+import {
+  type HoverStyles,
+  InteractiveSystem,
+  SceneEnvironment,
+  useViewer,
+  Viewer,
+} from '@pascal-app/viewer'
 import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
@@ -602,6 +608,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   const noEditing = isVersionPreviewMode || isFirstPersonMode || isStudioMode
   return (
     <>
+      <SceneEnvironment />
       {!(isFirstPersonMode || isStudioMode) && <SelectionManager />}
       {!noEditing && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}

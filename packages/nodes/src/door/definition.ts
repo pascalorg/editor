@@ -12,8 +12,10 @@ import { scaleHandleHeight } from './door-math'
 import { buildDoorFloorplan } from './floorplan'
 import { doorWidthAffordance } from './floorplan-affordances'
 import { doorFloorplanMoveTarget } from './floorplan-move'
+import { doorPaint } from './paint'
 import { doorParametrics } from './parametrics'
 import { DoorNode } from './schema'
+import { doorSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24
@@ -174,6 +176,10 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     // placed. Host apps strip these at preset-save time via
     // `getHostRefFields(def)`.
     hostRefFields: ['wallId', 'roofSegmentId', 'roofFace'],
+    // Panel / glass slots painted through the registry. The door system tags
+    // each mesh with its `userData.slotId`; paint writes `node.slots`.
+    slots: () => doorSlots(),
+    paint: doorPaint,
   },
 
   parametrics: doorParametrics,

@@ -46,6 +46,16 @@ export type WallNode = z.infer<typeof WallNode>
 
 export type WallSurfaceSide = 'interior' | 'exterior'
 
+// Declared default appearance for an unpainted wall face in colored mode —
+// visual parity with the retired DEFAULT_WALL_MATERIAL. Lives in core so the
+// slot declaration (nodes) and the material resolver (viewer) share one value.
+// May be a `#rrggbb` colour or a `library:<id>` ref. Textures-off still
+// collapses to the themed wall role (the escape hatch).
+export const WALL_SLOT_DEFAULT: Record<WallSurfaceSide, string> = {
+  interior: 'library:concrete-plate',
+  exterior: 'library:concrete-plate',
+}
+
 export type WallSurfaceMaterialSpec = {
   material?: z.infer<typeof MaterialSchema>
   materialPreset?: string

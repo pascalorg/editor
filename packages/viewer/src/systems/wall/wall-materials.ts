@@ -2,7 +2,9 @@ import {
   getEffectiveWallSurfaceMaterial,
   getMaterialPresetByRef,
   getWallSurfaceMaterialSignature,
+  parseMaterialRef,
   resolveMaterial,
+  WALL_SLOT_DEFAULT,
   type WallNode,
   type WallSurfaceMaterialSpec,
 } from '@pascal-app/core'
@@ -12,6 +14,7 @@ import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 import {
   baseMaterial,
   type ColorPreset,
+  createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
@@ -86,6 +89,15 @@ function getSurfaceVisibleMaterial(
 
 function hasExplicitMaterial(spec: WallSurfaceMaterialSpec): boolean {
   return Boolean(spec.materialPreset || spec.material)
+}
+
+// Resolve a wall face's declared default — a catalog `library:` finish or a
+// flat colour — to a renderable material.
+function resolveWallSlotDefault(slotDefault: string, shading: RenderShading): Material {
+  if (parseMaterialRef(slotDefault)?.kind === 'library') {
+    return createMaterialFromPresetRef(slotDefault, shading) ?? baseMaterial(shading)
+  }
+  return createDefaultMaterial(slotDefault, 0.9, shading)
 }
 
 function getSurfaceColor(spec: WallSurfaceMaterialSpec, fallback = DEFAULT_WALL_COLOR): string {
@@ -216,17 +228,19 @@ export function getMaterialsForWall(
   const exteriorSpec = getEffectiveWallSurfaceMaterial(wallNode, 'exterior')
   const wallRoleMaterial = createSurfaceRoleMaterial('wall', colorPreset, undefined, sceneTheme)
 
-  // Untextured surfaces take the themed wall role colour even with textures on;
-  // only surfaces with an explicit preset/material keep their texture.
+  // Colored mode: an unpainted face takes its declared slot default (parity
+  // with the retired DEFAULT_WALL_MATERIAL); only an explicit preset/material
+  // keeps a texture. Textures-off collapses every face to the themed wall role
+  // (the guaranteed escape hatch). The edge/cap slot (index 0) stays role-based.
   const visible: WallMaterialArray = textures
     ? [
         wallRoleMaterial,
         hasExplicitMaterial(interiorSpec)
           ? getSurfaceVisibleMaterial(interiorSpec, shading)
-          : wallRoleMaterial,
+          : resolveWallSlotDefault(WALL_SLOT_DEFAULT.interior, shading),
         hasExplicitMaterial(exteriorSpec)
           ? getSurfaceVisibleMaterial(exteriorSpec, shading)
-          : wallRoleMaterial,
+          : resolveWallSlotDefault(WALL_SLOT_DEFAULT.exterior, shading),
       ]
     : [wallRoleMaterial, wallRoleMaterial, wallRoleMaterial]
 

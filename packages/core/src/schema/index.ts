@@ -154,6 +154,7 @@ export type { WallSurfaceMaterialSpec, WallSurfaceSide } from './nodes/wall'
 export {
   getEffectiveWallSurfaceMaterial,
   getWallSurfaceMaterialSignature,
+  WALL_SLOT_DEFAULT,
   WallNode,
 } from './nodes/wall'
 export { WindowNode, WindowType } from './nodes/window'

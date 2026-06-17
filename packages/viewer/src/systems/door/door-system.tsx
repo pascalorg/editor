@@ -5,6 +5,8 @@ import {
   DoorNode as DoorNodeSchema,
   getDoorRenderOpenAmount,
   getEffectiveNode,
+  type SceneMaterial,
+  type SceneMaterialId,
   sceneRegistry,
   useInteractive,
   useLiveNodeOverrides,
@@ -13,19 +15,44 @@ import {
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
+import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import {
+  type ColorPreset,
+  createDefaultMaterial,
   createSurfaceRoleMaterial,
   glassMaterial as defaultGlassMaterial,
   baseMaterial as getBaseMaterial,
+  type RenderShading,
+  resolveMaterialRef,
 } from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
 const defaultRevealMaterial = new THREE.MeshBasicMaterial({ color: '#7f766c' })
+// Door hardware (handle / hinges / closer / panic bar) renders a catalog metal
+// finish by default (chrome), separate from the door body. The flat material is
+// only a fallback if the catalog ref ever fails to resolve.
+const HARDWARE_DEFAULT_REF = 'library:metal-chrome'
+// Door body defaults to a catalog colour (generic approach). Glass keeps the
+// built-in FrontSide glass material — the catalog `preset-glass` is DoubleSide,
+// which poisons the WebGPU MRT scene pass.
+const PANEL_DEFAULT_REF = 'library:preset-softwhite'
+const FRAME_DEFAULT_REF = 'library:preset-softwhite'
+const GLASS_DEFAULT_REF = 'library:preset-glass'
+const defaultHardwareMaterial = createDefaultMaterial('#3a3a3a', 0.4)
 let baseMaterial = getBaseMaterial()
+let frameMaterial: THREE.Material = getBaseMaterial()
 let revealMaterial: THREE.Material = defaultRevealMaterial
 let glassMaterial: THREE.Material = defaultGlassMaterial
+let hardwareMaterial: THREE.Material = defaultHardwareMaterial
+let currentDoorSlot: string | undefined
+// Per-frame viewer state, captured so the per-node mesh builder (which runs
+// outside React) can resolve each door's slot materials.
+let currentShading: RenderShading = 'rendered'
+let currentTextures = true
+let currentColorPreset: ColorPreset = 'clay'
+let currentSceneMaterials: Record<SceneMaterialId, SceneMaterial> | undefined
 
 const DOOR_RENDER_DEFAULTS = DoorNodeSchema.parse({ id: 'door_render_default' })
 const MAX_DOOR_REBUILDS_PER_FRAME = 16
@@ -50,6 +77,7 @@ export const DoorSystem = () => {
   const shading = useViewer((state) => state.shading)
   const textures = useViewer((state) => state.textures)
   const colorPreset = useViewer((state) => state.colorPreset)
+  const sceneMaterials = useScene((state) => state.materials)
   const materialRevisionRef = useRef<string | null>(null)
   // Subscribe so an override-only update (no scene write) still re-runs
   // the component, letting the gate below pick up the latest dirtyNodes
@@ -59,8 +87,10 @@ export const DoorSystem = () => {
 
   const joineryMaterial = createSurfaceRoleMaterial('joinery', colorPreset)
   baseMaterial = textures ? getBaseMaterial(shading) : joineryMaterial
+  frameMaterial = textures ? getBaseMaterial(shading) : joineryMaterial
   revealMaterial = textures ? defaultRevealMaterial : joineryMaterial
   glassMaterial = textures ? defaultGlassMaterial : joineryMaterial
+  hardwareMaterial = textures ? defaultHardwareMaterial : joineryMaterial
 
   useEffect(() => {
     const materialRevision = `${shading}:${textures ? 'textures' : 'solid'}:${colorPreset}`
@@ -75,12 +105,29 @@ export const DoorSystem = () => {
     }
   })
 
+  // Editing a scene material a door slot references must rebuild that door
+  // (door meshes are built by this system, not <GeometrySystem>).
+  useEffect(() => {
+    const nodes = useScene.getState().nodes
+    for (const node of Object.values(nodes)) {
+      if (node?.type !== 'door') continue
+      if (!nodeReferencesSceneMaterial(node)) continue
+      useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
+    }
+  }, [sceneMaterials])
+
   useFrame(() => {
     if (dirtyNodes.size === 0) return
     const frameJoineryMaterial = createSurfaceRoleMaterial('joinery', colorPreset)
     baseMaterial = textures ? getBaseMaterial(shading) : frameJoineryMaterial
+    frameMaterial = textures ? getBaseMaterial(shading) : frameJoineryMaterial
     revealMaterial = textures ? defaultRevealMaterial : frameJoineryMaterial
     glassMaterial = textures ? defaultGlassMaterial : frameJoineryMaterial
+    hardwareMaterial = textures ? defaultHardwareMaterial : frameJoineryMaterial
+    currentShading = shading
+    currentTextures = textures
+    currentColorPreset = colorPreset
+    currentSceneMaterials = sceneMaterials
 
     const nodes = useScene.getState().nodes
     const dirtyDoorIds: AnyNodeId[] = []
@@ -134,6 +181,59 @@ export const DoorSystem = () => {
   return null
 }
 
+function tagDoorSlot(mesh: THREE.Mesh): THREE.Mesh {
+  mesh.userData.slotId = currentDoorSlot
+  return mesh
+}
+
+function nodeReferencesSceneMaterial(node: { slots?: Record<string, string> }): boolean {
+  const slots = node.slots
+  if (!slots) return false
+  for (const ref of Object.values(slots)) {
+    if (typeof ref === 'string' && ref.startsWith('scene:')) return true
+  }
+  return false
+}
+
+type DoorMaterialSlotId = 'panel' | 'frame' | 'glass' | 'hardware'
+
+function doorSlotDefault(slotId: DoorMaterialSlotId): THREE.Material {
+  if (!currentTextures) return createSurfaceRoleMaterial('joinery', currentColorPreset)
+  if (slotId === 'glass') {
+    return (
+      resolveMaterialRef(GLASS_DEFAULT_REF, currentSceneMaterials, currentShading) ??
+      defaultGlassMaterial
+    )
+  }
+  if (slotId === 'hardware') {
+    return (
+      resolveMaterialRef(HARDWARE_DEFAULT_REF, currentSceneMaterials, currentShading) ??
+      defaultHardwareMaterial
+    )
+  }
+  if (slotId === 'frame') {
+    return (
+      resolveMaterialRef(FRAME_DEFAULT_REF, currentSceneMaterials, currentShading) ??
+      getBaseMaterial(currentShading)
+    )
+  }
+  return (
+    resolveMaterialRef(PANEL_DEFAULT_REF, currentSceneMaterials, currentShading) ??
+    getBaseMaterial(currentShading)
+  )
+}
+
+// Resolve a door's slot to a material: the `node.slots` override (colored mode
+// only) → the body/glass/hardware default. Textures-off ignores overrides — the
+// monochrome escape hatch.
+function resolveDoorSlotMaterial(node: DoorNode, slotId: DoorMaterialSlotId): THREE.Material {
+  const fallback = doorSlotDefault(slotId)
+  if (!currentTextures) return fallback
+  const ref = node.slots?.[slotId]
+  if (!ref) return fallback
+  return resolveMaterialRef(ref, currentSceneMaterials, currentShading) ?? fallback
+}
+
 function addBox(
   parent: THREE.Object3D,
   material: THREE.Material,
@@ -144,8 +244,11 @@ function addBox(
   y: number,
   z: number,
 ) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+  const geometry = new THREE.BoxGeometry(w, h, d)
+  applyWorldScaleBoxUVs(geometry, w, h, d)
+  const m = new THREE.Mesh(geometry, material)
   m.position.set(x, y, z)
+  tagDoorSlot(m)
   parent.add(m)
 }
 
@@ -160,9 +263,12 @@ function addRotatedBox(
   z: number,
   rotationY: number,
 ) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+  const geometry = new THREE.BoxGeometry(w, h, d)
+  applyWorldScaleBoxUVs(geometry, w, h, d)
+  const m = new THREE.Mesh(geometry, material)
   m.position.set(x, y, z)
   m.rotation.y = rotationY
+  tagDoorSlot(m)
   parent.add(m)
 }
 
@@ -177,9 +283,12 @@ function addBoxWithRotation(
   z: number,
   rotation: [number, number, number],
 ) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+  const geometry = new THREE.BoxGeometry(w, h, d)
+  applyWorldScaleBoxUVs(geometry, w, h, d)
+  const m = new THREE.Mesh(geometry, material)
   m.position.set(x, y, z)
   m.rotation.set(rotation[0], rotation[1], rotation[2])
+  tagDoorSlot(m)
   parent.add(m)
 }
 
@@ -196,6 +305,7 @@ function addShape(
   })
   geometry.translate(0, 0, -depth / 2)
   const mesh = new THREE.Mesh(geometry, material)
+  tagDoorSlot(mesh)
   parent.add(mesh)
 }
 
@@ -215,6 +325,7 @@ function addShapeAt(
   })
   geometry.translate(x, y, z - depth / 2)
   const mesh = new THREE.Mesh(geometry, material)
+  tagDoorSlot(mesh)
   parent.add(mesh)
 }
 
@@ -757,6 +868,7 @@ function addLeafSegmentContent({
   const cpX = contentPadding[0]
   const cpY = contentPadding[1]
   if (renderPerimeterFrame && shouldRenderFrame && cpY > 0) {
+    currentDoorSlot = 'panel'
     addLeafBox(
       baseMaterial,
       leafWidth,
@@ -778,6 +890,7 @@ function addLeafSegmentContent({
   }
   if (renderPerimeterFrame && shouldRenderFrame && cpX > 0) {
     const innerH = leafHeight - 2 * cpY
+    currentDoorSlot = 'panel'
     addLeafBox(
       baseMaterial,
       cpX,
@@ -857,6 +970,7 @@ function addLeafSegmentContent({
 
     if (seg.type !== 'empty') {
       cx = leafCenterX - contentW / 2
+      currentDoorSlot = 'panel'
       for (let c = 0; c < numCols - 1; c++) {
         cx += colWidths[c]!
         const dividerLeft = cx
@@ -894,6 +1008,7 @@ function addLeafSegmentContent({
       const colX = colXCenters[c]!
 
       if (seg.type === 'glass') {
+        currentDoorSlot = 'glass'
         const glassDepth = Math.max(0.004, leafDepth * 0.15)
         const segmentLeft = colX - colW / 2
         const segmentRight = colX + colW / 2
@@ -914,6 +1029,7 @@ function addLeafSegmentContent({
           addLeafBox(glassMaterial, colW, segH, glassDepth, colX, segCenterY, 0)
         }
       } else if (seg.type === 'panel') {
+        currentDoorSlot = 'panel'
         const segmentLeft = colX - colW / 2
         const segmentRight = colX + colW / 2
         const outerPanelShape =
@@ -1051,6 +1167,7 @@ function addDoorLeaf(
   const usesShapedLeafFrame = openingShape === 'rounded' || openingShape === 'arch'
 
   if (usesShapedLeafFrame && hasLeafContent) {
+    currentDoorSlot = 'panel'
     if (openingShape === 'rounded') {
       const roundedLeafShape = roundedBoundary
         ? createRoundedClippedLeafFrameShape(
@@ -1141,6 +1258,7 @@ function addDoorLeaf(
   })
 
   if (hasLeafContent && handle) {
+    currentDoorSlot = 'hardware'
     const handleY = handleHeight - doorHeight / 2
     const faceZ = leafDepth / 2
     const handleX =
@@ -1148,20 +1266,21 @@ function addDoorLeaf(
         ? leafCenterX + leafWidth / 2 - 0.045
         : leafCenterX - leafWidth / 2 + 0.045
 
-    addLeafBox(baseMaterial, 0.028, 0.14, 0.01, handleX, handleY, faceZ + 0.005)
-    addLeafBox(baseMaterial, 0.022, 0.1, 0.035, handleX, handleY, faceZ + 0.025)
+    addLeafBox(hardwareMaterial, 0.028, 0.14, 0.01, handleX, handleY, faceZ + 0.005)
+    addLeafBox(hardwareMaterial, 0.022, 0.1, 0.035, handleX, handleY, faceZ + 0.025)
 
     if (handleBothSides) {
-      addLeafBox(baseMaterial, 0.028, 0.14, 0.01, handleX, handleY, -faceZ - 0.005)
-      addLeafBox(baseMaterial, 0.022, 0.1, 0.035, handleX, handleY, -faceZ - 0.025)
+      addLeafBox(hardwareMaterial, 0.028, 0.14, 0.01, handleX, handleY, -faceZ - 0.005)
+      addLeafBox(hardwareMaterial, 0.022, 0.1, 0.035, handleX, handleY, -faceZ - 0.025)
     }
   }
 
   if (hasLeafContent && doorCloser) {
+    currentDoorSlot = 'hardware'
     const closerY = leafCenterY + leafHeight / 2 - 0.04
-    addLeafBox(baseMaterial, 0.28, 0.055, 0.055, leafCenterX, closerY, leafDepth / 2 + 0.03)
+    addLeafBox(hardwareMaterial, 0.28, 0.055, 0.055, leafCenterX, closerY, leafDepth / 2 + 0.03)
     addLeafBox(
-      baseMaterial,
+      hardwareMaterial,
       0.14,
       0.015,
       0.015,
@@ -1172,18 +1291,37 @@ function addDoorLeaf(
   }
 
   if (hasLeafContent && panicBar) {
+    currentDoorSlot = 'hardware'
     const barY = panicBarHeight - doorHeight / 2
-    addLeafBox(baseMaterial, leafWidth * 0.72, 0.04, 0.055, leafCenterX, barY, leafDepth / 2 + 0.03)
+    addLeafBox(
+      hardwareMaterial,
+      leafWidth * 0.72,
+      0.04,
+      0.055,
+      leafCenterX,
+      barY,
+      leafDepth / 2 + 0.03,
+    )
   }
 
   if (hasLeafContent) {
+    currentDoorSlot = 'hardware'
     const hingeMarkerX = hingeSide === 'right' ? hingeX - 0.012 : hingeX + 0.012
     const hingeH = 0.1
     const hingeW = 0.024
     const hingeD = leafDepth + 0.016
-    addBox(mesh, baseMaterial, hingeW, hingeH, hingeD, hingeMarkerX, leafBottom + 0.25, 0)
-    addBox(mesh, baseMaterial, hingeW, hingeH, hingeD, hingeMarkerX, (leafBottom + leafTop) / 2, 0)
-    addBox(mesh, baseMaterial, hingeW, hingeH, hingeD, hingeMarkerX, leafTop - 0.25, 0)
+    addBox(mesh, hardwareMaterial, hingeW, hingeH, hingeD, hingeMarkerX, leafBottom + 0.25, 0)
+    addBox(
+      mesh,
+      hardwareMaterial,
+      hingeW,
+      hingeH,
+      hingeD,
+      hingeMarkerX,
+      (leafBottom + leafTop) / 2,
+      0,
+    )
+    addBox(mesh, hardwareMaterial, hingeW, hingeH, hingeD, hingeMarkerX, leafTop - 0.25, 0)
   }
 }
 
@@ -1222,9 +1360,10 @@ function addFoldingDoor(
   const panelLength = insideWidth / panelCount
   const foldAngle = Math.PI * 0.44 * foldAmount
 
+  currentDoorSlot = 'hardware'
   addBox(
     mesh,
-    baseMaterial,
+    hardwareMaterial,
     insideWidth,
     Math.min(frameThickness * 0.5, 0.025),
     Math.max(frameDepth * 0.45, 0.035),
@@ -1244,6 +1383,7 @@ function addFoldingDoor(
     })
   }
 
+  currentDoorSlot = undefined
   for (let index = 0; index < panelCount; index++) {
     const start = vertices[index]!
     const end = vertices[index + 1]!
@@ -1291,6 +1431,7 @@ function addFoldingDoor(
       keepFrameWhenEmpty: true,
     })
 
+    currentDoorSlot = undefined
     for (const point of [start, end]) {
       addBox(
         mesh,
@@ -1307,9 +1448,10 @@ function addFoldingDoor(
 
   const handlePoint = vertices[vertices.length - 1]!
   const handleY = handleHeight - doorHeight / 2
+  currentDoorSlot = 'hardware'
   addBox(
     mesh,
-    baseMaterial,
+    hardwareMaterial,
     0.035,
     0.16,
     leafDepth + 0.035,
@@ -1319,7 +1461,7 @@ function addFoldingDoor(
   )
   addBox(
     mesh,
-    baseMaterial,
+    hardwareMaterial,
     0.035,
     0.16,
     leafDepth + 0.035,
@@ -1368,9 +1510,10 @@ function addPocketDoor(
   const handleY = handleHeight - doorHeight / 2
   const handleX = leafCenterX - slideSign * (leafWidth / 2 - 0.055)
 
+  currentDoorSlot = 'hardware'
   addBox(
     mesh,
-    baseMaterial,
+    hardwareMaterial,
     insideWidth * 2,
     Math.min(frameThickness * 0.45, 0.024),
     Math.max(frameDepth * 0.38, 0.03),
@@ -1378,6 +1521,7 @@ function addPocketDoor(
     topY - 0.018,
     0,
   )
+  currentDoorSlot = undefined
   addBox(
     mesh,
     revealMaterial,
@@ -1419,8 +1563,27 @@ function addPocketDoor(
     segments,
     contentPadding,
   })
-  addBox(mesh, baseMaterial, 0.03, 0.18, leafDepth + 0.03, handleX, handleY, leafDepth / 2 + 0.02)
-  addBox(mesh, baseMaterial, 0.03, 0.18, leafDepth + 0.03, handleX, handleY, -leafDepth / 2 - 0.02)
+  currentDoorSlot = 'hardware'
+  addBox(
+    mesh,
+    hardwareMaterial,
+    0.03,
+    0.18,
+    leafDepth + 0.03,
+    handleX,
+    handleY,
+    leafDepth / 2 + 0.02,
+  )
+  addBox(
+    mesh,
+    hardwareMaterial,
+    0.03,
+    0.18,
+    leafDepth + 0.03,
+    handleX,
+    handleY,
+    -leafDepth / 2 - 0.02,
+  )
 }
 
 function addBarnDoor(
@@ -1465,9 +1628,10 @@ function addBarnDoor(
   const handleX = leafCenterX - slideSign * (leafWidth / 2 - 0.075)
   const wheelY = trackY - 0.075
 
-  addBox(mesh, revealMaterial, railLength, 0.035, 0.035, railCenterX, trackY, faceZ + 0.01)
-  addBox(mesh, revealMaterial, 0.05, 0.13, 0.035, -insideWidth / 2, trackY - 0.02, faceZ + 0.01)
-  addBox(mesh, revealMaterial, 0.05, 0.13, 0.035, insideWidth / 2, trackY - 0.02, faceZ + 0.01)
+  currentDoorSlot = 'hardware'
+  addBox(mesh, hardwareMaterial, railLength, 0.035, 0.035, railCenterX, trackY, faceZ + 0.01)
+  addBox(mesh, hardwareMaterial, 0.05, 0.13, 0.035, -insideWidth / 2, trackY - 0.02, faceZ + 0.01)
+  addBox(mesh, hardwareMaterial, 0.05, 0.13, 0.035, insideWidth / 2, trackY - 0.02, faceZ + 0.01)
 
   const addBarnLeafBox = (
     material: THREE.Material,
@@ -1491,6 +1655,7 @@ function addBarnDoor(
     keepFrameWhenEmpty: true,
   })
 
+  currentDoorSlot = undefined
   addRotatedBox(
     mesh,
     revealMaterial,
@@ -1514,11 +1679,12 @@ function addBarnDoor(
     0.52,
   )
 
+  currentDoorSlot = 'hardware'
   for (const offset of [-leafWidth * 0.28, leafWidth * 0.28]) {
-    addBox(mesh, revealMaterial, 0.085, 0.085, 0.035, leafCenterX + offset, wheelY, faceZ + 0.022)
+    addBox(mesh, hardwareMaterial, 0.085, 0.085, 0.035, leafCenterX + offset, wheelY, faceZ + 0.022)
     addBox(
       mesh,
-      revealMaterial,
+      hardwareMaterial,
       0.026,
       0.16,
       0.026,
@@ -1528,9 +1694,10 @@ function addBarnDoor(
     )
   }
 
+  currentDoorSlot = 'hardware'
   addBox(
     mesh,
-    baseMaterial,
+    hardwareMaterial,
     0.032,
     0.22,
     leafDepth + 0.034,
@@ -1540,7 +1707,7 @@ function addBarnDoor(
   )
   addBox(
     mesh,
-    baseMaterial,
+    hardwareMaterial,
     0.032,
     0.22,
     leafDepth + 0.034,
@@ -1595,10 +1762,20 @@ function addSlidingDoor(
   const handleY = handleHeight - doorHeight / 2
   const handleX = activeX + activeSign * (panelWidth / 2 - 0.06)
 
-  addBox(mesh, revealMaterial, insideWidth, 0.024, Math.max(frameDepth * 0.32, 0.026), 0, railY, 0)
+  currentDoorSlot = 'hardware'
   addBox(
     mesh,
-    revealMaterial,
+    hardwareMaterial,
+    insideWidth,
+    0.024,
+    Math.max(frameDepth * 0.32, 0.026),
+    0,
+    railY,
+    0,
+  )
+  addBox(
+    mesh,
+    hardwareMaterial,
     insideWidth,
     0.018,
     Math.max(frameDepth * 0.28, 0.022),
@@ -1649,8 +1826,27 @@ function addSlidingDoor(
     contentPadding,
     keepFrameWhenEmpty: true,
   })
-  addBox(mesh, baseMaterial, 0.032, 0.24, 0.016, handleX, handleY, frontZ + leafDepth / 2 + 0.01)
-  addBox(mesh, baseMaterial, 0.032, 0.24, 0.016, handleX, handleY, frontZ - leafDepth / 2 - 0.01)
+  currentDoorSlot = 'hardware'
+  addBox(
+    mesh,
+    hardwareMaterial,
+    0.032,
+    0.24,
+    0.016,
+    handleX,
+    handleY,
+    frontZ + leafDepth / 2 + 0.01,
+  )
+  addBox(
+    mesh,
+    hardwareMaterial,
+    0.032,
+    0.24,
+    0.016,
+    handleX,
+    handleY,
+    frontZ - leafDepth / 2 - 0.01,
+  )
 }
 
 function addGarageSectionalDoor(
@@ -1687,9 +1883,10 @@ function addGarageSectionalDoor(
   const railY = leafCenterY + leafHeight / 2 - 0.04
   const railZ = -travelDepth / 2
 
+  currentDoorSlot = 'hardware'
   addBox(
     mesh,
-    revealMaterial,
+    hardwareMaterial,
     0.035,
     Math.max(0.04, frameThickness * 0.75),
     travelDepth,
@@ -1699,7 +1896,7 @@ function addGarageSectionalDoor(
   )
   addBox(
     mesh,
-    revealMaterial,
+    hardwareMaterial,
     0.035,
     Math.max(0.04, frameThickness * 0.75),
     travelDepth,
@@ -1730,6 +1927,7 @@ function addGarageSectionalDoor(
     const trimDepth = 0.01
     const trimFaceOffset = leafDepth / 2 + trimDepth + 0.006
     const addSectionalTrim = (localY: number) => {
+      currentDoorSlot = undefined
       addBoxWithRotation(
         mesh,
         revealMaterial,
@@ -1743,6 +1941,7 @@ function addGarageSectionalDoor(
       )
     }
 
+    currentDoorSlot = 'panel'
     addBoxWithRotation(
       mesh,
       baseMaterial,
@@ -1758,7 +1957,8 @@ function addGarageSectionalDoor(
     addSectionalTrim(-revealOffset)
   }
 
-  addBox(mesh, revealMaterial, insideWidth, 0.032, Math.max(frameDepth * 0.36, 0.03), 0, railY, 0)
+  currentDoorSlot = 'hardware'
+  addBox(mesh, hardwareMaterial, insideWidth, 0.032, Math.max(frameDepth * 0.36, 0.03), 0, railY, 0)
 }
 
 function addGarageRollupDoor(
@@ -1791,9 +1991,10 @@ function addGarageRollupDoor(
   const drumY = topY + drumMaxRadius * 0.12
   const drumZ = -frameDepth / 2 - drumMaxRadius * 0.72
 
+  currentDoorSlot = 'hardware'
   addBox(
     mesh,
-    revealMaterial,
+    hardwareMaterial,
     0.032,
     leafHeight,
     Math.max(frameDepth * 0.48, 0.035),
@@ -1803,7 +2004,7 @@ function addGarageRollupDoor(
   )
   addBox(
     mesh,
-    revealMaterial,
+    hardwareMaterial,
     0.032,
     leafHeight,
     Math.max(frameDepth * 0.48, 0.035),
@@ -1813,8 +2014,10 @@ function addGarageRollupDoor(
   )
 
   if (visibleHeight > 0.01) {
+    currentDoorSlot = 'panel'
     addBox(mesh, baseMaterial, insideWidth, visibleHeight, leafDepth, 0, curtainCenterY, 0)
 
+    currentDoorSlot = undefined
     for (let index = 0; index < visibleSlatCount; index++) {
       const y = topY - Math.min(visibleHeight, index * slatHeight)
       addBox(mesh, revealMaterial, insideWidth - 0.08, 0.01, 0.012, 0, y, leafDepth / 2 + 0.012)
@@ -1832,17 +2035,20 @@ function addGarageRollupDoor(
     )
   }
 
+  currentDoorSlot = 'panel'
   const drum = new THREE.Mesh(
     new THREE.CylinderGeometry(drumMaxRadius, drumMaxRadius, insideWidth + frameThickness, 36),
     baseMaterial,
   )
   drum.position.set(0, drumY, drumZ)
   drum.rotation.z = Math.PI / 2
+  tagDoorSlot(drum)
   mesh.add(drum)
 
+  currentDoorSlot = 'hardware'
   addBox(
     mesh,
-    revealMaterial,
+    hardwareMaterial,
     insideWidth + frameThickness,
     0.026,
     Math.max(frameDepth * 0.52, 0.04),
@@ -1881,9 +2087,10 @@ function addGarageTiltupDoor(
   const railY = hingeY - frameThickness * 0.35
   const railZ = -railLength / 2
 
+  currentDoorSlot = 'hardware'
   addBox(
     mesh,
-    revealMaterial,
+    hardwareMaterial,
     0.03,
     Math.max(frameThickness * 0.7, 0.035),
     railLength,
@@ -1893,7 +2100,7 @@ function addGarageTiltupDoor(
   )
   addBox(
     mesh,
-    revealMaterial,
+    hardwareMaterial,
     0.03,
     Math.max(frameThickness * 0.7, 0.035),
     railLength,
@@ -1902,6 +2109,7 @@ function addGarageTiltupDoor(
     railZ,
   )
 
+  currentDoorSlot = 'panel'
   addBoxWithRotation(
     mesh,
     baseMaterial,
@@ -1919,6 +2127,7 @@ function addGarageTiltupDoor(
   const trimDepth = 0.012
   const trimFaceOffset = leafDepth / 2 + trimDepth + 0.006
   const addTiltupTrim = (localX: number, localY: number, trimWidth: number, trimHeight: number) => {
+    currentDoorSlot = undefined
     addBoxWithRotation(
       mesh,
       revealMaterial,
@@ -1937,7 +2146,17 @@ function addGarageTiltupDoor(
   addTiltupTrim(-insetWidth / 2, 0, 0.018, insetHeight)
   addTiltupTrim(insetWidth / 2, 0, 0.018, insetHeight)
 
-  addBox(mesh, revealMaterial, insideWidth, 0.026, Math.max(frameDepth * 0.4, 0.035), 0, hingeY, 0)
+  currentDoorSlot = 'hardware'
+  addBox(
+    mesh,
+    hardwareMaterial,
+    insideWidth,
+    0.026,
+    Math.max(frameDepth * 0.4, 0.035),
+    0,
+    hingeY,
+    0,
+  )
 }
 
 function getEffectiveOpeningShape(node: DoorNode): DoorNode['openingShape'] {
@@ -1951,6 +2170,7 @@ function getEffectiveOpeningShape(node: DoorNode): DoorNode['openingShape'] {
 
 function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
   const node = normalizeDoorNodeForRender(rawNode)
+  currentDoorSlot = undefined
 
   // Root mesh is an invisible hitbox; all visuals live in child meshes
   mesh.geometry.dispose()
@@ -1967,6 +2187,14 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
     disposeObject(child)
     mesh.remove(child)
   }
+
+  // Point the builder-facing materials at this door's slot overrides for the
+  // duration of its build (recomputed per node, so the next door resets cleanly
+  // without a restore). Reveal keeps its own material.
+  baseMaterial = resolveDoorSlotMaterial(node, 'panel')
+  frameMaterial = resolveDoorSlotMaterial(node, 'frame')
+  glassMaterial = resolveDoorSlotMaterial(node, 'glass')
+  hardwareMaterial = resolveDoorSlotMaterial(node, 'hardware')
 
   const {
     width,
@@ -2012,6 +2240,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
   const swingDirectionSign = swingDirection === 'inward' ? 1 : -1
 
   // ── Frame members ──
+  currentDoorSlot = 'frame'
   if (openingShape === 'arch') {
     const frameBottom = -height / 2
     const frameTop = height / 2
@@ -2025,7 +2254,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
 
     addBox(
       mesh,
-      baseMaterial,
+      frameMaterial,
       frameThickness,
       postHeight,
       frameDepth,
@@ -2035,7 +2264,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
     )
     addBox(
       mesh,
-      baseMaterial,
+      frameMaterial,
       frameThickness,
       postHeight,
       frameDepth,
@@ -2045,7 +2274,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
     )
     addShape(
       mesh,
-      baseMaterial,
+      frameMaterial,
       useShallowHeadBar
         ? createArchHeadBarShape(width, frameHeadBottomY, frameSpringY, frameTop)
         : createArchBandShape(
@@ -2061,7 +2290,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
   } else if (openingShape === 'rounded') {
     addShape(
       mesh,
-      baseMaterial,
+      frameMaterial,
       createRoundedDoorFrameShape(
         width,
         height,
@@ -2074,7 +2303,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
     // Left post — full height
     addBox(
       mesh,
-      baseMaterial,
+      frameMaterial,
       frameThickness,
       height,
       frameDepth,
@@ -2085,7 +2314,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
     // Right post — full height
     addBox(
       mesh,
-      baseMaterial,
+      frameMaterial,
       frameThickness,
       height,
       frameDepth,
@@ -2096,7 +2325,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
     // Head (top bar) — full width
     addBox(
       mesh,
-      baseMaterial,
+      frameMaterial,
       width,
       frameThickness,
       frameDepth,
@@ -2108,9 +2337,10 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
 
   // ── Threshold (inside the frame) ──
   if (threshold) {
+    currentDoorSlot = 'frame'
     addBox(
       mesh,
-      baseMaterial,
+      frameMaterial,
       insideWidth,
       thresholdHeight,
       frameDepth,
@@ -2331,6 +2561,10 @@ function syncDoorCutout(node: DoorNode, mesh: THREE.Mesh) {
   if (!cutout) {
     cutout = new THREE.Mesh()
     cutout.name = 'cutout'
+    // The cutout (a 1m-deep CSG helper, invisible) is proud of the wall, so it
+    // wins the scene raycast over the wall in front of the recessed door body —
+    // making it the selection AND paint hit target for the whole opening. The
+    // paint capability then re-raycasts the door's parts to find the slot.
     mesh.add(cutout)
   }
   cutout.geometry.dispose()

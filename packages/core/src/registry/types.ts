@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import type { BufferGeometry, Object3D } from 'three'
+import type { BufferGeometry, Object3D, Ray } from 'three'
 import type { ZodObject, z } from 'zod'
 import type { MaterialSchema } from '../schema/material'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
@@ -1212,6 +1212,14 @@ export type PaintResolveArgs = {
   hitObjectName?: string
   /** Optional: the three.js object that received the pointer hit. Items read userData.slotId off it. */
   hitObject?: Object3D
+  /**
+   * Optional: the pointer's world ray, so a kind can re-raycast its OWN subtree
+   * to pick the precise sub-mesh under the cursor — independent of what the
+   * shared scene raycast hit first. Door/window use this: their opening proxy
+   * (a proud invisible cutout) wins the scene raycast over the wall in front of
+   * the recessed door body, then they re-raycast their parts to find the slot.
+   */
+  ray?: Ray
 }
 
 export type PaintPatchArgs = {
