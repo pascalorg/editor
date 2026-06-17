@@ -3500,6 +3500,10 @@ function syncWindowCutout(node: WindowNode, mesh: THREE.Mesh) {
   if (!cutout) {
     cutout = new THREE.Mesh()
     cutout.name = 'cutout'
+    // The cutout is a 1m-deep CSG helper for the wall hole — never interactive.
+    // three.js raycasts invisible meshes, so without this its front face (0.5m
+    // proud of the glass) intercepts every paint/hover ray.
+    cutout.raycast = noopHitboxRaycast
     mesh.add(cutout)
   }
   cutout.geometry.dispose()
