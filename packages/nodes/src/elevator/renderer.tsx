@@ -1383,218 +1383,222 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
         visible={renderNode.visible}
         {...handlers}
       >
-      <BoxPrimitive
-        castShadow
-        material={shaftShellMaterial}
-        position={[0, shaftBodyCenterY, shaftDepth / 2 + shaftWallThickness / 2]}
-        receiveShadow
-        scale={[shaftWidth + shaftWallThickness * 2, shaftBodyHeight, shaftWallThickness]}
-        slotId={shaftShellSlotId}
-      />
-      <BoxPrimitive
-        castShadow
-        material={shaftShellMaterial}
-        position={[-shaftWidth / 2 - shaftWallThickness / 2, shaftBodyCenterY, 0]}
-        receiveShadow
-        scale={[shaftWallThickness, shaftBodyHeight, shaftDepth + shaftWallThickness * 2]}
-        slotId={shaftShellSlotId}
-      />
-      <BoxPrimitive
-        castShadow
-        material={shaftShellMaterial}
-        position={[shaftWidth / 2 + shaftWallThickness / 2, shaftBodyCenterY, 0]}
-        receiveShadow
-        scale={[shaftWallThickness, shaftBodyHeight, shaftDepth + shaftWallThickness * 2]}
-        slotId={shaftShellSlotId}
-      />
-      <BoxPrimitive
-        castShadow
-        material={shaftTopMaterial}
-        position={[0, shaftBaseY + shaftHeight - shaftWallThickness / 2, 0]}
-        receiveShadow
-        scale={[
-          shaftWidth + shaftWallThickness * 2,
-          shaftWallThickness,
-          shaftDepth + shaftWallThickness * 2,
-        ]}
-        slotId="shaft"
-      />
-
-      <group ref={cabRef} position={[0, cabBaseY, 0]}>
         <BoxPrimitive
           castShadow
-          material={CAB_MATERIAL}
-          position={[0, 0.04, cabCenterZ]}
+          material={shaftShellMaterial}
+          position={[0, shaftBodyCenterY, shaftDepth / 2 + shaftWallThickness / 2]}
           receiveShadow
-          scale={[cabWidth, 0.08, cabDepth]}
-          slotId="cab"
+          scale={[shaftWidth + shaftWallThickness * 2, shaftBodyHeight, shaftWallThickness]}
+          slotId={shaftShellSlotId}
         />
-
         <BoxPrimitive
           castShadow
-          material={CAB_MATERIAL}
-          position={[0, cabHeight - 0.04, cabCenterZ]}
+          material={shaftShellMaterial}
+          position={[-shaftWidth / 2 - shaftWallThickness / 2, shaftBodyCenterY, 0]}
           receiveShadow
-          scale={[cabWidth, 0.08, cabDepth]}
-          slotId="cab"
+          scale={[shaftWallThickness, shaftBodyHeight, shaftDepth + shaftWallThickness * 2]}
+          slotId={shaftShellSlotId}
         />
-
         <BoxPrimitive
           castShadow
-          material={CAB_MATERIAL}
-          position={[0, cabHeight / 2, cabCenterZ + cabDepth / 2 - 0.04]}
+          material={shaftShellMaterial}
+          position={[shaftWidth / 2 + shaftWallThickness / 2, shaftBodyCenterY, 0]}
           receiveShadow
-          scale={[cabWidth, cabHeight, 0.08]}
-          slotId="cab"
+          scale={[shaftWallThickness, shaftBodyHeight, shaftDepth + shaftWallThickness * 2]}
+          slotId={shaftShellSlotId}
         />
-
         <BoxPrimitive
           castShadow
-          material={CAB_MATERIAL}
-          position={[-cabWidth / 2 + 0.04, cabHeight / 2, cabCenterZ]}
+          material={shaftTopMaterial}
+          position={[0, shaftBaseY + shaftHeight - shaftWallThickness / 2, 0]}
           receiveShadow
-          scale={[0.08, cabHeight, cabDepth]}
-          slotId="cab"
+          scale={[
+            shaftWidth + shaftWallThickness * 2,
+            shaftWallThickness,
+            shaftDepth + shaftWallThickness * 2,
+          ]}
+          slotId="shaft"
         />
 
-        <BoxPrimitive
-          castShadow
-          material={CAB_MATERIAL}
-          position={[cabWidth / 2 - 0.04, cabHeight / 2, cabCenterZ]}
-          receiveShadow
-          scale={[0.08, cabHeight, cabDepth]}
-          slotId="cab"
-        />
-
-        <ElevatorDoorLeaves
-          animated={{ elevatorId, kind: 'cab' }}
-          doorOpen={doorOpen}
-          doorPanelStyle={doorPanelStyle}
-          doorStyle={doorStyle}
-          height={doorHeight}
-          width={doorWidth}
-          y={0}
-          z={frontZ}
-        />
-
-        <ElevatorFloorIndicator
-          active={indicatorActive}
-          direction={indicatorDirection}
-          faceSign={1}
-          label={indicatorEntry?.label ?? '-'}
-          position={[0, doorHeight + 0.13, frontZ + 0.055]}
-          scale={0.78}
-        />
-
-        <group position={[cabPanelX, cabPanelY, cabPanelZ]} rotation-y={-Math.PI / 2}>
+        <group ref={cabRef} position={[0, cabBaseY, 0]}>
           <BoxPrimitive
             castShadow
-            material={PANEL_MATERIAL}
+            material={CAB_MATERIAL}
+            position={[0, 0.04, cabCenterZ]}
             receiveShadow
-            scale={[cabPanelWidth, cabPanelHeight, 0.045]}
+            scale={[cabWidth, 0.08, cabDepth]}
+            slotId="cab"
           />
 
-          {entries.map((entry, index) => {
-            const column = index % cabButtonColumns
-            const row = Math.floor(index / cabButtonColumns)
-            const isDisabledLevel = disabledLevelIds.has(entry.id)
-            const x =
-              cabFloorButtonOffsetX + (column - (cabButtonColumns - 1) / 2) * cabButtonSpacingX
-            const y = (row - (cabButtonRows - 1) / 2) * cabButtonSpacingY
+          <BoxPrimitive
+            castShadow
+            material={CAB_MATERIAL}
+            position={[0, cabHeight - 0.04, cabCenterZ]}
+            receiveShadow
+            scale={[cabWidth, 0.08, cabDepth]}
+            slotId="cab"
+          />
 
-            return (
-              <ElevatorMeshButton
-                active={!isDisabledLevel && activeLevelId === entry.id}
-                buttonKind="cab"
-                disabled={isDisabledLevel}
-                elevatorId={elevatorId}
-                faceSign={1}
-                key={entry.id}
-                label={entry.label}
-                levelId={entry.id as AnyNodeId}
-                position={[x, y, 0.045]}
-                queued={!isDisabledLevel && queuedLevelIds.has(entry.id)}
-              />
-            )
-          })}
-          <ElevatorMeshButton
-            action="open-door"
-            active={doorOpenButtonActive}
-            buttonKind="cab"
-            elevatorId={elevatorId}
+          <BoxPrimitive
+            castShadow
+            material={CAB_MATERIAL}
+            position={[0, cabHeight / 2, cabCenterZ + cabDepth / 2 - 0.04]}
+            receiveShadow
+            scale={[cabWidth, cabHeight, 0.08]}
+            slotId="cab"
+          />
+
+          <BoxPrimitive
+            castShadow
+            material={CAB_MATERIAL}
+            position={[-cabWidth / 2 + 0.04, cabHeight / 2, cabCenterZ]}
+            receiveShadow
+            scale={[0.08, cabHeight, cabDepth]}
+            slotId="cab"
+          />
+
+          <BoxPrimitive
+            castShadow
+            material={CAB_MATERIAL}
+            position={[cabWidth / 2 - 0.04, cabHeight / 2, cabCenterZ]}
+            receiveShadow
+            scale={[0.08, cabHeight, cabDepth]}
+            slotId="cab"
+          />
+
+          <ElevatorDoorLeaves
+            animated={{ elevatorId, kind: 'cab' }}
+            doorOpen={doorOpen}
+            doorPanelStyle={doorPanelStyle}
+            doorStyle={doorStyle}
+            height={doorHeight}
+            width={doorWidth}
+            y={0}
+            z={frontZ}
+          />
+
+          <ElevatorFloorIndicator
+            active={indicatorActive}
+            direction={indicatorDirection}
             faceSign={1}
-            glyph="door-open"
-            position={[cabDoorButtonX, cabDoorButtonY, 0.045]}
-            queued={false}
-            radius={0.047}
+            label={indicatorEntry?.label ?? '-'}
+            position={[0, doorHeight + 0.13, frontZ + 0.055]}
+            scale={0.78}
           />
-        </group>
-      </group>
 
-      {entrySpans.map(({ entry, levelTopY }) => {
-        const isCurrentLevel = activeLevelId === entry.id
-        const isDisabledLevel = disabledLevelIds.has(entry.id)
-        const isServiceOnlyLevel = serviceOnlyLevelIds.has(entry.id)
-        const isQueuedLevel = !isDisabledLevel && queuedLevelIds.has(entry.id)
-        const isPendingLevel = pendingLevelId === entry.id
-        const showLandingReadout = isCurrentLevel || isPendingLevel || isQueuedLevel
-
-        return (
-          <group key={entry.id}>
-            <LandingDoorFrame
-              doorHeight={doorHeight}
-              doorWidth={doorWidth}
-              levelTopY={levelTopY}
-              levelY={entry.baseY}
-              shaftWidth={shaftWidth}
-              z={frontWallZ}
+          <group position={[cabPanelX, cabPanelY, cabPanelZ]} rotation-y={-Math.PI / 2}>
+            <BoxPrimitive
+              castShadow
+              material={PANEL_MATERIAL}
+              receiveShadow
+              scale={[cabPanelWidth, cabPanelHeight, 0.045]}
             />
-            <LandingDoor
-              animated={isCurrentLevel}
-              doorPanelStyle={doorPanelStyle}
-              doorStyle={doorStyle}
+
+            {entries.map((entry, index) => {
+              const column = index % cabButtonColumns
+              const row = Math.floor(index / cabButtonColumns)
+              const isDisabledLevel = disabledLevelIds.has(entry.id)
+              const x =
+                cabFloorButtonOffsetX + (column - (cabButtonColumns - 1) / 2) * cabButtonSpacingX
+              const y = (row - (cabButtonRows - 1) / 2) * cabButtonSpacingY
+
+              return (
+                <ElevatorMeshButton
+                  active={!isDisabledLevel && activeLevelId === entry.id}
+                  buttonKind="cab"
+                  disabled={isDisabledLevel}
+                  elevatorId={elevatorId}
+                  faceSign={1}
+                  key={entry.id}
+                  label={entry.label}
+                  levelId={entry.id as AnyNodeId}
+                  position={[x, y, 0.045]}
+                  queued={!isDisabledLevel && queuedLevelIds.has(entry.id)}
+                />
+              )
+            })}
+            <ElevatorMeshButton
+              action="open-door"
+              active={doorOpenButtonActive}
+              buttonKind="cab"
               elevatorId={elevatorId}
-              doorHeight={doorHeight}
-              doorOpen={isCurrentLevel ? doorOpen : 0}
-              doorWidth={doorWidth}
-              levelId={entry.id as AnyNodeId}
-              levelY={entry.baseY}
-              z={frontZ - 0.02}
+              faceSign={1}
+              glyph="door-open"
+              position={[cabDoorButtonX, cabDoorButtonY, 0.045]}
+              queued={false}
+              radius={0.047}
             />
-            <ElevatorFloorIndicator
-              active={showLandingReadout}
-              direction={showLandingReadout ? indicatorDirection : null}
-              label={entry.label}
-              position={[0, entry.baseY + doorHeight + 0.16, frontZ - 0.055]}
-              scale={0.62}
-              showReadout={showLandingReadout}
-            />
-            <group position={[landingPanelX, entry.baseY + panelRelativeY, frontZ - 0.035]}>
-              <BoxPrimitive
-                castShadow
-                material={LANDING_PANEL_MATERIAL}
-                receiveShadow
-                scale={[0.18, 0.42, 0.04]}
-              />
-              <ElevatorMeshButton
-                active={!isDisabledLevel && !isServiceOnlyLevel && isCurrentLevel && doorOpen > 0.5}
-                buttonKind="landing"
-                disabled={isDisabledLevel || isServiceOnlyLevel}
-                elevatorId={elevatorId}
-                levelId={entry.id as AnyNodeId}
-                position={[0, 0.06, -0.045]}
-                queued={isQueuedLevel}
-                radius={0.045}
-              />
-              <BoxPrimitive
-                material={isQueuedLevel ? QUEUE_STRIP_MATERIALS.queued : QUEUE_STRIP_MATERIALS.idle}
-                position={[0, -0.12, -0.035]}
-                scale={[0.095, 0.025, 0.012]}
-              />
-            </group>
           </group>
-        )
-      })}
+        </group>
+
+        {entrySpans.map(({ entry, levelTopY }) => {
+          const isCurrentLevel = activeLevelId === entry.id
+          const isDisabledLevel = disabledLevelIds.has(entry.id)
+          const isServiceOnlyLevel = serviceOnlyLevelIds.has(entry.id)
+          const isQueuedLevel = !isDisabledLevel && queuedLevelIds.has(entry.id)
+          const isPendingLevel = pendingLevelId === entry.id
+          const showLandingReadout = isCurrentLevel || isPendingLevel || isQueuedLevel
+
+          return (
+            <group key={entry.id}>
+              <LandingDoorFrame
+                doorHeight={doorHeight}
+                doorWidth={doorWidth}
+                levelTopY={levelTopY}
+                levelY={entry.baseY}
+                shaftWidth={shaftWidth}
+                z={frontWallZ}
+              />
+              <LandingDoor
+                animated={isCurrentLevel}
+                doorPanelStyle={doorPanelStyle}
+                doorStyle={doorStyle}
+                elevatorId={elevatorId}
+                doorHeight={doorHeight}
+                doorOpen={isCurrentLevel ? doorOpen : 0}
+                doorWidth={doorWidth}
+                levelId={entry.id as AnyNodeId}
+                levelY={entry.baseY}
+                z={frontZ - 0.02}
+              />
+              <ElevatorFloorIndicator
+                active={showLandingReadout}
+                direction={showLandingReadout ? indicatorDirection : null}
+                label={entry.label}
+                position={[0, entry.baseY + doorHeight + 0.16, frontZ - 0.055]}
+                scale={0.62}
+                showReadout={showLandingReadout}
+              />
+              <group position={[landingPanelX, entry.baseY + panelRelativeY, frontZ - 0.035]}>
+                <BoxPrimitive
+                  castShadow
+                  material={LANDING_PANEL_MATERIAL}
+                  receiveShadow
+                  scale={[0.18, 0.42, 0.04]}
+                />
+                <ElevatorMeshButton
+                  active={
+                    !isDisabledLevel && !isServiceOnlyLevel && isCurrentLevel && doorOpen > 0.5
+                  }
+                  buttonKind="landing"
+                  disabled={isDisabledLevel || isServiceOnlyLevel}
+                  elevatorId={elevatorId}
+                  levelId={entry.id as AnyNodeId}
+                  position={[0, 0.06, -0.045]}
+                  queued={isQueuedLevel}
+                  radius={0.045}
+                />
+                <BoxPrimitive
+                  material={
+                    isQueuedLevel ? QUEUE_STRIP_MATERIALS.queued : QUEUE_STRIP_MATERIALS.idle
+                  }
+                  position={[0, -0.12, -0.035]}
+                  scale={[0.095, 0.025, 0.012]}
+                />
+              </group>
+            </group>
+          )
+        })}
       </group>
     </ElevatorMaterialsContext.Provider>
   )

@@ -406,8 +406,8 @@ import {
   stairRotateAffordance,
 } from './floorplan-affordances'
 import { stairFloorplanMoveTarget } from './floorplan-move'
-import { stairParametrics } from './parametrics'
 import { stairPaint } from './paint'
+import { stairParametrics } from './parametrics'
 import { StairNode } from './schema'
 import { stairSlots } from './slots'
 

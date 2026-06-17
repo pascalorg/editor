@@ -8,9 +8,7 @@ function isStairSlotId(value: unknown): value is StairSlotId {
 }
 
 function resolveStairPaintRole(args: PaintResolveArgs): StairSlotId | null {
-  const userData = args.hitObject?.userData as
-    | { slotId?: unknown; slotIds?: unknown }
-    | undefined
+  const userData = args.hitObject?.userData as { slotId?: unknown; slotIds?: unknown } | undefined
 
   if (isStairSlotId(userData?.slotId)) {
     return userData.slotId

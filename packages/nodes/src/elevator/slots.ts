@@ -23,7 +23,8 @@ export function elevatorSlots(node: ElevatorNode): SlotDeclaration[] {
     getResolvedElevatorShaftStyle(node.shaftStyle) === 'glass' ||
     getResolvedElevatorDoorPanelStyle(node.doorPanelStyle) === 'glass-frame'
 
-  if (hasGlass) slots.push({ slotId: 'glass', label: 'Glass', default: ELEVATOR_GLASS_SLOT_DEFAULT })
+  if (hasGlass)
+    slots.push({ slotId: 'glass', label: 'Glass', default: ELEVATOR_GLASS_SLOT_DEFAULT })
 
   return slots
 }

@@ -12,8 +12,8 @@ import {
 } from '@pascal-app/core'
 import { buildElevatorFloorplan } from './floorplan'
 import { elevatorResizeAffordance, elevatorRotateAffordance } from './floorplan-affordances'
-import { elevatorParametrics } from './parametrics'
 import { elevatorPaint } from './paint'
+import { elevatorParametrics } from './parametrics'
 import { ElevatorNode } from './schema'
 import { elevatorSlots } from './slots'
 

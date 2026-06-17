@@ -2288,11 +2288,7 @@ function ColumnBody({ node }: { node: ColumnNode }) {
       <ColumnSlot slotId="shaft">
         <Shaft height={shaftLayout.shaftHeight} node={node} y={shaftLayout.shaftY} />
         <Rings node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
-        <LatheBands
-          node={node}
-          shaftHeight={shaftLayout.shaftHeight}
-          shaftY={shaftLayout.shaftY}
-        />
+        <LatheBands node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
         <Flutes node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
         <LowerCarvedBand
           node={node}
@@ -2304,11 +2300,7 @@ function ColumnBody({ node }: { node: ColumnNode }) {
           shaftHeight={shaftLayout.shaftHeight}
           shaftY={shaftLayout.shaftY}
         />
-        <SpiralRibs
-          node={node}
-          shaftHeight={shaftLayout.shaftHeight}
-          shaftY={shaftLayout.shaftY}
-        />
+        <SpiralRibs node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
       </ColumnSlot>
       <ColumnSlot slotId="capital">
         <Capital

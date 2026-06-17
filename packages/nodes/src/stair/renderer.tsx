@@ -160,9 +160,7 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
           userData={STAIR_BODY_SLOT_USER_DATA}
         />
       ) : null}
-      {isSegmentBasedStair ? null : (
-        <CurvedStairBody bodyMaterials={bodyMaterials} stair={node} />
-      )}
+      {isSegmentBasedStair ? null : <CurvedStairBody bodyMaterials={bodyMaterials} stair={node} />}
       <StairRailings material={railingMaterial} stair={node} />
       {isSegmentBasedStair ? (
         <group name="segments-wrapper" visible={false}>
