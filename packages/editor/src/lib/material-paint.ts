@@ -382,8 +382,6 @@ export function resolveActivePaintMaterialFromSelection(params: {
   if (
     (selectedNode.type === 'fence' ||
       selectedNode.type === 'column' ||
-      selectedNode.type === 'slab' ||
-      selectedNode.type === 'ceiling' ||
       selectedNode.type === 'shelf') &&
     selectedMaterialTarget.role === 'surface'
   ) {

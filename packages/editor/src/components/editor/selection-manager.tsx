@@ -1059,13 +1059,7 @@ export const SelectionManager = () => {
       // before any of the legacy roof / stair / single-surface arms
       // below run.
 
-      if (
-        node.type === 'fence' ||
-        node.type === 'column' ||
-        node.type === 'slab' ||
-        node.type === 'ceiling' ||
-        node.type === 'shelf'
-      ) {
+      if (node.type === 'fence' || node.type === 'column' || node.type === 'shelf') {
         const compatible = paintEnabled
 
         return {
