@@ -24,6 +24,8 @@ import useViewer from '../../store/use-viewer'
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
+// Disables a mesh's own raycast so its children become the hit targets.
+const noopHitboxRaycast: THREE.Mesh['raycast'] = () => {}
 let baseMaterial = getBaseMaterial()
 let glassMaterial: THREE.Material = defaultGlassMaterial
 // Per-frame viewer state, captured so the per-node mesh builder (which runs
@@ -3228,6 +3230,10 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
   mesh.geometry.dispose()
   mesh.geometry = new THREE.BoxGeometry(node.width, node.height, node.frameDepth)
   mesh.material = hitboxMaterial
+  // Default (selectable) hitbox raycast — restored each build; the visual path
+  // below disables it so the tagged frame/glass children are the hit targets
+  // (otherwise the full-depth invisible box intercepts every paint/hover ray).
+  mesh.raycast = THREE.Mesh.prototype.raycast
 
   // Sync transform from node (React may lag behind the system by a frame during drag)
   mesh.position.set(node.position[0], node.position[1], node.position[2])
@@ -3267,6 +3273,9 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
     syncWindowCutout(node, mesh)
     return
   }
+
+  // Visuals exist: let the tagged children receive paint/hover/selection rays.
+  mesh.raycast = noopHitboxRaycast
 
   if (windowType === 'sliding') {
     addSlidingWindowVisuals(node, mesh)
