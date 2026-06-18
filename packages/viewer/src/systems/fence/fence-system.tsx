@@ -217,10 +217,12 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
 
     // End posts are the structural `posts` slot; the intermediate verticals are
     // the `infill` slats (only present when showInfill adds them).
+    // Depth is 0.001 m shy of the accent rail's `panelDepth * 0.35` so the two
+    // never share a coplanar face where they cross (kills the rail z-fighting).
     ;(isEdgePost ? posts : infill).push({
       position: [frame.point.x, postY, frame.point.y],
       rotationY: -frame.tangentAngle,
-      scale: [postWidth, postHeight, Math.max(panelDepth * 0.35, 0.012)],
+      scale: [postWidth, postHeight, Math.max(panelDepth * 0.35 - 0.001, 0.011)],
     })
   }
 
