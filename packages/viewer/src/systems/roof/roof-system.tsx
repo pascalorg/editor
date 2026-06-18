@@ -54,6 +54,22 @@ const _uvFaceNormal = new THREE.Vector3()
 const _uvWorldDown = new THREE.Vector3(0, -1, 0)
 const _uvDownSlope = new THREE.Vector3()
 const _uvAcrossSlope = new THREE.Vector3()
+// World Y of the segment whose geometry is currently being built. Vertical
+// (gable wall) faces tile their V in WORLD space (`V = 1 - worldY`) so the band
+// lines up with the wall below — which THREE's ExtrudeGeometry UVs map as
+// `1 - height` from the wall base, i.e. `1 - worldY` for a ground-floor wall.
+// Set around each segment build via `withSegmentUvWorldY`, otherwise 0.
+let _segmentUvWorldY = 0
+
+function withSegmentUvWorldY<T>(worldY: number, build: () => T): T {
+  const previous = _segmentUvWorldY
+  _segmentUvWorldY = worldY
+  try {
+    return build()
+  } finally {
+    _segmentUvWorldY = previous
+  }
+}
 const _tmpVec3A = new THREE.Vector3()
 const _tmpVec3B = new THREE.Vector3()
 const _surfaceRay = new THREE.Ray()
@@ -376,7 +392,9 @@ function updateMergedRoofGeometry(
   let totalInner: Brush | null = null
 
   for (const child of children) {
-    const brushes = getRoofSegmentBrushes(child)
+    const brushes = withSegmentUvWorldY(roofNode.position[1] + child.position[1], () =>
+      getRoofSegmentBrushes(child),
+    )
     if (!brushes) continue
 
     subtractAccessoryCuts(brushes, child, nodes)
@@ -852,7 +870,12 @@ export function generateRoofSegmentGeometry(
   node: RoofSegmentNode,
   nodes?: Record<string, AnyNode>,
 ): THREE.BufferGeometry {
-  const brushes = getRoofSegmentBrushes(node)
+  const parentRoof = node.parentId ? nodes?.[node.parentId] : undefined
+  const parentRoofWorldY =
+    parentRoof && 'position' in parentRoof ? ((parentRoof.position as number[])[1] ?? 0) : 0
+  const brushes = withSegmentUvWorldY(parentRoofWorldY + node.position[1], () =>
+    getRoofSegmentBrushes(node),
+  )
   if (!brushes) {
     // Fallback: simple box
     return new THREE.BoxGeometry(node.width, node.wallHeight, node.depth)
@@ -1340,12 +1363,15 @@ function pushRoofUv(uvs: number[], point: THREE.Vector3, normal: THREE.Vector3) 
     }
   }
 
+  // Vertical (gable wall) faces: V tiles in world space so the band aligns with
+  // the wall below (see `_segmentUvWorldY`). U stays in the face's local run.
+  const wallV = 1 - (point.y + _segmentUvWorldY)
   if (absX >= absZ) {
-    uvs.push(_uvFaceNormal.x >= 0 ? point.z : -point.z, -point.y)
+    uvs.push(_uvFaceNormal.x >= 0 ? point.z : -point.z, wallV)
     return
   }
 
-  uvs.push(_uvFaceNormal.z >= 0 ? point.x : -point.x, -point.y)
+  uvs.push(_uvFaceNormal.z >= 0 ? point.x : -point.x, wallV)
 }
 
 // ─── Skylight cutout ─────────────────────────────────────────────────
