@@ -254,23 +254,12 @@ function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
   const positions: number[] = []
   const uvs: number[] = []
   const indices: number[] = []
-  const bounds = new THREE.Box2()
-
-  for (const [x, z] of polygon) {
-    bounds.expandByPoint(new THREE.Vector2(x, z))
-  }
-  for (const hole of holePolygons) {
-    for (const [x, z] of hole) {
-      bounds.expandByPoint(new THREE.Vector2(x, z))
-    }
-  }
-
-  const floorWidth = Math.max(bounds.max.x - bounds.min.x, 0.001)
-  const floorHeight = Math.max(bounds.max.y - bounds.min.y, 0.001)
 
   const pushFloorVertex = (x: number, y: number, z: number) => {
     positions.push(x, y, z)
-    uvs.push((x - bounds.min.x) / floorWidth, (z - bounds.min.y) / floorHeight)
+    // Floor UVs in metres (shape-space x, -z), matching generatePositiveSlabGeometry's
+    // cap mapping so a finish tiles at the same world scale on every surface.
+    uvs.push(x, -z)
   }
 
   const pushWallVertex = (x: number, y: number, z: number, u: number, v: number) => {

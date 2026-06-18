@@ -572,7 +572,17 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
       return { ...effective, position: live.position }
     })
 
-  const newGeo = generateExtrudedWall(node, childrenNodes, miterData, slabElevation)
+  const builtGeo = generateExtrudedWall(node, childrenNodes, miterData, slabElevation)
+  const wallAngle = Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0])
+  // World transform the render mesh will apply (position + Y-rotation below).
+  // Reproduce it here so the UVs can be projected in WORLD space — see
+  // `applyWorldPlanarWallUVs`.
+  const wallWorldMatrix = new THREE.Matrix4().compose(
+    new THREE.Vector3(node.start[0], slabElevation, node.start[1]),
+    new THREE.Quaternion().setFromAxisAngle(WALL_UV_Y_AXIS, -wallAngle),
+    WALL_UV_UNIT_SCALE,
+  )
+  const newGeo = applyWorldPlanarWallUVs(builtGeo, wallWorldMatrix)
 
   mesh.geometry.dispose()
   mesh.geometry = newGeo
@@ -587,6 +597,71 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   mesh.position.set(node.start[0], slabElevation, node.start[1])
   const angle = Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0])
   mesh.rotation.y = -angle
+}
+
+const WALL_UV_Y_AXIS = new THREE.Vector3(0, 1, 0)
+const WALL_UV_UNIT_SCALE = new THREE.Vector3(1, 1, 1)
+
+/**
+ * Re-project a wall's UVs in WORLD space (1 UV unit = 1 m) so the finish tiles
+ * continuously across adjacent walls and lines up with the roof gable above —
+ * instead of THREE's `ExtrudeGeometry` UVs, which restart at each wall's own
+ * start/end. Matches `roof-system`'s `pushRoofUv` projection exactly: vertical
+ * faces use `U = ±worldX/Z` (the axis across the face normal) and `V = 1 -
+ * worldY`; the thin top/bottom caps use `(worldX, worldZ)`. De-indexes first so
+ * every triangle projects by its own face normal (no shared-vertex seams at
+ * edges). Applied only to the render mesh; collision/floorplan geometry is
+ * untouched.
+ */
+function applyWorldPlanarWallUVs(
+  geometry: THREE.BufferGeometry,
+  worldMatrix: THREE.Matrix4,
+): THREE.BufferGeometry {
+  const target = geometry.index ? geometry.toNonIndexed() : geometry
+  if (target !== geometry) geometry.dispose()
+
+  const position = target.getAttribute('position')
+  if (!position || position.count === 0) return target
+
+  const a = new THREE.Vector3()
+  const b = new THREE.Vector3()
+  const c = new THREE.Vector3()
+  const normal = new THREE.Vector3()
+  const edgeAB = new THREE.Vector3()
+  const edgeAC = new THREE.Vector3()
+  const uvs = new Float32Array(position.count * 2)
+
+  for (let i = 0; i < position.count; i += 3) {
+    a.fromBufferAttribute(position, i).applyMatrix4(worldMatrix)
+    b.fromBufferAttribute(position, i + 1).applyMatrix4(worldMatrix)
+    c.fromBufferAttribute(position, i + 2).applyMatrix4(worldMatrix)
+    edgeAB.subVectors(b, a)
+    edgeAC.subVectors(c, a)
+    normal.crossVectors(edgeAB, edgeAC).normalize()
+
+    const absX = Math.abs(normal.x)
+    const absY = Math.abs(normal.y)
+    const absZ = Math.abs(normal.z)
+
+    for (let k = 0; k < 3; k += 1) {
+      const p = k === 0 ? a : k === 1 ? b : c
+      let u: number
+      let v: number
+      if (absY >= absX && absY >= absZ) {
+        u = p.x
+        v = p.z
+      } else {
+        v = 1 - p.y
+        u = absX >= absZ ? (normal.x >= 0 ? p.z : -p.z) : normal.z >= 0 ? p.x : -p.x
+      }
+      uvs[(i + k) * 2] = u
+      uvs[(i + k) * 2 + 1] = v
+    }
+  }
+
+  target.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  target.setAttribute('uv2', new THREE.Float32BufferAttribute(uvs.slice(), 2))
+  return target
 }
 
 /**

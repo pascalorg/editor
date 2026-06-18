@@ -11,6 +11,9 @@ export const FenceNode = BaseNode.extend({
   type: nodeType('fence'),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
+  // Unified paint-slot refs (`scene:`/`library:` MaterialRef per slot id),
+  // matching the slot model items/slab/shelf use. Absent = declared default.
+  slots: z.record(z.string(), z.string()).optional(),
   start: z.tuple([z.number(), z.number()]),
   end: z.tuple([z.number(), z.number()]),
   height: z.number().default(1.8),

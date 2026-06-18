@@ -8,13 +8,22 @@ import { CupolaNode } from './nodes/cupola'
 import { DoorNode } from './nodes/door'
 import { DormerNode } from './nodes/dormer'
 import { DownspoutNode } from './nodes/downspout'
+import { DuctFittingNode } from './nodes/duct-fitting'
+import { DuctSegmentNode } from './nodes/duct-segment'
+import { DuctTerminalNode } from './nodes/duct-terminal'
 import { ElevatorNode } from './nodes/elevator'
 import { EyebrowVentNode } from './nodes/eyebrow-vent'
 import { FenceNode } from './nodes/fence'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
+import { HvacEquipmentNode } from './nodes/hvac-equipment'
 import { ItemNode } from './nodes/item'
 import { LevelNode } from './nodes/level'
+import { LinesetNode } from './nodes/lineset'
+import { LiquidLineNode } from './nodes/liquid-line'
+import { PipeFittingNode } from './nodes/pipe-fitting'
+import { PipeSegmentNode } from './nodes/pipe-segment'
+import { PipeTrapNode } from './nodes/pipe-trap'
 import { RidgeVentNode } from './nodes/ridge-vent'
 import { RoofNode } from './nodes/roof'
 import { RoofSegmentNode } from './nodes/roof-segment'
@@ -65,6 +74,15 @@ export const AnyNode = z.discriminatedUnion('type', [
   SkylightNode,
   DormerNode,
   DownspoutNode,
+  DuctSegmentNode,
+  DuctFittingNode,
+  DuctTerminalNode,
+  HvacEquipmentNode,
+  LinesetNode,
+  LiquidLineNode,
+  PipeSegmentNode,
+  PipeFittingNode,
+  PipeTrapNode,
 ])
 
 export type AnyNode = z.infer<typeof AnyNode>

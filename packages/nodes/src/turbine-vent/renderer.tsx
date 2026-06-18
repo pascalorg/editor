@@ -65,10 +65,12 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
       : undefined,
   )
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const baseGeometry = useMemo(
     () => buildTurbineVentBase(node),
     [node.diameter, node.height, node.neckHeight, node.baseOverhang],
   )
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const headGeometry = useMemo(
     () => buildTurbineVentHead(node),
     [node.style, node.diameter, node.height, node.neckHeight, node.vaneCount],

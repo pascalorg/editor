@@ -98,7 +98,7 @@ export const StairTreeNode = memo(function StairTreeNode({
         expanded={expanded}
         hasChildren={segments.length > 0}
         icon={
-          <Image alt="" className="object-contain" height={14} src="/icons/stairs.png" width={14} />
+          <Image alt="" className="object-contain" height={14} src="/icons/stairs.webp" width={14} />
         }
         isDropTarget={isValidDropTarget && isDropTarget}
         isHovered={isHovered || isDropTarget}
@@ -206,7 +206,7 @@ function StairSegmentTreeNode({
             alt=""
             className="object-contain opacity-60"
             height={14}
-            src="/icons/stairs.png"
+            src="/icons/stairs.webp"
             width={14}
           />
         }

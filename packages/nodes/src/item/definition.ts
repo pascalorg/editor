@@ -7,6 +7,7 @@ import {
 } from '@pascal-app/core'
 import { buildItemFloorplan } from './floorplan'
 import { itemFloorplanMoveTarget } from './floorplan-move'
+import { itemPaint } from './paint'
 import { itemParametrics } from './parametrics'
 import { ItemNode } from './schema'
 
@@ -199,6 +200,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    paint: itemPaint,
     // Items participate in compositions — e.g. "table-with-plants",
     // "shelf-with-books-on-top" — so they're presettable in their own
     // right (and as descendants of presettable parents). The GLB-kind
@@ -320,7 +322,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   presentation: {
     label: 'Item',
     description: 'A catalog-backed item (furniture, fixtures, decorations).',
-    icon: { kind: 'url', src: '/icons/item.png' },
+    icon: { kind: 'url', src: '/icons/item.webp' },
     paletteSection: 'furnish',
     paletteOrder: 10,
   },

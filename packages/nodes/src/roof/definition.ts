@@ -179,7 +179,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   presentation: {
     label: 'Roof',
     description: 'A pitched / hip / gable roof composed of one or more segments.',
-    icon: { kind: 'url', src: '/icons/roof.png' },
+    icon: { kind: 'url', src: '/icons/roof.webp' },
     paletteSection: 'structure',
     paletteOrder: 100,
   },

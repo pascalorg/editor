@@ -57,7 +57,7 @@ export const GutterTreeNode = memo(function GutterTreeNode({
             alt=""
             className="object-contain opacity-60"
             height={14}
-            src="/icons/roof.png"
+            src="/icons/roof.webp"
             width={14}
           />
         </SnapTargetIcon>

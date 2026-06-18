@@ -26,6 +26,7 @@ const invalidGhostMaterial = new THREE.MeshStandardMaterial({
 const DormerPreview = ({ node, invalid }: { node: DormerNode; invalid?: boolean }) => {
   const material = invalid ? invalidGhostMaterial : ghostMaterial
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geo = useMemo(
     () => buildDormerGhostGeometry(node),
     [node.width, node.depth, node.height, node.roofHeight, node.roofType, node.wallSkirtHeight],

@@ -54,6 +54,59 @@ const _uvFaceNormal = new THREE.Vector3()
 const _uvWorldDown = new THREE.Vector3(0, -1, 0)
 const _uvDownSlope = new THREE.Vector3()
 const _uvAcrossSlope = new THREE.Vector3()
+// World transform of the segment whose geometry is currently being built, so
+// vertical (gable wall) faces project their UVs in WORLD space — identical to
+// the wall kind's `applyWorldPlanarWallUVs` (U = ±worldX/Z, V = 1 - worldY) so
+// the gable band tiles continuously into the walls below. Identity = local
+// (the default outside a segment build). Set via `withSegmentUvMatrix`.
+const _segmentUvMatrix = new THREE.Matrix4()
+const _segmentUvNormalMatrix = new THREE.Matrix3()
+const _uvWorldPoint = new THREE.Vector3()
+const _uvWorldNormal = new THREE.Vector3()
+const _prevSegmentUvMatrix = new THREE.Matrix4()
+const _prevSegmentUvNormalMatrix = new THREE.Matrix3()
+
+function withSegmentUvMatrix<T>(matrix: THREE.Matrix4, build: () => T): T {
+  _prevSegmentUvMatrix.copy(_segmentUvMatrix)
+  _prevSegmentUvNormalMatrix.copy(_segmentUvNormalMatrix)
+  _segmentUvMatrix.copy(matrix)
+  _segmentUvNormalMatrix.getNormalMatrix(matrix)
+  try {
+    return build()
+  } finally {
+    _segmentUvMatrix.copy(_prevSegmentUvMatrix)
+    _segmentUvNormalMatrix.copy(_prevSegmentUvNormalMatrix)
+  }
+}
+
+// Scratch matrices for composing a segment's world transform (roof group ∘
+// segment) at each build, without per-call allocation.
+const _segWorldMatrix = new THREE.Matrix4()
+const _roofGroupMatrix = new THREE.Matrix4()
+const _segLocalMatrix = new THREE.Matrix4()
+const _uvTmpPos = new THREE.Vector3()
+const _uvTmpQuat = new THREE.Quaternion()
+const _uvUnitScale = new THREE.Vector3(1, 1, 1)
+
+/** Compose the world transform `T(roofPos)·Ry(roofRot) · T(segPos)·Ry(segRot)`. */
+function composeSegmentWorldMatrix(
+  roofPosition: readonly number[] | undefined,
+  roofRotation: number,
+  segPosition: readonly number[],
+  segRotation: number,
+): THREE.Matrix4 {
+  _roofGroupMatrix.compose(
+    _uvTmpPos.set(roofPosition?.[0] ?? 0, roofPosition?.[1] ?? 0, roofPosition?.[2] ?? 0),
+    _uvTmpQuat.setFromAxisAngle(_yAxis, roofRotation),
+    _uvUnitScale,
+  )
+  _segLocalMatrix.compose(
+    _uvTmpPos.set(segPosition[0] ?? 0, segPosition[1] ?? 0, segPosition[2] ?? 0),
+    _uvTmpQuat.setFromAxisAngle(_yAxis, segRotation),
+    _uvUnitScale,
+  )
+  return _segWorldMatrix.multiplyMatrices(_roofGroupMatrix, _segLocalMatrix)
+}
 const _tmpVec3A = new THREE.Vector3()
 const _tmpVec3B = new THREE.Vector3()
 const _surfaceRay = new THREE.Ray()
@@ -376,7 +429,15 @@ function updateMergedRoofGeometry(
   let totalInner: Brush | null = null
 
   for (const child of children) {
-    const brushes = getRoofSegmentBrushes(child)
+    const brushes = withSegmentUvMatrix(
+      composeSegmentWorldMatrix(
+        roofNode.position,
+        roofNode.rotation ?? 0,
+        child.position,
+        child.rotation ?? 0,
+      ),
+      () => getRoofSegmentBrushes(child),
+    )
     if (!brushes) continue
 
     subtractAccessoryCuts(brushes, child, nodes)
@@ -852,7 +913,22 @@ export function generateRoofSegmentGeometry(
   node: RoofSegmentNode,
   nodes?: Record<string, AnyNode>,
 ): THREE.BufferGeometry {
-  const brushes = getRoofSegmentBrushes(node)
+  const parentRoof = node.parentId ? nodes?.[node.parentId] : undefined
+  const parentRoofPosition =
+    parentRoof && 'position' in parentRoof ? (parentRoof.position as number[]) : undefined
+  const parentRoofRotation =
+    parentRoof && 'rotation' in parentRoof
+      ? ((parentRoof as { rotation?: number }).rotation ?? 0)
+      : 0
+  const brushes = withSegmentUvMatrix(
+    composeSegmentWorldMatrix(
+      parentRoofPosition,
+      parentRoofRotation,
+      node.position,
+      node.rotation ?? 0,
+    ),
+    () => getRoofSegmentBrushes(node),
+  )
   if (!brushes) {
     // Fallback: simple box
     return new THREE.BoxGeometry(node.width, node.wallHeight, node.depth)
@@ -1319,14 +1395,19 @@ function createGeometryFromFaces(
 }
 
 function pushRoofUv(uvs: number[], point: THREE.Vector3, normal: THREE.Vector3) {
-  _uvFaceNormal.copy(normal).normalize()
+  // Project in WORLD space (via the current segment's world transform) so
+  // vertical gable faces tile identically to the walls below; for a local
+  // build the matrix is identity and this is the original behaviour.
+  const p = _uvWorldPoint.copy(point).applyMatrix4(_segmentUvMatrix)
+  _uvFaceNormal.copy(normal).applyMatrix3(_segmentUvNormalMatrix).normalize()
+  _uvWorldNormal.copy(_uvFaceNormal)
 
   const absX = Math.abs(_uvFaceNormal.x)
   const absY = Math.abs(_uvFaceNormal.y)
   const absZ = Math.abs(_uvFaceNormal.z)
 
   if (absY >= absX && absY >= absZ) {
-    uvs.push(point.x, point.z)
+    uvs.push(p.x, p.z)
     return
   }
 
@@ -1335,17 +1416,20 @@ function pushRoofUv(uvs: number[], point: THREE.Vector3, normal: THREE.Vector3) 
     if (_uvDownSlope.lengthSq() > 1e-8) {
       _uvDownSlope.normalize()
       _uvAcrossSlope.crossVectors(_uvDownSlope, _uvFaceNormal).normalize()
-      uvs.push(point.dot(_uvAcrossSlope), point.dot(_uvDownSlope))
+      uvs.push(p.dot(_uvAcrossSlope), p.dot(_uvDownSlope))
       return
     }
   }
 
+  // Vertical (gable wall) faces: U = ±worldX/Z (axis across the face normal),
+  // V = 1 - worldY — the same world-space projection the wall kind uses.
+  const wallV = 1 - p.y
   if (absX >= absZ) {
-    uvs.push(_uvFaceNormal.x >= 0 ? point.z : -point.z, -point.y)
+    uvs.push(_uvWorldNormal.x >= 0 ? p.z : -p.z, wallV)
     return
   }
 
-  uvs.push(_uvFaceNormal.z >= 0 ? point.x : -point.x, -point.y)
+  uvs.push(_uvWorldNormal.z >= 0 ? p.x : -p.x, wallV)
 }
 
 // ─── Skylight cutout ─────────────────────────────────────────────────

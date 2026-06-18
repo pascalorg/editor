@@ -13,6 +13,7 @@ import type { EyebrowVentNode } from './schema'
  * the preview doesn't intercept the cursor ray feeding the tool.
  */
 const EyebrowVentPreview = ({ node, invalid }: { node: EyebrowVentNode; invalid?: boolean }) => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildEyebrowVentGeometry(node),
     [node.width, node.depth, node.height, node.style, node.louverCount, node.backRatio],

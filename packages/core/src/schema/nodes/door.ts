@@ -41,6 +41,10 @@ export const DoorNode = BaseNode.extend({
   id: objectId('door'),
   type: nodeType('door'),
   material: MaterialSchema.optional(),
+  // Per-slot material overrides on the unified slot model. Keys: `panel` (the
+  // door body), `glass`. Value = a `MaterialRef` (`library:<id>` / `scene:<id>`).
+  // Absent = the body/glass default. Mirrors `ShelfNode.slots`.
+  slots: z.record(z.string(), z.string()).optional(),
 
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),

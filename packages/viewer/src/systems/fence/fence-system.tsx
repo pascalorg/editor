@@ -100,16 +100,13 @@ function applyFenceUVs(geometry: THREE.BufferGeometry) {
 
   if (!(position && normal)) return
 
+  // World-scale triplanar UVs: 1 UV unit = 1 metre, sampled from the part's
+  // local-space (already translated into fence space) coordinates with NO
+  // per-part origin shift. A shared origin keeps a tiled finish continuous
+  // across posts, rails, and infill instead of restarting the tile at each
+  // part's own min corner (the previous behaviour, which broke the 1 m
+  // contract and made adjacent parts mistile).
   const uvs = new Float32Array(position.count * 2)
-  let minX = Number.POSITIVE_INFINITY
-  let minY = Number.POSITIVE_INFINITY
-  let minZ = Number.POSITIVE_INFINITY
-
-  for (let index = 0; index < position.count; index += 1) {
-    minX = Math.min(minX, position.getX(index))
-    minY = Math.min(minY, position.getY(index))
-    minZ = Math.min(minZ, position.getZ(index))
-  }
 
   for (let index = 0; index < position.count; index += 1) {
     const px = position.getX(index)
@@ -123,14 +120,14 @@ function applyFenceUVs(geometry: THREE.BufferGeometry) {
     let v = 0
 
     if (ny >= nx && ny >= nz) {
-      u = px - minX
-      v = pz - minZ
+      u = px
+      v = pz
     } else if (nx >= nz) {
-      u = pz - minZ
-      v = py - minY
+      u = pz
+      v = py
     } else {
-      u = px - minX
-      v = py - minY
+      u = px
+      v = py
     }
 
     uvs[index * 2] = u
@@ -153,8 +150,18 @@ function getStyleDefaults(style: FenceNode['style']) {
   return { spacingFactor: 0.3, postFactor: 0.55, baseFactor: 1, topFactor: 0.75 }
 }
 
-function createFenceParts(fence: FenceNode): FencePart[] {
-  const parts: FencePart[] = []
+// Paint slots map 1:1 to the fence panel's build options (Structure + the
+// showInfill toggle): the end posts, the infill slats between them, the base
+// kickboard, and the top rail.
+export type FenceSlotId = 'posts' | 'infill' | 'base' | 'rail'
+
+export type FenceSlotParts = Record<FenceSlotId, FencePart[]>
+
+function createFenceParts(fence: FenceNode): FenceSlotParts {
+  const posts: FencePart[] = []
+  const infill: FencePart[] = []
+  const base: FencePart[] = []
+  const rail: FencePart[] = []
   const length = Math.max(getWallCurveLength(fence), 0.01)
   const panelDepth = Math.max(fence.thickness, 0.03)
   const clearance = Math.max(fence.groundClearance, 0)
@@ -173,7 +180,7 @@ function createFenceParts(fence: FenceNode): FencePart[] {
   const endInsetT = Math.max(0.501, 1 - edgeInset / length)
 
   if (!isFloating) {
-    parts.push(
+    base.push(
       ...createFenceCurveSpanParts(
         fence,
         0,
@@ -183,7 +190,7 @@ function createFenceParts(fence: FenceNode): FencePart[] {
         panelDepth * 1.05,
       ),
     )
-    parts.push(
+    base.push(
       ...createFenceCurveSpanParts(
         fence,
         0,
@@ -208,14 +215,18 @@ function createFenceParts(fence: FenceNode): FencePart[] {
       : verticalHeight
     const postY = fullHeightPost ? postHeight / 2 : verticalY
 
-    parts.push({
+    // End posts are the structural `posts` slot; the intermediate verticals are
+    // the `infill` slats (only present when showInfill adds them).
+    // Depth is 0.001 m shy of the accent rail's `panelDepth * 0.35` so the two
+    // never share a coplanar face where they cross (kills the rail z-fighting).
+    ;(isEdgePost ? posts : infill).push({
       position: [frame.point.x, postY, frame.point.y],
       rotationY: -frame.tangentAngle,
-      scale: [postWidth, postHeight, Math.max(panelDepth * 0.35, 0.012)],
+      scale: [postWidth, postHeight, Math.max(panelDepth * 0.35 - 0.001, 0.011)],
     })
   }
 
-  parts.push(
+  rail.push(
     ...createFenceCurveSpanParts(
       fence,
       0,
@@ -227,7 +238,7 @@ function createFenceParts(fence: FenceNode): FencePart[] {
   )
 
   if (isFloating) {
-    parts.push(
+    rail.push(
       ...createFenceCurveSpanParts(
         fence,
         0,
@@ -239,13 +250,15 @@ function createFenceParts(fence: FenceNode): FencePart[] {
     )
   }
 
-  return parts
+  return { posts, infill, base, rail }
 }
 
-export function generateFenceGeometry(fence: FenceNode) {
-  const parts = createFenceParts(fence)
+function mergeFenceParts(parts: FencePart[]): THREE.BufferGeometry {
+  // An empty slot group (e.g. infill with showInfill off, or base on a floating
+  // fence) must not reach mergeGeometries — it throws on an empty array. The
+  // empty geometry has no position attribute, so the renderer skips its mesh.
+  if (parts.length === 0) return new THREE.BufferGeometry()
   const geometries = parts.map(createFencePartGeometry)
-
   const merged = mergeGeometries(geometries, false) ?? new THREE.BufferGeometry()
   geometries.forEach((geometry) => {
     geometry.dispose()
@@ -256,6 +269,29 @@ export function generateFenceGeometry(fence: FenceNode) {
   }
   merged.computeVertexNormals()
   return merged
+}
+
+/**
+ * Geometry split by paint slot — posts, infill, base, rail — each a separate
+ * merged BufferGeometry (empty ones included) so the fence renderer can give
+ * each its own material + `userData.slotId`. Slots match the panel's build
+ * options 1:1.
+ */
+export function generateFenceSlotGeometries(
+  fence: FenceNode,
+): Record<FenceSlotId, THREE.BufferGeometry> {
+  const parts = createFenceParts(fence)
+  return {
+    posts: mergeFenceParts(parts.posts),
+    infill: mergeFenceParts(parts.infill),
+    base: mergeFenceParts(parts.base),
+    rail: mergeFenceParts(parts.rail),
+  }
+}
+
+export function generateFenceGeometry(fence: FenceNode) {
+  const { posts, infill, base, rail } = createFenceParts(fence)
+  return mergeFenceParts([...posts, ...infill, ...base, ...rail])
 }
 
 function updateFenceGeometry(fenceId: FenceNode['id']) {

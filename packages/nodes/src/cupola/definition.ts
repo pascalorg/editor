@@ -153,7 +153,7 @@ export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
   presentation: {
     label: 'Cupola',
     description: 'Louvered roof lantern with a dome or pyramid cap and optional finial.',
-    icon: { kind: 'url', src: '/icons/roof.png' },
+    icon: { kind: 'url', src: '/icons/roof.webp' },
     paletteSection: 'structure',
     paletteOrder: 122,
   },

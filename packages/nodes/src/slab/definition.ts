@@ -12,8 +12,10 @@ import {
 } from './floorplan-affordances'
 import { slabFloorplanMoveTarget } from './floorplan-move'
 import { buildSlabGeometry } from './geometry'
+import { slabPaint } from './paint'
 import { slabParametrics } from './parametrics'
 import { SlabNode } from './schema'
+import { slabSlots } from './slots'
 
 const HEIGHT_HANDLE_OFFSET = 0.22
 const MIN_SLAB_ELEVATION = 0.02
@@ -155,6 +157,10 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     },
     duplicable: true,
     deletable: true,
+    // Unified slot model: one paintable floor surface with a declared default,
+    // painted through the registry `capabilities.paint` dispatch like the shelf.
+    slots: () => slabSlots(),
+    paint: slabPaint,
   },
 
   relations: {
@@ -208,7 +214,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   presentation: {
     label: 'Slab',
     description: 'A polygon-bounded floor surface that hosts items on top.',
-    icon: { kind: 'url', src: '/icons/floor.png' },
+    icon: { kind: 'url', src: '/icons/floor.webp' },
     paletteSection: 'structure',
     paletteOrder: 30,
   },

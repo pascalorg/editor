@@ -15,6 +15,8 @@ import {
   oscSine,
   output,
   pass,
+  premultiplyAlpha,
+  renderOutput,
   sample,
   time,
   uniform,
@@ -180,6 +182,8 @@ const PostProcessingPasses = ({
   const projectId = useViewer((s) => s.projectId)
   const shading = useViewer((s) => s.shading)
   const edges = useViewer((s) => s.edges)
+  const inkOpacityOverride = useViewer((s) => s.inkOpacity)
+  const transparentBackground = useViewer((s) => s.transparentBackground)
   const lastProjectIdRef = useRef(projectId)
 
   // Bump this to force a pipeline rebuild (used by retry logic)
@@ -272,7 +276,7 @@ const PostProcessingPasses = ({
     // Same 1px line thickness for both (soft's thickness is the nice one);
     // strong reads heavier purely by being fully solid vs soft's lighter 50%.
     const inkRadius = 1
-    const inkOpacity = edges === 'strong' ? 1 : 0.5
+    const inkOpacity = inkOpacityOverride ?? (edges === 'strong' ? 1 : 0.5)
 
     console.log('[viewer/post-processing] Building pipeline', {
       version: pipelineVersion,
@@ -280,9 +284,9 @@ const PostProcessingPasses = ({
       denoise: denoiseEnabled,
       outline: outlineEnabled,
       perfDisable,
-      hoverHighlightMode,
       projectId,
       shading,
+      transparentBackground,
       rendererCtor: (renderer as any).constructor?.name,
       width,
       height,
@@ -420,6 +424,7 @@ const PostProcessingPasses = ({
       // Single merged outline node: one shared depth pass for both selected + hovered groups.
       const outliner = useViewer.getState().outliner
       let compositeWithOutlines = sceneColor
+      let visualAlpha = contentAlpha
       if (outlineEnabled) {
         const outlineNode = mergedOutline(scene, camera, {
           primaryObjects: outliner.selectedObjects,
@@ -447,6 +452,11 @@ const PostProcessingPasses = ({
           .mul(hoverStrength)
           .mul(osc)
 
+        const outlineAlpha = outlineNode.primaryVisibleEdge
+          .max(outlineNode.primaryHiddenEdge)
+          .max(outlineNode.secondaryVisibleEdge)
+          .max(outlineNode.secondaryHiddenEdge)
+        visualAlpha = visualAlpha.max(outlineAlpha)
         compositeWithOutlines = vec4(
           add(sceneColor.rgb, selectedOutline.add(hoverOutline)),
           sceneColor.a,
@@ -457,9 +467,22 @@ const PostProcessingPasses = ({
       // Editor overlays painted on top by their own alpha — they never get inked,
       // AO'd, or outlined, and always read crisp regardless of scene depth.
       const withOverlay = mix(composited, overlayColor.rgb, overlayColor.a)
-      const finalOutput = vec4(withOverlay, float(1))
+      let finalOutput: ReturnType<typeof premultiplyAlpha> | ReturnType<typeof vec4> = vec4(
+        withOverlay,
+        float(1),
+      )
+      if (transparentBackground) {
+        const overlayAlpha = overlayColor.a
+        const alpha = overlayAlpha.add(visualAlpha.mul(overlayAlpha.oneMinus()))
+        const straightRgb = overlayColor.rgb
+          .mul(overlayAlpha)
+          .add(compositeWithOutlines.rgb.mul(visualAlpha).mul(overlayAlpha.oneMinus()))
+          .div(alpha.max(float(0.00001)))
+        finalOutput = premultiplyAlpha(renderOutput(vec4(straightRgb, alpha)))
+      }
 
       const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
+      renderPipeline.outputColorTransform = !transparentBackground
       renderPipeline.outputNode = finalOutput
       renderPipelineRef.current = renderPipeline
       retryCountRef.current = 0
@@ -487,18 +510,23 @@ const PostProcessingPasses = ({
       renderPipelineRef.current = null
     }
   }, [
+    // NOTE: hoverHighlightMode intentionally excluded — the hover style is
+    // pushed to uniforms in a separate effect, so a hover must NOT rebuild the
+    // whole pipeline. The uniform refs below are stable (useMemo), so they
+    // never trigger a rebuild either.
     camera,
     hoverHiddenColor,
-    hoverHighlightMode,
     hoverPulseMix,
     hoverStrength,
     hoverVisibleColor,
     edges,
+    inkOpacityOverride,
     pipelineVersion,
     projectId,
     renderer,
     scene,
     shading,
+    transparentBackground,
     size.height,
     size.width,
     zoneLayers,
@@ -525,7 +553,7 @@ const PostProcessingPasses = ({
     if (PERF_POST_FX_DISABLED || hasPipelineErrorRef.current || !renderPipelineRef.current) {
       try {
         if ((renderer as any).setClearAlpha) {
-          ;(renderer as any).setClearAlpha(1)
+          ;(renderer as any).setClearAlpha(transparentBackground ? 0 : 1)
         }
         const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
         ;(renderer as any).render(scene, camera)

@@ -29,6 +29,7 @@ const invalidGhostMaterial = new THREE.MeshStandardMaterial({
 const SolarPanelPreview = ({ node, invalid }: { node: SolarPanelNode; invalid?: boolean }) => {
   const material = invalid ? invalidGhostMaterial : ghostMaterial
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildSolarPanelGeometry(node),
     [

@@ -106,6 +106,15 @@ export type StructureTool =
   | 'dormer'
   | 'gutter'
   | 'downspout'
+  | 'duct-segment'
+  | 'duct-fitting'
+  | 'duct-terminal'
+  | 'hvac-equipment'
+  | 'lineset'
+  | 'liquid-line'
+  | 'pipe-segment'
+  | 'pipe-fitting'
+  | 'pipe-trap'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'
@@ -168,6 +177,7 @@ export type MaterialTargetRole =
   | ChimneyMaterialRole
   | DormerSurfaceMaterialRole
   | SingleSurfaceMaterialRole
+  | string
 
 export type SelectedMaterialTarget = {
   nodeId: AnyNodeId
@@ -291,6 +301,14 @@ type EditorState = {
    */
   activeHandleDrag: { nodeId: AnyNodeId; label: string } | null
   setActiveHandleDrag: (drag: { nodeId: AnyNodeId; label: string } | null) => void
+  /**
+   * World axis the R/T keyboard rotation turns around, for kinds with
+   * full 3D orientation (duct fittings). Alt cycles it Y → X → Z; the
+   * kind's tool / keyboard actions read it, and the floating action
+   * menu surfaces it in a pill above the selected node.
+   */
+  rotationAxis: 'x' | 'y' | 'z'
+  cycleRotationAxis: () => 'x' | 'y' | 'z'
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
   curvingFence: FenceNode | null
@@ -308,8 +326,6 @@ type EditorState = {
   primeMaterialPaintFromSelection: () => MaterialPaintSelectionSnapshot
   hoveredPaintTarget: PaintableMaterialTarget | null
   setHoveredPaintTarget: (target: PaintableMaterialTarget | null) => void
-  isPaintPanelOpen: boolean
-  setPaintPanelOpen: (open: boolean) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
   guideUi: Record<string, GuideUiState>
@@ -348,6 +364,10 @@ type EditorState = {
   toggleFloorplanOpen: () => void
   isFloorplanHovered: boolean
   setFloorplanHovered: (hovered: boolean) => void
+  // Toggleable DWV riser-diagram (plumbing isometric) overlay.
+  isRiserOpen: boolean
+  setRiserOpen: (open: boolean) => void
+  toggleRiserOpen: () => void
   navigationSyncPose: NavigationSyncPose | null
   publishNavigationSyncPose: (pose: NavigationSyncPoseInput) => void
   floorplanSelectionTool: FloorplanSelectionTool
@@ -667,6 +687,11 @@ export function selectSiteFloorplanContext() {
   })
 }
 
+// Stashes the view mode the user was in before entering capture, so we can
+// restore it on exit. Snapshot capture always frames in 3D — the 2D/split
+// floorplan panes render nothing meaningful for a thumbnail.
+let viewModeBeforeCapture: ViewMode | null = null
+
 const useEditor = create<EditorState>()(
   persist(
     (set, get) => ({
@@ -808,6 +833,13 @@ const useEditor = create<EditorState>()(
       setMovingFenceEndpoint: (value) => set({ movingFenceEndpoint: value }),
       activeHandleDrag: null,
       setActiveHandleDrag: (drag) => set({ activeHandleDrag: drag }),
+      rotationAxis: 'y',
+      cycleRotationAxis: () => {
+        const order = ['y', 'x', 'z'] as const
+        const next = order[(order.indexOf(get().rotationAxis as 'y' | 'x' | 'z') + 1) % 3]!
+        set({ rotationAxis: next })
+        return next
+      },
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       curvingFence: null,
@@ -858,8 +890,6 @@ const useEditor = create<EditorState>()(
         set((state) =>
           state.hoveredPaintTarget === target ? state : { hoveredPaintTarget: target },
         ),
-      isPaintPanelOpen: false,
-      setPaintPanelOpen: (open) => set({ isPaintPanelOpen: open }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
       guideUi: {},
@@ -919,7 +949,35 @@ const useEditor = create<EditorState>()(
       setCaptureMode: (next) => {
         const resolved: CaptureMode =
           typeof next === 'boolean' ? { mode: next ? 'standard' : 'idle' } : next
-        set({ captureMode: resolved, isCaptureMode: resolved.mode !== 'idle' })
+        const entering = resolved.mode !== 'idle'
+        set((state) => {
+          if (entering) {
+            // Force 3D for the shot. Remember the prior mode only on the first
+            // entry (viewMode is already '3d' on re-entry), so we restore the
+            // user's real choice — not the forced '3d' — when capture ends.
+            if (state.viewMode !== '3d') {
+              viewModeBeforeCapture = state.viewMode
+              return {
+                captureMode: resolved,
+                isCaptureMode: true,
+                viewMode: '3d',
+                isFloorplanOpen: false,
+              }
+            }
+            return { captureMode: resolved, isCaptureMode: true }
+          }
+          const restore = viewModeBeforeCapture
+          viewModeBeforeCapture = null
+          if (restore && restore !== '3d') {
+            return {
+              captureMode: resolved,
+              isCaptureMode: false,
+              viewMode: restore,
+              isFloorplanOpen: true,
+            }
+          }
+          return { captureMode: resolved, isCaptureMode: false }
+        })
       },
       viewMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode,
       setViewMode: (mode) => set({ viewMode: mode, isFloorplanOpen: mode !== '3d' }),
@@ -934,6 +992,9 @@ const useEditor = create<EditorState>()(
         }),
       isFloorplanHovered: false,
       setFloorplanHovered: (hovered) => set({ isFloorplanHovered: hovered }),
+      isRiserOpen: false,
+      setRiserOpen: (open) => set({ isRiserOpen: open }),
+      toggleRiserOpen: () => set((state) => ({ isRiserOpen: !state.isRiserOpen })),
       navigationSyncPose: null,
       publishNavigationSyncPose: (pose) =>
         set((state) => ({

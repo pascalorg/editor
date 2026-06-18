@@ -226,7 +226,7 @@ export default function StairPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/stairs.png"
+      icon="/icons/stairs.webp"
       onClose={handleClose}
       title={node.name || 'Staircase'}
       width={300}

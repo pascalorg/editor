@@ -49,7 +49,19 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
-  const material = getVisibleWallMaterials(node, shading, textures, colorPreset, sceneTheme)
+  // Subscribe to the scene-material palette so editing a `scene:` material a
+  // wall slot references re-renders the wall live (the wall-system geometry
+  // dirty loop never fires for a material-only edit). `getMaterialsForWall`'s
+  // content hash keeps unaffected walls on their cached materials.
+  const sceneMaterials = useScene((s) => s.materials)
+  const material = getVisibleWallMaterials(
+    node,
+    shading,
+    textures,
+    colorPreset,
+    sceneTheme,
+    sceneMaterials,
+  )
 
   return (
     <mesh
