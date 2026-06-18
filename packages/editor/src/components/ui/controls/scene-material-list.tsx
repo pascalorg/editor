@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react'
 import useEditor from '../../../store/use-editor'
 import { Button } from '../primitives/button'
 import { Input } from '../primitives/input'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 import { MaterialPropertiesEditor } from './material-properties-editor'
 
 type SlotRecord = Record<string, string | undefined>
@@ -24,7 +25,7 @@ function getSlotRecord(node: unknown): SlotRecord | null {
   return slots as SlotRecord
 }
 
-export function SceneMaterialList() {
+export function SceneMaterialList({ autoEditId }: { autoEditId?: SceneMaterialId | null }) {
   const materials = useScene((state) => state.materials)
   const nodes = useScene((state) => state.nodes)
   const addSceneMaterial = useScene((state) => state.addSceneMaterial)
@@ -68,6 +69,7 @@ export function SceneMaterialList() {
         <SceneMaterialRow
           addSceneMaterial={addSceneMaterial}
           activePaintTarget={activePaintTarget}
+          autoEdit={autoEditId === id}
           id={id}
           key={id}
           removeSceneMaterial={removeSceneMaterial}
@@ -86,6 +88,7 @@ function SceneMaterialRow({
   sceneMaterial,
   usageCount,
   activePaintTarget,
+  autoEdit,
   addSceneMaterial,
   updateSceneMaterial,
   removeSceneMaterial,
@@ -95,12 +98,14 @@ function SceneMaterialRow({
   sceneMaterial: SceneMaterial
   usageCount: number
   activePaintTarget: ReturnType<typeof useEditor.getState>['activePaintTarget']
+  autoEdit: boolean
   addSceneMaterial: ReturnType<typeof useScene.getState>['addSceneMaterial']
   updateSceneMaterial: ReturnType<typeof useScene.getState>['updateSceneMaterial']
   removeSceneMaterial: ReturnType<typeof useScene.getState>['removeSceneMaterial']
   setActivePaintMaterial: ReturnType<typeof useEditor.getState>['setActivePaintMaterial']
 }) {
-  const [isEditingMaterial, setIsEditingMaterial] = useState(false)
+  // A freshly-created material (via "+ Custom") mounts with its editor open.
+  const [isEditingMaterial, setIsEditingMaterial] = useState(autoEdit)
   const [draftName, setDraftName] = useState(sceneMaterial.name)
   const swatchColor = sceneMaterial.material.properties?.color ?? '#ffffff'
 
@@ -156,52 +161,68 @@ function SceneMaterialRow({
           Used by {usageCount} {usageCount === 1 ? 'part' : 'parts'}
         </span>
         <div className="flex items-center gap-1">
-          <Button
-            aria-label="Paint with"
-            onClick={() =>
-              setActivePaintMaterial({
-                material: sceneMaterial.material,
-                sourceTarget: activePaintTarget,
-              })
-            }
-            size="icon-sm"
-            title="Paint with"
-            type="button"
-            variant="outline"
-          >
-            <Paintbrush />
-          </Button>
-          <Button
-            aria-label="Edit"
-            aria-pressed={isEditingMaterial}
-            onClick={() => setIsEditingMaterial((value) => !value)}
-            size="icon-sm"
-            title="Edit"
-            type="button"
-            variant={isEditingMaterial ? 'default' : 'outline'}
-          >
-            <Pencil />
-          </Button>
-          <Button
-            aria-label="Duplicate"
-            onClick={duplicateMaterial}
-            size="icon-sm"
-            title="Duplicate"
-            type="button"
-            variant="outline"
-          >
-            <Copy />
-          </Button>
-          <Button
-            aria-label="Delete"
-            onClick={() => removeSceneMaterial(id)}
-            size="icon-sm"
-            title="Delete"
-            type="button"
-            variant="outline"
-          >
-            <Trash2 />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                aria-label="Paint with"
+                onClick={() =>
+                  setActivePaintMaterial({
+                    materialPreset: toSceneMaterialRef(id),
+                    sourceTarget: activePaintTarget,
+                  })
+                }
+                size="icon-sm"
+                type="button"
+                variant="outline"
+              >
+                <Paintbrush />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Paint with</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                aria-label="Edit"
+                aria-pressed={isEditingMaterial}
+                onClick={() => setIsEditingMaterial((value) => !value)}
+                size="icon-sm"
+                type="button"
+                variant={isEditingMaterial ? 'default' : 'outline'}
+              >
+                <Pencil />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                aria-label="Duplicate"
+                onClick={duplicateMaterial}
+                size="icon-sm"
+                type="button"
+                variant="outline"
+              >
+                <Copy />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Duplicate</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                aria-label="Delete"
+                onClick={() => removeSceneMaterial(id)}
+                size="icon-sm"
+                type="button"
+                variant="outline"
+              >
+                <Trash2 />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Delete</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 

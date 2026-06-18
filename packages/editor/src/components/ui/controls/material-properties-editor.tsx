@@ -2,6 +2,7 @@
 
 import type { MaterialProperties, MaterialSchema } from '@pascal-app/core'
 import { Input } from '../primitives/input'
+import { SliderControl } from './slider-control'
 
 const DEFAULT_MATERIAL_PROPERTIES: MaterialProperties = {
   color: '#ffffff',
@@ -44,7 +45,7 @@ export function MaterialPropertiesEditor({
         </label>
         <div className="flex items-center gap-2">
           <input
-            className="h-10 w-14 cursor-pointer rounded-md border border-input bg-transparent"
+            className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-0 [&::-moz-color-swatch]:rounded-[5px] [&::-moz-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-[5px] [&::-webkit-color-swatch]:border-none"
             onChange={(e) => updateMaterial({ color: e.target.value })}
             type="color"
             value={currentProps.color}
@@ -56,68 +57,35 @@ export function MaterialPropertiesEditor({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
-            Roughness
-          </label>
-          <span className="font-mono text-muted-foreground text-xs">
-            {currentProps.roughness.toFixed(2)}
-          </span>
-        </div>
-        <input
-          className="h-2 w-full cursor-pointer appearance-none rounded-full bg-accent"
-          max={1}
-          min={0}
-          onChange={(e) => updateMaterial({ roughness: Number.parseFloat(e.target.value) })}
-          step={0.01}
-          type="range"
-          value={currentProps.roughness}
-        />
-      </div>
+      <SliderControl
+        label="Roughness"
+        max={1}
+        min={0}
+        onChange={(value) => updateMaterial({ roughness: value })}
+        precision={2}
+        step={0.01}
+        value={currentProps.roughness}
+      />
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
-            Metalness
-          </label>
-          <span className="font-mono text-muted-foreground text-xs">
-            {currentProps.metalness.toFixed(2)}
-          </span>
-        </div>
-        <input
-          className="h-2 w-full cursor-pointer appearance-none rounded-full bg-accent"
-          max={1}
-          min={0}
-          onChange={(e) => updateMaterial({ metalness: Number.parseFloat(e.target.value) })}
-          step={0.01}
-          type="range"
-          value={currentProps.metalness}
-        />
-      </div>
+      <SliderControl
+        label="Metalness"
+        max={1}
+        min={0}
+        onChange={(value) => updateMaterial({ metalness: value })}
+        precision={2}
+        step={0.01}
+        value={currentProps.metalness}
+      />
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
-            Opacity
-          </label>
-          <span className="font-mono text-muted-foreground text-xs">
-            {currentProps.opacity.toFixed(2)}
-          </span>
-        </div>
-        <input
-          className="h-2 w-full cursor-pointer appearance-none rounded-full bg-accent"
-          max={1}
-          min={0}
-          onChange={(e) => {
-            const opacity = Number.parseFloat(e.target.value)
-            updateMaterial({ opacity }, opacity < 1 || currentProps.transparent)
-          }}
-          step={0.01}
-          type="range"
-          value={currentProps.opacity}
-        />
-      </div>
+      <SliderControl
+        label="Opacity"
+        max={1}
+        min={0}
+        onChange={(value) => updateMaterial({ opacity: value }, value < 1 || currentProps.transparent)}
+        precision={2}
+        step={0.01}
+        value={currentProps.opacity}
+      />
 
       <div className="space-y-2">
         <label className="block font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">

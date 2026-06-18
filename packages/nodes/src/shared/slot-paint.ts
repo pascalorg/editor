@@ -134,7 +134,14 @@ export function buildSlotPreviewMaterial(
   materialPreset: string | undefined,
 ): Material | null {
   const shading = useViewer.getState().shading
-  if (materialPreset) return createMaterialFromPresetRef(materialPreset, shading)
+  if (materialPreset) {
+    const parsed = parseMaterialRef(materialPreset)
+    if (parsed?.kind === 'scene') {
+      const sceneMaterial = useScene.getState().materials[parsed.id as SceneMaterialId]
+      return sceneMaterial ? createMaterial(sceneMaterial.material, shading) : null
+    }
+    return createMaterialFromPresetRef(materialPreset, shading)
+  }
   if (material) return createMaterial(material, shading)
   return null
 }

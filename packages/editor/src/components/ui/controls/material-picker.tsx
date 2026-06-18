@@ -11,7 +11,6 @@ import {
 } from '@pascal-app/core'
 import { useEffect, useState } from 'react'
 import { triggerSFX } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
 
 type MaterialPickerProps = {
   value?: MaterialSchema
@@ -34,7 +33,6 @@ export function MaterialPicker({
   onSelectMaterialPreset,
   disabled = false,
 }: MaterialPickerProps) {
-  const setPaintPanelOpen = useEditor((state) => state.setPaintPanelOpen)
   const [showCustom, setShowCustom] = useState<boolean>(!!value?.properties)
   const [selectedCategory, setSelectedCategory] = useState<(typeof MATERIAL_CATEGORIES)[number]>(
     MATERIAL_CATEGORIES[0],
@@ -70,14 +68,14 @@ export function MaterialPicker({
   const handleCatalogSelect = (materialId: string) => {
     if (disabled) return
     setShowCustom(false)
-    setPaintPanelOpen(false)
     onSelectMaterialPreset?.(toLibraryMaterialRef(materialId))
   }
 
+  // Seed a new custom material from the current/forked colour and hand it to
+  // the host (MaterialPaintPanel), which pre-creates a scene material the user
+  // edits inline in the build pane — no separate right-side editor pane.
   const handleCustomOpen = () => {
     if (disabled) return
-    setShowCustom(true)
-    setPaintPanelOpen(true)
     const forkColor = selectedMaterialPreset
       ? (selectedCatalogEntry?.previewColor ?? '#ffffff')
       : '#ffffff'
@@ -111,9 +109,6 @@ export function MaterialPicker({
                   setSelectedCategory(category)
                   if (showCustom) {
                     setShowCustom(false)
-                  }
-                  if (category !== 'colors') {
-                    setPaintPanelOpen(false)
                   }
                 }}
                 type="button"

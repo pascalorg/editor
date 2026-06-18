@@ -1,9 +1,15 @@
 'use client'
 
-import { type AnyNodeId, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  generateSceneMaterialId,
+  type SceneMaterialId,
+  toSceneMaterialRef,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Eraser, RotateCcw } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
   buildResetSurfaceMaterialUpdates,
   resolvePaintTargetFromSelection,
@@ -27,6 +33,8 @@ export function MaterialPaintPanel() {
   const setActivePaintTarget = useEditor((state) => state.setActivePaintTarget)
   const paintEraser = useEditor((state) => state.paintEraser)
   const setPaintEraser = useEditor((state) => state.setPaintEraser)
+  // Id of a just-created scene material whose inline editor should open on mount.
+  const [autoEditMaterialId, setAutoEditMaterialId] = useState<SceneMaterialId | null>(null)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const nodes = useScene((state) => state.nodes)
   const materialCount = useScene((state) => Object.keys(state.materials).length)
@@ -73,7 +81,18 @@ export function MaterialPaintPanel() {
       </div>
       <MaterialPicker
         onChange={(material) => {
-          setActivePaintMaterial({ material, sourceTarget: activePaintTarget })
+          // Custom-create: pre-create a scene material and select it as the
+          // brush via a `scene:` ref so painting stores the ref and edits to
+          // it propagate everywhere. The user edits it inline in the scene-
+          // material list below (auto-opened) — no separate right-side pane.
+          const id = generateSceneMaterialId()
+          const count = Object.keys(useScene.getState().materials).length
+          useScene.getState().addSceneMaterial({ id, name: `Material ${count + 1}`, material })
+          setActivePaintMaterial({
+            materialPreset: toSceneMaterialRef(id),
+            sourceTarget: activePaintTarget,
+          })
+          setAutoEditMaterialId(id)
         }}
         onSelectMaterialPreset={(materialPreset) => {
           setActivePaintMaterial({ materialPreset, sourceTarget: activePaintTarget })
@@ -83,7 +102,7 @@ export function MaterialPaintPanel() {
       />
       {materialCount > 0 ? (
         <PanelSection title="Scene materials">
-          <SceneMaterialList />
+          <SceneMaterialList autoEditId={autoEditMaterialId} />
         </PanelSection>
       ) : null}
     </div>

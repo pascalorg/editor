@@ -309,8 +309,6 @@ type EditorState = {
   primeMaterialPaintFromSelection: () => MaterialPaintSelectionSnapshot
   hoveredPaintTarget: PaintableMaterialTarget | null
   setHoveredPaintTarget: (target: PaintableMaterialTarget | null) => void
-  isPaintPanelOpen: boolean
-  setPaintPanelOpen: (open: boolean) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
   guideUi: Record<string, GuideUiState>
@@ -854,8 +852,6 @@ const useEditor = create<EditorState>()(
         set((state) =>
           state.hoveredPaintTarget === target ? state : { hoveredPaintTarget: target },
         ),
-      isPaintPanelOpen: false,
-      setPaintPanelOpen: (open) => set({ isPaintPanelOpen: open }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
       guideUi: {},
