@@ -339,7 +339,7 @@ export default function ChimneyPanel() {
   // Match the current store node against the preset table so the
   return (
     <PanelWrapper
-      icon="/icons/roof.png"
+      icon="/icons/roof.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
       title={node.name || 'Chimney'}

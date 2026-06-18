@@ -6,6 +6,7 @@ import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
+import usePlacementPreview from '../../store/use-placement-preview'
 import useSegmentDraftChain from '../../store/use-segment-draft-chain'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { WALL_GRID_STEP, type WallPlanPoint } from '../tools/wall/wall-drafting'
@@ -152,6 +153,9 @@ export function useFloorplanBackgroundPlacement({
             stopPropagation: () => {},
           } as any)
         }
+        // Drop the off-wall ghost on commit so it doesn't linger at the
+        // just-placed spot before the next pointer move re-evaluates.
+        usePlacementPreview.getState().clear()
         return true
       }
 

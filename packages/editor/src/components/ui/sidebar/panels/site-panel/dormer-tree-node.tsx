@@ -63,7 +63,7 @@ export const DormerTreeNode = memo(function DormerTreeNode({
             alt=""
             className="object-contain opacity-60"
             height={14}
-            src="/icons/roof.png"
+            src="/icons/roof.webp"
             width={14}
           />
         </SnapTargetIcon>

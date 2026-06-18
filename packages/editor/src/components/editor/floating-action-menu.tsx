@@ -24,6 +24,7 @@ import {
   StairNode,
   StairSegmentNode,
   sceneRegistry,
+  summarizeSystemFor,
   useLiveNodeOverrides,
   useScene,
   WallNode,
@@ -32,7 +33,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { useCallback, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
@@ -40,6 +41,21 @@ import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import useEditor from '../../store/use-editor'
 import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
+
+/**
+ * A kind shows the system pill when it exposes typed ports — `def.ports`
+ * is exactly what makes a node participate in the supply/return graph the
+ * pill summarizes. Keeps the menu off a hand-maintained kind list.
+ */
+const hasPorts = (type: string) => nodeRegistry.get(type)?.ports != null
+
+/**
+ * A kind shows the rotation-axis pill when its R/T keyboard rotation
+ * turns around a user-cyclable axis (`keyboardActions.axisCycling`) —
+ * duct / pipe fittings with full 3D orientation.
+ */
+const hasAxisCycling = (type: string) =>
+  nodeRegistry.get(type)?.keyboardActions?.axisCycling === true
 
 const ALLOWED_TYPES = [
   'item',
@@ -200,6 +216,8 @@ export function FloatingActionMenu() {
   // flips only at drag start / end, so subscribing here is cheap — the live
   // height value is written imperatively in the useFrame below.
   const activeHandleDrag = useEditor((s) => s.activeHandleDrag)
+  // R/T rotation axis for kinds with full 3D orientation (duct fittings).
+  const rotationAxis = useEditor((s) => s.rotationAxis)
 
   const groupRef = useRef<THREE.Group>(null)
   const menuScaleRef = useRef<HTMLDivElement>(null)
@@ -490,10 +508,26 @@ export function FloatingActionMenu() {
           // item without clicking" bug. (Item has its own
           // draft-committing move tool, so it must skip the generic
           // registry auto-create branch below.)
+        } else if (
+          duplicate.type === 'duct-segment' ||
+          duplicate.type === 'duct-fitting' ||
+          duplicate.type === 'pipe-segment' ||
+          duplicate.type === 'lineset' ||
+          duplicate.type === 'liquid-line'
+        ) {
+          // Duct runs & fittings, DWV pipe runs, and refrigerant linesets use
+          // pure drag-to-place: NO node is inserted into the scene until the
+          // commit click. `setMovingNode` below hands the clone (with
+          // `metadata.isNew`) to its ghost tool (`MoveDuctSegmentTool` /
+          // `MoveDuctFittingTool` / `MovePipeSegmentTool` / `MoveLinesetTool`),
+          // which previews a translucent copy inside a footprint bounding box
+          // on the cursor and calls `createNode` on the drop click.
+          // Pre-creating here would drop a copy before any click — the
+          // "auto-places it" bug.
         } else if (nodeRegistry.has(duplicate.type)) {
-          // Registry-driven kinds: offset the position slightly so the
-          // duplicate doesn't overlap exactly, then create + hand to the
-          // move tool. Mirrors the roof-segment / stair-segment behavior.
+          // Registry-driven kinds: offset slightly so the duplicate doesn't
+          // overlap exactly, then create + hand to the move tool. Mirrors the
+          // roof-segment / stair-segment behavior.
           if ('position' in duplicate && Array.isArray((duplicate as any).position)) {
             const pos = (duplicate as { position: [number, number, number] }).position
             ;(duplicate as { position: [number, number, number] }).position = [
@@ -501,6 +535,12 @@ export function FloatingActionMenu() {
               pos[1],
               pos[2] + 1,
             ]
+          } else if ('path' in duplicate && Array.isArray((duplicate as any).path)) {
+            // Other polyline kinds (pipe / lineset) carry a `path`, not a
+            // `position`. Create the copy HIDDEN so nothing is auto-placed:
+            // their shared path mover reveals it as a cursor-following
+            // preview on the first mouse move and commits on the next click.
+            ;(duplicate as { visible?: boolean }).visible = false
           }
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
         }
@@ -643,9 +683,86 @@ export function FloatingActionMenu() {
                 />
               </div>
             ) : null}
+            {/* HVAC chrome above the menu — same slot as the wall height
+                pill. System pill (which tree, run length, equipment reach)
+                for every distribution kind; the rotation-axis pill stacks
+                under it for duct fittings. */}
+            {node && hasPorts(node.type) ? (
+              <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2 flex flex-col items-center gap-1">
+                <SystemSummaryPill nodeId={node.id} unit={unit} />
+                {hasAxisCycling(node.type) ? (
+                  <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
+                    <span className="font-medium text-foreground">
+                      Axis {rotationAxis.toUpperCase()}
+                    </span>
+                    <span aria-hidden className="text-muted-foreground">
+                      ·
+                    </span>
+                    <span className="text-muted-foreground">R/T rotate</span>
+                    <span aria-hidden className="text-muted-foreground">
+                      ·
+                    </span>
+                    <span className="text-muted-foreground">⌥ axis</span>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </Html>
       </group>
     </group>
+  )
+}
+
+/**
+ * System summary pill for a selected distribution kind (HVAC duct / DWV
+ * pipe / refrigerant lineset): which supply/return tree it belongs to, its
+ * run length, and whether it actually reaches a piece of equipment.
+ *
+ * Mounted only while an HVAC node is selected, so the full-`nodes`
+ * subscription it needs (connectivity changes when ANY joint moves) doesn't
+ * re-render the always-mounted parent menu on every unrelated scene tick.
+ */
+function SystemSummaryPill({ nodeId, unit }: { nodeId: AnyNodeId; unit: 'metric' | 'imperial' }) {
+  const allNodes = useScene((s) => s.nodes)
+  const summary = useMemo(() => summarizeSystemFor(nodeId, allNodes), [nodeId, allNodes])
+  if (!summary) return null
+  return (
+    <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
+      <span className="font-medium text-foreground">
+        {summary.systems.length > 0
+          ? summary.systems.map((sys) => sys[0]!.toUpperCase() + sys.slice(1)).join(' + ')
+          : 'System'}
+      </span>
+      {summary.runCount > 0 ? (
+        <>
+          <span aria-hidden className="text-muted-foreground">
+            ·
+          </span>
+          <span className="text-muted-foreground">
+            {formatMeasurement(summary.runLengthM, unit)} · {summary.runCount}{' '}
+            {summary.runCount === 1 ? 'run' : 'runs'}
+          </span>
+        </>
+      ) : null}
+      {summary.terminalCount > 0 ? (
+        <>
+          <span aria-hidden className="text-muted-foreground">
+            ·
+          </span>
+          <span className="text-muted-foreground">
+            {summary.terminalCount} {summary.terminalCount === 1 ? 'register' : 'registers'}
+          </span>
+        </>
+      ) : null}
+      {summary.connectedToEquipment ? null : (
+        <>
+          <span aria-hidden className="text-muted-foreground">
+            ·
+          </span>
+          <span className="font-medium text-amber-500">⚠ no equipment</span>
+        </>
+      )}
+    </div>
   )
 }

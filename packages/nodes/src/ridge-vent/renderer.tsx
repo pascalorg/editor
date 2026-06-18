@@ -88,6 +88,7 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
       : segmentStore
     : undefined
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildRidgeVentGeometry(node),
     [node.length, node.width, node.height, node.style, node.endCaps],

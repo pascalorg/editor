@@ -98,7 +98,7 @@ export const RoofTreeNode = memo(function RoofTreeNode({
         expanded={expanded}
         hasChildren={segments.length > 0}
         icon={
-          <Image alt="" className="object-contain" height={14} src="/icons/roof.png" width={14} />
+          <Image alt="" className="object-contain" height={14} src="/icons/roof.webp" width={14} />
         }
         isDropTarget={isValidDropTarget && isDropTarget}
         isHovered={isHovered || isDropTarget}
@@ -230,7 +230,7 @@ function RoofSegmentTreeNode({
             alt=""
             className="object-contain opacity-60"
             height={14}
-            src="/icons/roof.png"
+            src="/icons/roof.webp"
             width={14}
           />
         }

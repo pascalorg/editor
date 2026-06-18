@@ -53,6 +53,7 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
       : undefined,
   )
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildCupolaGeometry(node),
     [node.width, node.depth, node.height, node.roofStyle, node.finial],

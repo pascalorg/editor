@@ -1,10 +1,13 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  computeOpeningGuides,
   type DoorNode,
   type FloorplanGeometry,
+  type FloorplanPoint,
   type GeometryContext,
   isCurvedWall,
+  type OpeningSpan,
   type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
@@ -49,79 +52,84 @@ export function buildOpeningPlacementDimensions(
   // walls) via ctx.resolve to compute the centroid.
   const outwardNormal = computeOutwardNormal(wall, ctx, dirX, dirZ)
 
-  const halfWidth = opening.width / 2
-  const startDist = opening.position[0] - halfWidth
-  const endDist = opening.position[0] + halfWidth
+  const wallThickness = wall.thickness ?? 0.1
+  const halfThickness = wallThickness / 2
+  const FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET = 0.32
 
-  // Walk wall.children to find adjacent openings (door OR window).
-  // ctx.siblings only includes same-kind nodes; doors + windows need
-  // each other so we go via the parent's children directly.
+  // Outer-face projection for the placement dimensions (so extension lines stay
+  // short and the layout matches the legacy treatment); centreline projection
+  // for the equal-spacing badges, which sit on the solid wall between openings.
+  const facePoint = (along: number): readonly [number, number] => [
+    x1 + dirX * along + outwardNormal[0] * halfThickness,
+    z1 + dirZ * along + outwardNormal[1] * halfThickness,
+  ]
+  const centrePoint = (along: number): FloorplanPoint => [x1 + dirX * along, z1 + dirZ * along]
+  const round = (value: number) => Number.parseFloat(value.toFixed(2))
+
+  // This wall's OTHER openings as wall-local spans. `ctx.siblings` only includes
+  // same-kind nodes; doors and windows need each other, so resolve the wall's
+  // children directly.
   const childIds = ((wall as unknown as { children?: AnyNodeId[] }).children ?? []) as AnyNodeId[]
-  let leftBoundary: number | null = null
-  let rightBoundary: number | null = null
+  const siblings: OpeningSpan[] = []
   for (const childId of childIds) {
     if (childId === opening.id) continue
     const sibling = ctx.resolve(childId) as AnyNode | undefined
     if (!sibling || (sibling.type !== 'door' && sibling.type !== 'window')) continue
     const sib = sibling as DoorNode | WindowNode
-    const sibStart = sib.position[0] - sib.width / 2
-    const sibEnd = sib.position[0] + sib.width / 2
-    if (sibEnd <= startDist && (leftBoundary === null || sibEnd > leftBoundary)) {
-      leftBoundary = sibEnd
-    }
-    if (sibStart >= endDist && (rightBoundary === null || sibStart < rightBoundary)) {
-      rightBoundary = sibStart
-    }
+    siblings.push({
+      id: sib.id,
+      centerS: sib.position[0],
+      width: sib.width,
+      centerY: sib.position[1],
+      height: sib.height,
+    })
   }
 
-  const leftFromDist = leftBoundary ?? 0
-  const rightToDist = rightBoundary ?? wallLength
-
-  // Place the dimension line at a constant offset from the wall's
-  // outer face — same value the legacy uses for its placement
-  // measurements (`FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET`). The
-  // dimension's `start` / `end` are points on that outer face (not
-  // the wall centerline), so the extension lines stay short and the
-  // overall layout matches the legacy treatment 1:1.
-  const wallThickness = wall.thickness ?? 0.1
-  const halfThickness = wallThickness / 2
-  const FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET = 0.32
-
-  // Project a point on the wall axis at distance `along` onto the
-  // wall's outer face by adding `halfThickness * outwardNormal`.
-  const facePoint = (along: number): readonly [number, number] => [
-    x1 + dirX * along + outwardNormal[0] * halfThickness,
-    z1 + dirZ * along + outwardNormal[1] * halfThickness,
-  ]
+  const guides = computeOpeningGuides({
+    moving: {
+      id: opening.id,
+      centerS: opening.position[0],
+      width: opening.width,
+      centerY: opening.position[1],
+      height: opening.height,
+    },
+    siblings,
+    wall: { length: wallLength, height: wall.height ?? 2.5 },
+    // The 2D plan is top-down: sill/head height and vertical alignment aren't
+    // representable here — those belong to the 3D viewport.
+    includeVertical: false,
+  })
 
   const out: FloorplanGeometry[] = []
 
-  const leftDistance = startDist - leftFromDist
-  if (leftDistance >= 0.01) {
+  // Edge-to-edge clearance to the nearest neighbour (or wall end) on each side.
+  for (const gap of guides.gaps) {
+    const lo = Math.min(gap.fromS, gap.toS)
+    const hi = Math.max(gap.fromS, gap.toS)
     out.push({
       kind: 'dimension',
-      start: facePoint(leftFromDist),
-      end: facePoint(startDist),
+      start: facePoint(lo),
+      end: facePoint(hi),
       offsetNormal: outwardNormal,
       offsetDistance: FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET,
       extensionOvershoot: 0.12,
-      text: `${Number.parseFloat(leftDistance.toFixed(2))}m`,
+      text: `${round(gap.distance)}m`,
       stroke: '#f97316',
     })
   }
 
-  const rightDistance = rightToDist - endDist
-  if (rightDistance >= 0.01) {
-    out.push({
-      kind: 'dimension',
-      start: facePoint(endDist),
-      end: facePoint(rightToDist),
-      offsetNormal: outwardNormal,
-      offsetDistance: FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET,
-      extensionOvershoot: 0.12,
-      text: `${Number.parseFloat(rightDistance.toFixed(2))}m`,
-      stroke: '#f97316',
-    })
+  // Equal-spacing rhythm — a "=" badge per equal gap, on the wall centreline.
+  if (guides.equalSpacing) {
+    const wallAngle = Math.atan2(dz, dx)
+    const text = `${round(guides.equalSpacing.gap)}m`
+    for (const seg of guides.equalSpacing.segments) {
+      out.push({
+        kind: 'equal-spacing-badge',
+        point: centrePoint((seg.fromS + seg.toS) / 2),
+        text,
+        angle: wallAngle,
+      })
+    }
   }
 
   return out

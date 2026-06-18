@@ -1,12 +1,4 @@
-import {
-  type AnyNodeId,
-  type DoorNode,
-  getScaledDimensions,
-  type ItemNode,
-  useScene,
-  type WallNode,
-  type WindowNode,
-} from '@pascal-app/core'
+import type { WallNode } from '@pascal-app/core'
 
 /**
  * Keep the door handle at the same relative height when the door is resized:
@@ -64,63 +56,7 @@ export function clampToWall(
   return { clampedX, clampedY }
 }
 
-/**
- * Checks if a proposed door position overlaps any existing wall children.
- * Handles item, window, and door types.
- */
-export function hasWallChildOverlap(
-  wallId: string,
-  clampedX: number,
-  clampedY: number,
-  width: number,
-  height: number,
-  ignoreId?: string,
-): boolean {
-  const nodes = useScene.getState().nodes
-  const wallNode = nodes[wallId as AnyNodeId] as WallNode | undefined
-  if (!wallNode) return true
-  const halfW = width / 2
-  const halfH = height / 2
-  const newBottom = clampedY - halfH
-  const newTop = clampedY + halfH
-  const newLeft = clampedX - halfW
-  const newRight = clampedX + halfW
-
-  for (const childId of Array.isArray(wallNode.children) ? wallNode.children : []) {
-    if (childId === ignoreId) continue
-    const child = nodes[childId as AnyNodeId]
-    if (!child) continue
-
-    let childLeft: number, childRight: number, childBottom: number, childTop: number
-
-    if (child.type === 'item') {
-      const item = child as ItemNode
-      if (item.asset.attachTo !== 'wall' && item.asset.attachTo !== 'wall-side') continue
-      const [w, h] = getScaledDimensions(item)
-      childLeft = item.position[0] - w / 2
-      childRight = item.position[0] + w / 2
-      childBottom = item.position[1]
-      childTop = item.position[1] + h
-    } else if (child.type === 'window') {
-      const win = child as WindowNode
-      childLeft = win.position[0] - win.width / 2
-      childRight = win.position[0] + win.width / 2
-      childBottom = win.position[1] - win.height / 2
-      childTop = win.position[1] + win.height / 2
-    } else if (child.type === 'door') {
-      const door = child as DoorNode
-      childLeft = door.position[0] - door.width / 2
-      childRight = door.position[0] + door.width / 2
-      childBottom = door.position[1] - door.height / 2
-      childTop = door.position[1] + door.height / 2
-    } else {
-      continue
-    }
-
-    const xOverlap = newLeft < childRight && newRight > childLeft
-    const yOverlap = newBottom < childTop && newTop > childBottom
-    if (xOverlap && yOverlap) return true
-  }
-
-  return false
-}
+// Wall-child overlap is shared by door + window placement (one source of
+// truth in `shared/wall-attach-target.ts`). Re-exported here so existing
+// `./door-math` importers don't change.
+export { hasWallChildOverlap } from '../shared/wall-attach-target'

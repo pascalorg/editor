@@ -31,6 +31,7 @@ import {
   type SceneMaterialId,
 } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { healSceneNodes } from '../utils/heal-scene-graph'
 import * as nodeActions from './actions/node-actions'
 import { resetSceneHistoryPauseDepth } from './history-control'
 
@@ -542,7 +543,10 @@ function migrateNodes(nodes: Record<string, any>): {
   nodes: Record<string, AnyNode>
   mintedMaterials: Record<SceneMaterialId, SceneMaterial>
 } {
-  const patchedNodes = { ...nodes }
+  // Repair pre-existing corruption (null children, zero-length walls) before
+  // any per-type migration runs, so already-saved scenes load cleanly.
+  const { nodes: healed } = healSceneNodes(nodes)
+  const patchedNodes = { ...healed } as Record<string, any>
   // Scene materials minted while moving legacy wall fields onto `node.slots`;
   // merged into the scene material map by the caller (`setScene`).
   const mintedMaterials: Record<SceneMaterialId, SceneMaterial> = {}

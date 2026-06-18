@@ -101,6 +101,7 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
   // that actually move the jog or the collar bore, so the pipe geometry
   // only rebuilds when one of those changes (not on every override-merge
   // render). Resolves to null when the gutter has no outlet.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const routing = useMemo(
     () =>
       effectiveGutter && effectiveSegment
@@ -117,6 +118,7 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
     ],
   )
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildDownspoutGeometry(node, routing),
     [

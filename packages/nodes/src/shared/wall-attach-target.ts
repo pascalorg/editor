@@ -1,9 +1,12 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  collectLevelWallSegments,
   getScaledDimensions,
   type ItemNode,
-  isCurvedWall,
+  nearestWallSegment,
+  useScene,
+  WALL_SNAP_DISTANCE_M,
   type WallNode,
 } from '@pascal-app/core'
 
@@ -21,8 +24,6 @@ import {
  * Curved walls are excluded — the legacy door / window placement also
  * rejects curved walls (mitering + arc + opening would tear in 3D).
  */
-
-const WALL_SNAP_DISTANCE_M = 1.5
 
 export type WallHit = {
   wall: WallNode
@@ -61,10 +62,14 @@ export function projectWallLocalPointToPlan(
 }
 
 /**
- * Walk every wall under `parentLevelId` and return the closest one to
- * `planPoint`, or `null` if no wall is within `WALL_SNAP_DISTANCE_M`.
- * `excludeWallId` skips a specific wall (e.g. the current parent during
- * a re-parent flow if you want a "must change" guard).
+ * Return the single closest wall under `parentLevelId` to `planPoint` — the
+ * wall whose segment-Voronoi cell the point lies in — or `null` if nothing is
+ * within `WALL_SNAP_DISTANCE_M`. `excludeWallId` skips a specific wall.
+ *
+ * The nearest-segment scan + curved-wall filter live in core
+ * (`collectLevelWallSegments` / `nearestWallSegment`) so the editor's 2D
+ * Voronoi debug overlay classifies points with the exact same math — the
+ * overlay is then a faithful picture of where this snaps.
  */
 export function findClosestWallInPlan(
   planPoint: readonly [number, number],
@@ -72,78 +77,36 @@ export function findClosestWallInPlan(
   parentLevelId: AnyNodeId | null,
   excludeWallId?: AnyNodeId,
 ): WallHit | null {
-  if (!parentLevelId) return null
-  const level = nodes[parentLevelId]
-  const childIds = (level as unknown as { children?: AnyNodeId[] })?.children
-  if (!Array.isArray(childIds)) return null
+  const segments = collectLevelWallSegments(nodes, parentLevelId)
+  const closest = nearestWallSegment(
+    segments,
+    planPoint[0],
+    planPoint[1],
+    WALL_SNAP_DISTANCE_M,
+    excludeWallId,
+  )
+  if (!closest) return null
 
-  let best: WallHit | null = null
+  const { segment, along, perp } = closest
+  // Side determination, calibrated to the 3D wall convention. In wall-local
+  // space the wall extends along +X and its +Z axis is the front-face normal;
+  // `perp >= 0` is consistently the front side (see `closestOnSegment`).
+  const side: 'front' | 'back' = perp >= 0 ? 'front' : 'back'
+  // Wall-local rotation matching 3D `calculateItemRotation`: 0 front, π back.
+  // The node is parented to the wall, so this composes with the wall's own
+  // rotation at render — never a world-space rotation here.
+  const itemRotation = side === 'front' ? 0 : Math.PI
 
-  for (const childId of childIds) {
-    const node = nodes[childId]
-    if (!node || node.type !== 'wall') continue
-    if (childId === excludeWallId) continue
-    const wall = node as WallNode
-    if (isCurvedWall(wall)) continue
-
-    const sx = wall.start[0]
-    const sy = wall.start[1]
-    const dx = wall.end[0] - sx
-    const dy = wall.end[1] - sy
-    const wallLength = Math.hypot(dx, dy)
-    if (wallLength < 1e-6) continue
-
-    const dirX = dx / wallLength
-    const dirY = dy / wallLength
-
-    // Project pointer onto wall axis.
-    const px = planPoint[0] - sx
-    const py = planPoint[1] - sy
-    const along = px * dirX + py * dirY
-    const perpRaw = px * -dirY + py * dirX // signed perpendicular distance
-    const clampedAlong = Math.max(0, Math.min(wallLength, along))
-
-    // Distance from the pointer to the wall segment (not just the line).
-    const closestPointX = sx + dirX * clampedAlong
-    const closestPointY = sy + dirY * clampedAlong
-    const distance = Math.hypot(planPoint[0] - closestPointX, planPoint[1] - closestPointY)
-    if (distance > WALL_SNAP_DISTANCE_M) continue
-    if (best && distance >= Math.abs(best.perpDistance) && best.wall.id !== wall.id) continue
-
-    // Side determination, calibrated to the 3D wall convention. In
-    // wall-local space the wall extends along +X and its +Z axis is the
-    // front-face normal. After `mesh.rotation.y = -wallAngle`:
-    //   - For a wall going `+X` in plan (wallAngle=0): wall-local +Z
-    //     maps to world +Z = plan +Y, so the front face is on plan +Y.
-    //     `perpRaw = py` is positive → front.
-    //   - For a wall going `+Y` in plan (wallAngle=π/2): wall-local +Z
-    //     maps to world -X = plan -X, so the front face is on plan -X.
-    //     `perpRaw = -px` is positive there → front.
-    // So `perpRaw >= 0` is consistently the front side. The earlier
-    // labelling had this flipped, which produced rotations that were
-    // off by 90° on non-horizontal walls.
-    const side: 'front' | 'back' = perpRaw >= 0 ? 'front' : 'back'
-
-    // Rotation in wall-local space — matches 3D `calculateItemRotation`:
-    // 0 when the item faces the front normal (+Z), π for the back. The
-    // node is parented to the wall, so this composes with the wall's
-    // own rotation when rendered. Don't return a world-space rotation
-    // here — the consumer writes this straight into `node.rotation[1]`.
-    const itemRotation = side === 'front' ? 0 : Math.PI
-
-    best = {
-      wall,
-      localX: clampedAlong,
-      perpDistance: perpRaw,
-      side,
-      dirX,
-      dirY,
-      wallLength,
-      itemRotation,
-    }
+  return {
+    wall: segment.wall,
+    localX: along,
+    perpDistance: perp,
+    side,
+    dirX: segment.dirX,
+    dirY: segment.dirY,
+    wallLength: segment.length,
+    itemRotation,
   }
-
-  return best
 }
 
 /** Figma-style along-wall alignment threshold (meters) — parity with the
@@ -224,4 +187,105 @@ export function snapLocalXToNeighbors(args: {
   }
 
   return bestDelta === null ? null : localX + bestDelta
+}
+
+/**
+ * Does a wall-hosted opening of `width × height` centred at `(clampedX,
+ * clampedY)` (wall-local) overlap any OTHER child of `wallId` (door / window /
+ * wall-mounted item)? AABB test in the wall's local face plane. `ignoreId`
+ * excludes the moving node itself. Returns `true` (blocked) if the wall is
+ * gone.
+ *
+ * Single source of truth for door + window placement collision — door-math and
+ * window-math had byte-identical copies of this. Y conventions differ per kind
+ * (items store bottom Y; doors/windows store centre Y), handled inline.
+ */
+export function hasWallChildOverlap(
+  wallId: string,
+  clampedX: number,
+  clampedY: number,
+  width: number,
+  height: number,
+  ignoreId?: string,
+): boolean {
+  const nodes = useScene.getState().nodes
+  const wallNode = nodes[wallId as AnyNodeId] as WallNode | undefined
+  if (!wallNode) return true
+  const halfW = width / 2
+  const halfH = height / 2
+  const newBottom = clampedY - halfH
+  const newTop = clampedY + halfH
+  const newLeft = clampedX - halfW
+  const newRight = clampedX + halfW
+
+  for (const childId of Array.isArray(wallNode.children) ? wallNode.children : []) {
+    if (childId === ignoreId) continue
+    const child = nodes[childId as AnyNodeId]
+    if (!child) continue
+
+    let childLeft: number
+    let childRight: number
+    let childBottom: number
+    let childTop: number
+
+    if (child.type === 'item') {
+      const item = child as ItemNode
+      if (item.asset.attachTo !== 'wall' && item.asset.attachTo !== 'wall-side') continue
+      const [w, h] = getScaledDimensions(item)
+      childLeft = item.position[0] - w / 2
+      childRight = item.position[0] + w / 2
+      childBottom = item.position[1] // items store bottom Y
+      childTop = item.position[1] + h
+    } else if (child.type === 'window') {
+      const win = child as { position: [number, number, number]; width: number; height: number }
+      childLeft = win.position[0] - win.width / 2
+      childRight = win.position[0] + win.width / 2
+      childBottom = win.position[1] - win.height / 2 // windows store centre Y
+      childTop = win.position[1] + win.height / 2
+    } else if (child.type === 'door') {
+      const door = child as { position: [number, number, number]; width: number; height: number }
+      childLeft = door.position[0] - door.width / 2
+      childRight = door.position[0] + door.width / 2
+      childBottom = door.position[1] - door.height / 2 // doors store centre Y
+      childTop = door.position[1] + door.height / 2
+    } else {
+      continue
+    }
+
+    const xOverlap = newLeft < childRight && newRight > childLeft
+    const yOverlap = newBottom < childTop && newTop > childBottom
+    if (xOverlap && yOverlap) return true
+  }
+
+  return false
+}
+
+/** Placement state for a wall-hosted opening — the SINGLE decision the preview
+ *  tint and the commit gate both consume so they can never disagree. */
+export type OpeningPlacement = {
+  /** Geometric overlap with another wall child (independent of modifiers). */
+  collides: boolean
+  /** May the opening be committed here? `true` unless it collides and the user
+   *  isn't force-placing. */
+  placeable: boolean
+  /** Ghost tint: green when placeable, red when not. */
+  tint: 'valid' | 'invalid'
+}
+
+/**
+ * Resolve the placement state from the raw collision result and whether the
+ * user is force-placing (Shift). Force-place lifts the collision block, so the
+ * opening becomes placeable AND the tint goes green — the preview and the
+ * commit gate stay in lockstep because both read this one result.
+ */
+export function resolveOpeningPlacement(args: {
+  collides: boolean
+  forcePlace: boolean
+}): OpeningPlacement {
+  const placeable = !args.collides || args.forcePlace
+  return {
+    collides: args.collides,
+    placeable,
+    tint: placeable ? 'valid' : 'invalid',
+  }
 }

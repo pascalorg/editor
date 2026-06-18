@@ -77,7 +77,7 @@ export const FloorplanCursorIndicatorOverlay = memo(function FloorplanCursorIndi
     }
 
     if (mode === 'material-paint') {
-      return { kind: 'asset', iconSrc: '/icons/paint.png' }
+      return { kind: 'asset', iconSrc: '/icons/paint.webp' }
     }
 
     return null

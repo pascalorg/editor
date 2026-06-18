@@ -6,6 +6,7 @@ import type {
   WallNode,
   WindowNode as WindowNodeType,
 } from '@pascal-app/core'
+import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { buildWindowFloorplan } from './floorplan'
@@ -20,6 +21,9 @@ const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24
 const MIN_WINDOW_HEIGHT = 0.3
 const MIN_WINDOW_WIDTH = 0.3
+// How far the move cross floats off the wall face (+Z, the window's facing
+// normal) so it's grabbable instead of buried in the sash/frame.
+const MOVE_HANDLE_LIFT = 0.12
 
 function readWallLength(w: WindowNodeType, scene: { get: (id: AnyNodeId) => unknown }): number {
   if (!w.wallId) return Number.POSITIVE_INFINITY
@@ -49,6 +53,7 @@ function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeT
       return readWallLength(n, scene)
     },
     currentValue: (n) => n.width,
+    onDrag: (node) => publishOpeningResizeGuides(node, true),
     apply: (initial, newWidth) => {
       const rotY = initial.rotation[1]
       const armX = Math.cos(rotY)
@@ -96,6 +101,7 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
         : Math.max(MIN_WINDOW_HEIGHT, anchored)
     },
     currentValue: (n) => n.height,
+    onDrag: (node) => publishOpeningResizeGuides(node, true),
     apply: (initial, newHeight) => {
       // Anchored edge stays in wall-local Y; opposite edge moves.
       const anchorY =
@@ -115,7 +121,26 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
   }
 }
 
+// Press-drag move grip at the window centre, standing in the wall face. Routes
+// through the same move tool as the floating Move button (3D
+// `affordanceTools.move`, 2D `floorplanMoveTarget`) — slide within the wall
+// plane + re-host onto another wall — committing on release, no second click.
+function windowMoveHandle(): HandleDescriptor<WindowNodeType> {
+  return {
+    kind: 'tap-action',
+    shape: 'move-cross',
+    plane: 'node-normal',
+    portal: 'grandparent',
+    cursor: 'move',
+    onActivate: (node, _scene, editor) => editor.engageMoveDrag(node),
+    placement: {
+      position: () => [0, 0, MOVE_HANDLE_LIFT],
+    },
+  }
+}
+
 const windowHandles: HandleDescriptor<WindowNodeType>[] = [
+  windowMoveHandle(),
   windowWidthHandle('left'),
   windowWidthHandle('right'),
   windowHeightHandle('top'),
@@ -210,7 +235,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   presentation: {
     label: 'Window',
     description: 'A window cut into a wall. Animated open/close for opening windows.',
-    icon: { kind: 'url', src: '/icons/window.png' },
+    icon: { kind: 'url', src: '/icons/window.webp' },
     paletteSection: 'structure',
     paletteOrder: 60,
   },

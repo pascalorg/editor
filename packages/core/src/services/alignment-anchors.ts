@@ -295,8 +295,43 @@ export function nodeAlignmentAnchors(
     const poly = (node as { polygon?: [number, number][] }).polygon
     return poly ? polygonAnchors(node.id, poly) : []
   }
+
+  const anchors: AlignmentAnchor[] = []
+
+  // Box footprint (items, columns, shelves, stairs, …).
   const aabb = alignmentAABB(node, nodes)
-  return aabb ? bboxCornerAnchors(node.id, aabb.minX, aabb.minZ, aabb.maxX, aabb.maxZ) : []
+  if (aabb) {
+    anchors.push(...bboxCornerAnchors(node.id, aabb.minX, aabb.minZ, aabb.maxX, aabb.maxZ))
+  }
+
+  // Polyline kinds (duct / pipe / lineset): every path vertex is an anchor,
+  // so anything dragged snaps to a run's ends and bends.
+  const path = (node as { path?: unknown }).path
+  if (Array.isArray(path)) {
+    for (const p of path as Array<[number, number, number]>) {
+      anchors.push({ nodeId: node.id, kind: 'corner', x: p[0], z: p[2] })
+    }
+  }
+
+  // Typed ports (fittings, equipment, terminals, run ends): connection points
+  // are natural alignment targets — line a new run up with an existing collar.
+  const ports = nodeRegistry.get(node.type)?.ports?.(node)
+  if (ports) {
+    for (const port of ports) {
+      anchors.push({ nodeId: node.id, kind: 'corner', x: port.position[0], z: port.position[2] })
+    }
+  }
+
+  // Position-based kinds with no footprint (e.g. duct fittings): the origin
+  // itself is a useful centre anchor.
+  if (!aabb) {
+    const position = (node as { position?: [number, number, number] }).position
+    if (Array.isArray(position)) {
+      anchors.push({ nodeId: node.id, kind: 'center', x: position[0], z: position[2] })
+    }
+  }
+
+  return anchors
 }
 
 /**

@@ -43,7 +43,7 @@ export const FenceTreeNode = memo(function FenceTreeNode({
       expanded={false}
       hasChildren={false}
       icon={
-        <Image alt="" className="object-contain" height={14} src="/icons/fence.png" width={14} />
+        <Image alt="" className="object-contain" height={14} src="/icons/fence.webp" width={14} />
       }
       isHovered={isHovered}
       isLast={isLast}

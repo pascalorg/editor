@@ -16,6 +16,9 @@ export const ZoneSystem = () => {
     const selectedLevelId = useViewer.getState().selection.levelId
     const selectedZoneId = useViewer.getState().selection.zoneId
     const hoveredId = useViewer.getState().hoveredId
+    // Snapshot capture is a clean, camera-only surface — never show zone
+    // geometry or the HTML zone tags in the framed shot.
+    const isCaptureMode = useEditor.getState().isCaptureMode
 
     const zoneGeometryVisible = structureLayer === 'zones'
     const zones = sceneRegistry.byType.zone || new Set()
@@ -35,8 +38,14 @@ export const ZoneSystem = () => {
       // Keep group visible (so <Html> labels stay active), hide/show meshes only.
       // Show meshes when: in zone mode, selected, or delete-hovered.
       if (!obj.visible) obj.visible = true
-      const meshVisible = zoneGeometryVisible || isSelected || isDeleteHovered
-      const targetOpacity = isSelected || isDeleteHovered ? 1 : zoneGeometryVisible ? 1 : 0
+      const meshVisible = !isCaptureMode && (zoneGeometryVisible || isSelected || isDeleteHovered)
+      const targetOpacity = isCaptureMode
+        ? 0
+        : isSelected || isDeleteHovered
+          ? 1
+          : zoneGeometryVisible
+            ? 1
+            : 0
 
       const walls = (obj as Group).getObjectByName('walls') as Mesh | undefined
       if (walls) {
@@ -73,8 +82,9 @@ export const ZoneSystem = () => {
         obj.userData.__raycastDisabled = true
       }
 
-      // Labels: always visible on the current level (regardless of mode)
-      const showLabel = !!selectedLevelId && isOnSelectedLevel
+      // Labels: visible on the current level (regardless of mode), but never
+      // during snapshot capture.
+      const showLabel = !isCaptureMode && !!selectedLevelId && isOnSelectedLevel
       const labelOpacity = showLabel ? '1' : '0'
       const labelEl = document.getElementById(`${zoneId}-label`)
       if (labelEl && labelEl.style.opacity !== labelOpacity) {

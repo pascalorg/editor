@@ -70,12 +70,16 @@ export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
 
   const position = liveTransform?.position ?? overridePosition ?? n.position ?? [0, 0, 0]
   const rawRotation = overrideRotation ?? n.rotation
+  const baseRotation: [number, number, number] =
+    typeof rawRotation === 'number' ? [0, rawRotation, 0] : (rawRotation ?? [0, 0, 0])
+  // The live transform carries only the plan-view Y rotation; keep the
+  // node's own X/Z so 3D-oriented kinds (e.g. a duct-fitting riser at
+  // X=π/2) don't visually flatten to horizontal mid-drag. Matches the
+  // move tool's commit, which also replaces only the Y component.
   const rotation: [number, number, number] =
     liveTransform?.rotation !== undefined
-      ? [0, liveTransform.rotation, 0]
-      : typeof rawRotation === 'number'
-        ? [0, rawRotation, 0]
-        : (rawRotation ?? [0, 0, 0])
+      ? [baseRotation[0], liveTransform.rotation, baseRotation[2]]
+      : baseRotation
 
   return (
     <group

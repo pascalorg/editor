@@ -85,7 +85,7 @@ export const CeilingTreeNode = memo(function CeilingTreeNode({
       expanded={expanded}
       hasChildren={children.length > 0}
       icon={
-        <Image alt="" className="object-contain" height={14} src="/icons/ceiling.png" width={14} />
+        <Image alt="" className="object-contain" height={14} src="/icons/ceiling.webp" width={14} />
       }
       isHovered={isHovered}
       isLast={isLast}

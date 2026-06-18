@@ -52,6 +52,7 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
   //   slot 1 → 'wall'  (deck top & shingle eave bands)
   //   slot 2 → 'wall'  (interior)
   //   slot 3 → 'top'   (shingle / roof surface)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const customMaterial = useMemo(() => {
     const resolveSlot = (role: RoofSegmentSurfaceMaterialRole): THREE.Material | null => {
       const parentSpec = parentNode ? getEffectiveRoofSurfaceMaterial(parentNode, role) : undefined

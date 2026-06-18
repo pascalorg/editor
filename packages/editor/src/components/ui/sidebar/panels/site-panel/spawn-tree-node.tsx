@@ -54,7 +54,7 @@ export const SpawnTreeNode = memo(function SpawnTreeNode({
           alt=""
           className="object-contain"
           height={14}
-          src="/icons/spawn-point.png"
+          src="/icons/spawn-point.webp"
           width={14}
         />
       }

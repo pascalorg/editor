@@ -127,11 +127,11 @@ const BoxVentTool = () => {
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
+        ghost={<BoxVentPreview node={previewNode} invalid />}
         onInvalidTarget={() => {
           setPreviewPos(null)
           setPreviewSurfaceQuat(null)
         }}
-        size={[0.6, 0.4, 0.6]}
       />
       {activeBuildingId && previewPos && previewSurfaceQuat && (
         <group position={previewPos}>

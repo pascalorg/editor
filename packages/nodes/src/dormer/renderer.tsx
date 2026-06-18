@@ -59,6 +59,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   // shingle, 4=Gable wall. Walls take the 'wall' role, the deck side and
   // shingle take 'roof'. When textures are off, every slot snaps to its
   // role colour regardless of explicit paint (the render-modes invariant).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const material = useMemo(() => {
     const wallRole = () => createSurfaceRoleMaterial('wall', colorPreset, undefined, sceneTheme)
     const roofRole = () => createSurfaceRoleMaterial('roof', colorPreset, undefined, sceneTheme)
@@ -111,6 +112,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     [colorPreset, sceneTheme],
   )
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(() => {
     if (!segment) return null
     if (isLiveDrag) return buildDormerFallbackGeometry(node)

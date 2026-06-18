@@ -119,11 +119,11 @@ const CupolaTool = () => {
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
+        ghost={<CupolaPreview node={previewNode} invalid />}
         onInvalidTarget={() => {
           setPreviewPos(null)
           setPreviewSurfaceQuat(null)
         }}
-        size={[0.8, 1.2, 0.8]}
       />
       {activeBuildingId && previewPos && previewSurfaceQuat && (
         <group position={previewPos}>

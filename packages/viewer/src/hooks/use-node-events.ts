@@ -36,52 +36,60 @@ export function useNodeEvents<K extends AnyNodeType>(node: NodeByKind<K>, type: 
     emitter.emit(eventKey, payload as never)
   }
 
-  // Suppress node pointer events while an interaction drag is in
-  // progress. `cameraDragging` covers orbit/pan/dolly; `inputDragging`
-  // covers host-driven drags (editor handle arrows etc.). Without
-  // this, the synthesized click on pointerup would reroute selection
-  // to whatever mesh the cursor lands on at release.
-  const isInteractionActive = () => {
+  // Camera drags (orbit / pan / dolly) suppress ALL node pointer events.
+  //
+  // `inputDragging` (host-driven drags: handle arrows, press-drag moves)
+  // additionally suppresses the SELECTION events — without it the click
+  // synthesized on pointer-release would reroute selection to whatever mesh
+  // sits under the cursor at release. It must NOT suppress the SPATIAL events
+  // (`enter` / `move` / `leave`): a surface-following move tool — a door /
+  // window sliding along a wall — runs WITH `inputDragging` set and depends on
+  // those events to track the cursor. Consumers that should ignore drag-time
+  // spatial events gate on `inputDragging` themselves (the editor's hover and
+  // paint paths, box-select), so emitting them during a drag only reaches the
+  // active move tool that wants them.
+  const spatialSuppressed = () => useViewer.getState().cameraDragging
+  const selectionSuppressed = () => {
     const s = useViewer.getState()
     return s.cameraDragging || s.inputDragging
   }
 
   return {
     onPointerDown: (e: ThreeEvent<PointerEvent>) => {
-      if (isInteractionActive()) return
+      if (selectionSuppressed()) return
       if (e.button !== 0) return
       emit('pointerdown', e)
     },
     onPointerUp: (e: ThreeEvent<PointerEvent>) => {
-      if (isInteractionActive()) return
+      if (selectionSuppressed()) return
       if (e.button !== 0) return
       emit('pointerup', e)
       // Synthesize a click event on pointer up to be more forgiving than R3F's default onClick
       // which often fails if the mouse moves even 1 pixel.
       emit('click', e)
     },
-    onClick: (e: ThreeEvent<PointerEvent>) => {
+    onClick: (_e: ThreeEvent<PointerEvent>) => {
       // Disable default R3F click since we synthesize it on pointerup
       // This prevents double-clicks from firing twice.
     },
     onPointerEnter: (e: ThreeEvent<PointerEvent>) => {
-      if (isInteractionActive()) return
+      if (spatialSuppressed()) return
       emit('enter', e)
     },
     onPointerLeave: (e: ThreeEvent<PointerEvent>) => {
-      if (isInteractionActive()) return
+      if (spatialSuppressed()) return
       emit('leave', e)
     },
     onPointerMove: (e: ThreeEvent<PointerEvent>) => {
-      if (isInteractionActive()) return
+      if (spatialSuppressed()) return
       emit('move', e)
     },
     onDoubleClick: (e: ThreeEvent<PointerEvent>) => {
-      if (isInteractionActive()) return
+      if (selectionSuppressed()) return
       emit('double-click', e)
     },
     onContextMenu: (e: ThreeEvent<PointerEvent>) => {
-      if (isInteractionActive()) return
+      if (selectionSuppressed()) return
       emit('context-menu', e)
     },
   }

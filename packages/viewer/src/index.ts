@@ -92,7 +92,7 @@ export {
   createColumnTorusGeometry,
 } from './systems/column/column-geometry'
 export { DoorAnimationSystem } from './systems/door/door-animation-system'
-export { DoorSystem } from './systems/door/door-system'
+export { buildDoorPreviewMesh, DoorSystem } from './systems/door/door-system'
 export { ElevatorInteractionSystem } from './systems/elevator/elevator-interaction-system'
 // Fence system follows the wall re-export pattern — composed into the
 // registry-driven fence definition's `def.system`. Removed in Phase 6
@@ -158,5 +158,5 @@ export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 // removed in Phase 6 when the legacy mount points are deleted.
 export { WallSystem } from './systems/wall/wall-system'
 export { WindowAnimationSystem } from './systems/window/window-animation-system'
-export { WindowSystem } from './systems/window/window-system'
+export { buildWindowPreviewMesh, WindowSystem } from './systems/window/window-system'
 export { ZoneSystem } from './systems/zone/zone-system'

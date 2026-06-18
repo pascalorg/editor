@@ -4,6 +4,7 @@ import {
   createSceneApi,
   DEFAULT_ANGLE_STEP,
   type HandleDescriptor,
+  hasRegistry3DMoveTool,
   nodeRegistry,
   type SceneApi,
   useScene,
@@ -34,7 +35,10 @@ export function canDirectRotateNode(node: AnyNode): boolean {
 }
 
 export function canDirectMoveNode(node: AnyNode): boolean {
-  return nodeRegistry.get(node.type)?.capabilities?.movable !== undefined
+  // 3D direct move (Ctrl/Meta-drag, the move-cross grip) needs a move tool that
+  // mounts in 3D — distinct from `isRegistryMovable`, which also accepts
+  // floorplan-only movers (zone) for the 2D plan.
+  return hasRegistry3DMoveTool(node.type)
 }
 
 export function snapDirectRotationDelta(delta: number, free: boolean): number {

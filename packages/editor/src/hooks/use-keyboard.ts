@@ -30,6 +30,16 @@ export const useKeyboard = ({
       return
     }
 
+    // True while a door/window is being placed: either a fresh clone is moving
+    // (preset / duplicate path) or a door/window build tool is armed. The
+    // placement tool owns R/T then (flip the draft before commit), so the
+    // global selection-based R/T handler must stand down to avoid double-firing.
+    const isPlacingOpening = () => {
+      const ed = useEditor.getState()
+      if (ed.movingNode?.type === 'door' || ed.movingNode?.type === 'window') return true
+      return ed.mode === 'build' && (ed.tool === 'door' || ed.tool === 'window')
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't handle shortcuts if user is typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -171,11 +181,16 @@ export const useKeyboard = ({
             }
           }
         }
-      } else if ((e.key === 'r' || e.key === 'R') && !isVersionPreviewMode) {
+      } else if ((e.key === 'r' || e.key === 'R') && !isVersionPreviewMode && !isPlacingOpening()) {
         // Rotate selected node clockwise if it supports rotation (items, roofs, etc.)
         // Doors use R to flip side (front ↔ back, rotation += π); their
         // open/close toggle lives on E. Windows still use R to toggle
         // their open/closed state.
+        //
+        // Skipped entirely while a door/window placement is active
+        // (`isPlacingOpening`): the placement tool owns R then (flip the draft
+        // before commit), and the user can have a node selected at the same
+        // time — without this guard both would fire (double flip + sfx).
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
           const node = useScene.getState().nodes[selectedNodeIds[0]!]
@@ -225,7 +240,7 @@ export const useKeyboard = ({
             sfxEmitter.emit('sfx:item-rotate')
           }
         }
-      } else if ((e.key === 't' || e.key === 'T') && !isVersionPreviewMode) {
+      } else if ((e.key === 't' || e.key === 'T') && !isVersionPreviewMode && !isPlacingOpening()) {
         // Rotate selected node counter-clockwise
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {

@@ -322,7 +322,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   presentation: {
     label: 'Item',
     description: 'A catalog-backed item (furniture, fixtures, decorations).',
-    icon: { kind: 'url', src: '/icons/item.png' },
+    icon: { kind: 'url', src: '/icons/item.webp' },
     paletteSection: 'furnish',
     paletteOrder: 10,
   },

@@ -49,7 +49,7 @@ export const ElevatorTreeNode = memo(function ElevatorTreeNode({
       expanded={false}
       hasChildren={false}
       icon={
-        <Image alt="" className="object-contain" height={14} src="/icons/elevator.png" width={14} />
+        <Image alt="" className="object-contain" height={14} src="/icons/elevator.webp" width={14} />
       }
       isHovered={isHovered}
       isLast={isLast}

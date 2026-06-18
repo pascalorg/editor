@@ -117,6 +117,7 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
   // the FULL host segment (the alignment needs wallHeight / overhang /
   // pitch / roofType to derive each eave Y), which is a superset of what
   // the mitre detector reads — so one list feeds both.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const { mitres, sharedEaveY } = useMemo(() => {
     if (!effectiveSegment) return { mitres: NO_MITRES, sharedEaveY: undefined }
     const segById = new Map<string, RoofSegmentNode>()
@@ -158,6 +159,7 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
     mitreNodes,
   ])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildGutterGeometry(node, mitres),
     [

@@ -94,6 +94,14 @@ export {
   wallTouchesOthers,
 } from './lib/space-detection'
 export {
+  closestOnSegment,
+  collectLevelWallSegments,
+  nearestWallSegment,
+  WALL_SNAP_DISTANCE_M,
+  type WallSegment,
+  type WallSegmentClosest,
+} from './lib/wall-distance'
+export {
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
   getMaterialPresetByRef,

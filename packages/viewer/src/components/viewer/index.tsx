@@ -8,7 +8,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import { hasDrawableGeometry } from '../../lib/drawable-geometry'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
@@ -275,6 +275,7 @@ interface ViewerProps {
   perf?: boolean
   useBvh?: boolean
   renderContext?: RenderContext
+  transparent?: boolean
   defaultRender?: {
     shading?: RenderShading
     textures?: boolean
@@ -318,6 +319,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     perf = false,
     useBvh = true,
     renderContext = 'editor',
+    transparent,
     defaultRender,
     isolate,
     sceneReadyKey,
@@ -348,6 +350,16 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   }, [isolate])
 
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  const transparentBackground = useViewer((state) => state.transparentBackground)
+  useLayoutEffect(() => {
+    if (transparent === undefined) return
+
+    useViewer.getState().setTransparentBackground(transparent)
+    return () => {
+      useViewer.getState().setTransparentBackground(false)
+    }
+  }, [transparent])
+
   const defaultShading = defaultRender?.shading
   const defaultTextures = defaultRender?.textures
   const defaultColorPreset = defaultRender?.colorPreset
@@ -392,7 +404,9 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   return (
     <Canvas
       camera={{ position: [50, 50, 50], fov: 50 }}
-      className={`transition-colors duration-700 ${isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
+      className={`transition-colors duration-700 ${
+        transparentBackground ? 'bg-transparent' : isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'
+      }`}
       dpr={[1, maxDpr]}
       frameloop="never"
       gl={
@@ -402,7 +416,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           if (cached) return cached
           const promise = (async () => {
             try {
-              const renderer = new THREE.WebGPURenderer(props as any)
+              const renderer = new THREE.WebGPURenderer({ ...(props as any), alpha: true })
               renderer.toneMapping = THREE.ACESFilmicToneMapping
               renderer.toneMappingExposure = getSceneTheme(
                 useViewer.getState().sceneTheme,

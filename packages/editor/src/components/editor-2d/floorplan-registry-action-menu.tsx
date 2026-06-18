@@ -48,6 +48,13 @@ export function FloorplanRegistryActionMenu() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
   const movingNode = useEditor((s) => s.movingNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  // Gate on floorplan hover so this 2D menu never coexists with the 3D
+  // FloatingActionMenu in split view — that menu hides while the floorplan
+  // is hovered, so this one must only show then. Mirrors the legacy
+  // FloorplanActionMenuLayer guard. Without it a registry kind (e.g. a
+  // duct) shows two Duplicate buttons whenever the pointer is outside the
+  // 2D panel.
+  const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
 
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
 
@@ -56,7 +63,7 @@ export function FloorplanRegistryActionMenu() {
   const selectedKind = useScene((s) => (selectedId ? (s.nodes[selectedId]?.type ?? null) : null))
   const def = selectedKind ? nodeRegistry.get(selectedKind) : null
   const isRegistryKind = !!def
-  const isVisible = isRegistryKind && !movingNode
+  const isVisible = isRegistryKind && !movingNode && isFloorplanHovered
   const isWall = selectedKind === 'wall'
 
   useEffect(() => {
@@ -191,6 +198,11 @@ export function FloorplanRegistryActionMenu() {
       cloned.metadata && typeof cloned.metadata === 'object' && !Array.isArray(cloned.metadata)
         ? (cloned.metadata as Record<string, unknown>)
         : {}
+    // Mark fresh + hand to the placement cursor so the copy follows the
+    // pointer and only lands on the next click — same gesture for every
+    // kind. Polyline runs (duct / pipe / lineset) ride the same path:
+    // `FloorplanRegistryMoveOverlay` translates their whole `path`, so they
+    // no longer need the old "offset + drop already-placed" special case.
     cloned.metadata = { ...prevMeta, isNew: true }
     const parsed = def.schema.parse(cloned) as AnyNode
     useScene.getState().createNode(parsed, node.parentId as AnyNodeId)

@@ -122,11 +122,11 @@ const TurbineVentTool = () => {
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
+        ghost={<TurbineVentPreview node={previewNode} invalid />}
         onInvalidTarget={() => {
           setPreviewPos(null)
           setPreviewSurfaceQuat(null)
         }}
-        size={[0.5, 0.8, 0.5]}
       />
       {activeBuildingId && previewPos && previewSurfaceQuat && (
         <group position={previewPos}>
