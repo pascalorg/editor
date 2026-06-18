@@ -231,7 +231,7 @@ export function BuildTab() {
       <TooltipProvider delayDuration={0} disableHoverableContent>
         <div
           className="grid gap-1.5"
-          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))' }}
         >
           {BUILD_TYPES.map((type) => {
             const active = isTypeActive(type)
@@ -240,7 +240,7 @@ export function BuildTab() {
                 <TooltipTrigger asChild>
                   <button
                     className={cn(
-                      'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
+                      'group relative flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 transition-all duration-200',
                       active
                         ? 'bg-primary/10 ring-1 ring-primary/50'
                         : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
@@ -254,11 +254,14 @@ export function BuildTab() {
                   >
                     <Image
                       alt={type.label}
-                      className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                      className="size-10 object-contain transition-transform duration-200 group-hover:scale-110"
                       height={48}
                       src={type.iconSrc}
                       width={48}
                     />
+                    <span className="w-full truncate text-center font-medium text-[11px] leading-tight text-muted-foreground group-hover:text-foreground">
+                      {type.label}
+                    </span>
                   </button>
                 </TooltipTrigger>
                 <TooltipContent className="pointer-events-none" side="top">
@@ -280,7 +283,7 @@ export function BuildTab() {
           <TooltipProvider delayDuration={0} disableHoverableContent>
             <div
               className="grid gap-1.5"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))' }}
             >
               {roofFeatures.map((feature) => {
                 const active = mode === 'build' && activeTool === feature.kind
@@ -289,7 +292,7 @@ export function BuildTab() {
                     <TooltipTrigger asChild>
                       <button
                         className={cn(
-                          'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
+                          'group relative flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 transition-all duration-200',
                           active
                             ? 'bg-primary/10 ring-1 ring-primary/50'
                             : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
@@ -303,11 +306,14 @@ export function BuildTab() {
                       >
                         <Image
                           alt={feature.label}
-                          className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                          className="size-10 object-contain transition-transform duration-200 group-hover:scale-110"
                           height={48}
                           src={feature.iconSrc}
                           width={48}
                         />
+                        <span className="w-full truncate text-center font-medium text-[11px] leading-tight text-muted-foreground group-hover:text-foreground">
+                          {feature.label}
+                        </span>
                       </button>
                     </TooltipTrigger>
                     <TooltipContent className="pointer-events-none" side="top">
@@ -325,7 +331,7 @@ export function BuildTab() {
           <TooltipProvider delayDuration={0} disableHoverableContent>
             <div
               className="grid gap-1.5 px-0.5"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))' }}
             >
               {MEP_ITEMS.map((item) => {
                 const active = isMepItemActive(item)
@@ -334,7 +340,7 @@ export function BuildTab() {
                     <TooltipTrigger asChild>
                       <button
                         className={cn(
-                          'group relative flex aspect-square items-center justify-center rounded-xl transition-all duration-200',
+                          'group relative flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 transition-all duration-200',
                           active
                             ? 'bg-primary/10 ring-1 ring-primary/50'
                             : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
@@ -348,11 +354,14 @@ export function BuildTab() {
                       >
                         <Image
                           alt={item.label}
-                          className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                          className="size-10 object-contain transition-transform duration-200 group-hover:scale-110"
                           height={48}
                           src={item.iconSrc}
                           width={48}
                         />
+                        <span className="w-full truncate text-center font-medium text-[11px] leading-tight text-muted-foreground group-hover:text-foreground">
+                          {item.label}
+                        </span>
                       </button>
                     </TooltipTrigger>
                     <TooltipContent className="pointer-events-none" side="top">
