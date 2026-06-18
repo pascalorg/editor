@@ -53,7 +53,7 @@ export const DoorTreeNode = memo(function DoorTreeNode({
       expanded={false}
       hasChildren={false}
       icon={
-        <Image alt="" className="object-contain" height={14} src="/icons/door.png" width={14} />
+        <Image alt="" className="object-contain" height={14} src="/icons/door.webp" width={14} />
       }
       isHovered={isHovered}
       isLast={isLast}

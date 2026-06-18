@@ -4,7 +4,7 @@ import {
   materialFromColor,
   type UserGeometryConstraints,
 } from './assembly-constraints'
-import { composeAssemblyFromConfig, getAssemblyTemplate } from './assembly-template-compose'
+import { getFamilyDefinition, normalizeFamilyId } from './family-registry'
 import {
   composePartPrimitives,
   type PartComposeInput,
@@ -84,73 +84,7 @@ function stringValue(...values: unknown[]): string | undefined {
 }
 
 function normalizeAssemblyFamily(value: unknown): AssemblyObjectFamily | undefined {
-  if (typeof value !== 'string') return undefined
-  const normalized = value
-    .trim()
-    .replace(/[\s_-]+/g, '_')
-    .toLowerCase()
-  if (
-    normalized === 'robot_arm' ||
-    normalized === 'robotarm' ||
-    normalized === 'industrial_robot' ||
-    normalized === 'industrialrobot' ||
-    normalized === 'manipulator'
-  ) {
-    return 'robot_arm'
-  }
-  if (normalized === 'outdoor_ac' || normalized === 'outdoorac') return 'outdoor_ac'
-  if (
-    normalized === 'machine_tool' ||
-    normalized === 'machinetool' ||
-    normalized === 'cnc' ||
-    normalized === 'cnc_machine' ||
-    normalized === 'cnc_mill' ||
-    normalized === 'machining_center' ||
-    normalized === 'lathe' ||
-    normalized === 'milling_machine' ||
-    normalized === 'grinder' ||
-    normalized === 'grinding_machine' ||
-    normalized === 'planer' ||
-    normalized === 'drill_press' ||
-    normalized === 'drilling_machine'
-  ) {
-    return 'machine_tool'
-  }
-  if (
-    normalized === 'distillation_tower' ||
-    normalized === 'distillation_column' ||
-    normalized === 'chemical_tower' ||
-    normalized === 'fractionator' ||
-    normalized === 'rectification_tower'
-  ) {
-    return 'distillation_tower'
-  }
-  if (
-    normalized === 'reactor' ||
-    normalized === 'reaction_kettle' ||
-    normalized === 'reaction_vessel' ||
-    normalized === 'stirred_tank'
-  ) {
-    return 'reactor'
-  }
-  if (normalized === 'compressor' || normalized === 'air_compressor') return 'compressor'
-  if (normalized === 'grate_cooler' || normalized === 'clinker_cooler') return 'grate_cooler'
-  if (
-    normalized === 'vehicle' ||
-    normalized === 'fan' ||
-    normalized === 'pump' ||
-    normalized === 'conveyor' ||
-    normalized === 'tank' ||
-    normalized === 'distillation_tower' ||
-    normalized === 'reactor' ||
-    normalized === 'compressor' ||
-    normalized === 'grate_cooler' ||
-    normalized === 'valve' ||
-    normalized === 'electrical'
-  ) {
-    return normalized
-  }
-  return undefined
+  return normalizeFamilyId(value)
 }
 
 function familyFor(
@@ -195,6 +129,46 @@ function partInput(
   }
 }
 
+function dimensionedRegistryPart(
+  part: PartComposePartInput,
+  index: number,
+  constraints: UserGeometryConstraints,
+  fallback: { length?: number; width?: number; height?: number },
+): PartComposePartInput {
+  if (index !== 0) return part
+  return {
+    ...part,
+    length: part.length ?? constraints.length?.value ?? fallback.length,
+    width: part.width ?? constraints.width?.value ?? fallback.width,
+    height: part.height ?? constraints.height?.value ?? fallback.height,
+  }
+}
+
+function composeRegistryFamilyAssembly(
+  input: AssemblyComposeInput,
+  constraints: UserGeometryConstraints,
+  family: AssemblyObjectFamily,
+): PrimitiveShapeInput[] {
+  const definition = getFamilyDefinition(family)
+  if (!definition) return []
+  const kinds = Array.from(new Set([...definition.requiredParts, ...definition.optionalParts]))
+  if (kinds.length === 0) return []
+  const parts = kinds.map((kind, index) =>
+    dimensionedRegistryPart(
+      { kind, ...(index === 0 ? { semanticRole: definition.primarySemanticRoles[0] } : {}) },
+      index,
+      constraints,
+      definition.defaultDimensions,
+    ),
+  )
+  return composePartPrimitives({
+    ...partInput(input, constraints, parts),
+    family: definition.id,
+    registryPartPlan: true,
+    autoComplete: false,
+  })
+}
+
 function styleText(input: AssemblyComposeInput, constraints: UserGeometryConstraints) {
   return `${input.style ?? ''} ${constraints.style ?? ''} ${input.prompt ?? ''}`.toLowerCase()
 }
@@ -233,35 +207,322 @@ function composeVehicleAssembly(input: AssemblyComposeInput, constraints: UserGe
     numberValue(input.height, input.params?.height) ??
     Number((length * (style === 'sports' ? 0.26 : style === 'suv' ? 0.38 : 0.32)).toFixed(3))
   const color = colorValue(input, constraints, '#64748b')
-  const template = getAssemblyTemplate('vehicle')
-  if (template) {
-    return composeAssemblyFromConfig(template, input, constraints, {
-      primaryColor: color,
-      sizeScale: sizeScale(input),
-    })
-  }
-  return composePartPrimitives(
-    partInput(input, constraints, [
-      {
-        kind: 'body_shell',
-        semanticRole: 'vehicle_body',
-        vehicleStyle: style,
-        length,
-        width,
-        height,
-        primaryColor: color,
-        cornerRadius: Math.min(length, width, height) * 0.08,
-        cornerSegments: 8,
-        cabinTopScale: style === 'sports' ? 0.7 : 0.84,
-      },
-      { kind: 'wheel_set', count: 4, semanticRole: 'vehicle_tire' },
-      { kind: 'window_strip', semanticRole: 'vehicle_window', variant: 'vehicle_glasshouse' },
-      { kind: 'light_pair', semanticRole: 'headlight' },
-      { kind: 'bar_pair' },
-      { kind: 'seam_ring' },
-      { kind: 'nameplate' },
-    ]),
-  )
+  return compactVehicleAssemblyShapes(input, style, length, width, height, color)
+}
+
+function compactVehicleAssemblyShapes(
+  input: AssemblyComposeInput,
+  style: string,
+  length: number,
+  width: number,
+  height: number,
+  color: string,
+): PrimitiveShapeInput[] {
+  const name = assemblyName(input, 'vehicle')
+  const bodyMat = materialFromColor(color)
+  const glassMat = materialFromColor('#60a5fa')
+  const darkMat = materialFromColor('#111827')
+  const lightMat = materialFromColor('#fde68a')
+  const tailLightMat = materialFromColor('#ef4444')
+  const hubMat = materialFromColor('#cbd5e1')
+  const bodyHeight = height * (style === 'truck' ? 0.42 : 0.38)
+  const cabinHeight = height * (style === 'sports' ? 0.34 : 0.4)
+  const wheelRadius = Math.max(0.16, Math.min(length * 0.085, height * 0.23))
+  const wheelY = wheelRadius
+  const bodyY = wheelY + bodyHeight * 0.58
+  const deckY = bodyY + bodyHeight * 0.52
+  const cabinLength = length * (style === 'truck' ? 0.32 : style === 'sports' ? 0.34 : 0.36)
+  const cabinWidth = width * 0.66
+  const cabinX = style === 'truck' ? length * 0.11 : -length * 0.03
+  const cabinY = deckY + cabinHeight * 0.38
+  const axleX = length * 0.34
+  const wheelZ = width * 0.5
+  const bumperY = wheelY + bodyHeight * 0.16
+  const seamY = deckY + bodyHeight * 0.07
+
+  return [
+    {
+      kind: 'trapezoid-prism',
+      name: `${name} vehicle body shell`,
+      semanticRole: 'vehicle_body',
+      sourcePartKind: 'body_shell',
+      position: [0, bodyY, 0],
+      length,
+      width,
+      height: bodyHeight,
+      topLengthScale: style === 'van' ? 0.98 : 0.94,
+      topWidthScale: style === 'truck' || style === 'suv' ? 0.93 : 0.88,
+      cornerRadius: Math.min(length, width, bodyHeight) * 0.08,
+      cornerSegments: 5,
+      material: bodyMat,
+    },
+    {
+      kind: 'wedge',
+      name: `${name} vehicle front deck hood`,
+      semanticRole: 'vehicle_deck',
+      sourcePartKind: 'body_shell',
+      position: [length * 0.24, deckY, 0],
+      length: length * 0.32,
+      width: width * 0.78,
+      height: bodyHeight * 0.08,
+      slopeAxis: 'x',
+      slopeDirection: 'negative',
+      material: bodyMat,
+    },
+    {
+      kind: 'wedge',
+      name: `${name} vehicle rear deck trunk`,
+      semanticRole: 'vehicle_deck',
+      sourcePartKind: 'body_shell',
+      position: [-length * 0.32, deckY - bodyHeight * 0.03, 0],
+      length: length * 0.24,
+      width: width * 0.78,
+      height: bodyHeight * 0.075,
+      slopeAxis: 'x',
+      slopeDirection: 'positive',
+      material: bodyMat,
+    },
+    {
+      kind: 'trapezoid-prism',
+      name: `${name} vehicle cabin frame`,
+      semanticRole: 'vehicle_cabin',
+      sourcePartKind: 'body_shell',
+      position: [cabinX, cabinY, 0],
+      length: cabinLength,
+      width: cabinWidth,
+      height: cabinHeight,
+      topLengthScale: style === 'sports' ? 0.58 : 0.68,
+      topWidthScale: 0.72,
+      cornerRadius: Math.min(width, cabinHeight) * 0.04,
+      cornerSegments: 4,
+      material: bodyMat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${name} windshield`,
+      semanticRole: 'vehicle_window',
+      sourcePartKind: 'window_strip',
+      position: [cabinX + cabinLength * 0.33, cabinY + cabinHeight * 0.02, 0],
+      rotation: [0, Math.PI / 2, 0],
+      length: cabinWidth * 0.62,
+      width: cabinHeight * 0.44,
+      thickness: 0.018,
+      cornerRadius: cabinHeight * 0.05,
+      material: glassMat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${name} rear window`,
+      semanticRole: 'vehicle_window',
+      sourcePartKind: 'window_strip',
+      position: [cabinX - cabinLength * 0.33, cabinY + cabinHeight * 0.02, 0],
+      rotation: [0, Math.PI / 2, 0],
+      length: cabinWidth * 0.58,
+      width: cabinHeight * 0.38,
+      thickness: 0.018,
+      cornerRadius: cabinHeight * 0.05,
+      material: glassMat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${name} side window left`,
+      semanticRole: 'vehicle_window',
+      sourcePartKind: 'window_strip',
+      position: [cabinX, cabinY + cabinHeight * 0.02, -cabinWidth * 0.51],
+      rotation: [Math.PI / 2, 0, 0],
+      length: cabinLength * 0.72,
+      width: cabinHeight * 0.36,
+      thickness: 0.018,
+      cornerRadius: cabinHeight * 0.05,
+      material: glassMat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${name} side window right`,
+      semanticRole: 'vehicle_window',
+      sourcePartKind: 'window_strip',
+      position: [cabinX, cabinY + cabinHeight * 0.02, cabinWidth * 0.51],
+      rotation: [Math.PI / 2, 0, 0],
+      length: cabinLength * 0.72,
+      width: cabinHeight * 0.36,
+      thickness: 0.018,
+      cornerRadius: cabinHeight * 0.05,
+      material: glassMat,
+    },
+    ...[-axleX, axleX].flatMap((x) =>
+      [-wheelZ, wheelZ].flatMap((z): PrimitiveShapeInput[] => [
+        {
+          kind: 'torus',
+          name: `${name} vehicle tire`,
+          semanticRole: 'vehicle_tire',
+          sourcePartKind: 'wheel_set',
+          position: [x, wheelY, z],
+          axis: 'z',
+          majorRadius: wheelRadius,
+          tubeRadius: wheelRadius * 0.24,
+          radialSegments: 12,
+          tubularSegments: 24,
+          material: darkMat,
+        },
+        {
+          kind: 'cylinder',
+          name: `${name} vehicle wheel hub`,
+          semanticRole: 'wheel_hub',
+          sourcePartKind: 'wheel_set',
+          position: [x, wheelY, z + (z > 0 ? 0.012 : -0.012)],
+          axis: 'z',
+          radius: wheelRadius * 0.38,
+          height: wheelRadius * 0.14,
+          radialSegments: 16,
+          material: hubMat,
+        },
+        {
+          kind: 'torus',
+          name: `${name} vehicle wheel arch`,
+          semanticRole: 'vehicle_body_detail',
+          sourcePartKind: 'body_shell',
+          position: [x, wheelY + wheelRadius * 0.24, z * 0.98],
+          axis: 'z',
+          majorRadius: wheelRadius * 1.1,
+          tubeRadius: wheelRadius * 0.07,
+          arc: Math.PI,
+          radialSegments: 8,
+          tubularSegments: 18,
+          material: bodyMat,
+        },
+      ]),
+    ),
+    {
+      kind: 'sphere',
+      name: `${name} left headlight`,
+      semanticRole: 'headlight',
+      sourcePartKind: 'light_pair',
+      position: [length * 0.49, bumperY + bodyHeight * 0.26, -width * 0.28],
+      radius: Math.max(0.035, width * 0.035),
+      material: lightMat,
+    },
+    {
+      kind: 'sphere',
+      name: `${name} left tail light`,
+      semanticRole: 'taillight',
+      sourcePartKind: 'light_pair',
+      position: [-length * 0.49, bumperY + bodyHeight * 0.23, -width * 0.3],
+      radius: Math.max(0.03, width * 0.03),
+      material: tailLightMat,
+    },
+    {
+      kind: 'sphere',
+      name: `${name} right tail light`,
+      semanticRole: 'taillight',
+      sourcePartKind: 'light_pair',
+      position: [-length * 0.49, bumperY + bodyHeight * 0.23, width * 0.3],
+      radius: Math.max(0.03, width * 0.03),
+      material: tailLightMat,
+    },
+    {
+      kind: 'sphere',
+      name: `${name} right headlight`,
+      semanticRole: 'headlight',
+      sourcePartKind: 'light_pair',
+      position: [length * 0.49, bumperY + bodyHeight * 0.26, width * 0.28],
+      radius: Math.max(0.035, width * 0.035),
+      material: lightMat,
+    },
+    {
+      kind: 'box',
+      name: `${name} front bumper bar`,
+      semanticRole: 'front_bumper',
+      sourcePartKind: 'bar_pair',
+      position: [length * 0.51, bumperY, 0],
+      length: length * 0.035,
+      width: width * 0.82,
+      height: bodyHeight * 0.14,
+      material: darkMat,
+    },
+    {
+      kind: 'box',
+      name: `${name} rear bumper bar`,
+      semanticRole: 'rear_bumper',
+      sourcePartKind: 'bar_pair',
+      position: [-length * 0.51, bumperY, 0],
+      length: length * 0.035,
+      width: width * 0.82,
+      height: bodyHeight * 0.14,
+      material: darkMat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${name} left rocker sill`,
+      semanticRole: 'vehicle_body_detail',
+      sourcePartKind: 'body_shell',
+      position: [0, bodyY - bodyHeight * 0.25, -width * 0.515],
+      rotation: [Math.PI / 2, 0, 0],
+      length: length * 0.72,
+      width: bodyHeight * 0.12,
+      thickness: 0.018,
+      material: darkMat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${name} right rocker sill`,
+      semanticRole: 'vehicle_body_detail',
+      sourcePartKind: 'body_shell',
+      position: [0, bodyY - bodyHeight * 0.25, width * 0.515],
+      rotation: [Math.PI / 2, 0, 0],
+      length: length * 0.72,
+      width: bodyHeight * 0.12,
+      thickness: 0.018,
+      material: darkMat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${name} hood seam`,
+      semanticRole: 'vehicle_body_detail',
+      sourcePartKind: 'body_shell',
+      position: [length * 0.25, seamY, 0],
+      rotation: [0, 0, 0],
+      length: length * 0.28,
+      width: width * 0.62,
+      thickness: 0.01,
+      cornerRadius: Math.min(width, length) * 0.01,
+      material: darkMat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${name} trunk seam`,
+      semanticRole: 'vehicle_body_detail',
+      sourcePartKind: 'body_shell',
+      position: [-length * 0.32, seamY - bodyHeight * 0.025, 0],
+      rotation: [0, 0, 0],
+      length: length * 0.2,
+      width: width * 0.62,
+      thickness: 0.01,
+      cornerRadius: Math.min(width, length) * 0.01,
+      material: darkMat,
+    },
+    {
+      kind: 'box',
+      name: `${name} left mirror`,
+      semanticRole: 'side_mirror',
+      sourcePartKind: 'body_shell',
+      position: [cabinX + cabinLength * 0.28, cabinY + cabinHeight * 0.03, -width * 0.46],
+      length: length * 0.035,
+      width: width * 0.08,
+      height: cabinHeight * 0.08,
+      material: darkMat,
+    },
+    {
+      kind: 'box',
+      name: `${name} right mirror`,
+      semanticRole: 'side_mirror',
+      sourcePartKind: 'body_shell',
+      position: [cabinX + cabinLength * 0.28, cabinY + cabinHeight * 0.03, width * 0.46],
+      length: length * 0.035,
+      width: width * 0.08,
+      height: cabinHeight * 0.08,
+      material: darkMat,
+    },
+  ]
 }
 
 function composeFanAssembly(input: AssemblyComposeInput, constraints: UserGeometryConstraints) {
@@ -1931,7 +2192,8 @@ function assemblyRequiredRoles(family: AssemblyObjectFamily): string[] {
 
 export function composeAssemblyPrimitives(input: AssemblyComposeInput = {}): PrimitiveShapeInput[] {
   const constraints = withInputConstraints(input)
-  switch (familyFor(input, constraints)) {
+  const family = familyFor(input, constraints)
+  switch (family) {
     case 'vehicle':
       return composeVehicleAssembly(input, constraints)
     case 'fan':
@@ -1959,6 +2221,6 @@ export function composeAssemblyPrimitives(input: AssemblyComposeInput = {}): Pri
     case 'robot_arm':
       return composeRobotArmAssembly(input, constraints)
     default:
-      return []
+      return family === 'unknown' ? [] : composeRegistryFamilyAssembly(input, constraints, family)
   }
 }

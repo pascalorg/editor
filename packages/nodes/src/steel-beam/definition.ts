@@ -62,7 +62,7 @@ export const steelBeamDefinition: NodeDefinition<typeof SteelBeamNode> = {
     label: 'Steel Beam',
     description:
       'An editable structural steel beam route with I, hollow box, channel, and concave profiles.',
-    icon: { kind: 'url', src: '/icons/column.png' },
+    icon: { kind: 'url', src: '/icons/column.webp' },
     paletteSection: 'structure',
     paletteOrder: 23,
   },

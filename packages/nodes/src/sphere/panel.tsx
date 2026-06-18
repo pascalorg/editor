@@ -53,14 +53,14 @@ export default function SpherePanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/cube.png"
+      icon="/icons/cube.webp"
       onClose={handleClose}
-      title={node.name || 'Sphere'}
+      title={node.name || '\u7403\u4f53'}
       width={300}
     >
       <PanelSection title={S.dimensions()}>
         <MetricControl
-          label="Radius"
+          label={'\u534a\u5f84'}
           max={10}
           min={0.1}
           onChange={(value) => handleUpdate({ radius: value })}

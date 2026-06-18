@@ -21,6 +21,7 @@ import {
   createSurfaceRoleMaterial,
   type RenderShading,
 } from '../../lib/materials'
+import { ensureObjectWebGPUCompatibleGeometry } from '../../lib/safe-geometry'
 import type { SceneSurfaceRole as SurfaceRole } from '../../lib/scene-themes'
 
 import useViewer from '../../store/use-viewer'
@@ -302,6 +303,7 @@ export const GeometrySystem = () => {
       if (!textures && defExtras.surfaceRole) {
         applyDefaultSurfaceRole(built, defExtras.surfaceRole, colorPreset, sceneTheme)
       }
+      ensureObjectWebGPUCompatibleGeometry(built)
 
       disposeChildren(group)
 

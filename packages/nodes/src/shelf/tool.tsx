@@ -89,7 +89,7 @@ const ShelfTool = () => {
     () =>
       ShelfNode.parse({
         ...shelfDefinition.defaults(),
-        name: 'Shelf',
+        name: '货架',
         position: [0, 0, 0],
         rotation: [0, 0, 0],
       }),
@@ -127,7 +127,7 @@ const ShelfTool = () => {
       const position = lastCursorRef.current ?? getLevelLocalPosition(activeLevelId, event)
       const shelf = ShelfNode.parse({
         ...shelfDefinition.defaults(),
-        name: 'Shelf',
+        name: '货架',
         position,
         rotation: [0, 0, 0],
       })

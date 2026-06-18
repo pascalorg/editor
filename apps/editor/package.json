@@ -11,6 +11,9 @@
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@gltf-transform/core": "^4.4.0",
+    "@gltf-transform/extensions": "^4.4.0",
+    "@gltf-transform/functions": "^4.4.0",
     "@iconify/react": "^6.0.2",
     "@number-flow/react": "^0.5.14",
     "@pascal-app/articraft-bridge": "*",
@@ -24,8 +27,10 @@
     "@react-three/fiber": "^9.5.0",
     "@tailwindcss/postcss": "^4.2.1",
     "clsx": "^2.1.1",
+    "draco3d": "^1.5.7",
     "geist": "^1.7.0",
     "lucide-react": "^1.7.0",
+    "meshoptimizer": "^1.1.1",
     "next": "16.2.1",
     "postcss": "^8.5.6",
     "react": "^19.2.4",
@@ -37,6 +42,7 @@
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
+    "@types/draco3d": "^1.4.10",
     "@types/howler": "^2.2.12",
     "@types/node": "^22.19.12",
     "@types/react": "19.2.2",

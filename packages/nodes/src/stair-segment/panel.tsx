@@ -121,7 +121,7 @@ export default function StairSegmentPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/stairs.png"
+      icon="/icons/stairs.webp"
       onBack={handleBack}
       onClose={handleClose}
       title={node.name || '楼梯分段'}

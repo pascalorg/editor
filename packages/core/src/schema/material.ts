@@ -21,7 +21,17 @@ export const MaterialProperties = z.object({
   metalness: z.number().min(0).max(1).default(0),
   opacity: z.number().min(0).max(1).default(1),
   transparent: z.boolean().default(false),
-  side: z.enum(['front', 'back', 'double']).default('front'),
+  side: z
+    .preprocess(
+      (value) => {
+        if (value === 0) return 'front'
+        if (value === 1) return 'back'
+        if (value === 2) return 'double'
+        return value
+      },
+      z.enum(['front', 'back', 'double']),
+    )
+    .default('front'),
 })
 export type MaterialProperties = z.infer<typeof MaterialProperties>
 
@@ -46,6 +56,7 @@ export const MaterialTarget = z.enum([
   'stair',
   'stair-segment',
   'fence',
+  'road',
   'column',
   'slab',
   'ceiling',

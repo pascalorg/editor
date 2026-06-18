@@ -2,6 +2,7 @@
 
 import { Icon } from '@iconify/react'
 import {
+  type AnyNodeId,
   initSpaceDetectionSync,
   initSpatialGridSync,
   spatialGridManager,
@@ -27,7 +28,7 @@ import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type PresetsAdapter, PresetsProvider } from '../../contexts/presets-context'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
-import { useKeyboard } from '../../hooks/use-keyboard'
+import { deleteSelectedNodeIds, useKeyboard } from '../../hooks/use-keyboard'
 import {
   applySceneGraphToEditor,
   loadSceneFromLocalStorage,
@@ -51,6 +52,14 @@ import { EditorCommands } from '../ui/command-palette/editor-commands'
 import { FloatingLevelSelector } from '../ui/floating-level-selector'
 import { HelperManager } from '../ui/helpers/helper-manager'
 import { PanelManager } from '../ui/panels/panel-manager'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/primitives/dialog'
 import { ErrorBoundary } from '../ui/primitives/error-boundary'
 import { useSidebarStore } from '../ui/primitives/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
@@ -126,6 +135,47 @@ function initializeEditorRuntime(): () => void {
     outliner.hoveredObjects.length = 0
   }
 }
+
+function DeleteSelectionConfirmDialog({
+  selectedIds,
+  onCancel,
+  onConfirm,
+}: {
+  selectedIds: readonly AnyNodeId[]
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const count = selectedIds.length
+  return (
+    <Dialog open={count > 1} onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="w-[360px] gap-3 border-white/10 bg-[#202124] p-4 text-white shadow-2xl sm:max-w-[360px]">
+        <DialogHeader className="gap-1">
+          <DialogTitle className="text-base">删除选中的物品？</DialogTitle>
+          <DialogDescription className="text-neutral-300 text-sm">
+            已选中 {count} 个物品，删除后可通过撤销恢复。确定要删除吗？
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="mt-1 flex-row justify-end gap-2">
+          <button
+            className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-neutral-100 text-sm transition hover:bg-white/10"
+            onClick={onCancel}
+            type="button"
+          >
+            取消
+          </button>
+          <button
+            className="rounded-md bg-red-500 px-3 py-1.5 font-medium text-sm text-white transition hover:bg-red-400"
+            onClick={onConfirm}
+            type="button"
+          >
+            删除
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export interface EditorProps {
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
@@ -616,14 +666,17 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isFirstPersonMode: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }) {
+  const isCaptureMode = useEditor((s) => s.isCaptureMode)
+  const noEditing = isVersionPreviewMode || isFirstPersonMode || isCaptureMode
+
   return (
     <>
-      {!isFirstPersonMode && <SelectionManager />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <BoxSelectTool />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <NodeArrowHandles />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <WallMoveSideHandles />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingActionMenu />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingBuildingActionMenu />}
+      {!(isFirstPersonMode || isCaptureMode) && <SelectionManager />}
+      {!noEditing && <BoxSelectTool />}
+      {!noEditing && <NodeArrowHandles />}
+      {!noEditing && <WallMoveSideHandles />}
+      {!noEditing && <FloatingActionMenu />}
+      {!noEditing && <FloatingBuildingActionMenu />}
       <ExportManager />
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
       <CeilingSystem />
@@ -633,7 +686,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <LiveDataBindingRuntime />
       {!isFirstPersonMode && <SiteEdgeLabels />}
       {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
-      {!(isLoading || isVersionPreviewMode || isFirstPersonMode) && <ToolManager />}
+      {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
@@ -975,8 +1028,27 @@ export default function Editor({
   commandPaletteEmptyAction,
 }: EditorProps) {
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
+  const [deleteConfirmationIds, setDeleteConfirmationIds] = useState<AnyNodeId[]>([])
 
-  useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode })
+  const handleRequestDeleteSelectedNodes = useCallback((selectedNodeIds: AnyNodeId[]) => {
+    setDeleteConfirmationIds(selectedNodeIds)
+  }, [])
+
+  const handleCancelDeleteSelection = useCallback(() => {
+    setDeleteConfirmationIds([])
+  }, [])
+
+  const handleConfirmDeleteSelection = useCallback(() => {
+    const existingIds = deleteConfirmationIds.filter((id) => Boolean(useScene.getState().nodes[id]))
+    deleteSelectedNodeIds(existingIds)
+    setDeleteConfirmationIds([])
+  }, [deleteConfirmationIds])
+
+  useKeyboard({
+    isVersionPreviewMode,
+    disabled: isFirstPersonMode,
+    onRequestDeleteSelectedNodes: handleRequestDeleteSelectedNodes,
+  })
 
   const { isLoadingSceneRef } = useAutoSave({
     onSave,
@@ -1158,6 +1230,11 @@ export default function Editor({
 
     return (
       <PresetsProvider adapter={presetsAdapter}>
+        <DeleteSelectionConfirmDialog
+          onCancel={handleCancelDeleteSelection}
+          onConfirm={handleConfirmDeleteSelection}
+          selectedIds={deleteConfirmationIds}
+        />
         {showLoader && (
           <div className="fixed inset-0 z-60">
             <SceneLoader />
@@ -1224,6 +1301,11 @@ export default function Editor({
   return (
     <PresetsProvider adapter={presetsAdapter}>
       <div className="dark flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
+        <DeleteSelectionConfirmDialog
+          onCancel={handleCancelDeleteSelection}
+          onConfirm={handleConfirmDeleteSelection}
+          selectedIds={deleteConfirmationIds}
+        />
         {showLoader && (
           <div className="fixed inset-0 z-60">
             <SceneLoader />

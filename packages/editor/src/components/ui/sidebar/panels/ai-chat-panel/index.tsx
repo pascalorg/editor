@@ -129,11 +129,15 @@ const COMPOSE_PRIMITIVE_TOOL = {
                   'capsule',
                   'half-cylinder',
                   'rounded-panel',
+                  'ellipsoid',
+                  'ellipse-panel',
+                  'semi-ellipse-panel',
+                  'pyramid',
                   'extrude',
                   'sweep',
                 ],
                 description:
-                  'Primitive type. box=solid cuboid, rounded-panel=thin bevelled rounded rectangle, cylinder=solid circular extrusion, hollow-cylinder=tube/pipe, cone=pointed circular cone, frustum=truncated cone/circular taper, hemisphere=closed dome, torus=ring/donut tube, wedge=sloped triangular prism, trapezoid-prism=tapered rectangular prism, capsule=rounded-ended bar, half-cylinder=semicircular extrusion, sphere=ellipsoid, lathe=revolved vertical profile, extrude=custom 2D profile with depth, sweep=tube along a 3D path.',
+                  'Primitive type. box=solid cuboid, rounded-panel=thin bevelled rounded rectangle, cylinder=solid circular extrusion, hollow-cylinder=tube/pipe, cone=pointed circular cone, frustum=truncated cone/circular taper, hemisphere=closed dome, torus=ring/donut tube, wedge=sloped triangular prism, trapezoid-prism=tapered rectangular prism, capsule=rounded-ended bar, half-cylinder=semicircular extrusion, sphere/ellipsoid=scaled round body, ellipse-panel/semi-ellipse-panel=thin oval profiles, pyramid=square pyramid, lathe=revolved vertical profile, extrude=custom 2D profile with depth, sweep=tube along a 3D path.',
               },
               position: {
                 type: 'array',
@@ -346,7 +350,7 @@ const COMPOSE_RECIPE_TOOL = {
   function: {
     name: 'compose_recipe',
     description:
-      'Create an editable primitive object from a small closed-form deterministic recipe pack. Use only when the object is a professional standard part with stable geometry, such as gear.spur, sprocket.chain, pipe.flange/elbow90, fastener.hexBolt, bearing.pillowBlock, coupling.flexible, plate.perforated, valve.gate/ball, robotArm.threeAxis, motor.servo, or mixer.impeller. Do not use recipes for open-ended vehicles, outdoor AC units, machine tools, pumps, conveyors, fans, tanks, towers, reactors, compressors, grate coolers, or broad factory equipment; use compose_assembly for those so hard dimensions/colors drive the generic part layout.',
+      'Create an editable primitive object from a small closed-form deterministic recipe pack. Use only when the object is a professional standard part with stable geometry, such as gear.spur, sprocket.chain, pipe.flange/elbow90, fastener.hexBolt, bearing.pillowBlock, coupling.flexible, plate.perforated, valve.gate/ball, robotArm.threeAxis, motor.servo, or mixer.impeller. Do not use recipes for open-ended vehicles, outdoor AC units, machine tools, pumps, conveyors, fans, tanks, towers, reactors, compressors, grate coolers, or broad factory equipment; use compose_parts for dedicated industrial parts families and compose_assembly for broader open-ended families.',
     parameters: {
       type: 'object',
       properties: {
@@ -368,7 +372,7 @@ const COMPOSE_RECIPE_TOOL = {
             'mixer.impeller',
           ],
           description:
-            'Built-in primitive recipe id. Use gear.spur for spur gears, sprocket.chain for roller-chain sprockets, pipe.flange for standard flanges, pipe.elbow90 for standard elbows, fastener.hexBolt for hex-head bolts, bearing.pillowBlock for mounted bearings, coupling.flexible for shaft couplings, plate.perforated for perforated/sieve plates, valve.ball/gate for standard valves, robotArm.threeAxis for 3-axis robot arms, motor.servo for servo motors, and mixer.impeller only for a simple shaft+hub+blade mixer part. Use compose_assembly for open-ended vehicles, outdoor AC units, machine tools, pumps, conveyors, fans, tanks, towers, reactors, compressors, grate coolers, and factory equipment.',
+            'Built-in primitive recipe id. Use gear.spur for spur gears, sprocket.chain for roller-chain sprockets, pipe.flange for standard flanges, pipe.elbow90 for standard elbows, fastener.hexBolt for hex-head bolts, bearing.pillowBlock for mounted bearings, coupling.flexible for shaft couplings, plate.perforated for perforated/sieve plates, valve.ball/gate for standard valves, robotArm.threeAxis for 3-axis robot arms, motor.servo for servo motors, and mixer.impeller only for a simple shaft+hub+blade mixer part. Use compose_parts for pump, conveyor, electrical cabinet, and pipe-system family registries; use compose_assembly for broader open-ended vehicles, outdoor AC units, machine tools, fans, tanks, towers, reactors, compressors, grate coolers, and factory equipment.',
         },
         name: { type: 'string', description: 'Optional generated object name.' },
         geometryBrief: GEOMETRY_BRIEF_SCHEMA,
@@ -481,7 +485,7 @@ const COMPOSE_ASSEMBLY_TOOL = {
   function: {
     name: 'compose_assembly',
     description:
-      'Create one editable object through the constraint-first automatic instruction-sheet generator. Prefer this only for supported open-ended families: vehicles, outdoor AC units, machine tools (lathe/milling/grinder/planer/drill/CNC), industrial robot arms, pumps, belt conveyors, fans, tanks, distillation/chemical towers or columns, reactors, compressors, grate coolers, electrical cabinets, and factory equipment. Plain chimneys/smokestacks are not assembly towers; use compose_parts with chimney_stack. If the requested family is unsupported, do not retry assembly; switch to compose_parts and build from generic reusable parts. Pass hard constraints such as length, width/diameter, height, primaryColor. Use compose_recipe only for closed-form standard instruction sheets such as gears/sprockets, flanges/elbows, fasteners, bearings, couplings, perforated plates, standard valves, robotArm.threeAxis, mixer.impeller, and servo motors.',
+      'Create one editable object through the constraint-first automatic instruction-sheet generator. Prefer this only for supported open-ended families without a dedicated parts family: vehicles, outdoor AC units, machine tools (lathe/milling/grinder/planer/drill/CNC), industrial robot arms, fans, tanks, distillation/chemical towers or columns, reactors, compressors, grate coolers, and broad factory equipment. Use compose_parts family registries for pumps, belt conveyors, electrical/control cabinets, and pipe systems. Plain chimneys/smokestacks are not assembly towers; use compose_parts with chimney_stack. If the requested family is unsupported, do not retry assembly; switch to compose_parts and build from generic reusable parts. Pass hard constraints such as length, width/diameter, height, primaryColor. Use compose_recipe only for closed-form standard instruction sheets such as gears/sprockets, flanges/elbows, fasteners, bearings, couplings, perforated plates, standard valves, robotArm.threeAxis, mixer.impeller, and servo motors.',
     parameters: {
       type: 'object',
       additionalProperties: true,
@@ -508,7 +512,7 @@ const COMPOSE_PARTS_TOOL = {
   function: {
     name: 'compose_parts',
     description:
-      'Create one editable object from the reusable building-block library. Parts are generic kernels; assign semanticRole to give context-specific meaning. Use this for explicit reusable part blueprints, subassemblies, and any object family not supported by compose_assembly. Recipes are instruction sheets that reference parts; assembly is the automatic instruction-sheet generator.',
+      'Create one editable object from the reusable building-block library. Parts are generic kernels; assign semanticRole to give context-specific meaning. Use this for explicit reusable part blueprints, industrial family registries, subassemblies, and any object family not supported by compose_assembly. Recipes are instruction sheets that reference parts; assembly is the automatic instruction-sheet generator.',
     parameters: {
       type: 'object',
       properties: {
@@ -518,6 +522,16 @@ const COMPOSE_PARTS_TOOL = {
           type: 'string',
           description: 'Compatibility alias for name. Prefer name in new tool calls.',
         },
+        family: {
+          type: 'string',
+          enum: ['pump', 'conveyor', 'electrical', 'pipe_system', 'aircraft', 'kiosk', 'desk', 'generic'],
+          description:
+            'Optional parts-family registry id. Use pump, conveyor, electrical, or pipe_system for industrial equipment so top-level dimensions drive editable part parameters.',
+        },
+        length: { type: 'number', description: 'Overall object length in meters.' },
+        width: { type: 'number', description: 'Overall object width/depth in meters.' },
+        height: { type: 'number', description: 'Overall object height in meters.' },
+        diameter: { type: 'number', description: 'Overall cylindrical diameter in meters, mainly for pipe systems.' },
         position: {
           type: 'array',
           items: { type: 'number' },
@@ -547,8 +561,8 @@ const COMPOSE_PARTS_TOOL = {
         },
         parts: {
           type: 'array',
-          description:
-            'Reusable parts to procedurally expand into primitives. Complete family objects and family components are different intents: car steering wheel, car wheel, aircraft wing, pump impeller, and fan blade are single-component requests, not parent assemblies. If no dedicated part kind exists for a component, build it from generic compose_primitive shapes instead of inventing a parent family. For a standing fan use circular_base + vertical_pole + support_bracket + motor_housing + radial_blades + protective_grill + optional control_knob. For shaft + hub + propeller/impeller/mud-mixer blades use cylinder-like support parts plus propeller_blade_set; do not create a new recipe. For chimneys/smokestacks use chimney_stack with height/radius and warningStripes:true for red-white bands. For desks with visible drawers use desk_top + leg_set + drawer_stack. For electrical/control cabinets use electrical_cabinet + cable_tray + nameplate/warning details. For pipe systems use pipe_run + pipe_elbow + flange_ring/valve_body. For a complete bicycle use wheel_set semanticRole:bicycle_tire count:2 + tube_frame semanticRole:bicycle_frame + fork semanticRole:bicycle_fork + handlebar + saddle + chain_loop; do not invent bicycle_crank/chainring/pedals part kinds. For a complete car use body_shell semanticRole:vehicle_body + wheel_set count:4 semanticRole:vehicle_tire + window_strip semanticRole:vehicle_window variant:vehicle_glasshouse + light_pair + bar_pair; legacy vehicle_* aliases remain accepted. For complete aircraft/airplanes/airliners, use one aircraft_fuselage part with top-level length/primaryColor and let defaults add wings, engines, T-tail, windows, and landing gear; do not hand-place generic airfoil_blade/streamlined_body/wheel_set parts for complete aircraft. For a water pump / centrifugal blower use skid_base + ribbed_motor_body or rounded_machine_body + volute_casing + inlet_port + outlet_port + flange_ring + optional impeller_blades + control_box. For conveyors use conveyor_frame + roller_array + belt_surface. For tanks use cylindrical_tank plus pipe/flange details. For valves use valve_body plus optional handwheel; set valveStyle/handleStyle for variants such as ball valves instead of inventing internal parts. For factory scenes use gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, platform_ladder, electrical_cabinet, cable_tray, pipe_run, and pipe_elbow.',
+              description:
+                'Reusable parts to procedurally expand into primitives. Complete family objects and family components are different intents: car steering wheel, car wheel, aircraft wing, pump impeller, and fan blade are single-component requests, not parent assemblies. For industrial families, prefer family:"pump", family:"conveyor", family:"electrical", or family:"pipe_system" with top-level length/width/height or diameter plus optional parts[].params; the registry fills required parts and clamps unsafe values. For kiosks, booths, ticket booths, vendor stalls, newsstands, small pavilions, and small sheds, use family:"kiosk" with kiosk_body, kiosk_roof, kiosk_opening, kiosk_counter, kiosk_sign, and kiosk_awning. If no dedicated part kind exists for a component, use family:"generic" with generic_body/generic_base/generic_panel/generic_handle/generic_spout/generic_control_panel/generic_display/generic_foot_set/generic_opening/generic_detail_accent before raw compose_primitive. For a standing fan use circular_base + vertical_pole + support_bracket + motor_housing + radial_blades + protective_grill + optional control_knob. For shaft + hub + propeller/impeller/mud-mixer blades use cylinder-like support parts plus propeller_blade_set; do not create a new recipe. For chimneys/smokestacks use chimney_stack with height/radius and warningStripes:true for red-white bands. For desks with visible drawers use desk_top + leg_set + drawer_stack. For electrical/control cabinets use electrical_cabinet + cable_tray + nameplate/warning details. For pipe systems use pipe_run + pipe_elbow + flange_ring/valve_body. For a complete bicycle use wheel_set semanticRole:bicycle_tire count:2 + tube_frame semanticRole:bicycle_frame + fork semanticRole:bicycle_fork + handlebar + saddle + chain_loop; do not invent bicycle_crank/chainring/pedals part kinds. For a complete car use body_shell semanticRole:vehicle_body + wheel_set count:4 semanticRole:vehicle_tire + window_strip semanticRole:vehicle_window variant:vehicle_glasshouse + light_pair + bar_pair; legacy vehicle_* aliases remain accepted. For complete aircraft/airplanes/airliners, use family:"aircraft" with top-level length/primaryColor and optional aircraft_* parts with params; the registry fills fuselage, wings, engines, T-tail, windows, and landing gear. Do not hand-place generic airfoil_blade/streamlined_body/wheel_set parts for complete aircraft. For a water pump / centrifugal blower use skid_base + ribbed_motor_body or rounded_machine_body + volute_casing + inlet_port + outlet_port + flange_ring + optional impeller_blades + control_box. For conveyors use conveyor_frame + roller_array + belt_surface. For tanks use cylindrical_tank plus pipe/flange details. For valves use valve_body plus optional handwheel; set valveStyle/handleStyle for variants such as ball valves instead of inventing internal parts. For factory scenes use gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, platform_ladder, electrical_cabinet, cable_tray, pipe_run, and pipe_elbow.',
           items: {
             type: 'object',
             properties: {
@@ -628,7 +642,7 @@ const COMPOSE_PARTS_TOOL = {
                   'lofted_panel',
                 ],
                 description:
-                  'Reusable procedural part. aircraft_fuselage creates a coherent complete aircraft default when used as the only aircraft part, adding wings, engines, T-tail, windows, and landing gear from top-level length/primaryColor. chimney_stack creates a tall tapered industrial chimney with base, rim, lift seams, access door, and optional red-white warning bands. pyramid creates a four-sided pyramid from length/width/height; set truncated:true or topScale/topRadius to make a flat-top truncated pyramid/frustum. vent_grill creates framed grille/louver panels; bolt_pattern creates screws/fasteners; leg_set creates support feet; nameplate creates rating plates; pipe_port/inlet_port/outlet_port create nozzles. propeller_blade_set creates count-based radial propeller/impeller/mixer paddle sets, including taiji-half circular-cropped blades with longitudinal curve; airfoil_blade creates continuous swept/tapered aircraft/turbine-like blades for local blade details, not complete aircraft layout; curved_lens_panel creates tinted non-rectangular lenses/visors; ergonomic_shell creates smooth mouse/controller/appliance shells; streamlined_body creates aerodynamic fuselage/car/train/appliance bodies; lofted_panel creates section-to-section transition fairings/panels. protective_grill creates a shallow domed fan cage; radial_blades creates airfoil-like fan blades; desk_top/leg_set/drawer_stack build office desks; electrical_cabinet/cable_tray build power/control cabinets and tray routes; pipe_run/pipe_elbow build process piping; wheel/wheel_set/window_panel/window_strip/body_shell/tube_frame/fork/light_pair/bar_pair are generic building blocks whose meaning comes from semanticRole; bicycle_* and vehicle_* aliases remain accepted but new calls should prefer generic parts; volute_casing creates pump/blower scroll casing; impeller_blades creates pump/turbine vanes; pipe/inlet/outlet/flange/bolt parts create industrial connection details; ribbed_motor_body, conveyor_frame, roller_array, belt_surface, cylindrical_tank, valve_body, handwheel, gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, and platform_ladder cover common factory equipment.',
+                  'Reusable procedural part. kiosk_body/kiosk_roof/kiosk_opening/kiosk_counter/kiosk_sign/kiosk_awning build small kiosks, ticket booths, vendor stalls, newsstands, small pavilions, and sheds. generic_body/generic_base/generic_panel/generic_handle/generic_spout/generic_control_panel/generic_display/generic_foot_set/generic_opening/generic_detail_accent cover unknown long-tail equipment, simple objects, and devices while preserving semantic part roles. aircraft_fuselage/aircraft_wing/aircraft_engine/aircraft_vertical_stabilizer/aircraft_horizontal_stabilizer/aircraft_landing_gear are family-registry parts for complete aircraft; use parts[].params to tune length, span, engine count/radius, window count, colors, and landing gear. chimney_stack creates a tall tapered industrial chimney with base, rim, lift seams, access door, and optional red-white warning bands. pyramid creates a four-sided pyramid from length/width/height; set truncated:true or topScale/topRadius to make a flat-top truncated pyramid/frustum. vent_grill creates framed grille/louver panels; bolt_pattern creates screws/fasteners; leg_set creates support feet; nameplate creates rating plates; pipe_port/inlet_port/outlet_port create nozzles. propeller_blade_set creates count-based radial propeller/impeller/mixer paddle sets, including taiji-half circular-cropped blades with longitudinal curve; airfoil_blade creates continuous swept/tapered aircraft/turbine-like blades for local blade details, not complete aircraft layout; curved_lens_panel creates tinted non-rectangular lenses/visors; ergonomic_shell creates smooth mouse/controller/appliance shells; streamlined_body creates aerodynamic fuselage/car/train/appliance bodies; lofted_panel creates section-to-section transition fairings/panels. protective_grill creates a shallow domed fan cage; radial_blades creates airfoil-like fan blades; desk_top/leg_set/drawer_stack build office desks; electrical_cabinet/cable_tray build power/control cabinets and tray routes; pipe_run/pipe_elbow build process piping; wheel/wheel_set/window_panel/window_strip/body_shell/tube_frame/fork/light_pair/bar_pair are generic building blocks whose meaning comes from semanticRole; bicycle_* and vehicle_* aliases remain accepted but new calls should prefer generic parts; volute_casing creates pump/blower scroll casing; impeller_blades creates pump/turbine vanes; pipe/inlet/outlet/flange/bolt parts create industrial connection details; ribbed_motor_body, conveyor_frame, roller_array, belt_surface, cylindrical_tank, valve_body, handwheel, gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, and platform_ladder cover common factory equipment.',
               },
               partType: {
                 type: 'string',
@@ -640,6 +654,11 @@ const COMPOSE_PARTS_TOOL = {
               partName: {
                 type: 'string',
                 description: 'Compatibility alias for name. Prefer name in new tool calls.',
+              },
+              params: {
+                type: 'object',
+                description:
+                  'LLM-safe adjustable part parameters. Prefer params for family parts instead of raw coordinates. Kiosk examples: kiosk_body {length,width,height,primaryColor}; kiosk_roof {length,width,height,variant:pitch|flat}; kiosk_opening {length,height}; kiosk_counter {length,width,thickness}; kiosk_sign {length,height,accentColor}. Generic examples: generic_body {length,width,height,primaryColor,cornerRadius}; generic_base {length,width,thickness}; generic_spout {length,radius}; generic_control_panel/generic_display/generic_opening {length,height,thickness}. Vehicle examples: body_shell {length,width,height,primaryColor,vehicleStyle}; wheel_set {count:2|4|6,radius,width,hubColor}; window_strip {height,tint,opacity}. Aircraft examples: aircraft_fuselage {length,width,height,count,primaryColor,accentColor,noseRoundness}; aircraft_wing {length,width,thickness,bladeSweep}; aircraft_engine {count,radius,length,width}; aircraft_landing_gear {length,width,radius}. Values are normalized and clamped by the tool.',
               },
               style: {
                 type: 'string',
@@ -660,7 +679,7 @@ const COMPOSE_PARTS_TOOL = {
               valveStyle: {
                 type: 'string',
                 description:
-                  'valve_body style hint. Use "ball" for ball valves / 鐞冮榾 / quarter-turn valves; omit for the default gate-valve-like body.',
+                  'valve_body style hint. Use "ball" for ball valves / quarter-turn valves; omit for the default gate-valve-like body.'
               },
               handleStyle: {
                 type: 'string',
@@ -921,7 +940,7 @@ const COMPOSE_PARTS_TOOL = {
                 type: 'string',
                 enum: ['frog', 'aviator', 'teardrop', 'rounded-rectangle'],
                 description:
-                  'curved_lens_panel outline style. Use frog for 蛤蟆墨镜 / oversized sunglasses lenses, aviator/teardrop for drop-shaped lenses.',
+                  'curved_lens_panel outline style. Use frog for 铔よ焼澧ㄩ暅 / oversized sunglasses lenses, aviator/teardrop for drop-shaped lenses.',
               },
               curvature: {
                 type: 'number',
@@ -1045,68 +1064,6 @@ const COMPOSE_ROBOT_ARM_TOOL = {
   },
 }
 
-const COMPOSE_OBJECT_TOOL = {
-  type: 'function' as const,
-  function: {
-    name: 'compose_object',
-    description:
-      'Create a stable editable low-poly object from curated category templates. Prefer this for simple furniture/appliance templates such as chairs/stools, sofas, outdoor AC units, keyboards, monitors/displays, tables/desks, shelves, and cabinets. For cars/vehicles, prefer compose_parts with reusable vehicle parts instead of this object template.',
-    parameters: {
-      type: 'object',
-      properties: {
-        name: { type: 'string', description: 'Optional object name prefix.' },
-        category: {
-          type: 'string',
-          enum: [
-            'vehicle',
-            'chair',
-            'outdoor-ac',
-            'sofa',
-            'keyboard',
-            'monitor',
-            'table',
-            'shelf',
-            'cabinet',
-            'generic',
-          ],
-          description:
-            'Object category. Use chair for chairs/stools, outdoor-ac for air conditioner outdoor units, sofa, keyboard, monitor/display/screen, table/desk, shelf/rack, cabinet/cupboard, or generic. Use vehicle only for legacy simple blockouts; prefer compose_parts for cars/vehicles.',
-        },
-        model: {
-          type: 'string',
-          description: 'Requested model or product name, e.g. "Tesla Model Y", "air conditioner outdoor unit", "绌鸿皟澶栨満", or "鍐欏瓧妗?.',
-        },
-        style: {
-          type: 'string',
-          description: 'Optional style hint such as crossover, office, wooden, modern, metal, etc.',
-        },
-        position: {
-          type: 'array',
-          items: { type: 'number' },
-          minItems: 3,
-          maxItems: 3,
-          description: 'Ground origin [x, y, z] in meters. Defaults to scene origin.',
-        },
-        width: { type: 'number', description: 'Object width along X in meters.' },
-        depth: { type: 'number', description: 'Object depth along Z in meters.' },
-        length: { type: 'number', description: 'Alias for depth/vehicle length along Z in meters.' },
-        height: { type: 'number', description: 'Object height along Y in meters.' },
-        primaryColor: { type: 'string', description: 'CSS hex primary color, e.g. #f4f6f8.' },
-        secondaryColor: { type: 'string', description: 'CSS hex secondary/accent color.' },
-        bodyColor: { type: 'string', description: 'Vehicle/body color alias.' },
-        glassColor: { type: 'string', description: 'Vehicle glass color alias.' },
-        wheelColor: { type: 'string', description: 'Vehicle tire color alias.' },
-        detail: {
-          type: 'string',
-          enum: ['low', 'medium', 'high'],
-          description: 'Round-part smoothness. Use medium by default; low for very abstract blockouts.',
-        },
-      },
-      required: [],
-    },
-  },
-}
-
 const REVISION_SELECTOR_SCHEMA = {
   type: 'object',
   properties: {
@@ -1140,6 +1097,10 @@ const REVISION_SHAPE_SCHEMA = {
         'capsule',
         'half-cylinder',
         'rounded-panel',
+        'ellipsoid',
+        'ellipse-panel',
+        'semi-ellipse-panel',
+        'pyramid',
         'extrude',
         'sweep',
       ],
@@ -1322,7 +1283,7 @@ const REVISE_GEOMETRY_TOOL = {
   },
 }
 
-type ComposeTool = typeof COMPOSE_OBJECT_TOOL | typeof COMPOSE_RECIPE_TOOL | typeof COMPOSE_ASSEMBLY_TOOL | typeof COMPOSE_PARTS_TOOL | typeof COMPOSE_ROBOT_ARM_TOOL | typeof COMPOSE_PRIMITIVE_TOOL | typeof REVISE_GEOMETRY_TOOL
+type ComposeTool = typeof COMPOSE_RECIPE_TOOL | typeof COMPOSE_ASSEMBLY_TOOL | typeof COMPOSE_PARTS_TOOL | typeof COMPOSE_ROBOT_ARM_TOOL | typeof COMPOSE_PRIMITIVE_TOOL | typeof REVISE_GEOMETRY_TOOL
 
 const GEOMETRY_REPAIR_COMPRESSION_INTERVAL = 4
 const GEOMETRY_REPAIR_STAGNATION_LIMIT = 4
@@ -1367,13 +1328,81 @@ function formatPrimitiveRunMessage(analysis: string | undefined, generate: strin
     : `**Generate:**\n${generate}`
 }
 
+function formatFactoryRunResult(data: unknown) {
+  const result = isRecord(data) ? data : {}
+  const patches = Array.isArray(result.patches) ? result.patches : []
+  const nodeIds = Array.isArray(result.nodeIds)
+    ? result.nodeIds.map((id) => String(id)).filter(Boolean)
+    : []
+  const missingAssets = Array.isArray(result.missingAssets) ? result.missingAssets : []
+  const geometryRunId =
+    typeof result.geometryRunId === 'string' ? result.geometryRunId : undefined
+  const applied = result.applied === true
+  const artifact = isRecord(result.artifact) ? result.artifact : undefined
+  const artifactTitle =
+    typeof artifact?.title === 'string'
+      ? artifact.title
+      : typeof artifact?.id === 'string'
+        ? artifact.id
+        : undefined
+  const missingLines = missingAssets
+    .map((item) => {
+      if (!isRecord(item)) return null
+      const name = typeof item.name === 'string' ? item.name : 'unknown'
+      const reason = typeof item.reason === 'string' ? item.reason : 'not resolved'
+      return `- ${name}: ${reason}`
+    })
+    .filter(Boolean)
+
+  return [
+    '**Factory draft:**',
+    artifactTitle ? `- Geometry artifact: ${artifactTitle}` : '- Geometry artifact: none',
+    `- Create patches: ${patches.length}`,
+    nodeIds.length ? `- Node ids: ${nodeIds.join(', ')}` : '- Node ids: none',
+    geometryRunId ? `- Geometry run: ${geometryRunId}` : undefined,
+    `- Applied to canvas: ${applied ? 'yes' : 'no'}`,
+    missingLines.length ? `\n**Missing assets:**\n${missingLines.join('\n')}` : undefined,
+    applied
+      ? '\nPatches were applied to the current canvas.'
+      : '\nPatches are prepared for review only. Nothing was applied to the canvas.',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function applyFactoryRunCreatePatchesToCanvas(data: unknown): string[] {
+  const result = isRecord(data) ? data : {}
+  if (result.applied === true) return []
+  const patches = Array.isArray(result.patches) ? result.patches : []
+  if (patches.length === 0) return []
+
+  const scene = useScene.getState()
+  const selectedLevelId = useViewer.getState().selection.levelId
+  const createdIds: string[] = []
+
+  for (const patch of patches) {
+    if (!isRecord(patch) || patch.op !== 'create' || !isRecord(patch.node)) continue
+    const node = patch.node as unknown as AnyNode
+    if (typeof node.id !== 'string' || typeof node.type !== 'string') continue
+    const patchParentId = typeof patch.parentId === 'string' ? patch.parentId : undefined
+    const parentId = (patchParentId ?? selectedLevelId ?? undefined) as AnyNodeId | undefined
+    scene.createNode(node, parentId)
+    createdIds.push(node.id)
+  }
+
+  if (createdIds.length > 0) {
+    useViewer.getState().setSelection({ selectedIds: [createdIds[0]!] })
+  }
+  return createdIds
+}
+
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   image?: ChatImageAttachment
   generationRun?: {
     id: string
-    mode: 'articraft' | 'image-to-3d' | 'primitive'
+    mode: 'articraft' | 'image-to-3d' | 'primitive' | 'factory'
     status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
   }
   articraftResult?: ArticraftResult
@@ -1420,6 +1449,7 @@ type ApiMessage = {
 }
 
 type AiGenerationMode = 'primitive' | 'articraft' | 'image-to-3d'
+type AiConversationPurpose = 'factory' | 'asset'
 
 const AI_GENERATION_MODES: Array<{
   id: AiGenerationMode
@@ -1528,7 +1558,7 @@ function isActiveGenerationRun(
 
 function buildMultimodalContent(text: string, image?: ChatImageAttachment): string | ApiContentPart[] {
   const normalizedText =
-    text.trim() || '请根据这张图片生成一个可编辑的 3D 几何对象，并尽量保留主要形状、比例和材质。'
+    text.trim() || 'Describe the image and generate a 3D object.'
   if (!image) return normalizedText
   return [
     { type: 'text', text: normalizedText },
@@ -2029,12 +2059,12 @@ function GeneratedGeometryPreview({ artifact }: { artifact: GeneratedGeometryArt
 }
 
 function getGeometryArtifactStatus(artifact: GeneratedGeometryArtifact) {
-  if (artifact.supersededBy) return `已被 ${artifact.supersededBy.slice(-6)} 替换`
-  if (artifact.replacedAt) return '已替换旧版'
-  if (artifact.placedAt && artifact.savedAt) return '已放置 · 已存入素材'
-  if (artifact.savedAt) return '已存入素材'
-  if (artifact.placedAt) return '已放置'
-  return '草稿'
+  if (artifact.supersededBy) return `Replaced by ${artifact.supersededBy.slice(-6)}`
+  if (artifact.replacedAt) return 'Replaced on canvas'
+  if (artifact.placedAt && artifact.savedAt) return 'Placed and saved'
+  if (artifact.savedAt) return 'Saved'
+  if (artifact.placedAt) return 'Placed'
+  return 'Ready'
 }
 
 function GeneratedGeometryStaticPreview({ artifact }: { artifact: GeneratedGeometryArtifact }) {
@@ -2057,7 +2087,7 @@ function GeneratedGeometryStaticPreview({ artifact }: { artifact: GeneratedGeome
         ))}
       </div>
       <div className="absolute right-2 bottom-2 rounded-full border border-border/60 bg-background/75 px-2 py-0.5 text-[10px] text-muted-foreground backdrop-blur">
-        静态预览
+        {'\u9759\u6001\u9884\u89c8'}
       </div>
     </div>
   )
@@ -2160,7 +2190,7 @@ function GeneratedGeometryCard({
           ? 'Drag the preview to rotate. If it is not right, keep typing revision notes and I will use this geometry as context.'
           : 'Older preview is static. The latest generated result remains interactive.'
       }
-      meta={`${artifact.createdNames.length} parts · ${artifact.sourceTool} · v${artifact.version}`}
+      meta={`${artifact.createdNames.length} parts 路 ${artifact.sourceTool} 路 v${artifact.version}`}
       preview={
         interactivePreview ? (
           <GeneratedGeometryPreview artifact={artifact} />
@@ -2319,6 +2349,7 @@ type AiChatPanelStateSnapshot = {
   messages: ChatMessage[]
   input: string
   generationMode: AiGenerationMode
+  conversationPurpose?: AiConversationPurpose
   inputExpanded: boolean
   imageAttachment?: ChatImageAttachment
 }
@@ -2329,17 +2360,25 @@ function readPersistedAiChatPanelState(): AiChatPanelStateSnapshot | null {
     const raw = window.localStorage.getItem(AI_CHAT_STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<AiChatPanelStateSnapshot>
+    const messages = Array.isArray(parsed.messages) ? (parsed.messages as ChatMessage[]) : []
+    const conversationPurpose =
+      parsed.conversationPurpose === 'factory' || parsed.conversationPurpose === 'asset'
+        ? parsed.conversationPurpose
+        : messages.length > 0
+          ? 'asset'
+          : undefined
     return {
       conversationId:
         typeof parsed.conversationId === 'string'
           ? parsed.conversationId
           : AI_CHAT_DEFAULT_CONVERSATION_ID,
-      messages: Array.isArray(parsed.messages) ? (parsed.messages as ChatMessage[]) : [],
+      messages,
       input: typeof parsed.input === 'string' ? parsed.input : '',
       generationMode:
         parsed.generationMode === 'articraft' || parsed.generationMode === 'image-to-3d'
           ? parsed.generationMode
           : 'primitive',
+      conversationPurpose,
       inputExpanded: parsed.inputExpanded === true,
       imageAttachment: parsed.imageAttachment,
     }
@@ -2378,6 +2417,7 @@ const aiChatPanelState: AiChatPanelStateSnapshot = {
   messages: [],
   input: '',
   generationMode: 'primitive',
+  conversationPurpose: undefined,
   inputExpanded: false,
 }
 
@@ -2397,6 +2437,9 @@ export function AiChatPanel() {
   const [generationMode, setGenerationMode] = useState<AiGenerationMode>(
     aiChatPanelState.generationMode,
   )
+  const [conversationPurpose, setConversationPurpose] = useState<AiConversationPurpose | undefined>(
+    aiChatPanelState.conversationPurpose,
+  )
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
   const [inputExpanded, setInputExpanded] = useState(aiChatPanelState.inputExpanded)
   const [imageAttachment, setImageAttachment] = useState<ChatImageAttachment | undefined>(
@@ -2407,6 +2450,7 @@ export function AiChatPanel() {
   const imageInputRef = useRef<HTMLInputElement>(null)
   const activeAbortControllerRef = useRef<AbortController | null>(null)
   const activeRunEventSourcesRef = useRef<Map<string, EventSource>>(new Map())
+  const appliedFactoryRunIdsRef = useRef<Set<string>>(new Set())
   const primitiveRunAnalysisRef = useRef<Map<string, string>>(new Map())
   const conversationHistoryNextCursorRef = useRef<string | null>(null)
   const conversationHistoryLoadingRef = useRef(false)
@@ -2427,6 +2471,7 @@ export function AiChatPanel() {
       setMessages(persisted.messages)
       setInput(persisted.input)
       setGenerationMode(persisted.generationMode)
+      setConversationPurpose(persisted.conversationPurpose)
       setInputExpanded(persisted.inputExpanded)
       setImageAttachment(persisted.imageAttachment)
       latestGeometryArtifactRef.current = latestGeneratedGeometryArtifact(persisted.messages)
@@ -2449,12 +2494,22 @@ export function AiChatPanel() {
       messages,
       input,
       generationMode,
+      conversationPurpose,
       inputExpanded,
       imageAttachment,
       updatedAt: new Date().toISOString(),
     }
     window.localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(snapshot))
-  }, [conversationId, generationMode, imageAttachment, input, inputExpanded, messages, panelHydrated])
+  }, [
+    conversationId,
+    conversationPurpose,
+    generationMode,
+    imageAttachment,
+    input,
+    inputExpanded,
+    messages,
+    panelHydrated,
+  ])
 
   useEffect(() => {
     if (!panelHydrated) return
@@ -2497,6 +2552,10 @@ export function AiChatPanel() {
   }, [generationMode])
 
   useEffect(() => {
+    aiChatPanelState.conversationPurpose = conversationPurpose
+  }, [conversationPurpose])
+
+  useEffect(() => {
     aiChatPanelState.inputExpanded = inputExpanded
   }, [inputExpanded])
 
@@ -2512,7 +2571,7 @@ export function AiChatPanel() {
     if (loading) setModeMenuOpen(false)
   }, [loading])
 
-  const markGenerationStopped = useCallback((content = '已停止生成。') => {
+  const markGenerationStopped = useCallback((content = 'Generation stopped.') => {
     setMessages((prev) => {
       let stoppedActiveRun = false
       const updated = prev.map((message) => {
@@ -2594,7 +2653,7 @@ export function AiChatPanel() {
     if (result.nodeIds.length === 0) {
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: '无法放置这个几何草稿：没有生成有效节点。' },
+        { role: 'assistant', content: 'No valid geometry nodes were created.' },
       ])
       return
     }
@@ -2610,7 +2669,7 @@ export function AiChatPanel() {
     if (result.nodeIds.length === 0) {
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: '无法替换画布中的旧版本：没有生成有效节点。' },
+        { role: 'assistant', content: 'Could not replace the previous canvas version.' },
       ])
       return
     }
@@ -2632,7 +2691,7 @@ export function AiChatPanel() {
         ...prev,
         {
           role: 'assistant',
-          content: `存入素材失败：${error instanceof Error ? error.message : String(error)}`,
+          content: `瀛樺叆绱犳潗澶辫触锛?{error instanceof Error ? error.message : String(error)}`,
         },
       ])
     }
@@ -2716,14 +2775,14 @@ export function AiChatPanel() {
     if (!AI_IMAGE_TYPES.has(file.type)) {
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: '图片格式不支持。请上传 PNG、JPG 或 WebP。' },
+        { role: 'assistant', content: 'Please upload a PNG, JPG, or WebP image.' },
       ])
       return
     }
     if (file.size > AI_IMAGE_MAX_BYTES) {
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: '图片太大。请上传 8MB 以内的图片。' },
+        { role: 'assistant', content: 'Image is too large. Please use an image under 8MB.' },
       ])
       return
     }
@@ -2739,7 +2798,7 @@ export function AiChatPanel() {
         ...prev,
         {
           role: 'assistant',
-          content: `读取图片失败：${error instanceof Error ? error.message : String(error)}`,
+          content: `璇诲彇鍥剧墖澶辫触锛?{error instanceof Error ? error.message : String(error)}`,
         },
       ])
     }
@@ -2788,7 +2847,7 @@ export function AiChatPanel() {
         const sizeKb = Math.ceil(bodyJson.length / 1024)
         const detail = error instanceof Error ? error.message : String(error)
         throw new Error(
-          `AI 请求没有发出去（${detail}）。请求约 ${sizeKb}KB，请检查 AI Base URL/CORS/网络；如果是二次修订，系统会使用压缩上下文和精简工具 schema 重试。`,
+          `AI request failed before sending. ${detail}. Payload size: ${sizeKb}KB. Check AI Base URL, CORS, and schema.`,
         )
       }
       throwIfAborted(signal)
@@ -2901,7 +2960,7 @@ export function AiChatPanel() {
     const resolvedTab = tab ?? 'inspect'
     setArticraftViewerModal({
       url: getArticraftViewerUrl(recordId, resolvedTab),
-      title: resolvedTab === 'code' ? 'Articraft 源记录' : 'Articraft Viewer',
+      title: resolvedTab === 'code' ? 'Articraft Code' : 'Articraft Viewer',
     })
   }, [getArticraftViewerUrl])
 
@@ -2942,7 +3001,7 @@ export function AiChatPanel() {
       {
         role: 'assistant',
         content: t('aiChat.articraftImported', {
-          fallback: '已导入当前场景：{count} 个部件。',
+          fallback: 'Imported {count} Articraft assets.',
           params: { count },
         }),
       },
@@ -2993,7 +3052,7 @@ export function AiChatPanel() {
         const jobMessageIndex = updated.findIndex((message) => message.generationRun?.id === runId)
         const resultMessage: ChatMessage = {
           role: 'assistant',
-          content: t('aiChat.articraftReady', 'Articraft 生成完成，可以查看或导入。'),
+          content: t('aiChat.articraftReady', 'Articraft result is ready.'),
           generationRun: { id: runId, mode: 'articraft', status: 'succeeded' },
           articraftResult: result,
         }
@@ -3011,7 +3070,7 @@ export function AiChatPanel() {
     (runId: string, prompt: string, image: ChatImageAttachment | undefined, resultData: unknown) => {
       const asset = isRecord(resultData) ? resultData.asset : undefined
       if (!isImageTo3DAsset(asset)) {
-        throw new Error('图生建模完成，但接口没有返回有效的物品资产。')
+        throw new Error('Image-to-3D did not return a valid asset.')
       }
 
       const provider =
@@ -3032,7 +3091,7 @@ export function AiChatPanel() {
         const runMessageIndex = updated.findIndex((message) => message.generationRun?.id === runId)
         const resultMessage: ChatMessage = {
           role: 'assistant',
-          content: `图生建模完成：${asset.name ?? asset.id}`,
+          content: `\u56fe\u751f\u5efa\u6a21\u5b8c\u6210\uff1a${asset.name ?? asset.id}`,
           image,
           generationRun: { id: runId, mode: 'image-to-3d', status: 'succeeded' },
           modelArtifact: artifact,
@@ -3053,7 +3112,7 @@ export function AiChatPanel() {
     if (activeRunEventSourcesRef.current.size === 0) setLoading(false)
   }, [])
 
-  const markRunCancelledFromServer = useCallback((runId: string, content = '已停止生成。') => {
+  const markRunCancelledFromServer = useCallback((runId: string, content = 'Generation cancelled.') => {
     closeRunEventSource(runId)
     setMessages((prev) =>
       prev.map((messageItem) =>
@@ -3129,7 +3188,7 @@ export function AiChatPanel() {
               messageItem.generationRun?.id === run.id
                 ? {
                     role: 'assistant',
-                    content: `图生建模失败：${message}`,
+                    content: `鍥剧敓寤烘ā澶辫触锛?{message}`,
                     generationRun: { id: run.id, mode: 'image-to-3d', status: 'failed' },
                   }
                 : messageItem,
@@ -3148,7 +3207,7 @@ export function AiChatPanel() {
             messageItem.generationRun?.id === run.id
               ? {
                   role: 'assistant',
-                  content: `图生建模失败：${String(parsed.message)}`,
+                  content: `鍥剧敓寤烘ā澶辫触锛?{String(parsed.message)}`,
                   generationRun: { id: run.id, mode: 'image-to-3d', status: 'failed' },
                 }
               : messageItem,
@@ -3163,7 +3222,7 @@ export function AiChatPanel() {
             ? parsed.data.status
             : undefined
         if (status === 'cancelled') {
-          markRunCancelledFromServer(run.id, '已停止图生建模。')
+          markRunCancelledFromServer(run.id, 'Image-to-3D run cancelled.')
         }
       })
     },
@@ -3237,7 +3296,7 @@ export function AiChatPanel() {
                 ? {
                     role: 'assistant',
                     content: t('aiChat.error', {
-                      fallback: '错误：{message}',
+                      fallback: '\u51fa\u9519\u4e86\uff1a{message}',
                       params: { message: String(parsed.message) },
                     }),
                     generationRun: { id: job.id, mode: 'articraft', status: 'failed' },
@@ -3256,7 +3315,7 @@ export function AiChatPanel() {
             ? parsed.data.status
             : undefined
         if (status === 'cancelled') {
-          markRunCancelledFromServer(job.id, '已停止 Articraft 生成。')
+          markRunCancelledFromServer(job.id, 'Articraft run cancelled.')
         }
       })
     },
@@ -3437,7 +3496,7 @@ export function AiChatPanel() {
                 ? {
                     role: 'assistant',
                     content: t('aiChat.error', {
-                      fallback: '错误：{message}',
+                      fallback: '\u51fa\u9519\u4e86\uff1a{message}',
                       params: { message: String(parsed.message) },
                     }),
                     generationRun: { id: run.id, mode: 'primitive', status: 'failed' },
@@ -3464,7 +3523,7 @@ export function AiChatPanel() {
               currentRun && typeof currentRun.error === 'string'
                 ? currentRun.error
                 : status === 'cancelled'
-                  ? '???'
+                  ? '生成已取消'
                   : '\u751f\u6210\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5'
             setMessages((prev) =>
               prev.map((messageItem) =>
@@ -3475,7 +3534,7 @@ export function AiChatPanel() {
                         status === 'cancelled'
                           ? message
                           : t('aiChat.error', {
-                              fallback: '???{message}',
+                      fallback: '\u51fa\u9519\u4e86\uff1a{message}',
                               params: { message },
                             }),
                       generationRun: {
@@ -3503,6 +3562,212 @@ export function AiChatPanel() {
       })
     },
     [closeRunEventSource, completePrimitiveRun, markRunCancelledFromServer],
+  )
+
+  const completeFactoryRun = useCallback((runId: string, data: unknown) => {
+    const appliedNodeIds = appliedFactoryRunIdsRef.current.has(runId)
+      ? []
+      : applyFactoryRunCreatePatchesToCanvas(data)
+    if (appliedNodeIds.length > 0) appliedFactoryRunIdsRef.current.add(runId)
+    const displayData =
+      isRecord(data) && appliedNodeIds.length > 0
+        ? {
+            ...data,
+            applied: true,
+            nodeIds: Array.from(
+              new Set([
+                ...(Array.isArray(data.nodeIds) ? data.nodeIds.map(String) : []),
+                ...appliedNodeIds,
+              ]),
+            ),
+          }
+        : data
+    setMessages((prev) => {
+      const updated = [...prev]
+      const runMessageIndex = updated.findIndex((message) => message.generationRun?.id === runId)
+      const requiredMissingAssets =
+        isRecord(displayData) && Array.isArray(displayData.missingAssets)
+          ? displayData.missingAssets.some(
+              (item) => isRecord(item) && item.required === true,
+            )
+          : false
+      const succeeded =
+        isRecord(displayData) &&
+        isRecord(displayData.intent) &&
+        displayData.intent.action !== 'missing' &&
+        !requiredMissingAssets
+      const resultMessage: ChatMessage = {
+        role: 'assistant',
+        content: formatFactoryRunResult(displayData),
+        generationRun: { id: runId, mode: 'factory', status: succeeded ? 'succeeded' : 'failed' },
+      }
+      if (runMessageIndex >= 0) {
+        updated[runMessageIndex] = resultMessage
+      } else {
+        updated.push(resultMessage)
+      }
+      return updated
+    })
+  }, [])
+
+  const subscribeFactoryRun = useCallback(
+    (run: { id: string; prompt: string; status?: string }) => {
+      if (activeRunEventSourcesRef.current.has(run.id)) return
+      setLoading(true)
+
+      const progressLines: string[] = []
+      setMessages((prev) => {
+        if (prev.some((message) => message.generationRun?.id === run.id)) return prev
+        return [
+          ...prev,
+          {
+            role: 'assistant',
+            content: '**Factory draft:**\nPreparing factory patch plan...',
+            generationRun: {
+              id: run.id,
+              mode: 'factory',
+              status: run.status === 'queued' ? 'queued' : 'running',
+            },
+          },
+        ]
+      })
+
+      const source = new EventSource(`/api/ai-harness/runs/${encodeURIComponent(run.id)}/events`)
+      activeRunEventSourcesRef.current.set(run.id, source)
+
+      source.addEventListener('progress', (event) => {
+        const parsed = safeParseJson(event.data)
+        const message = isRecord(parsed) && typeof parsed.message === 'string' ? parsed.message : ''
+        if (message.trim()) {
+          progressLines.push(message.trim())
+          if (progressLines.length > ARTICRAFT_PROGRESS_LINE_LIMIT) {
+            progressLines.splice(0, progressLines.length - ARTICRAFT_PROGRESS_LINE_LIMIT)
+          }
+        }
+        setMessages((prev) =>
+          prev.map((messageItem) =>
+            messageItem.generationRun?.id === run.id
+              ? {
+                  ...messageItem,
+                  content: formatArticraftProgressMessage(
+                    '**Factory draft:**\nGenerating equipment and patch plan...',
+                    progressLines,
+                  ),
+                  generationRun: { id: run.id, mode: 'factory', status: 'running' },
+                }
+              : messageItem,
+          ),
+        )
+      })
+
+      source.addEventListener('message', (event) => {
+        const parsed = safeParseJson(event.data)
+        if (!isRecord(parsed) || !isRecord(parsed.data) || parsed.data.stage !== 'patch-plan') return
+        const patchCount =
+          typeof parsed.data.patchCount === 'number' ? parsed.data.patchCount : undefined
+        const missingAssets = Array.isArray(parsed.data.missingAssets)
+          ? parsed.data.missingAssets.length
+          : 0
+        setMessages((prev) =>
+          prev.map((messageItem) =>
+            messageItem.generationRun?.id === run.id
+              ? {
+                  ...messageItem,
+                  content: [
+                    '**Factory draft:**',
+                    patchCount == null ? '- Patch plan ready.' : `- Create patches: ${patchCount}`,
+                    `- Missing assets: ${missingAssets}`,
+                    '- Waiting for final run result...',
+                  ].join('\n'),
+                  generationRun: { id: run.id, mode: 'factory', status: 'running' },
+                }
+              : messageItem,
+          ),
+        )
+      })
+
+      source.addEventListener('result', (event) => {
+        const parsed = safeParseJson(event.data)
+        closeRunEventSource(run.id)
+        completeFactoryRun(run.id, isRecord(parsed) ? parsed.data : undefined)
+      })
+
+      source.addEventListener('error', (event) => {
+        const parsed = event instanceof MessageEvent ? safeParseJson(event.data) : null
+        if (parsed && isRecord(parsed) && typeof parsed.message === 'string') {
+          closeRunEventSource(run.id)
+          setMessages((prev) =>
+            prev.map((messageItem) =>
+              messageItem.generationRun?.id === run.id
+                ? {
+                    role: 'assistant',
+                    content: t('aiChat.error', {
+                      fallback: '\u51fa\u9519\u4e86\uff1a{message}',
+                      params: { message: String(parsed.message) },
+                    }),
+                    generationRun: { id: run.id, mode: 'factory', status: 'failed' },
+                  }
+                : messageItem,
+            ),
+          )
+          return
+        }
+        void fetch(`/api/ai-harness/runs/${encodeURIComponent(run.id)}`, { cache: 'no-store' })
+          .then((response) => (response.ok ? response.json() : null))
+          .then((data) => {
+            const currentRun = isRecord(data) && isRecord(data.run) ? data.run : null
+            const status =
+              currentRun && typeof currentRun.status === 'string' ? currentRun.status : undefined
+            if (status === 'succeeded' && currentRun) {
+              closeRunEventSource(run.id)
+              completeFactoryRun(run.id, currentRun.result)
+              return
+            }
+            if (status !== 'failed' && status !== 'cancelled') return
+            closeRunEventSource(run.id)
+            const message =
+              currentRun && typeof currentRun.error === 'string'
+                ? currentRun.error
+                : status === 'cancelled'
+                  ? '已取消'
+                  : '生成失败，请重试'
+            setMessages((prev) =>
+              prev.map((messageItem) =>
+                messageItem.generationRun?.id === run.id
+                  ? {
+                      role: 'assistant',
+                      content:
+                        status === 'cancelled'
+                          ? message
+                          : t('aiChat.error', {
+                      fallback: '\u51fa\u9519\u4e86\uff1a{message}',
+                              params: { message },
+                            }),
+                      generationRun: {
+                        id: run.id,
+                        mode: 'factory',
+                        status: status as 'failed' | 'cancelled',
+                      },
+                    }
+                  : messageItem,
+              ),
+            )
+          })
+          .catch(() => {})
+      })
+
+      source.addEventListener('status', (event) => {
+        const parsed = event instanceof MessageEvent ? safeParseJson(event.data) : null
+        const status =
+          isRecord(parsed) && isRecord(parsed.data) && typeof parsed.data.status === 'string'
+            ? parsed.data.status
+            : undefined
+        if (status === 'cancelled') {
+          markRunCancelledFromServer(run.id)
+        }
+      })
+    },
+    [closeRunEventSource, completeFactoryRun, markRunCancelledFromServer, t],
   )
 
   useEffect(() => {
@@ -3544,13 +3809,26 @@ export function AiChatPanel() {
               prompt: typeof activeRun.prompt === 'string' ? activeRun.prompt : 'Geometry object',
               status: typeof activeRun.status === 'string' ? activeRun.status : undefined,
             })
+          } else if (activeRun.mode === 'factory') {
+            subscribeFactoryRun({
+              id: activeRun.id,
+              prompt: typeof activeRun.prompt === 'string' ? activeRun.prompt : 'Factory draft',
+              status: typeof activeRun.status === 'string' ? activeRun.status : undefined,
+            })
           }
         }
       })
       .catch(() => {})
 
     return () => controller.abort()
-  }, [conversationId, panelHydrated, subscribeArticraftRun, subscribeImageTo3DRun, subscribePrimitiveRun])
+  }, [
+    conversationId,
+    panelHydrated,
+    subscribeArticraftRun,
+    subscribeFactoryRun,
+    subscribeImageTo3DRun,
+    subscribePrimitiveRun,
+  ])
 
   useEffect(() => {
     return () => {
@@ -3629,6 +3907,7 @@ export function AiChatPanel() {
       setMessages([])
       setInput('')
       setImageAttachment(undefined)
+      setConversationPurpose(undefined)
       latestGeometryArtifactRef.current = null
       setConversationHistoryOpen(false)
     },
@@ -3647,11 +3926,12 @@ export function AiChatPanel() {
       setMessages([])
       setInput('')
       setImageAttachment(undefined)
+      setConversationPurpose(undefined)
       latestGeometryArtifactRef.current = null
       setConversationHistoryOpen(false)
       void refreshConversationHistory()
     } catch {
-      setMessages((prev) => [...prev, { role: 'assistant', content: '新会话创建失败。' }])
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Failed to create conversation.' }])
     }
   }, [closeActiveRunSources, refreshConversationHistory])
 
@@ -3678,10 +3958,11 @@ export function AiChatPanel() {
         setMessages([])
         setInput('')
         setImageAttachment(undefined)
+        setConversationPurpose(undefined)
         latestGeometryArtifactRef.current = null
         void refreshConversationHistory()
       } catch {
-        setMessages((prev) => [...prev, { role: 'assistant', content: '删除历史记录失败。' }])
+        setMessages((prev) => [...prev, { role: 'assistant', content: 'Failed to delete conversation.' }])
       }
     },
     [closeActiveRunSources, conversationId, refreshConversationHistory],
@@ -3738,7 +4019,7 @@ export function AiChatPanel() {
         ...prev,
         {
           role: 'assistant',
-          content: '没有找到匹配的姿态参数。请在 Articraft Viewer 调整关节后复制 URL，再点击一次。',
+          content: 'No Articraft pose data found. Open the Articraft Viewer and try again.',
         },
       ])
       return
@@ -3764,7 +4045,7 @@ export function AiChatPanel() {
     if (updates.length === 0) {
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: '没有已导入的 Articraft 关节匹配该姿态。请先导入模型。' },
+        { role: 'assistant', content: 'No matching Articraft joint metadata was found on the canvas.' },
       ])
       return
     }
@@ -3773,7 +4054,7 @@ export function AiChatPanel() {
     useViewer.getState().setSelection({ selectedIds: [updates[0]!.id] })
     setMessages((prev) => [
       ...prev,
-      { role: 'assistant', content: `已将姿态应用到 ${updates.length} 个 Articraft 关节节点。` },
+      { role: 'assistant', content: `Applied Articraft pose to ${updates.length} nodes.` },
     ])
   }, [])
 
@@ -3934,14 +4215,24 @@ export function AiChatPanel() {
       subscribeArticraftRun({ id: runId, prompt, status: 'queued' })
     } catch (err) {
       if (isAbortError(err)) {
-        markGenerationStopped('??? Articraft ???')
+        markGenerationStopped('已取消 Articraft 生成')
         return
       }
-      const errorMsg = String((err as { message?: unknown } | null)?.message ?? err)
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: t('aiChat.error', { fallback: '???{message}', params: { message: errorMsg } }) },
-      ])
+      const message = err instanceof Error ? err.message : String(err)
+      setMessages((prev) => {
+        const updated = [...prev]
+        const lastIdx = updated.length - 1
+        const result: ChatMessage = { role: 'assistant', content: `Articraft 生成失败：${message}` }
+        if (
+          lastIdx >= 0 &&
+          updated[lastIdx]?.role === 'assistant' &&
+          !updated[lastIdx]?.articraftResult
+        ) {
+          updated[lastIdx] = result
+          return updated
+        }
+        return [...updated, result]
+      })
     } finally {
       if (activeAbortControllerRef.current === controller) {
         activeAbortControllerRef.current = null
@@ -3981,7 +4272,6 @@ export function AiChatPanel() {
           tc.function.name === 'compose_recipe' ||
           tc.function.name === 'compose_assembly' ||
           tc.function.name === 'compose_parts' ||
-          tc.function.name === 'compose_object' ||
           tc.function.name === 'compose_robot_arm' ||
           tc.function.name === 'revise_geometry'
         )
@@ -3991,7 +4281,7 @@ export function AiChatPanel() {
             const result = [
               'Invalid generation plan. Nothing was created.',
               'Call exactly ONE geometry tool for the complete object.',
-              'Do not split one object across compose_assembly + compose_object + compose_recipe + compose_parts + compose_primitive, because attachTo indexes are local to a single tool call.',
+              'Do not split one object across compose_assembly + compose_recipe + compose_parts + compose_primitive, because attachTo indexes are local to a single tool call.',
             ].join('\n')
             toolResultApiMsgs.push({ role: 'tool', tool_call_id: tc.id, content: result })
             allResults.push(result)
@@ -4179,7 +4469,7 @@ export function AiChatPanel() {
     setInput('')
     setImageAttachment(undefined)
     const userContent =
-      text || '请生成一个可编辑的 3D 几何对象，并尽量保留主要形状、比例和材质。'
+      text || 'Describe the image and generate a 3D object.'
     const latestGeometryArtifactCandidate =
       latestGeneratedGeometryArtifact(messages) ?? latestGeometryArtifactRef.current
     if (latestGeometryArtifactCandidate) {
@@ -4265,7 +4555,13 @@ export function AiChatPanel() {
       const errorMsg = String((err as { message?: unknown } | null)?.message ?? err)
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: t('aiChat.error', { fallback: '错误：{message}', params: { message: errorMsg } }) },
+        {
+          role: 'assistant',
+          content: t('aiChat.error', {
+            fallback: '\u51fa\u9519\u4e86\uff1a{message}',
+            params: { message: errorMsg },
+          }),
+        },
       ])
     } finally {
       if (activeAbortControllerRef.current === controller) {
@@ -4275,6 +4571,103 @@ export function AiChatPanel() {
     }
     return
   }, [conversationId, input, messages, loading, generationMode, sendImageTo3DMessage, sendArticraftMessage, subscribePrimitiveRun, markGenerationStopped])
+
+  const selectConversationPurpose = useCallback((purpose: AiConversationPurpose) => {
+    setConversationPurpose(purpose)
+    setConversationHistoryOpen(false)
+    if (purpose === 'factory') {
+      setModeMenuOpen(false)
+      setImageAttachment(undefined)
+    }
+  }, [])
+
+  const sendFactoryMessage = useCallback(async () => {
+    const text = input.trim()
+    if (!text || loading) return
+    const controller = new AbortController()
+    activeAbortControllerRef.current = controller
+    setInput('')
+    setImageAttachment(undefined)
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', content: text },
+      {
+        role: 'assistant',
+        content: '**Factory draft:**\nPreparing factory patch plan...',
+      },
+    ])
+    setLoading(true)
+
+    try {
+      const res = await fetch('/api/ai-harness/runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId,
+          mode: 'factory',
+          prompt: text,
+          context: {
+            recentMessages: messages,
+          },
+        }),
+        signal: controller.signal,
+      })
+      throwIfAborted(controller.signal)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(isRecord(data) && typeof data.error === 'string' ? data.error : res.statusText)
+      }
+      const runId = isRecord(data) && typeof data.runId === 'string' ? data.runId : ''
+      if (!runId) throw new Error('Factory run was not created')
+
+      setMessages((prev) => {
+        const updated = [...prev]
+        const targetIndex =
+          updated.length > 0 && updated[updated.length - 1]?.role === 'assistant'
+            ? updated.length - 1
+            : -1
+        if (targetIndex >= 0) {
+          updated[targetIndex] = {
+            ...updated[targetIndex]!,
+            generationRun: { id: runId, mode: 'factory', status: 'queued' },
+          }
+        }
+        return updated
+      })
+      subscribeFactoryRun({ id: runId, prompt: text, status: 'queued' })
+    } catch (err) {
+      if (isAbortError(err)) {
+        markGenerationStopped()
+        return
+      }
+      const errorMsg = String((err as { message?: unknown } | null)?.message ?? err)
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: t('aiChat.error', {
+                      fallback: '\u51fa\u9519\u4e86\uff1a{message}',
+            params: { message: errorMsg },
+          }),
+        },
+      ])
+    } finally {
+      if (activeAbortControllerRef.current === controller) {
+        activeAbortControllerRef.current = null
+        if (activeRunEventSourcesRef.current.size === 0) setLoading(false)
+      }
+    }
+  }, [conversationId, input, loading, markGenerationStopped, messages, subscribeFactoryRun, t])
+
+  const handleFactoryKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        sendFactoryMessage()
+      }
+    },
+    [sendFactoryMessage],
+  )
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -4287,6 +4680,11 @@ export function AiChatPanel() {
   )
 
   const currentMode = AI_GENERATION_MODES.find((mode) => mode.id === generationMode) ?? AI_GENERATION_MODES[0]!
+  const resolvedConversationPurpose =
+    conversationPurpose ?? (messages.length > 0 ? 'asset' : undefined)
+  const showConversationPicker = !resolvedConversationPurpose && messages.length === 0
+  const isFactoryConversation = resolvedConversationPurpose === 'factory'
+  const isAssetConversation = resolvedConversationPurpose === 'asset'
   const primitiveHasConfig = Boolean(aiProxyUrl || (baseUrl && apiKey))
   const showImageUpload = generationMode === 'image-to-3d' || generationMode === 'articraft'
   const canSend =
@@ -4353,30 +4751,30 @@ export function AiChatPanel() {
           type="button"
         >
           <Icon className="size-3.5" icon="mdi:history" />
-          {t('aiChat.conversationHistory', '历史记录')}
+          {t('aiChat.conversationHistory', 'History')}
           <Icon
             className={cn('size-3.5 transition-transform', conversationHistoryOpen && 'rotate-180')}
             icon="mdi:chevron-down"
           />
         </button>
         <button
-          aria-label={t('aiChat.newConversation', '新会话')}
+          aria-label={t('aiChat.newConversation', 'New conversation')}
           className="inline-flex size-7 items-center justify-center rounded-md border border-border/60 bg-accent/25 text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff]"
           onClick={() => void createNewConversation()}
           type="button"
         >
           <Icon className="size-4" icon="mdi:plus" />
         </button>
-        {!primitiveHasConfig && generationMode === 'primitive' && (
+        {isAssetConversation && !primitiveHasConfig && generationMode === 'primitive' && (
           <span className="text-[10px] text-orange-400">
-            {t('aiChat.notConfigured', '未配置')}
+            {t('aiChat.notConfigured', 'Not configured')}
           </span>
         )}
         {conversationHistoryOpen ? (
           <div className="absolute top-full right-3 z-30 mt-1.5 w-[min(22rem,calc(100%-1.5rem))] rounded-xl border border-border/70 bg-background/95 p-1.5 shadow-xl backdrop-blur">
             {conversationHistory.length === 0 ? (
               <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">
-                {t('aiChat.noConversationHistory', '暂无历史记录')}
+                {t('aiChat.noConversationHistory', 'No history yet')}
               </div>
             ) : (
               <div
@@ -4409,16 +4807,16 @@ export function AiChatPanel() {
                         />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[11px] font-medium">
-                            {conversation.title || t('aiChat.newConversation', '新会话')}
+                            {conversation.title || t('aiChat.newConversation', 'New conversation')}
                           </span>
                           <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
-                            {conversation.messageCount} {t('aiChat.messageCountLabel', '条消息')} ·{' '}
+                            {conversation.messageCount} {t('aiChat.messageCountLabel', 'messages')} ?{' '}
                             {new Date(conversation.updatedAt).toLocaleString()}
                           </span>
                         </span>
                       </button>
                       <button
-                        aria-label={t('aiChat.deleteConversation', '删除历史记录')}
+                        aria-label={t('aiChat.deleteConversation', 'Delete conversation')}
                         className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-70 transition-colors hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
                         onClick={(event) => {
                           event.stopPropagation()
@@ -4433,7 +4831,7 @@ export function AiChatPanel() {
                 })}
                 {conversationHistoryLoading ? (
                   <div className="px-2 py-2 text-center text-[10px] text-muted-foreground">
-                    {t('aiChat.loadingConversationHistory', '正在加载历史记录...')}
+                    {t('aiChat.loadingConversationHistory', 'Loading history...')}
                   </div>
                 ) : null}
               </div>
@@ -4446,14 +4844,107 @@ export function AiChatPanel() {
         ref={scrollRef}
         className="flex-1 space-y-2 overflow-y-auto px-3 py-2 [scrollbar-color:#3a3a3d_#050505] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-button]:hidden [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3d] [&::-webkit-scrollbar-track]:bg-[#050505]"
       >
-        {messages.length === 0 && (
+        {showConversationPicker && (
+          <div className="flex min-h-full items-center justify-center py-8">
+            <div className="w-full max-w-sm space-y-3 text-center">
+              <div>
+                <Icon className="mx-auto mb-2 size-8 text-[#a684ff]" icon="mdi:robot-industrial-outline" />
+                <h3 className="font-medium text-foreground text-sm">开始新的 AI 会话</h3>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  选择你要让 AI 帮你完成的任务类型。
+                </p>
+              </div>
+              <button
+                className="group w-full rounded-2xl border border-border/70 bg-accent/25 p-3 text-left transition-colors hover:border-[#a684ff]/60 hover:bg-[#a684ff]/10"
+                onClick={() => selectConversationPurpose('factory')}
+                type="button"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-[#a684ff]/40 bg-[#a684ff]/10 text-[#a684ff]">
+                    <Icon className="size-5" icon="mdi:factory" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-foreground text-sm">
+                      创建与修改工厂
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">
+                      创建厂房、车间、房间、区域布局，并持续修改当前画布内容。
+                    </span>
+                    <span className="mt-2 block text-[10px] text-muted-foreground/80">
+                      例：创建一个化工车间 / 把刚才房间改成 4m × 4m
+                    </span>
+                  </span>
+                  <Icon
+                    className="mt-1 size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-[#a684ff]"
+                    icon="mdi:chevron-right"
+                  />
+                </div>
+              </button>
+              <button
+                className="group w-full rounded-2xl border border-border/70 bg-accent/25 p-3 text-left transition-colors hover:border-[#a684ff]/60 hover:bg-[#a684ff]/10"
+                onClick={() => selectConversationPurpose('asset')}
+                type="button"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-violet-400/40 bg-violet-400/10 text-violet-300">
+                    <Icon className="size-5" icon="mdi:cube-scan" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-foreground text-sm">
+                      生成工厂品件与设备
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">
+                      生成单个设备、机器、部件或图生模型，可放到画布或保存为品件。
+                    </span>
+                    <span className="mt-2 block text-[10px] text-muted-foreground/80">
+                      例：生成一个水泵 / 生成一个反应釜 / 上传图片生成设备模型
+                    </span>
+                  </span>
+                  <Icon
+                    className="mt-1 size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-[#a684ff]"
+                    icon="mdi:chevron-right"
+                  />
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+        {isAssetConversation && messages.length === 0 && (
           <div className="py-8 text-center text-xs text-muted-foreground">
             <Icon className="mx-auto mb-2 size-8 opacity-30" icon="mdi:cube-scan" />
-            <p>{t('aiChat.placeholder', '描述你想创建的对象。')}</p>
+            <p>{t('aiChat.placeholder', 'Describe the object you want to create.')}</p>
             <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-              {['风扇', '写字桌', '储物架', '排风扇'].map((hint) => (
+              {['Industrial pump', 'Control cabinet', 'Pipe system', 'Conveyor'].map((hint) => (
                 <button
                   className="rounded-full border border-border/60 px-2.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+                  key={hint}
+                  onClick={() => setInput(hint)}
+                  type="button"
+                >
+                  {hint}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {isFactoryConversation && messages.length === 0 && (
+          <div className="space-y-3 py-5">
+            <div className="rounded-2xl border border-[#a684ff]/30 bg-[#a684ff]/10 p-3">
+              <div className="flex items-center gap-2">
+                <Icon className="size-4 text-[#a684ff]" icon="mdi:factory" />
+                <span className="font-medium text-foreground text-sm">创建与修改工厂</span>
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                这里将用于通过自然语言创建厂房、车间、房间和工厂布局，并连续修改当前 AI 目标。
+              </p>
+              <p className="mt-2 text-[10px] leading-relaxed text-amber-300/90">
+                当前已接入工厂草稿执行：会生成几何 artifact 与 create patches，但不会自动应用到画布。
+              </p>
+            </div>
+            <div className="grid gap-1.5 text-[11px] text-muted-foreground">
+              {['创建一个 20m × 30m 的车间', '把刚才房间改成 4m × 4m', '加一个仓储区和设备区'].map((hint) => (
+                <button
+                  className="rounded-lg border border-border/60 px-2.5 py-1.5 text-left transition-colors hover:bg-accent hover:text-foreground"
                   key={hint}
                   onClick={() => setInput(hint)}
                   type="button"
@@ -4507,7 +4998,7 @@ export function AiChatPanel() {
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Icon className="size-3.5 shrink-0" icon="mdi:tools" />
                 <span>
-                  {t('aiChat.calling', '正在调用工具...')} {msg.toolCalls.map((tc) => tc.name).join(', ')}
+                  {t('aiChat.calling', 'Calling tools...')} {msg.toolCalls.map((tc) => tc.name).join(', ')}
                 </span>
               </div>
             ) : msg.imageTo3dResult ? (
@@ -4557,11 +5048,11 @@ export function AiChatPanel() {
                   <div className="min-w-0">
                     <div className="truncate font-medium">{msg.articraftResult.name}</div>
                     <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
-                      记录：{msg.articraftResult.recordId || '-'}
+                      Record: {msg.articraftResult.recordId || '-'}
                     </div>
                     {msg.articraftResult.recordPath ? (
                       <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground" title={msg.articraftResult.recordPath}>
-                        路径：{msg.articraftResult.recordPath}
+                        Path: {msg.articraftResult.recordPath}
                       </div>
                     ) : null}
                   </div>
@@ -4573,22 +5064,22 @@ export function AiChatPanel() {
                         : 'border-sky-400/40 bg-sky-400/10 text-sky-300',
                     )}
                   >
-                    {msg.articraftResult.status === 'imported' ? '已导入' : '就绪'}
+                    {msg.articraftResult.status === 'imported' ? 'Imported' : 'Ready'}
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-1 text-[11px]">
                   <div className="rounded border border-border/50 bg-accent/20 px-2 py-1">
-                    <div className="text-muted-foreground">部件</div>
+                    <div className="text-muted-foreground">Parts</div>
                     <div className="font-medium">{msg.articraftResult.partCount}</div>
                   </div>
                   <div className="rounded border border-border/50 bg-accent/20 px-2 py-1">
-                    <div className="text-muted-foreground">关节</div>
+                    <div className="text-muted-foreground">Joints</div>
                     <div className="font-medium">{msg.articraftResult.jointCount}</div>
                   </div>
                   <div className="rounded border border-border/50 bg-accent/20 px-2 py-1">
-                    <div className="text-muted-foreground">状态</div>
+                    <div className="text-muted-foreground">Status</div>
                     <div className="font-medium">
-                      {msg.articraftResult.status === 'imported' ? '已导入' : '就绪'}
+                      {msg.articraftResult.status === 'imported' ? 'Imported' : 'Ready'}
                     </div>
                   </div>
                 </div>
@@ -4598,13 +5089,13 @@ export function AiChatPanel() {
                   if (msg.articraftResult!.previewError) {
                     return (
                       <div className="rounded border border-amber-400/30 bg-amber-400/10 px-2 py-1.5 text-[11px] text-amber-200">
-                        预览导出失败：{msg.articraftResult!.previewError}
+                        Preview failed: {msg.articraftResult!.previewError}
                       </div>
                     )
                   }
                   return (
                     <div className="rounded border border-border/50 bg-accent/20 px-2 py-3 text-center text-[11px] text-muted-foreground">
-                      正在准备 3D 预览，或点击“存到资料库”生成 GLB。
+                      Preparing the 3D preview, or save to the library to generate a GLB.
                     </div>
                   )
                 })()}
@@ -4616,7 +5107,7 @@ export function AiChatPanel() {
                     type="button"
                   >
                     <Icon className="size-3.5" icon="mdi:open-in-new" />
-                    打开 Articraft Viewer
+                    Open Articraft Viewer
                   </button>
                   <button
                     className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
@@ -4626,7 +5117,7 @@ export function AiChatPanel() {
                     type="button"
                   >
                     <Icon className="size-3.5" icon="mdi:file-document-outline" />
-                    查看源记录
+                    View source record
                   </button>
                   <button
                     className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-emerald-400/50 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
@@ -4635,7 +5126,7 @@ export function AiChatPanel() {
                     type="button"
                   >
                     <Icon className="size-3.5" icon="mdi:import" />
-                    {msg.articraftResult.asset ? '放到画布' : '放到画布（可动）'}
+                    {msg.articraftResult.asset ? 'Place on canvas' : 'Place on canvas (available after import)'}
                   </button>
                   <button
                     className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-amber-400/50 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
@@ -4644,7 +5135,7 @@ export function AiChatPanel() {
                     type="button"
                   >
                     <Icon className="size-3.5" icon="mdi:archive-plus-outline" />
-                    {msg.articraftResult.savedAt ? '已存资料库' : '存到资料库'}
+                    {msg.articraftResult.savedAt ? 'Saved to library' : 'Save to library'}
                   </button>
                   {msg.articraftResult.asset ? (
                     <button
@@ -4653,7 +5144,7 @@ export function AiChatPanel() {
                       type="button"
                     >
                       <Icon className="size-3.5" icon="mdi:package-variant-closed" />
-                      在物品库中使用
+                      Select generated asset
                     </button>
                   ) : null}
                   <button
@@ -4663,7 +5154,7 @@ export function AiChatPanel() {
                     type="button"
                   >
                     <Icon className="size-3.5" icon="mdi:axis-arrow" />
-                    应用姿态
+                    Apply pose
                   </button>
                   <button
                     className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
@@ -4672,7 +5163,7 @@ export function AiChatPanel() {
                     type="button"
                   >
                     <Icon className="size-3.5" icon="mdi:refresh" />
-                    重新生成
+                    Regenerate
                   </button>
                 </div>
               </div>
@@ -4684,11 +5175,12 @@ export function AiChatPanel() {
         {loading && (
           <div className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground">
             <Icon className="size-3.5 animate-spin" icon="mdi:loading" />
-            {t('aiChat.thinking', '正在思考...')}
+            {t('aiChat.thinking', 'Thinking...')}
           </div>
         )}
       </div>
 
+      {isAssetConversation ? (
       <div className="border-border/50 border-t px-3 py-2">
         <div className="relative mb-2">
           <button
@@ -4812,7 +5304,7 @@ export function AiChatPanel() {
               )}
               disabled={loading}
               onClick={() => imageInputRef.current?.click()}
-              title="上传图片"
+              title="Upload image"
               type="button"
             >
               <Icon className="size-4" icon="mdi:image-plus-outline" />
@@ -4829,13 +5321,62 @@ export function AiChatPanel() {
             )}
             disabled={!loading && !canSend}
             onClick={loading ? handleStopGeneration : sendMessage}
-            title={loading ? '停止生成' : '发送'}
+            title={loading ? 'Stop generation' : 'Send'}
             type="button"
           >
             <Icon className="size-4" icon={loading ? 'mdi:stop' : 'mdi:send'} />
           </button>
         </div>
       </div>
+      ) : isFactoryConversation ? (
+        <div className="border-border/50 border-t px-3 py-2">
+          <div className="mb-2 rounded-xl border border-border/60 bg-accent/20 px-2.5 py-2">
+            <div className="flex items-center gap-1.5 text-[11px] text-foreground">
+              <Icon className="size-3.5 text-[#a684ff]" icon="mdi:factory" />
+              <span className="font-medium">创建与修改工厂</span>
+            </div>
+            <div className="mt-1 text-[9px] text-muted-foreground">
+              当前目标：生成 factory patch plan · 不自动应用到画布
+            </div>
+          </div>
+          <div className="relative">
+            <textarea
+              className={cn(
+                'w-full resize-none rounded-lg border border-border/60 bg-accent/30 px-2.5 py-1.5 pr-8 pb-11 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-[#a684ff]/50 focus:outline-none focus:ring-1 focus:ring-[#a684ff]/30',
+                inputExpanded ? 'min-h-[132px]' : 'min-h-[72px]',
+              )}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleFactoryKeyDown}
+              placeholder="描述你想创建或修改的工厂布局…"
+              ref={inputRef}
+              rows={inputExpanded ? 6 : 3}
+              value={input}
+            />
+            <button
+              className="absolute top-1.5 right-1.5 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-[#a684ff]"
+              onClick={() => setInputExpanded((expanded) => !expanded)}
+              title={inputExpanded ? 'Collapse to 3 rows' : 'Expand to 6 rows'}
+              type="button"
+            >
+              <Icon className="size-3.5" icon={inputExpanded ? 'mdi:arrow-collapse-vertical' : 'mdi:arrow-expand-vertical'} />
+            </button>
+            <button
+              className={cn(
+                'absolute right-2 bottom-2 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors',
+                !input.trim() || loading
+                  ? 'cursor-not-allowed opacity-50'
+                  : 'hover:bg-accent hover:text-[#a684ff]',
+              )}
+              disabled={!input.trim() || loading}
+              onClick={sendFactoryMessage}
+              title="Send"
+              type="button"
+            >
+              <Icon className="size-4" icon="mdi:send" />
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

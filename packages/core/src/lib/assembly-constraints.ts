@@ -1,21 +1,7 @@
+import { type FamilyId, getFamilyDefinition, inferFamilyDefinition } from './family-registry'
 import type { PrimitiveMaterialInput, PrimitiveShapeInput } from './primitive-compose'
 
-export type AssemblyObjectFamily =
-  | 'vehicle'
-  | 'fan'
-  | 'pump'
-  | 'conveyor'
-  | 'machine_tool'
-  | 'outdoor_ac'
-  | 'tank'
-  | 'distillation_tower'
-  | 'reactor'
-  | 'compressor'
-  | 'grate_cooler'
-  | 'valve'
-  | 'electrical'
-  | 'robot_arm'
-  | 'unknown'
+export type AssemblyObjectFamily = FamilyId | 'unknown'
 
 export type HardGeometryConstraint = {
   source: 'prompt' | 'args'
@@ -44,6 +30,32 @@ export type AssemblyConstraintValidation = {
   issues: string[]
 }
 
+const PROMPT_COLOR_AS_PART_DETAIL_FAMILIES = new Set<AssemblyObjectFamily>([
+  'conveyor',
+  'pump',
+  'tank',
+  'reactor',
+  'compressor',
+  'heat_exchanger',
+  'machine_tool',
+  'forming_machine',
+  'material_handling',
+  'fluid_machine',
+  'process_equipment',
+  'distillation_tower',
+  'robot_arm',
+])
+
+const RAW_PRIMARY_LENGTH_UNRELIABLE_FAMILIES = new Set<AssemblyObjectFamily>([
+  'aircraft',
+  'robot_arm',
+  'tank',
+  'reactor',
+  'compressor',
+  'process_equipment',
+  'distillation_tower',
+])
+
 function textOf(value: unknown): string {
   if (typeof value === 'string') return value
   if (Array.isArray(value)) return value.map(textOf).join(' ')
@@ -63,25 +75,16 @@ function hardString(value: string, source: HardGeometryConstraint['source']): Ha
   return { value, source, priority: 'hard' }
 }
 
-export function inferAssemblyFamily(prompt: string, args?: Record<string, unknown>): AssemblyObjectFamily {
-  const text = `${prompt} ${textOf(args)}`.toLowerCase()
-  if (/(outdoor.?ac|air.?conditioner|condenser|\u7a7a\u8c03\u5916\u673a|\u7a7a\u8abf\u5916\u6a5f|\u7a7a\u8c03|\u7a7a\u8abf)/i.test(text)) return 'outdoor_ac'
-  if (/(grate[_\s-]?cooler|clinker[_\s-]?cooler|\u7be6\u51b7\u673a|\u7be6\u51b7\u6a5f)/i.test(text)) return 'grate_cooler'
-  if (/(reactor|reaction[_\s-]?(kettle|vessel)|stirred[_\s-]?tank|\u53cd\u5e94\u91dc|\u53cd\u61c9\u91dc|\u53cd\u5e94\u5668|\u53cd\u61c9\u5668)/i.test(text)) return 'reactor'
-  if (/(compressor|air[_\s-]?compressor|gas[_\s-]?engine|gas[_\s-]?turbine|combustion[_\s-]?engine|internal[_\s-]?combustion|\u538b\u7f29\u673a|\u58d3\u7e2e\u6a5f|\u71c3\u6c14\u673a|\u71c3\u6c14\u8f6e\u673a|\u5185\u71c3\u673a|\u53d1\u52a8\u673a)/i.test(text)) return 'compressor'
-  if (/(distillation[_\s-]?(tower|column)|fractionat(?:ion|or)|rectification[_\s-]?(tower|column)|chemical[_\s-]?tower|process[_\s-]?tower|\u84b8\u998f\u5854|\u84b8\u992e\u5854|\u7cbe\u998f\u5854|\u7cbe\u992e\u5854|\u5854\u5668|\u5316\u5de5\u5854)/i.test(text)) return 'distillation_tower'
-  if (/(robot[_\s-]?arm|industrial.?robot|cobot|manipulator|fanuc|m-710ic|m-710i|\u673a\u68b0\u81c2|\u6a5f\u68b0\u81c2|\u673a\u5668\u4eba|\u6a5f\u5668\u4eba|\u516d\u8f74|\u516d\u8ef8)/i.test(text)) return 'robot_arm'
-  if (/(car|sedan|suv|truck|vehicle|汽车|汽車|小汽车|小汽車|轿车|轎車)/i.test(text)) return 'vehicle'
-  if (/(outdoor.?ac|air.?conditioner|condenser|空调外机|空調外機|空调|空調)/i.test(text)) return 'outdoor_ac'
-  if (/(cnc|lathe|milling|mill|grinder|grinding|planer|drill|drilling|machining.?center|machine.?tool|\u673a\u5e8a|\u6a5f\u5e8a|\u8f66\u5e8a|\u8eca\u5e8a|\u94e3\u5e8a|\u92d1\u5e8a|\u78e8\u5e8a|\u5228\u5e8a|\u947d\u5e8a|\u94bb\u5e8a|\u52a0\u5de5\u4e2d\u5fc3)/i.test(text))
-    return 'machine_tool'
-  if (/(pump|blower|centrifugal|泵|风机|風機)/i.test(text)) return 'pump'
-  if (/(conveyor|belt.?conveyor|\u8f93\u9001\u673a|\u8f38\u9001\u6a5f|\u4f20\u9001\u5e26|\u50b3\u9001\u5e36|\u8f93\u9001\u5e26|\u8f38\u9001\u5e36)/i.test(text)) return 'conveyor'
-  if (/(fan|ventilator|风扇|風扇)/i.test(text)) return 'fan'
-  if (/(tank|vessel|\u7f50|\u50a8\u7f50|\u5132\u7f50|\u5bb9\u5668)/i.test(text)) return 'tank'
-  if (/(valve|阀|閥)/i.test(text)) return 'valve'
-  if (/(electrical.?cabinet|control.?cabinet|电柜|電櫃|控制柜)/i.test(text)) return 'electrical'
-  return 'unknown'
+export function inferAssemblyFamily(
+  prompt: string,
+  args?: Record<string, unknown>,
+): AssemblyObjectFamily {
+  return (inferFamilyDefinition({
+    ...(args ?? {}),
+    prompt,
+    object: args?.object,
+    name: args?.name,
+  })?.id ?? 'unknown') as AssemblyObjectFamily
 }
 
 function unitScale(unit: unknown): number {
@@ -101,22 +104,23 @@ function unitScale(unit: unknown): number {
 function parseChineseNumber(value: string): number | undefined {
   const numeric = Number(value)
   if (Number.isFinite(numeric)) return numeric
-  const normalized = value.replaceAll('兩', '两')
+
+  const normalized = value.replaceAll('\u5169', '\u4e8c')
   const digitMap: Record<string, number> = {
-    一: 1,
-    二: 2,
-    两: 2,
-    三: 3,
-    四: 4,
-    五: 5,
-    六: 6,
-    七: 7,
-    八: 8,
-    九: 9,
+    '\u4e00': 1,
+    '\u4e8c': 2,
+    '\u4e09': 3,
+    '\u56db': 4,
+    '\u4e94': 5,
+    '\u516d': 6,
+    '\u4e03': 7,
+    '\u516b': 8,
+    '\u4e5d': 9,
   }
-  if (normalized === '十') return 10
-  if (normalized.includes('十')) {
-    const [tensRaw, onesRaw] = normalized.split('十')
+
+  if (normalized === '\u5341') return 10
+  if (normalized.includes('\u5341')) {
+    const [tensRaw, onesRaw] = normalized.split('\u5341')
     const tens = tensRaw ? digitMap[tensRaw] : 1
     const ones = onesRaw ? digitMap[onesRaw] : 0
     return tens != null && ones != null ? tens * 10 + ones : undefined
@@ -133,7 +137,7 @@ function parseDimensionMatch(match: RegExpMatchArray | null): number | undefined
 
 const COLOR_HEX: Array<[RegExp, string]> = [
   [/(绿色|綠色|green)/i, '#22c55e'],
-  [/(红色|紅色|red)/i, '#ef4444'],
+  [/(红色|紅色|\bred\b)/i, '#ef4444'],
   [/(蓝色|藍色|blue)/i, '#2563eb'],
   [/(黄色|黃色|yellow)/i, '#facc15'],
   [/(黑色|black)/i, '#111827'],
@@ -150,25 +154,40 @@ function promptColor(prompt: string): string | undefined {
 
 function promptDimensions(prompt: string, family: AssemblyObjectFamily): Record<string, number> {
   const dimensions: Record<string, number> = {}
+  const numberPattern =
+    '([0-9]+(?:\\.[0-9]+)?|[\\u4e00\\u4e8c\\u4e24\\u5169\\u4e09\\u56db\\u4e94\\u516d\\u4e03\\u516b\\u4e5d\\u5341]+)'
+  const requiredUnitPattern = '(mm|\\u6beb\\u7c73|cm|\\u5398\\u7c73|m|\\u7c73)'
+  const unitPattern = '(mm|\\u6beb\\u7c73|cm|\\u5398\\u7c73|m|\\u7c73)?'
+  const dimensionPattern = (labels: string) =>
+    new RegExp(
+      `(?:${labels})\\s*(?:\\u4e3a|\\u662f|\\u7ea6|\\u7d04|:)?\\s*${numberPattern}\\s*${unitPattern}`,
+      'i',
+    )
   const patterns: Array<[string, RegExp]> = [
-    ['length', /(?:长度|長度|车长|車長|长|長|length|long)\s*(?:为|是|约|約|:|：)?\s*([0-9]+(?:\.[0-9]+)?|[一二两兩三四五六七八九十]+)\s*(mm|毫米|cm|厘米|m|米)/i],
-    ['width', /(?:宽度|寬度|宽|寬|width|wide)\s*(?:为|是|约|約|:|：)?\s*([0-9]+(?:\.[0-9]+)?|[一二两兩三四五六七八九十]+)\s*(mm|毫米|cm|厘米|m|米)/i],
-    ['width', /(?:直径|直徑|diameter|dia\.?)\s*(?:为|是|约|約|:|：)?\s*([0-9]+(?:\.[0-9]+)?|[一二两兩三四五六七八九十]+)\s*(mm|毫米|cm|厘米|m|米)/i],
-    ['height', /(?:高度|高|height|tall)\s*(?:为|是|约|約|:|：)?\s*([0-9]+(?:\.[0-9]+)?|[一二两兩三四五六七八九十]+)\s*(mm|毫米|cm|厘米|m|米)/i],
+    [
+      'length',
+      dimensionPattern('\\u957f\\u5ea6|\\u9577\\u5ea6|\\u8f66\\u957f|\\u8eca\\u9577|length|long'),
+    ],
+    ['width', dimensionPattern('\\u5bbd\\u5ea6|\\u5bec\\u5ea6|width|wide')],
+    ['width', dimensionPattern('\\u76f4\\u5f84|\\u76f4\\u5f91|diameter|dia\\.?')],
+    ['height', dimensionPattern('\\u9ad8\\u5ea6|height|tall')],
   ]
+
   for (const [key, pattern] of patterns) {
     const dimension = parseDimensionMatch(prompt.match(pattern))
     if (dimension != null) dimensions[key] = dimension
   }
+
   if (family !== 'unknown' && family !== 'distillation_tower' && dimensions.length == null) {
     const dimension = parseDimensionMatch(
-      prompt.match(/([0-9]+(?:\.[0-9]+)?|[一二两兩三四五六七八九十]+)\s*(mm|毫米|cm|厘米|m|米)/i),
+      prompt.match(new RegExp(`${numberPattern}\\s*${requiredUnitPattern}`, 'i')),
     )
     if (dimension != null) dimensions.length = dimension
   }
+
   if (family === 'outdoor_ac') {
     const ordered = Array.from(
-      prompt.matchAll(/([0-9]+(?:\.[0-9]+)?)\s*(mm|cm|m)\b/gi),
+      prompt.matchAll(new RegExp(`([0-9]+(?:\\.[0-9]+)?)\\s*${requiredUnitPattern}\\b`, 'gi')),
     )
       .map((match) => parseDimensionMatch(match))
       .filter((value): value is number => value != null)
@@ -186,6 +205,7 @@ function promptDimensions(prompt: string, family: AssemblyObjectFamily): Record<
       ...(height ? { height } : {}),
     }
   }
+
   return dimensions
 }
 
@@ -194,7 +214,10 @@ function numberArg(args: Record<string, unknown>, params: Record<string, unknown
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
-function normalizeDimensionValue(value: number | undefined, family: AssemblyObjectFamily): number | undefined {
+function normalizeDimensionValue(
+  value: number | undefined,
+  family: AssemblyObjectFamily,
+): number | undefined {
   if (value == null) return undefined
   if (family !== 'unknown' && value > 50) return Number((value * 0.001).toFixed(4))
   return value
@@ -239,7 +262,11 @@ function dimensionArgs(
   }
 }
 
-function stringArg(args: Record<string, unknown>, params: Record<string, unknown>, ...keys: string[]) {
+function stringArg(
+  args: Record<string, unknown>,
+  params: Record<string, unknown>,
+  ...keys: string[]
+) {
   for (const key of keys) {
     const value = args[key] ?? params[key]
     if (typeof value === 'string' && value.trim()) return value
@@ -259,14 +286,44 @@ export function extractUserGeometryConstraints(
     family,
     style: stringArg(args, params, 'vehicleStyle', 'style', 'variant'),
   }
-  const length = normalizeDimensionValue(numberArg(args, params, 'length') ?? explicitDimensions.length ?? dimensions.length, family)
-  const width = normalizeDimensionValue(numberArg(args, params, 'width') ?? numberArg(args, params, 'diameter') ?? explicitDimensions.width ?? dimensions.width, family)
-  const height = normalizeDimensionValue(numberArg(args, params, 'height') ?? explicitDimensions.height ?? dimensions.height, family)
+  const length = normalizeDimensionValue(
+    numberArg(args, params, 'length') ?? explicitDimensions.length ?? dimensions.length,
+    family,
+  )
+  const width = normalizeDimensionValue(
+    numberArg(args, params, 'width') ??
+      numberArg(args, params, 'diameter') ??
+      explicitDimensions.width ??
+      dimensions.width,
+    family,
+  )
+  const height = normalizeDimensionValue(
+    numberArg(args, params, 'height') ?? explicitDimensions.height ?? dimensions.height,
+    family,
+  )
   const color = stringArg(args, params, 'primaryColor', 'color') ?? promptColor(prompt)
-  if (length != null) constraints.length = hardNumber(length, numberArg(args, params, 'length') != null ? 'args' : 'prompt')
-  if (width != null) constraints.width = hardNumber(width, numberArg(args, params, 'width') != null || numberArg(args, params, 'diameter') != null ? 'args' : 'prompt')
-  if (height != null) constraints.height = hardNumber(height, numberArg(args, params, 'height') != null ? 'args' : 'prompt')
-  if (color) constraints.primaryColor = hardString(color, stringArg(args, params, 'primaryColor', 'color') ? 'args' : 'prompt')
+  if (length != null)
+    constraints.length = hardNumber(
+      length,
+      numberArg(args, params, 'length') != null ? 'args' : 'prompt',
+    )
+  if (width != null)
+    constraints.width = hardNumber(
+      width,
+      numberArg(args, params, 'width') != null || numberArg(args, params, 'diameter') != null
+        ? 'args'
+        : 'prompt',
+    )
+  if (height != null)
+    constraints.height = hardNumber(
+      height,
+      numberArg(args, params, 'height') != null ? 'args' : 'prompt',
+    )
+  if (color && !PROMPT_COLOR_AS_PART_DETAIL_FAMILIES.has(family))
+    constraints.primaryColor = hardString(
+      color,
+      stringArg(args, params, 'primaryColor', 'color') ? 'args' : 'prompt',
+    )
   return constraints
 }
 
@@ -274,25 +331,77 @@ function shapeColor(shape: PrimitiveShapeInput): string | undefined {
   return shape.material?.properties?.color
 }
 
+function primaryShapeText(shape: PrimitiveShapeInput): string {
+  return `${shape.semanticRole ?? ''} ${shape.sourcePartKind ?? ''} ${shape.name ?? ''}`
+    .trim()
+    .toLowerCase()
+}
+
+function primaryShapeRoles(family: AssemblyObjectFamily): readonly string[] {
+  return getFamilyDefinition(family)?.primarySemanticRoles ?? []
+}
+
 function isPrimaryShape(shape: PrimitiveShapeInput, family: AssemblyObjectFamily): boolean {
-  if (family === 'vehicle') return shape.semanticRole === 'vehicle_body'
-  if (family === 'outdoor_ac') return shape.semanticRole === 'rounded_machine_body'
-  if (family === 'machine_tool') return shape.semanticRole === 'machine_enclosure'
-  if (family === 'distillation_tower') return shape.semanticRole === 'distillation_column_shell'
-  if (family === 'reactor') return shape.semanticRole === 'reactor_vessel_shell'
-  if (family === 'compressor') return shape.semanticRole === 'compressor_casing' || shape.semanticRole === 'motor_body'
-  if (family === 'grate_cooler') return shape.semanticRole === 'cooler_grate_bed'
-  if (family === 'robot_arm') return shape.semanticRole === 'upper_arm' || shape.semanticRole === 'forearm'
-  return /body|shell|enclosure|cabinet|tank|frame/.test(
-    `${shape.semanticRole ?? ''} ${shape.sourcePartKind ?? ''} ${shape.name ?? ''}`,
-  )
+  const roles = primaryShapeRoles(family)
+  if (roles.length === 0) return false
+  const text = primaryShapeText(shape)
+  return roles.some((role) => text.includes(role.toLowerCase()))
+}
+
+function primaryShapePriority(shape: PrimitiveShapeInput, family: AssemblyObjectFamily): number {
+  const text = primaryShapeText(shape)
+  const index = primaryShapeRoles(family).findIndex((role) => text.includes(role.toLowerCase()))
+  return index < 0 ? Number.MAX_SAFE_INTEGER : index
+}
+
+function primaryLengthValue(
+  candidates: readonly PrimitiveShapeInput[],
+  family: AssemblyObjectFamily,
+): number | undefined {
+  const values = candidates
+    .map((candidate) =>
+      family === 'distillation_tower'
+        ? primaryDimension(candidate, 'length')
+        : (candidate.length ?? primaryDimension(candidate, 'length')),
+    )
+    .filter((value): value is number => typeof value === 'number')
+  if (values.length === 0) return undefined
+  if (
+    family === 'pump' ||
+    family === 'conveyor' ||
+    family === 'material_handling' ||
+    family === 'fluid_machine' ||
+    family === 'process_equipment' ||
+    family === 'tank' ||
+    family === 'reactor' ||
+    family === 'compressor' ||
+    family === 'heat_exchanger' ||
+    family === 'machine_tool' ||
+    family === 'forming_machine' ||
+    family === 'robot_arm'
+  ) {
+    return Math.max(...values)
+  }
+  return values[0]
+}
+
+function primaryShapes(
+  shapes: readonly PrimitiveShapeInput[],
+  family: AssemblyObjectFamily,
+): PrimitiveShapeInput[] {
+  return shapes
+    .filter((shape) => isPrimaryShape(shape, family))
+    .sort((left, right) => primaryShapePriority(left, family) - primaryShapePriority(right, family))
 }
 
 export function materialFromColor(color?: string): PrimitiveMaterialInput | undefined {
   return color ? { properties: { color } } : undefined
 }
 
-function primaryDimension(shape: PrimitiveShapeInput, dimension: 'length' | 'width' | 'height'): number | undefined {
+function primaryDimension(
+  shape: PrimitiveShapeInput,
+  dimension: 'length' | 'width' | 'height',
+): number | undefined {
   if (dimension === 'length') {
     if (typeof shape.length === 'number') return shape.length
     if (shape.axis === 'x' && typeof shape.height === 'number') return shape.height
@@ -314,35 +423,60 @@ export function validateAssemblyConstraints(
   constraints: UserGeometryConstraints,
 ): AssemblyConstraintValidation {
   const issues: string[] = []
-  if (constraints.length != null) {
-    const candidates = shapes.filter((shape) => isPrimaryShape(shape, constraints.family))
-    const actual =
-      candidates[0] && constraints.family === 'distillation_tower'
-        ? primaryDimension(candidates[0], 'length')
-        : candidates[0]?.length
-    if (typeof actual === 'number' && Math.abs(actual - constraints.length.value) > Math.max(0.03, constraints.length.value * 0.04)) {
-      issues.push(`Hard constraint failed: expected primary length ${constraints.length.value}m, got ${actual}m.`)
+  if (
+    constraints.length != null &&
+    !RAW_PRIMARY_LENGTH_UNRELIABLE_FAMILIES.has(constraints.family)
+  ) {
+    const candidates = primaryShapes(shapes, constraints.family)
+    const actual = primaryLengthValue(candidates, constraints.family)
+    if (candidates.length === 0 && constraints.family !== 'unknown') {
+      issues.push(
+        `Hard constraint failed: no primary shape found for family ${constraints.family}.`,
+      )
+    } else if (actual == null && constraints.family !== 'unknown') {
+      issues.push(
+        `Hard constraint failed: primary shape for family ${constraints.family} has no measurable length.`,
+      )
+    } else if (
+      actual != null &&
+      Math.abs(actual - constraints.length.value) > Math.max(0.03, constraints.length.value * 0.04)
+    ) {
+      issues.push(
+        `Hard constraint failed: expected primary length ${constraints.length.value}m, got ${actual}m.`,
+      )
     }
   }
   if (constraints.family === 'distillation_tower' && constraints.width != null) {
-    const candidates = shapes.filter((shape) => isPrimaryShape(shape, constraints.family))
+    const candidates = primaryShapes(shapes, constraints.family)
     const actual = candidates[0] ? primaryDimension(candidates[0], 'width') : undefined
-    if (typeof actual === 'number' && Math.abs(actual - constraints.width.value) > Math.max(0.03, constraints.width.value * 0.04)) {
-      issues.push(`Hard constraint failed: expected primary width ${constraints.width.value}m, got ${actual}m.`)
+    if (
+      typeof actual === 'number' &&
+      Math.abs(actual - constraints.width.value) > Math.max(0.03, constraints.width.value * 0.04)
+    ) {
+      issues.push(
+        `Hard constraint failed: expected primary width ${constraints.width.value}m, got ${actual}m.`,
+      )
     }
   }
   if (constraints.family === 'distillation_tower' && constraints.height != null) {
-    const candidates = shapes.filter((shape) => isPrimaryShape(shape, constraints.family))
+    const candidates = primaryShapes(shapes, constraints.family)
     const actual = candidates[0] ? primaryDimension(candidates[0], 'height') : undefined
-    if (typeof actual === 'number' && Math.abs(actual - constraints.height.value) > Math.max(0.03, constraints.height.value * 0.04)) {
-      issues.push(`Hard constraint failed: expected primary height ${constraints.height.value}m, got ${actual}m.`)
+    if (
+      typeof actual === 'number' &&
+      Math.abs(actual - constraints.height.value) > Math.max(0.03, constraints.height.value * 0.04)
+    ) {
+      issues.push(
+        `Hard constraint failed: expected primary height ${constraints.height.value}m, got ${actual}m.`,
+      )
     }
   }
   if (constraints.primaryColor) {
-    const candidates = shapes.filter((shape) => isPrimaryShape(shape, constraints.family))
+    const candidates = primaryShapes(shapes, constraints.family)
     const actual = candidates.map(shapeColor).find(Boolean)
     if (actual && actual.toLowerCase() !== constraints.primaryColor.value.toLowerCase()) {
-      issues.push(`Hard constraint failed: expected primary color ${constraints.primaryColor.value}, got ${actual}.`)
+      issues.push(
+        `Hard constraint failed: expected primary color ${constraints.primaryColor.value}, got ${actual}.`,
+      )
     }
   }
   return { ok: issues.length === 0, issues }

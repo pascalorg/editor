@@ -8,14 +8,33 @@ import {
   validateAssemblyConstraints,
 } from '@pascal-app/core/lib/assembly-constraints'
 import {
-  applyDimensionSemanticsToObjectInput,
-  parseDimensionSemantics,
-} from '@pascal-app/core/lib/dimension-semantics'
+  applyDeviceProfileToPartInput,
+  buildDraftDeviceProfile,
+  type DeviceProfileDefinition,
+  type DeviceProfileQualityScore,
+  type DeviceProfileValidation,
+  evaluateDeviceProfileQuality,
+  inferDeviceProfileDefinition,
+  validateDeviceProfileForExecution,
+} from '@pascal-app/core/lib/device-profile-registry'
+import { parseDimensionSemantics } from '@pascal-app/core/lib/dimension-semantics'
 import {
-  composeObjectPrimitives,
-  type ObjectComposeInput,
-} from '@pascal-app/core/lib/object-compose'
-import { composePartPrimitives, type PartComposeInput } from '@pascal-app/core/lib/part-compose'
+  executableFamilyForLayoutFamily,
+  inferFamilyDefinition,
+} from '@pascal-app/core/lib/family-registry'
+import {
+  composePartPrimitives,
+  type PartComposeInput,
+  type PartComposePartInput,
+  resolveLayout,
+} from '@pascal-app/core/lib/part-compose'
+import {
+  getPartDefinitions,
+  normalizeAircraftPartPlan,
+  normalizeGenericPartPlan,
+  normalizePartPlanForFamily,
+  normalizeVehiclePartPlan,
+} from '@pascal-app/core/lib/part-registry'
 import {
   expandPrimitiveShapeArrays,
   type PrimitiveArrayExpandableShape,
@@ -30,6 +49,7 @@ import {
   composeRecipePrimitives,
   getPrimitiveRecipeGeometryBrief,
 } from '@pascal-app/core/lib/primitive-recipes'
+import { lowerDerivedPrimitiveShape } from '@pascal-app/core/lib/primitive-registry'
 import {
   applyPrimitiveRevision,
   type PrimitiveRevisionOperation,
@@ -63,6 +83,7 @@ export type GeometryToolExecutionContext = {
   revisionTarget?: GeneratedGeometryArtifact | null
   blueprintRequiredRoles?: string[]
   blueprintCategory?: string
+  deviceProfiles?: readonly DeviceProfileDefinition[]
 }
 
 export type GeometryToolExecutionResult = {
@@ -100,7 +121,6 @@ const GEOMETRY_TOOL_NAMES = new Set([
   'compose_assembly',
   'revise_geometry',
   'compose_robot_arm',
-  'compose_object',
 ])
 
 const MATERIAL_PRESETS = new Set([
@@ -169,6 +189,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function readNestedNumber(source: Record<string, unknown>, key: string): number | undefined {
+  const direct = source[key]
+  if (typeof direct === 'number' && Number.isFinite(direct)) return direct
+  for (const containerKey of ['params', 'dimensions']) {
+    const container = source[containerKey]
+    if (!isRecord(container)) continue
+    const nested = container[key]
+    if (typeof nested === 'number' && Number.isFinite(nested)) return nested
+  }
+  return undefined
+}
+
 function colorArrayToHex(color: number[]): string {
   return `#${color
     .slice(0, 3)
@@ -235,6 +267,53 @@ function normalizePrimitiveMaterial(
   }
 
   return undefined
+}
+
+function containsGlassText(value: unknown): boolean {
+  return typeof value === 'string' && /glass|glazing|window|玻璃|透明/i.test(value)
+}
+
+function shouldApplyGlassMaterial(
+  shape: RawShape,
+  kind: string,
+  material: PrimitiveMaterialInput | undefined,
+  materialPreset: unknown,
+  prompt: string | undefined,
+  expandedShapeCount: number,
+): boolean {
+  if (material?.preset === 'glass') return true
+  if (materialPreset === 'preset-glass' || materialPreset === 'glass') return true
+
+  const shapeText = [
+    shape.name,
+    shape.semanticRole,
+    shape.semanticGroup,
+    shape.sourcePartKind,
+    shape.sourcePartId,
+  ]
+    .filter(Boolean)
+    .join(' ')
+  if (containsGlassText(shapeText)) return true
+
+  const promptRequestsGlass = containsGlassText(prompt)
+  if (!promptRequestsGlass) return false
+  if (expandedShapeCount === 1) return true
+  return kind === 'rounded-panel' || kind === 'ellipse-panel' || kind === 'semi-ellipse-panel'
+}
+
+function withGlassMaterial(material: PrimitiveMaterialInput | undefined): PrimitiveMaterialInput {
+  return {
+    ...material,
+    preset: 'glass',
+    properties: {
+      ...material?.properties,
+      transparent: material?.properties?.transparent ?? true,
+      opacity: material?.properties?.opacity ?? 0.35,
+      roughness: material?.properties?.roughness ?? 0.08,
+      metalness: material?.properties?.metalness ?? 0.05,
+      side: material?.properties?.side ?? 'double',
+    },
+  }
 }
 
 function isPrimitiveAnchor(value: unknown): value is string {
@@ -307,6 +386,67 @@ function applyPromptDimensionSemanticsToPartInput(
   }
 }
 
+function simpleBoxPrimitiveFallbackShapes(
+  targetArgs: Record<string, unknown>,
+  sourceArgs: Record<string, unknown>,
+  prompt: string,
+): RawShape[] | undefined {
+  if (!Array.isArray(sourceArgs.parts) || sourceArgs.parts.length !== 1) return undefined
+  const part = sourceArgs.parts[0]
+  if (!isRecord(part)) return undefined
+  const kind = String(part.kind ?? part.partType ?? part.type ?? '').toLowerCase()
+  if (kind !== 'generic_body') return undefined
+
+  const text = genericFallbackText(sourceArgs, prompt).toLowerCase()
+  const semanticRole = String(part.semanticRole ?? '').toLowerCase()
+  const readsAsPlainBox =
+    /cuboid|cube|rectangular prism|rectangular block|plain box|simple box|\bbox\b|10\s*[*x×]\s*10/.test(
+      text,
+    ) ||
+    semanticRole === 'enclosure' ||
+    semanticRole === 'main_body' ||
+    semanticRole === 'body'
+  if (!readsAsPlainBox) return undefined
+
+  const length = readNestedNumber(part, 'length') ?? readNestedNumber(sourceArgs, 'length')
+  const width =
+    readNestedNumber(part, 'width') ??
+    readNestedNumber(part, 'depth') ??
+    readNestedNumber(sourceArgs, 'width') ??
+    readNestedNumber(sourceArgs, 'depth')
+  const height = readNestedNumber(part, 'height') ?? readNestedNumber(sourceArgs, 'height')
+  if (
+    typeof length !== 'number' ||
+    typeof width !== 'number' ||
+    typeof height !== 'number' ||
+    length <= 0 ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return undefined
+  }
+
+  targetArgs.length = length
+  targetArgs.width = width
+  targetArgs.height = height
+  targetArgs.geometryBrief =
+    typeof targetArgs.geometryBrief === 'string'
+      ? targetArgs.geometryBrief
+      : `simple rectangular cuboid ${length}x${width}x${height}m`
+  targetArgs.shapes = [
+    {
+      id: String(part.id ?? 'cuboid_body'),
+      kind: 'box',
+      semanticRole: semanticRole || 'cuboid_body',
+      length,
+      width,
+      height,
+      material: isRecord(part.material) ? (part.material as PrimitiveMaterialInput) : undefined,
+    },
+  ]
+  return targetArgs.shapes as RawShape[]
+}
+
 function getRawShapes(
   name: string,
   args: Record<string, unknown>,
@@ -329,6 +469,15 @@ function getRawShapes(
   }
   if (name === 'compose_parts') {
     const dimensionAwarePartArgs = applyPromptDimensionSemanticsToPartInput(args, prompt)
+    const simpleBoxShapes = simpleBoxPrimitiveFallbackShapes(args, dimensionAwarePartArgs, prompt)
+    if (simpleBoxShapes?.length) return simpleBoxShapes
+    const robotShapes = robotArmWorkstationFallbackShapes(
+      args,
+      dimensionAwarePartArgs,
+      prompt,
+      context,
+    )
+    if (robotShapes?.length) return robotShapes
     const hasExplicitParts =
       Array.isArray(dimensionAwarePartArgs.parts) && dimensionAwarePartArgs.parts.length > 0
     if (
@@ -341,10 +490,26 @@ function getRawShapes(
         return fallbackShapes
       }
     }
-    if (!hasExplicitParts) {
-      if (isOpenAssemblyRequest(dimensionAwarePartArgs, prompt)) {
-        return composeAssemblyPrimitives(openAssemblyFallbackInput(dimensionAwarePartArgs, prompt))
+    if (
+      hasExplicitParts &&
+      shouldUseCoherentVehicleFallback(dimensionAwarePartArgs, prompt, context)
+    ) {
+      const fallbackShapes = coherentVehicleFallbackShapes(dimensionAwarePartArgs, prompt)
+      if (fallbackShapes?.length) {
+        for (const [key, value] of Object.entries(dimensionAwarePartArgs)) args[key] = value
+        return fallbackShapes
       }
+    }
+    if (hasExplicitParts) {
+      const registryShapes = registryPartFallbackShapes(
+        args,
+        dimensionAwarePartArgs,
+        prompt,
+        context,
+      )
+      if (registryShapes?.length) return registryShapes
+    }
+    if (!hasExplicitParts) {
       if (isRiverIntent(dimensionAwarePartArgs, prompt)) {
         const fallbackShapes = riverPrimitiveFallbackShapes(dimensionAwarePartArgs, prompt)
         args.__fallbackGeometryBrief = riverFallbackGeometryBrief(dimensionAwarePartArgs, prompt)
@@ -352,10 +517,23 @@ function getRawShapes(
         return fallbackShapes
       }
       // Try recipe first for parametric requests (gear, valve, etc.) — recipe is more precise
+      const registryShapes = registryPartFallbackShapes(
+        args,
+        dimensionAwarePartArgs,
+        prompt,
+        context,
+      )
+      if (registryShapes?.length) return registryShapes
       const recipeShapes = composeRecipePrimitives(
         recipeFallbackInput(dimensionAwarePartArgs, prompt),
       )
       if (recipeShapes.length > 0) return recipeShapes
+      if (isOutdoorAcPartFallbackRequest(dimensionAwarePartArgs, prompt)) {
+        return composeAssemblyPrimitives(openAssemblyFallbackInput(dimensionAwarePartArgs, prompt))
+      }
+      if (isOpenAssemblyRequest(dimensionAwarePartArgs, prompt)) {
+        return composeAssemblyPrimitives(openAssemblyFallbackInput(dimensionAwarePartArgs, prompt))
+      }
       // Fall back to assembly only when an explicit family is recognized
       const assemblyShapes = composeAssemblyPrimitives({
         ...(dimensionAwarePartArgs as AssemblyComposeInput),
@@ -416,6 +594,14 @@ function getRawShapes(
     const operations = Array.isArray(args.operations)
       ? (args.operations as PrimitiveRevisionOperation[])
       : []
+    if (operations.length === 0) {
+      const inferredRevision = inferIndustrialRevisionFallback(args, prompt, target)
+      if (inferredRevision?.shapes) return inferredRevision.shapes
+      if (inferredRevision?.operations.length) {
+        args.operations = inferredRevision.operations
+        operations.push(...inferredRevision.operations)
+      }
+    }
     const revision = applyPrimitiveRevision({
       shapes: target.shapes as PrimitiveShapeInput[],
       operations,
@@ -428,12 +614,14 @@ function getRawShapes(
     return revision.shapes as RawShape[]
   }
   if (name === 'compose_robot_arm') return composeRobotArmPrimitives(args as RobotArmComposeInput)
-  if (name === 'compose_object') {
-    const dimensionAwareObjectArgs = applyDimensionSemanticsToObjectInput(
-      args as ObjectComposeInput,
-      prompt,
-    )
-    return composeObjectPrimitives(dimensionAwareObjectArgs)
+  if (
+    name === 'compose_primitive' &&
+    isVehicleIntent(args, prompt, context) &&
+    !isVehicleComponentIntent(args, prompt, context) &&
+    !isAircraftIntent(args, prompt, context)
+  ) {
+    const fallbackShapes = coherentVehicleFallbackShapes(args, prompt)
+    if (fallbackShapes?.length) return fallbackShapes
   }
   const explicitPrimitiveShapes = readExplicitPrimitiveShapes(args)
   if (explicitPrimitiveShapes) {
@@ -465,6 +653,613 @@ function getRawShapes(
     return applyGenericPrimitiveFallback(args, args, prompt)
   }
   return args.shapes as RawShape[] | undefined
+}
+
+const INDUSTRIAL_PART_FAMILIES = new Set([
+  'pump',
+  'conveyor',
+  'electrical',
+  'pipe_system',
+  'tank',
+  'reactor',
+  'compressor',
+  'heat_exchanger',
+  'machine_tool',
+])
+
+function revisionRequestText(args: Record<string, unknown>, prompt: string): string {
+  return [
+    prompt,
+    typeof args.feedback === 'string' ? args.feedback : undefined,
+    typeof args.intent === 'string' ? args.intent : undefined,
+    typeof args.userVisiblePlan === 'string' ? args.userVisiblePlan : undefined,
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase()
+}
+
+function integerNear(text: string, words: RegExp): number | undefined {
+  const before = text.match(
+    new RegExp(`(\\d{1,2})\\s*(?:个|条|根|组|x|pcs?|pieces?)?\\s*${words.source}`, 'i'),
+  )
+  if (before) return Number(before[1])
+  const after = text.match(
+    new RegExp(`${words.source}\\s*(?:数量|count|qty)?\\s*(?:到|为|=|:)?\\s*(\\d{1,2})`, 'i'),
+  )
+  if (after) return Number(after[1])
+  if (/(double|two|2|双|两|二)/i.test(text) && words.test(text)) return 2
+  if (/(triple|three|3|三)/i.test(text) && words.test(text)) return 3
+  return undefined
+}
+
+function radiusFromDimensions(
+  dimensions: ReturnType<typeof parseDimensionSemantics>,
+): number | undefined {
+  if (typeof dimensions.radius === 'number') return dimensions.radius
+  if (typeof dimensions.diameter === 'number') return dimensions.diameter / 2
+  if (typeof dimensions.width === 'number') return dimensions.width / 2
+  return undefined
+}
+
+function industrialFamilyFromArtifact(target: GeneratedGeometryArtifact): string | undefined {
+  const family = typeof target.sourceArgs.family === 'string' ? target.sourceArgs.family : undefined
+  if (family && INDUSTRIAL_PART_FAMILIES.has(family)) return family
+  const inferred = inferFamilyDefinition({
+    ...target.sourceArgs,
+    prompt: target.userPrompt ?? '',
+  })?.id
+  return inferred && INDUSTRIAL_PART_FAMILIES.has(inferred) ? inferred : undefined
+}
+
+function recomposeIndustrialRevision(
+  args: Record<string, unknown>,
+  prompt: string,
+  target: GeneratedGeometryArtifact,
+  updates: Record<string, unknown>,
+): RawShape[] | undefined {
+  const family = industrialFamilyFromArtifact(target)
+  if (!family) return undefined
+  const sourceArgs: Record<string, unknown> = {
+    ...target.sourceArgs,
+    ...updates,
+    family,
+    parts: applyIndustrialUpdatesToSourceParts(target.sourceArgs.parts, family, updates),
+  }
+  const normalizedPlan = normalizePartPlanForFamily(family, { ...sourceArgs, prompt })
+  if (!normalizedPlan?.parts.length) return undefined
+
+  const partInput: PartComposeInput = {
+    ...(sourceArgs as PartComposeInput),
+    name:
+      typeof sourceArgs.name === 'string'
+        ? sourceArgs.name
+        : typeof sourceArgs.object === 'string'
+          ? sourceArgs.object
+          : target.title,
+    family,
+    registryPartPlan: true,
+    autoComplete: false,
+    enhanceVisualDetails: false,
+    parts: normalizedPlan.parts,
+  }
+  const shapes = composePartPrimitives(partInput) as RawShape[]
+  if (shapes.length === 0) return undefined
+
+  args.family = family
+  for (const [key, value] of Object.entries(updates)) args[key] = value
+  args.parts = normalizedPlan.parts
+  args.__recomposedIndustrialParts = true
+  args.__changedShapeCount = target.shapes.length + shapes.length
+  if (normalizedPlan.warnings.length > 0) args.partWarnings = normalizedPlan.warnings
+  return shapes
+}
+
+function applyIndustrialUpdatesToSourceParts(
+  value: unknown,
+  family: string,
+  updates: Record<string, unknown>,
+) {
+  const sourceParts = Array.isArray(value) ? value : []
+  const numberUpdate = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = updates[key]
+      if (typeof value === 'number' && Number.isFinite(value)) return value
+    }
+    return undefined
+  }
+  const radiusUpdate = (...keys: string[]) => {
+    const radius = numberUpdate(...keys.filter((key) => key.toLowerCase().includes('radius')))
+    if (radius != null) return radius
+    const diameter = numberUpdate(...keys.filter((key) => key.toLowerCase().includes('diameter')))
+    return diameter != null ? diameter / 2 : undefined
+  }
+  const stringUpdate = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = updates[key]
+      if (typeof value === 'string' && value.trim()) return value.trim()
+    }
+    return undefined
+  }
+  const sidePosition = (
+    side: string | undefined,
+    fallback: [number, number, number],
+  ): [number, number, number] | undefined => {
+    if (!side) return undefined
+    switch (side) {
+      case 'left':
+        return [-Math.abs(fallback[0]), fallback[1], fallback[2]]
+      case 'right':
+        return [Math.abs(fallback[0]), fallback[1], fallback[2]]
+      case 'front':
+        return [fallback[0], fallback[1], Math.abs(fallback[2])]
+      case 'back':
+        return [fallback[0], fallback[1], -Math.abs(fallback[2])]
+      default:
+        return undefined
+    }
+  }
+  const partKind = (part: unknown) =>
+    part && typeof part === 'object' && typeof (part as Record<string, unknown>).kind === 'string'
+      ? String((part as Record<string, unknown>).kind)
+      : ''
+  const hasKind = (parts: unknown[], kind: string) => parts.some((part) => partKind(part) === kind)
+  const withOptionalPart = (parts: unknown[], kind: string) =>
+    hasKind(parts, kind) ? parts : [...parts, { kind }]
+
+  let nextParts = sourceParts
+  if ((family === 'tank' || family === 'reactor') && updates.addPlatformLadder === true) {
+    nextParts = withOptionalPart(nextParts, 'platform_ladder')
+  }
+  if ((family === 'tank' || family === 'heat_exchanger') && updates.addSupportBase === true) {
+    nextParts = withOptionalPart(nextParts, 'skid_base')
+  }
+  if (family === 'compressor' && updates.addControlBox === true) {
+    nextParts = withOptionalPart(nextParts, 'control_box')
+  }
+
+  return nextParts.map((part) => {
+    if (!part || typeof part !== 'object') return part
+    const current = part as Record<string, unknown>
+    const kind = typeof current.kind === 'string' ? current.kind : ''
+    if (family === 'conveyor' && kind === 'roller_array' && updates.rollerCount != null) {
+      return { ...current, count: updates.rollerCount }
+    }
+    if (family === 'conveyor' && kind === 'conveyor_frame' && updates.legCount != null) {
+      return { ...current, legCount: updates.legCount }
+    }
+    if (family === 'electrical' && kind === 'electrical_cabinet') {
+      return {
+        ...current,
+        ...(updates.doorCount != null ? { doorCount: updates.doorCount } : {}),
+        ...(updates.ventRows != null ? { slatCount: updates.ventRows } : {}),
+      }
+    }
+    if (family === 'pump' && kind === 'flange_ring' && updates.flangeBoltCount != null) {
+      return { ...current, boltCount: updates.flangeBoltCount }
+    }
+    if (family === 'pump' && kind === 'ribbed_motor_body' && updates.ribCount != null) {
+      return { ...current, slatCount: updates.ribCount }
+    }
+    if (family === 'pipe_system' && kind === 'flange_ring' && updates.flangeBoltCount != null) {
+      return { ...current, boltCount: updates.flangeBoltCount }
+    }
+    if (family === 'pipe_system' && kind === 'valve_body' && updates.valveStyle != null) {
+      return { ...current, valveStyle: updates.valveStyle }
+    }
+    if (family === 'tank') {
+      if (kind === 'cylindrical_tank') {
+        return {
+          ...current,
+          ...(numberUpdate('tankHeight', 'height') != null
+            ? { length: numberUpdate('tankHeight', 'height') }
+            : {}),
+          ...(radiusUpdate('tankRadius', 'radius', 'tankDiameter', 'diameter') != null
+            ? { radius: radiusUpdate('tankRadius', 'radius', 'tankDiameter', 'diameter') }
+            : {}),
+        }
+      }
+      if (kind === 'inlet_port' || kind === 'outlet_port') {
+        const portRadius = radiusUpdate(
+          'portRadius',
+          'nozzleRadius',
+          'portDiameter',
+          'nozzleDiameter',
+        )
+        return portRadius != null ? { ...current, radius: portRadius } : current
+      }
+      if (kind === 'platform_ladder' && numberUpdate('platformHeight') != null) {
+        return {
+          ...current,
+          height: numberUpdate('platformHeight'),
+          ...(sidePosition(stringUpdate('platformSide'), [0.8, 1.4, 0.5])
+            ? { position: sidePosition(stringUpdate('platformSide'), [0.8, 1.4, 0.5]) }
+            : {}),
+        }
+      }
+      if (kind === 'skid_base' && numberUpdate('supportHeight') != null) {
+        return { ...current, height: numberUpdate('supportHeight') }
+      }
+    }
+    if (family === 'reactor') {
+      if (kind === 'agitator_tank') {
+        return {
+          ...current,
+          ...(numberUpdate('vesselHeight', 'tankHeight', 'height') != null
+            ? { height: numberUpdate('vesselHeight', 'tankHeight', 'height') }
+            : {}),
+          ...(radiusUpdate('vesselRadius', 'tankRadius', 'radius', 'vesselDiameter', 'diameter') !=
+          null
+            ? {
+                radius: radiusUpdate(
+                  'vesselRadius',
+                  'tankRadius',
+                  'radius',
+                  'vesselDiameter',
+                  'diameter',
+                ),
+              }
+            : {}),
+        }
+      }
+      if (kind === 'inlet_port' || kind === 'outlet_port') {
+        const nozzleRadius = radiusUpdate(
+          'nozzleRadius',
+          'portRadius',
+          'nozzleDiameter',
+          'portDiameter',
+        )
+        return nozzleRadius != null ? { ...current, radius: nozzleRadius } : current
+      }
+      if (kind === 'platform_ladder') {
+        return {
+          ...current,
+          ...(numberUpdate('platformHeight') != null
+            ? { height: numberUpdate('platformHeight') }
+            : {}),
+          ...(sidePosition(stringUpdate('platformSide'), [0.72, 0.9, 0.48])
+            ? { position: sidePosition(stringUpdate('platformSide'), [0.72, 0.9, 0.48]) }
+            : {}),
+        }
+      }
+    }
+    if (family === 'compressor') {
+      if (kind === 'ribbed_motor_body') {
+        return {
+          ...current,
+          ...(numberUpdate('motorLength') != null ? { length: numberUpdate('motorLength') } : {}),
+          ...(numberUpdate('motorRadius') != null ? { radius: numberUpdate('motorRadius') } : {}),
+        }
+      }
+      if (kind === 'rounded_machine_body') {
+        const casingRadius = numberUpdate('casingRadius')
+        return {
+          ...current,
+          ...(numberUpdate('casingLength') != null ? { length: numberUpdate('casingLength') } : {}),
+          ...(casingRadius != null
+            ? { width: casingRadius * 1.8, height: casingRadius * 1.8 }
+            : {}),
+        }
+      }
+      if (kind === 'inlet_port' || kind === 'outlet_port') {
+        const portRadius = radiusUpdate('portRadius', 'portDiameter')
+        return portRadius != null ? { ...current, radius: portRadius } : current
+      }
+      if (kind === 'control_box') {
+        return {
+          ...current,
+          ...(sidePosition(stringUpdate('controlPanelSide'), [0.75, 0.3, 0.45])
+            ? { position: sidePosition(stringUpdate('controlPanelSide'), [0.75, 0.3, 0.45]) }
+            : {}),
+        }
+      }
+    }
+    if (family === 'heat_exchanger') {
+      if (kind === 'heat_exchanger') {
+        return {
+          ...current,
+          ...(numberUpdate('length') != null ? { length: numberUpdate('length') } : {}),
+          ...(radiusUpdate('shellRadius', 'radius', 'shellDiameter', 'diameter') != null
+            ? { radius: radiusUpdate('shellRadius', 'radius', 'shellDiameter', 'diameter') }
+            : {}),
+        }
+      }
+      if (kind === 'skid_base' && numberUpdate('supportHeight') != null) {
+        return { ...current, height: numberUpdate('supportHeight') }
+      }
+    }
+    if (family === 'machine_tool') {
+      if (kind === 'generic_base') {
+        return {
+          ...current,
+          ...(numberUpdate('length') != null ? { length: numberUpdate('length') } : {}),
+          ...(numberUpdate('width') != null ? { width: numberUpdate('width') } : {}),
+        }
+      }
+      if (kind === 'generic_body') {
+        return {
+          ...current,
+          ...(numberUpdate('length') != null ? { length: numberUpdate('length') } : {}),
+          ...(numberUpdate('width') != null ? { width: numberUpdate('width') } : {}),
+          ...(numberUpdate('height') != null ? { height: numberUpdate('height') } : {}),
+        }
+      }
+      if (kind === 'generic_panel') {
+        return {
+          ...current,
+          ...(numberUpdate('spindleHeadLength') != null
+            ? { length: numberUpdate('spindleHeadLength') }
+            : {}),
+          ...(numberUpdate('spindleHeadHeight') != null
+            ? { height: numberUpdate('spindleHeadHeight') }
+            : {}),
+        }
+      }
+      if (kind === 'control_box') {
+        return {
+          ...current,
+          ...(numberUpdate('controlPanelLength') != null
+            ? { length: numberUpdate('controlPanelLength') }
+            : {}),
+          ...(numberUpdate('controlPanelHeight') != null
+            ? { height: numberUpdate('controlPanelHeight') }
+            : {}),
+          ...(sidePosition(stringUpdate('controlPanelSide'), [1.05, 1, 0.6])
+            ? { position: sidePosition(stringUpdate('controlPanelSide'), [1.05, 1, 0.6]) }
+            : {}),
+        }
+      }
+    }
+    return part
+  })
+}
+
+function inferIndustrialRecomposeUpdates(
+  text: string,
+  family: string,
+): Record<string, unknown> | undefined {
+  const updates: Record<string, unknown> = {}
+  const dimensions = parseDimensionSemantics(text)
+  const radius = radiusFromDimensions(dimensions)
+  const hasAnyDimension =
+    dimensions.length != null ||
+    dimensions.width != null ||
+    dimensions.height != null ||
+    dimensions.diameter != null ||
+    dimensions.radius != null
+  const mentionsTankShell =
+    /(tank|vessel|shell|罐|容器|筒体|壳体|body|overall|whole|整体|主体)/i.test(text)
+  const mentionsPort =
+    /(port|nozzle|inlet|outlet|feed|discharge|接口|喷嘴|管口|入口|出口|进料|出料)/i.test(text)
+  const mentionsSupport =
+    /(support|base|skid|saddle|platform|ladder|支撑|底座|鞍座|平台|爬梯)/i.test(text)
+  const mentionsMotor = /(motor|drive|电机|马达)/i.test(text)
+  const mentionsCasing = /(casing|compressor body|housing|shell|壳体|机壳|压缩机)/i.test(text)
+  const mentionsControlPanel =
+    /(control panel|control box|operator panel|控制面板|控制箱|操作面板)/i.test(text)
+  const mentionsSpindle = /(spindle|tool head|spindle head|主轴|主轴头|刀头)/i.test(text)
+
+  const hasAddIntent = /(add|with|install|include|\bhas\b|加|增加|添加|装|帶|带)/i.test(text)
+  const side = (() => {
+    if (/(left|左)/i.test(text)) return 'left'
+    if (/(right|右)/i.test(text)) return 'right'
+    if (/(front|前)/i.test(text)) return 'front'
+    if (/(back|rear|后|後)/i.test(text)) return 'back'
+    return undefined
+  })()
+  const mentionsPlatform = /(platform|ladder|access|平台|爬梯|檢修|检修)/i.test(text)
+  const mentionsSupportBase = /(support|base|skid|saddle|支撑|支座|底座|鞍座)/i.test(text)
+
+  if (family === 'electrical') {
+    const doorCount = integerNear(text, /(doors?|door panels?|cabinet doors?|柜门|门|双开门)/i)
+    if (doorCount != null) updates.doorCount = doorCount
+    const ventRows = integerNear(text, /(vents?|vent rows?|slats?|louvers?|散热|百叶|通风)/i)
+    if (ventRows != null) updates.ventRows = ventRows
+  }
+
+  if (family === 'conveyor') {
+    const rollerCount = integerNear(text, /(rollers?|idlers?|滚筒|托辊)/i)
+    if (rollerCount != null) updates.rollerCount = rollerCount
+    const legCount = integerNear(text, /(legs?|supports?|支腿|支架)/i)
+    if (legCount != null) updates.legCount = legCount
+  }
+
+  if (family === 'pump') {
+    const boltCount = integerNear(text, /(bolts?|bolt holes?|螺栓|螺孔)/i)
+    if (boltCount != null && /flange|法兰|bolt|螺栓|螺孔/i.test(text)) {
+      updates.flangeBoltCount = boltCount
+    }
+    const ribCount = integerNear(text, /(ribs?|fins?|散热片|筋|肋)/i)
+    if (ribCount != null) updates.ribCount = ribCount
+  }
+
+  if (family === 'pipe_system') {
+    if (/ball valve|球阀/i.test(text)) updates.valveStyle = 'ball'
+    if (/gate valve|闸阀/i.test(text)) updates.valveStyle = 'gate'
+    const boltCount = integerNear(text, /(bolts?|bolt holes?|螺栓|螺孔)/i)
+    if (boltCount != null && /flange|法兰|bolt|螺栓|螺孔/i.test(text)) {
+      updates.flangeBoltCount = boltCount
+    }
+  }
+
+  if (family === 'tank') {
+    if (hasAddIntent && mentionsPlatform) updates.addPlatformLadder = true
+    if (hasAddIntent && mentionsSupportBase) updates.addSupportBase = true
+    if (side && mentionsPlatform) updates.platformSide = side
+    if (mentionsPort && radius != null) updates.portDiameter = radius * 2
+    if ((mentionsTankShell || !mentionsPort) && dimensions.height != null) {
+      updates.tankHeight = dimensions.height
+      updates.height = dimensions.height
+    }
+    if ((mentionsTankShell || !mentionsPort) && dimensions.diameter != null) {
+      updates.diameter = dimensions.diameter
+      updates.tankDiameter = dimensions.diameter
+    }
+    if ((mentionsTankShell || !mentionsPort) && dimensions.radius != null) {
+      updates.radius = dimensions.radius
+      updates.tankRadius = dimensions.radius
+    }
+    if (mentionsSupport && dimensions.height != null) updates.supportHeight = dimensions.height
+    if (/platform|ladder|平台|爬梯/i.test(text) && dimensions.height != null) {
+      updates.platformHeight = dimensions.height
+    }
+  }
+
+  if (family === 'reactor') {
+    if (hasAddIntent && mentionsPlatform) updates.addPlatformLadder = true
+    if (side && mentionsPlatform) updates.platformSide = side
+    if (mentionsPort && radius != null) updates.nozzleDiameter = radius * 2
+    if ((mentionsTankShell || !mentionsPort) && dimensions.height != null) {
+      updates.vesselHeight = dimensions.height
+      updates.height = dimensions.height
+    }
+    if ((mentionsTankShell || !mentionsPort) && dimensions.diameter != null) {
+      updates.diameter = dimensions.diameter
+      updates.vesselDiameter = dimensions.diameter
+    }
+    if ((mentionsTankShell || !mentionsPort) && dimensions.radius != null) {
+      updates.radius = dimensions.radius
+      updates.vesselRadius = dimensions.radius
+    }
+  }
+
+  if (family === 'compressor') {
+    if (hasAddIntent && mentionsControlPanel) updates.addControlBox = true
+    if (side && mentionsControlPanel) updates.controlPanelSide = side
+    if (mentionsPort && radius != null) updates.portDiameter = radius * 2
+    if (mentionsMotor) {
+      if (dimensions.length != null) updates.motorLength = dimensions.length
+      if (radius != null) updates.motorRadius = radius
+    } else if (mentionsCasing) {
+      if (dimensions.length != null) updates.casingLength = dimensions.length
+      if (radius != null) updates.casingRadius = radius
+    } else if (hasAnyDimension) {
+      if (dimensions.length != null) updates.length = dimensions.length
+      if (dimensions.width != null) updates.width = dimensions.width
+      if (dimensions.height != null) updates.height = dimensions.height
+    }
+  }
+
+  if (family === 'heat_exchanger') {
+    if (hasAddIntent && mentionsSupportBase) updates.addSupportBase = true
+    if (dimensions.length != null) updates.length = dimensions.length
+    if (dimensions.diameter != null) {
+      updates.diameter = dimensions.diameter
+      updates.shellDiameter = dimensions.diameter
+    }
+    if (dimensions.radius != null) {
+      updates.radius = dimensions.radius
+      updates.shellRadius = dimensions.radius
+    }
+    if (mentionsSupport && dimensions.height != null) updates.supportHeight = dimensions.height
+  }
+
+  if (family === 'machine_tool') {
+    if (mentionsControlPanel) {
+      if (side) updates.controlPanelSide = side
+      if (dimensions.length != null) updates.controlPanelLength = dimensions.length
+      if (dimensions.height != null) updates.controlPanelHeight = dimensions.height
+    } else if (mentionsSpindle) {
+      if (dimensions.length != null) updates.spindleHeadLength = dimensions.length
+      if (dimensions.height != null) updates.spindleHeadHeight = dimensions.height
+    } else if (hasAnyDimension) {
+      if (dimensions.length != null) updates.length = dimensions.length
+      if (dimensions.width != null) updates.width = dimensions.width
+      if (dimensions.height != null) updates.height = dimensions.height
+    }
+  }
+
+  return Object.keys(updates).length > 0 ? updates : undefined
+}
+
+function inferIndustrialResizeOperations(
+  text: string,
+  family: string,
+): PrimitiveRevisionOperation[] {
+  const dimensions = parseDimensionSemantics(text)
+  const radius = radiusFromDimensions(dimensions)
+  const hasWiderIntent = /wider|wide|width|broaden|加宽|更宽|宽一点|宽些/.test(text)
+  const hasBiggerIntent = /larger|bigger|increase|加大|变大|更大|大一点|放大/.test(text)
+  const operations: PrimitiveRevisionOperation[] = []
+
+  if (family === 'conveyor' && /(belt|belt_surface|输送带|皮带)/i.test(text)) {
+    operations.push(
+      dimensions.width
+        ? { op: 'resize', selector: { sourcePartKind: 'belt_surface' }, width: dimensions.width }
+        : {
+            op: 'scaleSemantic',
+            selector: { sourcePartKind: 'belt_surface' },
+            dimension: hasWiderIntent ? 'width' : 'primary',
+            factor: 1.2,
+          },
+    )
+  }
+
+  if (family === 'pump' && /(inlet|suction|入口|进口|吸入口)/i.test(text)) {
+    operations.push(
+      radius
+        ? { op: 'resize', selector: { sourcePartKind: 'inlet_port' }, radius }
+        : {
+            op: 'scaleSemantic',
+            selector: { sourcePartKind: 'inlet_port' },
+            dimension: 'radius',
+            factor: hasBiggerIntent ? 1.25 : 1.15,
+          },
+    )
+  }
+
+  if (family === 'pump' && /(outlet|discharge|出口|排出口)/i.test(text)) {
+    operations.push(
+      radius
+        ? { op: 'resize', selector: { sourcePartKind: 'outlet_port' }, radius }
+        : {
+            op: 'scaleSemantic',
+            selector: { sourcePartKind: 'outlet_port' },
+            dimension: 'radius',
+            factor: hasBiggerIntent ? 1.25 : 1.15,
+          },
+    )
+  }
+
+  if (family === 'pipe_system' && /(pipe|pipeline|管道|管路|管线)/i.test(text)) {
+    for (const sourcePartKind of ['pipe_run', 'pipe_elbow', 'valve_body'] as const) {
+      operations.push(
+        radius
+          ? { op: 'resize', selector: { sourcePartKind }, radius }
+          : {
+              op: 'scaleSemantic',
+              selector: { sourcePartKind },
+              dimension: 'radius',
+              factor: hasBiggerIntent ? 1.2 : 1.12,
+            },
+      )
+    }
+  }
+
+  return operations
+}
+
+function inferIndustrialRevisionFallback(
+  args: Record<string, unknown>,
+  prompt: string,
+  target: GeneratedGeometryArtifact,
+):
+  | { operations: PrimitiveRevisionOperation[]; shapes?: undefined }
+  | { operations: []; shapes: RawShape[] }
+  | undefined {
+  const family = industrialFamilyFromArtifact(target)
+  if (!family) return undefined
+  const text = revisionRequestText(args, prompt)
+  if (!text) return undefined
+
+  const recomposeUpdates = inferIndustrialRecomposeUpdates(text, family)
+  if (recomposeUpdates) {
+    const shapes = recomposeIndustrialRevision(args, prompt, target, recomposeUpdates)
+    if (shapes) return { operations: [], shapes }
+  }
+
+  const operations = inferIndustrialResizeOperations(text, family)
+  return operations.length > 0 ? { operations } : undefined
 }
 
 function isChimneyIntent(args: Record<string, unknown>, prompt: string): boolean {
@@ -532,7 +1327,7 @@ function classifyGenericPrimitiveFallback(
     return 'landscape_natural'
   }
   if (
-    /(machine|equipment|device|appliance|instrument|console|robot|pump|motor|\u673a\u5668|\u8bbe\u5907|\u88c5\u7f6e|\u4eea\u5668|\u7535\u5668)/i.test(
+    /(machine|equipment|device|appliance|instrument|console|robot|pump|motor|coffee|espresso|\u5496\u5561\u673a|\u673a\u5668|\u8bbe\u5907|\u88c5\u7f6e|\u4eea\u5668|\u7535\u5668)/i.test(
       text,
     )
   ) {
@@ -560,6 +1355,498 @@ function shouldUseGenericPrimitiveFallback(args: Record<string, unknown>, prompt
   if (text.length < 2) return false
   if (/^\s*(edit|revise|change|delete|remove|undo|redo)\b/i.test(prompt)) return false
   return true
+}
+
+function isOutdoorAcPartFallbackRequest(args: Record<string, unknown>, prompt: string): boolean {
+  return /outdoor.?ac|air.?condition(?:er|ing)?|ac\s+unit|\u7a7a\u8c03\u5916\u673a|\u7a7a\u8c03|\u5916\u673a/i.test(
+    genericFallbackText(args, prompt),
+  )
+}
+
+function explicitDraftProfileFromArgs(
+  args: Record<string, unknown>,
+  prompt: string,
+): DeviceProfileDefinition | undefined {
+  if (!isRecord(args.deviceProfileDraft)) return undefined
+  return buildDraftDeviceProfile(prompt, {
+    ...args,
+    deviceProfileDraft: args.deviceProfileDraft,
+  }).profile
+}
+
+function attachExplicitDeviceProfileDraft(args: Record<string, unknown>, prompt: string) {
+  const profile = explicitDraftProfileFromArgs(args, prompt)
+  if (!profile) return
+  args.deviceProfileDraft = profile
+  args.__deviceProfileDefinition = args.__deviceProfileDefinition ?? profile
+  args.deviceProfile = args.deviceProfile ?? profile.id
+  args.archetypeFamily = args.archetypeFamily ?? profile.archetypeFamily
+  args.layoutFamily = args.layoutFamily ?? profile.layoutFamily
+  args.profileSource = args.profileSource ?? profile.source
+  args.primarySemanticRole = args.primarySemanticRole ?? profile.primarySemanticRole
+  args.family = args.family ?? profile.family
+}
+
+function hasPartDefinitions(family: unknown): family is string {
+  return typeof family === 'string' && getPartDefinitions(family).length > 0
+}
+
+function executableFamilyForProfile(
+  profile: DeviceProfileDefinition | undefined,
+  inferredFamily: string | undefined,
+): string | undefined {
+  if (profile) {
+    if (hasPartDefinitions(profile.family)) return profile.family
+    const layoutExecutable = executableFamilyForLayoutFamily(
+      profile.layoutFamily,
+      hasPartDefinitions(inferredFamily) ? inferredFamily : undefined,
+    )
+    if (hasPartDefinitions(layoutExecutable)) return layoutExecutable
+    if (hasPartDefinitions(inferredFamily)) return inferredFamily
+    if (hasPartDefinitions('generic')) return 'generic'
+    return undefined
+  }
+  return hasPartDefinitions(inferredFamily) ? inferredFamily : undefined
+}
+
+function explicitProfileParts(parts: unknown): PartComposePartInput[] {
+  if (!Array.isArray(parts)) return []
+  const seen = new Set<string>()
+  const output: PartComposePartInput[] = []
+  for (const part of parts) {
+    if (!isRecord(part)) continue
+    const kind = String(part.kind ?? part.partType ?? part.type ?? '').trim()
+    if (!kind) continue
+    const semanticRole = String(part.semanticRole ?? '').trim()
+    const key = `${kind.toLowerCase()}::${semanticRole.toLowerCase()}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    output.push({
+      ...(part as PartComposePartInput),
+      kind,
+      ...(semanticRole ? { semanticRole } : {}),
+    })
+  }
+  return output
+}
+
+function shouldBuildRuntimeDraftProfile(args: Record<string, unknown>, prompt: string): boolean {
+  const text = genericFallbackText(args, prompt).toLowerCase()
+  return /industrial|factory|equipment|machine|apparatus|plant|process|press|filter|dryer|lyophili[sz]er|centrifuge|separator|conveyor|screw|auger|\u5de5\u5382|\u5de5\u4e1a|\u8bbe\u5907|\u8a2d\u5099|\u88c5\u7f6e|\u88dd\u7f6e|\u538b\u6ee4|\u58d3\u6ffe|\u51bb\u5e72|\u51cd\u4e7e|\u5206\u79bb|\u8f93\u9001|\u8f38\u9001|\u87ba\u65cb/.test(
+    text,
+  )
+}
+
+function registryPartFallbackShapes(
+  targetArgs: Record<string, unknown>,
+  sourceArgs: Record<string, unknown>,
+  prompt: string,
+  context?: GeometryToolExecutionContext,
+): RawShape[] | undefined {
+  const availableProfiles = context?.deviceProfiles ?? undefined
+  const explicitDraftProfile = explicitDraftProfileFromArgs(sourceArgs, prompt)
+  const inferredFamilyDefinition = inferFamilyDefinition({ ...sourceArgs, prompt })
+  const inferredProfile = inferDeviceProfileDefinition({ ...sourceArgs, prompt }, availableProfiles)
+  const draftFallbackAllowed =
+    explicitDraftProfile != null ||
+    (inferredProfile == null && shouldBuildRuntimeDraftProfile(sourceArgs, prompt))
+  const fallbackDraft =
+    draftFallbackAllowed && explicitDraftProfile == null
+      ? buildDraftDeviceProfile(prompt, {
+          ...sourceArgs,
+          deviceProfileDraft: sourceArgs.deviceProfileDraft,
+        }).profile
+      : undefined
+  const shouldUseFallbackDraft =
+    fallbackDraft != null &&
+    fallbackDraft.description !== 'Generic industrial fallback draft profile.'
+  const explicitDraftValidation = explicitDraftProfile
+    ? validateDeviceProfileForExecution(explicitDraftProfile)
+    : undefined
+  const draftProfile =
+    (explicitDraftValidation?.ok ? explicitDraftProfile : undefined) ??
+    (shouldUseFallbackDraft ? fallbackDraft : undefined)
+  const profile = inferredProfile ?? draftProfile
+  if (explicitDraftValidation && !explicitDraftValidation.ok && inferredProfile == null) {
+    targetArgs.deviceProfileValidation = explicitDraftValidation
+    targetArgs.profileFallbackReason = 'profile_validation_failed'
+    targetArgs.family = 'generic'
+    targetArgs.deviceProfile = undefined
+    targetArgs.__deviceProfileDefinition = undefined
+    return undefined
+  }
+  const profileValidation = profile ? validateDeviceProfileForExecution(profile) : undefined
+  if (profileValidation && !profileValidation.ok) {
+    targetArgs.deviceProfileValidation = profileValidation
+    targetArgs.profileFallbackReason = 'profile_validation_failed'
+    targetArgs.family = 'generic'
+    targetArgs.deviceProfile = undefined
+    targetArgs.__deviceProfileDefinition = undefined
+    return undefined
+  }
+  const profiledSourceArgs = profile
+    ? applyDeviceProfileToPartInput(profile, { ...sourceArgs, prompt })
+    : sourceArgs
+  const inferredFamily =
+    (profile ? inferFamilyDefinition({ ...profiledSourceArgs, prompt }) : inferredFamilyDefinition)
+      ?.id ?? inferFamilyDefinition({ ...profiledSourceArgs, prompt })?.id
+  const family = executableFamilyForProfile(profile, inferredFamily)
+  if (!family || family === 'vehicle') return undefined
+  const explicitParts =
+    profile && profile.source !== 'builtin' ? explicitProfileParts(profiledSourceArgs.parts) : []
+  const normalizedPlan =
+    explicitParts.length > 0
+      ? { family, parts: explicitParts, warnings: [] }
+      : normalizePartPlanForFamily(family, { ...profiledSourceArgs, prompt })
+  if (!normalizedPlan?.parts.length) return undefined
+  const normalizedParts = profile
+    ? applyProfilePartRoles(profile, normalizedPlan.parts)
+    : normalizedPlan.parts
+
+  const partInput: PartComposeInput = {
+    ...(profiledSourceArgs as PartComposeInput),
+    name:
+      typeof profiledSourceArgs.name === 'string'
+        ? profiledSourceArgs.name
+        : typeof profiledSourceArgs.object === 'string'
+          ? profiledSourceArgs.object
+          : normalizedPlan.family.replace(/_/g, ' '),
+    family: normalizedPlan.family,
+    registryPartPlan: true,
+    autoComplete: false,
+    enhanceVisualDetails: false,
+    parts: normalizedParts,
+  }
+  const shapes = composePartPrimitives(partInput) as RawShape[]
+  if (shapes.length === 0) return undefined
+
+  const executionValidation = profile
+    ? profileExecutionSmokeValidation(profile, shapes, normalizedParts)
+    : undefined
+  const fullProfileValidation =
+    profile && profileValidation
+      ? validateDeviceProfileForExecution(profile, executionValidation)
+      : undefined
+  if (fullProfileValidation && !fullProfileValidation.ok) {
+    targetArgs.deviceProfileValidation = fullProfileValidation
+    targetArgs.profileFallbackReason = 'profile_execution_validation_failed'
+    return undefined
+  }
+
+  targetArgs.family = normalizedPlan.family
+  targetArgs.parts = normalizedParts
+  targetArgs.__registryPartPlan = true
+  targetArgs.layoutPlan = resolveLayout(
+    {
+      family: profile?.family ?? normalizedPlan.family,
+      layoutFamily: profile?.layoutFamily,
+      primarySemanticRole: profile?.primarySemanticRole,
+    },
+    normalizedParts,
+    {
+      length: typeof profiledSourceArgs.length === 'number' ? profiledSourceArgs.length : undefined,
+      width: typeof profiledSourceArgs.width === 'number' ? profiledSourceArgs.width : undefined,
+      height: typeof profiledSourceArgs.height === 'number' ? profiledSourceArgs.height : undefined,
+      diameter:
+        typeof profiledSourceArgs.diameter === 'number' ? profiledSourceArgs.diameter : undefined,
+    },
+  )
+  if (profile) {
+    targetArgs.deviceProfile = profile.id
+    targetArgs.archetypeFamily = profile.archetypeFamily
+    targetArgs.layoutFamily = profile.layoutFamily
+    targetArgs.profileSource = profile.source
+    targetArgs.primarySemanticRole = profile.primarySemanticRole
+    targetArgs.deviceProfileValidation = fullProfileValidation ?? profileValidation
+    targetArgs.__deviceProfileDefinition = profile
+    if (profile.status === 'runtime_draft') {
+      targetArgs.deviceProfileDraft = profile
+    }
+  }
+  for (const key of ['length', 'width', 'height', 'diameter']) {
+    if (targetArgs[key] == null && profiledSourceArgs[key] != null) {
+      targetArgs[key] = profiledSourceArgs[key]
+    }
+  }
+  if (normalizedPlan.warnings.length > 0) targetArgs.partWarnings = normalizedPlan.warnings
+  return shapes
+}
+
+function applyProfilePartRoles(
+  profile: DeviceProfileDefinition,
+  normalizedParts: readonly PartComposePartInput[],
+): PartComposePartInput[] {
+  const remainingProfileParts = [...profile.parts]
+  return normalizedParts.map((part) => {
+    const index = remainingProfileParts.findIndex(
+      (profilePart) =>
+        String(profilePart.kind).toLowerCase() === String(part.kind).toLowerCase() ||
+        String(profilePart.semanticRole).toLowerCase() === String(part.semanticRole).toLowerCase(),
+    )
+    if (index < 0) return part
+    const [profilePart] = remainingProfileParts.splice(index, 1)
+    if (!profilePart?.semanticRole) return part
+    if (String(profilePart.kind).toLowerCase() === 'heat_exchanger') return part
+    return {
+      ...part,
+      semanticRole: profilePart.semanticRole,
+      ...(profilePart.required ? { required: true } : {}),
+    }
+  })
+}
+
+function profileExecutionSmokeValidation(
+  profile: DeviceProfileDefinition,
+  shapes: RawShape[],
+  parts: readonly PartComposePartInput[] = [],
+): DeviceProfileValidation {
+  const issues: string[] = []
+  const warnings: string[] = []
+  if (shapes.length === 0) issues.push(`Profile ${profile.id} produced no shapes.`)
+  if (shapes.length > MAX_GENERATED_GEOMETRY_SHAPES) {
+    issues.push(
+      `Profile ${profile.id} produced ${shapes.length} shapes, above limit ${MAX_GENERATED_GEOMETRY_SHAPES}.`,
+    )
+  }
+
+  const roleText = textOf([
+    shapes.map((shape) => [shape.semanticRole, shape.sourcePartKind, shape.name]),
+    parts.map((part) => [part?.semanticRole, part?.kind, part?.name]),
+  ]).toLowerCase()
+  if (!roleText.includes(profile.primarySemanticRole.toLowerCase())) {
+    issues.push(
+      `Profile ${profile.id} primarySemanticRole "${profile.primarySemanticRole}" was not produced.`,
+    )
+  }
+
+  const requiredRoles = profile.parts
+    .filter((part) => part.required)
+    .map((part) => part.semanticRole)
+  const missingRequiredRoles = requiredRoles.filter(
+    (role) => !roleText.includes(role.toLowerCase()),
+  )
+  if (missingRequiredRoles.length > 0) {
+    issues.push(`Profile ${profile.id} missing required roles: ${missingRequiredRoles.join(', ')}.`)
+  }
+
+  const hasFiniteShape = shapes.some((shape) => {
+    const values = [
+      shape.length,
+      shape.width,
+      shape.height,
+      shape.radius,
+      shape.radiusTop,
+      shape.radiusBottom,
+      shape.majorRadius,
+      shape.tubeRadius,
+      shape.depth,
+      shape.thickness,
+    ]
+    return values.some((value) => typeof value === 'number' && Number.isFinite(value) && value > 0)
+  })
+  if (!hasFiniteShape) issues.push(`Profile ${profile.id} produced no finite positive dimensions.`)
+  if (shapes.length < Math.max(2, profile.parts.filter((part) => part.required).length)) {
+    warnings.push(`Profile ${profile.id} produced a sparse geometry draft.`)
+  }
+
+  const requiredCount = Math.max(requiredRoles.length, 1)
+  const coveredRequiredCount = requiredRoles.length - missingRequiredRoles.length
+  const roleScore = requiredRoles.length === 0 ? 1 : coveredRequiredCount / requiredCount
+  const shapeScore = shapes.length > 0 && shapes.length <= MAX_GENERATED_GEOMETRY_SHAPES ? 1 : 0
+  const primaryScore = roleText.includes(profile.primarySemanticRole.toLowerCase()) ? 1 : 0
+  const dimensionScore = hasFiniteShape ? 1 : 0
+  const score = (roleScore + shapeScore + primaryScore + dimensionScore) / 4
+  return { ok: issues.length === 0, issues, warnings, score }
+}
+
+function isRobotArmRequest(args: Record<string, unknown>, prompt: string): boolean {
+  const text = [
+    args.family,
+    args.category,
+    args.object,
+    args.name,
+    args.style,
+    prompt,
+    Array.isArray(args.parts)
+      ? args.parts
+          .filter(isRecord)
+          .map((part) => [part.kind, part.semanticRole, part.name, part.id].join(' '))
+          .join(' ')
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  if (/palletiz(?:er|ing)|ma\s+duo/.test(text)) return true
+  return /robot[_\s-]?arm|industrial[_\s-]?robot|six[_\s-]?axis|cobot|manipulator|welding[_\s-]?cell|焊接机器人|机器人/.test(
+    text,
+  )
+}
+
+function robotArmWorkstationFallbackShapes(
+  targetArgs: Record<string, unknown>,
+  sourceArgs: Record<string, unknown>,
+  prompt: string,
+  context?: GeometryToolExecutionContext,
+): RawShape[] | undefined {
+  if (!isRobotArmRequest(sourceArgs, prompt)) return undefined
+
+  const profile = inferDeviceProfileDefinition(
+    { ...sourceArgs, prompt },
+    context?.deviceProfiles ?? undefined,
+  )
+  const profiledSourceArgs = profile
+    ? applyDeviceProfileToPartInput(profile, { ...sourceArgs, prompt })
+    : sourceArgs
+  const dimensions = parseDimensionSemantics(prompt)
+  const height = firstNumber(profiledSourceArgs.height, dimensions.height) ?? 1.8
+  const length = firstNumber(profiledSourceArgs.length, dimensions.length) ?? 2.2
+  const width =
+    firstNumber(profiledSourceArgs.width, profiledSourceArgs.depth, dimensions.width) ?? 1.6
+  const reach = Math.max(0.8, Math.min(2.4, height * 0.72))
+  const robotName =
+    typeof profiledSourceArgs.name === 'string' && profiledSourceArgs.name.trim()
+      ? profiledSourceArgs.name.trim()
+      : 'industrial robot welding cell'
+  const robotShapes = composeRobotArmPrimitives({
+    name: robotName,
+    axisCount: 6,
+    pose: 'work-ready',
+    endEffector: 'tool-flange',
+    reach,
+    primaryColor:
+      typeof profiledSourceArgs.primaryColor === 'string'
+        ? profiledSourceArgs.primaryColor
+        : '#facc15',
+    secondaryColor:
+      typeof profiledSourceArgs.secondaryColor === 'string'
+        ? profiledSourceArgs.secondaryColor
+        : '#111827',
+    metalColor:
+      typeof profiledSourceArgs.metalColor === 'string' ? profiledSourceArgs.metalColor : '#cbd5e1',
+  }) as RawShape[]
+
+  const workTableLength = Math.max(0.55, length * 0.32)
+  const workTableWidth = Math.max(0.38, width * 0.36)
+  const workTableHeight = Math.max(0.18, height * 0.24)
+  const tableX = Math.max(0.55, length * 0.28)
+  const controlX = -Math.max(0.5, length * 0.34)
+  const controlZ = Math.max(0.45, width * 0.36)
+  const extras: RawShape[] = [
+    {
+      kind: 'box',
+      name: `${robotName} fixture table top`,
+      position: [tableX, workTableHeight, 0],
+      length: workTableLength,
+      width: workTableWidth,
+      height: Math.max(0.04, height * 0.035),
+      material: materialColor({ color: '#475569' }, '#475569'),
+      semanticRole: 'work_table',
+      sourcePartKind: 'work_table',
+    },
+    {
+      kind: 'box',
+      name: `${robotName} fixture table base`,
+      position: [tableX, workTableHeight * 0.5, 0],
+      length: workTableLength * 0.78,
+      width: workTableWidth * 0.72,
+      height: workTableHeight,
+      material: materialColor({ color: '#1f2937' }, '#1f2937'),
+      semanticRole: 'work_table',
+      sourcePartKind: 'work_table',
+    },
+    {
+      kind: 'box',
+      name: `${robotName} control cabinet`,
+      position: [controlX, height * 0.38, controlZ],
+      length: Math.max(0.22, width * 0.16),
+      width: Math.max(0.18, width * 0.12),
+      height: Math.max(0.7, height * 0.62),
+      material: materialColor({ color: '#e5e7eb' }, '#e5e7eb'),
+      semanticRole: 'control_panel',
+      sourcePartKind: 'control_box',
+    },
+    {
+      kind: 'box',
+      name: `${robotName} control screen`,
+      position: [controlX, height * 0.52, controlZ + Math.max(0.095, width * 0.065)],
+      length: Math.max(0.12, width * 0.09),
+      width: 0.012,
+      height: Math.max(0.08, height * 0.07),
+      material: materialColor({ color: '#0f172a' }, '#0f172a'),
+      semanticRole: 'control_panel',
+      sourcePartKind: 'display_screen',
+    },
+    {
+      kind: 'cylinder',
+      name: `${robotName} welding torch`,
+      position: [tableX * 0.45, height * 0.78, 0],
+      axis: 'z',
+      radius: Math.max(0.012, reach * 0.012),
+      height: Math.max(0.16, reach * 0.16),
+      material: materialColor({ color: '#94a3b8' }, '#94a3b8'),
+      semanticRole: 'end_effector',
+      sourcePartKind: 'welding_torch',
+    },
+    {
+      kind: 'box',
+      name: `${robotName} safety barrier rail`,
+      position: [0, height * 0.32, -width * 0.48],
+      length: length,
+      width: 0.035,
+      height: 0.045,
+      material: materialColor({ color: '#facc15' }, '#facc15'),
+      semanticRole: 'safety_barrier',
+      sourcePartKind: 'safety_barrier',
+    },
+    {
+      kind: 'box',
+      name: `${robotName} warning label`,
+      position: [controlX, height * 0.25, controlZ + Math.max(0.1, width * 0.07)],
+      length: Math.max(0.1, width * 0.07),
+      width: 0.01,
+      height: Math.max(0.06, height * 0.045),
+      material: materialColor({ color: '#f97316' }, '#f97316'),
+      semanticRole: 'warning_label',
+      sourcePartKind: 'warning_label',
+    },
+  ]
+
+  targetArgs.family = 'robot_arm'
+  targetArgs.name = robotName
+  if (profile) {
+    targetArgs.deviceProfile = profile.id
+    targetArgs.archetypeFamily = profile.archetypeFamily
+    targetArgs.layoutFamily = profile.layoutFamily
+    targetArgs.profileSource = profile.source
+    targetArgs.primarySemanticRole = profile.primarySemanticRole
+    targetArgs.__deviceProfileDefinition = profile
+    if (profile.status === 'runtime_draft') {
+      targetArgs.deviceProfileDraft = profile
+    }
+  }
+  targetArgs.__fallbackGeometryBrief = {
+    category: 'robot_arm',
+    units: 'm',
+    coordinateConvention: '+X work direction, +Y up, +Z cell width; y=0 is floor',
+    expectedDimensions: { length, width, height },
+    requiredRoles: [
+      'robot_base',
+      'base_joint',
+      'shoulder_joint',
+      'upper_arm',
+      'elbow_joint',
+      'forearm',
+      'wrist_joint',
+      'end_effector',
+      'work_table',
+      'control_panel',
+      'safety_barrier',
+      'warning_label',
+    ],
+  }
+  targetArgs.sourceStrategy = 'robot_arm_workstation_fallback'
+  return [...robotShapes, ...extras]
 }
 
 function genericPrimitiveFallbackGeometryBrief(
@@ -623,7 +1910,7 @@ function genericPrimitiveFallbackGeometryBrief(
     expectedDimensions: { length, width, height },
     requiredRoles,
     assumptions: [
-      'generic primitive fallback because no dedicated recipe, assembly family, or reusable part matched',
+      'freeform assembly fallback because no dedicated recipe, assembly family, or reusable part matched',
       'low-detail editable draft intended for follow-up refinement',
     ],
   }
@@ -790,6 +2077,9 @@ function genericObjectPrimitiveFallbackShapes(
   }
 
   if (category === 'equipment') {
+    const isCoffeeMachine = /coffee|espresso|\u5496\u5561\u673a/i.test(
+      genericFallbackText(args, prompt),
+    )
     return [
       {
         kind: 'box',
@@ -828,6 +2118,35 @@ function genericObjectPrimitiveFallbackShapes(
         thickness: 0.03,
         material: accentMaterial,
       },
+      ...(isCoffeeMachine
+        ? ([
+            {
+              kind: 'cylinder',
+              name: 'freeform coffee spout',
+              semanticRole: 'spout',
+              semanticGroup: 'generic_fallback',
+              sourcePartKind: 'generic.spout',
+              position: [0, height * 0.52, width * 0.58],
+              axis: 'z',
+              radius: Math.min(length, width) * 0.035,
+              height: width * 0.22,
+              material: darkMaterial,
+            },
+            {
+              kind: 'rounded-panel',
+              name: 'freeform cup platform',
+              semanticRole: 'cup_platform',
+              semanticGroup: 'generic_fallback',
+              sourcePartKind: 'generic.platform',
+              position: [0, height * 0.18, width * 0.56],
+              length: length * 0.44,
+              width: width * 0.28,
+              thickness: height * 0.055,
+              cornerRadius: Math.min(length, width) * 0.04,
+              material: darkMaterial,
+            },
+          ] satisfies RawShape[])
+        : []),
     ]
   }
 
@@ -892,12 +2211,68 @@ function applyGenericPrimitiveFallback(
   sourceArgs: Record<string, unknown>,
   prompt: string,
 ): RawShape[] {
+  if (
+    !isRiverIntent(sourceArgs, prompt) &&
+    classifyGenericPrimitiveFallback(sourceArgs, prompt) !== 'landscape_rockery'
+  ) {
+    const genericPartShapes = genericPartFallbackShapes(targetArgs, sourceArgs, prompt)
+    if (genericPartShapes?.length) return genericPartShapes
+  }
   const fallbackBrief = genericPrimitiveFallbackGeometryBrief(sourceArgs, prompt)
   const fallbackShapes = genericObjectPrimitiveFallbackShapes(sourceArgs, prompt)
   targetArgs.__fallbackGeometryBrief = fallbackBrief
   targetArgs.__genericPrimitiveFallback = true
+  targetArgs.__freeformAssemblyFallback = true
   targetArgs.shapes = fallbackShapes
   return fallbackShapes
+}
+
+function genericPartFallbackShapes(
+  targetArgs: Record<string, unknown>,
+  sourceArgs: Record<string, unknown>,
+  prompt: string,
+): RawShape[] | undefined {
+  const fallbackBrief = genericPrimitiveFallbackGeometryBrief(sourceArgs, prompt)
+  const expectedDimensions = fallbackBrief.expectedDimensions ?? {}
+  const partInput: PartComposeInput = {
+    ...(sourceArgs as PartComposeInput),
+    name:
+      typeof sourceArgs.name === 'string'
+        ? sourceArgs.name
+        : typeof sourceArgs.object === 'string'
+          ? sourceArgs.object
+          : prompt,
+    length: firstNumber(sourceArgs.length, expectedDimensions.length),
+    width: firstNumber(sourceArgs.width, sourceArgs.depth, expectedDimensions.width),
+    height: firstNumber(sourceArgs.height, expectedDimensions.height),
+    primaryColor:
+      typeof sourceArgs.primaryColor === 'string'
+        ? sourceArgs.primaryColor
+        : typeof sourceArgs.color === 'string'
+          ? sourceArgs.color
+          : undefined,
+    autoComplete: true,
+    enhanceVisualDetails: false,
+    geometryBrief: fallbackBrief,
+  }
+  const normalizedPlan = normalizeGenericPartPlan({ ...partInput, prompt })
+  const shapes = composePartPrimitives({
+    ...partInput,
+    parts: normalizedPlan.parts,
+  }) as RawShape[]
+  if (shapes.length === 0) return undefined
+
+  targetArgs.__fallbackGeometryBrief = fallbackBrief
+  targetArgs.__genericPartFallback = true
+  targetArgs.__freeformAssemblyFallback = true
+  targetArgs.family = 'generic'
+  targetArgs.parts = normalizedPlan.parts
+  if (partInput.length != null) targetArgs.length = partInput.length
+  if (partInput.width != null) targetArgs.width = partInput.width
+  if (partInput.height != null) targetArgs.height = partInput.height
+  if (partInput.primaryColor) targetArgs.primaryColor = partInput.primaryColor
+  if (normalizedPlan.warnings.length > 0) targetArgs.partWarnings = normalizedPlan.warnings
+  return shapes
 }
 
 function isAircraftIntent(
@@ -905,11 +2280,145 @@ function isAircraftIntent(
   prompt: string,
   context?: GeometryToolExecutionContext,
 ): boolean {
+  const explicitFamily =
+    typeof args.family === 'string' ? inferFamilyDefinition({ family: args.family })?.id : undefined
+  if (explicitFamily && explicitFamily !== 'aircraft') return false
   const roleText = (context?.blueprintRequiredRoles ?? []).join(' ')
   const text =
     `${prompt} ${context?.blueprintCategory ?? ''} ${roleText} ${JSON.stringify(args)}`.toLowerCase()
   return /aircraft|airliner|boeing|airplane|plane|fuselage|landing[_\s-]?gear|\u98de\u673a|\u5ba2\u673a|\u6ce2\u97f3/.test(
     text,
+  )
+}
+
+function isVehicleIntent(
+  args: Record<string, unknown>,
+  prompt: string,
+  context?: GeometryToolExecutionContext,
+): boolean {
+  const roleText = (context?.blueprintRequiredRoles ?? []).join(' ')
+  const text =
+    `${prompt} ${context?.blueprintCategory ?? ''} ${roleText} ${JSON.stringify(args)}`.toLowerCase()
+  return /vehicle|sedan|suv|truck|van|automobile|(?:^|[\s_-])(?:car|auto)(?:$|[\s_-])|\u6c7d\u8f66|\u8f7f\u8f66/.test(
+    text,
+  )
+}
+
+function isVehicleComponentIntent(
+  args: Record<string, unknown>,
+  prompt: string,
+  context?: GeometryToolExecutionContext,
+): boolean {
+  const parts = Array.isArray(args.parts) ? args.parts.filter(isRecord) : []
+  const hasVehicleBodyPart = parts.some((part) =>
+    /vehicle_body|body_shell|car_body/.test(
+      String(part.kind ?? part.partType ?? part.type ?? part.semanticRole ?? '').toLowerCase(),
+    ),
+  )
+  if (hasVehicleBodyPart) return false
+
+  const text =
+    `${prompt} ${context?.blueprintCategory ?? ''} ${(context?.blueprintRequiredRoles ?? []).join(' ')} ${JSON.stringify(args)}`.toLowerCase()
+  if (
+    /steering[_\s-]?wheel|tire|tyre|wheel\b|rim|hub|\u8f6e\u80ce|\u8f66\u8f6e|\u65b9\u5411\u76d8/.test(
+      text,
+    )
+  ) {
+    return true
+  }
+  const geometryBrief = nestedRecord(args, 'geometryBrief')
+  const category = String(geometryBrief.category ?? context?.blueprintCategory ?? '').toLowerCase()
+  return /component|part|single/.test(category)
+}
+
+function coherentVehicleFallbackInput(
+  args: Record<string, unknown>,
+  prompt: string,
+): AssemblyComposeInput {
+  const constraints = nestedRecord(args, 'constraints')
+  const dimensions = nestedRecord(args, 'dimensions')
+  const geometryBrief = nestedRecord(args, 'geometryBrief')
+  const expectedDimensions = isRecord(geometryBrief.expectedDimensions)
+    ? geometryBrief.expectedDimensions
+    : {}
+  return {
+    family: 'vehicle',
+    object:
+      typeof args.object === 'string'
+        ? args.object
+        : typeof args.name === 'string'
+          ? args.name
+          : undefined,
+    style: typeof args.style === 'string' ? args.style : undefined,
+    prompt,
+    length: firstNumber(
+      args.length,
+      constraints.length,
+      dimensions.length,
+      expectedDimensions.length,
+    ),
+    width: firstNumber(
+      args.width,
+      args.depth,
+      constraints.width,
+      constraints.depth,
+      dimensions.width,
+      dimensions.depth,
+      expectedDimensions.width,
+      expectedDimensions.depth,
+    ),
+    height: firstNumber(
+      args.height,
+      constraints.height,
+      dimensions.height,
+      expectedDimensions.height,
+    ),
+    primaryColor:
+      typeof args.primaryColor === 'string'
+        ? args.primaryColor
+        : typeof args.color === 'string'
+          ? args.color
+          : typeof constraints.primaryColor === 'string'
+            ? constraints.primaryColor
+            : undefined,
+  }
+}
+
+function coherentVehicleFallbackShapes(
+  args: Record<string, unknown>,
+  prompt: string,
+): RawShape[] | undefined {
+  const fallbackInput = coherentVehicleFallbackInput(args, prompt)
+  const shapes = composeAssemblyPrimitives(fallbackInput) as RawShape[]
+  if (shapes.length === 0) return undefined
+  args.__fallbackGeometryBrief = getAssemblyGeometryBrief(fallbackInput)
+  args.family = 'vehicle'
+  const normalizedPlan = normalizeVehiclePartPlan(args)
+  args.parts = normalizedPlan.parts
+  if (normalizedPlan.warnings.length > 0) args.partWarnings = normalizedPlan.warnings
+  if (fallbackInput.length != null) args.length = fallbackInput.length
+  if (fallbackInput.width != null) args.width = fallbackInput.width
+  if (fallbackInput.height != null) args.height = fallbackInput.height
+  if (fallbackInput.primaryColor) args.primaryColor = fallbackInput.primaryColor
+  return shapes
+}
+
+function shouldUseCoherentVehicleFallback(
+  args: Record<string, unknown>,
+  prompt: string,
+  context?: GeometryToolExecutionContext,
+): boolean {
+  if (!isVehicleIntent(args, prompt, context)) return false
+  if (isVehicleComponentIntent(args, prompt, context)) return false
+  if (isAircraftIntent(args, prompt, context)) return false
+  const parts = Array.isArray(args.parts) ? args.parts.filter(isRecord) : []
+  if (parts.length === 0) return false
+  return parts.some((part) =>
+    /vehicle|car|sedan|suv|truck|body_shell|body|wheel_set|window_strip|headlight|bumper/.test(
+      String(
+        [part.kind, part.partType, part.type, part.semanticRole, part.name, part.id].join(' '),
+      ).toLowerCase(),
+    ),
   )
 }
 
@@ -942,13 +2451,19 @@ function compactAircraftFallbackInput(
     'aircraft_engine_nacelle',
   ]
 
-  return applyPromptDimensionSemanticsToPartInput(
+  const sourceParts =
+    Array.isArray(args.parts) && args.parts.some(isRecord)
+      ? args.parts
+      : [{ kind: 'aircraft_fuselage', id: 'aircraft_fuselage' }]
+  const baseInput = applyPromptDimensionSemanticsToPartInput(
     {
       name: typeof args.name === 'string' ? args.name : 'compact aircraft',
+      family: 'aircraft',
       ...(length ? { length } : {}),
       primaryColor: args.primaryColor ?? args.color,
       secondaryColor: args.secondaryColor,
       darkColor: args.darkColor,
+      accentColor: args.accentColor,
       geometryBrief: {
         ...geometryBrief,
         category: 'aircraft',
@@ -958,10 +2473,17 @@ function compactAircraftFallbackInput(
         },
         requiredRoles,
       },
-      parts: [{ kind: 'aircraft_fuselage', id: 'aircraft_fuselage' }],
+      parts: sourceParts,
     },
     prompt,
   )
+  const normalizedPlan = normalizeAircraftPartPlan({ ...baseInput, prompt })
+
+  return {
+    ...baseInput,
+    parts: normalizedPlan.parts,
+    ...(normalizedPlan.warnings.length > 0 ? { partWarnings: normalizedPlan.warnings } : {}),
+  }
 }
 
 function compactAircraftFallbackShapes(
@@ -974,8 +2496,14 @@ function compactAircraftFallbackShapes(
   const shapes = composePartPrimitives(fallbackInput as PartComposeInput) as RawShape[]
   if (shapes.length === 0) return undefined
   args.__fallbackGeometryBrief = fallbackInput.geometryBrief
+  args.family = 'aircraft'
   args.parts = fallbackInput.parts
+  if (Array.isArray(fallbackInput.partWarnings)) args.partWarnings = fallbackInput.partWarnings
   if (fallbackInput.length != null) args.length = fallbackInput.length
+  if (fallbackInput.primaryColor) args.primaryColor = fallbackInput.primaryColor
+  if (fallbackInput.secondaryColor) args.secondaryColor = fallbackInput.secondaryColor
+  if (fallbackInput.darkColor) args.darkColor = fallbackInput.darkColor
+  if (fallbackInput.accentColor) args.accentColor = fallbackInput.accentColor
   return shapes
 }
 
@@ -1341,7 +2869,7 @@ function rawShapeKind(shape: RawShape): string {
     .toLowerCase()
 }
 
-function rawShapeText(shape: RawShape): string {
+function rawShapeNaturalText(shape: RawShape): string {
   return [
     rawShapeValue(shape, 'name'),
     rawShapeValue(shape, 'semanticRole'),
@@ -1401,7 +2929,7 @@ function upgradeSimpleChimneyPrimitiveShapes(
   if (!shape) return undefined
   const kind = rawShapeKind(shape)
   if (kind !== 'cylinder') return undefined
-  if (/opening|hollow|rim|cap|torus|frustum/.test(rawShapeText(shape))) return undefined
+  if (/opening|hollow|rim|cap|torus|frustum/.test(rawShapeNaturalText(shape))) return undefined
 
   const height = rawShapeNumber(shape, 'height') ?? rawShapeNumber(shape, 'length')
   const radius = rawShapeNumber(shape, 'radius')
@@ -1502,16 +3030,55 @@ function openAssemblyFallbackInput(
 ): AssemblyComposeInput {
   const fallback = recipeFallbackInput(args, prompt)
   const params = isRecord(fallback.params) ? fallback.params : {}
+  const family = inferOpenAssemblyFamily(args, prompt)
   return {
     ...(withoutExternalRecipeBrief(args) as AssemblyComposeInput),
     ...params,
+    ...(family ? { family } : {}),
     name: fallback.name,
     prompt,
   }
 }
 
+const REGISTRY_OPEN_ASSEMBLY_FAMILIES = new Set([
+  'vehicle',
+  'fan',
+  'pump',
+  'conveyor',
+  'machine_tool',
+  'outdoor_ac',
+  'tank',
+  'distillation_tower',
+  'reactor',
+  'compressor',
+  'grate_cooler',
+  'electrical',
+  'robot_arm',
+])
+
+function inferOpenAssemblyFamily(
+  args: Record<string, unknown>,
+  prompt: string,
+): string | undefined {
+  const profile = inferDeviceProfileDefinition({ ...args, prompt })
+  if (profile && REGISTRY_OPEN_ASSEMBLY_FAMILIES.has(profile.family)) return profile.family
+  const candidate = args.family ?? args.recipeId ?? args.recipe ?? args.id ?? args.objectType
+  const family = inferFamilyDefinition({
+    ...args,
+    family: args.family,
+    object: candidate,
+    name: candidate,
+    prompt,
+  })?.id
+  if (!family || !REGISTRY_OPEN_ASSEMBLY_FAMILIES.has(family)) return undefined
+  if (family === 'vehicle' && isVehicleComponentIntent(args, prompt)) return undefined
+  return family
+}
+
 function isOpenAssemblyRequest(args: Record<string, unknown>, prompt: string): boolean {
-  return isOpenAssemblyCapabilityRequest(args, prompt)
+  return (
+    isOpenAssemblyCapabilityRequest(args, prompt) || inferOpenAssemblyFamily(args, prompt) != null
+  )
 }
 
 function numberFromRecord(record: Record<string, unknown>, key: string): number | undefined {
@@ -1709,7 +3276,7 @@ function readPromptRecipeSemantics(
 
 const PROMPT_COLOR_HEX: Array<[RegExp, string]> = [
   [/(绿色|綠色|green)/i, '#22c55e'],
-  [/(红色|紅色|red)/i, '#ef4444'],
+  [/(红色|紅色|\bred\b)/i, '#ef4444'],
   [/(蓝色|藍色|blue)/i, '#2563eb'],
   [/(黄色|黃色|yellow)/i, '#facc15'],
   [/(黑色|black)/i, '#111827'],
@@ -1853,6 +3420,9 @@ function readExecutionGeometryBrief(
   const fallbackBrief = normalizeGeometryBrief(args.__fallbackGeometryBrief)
   if (fallbackBrief) return mergeBlueprintGeometryBrief(fallbackBrief, context)
 
+  const registryBrief = registryPartGeometryBrief(args)
+  if (registryBrief) return registryBrief
+
   if (
     name === 'compose_assembly' ||
     (name === 'compose_recipe' && isOpenAssemblyRequest(args, prompt)) ||
@@ -1886,6 +3456,31 @@ function readExecutionGeometryBrief(
       (name === 'revise_geometry' ? context?.revisionTarget?.geometryBrief : undefined),
     context,
   )
+}
+
+function registryPartGeometryBrief(
+  args: Record<string, unknown>,
+): PrimitiveGeometryBrief | undefined {
+  if (args.__registryPartPlan !== true) return undefined
+  const family =
+    typeof args.family === 'string' && args.family.trim() ? args.family.trim() : undefined
+  const parts = Array.isArray(args.parts) ? args.parts.filter(isRecord) : []
+  if (!family || parts.length === 0) return undefined
+
+  const requiredRoles = Array.from(
+    new Set(
+      parts
+        .map((part) =>
+          normalizeRequiredRoleToken(String(part.semanticRole ?? part.kind ?? '').trim()),
+        )
+        .filter((role) => role.length > 0),
+    ),
+  )
+  return {
+    ...normalizeGeometryBrief(args.geometryBrief),
+    category: family,
+    requiredRoles,
+  }
 }
 
 function mergeBlueprintGeometryBrief(
@@ -1963,6 +3558,19 @@ function formatVisualQualitySummary(quality: VisualQualitySummary): string {
   if (quality.warnings.length > 0) {
     parts.push(`warnings=[${quality.warnings.join('; ')}]`)
   }
+  return parts.join(' ')
+}
+
+function formatProfileQualitySummary(quality: DeviceProfileQualityScore | undefined): string {
+  if (!quality) return ''
+  const parts = [
+    `Profile quality: overall=${quality.overallScore.toFixed(2)}`,
+    `semantic=${quality.semanticScore.toFixed(2)}`,
+    `geometry=${quality.geometryScore.toFixed(2)}`,
+    `editability=${quality.editabilityScore.toFixed(2)}`,
+    `visual=${quality.visualCompletenessScore.toFixed(2)}`,
+  ]
+  if (quality.warnings.length > 0) parts.push(`warnings=[${quality.warnings.join('; ')}]`)
   return parts.join(' ')
 }
 
@@ -2051,8 +3659,11 @@ function defaultGroundedPosition(
     case 'box':
     case 'wedge':
     case 'trapezoid-prism':
+    case 'pyramid':
       return [0, height / 2, 0]
     case 'rounded-panel':
+    case 'ellipse-panel':
+    case 'semi-ellipse-panel':
       return [0, positive(values.thickness ?? values.height, 0.04) / 2, 0]
     case 'conformal-strip':
       return [0, 0, 0]
@@ -2071,6 +3682,7 @@ function defaultGroundedPosition(
         0,
       ]
     case 'sphere':
+    case 'ellipsoid':
     case 'hemisphere':
       return [0, radius, 0]
     case 'torus':
@@ -2084,20 +3696,38 @@ function defaultGroundedPosition(
   }
 }
 
-export function normalizeGeometryToolShapes(rawShapes: RawShape[]): ShapeSpec[] {
-  return (
-    expandPrimitiveShapeArrays(rawShapes as PrimitiveArrayExpandableShape[]) as RawShape[]
-  ).map((shape) => {
+export function normalizeGeometryToolShapes(
+  rawShapes: RawShape[],
+  options: { prompt?: string } = {},
+): ShapeSpec[] {
+  const expandedShapes = expandPrimitiveShapeArrays(
+    rawShapes as PrimitiveArrayExpandableShape[],
+  ) as RawShape[]
+  return expandedShapes.map((shape) => {
     const shapeRecord = shape as Record<string, unknown>
     const params = isRecord(shapeRecord.params) ? shapeRecord.params : {}
     const read = (key: string) => shapeRecord[key] ?? params[key]
     const size = Array.isArray(read('size')) ? (read('size') as number[]) : undefined
     const color = Array.isArray(read('color')) ? (read('color') as number[]) : undefined
-    const material = normalizePrimitiveMaterial(read('material'), read('materialColor'), color)
-
     const kind = normalizePrimitiveKind(
       read('kind') ?? read('primitive') ?? read('shape') ?? read('type'),
     )
+    const materialPreset = read('materialPreset')
+    const normalizedMaterial = normalizePrimitiveMaterial(
+      read('material'),
+      read('materialColor'),
+      color,
+    )
+    const material = shouldApplyGlassMaterial(
+      shape,
+      kind,
+      normalizedMaterial,
+      materialPreset,
+      options.prompt,
+      expandedShapes.length,
+    )
+      ? withGlassMaterial(normalizedMaterial)
+      : normalizedMaterial
     const isBoxLike =
       kind === 'box' || kind === 'rounded-panel' || kind === 'wedge' || kind === 'trapezoid-prism'
     const isAxisLengthPrimitive =
@@ -2142,7 +3772,7 @@ export function normalizeGeometryToolShapes(rawShapes: RawShape[]): ShapeSpec[] 
         thickness: normalizedThickness,
         axis,
       })
-    return {
+    const normalizedShape: ShapeSpec = {
       kind,
       position,
       rotation: normalizeVec3Object(read('rotation')) ?? [0, 0, 0],
@@ -2199,11 +3829,12 @@ export function normalizeGeometryToolShapes(rawShapes: RawShape[]): ShapeSpec[] 
       curveSegments: read('curveSegments') as number | undefined,
       closed: read('closed') as boolean | undefined,
       material,
-      materialPreset: read('materialPreset') as string | undefined,
+      materialPreset: materialPreset as string | undefined,
       attachTo: read('attachTo') as number | string | undefined,
       anchor: read('anchor') as string | undefined,
       childAnchor: read('childAnchor') as string | undefined,
     }
+    return lowerDerivedPrimitiveShape(normalizedShape as PrimitiveShapeInput) as ShapeSpec
   })
 }
 
@@ -2360,6 +3991,133 @@ export function validateGeometryToolShapes(shapes: ShapeSpec[]): string[] {
   })
 }
 
+function compactRoleKey(value: unknown): string {
+  return typeof value === 'string'
+    ? value
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_')
+    : ''
+}
+
+function rawShapeText(shape: RawShape): string {
+  return [
+    shape.name,
+    shape.semanticRole,
+    shape.sourcePartKind,
+    shape.semanticGroup,
+    shape.kind,
+    shape.shape,
+    shape.type,
+  ]
+    .map(compactRoleKey)
+    .filter(Boolean)
+    .join(' ')
+}
+
+function explicitRequiredRoleSet(args: Record<string, unknown>): Set<string> {
+  const roles = new Set<string>()
+  const brief = isRecord(args.geometryBrief) ? args.geometryBrief : undefined
+  for (const value of [
+    ...(Array.isArray(brief?.requiredRoles) ? brief.requiredRoles : []),
+    ...(Array.isArray(brief?.semanticRoles) ? brief.semanticRoles : []),
+  ]) {
+    const role = compactRoleKey(value).replace(/[:=]\d+$/, '')
+    if (role) roles.add(role)
+  }
+  const primary = compactRoleKey(args.primarySemanticRole)
+  if (primary) roles.add(primary)
+  return roles
+}
+
+function shapeBudgetPriority(shape: RawShape, args: Record<string, unknown>): number {
+  const text = rawShapeText(shape)
+  const requiredRoles = explicitRequiredRoleSet(args)
+  let priority = 50
+
+  if ([...requiredRoles].some((role) => role && text.includes(role))) priority += 80
+  if (
+    /main|body|housing|shell|casing|bed|frame|base|skid|grate|filter|plate_stack|volute|turbine|hopper/.test(
+      text,
+    )
+  ) {
+    priority += 45
+  }
+  if (/inlet|outlet|duct|port|nozzle|chute|motor|gearbox|bearing|shaft|control/.test(text)) {
+    priority += 35
+  }
+  if (/support|leg|foot|platform|ladder|access|door|panel|guard/.test(text)) priority += 18
+  if (/bolt|rivet|screw|washer|nameplate|label|warning|seam|stripe|fin|rib|slat/.test(text)) {
+    priority -= 45
+  }
+  if (/detail|accent|decorative/.test(text)) priority -= 35
+  if (typeof shape.attachTo === 'number' || typeof shape.attachTo === 'string') priority += 6
+
+  return priority
+}
+
+function compactRawShapesToBudget(
+  rawShapes: RawShape[],
+  maxShapes: number,
+  args: Record<string, unknown>,
+): RawShape[] {
+  if (rawShapes.length <= maxShapes) return rawShapes
+  const keep = new Set<number>()
+  const ranked = rawShapes
+    .map((shape, index) => ({ index, priority: shapeBudgetPriority(shape, args) }))
+    .sort((left, right) => right.priority - left.priority || left.index - right.index)
+
+  for (const item of ranked.slice(0, maxShapes)) keep.add(item.index)
+  for (let index = 0; index < rawShapes.length; index += 1) {
+    const attachTo = rawShapes[index]?.attachTo
+    if (typeof attachTo === 'number' && keep.has(index)) keep.add(attachTo)
+  }
+
+  if (keep.size > maxShapes) {
+    const required = [...keep]
+      .map((index) => ({ index, priority: shapeBudgetPriority(rawShapes[index]!, args) }))
+      .sort((left, right) => right.priority - left.priority || left.index - right.index)
+      .slice(0, maxShapes)
+    keep.clear()
+    for (const item of required) keep.add(item.index)
+  }
+
+  const oldToNew = new Map<number, number>()
+  const compacted = rawShapes.flatMap((shape, oldIndex) => {
+    if (!keep.has(oldIndex)) return []
+    oldToNew.set(oldIndex, oldToNew.size)
+    return [{ shape: { ...shape }, oldIndex }]
+  })
+
+  return compacted.map(({ shape, oldIndex }) => {
+    if (typeof shape.attachTo !== 'number') return shape
+    const nextAttachTo = oldToNew.get(shape.attachTo)
+    const newIndex = oldToNew.get(oldIndex) ?? 0
+    if (nextAttachTo == null || nextAttachTo >= newIndex) {
+      const next = { ...shape }
+      delete next.attachTo
+      delete next.anchor
+      delete next.childAnchor
+      return next
+    }
+    return { ...shape, attachTo: nextAttachTo }
+  })
+}
+
+function shouldAutoCompactShapeBudget(name: string, args: Record<string, unknown>): boolean {
+  return (
+    name === 'compose_parts' &&
+    (args.__registryPartPlan === true ||
+      typeof args.deviceProfile === 'string' ||
+      isRecord(args.deviceProfileDraft) ||
+      isRecord(args.__deviceProfileDefinition))
+  )
+}
+
+function shouldEnforceHardAssemblyConstraints(args: Record<string, unknown>): boolean {
+  return !(typeof args.deviceProfile === 'string' || isRecord(args.deviceProfileDraft))
+}
+
 export function executeGeometryToolCall(
   name: string,
   args: Record<string, unknown>,
@@ -2373,6 +4131,7 @@ export function executeGeometryToolCall(
   }
 
   applyDeterministicGeometryIntentPlan(name, args, context)
+  attachExplicitDeviceProfileDraft(args, context.prompt)
   const intentPlanningIssues = Array.isArray(args.__intentPlanningIssues)
     ? (args.__intentPlanningIssues as string[])
     : []
@@ -2437,6 +4196,10 @@ export function executeGeometryToolCall(
       ) as RawShape[]
     }
   }
+  if (rawShapes.length > maxShapes && shouldAutoCompactShapeBudget(name, args)) {
+    const compactedShapes = compactRawShapesToBudget(rawShapes, maxShapes, args)
+    if (compactedShapes.length <= maxShapes) rawShapes = compactedShapes
+  }
   if (rawShapes.length > maxShapes) {
     return {
       content:
@@ -2449,7 +4212,7 @@ export function executeGeometryToolCall(
     }
   }
 
-  let shapes = normalizeGeometryToolShapes(rawShapes)
+  let shapes = normalizeGeometryToolShapes(rawShapes, { prompt: context.prompt })
   const validationIssues = validateGeometryToolShapes(shapes)
 
   if (validationIssues.length > 0) {
@@ -2519,6 +4282,26 @@ export function executeGeometryToolCall(
     prompt: context.prompt,
     geometryBrief,
   })
+  const profileDefinition = isRecord(args.__deviceProfileDefinition)
+    ? (args.__deviceProfileDefinition as unknown as DeviceProfileDefinition)
+    : undefined
+  const profileQuality = profileDefinition
+    ? evaluateDeviceProfileQuality(profileDefinition, shapes, {
+        visualScore: visualQuality.score,
+        maxShapes,
+      })
+    : undefined
+  if (profileQuality && profileQuality.overallScore < 0.45) {
+    return {
+      content: [
+        'Invalid geometry tool call. Nothing was created.',
+        'Fix the arguments and call exactly one geometry tool again.',
+        `- profile quality score is too low (${profileQuality.overallScore.toFixed(2)}).`,
+        ...profileQuality.issues.map((issue) => `- ${issue}`),
+        ...profileQuality.warnings.map((warning) => `- Warning: ${warning}`),
+      ].join('\n'),
+    }
+  }
   if (
     (visualQuality.family === 'vehicle' ||
       visualQuality.family === 'robot_arm' ||
@@ -2539,7 +4322,7 @@ export function executeGeometryToolCall(
       ].join('\n'),
     }
   }
-  if (name !== 'revise_geometry') {
+  if (name !== 'revise_geometry' && shouldEnforceHardAssemblyConstraints(args)) {
     const hardConstraints = extractUserGeometryConstraints(
       context.prompt,
       userConstraintArgs(name, args),
@@ -2567,6 +4350,7 @@ export function executeGeometryToolCall(
   const title = assemblyName ?? created[0] ?? 'Generated geometry'
   const semanticSummary = formatSemanticValidationSummary(semanticValidation)
   const visualQualitySummary = formatVisualQualitySummary(visualQuality)
+  const profileQualitySummary = formatProfileQualitySummary(profileQuality)
   const artifact: GeneratedGeometryArtifact = {
     id: createGeneratedGeometryId(),
     title,
@@ -2586,6 +4370,7 @@ export function executeGeometryToolCall(
     geometryBrief,
     semanticSummary,
     visualQualitySummary,
+    profileQuality,
     editHistory:
       name === 'revise_geometry'
         ? [
@@ -2615,6 +4400,7 @@ export function executeGeometryToolCall(
 ${shapeDetails}
 ${semanticSummary ? `${semanticSummary}\n` : ''}
 ${visualQualitySummary ? `${visualQualitySummary}\n` : ''}
+${profileQualitySummary ? `${profileQualitySummary}\n` : ''}
 Names: ${created.join(', ')}`,
   }
 }

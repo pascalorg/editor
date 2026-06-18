@@ -35,7 +35,7 @@ export const boxDefinition: NodeDefinition<typeof BoxNode> = {
   presentation: {
     label: 'Box',
     description: 'A configurable cuboid primitive with optional rounded corners.',
-    icon: { kind: 'url', src: '/icons/cube.png' },
+    icon: { kind: 'url', src: '/icons/cube.webp' },
     paletteSection: 'structure',
     paletteOrder: 115,
   },

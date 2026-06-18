@@ -7,6 +7,7 @@ import useEditor, {
   normalizePersistedEditorUiState,
   type PersistedEditorUiState,
 } from '../store/use-editor'
+import { prepareSceneGraphForSave } from './scene-save'
 
 export type SceneGraph = {
   nodes: Record<string, unknown>
@@ -388,7 +389,7 @@ const LOCAL_STORAGE_KEY = 'pascal-editor-scene'
 
 export function saveSceneToLocalStorage(scene: SceneGraph): void {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(scene))
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(prepareSceneGraphForSave(scene)))
   } catch {
     // Swallow storage quota errors
   }

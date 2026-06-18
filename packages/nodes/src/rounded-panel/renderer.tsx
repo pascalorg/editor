@@ -10,7 +10,41 @@ import {
 } from '@pascal-app/viewer'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
+
+function createRoundedPanelGeometry(
+  length: number,
+  width: number,
+  thickness: number,
+  cornerRadius: number,
+  cornerSegments: number,
+) {
+  const radius = Math.max(0, Math.min(cornerRadius, Math.min(length, width) / 2 - 0.001))
+  if (radius <= 0) {
+    return new THREE.BoxGeometry(length, thickness, width)
+  }
+
+  const halfLength = length / 2
+  const halfWidth = width / 2
+  const shape = new THREE.Shape()
+  shape.moveTo(-halfLength + radius, -halfWidth)
+  shape.lineTo(halfLength - radius, -halfWidth)
+  shape.quadraticCurveTo(halfLength, -halfWidth, halfLength, -halfWidth + radius)
+  shape.lineTo(halfLength, halfWidth - radius)
+  shape.quadraticCurveTo(halfLength, halfWidth, halfLength - radius, halfWidth)
+  shape.lineTo(-halfLength + radius, halfWidth)
+  shape.quadraticCurveTo(-halfLength, halfWidth, -halfLength, halfWidth - radius)
+  shape.lineTo(-halfLength, -halfWidth + radius)
+  shape.quadraticCurveTo(-halfLength, -halfWidth, -halfLength + radius, -halfWidth)
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    bevelEnabled: false,
+    curveSegments: Math.max(1, Math.round(cornerSegments)),
+    depth: thickness,
+  })
+  geometry.translate(0, 0, -thickness / 2)
+  geometry.rotateX(Math.PI / 2)
+  return geometry
+}
 
 export const RoundedPanelRenderer = ({ node }: { node: RoundedPanelNode }) => {
   const ref = useRef<THREE.Group>(null!)
@@ -43,19 +77,12 @@ export const RoundedPanelRenderer = ({ node }: { node: RoundedPanelNode }) => {
     const length = node.length ?? 1
     const width = node.width ?? 0.5
     const thickness = node.thickness ?? 0.04
-    const maxRadius = Math.max(0, Math.min(length, width, thickness) / 2 - 0.001)
-    const radius = Math.max(0, Math.min(node.cornerRadius ?? 0.04, maxRadius))
-
-    if (radius <= 0) {
-      return new THREE.BoxGeometry(length, thickness, width)
-    }
-
-    return new RoundedBoxGeometry(
+    return createRoundedPanelGeometry(
       length,
-      thickness,
       width,
-      Math.max(1, Math.round(node.cornerSegments ?? 4)),
-      radius,
+      thickness,
+      node.cornerRadius ?? 0.04,
+      node.cornerSegments ?? 4,
     )
   }, [node.length, node.width, node.thickness, node.cornerRadius, node.cornerSegments])
 

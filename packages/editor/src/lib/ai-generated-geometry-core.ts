@@ -1,4 +1,5 @@
 import type {
+  DeviceProfileQualityScore,
   PrimitiveEditableHints,
   PrimitiveGeometryBrief,
   PrimitiveMaterialInput,
@@ -6,6 +7,7 @@ import type {
   ResolvedPrimitiveTransform,
   Vec3,
 } from '@pascal-app/core'
+import { normalizePrimitiveKindFromRegistry } from '@pascal-app/core/lib/primitive-registry'
 
 export interface GeneratedGeometryShapeSpec {
   kind: string
@@ -88,6 +90,7 @@ export type GeneratedGeometryArtifact = {
   geometryBrief?: PrimitiveGeometryBrief
   semanticSummary?: string
   visualQualitySummary?: string
+  profileQuality?: DeviceProfileQualityScore
   editHistory?: GeneratedGeometryEdit[]
   placedNodeIds?: string[]
   placedAt?: string
@@ -203,6 +206,8 @@ function readString(value: unknown): string | undefined {
 
 export function normalizePrimitiveKind(value: unknown): string {
   const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  const registryKind = normalizePrimitiveKindFromRegistry(raw)
+  if (registryKind && registryKind !== raw) return registryKind
   switch (raw) {
     case 'tube':
     case 'pipe':
@@ -246,12 +251,6 @@ export function inferGeneratedAssemblyName(
 ): string {
   const explicitName = readString(args.name)
   if (explicitName) return explicitName
-
-  if (toolName === 'compose_object') {
-    const model = readString(args.model)
-    const category = readString(args.category)
-    return model ?? (category ? `${category} object` : 'Generated object')
-  }
 
   if (toolName === 'compose_robot_arm') return 'Robot arm'
 

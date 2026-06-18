@@ -4,8 +4,11 @@ import { BufferGeometry, MeshStandardMaterial } from 'three'
 
 mock.module('@pascal-app/viewer', () => ({
   applyMaterialPresetToMaterials: () => {},
-  createMaterial: () => new MeshStandardMaterial(),
-  DEFAULT_SHELF_MATERIAL: new MeshStandardMaterial({ color: 0xf3f0e8 }),
+  createDefaultMaterial: () => new MeshStandardMaterial(),
+  createMaterial: (material?: { properties?: { color?: string } }) =>
+    new MeshStandardMaterial({ color: material?.properties?.color ?? 0xffffff }),
+  createSurfaceRoleMaterial: () => new MeshStandardMaterial(),
+  DEFAULT_SHELF_MATERIAL: () => new MeshStandardMaterial({ color: 0xffffff }),
   DEFAULT_SLAB_MATERIAL: new MeshStandardMaterial({ color: 0xe5e5e5 }),
   DEFAULT_STAIR_MATERIAL: new MeshStandardMaterial({ color: 0x8b7355 }),
   generateFenceGeometry: () => new BufferGeometry(),
@@ -71,6 +74,14 @@ describe('builtinPlugin', () => {
     expect(nodeRegistry.size).toBeGreaterThanOrEqual(1)
   })
 
+  test('places the warehouse shelf in the structure palette', async () => {
+    await loadPlugin(builtinPlugin)
+    const shelf = nodeRegistry.get('shelf')
+    expect(shelf?.category).toBe('structure')
+    expect(shelf?.presentation?.label).toBe('货架')
+    expect(shelf?.presentation?.paletteSection).toBe('structure')
+  })
+
   test('every AnyNode discriminator is registered in builtinPlugin', async () => {
     // Phase 6 coverage check. The `AnyNode` discriminated union and the
     // `builtinPlugin.nodes` array are both hand-maintained today (full
@@ -111,10 +122,12 @@ describe('builtinPlugin', () => {
       'extrude',
       'sweep',
       'fence',
+      'road',
       'column',
       'slab',
       'ceiling',
       'shelf',
+      'item',
     ]
 
     for (const kind of materialKinds) {
@@ -146,6 +159,56 @@ describe('builtinPlugin', () => {
         kind: 'face',
         materialKey: 'exteriorMaterial',
         materialPresetKey: 'exteriorMaterialPreset',
+      },
+    ])
+  })
+
+  test('roof and stair declare editable surface material targets', async () => {
+    await loadPlugin(builtinPlugin)
+    expect(nodeRegistry.get('roof')?.materialTargets).toEqual([
+      {
+        key: 'top',
+        label: 'Top',
+        kind: 'face',
+        materialKey: 'topMaterial',
+        materialPresetKey: 'topMaterialPreset',
+      },
+      {
+        key: 'edge',
+        label: 'Edge',
+        kind: 'face',
+        materialKey: 'edgeMaterial',
+        materialPresetKey: 'edgeMaterialPreset',
+      },
+      {
+        key: 'wall',
+        label: 'Wall',
+        kind: 'face',
+        materialKey: 'wallMaterial',
+        materialPresetKey: 'wallMaterialPreset',
+      },
+    ])
+    expect(nodeRegistry.get('stair')?.materialTargets).toEqual([
+      {
+        key: 'tread',
+        label: 'Tread',
+        kind: 'part',
+        materialKey: 'treadMaterial',
+        materialPresetKey: 'treadMaterialPreset',
+      },
+      {
+        key: 'side',
+        label: 'Side',
+        kind: 'part',
+        materialKey: 'sideMaterial',
+        materialPresetKey: 'sideMaterialPreset',
+      },
+      {
+        key: 'railing',
+        label: 'Railing',
+        kind: 'part',
+        materialKey: 'railingMaterial',
+        materialPresetKey: 'railingMaterialPreset',
       },
     ])
   })

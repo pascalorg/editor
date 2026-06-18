@@ -184,7 +184,7 @@ describe('pascal://scene/current/summary', () => {
 describe('pascal://catalog/items', () => {
   beforeEach(() => resetScene())
 
-  test('returns built-in catalog subset', async () => {
+  test('returns shared catalog items', async () => {
     const pair = await spinUp(registerCatalogItems)
     try {
       const res = await pair.client.readResource({ uri: 'pascal://catalog/items' })
@@ -194,6 +194,7 @@ describe('pascal://catalog/items', () => {
       expect(parsed.status).toBe('ok')
       expect(parsed.items.length).toBeGreaterThan(0)
       expect(parsed.items.map((item: { id: string }) => item.id)).toContain('sofa')
+      expect(parsed.items.map((item: { id: string }) => item.id)).toContain('factory-extractor')
       expect(typeof parsed.note).toBe('string')
     } finally {
       await pair.close()

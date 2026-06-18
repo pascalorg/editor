@@ -6,6 +6,7 @@ import {
   getVisibleWallMaterials,
   NodeRenderer,
   useNodeEvents,
+  useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { BufferGeometry, Mesh } from 'three'
@@ -57,7 +58,11 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   }, [collisionPlaceholderGeometry, placeholderGeometry])
 
   const handlers = useNodeEvents(node, 'wall')
-  const material = getVisibleWallMaterials(node)
+  const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
+  const sceneTheme = useViewer((state) => state.sceneTheme)
+  const material = getVisibleWallMaterials(node, { shading, textures, colorPreset, sceneTheme })
 
   return (
     <mesh

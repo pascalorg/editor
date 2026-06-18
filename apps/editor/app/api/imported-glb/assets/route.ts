@@ -13,6 +13,7 @@ import {
   removeGeneratedAssetDirectory,
   upsertGeneratedAsset,
 } from '@/lib/generated-assets/manifest'
+import { optimizeImportedGlb } from '@/lib/imported-glb/optimizer'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -230,6 +231,11 @@ function validateGlbInspection(inspection: GlbInspection) {
   return reasons
 }
 
+function sanitizeOptimizationForResponse<T extends { buffer?: Buffer }>(optimization: T) {
+  const { buffer: _buffer, ...rest } = optimization
+  return rest
+}
+
 export async function GET() {
   const repoRoot = await findRepoRoot()
   const assets = await readGeneratedAssets(generatedManifestPath(repoRoot))
@@ -276,19 +282,38 @@ export async function POST(req: NextRequest) {
   }
 
   const modelBuffer = Buffer.from(await model.arrayBuffer())
-  let inspection: GlbInspection
+  let originalInspection: GlbInspection
   try {
-    inspection = inspectGlb(modelBuffer)
+    originalInspection = inspectGlb(modelBuffer)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return NextResponse.json({ error: `GLB 文件无法解析：${message}` }, { status: 400 })
+    return NextResponse.json({ error: `GLB file could not be parsed: ${message}` }, { status: 400 })
   }
+
+  const optimization = await optimizeImportedGlb(modelBuffer, {
+    triangles: originalInspection.triangles,
+  })
+  const finalModelBuffer = optimization.buffer
+
+  let inspection: GlbInspection
+  try {
+    inspection = inspectGlb(finalModelBuffer)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return NextResponse.json(
+      { error: `Optimized GLB could not be parsed: ${message}` },
+      { status: 500 },
+    )
+  }
+
   const complexityErrors = validateGlbInspection(inspection)
   if (complexityErrors.length > 0) {
     return NextResponse.json(
       {
-        error: `GLB 模型过于复杂，请先压缩/减面后再导入。${complexityErrors.join('；')}`,
+        error: `Optimized GLB is still too complex. Please reduce polygons/textures before importing. ${complexityErrors.join('; ')}`,
+        originalInspection,
         inspection,
+        optimization: sanitizeOptimizationForResponse(optimization),
       },
       { status: 413 },
     )
@@ -300,7 +325,7 @@ export async function POST(req: NextRequest) {
   const assetId = createGeneratedAssetId('imported-glb', displayName)
   const assetDir = path.join(itemRoot(repoRoot), assetId)
   await fs.mkdir(assetDir, { recursive: true })
-  await fs.writeFile(path.join(assetDir, 'model.glb'), modelBuffer)
+  await fs.writeFile(path.join(assetDir, 'model.glb'), finalModelBuffer)
   await fs.writeFile(
     path.join(assetDir, 'imported-glb.json'),
     `${JSON.stringify(
@@ -308,7 +333,9 @@ export async function POST(req: NextRequest) {
         sourceFileName: model.name,
         sourceFileType: model.type || 'model/gltf-binary',
         sourceFileSize: model.size,
+        originalInspection,
         inspection,
+        optimization: sanitizeOptimizationForResponse(optimization),
         importedAt: new Date().toISOString(),
       },
       null,
@@ -321,15 +348,27 @@ export async function POST(req: NextRequest) {
     id: assetId,
     category,
     name: displayName,
-    thumbnail: '/icons/cube.png',
-    floorPlanUrl: '/icons/cube.png',
+    thumbnail: '/icons/cube.webp',
+    floorPlanUrl: '/icons/cube.webp',
     source: 'mine',
     src: `/items/${assetId}/model.glb`,
     dimensions: inspection.dimensions,
-    tags: ['floor', 'imported', 'glb', `${inspection.triangles}-triangles`],
+    tags: [
+      'floor',
+      'imported',
+      'glb',
+      optimization.status === 'optimized' ? 'optimized-glb' : 'original-glb',
+      `${inspection.triangles}-triangles`,
+    ],
   }
 
   await upsertGeneratedAsset(generatedManifestPath(repoRoot), asset)
 
-  return NextResponse.json({ asset, inspection, savedAt: new Date().toISOString() })
+  return NextResponse.json({
+    asset,
+    originalInspection,
+    inspection,
+    optimization: sanitizeOptimizationForResponse(optimization),
+    savedAt: new Date().toISOString(),
+  })
 }

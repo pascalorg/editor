@@ -1,1 +1,1 @@
-export { RoadNode } from '@pascal-app/core'
+export { RoadNode, RoadSurfaceKind } from '@pascal-app/core'

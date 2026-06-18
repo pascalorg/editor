@@ -80,7 +80,7 @@ function createRoadOnCurrentLevel(start: WallPlanPoint, end: WallPlanPoint) {
 
   const roadCount = Object.values(nodes).filter((node) => node.type === 'road').length
   const road = RoadNode.parse({
-    name: `Road ${roadCount + 1}`,
+    name: `\u5730\u9762\u5e26 ${roadCount + 1}`,
     start,
     end,
   })

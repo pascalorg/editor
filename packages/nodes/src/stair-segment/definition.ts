@@ -134,7 +134,7 @@ export const stairSegmentDefinition: NodeDefinition<typeof StairSegmentNode> = {
   presentation: {
     label: '楼梯分段',
     description: '父级楼梯中的单个梯段。',
-    icon: { kind: 'url', src: '/icons/stairs.png' },
+    icon: { kind: 'url', src: '/icons/stairs.webp' },
     paletteSection: 'structure',
     paletteOrder: 111,
   },

@@ -22,6 +22,8 @@ import {
   executeGeometryToolCall,
   type GeometryToolExecutionResult,
 } from '../../../../packages/editor/src/lib/ai-geometry-tool-executor'
+import { persistDeviceProfileCandidateFromArtifact } from '../device-profile-candidates'
+import { loadDeviceProfiles } from '../device-profiles'
 import { appendRunEvent, isTerminalStatus, loadRun, updateRun } from './run-store'
 
 type ApiMessage = {
@@ -83,6 +85,7 @@ type PartBlueprint = {
   constraints?: Record<string, unknown>
   parts?: PartBlueprintItem[]
   requiredRoles?: string[]
+  deviceProfileDraft?: Record<string, unknown>
 }
 
 type PrimitiveRouteMetrics = {
@@ -109,7 +112,6 @@ const runningRuns = new Set<string>()
 const activeControllers = new Map<string, AbortController>()
 
 const GEOMETRY_TOOL_NAMES = new Set([
-  'compose_object',
   'compose_recipe',
   'compose_assembly',
   'compose_parts',
@@ -119,10 +121,6 @@ const GEOMETRY_TOOL_NAMES = new Set([
 ])
 
 const PRIMITIVE_TOOLS: ComposeTool[] = [
-  tool(
-    'compose_object',
-    'Create a supported editable object template such as chair, sofa, table, shelf, cabinet, monitor, keyboard, or outdoor AC unit.',
-  ),
   tool(
     'compose_recipe',
     'Create one editable object from a deterministic instruction sheet. Recipes stay small and reference generic parts with semantic roles; use only for closed-form professional standard parts such as gear.spur, sprocket.chain, pipe.flange, pipe.elbow90, fastener.hexBolt, bearing.pillowBlock, coupling.flexible, plate.perforated, valve.gate/ball, robotArm.threeAxis, mixer.impeller, and motor.servo. Do not use this for open-ended complete equipment such as vehicles, outdoor AC units, machine tools, industrial robot arms, pumps, conveyors, fans, tanks, towers, reactors, compressors, grate coolers, aircraft, or broad industrial archetypes.',
@@ -530,8 +528,12 @@ function executeTool(
   prompt: string,
   revisionTarget: GeneratedGeometryArtifact | null,
   blueprint: PartBlueprint | null,
+  deviceProfiles?: Awaited<ReturnType<typeof loadDeviceProfiles>>,
 ): GeometryToolExecutionResult {
   const isRevisionTool = name === 'revise_geometry'
+  if (blueprint?.deviceProfileDraft && args.deviceProfileDraft == null) {
+    args.deviceProfileDraft = blueprint.deviceProfileDraft
+  }
   return executeGeometryToolCall(
     name,
     args,
@@ -543,6 +545,7 @@ function executeTool(
       revisionTarget,
       blueprintRequiredRoles: blueprint?.requiredRoles,
       blueprintCategory: blueprint?.category,
+      deviceProfiles: deviceProfiles?.profiles,
     },
     {
       messages: {
@@ -572,10 +575,20 @@ export function ensurePrimitiveRunRunning(runId: string) {
   if (runningRuns.has(runId)) {
     return
   }
+  void runPrimitiveRunToCompletion(runId)
+}
+
+export async function runPrimitiveRunToCompletion(runId: string) {
+  if (runningRuns.has(runId)) {
+    throw new Error(`Primitive run is already running: ${runId}`)
+  }
   runningRuns.add(runId)
-  void runPrimitiveRun(runId).finally(() => {
+  try {
+    await runPrimitiveRun(runId)
+    return await loadRun(runId)
+  } finally {
     runningRuns.delete(runId)
-  })
+  }
 }
 
 export async function cancelPrimitiveRun(runId: string) {
@@ -635,12 +648,24 @@ async function runPrimitiveRun(runId: string) {
             contextDecision,
           })
         : (stringFromContext(context, 'analysisContext') ?? harnessContext)
+    const loadedDeviceProfiles = await loadDeviceProfiles()
 
     await appendRunEvent(runId, {
       type: 'message',
       message: JSON.stringify(contextDecision),
       data: { stage: 'context-resolver', contextDecision },
     })
+    if (loadedDeviceProfiles.warnings.length > 0) {
+      await appendRunEvent(runId, {
+        type: 'message',
+        message: 'Device profile source warnings',
+        data: {
+          stage: 'device-profiles',
+          warnings: loadedDeviceProfiles.warnings,
+          profileCount: loadedDeviceProfiles.profiles.length,
+        },
+      })
+    }
 
     await appendRunEvent(runId, { type: 'progress', message: 'Analyzing geometry request...' })
     const analysisResponse = await callAi(
@@ -715,6 +740,7 @@ async function runPrimitiveRun(runId: string) {
           userPrompt,
           revisionTarget,
           blueprint,
+          loadedDeviceProfiles,
         )
         deterministicResults.push(directResult.content)
         await appendRunEvent(runId, {
@@ -740,6 +766,17 @@ async function runPrimitiveRun(runId: string) {
         if (directResult.artifact) {
           routeMetrics.route = 'deterministic'
           routeMetrics.deterministicSucceeded = true
+          const candidatePersist = await persistDeviceProfileCandidateFromArtifact(
+            userPrompt,
+            directResult.artifact,
+          )
+          await appendRunEvent(runId, {
+            type: 'message',
+            message: candidatePersist.saved
+              ? 'Device profile candidate saved'
+              : 'Device profile candidate not saved',
+            data: { stage: 'device-profile-candidate', candidatePersist },
+          })
           if (await shouldStopRun(runId, signal)) return
           const result = {
             contextDecision,
@@ -747,7 +784,14 @@ async function runPrimitiveRun(runId: string) {
             results: deterministicResults,
             lastContent: deterministicLastContent,
             artifact: directResult.artifact,
-            metrics: { primitiveRoute: routeMetrics },
+            deviceProfileCandidate: candidatePersist,
+            metrics: {
+              primitiveRoute: routeMetrics,
+              deviceProfiles: {
+                count: loadedDeviceProfiles.profiles.length,
+                warnings: loadedDeviceProfiles.warnings,
+              },
+            },
           }
           await appendRunEvent(runId, {
             type: 'message',
@@ -912,6 +956,7 @@ async function runPrimitiveRun(runId: string) {
             userPrompt,
             revisionTarget,
             blueprint,
+            loadedDeviceProfiles,
           )
           toolResultMessages.push({ role: 'tool', tool_call_id: call.id, content: result.content })
           results.push(result.content)
@@ -975,13 +1020,36 @@ async function runPrimitiveRun(runId: string) {
     }
 
     if (await shouldStopRun(runId, signal)) return
+    const candidatePersist = await persistDeviceProfileCandidateFromArtifact(userPrompt, artifact)
+    await appendRunEvent(runId, {
+      type: 'message',
+      message: candidatePersist.saved
+        ? 'Device profile candidate saved'
+        : 'Device profile candidate not saved',
+      data: { stage: 'device-profile-candidate', candidatePersist },
+    })
     const result = {
       contextDecision,
       analysis,
       results,
       lastContent,
       artifact,
+      deviceProfileCandidate: candidatePersist,
+      ...(artifact
+        ? {
+            sourceTool: artifact.sourceTool,
+            sourceArgs: artifact.sourceArgs,
+            geometryBrief: artifact.geometryBrief,
+            shapes: artifact.shapes,
+            transforms: artifact.transforms,
+            shapeCount: artifact.shapes.length,
+          }
+        : {}),
       metrics: { primitiveRoute: routeMetrics },
+      profileSources: {
+        count: loadedDeviceProfiles.profiles.length,
+        warnings: loadedDeviceProfiles.warnings,
+      },
     }
     await appendRunEvent(runId, {
       type: 'message',

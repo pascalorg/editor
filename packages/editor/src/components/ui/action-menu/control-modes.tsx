@@ -35,7 +35,7 @@ type ControlConfig = {
 const controls: Omit<ControlConfig, 'label'>[] = [
   {
     id: 'select',
-    imageSrc: '/icons/select.png',
+    imageSrc: '/icons/select.webp',
     shortcut: 'V',
     color: 'hover:bg-blue-500/20 hover:text-blue-400',
     activeColor: 'bg-blue-500/20 text-blue-400',
@@ -48,13 +48,13 @@ const controls: Omit<ControlConfig, 'label'>[] = [
   },
   {
     id: 'site-edit',
-    imageSrc: '/icons/site.png',
+    imageSrc: '/icons/site.webp',
     color: 'hover:bg-white/5',
     activeColor: 'bg-white/10 hover:bg-white/10',
   },
   {
     id: 'build',
-    imageSrc: '/icons/build.png',
+    imageSrc: '/icons/build.webp',
     shortcut: 'B',
     color: 'hover:bg-green-500/20 hover:text-green-400',
     activeColor: 'bg-green-500/20 text-green-400',
@@ -74,7 +74,7 @@ const controls: Omit<ControlConfig, 'label'>[] = [
   },
   {
     id: 'zone',
-    imageSrc: '/icons/zone.png',
+    imageSrc: '/icons/zone.webp',
     shortcut: 'Z',
     color: 'hover:bg-green-500/20 hover:text-green-400',
     activeColor: 'bg-green-500/20 text-green-400',

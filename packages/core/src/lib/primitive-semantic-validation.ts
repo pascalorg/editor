@@ -1,3 +1,4 @@
+import type { FamilyId } from './family-registry'
 import type {
   PrimitiveGeometryBrief,
   PrimitiveShapeInput,
@@ -10,19 +11,7 @@ import {
 } from './primitive-facts'
 import { hasComponentPartIntent } from './primitive-part-intent'
 
-type SemanticFamily =
-  | 'vehicle'
-  | 'bicycle'
-  | 'valve'
-  | 'robot_arm'
-  | 'mixer'
-  | 'machine_tool'
-  | 'distillation_tower'
-  | 'forming_machine'
-  | 'material_handling'
-  | 'fluid_machine'
-  | 'process_equipment'
-  | 'unknown'
+type SemanticFamily = FamilyId | 'unknown'
 
 export interface PrimitiveSemanticValidationOptions {
   toolName?: string
@@ -82,6 +71,52 @@ function detectFamily(
     .filter(Boolean)
     .join(' ')
     .toLowerCase()
+  const declaredFamily = textOf(options.sourceArgs?.family).toLowerCase()
+  const declaredLayoutFamily = textOf(options.sourceArgs?.layoutFamily).toLowerCase()
+  const hasDeviceProfile = textOf(options.sourceArgs?.deviceProfile).length > 0
+
+  if (
+    hasDeviceProfile &&
+    (declaredFamily === 'generic' || declaredLayoutFamily === 'generic_industrial_layout')
+  ) {
+    return 'unknown'
+  }
+  if (hasDeviceProfile) {
+    if (
+      declaredLayoutFamily === 'linear_transport_layout' ||
+      declaredFamily === 'material_handling' ||
+      declaredFamily === 'conveyor'
+    ) {
+      return 'material_handling'
+    }
+    if (
+      declaredLayoutFamily === 'vessel_layout' ||
+      declaredFamily === 'tank' ||
+      declaredFamily === 'reactor' ||
+      declaredFamily === 'heat_exchanger'
+    ) {
+      return 'process_equipment'
+    }
+    if (
+      declaredLayoutFamily === 'rotating_machine_layout' ||
+      declaredFamily === 'pump' ||
+      declaredFamily === 'compressor' ||
+      declaredFamily === 'fluid_machine'
+    ) {
+      return 'fluid_machine'
+    }
+    if (declaredLayoutFamily === 'box_enclosure_layout') {
+      return 'machine_tool'
+    }
+  }
+
+  if (
+    /reactor|reaction[_\s-]?(kettle|vessel)|stirred[_\s-]?tank|\u53cd\u5e94\u91dc|\u53cd\u61c9\u91dc|\u53cd\u5e94\u5668|\u53cd\u61c9\u5668/.test(
+      intentText,
+    )
+  ) {
+    return 'process_equipment'
+  }
 
   if (
     /mixer|impeller|agitator|mixing[_\s-]?paddle|mud[_\s-]?mixer|\u6ce5\u6d46\u6405\u62cc|\u6405\u62cc\u90e8\u4ef6|\u6405\u62cc\u53f6\u7247|\u53f6\u8f6e/.test(
@@ -121,8 +156,8 @@ function detectFamily(
   ) {
     return 'unknown'
   }
-  if (/bicycle|bike/.test(text)) return 'bicycle'
-  if (/vehicle|sedan|suv|automobile|(?:^|[\s_-])(?:car|auto)(?:$|[\s_-])/.test(text)) {
+  if (/bicycle|bike/.test(intentText)) return 'bicycle'
+  if (/vehicle|sedan|suv|automobile|(?:^|[\s_-])(?:car|auto)(?:$|[\s_-])/.test(intentText)) {
     return 'vehicle'
   }
   if (/valve|gate_valve|gate valve|\u9600\u95e8|\u95f8\u9600/.test(text)) return 'valve'
@@ -375,6 +410,177 @@ function normalizeRequiredRole(role: string): string {
     case 'bumper':
     case 'bumpers':
       return 'bumper'
+    case 'base':
+    case 'base_frame':
+    case 'bottom_base':
+    case 'skid':
+    case 'skid_base':
+    case 'base_skid':
+    case 'pump_base':
+    case 'support_base':
+    case 'support_frame':
+    case 'support_leg':
+    case 'support_legs':
+    case 'support_foot':
+    case 'support_feet':
+      return 'support_base'
+    case 'filter_housing':
+    case 'tall_housing':
+    case 'collector_housing':
+      return 'filter_housing'
+    case 'cooler_bed':
+    case 'grate_bed':
+    case 'cooler_grate':
+      return 'cooler_grate_bed'
+    case 'cooling_air_boxes':
+    case 'air_box':
+    case 'air_boxes':
+      return 'cooling_air_box'
+    case 'inlet_chute':
+    case 'feed_chute':
+    case 'inlet_duct':
+    case 'steam_inlet':
+    case 'steam_inlet_nozzle':
+      return 'inlet_port'
+    case 'outlet_chute':
+    case 'discharge_chute':
+    case 'outlet_duct':
+    case 'clean_air_outlet':
+    case 'exhaust_outlet':
+    case 'exhaust_outlet_nozzle':
+      return 'outlet_port'
+    case 'inspection_door':
+    case 'inspection_doors':
+    case 'access_door':
+    case 'access_doors':
+      return 'access_panel'
+    case 'pulse_jet_headers':
+    case 'pulse_header':
+    case 'pulse_headers':
+      return 'pulse_jet_header'
+    case 'filter_bag':
+    case 'filter_bags':
+    case 'filter_bags_row':
+    case 'filter_bag_rows':
+      return 'filter_bag_row'
+    case 'turbine_body':
+    case 'turbine_shell':
+    case 'turbine_casing':
+      return 'turbine_casing'
+    case 'rotor':
+    case 'rotor_axis':
+    case 'rotor_shaft':
+      return 'rotor_shaft'
+    case 'bearing':
+    case 'bearings':
+    case 'bearing_housings':
+      return 'bearing_housing'
+    case 'lubrication':
+    case 'lube_unit':
+      return 'lubrication_unit'
+    case 'plate_stack':
+    case 'plate_pack':
+    case 'heat_transfer_plate_stack':
+      return 'plate_stack'
+    case 'heat_transfer_plates':
+    case 'exchanger_plate':
+    case 'exchanger_plates':
+      return 'heat_transfer_plate'
+    case 'fixed_frame':
+    case 'fixed_end':
+      return 'fixed_end_frame'
+    case 'movable_pressure_plate':
+    case 'end_pressure_plate':
+      return 'pressure_plate'
+    case 'tie_rods':
+    case 'tie_bar':
+    case 'tie_bars':
+      return 'tie_rod'
+    case 'guide_bars':
+    case 'top_guide_bar':
+    case 'bottom_guide_bar':
+      return 'guide_bar'
+    case 'pump_body':
+    case 'pump_casing':
+    case 'pump_volute':
+    case 'volute':
+    case 'volute_casing':
+      return 'volute_casing'
+    case 'inlet':
+    case 'inlet_nozzle':
+    case 'suction':
+    case 'suction_nozzle':
+    case 'inlet_port':
+      return 'inlet_port'
+    case 'outlet':
+    case 'outlet_nozzle':
+    case 'discharge':
+    case 'discharge_nozzle':
+    case 'outlet_port':
+      return 'outlet_port'
+    case 'motor':
+    case 'drive_motor':
+    case 'motor_body':
+      return 'drive_motor'
+    case 'coupling':
+    case 'shaft_coupling':
+    case 'coupling_area':
+    case 'coupling_guard':
+    case 'coupling_housing':
+      return 'coupling_housing'
+    case 'junction_box':
+    case 'control_box':
+    case 'control_panel':
+    case 'equipment_control_panel':
+      return 'control_panel'
+    case 'equipment_nameplate':
+      return 'nameplate'
+    case 'safety_label':
+      return 'warning_label'
+    case 'tank_body':
+    case 'tank_shell':
+    case 'cylindrical_tank':
+    case 'vessel_shell':
+      return 'vessel_shell'
+    case 'access_ladder':
+    case 'ladder':
+    case 'platform_ladder':
+    case 'access_platform':
+      return 'access_platform'
+    case 'top_manway':
+    case 'manway':
+      return 'inlet_port'
+    case 'drain_nozzle':
+    case 'drain_port':
+      return 'outlet_port'
+    case 'robot_base_plate':
+    case 'robot_pedestal':
+    case 'robot_swivel':
+      return 'robot_base'
+    case 'robot_lower_arm':
+      return 'upper_arm'
+    case 'robot_upper_arm':
+      return 'upper_arm'
+    case 'robot_forearm':
+      return 'forearm'
+    case 'robot_upper_arm_joint':
+      return 'shoulder_joint'
+    case 'robot_forearm_joint':
+      return 'elbow_joint'
+    case 'robot_wrist':
+    case 'wrist':
+      return 'wrist_joint'
+    case 'welding_torch':
+    case 'torch':
+      return 'end_effector'
+    case 'work_table_base':
+    case 'work_table_top':
+      return 'work_table'
+    case 'control_cabinet':
+    case 'control_cabinet_body':
+      return 'control_panel'
+    case 'safety_barrier':
+      return 'safety_barrier'
     case 'inlet_flange':
     case 'suction_flange':
     case 'flange_inlet':
@@ -556,6 +762,53 @@ function requiredRoles(brief: PrimitiveGeometryBrief | undefined): string[] {
   )
 }
 
+const INDUSTRIAL_SOFT_REQUIRED_ROLES = new Set([
+  'access_panel',
+  'access_platform',
+  'support_base',
+  'pulse_jet_header',
+  'filter_bag_row',
+  'inspection_door',
+  'control_panel',
+  'display_screen',
+  'vent_panel',
+  'lubrication_unit',
+  'bearing_housing',
+  'tie_rod',
+  'guide_bar',
+])
+
+const INDUSTRIAL_HARD_REQUIRED_ROLES = new Set([
+  'cooler_grate_bed',
+  'cooler_housing',
+  'filter_housing',
+  'turbine_casing',
+  'plate_stack',
+  'heat_transfer_plate',
+  'volute_casing',
+  'vessel_shell',
+  'inlet_port',
+  'outlet_port',
+])
+
+function isIndustrialFamily(family: SemanticFamily): boolean {
+  return (
+    family === 'machine_tool' ||
+    family === 'distillation_tower' ||
+    family === 'forming_machine' ||
+    family === 'material_handling' ||
+    family === 'fluid_machine' ||
+    family === 'process_equipment' ||
+    family === 'unknown'
+  )
+}
+
+function shouldSoftFailRequiredRole(role: string, family: SemanticFamily): boolean {
+  if (!isIndustrialFamily(family)) return false
+  if (INDUSTRIAL_HARD_REQUIRED_ROLES.has(role)) return false
+  return INDUSTRIAL_SOFT_REQUIRED_ROLES.has(role) || /door|panel|platform|ladder|support|guard|bolt|label|header|row|rod|bar|unit|housing/.test(role)
+}
+
 function hasComponentScopedBrief(brief: PrimitiveGeometryBrief | undefined): boolean {
   const category = brief?.category?.toLowerCase() ?? ''
   if (!/(vehicle|car|automobile|auto|bicycle|bike|cycle)/.test(category)) return false
@@ -598,8 +851,93 @@ function hasComponentScopedBrief(brief: PrimitiveGeometryBrief | undefined): boo
 function satisfiesRequiredRole(facts: PrimitiveGeometryFacts, role: string): boolean {
   if ((facts.roles[role] ?? 0) > 0) return true
   if ((facts.sourcePartKinds[role] ?? 0) > 0) return true
+  const hasText = (pattern: RegExp) =>
+    facts.shapes.some((fact) =>
+      pattern.test(
+        `${fact.semanticRole ?? ''} ${fact.sourcePartKind ?? ''} ${fact.name ?? ''}`.toLowerCase(),
+      ),
+    )
 
   switch (role) {
+    case 'support_base':
+      return (
+        (facts.roles.support_base ?? 0) > 0 ||
+        (facts.roles.machine_base ?? 0) > 0 ||
+        (facts.roles.skid_base ?? 0) > 0 ||
+        (facts.roles.support_leg ?? 0) > 0 ||
+        (facts.roles.support_foot ?? 0) > 0 ||
+        (facts.sourcePartKinds.skid_base ?? 0) > 0 ||
+        (facts.sourcePartKinds.generic_base ?? 0) > 0 ||
+        (facts.sourcePartKinds.generic_foot_set ?? 0) > 0 ||
+        hasText(/support|skid|base|leg|foot/)
+      )
+    case 'filter_housing':
+      return (
+        (facts.roles.filter_housing ?? 0) > 0 ||
+        (facts.roles.machine_enclosure ?? 0) > 0 ||
+        (facts.roles.main_body ?? 0) > 0 ||
+        (facts.sourcePartKinds.generic_body ?? 0) > 0 ||
+        hasText(/filter.*housing|baghouse|collector.*housing|main.*body/)
+      )
+    case 'cooler_grate_bed':
+      return hasText(/grate|cooler.*bed|bed.*cooler|belt_surface/)
+    case 'cooler_housing':
+      return hasText(/cooler.*housing|housing.*cooler|enclosure|body|shell/)
+    case 'cooling_air_box':
+      return hasText(/air.*box|cooling.*box|plenum|under.?grate/)
+    case 'access_panel':
+      return (
+        (facts.roles.access_panel ?? 0) > 0 ||
+        (facts.roles.panel ?? 0) > 0 ||
+        (facts.sourcePartKinds.generic_panel ?? 0) > 0 ||
+        hasText(/access|inspection|door|panel|hatch/)
+      )
+    case 'pulse_jet_header':
+      return hasText(/pulse|header|manifold|pipe|tube/)
+    case 'filter_bag_row':
+      return hasText(/filter.*bag|bag.*row|bag.*array|internal.*filter|panel/)
+    case 'inlet_port':
+      return (
+        (facts.roles.inlet_port ?? 0) > 0 ||
+        (facts.roles.feed_chute ?? 0) > 0 ||
+        (facts.roles.inlet_chute ?? 0) > 0 ||
+        (facts.roles.inlet_duct ?? 0) > 0 ||
+        hasText(/inlet|suction|feed.*chute|infeed|material.*in|steam.*in/)
+      )
+    case 'outlet_port':
+      return (
+        (facts.roles.outlet_port ?? 0) > 0 ||
+        (facts.roles.discharge_chute ?? 0) > 0 ||
+        (facts.roles.outlet_chute ?? 0) > 0 ||
+        (facts.roles.outlet_duct ?? 0) > 0 ||
+        (facts.roles.clean_air_outlet ?? 0) > 0 ||
+        hasText(/outlet|discharge|exhaust|outfeed|clean.*air|material.*out/)
+      )
+    case 'turbine_casing':
+      return (
+        (facts.roles.turbine_casing ?? 0) > 0 ||
+        (facts.roles.compressor_casing ?? 0) > 0 ||
+        (facts.sourcePartKinds.rounded_machine_body ?? 0) > 0 ||
+        hasText(/turbine.*casing|casing.*turbine|rounded.*body|machine.*body/)
+      )
+    case 'rotor_shaft':
+      return hasText(/rotor|shaft|axis|spindle/)
+    case 'bearing_housing':
+      return hasText(/bearing|pedestal|end.*cap|housing/)
+    case 'lubrication_unit':
+      return hasText(/lubrication|lube|oil|control|box/)
+    case 'plate_stack':
+      return hasText(/plate.*stack|stack.*plate|plate.*pack|main.*body/)
+    case 'heat_transfer_plate':
+      return hasText(/heat.*transfer.*plate|exchanger.*plate|plate/)
+    case 'fixed_end_frame':
+      return hasText(/fixed.*frame|end.*frame|frame/)
+    case 'pressure_plate':
+      return hasText(/pressure.*plate|movable.*plate|end.*plate|panel/)
+    case 'tie_rod':
+      return hasText(/tie.*rod|tie.*bar|rod|rail/)
+    case 'guide_bar':
+      return hasText(/guide.*bar|guide.*rail|rail/)
     case 'steering_wheel_rim':
       return facts.shapes.some((fact) => {
         const text =
@@ -749,6 +1087,86 @@ function satisfiesRequiredRole(facts: PrimitiveGeometryFacts, role: string): boo
         (facts.roles.vehicle_bumper ?? 0) >= 2 ||
         ((facts.roles.front_bumper ?? 0) > 0 && (facts.roles.rear_bumper ?? 0) > 0)
       )
+    case 'control_panel':
+      return (
+        (facts.roles.control_panel ?? 0) > 0 ||
+        (facts.roles.control_box ?? 0) > 0 ||
+        (facts.roles.control_detail ?? 0) > 0 ||
+        (facts.sourcePartKinds.control_box ?? 0) > 0 ||
+        (facts.sourcePartKinds.generic_control_panel ?? 0) > 0
+      )
+    case 'display_screen':
+      return (
+        (facts.roles.display_screen ?? 0) > 0 ||
+        (facts.roles.display ?? 0) > 0 ||
+        (facts.roles.control_panel ?? 0) > 0 ||
+        (facts.sourcePartKinds.generic_display ?? 0) > 0 ||
+        hasText(/display|screen|hmi|control/)
+      )
+    case 'vent_panel':
+      return (
+        (facts.roles.vent_panel ?? 0) > 0 ||
+        (facts.roles.detail_accent ?? 0) > 0 ||
+        (facts.sourcePartKinds.generic_detail_accent ?? 0) > 0 ||
+        hasText(/vent|louver|slat|detail|accent|panel/)
+      )
+    case 'drive_motor':
+      return (
+        (facts.roles.drive_motor ?? 0) > 0 ||
+        (facts.roles.motor_body ?? 0) > 0 ||
+        (facts.sourcePartKinds.ribbed_motor_body ?? 0) > 0
+      )
+    case 'coupling_housing':
+      return (
+        (facts.roles.coupling_housing ?? 0) > 0 ||
+        (facts.roles.shaft_coupling ?? 0) > 0 ||
+        ((facts.roles.drive_motor ?? 0) > 0 && (facts.roles.volute_casing ?? 0) > 0)
+      )
+    case 'flange_inlet':
+      return (
+        (facts.roles.flange_inlet ?? 0) > 0 ||
+        (facts.roles.inlet_flange ?? 0) > 0 ||
+        (facts.roles.flange ?? 0) > 0 ||
+        (facts.sourcePartKinds.flange_ring ?? 0) > 0
+      )
+    case 'flange_outlet':
+      return (
+        (facts.roles.flange_outlet ?? 0) > 0 ||
+        (facts.roles.outlet_flange ?? 0) > 0 ||
+        (facts.roles.flange ?? 0) > 0 ||
+        (facts.sourcePartKinds.flange_ring ?? 0) > 0
+      )
+    case 'vessel_shell':
+      return (
+        (facts.roles.vessel_shell ?? 0) > 0 ||
+        (facts.roles.cylindrical_tank ?? 0) > 0 ||
+        (facts.sourcePartKinds.cylindrical_tank ?? 0) > 0
+      )
+    case 'access_platform':
+      return (
+        (facts.roles.access_platform ?? 0) > 0 ||
+        (facts.roles.platform_ladder ?? 0) > 0 ||
+        (facts.sourcePartKinds.platform_ladder ?? 0) > 0
+      )
+    case 'work_table':
+      return (
+        (facts.roles.work_table ?? 0) > 0 ||
+        (facts.roles.fixture_table ?? 0) > 0 ||
+        facts.shapes.some((fact) =>
+          /work.?table|fixture.?table/.test(
+            `${fact.semanticRole ?? ''} ${fact.sourcePartKind ?? ''} ${fact.name ?? ''}`.toLowerCase(),
+          ),
+        )
+      )
+    case 'safety_barrier':
+      return (
+        (facts.roles.safety_barrier ?? 0) > 0 ||
+        facts.shapes.some((fact) =>
+          /safety.?barrier|guard.?rail|fence/.test(
+            `${fact.semanticRole ?? ''} ${fact.sourcePartKind ?? ''} ${fact.name ?? ''}`.toLowerCase(),
+          ),
+        )
+      )
     case 'mixer_blades':
       return (facts.roles.mixer_blade ?? 0) >= 3 || (facts.sourcePartKinds.mixer_blades ?? 0) >= 3
     case 'mixer_shaft':
@@ -882,7 +1300,7 @@ function requestedRed(options: PrimitiveSemanticValidationOptions): boolean {
     .filter(Boolean)
     .join(' ')
     .toLowerCase()
-  return /red|#cc0000|#ff0000|红色|紅色/.test(text)
+  return /\bred\b|#cc0000|#ff0000|红色|紅色/.test(text)
 }
 
 function isRedColor(color: string | undefined): boolean {
@@ -902,11 +1320,18 @@ function isRedColor(color: string | undefined): boolean {
 function validateRequiredRoles(
   facts: PrimitiveGeometryFacts,
   options: PrimitiveSemanticValidationOptions,
+  family: SemanticFamily,
   issues: string[],
+  warnings: string[],
 ) {
   for (const role of requiredRoles(options.geometryBrief)) {
     if (!satisfiesRequiredRole(facts, role)) {
-      issues.push(`required semantic role "${role}" is missing.`)
+      const message = `required semantic role "${role}" is missing.`
+      if (shouldSoftFailRequiredRole(role, family)) {
+        warnings.push(message)
+      } else {
+        issues.push(message)
+      }
     }
   }
 }
@@ -1044,9 +1469,11 @@ function validateBicycle(facts: PrimitiveGeometryFacts, issues: string[], warnin
 }
 
 function validateMixer(facts: PrimitiveGeometryFacts, issues: string[], warnings: string[]) {
-  const shafts = factsBy(facts, (fact) => hasRole(fact, ['mixer_shaft']))
-  const hubs = factsBy(facts, (fact) => hasRole(fact, ['mixer_hub']))
-  const blades = factsBy(facts, (fact) => hasRole(fact, ['mixer_blade']))
+  const shafts = factsBy(facts, (fact) => hasRole(fact, ['mixer_shaft', 'agitator_shaft']))
+  const hubs = factsBy(facts, (fact) =>
+    hasRole(fact, ['mixer_hub', 'agitator_hub', 'reactor_impeller_hub']),
+  )
+  const blades = factsBy(facts, (fact) => hasRole(fact, ['mixer_blade', 'reactor_impeller']))
 
   if (shafts.length < 1) issues.push('mixer requires one readable vertical shaft/rod.')
   if (hubs.length < 1) issues.push('mixer requires a lower hub connecting blades to the shaft.')
@@ -1116,20 +1543,28 @@ function validateIndustrialFamily(
     }
   }
   if (family === 'material_handling') {
-    const isGrateCooler = hasAnyRole(facts, ['cooler_grate_bed', 'cooler_housing'])
+    const grateCoolerIntent = facts.shapes.some((fact) =>
+      /grate|cooler/.test(
+        `${fact.semanticRole ?? ''} ${fact.sourcePartKind ?? ''} ${fact.name ?? ''}`.toLowerCase(),
+      ),
+    )
+    const isGrateCooler =
+      grateCoolerIntent &&
+      satisfiesRequiredRole(facts, 'cooler_grate_bed') ||
+      (grateCoolerIntent && satisfiesRequiredRole(facts, 'cooler_housing'))
     if (isGrateCooler) {
-      if (!hasAnyRole(facts, ['cooler_grate_bed'])) {
+      if (!satisfiesRequiredRole(facts, 'cooler_grate_bed')) {
         issues.push('grate cooler requires a readable grate bed.')
       }
-      if (!hasAnyRole(facts, ['cooling_air_box'])) {
+      if (!satisfiesRequiredRole(facts, 'cooling_air_box')) {
         issues.push('grate cooler requires visible under-grate cooling air boxes.')
       }
       return
     }
-    if (!hasAnyRole(facts, ['conveyor_frame'])) {
+    if (!hasAnyRole(facts, ['conveyor_frame', 'press_frame_rails', 'support_frame'])) {
       issues.push('material handling equipment requires a conveyor/frame structure.')
     }
-    if (!hasAnyRole(facts, ['belt_surface', 'roller_array'])) {
+    if (!hasAnyRole(facts, ['belt_surface', 'roller_array', 'filter_plate_stack', 'screw_flight'])) {
       issues.push('material handling equipment requires a belt surface or roller array.')
     }
   }
@@ -1207,7 +1642,7 @@ export function validatePrimitiveSemantics(
   const issues: string[] = []
   const warnings: string[] = []
 
-  validateRequiredRoles(facts, options, issues)
+  validateRequiredRoles(facts, options, family, issues, warnings)
 
   if (facts.shapeCount === 0) issues.push('no primitive geometry facts were produced.')
   if (facts.dimensions.some((dimension) => dimension > 50)) {

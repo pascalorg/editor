@@ -15,6 +15,7 @@ import {
   glassMaterial as defaultGlassMaterial,
   createBaseMaterial as getBaseMaterial,
 } from '../../lib/materials'
+import { ensureWebGPUCompatibleGeometry } from '../../lib/safe-geometry'
 import useViewer from '../../store/use-viewer'
 
 // Invisible material for root mesh — used as selection hitbox only
@@ -138,7 +139,7 @@ function addBox(
   y: number,
   z: number,
 ) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+  const m = new THREE.Mesh(ensureWebGPUCompatibleGeometry(new THREE.BoxGeometry(w, h, d)), material)
   m.position.set(x, y, z)
   parent.add(m)
 }
@@ -156,7 +157,7 @@ function addShape(
     curveSegments: 24,
   })
   geometry.translate(0, 0, -depth / 2 + z)
-  const mesh = new THREE.Mesh(geometry, material)
+  const mesh = new THREE.Mesh(ensureWebGPUCompatibleGeometry(geometry), material)
   parent.add(mesh)
 }
 
@@ -2688,7 +2689,7 @@ function addBayWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
       geometry.setIndex(indices)
       geometry.computeVertexNormals()
-      mesh.add(new THREE.Mesh(geometry, baseMaterial))
+      mesh.add(new THREE.Mesh(ensureWebGPUCompatibleGeometry(geometry), baseMaterial))
     }
 
     const center = new THREE.Group()
@@ -2859,7 +2860,7 @@ function addBowWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     }
 
     const addCurvedMesh = (material: THREE.Material, geometry: THREE.BufferGeometry) => {
-      mesh.add(new THREE.Mesh(geometry, material))
+      mesh.add(new THREE.Mesh(ensureWebGPUCompatibleGeometry(geometry), material))
     }
 
     addCurvedMesh(baseMaterial, createCurvedVerticalBand(glassTop, innerH / 2))
@@ -3156,7 +3157,9 @@ function addShapedLouveredWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
 function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
   // Root mesh is an invisible hitbox; all visuals live in child meshes
   mesh.geometry.dispose()
-  mesh.geometry = new THREE.BoxGeometry(node.width, node.height, node.frameDepth)
+  mesh.geometry = ensureWebGPUCompatibleGeometry(
+    new THREE.BoxGeometry(node.width, node.height, node.frameDepth),
+  )
   mesh.material = hitboxMaterial
 
   // Sync transform from node (React may lag behind the system by a frame during drag)

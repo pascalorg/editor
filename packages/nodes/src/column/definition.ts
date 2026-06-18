@@ -77,7 +77,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   presentation: {
     label: 'Column',
     description: 'A parametric column with configurable cross-section, base, and capital.',
-    icon: { kind: 'url', src: '/icons/column.png' },
+    icon: { kind: 'url', src: '/icons/column.webp' },
     paletteSection: 'structure',
     paletteOrder: 70,
   },

@@ -289,6 +289,48 @@
   - `Mine` clearly invites GLB import.
   - After import, users know where the model went and can place it immediately.
 
+
+## GLB import optimization and reuse design
+- Product intent:
+  - When users import GLB from `Items -> Mine`, Pascal should create a reusable, lighter asset instead of accepting only the original heavy file.
+  - Placing the same imported GLB many times should reuse the loaded resource and shared GPU geometry/materials instead of behaving like many independent model loads.
+  - Users should get actionable feedback: original complexity, optimized complexity, file size reduction, and warnings when a model is still too heavy.
+- Current evidence:
+  - `packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx` posts the selected `.glb` file to `/api/imported-glb/assets`, then switches to `Mine`, selects the asset, and starts item placement.
+  - `apps/editor/app/api/imported-glb/assets/route.ts` already parses GLB JSON, records triangles/meshes/materials/images/texture size, rejects overly complex files, and writes `model.glb` plus `imported-glb.json`.
+  - `packages/nodes/src/item/renderer.tsx` loads item GLBs via `useGLTF(modelUrl)` and renders with drei `<Clone dispose={null}>`; this already gives URL-level loader caching and shared child geometry/material references for repeated placements of the same `asset.src`.
+  - `packages/core/src/schema/nodes/item.ts` keeps item assets serializable through `asset.src`, dimensions, corrective transforms, tags, and metadata-like asset fields; core must not store Three.js resources.
+- Geometry vocabulary:
+  - Do not equate GLB face count with mesh count. Meshes are containers; render cost is mainly triangles/primitives, draw calls/material count, texture memory, skeleton/animation cost, and number of visible instances.
+  - Import UI should display `triangles`, `mesh`, `materials`, `max texture size`, and file size separately.
+- Import-time optimization pipeline:
+  1. **Inspect original**: keep the current lightweight GLB JSON inspection, but persist `originalInspection` and `originalBytes`.
+  2. **Optimize candidate**: run server-side optimization before saving the final asset. The preferred pipeline is prune/dedup/weld, simplify by triangle budget, resize oversized textures, quantize/meshopt-compress, then re-inspect.
+  3. **Budget selection**: default target should be practical for canvas reuse, e.g. reduce to roughly `100k-150k` triangles for ordinary furniture/equipment, with a hard cap still around `500k` triangles for exceptional assets.
+  4. **Save final**: write optimized output as `/items/{assetId}/model.glb`; optionally preserve the original as `/items/{assetId}/original.glb` only if product explicitly wants restore/re-optimize.
+  5. **Record metadata**: `imported-glb.json` should include optimization status, original/final inspections, original/final byte sizes, reduction ratios, optimizer version/options, and warnings.
+  6. **Manifest tags**: generated asset tags should include final triangle count and optimization status, not only original complexity.
+- Dependency/implementation direction:
+  - Use an explicit GLB optimizer module under `apps/editor/lib/imported-glb/` or similar; keep it in the app/server layer because optimization depends on Node tooling and GLB binary processing.
+  - Do not put optimization logic in `packages/core` or `packages/viewer`; core remains schema/logic only, viewer remains runtime rendering only.
+  - If adding dependencies is allowed, prefer `@gltf-transform/core` + `@gltf-transform/functions` + `@gltf-transform/extensions` with meshoptimizer/Draco/texture transforms as needed. Without new dependencies, keep the current inspect/reject path and design the module boundary so the optimizer can be plugged in later.
+- Runtime reuse design:
+  - Canonical reuse key is `asset.src`. All placements of the same imported asset must keep the same `asset.src` and asset id; transforms live on each `ItemNode`, not in duplicated asset files.
+  - Keep using `useGLTF(modelUrl)` plus `<Clone dispose={null}>` for normal GLB assets because drei caches by URL and `Clone` shares geometry/material references.
+  - Avoid adding cache-busting query params except for semantic loader options. Imported GLBs currently add `?pascalImportedGlb=1`; this remains stable per `asset.src`, so multiple placements still share one cache entry.
+  - For very high instance counts of the exact same asset, add a later `instanced item` path only when the asset has no per-node material override, no animation state divergence, and compatible transforms. This is an optimization tier, not required for the first import pipeline.
+- UX behavior in `Items -> Mine`:
+  - During import, show `Optimizing GLB...` after upload starts, not only `Importing...`.
+  - On success, show a compact result such as `Optimized: 320k -> 120k triangles, 18MB -> 7MB`.
+  - If optimization cannot reduce enough, reject with the measured reasons and tell users to reduce polygons/textures before import.
+  - If optimization fails due to unsupported input but the original is under safe limits, allow saving original with a warning only if this fallback is deliberate; otherwise fail closed to protect canvas performance.
+- Acceptance criteria:
+  - Importing a valid GLB from `Items -> Mine` saves an optimized `model.glb` and records original/final metrics.
+  - The asset card remains in `Mine` and can be placed immediately.
+  - Placing the same imported asset multiple times keeps the same `asset.src`; runtime GLTF loading happens once per URL cache key, with clones sharing geometry/material references.
+  - Typecheck covers the import route and item renderer remains editor-agnostic.
+  - No Three.js resource object, loader cache, or optimizer-specific runtime object is stored in `packages/core` scene data.
+
 ## Open questions
 - [ ] Should `存入素材` preserve editability as Pascal geometry, or export a GLB-style item asset for compatibility?
 - [ ] Should `放置画布` leave the draft reusable for multiple placements, or mark it as consumed?

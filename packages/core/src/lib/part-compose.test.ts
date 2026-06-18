@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { assessPartBlueprint, assessPartVisualDetails, composePartPrimitives } from './part-compose'
+import {
+  assessPartBlueprint,
+  assessPartVisualDetails,
+  composePartPrimitives,
+  resolveLayout,
+} from './part-compose'
 
 function expectBladeRotationMatchesRadialPlacement(shape: {
   position?: number[]
@@ -37,6 +42,123 @@ function expectLocalPlaneBladeRotationMatchesRadialPlacement(
   expect(actualY).toBeCloseTo(0, 4)
   expect(wrappedDelta).toBeCloseTo(0, 4)
 }
+
+describe('resolveLayout', () => {
+  test('resolves explicit part relationship plans before primitive composition', () => {
+    const [body, flange] = resolveLayout({
+      parts: [
+        { id: 'body', kind: 'valve_body', position: [0, 0.38, 0], axis: 'x', length: 0.7 },
+        {
+          id: 'flange',
+          kind: 'flange_ring',
+          connectTo: 'body',
+          connectPoint: 'outlet',
+          childPoint: 'back',
+          axis: 'x',
+          radius: 0.12,
+        },
+      ],
+    })
+
+    expect(body?.position).toEqual([0, 0.38, 0])
+    expect(flange?.position?.[0]).toBeGreaterThan(0.35)
+    expect(flange?.position?.[1]).toBeCloseTo(0.38, 5)
+  })
+
+  test('builds shared rotating machine layout plans for pumps and compressors', () => {
+    const pump = resolveLayout(
+      { family: 'pump', layoutFamily: 'rotating_machine_layout' },
+      [
+        { kind: 'skid_base', semanticRole: 'support_base' },
+        { kind: 'ribbed_motor_body', semanticRole: 'drive_motor' },
+        { kind: 'volute_casing', semanticRole: 'volute_casing' },
+      ],
+      { length: 2.2, width: 0.9, height: 1.1 },
+    )
+    const compressor = resolveLayout(
+      { family: 'compressor', layoutFamily: 'rotating_machine_layout' },
+      [
+        { kind: 'skid_base', semanticRole: 'support_base' },
+        { kind: 'ribbed_motor_body', semanticRole: 'drive_motor' },
+        { kind: 'rounded_machine_body', semanticRole: 'compressor_casing' },
+      ],
+      { length: 2.2, width: 0.9, height: 1.1 },
+    )
+
+    expect(pump.layoutFamily).toBe('rotating_machine_layout')
+    expect(compressor.layoutFamily).toBe('rotating_machine_layout')
+    expect(pump.anchors.map((anchor) => anchor.id)).toContain('drive')
+    expect(
+      compressor.placements.find((part) => part.semanticRole === 'drive_motor')?.anchorId,
+    ).toBe('drive')
+  })
+
+  test('builds shared vessel layout plans for tanks and reactors', () => {
+    const tank = resolveLayout(
+      { family: 'tank', layoutFamily: 'vessel_layout' },
+      [
+        { kind: 'cylindrical_tank', semanticRole: 'vessel_shell' },
+        { kind: 'skid_base', semanticRole: 'support_base' },
+      ],
+      { height: 3, diameter: 1.2 },
+    )
+    const reactor = resolveLayout(
+      { family: 'reactor', layoutFamily: 'vessel_layout' },
+      [
+        { kind: 'agitator_tank', semanticRole: 'vessel_shell' },
+        { kind: 'platform_ladder', semanticRole: 'access_platform' },
+      ],
+      { height: 2.4, diameter: 1.1 },
+    )
+
+    expect(tank.layoutFamily).toBe('vessel_layout')
+    expect(reactor.layoutFamily).toBe('vessel_layout')
+    expect(tank.placements.find((part) => part.semanticRole === 'vessel_shell')?.anchorId).toBe(
+      'shell',
+    )
+    expect(
+      reactor.placements.find((part) => part.semanticRole === 'access_platform')?.anchorId,
+    ).toBe('access')
+  })
+
+  test('builds shared enclosure layout plans for packaging, CNC, and electrical equipment', () => {
+    const packaging = resolveLayout(
+      { family: 'machine_tool', layoutFamily: 'box_enclosure_layout' },
+      [
+        { kind: 'generic_body', semanticRole: 'machine_enclosure' },
+        { kind: 'control_box', semanticRole: 'control_panel' },
+      ],
+      { length: 2.6, width: 1, height: 1.6 },
+    )
+    const cnc = resolveLayout(
+      { family: 'machine_tool', layoutFamily: 'box_enclosure_layout' },
+      [
+        { kind: 'generic_body', semanticRole: 'machine_enclosure' },
+        { kind: 'generic_panel', semanticRole: 'viewing_window' },
+      ],
+      { length: 2.8, width: 1.1, height: 1.7 },
+    )
+    const electrical = resolveLayout(
+      { family: 'electrical', layoutFamily: 'box_enclosure_layout' },
+      [
+        { kind: 'electrical_cabinet', semanticRole: 'electrical_cabinet' },
+        { kind: 'vent_slats', semanticRole: 'vent_panel' },
+      ],
+      { length: 1.2, width: 0.5, height: 1.8 },
+    )
+
+    expect(packaging.layoutFamily).toBe('box_enclosure_layout')
+    expect(cnc.layoutFamily).toBe('box_enclosure_layout')
+    expect(electrical.layoutFamily).toBe('box_enclosure_layout')
+    expect(
+      packaging.placements.find((part) => part.semanticRole === 'control_panel')?.anchorId,
+    ).toBe('controls')
+    expect(cnc.placements.find((part) => part.semanticRole === 'viewing_window')?.anchorId).toBe(
+      'front_panel',
+    )
+    expect(electrical.bounds.size[1]).toBeCloseTo(1.8, 5)
+  })
+})
 
 function cylinderEndpoints(shape: {
   position?: number[]
@@ -1740,5 +1862,49 @@ describe('composePartPrimitives', () => {
     })
     expect(detailedPipe.some((shape) => shape.name?.includes('pipe elbow'))).toBe(true)
     expect(detailedPipe.some((shape) => shape.name?.includes('flange ring'))).toBe(true)
+  })
+
+  test('keeps registry family plans isolated from legacy cross-family auto completion', () => {
+    const tank = composePartPrimitives({
+      name: 'Detailed storage tank with inlet outlet and access platform',
+      family: 'tank',
+      registryPartPlan: true,
+      autoComplete: true,
+      enhanceVisualDetails: true,
+      parts: [
+        { kind: 'cylindrical_tank', semanticRole: 'vessel_shell', height: 3, radius: 0.6 },
+        { kind: 'inlet_port', semanticRole: 'inlet_port' },
+        { kind: 'outlet_port', semanticRole: 'outlet_port' },
+        { kind: 'platform_ladder', semanticRole: 'access_platform' },
+      ],
+    })
+
+    expect(tank.some((shape) => shape.sourcePartKind === 'cylindrical_tank')).toBe(true)
+    expect(tank.some((shape) => shape.sourcePartKind === 'platform_ladder')).toBe(true)
+    expect(tank.some((shape) => shape.sourcePartKind === 'volute_casing')).toBe(false)
+    expect(tank.some((shape) => shape.sourcePartKind === 'impeller_blades')).toBe(false)
+    expect(tank.some((shape) => shape.sourcePartKind === 'ribbed_motor_body')).toBe(false)
+
+    const machineTool = composePartPrimitives({
+      name: 'Boeing style CNC machining center enclosure',
+      family: 'machine_tool',
+      registryPartPlan: true,
+      autoComplete: true,
+      enhanceVisualDetails: true,
+      parts: [
+        { kind: 'generic_base', semanticRole: 'machine_base', length: 2.8, width: 1.1 },
+        { kind: 'generic_body', semanticRole: 'machine_enclosure', length: 2.8, width: 1.1 },
+        { kind: 'generic_panel', semanticRole: 'spindle_head' },
+        { kind: 'control_box', semanticRole: 'control_panel' },
+      ],
+    })
+
+    const sourceKinds = new Set(machineTool.map((shape) => shape.sourcePartKind))
+    expect(sourceKinds.has('generic_base')).toBe(true)
+    expect(sourceKinds.has('generic_body')).toBe(true)
+    expect(sourceKinds.has('aircraft_fuselage')).toBe(false)
+    expect(sourceKinds.has('aircraft_wing')).toBe(false)
+    expect(sourceKinds.has('aircraft_engine')).toBe(false)
+    expect(sourceKinds.has('aircraft_landing_gear')).toBe(false)
   })
 })

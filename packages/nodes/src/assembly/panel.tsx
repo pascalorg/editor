@@ -82,15 +82,17 @@ export default function AssemblyPanel() {
 
   return (
     <PanelWrapper
-      icon={isEditingParts ? <Pencil className="h-4 w-4" /> : '/icons/cube.png'}
+      icon={isEditingParts ? <Pencil className="h-4 w-4" /> : '/icons/cube.webp'}
       onClose={handleClose}
-      title={node.name || 'Assembly'}
+      title={node.name || '\u7ec4\u5408'}
       width={300}
     >
-      <PanelSection title="Assembly">
+      <PanelSection title={'\u7ec4\u5408'}>
         <div className="rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-muted-foreground text-xs leading-5">
-          {childCount} part{childCount === 1 ? '' : 's'} grouped. Select the assembly to move,
-          rotate, or raise the whole object; enter part edit to select a single child.
+          {'\u5df2\u7ec4\u5408'} {childCount}{' '}
+          {
+            '\u4e2a\u90e8\u4ef6\u3002\u9009\u62e9\u7ec4\u5408\u53ef\u6574\u4f53\u79fb\u52a8\u3001\u65cb\u8f6c\u6216\u62ac\u9ad8\uff1b\u8fdb\u5165\u90e8\u4ef6\u7f16\u8f91\u53ef\u5355\u72ec\u9009\u62e9\u5b50\u7269\u4ef6\u3002'
+          }
         </div>
         <ActionGroup>
           <ActionButton
@@ -101,7 +103,9 @@ export default function AssemblyPanel() {
                 <Pencil className="h-3.5 w-3.5" />
               )
             }
-            label={isEditingParts ? 'Exit part edit' : 'Edit parts'}
+            label={
+              isEditingParts ? '\u9000\u51fa\u90e8\u4ef6\u7f16\u8f91' : '\u7f16\u8f91\u90e8\u4ef6'
+            }
             onClick={handleTogglePartEdit}
           />
         </ActionGroup>
@@ -111,21 +115,21 @@ export default function AssemblyPanel() {
         nodeId={selectedId as AnyNode['id']}
         onUpdate={handleUpdate}
         rotationAxes={[1]}
-        title="Whole transform"
+        title={'\u6574\u4f53\u53d8\u6362'}
       />
       <DataBindingSection node={node} onUpdate={handleUpdate} />
 
-      <PanelSection title="Actions">
+      <PanelSection title={'\u64cd\u4f5c'}>
         <ActionGroup>
           <ActionButton
             icon={<Move className="h-3.5 w-3.5" />}
-            label="Move whole"
+            label={'\u6574\u4f53\u79fb\u52a8'}
             onClick={handleMove}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label="Delete"
+            label={'\u5220\u9664'}
             onClick={handleDelete}
           />
         </ActionGroup>

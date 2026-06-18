@@ -53,7 +53,7 @@ export const WindowTreeNode = memo(function WindowTreeNode({
       expanded={false}
       hasChildren={false}
       icon={
-        <Image alt="" className="object-contain" height={14} src="/icons/window.png" width={14} />
+        <Image alt="" className="object-contain" height={14} src="/icons/window.webp" width={14} />
       }
       isHovered={isHovered}
       isLast={isLast}

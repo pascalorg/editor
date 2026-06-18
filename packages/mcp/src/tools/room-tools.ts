@@ -375,7 +375,7 @@ export function registerSearchAssets(server: McpServer): void {
     {
       title: 'Search assets',
       description:
-        'Search the built-in MCP item catalog by keyword. Call before place_item when you need a valid catalogItemId.',
+        'Search the shared placeable item catalog by keyword. Call before place_item when you need a valid catalogItemId.',
       inputSchema: searchAssetsInput,
       outputSchema: searchAssetsOutput,
     },

@@ -47,16 +47,16 @@ export {
   sceneRegistry,
   useRegistry,
 } from './hooks/scene-registry/scene-registry'
-export { pointInPolygon, spatialGridManager } from './hooks/spatial-grid/spatial-grid-manager'
 export {
-  getFloorPlacedElevation,
-  getFloorPlacedFootprints,
-  getFloorStackedPosition,
   type FloorPlacedElevationArgs,
   type FloorPlacedFootprint,
   type FloorPlacedFootprintContext,
   type FloorPlacedFootprintsResolver,
+  getFloorPlacedElevation,
+  getFloorPlacedFootprints,
+  getFloorStackedPosition,
 } from './hooks/spatial-grid/floor-placed-elevation'
+export { pointInPolygon, spatialGridManager } from './hooks/spatial-grid/spatial-grid-manager'
 export {
   initSpatialGridSync,
   resolveBuildingForLevel,
@@ -84,6 +84,37 @@ export {
 } from './lib/assembly-constraints'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
 export {
+  applyDeviceProfileToPartInput,
+  buildDraftDeviceProfile,
+  createDeviceProfileResolver,
+  DEVICE_PROFILE_DEFINITIONS,
+  type DeviceArchetypeFamily,
+  type DeviceProfileDefinition,
+  type DeviceProfileExecutionValidation,
+  type DeviceProfileId,
+  type DeviceProfileMergeResult,
+  type DeviceProfileQualityInputShape,
+  type DeviceProfileQualityScore,
+  type DeviceProfileResolver,
+  type DeviceProfileSource,
+  type DeviceProfileStatus,
+  type DeviceProfileValidation,
+  type DimensionDefaults,
+  type DimensionRule,
+  type DraftDeviceProfileResult,
+  deviceProfileCapabilitySummary,
+  evaluateDeviceProfileQuality,
+  getDeviceProfileDefinition,
+  inferDeviceProfileDefinition,
+  mergeDeviceProfiles,
+  normalizeDeviceProfileInput,
+  type ProfilePartSpec,
+  validateDeviceProfileDefinition,
+  validateDeviceProfileForExecution,
+  validateDeviceProfileSchema,
+  validateDeviceProfiles,
+} from './lib/device-profile-registry'
+export {
   applyDimensionSemanticsToObjectInput,
   type DimensionSemantics,
   parseDimensionSemantics,
@@ -95,7 +126,25 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
-export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
+export {
+  executableFamilyForLayoutFamily,
+  FAMILY_DEFINITIONS,
+  type FamilyDefinition,
+  type FamilyId,
+  familyCapabilitySummary,
+  familyPartDefinitions,
+  getFamilyDefinition,
+  getLayoutFamilyDefinition,
+  inferFamilyDefinition,
+  isFamilyId,
+  LAYOUT_FAMILY_DEFINITIONS,
+  type LayoutFamilyDefinition,
+  type LayoutFamilyGroup,
+  type LayoutFamilyId,
+  layoutFamilyCapabilitySummary,
+  normalizeFamilyId,
+  normalizeLayoutFamilyId,
+} from './lib/family-registry'
 export {
   createGeometryGoldenSnapshot,
   type GeometryGoldenShapeSnapshot,
@@ -103,15 +152,6 @@ export {
   type GeometryGoldenSnapshotOptions,
   stringifyGeometryGoldenSnapshot,
 } from './lib/geometry-golden-snapshot'
-export {
-  type Point2D as PolygonPoint2D,
-  pointInPolygon as pointInPolygon2D,
-  pointOnSegment,
-  polygonContainsPolygon,
-  polygonsIntersect,
-  polygonsOverlap,
-  segmentsIntersect,
-} from './lib/polygon-relations'
 export {
   composeIndustrialArchetype,
   type IndustrialArchetypeComposeInput,
@@ -129,6 +169,7 @@ export {
   type IndustrialVariantId,
   industrialAliasesForRecipe,
 } from './lib/industrial-archetype-registry'
+export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
 export {
   composeObjectPrimitives,
   type ObjectComposeCategory,
@@ -145,14 +186,49 @@ export {
 export {
   assessPartBlueprint,
   assessPartVisualDetails,
+  type BoundingBox,
   composePartPrimitives,
+  type LayoutAnchor,
+  type LayoutDimensions,
+  type LayoutPlan,
+  type LayoutProfileInput,
   type PartBlueprintAssessment,
   type PartComposeDetail,
   type PartComposeInput,
   type PartComposeKind,
   type PartComposePartInput,
+  type PartPlacement,
+  type PartSpec,
   type PartVisualAssessment,
+  resolveLayout,
 } from './lib/part-compose'
+export {
+  AIRCRAFT_PART_DEFINITIONS,
+  CONVEYOR_PART_DEFINITIONS,
+  DESK_PART_DEFINITIONS,
+  ELECTRICAL_PART_DEFINITIONS,
+  GENERIC_PART_DEFINITIONS,
+  getPartDefinitions,
+  KIOSK_PART_DEFINITIONS,
+  type NormalizedPartPlan,
+  normalizeAircraftPartPlan,
+  normalizeConveyorPartPlan,
+  normalizeDeskPartPlan,
+  normalizeElectricalPartPlan,
+  normalizeGenericPartPlan,
+  normalizeKioskPartPlan,
+  normalizePartPlanForFamily,
+  normalizePipeSystemPartPlan,
+  normalizePumpPartPlan,
+  normalizeVehiclePartPlan,
+  type PartDefinition,
+  type PartParameterDefinition,
+  type PartParameterType,
+  PIPE_SYSTEM_PART_DEFINITIONS,
+  PUMP_PART_DEFINITIONS,
+  partCapabilitySummary,
+  VEHICLE_PART_DEFINITIONS,
+} from './lib/part-registry'
 export {
   CORE_COMPONENT_PART_CAPABILITIES,
   type CoreComponentPartCapability,
@@ -162,6 +238,15 @@ export {
   type PartCapabilityCategory,
   partCapabilitiesPrompt,
 } from './lib/part-taxonomy'
+export {
+  type Point2D as PolygonPoint2D,
+  pointInPolygon as pointInPolygon2D,
+  pointOnSegment,
+  polygonContainsPolygon,
+  polygonsIntersect,
+  polygonsOverlap,
+  segmentsIntersect,
+} from './lib/polygon-relations'
 export {
   type PrimitiveAnchor,
   type PrimitiveAxis,
@@ -192,6 +277,16 @@ export {
   type PrimitiveRecipeId,
   type PrimitiveRecipeParams,
 } from './lib/primitive-recipes'
+export {
+  getPrimitiveDefinition,
+  lowerDerivedPrimitiveShape,
+  normalizePrimitiveKindFromRegistry,
+  PRIMITIVE_DEFINITIONS,
+  type PrimitiveDefinition,
+  type PrimitiveParameterDefinition,
+  type PrimitiveParameterType,
+  primitiveCapabilitySummary,
+} from './lib/primitive-registry'
 export {
   applyPrimitiveRevision,
   type PrimitiveRevisionEdge,
@@ -258,6 +353,7 @@ export {
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
   getMaterialPresetByRef,
+  getMaterialSolidColorByRef,
   getMaterialsForCategory,
   LIBRARY_MATERIAL_REF_PREFIX,
   MATERIAL_CATALOG,
@@ -275,6 +371,7 @@ export {
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
 } from './store/history-control'
+export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export {
   type ControlValue,
   type DoorAnimationState,
@@ -286,7 +383,6 @@ export {
   type WindowAnimationState,
   type WindowInteractiveState,
 } from './store/use-interactive'
-export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export {
   default as useLiveNodeOverrides,
   getEffectiveNode,

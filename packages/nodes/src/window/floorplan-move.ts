@@ -6,7 +6,7 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import { snapToHalf } from '@pascal-app/editor'
-import { findClosestWallInPlan } from '../shared/wall-attach-target'
+import { findClosestWallInPlan, resolveOpeningPlacement } from '../shared/wall-attach-target'
 import { clampToWall, hasWallChildOverlap } from './window-math'
 
 /**
@@ -64,15 +64,17 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     canCommit() {
       const live = useScene.getState().nodes[node.id as AnyNodeId] as WindowNode | undefined
       if (!live || live.type !== 'window') return false
-      const overlapping = hasWallChildOverlap(
-        live.parentId as string,
-        live.position[0],
-        live.position[1],
-        live.width,
-        live.height,
-        live.id,
-      )
-      return !overlapping
+      const placement = resolveOpeningPlacement({
+        collides: hasWallChildOverlap(
+          live.parentId as string,
+          live.position[0],
+          live.position[1],
+          live.width,
+          live.height,
+          live.id,
+        ),
+      })
+      return placement.placeable
     },
   }
 

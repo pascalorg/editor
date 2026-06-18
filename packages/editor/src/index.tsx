@@ -1,5 +1,7 @@
 export type { EditorProps } from './components/editor'
 export { default as Editor } from './components/editor'
+export { Grid } from './components/editor/grid'
+export { NodeArrowHandles } from './components/editor/node-arrow-handles'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,
@@ -46,6 +48,7 @@ export {
   type PlacementCoordinatorConfig,
   usePlacementCoordinator,
 } from './components/tools/item/use-placement-coordinator'
+export { MoveTool } from './components/tools/item/move-tool'
 export {
   createPipeOnCurrentLevel,
   type PipePlanPoint,
@@ -85,6 +88,7 @@ export {
   DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
 } from './components/tools/stair/stair-defaults'
+export { ToolManager } from './components/tools/tool-manager'
 export {
   createWallOnCurrentLevel,
   getWallGridStep,
@@ -99,6 +103,7 @@ export { ViewToggles as ViewerToolbarLeft } from './components/ui/action-menu/vi
 export { useCommandPalette } from './components/ui/command-palette'
 export { ActionButton, ActionGroup } from './components/ui/controls/action-button'
 export { MaterialPicker } from './components/ui/controls/material-picker'
+export { MaterialSwatchField } from './components/ui/controls/material-swatch-field'
 export { MetricControl } from './components/ui/controls/metric-control'
 export { NodeMaterialSection } from './components/ui/controls/node-material-section'
 export { PanelSection } from './components/ui/controls/panel-section'

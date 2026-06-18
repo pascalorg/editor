@@ -619,6 +619,8 @@ export function selectDefaultBuildingAndLevel() {
   }
 }
 
+let viewModeBeforeCapture: ViewMode | null = null
+
 const useEditor = create<EditorState>()(
   persist(
     (set, get) => ({
@@ -867,7 +869,33 @@ const useEditor = create<EditorState>()(
         }
       },
       isCaptureMode: false,
-      setCaptureMode: (active) => set({ isCaptureMode: active }),
+      setCaptureMode: (active) =>
+        set((state) => {
+          if (active) {
+            if (state.viewMode !== '3d') {
+              viewModeBeforeCapture = state.viewMode
+              return {
+                isCaptureMode: true,
+                viewMode: '3d',
+                isFloorplanOpen: false,
+              }
+            }
+
+            return { isCaptureMode: true }
+          }
+
+          const restore = viewModeBeforeCapture
+          viewModeBeforeCapture = null
+          if (restore && restore !== '3d') {
+            return {
+              isCaptureMode: false,
+              viewMode: restore,
+              isFloorplanOpen: true,
+            }
+          }
+
+          return { isCaptureMode: false }
+        }),
       viewMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode,
       setViewMode: (mode) => set({ viewMode: mode, isFloorplanOpen: mode !== '3d' }),
       splitOrientation: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.splitOrientation,
@@ -957,7 +985,7 @@ const useEditor = create<EditorState>()(
           ...(openSitePanel ? { activeSidebarPanel: 'site' } : {}),
         })
       },
-      setIsCaptureMode: (enabled) => set({ isCaptureMode: enabled }),
+      setIsCaptureMode: (enabled) => get().setCaptureMode(enabled),
       floorplanPaneRatio: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.floorplanPaneRatio,
       setFloorplanPaneRatio: (ratio) =>
         set({ floorplanPaneRatio: normalizeFloorplanPaneRatio(ratio) }),

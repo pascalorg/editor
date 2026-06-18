@@ -4,14 +4,33 @@ This document captures the design intent for the primitive/parts generation flow
 
 ## Current strategy
 
-Geometry generation has four levels:
+Geometry generation has four active levels:
 
-1. `compose_object` for supported whole-object templates.
+1. `compose_assembly` for supported complete object families that do not have a dedicated parts family.
 2. `compose_recipe` for built-in deterministic primitive recipe packs.
-3. `compose_parts` for reusable mechanical or industrial part blueprints.
-4. `compose_primitive` for fully custom low-level geometry.
+3. `compose_parts` for reusable mechanical or industrial part blueprints and dedicated parts families.
+4. `compose_primitive` for fully custom low-level geometry and derived primitive aliases.
 
-Prefer `compose_recipe` for known high-friction families that already have deterministic recipe packs: vehicles, gate/ball valves, and 3-axis robot arms. Prefer `compose_parts` when the requested object is a recognizable assembly made of reusable physical components, but no fixed recipe covers it. A standing fan is not implemented as a one-off fan template; it is built from base, pole, bracket, motor housing, blades, and protective grill parts. The same pattern is used for pumps, blowers, conveyors, tanks, custom valves, and other equipment.
+Industrial equipment is now profile-first. Concrete equipment knowledge belongs in
+device profiles, while family ids describe reusable layout/execution capability.
+When no stable profile matches, Stage 1 should produce a runtime
+`deviceProfileDraft`; the executor validates it, executes it through
+`compose_parts`, and saves a generated candidate only when profile-aware quality is
+high enough. Generated candidates remain below workspace/imported/builtin profiles
+in priority and are never promoted to stable automatically.
+
+`compose_object` is retired from active AI tool routing. Object-like requests should
+route through family assembly, reusable parts, recipes, or the controlled freeform
+fallback.
+
+Prefer `compose_recipe` for known high-friction closed-form parts. Prefer
+`compose_parts` when the requested object is a recognizable assembly made of
+reusable physical components, especially when a device profile or generated
+candidate exists. Do not add a new family for each industrial device; add profile
+data unless the object needs a genuinely new reusable layout capability.
+
+See `docs/device-profile-architecture.md` for the profile source, lifecycle,
+validator, quality, and migration rules.
 
 Primitive "high fidelity" means editable, stylized fidelity: stronger proportions,
 clearer silhouettes, rounded/tapered manufactured forms, and stable semantic
@@ -79,6 +98,35 @@ Important input fields:
 - `enhanceVisualDetails`: adds recommended non-essential visual details when explicitly enabled or when the object name asks for realism/detail.
 
 ## Supported part families
+
+### Industrial family registries
+
+Industrial equipment is parts-first. For these requests, route through `compose_parts`
+with a family id and top-level dimensions, then let the registry fill required parts
+and clamp unsafe values:
+
+```txt
+family: pump
+required: skid_base, ribbed_motor_body, volute_casing, inlet_port, outlet_port
+optional: flange_ring, impeller_blades, control_box, nameplate, warning_label
+
+family: conveyor
+required: conveyor_frame, roller_array, belt_surface
+optional: ribbed_motor_body, warning_label, nameplate
+
+family: electrical
+required: electrical_cabinet
+optional: cable_tray, nameplate, warning_label, vent_slats
+
+family: pipe_system
+required: pipe_run
+optional: pipe_elbow, flange_ring, valve_body
+```
+
+Each part exposes LLM-safe params in `part-registry.ts`, such as `length`, `width`,
+`height`, `radius`, `count`, `axis`, and color fields. The normalizer maps overall
+`length`/`width`/`height`/`diameter` to sensible part dimensions while preserving
+explicit `parts[].params`.
 
 ### Fans
 
@@ -213,6 +261,81 @@ chain_loop
 
 The bicycle family is a structural side-view approximation: tires/rims/spokes, triangular frame tubes, front fork, handlebar, saddle, and chain loop.
 
+### Aircraft
+
+Complete aircraft are generated through the family/parts registry instead of a
+single opaque object template. Use `compose_parts` with `family:"aircraft"` and
+top-level dimensions/colors, then tune optional `parts[].params` when needed:
+
+```txt
+aircraft_fuselage
+aircraft_wing
+aircraft_engine
+aircraft_vertical_stabilizer
+aircraft_horizontal_stabilizer
+aircraft_landing_gear
+```
+
+`aircraft_fuselage.length` is the overall X length. The composer derives the
+scaled wing, engine, tail, window, and landing-gear placement from that length.
+Use `aircraft_fuselage.count` for cabin window count, `aircraft_engine.count`
+for one to four engines, `aircraft_engine.radius` for nacelle size, and
+`aircraft_wing.bladeSweep` / `verticalCurve` for the wing silhouette. If the LLM
+uses aliases such as `fuselage`, `wing`, `jet_engine`, `t_tail`, or
+`landing_gear`, the registry normalizes them to the aircraft part kinds and
+fills any missing required parts.
+
+### Kiosks, booths, and small buildings
+
+Small, single-room public-facing structures should use the dedicated kiosk
+family before falling back to generic parts:
+
+```txt
+kiosk_body
+kiosk_roof
+kiosk_opening
+optional kiosk_counter
+optional kiosk_sign
+optional kiosk_awning
+```
+
+This covers ticket booths, vendor stalls, newsstands, small pavilions, sheds,
+guard booths, and compact booth-like buildings. Top-level `length`, `width`,
+and `height` control the overall footprint and height; individual
+`parts[].params` can override specific pieces such as the service-window size,
+counter width, roof style, sign size, or awning dimensions. The generated roles
+include `kiosk_body`, `roof`, `opening`, `service_counter`, `sign_panel`, and
+`awning`, which makes follow-up revisions more precise than the generic
+`main_body` / `support_base` fallback.
+
+### Generic long-tail objects
+
+When no dedicated family/recipe matches, the fallback path should still prefer a
+controlled parts plan before raw `compose_primitive`. Use `family:"generic"` and
+semantic generic parts:
+
+```txt
+generic_body
+generic_base
+generic_panel
+generic_handle
+generic_spout
+generic_control_panel
+generic_display
+generic_foot_set
+generic_opening
+generic_detail_accent
+```
+
+This is the preferred bridge for coffee machines, simple devices, display
+fixtures, and other long-tail requests that do not have a dedicated family. The executor can
+infer a generic plan automatically from the prompt and top-level dimensions; for
+example a coffee/espresso machine gets a `generic_body`, support base, control
+panel, spout, and cup platform. These generic parts expose safe dimensions such
+as `length`, `width`, `height`, `thickness`, `radius`, `cornerRadius`, and color
+fields, so follow-up revisions can address semantic parts instead of editing
+anonymous primitive boxes.
+
 ### Cars and small vehicles
 
 Preferred path: `compose_recipe` with one of `vehicle.sedan`, `vehicle.suv`,
@@ -291,7 +414,7 @@ Supported first-pass points include pipe `open/base`, volute `inlet/outlet`, mot
 
 `assessPartBlueprint(input)` scores recognized families and reports missing required parts, optional parts, recommended details, missing detail parts, and user-facing recommendations. Required checks support alternatives; for example pump motor/body can be `ribbed_motor_body`, `rounded_machine_body`, or `motor_housing`.
 
-`autoComplete` uses the same family specs to add essentials for fans, pumps, conveyors, bicycles, cars, valves, desks, electrical cabinets, and pipe systems. It only fills required structure; visual-detail suggestions such as nameplates or warning labels are reported by assessment and should be added when the prompt asks for detail or when a later visual scoring pass decides the object is too plain.
+`autoComplete` uses the same family specs to add essentials for fans, pumps, conveyors, bicycles, cars, aircraft, valves, desks, electrical cabinets, and pipe systems. It only fills required structure; visual-detail suggestions such as nameplates or warning labels are reported by assessment and should be added when the prompt asks for detail or when a later visual scoring pass decides the object is too plain.
 
 ## Visual detail scoring
 
@@ -301,6 +424,7 @@ Supported first-pass points include pipe `open/base`, volute `inlet/outlet`, mot
 - fan: control knob and protective grill
 - conveyor: drive motor and warning label
 - vehicle: windows, lights, bumper, seam/nameplate details
+- aircraft: fuselage, wings, engines, tail stabilizers, and landing gear
 - valve: flanged ends and handwheel
 - desk: drawer stack
 - pipe system: elbow, flange, and valve details
@@ -322,7 +446,7 @@ The parser recognizes labeled and compact dimensions such as:
 - `120x60x75cm`
 - `直径300mm 高1.2m`
 
-Values are normalized to meters. For table/desk/furniture generation, user `长/length` maps to the X footprint (`width` in `compose_object`) and user `宽/width` maps to Z front-back depth. For vehicles, user length maps to the vehicle length/depth axis.
+Values are normalized to meters. For table/desk/furniture generation, user `长/length` maps to the X footprint and user `宽/width` maps to Z front-back depth. For vehicles, user length maps to the vehicle length/depth axis.
 
 ## Memory handling for long chats
 

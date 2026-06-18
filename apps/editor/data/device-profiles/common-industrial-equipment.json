@@ -1,0 +1,113 @@
+[
+  {
+    "id": "grate_cooler",
+    "name": "Grate cooler",
+    "aliases": ["grate cooler", "cement grate cooler", "clinker cooler"],
+    "layoutFamily": "linear_transport_layout",
+    "archetypeFamily": "material_handling",
+    "family": "conveyor",
+    "defaultDimensions": { "length": 8.0, "width": 2.4, "height": 2.2 },
+    "parts": [
+      { "kind": "conveyor_frame", "semanticRole": "cooler_housing", "required": true, "length": 8.0, "width": 2.4, "height": 1.2 },
+      { "kind": "belt_surface", "semanticRole": "cooler_grate_bed", "required": true, "length": 7.4, "width": 2.0, "height": 0.12 },
+      { "kind": "roller_array", "semanticRole": "cooling_air_box", "required": true, "count": 7 },
+      { "kind": "generic_spout", "semanticRole": "inlet_port", "length": 0.9, "radius": 0.22 },
+      { "kind": "generic_spout", "semanticRole": "outlet_port", "length": 0.9, "radius": 0.22 },
+      { "kind": "ribbed_motor_body", "semanticRole": "drive_motor", "length": 0.7, "radius": 0.22 },
+      { "kind": "generic_body", "semanticRole": "gearbox", "length": 0.55, "width": 0.42, "height": 0.38 },
+      { "kind": "generic_panel", "semanticRole": "access_panel", "length": 0.75, "height": 0.45 },
+      { "kind": "generic_foot_set", "semanticRole": "support_base" }
+    ],
+    "primarySemanticRole": "cooler_grate_bed",
+    "description": "Long cement-line grate cooler using linear transport layout with grate bed, housing, cooling air boxes, drive motor, and chutes."
+  },
+  {
+    "id": "steam_turbine",
+    "name": "Steam turbine",
+    "aliases": ["steam turbine", "industrial steam turbine", "turbine skid"],
+    "layoutFamily": "rotating_machine_layout",
+    "archetypeFamily": "rotating_fluid_machine",
+    "family": "compressor",
+    "defaultDimensions": { "length": 3.6, "width": 1.2, "height": 1.4 },
+    "parts": [
+      { "kind": "skid_base", "semanticRole": "support_base", "required": true, "length": 3.6, "width": 1.2, "height": 0.16 },
+      { "kind": "rounded_machine_body", "semanticRole": "turbine_casing", "required": true, "length": 1.45, "width": 0.62, "height": 0.62 },
+      { "kind": "generic_spout", "semanticRole": "rotor_shaft", "required": true, "length": 2.2, "radius": 0.08 },
+      { "kind": "inlet_port", "semanticRole": "inlet_port", "required": true, "radius": 0.12, "length": 0.35 },
+      { "kind": "outlet_port", "semanticRole": "outlet_port", "required": true, "radius": 0.16, "length": 0.42 },
+      { "kind": "generic_body", "semanticRole": "bearing_housing", "length": 0.42, "width": 0.5, "height": 0.5 },
+      { "kind": "generic_panel", "semanticRole": "coupling_guard", "length": 0.7, "height": 0.32 },
+      { "kind": "generic_body", "semanticRole": "lubrication_unit", "length": 0.5, "width": 0.32, "height": 0.42 },
+      { "kind": "control_box", "semanticRole": "control_panel", "length": 0.32, "width": 0.18, "height": 0.42 }
+    ],
+    "primarySemanticRole": "turbine_casing",
+    "description": "Skid-mounted steam turbine with casing, rotor shaft, inlet/exhaust nozzles, bearings, lube unit, and controls."
+  },
+  {
+    "id": "baghouse_dust_collector",
+    "name": "Baghouse dust collector",
+    "aliases": ["baghouse dust collector", "baghouse filter", "dust collector", "bag filter"],
+    "layoutFamily": "box_enclosure_layout",
+    "archetypeFamily": "enclosed_machine",
+    "family": "generic",
+    "defaultDimensions": { "length": 2.4, "width": 1.5, "height": 4.8 },
+    "parts": [
+      { "kind": "generic_base", "semanticRole": "support_base", "required": true, "length": 2.6, "width": 1.6, "height": 0.16 },
+      { "kind": "generic_body", "semanticRole": "filter_housing", "required": true, "length": 2.2, "width": 1.35, "height": 2.8 },
+      { "kind": "generic_body", "semanticRole": "hopper_bottom", "required": true, "length": 1.8, "width": 1.1, "height": 1.0 },
+      { "kind": "generic_spout", "semanticRole": "inlet_port", "required": true, "length": 0.65, "radius": 0.16 },
+      { "kind": "generic_spout", "semanticRole": "outlet_port", "required": true, "length": 0.65, "radius": 0.18 },
+      { "kind": "generic_panel", "semanticRole": "filter_bag_row", "length": 1.5, "height": 1.6 },
+      { "kind": "generic_spout", "semanticRole": "pulse_jet_header", "length": 1.7, "radius": 0.055 },
+      { "kind": "generic_panel", "semanticRole": "access_panel", "length": 0.55, "height": 0.75 },
+      { "kind": "generic_foot_set", "semanticRole": "support_base" },
+      { "kind": "generic_panel", "semanticRole": "access_platform", "length": 0.42, "height": 1.4 }
+    ],
+    "primarySemanticRole": "filter_housing",
+    "description": "Tall baghouse collector with rectangular filter housing, hopper, inlet/outlet ducts, bag rows, pulse header, supports, and access details."
+  },
+  {
+    "id": "plate_heat_exchanger",
+    "name": "Plate heat exchanger",
+    "aliases": ["plate heat exchanger", "gasketed plate heat exchanger", "plate exchanger"],
+    "layoutFamily": "box_enclosure_layout",
+    "archetypeFamily": "thermal_equipment",
+    "family": "generic",
+    "defaultDimensions": { "length": 2.4, "width": 0.75, "height": 1.5 },
+    "parts": [
+      { "kind": "generic_base", "semanticRole": "support_base", "required": true, "length": 2.5, "width": 0.8, "height": 0.12 },
+      { "kind": "generic_body", "semanticRole": "plate_stack", "required": true, "length": 1.45, "width": 0.52, "height": 1.25 },
+      { "kind": "generic_panel", "semanticRole": "heat_transfer_plate", "required": true, "length": 1.15, "height": 1.18 },
+      { "kind": "generic_panel", "semanticRole": "fixed_end_frame", "required": true, "length": 0.18, "height": 1.35 },
+      { "kind": "generic_panel", "semanticRole": "pressure_plate", "required": true, "length": 0.18, "height": 1.25 },
+      { "kind": "generic_detail_accent", "semanticRole": "tie_rod", "length": 1.8, "height": 0.05 },
+      { "kind": "generic_spout", "semanticRole": "inlet_port", "required": true, "length": 0.32, "radius": 0.09 },
+      { "kind": "generic_spout", "semanticRole": "outlet_port", "required": true, "length": 0.32, "radius": 0.09 },
+      { "kind": "generic_detail_accent", "semanticRole": "guide_bar", "length": 1.9, "height": 0.05 },
+      { "kind": "generic_foot_set", "semanticRole": "support_base" }
+    ],
+    "primarySemanticRole": "plate_stack",
+    "forbiddenRoles": ["heat_exchanger_shell", "tube_bundle"],
+    "description": "Gasketed plate heat exchanger profile that avoids shell-and-tube geometry and emphasizes plate stack, end frames, rods, ports, and supports."
+  },
+  {
+    "id": "agv_material_cart",
+    "name": "AGV material cart",
+    "aliases": ["agv", "agv cart", "agv vehicle", "automated guided vehicle", "amr cart", "vga cart", "vga小车", "agv小车", "自动导引车", "搬运小车", "物流小车"],
+    "layoutFamily": "generic_industrial_layout",
+    "archetypeFamily": "material_handling",
+    "family": "generic",
+    "defaultDimensions": { "length": 1.4, "width": 0.85, "height": 0.55 },
+    "parts": [
+      { "kind": "generic_body", "semanticRole": "vehicle_body", "required": true, "length": 1.4, "width": 0.85, "height": 0.28 },
+      { "kind": "generic_base", "semanticRole": "cargo_platform", "required": true, "length": 1.25, "width": 0.72, "height": 0.08 },
+      { "kind": "wheel_set", "semanticRole": "wheel", "required": true, "count": 4, "radius": 0.13, "wheelWidth": 0.06 },
+      { "kind": "bar_pair", "semanticRole": "bumper", "required": true, "length": 1.25, "height": 0.12 },
+      { "kind": "generic_detail_accent", "semanticRole": "navigation_sensor", "required": true, "length": 0.18, "width": 0.08, "height": 0.08 },
+      { "kind": "generic_panel", "semanticRole": "status_light", "length": 0.18, "height": 0.08 },
+      { "kind": "warning_label", "semanticRole": "safety_label" }
+    ],
+    "primarySemanticRole": "vehicle_body",
+    "description": "Factory AGV/material-handling cart with low chassis, load platform, four wheels, safety bumpers, navigation sensor, and status light."
+  }
+]

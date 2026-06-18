@@ -24,8 +24,15 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
-import { clearOpeningGuides3D, publishOpeningGuidesForWallEvent } from '../shared/opening-guides-runtime'
+import {
+  clearOpeningGuides3D,
+  publishOpeningGuidesForWallEvent,
+} from '../shared/opening-guides-runtime'
+import { resolveOpeningPlacement } from '../shared/wall-attach-target'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
+
+const isOpeningPlacementValid = (...args: Parameters<typeof hasWallChildOverlap>) =>
+  resolveOpeningPlacement({ collides: hasWallChildOverlap(...args) }).placeable
 
 const edgeMaterial = new LineBasicNodeMaterial({
   color: 0xef_44_44,
@@ -160,7 +167,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       if (prevWallId && prevWallId !== event.node.id) markWallDirty(prevWallId)
       markWallDirtyThrottled(event.node.id)
 
-      const valid = !hasWallChildOverlap(
+      const valid = isOpeningPlacementValid(
         event.node.id,
         clampedX,
         clampedY,
@@ -239,7 +246,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       })
       markWallDirtyThrottled(event.node.id)
 
-      const valid = !hasWallChildOverlap(
+      const valid = isOpeningPlacementValid(
         event.node.id,
         clampedX,
         clampedY,
@@ -288,7 +295,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         movingDoorNode.height,
       )
 
-      const valid = !hasWallChildOverlap(
+      const valid = isOpeningPlacementValid(
         event.node.id,
         clampedX,
         clampedY,

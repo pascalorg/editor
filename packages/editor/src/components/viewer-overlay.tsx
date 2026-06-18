@@ -15,8 +15,8 @@ import { ArrowLeft, Camera, ChevronRight, Diamond, Layers, Moon, Sun } from 'luc
 import { motion } from 'motion/react'
 import Link from 'next/link'
 import { useShallow } from 'zustand/react/shallow'
-import { cn } from '../lib/utils'
 import { t } from '../i18n'
+import { cn } from '../lib/utils'
 import { ActionButton } from './ui/action-menu/action-button'
 import { TooltipProvider } from './ui/primitives/tooltip'
 
@@ -63,19 +63,19 @@ function getWallModeConfig() {
   return {
     up: {
       icon: (props: any) => (
-        <img alt={fullHeight} height={28} src="/icons/room.png" width={28} {...props} />
+        <img alt={fullHeight} height={28} src="/icons/room.webp" width={28} {...props} />
       ),
       label: fullHeight,
     },
     cutaway: {
       icon: (props: any) => (
-        <img alt={cutaway} height={28} src="/icons/wallcut.png" width={28} {...props} />
+        <img alt={cutaway} height={28} src="/icons/wallcut.webp" width={28} {...props} />
       ),
       label: cutaway,
     },
     down: {
       icon: (props: any) => (
-        <img alt={low} height={28} src="/icons/walllow.png" width={28} {...props} />
+        <img alt={low} height={28} src="/icons/walllow.webp" width={28} {...props} />
       ),
       label: low,
     },
@@ -92,7 +92,7 @@ const getNodeName = (node: AnyNode): string => {
   if ('name' in node && node.name) return node.name
   if (node.type === 'wall') return 'Wall'
   if (node.type === 'fence') return 'Fence'
-  if (node.type === 'road') return 'Road'
+  if (node.type === 'road') return '\u5730\u9762\u5e26'
   if (node.type === 'item') return (node as { asset: { name: string } }).asset?.name || 'Item'
   if (node.type === 'slab') return 'Slab'
   if (node.type === 'ceiling') return 'Ceiling'
@@ -383,7 +383,7 @@ export const ViewerOverlay = ({
                 <img
                   alt={t('actionMenu.scans', 'Scans')}
                   className="h-[28px] w-[28px] object-contain"
-                  src="/icons/mesh.png"
+                  src="/icons/mesh.webp"
                 />
               </ActionButton>
             )}
@@ -407,7 +407,7 @@ export const ViewerOverlay = ({
                 <img
                   alt={t('actionMenu.guides', 'Guides')}
                   className="h-[28px] w-[28px] object-contain"
-                  src="/icons/floorplan.png"
+                  src="/icons/floorplan.webp"
                 />
               </ActionButton>
             )}
@@ -521,7 +521,7 @@ export const ViewerOverlay = ({
               <img
                 alt={t('actionMenu.orbitLeft', 'Orbit Left')}
                 className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
-                src="/icons/rotate.png"
+                src="/icons/rotate.webp"
               />
             </ActionButton>
 
@@ -536,7 +536,7 @@ export const ViewerOverlay = ({
               <img
                 alt={t('actionMenu.orbitRight', 'Orbit Right')}
                 className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
-                src="/icons/rotate.png"
+                src="/icons/rotate.webp"
               />
             </ActionButton>
 
@@ -551,7 +551,7 @@ export const ViewerOverlay = ({
               <img
                 alt={t('actionMenu.topView', 'Top View')}
                 className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
-                src="/icons/topview.png"
+                src="/icons/topview.webp"
               />
             </ActionButton>
           </div>

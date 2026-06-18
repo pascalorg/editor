@@ -2411,6 +2411,46 @@ export function getCatalogMaterialById(id?: string): MaterialCatalogItem | undef
   return MATERIAL_CATALOG.find((item) => item.id === id)
 }
 
+function isNeutralWhite(color?: string | null): boolean {
+  if (!color) return false
+  const normalized = color.trim().toLowerCase()
+  return normalized === '#fff' || normalized === '#ffffff' || normalized === 'white'
+}
+
+function inferTexturedMaterialSolidColor(item: MaterialCatalogItem): string | null {
+  const text = `${item.id} ${item.label} ${item.description ?? ''}`.toLowerCase()
+
+  if (item.category === 'wood') {
+    if (text.includes('plank')) return '#8b5f3a'
+    if (text.includes('parquet')) return '#9b6a3f'
+    if (text.includes('fine')) return '#a8794c'
+    return '#93633c'
+  }
+
+  if (item.category === 'flooring') {
+    if (text.includes('wood') || text.includes('parquet') || text.includes('plank')) {
+      return '#9b6a3f'
+    }
+    if (text.includes('marble')) return '#d7d0c4'
+    if (text.includes('concrete') || text.includes('cement')) return '#a8aaa4'
+    if (text.includes('stone')) return '#aaa296'
+    if (text.includes('tile') || text.includes('ceramic') || text.includes('porcelain')) {
+      return '#c8c0b4'
+    }
+    return '#b8b1a2'
+  }
+
+  if (item.category === 'roof') {
+    if (text.includes('terracotta')) return '#a9522f'
+    if (text.includes('clay')) return '#b65f38'
+    if (text.includes('weathered')) return '#5f5b52'
+    if (text.includes('shingle')) return '#6f655a'
+    return '#8a6a52'
+  }
+
+  return null
+}
+
 export const LIBRARY_MATERIAL_REF_PREFIX = 'library:'
 
 export function toLibraryMaterialRef(id: string) {
@@ -2421,6 +2461,19 @@ export function getLibraryMaterialIdFromRef(materialRef?: string | null) {
   if (!materialRef) return null
   if (!materialRef.startsWith(LIBRARY_MATERIAL_REF_PREFIX)) return null
   return materialRef.slice(LIBRARY_MATERIAL_REF_PREFIX.length)
+}
+
+export function getMaterialSolidColorByRef(materialRef?: string | null): string | null {
+  const materialId = getLibraryMaterialIdFromRef(materialRef)
+  const item = getCatalogMaterialById(materialId ?? undefined)
+  if (!item) return null
+
+  if (item.previewColor) return item.previewColor
+
+  const color = item.preset.mapProperties.color
+  if (!isNeutralWhite(color)) return color
+
+  return inferTexturedMaterialSolidColor(item) ?? color ?? null
 }
 
 export function getMaterialPresetByRef(materialRef?: string | null): MaterialPresetPayload | null {

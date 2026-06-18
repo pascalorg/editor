@@ -6,29 +6,29 @@ export type NodeDisplay = {
 }
 
 const TYPE_DEFAULTS: Record<string, NodeDisplay> = {
-  item: { icon: '/icons/furniture.png', label: 'Item' },
-  wall: { icon: '/icons/wall.png', label: 'Wall' },
-  door: { icon: '/icons/door.png', label: 'Door' },
-  window: { icon: '/icons/window.png', label: 'Window' },
-  slab: { icon: '/icons/floor.png', label: 'Slab' },
-  ceiling: { icon: '/icons/ceiling.png', label: 'Ceiling' },
-  column: { icon: '/icons/column.png', label: 'Column' },
-  elevator: { icon: '/icons/elevator.png', label: 'Elevator' },
-  fence: { icon: '/icons/fence.png', label: 'Fence' },
-  roof: { icon: '/icons/roof.png', label: 'Roof' },
-  'roof-segment': { icon: '/icons/roof.png', label: 'Roof segment' },
-  stair: { icon: '/icons/stair.png', label: 'Stair' },
-  'stair-segment': { icon: '/icons/stair.png', label: 'Stair segment' },
-  scan: { icon: '/icons/mesh.png', label: '3D Scan' },
-  guide: { icon: '/icons/floorplan.png', label: 'Guide image' },
+  item: { icon: '/icons/item.webp', label: 'Item' },
+  wall: { icon: '/icons/wall.webp', label: 'Wall' },
+  door: { icon: '/icons/door.webp', label: 'Door' },
+  window: { icon: '/icons/window.webp', label: 'Window' },
+  slab: { icon: '/icons/floor.webp', label: 'Slab' },
+  ceiling: { icon: '/icons/ceiling.webp', label: 'Ceiling' },
+  column: { icon: '/icons/column.webp', label: 'Column' },
+  elevator: { icon: '/icons/elevator.webp', label: 'Elevator' },
+  fence: { icon: '/icons/fence.webp', label: 'Fence' },
+  roof: { icon: '/icons/roof.webp', label: 'Roof' },
+  'roof-segment': { icon: '/icons/roof.webp', label: 'Roof segment' },
+  stair: { icon: '/icons/stairs.webp', label: 'Stair' },
+  'stair-segment': { icon: '/icons/stairs.webp', label: 'Stair segment' },
+  scan: { icon: '/icons/mesh.webp', label: '3D Scan' },
+  guide: { icon: '/icons/floorplan.webp', label: 'Guide image' },
   'cable-tray': { icon: '/icons/pipe.svg', label: 'Cable tray' },
-  ladder: { icon: '/icons/stairs.png', label: 'Ladder' },
-  'steel-beam': { icon: '/icons/column.png', label: 'Steel beam' },
+  ladder: { icon: '/icons/stairs.webp', label: 'Ladder' },
+  'steel-beam': { icon: '/icons/column.webp', label: 'Steel beam' },
 }
 
 export function getNodeDisplay(node: AnyNode | null | undefined): NodeDisplay {
-  if (!node) return { icon: '/icons/select.png', label: 'Selection' }
-  const fallback = TYPE_DEFAULTS[node.type] ?? { icon: '/icons/select.png', label: node.type }
+  if (!node) return { icon: '/icons/select.webp', label: 'Selection' }
+  const fallback = TYPE_DEFAULTS[node.type] ?? { icon: '/icons/select.webp', label: node.type }
   // Item nodes carry an asset with its own thumbnail/name
   if (node.type === 'item') {
     return {

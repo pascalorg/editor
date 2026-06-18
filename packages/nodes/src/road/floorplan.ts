@@ -2,9 +2,12 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getMaterialPresetByRef,
+  getMaterialSolidColorByRef,
   getWallCurveFrameAt,
   getWallCurveLength,
   getWallSurfacePolygon,
+  resolveMaterial,
 } from '@pascal-app/core'
 import type { RoadNode } from './schema'
 
@@ -19,6 +22,15 @@ function getRoadPolygon(node: RoadNode): FloorplanPoint[] | null {
     point.x,
     point.y,
   ])
+}
+
+function getRoadFloorplanFill(node: RoadNode): string {
+  const solidColor = getMaterialSolidColorByRef(node.materialPreset)
+  if (solidColor) return solidColor
+  const materialPreset = getMaterialPresetByRef(node.materialPreset)
+  if (materialPreset) return materialPreset.mapProperties.color
+  if (node.material) return resolveMaterial(node.material).color
+  return node.asphaltColor
 }
 
 export function buildRoadFloorplan(node: RoadNode, ctx: GeometryContext): FloorplanGeometry | null {
@@ -43,7 +55,7 @@ export function buildRoadFloorplan(node: RoadNode, ctx: GeometryContext): Floorp
     {
       kind: 'polygon',
       points: polygon,
-      fill: node.asphaltColor,
+      fill: getRoadFloorplanFill(node),
       stroke,
       strokeWidth: isActive ? 0.045 : 0.025,
       opacity: 0.92,

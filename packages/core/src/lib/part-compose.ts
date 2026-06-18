@@ -1,3 +1,4 @@
+import type { FamilyId, LayoutFamilyId } from './family-registry'
 import {
   angularStep,
   radialExtrudeRotationInHorizontalPlane,
@@ -93,6 +94,22 @@ export type PartComposeKind =
   | 'aircraft_vertical_stabilizer'
   | 'aircraft_horizontal_stabilizer'
   | 'aircraft_landing_gear'
+  | 'generic_body'
+  | 'generic_base'
+  | 'generic_panel'
+  | 'generic_handle'
+  | 'generic_spout'
+  | 'generic_control_panel'
+  | 'generic_display'
+  | 'generic_foot_set'
+  | 'generic_opening'
+  | 'generic_detail_accent'
+  | 'kiosk_body'
+  | 'kiosk_roof'
+  | 'kiosk_opening'
+  | 'kiosk_counter'
+  | 'kiosk_sign'
+  | 'kiosk_awning'
 
 export interface LoftedPanelSectionInput {
   width?: number
@@ -150,6 +167,7 @@ export interface PartComposePartInput {
   outletAngle?: number
   radius?: number
   diameter?: number
+  bendRadius?: number
   dimensions?: Record<string, unknown>
   height?: number
   width?: number
@@ -161,6 +179,8 @@ export interface PartComposePartInput {
   cornerRadius?: number
   cornerSegments?: number
   count?: number
+  doorCount?: number
+  legCount?: number
   ringCount?: number
   spokeCount?: number
   wireRadius?: number
@@ -229,6 +249,7 @@ export interface PartComposePartInput {
 export interface PartComposeInput {
   name?: string
   partName?: string
+  family?: string
   geometryBrief?: PrimitiveGeometryBrief
   position?: Vec3
   detail?: PartComposeDetail | string
@@ -246,7 +267,32 @@ export interface PartComposeInput {
   accentColor?: string
   autoComplete?: boolean
   enhanceVisualDetails?: boolean
+  registryPartPlan?: boolean
+  __registryPartPlan?: boolean
   parts?: PartComposePartInput[]
+}
+
+export interface PartSpec {
+  kind: PartComposeKind | string
+  family?: string
+  semanticRole?: string
+  dimensions?: {
+    length?: number
+    width?: number
+    depth?: number
+    height?: number
+    diameter?: number
+    radius?: number
+    thickness?: number
+  }
+  transform?: {
+    position?: Vec3
+    rotation?: Vec3
+  }
+  material?: PrimitiveMaterialInput
+  color?: string
+  attachTo?: string | number
+  constraints?: Record<string, unknown>
 }
 
 export interface PartBlueprintAssessment {
@@ -763,6 +809,99 @@ function normalizePartKind(kind: unknown): PartComposeKind | null {
     case 'bumpers':
     case 'car_bumper':
       return 'bar_pair'
+    case 'generic_body':
+    case 'generic_main_body':
+    case 'main_body':
+    case 'equipment_body':
+    case 'building_body':
+    case 'furniture_body':
+    case 'cabinet_body':
+    case 'housing':
+    case 'shell':
+      return 'generic_body'
+    case 'generic_base':
+    case 'support_base':
+    case 'platform_base':
+    case 'base_slab':
+    case 'cup_platform':
+    case 'generic_platform':
+      return 'generic_base'
+    case 'generic_panel':
+    case 'panel':
+    case 'front_panel':
+    case 'side_panel':
+    case 'access_panel':
+      return 'generic_panel'
+    case 'generic_handle':
+    case 'handle':
+    case 'pull_handle':
+    case 'door_handle':
+      return 'generic_handle'
+    case 'generic_spout':
+    case 'spout':
+    case 'nozzle_spout':
+    case 'coffee_spout':
+    case 'dispense_spout':
+      return 'generic_spout'
+    case 'generic_control_panel':
+    case 'control_detail':
+    case 'buttons':
+    case 'button_panel':
+      return 'generic_control_panel'
+    case 'generic_display':
+    case 'display':
+    case 'screen':
+    case 'readout':
+      return 'generic_display'
+    case 'generic_foot_set':
+    case 'foot_set':
+      return 'generic_foot_set'
+    case 'generic_opening':
+    case 'opening':
+    case 'door_opening':
+    case 'window_opening':
+      return 'generic_opening'
+    case 'generic_detail_accent':
+    case 'detail_accent':
+    case 'accent':
+    case 'trim':
+      return 'generic_detail_accent'
+    case 'kiosk_body':
+    case 'booth_body':
+    case 'small_building_body':
+    case 'stall_body':
+    case 'newsstand_body':
+      return 'kiosk_body'
+    case 'kiosk_roof':
+    case 'booth_roof':
+    case 'small_building_roof':
+    case 'pavilion_roof':
+    case 'shed_roof':
+      return 'kiosk_roof'
+    case 'kiosk_opening':
+    case 'service_window':
+    case 'serving_window':
+    case 'ticket_window':
+    case 'booth_window':
+    case 'kiosk_door':
+      return 'kiosk_opening'
+    case 'kiosk_counter':
+    case 'service_counter':
+    case 'serving_counter':
+    case 'sales_counter':
+    case 'vendor_counter':
+      return 'kiosk_counter'
+    case 'kiosk_sign':
+    case 'sign_panel':
+    case 'shop_sign':
+    case 'booth_sign':
+    case 'name_sign':
+      return 'kiosk_sign'
+    case 'kiosk_awning':
+    case 'awning':
+    case 'canopy':
+    case 'sunshade':
+      return 'kiosk_awning'
     case 'airfoil_blade':
     case 'airfoil_blades':
     case 'propeller_blade':
@@ -1296,6 +1435,10 @@ function normalizePartComposeInput(input: PartComposeInput): PartComposeInput {
     name: input.name ?? input.partName,
     parts: input.parts?.map(normalizePartInput),
   })
+}
+
+function isRegistryPartPlanInput(input: PartComposeInput): boolean {
+  return input.registryPartPlan === true || input.__registryPartPlan === true
 }
 
 function vehicleLength(part: PartComposePartInput, style: VehicleStyle = 'sedan'): number {
@@ -3436,7 +3579,10 @@ function composeAircraftEngine(
   const nacelleMat = partMaterial(part, material(input.metalColor ?? '#64748b', 0.34, 0.56))
   const intakeMat = material(input.darkColor ?? '#111827', 0.42, 0.2)
   const fanMat = material(input.secondaryColor ?? '#cbd5e1', 0.3, 0.65)
-  const offsets = count === 1 ? [0] : [-0.5, 0.5].slice(0, count).map((v) => v * spacing)
+  const offsets =
+    count === 1
+      ? [0]
+      : Array.from({ length: count }, (_, index) => (index - (count - 1) / 2) * spacing)
   const shapes: PrimitiveShapeInput[] = []
   offsets.forEach((zOffset, index) => {
     const nacelleCenter: Vec3 = [center[0], center[1], center[2] + zOffset]
@@ -3976,7 +4122,16 @@ function composeConveyorFrame(
     },
   ]
 
-  for (const x of [-0.42, 0.42]) {
+  const legPairs = clampInt(
+    part.legCount != null ? Math.ceil(part.legCount / 2) : undefined,
+    2,
+    1,
+    8,
+  )
+  const legOffsets = Array.from({ length: legPairs }, (_, index) =>
+    legPairs === 1 ? 0 : -0.44 + (0.88 * index) / (legPairs - 1),
+  )
+  for (const x of legOffsets) {
     for (const z of [-0.5, 0.5]) {
       shapes.push({
         kind: 'cylinder',
@@ -5581,6 +5736,470 @@ function composeBumper(
 
   return shapes
 }
+function genericPartRole(part: PartComposePartInput, fallback: string): string {
+  return normalizedRoleToken(part.semanticRole) || fallback
+}
+
+function composeGenericBody(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const length = clamp(part.length, input.length ?? 1, 0.08, 8)
+  const width = clamp(part.width ?? part.depth, input.width ?? input.depth ?? 0.65, 0.05, 5)
+  const height = clamp(part.height, input.height ?? 0.8, 0.05, 5)
+  const center = add(origin, part.position ?? [0, height * 0.5, 0])
+  const mat = partMaterial(part, material(part.primaryColor ?? input.primaryColor ?? '#8b9aae'))
+  return applyPartRotation(
+    [
+      {
+        kind: 'box',
+        name: part.name ?? `${input.name ?? 'generic object'} body`,
+        semanticRole: genericPartRole(part, 'main_body'),
+        semanticGroup: part.semanticGroup ?? 'generic_parts',
+        sourcePartKind: 'generic_body',
+        position: center,
+        length,
+        width,
+        height,
+        cornerRadius: clamp(part.cornerRadius, Math.min(length, width, height) * 0.06, 0, 0.5),
+        cornerSegments: part.cornerSegments ?? 5,
+        material: mat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeGenericBase(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const length = clamp(part.length, (input.length ?? 1) * 1.08, 0.08, 8)
+  const width = clamp(
+    part.width ?? part.depth,
+    (input.width ?? input.depth ?? 0.65) * 1.08,
+    0.05,
+    5,
+  )
+  const thickness = clamp(part.thickness ?? part.height, (input.height ?? 0.8) * 0.08, 0.01, 0.8)
+  const center = add(origin, part.position ?? [0, thickness * 0.5, 0])
+  const mat = partMaterial(part, material(part.darkColor ?? input.darkColor ?? '#1f2937', 0.66))
+  return applyPartRotation(
+    [
+      {
+        kind: 'rounded-panel',
+        name: part.name ?? `${input.name ?? 'generic object'} base`,
+        semanticRole: genericPartRole(part, 'support_base'),
+        semanticGroup: part.semanticGroup ?? 'generic_parts',
+        sourcePartKind: 'generic_base',
+        position: center,
+        length,
+        width,
+        thickness,
+        cornerRadius: clamp(part.cornerRadius, Math.min(length, width) * 0.04, 0, 0.35),
+        cornerSegments: part.cornerSegments ?? 5,
+        material: mat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeGenericPanel(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+  kind:
+    | 'generic_panel'
+    | 'generic_control_panel'
+    | 'generic_display'
+    | 'generic_opening'
+    | 'generic_detail_accent',
+): PrimitiveShapeInput[] {
+  const objectLength = input.length ?? 1
+  const objectWidth = input.width ?? input.depth ?? 0.65
+  const objectHeight = input.height ?? 0.8
+  const length = clamp(
+    part.length,
+    kind === 'generic_detail_accent' ? objectLength * 0.24 : objectLength * 0.3,
+    0.02,
+    4,
+  )
+  const panelHeight = clamp(
+    part.height ?? part.width,
+    kind === 'generic_opening' ? objectHeight * 0.34 : objectHeight * 0.22,
+    0.02,
+    3,
+  )
+  const thickness = clamp(part.thickness ?? part.depth, 0.025, 0.002, 0.4)
+  const fallbackZ = objectWidth * 0.51
+  const fallbackY =
+    kind === 'generic_opening'
+      ? objectHeight * 0.36
+      : kind === 'generic_detail_accent'
+        ? objectHeight * 0.68
+        : objectHeight * 0.62
+  const center = add(
+    origin,
+    part.position ?? [
+      kind === 'generic_detail_accent' ? objectLength * 0.18 : 0,
+      fallbackY,
+      fallbackZ,
+    ],
+  )
+  const fallbackColor =
+    kind === 'generic_display'
+      ? '#0f172a'
+      : kind === 'generic_opening'
+        ? '#111827'
+        : kind === 'generic_control_panel'
+          ? '#38bdf8'
+          : '#94a3b8'
+  const mat = partMaterial(
+    part,
+    material(part.color ?? part.accentColor ?? input.accentColor ?? fallbackColor, 0.4),
+  )
+  return applyPartRotation(
+    [
+      {
+        kind: 'rounded-panel',
+        name:
+          part.name ??
+          `${input.name ?? 'generic object'} ${kind.replace(/^generic_/, '').replace(/_/g, ' ')}`,
+        semanticRole: genericPartRole(
+          part,
+          kind === 'generic_control_panel'
+            ? 'control_detail'
+            : kind === 'generic_display'
+              ? 'display'
+              : kind === 'generic_opening'
+                ? 'opening'
+                : kind === 'generic_detail_accent'
+                  ? 'detail_accent'
+                  : 'panel',
+        ),
+        semanticGroup: part.semanticGroup ?? 'generic_parts',
+        sourcePartKind: kind,
+        position: center,
+        length,
+        width: panelHeight,
+        thickness,
+        cornerRadius: clamp(part.cornerRadius, Math.min(length, panelHeight) * 0.06, 0, 0.2),
+        cornerSegments: part.cornerSegments ?? 4,
+        material: mat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeGenericHandle(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const objectWidth = input.width ?? input.depth ?? 0.65
+  const objectHeight = input.height ?? 0.8
+  const length = clamp(part.length, 0.22, 0.03, 2)
+  const radius = clamp(part.radius ?? part.wireRadius, 0.018, 0.004, 0.12)
+  const center = add(origin, part.position ?? [0, objectHeight * 0.46, objectWidth * 0.56])
+  return applyPartRotation(
+    [
+      {
+        kind: 'capsule',
+        name: part.name ?? `${input.name ?? 'generic object'} handle`,
+        semanticRole: genericPartRole(part, 'handle'),
+        semanticGroup: part.semanticGroup ?? 'generic_parts',
+        sourcePartKind: 'generic_handle',
+        position: center,
+        axis: 'x',
+        radius,
+        height: length,
+        radialSegments: 12,
+        capSegments: 4,
+        material: partMaterial(part, material(input.darkColor ?? '#111827', 0.62, 0.12)),
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeGenericSpout(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const objectLength = input.length ?? 1
+  const objectWidth = input.width ?? input.depth ?? 0.65
+  const objectHeight = input.height ?? 0.8
+  const radius = clamp(part.radius, Math.min(objectLength, objectWidth) * 0.035, 0.004, 0.2)
+  const length = clamp(part.length ?? part.depth ?? part.height, objectWidth * 0.22, 0.02, 1.2)
+  const center = add(origin, part.position ?? [0, objectHeight * 0.52, objectWidth * 0.58])
+  return applyPartRotation(
+    [
+      {
+        kind: 'cylinder',
+        name: part.name ?? `${input.name ?? 'generic object'} spout`,
+        semanticRole: genericPartRole(part, 'spout'),
+        semanticGroup: part.semanticGroup ?? 'generic_parts',
+        sourcePartKind: 'generic_spout',
+        position: center,
+        axis: partAxis(part.axis, 'z'),
+        radius,
+        height: length,
+        radialSegments: 16,
+        material: partMaterial(part, material(input.darkColor ?? '#111827', 0.5, 0.24)),
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeGenericFootSet(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const objectLength = input.length ?? 1
+  const objectWidth = input.width ?? input.depth ?? 0.65
+  const radius = clamp(part.radius, 0.035, 0.006, 0.18)
+  const height = clamp(part.height, 0.08, 0.02, 0.8)
+  const inset = clamp(part.cornerInset, radius * 2.2, 0, Math.min(objectLength, objectWidth) * 0.45)
+  const center = add(origin, part.position ?? [0, height * 0.5, 0])
+  const xs = [-objectLength / 2 + inset, objectLength / 2 - inset]
+  const zs = [-objectWidth / 2 + inset, objectWidth / 2 - inset]
+  const mat = partMaterial(part, material(input.darkColor ?? '#111827', 0.66, 0.08))
+  const shapes: PrimitiveShapeInput[] = []
+  for (const x of xs) {
+    for (const z of zs) {
+      shapes.push({
+        kind: 'cylinder',
+        name: part.name ?? `${input.name ?? 'generic object'} foot`,
+        semanticRole: genericPartRole(part, 'support_foot'),
+        semanticGroup: part.semanticGroup ?? 'generic_parts',
+        sourcePartKind: 'generic_foot_set',
+        position: [center[0] + x, center[1], center[2] + z],
+        axis: 'y',
+        radius,
+        height,
+        radialSegments: 10,
+        material: mat,
+      })
+    }
+  }
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function kioskTotalDimensions(input: PartComposeInput) {
+  const length = clamp(input.length, 1.8, 0.4, 8)
+  const width = clamp(input.width ?? input.depth, 1.2, 0.3, 5)
+  const height = clamp(input.height, 2.1, 0.7, 5)
+  return { length, width, height }
+}
+
+function composeKioskBody(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const total = kioskTotalDimensions(input)
+  const length = clamp(part.length, total.length, 0.4, 8)
+  const width = clamp(part.width ?? part.depth, total.width, 0.3, 5)
+  const height = clamp(part.height, total.height * 0.78, 0.4, 5)
+  const center = add(origin, part.position ?? [0, height * 0.5, 0])
+  const mat = partMaterial(part, material(part.primaryColor ?? input.primaryColor ?? '#d1d5db'))
+  return applyPartRotation(
+    [
+      {
+        kind: 'box',
+        name: part.name ?? `${input.name ?? 'kiosk'} body`,
+        semanticRole: part.semanticRole ?? 'kiosk_body',
+        semanticGroup: part.semanticGroup ?? 'kiosk',
+        sourcePartKind: 'kiosk_body',
+        position: center,
+        length,
+        width,
+        height,
+        cornerRadius: clamp(part.cornerRadius, Math.min(length, width, height) * 0.025, 0, 0.3),
+        cornerSegments: part.cornerSegments ?? 3,
+        material: mat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeKioskRoof(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const total = kioskTotalDimensions(input)
+  const bodyHeight = total.height * 0.78
+  const length = clamp(part.length, total.length * 1.16, 0.4, 9)
+  const width = clamp(part.width ?? part.depth, total.width * 1.18, 0.3, 6)
+  const height = clamp(part.height ?? part.thickness, total.height * 0.16, 0.04, 1.2)
+  const center = add(origin, part.position ?? [0, bodyHeight + height * 0.5, 0])
+  const mat = partMaterial(part, material(part.color ?? input.secondaryColor ?? '#7f1d1d'))
+  return applyPartRotation(
+    [
+      {
+        kind: part.variant === 'flat' ? 'box' : 'wedge',
+        name: part.name ?? `${input.name ?? 'kiosk'} roof`,
+        semanticRole: part.semanticRole ?? 'roof',
+        semanticGroup: part.semanticGroup ?? 'kiosk',
+        sourcePartKind: 'kiosk_roof',
+        position: center,
+        length,
+        width,
+        height,
+        material: mat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeKioskOpening(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const total = kioskTotalDimensions(input)
+  const length = clamp(part.length, total.length * 0.42, 0.08, 5)
+  const panelHeight = clamp(part.height ?? part.width, total.height * 0.34, 0.08, 4)
+  const thickness = clamp(part.thickness ?? part.depth, 0.035, 0.004, 0.5)
+  const center = add(origin, part.position ?? [0, total.height * 0.42, total.width * 0.515])
+  const mat = partMaterial(part, material(part.color ?? input.darkColor ?? '#111827', 0.58, 0.04))
+  return applyPartRotation(
+    [
+      {
+        kind: 'rounded-panel',
+        name: part.name ?? `${input.name ?? 'kiosk'} service opening`,
+        semanticRole: part.semanticRole ?? 'opening',
+        semanticGroup: part.semanticGroup ?? 'kiosk',
+        sourcePartKind: 'kiosk_opening',
+        position: center,
+        length,
+        width: panelHeight,
+        thickness,
+        cornerRadius: clamp(part.cornerRadius, Math.min(length, panelHeight) * 0.05, 0, 0.25),
+        cornerSegments: part.cornerSegments ?? 4,
+        material: mat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeKioskCounter(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const total = kioskTotalDimensions(input)
+  const length = clamp(part.length, total.length * 0.62, 0.08, 6)
+  const width = clamp(part.width ?? part.depth, total.width * 0.2, 0.04, 2)
+  const thickness = clamp(part.thickness ?? part.height, total.height * 0.04, 0.02, 0.6)
+  const center = add(origin, part.position ?? [0, total.height * 0.27, total.width * 0.62])
+  const mat = partMaterial(part, material(part.color ?? input.metalColor ?? '#9ca3af', 0.45, 0.18))
+  return applyPartRotation(
+    [
+      {
+        kind: 'rounded-panel',
+        name: part.name ?? `${input.name ?? 'kiosk'} service counter`,
+        semanticRole: part.semanticRole ?? 'service_counter',
+        semanticGroup: part.semanticGroup ?? 'kiosk',
+        sourcePartKind: 'kiosk_counter',
+        position: center,
+        length,
+        width,
+        thickness,
+        cornerRadius: clamp(part.cornerRadius, Math.min(length, width) * 0.04, 0, 0.2),
+        cornerSegments: part.cornerSegments ?? 4,
+        material: mat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeKioskSign(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const total = kioskTotalDimensions(input)
+  const length = clamp(part.length, total.length * 0.64, 0.08, 6)
+  const panelHeight = clamp(part.height ?? part.width, total.height * 0.12, 0.04, 1.5)
+  const thickness = clamp(part.thickness ?? part.depth, 0.035, 0.004, 0.4)
+  const center = add(origin, part.position ?? [0, total.height * 0.72, total.width * 0.54])
+  const mat = partMaterial(part, material(part.accentColor ?? input.accentColor ?? '#facc15', 0.32))
+  return applyPartRotation(
+    [
+      {
+        kind: 'rounded-panel',
+        name: part.name ?? `${input.name ?? 'kiosk'} sign panel`,
+        semanticRole: part.semanticRole ?? 'sign_panel',
+        semanticGroup: part.semanticGroup ?? 'kiosk',
+        sourcePartKind: 'kiosk_sign',
+        position: center,
+        length,
+        width: panelHeight,
+        thickness,
+        cornerRadius: clamp(part.cornerRadius, Math.min(length, panelHeight) * 0.08, 0, 0.2),
+        cornerSegments: part.cornerSegments ?? 4,
+        material: mat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeKioskAwning(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const total = kioskTotalDimensions(input)
+  const length = clamp(part.length, total.length * 0.72, 0.08, 7)
+  const width = clamp(part.width ?? part.depth, total.width * 0.32, 0.04, 2.4)
+  const thickness = clamp(part.thickness ?? part.height, total.height * 0.04, 0.02, 0.8)
+  const center = add(origin, part.position ?? [0, total.height * 0.58, total.width * 0.64])
+  const mat = partMaterial(part, material(part.color ?? input.secondaryColor ?? '#ef4444', 0.48))
+  return applyPartRotation(
+    [
+      {
+        kind: 'wedge',
+        name: part.name ?? `${input.name ?? 'kiosk'} front awning`,
+        semanticRole: part.semanticRole ?? 'awning',
+        semanticGroup: part.semanticGroup ?? 'kiosk',
+        sourcePartKind: 'kiosk_awning',
+        position: center,
+        rotation: part.rotation ?? [0, 0, 0],
+        length,
+        width,
+        height: thickness,
+        material: mat,
+      },
+    ],
+    center,
+    undefined,
+  )
+}
+
 function composeGearboxBody(
   input: PartComposeInput,
   part: PartComposePartInput,
@@ -5748,6 +6367,19 @@ function composeHeatExchanger(
       radialSegments: ringSegments(input.detail),
       material: mat,
     },
+    ...[-0.36, -0.12, 0.12, 0.36].map((offset): PrimitiveShapeInput => ({
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} heat exchanger tube bundle`,
+      position:
+        axis === 'x'
+          ? [center[0], center[1] + radius * offset, center[2] + radius * 0.18]
+          : [center[0] + radius * offset, center[1], center[2] + radius * 0.18],
+      axis,
+      radius: radius * 0.035,
+      height: length * 0.86,
+      radialSegments: 10,
+      material: material(input.metalColor ?? '#cbd5e1', 0.3, 0.75),
+    })),
     ...composePipePort(
       input,
       {
@@ -5819,6 +6451,16 @@ function composeAgitatorTank(
       radius: radius * 0.035,
       height: height * 0.9,
       radialSegments: 12,
+      material: metal,
+    },
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} agitator hub`,
+      position: [center[0], center[1] - height * 0.22, center[2]],
+      axis: 'y',
+      radius: radius * 0.12,
+      height: radius * 0.16,
+      radialSegments: 18,
       material: metal,
     },
   ]
@@ -6177,6 +6819,7 @@ function composeElectricalCabinet(
   const dark = material(input.darkColor ?? '#334155', 0.48, 0.22)
   const warning = material('#f59e0b', 0.5, 0.02)
   const metal = material(input.metalColor ?? '#cbd5e1', 0.28, 0.74)
+  const doorCount = clampInt(part.doorCount, 1, 1, 4)
   const shapes: PrimitiveShapeInput[] = [
     {
       kind: 'box',
@@ -6202,26 +6845,6 @@ function composeElectricalCabinet(
     },
     {
       kind: 'box',
-      name: `${part.name ?? input.name ?? 'object'} electrical cabinet door seam`,
-      position: [center[0] - length * 0.02, center[1], center[2] + width * 0.54],
-      length: length * 0.012,
-      width: width * 0.015,
-      height: height * 0.82,
-      material: dark,
-    },
-    {
-      kind: 'capsule',
-      name: `${part.name ?? input.name ?? 'object'} electrical cabinet handle`,
-      position: [center[0] + length * 0.33, center[1] + height * 0.03, center[2] + width * 0.565],
-      axis: 'y',
-      radius: length * 0.018,
-      height: height * 0.2,
-      radialSegments: 10,
-      capSegments: 3,
-      material: metal,
-    },
-    {
-      kind: 'box',
       name: `${part.name ?? input.name ?? 'object'} electrical cabinet warning label`,
       position: [center[0] - length * 0.22, center[1] + height * 0.22, center[2] + width * 0.57],
       length: length * 0.2,
@@ -6243,6 +6866,38 @@ function composeElectricalCabinet(
       material: metal,
     },
   ]
+
+  for (let i = 1; i < doorCount; i += 1) {
+    const x = center[0] - length * 0.46 + (length * 0.92 * i) / doorCount
+    shapes.push({
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'object'} electrical cabinet door seam ${i}`,
+      position: [x, center[1], center[2] + width * 0.54],
+      length: length * 0.012,
+      width: width * 0.015,
+      height: height * 0.82,
+      material: dark,
+    })
+  }
+
+  for (let i = 0; i < doorCount; i += 1) {
+    const doorCenterX = center[0] - length * 0.46 + (length * 0.92 * (i + 0.5)) / doorCount
+    shapes.push({
+      kind: 'capsule',
+      name: `${part.name ?? input.name ?? 'object'} electrical cabinet handle ${i + 1}`,
+      position: [
+        doorCenterX + (length * 0.28) / doorCount,
+        center[1] + height * 0.03,
+        center[2] + width * 0.565,
+      ],
+      axis: 'y',
+      radius: length * 0.018,
+      height: height * 0.2,
+      radialSegments: 10,
+      capSegments: 3,
+      material: metal,
+    })
+  }
 
   const slatCount = clampInt(part.slatCount ?? part.count, 5, 2, 10)
   for (let i = 0; i < slatCount; i += 1) {
@@ -6319,7 +6974,12 @@ function composePipeElbow(
   origin: Vec3,
 ): PrimitiveShapeInput[] {
   const radius = clamp(part.radius, 0.055, 0.008, 0.45)
-  const bendRadius = clamp(part.length ?? part.depth, radius * 4.2, radius * 1.4, 2)
+  const bendRadius = clamp(
+    part.bendRadius ?? part.length ?? part.depth,
+    radius * 4.2,
+    radius * 1.4,
+    2,
+  )
   const center = add(origin, part.position ?? [0, 0.55, 0])
   const mat = partMaterial(part, material(input.primaryColor ?? '#64748b', 0.42, 0.42))
   const shapes: PrimitiveShapeInput[] = [
@@ -6644,6 +7304,82 @@ function partHalfExtents(part: PartComposePartInput, kind: PartComposeKind | nul
         clamp(part.width, 0.32, gearRadius * 3, 1.4) / 2 + gearRadius,
       ]
     }
+    case 'generic_body':
+      return [
+        clamp(part.length, 1, 0.08, 8) / 2,
+        clamp(part.height, 0.8, 0.05, 5) / 2,
+        clamp(part.width ?? part.depth, 0.65, 0.05, 5) / 2,
+      ]
+    case 'generic_base':
+      return [
+        clamp(part.length, 1.08, 0.08, 8) / 2,
+        clamp(part.thickness ?? part.height, 0.08, 0.01, 0.8) / 2,
+        clamp(part.width ?? part.depth, 0.72, 0.05, 5) / 2,
+      ]
+    case 'generic_panel':
+    case 'generic_control_panel':
+    case 'generic_display':
+    case 'generic_opening':
+    case 'generic_detail_accent':
+      return [
+        clamp(part.length, 0.3, 0.02, 4) / 2,
+        clamp(part.height ?? part.width, 0.22, 0.02, 3) / 2,
+        clamp(part.thickness ?? part.depth, 0.025, 0.002, 0.4) / 2,
+      ]
+    case 'generic_handle':
+      return [
+        clamp(part.length, 0.22, 0.03, 2) / 2,
+        clamp(part.radius, 0.018, 0.004, 0.12),
+        clamp(part.depth ?? part.width, 0.05, 0.01, 0.5) / 2,
+      ]
+    case 'generic_spout':
+      return [
+        clamp(part.radius, 0.035, 0.004, 0.2),
+        clamp(part.radius, 0.035, 0.004, 0.2),
+        clamp(part.length ?? part.depth ?? part.height, 0.2, 0.02, 1.2) / 2,
+      ]
+    case 'generic_foot_set':
+      return [
+        clamp(part.length, 0.9, 0.08, 8) / 2,
+        clamp(part.height, 0.08, 0.02, 0.8) / 2,
+        clamp(part.width ?? part.depth, 0.55, 0.05, 5) / 2,
+      ]
+    case 'kiosk_body':
+      return [
+        clamp(part.length, 1.8, 0.4, 8) / 2,
+        clamp(part.height, 1.7, 0.4, 5) / 2,
+        clamp(part.width ?? part.depth, 1.2, 0.3, 5) / 2,
+      ]
+    case 'kiosk_roof':
+      return [
+        clamp(part.length, 2.1, 0.4, 9) / 2,
+        clamp(part.height ?? part.thickness, 0.28, 0.04, 1.2) / 2,
+        clamp(part.width ?? part.depth, 1.45, 0.3, 6) / 2,
+      ]
+    case 'kiosk_opening':
+      return [
+        clamp(part.length, 0.8, 0.08, 5) / 2,
+        clamp(part.height ?? part.width, 0.75, 0.08, 4) / 2,
+        clamp(part.thickness ?? part.depth, 0.035, 0.004, 0.5) / 2,
+      ]
+    case 'kiosk_counter':
+      return [
+        clamp(part.length, 1, 0.08, 6) / 2,
+        clamp(part.thickness ?? part.height, 0.08, 0.02, 0.6) / 2,
+        clamp(part.width ?? part.depth, 0.28, 0.04, 2) / 2,
+      ]
+    case 'kiosk_sign':
+      return [
+        clamp(part.length, 1, 0.08, 6) / 2,
+        clamp(part.height ?? part.width, 0.26, 0.04, 1.5) / 2,
+        clamp(part.thickness ?? part.depth, 0.035, 0.004, 0.4) / 2,
+      ]
+    case 'kiosk_awning':
+      return [
+        clamp(part.length, 1.25, 0.08, 7) / 2,
+        clamp(part.thickness ?? part.height, 0.08, 0.02, 0.8) / 2,
+        clamp(part.width ?? part.depth, 0.45, 0.04, 2.4) / 2,
+      ]
     case 'lofted_panel':
       return [
         clamp(part.length, 0.8, 0.08, 6) / 2,
@@ -6781,7 +7517,12 @@ function partHalfExtents(part: PartComposePartInput, kind: PartComposeKind | nul
     }
     case 'pipe_elbow': {
       const pipeRadius = clamp(part.radius, 0.055, 0.008, 0.45)
-      const bendRadius = clamp(part.length ?? part.depth, pipeRadius * 4.2, pipeRadius * 1.4, 2)
+      const bendRadius = clamp(
+        part.bendRadius ?? part.length ?? part.depth,
+        pipeRadius * 4.2,
+        pipeRadius * 1.4,
+        2,
+      )
       return [bendRadius / 2 + pipeRadius, pipeRadius, bendRadius / 2 + pipeRadius]
     }
     case 'cylindrical_tank':
@@ -6947,7 +7688,12 @@ function connectionPointOffset(
     }
     case 'pipe_elbow': {
       const elbowRadius = clamp(part.radius, 0.055, 0.008, 0.45)
-      const bendRadius = clamp(part.length ?? part.depth, elbowRadius * 4.2, elbowRadius * 1.4, 2)
+      const bendRadius = clamp(
+        part.bendRadius ?? part.length ?? part.depth,
+        elbowRadius * 4.2,
+        elbowRadius * 1.4,
+        2,
+      )
       if (
         normalizedPoint === 'start' ||
         normalizedPoint === 'inlet' ||
@@ -7385,6 +8131,242 @@ function resolveConnectedParts(parts: PartComposePartInput[]): PartComposePartIn
   })
 
   return resolved
+}
+
+export interface PartRelationshipLayoutInput {
+  parts: PartComposePartInput[]
+}
+
+export interface BoundingBox {
+  min: Vec3
+  max: Vec3
+  size: Vec3
+}
+
+export interface LayoutAnchor {
+  id: string
+  role: string
+  position: Vec3
+}
+
+export interface PartPlacement {
+  partId: string
+  kind: string
+  semanticRole?: string
+  anchorId?: string
+  position: Vec3
+}
+
+export interface LayoutPlan {
+  family: FamilyId | string
+  layoutFamily?: LayoutFamilyId
+  anchors: LayoutAnchor[]
+  placements: PartPlacement[]
+  bounds: BoundingBox
+  parts: PartComposePartInput[]
+}
+
+export interface LayoutProfileInput {
+  family: FamilyId | string
+  layoutFamily?: LayoutFamilyId
+  primarySemanticRole?: string
+}
+
+export interface LayoutDimensions {
+  length?: number
+  width?: number
+  height?: number
+  diameter?: number
+}
+
+export function resolvePlacedParts(plan: PartRelationshipLayoutInput): PartComposePartInput[] {
+  return resolveConnectedParts(expandArrayParts(expandAroundDistributedParts(plan.parts)))
+}
+
+function layoutNumber(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function layoutKind(part: PartComposePartInput) {
+  return String(part.kind ?? part.partType ?? part.type ?? part.id ?? 'part')
+}
+
+function layoutRole(part: PartComposePartInput) {
+  return typeof part.semanticRole === 'string' && part.semanticRole.trim()
+    ? part.semanticRole.trim()
+    : layoutKind(part)
+}
+
+function inferLayoutFamily(profile: LayoutProfileInput): LayoutFamilyId | undefined {
+  if (profile.layoutFamily) return profile.layoutFamily
+  switch (profile.family) {
+    case 'pump':
+    case 'compressor':
+    case 'fan':
+    case 'fluid_machine':
+      return 'rotating_machine_layout'
+    case 'tank':
+    case 'reactor':
+    case 'process_equipment':
+    case 'heat_exchanger':
+      return 'vessel_layout'
+    case 'conveyor':
+    case 'grate_cooler':
+    case 'material_handling':
+      return 'linear_transport_layout'
+    case 'machine_tool':
+    case 'electrical':
+    case 'kiosk':
+    case 'forming_machine':
+      return 'box_enclosure_layout'
+    default:
+      return undefined
+  }
+}
+
+function anchorForRole(layoutFamily: LayoutFamilyId | undefined, role: string) {
+  const normalized = role.toLowerCase()
+  if (layoutFamily === 'rotating_machine_layout') {
+    if (/base|skid|support/.test(normalized)) return 'base'
+    if (/motor|drive/.test(normalized)) return 'drive'
+    if (/casing|volute|body|compressor/.test(normalized)) return 'process_body'
+    if (/inlet|suction/.test(normalized)) return 'inlet'
+    if (/outlet|discharge/.test(normalized)) return 'outlet'
+  }
+  if (layoutFamily === 'vessel_layout') {
+    if (/shell|vessel|tank|reactor|body/.test(normalized)) return 'shell'
+    if (/support|base|skid/.test(normalized)) return 'support'
+    if (/top|inlet|feed|manway/.test(normalized)) return 'top_nozzle'
+    if (/drain|outlet|discharge/.test(normalized)) return 'side_nozzle'
+    if (/ladder|platform|access/.test(normalized)) return 'access'
+  }
+  if (layoutFamily === 'linear_transport_layout') {
+    if (/frame|support|leg/.test(normalized)) return 'frame'
+    if (/roller|flight|slat/.test(normalized)) return 'repeaters'
+    if (/belt|surface|trough|cover/.test(normalized)) return 'surface'
+    if (/motor|drive/.test(normalized)) return 'drive'
+  }
+  if (layoutFamily === 'box_enclosure_layout' || layoutFamily === 'generic_industrial_layout') {
+    if (/base|skid|foot/.test(normalized)) return 'base'
+    if (/body|enclosure|cabinet|chamber|frame/.test(normalized)) return 'body'
+    if (/control|display|screen/.test(normalized)) return 'controls'
+    if (/panel|door|window|opening|plate/.test(normalized)) return 'front_panel'
+    if (/vent|label|nameplate|warning/.test(normalized)) return 'details'
+  }
+  return 'body'
+}
+
+function layoutAnchors(
+  layoutFamily: LayoutFamilyId | undefined,
+  dimensions: Required<LayoutDimensions>,
+) {
+  const length = dimensions.length
+  const width = dimensions.width
+  const height = dimensions.height
+  const rotating: LayoutAnchor[] = [
+    { id: 'base', role: 'support_base', position: [0, height * 0.08, 0] },
+    { id: 'drive', role: 'drive_motor', position: [-length * 0.25, height * 0.42, 0] },
+    { id: 'process_body', role: 'main_casing', position: [length * 0.18, height * 0.42, 0] },
+    { id: 'inlet', role: 'inlet_port', position: [length * 0.35, height * 0.42, width * 0.45] },
+    { id: 'outlet', role: 'outlet_port', position: [length * 0.22, height * 0.68, 0] },
+  ]
+  const vessel: LayoutAnchor[] = [
+    { id: 'shell', role: 'vessel_shell', position: [0, height * 0.52, 0] },
+    { id: 'support', role: 'support_base', position: [0, height * 0.08, 0] },
+    { id: 'top_nozzle', role: 'top_nozzle', position: [0, height * 1.03, 0] },
+    { id: 'side_nozzle', role: 'side_nozzle', position: [width * 0.48, height * 0.42, 0] },
+    { id: 'access', role: 'access_platform', position: [-width * 0.55, height * 0.5, 0] },
+  ]
+  const linear: LayoutAnchor[] = [
+    { id: 'frame', role: 'transport_frame', position: [0, height * 0.42, 0] },
+    { id: 'repeaters', role: 'repeating_elements', position: [0, height * 0.7, 0] },
+    { id: 'surface', role: 'transport_surface', position: [0, height * 0.75, 0] },
+    { id: 'drive', role: 'drive_motor', position: [-length * 0.44, height * 0.42, 0] },
+  ]
+  const box: LayoutAnchor[] = [
+    { id: 'base', role: 'support_base', position: [0, height * 0.06, 0] },
+    { id: 'body', role: 'enclosure_body', position: [0, height * 0.52, 0] },
+    { id: 'front_panel', role: 'front_panel', position: [0, height * 0.55, width * 0.51] },
+    {
+      id: 'controls',
+      role: 'control_panel',
+      position: [length * 0.32, height * 0.58, width * 0.53],
+    },
+    {
+      id: 'details',
+      role: 'detail_elements',
+      position: [-length * 0.3, height * 0.68, width * 0.53],
+    },
+  ]
+  switch (layoutFamily) {
+    case 'rotating_machine_layout':
+      return rotating
+    case 'vessel_layout':
+      return vessel
+    case 'linear_transport_layout':
+      return linear
+    case 'box_enclosure_layout':
+    case 'generic_industrial_layout':
+      return box
+    default:
+      return box
+  }
+}
+
+function resolveLayoutPlan(
+  profile: LayoutProfileInput,
+  parts: readonly PartComposePartInput[],
+  dimensions: LayoutDimensions = {},
+): LayoutPlan {
+  const resolvedDimensions: Required<LayoutDimensions> = {
+    length: layoutNumber(dimensions.length, layoutNumber(dimensions.diameter, 1.6)),
+    width: layoutNumber(dimensions.width, layoutNumber(dimensions.diameter, 0.8)),
+    height: layoutNumber(dimensions.height, 1.1),
+    diameter: layoutNumber(dimensions.diameter, layoutNumber(dimensions.width, 0.8)),
+  }
+  const layoutFamily = inferLayoutFamily(profile)
+  const anchors = layoutAnchors(layoutFamily, resolvedDimensions)
+  const anchorMap = new Map(anchors.map((anchor) => [anchor.id, anchor]))
+  const placements = parts.map((part, index): PartPlacement => {
+    const role = layoutRole(part)
+    const anchorId = anchorForRole(layoutFamily, role)
+    const anchor = anchorMap.get(anchorId) ?? anchors[0]
+    const explicitPosition = Array.isArray(part.position) ? (part.position as Vec3) : undefined
+    return {
+      partId: String(part.id ?? `${layoutKind(part)}-${index + 1}`),
+      kind: layoutKind(part),
+      semanticRole: role,
+      anchorId,
+      position: explicitPosition ?? anchor?.position ?? [0, resolvedDimensions.height / 2, 0],
+    }
+  })
+  return {
+    family: profile.family,
+    layoutFamily,
+    anchors,
+    placements,
+    bounds: {
+      min: [-resolvedDimensions.length / 2, 0, -resolvedDimensions.width / 2],
+      max: [resolvedDimensions.length / 2, resolvedDimensions.height, resolvedDimensions.width / 2],
+      size: [resolvedDimensions.length, resolvedDimensions.height, resolvedDimensions.width],
+    },
+    parts: [...parts],
+  }
+}
+
+export function resolveLayout(plan: PartRelationshipLayoutInput): PartComposePartInput[]
+export function resolveLayout(
+  profile: LayoutProfileInput,
+  parts: readonly PartComposePartInput[],
+  dimensions?: LayoutDimensions,
+): LayoutPlan
+export function resolveLayout(
+  first: PartRelationshipLayoutInput | LayoutProfileInput,
+  parts?: readonly PartComposePartInput[],
+  dimensions?: LayoutDimensions,
+): PartComposePartInput[] | LayoutPlan {
+  if (Array.isArray(parts)) return resolveLayoutPlan(first as LayoutProfileInput, parts, dimensions)
+  return resolvePlacedParts(first as PartRelationshipLayoutInput)
 }
 
 function familySpecForParts(present: PartComposeKind[]): PartFamilySpec {
@@ -7870,6 +8852,7 @@ function enhancePartBlueprintWithVisualDetails(
   parts: PartComposePartInput[],
   input: PartComposeInput,
 ): PartComposePartInput[] {
+  if (isRegistryPartPlanInput(input)) return parts
   if (input.autoComplete === false) return parts
   if (input.enhanceVisualDetails === false) return parts
   const shouldEnhance = input.enhanceVisualDetails === true || requestedDetails(input)
@@ -8011,6 +8994,10 @@ function completePartBlueprint(
         completed[i] = { ...part, handleStyle: 'lever' }
       }
     }
+  }
+  if (isRegistryPartPlanInput(input)) {
+    tuneValveDefaults()
+    return completed
   }
   if (autoComplete === false) return completed
 
@@ -8199,6 +9186,42 @@ function semanticRoleForPartShape(kind: PartComposeKind, shape: PrimitiveShapeIn
       if (name.includes('nose')) return 'aircraft_landing_gear_nose'
       if (name.includes('main')) return 'aircraft_landing_gear_main'
       return 'landing_gear_wheel'
+    case 'generic_body':
+      return name.includes('building')
+        ? 'building_body'
+        : name.includes('furniture')
+          ? 'furniture_body'
+          : 'main_body'
+    case 'generic_base':
+      return name.includes('cup') ? 'cup_platform' : 'support_base'
+    case 'generic_panel':
+      return 'panel'
+    case 'generic_handle':
+      return 'handle'
+    case 'generic_spout':
+      return 'spout'
+    case 'generic_control_panel':
+      return 'control_detail'
+    case 'generic_display':
+      return 'display'
+    case 'generic_foot_set':
+      return 'support_foot'
+    case 'generic_opening':
+      return 'opening'
+    case 'generic_detail_accent':
+      return 'detail_accent'
+    case 'kiosk_body':
+      return 'kiosk_body'
+    case 'kiosk_roof':
+      return 'roof'
+    case 'kiosk_opening':
+      return 'opening'
+    case 'kiosk_counter':
+      return 'service_counter'
+    case 'kiosk_sign':
+      return 'sign_panel'
+    case 'kiosk_awning':
+      return 'awning'
     case 'streamlined_body':
       if (name.includes('nose')) return 'streamlined_nose'
       if (name.includes('tail')) return 'streamlined_tail'
@@ -8237,6 +9260,22 @@ function semanticRoleForPartShape(kind: PartComposeKind, shape: PrimitiveShapeIn
       if (name.includes('gate wedge')) return 'gate_wedge'
       if (name.includes('yoke')) return 'yoke'
       return 'valve_body'
+    case 'cylindrical_tank':
+      if (name.includes('nozzle')) return 'inlet_port'
+      if (name.includes('dished end')) return 'vessel_head'
+      return 'vessel_shell'
+    case 'agitator_tank':
+      if (name.includes('motor')) return 'agitator_motor'
+      if (name.includes('shaft')) return 'agitator_shaft'
+      if (name.includes('hub')) return 'reactor_impeller_hub'
+      if (name.includes('blade')) return 'reactor_impeller'
+      return 'reactor_vessel_shell'
+    case 'heat_exchanger':
+      if (name.includes('top nozzle')) return 'inlet_port'
+      if (name.includes('bottom nozzle')) return 'outlet_port'
+      if (name.includes('tube bundle')) return 'tube_bundle'
+      if (name.includes('channel head')) return 'heat_exchanger_channel_head'
+      return 'heat_exchanger_shell'
     default:
       return kind
   }
@@ -8299,6 +9338,10 @@ function shouldPreferPartShapeRole(
         'pedals',
         'bicycle_pedals',
       ].includes(partRole)
+    case 'cylindrical_tank':
+    case 'agitator_tank':
+    case 'heat_exchanger':
+      return true
     default:
       return false
   }
@@ -8349,19 +9392,15 @@ export function composePartPrimitives(input: PartComposeInput = {}): PrimitiveSh
     enhancePartBlueprintWithVisualDetails(completedParts, input),
     input,
   )
-  const parts = resolveConnectedParts(
-    expandArrayParts(
-      expandAroundDistributedParts(
-        applyMixerPartDefaults(
-          applyBicycleLayoutDefaults(
-            applyContextualPartDefaults(applyVehicleLayoutDefaults(detailedParts, input), input),
-            input,
-          ),
-          input,
-        ),
+  const parts = resolveLayout({
+    parts: applyMixerPartDefaults(
+      applyBicycleLayoutDefaults(
+        applyContextualPartDefaults(applyVehicleLayoutDefaults(detailedParts, input), input),
+        input,
       ),
+      input,
     ),
-  )
+  })
   const shapes: PrimitiveShapeInput[] = []
 
   parts.forEach((part, index) => {
@@ -8448,6 +9487,46 @@ export function composePartPrimitives(input: PartComposeInput = {}): PrimitiveSh
         break
       case 'aircraft_landing_gear':
         shapes.push(...composeAircraftLandingGear(input, part, origin))
+        break
+      case 'generic_body':
+        shapes.push(...composeGenericBody(input, part, origin))
+        break
+      case 'generic_base':
+        shapes.push(...composeGenericBase(input, part, origin))
+        break
+      case 'generic_panel':
+      case 'generic_control_panel':
+      case 'generic_display':
+      case 'generic_opening':
+      case 'generic_detail_accent':
+        shapes.push(...composeGenericPanel(input, part, origin, kind))
+        break
+      case 'generic_handle':
+        shapes.push(...composeGenericHandle(input, part, origin))
+        break
+      case 'generic_spout':
+        shapes.push(...composeGenericSpout(input, part, origin))
+        break
+      case 'generic_foot_set':
+        shapes.push(...composeGenericFootSet(input, part, origin))
+        break
+      case 'kiosk_body':
+        shapes.push(...composeKioskBody(input, part, origin))
+        break
+      case 'kiosk_roof':
+        shapes.push(...composeKioskRoof(input, part, origin))
+        break
+      case 'kiosk_opening':
+        shapes.push(...composeKioskOpening(input, part, origin))
+        break
+      case 'kiosk_counter':
+        shapes.push(...composeKioskCounter(input, part, origin))
+        break
+      case 'kiosk_sign':
+        shapes.push(...composeKioskSign(input, part, origin))
+        break
+      case 'kiosk_awning':
+        shapes.push(...composeKioskAwning(input, part, origin))
         break
       case 'lofted_panel':
         shapes.push(...composeLoftedPanel(input, part, origin))

@@ -47,7 +47,7 @@ export const PipeTreeNode = memo(function PipeTreeNode({
           alt=""
           className="object-contain"
           height={14}
-          src="/icons/custom-room.png"
+          src="/icons/custom-room.webp"
           width={14}
         />
       }

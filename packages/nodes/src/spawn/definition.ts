@@ -57,7 +57,7 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
   presentation: {
     label: 'Spawn Point',
     description: 'Player or camera origin within a level. One per level.',
-    icon: { kind: 'url', src: '/icons/site.png' },
+    icon: { kind: 'url', src: '/icons/site.webp' },
     paletteSection: 'structure',
     paletteOrder: 90, // bottom of structure list — matches legacy palette order
   },

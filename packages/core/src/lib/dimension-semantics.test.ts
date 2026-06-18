@@ -6,6 +6,18 @@ import {
 import { composeObjectPrimitives } from './object-compose'
 
 describe('dimension semantics', () => {
+  test('parses natural language dimension separators', () => {
+    const dimensions = parseDimensionSemantics(
+      'change heat exchanger length to 3m width to 1.2m height to 2m diameter to 0.7m',
+    )
+
+    expect(dimensions.length).toBeCloseTo(3)
+    expect(dimensions.width).toBeCloseTo(1.2)
+    expect(dimensions.height).toBeCloseTo(2)
+    expect(dimensions.diameter).toBeCloseTo(0.7)
+    expect(dimensions.radius).toBeCloseTo(0.35)
+  })
+
   test('parses labeled Chinese dimensions and converts units to meters', () => {
     const dimensions = parseDimensionSemantics('生成一个写字桌，长120cm，宽60cm，高75cm')
 

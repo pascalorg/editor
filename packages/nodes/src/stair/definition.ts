@@ -392,6 +392,7 @@ function stairHandles(node: StairNodeType): HandleDescriptor<StairNodeType>[] {
   return handles
 }
 
+import { stairSurfaceMaterialTargets } from '../shared/material-targets'
 import {
   computeStairSegmentFloorStackTransforms,
   getStairFloorPlacedFootprints,
@@ -446,8 +447,8 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
     },
   },
 
-
   parametrics: stairParametrics,
+  materialTargets: stairSurfaceMaterialTargets,
   handles: stairHandles,
 
   renderer: {
@@ -489,7 +490,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
   presentation: {
     label: '楼梯',
     description: '由一个或多个梯段组成的楼梯，可配置踏步、升高和栏杆。',
-    icon: { kind: 'url', src: '/icons/stairs.png' },
+    icon: { kind: 'url', src: '/icons/stairs.webp' },
     paletteSection: 'structure',
     paletteOrder: 110,
   },

@@ -14,17 +14,18 @@ import type { ShelfNode } from './schema'
 export const shelfParametrics: ParametricDescriptor<ShelfNode> = {
   groups: [
     {
-      label: 'Style',
+      label: '类型',
       fields: [
         {
           key: 'style',
           kind: 'enum',
-          options: ['wall-shelf', 'bookshelf', 'open-rack', 'cubby'],
+          options: ['open-rack', 'cubby'],
+          display: 'segmented',
         },
       ],
     },
     {
-      label: 'Topology',
+      label: '结构',
       fields: [
         { key: 'rows', kind: 'number', min: 1, max: 8, step: 1 },
         // Columns only meaningful for kinds with vertical dividers.
@@ -68,7 +69,7 @@ export const shelfParametrics: ParametricDescriptor<ShelfNode> = {
       ],
     },
     {
-      label: 'Dimensions',
+      label: '尺寸',
       fields: [
         { key: 'width', kind: 'number', unit: 'm', min: 0.3, max: 3.0, step: 0.05 },
         { key: 'depth', kind: 'number', unit: 'm', min: 0.1, max: 1.0, step: 0.05 },
@@ -77,7 +78,7 @@ export const shelfParametrics: ParametricDescriptor<ShelfNode> = {
       ],
     },
     {
-      label: 'Position',
+      label: '位置',
       fields: [{ key: 'position', kind: 'vec3' }],
     },
   ],

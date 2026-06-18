@@ -20,6 +20,8 @@ interface PanelSectionProps {
   className?: string
 }
 
+const HIDDEN_INSPECTOR_SECTION_TITLES = new Set(['操作', 'Actions', '鎿嶄綔'])
+
 export function PanelSection({
   title,
   children,
@@ -37,6 +39,8 @@ export function PanelSection({
     if (!hasExpansion) return
     setIsExpanded(expansionPinned === true && defaultExpanded)
   }, [defaultExpanded, expansionPinned, expansionResetKey, hasExpansion])
+
+  if (HIDDEN_INSPECTOR_SECTION_TITLES.has(title)) return null
 
   return (
     <motion.div

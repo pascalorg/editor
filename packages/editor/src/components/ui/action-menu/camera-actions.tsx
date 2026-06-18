@@ -37,7 +37,7 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
               alt={orbitLeft}
               className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
               height={28}
-              src="/icons/rotate.png"
+              src="/icons/rotate.webp"
               width={28}
             />
           </ActionButton>
@@ -53,7 +53,7 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
               alt={orbitRight}
               className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
               height={28}
-              src="/icons/rotate.png"
+              src="/icons/rotate.webp"
               width={28}
             />
           </ActionButton>
@@ -71,7 +71,7 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
           alt={topView}
           className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
           height={28}
-          src="/icons/topview.png"
+          src="/icons/topview.webp"
           width={28}
         />
       </ActionButton>

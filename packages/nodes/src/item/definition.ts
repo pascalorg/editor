@@ -3,6 +3,7 @@ import {
   type ItemNode as ItemNodeType,
   type NodeDefinition,
 } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { buildItemFloorplan } from './floorplan'
 import { itemFloorplanMoveTarget } from './floorplan-move'
 import { itemParametrics } from './parametrics'
@@ -119,6 +120,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   // *transitions* (drop a wall item on a ceiling) remain canonical
   // in the 3D path; 2D only re-anchors within the same family.
   floorplanMoveTarget: itemFloorplanMoveTarget,
+  materialTargets: overallMaterialTarget,
 
   toolHints: [
     { key: 'Left click', label: '放置物品' },
@@ -131,7 +133,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   presentation: {
     label: 'Item',
     description: 'A catalog-backed item (furniture, fixtures, decorations).',
-    icon: { kind: 'url', src: '/icons/item.png' },
+    icon: { kind: 'url', src: '/icons/item.webp' },
     paletteSection: 'furnish',
     paletteOrder: 10,
   },

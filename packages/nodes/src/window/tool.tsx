@@ -26,7 +26,11 @@ import {
   publishOpeningGuidesForWallEvent,
   resolveSillSnap,
 } from '../shared/opening-guides-runtime'
+import { resolveOpeningPlacement } from '../shared/wall-attach-target'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
+
+const isOpeningPlacementValid = (...args: Parameters<typeof hasWallChildOverlap>) =>
+  resolveOpeningPlacement({ collides: hasWallChildOverlap(...args) }).placeable
 
 // Shared edge material — reuse across renders, just toggle color
 const edgeMaterial = new LineBasicNodeMaterial({
@@ -195,7 +199,14 @@ const WindowTool: React.FC = () => {
       useScene.getState().createNode(node, event.node.id as AnyNodeId)
       draftRef.current = node
 
-      const valid = !hasWallChildOverlap(event.node.id, clampedX, clampedY, width, height, node.id)
+      const valid = isOpeningPlacementValid(
+        event.node.id,
+        clampedX,
+        clampedY,
+        width,
+        height,
+        node.id,
+      )
       lastPlacementRef.current = {
         wallId: event.node.id,
         clampedX,
@@ -323,7 +334,7 @@ const WindowTool: React.FC = () => {
         }
       }
 
-      const valid = !hasWallChildOverlap(
+      const valid = isOpeningPlacementValid(
         event.node.id,
         clampedX,
         clampedY,
@@ -428,7 +439,7 @@ const WindowTool: React.FC = () => {
           draft.width,
           draft.height,
         )
-        const valid = !hasWallChildOverlap(
+        const valid = isOpeningPlacementValid(
           event.node.id,
           clampedX,
           clampedY,

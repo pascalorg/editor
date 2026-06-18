@@ -529,13 +529,13 @@ function createEmptyGeometry(): THREE.BufferGeometry {
   // Three zero-vertices (one degenerate, invisible triangle), not an empty
   // attribute: an empty position (count 0) leaves WebGPU vertex buffer slot 0
   // unbound and the draw is rejected ("Vertex buffer slot 0 … was not set"),
-  // poisoning the command encoder. The count-0 groups keep nothing drawn.
+  // poisoning the command encoder. Keep one non-empty material group over the
+  // degenerate triangle so WebGPU never receives a zero-count draw.
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(6), 2))
   geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(new Float32Array(6), 2))
-  geometry.addGroup(0, 0, STAIR_TREAD_MATERIAL_INDEX)
-  geometry.addGroup(0, 0, STAIR_SIDE_MATERIAL_INDEX)
+  geometry.addGroup(0, 3, STAIR_TREAD_MATERIAL_INDEX)
   return geometry
 }
 

@@ -97,6 +97,40 @@ function sceneGraphSignature(graph: SceneGraphWithCollections): string {
   })
 }
 
+async function readSceneSaveError(response: Response) {
+  try {
+    const payload = (await response.json()) as {
+      error?: string
+      details?: unknown
+      currentVersion?: number
+      diagnostics?: { nodeId?: string; type?: string | null; path?: string; message?: string }[]
+    }
+    const diagnosticText = payload.diagnostics
+      ?.slice(0, 3)
+      .map((item) =>
+        [
+          item.nodeId ? `node=${item.nodeId}` : undefined,
+          item.type ? `type=${item.type}` : undefined,
+          item.path ? `path=${item.path}` : undefined,
+          item.message,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      )
+      .filter(Boolean)
+      .join('; ')
+    const detailText =
+      typeof payload.details === 'string'
+        ? payload.details
+        : payload.details
+          ? JSON.stringify(payload.details)
+          : undefined
+    return [payload.error, diagnosticText || detailText].filter(Boolean).join(': ')
+  } catch {
+    return ''
+  }
+}
+
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const router = useRouter()
   const sidebarTabs = useMemo(() => SIDEBAR_TABS(), [])
@@ -139,28 +173,31 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
 
         if (response.status === 409) {
           setConflict(true)
-          return
+          const detail = await readSceneSaveError(response)
+          throw new Error(detail || t('save.conflictReload', 'Conflict - reload to continue'))
         }
 
         if (!response.ok) {
+          const detail = await readSceneSaveError(response)
           setSaveError(
             t('save.saveFailed', {
               fallback: 'Save failed ({status})',
               params: { status: response.status },
             }),
           )
-          return
+          throw new Error(detail || `Save failed (${response.status})`)
         }
 
         const next = (await response.json()) as SceneMeta
         versionRef.current = next.version
         setSaveError(null)
       } catch (error) {
-        setSaveError(
+        const message =
           error instanceof Error
             ? error.message
-            : t('save.saveFailed', { fallback: 'Save failed ({status})', params: { status: '' } }),
-        )
+            : t('save.saveFailed', { fallback: 'Save failed ({status})', params: { status: '' } })
+        setSaveError(message)
+        throw error instanceof Error ? error : new Error(message)
       }
     },
     [meta.id, meta.name],

@@ -7,13 +7,14 @@ import {
   emitter,
   type GridEvent,
   getMaterialPresetByRef,
+  getMaterialSolidColorByRef,
   pauseSceneHistory,
   planAutoSlabsForLevel,
   planWallMoveJunctions,
   resolveMaterial,
   resumeSceneHistory,
-  sceneRegistry,
   type SlabNode,
+  sceneRegistry,
   useScene,
   type WallMoveBridgePlan,
   type WallMoveJunctionPlan,
@@ -229,6 +230,9 @@ function wallSegmentExists(
 
 function getWallGhostColor(wall: WallNode) {
   const presetColor =
+    getMaterialSolidColorByRef(wall.materialPreset) ??
+    getMaterialSolidColorByRef(wall.interiorMaterialPreset) ??
+    getMaterialSolidColorByRef(wall.exteriorMaterialPreset) ??
     getMaterialPresetByRef(wall.materialPreset)?.mapProperties.color ??
     getMaterialPresetByRef(wall.interiorMaterialPreset)?.mapProperties.color ??
     getMaterialPresetByRef(wall.exteriorMaterialPreset)?.mapProperties.color

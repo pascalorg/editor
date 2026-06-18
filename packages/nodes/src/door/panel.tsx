@@ -590,7 +590,7 @@ export default function DoorPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/door.png"
+      icon="/icons/door.webp"
       onClose={handleClose}
       title={node.name || N.door()}
       width={320}
@@ -670,7 +670,9 @@ export default function DoorPanel() {
                   type="button"
                 >
                   <DoorOpen className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate font-medium">{doorTypeLabel(option.value, option.label)}</span>
+                  <span className="truncate font-medium">
+                    {doorTypeLabel(option.value, option.label)}
+                  </span>
                 </button>
               )
             })}
@@ -682,7 +684,7 @@ export default function DoorPanel() {
         <SliderControl
           label={
             <>
-              X<sub className="ml-[1px] text-[11px] opacity-70">wall</sub>
+              X<sub className="ml-[1px] text-[11px] opacity-70">墙</sub>
             </>
           }
           max={10}
@@ -841,9 +843,9 @@ export default function DoorPanel() {
                 })
               }
               options={[
-                { label: 'Rect', value: 'rectangle' },
-                { label: 'Rounded', value: 'rounded' },
-                { label: 'Arch', value: 'arch' },
+                { label: '矩形', value: 'rectangle' },
+                { label: '圆角', value: 'rounded' },
+                { label: '拱形', value: 'arch' },
               ]}
               value={doorShape}
             />
@@ -856,8 +858,8 @@ export default function DoorPanel() {
                     handleUpdate({ openingRadiusMode: v as DoorNode['openingRadiusMode'] })
                   }
                   options={[
-                    { label: 'All', value: 'all' },
-                    { label: 'Individual', value: 'individual' },
+                    { label: '全部', value: 'all' },
+                    { label: '单独', value: 'individual' },
                   ]}
                   value={openingRadiusMode}
                 />
@@ -938,9 +940,9 @@ export default function DoorPanel() {
                 })
               }
               options={[
-                { label: 'Rect', value: 'rectangle' },
-                { label: 'Rounded', value: 'rounded' },
-                { label: 'Arch', value: 'arch' },
+                { label: '矩形', value: 'rectangle' },
+                { label: '圆角', value: 'rounded' },
+                { label: '拱形', value: 'arch' },
               ]}
               value={openingShape}
             />
@@ -953,8 +955,8 @@ export default function DoorPanel() {
                     handleUpdate({ openingRadiusMode: v as DoorNode['openingRadiusMode'] })
                   }
                   options={[
-                    { label: 'All', value: 'all' },
-                    { label: 'Individual', value: 'individual' },
+                    { label: '全部', value: 'all' },
+                    { label: '单独', value: 'individual' },
                   ]}
                   value={openingRadiusMode}
                 />
@@ -1084,8 +1086,8 @@ export default function DoorPanel() {
                     <SegmentedControl
                       onChange={(v) => handleUpdate({ hingesSide: v })}
                       options={[
-                        { label: 'Left', value: 'left' },
-                        { label: 'Right', value: 'right' },
+                        { label: '左侧', value: 'left' },
+                        { label: '右侧', value: 'right' },
                       ]}
                       value={node.hingesSide}
                     />
@@ -1098,8 +1100,8 @@ export default function DoorPanel() {
                   <SegmentedControl
                     onChange={(v) => handleUpdate({ swingDirection: v })}
                     options={[
-                      { label: 'Inward', value: 'inward' },
-                      { label: 'Outward', value: 'outward' },
+                      { label: '向内', value: 'inward' },
+                      { label: '向外', value: 'outward' },
                     ]}
                     value={node.swingDirection}
                   />
@@ -1161,8 +1163,8 @@ export default function DoorPanel() {
                       <SegmentedControl
                         onChange={(v) => handleUpdate({ handleSide: v })}
                         options={[
-                          { label: 'Left', value: 'left' },
-                          { label: 'Right', value: 'right' },
+                          { label: '左侧', value: 'left' },
+                          { label: '右侧', value: 'right' },
                         ]}
                         value={node.handleSide}
                       />
@@ -1211,7 +1213,9 @@ export default function DoorPanel() {
                 return (
                   <div className="mb-2 flex flex-col gap-1" key={i}>
                     <div className="flex items-center justify-between pb-1">
-                      <span className="font-medium text-white/80 text-xs">Segment {i + 1}</span>
+                      <span className="font-medium text-white/80 text-xs">
+                        {L.segmentNamed(i + 1)}
+                      </span>
                     </div>
 
                     <SegmentedControl
@@ -1222,9 +1226,9 @@ export default function DoorPanel() {
                         handleUpdate({ segments: updated })
                       }}
                       options={[
-                        { label: 'Panel', value: 'panel' },
-                        { label: 'Glass', value: 'glass' },
-                        { label: 'Empty', value: 'empty' },
+                        { label: '\u9762\u677f', value: 'panel' },
+                        { label: '\u73bb\u7483', value: 'glass' },
+                        { label: '\u7a7a', value: 'empty' },
                       ]}
                       value={seg.type}
                     />
@@ -1360,7 +1364,11 @@ export default function DoorPanel() {
 
       <PanelSection title={S.actions()}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={L.move()} onClick={handleMove} />
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label={L.move()}
+            onClick={handleMove}
+          />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
             label={L.duplicate()}

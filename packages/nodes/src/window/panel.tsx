@@ -443,7 +443,7 @@ export default function WindowPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/window.png"
+      icon="/icons/window.webp"
       onClose={handleClose}
       title={node.name || N.window()}
       width={320}
@@ -520,7 +520,9 @@ export default function WindowPanel() {
                   }
                   type="button"
                 >
-                  <span className="truncate font-medium">{windowTypeLabel(option.value, option.label)}</span>
+                  <span className="truncate font-medium">
+                    {windowTypeLabel(option.value, option.label)}
+                  </span>
                 </button>
               )
             })}
@@ -589,7 +591,7 @@ export default function WindowPanel() {
         <SliderControl
           label={
             <>
-              X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+              X<sub className="ml-[1px] text-[11px] opacity-70">位置</sub>
             </>
           }
           onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
@@ -601,7 +603,7 @@ export default function WindowPanel() {
         <SliderControl
           label={
             <>
-              Y<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+              Y<sub className="ml-[1px] text-[11px] opacity-70">位置</sub>
             </>
           }
           onChange={(v) => handleUpdate({ position: [node.position[0], v, node.position[2]] })}
@@ -664,9 +666,9 @@ export default function WindowPanel() {
               })
             }
             options={[
-              { value: 'rectangle', label: 'Rect' },
-              { value: 'rounded', label: 'Rounded' },
-              { value: 'arch', label: 'Arch' },
+              { value: 'rectangle', label: '矩形' },
+              { value: 'rounded', label: '圆角' },
+              { value: 'arch', label: '拱形' },
             ]}
             value={windowShape}
           />
@@ -677,8 +679,8 @@ export default function WindowPanel() {
                   handleUpdate({ openingRadiusMode: value as WindowNode['openingRadiusMode'] })
                 }
                 options={[
-                  { value: 'all', label: 'All' },
-                  { value: 'individual', label: 'Individual' },
+                  { value: 'all', label: '全部' },
+                  { value: 'individual', label: '单独' },
                 ]}
                 value={openingRadiusMode}
               />
@@ -755,9 +757,9 @@ export default function WindowPanel() {
               handleUpdate({ openingShape: value as WindowNode['openingShape'] })
             }
             options={[
-              { value: 'rectangle', label: 'Rect' },
-              { value: 'rounded', label: 'Rounded' },
-              { value: 'arch', label: 'Arch' },
+              { value: 'rectangle', label: '矩形' },
+              { value: 'rounded', label: '圆角' },
+              { value: 'arch', label: '拱形' },
             ]}
             value={openingShape}
           />
@@ -768,8 +770,8 @@ export default function WindowPanel() {
                   handleUpdate({ openingRadiusMode: value as WindowNode['openingRadiusMode'] })
                 }
                 options={[
-                  { value: 'all', label: 'All' },
-                  { value: 'individual', label: 'Individual' },
+                  { value: 'all', label: '全部' },
+                  { value: 'individual', label: '单独' },
                 ]}
                 value={openingRadiusMode}
               />
@@ -995,7 +997,11 @@ export default function WindowPanel() {
 
       <PanelSection title={S.actions()}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={L.move()} onClick={handleMove} />
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label={L.move()}
+            onClick={handleMove}
+          />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
             label={L.duplicate()}

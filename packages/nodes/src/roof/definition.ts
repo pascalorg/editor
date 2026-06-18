@@ -1,4 +1,5 @@
 import { type NodeDefinition, RoofNode as RoofNodeSchema } from '@pascal-app/core'
+import { roofSurfaceMaterialTargets } from '../shared/material-targets'
 import { roofParametrics } from './parametrics'
 import { RoofNode } from './schema'
 
@@ -31,6 +32,8 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
 
   parametrics: roofParametrics,
 
+  materialTargets: roofSurfaceMaterialTargets,
+
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),
@@ -43,7 +46,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   presentation: {
     label: 'Roof',
     description: 'A pitched / hip / gable roof composed of one or more segments.',
-    icon: { kind: 'url', src: '/icons/roof.png' },
+    icon: { kind: 'url', src: '/icons/roof.webp' },
     paletteSection: 'structure',
     paletteOrder: 100,
   },

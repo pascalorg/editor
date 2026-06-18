@@ -66,7 +66,7 @@ export const ladderDefinition: NodeDefinition<typeof LadderNode> = {
   presentation: {
     label: 'Ladder',
     description: 'An editable industrial access ladder with rung and safety-cage controls.',
-    icon: { kind: 'url', src: '/icons/stairs.png' },
+    icon: { kind: 'url', src: '/icons/stairs.webp' },
     paletteSection: 'structure',
     paletteOrder: 22,
   },

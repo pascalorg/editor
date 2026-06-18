@@ -21,6 +21,24 @@ import { ItemCatalog } from '../../../item-catalog/item-catalog'
 const PLACEMENT_TAGS = new Set(['floor', 'wall', 'ceiling', 'countertop'])
 const IMPORTED_ASSETS_UPDATED_EVENT = 'imported-assets:updated'
 
+type GlbImportInspection = {
+  triangles: number
+}
+
+type GlbImportOptimization = {
+  status: 'optimized' | 'skipped' | 'failed'
+  originalBytes: number
+  finalBytes: number
+}
+
+type GlbImportResponse = {
+  asset?: AssetInput
+  error?: string
+  originalInspection?: GlbImportInspection
+  inspection?: GlbImportInspection
+  optimization?: GlbImportOptimization
+}
+
 function itemMatchesCatalogCategory(item: AssetInput, category: CatalogCategory) {
   if (category === 'mine') return (item.source ?? 'library') === 'mine'
   return (
@@ -44,6 +62,38 @@ function matchesGeneratedGeometrySearch(artifact: GeneratedGeometryArtifact, que
     .some((value) => value.toLowerCase().includes(normalized))
 }
 
+function formatCompactNumber(value: number) {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+  if (value >= 1_000) return `${Math.round(value / 1_000)}k`
+  return value.toLocaleString()
+}
+
+function formatBytes(value: number) {
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)}MB`
+  if (value >= 1024) return `${Math.round(value / 1024)}KB`
+  return `${value}B`
+}
+
+function formatGlbImportSuccess(data: GlbImportResponse) {
+  const originalTriangles = data.originalInspection?.triangles
+  const finalTriangles = data.inspection?.triangles
+  const originalBytes = data.optimization?.originalBytes
+  const finalBytes = data.optimization?.finalBytes
+
+  if (
+    data.optimization?.status === 'optimized' &&
+    originalTriangles !== undefined &&
+    finalTriangles !== undefined &&
+    originalBytes !== undefined &&
+    finalBytes !== undefined
+  ) {
+    return `已优化并导入：${formatCompactNumber(originalTriangles)} -> ${formatCompactNumber(
+      finalTriangles,
+    )} 三角面，${formatBytes(originalBytes)} -> ${formatBytes(finalBytes)}`
+  }
+
+  return '已导入到我的物品，可点击放置'
+}
 
 export function ItemsPanel({
   items,
@@ -123,7 +173,7 @@ export function ItemsPanel({
         method: 'POST',
         body: form,
       })
-      const data = (await res.json().catch(() => ({}))) as { asset?: AssetInput; error?: string }
+      const data = (await res.json().catch(() => ({}))) as GlbImportResponse
       if (!res.ok || !data.asset) {
         throw new Error(data.error || `导入失败 (${res.status})`)
       }

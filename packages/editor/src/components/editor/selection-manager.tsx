@@ -4,6 +4,7 @@ import {
   type BuildingNode,
   emitter,
   getMaterialPresetByRef,
+  getMaterialSolidColorByRef,
   getSceneHistoryPauseDepth,
   getSelectableKinds,
   type ItemNode,
@@ -256,15 +257,52 @@ function previewCursor(cursor: string): PaintPreviewCleanup {
 }
 
 function getSingleSurfacePreviewMaterial(material: ActivePaintMaterial): Material | null {
+  const { shading, textures } = getMaterialRenderSettings()
   if (material.materialPreset) {
-    return createMaterialFromPresetRef(material.materialPreset)
+    if (textures) {
+      return createMaterialFromPresetRef(material.materialPreset, shading)
+    }
+
+    const preset = getMaterialPresetByRef(material.materialPreset)
+    if (preset) {
+      return createMaterial(
+        {
+          preset: 'custom',
+          properties: {
+            color:
+              getMaterialSolidColorByRef(material.materialPreset) ?? preset.mapProperties.color,
+            roughness: preset.mapProperties.roughness,
+            metalness: preset.mapProperties.metalness,
+            opacity: preset.mapProperties.opacity,
+            transparent: preset.mapProperties.transparent,
+            side: 'front',
+          },
+        },
+        'solid',
+      )
+    }
+    return createMaterialFromPresetRef(material.materialPreset, shading)
   }
 
   if (material.material) {
-    return createMaterial(material.material)
+    if (shading === 'solid' || !textures) {
+      const properties = resolveMaterial(material.material)
+      return createMaterial({ preset: 'custom', properties }, 'solid')
+    }
+    return createMaterial(material.material, shading)
   }
 
   return null
+}
+
+function getMaterialRenderSettings() {
+  const viewer = useViewer.getState()
+  return {
+    shading: viewer.shading,
+    textures: viewer.textures,
+    colorPreset: viewer.colorPreset,
+    sceneTheme: viewer.sceneTheme,
+  }
 }
 
 function applyWallPaintPreview(
@@ -279,8 +317,12 @@ function applyWallPaintPreview(
     ...node,
     ...buildWallSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
+  const { shading, textures, colorPreset, sceneTheme } = getMaterialRenderSettings()
 
-  return previewMeshMaterial(mesh, getVisibleWallMaterials(previewNode))
+  return previewMeshMaterial(
+    mesh,
+    getVisibleWallMaterials(previewNode, { shading, textures, colorPreset, sceneTheme }),
+  )
 }
 
 function applyRoofPaintPreview(
@@ -296,7 +338,14 @@ function applyRoofPaintPreview(
     ...node,
     ...buildRoofSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
-  const previewMaterial = getRoofMaterialArray(previewNode)
+  const { shading, textures, colorPreset, sceneTheme } = getMaterialRenderSettings()
+  const previewMaterial = getRoofMaterialArray(
+    previewNode,
+    shading,
+    textures,
+    colorPreset,
+    sceneTheme,
+  )
   if (!previewMaterial) return null
 
   return previewMeshMaterial(mesh, previewMaterial)
@@ -314,8 +363,9 @@ function applyStairPaintPreview(
     ...node,
     ...buildStairSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
-  const bodyMaterials = getStairBodyMaterials(previewNode)
-  const railingMaterial = getStairRailingMaterial(previewNode)
+  const { shading, textures, colorPreset } = getMaterialRenderSettings()
+  const bodyMaterials = getStairBodyMaterials(previewNode, shading, textures, colorPreset)
+  const railingMaterial = getStairRailingMaterial(previewNode, shading, textures, colorPreset)
   const restores: PaintPreviewCleanup[] = []
 
   root.traverse((object) => {
@@ -357,6 +407,7 @@ function applySingleSurfacePaintPreview(
     if (!(root && overlay)) return null
 
     const previewColor =
+      getMaterialSolidColorByRef(material.materialPreset) ??
       getMaterialPresetByRef(material.materialPreset)?.mapProperties.color ??
       resolveMaterial(material.material).color ??
       '#999999'
@@ -402,7 +453,10 @@ function applySingleSurfacePaintPreview(
   if (node.type === 'slab') {
     if (!mesh) return null
     const slabMaterial = previewMaterial.clone()
-    applyMaterialPresetToMaterials(slabMaterial, getMaterialPresetByRef(material.materialPreset))
+    const { shading, textures } = getMaterialRenderSettings()
+    if (shading !== 'solid' && textures) {
+      applyMaterialPresetToMaterials(slabMaterial, getMaterialPresetByRef(material.materialPreset))
+    }
     const previewMeshMaterialInput = slabMaterial as Material & {
       alphaMap?: unknown
       depthWrite?: boolean
@@ -1464,8 +1518,28 @@ export const SelectionManager = () => {
 
     const onDoubleClick = (event: NodeEvent) => {
       const rawNode = event.node
-      const node = resolveAssemblySelectionNode(rawNode, event.nativeEvent)
+      const containingAssembly = findContainingAssemblyNode(rawNode)
       const currentPhase = useEditor.getState().phase
+
+      if (containingAssembly) {
+        event.stopPropagation()
+        if (currentPhase !== 'structure') {
+          useEditor.getState().setPhase('structure')
+        }
+        if (useEditor.getState().structureLayer !== 'elements') {
+          useEditor.getState().setStructureLayer('elements')
+        }
+        useEditor.getState().setEditingAssemblyId(containingAssembly.id as AnyNodeId)
+        useEditor.getState().setSelectedMaterialTarget(null)
+        SELECTION_STRATEGIES.structure?.handleSelect(
+          rawNode,
+          event.nativeEvent,
+          modifierKeysRef.current,
+        )
+        return
+      }
+
+      const node = resolveAssemblySelectionNode(rawNode, event.nativeEvent)
 
       if (node.type === 'assembly') {
         event.stopPropagation()

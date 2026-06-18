@@ -13,4 +13,5 @@ export const roundedpanelParametrics: ParametricDescriptor<RoundedPanelNode> = {
       ],
     },
   ],
+  customPanel: () => import('./panel'),
 }

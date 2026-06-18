@@ -28,7 +28,11 @@ import {
   publishOpeningGuidesForWallEvent,
   resolveSillSnap,
 } from '../shared/opening-guides-runtime'
+import { resolveOpeningPlacement } from '../shared/wall-attach-target'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
+
+const isOpeningPlacementValid = (...args: Parameters<typeof hasWallChildOverlap>) =>
+  resolveOpeningPlacement({ collides: hasWallChildOverlap(...args) }).placeable
 
 const edgeMaterial = new LineBasicNodeMaterial({
   color: 0xef_44_44,
@@ -180,7 +184,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       if (prevWallId && prevWallId !== event.node.id) markWallDirty(prevWallId)
       markWallDirtyThrottled(event.node.id)
 
-      const valid = !hasWallChildOverlap(
+      const valid = isOpeningPlacementValid(
         event.node.id,
         clampedX,
         clampedY,
@@ -274,7 +278,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       })
       markWallDirtyThrottled(event.node.id)
 
-      const valid = !hasWallChildOverlap(
+      const valid = isOpeningPlacementValid(
         event.node.id,
         clampedX,
         clampedY,
@@ -337,7 +341,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         movingWindowNode.height,
       )
 
-      const valid = !hasWallChildOverlap(
+      const valid = isOpeningPlacementValid(
         event.node.id,
         clampedX,
         clampedY,

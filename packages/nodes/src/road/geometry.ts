@@ -1,21 +1,78 @@
-import { getWallCurveFrameAt, getWallCurveLength, sampleWallCenterline } from '@pascal-app/core'
-import { BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
+import {
+  getMaterialPresetByRef,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  resolveMaterial,
+  sampleWallCenterline,
+} from '@pascal-app/core'
+import { applyMaterialPresetToMaterials, type RenderShading } from '@pascal-app/viewer'
+import { BoxGeometry, FrontSide, Group, type Material, Mesh, MeshStandardMaterial } from 'three'
 import type { RoadNode } from './schema'
 
-function createRoadMaterial(color: string) {
-  return new MeshStandardMaterial({
-    color,
-    metalness: 0.02,
-    roughness: 0.88,
-  })
+function getMaterialDebugColor(material: Material): string | null {
+  const color = (material as { color?: { getHexString?: () => string } }).color
+  return color?.getHexString ? `#${color.getHexString()}` : null
 }
 
-function createMarkingMaterial(color: string) {
-  return new MeshStandardMaterial({
-    color,
-    metalness: 0,
-    roughness: 0.55,
+function createRoadMaterial(node: RoadNode, shading: RenderShading): Material {
+  if (node.materialPreset) {
+    const preset = getMaterialPresetByRef(node.materialPreset)
+    if (preset) {
+      const material = new MeshStandardMaterial()
+      applyMaterialPresetToMaterials(material, preset)
+      console.log('[pascal:road:material]', {
+        id: node.id,
+        source: 'materialPreset',
+        materialPreset: node.materialPreset,
+        shading,
+        resolvedColor: getMaterialDebugColor(material),
+        maps: Object.keys(preset.maps).filter(
+          (key) => preset.maps[key as keyof typeof preset.maps] !== undefined,
+        ),
+      })
+      return material
+    }
+  }
+
+  if (node.material) {
+    const properties = resolveMaterial(node.material)
+    const material = new MeshStandardMaterial({
+      color: properties.color,
+      roughness: properties.roughness,
+      metalness: properties.metalness,
+      opacity: properties.opacity,
+      transparent: properties.transparent,
+      side: FrontSide,
+    })
+    console.log('[pascal:road:material]', {
+      id: node.id,
+      source: 'material',
+      inputColor: node.material.properties?.color,
+      resolvedProperties: properties,
+      shading,
+      resolvedColor: getMaterialDebugColor(material),
+    })
+    return material
+  }
+
+  const material = new MeshStandardMaterial({
+    color: node.asphaltColor,
+    roughness: 0.88,
+    metalness: 0.02,
   })
+  console.log('[pascal:road:material]', {
+    id: node.id,
+    source: 'asphaltColor',
+    asphaltColor: node.asphaltColor,
+    shading,
+    resolvedColor: getMaterialDebugColor(material),
+  })
+  return material
+}
+
+function createMarkingMaterial(color: string, shading: RenderShading): Material {
+  void shading
+  return new MeshStandardMaterial({ color, roughness: 0.55, metalness: 0 })
 }
 
 function addRoadSegment(
@@ -28,7 +85,7 @@ function addRoadSegment(
     width: number
     height: number
     y: number
-    material: MeshStandardMaterial
+    material: Material
   },
 ) {
   const dx = args.x2 - args.x1
@@ -43,9 +100,9 @@ function addRoadSegment(
   group.add(mesh)
 }
 
-function addRoadBody(group: Group, node: RoadNode) {
+function addRoadBody(group: Group, node: RoadNode, shading: RenderShading) {
   const points = sampleWallCenterline(node, 32)
-  const material = createRoadMaterial(node.asphaltColor)
+  const material = createRoadMaterial(node, shading)
 
   for (let index = 1; index < points.length; index += 1) {
     const prev = points[index - 1]!
@@ -63,7 +120,7 @@ function addRoadBody(group: Group, node: RoadNode) {
   }
 }
 
-function addLaneMarkings(group: Group, node: RoadNode, length: number) {
+function addLaneMarkings(group: Group, node: RoadNode, length: number, shading: RenderShading) {
   if (!node.showLaneMarkings || node.laneCount <= 1 || length <= 0.4) return
 
   const laneWidth = node.width / node.laneCount
@@ -72,7 +129,7 @@ function addLaneMarkings(group: Group, node: RoadNode, length: number) {
   const step = stripeLength + stripeGap
   const stripeWidth = Math.min(0.12, Math.max(0.045, laneWidth * 0.04))
   const stripeHeight = 0.006
-  const material = createMarkingMaterial(node.markingColor)
+  const material = createMarkingMaterial(node.markingColor, shading)
   const segmentCount = Math.max(1, Math.floor(length / step))
 
   for (let laneIndex = 1; laneIndex < node.laneCount; laneIndex += 1) {
@@ -95,13 +152,26 @@ function addLaneMarkings(group: Group, node: RoadNode, length: number) {
   }
 }
 
-export function buildRoadGeometry(node: RoadNode): Group {
+export function buildRoadGeometry(
+  node: RoadNode,
+  _ctx?: unknown,
+  shading: RenderShading = 'rendered',
+): Group {
   const group = new Group()
   const length = getWallCurveLength(node)
   if (length < 0.01) return group
 
-  addRoadBody(group, node)
-  addLaneMarkings(group, node, length)
+  console.log('[pascal:road:build]', {
+    id: node.id,
+    materialColor: node.material?.properties?.color,
+    materialPreset: node.materialPreset,
+    asphaltColor: node.asphaltColor,
+    markingColor: node.markingColor,
+    shading,
+  })
+
+  addRoadBody(group, node, shading)
+  addLaneMarkings(group, node, length, shading)
 
   return group
 }

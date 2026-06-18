@@ -16,6 +16,7 @@ interface DimensionMatch {
 const UNIT_PATTERN = '(mm|\u6beb\u7c73|cm|\u5398\u7c73|m|\u7c73|meter|meters|metre|metres)?'
 const NUMBER_PATTERN =
   '(\\d+(?:\\.\\d+)?|[\u96f6\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e]+)'
+const VALUE_SEPARATOR = '(?:[:=]|to|\u4e3a|\u662f|\u5230|\u81f3)?'
 const CHINESE_DIGITS: Record<string, number> = {
   '\u96f6': 0,
   '\u4e00': 1,
@@ -110,49 +111,49 @@ function labeledMatches(text: string): DimensionMatch[] {
     [
       'length',
       new RegExp(
-        `(?:\u957f\u5ea6|\u957f|length|long|\\bl\\b)\\s*[:=]?\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
+        `(?:\u957f\u5ea6|\u957f|length|long|\\bl\\b)\\s*${VALUE_SEPARATOR}\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
         'gi',
       ),
     ],
     [
       'width',
       new RegExp(
-        `(?:\u5bbd\u5ea6|\u5bbd|width|wide|\\bw\\b)\\s*[:=]?\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
+        `(?:\u5bbd\u5ea6|\u5bbd|width|wide|\\bw\\b)\\s*${VALUE_SEPARATOR}\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
         'gi',
       ),
     ],
     [
       'depth',
       new RegExp(
-        `(?:\u6df1\u5ea6|\u6df1|depth|deep|\\bd\\b)\\s*[:=]?\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
+        `(?:\u6df1\u5ea6|\u6df1|depth|deep|\\bd\\b)\\s*${VALUE_SEPARATOR}\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
         'gi',
       ),
     ],
     [
       'height',
       new RegExp(
-        `(?:\u9ad8\u5ea6|\u9ad8|height|tall|\\bh\\b)\\s*[:=]?\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
+        `(?:\u9ad8\u5ea6|\u9ad8|height|tall|\\bh\\b)\\s*${VALUE_SEPARATOR}\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
         'gi',
       ),
     ],
     [
       'diameter',
       new RegExp(
-        `(?:\u76f4\u5f84|\u76f4\u5f91|diameter|dia|\u03c6|\u03a6)\\s*[:=]?\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
+        `(?:\u76f4\u5f84|\u76f4\u5f91|diameter|dia|\u03c6|\u03a6)\\s*${VALUE_SEPARATOR}\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
         'gi',
       ),
     ],
     [
       'radius',
       new RegExp(
-        `(?:\u534a\u5f84|\u534a\u5f91|radius|\\br\\b)\\s*[:=]?\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
+        `(?:\u534a\u5f84|\u534a\u5f91|radius|\\br\\b)\\s*${VALUE_SEPARATOR}\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
         'gi',
       ),
     ],
     [
       'thickness',
       new RegExp(
-        `(?:\u539a\u5ea6|\u539a|thickness|\\bt\\b)\\s*[:=]?\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
+        `(?:\u539a\u5ea6|\u539a|thickness|\\bt\\b)\\s*${VALUE_SEPARATOR}\\s*${NUMBER_PATTERN}\\s*${UNIT_PATTERN}`,
         'gi',
       ),
     ],

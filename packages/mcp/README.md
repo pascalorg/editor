@@ -243,7 +243,7 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `get_walls` | Walls on a level with length and child doors/windows. | `{ levelId? }` | `{ levelId, walls[] }` |
 | `get_zones` | Room/zone polygons with approximate areas and bounds. | `{ levelId? }` | `{ levelId, zones[] }` |
 | `measure` | Distance between two nodes; area when applicable. | `{ fromId, toId }` | `{ distanceMeters, areaSqMeters?, units: 'meters' }` |
-| `search_assets` | Search the built-in MCP item catalog. | `{ query, category? }` | `{ results, total }` |
+| `search_assets` | Search the shared placeable item catalog. | `{ query, category? }` | `{ results, total }` |
 | `create_story_shell` | Create one level-owned story shell from a footprint: perimeter walls plus optional slab and ceiling. Use once per story. | `{ levelId, footprint, wallHeight?, wallThickness?, createSlab?, createCeiling? }` | `{ wallIds, slabId, ceilingId, createdIds }` |
 | `create_stair_between_levels` | Create a straight stair and one rectangular manual opening in the destination slab/source ceiling, with auto-opening disabled. | `{ fromLevelId, toLevelId, position, width?, runLength?, totalRise? }` | `{ stairId, stairSegmentId, openingPolygon }` |
 | `create_roof` | Create a roof container and one roof segment. By default creates a dedicated roof level above the reference occupied level for solo/exploded views. | `{ levelId, width, depth, roofType?, roofHeight?, roofLevelId?, useDedicatedRoofLevel? }` | `{ roofLevelId, createdRoofLevelId, roofId, roofSegmentId }` |
@@ -280,7 +280,7 @@ The vision tools require the MCP host to support the sampling capability
 | `pascal://scene/current` | `application/json` | Full `{ nodes, rootNodeIds, collections }` snapshot. |
 | `pascal://scene/current/summary` | `text/markdown` | Human-readable summary with node counts, bounding box, and level areas. |
 | `pascal://agent/guide` | `text/markdown` | MCP-first construction workflow, scene invariants, and tool preferences for agents. |
-| `pascal://catalog/items` | `application/json` | Dependency-free built-in catalog subset for common residential furniture and fixtures. |
+| `pascal://catalog/items` | `application/json` | Dependency-free shared catalog of placeable editor/MCP items. |
 | `pascal://constraints/{levelId}` | `application/json` | Slab footprints and wall polygons for the given level — useful as planner context. |
 
 ## Prompts

@@ -10,7 +10,6 @@ import {
 import {
   ActionButton,
   ActionGroup,
-  cn,
   NodeMaterialSection,
   PanelSection,
   PanelWrapper,
@@ -22,14 +21,32 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
-import { columnL, columnPresetLabel, columnSupportStyleLabel, L, N, S } from '../i18n/panel-labels'
+import { columnL, L, N, S } from '../i18n/panel-labels'
 
 const SELECT_CLASS =
-  'h-10 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground outline-none transition-colors hover:bg-[#3e3e3e] focus:ring-1 focus:ring-border'
+  'h-8 w-full rounded-md border border-border/50 bg-[#2C2C2E] px-2 text-xs text-foreground outline-none transition-colors hover:bg-[#3e3e3e] focus:ring-1 focus:ring-border'
 
-const COLUMN_PRESET_OPTIONS = Object.entries(COLUMN_PRESETS).map(([value, preset]) => ({
+const COLUMN_PRESET_LABELS: Record<ColumnPresetId, string> = {
+  basicPillar: '直圆柱',
+  squarePillar: '方柱',
+  taperedPillar: '收分圆柱',
+  bulgedPillar: '鼓形柱',
+  hourglassPillar: '束腰柱',
+  aFrameSupport: 'A 型支撑',
+  yFrameSupport: 'Y 型支撑',
+  vFrameSupport: 'V 型支撑',
+  xBraceSupport: 'X 型斜撑',
+  kBraceSupport: 'K 型斜撑',
+  singleStrutSupport: '单斜撑',
+  tripodSupport: '三脚支撑',
+  trestleSupport: '栈桥支撑',
+  portalFrameSupport: '门式框架',
+  boxFrameSupport: '箱型框架',
+  pipeSaddleSupport: '管托支撑',
+}
+
+const COLUMN_PRESET_OPTIONS = Object.keys(COLUMN_PRESETS).map((value) => ({
   value: value as ColumnPresetId,
-  label: preset.label,
 }))
 
 const COLUMN_PROPORTION_PRESETS = {
@@ -77,39 +94,85 @@ const COLUMN_PROPORTION_PRESETS = {
 
 type ColumnProportionPresetId = keyof typeof COLUMN_PROPORTION_PRESETS
 
-const COLUMN_PROPORTION_OPTIONS = Object.entries(COLUMN_PROPORTION_PRESETS).map(
-  ([value, preset]) => ({
-    value: value as ColumnProportionPresetId,
-    label: preset.label,
-  }),
-)
+const COLUMN_PROPORTION_LABELS: Record<ColumnProportionPresetId, string> = {
+  slender: '细长',
+  standard: '标准',
+  heavy: '厚重',
+  stout: '矮粗',
+}
 
-const SUPPORT_STYLE_OPTIONS: Array<{ label: string; value: ColumnNode['supportStyle'] }> = [
-  { label: 'Vertical', value: 'vertical' },
-  { label: 'A-Frame', value: 'a-frame' },
-  { label: 'Y Support', value: 'y-frame' },
-  { label: 'V Support', value: 'v-frame' },
-  { label: 'X Brace', value: 'x-brace' },
-  { label: 'K Brace', value: 'k-brace' },
-  { label: 'Single Strut', value: 'single-strut' },
-  { label: 'Tripod', value: 'tripod' },
-  { label: 'Trestle', value: 'trestle' },
-  { label: 'Portal Frame', value: 'portal-frame' },
-  { label: 'Box Frame', value: 'box-frame' },
-  { label: 'Pipe Saddle', value: 'pipe-saddle' },
-]
+const COLUMN_PROPORTION_OPTIONS = Object.keys(COLUMN_PROPORTION_PRESETS).map((value) => ({
+  value: value as ColumnProportionPresetId,
+}))
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
+function columnPresetDisplayLabel(presetId: ColumnPresetId) {
+  return COLUMN_PRESET_LABELS[presetId] ?? COLUMN_PRESETS[presetId].label
+}
+
 function presetUpdates(presetId: ColumnPresetId): Partial<ColumnNode> {
   const { label, ...preset } = COLUMN_PRESETS[presetId]
   return {
-    name: label,
+    name: columnPresetDisplayLabel(presetId),
     supportStyle: 'supportStyle' in preset ? preset.supportStyle : 'vertical',
     ...preset,
   }
+}
+
+function valuesEqual(a: unknown, b: unknown) {
+  return typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 0.0001 : a === b
+}
+
+function matchesColumnPreset(node: ColumnNode, presetId: ColumnPresetId) {
+  const preset = COLUMN_PRESETS[presetId]
+  const expectedSupportStyle = 'supportStyle' in preset ? preset.supportStyle : 'vertical'
+  if ((node.supportStyle ?? 'vertical') !== expectedSupportStyle) return false
+
+  return Object.entries(preset).every(([key, value]) => {
+    if (key === 'label' || key === 'supportStyle') return true
+    return valuesEqual(node[key as keyof ColumnNode], value)
+  })
+}
+
+function currentColumnPresetId(node: ColumnNode): ColumnPresetId {
+  const exactMatch = COLUMN_PRESET_OPTIONS.find((option) => matchesColumnPreset(node, option.value))
+  if (exactMatch) return exactMatch.value
+
+  switch (node.supportStyle ?? 'vertical') {
+    case 'a-frame':
+      return 'aFrameSupport'
+    case 'y-frame':
+      return 'yFrameSupport'
+    case 'v-frame':
+      return 'vFrameSupport'
+    case 'x-brace':
+      return 'xBraceSupport'
+    case 'k-brace':
+      return 'kBraceSupport'
+    case 'single-strut':
+      return 'singleStrutSupport'
+    case 'tripod':
+      return 'tripodSupport'
+    case 'trestle':
+      return 'trestleSupport'
+    case 'portal-frame':
+      return 'portalFrameSupport'
+    case 'box-frame':
+      return 'boxFrameSupport'
+    case 'pipe-saddle':
+      return 'pipeSaddleSupport'
+    default:
+      break
+  }
+
+  if (node.shaftProfile === 'tapered') return 'taperedPillar'
+  if (node.shaftProfile === 'bulged') return 'bulgedPillar'
+  if (node.shaftProfile === 'hourglass') return 'hourglassPillar'
+  if (node.crossSection === 'square' || node.crossSection === 'rectangular') return 'squarePillar'
+  return 'basicPillar'
 }
 
 function proportionUpdates(
@@ -239,130 +302,27 @@ export default function ColumnPanel() {
     supportStyle === 'box-frame' ||
     isPipeSupport
 
-  const supportStyleOptions = SUPPORT_STYLE_OPTIONS.map((option) => ({
-    ...option,
-    label: columnSupportStyleLabel(option.value, option.label),
-  }))
-
   return (
     <PanelWrapper
-      icon="/icons/column.png"
+      icon="/icons/column.webp"
       onClose={handleClose}
       title={node.name || N.column()}
       width={300}
     >
-      <PanelSection title={S.preset()}>
+      <PanelSection title="形状">
         <select
           className={SELECT_CLASS}
           onChange={(event) => {
-            if (!event.target.value) return
             handleUpdate(presetUpdates(event.target.value as ColumnPresetId))
           }}
-          value=""
+          value={currentColumnPresetId(node)}
         >
-          <option value="">{columnL.applyPreset()}</option>
           {COLUMN_PRESET_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
-              {columnPresetLabel(option.value, option.label)}
+              {columnPresetDisplayLabel(option.value)}
             </option>
           ))}
         </select>
-      </PanelSection>
-
-      <PanelSection title={S.shape()}>
-        <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
-          {supportStyleOptions.map((option) => {
-            const isSelected = supportStyle === option.value
-            return (
-              <button
-                className={cn(
-                  'flex min-h-12 items-center rounded-lg border px-2.5 text-left text-xs transition-colors',
-                  isSelected
-                    ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                    : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
-                )}
-                key={option.value}
-                onClick={() =>
-                  handleUpdate({
-                    supportStyle: option.value,
-                    ...(option.value !== 'vertical'
-                      ? {
-                          crossSection: 'rectangular',
-                          width: node.braceWidth ?? node.width,
-                          depth: node.braceDepth ?? node.depth,
-                          baseStyle: 'none',
-                          capitalStyle: 'none',
-                        }
-                      : {}),
-                  })
-                }
-                type="button"
-              >
-                <span className="truncate font-medium">{option.label}</span>
-              </button>
-            )
-          })}
-        </div>
-        {isBraceSupport ? (
-          <>
-            <SliderControl
-              label={columnL.braceWidth()}
-              max={0.8}
-              min={0.04}
-              onChange={(value) => handleUpdate({ braceWidth: value, width: value })}
-              precision={2}
-              step={0.01}
-              unit="m"
-              value={node.braceWidth ?? node.width}
-            />
-            <SliderControl
-              label={columnL.braceDepth()}
-              max={0.8}
-              min={0.04}
-              onChange={(value) => handleUpdate({ braceDepth: value, depth: value })}
-              precision={2}
-              step={0.01}
-              unit="m"
-              value={node.braceDepth ?? node.depth}
-            />
-          </>
-        ) : (
-          <>
-            <select
-              className={SELECT_CLASS}
-              onChange={(event) =>
-                handleUpdate({ crossSection: event.target.value as ColumnNode['crossSection'] })
-              }
-              value={node.crossSection}
-            >
-              <option value="round">{columnL.round()}</option>
-              <option value="square">{columnL.square()}</option>
-              <option value="rectangular">{columnL.rectangular()}</option>
-            </select>
-            <SliderControl
-              label={columnL.edgeSoftness()}
-              max={0.12}
-              min={0}
-              onChange={(value) => handleUpdate({ edgeSoftness: value })}
-              precision={3}
-              step={0.005}
-              unit="m"
-              value={node.edgeSoftness ?? 0.025}
-            />
-            {(node.crossSection === 'square' || node.crossSection === 'rectangular') && (
-              <SliderControl
-                label={columnL.shaftCornerRadius()}
-                max={0.3}
-                min={0}
-                onChange={(value) => handleUpdate({ shaftCornerRadius: value })}
-                precision={3}
-                step={0.005}
-                unit="m"
-                value={node.shaftCornerRadius ?? 0.035}
-              />
-            )}
-          </>
-        )}
       </PanelSection>
 
       <PanelSection title={S.dimensions()}>
@@ -378,7 +338,7 @@ export default function ColumnPanel() {
             <option value="">{columnL.applyProportion()}</option>
             {COLUMN_PROPORTION_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
-                {columnPresetLabel(option.value, option.label)}
+                {COLUMN_PROPORTION_LABELS[option.value]}
               </option>
             ))}
           </select>
@@ -508,10 +468,10 @@ export default function ColumnPanel() {
             }
             value={shaftProfile}
           >
-            <option value="straight">Straight</option>
-            <option value="tapered">Tapered</option>
-            <option value="bulged">Bulged</option>
-            <option value="hourglass">Hourglass</option>
+            <option value="straight">直柱</option>
+            <option value="tapered">收分</option>
+            <option value="bulged">鼓出</option>
+            <option value="hourglass">束腰</option>
           </select>
           {shaftProfile === 'straight' && (
             <SliderControl
@@ -702,10 +662,10 @@ export default function ColumnPanel() {
             }}
             value={node.capitalStyle === 'simple-slab' ? 'simple' : (node.capitalStyle ?? 'simple')}
           >
-            <option value="none">No Top</option>
-            <option value="simple">Simple Top</option>
-            <option value="stepped">Stepped Top</option>
-            <option value="rounded">Rounded Top</option>
+            <option value="none">无顶部</option>
+            <option value="simple">简单顶部</option>
+            <option value="stepped">台阶顶部</option>
+            <option value="rounded">圆角顶部</option>
           </select>
           {node.capitalStyle !== 'none' && (
             <SliderControl
@@ -811,11 +771,11 @@ export default function ColumnPanel() {
             }}
             value={node.baseStyle ?? 'square-plinth'}
           >
-            <option value="none">No Bottom</option>
-            <option value="simple-square">Simple Block Bottom</option>
-            <option value="square-plinth">Square Plinth Bottom</option>
-            <option value="stepped-square">Stepped Bottom</option>
-            <option value="round-rings">Rounded Bottom</option>
+            <option value="none">无底部</option>
+            <option value="simple-square">简单方块底部</option>
+            <option value="square-plinth">方形基座底部</option>
+            <option value="stepped-square">台阶底部</option>
+            <option value="round-rings">圆环底部</option>
           </select>
           {node.baseStyle !== 'none' && (
             <SliderControl

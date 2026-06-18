@@ -92,7 +92,7 @@ export {
   PipeFittingNode,
   PipeValveStyle,
 } from './nodes/pipe-fitting'
-export { RoadNode } from './nodes/road'
+export { RoadNode, RoadSurfaceKind } from './nodes/road'
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export { RoofSegmentNode, RoofType } from './nodes/roof-segment'
@@ -107,6 +107,7 @@ export { SphereNode } from './nodes/sphere'
 export type { StairSurfaceMaterialRole, StairSurfaceMaterialSpec } from './nodes/stair'
 export {
   getEffectiveStairSurfaceMaterial,
+  StairCenterColumnShape,
   StairNode,
   StairRailingMode,
   StairSlabOpeningMode,

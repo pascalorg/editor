@@ -92,7 +92,7 @@ const VIEW_MODE_IDS: {
         alt=""
         className="h-3.5 w-3.5 object-contain"
         height={14}
-        src="/icons/building.png"
+        src="/icons/building.webp"
         width={14}
       />
     ),
@@ -105,7 +105,7 @@ const VIEW_MODE_IDS: {
         alt=""
         className="h-3.5 w-3.5 object-contain"
         height={14}
-        src="/icons/blueprint.png"
+        src="/icons/blueprint.webp"
         width={14}
       />
     ),
@@ -142,9 +142,9 @@ function wallModeLabel(mode: string): string {
 }
 
 const wallModeIcons: Record<string, string> = {
-  up: '/icons/room.png',
-  cutaway: '/icons/wallcut.png',
-  down: '/icons/walllow.png',
+  up: '/icons/room.webp',
+  cutaway: '/icons/wallcut.webp',
+  down: '/icons/walllow.webp',
 }
 
 const SHADING_OPTIONS = [

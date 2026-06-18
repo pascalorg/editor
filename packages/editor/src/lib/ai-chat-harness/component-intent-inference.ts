@@ -84,7 +84,7 @@ function inferComponentFamily(text: string, prompt: string): string {
   return 'generic'
 }
 
-function blueprintText(blueprint: ComponentIntentBlueprint, userPrompt: string) {
+function blueprintIdentityText(blueprint: ComponentIntentBlueprint) {
   const partText = (blueprint.parts ?? [])
     .map((part) =>
       [normalizedText(part.id), normalizedText(part.kind), normalizedText(part.semanticRole)].join(
@@ -93,9 +93,11 @@ function blueprintText(blueprint: ComponentIntentBlueprint, userPrompt: string) 
     )
     .join(' ')
   const requiredRoles = (blueprint.requiredRoles ?? []).map(normalizedText).join(' ')
-  return [normalizedText(blueprint.category), partText, requiredRoles, userPrompt.toLowerCase()]
-    .filter(Boolean)
-    .join(' ')
+  return [normalizedText(blueprint.category), partText, requiredRoles].filter(Boolean).join(' ')
+}
+
+function blueprintText(blueprint: ComponentIntentBlueprint, userPrompt: string) {
+  return [blueprintIdentityText(blueprint), userPrompt.toLowerCase()].filter(Boolean).join(' ')
 }
 
 function inferComponentFromBlueprint(
@@ -105,8 +107,13 @@ function inferComponentFromBlueprint(
   if (!blueprint || !['compose_parts', 'compose_primitive'].includes(blueprint.route ?? '')) {
     return undefined
   }
-  const text = blueprintText(blueprint, userPrompt)
-  const has = (pattern: RegExp) => pattern.test(text) || pattern.test(userPrompt)
+  const partCount = blueprint.parts?.length ?? 0
+  const requiredRoleCount = blueprint.requiredRoles?.length ?? 0
+  const category = normalizedText(blueprint.category)
+  const explicitlyComponent = /(^|_)component($|_)/.test(category)
+  if (!explicitlyComponent && (partCount > 2 || requiredRoleCount > 2)) return undefined
+  const text = blueprintIdentityText(blueprint)
+  const has = (pattern: RegExp) => pattern.test(text)
 
   if (has(/wheel|tire|tyre|rim|\u8f6e\u5b50|\u8f66\u8f6e|\u8f6e\u80ce|\u8f6e\u6bc2/)) {
     return 'wheel'

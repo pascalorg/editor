@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { buildRoadFloorplan } from './floorplan'
 import { buildRoadGeometry } from './geometry'
 import { roadParametrics } from './parametrics'
@@ -15,6 +16,7 @@ export const roadDefinition: NodeDefinition<typeof RoadNode> = {
     parentId: null,
     visible: true,
     metadata: {},
+    surfaceKind: 'road',
     start: [0, 0],
     end: [5, 0],
     curveOffset: 0,
@@ -23,6 +25,17 @@ export const roadDefinition: NodeDefinition<typeof RoadNode> = {
     elevation: 0.01,
     laneCount: 2,
     showLaneMarkings: true,
+    material: {
+      preset: 'custom',
+      properties: {
+        color: '#2f3338',
+        roughness: 0.88,
+        metalness: 0.02,
+        opacity: 1,
+        transparent: false,
+        side: 'front',
+      },
+    },
     asphaltColor: '#2f3338',
     markingColor: '#f8fafc',
   }),
@@ -40,6 +53,8 @@ export const roadDefinition: NodeDefinition<typeof RoadNode> = {
 
   parametrics: roadParametrics,
 
+  materialTargets: overallMaterialTarget,
+
   tool: () => import('./tool'),
 
   geometry: buildRoadGeometry,
@@ -52,20 +67,20 @@ export const roadDefinition: NodeDefinition<typeof RoadNode> = {
   },
 
   toolHints: [
-    { key: 'Left click', label: '设置道路起点 / 终点' },
+    { key: 'Left click', label: '\u8bbe\u7f6e\u5730\u9762\u5e26\u8d77\u70b9 / \u7ec8\u70b9' },
     { key: 'Shift', label: '按住关闭角度吸附' },
     { key: 'Esc', label: '取消' },
   ],
 
   presentation: {
-    label: 'Road',
-    description: 'A flat road segment with editable width, lane count, and markings.',
+    label: '\u5730\u9762\u5e26',
+    description: 'A flat ground strip that can act as a road, river, walkway, or greenbelt.',
     icon: { kind: 'url', src: '/icons/road.svg' },
     paletteSection: 'structure',
     paletteOrder: 19,
   },
 
   mcp: {
-    description: 'A road segment defined by start + end points, width, and lane markings.',
+    description: 'A ground strip defined by start + end points, width, surface kind, and markings.',
   },
 }

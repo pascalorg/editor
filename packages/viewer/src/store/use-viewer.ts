@@ -77,6 +77,12 @@ type ViewerState = {
   showGrid: boolean
   setShowGrid: (show: boolean) => void
 
+  transparentBackground: boolean
+  setTransparentBackground: (transparent: boolean) => void
+
+  inkOpacity: number | null
+  setInkOpacity: (opacity: number | null) => void
+
   projectId: string | null
   setProjectId: (id: string | null) => void
   projectPreferences: Record<
@@ -292,6 +298,12 @@ const useViewer = create<ViewerState>()(
           }
           return { showGrid: show, projectPreferences }
         }),
+
+      transparentBackground: false,
+      setTransparentBackground: (transparent) => set({ transparentBackground: transparent }),
+
+      inkOpacity: null,
+      setInkOpacity: (opacity) => set({ inkOpacity: opacity }),
 
       projectId: null,
       setProjectId: (id) =>

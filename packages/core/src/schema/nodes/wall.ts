@@ -81,19 +81,23 @@ function hasSurfaceMaterial(spec: WallSurfaceMaterialSpec): boolean {
   return spec.material !== undefined || typeof spec.materialPreset === 'string'
 }
 
+function normalizeWallSurfaceMaterial(spec: WallSurfaceMaterialSpec): WallSurfaceMaterialSpec {
+  return spec.material ? { material: spec.material } : spec
+}
+
 export function getEffectiveWallSurfaceMaterial(
   wall: WallSurfaceMaterialSource,
   side: WallSurfaceSide,
 ): WallSurfaceMaterialSpec {
-  const configured = getConfiguredWallSurfaceMaterial(wall, side)
+  const configured = normalizeWallSurfaceMaterial(getConfiguredWallSurfaceMaterial(wall, side))
   if (hasSurfaceMaterial(configured)) {
     return configured
   }
 
-  return {
+  return normalizeWallSurfaceMaterial({
     material: wall.material,
     materialPreset: wall.materialPreset,
-  }
+  })
 }
 
 export function getWallSurfaceMaterialSignature(spec: WallSurfaceMaterialSpec): string {

@@ -1049,11 +1049,13 @@ const NODE_LABELS: Record<string, string> = {
   'Steel Beam': '钢梁',
   Tank: '储罐',
   'Data Widget': '数据组件',
+  Shelf: '货架',
   'cable-tray': '桥架',
   'pipe-fitting': '管件',
   'steel-beam': '钢梁',
   tank: '储罐',
   'data-widget': '数据组件',
+  shelf: '货架',
 }
 
 const PANEL_GROUP_LABELS: Record<string, string> = {
@@ -1065,15 +1067,24 @@ const PANEL_GROUP_LABELS: Record<string, string> = {
   Profile: '型材',
   Tank: '储罐',
   Widget: '组件',
-  Style: '样式',
+  Style: '类型',
   Position: '位置',
   Actions: '操作',
+  Topology: '结构',
 }
 
 const FIELD_LABELS: Record<string, string> = {
   width: '宽度',
+  depth: '深度',
   sideHeight: '侧边高度',
   thickness: '厚度',
+  rows: '层数',
+  columns: '列数',
+  withSides: '侧板',
+  withBack: '背板',
+  withBottom: '底板',
+  bracketStyle: '支架样式',
+  style: '类型',
   elevation: '标高',
   curveOffset: '曲线偏移',
   showRungs: '显示横档',
@@ -1134,6 +1145,13 @@ const ENUM_LABELS: Record<string, string> = {
   normal: '正常',
   caution: '警示',
   danger: '危险',
+  'wall-shelf': '壁挂架',
+  bookshelf: '书架',
+  'open-rack': '仓储货架',
+  cubby: '格子架',
+  minimal: '简洁',
+  industrial: '工业',
+  hidden: '隐藏',
 }
 
 function translateNodeLabel(label: string): string {

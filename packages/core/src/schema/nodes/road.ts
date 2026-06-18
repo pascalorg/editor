@@ -3,9 +3,13 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
+export const RoadSurfaceKind = z.enum(['road', 'river', 'walkway', 'greenbelt'])
+export type RoadSurfaceKind = z.infer<typeof RoadSurfaceKind>
+
 export const RoadNode = BaseNode.extend({
   id: objectId('road'),
   type: nodeType('road'),
+  surfaceKind: RoadSurfaceKind.default('road'),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
   start: z.tuple([z.number(), z.number()]),
@@ -20,12 +24,13 @@ export const RoadNode = BaseNode.extend({
   markingColor: z.string().default('#f8fafc'),
 }).describe(
   dedent`
-  Road node - a flat road segment drawn on a level.
-  - start/end: road centerline endpoints in level coordinate system
+  Ground strip node - a flat linear surface strip drawn on a level.
+  - surfaceKind: road, river, walkway, or greenbelt presentation
+  - start/end: centerline endpoints in level coordinate system
   - curveOffset: midpoint sagitta offset used to bend the road into an arc
-  - width/thickness/elevation: road deck dimensions and offset above the level plane
-  - laneCount/showLaneMarkings: visual lane stripe controls
-  - asphaltColor/markingColor: default road and stripe colours
+  - width/thickness/elevation: strip dimensions and offset above or below the level plane
+  - laneCount/showLaneMarkings: visual lane stripe controls for road-like strips
+  - asphaltColor/markingColor: default surface and stripe colours
   `,
 )
 

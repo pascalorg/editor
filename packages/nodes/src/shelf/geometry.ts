@@ -46,7 +46,7 @@ function getShelfMaterial(node: ShelfNode): Material {
     ? new MeshStandardMaterial()
     : node.material
       ? createMaterial(node.material).clone()
-      : DEFAULT_SHELF_MATERIAL.clone()
+      : DEFAULT_SHELF_MATERIAL().clone()
 
   if (preset) {
     applyMaterialPresetToMaterials(material, preset)

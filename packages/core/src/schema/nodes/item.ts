@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { AssetUrl } from '../asset-url'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { CollectionId } from '../collections'
+import { MaterialSchema } from '../material'
 
 // --- Control descriptors ---
 
@@ -130,6 +131,9 @@ export const ItemNode = BaseNode.extend({
 
   // Denormalized references to collections this node belongs to
   collectionIds: z.array(z.custom<CollectionId>()).optional(),
+
+  material: MaterialSchema.optional(),
+  materialPreset: z.string().optional(),
 
   asset: assetSchema,
 }).describe(dedent`Item node - used to represent a item in the building

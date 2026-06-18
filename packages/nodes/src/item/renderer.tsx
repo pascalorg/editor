@@ -13,22 +13,24 @@ import {
 import {
   type ColorPreset,
   createDefaultMaterial,
+  createMaterial,
+  createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
   ErrorBoundary,
   glassMaterial,
   NodeRenderer,
   type RenderShading,
   resolveCdnUrl,
+  useGLTFKTX2,
   useItemLightPool,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
 import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
-import { useGLTF } from '@react-three/drei/core/Gltf'
 import { useFrame } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
-import type { AnimationAction, Group, Material, Mesh } from 'three'
+import type { AnimationAction, AnimationClip, Group, Material, Mesh, Object3D } from 'three'
 import { MathUtils } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
 import { getItemColorOverride, isImportedGlbAsset } from './color-metadata'
@@ -148,10 +150,15 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
     if (!(src && importedGlb)) return src
     return `${src}${src.includes('?') ? '&' : '?'}pascalImportedGlb=1`
   }, [node.asset.src, importedGlb])
-  const { scene, nodes, animations } = useGLTF(modelUrl)
+  const { scene, nodes, animations } = useGLTFKTX2(modelUrl) as {
+    scene: Group
+    nodes: Record<string, Object3D>
+    animations: AnimationClip[]
+  }
   const ref = useRef<Group>(null!)
   const { actions } = useAnimations(animations, ref)
-  const colorOverride = getItemColorOverride(node)
+  const legacyColorOverride =
+    node.material || node.materialPreset ? null : getItemColorOverride(node)
   const shading = useViewer((state) => state.shading)
   const textures = useViewer((state) => state.textures)
   const colorPreset = useViewer((state) => state.colorPreset)
@@ -178,12 +185,17 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
 
   const preparedScene = useMemo(() => {
     const clonedScene = scene.clone(true)
-    const colorMaterial = colorOverride
-      ? (createDefaultMaterial(colorOverride, 0.72, shading) as MutableMaterial)
-      : null
-    if (colorMaterial && 'metalness' in colorMaterial) colorMaterial.metalness = 0.05
+    const overrideMaterial =
+      (node.materialPreset ? createMaterialFromPresetRef(node.materialPreset, shading) : null) ??
+      (node.material ? createMaterial(node.material, shading) : null) ??
+      (legacyColorOverride
+        ? (createDefaultMaterial(legacyColorOverride, 0.72, shading) as MutableMaterial)
+        : null)
+    if (legacyColorOverride && overrideMaterial && 'metalness' in overrideMaterial) {
+      ;(overrideMaterial as MutableMaterial).metalness = 0.05
+    }
 
-    clonedScene.traverse((child) => {
+    clonedScene.traverse((child: Object3D) => {
       if ((child as Mesh).isMesh) {
         const mesh = child as Mesh
         if (!importedGlb && mesh.name === 'cutout') {
@@ -191,8 +203,8 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
           return
         }
 
-        if (colorMaterial) {
-          mesh.material = colorMaterial
+        if (overrideMaterial) {
+          mesh.material = overrideMaterial
           mesh.castShadow = true
           mesh.receiveShadow = true
           return
@@ -227,7 +239,16 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
       }
     })
     return clonedScene
-  }, [scene, importedGlb, colorOverride, shading, textures, colorPreset])
+  }, [
+    scene,
+    importedGlb,
+    node.material,
+    node.materialPreset,
+    legacyColorOverride,
+    shading,
+    textures,
+    colorPreset,
+  ])
 
   const interactive = interactiveRef.current
   const animEffect =

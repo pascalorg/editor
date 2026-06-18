@@ -67,6 +67,14 @@ function detectFamily(
 
   if (hasComponentPartIntent(promptIntentText)) return 'unknown'
 
+  if (
+    /reactor|reaction[_\s-]?vessel|stirred[_\s-]?tank|pressure[_\s-]?vessel|process[_\s-]?equipment|reactor_vessel_shell|vessel_shell|agitator_motor|agitator_shaft|inlet_port|outlet_port|\u53cd\u5e94\u91dc|\u53cd\u5e94\u5668|\u6405\u62cc\u7f50|\u538b\u529b\u5bb9\u5668/.test(
+      text,
+    )
+  ) {
+    return 'industrial_equipment'
+  }
+
   if (/robot|cobot|manipulator|robot_arm|\u673a\u5668\u81c2|\u673a\u68b0\u81c2/.test(text)) {
     return 'robot_arm'
   }
@@ -90,6 +98,13 @@ function detectFamily(
     )
   ) {
     return 'unknown'
+  }
+  if (
+    /\bagv\b|\bamr\b|\bvga[_\s-]?(cart|vehicle)?\b|automated[_\s-]?guided[_\s-]?vehicle|material[_\s-]?cart|navigation_sensor/.test(
+      text,
+    )
+  ) {
+    return 'industrial_equipment'
   }
   if (
     /vehicle|sedan|suv|automobile|(?:^|[\s_-])(?:car|auto)(?:$|[\s_-])|\u6c7d\u8f66|\u8f7f\u8f66/.test(

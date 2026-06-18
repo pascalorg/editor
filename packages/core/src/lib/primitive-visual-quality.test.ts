@@ -198,4 +198,59 @@ describe('assessPrimitiveVisualQuality', () => {
     expect(good.score).toBeGreaterThanOrEqual(0.8)
     expect(good.issues).toEqual([])
   })
+
+  test('treats reactor assemblies as industrial equipment even when prompt lists robot arm capabilities', () => {
+    const shapes = composeAssemblyPrimitives({
+      family: 'reactor',
+      object: 'stirred reactor',
+    })
+    const result = assessPrimitiveVisualQuality(
+      shapes,
+      resolvePrimitiveWorldTransforms(shapes, { positionMode: 'world-center' }),
+      {
+        prompt:
+          'Factory geometry capabilities include conveyor, tank, reactor, and robot arm. User asks for 反应釜装置.',
+        geometryBrief: { category: 'industrial_process_equipment' },
+      },
+    )
+
+    expect(result.family).toBe('industrial_equipment')
+    expect(result.issues).not.toContain('robot arm visual quality requires robot_base.')
+  })
+
+  test('treats AGV material carts as industrial equipment instead of passenger cars', () => {
+    const shapes = composePartPrimitives({
+      name: 'AGV material cart',
+      family: 'generic',
+      parts: [
+        { kind: 'generic_body', semanticRole: 'vehicle_body', length: 1.4, width: 0.85, height: 0.28 },
+        { kind: 'generic_base', semanticRole: 'cargo_platform', length: 1.25, width: 0.72, height: 0.08 },
+        { kind: 'wheel_set', semanticRole: 'wheel', count: 4, radius: 0.13, wheelWidth: 0.06 },
+        { kind: 'bar_pair', semanticRole: 'bumper', length: 1.25, height: 0.12 },
+        {
+          kind: 'generic_detail_accent',
+          semanticRole: 'navigation_sensor',
+          length: 0.18,
+          width: 0.08,
+          height: 0.08,
+        },
+        { kind: 'warning_label', semanticRole: 'safety_label' },
+      ],
+    })
+
+    const result = assessPrimitiveVisualQuality(
+      shapes,
+      resolvePrimitiveWorldTransforms(shapes, { positionMode: 'world-center' }),
+      {
+        prompt: 'factory AGV material cart',
+        geometryBrief: { category: 'agv_material_cart' },
+      },
+    )
+
+    expect(result.family).toBe('industrial_equipment')
+    expect(result.score).toBeGreaterThanOrEqual(0.8)
+    expect(result.issues).not.toContain(
+      'vehicle needs a separate cabin/roof mass, not one plain body block.',
+    )
+  })
 })

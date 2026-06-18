@@ -153,7 +153,7 @@ export function SlabPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/floor.png"
+      icon="/icons/floor.webp"
       onClose={handleClose}
       title={node.name || N.slab()}
       width={320}

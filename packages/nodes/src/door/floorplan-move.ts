@@ -6,7 +6,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { snapToHalf } from '@pascal-app/editor'
-import { findClosestWallInPlan } from '../shared/wall-attach-target'
+import { findClosestWallInPlan, resolveOpeningPlacement } from '../shared/wall-attach-target'
 import { clampToWall, hasWallChildOverlap } from './door-math'
 
 /**
@@ -71,15 +71,17 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       if (!live || live.type !== 'door') return false
       // Block commit if the door overlaps any other wall child at its
       // current position. The 3D port has the same guard.
-      const overlapping = hasWallChildOverlap(
-        live.parentId as string,
-        live.position[0],
-        live.position[1],
-        live.width,
-        live.height,
-        live.id,
-      )
-      return !overlapping
+      const placement = resolveOpeningPlacement({
+        collides: hasWallChildOverlap(
+          live.parentId as string,
+          live.position[0],
+          live.position[1],
+          live.width,
+          live.height,
+          live.id,
+        ),
+      })
+      return placement.placeable
     },
   }
 

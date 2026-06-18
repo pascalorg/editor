@@ -8,13 +8,14 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react'
 import * as THREE from 'three/webgpu'
-import { hasDrawableGeometry } from '../../lib/drawable-geometry'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
+import { ensureObjectWebGPUCompatibleGeometry } from '../../lib/safe-geometry'
 import { getSceneTheme } from '../../lib/scene-themes'
+import { installEmptyDrawGuard } from '../../lib/webgpu-draw-guard'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
@@ -63,62 +64,6 @@ const DIRTY_BUILD_KINDS = new Set([
   'wall',
   'window',
 ])
-
-const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakSet<object>()
-
-/**
- * Renderer-level safety net against the empty-vertex-buffer crash.
- *
- * Wraps the per-object render function so any draw whose geometry has a count-0
- * `position` attribute is skipped instead of submitted. One such draw leaves
- * WebGPU vertex buffer slot 0 unbound, which the validator rejects and which
- * poisons the *whole* command encoder — so a single stray empty mesh (e.g. a
- * transient placeholder, or a derived edge/outline geometry) flickers the entire
- * canvas, not just itself. See `hasDrawableGeometry`.
- *
- * The custom render-object function is the documented three.js hook for this
- * (`Renderer.setRenderObjectFunction`); it must call `renderObject()` for
- * everything it keeps. `MergedOutlineNode` captures and restores this function
- * around its passes, so the guard survives outline rendering (its own passes
- * carry the same check inline).
- */
-function installEmptyDrawGuard(renderer: THREE.WebGPURenderer) {
-  renderer.setRenderObjectFunction(
-    (
-      object: any,
-      scene: any,
-      camera: any,
-      geometry: any,
-      material: any,
-      group: any,
-      lightsNode: any,
-      clippingContext: any,
-      passId: any,
-    ) => {
-      if (!hasDrawableGeometry(geometry)) {
-        if (warnedEmptyDraw && !warnedEmptyDraw.has(geometry ?? object)) {
-          warnedEmptyDraw.add(geometry ?? object)
-          console.warn(
-            '[viewer] skipped a draw with an empty position buffer (would poison the WebGPU command encoder)',
-            { name: object?.name, type: object?.type, material: material?.name },
-          )
-        }
-        return
-      }
-      ;(renderer as any).renderObject(
-        object,
-        scene,
-        camera,
-        geometry,
-        material,
-        group,
-        lightsNode,
-        clippingContext,
-        passId,
-      )
-    },
-  )
-}
 
 /**
  * Monitors the WebGPU device for loss / uncaptured errors and logs them.
@@ -214,6 +159,16 @@ function ShadowMapSync() {
   return null
 }
 
+function WebGPUSceneGeometryGuard() {
+  const scene = useThree((state) => state.scene)
+
+  useFrame(() => {
+    ensureObjectWebGPUCompatibleGeometry(scene)
+  }, -100)
+
+  return null
+}
+
 function hasPendingSceneBuildWork() {
   const { dirtyNodes, nodes } = useScene.getState()
 
@@ -288,6 +243,7 @@ interface ViewerProps {
   perf?: boolean
   useBvh?: boolean
   renderContext?: RenderContext
+  transparent?: boolean
   defaultRender?: {
     shading?: RenderShading
     textures?: boolean
@@ -331,6 +287,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     perf = false,
     useBvh = true,
     renderContext = 'editor',
+    transparent,
     defaultRender,
     isolate,
     sceneReadyKey,
@@ -361,6 +318,16 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   }, [isolate])
 
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  const transparentBackground = useViewer((state) => state.transparentBackground)
+  useLayoutEffect(() => {
+    if (transparent === undefined) return
+
+    useViewer.getState().setTransparentBackground(transparent)
+    return () => {
+      useViewer.getState().setTransparentBackground(false)
+    }
+  }, [transparent])
+
   const defaultShading = defaultRender?.shading
   const defaultTextures = defaultRender?.textures
   const defaultColorPreset = defaultRender?.colorPreset
@@ -405,7 +372,9 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   return (
     <Canvas
       camera={{ position: [50, 50, 50], fov: 50 }}
-      className={`transition-colors duration-700 ${isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
+      className={`transition-colors duration-700 ${
+        transparentBackground ? 'bg-transparent' : isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'
+      }`}
       dpr={[1, maxDpr]}
       frameloop="never"
       gl={
@@ -415,7 +384,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           if (cached) return cached
           const promise = (async () => {
             try {
-              const renderer = new THREE.WebGPURenderer(props as any)
+              const renderer = new THREE.WebGPURenderer({ ...(props as any), alpha: true })
               renderer.toneMapping = THREE.ACESFilmicToneMapping
               renderer.toneMappingExposure = getSceneTheme(
                 useViewer.getState().sceneTheme,
@@ -447,6 +416,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
       <FrameLimiter fps={50} />
       <ViewerCamera />
       <GPUDeviceWatcher />
+      <WebGPUSceneGeometryGuard />
       <ToneMappingExposure />
       <ShadowMapSync />
       <SceneReadyTracker onSceneReadyChange={onSceneReadyChange} sceneReadyKey={sceneReadyKey} />

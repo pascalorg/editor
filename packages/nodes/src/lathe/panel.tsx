@@ -52,10 +52,10 @@ export default function LathePanel() {
   if (!(node && node.type === 'lathe' && selectedId && selectedCount === 1)) return null
 
   return (
-    <PanelWrapper onClose={handleClose} title={node.name || 'Lathe'} width={300}>
+    <PanelWrapper onClose={handleClose} title={node.name || '\u65cb\u8f6c\u4f53'} width={300}>
       <PanelSection title={S.dimensions()}>
         <SliderControl
-          label="Segments"
+          label={S.segments()}
           max={128}
           min={8}
           onChange={(value) => handleUpdate({ segments: Math.round(value) })}
@@ -64,13 +64,13 @@ export default function LathePanel() {
           value={node.segments ?? 32}
         />
         <SliderControl
-          label="Arc"
+          label={'\u5f27\u5ea6'}
           max={360}
           min={1}
           onChange={(degrees) => handleUpdate({ arc: (degrees * Math.PI) / 180 })}
           precision={0}
           step={1}
-          unit="deg"
+          unit="°"
           value={Math.round(((node.arc ?? Math.PI * 2) * 180) / Math.PI)}
         />
       </PanelSection>

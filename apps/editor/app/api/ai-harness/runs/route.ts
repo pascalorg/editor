@@ -1,15 +1,28 @@
 import { NextResponse } from 'next/server'
-import { ensureArticraftRunRunning } from '@/lib/ai-harness-runs/articraft-runner'
-import { ensureImageTo3DRunRunning } from '@/lib/ai-harness-runs/image-to-3d-runner'
-import { ensurePrimitiveRunRunning } from '@/lib/ai-harness-runs/primitive-runner'
 import { createRun, listRecentRuns } from '@/lib/ai-harness-runs/run-store'
-import type { AiHarnessRunMode } from '@/lib/ai-harness-runs/types'
+import type { AiHarnessRun, AiHarnessRunMode } from '@/lib/ai-harness-runs/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+async function ensureRunRunning(run: AiHarnessRun) {
+  if (run.mode === 'articraft') {
+    const { ensureArticraftRunRunning } = await import('@/lib/ai-harness-runs/articraft-runner')
+    ensureArticraftRunRunning(run.id)
+  } else if (run.mode === 'image-to-3d') {
+    const { ensureImageTo3DRunRunning } = await import('@/lib/ai-harness-runs/image-to-3d-runner')
+    ensureImageTo3DRunRunning(run.id)
+  } else if (run.mode === 'primitive') {
+    const { ensurePrimitiveRunRunning } = await import('@/lib/ai-harness-runs/primitive-runner')
+    ensurePrimitiveRunRunning(run.id)
+  } else if (run.mode === 'factory') {
+    const { ensureFactoryRunRunning } = await import('@/lib/ai-harness-runs/factory-runner')
+    ensureFactoryRunRunning(run.id)
+  }
 }
 
 export async function POST(request: Request) {
@@ -25,7 +38,7 @@ export async function POST(request: Request) {
   }
 
   const mode = body.mode
-  if (!(mode === 'articraft' || mode === 'image-to-3d' || mode === 'primitive')) {
+  if (!(mode === 'articraft' || mode === 'image-to-3d' || mode === 'primitive' || mode === 'factory')) {
     return NextResponse.json({ error: 'Unsupported run mode' }, { status: 400 })
   }
 
@@ -53,13 +66,7 @@ export async function POST(request: Request) {
       image,
     })
 
-    if (run.mode === 'articraft') {
-      ensureArticraftRunRunning(run.id)
-    } else if (run.mode === 'image-to-3d') {
-      ensureImageTo3DRunRunning(run.id)
-    } else if (run.mode === 'primitive') {
-      ensurePrimitiveRunRunning(run.id)
-    }
+    await ensureRunRunning(run)
 
     return NextResponse.json({ runId: run.id, conversationId: run.conversationId, run })
   } catch (error) {

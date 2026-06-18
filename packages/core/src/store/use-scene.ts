@@ -75,6 +75,7 @@ function normalizeStairNode(node: Record<string, unknown>) {
     topLandingMode: getEnumValue(node.topLandingMode, ['none', 'integrated'] as const, 'none'),
     topLandingDepth: getFiniteNumber(node.topLandingDepth, 0.9),
     showCenterColumn: getBoolean(node.showCenterColumn, true),
+    centerColumnShape: getEnumValue(node.centerColumnShape, ['round', 'square'] as const, 'round'),
     showStepSupports: getBoolean(node.showStepSupports, true),
     railingMode: getEnumValue(node.railingMode, ['none', 'left', 'right', 'both'] as const, 'none'),
     railingHeight: getFiniteNumber(node.railingHeight, 0.92),

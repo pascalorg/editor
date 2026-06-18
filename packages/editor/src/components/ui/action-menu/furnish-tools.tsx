@@ -9,11 +9,11 @@ export type FurnishToolConfig = {
 }
 
 export const furnishTools: FurnishToolConfig[] = [
-  { id: 'item', iconSrc: '/icons/appliance.png', label: 'Common Equipment', catalogCategory: 'electronics' },
-  { id: 'item', iconSrc: '/icons/shelf.png', label: 'Equipment', catalogCategory: 'equipment' },
-  { id: 'item', iconSrc: '/icons/door.png', label: 'Structural', catalogCategory: 'structural' },
-  { id: 'item', iconSrc: '/icons/tree.png', label: 'Outdoor', catalogCategory: 'outdoor' },
-  { id: 'item', iconSrc: '/icons/collection.png', label: '\u6211\u7684', catalogCategory: 'mine' },
+  { id: 'item', iconSrc: '/icons/appliance.webp', label: 'Common Equipment', catalogCategory: 'electronics' },
+  { id: 'item', iconSrc: '/icons/shelf.webp', label: 'Equipment', catalogCategory: 'equipment' },
+  { id: 'item', iconSrc: '/icons/door.webp', label: 'Structural', catalogCategory: 'structural' },
+  { id: 'item', iconSrc: '/icons/tree.webp', label: 'Outdoor', catalogCategory: 'outdoor' },
+  { id: 'item', iconSrc: '/icons/collection.webp', label: '\u6211\u7684', catalogCategory: 'mine' },
 ]
 
 export function getFurnishToolLabel(category: CatalogCategory): string {

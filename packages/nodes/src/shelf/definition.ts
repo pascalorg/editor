@@ -10,7 +10,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   kind: 'shelf',
   schemaVersion: 2,
   schema: ShelfNode,
-  category: 'furnish',
+  category: 'structure',
 
   defaults: () => ({
     object: 'node',
@@ -20,17 +20,17 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
     children: [],
     position: [0, 0, 0],
     rotation: [0, 0, 0],
-    width: 1,
-    depth: 0.5,
-    thickness: 0.05,
-    height: 1.8,
-    style: 'cubby',
-    rows: 3,
+    width: 2.4,
+    depth: 0.8,
+    thickness: 0.06,
+    height: 2.4,
+    style: 'open-rack',
+    rows: 4,
     columns: 2,
     withBack: true,
-    withSides: true,
-    withBottom: true,
-    bracketStyle: 'minimal',
+    withSides: false,
+    withBottom: false,
+    bracketStyle: 'industrial',
     // material / materialPreset left undefined — geometry falls back to
     // `DEFAULT_SHELF_MATERIAL` (off-white), and paint mode writes the
     // chosen catalog material into these fields.
@@ -105,20 +105,20 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Left click', label: '放置搁板' },
+    { key: 'Left click', label: '放置货架' },
     { key: 'Esc', label: '取消' },
   ],
 
   presentation: {
-    label: 'Shelf',
-    description: 'A configurable shelving unit. Items host on each row.',
-    icon: { kind: 'url', src: '/icons/shelf.png' },
-    paletteSection: 'furnish',
-    paletteOrder: 30,
+    label: '货架',
+    description: '可配置的仓库/工厂货架，支持多层承载物品。',
+    icon: { kind: 'url', src: '/icons/shelf.webp' },
+    paletteSection: 'structure',
+    paletteOrder: 24,
   },
 
   mcp: {
     description:
-      'A parametric shelving unit. Four styles (wall-shelf / bookshelf / open-rack / cubby) with configurable rows, columns, sides, and back. Items host on each row.',
+      'A parametric warehouse shelf/rack. Four styles (wall-shelf / bookshelf / open-rack / cubby) with configurable rows, columns, sides, and back. Items host on each row.',
   },
 }

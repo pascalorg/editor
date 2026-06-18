@@ -1,10 +1,17 @@
 'use client'
 
-import { type AnyNode, getScaledDimensions, ItemNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  getScaledDimensions,
+  ItemNode,
+  type MaterialSchema,
+  useScene,
+} from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
   CollectionsPopover,
+  MaterialSwatchField,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -21,7 +28,6 @@ import {
   getItemColorMode,
   getItemColorOverride,
   isImportedGlbAsset,
-  normalizeItemColor,
 } from './color-metadata'
 
 /**
@@ -90,6 +96,8 @@ export default function ItemPanel() {
       rotation: [...node.rotation] as [number, number, number],
       name: node.name,
       asset: node.asset,
+      material: node.material,
+      materialPreset: node.materialPreset,
       parentId: node.parentId,
       side: node.side,
       metadata:
@@ -101,18 +109,28 @@ export default function ItemPanel() {
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
 
-  const handleColorDefault = useCallback(() => {
-    const n = nodeRef.current
-    if (!n) return
-    handleUpdate({ metadata: createItemColorMetadata(n, 'default') })
-  }, [handleUpdate])
-
-  const handleColorCustom = useCallback(
-    (color?: string) => {
+  const handleMaterialCustom = useCallback(
+    (material: MaterialSchema) => {
       const n = nodeRef.current
       if (!n) return
-      const nextColor = normalizeItemColor(color) ?? getItemColorOverride(n) ?? DEFAULT_ITEM_COLOR
-      handleUpdate({ metadata: createItemColorMetadata(n, 'custom', nextColor) })
+      handleUpdate({
+        material,
+        materialPreset: undefined,
+        metadata: createItemColorMetadata(n, 'default'),
+      })
+    },
+    [handleUpdate],
+  )
+
+  const handleMaterialPreset = useCallback(
+    (materialPreset: string) => {
+      const n = nodeRef.current
+      if (!n) return
+      handleUpdate({
+        material: undefined,
+        materialPreset,
+        metadata: createItemColorMetadata(n, 'default'),
+      })
     },
     [handleUpdate],
   )
@@ -129,10 +147,25 @@ export default function ItemPanel() {
   const itemColorMode = getItemColorMode(node)
   const itemColor = getItemColorOverride(node) ?? DEFAULT_ITEM_COLOR
   const importedGlb = isImportedGlbAsset(node)
+  const materialValue =
+    node.material ??
+    (itemColorMode === 'custom'
+      ? ({
+          preset: 'custom',
+          properties: {
+            color: itemColor,
+            roughness: 0.72,
+            metalness: 0.05,
+            opacity: 1,
+            transparent: false,
+            side: 'front',
+          },
+        } satisfies MaterialSchema)
+      : undefined)
 
   return (
     <PanelWrapper
-      icon={node.asset.thumbnail || '/icons/furniture.png'}
+      icon={node.asset.thumbnail || '/icons/item.webp'}
       onClose={handleClose}
       title={node.name || node.asset.name}
       width={300}
@@ -314,44 +347,20 @@ export default function ItemPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="颜色">
-        <div className="space-y-2 px-2 py-1">
-          <div className="grid grid-cols-2 gap-1.5">
-            <button
-              className={
-                itemColorMode === 'default'
-                  ? 'rounded-md border border-white/15 bg-white/10 px-2 py-1.5 font-medium text-white text-xs'
-                  : 'rounded-md border border-white/10 bg-[#2C2C2E] px-2 py-1.5 font-medium text-muted-foreground text-xs transition-colors hover:bg-[#3e3e3e] hover:text-white'
-              }
-              onClick={handleColorDefault}
-              type="button"
-            >
-              默认
-            </button>
-            <button
-              className={
-                itemColorMode === 'custom'
-                  ? 'rounded-md border border-white/15 bg-white/10 px-2 py-1.5 font-medium text-white text-xs'
-                  : 'rounded-md border border-white/10 bg-[#2C2C2E] px-2 py-1.5 font-medium text-muted-foreground text-xs transition-colors hover:bg-[#3e3e3e] hover:text-white'
-              }
-              onClick={() => handleColorCustom(itemColor)}
-              type="button"
-            >
-              自定义
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              aria-label="物品颜色"
-              className="h-8 w-10 cursor-pointer rounded border border-white/10 bg-transparent p-0.5"
-              onChange={(event) => handleColorCustom(event.target.value)}
-              type="color"
-              value={itemColor}
-            />
-            <div className="flex-1 rounded-md border border-white/10 bg-[#1f1f21] px-2 py-1.5 font-mono text-muted-foreground text-xs">
-              {itemColor}
-            </div>
-          </div>
+      <PanelSection title={'\u6750\u8d28'}>
+        <div className="space-y-2 px-3 py-2">
+          <MaterialSwatchField
+            description={
+              itemColorMode === 'default' && !node.material && !node.materialPreset
+                ? '\u4f7f\u7528\u539f\u59cb\u6a21\u578b\u6750\u8d28'
+                : undefined
+            }
+            label={'\u8868\u9762'}
+            selectedMaterialPreset={node.material ? undefined : node.materialPreset}
+            value={materialValue}
+            onChange={handleMaterialCustom}
+            onSelectMaterialPreset={handleMaterialPreset}
+          />
           {importedGlb && itemColorMode === 'default' ? (
             <p className="px-0.5 text-[11px] text-muted-foreground">
               默认使用导入 GLB 自带的颜色和贴图。

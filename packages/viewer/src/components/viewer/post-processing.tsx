@@ -15,6 +15,8 @@ import {
   oscSine,
   output,
   pass,
+  premultiplyAlpha,
+  renderOutput,
   sample,
   time,
   uniform,
@@ -27,6 +29,7 @@ import { inkedEdges } from '../../lib/ink-edges'
 import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { getSceneTheme } from '../../lib/scene-themes'
+import { installEmptyDrawGuard } from '../../lib/webgpu-draw-guard'
 import useViewer from '../../store/use-viewer'
 
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
@@ -55,6 +58,14 @@ function summarizeError(error: unknown) {
   return { message: String(error) }
 }
 
+function isRenderPipelineIdError(error: unknown) {
+  return (
+    error instanceof TypeError &&
+    error.message.includes('Cannot read properties of undefined') &&
+    error.message.includes("'id'")
+  )
+}
+
 function resetRendererForDirectRender(renderer: unknown, clearColor: Color, clearAlpha = 1) {
   const r = renderer as {
     autoClear?: boolean
@@ -76,6 +87,7 @@ function resetRendererForDirectRender(renderer: unknown, clearColor: Color, clea
     r.setClearColor?.(clearColor, clearAlpha)
     r.setClearAlpha?.(clearAlpha)
     r.autoClear = true
+    installEmptyDrawGuard(renderer as WebGPURenderer)
   } catch (error) {
     console.warn('[viewer/post-processing] Failed to reset renderer state for fallback.', {
       error: summarizeError(error),
@@ -92,7 +104,7 @@ function resetRendererForDirectRender(renderer: unknown, clearColor: Color, clea
 //   - denoise: keep SSGI but feed its raw noisy AO straight to the composite
 //   - outline: skip the merged-outline node and its 14 internal RTs
 //   - postFx:  bypass the whole RenderPipeline and use renderer.render(scene, camera)
-//              directly — isolates raw scene-render cost from any post-FX overhead
+//              directly -isolates raw scene-render cost from any post-FX overhead
 function readPerfDisableFlags() {
   if (typeof window === 'undefined') {
     return { ao: false, denoise: false, outline: false, postFx: false }
@@ -123,6 +135,18 @@ const PERF_POST_FX_DISABLED =
 const MAX_PIPELINE_RETRIES = 3
 const RETRY_DELAY_MS = 500
 
+type ActivePostFxFeatures = {
+  ssgi: boolean
+  denoise: boolean
+  outline: boolean
+}
+
+type PostFxDegradeState = {
+  outline: boolean
+  denoise: boolean
+  ao: boolean
+}
+
 export type HoverStyle = {
   visibleColor: number
   hiddenColor: number
@@ -145,19 +169,47 @@ export const DEFAULT_HOVER_STYLES: HoverStyles = {
   default: DEFAULT_HOVER_STYLE,
 }
 
-function sanitizeOutlineObjects(objects: Object3D[]) {
+function isDescendantOf(object: Object3D, ancestor: Object3D) {
+  let current: Object3D | null = object
+
+  while (current) {
+    if (current === ancestor) return true
+    current = current.parent
+  }
+
+  return false
+}
+
+function isValidOutlineObject(object: Object3D | undefined, scene: Object3D) {
+  return Boolean(
+    object &&
+      typeof object.id === 'number' &&
+      typeof object.traverse === 'function' &&
+      object.parent &&
+      isDescendantOf(object, scene),
+  )
+}
+
+function syncOutlineObjects(target: Object3D[], source: Object3D[], scene: Object3D) {
   let nextIndex = 0
 
-  for (const object of objects) {
-    if (!(object && typeof object.id === 'number' && object.parent)) {
-      continue
-    }
-
-    objects[nextIndex] = object
+  for (const object of source) {
+    if (!isValidOutlineObject(object, scene)) continue
+    target[nextIndex] = object
     nextIndex++
   }
 
-  objects.length = nextIndex
+  target.length = nextIndex
+}
+
+function nextPostFxDegrade(
+  features: ActivePostFxFeatures,
+  degraded: PostFxDegradeState,
+): keyof PostFxDegradeState | null {
+  if (features.outline && !degraded.outline) return 'outline'
+  if (features.denoise && !degraded.denoise) return 'denoise'
+  if (features.ssgi && !degraded.ao) return 'ao'
+  return null
 }
 
 const PostProcessingPasses = ({
@@ -168,13 +220,23 @@ const PostProcessingPasses = ({
   const { gl: renderer, invalidate, scene, camera, size } = useThree()
   const renderPipelineRef = useRef<RenderPipeline | null>(null)
   const hasPipelineErrorRef = useRef(false)
+  const activePostFxFeaturesRef = useRef<ActivePostFxFeatures>({
+    ssgi: false,
+    denoise: false,
+    outline: false,
+  })
+  const postFxDegradeRef = useRef<PostFxDegradeState>({
+    outline: false,
+    denoise: false,
+    ao: false,
+  })
   const fallbackErrorLoggedRef = useRef(false)
   const postFxFailureWarnedRef = useRef(false)
   const retryCountRef = useRef(0)
   const rebuildTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skippedZeroSizeRef = useRef(false)
 
-  // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
+  // Background color uniform - updated every frame via lerp, read by the TSL pipeline.
   // Initialised from the current scene theme so there's no flash on first render.
   const initBg = getSceneTheme(useViewer.getState().sceneTheme).background
   const bgUniform = useRef(uniform(new Color(initBg)))
@@ -215,13 +277,19 @@ const PostProcessingPasses = ({
   const hoverHiddenColor = useMemo(() => uniform(new Color(DEFAULT_HOVER_STYLE.hiddenColor)), [])
   const hoverStrength = useMemo(() => uniform(DEFAULT_HOVER_STYLE.strength), [])
   const hoverPulseMix = useMemo(() => uniform(DEFAULT_HOVER_STYLE.pulse ? 0 : 1), [])
+  const selectedOutlineObjectsRef = useRef<Object3D[]>([])
+  const hoveredOutlineObjectsRef = useRef<Object3D[]>([])
 
   // Subscribe to projectId so the pipeline rebuilds on project switch
   const projectId = useViewer((s) => s.projectId)
   const shading = useViewer((s) => s.shading)
   const edges = useViewer((s) => s.edges)
   const shadows = useViewer((s) => s.shadows)
+  const inkOpacityOverride = useViewer((s) => s.inkOpacity)
+  const transparentBackground = useViewer((s) => s.transparentBackground)
   const lastProjectIdRef = useRef(projectId)
+  const postFxSettingsKey = `${projectId}|${shading}|${edges}|${shadows}|${inkOpacityOverride}|${transparentBackground}`
+  const lastPostFxSettingsKeyRef = useRef(postFxSettingsKey)
 
   const [pipelineVersion, setPipelineVersion] = useState(0)
 
@@ -238,6 +306,7 @@ const PostProcessingPasses = ({
   useEffect(() => {
     if (lastProjectIdRef.current === projectId) return
     lastProjectIdRef.current = projectId
+    postFxDegradeRef.current = { outline: false, denoise: false, ao: false }
     fallbackErrorLoggedRef.current = false
     postFxFailureWarnedRef.current = false
     retryCountRef.current = 0
@@ -278,8 +347,16 @@ const PostProcessingPasses = ({
     const width = Math.floor(size.width)
     const height = Math.floor(size.height)
 
+    if (lastPostFxSettingsKeyRef.current !== postFxSettingsKey) {
+      lastPostFxSettingsKeyRef.current = postFxSettingsKey
+      postFxDegradeRef.current = { outline: false, denoise: false, ao: false }
+      fallbackErrorLoggedRef.current = false
+      postFxFailureWarnedRef.current = false
+      retryCountRef.current = 0
+    }
+
     if (!(renderer && scene && camera)) {
-      console.warn('[viewer/post-processing] Skipping pipeline build — missing dependency.', {
+      console.warn('[viewer/post-processing] Skipping pipeline build -missing dependency.', {
         hasRenderer: !!renderer,
         hasScene: !!scene,
         hasCamera: !!camera,
@@ -302,34 +379,37 @@ const PostProcessingPasses = ({
     }
 
     const perfDisable = readPerfDisableFlags()
-    const ssgiEnabled = shading === 'rendered' && SSGI_PARAMS.enabled && !perfDisable.ao
-    const denoiseEnabled = ssgiEnabled && !perfDisable.denoise
-    const outlineEnabled = !perfDisable.outline
-    const inkEnabled = edges !== 'off'
-    // The depth+normal MRT feeds both SSGI and the screen-space ink pass.
-    const needsNormalMRT = ssgiEnabled || inkEnabled
-    // Soft = thin (1px sample radius) + faint (50% opacity); strong = thick
-    // (2px, ~2× wider detected band) + solid (100%). The edge masks saturate,
-    // so radius+opacity are what actually separate the two modes — gain wouldn't.
-    // Same 1px line thickness for both (soft's thickness is the nice one);
-    // strong reads heavier purely by being fully solid vs soft's lighter 50%.
-    const inkRadius = 1
-    const inkOpacity = edges === 'strong' ? 1 : 0.5
-
-    console.log('[viewer/post-processing] Building pipeline', {
-      version: pipelineVersion,
+    const ssgiEnabled =
+      shading === 'rendered' &&
+      SSGI_PARAMS.enabled &&
+      !perfDisable.ao &&
+      !postFxDegradeRef.current.ao
+    const denoiseEnabled = ssgiEnabled && !perfDisable.denoise && !postFxDegradeRef.current.denoise
+    const outlineEnabled = !perfDisable.outline && !postFxDegradeRef.current.outline
+    activePostFxFeaturesRef.current = {
       ssgi: ssgiEnabled,
       denoise: denoiseEnabled,
       outline: outlineEnabled,
-      perfDisable,
-      hoverHighlightMode,
-      projectId,
-      shading,
-      shadows,
-      rendererCtor: (renderer as any).constructor?.name,
-      width,
-      height,
-    })
+    }
+    const inkEnabled = edges !== 'off'
+    const hasActivePostFx = ssgiEnabled || inkEnabled || outlineEnabled
+    if (!hasActivePostFx) {
+      hasPipelineErrorRef.current = false
+      if (renderPipelineRef.current) {
+        renderPipelineRef.current.dispose()
+      }
+      renderPipelineRef.current = null
+      return
+    }
+    // The depth+normal MRT feeds both SSGI and the screen-space ink pass.
+    const needsNormalMRT = ssgiEnabled || inkEnabled
+    // Soft = thin (1px sample radius) + faint (50% opacity); strong = thick
+    // (2px, ~2x wider detected band) + solid (100%). The edge masks saturate,
+    // so radius+opacity are what actually separate the two modes - gain wouldn't.
+    // Same 1px line thickness for both (soft's thickness is the nice one);
+    // strong reads heavier purely by being fully solid vs soft's lighter 50%.
+    const inkRadius = 1
+    const inkOpacity = inkOpacityOverride ?? (edges === 'strong' ? 1 : 0.5)
 
     hasPipelineErrorRef.current = false
 
@@ -350,11 +430,8 @@ const PostProcessingPasses = ({
 
     // Clear outliner arrays synchronously to prevent stale Object3D refs
     // from the previous project leaking into the new pipeline's outline passes.
-    const outliner = useViewer.getState().outliner
-    sanitizeOutlineObjects(outliner.selectedObjects)
-    sanitizeOutlineObjects(outliner.hoveredObjects)
-    outliner.selectedObjects.length = 0
-    outliner.hoveredObjects.length = 0
+    selectedOutlineObjectsRef.current.length = 0
+    hoveredOutlineObjectsRef.current.length = 0
 
     try {
       const scenePass = pass(scene, camera)
@@ -373,13 +450,13 @@ const PostProcessingPasses = ({
       // Background detection via alpha: renderer clears with alpha=0 (setClearAlpha(0) in useFrame),
       // so background pixels have scenePassColor.a=0 while geometry pixels have output.a=1.
       // WebGPU only applies clearColorValue to MRT attachment 0 (output), so scenePassColor.a
-      // is the reliable geometry mask — no normals, no flicker.
+      // is the reliable geometry mask -no normals, no flicker.
       const hasGeometry = scenePassColor.a
       const contentAlpha = hasGeometry.max(zonePass.a)
 
       let sceneColor = scenePassColor as unknown as ReturnType<typeof vec4>
 
-      // Depth + normal MRT — shared by SSGI (diffuse/normal) and the ink pass
+      // Depth + normal MRT -shared by SSGI (diffuse/normal) and the ink pass
       // (depth/normal). Built whenever either is active.
       let scenePassDepth: any = null
       let scenePassNormal: any = null
@@ -423,7 +500,7 @@ const PostProcessingPasses = ({
         const gi = giPass.rgb
         let ao: any
         if (denoiseEnabled) {
-          // DenoiseNode only denoises RGB — alpha is passed through unchanged.
+          // DenoiseNode only denoises RGB -alpha is passed through unchanged.
           // SSGI packs AO into alpha, so we remap it into RGB before denoising.
           const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
           const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
@@ -432,7 +509,7 @@ const PostProcessingPasses = ({
           ao = (denoisePass as any).r
         } else {
           // Diagnostic path: feed raw noisy SSGI AO straight through. Will
-          // look grainy — that's the point, it isolates denoise cost.
+          // look grainy -that's the point, it isolates denoise cost.
           ao = giTexture.a
         }
 
@@ -443,7 +520,7 @@ const PostProcessingPasses = ({
         )
       }
 
-      // Screen-space ink outline (SketchUp look) — depth/normal edge detection
+      // Screen-space ink outline (SketchUp look) -depth/normal edge detection
       // over the composited scene. Topology-agnostic, so it handles CSG-cut
       // walls cleanly. Applied before the selection outline + background mix.
       if (inkEnabled) {
@@ -461,12 +538,12 @@ const PostProcessingPasses = ({
       }
 
       // Single merged outline node: one shared depth pass for both selected + hovered groups.
-      const outliner = useViewer.getState().outliner
       let compositeWithOutlines = sceneColor
+      let visualAlpha = contentAlpha
       if (outlineEnabled) {
         const outlineNode = mergedOutline(scene, camera, {
-          primaryObjects: outliner.selectedObjects,
-          secondaryObjects: outliner.hoveredObjects,
+          primaryObjects: selectedOutlineObjectsRef.current,
+          secondaryObjects: hoveredOutlineObjectsRef.current,
           primaryEdgeThickness: uniform(1),
           secondaryEdgeThickness: uniform(1.5),
         })
@@ -490,6 +567,11 @@ const PostProcessingPasses = ({
           .mul(hoverStrength)
           .mul(osc)
 
+        const outlineAlpha = outlineNode.primaryVisibleEdge
+          .max(outlineNode.primaryHiddenEdge)
+          .max(outlineNode.secondaryVisibleEdge)
+          .max(outlineNode.secondaryHiddenEdge)
+        visualAlpha = visualAlpha.max(outlineAlpha)
         compositeWithOutlines = vec4(
           add(sceneColor.rgb, selectedOutline.add(hoverOutline)),
           sceneColor.a,
@@ -497,17 +579,57 @@ const PostProcessingPasses = ({
       }
 
       const composited = mix(bgUniform.current, compositeWithOutlines.rgb, contentAlpha)
-      // Editor overlays painted on top by their own alpha — they never get inked,
+      // Editor overlays painted on top by their own alpha -they never get inked,
       // AO'd, or outlined, and always read crisp regardless of scene depth.
       const withOverlay = mix(composited, overlayColor.rgb, overlayColor.a)
-      const finalOutput = vec4(withOverlay, float(1))
+      let finalOutput: any = vec4(withOverlay, float(1))
+      if (transparentBackground) {
+        const overlayAlpha = overlayColor.a
+        const alpha = overlayAlpha.add(visualAlpha.mul(overlayAlpha.oneMinus()))
+        const straightRgb = overlayColor.rgb
+          .mul(overlayAlpha)
+          .add(compositeWithOutlines.rgb.mul(visualAlpha).mul(overlayAlpha.oneMinus()))
+          .div(alpha.max(float(0.00001)))
+        finalOutput = premultiplyAlpha(renderOutput(vec4(straightRgb, alpha)))
+      }
 
       const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
+      renderPipeline.outputColorTransform = !transparentBackground
       renderPipeline.outputNode = finalOutput
       renderPipelineRef.current = renderPipeline
       retryCountRef.current = 0
     } catch (error) {
       hasPipelineErrorRef.current = true
+      const degrade = nextPostFxDegrade(activePostFxFeaturesRef.current, postFxDegradeRef.current)
+      if (degrade) {
+        postFxDegradeRef.current = {
+          ...postFxDegradeRef.current,
+          [degrade]: true,
+        }
+        if (renderPipelineRef.current) {
+          renderPipelineRef.current.dispose()
+        }
+        renderPipelineRef.current = null
+
+        if (rebuildTimeoutRef.current !== null) {
+          clearTimeout(rebuildTimeoutRef.current)
+        }
+        rebuildTimeoutRef.current = setTimeout(requestPipelineRebuild, 0)
+
+        try {
+          resetRendererForDirectRender(renderer, bgCurrent.current, transparentBackground ? 0 : 1)
+          ;(renderer as any).render(scene, camera)
+        } catch (fallbackError) {
+          if (!fallbackErrorLoggedRef.current) {
+            fallbackErrorLoggedRef.current = true
+            console.warn('[viewer/post-processing] Immediate fallback render failed.', {
+              error: summarizeError(fallbackError),
+            })
+          }
+        }
+        return
+      }
+
       if (!postFxFailureWarnedRef.current) {
         postFxFailureWarnedRef.current = true
         console.warn(
@@ -535,22 +657,23 @@ const PostProcessingPasses = ({
   }, [
     camera,
     hoverHiddenColor,
-    hoverHighlightMode,
     hoverPulseMix,
     hoverStrength,
     hoverVisibleColor,
     edges,
+    inkOpacityOverride,
     pipelineVersion,
-    projectId,
+    postFxSettingsKey,
     renderer,
     scene,
     shading,
-    shadows,
+    transparentBackground,
     size.height,
     size.width,
     zoneLayers,
     sceneOnlyLayers,
     overlayLayers,
+    requestPipelineRebuild,
   ])
 
   useFrame((_, delta) => {
@@ -562,16 +685,16 @@ const PostProcessingPasses = ({
     bgTarget.current.set(getSceneTheme(useViewer.getState().sceneTheme).background)
     bgCurrent.current.lerp(bgTarget.current, Math.min(delta, 0.1) * 4)
     bgUniform.current.value.copy(bgCurrent.current)
-    // Ink colour follows the (lerping) background luminance — snaps dark↔light.
+    // Ink colour follows the (lerping) background luminance - snaps dark/light.
     inkColorUniform.current.value.set(edgeColorFor(`#${bgCurrent.current.getHexString()}`))
 
     const outliner = useViewer.getState().outliner
-    sanitizeOutlineObjects(outliner.selectedObjects)
-    sanitizeOutlineObjects(outliner.hoveredObjects)
+    syncOutlineObjects(selectedOutlineObjectsRef.current, outliner.selectedObjects, scene)
+    syncOutlineObjects(hoveredOutlineObjectsRef.current, outliner.hoveredObjects, scene)
 
     if (PERF_POST_FX_DISABLED || hasPipelineErrorRef.current || !renderPipelineRef.current) {
       try {
-        resetRendererForDirectRender(renderer, bgCurrent.current, 1)
+        resetRendererForDirectRender(renderer, bgCurrent.current, transparentBackground ? 0 : 1)
         const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
         ;(renderer as any).render(scene, camera)
         if (PERF_OVERLAY_ENABLED) {
@@ -601,7 +724,7 @@ const PostProcessingPasses = ({
       renderPipelineRef.current.render()
       if (PERF_OVERLAY_ENABLED) {
         // device.queue.onSubmittedWorkDone() resolves once the GPU has
-        // finished the work we just submitted — the delta from our submit
+        // finished the work we just submitted -the delta from our submit
         // timestamp is a clean per-frame GPU duration. Doesn't block CPU
         // (no await) and works for the custom RenderPipeline path that
         // bypasses three.js's timestamp-query infrastructure.
@@ -614,7 +737,57 @@ const PostProcessingPasses = ({
       }
     } catch (error) {
       hasPipelineErrorRef.current = true
+      const degrade = nextPostFxDegrade(activePostFxFeaturesRef.current, postFxDegradeRef.current)
       if (!postFxFailureWarnedRef.current) {
+        if (degrade) {
+          postFxDegradeRef.current = {
+            ...postFxDegradeRef.current,
+            [degrade]: true,
+          }
+          if (renderPipelineRef.current) {
+            renderPipelineRef.current.dispose()
+          }
+          renderPipelineRef.current = null
+
+          if (rebuildTimeoutRef.current !== null) {
+            clearTimeout(rebuildTimeoutRef.current)
+          }
+          rebuildTimeoutRef.current = setTimeout(requestPipelineRebuild, 0)
+
+          try {
+            resetRendererForDirectRender(renderer, bgCurrent.current, transparentBackground ? 0 : 1)
+            ;(renderer as any).render(scene, camera)
+          } catch (fallbackError) {
+            if (!fallbackErrorLoggedRef.current) {
+              fallbackErrorLoggedRef.current = true
+              console.warn('[viewer/post-processing] Immediate fallback render failed.', {
+                error: summarizeError(fallbackError),
+              })
+            }
+          }
+          return
+        }
+
+        if (isRenderPipelineIdError(error)) {
+          if (renderPipelineRef.current) {
+            renderPipelineRef.current.dispose()
+          }
+          renderPipelineRef.current = null
+
+          try {
+            resetRendererForDirectRender(renderer, bgCurrent.current, transparentBackground ? 0 : 1)
+            ;(renderer as any).render(scene, camera)
+          } catch (fallbackError) {
+            if (!fallbackErrorLoggedRef.current) {
+              fallbackErrorLoggedRef.current = true
+              console.warn('[viewer/post-processing] Immediate fallback render failed.', {
+                error: summarizeError(fallbackError),
+              })
+            }
+          }
+          return
+        }
+
         postFxFailureWarnedRef.current = true
         console.warn(
           '[viewer/post-processing] Render pass failed. Rendering without post FX until the next retry.',
@@ -639,7 +812,7 @@ const PostProcessingPasses = ({
       }
 
       try {
-        resetRendererForDirectRender(renderer, bgCurrent.current, 1)
+        resetRendererForDirectRender(renderer, bgCurrent.current, transparentBackground ? 0 : 1)
         ;(renderer as any).render(scene, camera)
       } catch (fallbackError) {
         if (!fallbackErrorLoggedRef.current) {

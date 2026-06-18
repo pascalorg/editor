@@ -2071,20 +2071,21 @@ function Capital({ node, y, height }: { node: ColumnNode; y: number; height: num
 }
 
 function PipeSupport({ node }: { node: ColumnNode }) {
-  const height = Math.max(0.12, node.height)
-  const width = clamp(node.braceWidth ?? node.width, 0.04, 1.6)
-  const depth = clamp(node.braceDepth ?? node.depth, 0.04, 1.6)
-  const span = Math.max(node.braceBottomSpread ?? Math.max(width * 4, 0.7), width * 2.5)
-  const baseThickness = Math.max(0.035, Math.min(0.08, width * 0.45))
-  const postWidth = Math.max(width * 0.55, 0.035)
-  const topBlockHeight = Math.max(baseThickness * 1.4, depth * 0.35)
-  const topBlockDepth = Math.max(depth * 1.5, postWidth * 2.2)
+  const height = Math.max(0.8, node.height)
+  const width = clamp(node.braceWidth ?? node.width, 0.08, 1.6)
+  const depth = clamp(node.braceDepth ?? node.depth, 0.08, 1.6)
+  const span = Math.max(node.braceBottomSpread ?? Math.max(width * 6, 1.2), width * 5)
+  const saddleDepth = Math.max(node.braceTopSpread ?? depth * 3.2, depth * 2.8, 0.45)
+  const baseThickness = Math.max(0.05, Math.min(0.12, width * 0.5))
+  const postWidth = Math.max(width * 0.75, 0.08)
+  const topBlockHeight = Math.max(baseThickness * 1.8, depth * 0.55, 0.12)
+  const topBlockDepth = Math.max(saddleDepth, postWidth * 2.5)
   const postHeight = Math.max(0.04, height - topBlockHeight - baseThickness)
 
   return (
     <group>
       <MappedBox
-        depth={Math.max(depth * 1.35, 0.18)}
+        depth={Math.max(saddleDepth * 0.75, depth * 1.8)}
         height={baseThickness}
         position={[0, baseThickness / 2, 0]}
         width={span * 1.12}

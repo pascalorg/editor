@@ -3,6 +3,7 @@
 import { getSceneHistoryPauseDepth, useScene } from '@pascal-app/core'
 import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
 import { type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
+import { prepareSceneGraphForSave } from '../lib/scene-save'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
 
@@ -70,7 +71,7 @@ export function useAutoSave({
       }
 
       const { nodes, rootNodeIds } = useScene.getState()
-      const sceneGraph = { nodes, rootNodeIds } as SceneGraph
+      const sceneGraph = prepareSceneGraphForSave({ nodes, rootNodeIds } as SceneGraph)
 
       // Guard: refuse to autosave if the scene went from populated to nearly empty.
       // This catches accidental full deletions before they're persisted.
@@ -154,7 +155,7 @@ export function useAutoSave({
     function flushOnExit() {
       if (!hasDirtyChangesRef.current) return
       const { nodes, rootNodeIds } = useScene.getState()
-      const sceneGraph = { nodes, rootNodeIds } as SceneGraph
+      const sceneGraph = prepareSceneGraphForSave({ nodes, rootNodeIds } as SceneGraph)
       if (onSaveRef.current) {
         onSaveRef.current(sceneGraph).catch(() => {})
       } else {

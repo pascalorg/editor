@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { AnyNode } from '../types'
+import { BoxNode } from './box'
 import { CableTrayNode } from './cable-tray'
 import { LevelNode } from './level'
 import { SteelBeamNode } from './steel-beam'
@@ -20,6 +21,17 @@ describe('LevelNode', () => {
     })
 
     expect(level.children).toEqual([cableTray.id, steelBeam.id])
+    expect(AnyNode.safeParse(level).success).toBe(true)
+  })
+
+  test('accepts generated primitive and assembly children', () => {
+    const box = BoxNode.parse({ id: 'box_generated', parentId: 'level_main' })
+    const level = LevelNode.parse({
+      id: 'level_main',
+      children: ['assembly_generated', box.id],
+    })
+
+    expect(level.children).toEqual(['assembly_generated', 'box_generated'])
     expect(AnyNode.safeParse(level).success).toBe(true)
   })
 })

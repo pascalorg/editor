@@ -1,6 +1,7 @@
 import type { LadderNode, ParametricDescriptor } from '@pascal-app/core'
 
 export const ladderParametrics: ParametricDescriptor<LadderNode> = {
+  customPanel: () => import('../stair/panel'),
   groups: [
     {
       label: 'Dimensions',
@@ -48,4 +49,3 @@ export const ladderParametrics: ParametricDescriptor<LadderNode> = {
     },
   ],
 }
-

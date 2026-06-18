@@ -1,7 +1,12 @@
 import type { ParametricDescriptor, RoadNode } from '@pascal-app/core'
+import { RoadSurfaceKindField } from './surface-kind-field'
 
 export const roadParametrics: ParametricDescriptor<RoadNode> = {
   groups: [
+    {
+      label: 'Type',
+      fields: [{ key: 'surfaceKind', kind: 'custom', component: RoadSurfaceKindField }],
+    },
     {
       label: 'Dimensions',
       fields: [
@@ -20,10 +25,7 @@ export const roadParametrics: ParametricDescriptor<RoadNode> = {
     },
     {
       label: 'Appearance',
-      fields: [
-        { key: 'asphaltColor', kind: 'color' },
-        { key: 'markingColor', kind: 'color', visibleIf: (node) => node.showLaneMarkings },
-      ],
+      fields: [{ key: 'markingColor', kind: 'color', visibleIf: (node) => node.showLaneMarkings }],
     },
   ],
 }

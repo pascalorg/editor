@@ -72,6 +72,38 @@ describe('place_item', () => {
     expect(bridge.validateScene().valid).toBe(true)
   })
 
+  test('places newly shared factory catalog items without placeholder fallback', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const slab = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 4],
+        [0, 4],
+      ],
+    })
+    bridge.createNode(slab, level.id)
+
+    const result = await client.callTool({
+      name: 'place_item',
+      arguments: {
+        catalogItemId: 'factory-extractor',
+        targetNodeId: slab.id,
+        position: [2, 0, 2],
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.status).toBe('ok')
+    const item = bridge.getNode(parsed.itemId)
+    expect((item as { asset?: { id?: string; src?: string } } | null)?.asset?.id).toBe(
+      'factory-extractor',
+    )
+    expect((item as { asset?: { src?: string } } | null)?.asset?.src).toBe(
+      '/items/factory-extractor/model.glb',
+    )
+  })
+
   test('rejects placement on an unsupported node', async () => {
     const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
     const result = await client.callTool({

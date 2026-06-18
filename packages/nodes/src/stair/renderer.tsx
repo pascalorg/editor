@@ -485,6 +485,7 @@ function CurvedStairBody({
           height={spiralColumnHeight}
           material={sideMaterial}
           radius={spiralColumnRadius}
+          shape={stair.centerColumnShape ?? 'round'}
         />
       ) : null}
       {Array.from({ length: stepCount }).map((_, index) => {
@@ -596,8 +597,8 @@ function CurvedStepMesh({
 }
 
 /**
- * Spiral center column. The cylinder is rebuilt whenever
- * `spiralColumnRadius` changes — i.e. on every tick of an inner-radius
+ * Spiral center column. The geometry is rebuilt whenever
+ * `spiralColumnRadius` or `centerColumnShape` changes — i.e. on every tick of an inner-radius
  * drag. We pass the geometry as a prop (avoiding R3F's empty-placeholder
  * frame from inline JSX) and dispose the prior one on swap, matching the
  * pattern in guide/renderer.tsx. Without this WebGPU flags
@@ -607,15 +608,20 @@ function SpiralColumnMesh({
   radius,
   height,
   material,
+  shape,
 }: {
   radius: number
   height: number
   material: THREE.Material | THREE.Material[]
+  shape: StairNode['centerColumnShape']
 }) {
-  const geometry = useMemo(
-    () => new THREE.CylinderGeometry(radius, radius, height, 10),
-    [radius, height],
-  )
+  const geometry = useMemo(() => {
+    if (shape === 'square') {
+      const side = radius * 2
+      return new THREE.BoxGeometry(side, height, side)
+    }
+    return new THREE.CylinderGeometry(radius, radius, height, 10)
+  }, [radius, height, shape])
   useEffect(
     () => () => {
       geometry.dispose()

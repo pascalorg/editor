@@ -26,3 +26,51 @@ export const wallSurfaceMaterialTargets = [
     materialPresetKey: 'exteriorMaterialPreset',
   },
 ] as const satisfies readonly MaterialTargetDescriptor[]
+
+export const roofSurfaceMaterialTargets = [
+  {
+    key: 'top',
+    label: 'Top',
+    kind: 'face',
+    materialKey: 'topMaterial',
+    materialPresetKey: 'topMaterialPreset',
+  },
+  {
+    key: 'edge',
+    label: 'Edge',
+    kind: 'face',
+    materialKey: 'edgeMaterial',
+    materialPresetKey: 'edgeMaterialPreset',
+  },
+  {
+    key: 'wall',
+    label: 'Wall',
+    kind: 'face',
+    materialKey: 'wallMaterial',
+    materialPresetKey: 'wallMaterialPreset',
+  },
+] as const satisfies readonly MaterialTargetDescriptor[]
+
+export const stairSurfaceMaterialTargets = [
+  {
+    key: 'tread',
+    label: 'Tread',
+    kind: 'part',
+    materialKey: 'treadMaterial',
+    materialPresetKey: 'treadMaterialPreset',
+  },
+  {
+    key: 'side',
+    label: 'Side',
+    kind: 'part',
+    materialKey: 'sideMaterial',
+    materialPresetKey: 'sideMaterialPreset',
+  },
+  {
+    key: 'railing',
+    label: 'Railing',
+    kind: 'part',
+    materialKey: 'railingMaterial',
+    materialPresetKey: 'railingMaterialPreset',
+  },
+] as const satisfies readonly MaterialTargetDescriptor[]

@@ -95,4 +95,65 @@ describe('component intent inference', () => {
       arrangement: 'single',
     })
   })
+
+  test('does not infer a wheel component from negative constraints in a whole CNC blueprint', () => {
+    const intent = inferCreateIntentFromBlueprint(
+      'compose_parts',
+      {},
+      {
+        route: 'compose_parts',
+        category: 'cnc_machining_center',
+        constraints: { length: 2.8, width: 1.1, height: 1.7 },
+        requiredRoles: [
+          'machine_base',
+          'machine_enclosure',
+          'viewing_panel',
+          'spindle_head',
+          'work_table',
+          'control_panel',
+        ],
+        parts: [
+          { id: 'base', kind: 'generic_base', semanticRole: 'machine_base' },
+          { id: 'enclosure', kind: 'generic_body', semanticRole: 'machine_enclosure' },
+          { id: 'viewing_panel', kind: 'generic_panel', semanticRole: 'viewing_panel' },
+        ],
+      },
+      'Generate a CNC machining center. Do not generate aircraft, vehicle, wheel, wing, or landing gear.',
+    )
+
+    expect(intent).toBeUndefined()
+  })
+
+  test('does not infer an access door component from a multi-part CNC machine blueprint', () => {
+    const intent = inferCreateIntentFromBlueprint(
+      'compose_parts',
+      {},
+      {
+        route: 'compose_parts',
+        category: 'machine_tool',
+        constraints: { length: 2.8, width: 1.1, height: 1.7 },
+        requiredRoles: [
+          'machine_base',
+          'machine_enclosure',
+          'viewing_panel',
+          'spindle_head',
+          'work_table',
+          'control_panel',
+          'display_screen',
+          'vent_panel',
+          'access_panel',
+          'warning_label',
+          'nameplate',
+        ],
+        parts: [
+          { id: 'base', kind: 'generic_base', semanticRole: 'machine_base' },
+          { id: 'enclosure', kind: 'generic_body', semanticRole: 'machine_enclosure' },
+          { id: 'access_door', kind: 'access_panel', semanticRole: 'access_panel' },
+        ],
+      },
+      'Generate a CNC machining center. Do not generate aircraft.',
+    )
+
+    expect(intent).toBeUndefined()
+  })
 })

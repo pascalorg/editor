@@ -149,7 +149,7 @@ export function CeilingPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/ceiling.png"
+      icon="/icons/ceiling.webp"
       onClose={handleClose}
       title={node.name || N.ceiling()}
       width={320}

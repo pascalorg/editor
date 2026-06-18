@@ -147,6 +147,52 @@ describe('validatePrimitiveSemantics', () => {
     )
   })
 
+  test('does not treat revision-only vehicle roles as a complete passenger car request', () => {
+    const shapes: PrimitiveShapeInput[] = [
+      {
+        kind: 'box',
+        name: 'agv cart body',
+        semanticRole: 'vehicle_body',
+        position: [0, 0.35, 0],
+        length: 1.4,
+        width: 0.8,
+        height: 0.35,
+      },
+      {
+        kind: 'torus',
+        name: 'left drive tire',
+        semanticRole: 'vehicle_tire',
+        position: [-0.4, 0.2, -0.45],
+        axis: 'z',
+        majorRadius: 0.16,
+        tubeRadius: 0.04,
+      },
+      {
+        kind: 'box',
+        name: 'navigation sensor mast',
+        semanticRole: 'navigation_sensor',
+        position: [0.45, 0.75, 0],
+        length: 0.08,
+        width: 0.08,
+        height: 0.35,
+      },
+    ]
+
+    const result = validatePrimitiveSemantics(
+      shapes,
+      resolvePrimitiveWorldTransforms(shapes, { positionMode: 'world-center' }),
+      {
+        prompt: 'make it blue',
+        geometryBrief: { category: 'generic body assembly' },
+      },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.family).toBe('unknown')
+    expect(result.issues).not.toContain('vehicle requires exactly 1 main body shell, got 1.')
+    expect(result.issues.some((issue) => issue.includes('vehicle requires'))).toBe(false)
+  })
+
   test('accepts car tire required-role aliases for single vehicle wheel components', () => {
     const shapes: PrimitiveShapeInput[] = [
       {
@@ -484,6 +530,38 @@ describe('validatePrimitiveSemantics', () => {
     expect(result.facts.roles.upper_arm).toBe(1)
     expect(result.facts.roles.forearm).toBe(1)
     expect(result.facts.roles.end_effector).toBe(1)
+  })
+
+  test('accepts industrial role aliases from LLM blueprints', () => {
+    const shapes = [
+      { kind: 'box', semanticRole: 'support_base', sourcePartKind: 'skid_base', length: 2.6 },
+      { kind: 'cylinder', semanticRole: 'volute_casing', radius: 0.3, height: 0.28 },
+      { kind: 'cylinder', semanticRole: 'inlet_port', radius: 0.12, height: 0.35 },
+      { kind: 'cylinder', semanticRole: 'outlet_port', radius: 0.1, height: 0.35 },
+      { kind: 'cylinder', semanticRole: 'drive_motor', radius: 0.28, height: 1.1 },
+      { kind: 'box', semanticRole: 'control_box', sourcePartKind: 'control_box' },
+      { kind: 'torus', semanticRole: 'flange', sourcePartKind: 'flange_ring' },
+    ] as const
+
+    const result = validatePrimitiveSemantics(shapes, [], {
+      prompt: 'generate an industrial centrifugal pump skid',
+      geometryBrief: {
+        category: 'pump',
+        requiredRoles: [
+          'base_frame',
+          'pump_volute',
+          'inlet_nozzle',
+          'outlet_nozzle',
+          'drive_motor',
+          'junction_box',
+          'shaft_coupling',
+          'inlet_flange',
+          'outlet_flange',
+        ],
+      },
+    })
+
+    expect(result.ok).toBe(true)
   })
 
   test('accepts mixer impeller recipe with shaft, hub, and radial blades', () => {

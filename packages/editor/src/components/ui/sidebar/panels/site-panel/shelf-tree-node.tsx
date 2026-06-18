@@ -92,7 +92,7 @@ export const ShelfTreeNode = memo(function ShelfTreeNode({
       expanded={expanded}
       hasChildren={hasChildren}
       icon={
-        <Image alt="" className="object-contain" height={14} src="/icons/shelf.png" width={14} />
+        <Image alt="" className="object-contain" height={14} src="/icons/shelf.webp" width={14} />
       }
       isHovered={isHovered}
       isLast={isLast}
@@ -100,7 +100,7 @@ export const ShelfTreeNode = memo(function ShelfTreeNode({
       isVisible={isVisible}
       label={
         <InlineRenameInput
-          defaultName="Shelf"
+          defaultName="货架"
           isEditing={isEditing}
           nodeId={nodeId}
           onStartEditing={handleStartEditing}

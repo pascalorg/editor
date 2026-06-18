@@ -21,8 +21,15 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
-import { clearOpeningGuides3D, publishOpeningGuidesForWallEvent } from '../shared/opening-guides-runtime'
+import {
+  clearOpeningGuides3D,
+  publishOpeningGuidesForWallEvent,
+} from '../shared/opening-guides-runtime'
+import { resolveOpeningPlacement } from '../shared/wall-attach-target'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
+
+const isOpeningPlacementValid = (...args: Parameters<typeof hasWallChildOverlap>) =>
+  resolveOpeningPlacement({ collides: hasWallChildOverlap(...args) }).placeable
 
 const edgeMaterial = new LineBasicNodeMaterial({
   color: 0xef_44_44,
@@ -167,7 +174,14 @@ const DoorTool: React.FC = () => {
       useScene.getState().createNode(node, event.node.id as AnyNodeId)
       draftRef.current = node
 
-      const valid = !hasWallChildOverlap(event.node.id, clampedX, clampedY, width, height, node.id)
+      const valid = isOpeningPlacementValid(
+        event.node.id,
+        clampedX,
+        clampedY,
+        width,
+        height,
+        node.id,
+      )
       log('created transient draft from wall:enter', {
         ...eventDetails(event),
         draftId: node.id,
@@ -274,7 +288,7 @@ const DoorTool: React.FC = () => {
         }
       }
 
-      const valid = !hasWallChildOverlap(
+      const valid = isOpeningPlacementValid(
         event.node.id,
         clampedX,
         clampedY,
@@ -348,7 +362,7 @@ const DoorTool: React.FC = () => {
 
       const localX = snapToHalf(event.localPosition[0])
       const { clampedX, clampedY } = clampToWall(event.node, localX, draft.width, draft.height)
-      const valid = !hasWallChildOverlap(
+      const valid = isOpeningPlacementValid(
         event.node.id,
         clampedX,
         clampedY,

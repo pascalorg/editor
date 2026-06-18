@@ -63,7 +63,7 @@ export const pipeDefinition: NodeDefinition<typeof PipeNode> = {
   presentation: {
     label: 'Pipe',
     description: 'Steam / utility pipe — plan path with elevation and rotate (90° = vertical).',
-    icon: { kind: 'url', src: '/icons/custom-room.png' },
+    icon: { kind: 'url', src: '/icons/custom-room.webp' },
     paletteSection: 'structure',
     paletteOrder: 18,
   },

@@ -86,7 +86,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   presentation: {
     label: 'Window',
     description: 'A window cut into a wall. Animated open/close for opening windows.',
-    icon: { kind: 'url', src: '/icons/window.png' },
+    icon: { kind: 'url', src: '/icons/window.webp' },
     paletteSection: 'structure',
     paletteOrder: 60,
   },

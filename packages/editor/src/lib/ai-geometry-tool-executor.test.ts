@@ -1,6 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import { executeGeometryToolCall, normalizeGeometryToolShapes } from './ai-geometry-tool-executor'
 
+type TestSourcePart = {
+  kind?: unknown
+  position?: number[]
+}
+
+function sourceParts(value: unknown): TestSourcePart[] {
+  return Array.isArray(value)
+    ? value.filter((part): part is TestSourcePart => typeof part === 'object' && part !== null)
+    : []
+}
+
 describe('AI geometry tool executor', () => {
   test('accepts complex extrude profiles with bore and keyway holes', () => {
     const teeth = 20
@@ -77,6 +88,65 @@ describe('AI geometry tool executor', () => {
           color: '#ff0000',
           opacity: 0.5,
           transparent: true,
+        },
+      },
+    })
+  })
+
+  test('infers transparent glass material for generated glass panels', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        shapes: [
+          {
+            kind: 'rounded-panel',
+            name: 'blue panel',
+            position: [0, 0.006, 0],
+            length: 1,
+            width: 2,
+            thickness: 0.012,
+            cornerRadius: 0.08,
+            material: { properties: { color: '#2f80ff' } },
+          },
+        ],
+      },
+      { prompt: '生成一块1米*2米的圆角蓝色玻璃' },
+    )
+
+    expect(result.artifact?.shapes[0]).toMatchObject({
+      kind: 'rounded-panel',
+      material: {
+        preset: 'glass',
+        properties: {
+          color: '#2f80ff',
+          transparent: true,
+          opacity: 0.35,
+        },
+      },
+    })
+  })
+
+  test('infers transparent glass material from shape semantics without prompt context', () => {
+    const [shape] = normalizeGeometryToolShapes([
+      {
+        kind: 'box',
+        name: 'blue glass sheet',
+        semanticRole: 'glass_panel',
+        length: 1,
+        width: 2,
+        height: 0.012,
+        materialColor: '#2f80ff',
+      },
+    ])
+
+    expect(shape).toMatchObject({
+      kind: 'box',
+      material: {
+        preset: 'glass',
+        properties: {
+          color: '#2f80ff',
+          transparent: true,
+          opacity: 0.35,
         },
       },
     })
@@ -296,6 +366,14 @@ describe('AI geometry tool executor', () => {
 
     expect(result.artifact).toBeDefined()
     expect(result.artifact?.geometryBrief?.category).toBe('generic_object')
+    expect(result.artifact?.sourceArgs.family).toBe('generic')
+    expect(result.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'generic_body', semanticRole: 'main_body' }),
+        expect.objectContaining({ kind: 'generic_base', semanticRole: 'support_base' }),
+        expect.objectContaining({ kind: 'generic_detail_accent', semanticRole: 'detail_accent' }),
+      ]),
+    )
     expect(roles.has('main_body')).toBe(true)
     expect(roles.has('support_base')).toBe(true)
     expect(roles.has('detail_accent')).toBe(true)
@@ -323,14 +401,15 @@ describe('AI geometry tool executor', () => {
       },
       { prompt: 'legacy logo strip' },
     )
+    expect(initial.artifact).toBeDefined()
+    const initialArtifact = initial.artifact!
     const malformedTarget = {
-      ...initial.artifact,
-      shapes:
-        initial.artifact?.shapes.map((shape) =>
-          shape.semanticRole === 'panel_surface'
-            ? { ...shape, profile: { curve: 'sine' } as unknown as [number, number][] }
-            : shape,
-        ) ?? [],
+      ...initialArtifact,
+      shapes: initialArtifact.shapes.map((shape) =>
+        shape.semanticRole === 'panel_surface'
+          ? { ...shape, profile: { curve: 'sine' } as unknown as [number, number][] }
+          : shape,
+      ),
     }
 
     const result = executeGeometryToolCall(
@@ -532,17 +611,15 @@ describe('AI geometry tool executor', () => {
     expect(result.content).toContain('limit is 2')
   })
 
-  test('applies prompt dimension semantics for compose_object before composition', () => {
+  test('rejects legacy compose_object tool calls after object templates are retired', () => {
     const result = executeGeometryToolCall(
       'compose_object',
       { category: 'table' },
       { prompt: 'desk length 120cm width 60cm height 75cm' },
     )
 
-    const top = result.artifact?.shapes.find((shape) => shape.name === 'Low-poly table top')
-    expect(top?.length).toBeCloseTo(1.2)
-    expect(top?.width).toBeCloseTo(0.6)
-    expect(top?.position[1]).toBeCloseTo(0.72)
+    expect(result.artifact).toBeUndefined()
+    expect(result.content).toContain('Unknown tool: compose_object')
   })
 
   test('normalizes natural width/depth fields for box-like shapes', () => {
@@ -573,6 +650,21 @@ describe('AI geometry tool executor', () => {
     expect(cone?.position).toEqual([0, 1, 0])
     expect(horizontalCone?.position).toEqual([0, 0.25, 0])
     expect(explicitCone?.position).toEqual([0, 0, 0])
+  })
+
+  test('lowers derived primitive aliases to canonical primitive shapes', () => {
+    const [ellipsoid, ovalPanel, halfOval, pyramid] = normalizeGeometryToolShapes([
+      { kind: 'ellipsoid', length: 2, width: 1, height: 0.8 },
+      { kind: 'ellipse-panel', length: 1.2, width: 0.6, thickness: 0.04, segments: 16 },
+      { kind: 'semi-ellipse-panel', length: 1, height: 0.4, thickness: 0.03 },
+      { kind: 'pyramid', radius: 0.5, height: 1 },
+    ])
+
+    expect(ellipsoid).toMatchObject({ kind: 'sphere', scale: [1, 0.4, 0.5] })
+    expect(ovalPanel).toMatchObject({ kind: 'extrude', depth: 0.04 })
+    expect(ovalPanel?.profile?.length).toBe(16)
+    expect(halfOval).toMatchObject({ kind: 'extrude', depth: 0.03 })
+    expect(pyramid).toMatchObject({ kind: 'cone', radialSegments: 4, height: 1 })
   })
 
   test('expands primitive array expressions before validation and shape budget checks', () => {
@@ -767,6 +859,69 @@ describe('AI geometry tool executor', () => {
     expect(
       result.artifact?.shapes.filter((shape) => shape.semanticRole === 'vehicle_tire'),
     ).toHaveLength(4)
+  })
+
+  test('stabilizes messy full-vehicle compose_parts output through the vehicle template', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'messy red car',
+        primaryColor: '#cc0000',
+        geometryBrief: {
+          category: 'vehicle',
+          requiredRoles: ['vehicle_body', 'vehicle_tire', 'vehicle_window'],
+        },
+        parts: [
+          {
+            kind: 'vehicle_body',
+            semanticRole: 'vehicle_body',
+            length: 4.4,
+            width: 1.8,
+            height: 1.35,
+          },
+          { kind: 'car_roof_panel', semanticRole: 'vehicle_roof', position: [0, 2, 0] },
+          { kind: 'window_panel', semanticRole: 'vehicle_window', alignAbove: 'vehicle_body' },
+          {
+            kind: 'wheel_set',
+            semanticRole: 'vehicle_tire',
+            params: { count: 4, radius: 2.5 },
+            around: 'body',
+          },
+          { kind: 'bumper', semanticRole: 'vehicle_bumper', alignBeside: 'vehicle_body' },
+        ],
+      },
+      { prompt: 'generate a red sedan car from parts' },
+    )
+
+    const bodyShell = result.artifact?.shapes.find((shape) =>
+      shape.name?.includes('vehicle body shell'),
+    )
+    const cabin = result.artifact?.shapes.find((shape) => shape.semanticRole === 'vehicle_cabin')
+    const tires =
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'vehicle_tire') ?? []
+
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(result.content).toContain('Validation: family=vehicle')
+    expect(result.content).toContain('Visual quality: family=vehicle')
+    expect(result.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'body_shell', semanticRole: 'vehicle_body' }),
+        expect.objectContaining({
+          kind: 'wheel_set',
+          count: 4,
+          radius: 0.8,
+          semanticRole: 'vehicle_tire',
+        }),
+        expect.objectContaining({ kind: 'window_strip', semanticRole: 'vehicle_window' }),
+      ]),
+    )
+    expect(bodyShell?.length).toBeCloseTo(4.4)
+    expect(bodyShell?.material?.properties?.color).toBe('#cc0000')
+    expect(result.artifact?.sourceArgs.partWarnings).toEqual(
+      expect.arrayContaining(['wheel_set.radius clamped from 2.5 to 0.8.']),
+    )
+    expect(cabin).toBeDefined()
+    expect(tires).toHaveLength(4)
   })
 
   test('accepts single car tire required role aliases without requiring a full car', () => {
@@ -1043,6 +1198,34 @@ describe('AI geometry tool executor', () => {
     expect(result.content).not.toContain('No geometry could be created')
   })
 
+  test('recovers simple cuboid requests when LLM emits a clamped generic body part', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        geometryBrief: '10x10x10 meter rectangular cuboid. requiredRoles: [enclosure]',
+        parts: [
+          {
+            id: 'main_body',
+            kind: 'generic_body',
+            semanticRole: 'enclosure',
+            params: { length: 10, width: 10, height: 10 },
+          },
+        ],
+      },
+      { prompt: 'create a 10x10 meter rectangular cuboid' },
+    )
+
+    expect(result.content).toContain('Created draft')
+    expect(result.artifact?.shapes).toHaveLength(1)
+    expect(result.artifact?.shapes[0]).toMatchObject({
+      kind: 'box',
+      semanticRole: 'enclosure',
+      length: 10,
+      width: 10,
+      height: 10,
+    })
+  })
+
   test('builds unsupported aircraft from generic parts without vehicle auto-completion', () => {
     const result = executeGeometryToolCall(
       'compose_parts',
@@ -1314,14 +1497,65 @@ describe('AI geometry tool executor', () => {
     )
 
     expect(result.artifact?.shapes).toHaveLength(55)
-    expect(result.artifact?.sourceArgs.parts).toEqual([
-      { kind: 'aircraft_fuselage', id: 'aircraft_fuselage' },
-    ])
+    expect(result.artifact?.sourceArgs.family).toBe('aircraft')
+    expect(result.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'aircraft_fuselage', length: 10 }),
+        expect.objectContaining({ kind: 'aircraft_wing' }),
+        expect.objectContaining({ kind: 'aircraft_engine' }),
+        expect.objectContaining({ kind: 'aircraft_vertical_stabilizer' }),
+        expect.objectContaining({ kind: 'aircraft_horizontal_stabilizer' }),
+        expect.objectContaining({ kind: 'aircraft_landing_gear' }),
+      ]),
+    )
     expect(fuselage?.scale?.[0]).toBeCloseTo(7.8)
     expect(roles.has('left_wing')).toBe(false)
     expect(roles.has('aircraft_wing')).toBe(true)
     expect(roles.has('aircraft_landing_gear_nose')).toBe(true)
     expect(roles.has('engine_nacelle_left')).toBe(true)
+  })
+
+  test('routes complete aircraft requests through registry-normalized parts', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'aircraft',
+        name: 'six meter airliner',
+        length: 6,
+        primaryColor: '#f8fafc',
+        parts: [
+          {
+            kind: 'aircraft_engine',
+            params: { count: 4, radius: 0.08 },
+          },
+        ],
+      },
+      { prompt: 'generate a complete six meter airliner with four engines' },
+    )
+
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+    const engineShapes =
+      result.artifact?.shapes.filter((shape) => shape.sourcePartKind === 'aircraft_engine') ?? []
+
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(result.artifact?.sourceArgs.family).toBe('aircraft')
+    expect(result.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'aircraft_fuselage',
+          length: 6,
+          primaryColor: '#f8fafc',
+        }),
+        expect.objectContaining({ kind: 'aircraft_engine', count: 4, radius: 0.08 }),
+        expect.objectContaining({ kind: 'aircraft_landing_gear' }),
+      ]),
+    )
+    expect(roles.has('aircraft_fuselage')).toBe(true)
+    expect(roles.has('aircraft_wing')).toBe(true)
+    expect(roles.has('vertical_stabilizer')).toBe(true)
+    expect(roles.has('horizontal_stabilizer')).toBe(true)
+    expect(engineShapes).toHaveLength(12)
+    expect(result.content).toContain('Visual quality: family=aircraft')
   })
 
   test('falls back to compact aircraft defaults when handwritten aircraft exceeds shape limit', () => {
@@ -1766,7 +2000,8 @@ describe('AI geometry tool executor', () => {
 
     expect(result.artifact).toBeUndefined()
     expect(result.content).toContain('Invalid geometry tool call')
-    expect(result.content).toContain('vehicle requires exactly 4 tires')
+    expect(result.content).toContain('vehicle visual quality score is too low')
+    expect(result.content).toContain('vehicle needs a separate cabin/roof mass')
   })
 
   test('accepts bicycle compose_parts calls with nested geometryBrief part-kind aliases', () => {
@@ -2311,6 +2546,34 @@ describe('AI geometry tool executor', () => {
     expect(result.content).toContain('Validation: family=vehicle')
     expect(bodyShell?.length).toBeCloseTo(2)
     expect(bodyShell?.material?.properties?.color).toBe('#22c55e')
+    expect(result.artifact?.shapes.length).toBeLessThanOrEqual(36)
+    expect(
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'vehicle_tire'),
+    ).toHaveLength(4)
+    expect(
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'wheel_hub'),
+    ).toHaveLength(4)
+    expect(result.artifact?.shapes.some((shape) => shape.semanticRole === 'side_mirror')).toBe(true)
+  })
+
+  test('reroutes mistaken primitive car requests to compact vehicle assembly', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        geometryBrief: { category: 'sports equipment', requiredRoles: ['ball_surface'] },
+        shapes: [{ kind: 'sphere', semanticRole: 'ball_surface', radius: 0.1 }],
+      },
+      { prompt: '生成一辆小汽车' },
+    )
+
+    expect(result.artifact?.sourceTool).toBe('compose_primitive')
+    expect(result.content).toContain('Validation: family=vehicle')
+    expect(result.artifact?.geometryBrief?.category).toBe('vehicle')
+    expect(result.artifact?.shapes.length).toBeLessThanOrEqual(36)
+    expect(result.artifact?.shapes.some((shape) => shape.semanticRole === 'ball_surface')).toBe(
+      false,
+    )
+    expect(result.artifact?.shapes.some((shape) => shape.semanticRole === 'wheel_hub')).toBe(true)
   })
 
   test('applies explicit CNC color to visible machine tool body parts', () => {
@@ -2578,7 +2841,116 @@ describe('AI geometry tool executor', () => {
     expect(colors.has('#facc15')).toBe(true)
   })
 
-  test('redirects legacy outdoor AC recipe aliases to assembly and accepts object aliases', () => {
+  test('routes robot welding cell compose_parts requests through robot arm fallback', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'robot_arm',
+        name: 'robot welding cell',
+        length: 2.2,
+        width: 1.6,
+        height: 1.8,
+        parts: [
+          { kind: 'generic_base', semanticRole: 'robot_base_plate' },
+          { kind: 'generic_body', semanticRole: 'robot_upper_arm' },
+          { kind: 'generic_body', semanticRole: 'robot_forearm' },
+          { kind: 'generic_panel', semanticRole: 'work_table_top' },
+          { kind: 'control_box', semanticRole: 'control_cabinet_body' },
+        ],
+      },
+      {
+        prompt:
+          'generate an industrial robot welding cell with upper arm, forearm, wrist, work table, control cabinet and safety barrier',
+      },
+    )
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(result.content).toContain('Created draft assembly')
+    expect(result.artifact?.sourceArgs.family).toBe('robot_arm')
+    expect(result.artifact?.sourceArgs.sourceStrategy).toBe('robot_arm_workstation_fallback')
+    expect(result.artifact?.geometryBrief?.category).toBe('robot_arm')
+    expect(roles.has('robot_base')).toBe(true)
+    expect(roles.has('upper_arm')).toBe(true)
+    expect(roles.has('forearm')).toBe(true)
+    expect(roles.has('wrist_joint')).toBe(true)
+    expect(roles.has('end_effector')).toBe(true)
+    expect(roles.has('work_table')).toBe(true)
+    expect(roles.has('control_panel')).toBe(true)
+    expect(roles.has('safety_barrier')).toBe(true)
+  })
+
+  test('routes palletizer device profiles through robot workcell fallback', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      { name: 'robot palletizer cell' },
+      {
+        prompt: 'make a robot palletizer cell with pallet table, control cabinet and safety fence',
+      },
+    )
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(result.artifact?.sourceArgs).toMatchObject({
+      family: 'robot_arm',
+      deviceProfile: 'palletizer_cell',
+      archetypeFamily: 'robotic_workcell',
+      sourceStrategy: 'robot_arm_workstation_fallback',
+    })
+    expect(roles.has('robot_base')).toBe(true)
+    expect(roles.has('upper_arm')).toBe(true)
+    expect(roles.has('forearm')).toBe(true)
+    expect(roles.has('work_table')).toBe(true)
+    expect(roles.has('control_panel')).toBe(true)
+    expect(roles.has('safety_barrier')).toBe(true)
+    expect(result.artifact?.profileQuality?.overallScore).toBeGreaterThan(0.7)
+  })
+
+  test('reports stable profile-aware quality scores for key industrial devices', () => {
+    const cases = [
+      {
+        name: 'screw compressor',
+        prompt: 'make a skid mounted screw compressor package with casing, motor and ports',
+        profile: 'screw_compressor',
+      },
+      {
+        name: 'packaging machine',
+        prompt: 'make an automatic packaging machine with enclosure, feed chute and operator panel',
+        profile: 'packaging_machine',
+      },
+      {
+        name: 'shell and tube heat exchanger',
+        prompt: 'make a shell and tube heat exchanger with channel heads and skid supports',
+        profile: 'shell_tube_heat_exchanger',
+      },
+      {
+        name: 'robot palletizer cell',
+        prompt: 'make a robot palletizer cell with pallet table, control cabinet and safety fence',
+        profile: 'palletizer_cell',
+      },
+    ]
+
+    for (const testCase of cases) {
+      const result = executeGeometryToolCall(
+        'compose_parts',
+        { name: testCase.name },
+        { prompt: testCase.prompt },
+      )
+
+      expect(result.artifact?.sourceArgs.deviceProfile).toBe(testCase.profile)
+      const quality = result.artifact?.profileQuality
+      expect(quality, testCase.name).toBeDefined()
+      if (!quality) throw new Error(`Missing profile quality for ${testCase.name}`)
+      expect(typeof quality.semanticScore).toBe('number')
+      expect(typeof quality.geometryScore).toBe('number')
+      expect(typeof quality.editabilityScore).toBe('number')
+      expect(typeof quality.visualCompletenessScore).toBe('number')
+      expect(typeof quality.overallScore).toBe('number')
+      expect(quality.overallScore).toBeGreaterThan(0.55)
+      expect(result.content).toContain('Profile quality:')
+    }
+  })
+
+  test('redirects legacy outdoor AC recipe aliases to assembly and rejects object aliases', () => {
     const recipe = executeGeometryToolCall(
       'compose_recipe',
       { recipeId: 'outdoor_ac_unit' },
@@ -2596,10 +2968,8 @@ describe('AI geometry tool executor', () => {
       { prompt: 'test prompt' },
     )
 
-    expect(object.artifact).toBeDefined()
-    expect(object.artifact?.shapes.length).toBeGreaterThan(6)
-    expect(object.artifact?.shapes.some((shape) => shape.name?.includes('fan blade'))).toBe(true)
-    expect(object.artifact?.shapes.some((shape) => shape.name?.includes('vent slat'))).toBe(true)
+    expect(object.artifact).toBeUndefined()
+    expect(object.content).toContain('Unknown tool: compose_object')
   })
 
   test('falls back from empty LLM parts/primitives to matching outdoor AC assembly', () => {
@@ -2637,6 +3007,1067 @@ describe('AI geometry tool executor', () => {
     expect(
       emptyPrimitive.artifact?.shapes.some((shape) => shape.semanticRole === 'vent_slats'),
     ).toBe(true)
+  })
+
+  test('uses freeform assembly fallback for unknown object families', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      { name: 'futuristic coffee machine' },
+      { prompt: 'make a futuristic coffee machine with a spout and cup platform' },
+    )
+
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(result.artifact?.sourceArgs.family).toBe('generic')
+    expect(result.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'generic_body', semanticRole: 'main_body' }),
+        expect.objectContaining({ kind: 'generic_control_panel', semanticRole: 'control_detail' }),
+        expect.objectContaining({ kind: 'generic_spout', semanticRole: 'spout' }),
+        expect.objectContaining({ kind: 'generic_base', semanticRole: 'cup_platform' }),
+      ]),
+    )
+    expect(result.artifact?.geometryBrief?.assumptions).toEqual(
+      expect.arrayContaining([
+        'freeform assembly fallback because no dedicated recipe, assembly family, or reusable part matched',
+      ]),
+    )
+    expect(result.artifact?.shapes.some((shape) => shape.semanticRole === 'spout')).toBe(true)
+    expect(result.artifact?.shapes.some((shape) => shape.semanticRole === 'cup_platform')).toBe(
+      true,
+    )
+  })
+
+  test('routes desk requests without explicit parts through registry-normalized parts', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      { name: 'office desk with drawers', length: 1.4, width: 0.7, height: 0.75 },
+      { prompt: 'make an office desk with drawers' },
+    )
+
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(result.artifact?.sourceArgs.family).toBe('desk')
+    expect(result.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'desk_top', semanticRole: 'furniture_body' }),
+        expect.objectContaining({ kind: 'leg_set', semanticRole: 'support_leg' }),
+        expect.objectContaining({ kind: 'drawer_stack', semanticRole: 'drawer_stack' }),
+      ]),
+    )
+    expect(result.artifact?.shapes.some((shape) => shape.name?.includes('desk top'))).toBe(true)
+    expect(result.artifact?.shapes.some((shape) => shape.name?.includes('drawer front'))).toBe(true)
+  })
+
+  test('routes small kiosk requests through dedicated family parts', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'small ticket booth with service window',
+        length: 2,
+        width: 1.4,
+        height: 2.4,
+        primaryColor: '#e5e7eb',
+        accentColor: '#facc15',
+      },
+      { prompt: 'make a small ticket booth with a service window, counter, sign, and awning' },
+    )
+
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(result.artifact?.sourceArgs.family).toBe('kiosk')
+    expect(result.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'kiosk_body', semanticRole: 'kiosk_body' }),
+        expect.objectContaining({ kind: 'kiosk_roof', semanticRole: 'roof' }),
+        expect.objectContaining({ kind: 'kiosk_opening', semanticRole: 'opening' }),
+        expect.objectContaining({ kind: 'kiosk_sign', semanticRole: 'sign_panel' }),
+        expect.objectContaining({ kind: 'kiosk_awning', semanticRole: 'awning' }),
+      ]),
+    )
+    expect(roles.has('kiosk_body')).toBe(true)
+    expect(roles.has('roof')).toBe(true)
+    expect(roles.has('opening')).toBe(true)
+    expect(roles.has('sign_panel')).toBe(true)
+    expect(roles.has('awning')).toBe(true)
+    expect(roles.has('main_body')).toBe(false)
+  })
+
+  test('routes pump requests without explicit parts through industrial family parts', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'centrifugal pump',
+        length: 1.4,
+        width: 0.6,
+        height: 0.7,
+        primaryColor: '#64748b',
+      },
+      { prompt: 'make a centrifugal pump with inlet and outlet flanges' },
+    )
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(result.artifact?.sourceArgs.family).toBe('pump')
+    expect(result.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'skid_base', semanticRole: 'support_base' }),
+        expect.objectContaining({ kind: 'ribbed_motor_body', semanticRole: 'drive_motor' }),
+        expect.objectContaining({ kind: 'volute_casing', semanticRole: 'volute_casing' }),
+        expect.objectContaining({ kind: 'inlet_port', semanticRole: 'inlet_port' }),
+        expect.objectContaining({ kind: 'outlet_port', semanticRole: 'outlet_port' }),
+      ]),
+    )
+    expect(roles.has('volute_casing')).toBe(true)
+    expect(roles.has('inlet_port')).toBe(true)
+    expect(roles.has('outlet_port')).toBe(true)
+    expect(roles.has('rounded_machine_body')).toBe(false)
+  })
+
+  test('routes conveyor requests without explicit parts through industrial family parts', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      { name: 'warehouse belt conveyor', length: 4, width: 0.8, height: 0.9 },
+      { prompt: 'make a warehouse belt conveyor with rollers and drive motor' },
+    )
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(result.artifact?.sourceArgs.family).toBe('conveyor')
+    expect(result.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'conveyor_frame', semanticRole: 'conveyor_frame' }),
+        expect.objectContaining({ kind: 'roller_array', semanticRole: 'roller_array' }),
+        expect.objectContaining({ kind: 'belt_surface', semanticRole: 'belt_surface' }),
+      ]),
+    )
+    expect(roles.has('conveyor_frame')).toBe(true)
+    expect(roles.has('roller_array')).toBe(true)
+    expect(roles.has('belt_surface')).toBe(true)
+  })
+
+  test('routes device profiles through reusable industrial families', () => {
+    const compressor = executeGeometryToolCall(
+      'compose_parts',
+      { name: 'screw compressor skid package' },
+      { prompt: 'make a skid mounted screw compressor package with inlet, outlet and control box' },
+    )
+    const compressorRoles = new Set(compressor.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(compressor.artifact?.sourceTool).toBe('compose_parts')
+    expect(compressor.artifact?.sourceArgs).toMatchObject({
+      family: 'compressor',
+      deviceProfile: 'screw_compressor',
+      archetypeFamily: 'rotating_fluid_machine',
+    })
+    expect(compressorRoles.has('compressor_casing')).toBe(true)
+    expect(compressorRoles.has('motor_body')).toBe(true)
+    expect(compressorRoles.has('control_box')).toBe(true)
+
+    const packaging = executeGeometryToolCall(
+      'compose_parts',
+      { name: 'automatic packaging machine' },
+      { prompt: 'make a packaging machine with feed chute, discharge chute and control panel' },
+    )
+    const packagingRoles = new Set(packaging.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(packaging.artifact?.sourceTool).toBe('compose_parts')
+    expect(packaging.artifact?.sourceArgs).toMatchObject({
+      family: 'machine_tool',
+      deviceProfile: 'packaging_machine',
+      archetypeFamily: 'enclosed_machine',
+    })
+    expect(packagingRoles.has('machine_enclosure')).toBe(true)
+    expect(packagingRoles.has('feed_chute')).toBe(true)
+    expect(packagingRoles.has('discharge_chute')).toBe(true)
+    expect(packagingRoles.has('control_panel')).toBe(true)
+    expect(packagingRoles.has('display_screen')).toBe(true)
+  })
+
+  test('builds draft profiles for unknown industrial equipment before generic fallback', () => {
+    const cases = [
+      {
+        name: 'freeze dryer',
+        prompt: 'make a freeze dryer with sealed chamber, vacuum port and control panel',
+        profile: 'freeze_dryer_draft',
+        family: 'generic',
+        primary: 'vacuum_chamber',
+      },
+      {
+        name: 'plate filter press',
+        prompt: 'make a plate and frame filter press with plate stack and slurry inlet',
+        profile: 'filter_press_draft',
+        family: 'generic',
+        primary: 'press_frame',
+      },
+      {
+        name: 'screw conveyor',
+        prompt: 'make a screw conveyor with trough, auger flight and drive motor',
+        profile: 'screw_conveyor_draft',
+        family: 'conveyor',
+        primary: 'conveyor_frame',
+      },
+    ]
+
+    for (const testCase of cases) {
+      const result = executeGeometryToolCall(
+        'compose_parts',
+        { name: testCase.name },
+        { prompt: testCase.prompt },
+      )
+      const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+
+      expect(result.artifact?.sourceTool).toBe('compose_parts')
+      expect(result.artifact?.sourceArgs).toMatchObject({
+        family: testCase.family,
+        deviceProfile: testCase.profile,
+        profileSource: 'generated_candidate',
+        primarySemanticRole: testCase.primary,
+      })
+      expect(result.artifact?.sourceArgs.deviceProfileValidation).toMatchObject({
+        ok: true,
+      })
+      expect(roles.has(testCase.primary)).toBe(true)
+    }
+  })
+
+  test('falls back to generic industrial parts when an unsafe draft is supplied', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'unsafe draft machine',
+        deviceProfileDraft: {
+          id: 'unsafe_draft',
+          name: 'Unsafe Draft',
+          family: 'machine_tool',
+          parts: [{ kind: 'not_a_real_part', semanticRole: 'main_body', required: true }],
+          primarySemanticRole: 'main_body',
+        },
+      },
+      { prompt: 'make an unsafe draft industrial machine' },
+    )
+
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(result.artifact?.sourceArgs.family).toBe('generic')
+    expect(result.artifact?.sourceArgs.profileFallbackReason).toBe('profile_validation_failed')
+    expect(result.artifact?.shapes.length).toBeGreaterThan(0)
+  })
+
+  test('prefers loaded device profiles over model-authored drafts for known equipment', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'vga cart',
+        deviceProfileDraft: {
+          id: 'vga_cart_runtime',
+          name: 'VGA cart runtime draft',
+          family: 'generic',
+          layoutFamily: 'generic_industrial_layout',
+          primarySemanticRole: 'cart_body',
+          parts: [
+            { kind: 'generic_body', semanticRole: 'cart_body', required: true },
+            { kind: 'wheel_set', semanticRole: 'wheel', required: true },
+          ],
+        },
+      },
+      {
+        prompt: 'create a vga cart',
+        deviceProfiles: [
+          {
+            id: 'agv_material_cart',
+            name: 'AGV material cart',
+            aliases: ['vga cart'],
+            layoutFamily: 'generic_industrial_layout',
+            archetypeFamily: 'material_handling',
+            family: 'generic',
+            defaultDimensions: { length: 1.4, width: 0.85, height: 0.55 },
+            parts: [
+              { kind: 'generic_body', semanticRole: 'vehicle_body', required: true },
+              { kind: 'generic_base', semanticRole: 'cargo_platform', required: true },
+              { kind: 'wheel_set', semanticRole: 'wheel', required: true },
+              { kind: 'bar_pair', semanticRole: 'bumper', required: true },
+              { kind: 'generic_detail_accent', semanticRole: 'navigation_sensor', required: true },
+            ],
+            primarySemanticRole: 'vehicle_body',
+            status: 'stable',
+            source: 'workspace',
+            description: 'Factory AGV cart.',
+          },
+        ],
+      },
+    )
+
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+    expect(result.artifact?.sourceArgs).toMatchObject({
+      deviceProfile: 'agv_material_cart',
+      profileSource: 'workspace',
+      primarySemanticRole: 'vehicle_body',
+    })
+    expect(roles.has('vehicle_body')).toBe(true)
+    expect(roles.has('navigation_sensor')).toBe(true)
+    expect(roles.has('cart_body')).toBe(false)
+  })
+
+  test('executes explicit draft profiles whose family is an abstract layout group', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'plate frame filter press',
+        deviceProfileDraft: {
+          id: 'plate_frame_filter_press_runtime',
+          name: 'Plate frame filter press',
+          family: 'material_handling',
+          layoutFamily: 'linear_transport_layout',
+          primarySemanticRole: 'filter_plate_stack',
+          parts: [
+            { kind: 'generic_body', semanticRole: 'press_frame_end_plate', required: true },
+            { kind: 'conveyor_frame', semanticRole: 'press_frame_rails', required: true },
+            { kind: 'generic_body', semanticRole: 'filter_plate_stack', required: true },
+            { kind: 'generic_base', semanticRole: 'support_legs', required: true },
+            { kind: 'generic_spout', semanticRole: 'feed_inlet', required: true },
+            { kind: 'generic_spout', semanticRole: 'filtrate_outlet', required: true },
+            { kind: 'generic_body', semanticRole: 'hydraulic_closure', required: true },
+            { kind: 'control_box', semanticRole: 'control_box', required: true },
+          ],
+        },
+      },
+      { prompt: 'make a plate frame filter press with filter plate stack and hydraulic closure' },
+    )
+
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(result.artifact?.sourceArgs).toMatchObject({
+      family: 'conveyor',
+      deviceProfile: 'plate_frame_filter_press_runtime',
+      profileSource: 'generated_candidate',
+      layoutFamily: 'linear_transport_layout',
+      primarySemanticRole: 'filter_plate_stack',
+    })
+    expect(result.artifact?.profileQuality?.overallScore).toBeGreaterThan(0.7)
+    expect(roles.has('filter_plate_stack')).toBe(true)
+    expect(roles.has('roller_array')).toBe(false)
+    expect(roles.has('belt_surface')).toBe(false)
+  })
+
+  test('uses generic draft profile context to prevent compose_primitive vehicle misclassification', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        deviceProfileDraft: {
+          id: 'main_battle_tank_runtime',
+          name: 'Main battle tank',
+          family: 'generic',
+          layoutFamily: 'generic_industrial_layout',
+          primarySemanticRole: 'hull_body',
+          parts: [
+            { kind: 'generic_body', semanticRole: 'hull_body', required: true },
+            { kind: 'generic_base', semanticRole: 'track_assembly', required: true },
+            { kind: 'generic_body', semanticRole: 'turret_base', required: true },
+            { kind: 'generic_spout', semanticRole: 'gun_barrel', required: true },
+          ],
+        },
+        shapes: [
+          {
+            kind: 'box',
+            name: 'armored hull',
+            semanticRole: 'hull_body',
+            sourcePartKind: 'generic_body',
+            position: [0, 0.55, 0],
+            length: 2.4,
+            width: 1.1,
+            height: 0.55,
+          },
+          {
+            kind: 'box',
+            name: 'left track',
+            semanticRole: 'track_assembly',
+            sourcePartKind: 'generic_base',
+            position: [0, 0.2, -0.65],
+            length: 2.6,
+            width: 0.22,
+            height: 0.32,
+          },
+          {
+            kind: 'box',
+            name: 'right track',
+            semanticRole: 'track_assembly',
+            sourcePartKind: 'generic_base',
+            position: [0, 0.2, 0.65],
+            length: 2.6,
+            width: 0.22,
+            height: 0.32,
+          },
+          {
+            kind: 'cylinder',
+            name: 'turret',
+            semanticRole: 'turret_base',
+            sourcePartKind: 'generic_body',
+            position: [0.2, 0.95, 0],
+            radius: 0.42,
+            height: 0.25,
+          },
+          {
+            kind: 'cylinder',
+            name: 'barrel',
+            semanticRole: 'gun_barrel',
+            sourcePartKind: 'generic_spout',
+            position: [1.05, 0.98, 0],
+            rotation: [0, 0, Math.PI / 2],
+            radius: 0.045,
+            height: 1.3,
+          },
+        ],
+      },
+      { prompt: '生成一个坦克' },
+    )
+
+    expect(result.artifact?.sourceTool).toBe('compose_primitive')
+    expect(result.artifact?.sourceArgs).toMatchObject({
+      family: 'generic',
+      deviceProfile: 'main_battle_tank_runtime',
+      layoutFamily: 'generic_industrial_layout',
+    })
+    expect(result.artifact?.semanticSummary).not.toContain('family=vehicle')
+    expect(result.artifact?.profileQuality?.overallScore).toBeGreaterThan(0.7)
+  })
+
+  test('routes process equipment requests through dedicated industrial part families', () => {
+    const cases: Array<{
+      label: string
+      args: Record<string, unknown>
+      prompt: string
+      family: string
+      sourceParts: string[]
+      roles: string[]
+    }> = [
+      {
+        label: 'storage tank',
+        args: {
+          family: 'tank',
+          name: 'storage tank with platform',
+          height: 3,
+          diameter: 1.2,
+          parts: [{ kind: 'platform' }],
+        },
+        prompt: 'make a vertical storage tank with an access platform',
+        family: 'tank',
+        sourceParts: ['cylindrical_tank', 'platform_ladder'],
+        roles: ['vessel_shell', 'vessel_head', 'inlet_port', 'access_platform'],
+      },
+      {
+        label: 'stirred reactor',
+        args: { family: 'reactor', name: 'stirred reactor', vesselHeight: 2, diameter: 1.1 },
+        prompt: 'make a stirred reactor with agitator and nozzles',
+        family: 'reactor',
+        sourceParts: ['agitator_tank', 'inlet_port', 'outlet_port'],
+        roles: [
+          'reactor_vessel_shell',
+          'agitator_motor',
+          'agitator_shaft',
+          'reactor_impeller',
+          'inlet_port',
+          'outlet_port',
+        ],
+      },
+      {
+        label: 'compressor',
+        args: {
+          family: 'compressor',
+          name: 'skid air compressor',
+          length: 2,
+          width: 0.8,
+          height: 0.8,
+          portDiameter: 0.18,
+        },
+        prompt: 'make a skid mounted air compressor',
+        family: 'compressor',
+        sourceParts: [
+          'skid_base',
+          'ribbed_motor_body',
+          'rounded_machine_body',
+          'inlet_port',
+          'outlet_port',
+        ],
+        roles: ['machine_base', 'motor_body', 'compressor_casing', 'inlet_port', 'outlet_port'],
+      },
+      {
+        label: 'heat exchanger',
+        args: {
+          family: 'heat_exchanger',
+          name: 'shell and tube heat exchanger with support',
+          length: 2.4,
+          diameter: 0.5,
+          parts: [{ kind: 'support' }],
+        },
+        prompt: 'make a shell and tube heat exchanger with saddle supports',
+        family: 'heat_exchanger',
+        sourceParts: ['heat_exchanger', 'skid_base'],
+        roles: [
+          'heat_exchanger_shell',
+          'heat_exchanger_channel_head',
+          'inlet_port',
+          'outlet_port',
+          'support_base',
+        ],
+      },
+      {
+        label: 'cnc machine tool',
+        args: {
+          family: 'machine_tool',
+          name: 'cnc machining center',
+          length: 2.8,
+          width: 1.1,
+          height: 1.7,
+        },
+        prompt: 'make a cnc machining center',
+        family: 'machine_tool',
+        sourceParts: ['generic_base', 'generic_body', 'generic_panel', 'control_box'],
+        roles: ['machine_base', 'machine_enclosure', 'spindle_head', 'control_panel'],
+      },
+    ]
+
+    for (const testCase of cases) {
+      const result = executeGeometryToolCall('compose_parts', testCase.args, {
+        prompt: testCase.prompt,
+      })
+      const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+
+      expect(result.artifact?.sourceTool).toBe('compose_parts')
+      expect(result.artifact?.sourceArgs.family).toBe(testCase.family)
+      expect(result.artifact?.sourceArgs.parts).toEqual(
+        expect.arrayContaining(
+          testCase.sourceParts.map((kind) => expect.objectContaining({ kind })),
+        ),
+      )
+      for (const role of testCase.roles) expect(roles.has(role)).toBe(true)
+    }
+  })
+
+  test('maps industrial family attributes into concrete parts for later revisions', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'pump',
+        name: 'adjustable centrifugal pump',
+        length: 1.6,
+        width: 0.68,
+        height: 0.72,
+        motorLength: 0.7,
+        inletDiameter: 0.2,
+        outletDiameter: 0.14,
+        flangeBoltCount: 12,
+        parts: [{ kind: 'flange' }],
+      },
+      { prompt: 'make a centrifugal pump with large inlet flange and 12 flange bolts' },
+    )
+
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(result.artifact?.sourceArgs.family).toBe('pump')
+    expect(result.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'ribbed_motor_body', length: 0.7 }),
+        expect.objectContaining({ kind: 'inlet_port', radius: 0.1 }),
+        expect.objectContaining({ kind: 'outlet_port', radius: 0.07 }),
+        expect.objectContaining({ kind: 'flange_ring', boltCount: 12 }),
+      ]),
+    )
+    expect(
+      result.artifact?.shapes.some((shape) => shape.sourcePartKind === 'ribbed_motor_body'),
+    ).toBe(true)
+  })
+
+  test('resizes an industrial part by sourcePartKind without replacing the object', () => {
+    const initial = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'conveyor',
+        name: 'revision-ready conveyor',
+        length: 4,
+        width: 0.8,
+        height: 0.9,
+        beltWidth: 0.62,
+        rollerCount: 12,
+      },
+      { prompt: 'make a belt conveyor' },
+    )
+
+    const revised = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: initial.artifact?.id,
+        feedback: 'make only the belt wider',
+        intent: 'widen the belt surface while preserving the conveyor frame and rollers',
+        operations: [{ op: 'resize', selector: { sourcePartKind: 'belt_surface' }, width: 0.72 }],
+      },
+      {
+        prompt: 'make only the belt wider',
+        revisionOf: initial.artifact?.id,
+        revisionVersion: initial.artifact?.version,
+        revisionTarget: initial.artifact,
+      },
+    )
+
+    const belt = revised.artifact?.shapes.find((shape) => shape.sourcePartKind === 'belt_surface')
+    const frame = revised.artifact?.shapes.find(
+      (shape) => shape.sourcePartKind === 'conveyor_frame',
+    )
+
+    expect(revised.artifact?.sourceTool).toBe('revise_geometry')
+    expect(revised.artifact?.shapes).toHaveLength(initial.artifact?.shapes.length ?? 0)
+    expect(belt?.width).toBe(0.72)
+    expect(frame?.width).not.toBe(0.72)
+  })
+
+  test('infers industrial resize revisions from follow-up text without LLM-authored operations', () => {
+    const initial = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'pump',
+        name: 'editable pump',
+        length: 1.4,
+        width: 0.6,
+        height: 0.7,
+      },
+      { prompt: 'make a centrifugal pump' },
+    )
+
+    const revised = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: initial.artifact?.id,
+        feedback: 'make the pump inlet diameter 0.24m',
+      },
+      {
+        prompt: 'make the pump inlet diameter 0.24m',
+        revisionOf: initial.artifact?.id,
+        revisionVersion: initial.artifact?.version,
+        revisionTarget: initial.artifact,
+      },
+    )
+
+    const inletShapes =
+      revised.artifact?.shapes.filter((shape) => shape.sourcePartKind === 'inlet_port') ?? []
+    const outletShapes =
+      revised.artifact?.shapes.filter((shape) => shape.sourcePartKind === 'outlet_port') ?? []
+
+    expect(revised.artifact?.sourceTool).toBe('revise_geometry')
+    expect(inletShapes.some((shape) => shape.radius === 0.12)).toBe(true)
+    expect(outletShapes.some((shape) => shape.radius === 0.12)).toBe(false)
+    expect(revised.artifact?.editHistory?.at(-1)?.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          op: 'resize',
+          selector: { sourcePartKind: 'inlet_port' },
+          radius: 0.12,
+        }),
+      ]),
+    )
+  })
+
+  test('recomposes industrial part-count revisions from follow-up text', () => {
+    const initial = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'conveyor',
+        name: 'editable conveyor',
+        length: 4,
+        width: 0.8,
+        height: 0.9,
+      },
+      { prompt: 'make a belt conveyor' },
+    )
+
+    const revised = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: initial.artifact?.id,
+        feedback: 'change the conveyor to 14 rollers',
+      },
+      {
+        prompt: 'change the conveyor to 14 rollers',
+        revisionOf: initial.artifact?.id,
+        revisionVersion: initial.artifact?.version,
+        revisionTarget: initial.artifact,
+      },
+    )
+
+    const rollers =
+      revised.artifact?.shapes.filter(
+        (shape) => shape.sourcePartKind === 'roller_array' && shape.name?.includes('roller'),
+      ) ?? []
+
+    expect(revised.artifact?.sourceTool).toBe('revise_geometry')
+    expect(revised.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: 'roller_array', count: 14 })]),
+    )
+    expect(rollers).toHaveLength(14)
+  })
+
+  test('recomposes electrical cabinet door revisions from follow-up text', () => {
+    const initial = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'electrical',
+        name: 'editable cabinet',
+        length: 0.9,
+        width: 0.35,
+        height: 1.8,
+      },
+      { prompt: 'make an electrical cabinet' },
+    )
+
+    const revised = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: initial.artifact?.id,
+        feedback: 'change the cabinet to double doors',
+      },
+      {
+        prompt: 'change the cabinet to double doors',
+        revisionOf: initial.artifact?.id,
+        revisionVersion: initial.artifact?.version,
+        revisionTarget: initial.artifact,
+      },
+    )
+
+    const handles =
+      revised.artifact?.shapes.filter(
+        (shape) => shape.sourcePartKind === 'electrical_cabinet' && shape.name?.includes('handle'),
+      ) ?? []
+
+    expect(revised.artifact?.sourceTool).toBe('revise_geometry')
+    expect(revised.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'electrical_cabinet', doorCount: 2 }),
+      ]),
+    )
+    expect(handles).toHaveLength(2)
+  })
+
+  test('recomposes new industrial family dimensions from follow-up text', () => {
+    const tank = executeGeometryToolCall(
+      'compose_parts',
+      { family: 'tank', name: 'editable storage tank', height: 3, diameter: 1.2 },
+      { prompt: 'make a vertical storage tank' },
+    )
+    const revisedTank = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: tank.artifact?.id,
+        feedback: 'change the tank diameter to 1.6m',
+      },
+      {
+        prompt: 'change the tank diameter to 1.6m',
+        revisionOf: tank.artifact?.id,
+        revisionVersion: tank.artifact?.version,
+        revisionTarget: tank.artifact,
+      },
+    )
+    const tankShell = revisedTank.artifact?.shapes.find(
+      (shape) =>
+        shape.sourcePartKind === 'cylindrical_tank' && shape.semanticRole === 'vessel_shell',
+    )
+
+    expect(revisedTank.artifact?.sourceTool).toBe('revise_geometry')
+    expect(revisedTank.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: 'cylindrical_tank', radius: 0.8 })]),
+    )
+    expect(tankShell?.radius).toBeCloseTo(0.8)
+
+    const reactor = executeGeometryToolCall(
+      'compose_parts',
+      { family: 'reactor', name: 'editable reactor', vesselHeight: 2, diameter: 1.1 },
+      { prompt: 'make a stirred reactor' },
+    )
+    const revisedReactor = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: reactor.artifact?.id,
+        feedback: 'make the reactor nozzle diameter 0.2m',
+      },
+      {
+        prompt: 'make the reactor nozzle diameter 0.2m',
+        revisionOf: reactor.artifact?.id,
+        revisionVersion: reactor.artifact?.version,
+        revisionTarget: reactor.artifact,
+      },
+    )
+    const reactorPorts =
+      revisedReactor.artifact?.shapes.filter(
+        (shape) => shape.sourcePartKind === 'inlet_port' || shape.sourcePartKind === 'outlet_port',
+      ) ?? []
+
+    expect(revisedReactor.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'inlet_port', radius: 0.1 }),
+        expect.objectContaining({ kind: 'outlet_port', radius: 0.1 }),
+      ]),
+    )
+    expect(reactorPorts.some((shape) => shape.radius === 0.1)).toBe(true)
+
+    const exchanger = executeGeometryToolCall(
+      'compose_parts',
+      { family: 'heat_exchanger', name: 'editable heat exchanger', length: 2.4, diameter: 0.5 },
+      { prompt: 'make a shell and tube heat exchanger' },
+    )
+    const revisedExchanger = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: exchanger.artifact?.id,
+        feedback: 'change heat exchanger length to 3m and diameter to 0.7m',
+      },
+      {
+        prompt: 'change heat exchanger length to 3m and diameter to 0.7m',
+        revisionOf: exchanger.artifact?.id,
+        revisionVersion: exchanger.artifact?.version,
+        revisionTarget: exchanger.artifact,
+      },
+    )
+    const exchangerShell = revisedExchanger.artifact?.shapes.find(
+      (shape) =>
+        shape.sourcePartKind === 'heat_exchanger' && shape.semanticRole === 'heat_exchanger_shell',
+    )
+
+    expect(revisedExchanger.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'heat_exchanger', length: 3, radius: 0.35 }),
+      ]),
+    )
+    expect(exchangerShell?.height).toBeCloseTo(3)
+    expect(exchangerShell?.radius).toBeCloseTo(0.35)
+  })
+
+  test('recomposes compressor and machine tool part attributes from follow-up text', () => {
+    const compressor = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'compressor',
+        name: 'editable compressor',
+        length: 2,
+        width: 0.8,
+        height: 0.8,
+      },
+      { prompt: 'make a skid mounted compressor' },
+    )
+    const revisedCompressor = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: compressor.artifact?.id,
+        feedback: 'make the compressor motor length 0.9m and port diameter 0.22m',
+      },
+      {
+        prompt: 'make the compressor motor length 0.9m and port diameter 0.22m',
+        revisionOf: compressor.artifact?.id,
+        revisionVersion: compressor.artifact?.version,
+        revisionTarget: compressor.artifact,
+      },
+    )
+
+    expect(revisedCompressor.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'ribbed_motor_body', length: 0.9 }),
+        expect.objectContaining({ kind: 'inlet_port', radius: 0.11 }),
+        expect.objectContaining({ kind: 'outlet_port', radius: 0.11 }),
+      ]),
+    )
+    expect(
+      revisedCompressor.artifact?.shapes.some(
+        (shape) => shape.sourcePartKind === 'ribbed_motor_body' && shape.height === 0.9,
+      ),
+    ).toBe(true)
+
+    const machine = executeGeometryToolCall(
+      'compose_parts',
+      { family: 'machine_tool', name: 'editable cnc', length: 2.8, width: 1.1, height: 1.7 },
+      { prompt: 'make a cnc machining center' },
+    )
+    const revisedMachine = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: machine.artifact?.id,
+        feedback: 'change machine tool length to 3m width to 1.2m height to 2m',
+      },
+      {
+        prompt: 'change machine tool length to 3m width to 1.2m height to 2m',
+        revisionOf: machine.artifact?.id,
+        revisionVersion: machine.artifact?.version,
+        revisionTarget: machine.artifact,
+      },
+    )
+    const enclosure = revisedMachine.artifact?.shapes.find(
+      (shape) => shape.semanticRole === 'machine_enclosure',
+    )
+
+    expect(revisedMachine.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'generic_body', length: 3, width: 1.2, height: 2 }),
+      ]),
+    )
+    expect(enclosure).toMatchObject({ length: 3, width: 1.2, height: 2 })
+  })
+
+  test('adds and repositions optional industrial parts from follow-up text', () => {
+    const tank = executeGeometryToolCall(
+      'compose_parts',
+      { family: 'tank', name: 'editable tank', height: 3, diameter: 1.2 },
+      { prompt: 'make a vertical storage tank' },
+    )
+    const revisedTank = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: tank.artifact?.id,
+        feedback: '给储罐右侧加一个检修平台',
+      },
+      {
+        prompt: '给储罐右侧加一个检修平台',
+        revisionOf: tank.artifact?.id,
+        revisionVersion: tank.artifact?.version,
+        revisionTarget: tank.artifact,
+      },
+    )
+    const platform = sourceParts(revisedTank.artifact?.sourceArgs.parts).find(
+      (part) => part.kind === 'platform_ladder',
+    )
+
+    expect(revisedTank.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: 'platform_ladder' })]),
+    )
+    expect(platform?.position?.[0]).toBeGreaterThan(0)
+    expect(
+      revisedTank.artifact?.shapes.some((shape) => shape.sourcePartKind === 'platform_ladder'),
+    ).toBe(true)
+
+    const compressor = executeGeometryToolCall(
+      'compose_parts',
+      { family: 'compressor', name: 'editable compressor', length: 2, width: 0.8, height: 0.8 },
+      { prompt: 'make a skid mounted compressor' },
+    )
+    const revisedCompressor = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: compressor.artifact?.id,
+        feedback: 'add a control box on the left side',
+      },
+      {
+        prompt: 'add a control box on the left side',
+        revisionOf: compressor.artifact?.id,
+        revisionVersion: compressor.artifact?.version,
+        revisionTarget: compressor.artifact,
+      },
+    )
+    const compressorControl = sourceParts(revisedCompressor.artifact?.sourceArgs.parts).find(
+      (part) => part.kind === 'control_box',
+    )
+
+    expect(compressorControl?.position?.[0]).toBeLessThan(0)
+    expect(
+      revisedCompressor.artifact?.shapes.some((shape) => shape.sourcePartKind === 'control_box'),
+    ).toBe(true)
+
+    const machine = executeGeometryToolCall(
+      'compose_parts',
+      { family: 'machine_tool', name: 'editable cnc', length: 2.8, width: 1.1, height: 1.7 },
+      { prompt: 'make a cnc machining center' },
+    )
+    const revisedMachine = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: machine.artifact?.id,
+        feedback: 'move the control panel to the left side',
+      },
+      {
+        prompt: 'move the control panel to the left side',
+        revisionOf: machine.artifact?.id,
+        revisionVersion: machine.artifact?.version,
+        revisionTarget: machine.artifact,
+      },
+    )
+    const machineControl = sourceParts(revisedMachine.artifact?.sourceArgs.parts).find(
+      (part) => part.kind === 'control_box',
+    )
+
+    expect(machineControl?.position?.[0]).toBeLessThan(0)
+  })
+
+  test('uses registry canonical roles instead of LLM blueprint roles for industrial parts', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'tank',
+        geometryBrief:
+          'Vertical industrial storage tank, 3m tall, 1.2m diameter, metallic grey. Required roles: tank_body, tank_base, inlet_nozzle, outlet_nozzle, inspection_platform.',
+        height: 3,
+        diameter: 1.2,
+        primaryColor: '#9BA4B5',
+        metalColor: '#9BA4B5',
+        parts: [
+          {
+            id: 'tank_body',
+            kind: 'cylindrical_tank',
+            semanticRole: 'tank_body',
+            params: { height: 3, radius: 0.6, primaryColor: '#9BA4B5' },
+          },
+          {
+            id: 'platform',
+            kind: 'platform_ladder',
+            semanticRole: 'inspection_platform',
+            side: 'right',
+            params: { metalColor: '#9BA4B5' },
+          },
+        ],
+      },
+      {
+        prompt:
+          'Generate a vertical industrial storage tank, 3 meters tall and 1.2 meters diameter, with a right-side inspection platform and ladder, metallic grey.',
+        blueprintRequiredRoles: [
+          'tank_body',
+          'tank_base',
+          'inlet_nozzle',
+          'outlet_nozzle',
+          'inspection_platform',
+        ],
+        blueprintCategory: 'industrial_storage_tank',
+      },
+    )
+
+    expect(result.artifact?.sourceArgs.family).toBe('tank')
+    expect(result.artifact?.geometryBrief?.requiredRoles).toEqual(
+      expect.arrayContaining(['cylindrical_tank', 'access_platform']),
+    )
+    expect(result.artifact?.geometryBrief?.requiredRoles).not.toContain('tank_body')
+    expect(result.artifact?.semanticSummary).toContain('family=process_equipment')
+    expect(result.content).toContain('Created draft')
+    expect(
+      result.artifact?.shapes.some((shape) => shape.sourcePartKind === 'platform_ladder'),
+    ).toBe(true)
+  })
+
+  test('keeps registry machine tool output isolated from aircraft auto completion', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'machine_tool',
+        name: 'Boeing style CNC machining center',
+        length: 2.8,
+        width: 1.1,
+        height: 1.7,
+        parts: [
+          { kind: 'machine base', semanticRole: 'machine_base' },
+          { kind: 'machine enclosure', semanticRole: 'machine_enclosure' },
+          { kind: 'viewing panel', semanticRole: 'spindle_head' },
+          { kind: 'control panel', semanticRole: 'control_panel' },
+        ],
+      },
+      { prompt: 'generate a Boeing style CNC machining center, not an aircraft' },
+    )
+
+    const sourceKinds = new Set(result.artifact?.shapes.map((shape) => shape.sourcePartKind))
+    expect(result.artifact?.sourceArgs.family).toBe('machine_tool')
+    expect(sourceKinds.has('generic_base')).toBe(true)
+    expect(sourceKinds.has('generic_body')).toBe(true)
+    expect(sourceKinds.has('aircraft_fuselage')).toBe(false)
+    expect(sourceKinds.has('aircraft_wing')).toBe(false)
+    expect(sourceKinds.has('aircraft_engine')).toBe(false)
+    expect(sourceKinds.has('aircraft_landing_gear')).toBe(false)
   })
 
   test('prefers outdoor AC assembly over generic appliance parts when compose_parts has no parts', () => {
@@ -2962,5 +4393,148 @@ describe('AI geometry tool executor', () => {
       revised.artifact?.shapes.filter((shape) => shape.semanticRole === 'bicycle_spoke'),
     ).toHaveLength(8)
     expect(revised.artifact?.editHistory?.at(-1)?.operations).toHaveLength(11)
+  })
+
+  test('preserves explicit machine tool blueprint parts and ignores negative wheel terms', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        category: 'cnc_machining_center',
+        family: 'machine_tool',
+        length: 2.8,
+        width: 1.1,
+        height: 1.7,
+        primaryColor: '#E8E8EC',
+        geometryBrief: {
+          category: 'cnc_machining_center',
+          requiredRoles: [
+            'machine_base',
+            'machine_enclosure',
+            'viewing_panel',
+            'spindle_head',
+            'work_table',
+            'control_panel',
+            'display_screen',
+            'warning_label',
+            'nameplate',
+            'vent_panel',
+            'access_panel',
+          ],
+        },
+        parts: [
+          {
+            id: 'base',
+            kind: 'generic_base',
+            semanticRole: 'machine_base',
+            params: { length: 2.8, width: 1.1, thickness: 0.18, darkColor: '#3A3A44' },
+          },
+          {
+            id: 'enclosure',
+            kind: 'generic_body',
+            semanticRole: 'machine_enclosure',
+            alignAbove: 'base',
+            params: { length: 2.4, width: 1.05, height: 1.4 },
+          },
+          {
+            id: 'viewing_panel',
+            kind: 'generic_panel',
+            semanticRole: 'viewing_panel',
+            centeredOn: 'enclosure',
+            side: 'front',
+            params: { length: 0.9, height: 0.7, thickness: 0.01, color: '#88CCEE' },
+          },
+          {
+            id: 'work_table',
+            kind: 'generic_panel',
+            semanticRole: 'work_table',
+            centeredOn: 'enclosure',
+            params: { length: 1, width: 0.7, thickness: 0.06 },
+          },
+          {
+            id: 'spindle_head',
+            kind: 'generic_panel',
+            semanticRole: 'spindle_head',
+            alignAbove: 'work_table',
+            centeredOn: 'work_table',
+            params: { length: 0.25, width: 0.25, height: 0.35 },
+          },
+          {
+            id: 'control_box',
+            kind: 'control_box',
+            semanticRole: 'control_panel',
+            alignBeside: 'enclosure',
+            side: 'right',
+            params: { length: 0.5, width: 0.3, height: 0.9 },
+          },
+          {
+            id: 'display',
+            kind: 'generic_display',
+            semanticRole: 'display_screen',
+            centeredOn: 'control_box',
+            side: 'front',
+            params: { length: 0.35, height: 0.28 },
+          },
+          {
+            id: 'vents_left',
+            kind: 'vent_slats',
+            semanticRole: 'vent_panel',
+            centeredOn: 'enclosure',
+            side: 'left',
+            params: { slatCount: 6 },
+          },
+          {
+            id: 'access_left',
+            kind: 'generic_detail_accent',
+            semanticRole: 'access_panel',
+            centeredOn: 'enclosure',
+            side: 'left',
+          },
+          { id: 'warning_front', kind: 'warning_label', semanticRole: 'warning_label' },
+          { id: 'nameplate_front', kind: 'nameplate', semanticRole: 'nameplate' },
+        ],
+      },
+      {
+        prompt:
+          'Generate a CNC machining center. Do not generate aircraft, vehicle, wheel, wing, or landing gear.',
+        blueprintCategory: 'cnc_machining_center',
+        blueprintRequiredRoles: [
+          'machine_base',
+          'machine_enclosure',
+          'viewing_panel',
+          'spindle_head',
+          'work_table',
+          'control_panel',
+          'display_screen',
+          'warning_label',
+          'nameplate',
+          'vent_panel',
+          'access_panel',
+        ],
+      },
+    )
+
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+    const sourceKinds = new Set(result.artifact?.shapes.map((shape) => shape.sourcePartKind))
+
+    expect(result.artifact).toBeDefined()
+    expect(result.artifact?.sourceArgs.family).toBe('machine_tool')
+    expect(result.artifact?.shapes.length).toBeGreaterThan(10)
+    for (const role of [
+      'machine_base',
+      'machine_enclosure',
+      'viewing_panel',
+      'spindle_head',
+      'work_table',
+      'control_panel',
+      'display_screen',
+      'warning_label',
+      'nameplate',
+      'vent_panel',
+      'access_panel',
+    ]) {
+      expect(roles.has(role)).toBe(true)
+    }
+    expect(sourceKinds.has('wheel_set')).toBe(false)
+    expect(sourceKinds.has('aircraft_fuselage')).toBe(false)
   })
 })

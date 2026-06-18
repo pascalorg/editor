@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { apiGraphSchema } from '@/lib/graph-schema'
+import { apiGraphSchema, diagnoseApiGraph } from '@/lib/graph-schema'
 import {
   guardSceneApiRequest,
   sceneApiJson,
@@ -8,6 +8,7 @@ import {
   withSceneApiHeaders,
 } from '@/lib/scene-api-security'
 import { getSceneOperations } from '@/lib/scene-store-server'
+import { sceneThumbnailUrlSchema } from '@/lib/scene-thumbnail-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,7 @@ type RouteParams = { params: Promise<{ id: string }> }
 const putSceneSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   graph: apiGraphSchema,
-  thumbnailUrl: z.string().url().nullable().optional(),
+  thumbnailUrl: sceneThumbnailUrlSchema,
   expectedVersion: z.number().int().nonnegative().optional(),
 })
 
@@ -67,9 +68,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   const parsed = putSceneSchema.safeParse(body)
   if (!parsed.success) {
+    const graph =
+      typeof body === 'object' && body !== null && !Array.isArray(body)
+        ? (body as { graph?: unknown }).graph
+        : undefined
     return sceneApiJson(
       request,
-      { error: 'invalid_request', details: parsed.error.issues },
+      {
+        error: 'invalid_request',
+        details: parsed.error.issues,
+        diagnostics: diagnoseApiGraph(graph),
+      },
       { status: 400 },
     )
   }

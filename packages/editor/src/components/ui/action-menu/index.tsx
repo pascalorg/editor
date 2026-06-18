@@ -1,6 +1,6 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { type AnyNodeId, type MaterialSchema, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo } from 'react'
@@ -8,7 +8,13 @@ import { MaterialPicker } from './../../../components/ui/controls/material-picke
 import { TooltipProvider } from './../../../components/ui/primitives/tooltip'
 import { useIsMobile } from './../../../hooks/use-mobile'
 import { useReducedMotion } from './../../../hooks/use-reduced-motion'
-import { resolvePaintTargetFromSelection } from './../../../lib/material-paint'
+import {
+  buildRoofSurfaceMaterialPatch,
+  buildSingleSurfaceMaterialPatch,
+  buildStairSurfaceMaterialPatch,
+  buildWallSurfaceMaterialPatch,
+  resolvePaintTargetFromSelection,
+} from './../../../lib/material-paint'
 import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { CameraActions } from './camera-actions'
@@ -24,8 +30,10 @@ const MOBILE_BOTTOM_OFFSET = 24
 function PaintMaterialTray() {
   const activePaintMaterial = useEditor((state) => state.activePaintMaterial)
   const activePaintTarget = useEditor((state) => state.activePaintTarget)
+  const selectedMaterialTarget = useEditor((state) => state.selectedMaterialTarget)
   const setActivePaintMaterial = useEditor((state) => state.setActivePaintMaterial)
   const setActivePaintTarget = useEditor((state) => state.setActivePaintTarget)
+  const updateNode = useScene((state) => state.updateNode)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const nodes = useScene((state) => state.nodes)
   const selectedId = selectedIds.length === 1 ? (selectedIds[0] ?? null) : null
@@ -41,14 +49,90 @@ function PaintMaterialTray() {
     }
   }, [nodes, selectedId, setActivePaintTarget])
 
+  const applyToSelectedNode = (material?: MaterialSchema, materialPreset?: string) => {
+    if (!(material || materialPreset)) return
+    if (!selectedId) return
+    const node = nodes[selectedId as AnyNodeId]
+    if (!node) return
+    const selectedNodeId = selectedId as AnyNodeId
+    const markSelectedNodeDirty = () => useScene.getState().markDirty(selectedNodeId)
+    const target = selectedMaterialTarget
+
+    if (node.type === 'wall') {
+      if (
+        target?.nodeId === selectedId &&
+        (target.role === 'interior' || target.role === 'exterior')
+      ) {
+        updateNode(
+          selectedNodeId,
+          buildWallSurfaceMaterialPatch(node, target.role, material, materialPreset),
+        )
+        markSelectedNodeDirty()
+        return
+      }
+
+      updateNode(selectedNodeId, {
+        interiorMaterial: material,
+        interiorMaterialPreset: materialPreset,
+        exteriorMaterial: material,
+        exteriorMaterialPreset: materialPreset,
+        material: undefined,
+        materialPreset: undefined,
+      })
+      markSelectedNodeDirty()
+      return
+    }
+
+    if (
+      node.type === 'roof' &&
+      target?.nodeId === selectedId &&
+      (target.role === 'top' || target.role === 'edge' || target.role === 'wall')
+    ) {
+      updateNode(
+        selectedNodeId,
+        buildRoofSurfaceMaterialPatch(node, target.role, material, materialPreset),
+      )
+      markSelectedNodeDirty()
+      return
+    }
+
+    if (
+      node.type === 'stair' &&
+      target?.nodeId === selectedId &&
+      (target.role === 'railing' || target.role === 'tread' || target.role === 'side')
+    ) {
+      updateNode(
+        selectedNodeId,
+        buildStairSurfaceMaterialPatch(node, target.role, material, materialPreset),
+      )
+      markSelectedNodeDirty()
+      return
+    }
+
+    if (target?.nodeId === selectedId && target.role === 'surface') {
+      updateNode(selectedNodeId, buildSingleSurfaceMaterialPatch(material, materialPreset))
+      markSelectedNodeDirty()
+      console.log('[pascal:material-tray:write]', {
+        nodeId: selectedNodeId,
+        nodeType: node.type,
+        target: target.role,
+        materialColor: material?.properties?.color,
+        materialProperties: material?.properties,
+        materialPreset,
+      })
+    }
+  }
+
   return (
     <div className="w-[42rem] max-w-[calc(100vw-2rem)]">
       <MaterialPicker
         onChange={(material) => {
           setActivePaintMaterial({ material, sourceTarget: activePaintTarget })
+          applyToSelectedNode(material, undefined)
         }}
         onSelectMaterialPreset={(materialPreset) => {
           setActivePaintMaterial({ materialPreset, sourceTarget: activePaintTarget })
+          applyToSelectedNode(undefined, materialPreset)
         }}
         selectedMaterialPreset={activePaintMaterial?.materialPreset}
         value={activePaintMaterial?.material}
@@ -73,7 +157,7 @@ export function ActionMenu({ className }: { className?: string }) {
   const showPaintTray = useMemo(() => mode === 'material-paint', [mode])
 
   // On mobile, defer the bottom rail to the selection bar when something
-  // is selected — the contextual actions take priority over mode controls.
+  // is selected; the contextual actions take priority over mode controls.
   // Also hide on Chat / Items / Studio tabs; those are contextual workflows
   // (composing / picking furniture / generating renders) where the build
   // menu is irrelevant.

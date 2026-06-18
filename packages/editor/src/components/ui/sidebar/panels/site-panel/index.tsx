@@ -365,13 +365,13 @@ const ReferenceItem = memo(function ReferenceItem({
           <img
             alt={t('sidebar.scan3d', '3D Scan')}
             className="h-3.5 w-3.5 shrink-0 object-contain opacity-70 transition-opacity group-hover/ref:opacity-100"
-            src="/icons/mesh.png"
+            src="/icons/mesh.webp"
           />
         ) : (
           <img
             alt={t('sidebar.guideImage', 'Guide Image')}
             className="h-3.5 w-3.5 shrink-0 object-contain opacity-70 transition-opacity group-hover/ref:opacity-100"
-            src="/icons/floorplan.png"
+            src="/icons/floorplan.webp"
           />
         )}
         <InlineRenameInput
@@ -763,7 +763,7 @@ const LevelItem = memo(function LevelItem({
               'h-4 w-4 shrink-0 object-contain transition-all duration-200',
               !isSelected && 'opacity-60 grayscale',
             )}
-            src="/icons/level.png"
+            src="/icons/level.webp"
           />
           <InlineRenameInput
             defaultName={lblLevelFallback(level.level)}
@@ -1044,7 +1044,7 @@ const LayerToggle = memo(function LayerToggle() {
               'mb-1 h-6 w-6 transition-all',
               activeTab !== 'structure' && 'opacity-50 grayscale',
             )}
-            src="/icons/room.png"
+            src="/icons/room.webp"
           />
           {t('sidebar.structure', 'Structure')}
         </div>
@@ -1080,7 +1080,7 @@ const LayerToggle = memo(function LayerToggle() {
               'mb-1 h-6 w-6 transition-all',
               activeTab !== 'furnish' && 'opacity-50 grayscale',
             )}
-            src="/icons/couch.png"
+            src="/icons/couch.webp"
           />
           {t('sidebar.furnish', 'Furnish')}
         </div>
@@ -1116,7 +1116,7 @@ const LayerToggle = memo(function LayerToggle() {
               'mb-1 h-6 w-6 transition-all',
               activeTab !== 'zones' && 'opacity-50 grayscale',
             )}
-            src="/icons/kitchen.png"
+            src="/icons/kitchen.webp"
           />
           {t('sidebar.zones', 'Zones')}
         </div>
@@ -1471,7 +1471,7 @@ const BuildingItem = memo(function BuildingItem({
               'h-5 w-5 object-contain transition-all',
               !isBuildingActive && 'opacity-60 grayscale',
             )}
-            src="/icons/building.png"
+            src="/icons/building.webp"
           />
           <span className="truncate font-medium text-sm">
             {building.name || t('sidebar.building', 'Building')}
@@ -1629,7 +1629,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                   'h-5 w-5 object-contain transition-all',
                   phase !== 'site' && 'opacity-60 grayscale',
                 )}
-                src="/icons/site.png"
+                src="/icons/site.webp"
               />
               <span className="font-medium text-sm">
                 {siteNode.name || t('sidebar.siteNode', 'Site')}

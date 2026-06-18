@@ -1,8 +1,9 @@
 import type { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { apiGraphSchema } from '@/lib/graph-schema'
+import { apiGraphSchema, diagnoseApiGraph } from '@/lib/graph-schema'
 import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight } from '@/lib/scene-api-security'
 import { getSceneOperations } from '@/lib/scene-store-server'
+import { sceneThumbnailUrlSchema } from '@/lib/scene-thumbnail-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +12,7 @@ const createSceneSchema = z.object({
   name: z.string().min(1).max(200),
   projectId: z.string().min(1).max(200).nullable().optional(),
   graph: apiGraphSchema,
-  thumbnailUrl: z.string().url().nullable().optional(),
+  thumbnailUrl: sceneThumbnailUrlSchema,
 })
 
 const listQuerySchema = z.object({
@@ -65,9 +66,17 @@ export async function POST(request: NextRequest) {
 
   const parsed = createSceneSchema.safeParse(body)
   if (!parsed.success) {
+    const graph =
+      typeof body === 'object' && body !== null && !Array.isArray(body)
+        ? (body as { graph?: unknown }).graph
+        : undefined
     return sceneApiJson(
       request,
-      { error: 'invalid_request', details: parsed.error.issues },
+      {
+        error: 'invalid_request',
+        details: parsed.error.issues,
+        diagnostics: diagnoseApiGraph(graph),
+      },
       { status: 400 },
     )
   }

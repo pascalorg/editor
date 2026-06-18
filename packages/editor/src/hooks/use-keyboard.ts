@@ -22,7 +22,10 @@ export const markToolCancelConsumed = () => {
 
 function isEditableTarget(target: EventTarget | null) {
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return true
-  return target instanceof HTMLElement && Boolean(target.closest('[contenteditable="true"]'))
+  return (
+    target instanceof HTMLElement &&
+    Boolean(target.closest('[contenteditable="true"], [role="dialog"]'))
+  )
 }
 
 function hasBrowserTextSelection() {
@@ -81,12 +84,31 @@ function nudgeSelectedNodesOnPlan(key: string, step: number): boolean {
   return true
 }
 
+export function deleteSelectedNodeIds(selectedNodeIds: readonly AnyNodeId[]) {
+  if (selectedNodeIds.length === 0) return
+
+  if (selectedNodeIds.length === 1) {
+    const node = useScene.getState().nodes[selectedNodeIds[0]!]
+    if (node?.type === 'item') {
+      sfxEmitter.emit('sfx:item-delete')
+    } else {
+      sfxEmitter.emit('sfx:structure-delete')
+    }
+  } else {
+    sfxEmitter.emit('sfx:structure-delete')
+  }
+
+  useScene.getState().deleteNodes([...selectedNodeIds])
+}
+
 export const useKeyboard = ({
   isVersionPreviewMode = false,
   disabled = false,
+  onRequestDeleteSelectedNodes,
 }: {
   isVersionPreviewMode?: boolean
   disabled?: boolean
+  onRequestDeleteSelectedNodes?: (selectedNodeIds: AnyNodeId[]) => void
 } = {}) => {
   useEffect(() => {
     if (disabled) {
@@ -364,34 +386,22 @@ export const useKeyboard = ({
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
 
         if (selectedNodeIds.length > 0) {
-          // Guard against accidental bulk deletion (e.g. box-select all + Delete)
-          const BULK_DELETE_THRESHOLD = 10
-          if (selectedNodeIds.length >= BULK_DELETE_THRESHOLD) {
-            const confirmed = window.confirm(
-              `Delete ${selectedNodeIds.length} selected elements? This cannot be undone if the undo history is exhausted.`,
-            )
-            if (!confirmed) return
-          }
-
-          // Play appropriate SFX based on what's being deleted
-          if (selectedNodeIds.length === 1) {
-            const node = useScene.getState().nodes[selectedNodeIds[0]!]
-            if (node?.type === 'item') {
-              sfxEmitter.emit('sfx:item-delete')
+          if (selectedNodeIds.length > 1) {
+            if (onRequestDeleteSelectedNodes) {
+              onRequestDeleteSelectedNodes([...selectedNodeIds])
             } else {
-              sfxEmitter.emit('sfx:structure-delete')
+              deleteSelectedNodeIds(selectedNodeIds)
             }
-          } else {
-            sfxEmitter.emit('sfx:structure-delete')
+            return
           }
 
-          useScene.getState().deleteNodes(selectedNodeIds)
+          deleteSelectedNodeIds(selectedNodeIds)
         }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [disabled, isVersionPreviewMode])
+  }, [disabled, isVersionPreviewMode, onRequestDeleteSelectedNodes])
 
   return null
 }

@@ -1,4 +1,4 @@
-export type AiHarnessRunMode = 'articraft' | 'image-to-3d' | 'primitive'
+export type AiHarnessRunMode = 'articraft' | 'image-to-3d' | 'primitive' | 'factory'
 
 export type AiHarnessRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
 

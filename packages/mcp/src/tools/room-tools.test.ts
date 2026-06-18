@@ -21,15 +21,27 @@ describe('room tools', () => {
     await Promise.all([server.connect(srvT), client.connect(cliT)])
   })
 
-  test('search_assets returns built-in catalog matches', async () => {
+  test('search_assets returns shared catalog matches', async () => {
     const result = await client.callTool({
       name: 'search_assets',
-      arguments: { query: 'sofa' },
+      arguments: { query: 'factory pipe' },
     })
     expect(result.isError).toBeFalsy()
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.total).toBeGreaterThan(0)
-    expect(parsed.results.map((item: { id: string }) => item.id)).toContain('sofa')
+    expect(parsed.results.map((item: { id: string }) => item.id)).toContain(
+      'factory-straight-pipe',
+    )
+  })
+
+  test('search_assets category filters match shared catalog tags', async () => {
+    const result = await client.callTool({
+      name: 'search_assets',
+      arguments: { query: 'bed', category: 'furniture' },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.results.map((item: { id: string }) => item.id)).toContain('double-bed')
   })
 
   test('create_room creates a valid zone/slab/ceiling/wall bundle', async () => {

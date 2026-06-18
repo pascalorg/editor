@@ -3,10 +3,10 @@ import type { SceneOperations } from '../operations'
 import { MCP_CATALOG_ITEMS } from '../tools/asset-catalog'
 
 /**
- * `pascal://catalog/items` — small built-in item catalog for standalone MCP.
+ * `pascal://catalog/items` — shared placeable item catalog for standalone MCP.
  *
- * The editor UI owns the full catalog. MCP intentionally keeps a dependency-free
- * subset so headless agents can still place realistic furniture and fixtures.
+ * The catalog lives in core as pure AssetInput data so MCP can run headlessly
+ * without depending on editor UI/React packages.
  */
 export function registerCatalogItems(server: McpServer, _bridge: SceneOperations): void {
   server.registerResource(
@@ -15,14 +15,14 @@ export function registerCatalogItems(server: McpServer, _bridge: SceneOperations
     {
       title: 'Item catalog',
       description:
-        'Dependency-free catalog subset of placeable items available in standalone MCP mode.',
+        'Dependency-free shared catalog of placeable items available in standalone MCP mode.',
       mimeType: 'application/json',
     },
     async (uri) => {
       const payload = {
         status: 'ok' as const,
         items: MCP_CATALOG_ITEMS,
-        note: 'Standalone MCP catalog subset; host applications can still expose a larger catalog separately.',
+        note: 'Shared core catalog; editor and MCP resolve the same built-in placeable item IDs.',
       }
       return {
         contents: [

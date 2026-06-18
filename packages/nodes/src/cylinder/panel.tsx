@@ -53,14 +53,14 @@ export default function CylinderPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/cube.png"
+      icon="/icons/cube.webp"
       onClose={handleClose}
-      title={node.name || 'Cylinder'}
+      title={node.name || '\u5706\u67f1'}
       width={300}
     >
       <PanelSection title={S.dimensions()}>
         <MetricControl
-          label="Radius"
+          label={'\u534a\u5f84'}
           max={10}
           min={0.1}
           onChange={(value) => handleUpdate({ radius: value })}
@@ -80,7 +80,7 @@ export default function CylinderPanel() {
           value={Math.round((node.height ?? 1) * 100) / 100}
         />
         <MetricControl
-          label="Wall"
+          label={'\u58c1\u539a'}
           max={Math.max(0.1, (node.radius ?? 0.5) - 0.01)}
           min={0}
           onChange={(value) => handleUpdate({ wallThickness: value <= 0.001 ? undefined : value })}

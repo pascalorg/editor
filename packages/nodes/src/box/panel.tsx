@@ -53,9 +53,9 @@ export default function BoxPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/cube.png"
+      icon="/icons/cube.webp"
       onClose={handleClose}
-      title={node.name || 'Box'}
+      title={node.name || '\u76d2\u4f53'}
       width={300}
     >
       <PanelSection title={S.dimensions()}>
@@ -90,7 +90,7 @@ export default function BoxPanel() {
           value={Math.round((node.height ?? 1) * 100) / 100}
         />
         <MetricControl
-          label="Corner radius"
+          label={L.cornerRadius()}
           max={Math.max(0, Math.min(node.length ?? 1, node.width ?? 1, node.height ?? 1) / 2)}
           min={0}
           onChange={(value) => handleUpdate({ cornerRadius: value })}

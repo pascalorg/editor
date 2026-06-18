@@ -1,4 +1,4 @@
-import { composePartPrimitives, type PartComposeInput } from './part-compose'
+import { radialExtrudeRotationInHorizontalPlane } from './orientation-utils'
 import type { PrimitiveGeometryBrief, PrimitiveShapeInput, Vec3 } from './primitive-compose'
 import { composeRobotArmPrimitives, type RobotArmComposeInput } from './robot-arm-compose'
 
@@ -146,13 +146,6 @@ function stringValue(...values: unknown[]): string | undefined {
   return undefined
 }
 
-function boolValue(...values: unknown[]): boolean | undefined {
-  for (const value of values) {
-    if (typeof value === 'boolean') return value
-  }
-  return undefined
-}
-
 function clampNumber(value: number | undefined, fallback: number, min: number, max: number) {
   const resolved = value ?? fallback
   return Math.max(min, Math.min(max, resolved))
@@ -194,11 +187,11 @@ function colorFor(params: PrimitiveRecipeParams, fallback: string): string {
   return stringValue(params.primaryColor, params.color, fallback) ?? fallback
 }
 
-function detailFor(params: PrimitiveRecipeParams): PartComposeInput['detail'] {
+function detailFor(params: PrimitiveRecipeParams): PrimitiveRecipeParams['detail'] {
   return stringValue(
     params.detail,
     params.highFidelity ? 'high' : undefined,
-  ) as PartComposeInput['detail']
+  ) as PrimitiveRecipeParams['detail']
 }
 
 function positionFor(params: PrimitiveRecipeParams, input: ComposeRecipeInput): Vec3 | undefined {
@@ -1315,42 +1308,240 @@ function perforatedPlateRecipe(): PrimitiveRecipeDefinition {
   }
 }
 
+function composeValveRecipePrimitives(
+  input: ComposeRecipeInput,
+  kind: 'gate' | 'ball',
+): PrimitiveShapeInput[] {
+  const params = recipeParams(input)
+  const scale = sizeScaleFor(params) ?? 1
+  const length = clampNumber(numberValue(params.length), 0.7 * scale, 0.22, 2.4)
+  const bodyRadius = clampNumber(
+    numberValue(params.radius, params.height),
+    0.14 * scale,
+    0.045,
+    0.6,
+  )
+  const flangeRadius = clampNumber(
+    numberValue(params.outerDiameter),
+    bodyRadius * 1.45,
+    bodyRadius,
+    1,
+  )
+  const flangeThickness = clampNumber(numberValue(params.thickness), length * 0.07, 0.012, 0.18)
+  const origin = positionFor(params, input) ?? [0, 0, 0]
+  const name = nameFor(input, kind === 'ball' ? 'ball valve' : 'gate valve')
+  const bodyColor = colorFor(params, '#64748b')
+  const darkColor = stringValue(params.darkColor, '#1f2937') ?? '#1f2937'
+  const metalColor = stringValue(params.metalColor, '#cbd5e1') ?? '#cbd5e1'
+  const body = { properties: { color: bodyColor, roughness: 0.42, metalness: 0.58 } }
+  const dark = { properties: { color: darkColor, roughness: 0.55, metalness: 0.25 } }
+  const metal = { properties: { color: metalColor, roughness: 0.3, metalness: 0.82 } }
+  const centerY = origin[1] + bodyRadius
+  const leftX = origin[0] - length / 2
+  const rightX = origin[0] + length / 2
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'cylinder',
+      name: `${name} main valve body`,
+      semanticRole: 'valve_body',
+      sourcePartKind: 'valve_body',
+      position: [origin[0], centerY, origin[2]],
+      axis: 'x',
+      radius: bodyRadius,
+      height: length,
+      radialSegments: 40,
+      material: body,
+    },
+    {
+      kind: 'hollow-cylinder',
+      name: `${name} inlet flange`,
+      semanticRole: 'flange_inlet',
+      sourcePartKind: 'flange_ring',
+      position: [leftX - flangeThickness / 2, centerY, origin[2]],
+      axis: 'x',
+      radius: flangeRadius,
+      height: flangeThickness,
+      wallThickness: Math.max(flangeRadius - bodyRadius * 0.62, 0.006),
+      radialSegments: 48,
+      material: metal,
+    },
+    {
+      kind: 'hollow-cylinder',
+      name: `${name} outlet flange`,
+      semanticRole: 'flange_outlet',
+      sourcePartKind: 'flange_ring',
+      position: [rightX + flangeThickness / 2, centerY, origin[2]],
+      axis: 'x',
+      radius: flangeRadius,
+      height: flangeThickness,
+      wallThickness: Math.max(flangeRadius - bodyRadius * 0.62, 0.006),
+      radialSegments: 48,
+      material: metal,
+    },
+    {
+      kind: 'cylinder',
+      name: `${name} vertical stem`,
+      semanticRole: 'stem',
+      sourcePartKind: 'handwheel',
+      position: [origin[0], centerY + bodyRadius * 1.25, origin[2]],
+      axis: 'y',
+      radius: bodyRadius * 0.12,
+      height: bodyRadius * 1.5,
+      radialSegments: 24,
+      material: metal,
+    },
+  ]
+
+  if (kind === 'ball') {
+    shapes.push(
+      {
+        kind: 'sphere',
+        name: `${name} visible ball core`,
+        semanticRole: 'valve_ball',
+        sourcePartKind: 'valve_body',
+        position: [origin[0], centerY, origin[2]],
+        radius: bodyRadius * 0.62,
+        widthSegments: 32,
+        heightSegments: 16,
+        material: metal,
+      },
+      {
+        kind: 'cylinder',
+        name: `${name} dark through bore`,
+        semanticRole: 'valve_bore',
+        sourcePartKind: 'valve_body',
+        position: [origin[0], centerY, origin[2]],
+        axis: 'x',
+        radius: bodyRadius * 0.25,
+        height: length * 0.72,
+        radialSegments: 24,
+        material: dark,
+      },
+      {
+        kind: 'torus',
+        name: `${name} left seat ring`,
+        semanticRole: 'seat_ring',
+        sourcePartKind: 'valve_body',
+        position: [origin[0] - bodyRadius * 0.48, centerY, origin[2]],
+        axis: 'x',
+        majorRadius: bodyRadius * 0.38,
+        tubeRadius: bodyRadius * 0.035,
+        radialSegments: 10,
+        tubularSegments: 36,
+        material: dark,
+      },
+      {
+        kind: 'torus',
+        name: `${name} right seat ring`,
+        semanticRole: 'seat_ring',
+        sourcePartKind: 'valve_body',
+        position: [origin[0] + bodyRadius * 0.48, centerY, origin[2]],
+        axis: 'x',
+        majorRadius: bodyRadius * 0.38,
+        tubeRadius: bodyRadius * 0.035,
+        radialSegments: 10,
+        tubularSegments: 36,
+        material: dark,
+      },
+      {
+        kind: 'box',
+        name: `${name} quarter-turn lever handle`,
+        semanticRole: 'lever_handle',
+        sourcePartKind: 'handwheel',
+        position: [origin[0] + bodyRadius * 0.55, centerY + bodyRadius * 2.05, origin[2]],
+        length: bodyRadius * 1.7,
+        width: bodyRadius * 0.12,
+        height: bodyRadius * 0.1,
+        material: metal,
+      },
+    )
+  } else {
+    shapes.push(
+      {
+        kind: 'cylinder',
+        name: `${name} bonnet`,
+        semanticRole: 'bonnet',
+        sourcePartKind: 'valve_body',
+        position: [origin[0], centerY + bodyRadius * 0.85, origin[2]],
+        axis: 'y',
+        radius: bodyRadius * 0.55,
+        height: bodyRadius * 0.7,
+        radialSegments: 32,
+        material: body,
+      },
+      {
+        kind: 'box',
+        name: `${name} internal gate wedge`,
+        semanticRole: 'gate_wedge',
+        sourcePartKind: 'valve_body',
+        position: [origin[0], centerY - bodyRadius * 0.1, origin[2]],
+        length: bodyRadius * 0.35,
+        width: bodyRadius * 1.0,
+        height: bodyRadius * 0.9,
+        material: dark,
+      },
+      {
+        kind: 'torus',
+        name: `${name} handwheel`,
+        semanticRole: 'handwheel',
+        sourcePartKind: 'handwheel',
+        position: [origin[0], centerY + bodyRadius * 2.18, origin[2]],
+        axis: 'y',
+        majorRadius: bodyRadius * 0.72,
+        tubeRadius: bodyRadius * 0.055,
+        radialSegments: 12,
+        tubularSegments: 48,
+        material: metal,
+      },
+      {
+        kind: 'box',
+        name: `${name} yoke bridge`,
+        semanticRole: 'yoke',
+        sourcePartKind: 'handwheel',
+        position: [origin[0], centerY + bodyRadius * 1.7, origin[2]],
+        length: bodyRadius * 1.0,
+        width: bodyRadius * 0.12,
+        height: bodyRadius * 0.18,
+        material: metal,
+      },
+    )
+    for (let index = 0; index < 6; index += 1) {
+      const angle = (index / 6) * Math.PI * 2
+      shapes.push({
+        kind: 'cylinder',
+        name: `${name} bonnet bolt ${index + 1}`,
+        semanticRole: 'bonnet_bolts',
+        sourcePartKind: 'bolt_pattern',
+        position: [
+          origin[0] + Math.cos(angle) * bodyRadius * 0.55,
+          centerY + bodyRadius * 1.22,
+          origin[2] + Math.sin(angle) * bodyRadius * 0.55,
+        ],
+        axis: 'y',
+        radius: bodyRadius * 0.035,
+        height: bodyRadius * 0.08,
+        radialSegments: 12,
+        material: metal,
+      })
+    }
+  }
+
+  return shapes
+}
+
 function valveRecipe(kind: 'gate' | 'ball'): PrimitiveRecipeDefinition {
   const id = `valve.${kind}` as PrimitiveRecipeId
   const label = kind === 'ball' ? 'Ball valve' : 'Gate valve'
   const aliases =
     kind === 'ball'
-      ? ['ball valve', 'quarter turn valve', '球阀']
-      : ['valve', 'gate valve', 'industrial valve', '阀门', '闸阀']
-
-  const partInput = (input: ComposeRecipeInput): PartComposeInput => {
-    const params = recipeParams(input)
-    const valveStyle = kind === 'ball' ? 'ball' : stringValue(params.valveStyle, 'gate')
-    return {
-      name: nameFor(input, label),
-      geometryBrief: input.geometryBrief ?? valveBrief(kind),
-      position: positionFor(params, input),
-      detail: detailFor(params),
-      primaryColor: colorFor(params, '#64748b'),
-      secondaryColor: stringValue(params.secondaryColor, '#475569'),
-      metalColor: stringValue(params.metalColor, '#cbd5e1'),
-      darkColor: stringValue(params.darkColor, '#1f2937'),
-      enhanceVisualDetails: boolValue(params.highFidelity, params.enhanceVisualDetails) === true,
-      parts: [
-        { kind: 'valve_body', valveStyle },
-        {
-          kind: 'handwheel',
-          handleStyle: kind === 'ball' ? 'lever' : stringValue(params.handleStyle),
-        },
-      ],
-    }
-  }
+      ? ['ball valve', 'quarter turn valve', '\u7403\u9600']
+      : ['valve', 'gate valve', 'industrial valve', '\u9600\u95e8', '\u95f8\u9600']
 
   return {
     id,
     label,
     aliases,
-    compose: (input) => composePartPrimitives(partInput(input)),
+    compose: (input) => composeValveRecipePrimitives(input, kind),
     geometryBrief: (input) => input.geometryBrief ?? valveBrief(kind),
   }
 }
@@ -1425,6 +1616,86 @@ function robotArmBrief(input: ComposeRecipeInput): PrimitiveGeometryBrief {
     ],
     validationTargets: ['readable base', 'three joint housings', 'separate upper arm and forearm'],
   }
+}
+
+function taijiHalfBladeProfile(
+  length: number,
+  rootWidth: number,
+  bladeWidth: number,
+  longitudinalCurve: number,
+  steps: number,
+): [number, number][] {
+  const profile: [number, number][] = []
+  const halfRoot = rootWidth * 0.5
+  const maxHalfWidth = bladeWidth * 0.78
+  const halfWidthAt = (t: number) => {
+    const bulb = Math.sin(Math.PI * t) ** 0.48
+    const outerWeight = 0.72 + t * 0.28
+    const rootNeck = halfRoot * (1 - t) ** 2.2
+    return rootNeck + maxHalfWidth * bulb * outerWeight
+  }
+  const spineOffset = (t: number) =>
+    longitudinalCurve * (Math.sin(Math.PI * (t - 0.06)) + 0.28 * Math.sin(Math.PI * 2 * t))
+  const innerCut = (t: number) => longitudinalCurve * 0.72 * Math.sin(Math.PI * t) * (1 - t * 0.35)
+
+  for (let step = 0; step <= steps; step += 1) {
+    const t = step / steps
+    const x = length * (t - 0.5)
+    profile.push([x, spineOffset(t) + halfWidthAt(t) * (0.92 + t * 0.18)])
+  }
+  for (let step = steps; step >= 0; step -= 1) {
+    const t = step / steps
+    const x = length * (t - 0.5)
+    const width = halfWidthAt(t)
+    profile.push([x, spineOffset(t) - width * (0.5 + 0.32 * (1 - t)) + innerCut(t)])
+  }
+  return profile
+}
+
+function composeMixerBladeRecipeShapes(args: {
+  name: string
+  origin: Vec3
+  bladeCenterY: number
+  bladeCount: number
+  bladeLength: number
+  bladeWidth: number
+  bladeThickness: number
+  bladeTilt: number
+  hubRadius: number
+  material: PrimitiveShapeInput['material']
+  detail?: PrimitiveRecipeParams['detail']
+}): PrimitiveShapeInput[] {
+  const rootWidth = Math.max(args.bladeThickness * 1.05, args.hubRadius * 0.36)
+  const profile = taijiHalfBladeProfile(
+    args.bladeLength,
+    rootWidth,
+    args.bladeWidth,
+    args.bladeWidth * 0.38,
+    args.detail === 'low' ? 12 : 24,
+  )
+  return Array.from({ length: args.bladeCount }, (_, index) => {
+    const angle = (index * Math.PI * 2) / args.bladeCount
+    return {
+      kind: 'extrude',
+      name: `${args.name} taiji half mixer propeller blade ${index + 1}`,
+      semanticRole: 'mixer_blade',
+      semanticGroup: 'mixer_blades',
+      sourcePartKind: 'mixer_blades',
+      position: [
+        args.origin[0] + Math.cos(angle) * (args.hubRadius + args.bladeLength * 0.5),
+        args.bladeCenterY,
+        args.origin[2] + Math.sin(angle) * (args.hubRadius + args.bladeLength * 0.5),
+      ],
+      rotation: radialExtrudeRotationInHorizontalPlane(angle, args.bladeTilt * 0.55),
+      profile,
+      depth: args.bladeThickness,
+      bevelSize: args.bladeThickness * 0.12,
+      bevelThickness: args.bladeThickness * 0.16,
+      bevelSegments: 1,
+      curveSegments: 16,
+      material: args.material,
+    } satisfies PrimitiveShapeInput
+  })
 }
 
 function mixerImpellerRecipe(): PrimitiveRecipeDefinition {
@@ -1529,27 +1800,24 @@ function mixerImpellerRecipe(): PrimitiveRecipeDefinition {
     ]
 
     shapes.push(
-      ...composePartPrimitives({
+      ...composeMixerBladeRecipeShapes({
         name: nameFor(input, 'mud mixer impeller'),
-        detail: detailFor(params) ?? 'medium',
-        accentColor: stringValue(params.accentColor, params.secondaryColor, '#64748b') ?? '#64748b',
-        darkColor: stringValue(params.darkColor, '#1f2937') ?? '#1f2937',
-        autoComplete: false,
-        parts: [
-          {
-            kind: 'mixer_blades',
-            name: `${nameFor(input, 'mud mixer impeller')} taiji half paddle set`,
-            position: [origin[0], bladeCenterY, origin[2]],
-            count: bladeCount,
-            bladeShape: 'taiji_half',
-            bladeRadius: bladeLength,
-            bladeWidth,
-            depth: bladeThickness,
-            bladePitch: bladeTilt,
-            verticalCurve: bladeWidth * 0.38,
-            wireRadius: hubRadius,
+        origin,
+        bladeCenterY,
+        bladeCount,
+        bladeLength,
+        bladeWidth,
+        bladeThickness,
+        bladeTilt,
+        hubRadius,
+        material: {
+          properties: {
+            color: stringValue(params.accentColor, params.secondaryColor, '#64748b') ?? '#64748b',
+            roughness: 0.5,
+            metalness: 0.45,
           },
-        ],
+        },
+        detail: detailFor(params) ?? 'medium',
       }),
     )
 

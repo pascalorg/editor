@@ -95,7 +95,7 @@ export default function SpawnPanel() {
   const storedRotationDegrees = Math.round((node.rotation * 180) / Math.PI)
 
   return (
-    <PanelWrapper icon="/icons/site.png" onClose={handleClose} title={N.spawn()} width={300}>
+    <PanelWrapper icon="/icons/site.webp" onClose={handleClose} title={N.spawn()} width={300}>
       <PanelSection title={S.position()}>
         <SliderControl
           label={L.x()}

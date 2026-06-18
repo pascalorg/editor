@@ -1,5 +1,10 @@
 import type { BufferGeometry } from 'three'
 
+export type DrawGroupLike = {
+  start?: number
+  count?: number
+} | null
+
 /**
  * True when `geometry` has a bound, non-empty `position` attribute — i.e. it is
  * safe to submit to the WebGPU renderer.
@@ -18,7 +23,30 @@ import type { BufferGeometry } from 'three'
  * renderer-level safety net: skipping a count-0 draw is a no-op visually (it
  * would draw nothing anyway) while keeping the command encoder healthy.
  */
-export function hasDrawableGeometry(geometry: BufferGeometry | undefined | null): boolean {
+export function hasDrawableGeometry(
+  geometry: BufferGeometry | undefined | null,
+  group?: DrawGroupLike,
+): boolean {
   const position = geometry?.attributes?.position
-  return Boolean(position && position.count > 0)
+  if (!(position && position.count > 0)) return false
+
+  const drawRangeCount = geometry?.drawRange?.count
+  if (Number.isFinite(drawRangeCount) && drawRangeCount <= 0) return false
+
+  const index = geometry?.index
+  if (index && index.count <= 0) return false
+
+  if (group) {
+    const groupCount = group.count
+    if (Number.isFinite(groupCount) && (groupCount ?? 0) <= 0) return false
+
+    const groupStart = Math.max(0, group.start ?? 0)
+    if (index) {
+      if (groupStart >= index.count) return false
+    } else if (groupStart >= position.count) {
+      return false
+    }
+  }
+
+  return true
 }

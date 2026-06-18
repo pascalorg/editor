@@ -21,7 +21,7 @@ import type { FenceNode } from './schema'
 export function buildFenceGeometry(node: FenceNode): Group {
   const group = new Group()
   const geometry = generateFenceGeometry(node)
-  const mesh = new Mesh(geometry, DEFAULT_STAIR_MATERIAL)
+  const mesh = new Mesh(geometry, DEFAULT_STAIR_MATERIAL())
   mesh.castShadow = true
   mesh.receiveShadow = true
   group.add(mesh)

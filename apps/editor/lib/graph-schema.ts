@@ -1,6 +1,60 @@
 import { AnyNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 
+export interface GraphValidationDiagnostic {
+  nodeId: string
+  type: string | null
+  name: string | null
+  path: string
+  message: string
+}
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function formatIssuePath(path: readonly (string | number | symbol)[]) {
+  return path.map((part) => String(part)).join('.')
+}
+
+export function diagnoseApiGraph(value: unknown, limit = 20): GraphValidationDiagnostic[] {
+  const graph = readRecord(value)
+  const nodes = readRecord(graph?.nodes)
+  if (!nodes) {
+    return [
+      {
+        nodeId: '(graph)',
+        type: null,
+        name: null,
+        path: 'nodes',
+        message: 'Scene graph nodes must be an object.',
+      },
+    ]
+  }
+
+  const diagnostics: GraphValidationDiagnostic[] = []
+  for (const [nodeId, node] of Object.entries(nodes)) {
+    const nodeRecord = readRecord(node)
+    const parsed = AnyNode.safeParse(node)
+    if (parsed.success) continue
+
+    for (const issue of parsed.error.issues) {
+      diagnostics.push({
+        nodeId,
+        type: typeof nodeRecord?.type === 'string' ? nodeRecord.type : null,
+        name: typeof nodeRecord?.name === 'string' ? nodeRecord.name : null,
+        path: formatIssuePath(issue.path),
+        message: issue.message,
+      })
+      if (diagnostics.length >= limit) return diagnostics
+    }
+  }
+
+  return diagnostics
+}
+
 /**
  * Validates a SceneGraph at an untrusted API boundary. Re-runs
  * `AnyNode.safeParse` on every node, which enforces the `AssetUrl`

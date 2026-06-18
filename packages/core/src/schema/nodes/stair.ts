@@ -9,11 +9,13 @@ export const StairRailingMode = z.enum(['none', 'left', 'right', 'both'])
 export const StairType = z.enum(['straight', 'curved', 'spiral'])
 export const StairTopLandingMode = z.enum(['none', 'integrated'])
 export const StairSlabOpeningMode = z.enum(['none', 'destination'])
+export const StairCenterColumnShape = z.enum(['round', 'square'])
 
 export type StairRailingMode = z.infer<typeof StairRailingMode>
 export type StairType = z.infer<typeof StairType>
 export type StairTopLandingMode = z.infer<typeof StairTopLandingMode>
 export type StairSlabOpeningMode = z.infer<typeof StairSlabOpeningMode>
+export type StairCenterColumnShape = z.infer<typeof StairCenterColumnShape>
 export type StairSurfaceMaterialRole = 'railing' | 'tread' | 'side'
 export type StairSurfaceMaterialSpec = {
   material?: MaterialSchemaType
@@ -49,6 +51,7 @@ export const StairNode = BaseNode.extend({
   topLandingMode: StairTopLandingMode.default('none'),
   topLandingDepth: z.number().default(0.9),
   showCenterColumn: z.boolean().default(true),
+  centerColumnShape: StairCenterColumnShape.default('round'),
   showStepSupports: z.boolean().default(true),
   railingMode: StairRailingMode.default('none'),
   railingHeight: z.number().default(0.92),
@@ -75,6 +78,7 @@ export const StairNode = BaseNode.extend({
   - topLandingMode: optional integrated top landing for spiral stairs
   - topLandingDepth: depth used to size the integrated spiral top landing
   - showCenterColumn: whether spiral stairs render a center column
+  - centerColumnShape: round or square center column shape for spiral stairs
   - showStepSupports: whether spiral stairs render step support brackets
   - railingMode: whether to render railings and on which side(s)
   - railingHeight: top height of the railing above the stair surface

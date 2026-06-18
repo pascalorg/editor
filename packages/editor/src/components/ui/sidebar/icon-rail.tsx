@@ -24,7 +24,7 @@ interface IconRailProps {
 function getSitePanel() {
   return {
     id: 'site' as PanelId,
-    iconSrc: '/icons/level.png',
+    iconSrc: '/icons/level.webp',
     label: t('sidebar.site', 'Site'),
   }
 }
@@ -32,7 +32,7 @@ function getSitePanel() {
 function getSettingsPanel() {
   return {
     id: 'settings' as PanelId,
-    iconSrc: '/icons/settings.png',
+    iconSrc: '/icons/settings.webp',
     label: t('sidebar.settings', 'Settings'),
   }
 }

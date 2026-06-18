@@ -17,6 +17,24 @@ import { type AnyNode, type AnyNodeId, isCurvedWall, type WallNode } from '@pasc
 
 const WALL_SNAP_DISTANCE_M = 1.5
 
+export type OpeningPlacement = {
+  collides: boolean
+  placeable: boolean
+  tint: 'valid' | 'invalid'
+}
+
+export function resolveOpeningPlacement(args: {
+  collides: boolean
+  forcePlace?: boolean
+}): OpeningPlacement {
+  const placeable = !args.collides || args.forcePlace === true
+  return {
+    collides: args.collides,
+    placeable,
+    tint: placeable ? 'valid' : 'invalid',
+  }
+}
+
 export type WallHit = {
   wall: WallNode
   /** Distance along the wall from `start` (clamped to [0, length]). */

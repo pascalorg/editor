@@ -1,7 +1,5 @@
-import { ensureArticraftRunRunning } from '@/lib/ai-harness-runs/articraft-runner'
-import { ensureImageTo3DRunRunning } from '@/lib/ai-harness-runs/image-to-3d-runner'
-import { ensurePrimitiveRunRunning } from '@/lib/ai-harness-runs/primitive-runner'
 import { isTerminalStatus, listRunEvents, loadRun } from '@/lib/ai-harness-runs/run-store'
+import type { AiHarnessRun } from '@/lib/ai-harness-runs/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -12,19 +10,30 @@ const POLL_MS = 500
 const HEARTBEAT_MS = 15_000
 const MAX_EVENTS_PER_POLL = 100
 
+async function ensureRunRunning(run: AiHarnessRun) {
+  if (isTerminalStatus(run.status)) return
+  if (run.mode === 'articraft') {
+    const { ensureArticraftRunRunning } = await import('@/lib/ai-harness-runs/articraft-runner')
+    ensureArticraftRunRunning(run.id)
+  } else if (run.mode === 'image-to-3d') {
+    const { ensureImageTo3DRunRunning } = await import('@/lib/ai-harness-runs/image-to-3d-runner')
+    ensureImageTo3DRunRunning(run.id)
+  } else if (run.mode === 'primitive') {
+    const { ensurePrimitiveRunRunning } = await import('@/lib/ai-harness-runs/primitive-runner')
+    ensurePrimitiveRunRunning(run.id)
+  } else if (run.mode === 'factory') {
+    const { ensureFactoryRunRunning } = await import('@/lib/ai-harness-runs/factory-runner')
+    ensureFactoryRunRunning(run.id)
+  }
+}
+
 export async function GET(request: Request, { params }: RouteParams) {
   const { id } = await params
   const run = await loadRun(id)
   if (!run) {
     return Response.json({ error: 'not_found' }, { status: 404 })
   }
-  if (run.mode === 'articraft' && !isTerminalStatus(run.status)) {
-    ensureArticraftRunRunning(run.id)
-  } else if (run.mode === 'image-to-3d' && !isTerminalStatus(run.status)) {
-    ensureImageTo3DRunRunning(run.id)
-  } else if (run.mode === 'primitive' && !isTerminalStatus(run.status)) {
-    ensurePrimitiveRunRunning(run.id)
-  }
+  await ensureRunRunning(run)
 
   const url = new URL(request.url)
   const afterFromQuery = Number.parseInt(url.searchParams.get('after') ?? '0', 10)

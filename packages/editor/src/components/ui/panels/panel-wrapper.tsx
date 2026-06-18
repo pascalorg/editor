@@ -12,7 +12,7 @@ const INSPECTOR_SECTIONS_PINNED_KEY = 'pascal:inspector-sections-pinned'
 
 interface PanelWrapperProps {
   title: string
-  /** Either a URL path (legacy panels pass `/icons/floor.png` etc.,
+  /** Either a URL path (legacy panels pass `/icons/floor.webp` etc.,
    *  rendered via next/image) OR a React node (registry-driven
    *  inspector renders `<Icon icon="lucide:fence" />` from
    *  `def.presentation.icon`). */
@@ -73,6 +73,8 @@ export function PanelWrapper({
           : 'pointer-events-auto fixed top-20 right-4 z-50 flex max-h-[calc(100dvh-154px)] flex-col overflow-hidden rounded-xl border border-border/50 bg-sidebar/95 shadow-2xl backdrop-blur-xl dark:text-foreground',
         className,
       )}
+      onMouseMove={(event) => event.stopPropagation()}
+      onPointerMove={(event) => event.stopPropagation()}
       style={isMobile ? undefined : { width }}
     >
       {/* Header — desktop only; mobile sheet provides its own header */}

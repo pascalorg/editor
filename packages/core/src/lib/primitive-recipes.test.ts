@@ -25,6 +25,13 @@ function expectBladeRotationMatchesRadialPlacement(shape: {
 }
 
 describe('primitive recipe registry', () => {
+  test('keeps closed-form recipes independent from part composition', async () => {
+    const source = await Bun.file(`${import.meta.dir}/primitive-recipes.ts`).text()
+
+    expect(source).not.toContain("from './part-compose'")
+    expect(source).not.toContain('composePartPrimitives')
+  })
+
   test('lists only closed-form professional recipes and resolves aliases', () => {
     expect(listPrimitiveRecipes().map((recipe) => recipe.id)).toEqual([
       'gear.spur',

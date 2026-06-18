@@ -3,8 +3,11 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type LadderNode,
+  LadderNode as LadderNodeSchema,
   type LevelNode,
   type StairNode,
+  StairNode as StairNodeSchema,
   type StairRailingMode,
   type StairSegmentNode,
   StairSegmentNode as StairSegmentNodeSchema,
@@ -49,6 +52,13 @@ const STAIR_TYPE_OPTIONS: { label: string; value: StairType }[] = [
   { label: '螺旋', value: 'spiral' },
 ]
 
+type StairPanelType = StairType | 'ladder'
+
+const STAIR_PANEL_TYPE_OPTIONS: { label: string; value: StairPanelType }[] = [
+  ...STAIR_TYPE_OPTIONS,
+  { label: '\u722c\u68af', value: 'ladder' },
+]
+
 const TOP_LANDING_MODE_OPTIONS: { label: string; value: StairTopLandingMode }[] = [
   { label: '无', value: 'none' },
   { label: '一体式', value: 'integrated' },
@@ -58,6 +68,65 @@ const STAIR_SLAB_OPENING_OPTIONS: { label: string; value: StairSlabOpeningMode }
   { label: '无', value: 'none' },
   { label: '目标楼层', value: 'destination' },
 ]
+
+const CENTER_COLUMN_SHAPE_OPTIONS: { label: string; value: StairNode['centerColumnShape'] }[] = [
+  { label: '圆柱', value: 'round' },
+  { label: '方柱', value: 'square' },
+]
+
+function rotationYFromLadder(ladder: LadderNode): number {
+  return Array.isArray(ladder.rotation) ? (ladder.rotation[1] ?? 0) : 0
+}
+
+function createReplacementLadder(stair: StairNode): LadderNode {
+  return LadderNodeSchema.parse({
+    name: stair.name,
+    parentId: stair.parentId,
+    visible: stair.visible,
+    metadata: stair.metadata,
+    position: stair.position,
+    rotation: [0, stair.rotation ?? 0, 0],
+    height: stair.totalRise ?? 3,
+    width: Math.min(Math.max(stair.width ?? 0.55, 0.25), 1.2),
+  })
+}
+
+function createReplacementStair(
+  ladder: LadderNode,
+  stairType: StairType,
+  segmentId?: StairSegmentNode['id'],
+): StairNode {
+  return StairNodeSchema.parse({
+    name: ladder.name,
+    parentId: ladder.parentId,
+    visible: ladder.visible,
+    metadata: ladder.metadata,
+    position: ladder.position,
+    rotation: rotationYFromLadder(ladder),
+    stairType,
+    fromLevelId: ladder.parentId,
+    toLevelId: ladder.parentId,
+    width: Math.min(Math.max(ladder.width ?? 1, 0.4), 10),
+    totalRise: Math.max(ladder.height ?? 2.5, 0.2),
+    stepCount: 10,
+    children: segmentId ? [segmentId] : [],
+    ...(stairType === 'spiral' ? { sweepAngle: DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE } : {}),
+  })
+}
+
+function createDefaultPanelStairSegment(fillToFloor = true): StairSegmentNode {
+  return StairSegmentNodeSchema.parse({
+    segmentType: 'stair',
+    width: 1.0,
+    length: 3.0,
+    height: 2.5,
+    stepCount: 10,
+    attachmentSide: 'front',
+    fillToFloor,
+    thickness: 0.25,
+    position: [0, 0, 0],
+  })
+}
 
 export default function StairPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -69,7 +138,9 @@ export default function StairPanel() {
   const nodes = useScene((s) => s.nodes)
 
   const node = useScene((s) =>
-    selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairNode | undefined) : undefined,
+    selectedId
+      ? (s.nodes[selectedId as AnyNode['id']] as StairNode | LadderNode | undefined)
+      : undefined,
   )
   const levels = useMemo<LevelNode[]>(
     () => (node?.type === 'stair' ? getStairLevelOptions(nodes, node) : []),
@@ -87,7 +158,7 @@ export default function StairPanel() {
   )
 
   const handleUpdate = useCallback(
-    (updates: Partial<StairNode>) => {
+    (updates: Partial<AnyNode>) => {
       if (!selectedId) return
       updateNode(selectedId as AnyNode['id'], updates)
     },
@@ -100,7 +171,7 @@ export default function StairPanel() {
 
   const handleAutoCutoutChange = useCallback(
     (checked: boolean) => {
-      if (!node) return
+      if (!node || node.type !== 'stair') return
       const updates: Partial<StairNode> = {
         slabOpeningMode: checked ? 'destination' : 'none',
       }
@@ -133,8 +204,59 @@ export default function StairPanel() {
     [handleUpdate],
   )
 
+  const replaceSelection = useCallback(
+    (nextNode: StairNode | LadderNode, previousId: AnyNodeId) => {
+      useScene.getState().applyNodeChanges({
+        create: [
+          { node: nextNode, parentId: (nextNode.parentId ?? undefined) as AnyNodeId | undefined },
+        ],
+        delete: [previousId],
+      })
+      setSelection({ selectedIds: [nextNode.id as AnyNodeId] })
+    },
+    [setSelection],
+  )
+
+  const handleTypeChange = useCallback(
+    (value: StairPanelType) => {
+      if (!(node && selectedId)) return
+
+      if (node.type === 'stair') {
+        if (value === 'ladder') {
+          replaceSelection(createReplacementLadder(node), selectedId as AnyNodeId)
+          return
+        }
+
+        handleUpdate(
+          value === 'spiral' && node.stairType !== 'spiral'
+            ? {
+                stairType: value,
+                sweepAngle: DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE,
+                position: [node.position[0], 0, node.position[2]],
+              }
+            : { stairType: value },
+        )
+        return
+      }
+
+      if (value === 'ladder') return
+
+      const segment = value === 'straight' ? createDefaultPanelStairSegment() : null
+      const stair = createReplacementStair(node, value, segment?.id)
+      useScene.getState().applyNodeChanges({
+        create: [
+          { node: stair, parentId: (stair.parentId ?? undefined) as AnyNodeId | undefined },
+          ...(segment ? [{ node: segment, parentId: stair.id as AnyNodeId }] : []),
+        ],
+        delete: [selectedId as AnyNodeId],
+      })
+      setSelection({ selectedIds: [stair.id as AnyNodeId] })
+    },
+    [node, selectedId, handleUpdate, replaceSelection, setSelection],
+  )
+
   const getLastSegmentFillDefaults = useCallback(() => {
-    if (!node) return { fillToFloor: true }
+    if (!node || node.type !== 'stair') return { fillToFloor: true }
     const children = node.children ?? []
     const lastChildId = children[children.length - 1]
     if (lastChildId) {
@@ -149,7 +271,7 @@ export default function StairPanel() {
   }, [node])
 
   const handleAddFlight = useCallback(() => {
-    if (!node) return
+    if (!node || node.type !== 'stair') return
     const { fillToFloor } = getLastSegmentFillDefaults()
     const segment = StairSegmentNodeSchema.parse({
       segmentType: 'stair',
@@ -166,7 +288,7 @@ export default function StairPanel() {
   }, [node, createNode, getLastSegmentFillDefaults])
 
   const handleAddLanding = useCallback(() => {
-    if (!node) return
+    if (!node || node.type !== 'stair') return
     const { fillToFloor } = getLastSegmentFillDefaults()
     const segment = StairSegmentNodeSchema.parse({
       segmentType: 'landing',
@@ -190,7 +312,7 @@ export default function StairPanel() {
   )
 
   const handleDuplicate = useCallback(() => {
-    if (!node) return
+    if (!node || node.type !== 'stair') return
     triggerSFX('sfx:item-pick')
 
     try {
@@ -219,32 +341,233 @@ export default function StairPanel() {
     setSelection({ selectedIds: [] })
   }, [selectedId, node, setSelection])
 
-  if (!(node && node.type === 'stair' && selectedId && selectedCount === 1)) return null
+  if (
+    !(
+      node &&
+      (node.type === 'stair' || node.type === 'ladder') &&
+      selectedId &&
+      selectedCount === 1
+    )
+  ) {
+    return null
+  }
+
+  if (node.type === 'ladder') {
+    const ladderRotationY = rotationYFromLadder(node)
+
+    return (
+      <PanelWrapper
+        icon="/icons/stairs.webp"
+        onClose={handleClose}
+        title={node.name || '\u722c\u68af'}
+        width={300}
+      >
+        <PanelSection title={'\u7c7b\u578b'}>
+          <SegmentedControl
+            onChange={handleTypeChange}
+            options={STAIR_PANEL_TYPE_OPTIONS}
+            value="ladder"
+          />
+        </PanelSection>
+
+        <PanelSection title={'\u5c3a\u5bf8'}>
+          <MetricControl
+            label={'\u9ad8\u5ea6'}
+            max={20}
+            min={0.5}
+            onChange={(value) => handleUpdate({ height: value } as Partial<AnyNode>)}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={Math.round((node.height ?? 3) * 100) / 100}
+          />
+          <MetricControl
+            label={'\u5bbd\u5ea6'}
+            max={1.2}
+            min={0.25}
+            onChange={(value) => handleUpdate({ width: value } as Partial<AnyNode>)}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={Math.round((node.width ?? 0.55) * 100) / 100}
+          />
+          <MetricControl
+            label={'\u79bb\u5899\u6df1\u5ea6'}
+            max={0.8}
+            min={0}
+            onChange={(value) => handleUpdate({ standoffDepth: value } as Partial<AnyNode>)}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={Math.round((node.standoffDepth ?? 0.16) * 100) / 100}
+          />
+        </PanelSection>
+
+        <PanelSection title={'\u6a2a\u6863'}>
+          <MetricControl
+            label={'\u95f4\u8ddd'}
+            max={0.6}
+            min={0.15}
+            onChange={(value) => handleUpdate({ rungSpacing: value } as Partial<AnyNode>)}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={Math.round((node.rungSpacing ?? 0.3) * 100) / 100}
+          />
+          <MetricControl
+            label={'\u6a2a\u6863\u76f4\u5f84'}
+            max={0.08}
+            min={0.01}
+            onChange={(value) => handleUpdate({ rungDiameter: value } as Partial<AnyNode>)}
+            precision={3}
+            step={0.005}
+            unit="m"
+            value={Math.round((node.rungDiameter ?? 0.03) * 1000) / 1000}
+          />
+          <MetricControl
+            label={'\u7acb\u6746\u76f4\u5f84'}
+            max={0.1}
+            min={0.015}
+            onChange={(value) => handleUpdate({ railDiameter: value } as Partial<AnyNode>)}
+            precision={3}
+            step={0.005}
+            unit="m"
+            value={Math.round((node.railDiameter ?? 0.04) * 1000) / 1000}
+          />
+        </PanelSection>
+
+        <PanelSection title={'\u5b89\u5168\u7b3c'}>
+          <ToggleControl
+            checked={node.cageEnabled ?? false}
+            label={'\u542f\u7528\u5b89\u5168\u7b3c'}
+            onChange={(checked) => handleUpdate({ cageEnabled: checked } as Partial<AnyNode>)}
+          />
+          {node.cageEnabled ? (
+            <>
+              <MetricControl
+                label={'\u534a\u5f84'}
+                max={0.8}
+                min={0.25}
+                onChange={(value) => handleUpdate({ cageRadius: value } as Partial<AnyNode>)}
+                precision={2}
+                step={0.01}
+                unit="m"
+                value={Math.round((node.cageRadius ?? 0.42) * 100) / 100}
+              />
+              <MetricControl
+                label={'\u8d77\u59cb\u9ad8\u5ea6'}
+                max={8}
+                min={0.5}
+                onChange={(value) => handleUpdate({ cageStartHeight: value } as Partial<AnyNode>)}
+                precision={2}
+                step={0.05}
+                unit="m"
+                value={Math.round((node.cageStartHeight ?? 1.8) * 100) / 100}
+              />
+            </>
+          ) : null}
+        </PanelSection>
+
+        <PanelSection title={'\u5916\u89c2'}>
+          <div className="flex items-center justify-between px-1 py-1">
+            <span className="text-foreground/80 text-xs">{'\u989c\u8272'}</span>
+            <div className="flex items-center gap-2">
+              <input
+                className="h-7 w-9 cursor-pointer rounded border border-border/50 bg-transparent"
+                onChange={(event) =>
+                  handleUpdate({ color: event.target.value } as Partial<AnyNode>)
+                }
+                type="color"
+                value={node.color ?? '#8a9098'}
+              />
+              <input
+                className="w-24 rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 font-mono text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
+                onChange={(event) =>
+                  handleUpdate({ color: event.target.value } as Partial<AnyNode>)
+                }
+                type="text"
+                value={node.color ?? '#8a9098'}
+              />
+            </div>
+          </div>
+        </PanelSection>
+
+        <PanelSection title={'\u4f4d\u7f6e'}>
+          <SliderControl
+            label="X"
+            max={50}
+            min={-50}
+            onChange={(v) =>
+              handleUpdate({
+                position: [v, node.position[1], node.position[2]],
+              } as Partial<AnyNode>)
+            }
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={Math.round(node.position[0] * 100) / 100}
+          />
+          <SliderControl
+            label="Z"
+            max={50}
+            min={-50}
+            onChange={(v) =>
+              handleUpdate({
+                position: [node.position[0], node.position[1], v],
+              } as Partial<AnyNode>)
+            }
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={Math.round(node.position[2] * 100) / 100}
+          />
+          <SliderControl
+            label={'\u65cb\u8f6c'}
+            max={180}
+            min={-180}
+            onChange={(degrees) =>
+              handleUpdate({ rotation: [0, (degrees * Math.PI) / 180, 0] } as Partial<AnyNode>)
+            }
+            precision={0}
+            step={1}
+            unit={'\u00b0'}
+            value={Math.round((ladderRotationY * 180) / Math.PI)}
+          />
+        </PanelSection>
+
+        <PanelSection title={'\u64cd\u4f5c'}>
+          <ActionGroup>
+            <ActionButton
+              icon={<Move className="h-3.5 w-3.5" />}
+              label={'\u79fb\u52a8'}
+              onClick={handleMove}
+            />
+            <ActionButton
+              className="hover:bg-red-500/20"
+              icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
+              label={'\u5220\u9664'}
+              onClick={handleDelete}
+            />
+          </ActionGroup>
+        </PanelSection>
+      </PanelWrapper>
+    )
+  }
 
   const resolvedFromLevelId = resolveStairFromLevelId(nodes, node, levels)
   const resolvedToLevelId = resolveStairToLevelId(nodes, node, resolvedFromLevelId, levels)
 
   return (
     <PanelWrapper
-      icon="/icons/stairs.png"
+      icon="/icons/stairs.webp"
       onClose={handleClose}
       title={node.name || '楼梯'}
       width={300}
     >
       <PanelSection title="类型">
         <SegmentedControl
-          onChange={(value) =>
-            handleUpdate(
-              value === 'spiral' && node.stairType !== 'spiral'
-                ? {
-                    stairType: value,
-                    sweepAngle: DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE,
-                    position: [node.position[0], 0, node.position[2]],
-                  }
-                : { stairType: value },
-            )
-          }
-          options={STAIR_TYPE_OPTIONS}
+          onChange={handleTypeChange}
+          options={STAIR_PANEL_TYPE_OPTIONS}
           value={node.stairType ?? 'straight'}
         />
       </PanelSection>
@@ -323,7 +646,9 @@ export default function StairPanel() {
                 type="button"
               >
                 <span className="truncate">{seg.name || `分段 ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs capitalize">{seg.segmentType === 'landing' ? '平台' : '梯段'}</span>
+                <span className="text-muted-foreground text-xs capitalize">
+                  {seg.segmentType === 'landing' ? '平台' : '梯段'}
+                </span>
               </button>
             ))}
           </div>
@@ -437,6 +762,13 @@ export default function StairPanel() {
                 label="中心柱"
                 onChange={(checked) => handleUpdate({ showCenterColumn: checked })}
               />
+              {(node.showCenterColumn ?? true) && (
+                <SegmentedControl
+                  onChange={(value) => handleUpdate({ centerColumnShape: value })}
+                  options={CENTER_COLUMN_SHAPE_OPTIONS}
+                  value={node.centerColumnShape ?? 'round'}
+                />
+              )}
               <ToggleControl
                 checked={node.showStepSupports ?? true}
                 label="踏步支撑"
