@@ -7,8 +7,8 @@ export type FenceSlotId = 'posts' | 'infill' | 'base' | 'rail'
 
 export const FENCE_POSTS_SLOT_DEFAULT = 'library:preset-charcoal'
 export const FENCE_INFILL_SLOT_DEFAULT = 'library:preset-charcoal'
-export const FENCE_BASE_SLOT_DEFAULT = 'library:preset-charcoal'
-export const FENCE_RAIL_SLOT_DEFAULT = 'library:wood-finewood27'
+export const FENCE_BASE_SLOT_DEFAULT = 'library:preset-greige'
+export const FENCE_RAIL_SLOT_DEFAULT = 'library:preset-greige'
 
 export const FENCE_SLOT_DEFAULTS: Record<FenceSlotId, string> = {
   posts: FENCE_POSTS_SLOT_DEFAULT,
