@@ -28,9 +28,9 @@ import {
   Vector3,
 } from 'three'
 import {
-  type DuctElbowEndpoint,
-  detectDuctElbowEndpoint,
-  planDuctElbowEndpointReaim,
+  detectElbowEndpoint,
+  type ElbowEndpoint,
+  planElbowEndpointReaim,
 } from '../shared/elbow-endpoint-reaim'
 import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 
@@ -130,7 +130,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     // Set when the run's OTHER end sits on an elbow collar: the elbow re-aims
     // to follow this drag instead of translating rigidly (mutually exclusive
     // with `connectivity`-driven follow for this endpoint).
-    elbowEndpoint: DuctElbowEndpoint | null
+    elbowEndpoint: ElbowEndpoint | null
     // True while Alt is held: the joint is detached for this drag, so the
     // final commit must omit elbow / connectivity updates. Tracked live so
     // `onUp` knows what the last frame did.
@@ -185,7 +185,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     detached: boolean,
   ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
     if (!detached && drag.elbowEndpoint) {
-      const plan = planDuctElbowEndpointReaim(drag.elbowEndpoint, drag.index, next)
+      const plan = planElbowEndpointReaim(drag.elbowEndpoint, drag.index, next)
       // Out of the elbow's buildable turn range — hold this frame.
       if (!plan) return null
       return [
@@ -239,8 +239,8 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     // collar fixed, bend angle adapts) — so the dragged end moves freely in
     // any direction instead of being locked to the segment's own axis, the
     // way a wall corner drags. Detected once against a drag-start snapshot.
-    const elbowEndpoint: DuctElbowEndpoint | null = isEndpoint
-      ? detectDuctElbowEndpoint(initialPath, index, useScene.getState().nodes)
+    const elbowEndpoint: ElbowEndpoint | null = isEndpoint
+      ? detectElbowEndpoint('duct-segment', initialPath, index, useScene.getState().nodes)
       : null
 
     const onMove = (event: PointerEvent) => {

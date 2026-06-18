@@ -27,6 +27,11 @@ import {
   Vector2,
   Vector3,
 } from 'three'
+import {
+  detectElbowEndpoint,
+  type ElbowEndpoint,
+  planElbowEndpointReaim,
+} from '../shared/elbow-endpoint-reaim'
 import { collectScenePorts, DWV_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 
 /** Corner hex-disc radius (meters) — matches the duct corner handle. */
@@ -46,19 +51,36 @@ function snap(value: number, step: number): number {
 type Point = [number, number, number]
 
 /**
- * Selection-time editing for committed DWV pipe runs: one draggable
- * handle per path point. The plumbing sibling of the duct-segment
- * affordance — same portal / constrained-drag / single-undo model, snapping
- * to DWV ports instead of duct ports.
+ * Selection-time editing for committed DWV pipe runs: one draggable handle
+ * per path point. The plumbing sibling of the duct-segment affordance —
+ * same portal / free-drag / single-undo model, snapping to DWV ports
+ * instead of duct ports.
  *
  * Handles are PORTALED into the pipe's registered scene group so they
  * share its exact frame — path coords are node-local, and the level /
  * building transform above the group applies to the handles for free.
+ * Drag raycasts run in world space and convert hits back into the
+ * group's local frame before writing the path.
  *
- * Drag model: by default the point is CONSTRAINED to the axis the
- * segment was drawn along. Holding **Alt** releases it into free
- * horizontal-plane movement (endpoints port-snap onto nearby DWV ports).
- * Holding **Shift** bypasses grid snapping for a precision drag.
+ * Drag model: the point moves FREELY on the horizontal plane at its own
+ * height (no axis lock) — like a wall corner. Dragged run endpoints snap
+ * onto nearby typed DWV ports so a loose run can be mated onto a fitting
+ * after the fact. When the dragged endpoint belongs to a straight run whose
+ * OTHER end sits on an elbow collar, the elbow re-aims to follow the drag
+ * (junction + far collar fixed, bend angle adapts) instead of port-snapping.
+ *
+ * Modifiers (mirroring the duct corner drag):
+ * - **Alt** detaches: the joint breaks for this drag — the elbow does NOT
+ *   re-aim and mated fittings / runs do NOT follow; the endpoint moves on its
+ *   own (port re-mate still allowed so it can be reattached elsewhere).
+ * - **Cmd / Ctrl** switches to vertical movement (stack / riser editing): XZ
+ *   holds and the cursor drives Y.
+ * - **Shift** bypasses grid snapping for a perfectly smooth precision drag.
+ *
+ * History does the single-undo dance: paused during the drag (the live
+ * `updateNode` ticks are untracked), then on release the path is
+ * reverted, history resumed, and the final path applied as one tracked
+ * change.
  */
 const PipeSegmentSelectionAffordance = () => {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -107,6 +129,14 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     // Connectivity snapshot taken at pointer-down: which fittings / pipes are
     // mated to this run's endpoints, so they follow as the endpoint moves.
     connectivity: PortConnectivity | null
+    // Set when the run's OTHER end sits on an elbow collar: the elbow re-aims
+    // to follow this drag instead of translating rigidly (mutually exclusive
+    // with `connectivity`-driven follow for this endpoint).
+    elbowEndpoint: ElbowEndpoint | null
+    // True while Alt is held: the joint is detached for this drag, so the
+    // final commit must omit elbow / connectivity updates. Tracked live so
+    // `onUp` knows what the last frame did.
+    detached: boolean
   } | null>(null)
 
   const makeRay = (clientX: number, clientY: number) => {
@@ -126,24 +156,50 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
   }
 
   /**
-   * Signed distance along `axisWorld` (unit, through `anchorWorld`) of the
-   * point on that line closest to the cursor ray. Null when the ray runs
-   * (near-)parallel to the axis and the projection is unstable.
+   * Local-frame Y where the cursor ray meets a vertical plane through
+   * `anchorWorld` that faces the camera — drives Cmd/Ctrl-vertical (riser) drag.
+   * Null when the ray is parallel to the plane.
    */
-  const projectOntoAxis = (
+  const intersectVerticalY = (
     clientX: number,
     clientY: number,
     anchorWorld: Vector3,
-    axisWorld: Vector3,
   ): number | null => {
-    const ray = makeRay(clientX, clientY)
-    const w0 = new Vector3().subVectors(ray.origin, anchorWorld)
-    const b = ray.direction.dot(axisWorld)
-    const denom = 1 - b * b
-    if (Math.abs(denom) < 1e-6) return null
-    const d0 = ray.direction.dot(w0)
-    const e0 = axisWorld.dot(w0)
-    return (e0 - b * d0) / denom
+    // Plane normal: camera forward flattened onto the horizontal plane, so
+    // the plane stands upright through the point and faces the viewer.
+    const forward = camera.getWorldDirection(new Vector3())
+    forward.y = 0
+    if (forward.lengthSq() < 1e-6) forward.set(0, 0, 1)
+    forward.normalize()
+    const plane = new Plane().setFromNormalAndCoplanarPoint(forward, anchorWorld)
+    const hit = intersect(clientX, clientY, plane)
+    return hit ? toLocal(hit)[1] : null
+  }
+
+  // Build the per-frame update batch for the dragged endpoint at `next`.
+  // Detached (Alt): only the pipe path moves — no elbow re-aim, no
+  // connectivity follow. Elbow mode: the run rides the elbow's re-aimed
+  // collar and the elbow swings to fit. Otherwise: the dragged point moves
+  // and any mated fittings / runs translate via connectivity.
+  const buildDragBatch = (
+    drag: NonNullable<typeof dragRef.current>,
+    next: Point,
+    detached: boolean,
+  ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
+    if (!detached && drag.elbowEndpoint) {
+      const plan = planElbowEndpointReaim(drag.elbowEndpoint, drag.index, next)
+      // Out of the elbow's buildable turn range — hold this frame.
+      if (!plan) return null
+      return [
+        { id: pipe.id as AnyNodeId, data: { path: plan.path } },
+        { id: plan.elbowUpdate.id, data: plan.elbowUpdate.data as Partial<AnyNode> },
+      ]
+    }
+    const path = pipe.path.map((p, i) => (i === drag.index ? next : p)) as Point[]
+    return [
+      { id: pipe.id as AnyNodeId, data: { path } },
+      ...(detached ? [] : connectivityUpdatesForPath(drag.connectivity, path)),
+    ]
   }
 
   /** World-space position of a local path point. */
@@ -180,27 +236,14 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
 
     const isEndpoint = index === 0 || index === initialPath.length - 1
 
-    // Axis the segment was drawn along, at this point: from the
-    // neighbouring path point toward the dragged one. The default drag
-    // is constrained to this line.
-    const neighbor = initialPath[index === 0 ? 1 : index - 1]!
-    const axisLocal = new Vector3(
-      startPoint[0] - neighbor[0],
-      startPoint[1] - neighbor[1],
-      startPoint[2] - neighbor[2],
-    )
-    if (axisLocal.lengthSq() < 1e-9) axisLocal.set(1, 0, 0)
-    axisLocal.normalize()
-    // World-space anchor + axis, derived once — the constraint line is
-    // fixed for the whole drag regardless of where the point currently is.
-    const anchorWorldStart = toWorld(startPoint)
-    const axisWorld = toWorld([
-      startPoint[0] + axisLocal.x,
-      startPoint[1] + axisLocal.y,
-      startPoint[2] + axisLocal.z,
-    ])
-      .sub(anchorWorldStart)
-      .normalize()
+    // Elbow re-aim: if this is a straight run whose OTHER end sits on an
+    // elbow collar, the elbow swings to follow the drag (junction + far
+    // collar fixed, bend angle adapts) — so the dragged end moves freely in
+    // any direction instead of being locked to the segment's own axis, the
+    // way a wall corner drags. Detected once against a drag-start snapshot.
+    const elbowEndpoint: ElbowEndpoint | null = isEndpoint
+      ? detectElbowEndpoint('pipe-segment', initialPath, index, useScene.getState().nodes)
+      : null
 
     const onMove = (event: PointerEvent) => {
       const drag = dragRef.current
@@ -209,16 +252,27 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       // Shift = precision: bypass grid snapping for a perfectly smooth
       // drag (snap() is a no-op at step 0).
       const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+      // Alt = detach: break the joint for this drag — the endpoint moves on
+      // its own, no elbow re-aim and no connectivity follow (it can still
+      // port-snap to re-mate elsewhere). Mirrors the wall corner drag.
+      const detached = event.altKey
       let next: Point | null = null
-      if (event.altKey) {
-        // Alt = freedom: slide on the horizontal plane at the point's
-        // height. Endpoints can port-snap here to mate onto a fitting.
+      if (event.metaKey || event.ctrlKey) {
+        // Cmd/Ctrl = vertical: keep XZ fixed and drive Y off the cursor
+        // against a vertical plane through the point (stack / riser editing).
+        const y = intersectVerticalY(event.clientX, event.clientY, toWorld(current))
+        if (y !== null) next = [current[0], Math.max(0, snap(y, step)), current[2]]
+      } else {
+        // Default: free movement on the horizontal plane at the point's
+        // height (no axis lock). Endpoints can port-snap to mate a fitting.
         const plane = new Plane().setFromNormalAndCoplanarPoint(UP, toWorld(current))
         const hit = intersect(event.clientX, event.clientY, plane)
         if (hit) {
           const local = toLocal(hit)
           next = [snap(local[0], step), current[1], snap(local[2], step)]
-          if (isEndpoint) {
+          // Port re-mate stays available whether detaching or free-dragging;
+          // it's only suppressed while the elbow is actively re-aiming.
+          if (isEndpoint && (detached || !drag.elbowEndpoint)) {
             const port = findNearestPortXZ(
               [local[0], current[1], local[2]],
               collectScenePorts({ excludeNodeId: pipe.id, systems: DWV_PORT_SYSTEMS }),
@@ -227,30 +281,14 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
             if (port) next = [port.position[0], port.position[1], port.position[2]]
           }
         }
-      } else {
-        // Default: constrained to the axis the segment was drawn along —
-        // slide the point closer / further along its own line.
-        const t = projectOntoAxis(event.clientX, event.clientY, anchorWorldStart, axisWorld)
-        if (t !== null) {
-          const dist = snap(t, step)
-          next = [
-            startPoint[0] + axisLocal.x * dist,
-            Math.max(0, startPoint[1] + axisLocal.y * dist),
-            startPoint[2] + axisLocal.z * dist,
-          ]
-        }
       }
       if (!next) return
       if (next[0] === current[0] && next[1] === current[1] && next[2] === current[2]) return
+      const batch = buildDragBatch(drag, next, detached)
+      if (!batch) return
       drag.current = next
-      const path = pipe.path.map((p, i) => (i === drag.index ? next! : p)) as Point[]
-      // Drag the run + any fittings mated to the moved endpoint as one batch.
-      useScene
-        .getState()
-        .updateNodes([
-          { id: pipe.id as AnyNodeId, data: { path } },
-          ...connectivityUpdatesForPath(drag.connectivity, path),
-        ])
+      drag.detached = detached
+      useScene.getState().updateNodes(batch)
     }
 
     const onUp = () => {
@@ -259,19 +297,32 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       drag.cleanup()
       dragRef.current = null
       setDraggingIndex(null)
-      // Single-undo dance: revert (still paused), resume, re-apply the
-      // final path — plus any connected fitting moves — as one tracked batch.
-      const finalPath = drag.initialPath.map((p, i) =>
-        i === drag.index ? drag.current : p,
-      ) as Point[]
-      const finalUpdates = connectivityUpdatesForPath(drag.connectivity, finalPath)
-      // Revert the run AND the followers to their pre-drag state while paused
-      // so history captures a clean before→after delta.
-      const revertUpdates = (drag.connectivity?.connections ?? []).flatMap((conn) =>
-        conn.kind === 'rigid-node'
-          ? [{ id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }]
-          : [{ id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> }],
-      )
+      // Single-undo dance: revert (still paused), resume, re-apply the final
+      // batch as one tracked change. The final batch is built the same way as
+      // each live frame (elbow re-aim, rigid connectivity follow, or — when
+      // detached — just the pipe path).
+      const detached = drag.detached
+      const finalBatch = buildDragBatch(drag, drag.current, detached)
+      // Revert the run AND whatever the drag carried to their pre-drag state
+      // while paused so history captures a clean before→after delta. When
+      // detached nothing else moved, so only the run needs reverting.
+      const revertUpdates: { id: AnyNodeId; data: Partial<AnyNode> }[] = detached
+        ? []
+        : drag.elbowEndpoint
+          ? [
+              {
+                id: drag.elbowEndpoint.elbow.id as AnyNodeId,
+                data: {
+                  angle: drag.elbowEndpoint.elbow.angle,
+                  rotation: drag.elbowEndpoint.elbow.rotation,
+                } as Partial<AnyNode>,
+              },
+            ]
+          : (drag.connectivity?.connections ?? []).map((conn) =>
+              conn.kind === 'rigid-node'
+                ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
+                : { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> },
+            )
       useScene
         .getState()
         .updateNodes([
@@ -279,13 +330,9 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
           ...revertUpdates.filter((u) => useScene.getState().nodes[u.id]),
         ])
       resumeSceneHistory(useScene)
-      const moved = finalPath[drag.index]!.some(
-        (v, axis) => v !== drag.initialPath[drag.index]![axis],
-      )
-      if (moved) {
-        useScene
-          .getState()
-          .updateNodes([{ id: pipe.id as AnyNodeId, data: { path: finalPath } }, ...finalUpdates])
+      const moved = drag.current.some((v, axis) => v !== drag.initialPath[drag.index]![axis])
+      if (moved && finalBatch) {
+        useScene.getState().updateNodes(finalBatch)
       }
     }
 
@@ -297,7 +344,15 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       document.body.style.cursor = ''
     }
 
-    dragRef.current = { index, initialPath, current: startPoint, cleanup, connectivity }
+    dragRef.current = {
+      index,
+      initialPath,
+      current: startPoint,
+      cleanup,
+      connectivity,
+      elbowEndpoint,
+      detached: false,
+    }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onUp)

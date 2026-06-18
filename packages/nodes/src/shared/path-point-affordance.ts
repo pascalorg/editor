@@ -10,9 +10,9 @@ import {
 } from '@pascal-app/core'
 import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
 import {
-  type DuctElbowEndpoint,
-  detectDuctElbowEndpoint,
-  planDuctElbowEndpointReaim,
+  detectElbowEndpoint,
+  type ElbowEndpoint,
+  planElbowEndpointReaim,
 } from './elbow-endpoint-reaim'
 
 /**
@@ -26,9 +26,9 @@ import {
  * Like the 3D handles, dragging a vertex that sits on a fitting carries the
  * joint along (port connectivity): the fitting follows, connected runs stretch
  * along their own axis and translate across it, and that perpendicular slide
- * propagates down the chain. And — duct only — dragging the free end of a
- * straight run whose other end sits on an elbow re-aims that elbow to follow
- * the drag (bend angle adapts) instead of translating it rigidly. Holding
+ * propagates down the chain. And — duct / pipe only — dragging the free end
+ * of a straight run whose other end sits on an elbow re-aims that elbow to
+ * follow the drag (bend angle adapts) instead of translating it rigidly. Holding
  * **Alt** detaches: the joint breaks for the drag so the vertex moves on its
  * own (no elbow re-aim, no connectivity follow). Behavioral parity with the
  * 3D selection tool.
@@ -65,15 +65,14 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
       // bear ports; interior vertices have no joint, so skip the analysis.
       const isEndpoint = pointIndex === 0 || pointIndex === initialPath.length - 1
 
-      // Elbow re-aim (duct only): if this is a straight run whose OTHER end
+      // Elbow re-aim (duct / pipe): if this is a straight run whose OTHER end
       // sits on an elbow collar, the elbow swings to follow the drag (junction
       // + far collar fixed, bend angle adapts) — the 2D twin of the 3D
       // selection handle's behaviour. Takes precedence over the rigid
       // connectivity follow for this endpoint.
-      const elbowEndpoint: DuctElbowEndpoint | null =
-        isEndpoint && kind === 'duct-segment'
-          ? detectDuctElbowEndpoint(initialPath, pointIndex, nodes)
-          : null
+      const elbowEndpoint: ElbowEndpoint | null = isEndpoint
+        ? detectElbowEndpoint(kind, initialPath, pointIndex, nodes)
+        : null
 
       const connectivity: PortConnectivity | null =
         isEndpoint && !elbowEndpoint
@@ -113,7 +112,7 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
           // Elbow re-aim: the elbow swings to follow the dragged end and the
           // run rides its re-aimed collar. Out-of-range turns hold the frame.
           if (!detached && elbowEndpoint) {
-            const plan = planDuctElbowEndpointReaim(elbowEndpoint, pointIndex, dragged)
+            const plan = planElbowEndpointReaim(elbowEndpoint, pointIndex, dragged)
             if (!plan) return
             useScene.getState().updateNodes([
               { id: node.id, data: { path: plan.path } as Partial<unknown> as never },

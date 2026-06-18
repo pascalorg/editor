@@ -462,24 +462,30 @@ export type ElbowRealignPlan = {
   collarPoint: Point
 }
 
+export type PipeElbowRealignPlan = {
+  update: { id: PipeFittingNode['id']; data: { angle: number; rotation: Point } }
+  collarPoint: Point
+}
+
 /**
- * Re-aim an existing elbow whose open collar a new run just snapped
- * onto. The junction stays put and the OTHER collar keeps its exact
- * position + direction (it's mated to something), while the snapped
- * collar swings to face the incoming run — the elbow's `angle` adjusts
- * to whatever turn that requires.
+ * Shared elbow re-aim geometry for duct AND pipe elbows — both share the
+ * exact same local convention (inlet -X, outlet turned `angle`° in XZ,
+ * 15–90° buildable range), so only the collar leg length differs.
  *
- * Geometry: with the fixed collar's outward direction f and the desired
- * free direction `awayDir`, the elbow's local inlet/outlet pair subtends
- * 180° − angle, so the new turn is θ = 180° − ∠(f, away). Buildable only
- * while θ stays in the elbow's 15–90° range — otherwise null and the
- * caller leaves the joint as a plain butt joint.
+ * The junction stays put and the OTHER collar keeps its exact position +
+ * direction (it's mated to something), while the snapped collar swings to
+ * face `awayDir` — the elbow's `angle` adjusts to whatever turn that
+ * requires. Geometry: with the fixed collar's outward direction f and the
+ * desired free direction `awayDir`, the elbow's local inlet/outlet pair
+ * subtends 180° − angle, so the new turn is θ = 180° − ∠(f, away).
+ * Buildable only while θ stays in 15–90° — otherwise null.
  */
-export function planElbowRealign(
-  elbow: DuctFittingNode,
+function planElbowRealignCore(
+  elbow: { fittingType: string; rotation: Point; angle: number; position: Point },
   snappedPortId: string,
   awayDir: Point,
-): ElbowRealignPlan | null {
+  leg: number,
+): { angle: number; rotation: Point; collarPoint: Point } | null {
   if (elbow.fittingType !== 'elbow') return null
   if (snappedPortId !== 'inlet' && snappedPortId !== 'outlet') return null
 
@@ -518,18 +524,45 @@ export function planElbowRealign(
   )
   const euler = new Euler().setFromQuaternion(rotation)
 
-  const leg = fittingLegLength(elbow.diameter)
   const collar = new Vector3(...elbow.position).addScaledVector(away, leg)
 
   return {
-    update: {
-      id: elbow.id,
-      data: {
-        angle: Math.min(90, (turnNew * 180) / Math.PI),
-        rotation: [euler.x, euler.y, euler.z],
-      },
-    },
+    angle: Math.min(90, (turnNew * 180) / Math.PI),
+    rotation: [euler.x, euler.y, euler.z],
     collarPoint: [collar.x, collar.y, collar.z],
+  }
+}
+
+/** Re-aim a DUCT elbow whose open collar a new run just snapped onto. */
+export function planElbowRealign(
+  elbow: DuctFittingNode,
+  snappedPortId: string,
+  awayDir: Point,
+): ElbowRealignPlan | null {
+  const core = planElbowRealignCore(elbow, snappedPortId, awayDir, fittingLegLength(elbow.diameter))
+  if (!core) return null
+  return {
+    update: { id: elbow.id, data: { angle: core.angle, rotation: core.rotation } },
+    collarPoint: core.collarPoint,
+  }
+}
+
+/** Re-aim a DWV PIPE elbow — same geometry, pipe collar leg length. */
+export function planPipeElbowRealign(
+  elbow: PipeFittingNode,
+  snappedPortId: string,
+  awayDir: Point,
+): PipeElbowRealignPlan | null {
+  const core = planElbowRealignCore(
+    elbow,
+    snappedPortId,
+    awayDir,
+    pipeFittingLegLength(elbow.diameter),
+  )
+  if (!core) return null
+  return {
+    update: { id: elbow.id, data: { angle: core.angle, rotation: core.rotation } },
+    collarPoint: core.collarPoint,
   }
 }
 

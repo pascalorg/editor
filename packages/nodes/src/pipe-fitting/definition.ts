@@ -78,6 +78,7 @@ export const pipeFittingDefinition: NodeDefinition<typeof PipeFittingNode> = {
   // editor's SelectionAffordanceManager rather than `def.system`.
   affordanceTools: {
     selection: () => import('./selection'),
+    move: () => import('./move-tool'),
   },
 
   tool: () => import('./tool'),
