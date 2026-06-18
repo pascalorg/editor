@@ -11,6 +11,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  consumePlacementDragRelease,
   DragBoundingBox,
   EDITOR_LAYER,
   markToolCancelConsumed,
@@ -258,9 +259,12 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       else connectivity?.preview({ position: next })
     }
 
-    const commit = (event: GridEvent) => {
+    const commit = (event: GridEvent, fromDragRelease = false) => {
       if (committed) return
-      if (Date.now() - activatedAt < 150) {
+      // The 150ms debounce only guards click-to-place against the arming click
+      // double-firing; a press-drag release is a distinct pointerup gesture, so
+      // it skips the guard (a quick drag-flick still commits).
+      if (!fromDragRelease && Date.now() - activatedAt < 150) {
         event.nativeEvent?.stopPropagation?.()
         return
       }
@@ -323,14 +327,38 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       useEditor.getState().setMovingNode(null)
     }
 
+    // Press-drag-release: when the move was engaged by the drag gesture (the
+    // selection rig's move cross or a future floating drag), `placementDragMode`
+    // is set, so commit on pointer-up at the last previewed position instead of
+    // waiting for a second click — same contract as every other move tool.
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      // A press-release that never moved isn't a placement — back out cleanly
+      // (drop the ghost, re-select the fitting) instead of leaving the tool
+      // armed waiting for a click.
+      if (!hasMoved) {
+        onCancel()
+        return
+      }
+      commit(
+        {
+          nativeEvent: event,
+          stopPropagation: () => event.stopPropagation(),
+        } as unknown as GridEvent,
+        true,
+      )
+    }
+
     emitter.on('grid:move', onMove)
     emitter.on('grid:click', commit)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', commit)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
       connectivity?.clear()
       useAlignmentGuides.getState().clear()
       if (existedAtStart) setMeshHidden(false)

@@ -5,6 +5,10 @@ import type { DuctSegmentNode } from './schema'
 const SUPPLY_CENTERLINE = '#d4825a'
 const RETURN_CENTERLINE = '#5a8ad4'
 const BODY_COLOR = '#9ca3af'
+/** Move-arrow stand-off past the duct body, in plan meters. */
+const SIDE_ARROW_GAP = 0.27
+/** Below this plan length a segment / end has no usable direction. */
+const MIN_SEGMENT_LEN = 0.05
 
 /**
  * Floor-plan representation of a duct run: the path drawn at the duct's
@@ -95,6 +99,32 @@ export function buildDuctSegmentFloorplan(
         affordance: 'move-path-point',
         payload: { pointIndex: indexMap[k]! },
       })
+    }
+
+    // Side-move arrows: a front / back pair at each segment midpoint, sliding
+    // that segment perpendicular to itself. 2D twin of the 3D side-move
+    // arrows. The arrows stand one duct-radius + gap off the body; `angle`
+    // points each chevron outward along the segment normal.
+    const offset = diameterM / 2 + SIDE_ARROW_GAP
+    for (let k = 0; k < points.length - 1; k++) {
+      const a = points[k]!
+      const b = points[k + 1]!
+      const dx = b[0] - a[0]
+      const dz = b[1] - a[1]
+      const len = Math.hypot(dx, dz)
+      if (len < MIN_SEGMENT_LEN) continue
+      const normal: [number, number] = [-dz / len, dx / len]
+      const mid: FloorplanPoint = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+      for (const side of [1, -1] as const) {
+        const n: [number, number] = [normal[0] * side, normal[1] * side]
+        children.push({
+          kind: 'move-arrow',
+          point: [mid[0] + n[0] * offset, mid[1] + n[1] * offset],
+          angle: Math.atan2(n[1], n[0]),
+          affordance: 'move-segment',
+          payload: { segmentIndex: indexMap[k]!, normal: n },
+        })
+      }
     }
   }
 

@@ -1,5 +1,6 @@
 import { type AnyNode, type NodeDefinition, useScene } from '@pascal-app/core'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
+import { createSegmentMoveAffordance } from '../shared/path-segment-affordance'
 import { buildDuctSegmentFloorplan } from './floorplan'
 import { buildDuctSegmentGeometry, ductPortDiameterIn } from './geometry'
 import { ductSegmentParametrics } from './parametrics'
@@ -147,6 +148,9 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   // `endpoint-handle` per path vertex; this drags the matching point.
   floorplanAffordances: {
     'move-path-point': createPathPointMoveAffordance('duct-segment'),
+    // 2D twin of the 3D side-move arrows: slide a segment perpendicular to
+    // itself. (Length editing stays on the per-vertex hex handles.)
+    'move-segment': createSegmentMoveAffordance('duct-segment'),
   },
 
   // Selection-time path-point handles (drag to edit a committed run).
