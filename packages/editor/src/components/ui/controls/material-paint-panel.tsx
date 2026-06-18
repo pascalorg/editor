@@ -56,8 +56,11 @@ export function MaterialPaintPanel() {
   }
 
   return (
-    <div className="w-full space-y-2">
-      <div className="flex items-center gap-2">
+    // Fill the host's scroll slot and own the scroll internally: the eraser /
+    // reset row stays pinned (shrink-0) while only the material list below
+    // scrolls. The category tabs pin too (sticky, inside the scroll region).
+    <div className="flex h-full min-h-0 w-full flex-col">
+      <div className="flex shrink-0 items-center gap-2 pb-2">
         <Button
           aria-pressed={paintEraser}
           className="flex-1"
@@ -79,32 +82,34 @@ export function MaterialPaintPanel() {
           Reset all
         </Button>
       </div>
-      <MaterialPicker
-        onChange={(material) => {
-          // Custom-create: pre-create a scene material and select it as the
-          // brush via a `scene:` ref so painting stores the ref and edits to
-          // it propagate everywhere. The user edits it inline in the scene-
-          // material list below (auto-opened) — no separate right-side pane.
-          const id = generateSceneMaterialId()
-          const count = Object.keys(useScene.getState().materials).length
-          useScene.getState().addSceneMaterial({ id, name: `Material ${count + 1}`, material })
-          setActivePaintMaterial({
-            materialPreset: toSceneMaterialRef(id),
-            sourceTarget: activePaintTarget,
-          })
-          setAutoEditMaterialId(id)
-        }}
-        onSelectMaterialPreset={(materialPreset) => {
-          setActivePaintMaterial({ materialPreset, sourceTarget: activePaintTarget })
-        }}
-        selectedMaterialPreset={activePaintMaterial?.materialPreset}
-        value={activePaintMaterial?.material}
-      />
-      {materialCount > 0 ? (
-        <PanelSection title="Scene materials">
-          <SceneMaterialList autoEditId={autoEditMaterialId} />
-        </PanelSection>
-      ) : null}
+      <div className="subtle-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto">
+        <MaterialPicker
+          onChange={(material) => {
+            // Custom-create: pre-create a scene material and select it as the
+            // brush via a `scene:` ref so painting stores the ref and edits to
+            // it propagate everywhere. The user edits it inline in the scene-
+            // material list below (auto-opened) — no separate right-side pane.
+            const id = generateSceneMaterialId()
+            const count = Object.keys(useScene.getState().materials).length
+            useScene.getState().addSceneMaterial({ id, name: `Material ${count + 1}`, material })
+            setActivePaintMaterial({
+              materialPreset: toSceneMaterialRef(id),
+              sourceTarget: activePaintTarget,
+            })
+            setAutoEditMaterialId(id)
+          }}
+          onSelectMaterialPreset={(materialPreset) => {
+            setActivePaintMaterial({ materialPreset, sourceTarget: activePaintTarget })
+          }}
+          selectedMaterialPreset={activePaintMaterial?.materialPreset}
+          value={activePaintMaterial?.material}
+        />
+        {materialCount > 0 ? (
+          <PanelSection title="Scene materials">
+            <SceneMaterialList autoEditId={autoEditMaterialId} />
+          </PanelSection>
+        ) : null}
+      </div>
     </div>
   )
 }

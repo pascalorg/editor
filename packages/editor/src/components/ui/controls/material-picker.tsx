@@ -96,7 +96,7 @@ export function MaterialPicker({
     <div className={`min-w-0 space-y-3 ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
       {(catalogItems.length > 0 || onChange) && (
         <div className="min-w-0 space-y-1">
-          <div className="flex flex-wrap gap-1 pb-1">
+          <div className="sticky top-0 z-10 flex flex-wrap gap-1 bg-sidebar pb-1">
             {availableCategories.map((category) => (
               <button
                 className={`rounded-full px-3 py-1 font-medium text-xs transition-colors ${
@@ -107,9 +107,11 @@ export function MaterialPicker({
                 key={category}
                 onClick={() => {
                   setSelectedCategory(category)
-                  if (showCustom) {
-                    setShowCustom(false)
-                  }
+                  // Auto-select the first material in the category so the brush
+                  // is immediately ready (and the row shows as selected).
+                  const first = getMaterialsForCategory(category)[0]
+                  if (first) handleCatalogSelect(first.id)
+                  else if (showCustom) setShowCustom(false)
                 }}
                 type="button"
               >
@@ -126,7 +128,7 @@ export function MaterialPicker({
               return (
                 <button
                   className={`group relative flex flex-col gap-1.5 rounded-xl p-1.5 transition-colors hover:cursor-pointer hover:bg-sidebar-accent ${
-                    isSelected ? 'bg-sidebar-accent ring-2 ring-primary-foreground' : ''
+                    isSelected ? 'bg-sidebar-accent ring-1 ring-primary ring-inset' : ''
                   }`}
                   key={item.id}
                   onClick={() => {
@@ -159,7 +161,7 @@ export function MaterialPicker({
             {selectedCategory === 'colors' && onChange ? (
               <button
                 className={`group relative flex flex-col gap-1.5 rounded-xl p-1.5 transition-colors hover:cursor-pointer hover:bg-sidebar-accent ${
-                  showCustom ? 'bg-sidebar-accent ring-2 ring-primary-foreground' : ''
+                  showCustom ? 'bg-sidebar-accent ring-1 ring-primary ring-inset' : ''
                 }`}
                 onClick={() => {
                   triggerSFX('sfx:menu-click')

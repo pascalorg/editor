@@ -32,6 +32,7 @@ export function SceneMaterialList({ autoEditId }: { autoEditId?: SceneMaterialId
   const updateSceneMaterial = useScene((state) => state.updateSceneMaterial)
   const removeSceneMaterial = useScene((state) => state.removeSceneMaterial)
   const activePaintTarget = useEditor((state) => state.activePaintTarget)
+  const activePaintRef = useEditor((state) => state.activePaintMaterial?.materialPreset)
   const setActivePaintMaterial = useEditor((state) => state.setActivePaintMaterial)
 
   const materialEntries = useMemo(
@@ -71,6 +72,7 @@ export function SceneMaterialList({ autoEditId }: { autoEditId?: SceneMaterialId
           activePaintTarget={activePaintTarget}
           autoEdit={autoEditId === id}
           id={id}
+          isActive={activePaintRef === toSceneMaterialRef(id)}
           key={id}
           removeSceneMaterial={removeSceneMaterial}
           sceneMaterial={sceneMaterial}
@@ -89,6 +91,7 @@ function SceneMaterialRow({
   usageCount,
   activePaintTarget,
   autoEdit,
+  isActive,
   addSceneMaterial,
   updateSceneMaterial,
   removeSceneMaterial,
@@ -99,6 +102,7 @@ function SceneMaterialRow({
   usageCount: number
   activePaintTarget: ReturnType<typeof useEditor.getState>['activePaintTarget']
   autoEdit: boolean
+  isActive: boolean
   addSceneMaterial: ReturnType<typeof useScene.getState>['addSceneMaterial']
   updateSceneMaterial: ReturnType<typeof useScene.getState>['updateSceneMaterial']
   removeSceneMaterial: ReturnType<typeof useScene.getState>['removeSceneMaterial']
@@ -133,7 +137,11 @@ function SceneMaterialRow({
   }
 
   return (
-    <div className="rounded-md border border-border/60 bg-background/40 p-2">
+    <div
+      className={`rounded-md border border-border/60 bg-background/40 p-2 ${
+        isActive ? 'ring-1 ring-primary ring-inset' : ''
+      }`}
+    >
       <div className="flex items-center gap-2">
         <span
           className="h-8 w-8 shrink-0 rounded-md border border-border/70"
