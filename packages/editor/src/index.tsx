@@ -250,7 +250,6 @@ export {
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
-  buildWallSurfaceMaterialPatch,
   getActivePaintMaterialLabel,
   hasActivePaintMaterial,
 } from './lib/material-paint'

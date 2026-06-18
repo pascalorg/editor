@@ -6,6 +6,7 @@ import { wallFloorplanSiblingOverrides } from './floorplan-overrides'
 import { wallPaint } from './paint'
 import { wallParametrics } from './parametrics'
 import { WallNode } from './schema'
+import { wallSlots } from './slots'
 
 /**
  * Wall — the Phase 3 stress test of the registry-driven node model.
@@ -56,6 +57,11 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     // preview through this entry rather than carrying a kind-name
     // arm.
     paint: wallPaint,
+    // Declared paintable slots (interior / exterior) with their default
+    // appearance — the same `{ slotId, label, default }` contract every other
+    // paintable kind exposes. Paint still writes the legacy inline fields via
+    // `wallPaint`; migrating those into `node.slots` is a later step.
+    slots: () => wallSlots(),
   },
 
   relations: {

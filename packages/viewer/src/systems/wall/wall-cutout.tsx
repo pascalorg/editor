@@ -104,7 +104,14 @@ export const WallCutout = () => {
         const hideWall = getWallHideState(wallNode, wallMesh as Mesh, wallMode, u)
         const isDeleteHighlighted = deleteHoveredWallId === wallId
         const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
-        const materials = getMaterialsForWall(wallNode, shading, textures, colorPreset, sceneTheme)
+        const materials = getMaterialsForWall(
+          wallNode,
+          shading,
+          textures,
+          colorPreset,
+          sceneTheme,
+          useScene.getState().materials,
+        )
 
         if (hideWall) {
           ;(wallMesh as Mesh).material = isDeleteHighlighted
@@ -145,6 +152,7 @@ export const WallCutout = () => {
           useViewer.getState().textures,
           useViewer.getState().colorPreset,
           useViewer.getState().sceneTheme,
+          useScene.getState().materials,
         )
         const current = wallMesh.material as Material | Material[]
         snapshot.set(wallMesh, current)

@@ -2,9 +2,14 @@ import {
   getEffectiveWallSurfaceMaterial,
   getMaterialPresetByRef,
   getWallSurfaceMaterialSignature,
+  parseMaterialRef,
   resolveMaterial,
+  type SceneMaterial,
+  type SceneMaterialId,
+  WALL_SLOT_DEFAULT,
   type WallNode,
   type WallSurfaceMaterialSpec,
+  type WallSurfaceSide,
 } from '@pascal-app/core'
 import { Color, type Material } from 'three'
 import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, vec2 } from 'three/tsl'
@@ -12,12 +17,16 @@ import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 import {
   baseMaterial,
   type ColorPreset,
+  createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
   type RenderShading,
+  resolveMaterialRef,
   resolveSurfaceColor,
 } from '../../lib/materials'
+
+type SceneMaterials = Record<SceneMaterialId, SceneMaterial> | undefined
 
 const DEFAULT_WALL_COLOR = '#f2f0ed'
 
@@ -86,6 +95,86 @@ function getSurfaceVisibleMaterial(
 
 function hasExplicitMaterial(spec: WallSurfaceMaterialSpec): boolean {
   return Boolean(spec.materialPreset || spec.material)
+}
+
+// Resolve a wall face's declared default — a catalog `library:` finish or a
+// flat colour — to a renderable material.
+function resolveWallSlotDefault(slotDefault: string, shading: RenderShading): Material {
+  if (parseMaterialRef(slotDefault)?.kind === 'library') {
+    return createMaterialFromPresetRef(slotDefault, shading) ?? baseMaterial(shading)
+  }
+  return createDefaultMaterial(slotDefault, 0.9, shading)
+}
+
+// Slot-first resolution for one wall face, matching every other paintable kind:
+//   node.slots[side] ref → legacy inline fields → declared slot default.
+// A dangling `scene:` ref (material deleted / copied across scenes) falls back
+// to the declared default — it never blocks rendering (the dangling-ref rule).
+function resolveWallFaceMaterial(
+  wallNode: WallNode,
+  side: WallSurfaceSide,
+  shading: RenderShading,
+  sceneMaterials: SceneMaterials,
+): Material {
+  const ref = wallNode.slots?.[side]
+  if (ref) {
+    return (
+      resolveMaterialRef(ref, sceneMaterials, shading) ??
+      resolveWallSlotDefault(WALL_SLOT_DEFAULT[side], shading)
+    )
+  }
+
+  const spec = getEffectiveWallSurfaceMaterial(wallNode, side)
+  if (hasExplicitMaterial(spec)) {
+    return getSurfaceVisibleMaterial(spec, shading)
+  }
+
+  return resolveWallSlotDefault(WALL_SLOT_DEFAULT[side], shading)
+}
+
+// Cache-key fragment for one face: the slot ref plus, for a `scene:` ref, the
+// referenced material's *content* — so editing a scene material assigned to a
+// wall invalidates the cache (a `library:` ref is static catalog content, so
+// its id alone is enough). Falls back to the legacy signature when unmigrated.
+function wallFaceMaterialSignature(
+  wallNode: WallNode,
+  side: WallSurfaceSide,
+  sceneMaterials: SceneMaterials,
+): string {
+  const ref = wallNode.slots?.[side]
+  if (ref) {
+    const parsed = parseMaterialRef(ref)
+    if (parsed?.kind === 'scene') {
+      return JSON.stringify({
+        ref,
+        material: sceneMaterials?.[parsed.id as SceneMaterialId]?.material ?? null,
+      })
+    }
+    return JSON.stringify({ ref })
+  }
+  return getWallSurfaceMaterialSignature(getEffectiveWallSurfaceMaterial(wallNode, side))
+}
+
+// Slot-first tint for the cutaway/invisible wall variant.
+function resolveWallFaceColor(
+  wallNode: WallNode,
+  side: WallSurfaceSide,
+  sceneMaterials: SceneMaterials,
+  fallback: string,
+): string {
+  const ref = wallNode.slots?.[side]
+  if (ref) {
+    const parsed = parseMaterialRef(ref)
+    if (parsed?.kind === 'library') {
+      return getMaterialPresetByRef(ref)?.mapProperties?.color ?? fallback
+    }
+    if (parsed?.kind === 'scene') {
+      const sceneMaterial = sceneMaterials?.[parsed.id as SceneMaterialId]
+      return sceneMaterial ? resolveMaterial(sceneMaterial.material).color : fallback
+    }
+    return fallback
+  }
+  return getSurfaceColor(getEffectiveWallSurfaceMaterial(wallNode, side), fallback)
 }
 
 function getSurfaceColor(spec: WallSurfaceMaterialSpec, fallback = DEFAULT_WALL_COLOR): string {
@@ -173,15 +262,15 @@ function disposeOwnedMaterials(materials: WallMaterialArray[]) {
   })
 }
 
-export function getWallMaterialHash(wallNode: WallNode, shading: RenderShading): string {
+export function getWallMaterialHash(
+  wallNode: WallNode,
+  shading: RenderShading,
+  sceneMaterials?: SceneMaterials,
+): string {
   return JSON.stringify({
     shading,
-    interior: getWallSurfaceMaterialSignature(
-      getEffectiveWallSurfaceMaterial(wallNode, 'interior'),
-    ),
-    exterior: getWallSurfaceMaterialSignature(
-      getEffectiveWallSurfaceMaterial(wallNode, 'exterior'),
-    ),
+    interior: wallFaceMaterialSignature(wallNode, 'interior', sceneMaterials),
+    exterior: wallFaceMaterialSignature(wallNode, 'exterior', sceneMaterials),
   })
 }
 
@@ -191,10 +280,11 @@ export function getMaterialsForWall(
   textures = true,
   colorPreset: ColorPreset = 'clay',
   sceneTheme?: string,
+  sceneMaterials?: SceneMaterials,
 ): WallMaterials {
   const cacheKey = `${wallNode.id}-${shading}-${textures}-${colorPreset}-${sceneTheme ?? 'base'}`
   const materialHash = textures
-    ? getWallMaterialHash(wallNode, shading)
+    ? getWallMaterialHash(wallNode, shading, sceneMaterials)
     : JSON.stringify({ textures, colorPreset, sceneTheme })
 
   const existing = wallMaterialCache.get(cacheKey)
@@ -212,21 +302,17 @@ export function getMaterialsForWall(
     ])
   }
 
-  const interiorSpec = getEffectiveWallSurfaceMaterial(wallNode, 'interior')
-  const exteriorSpec = getEffectiveWallSurfaceMaterial(wallNode, 'exterior')
   const wallRoleMaterial = createSurfaceRoleMaterial('wall', colorPreset, undefined, sceneTheme)
 
-  // Untextured surfaces take the themed wall role colour even with textures on;
-  // only surfaces with an explicit preset/material keep their texture.
+  // Colored mode: each face resolves slot-first (node.slots ref → legacy inline
+  // fields → declared slot default, parity with the retired DEFAULT_WALL_MATERIAL).
+  // Textures-off collapses every face to the themed wall role (the guaranteed
+  // escape hatch). The edge/cap slot (index 0) stays role-based.
   const visible: WallMaterialArray = textures
     ? [
         wallRoleMaterial,
-        hasExplicitMaterial(interiorSpec)
-          ? getSurfaceVisibleMaterial(interiorSpec, shading)
-          : wallRoleMaterial,
-        hasExplicitMaterial(exteriorSpec)
-          ? getSurfaceVisibleMaterial(exteriorSpec, shading)
-          : wallRoleMaterial,
+        resolveWallFaceMaterial(wallNode, 'interior', shading, sceneMaterials),
+        resolveWallFaceMaterial(wallNode, 'exterior', shading, sceneMaterials),
       ]
     : [wallRoleMaterial, wallRoleMaterial, wallRoleMaterial]
 
@@ -234,11 +320,15 @@ export function getMaterialsForWall(
   const invisible: WallMaterialArray = [
     createInvisibleWallMaterial(wallRoleColor, textures ? shading : 'solid'),
     createInvisibleWallMaterial(
-      textures ? getSurfaceColor(interiorSpec, wallRoleColor) : wallRoleColor,
+      textures
+        ? resolveWallFaceColor(wallNode, 'interior', sceneMaterials, wallRoleColor)
+        : wallRoleColor,
       textures ? shading : 'solid',
     ),
     createInvisibleWallMaterial(
-      textures ? getSurfaceColor(exteriorSpec, wallRoleColor) : wallRoleColor,
+      textures
+        ? resolveWallFaceColor(wallNode, 'exterior', sceneMaterials, wallRoleColor)
+        : wallRoleColor,
       textures ? shading : 'solid',
     ),
   ]
@@ -276,6 +366,8 @@ export function getVisibleWallMaterials(
   textures = true,
   colorPreset: ColorPreset = 'clay',
   sceneTheme?: string,
+  sceneMaterials?: SceneMaterials,
 ): WallMaterialArray {
-  return getMaterialsForWall(wallNode, shading, textures, colorPreset, sceneTheme).visible
+  return getMaterialsForWall(wallNode, shading, textures, colorPreset, sceneTheme, sceneMaterials)
+    .visible
 }

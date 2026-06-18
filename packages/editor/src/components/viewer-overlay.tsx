@@ -26,8 +26,10 @@ import {
   ChevronRight,
   Diamond,
   Layers,
+  Palette,
   PenLine,
   Sparkles,
+  Square,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useShallow } from 'zustand/react/shallow'
@@ -37,6 +39,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/primitives/dropdown-menu'
 import { TooltipProvider } from './ui/primitives/tooltip'
@@ -87,8 +90,14 @@ const SHADING_OPTIONS = [
   { id: 'rendered', name: 'Rendered', detail: 'Full ambient occlusion', icon: Sparkles },
 ] as const
 
+const TEXTURE_OPTIONS = [
+  { id: true, name: 'Colored', detail: 'Show materials, textures & colors', icon: Palette },
+  { id: false, name: 'Monochrome', detail: 'Flat clay surfaces by role', icon: Square },
+] as const
+
 function RenderModeMenu() {
   const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
   const active = SHADING_OPTIONS.find((o) => o.id === shading) ?? SHADING_OPTIONS[0]
   const ActiveIcon = active.icon
   return (
@@ -118,6 +127,23 @@ function RenderModeMenu() {
                 <span className="text-muted-foreground text-xs">{option.detail}</span>
               </div>
               {shading === option.id ? <Check className="ml-auto text-foreground" /> : null}
+            </DropdownMenuItem>
+          )
+        })}
+        <DropdownMenuSeparator />
+        {TEXTURE_OPTIONS.map((option) => {
+          const OptionIcon = option.icon
+          return (
+            <DropdownMenuItem
+              key={option.name}
+              onSelect={() => useViewer.getState().setTextures(option.id)}
+            >
+              <OptionIcon />
+              <div className="flex flex-col">
+                <span className="text-foreground">{option.name}</span>
+                <span className="text-muted-foreground text-xs">{option.detail}</span>
+              </div>
+              {textures === option.id ? <Check className="ml-auto text-foreground" /> : null}
             </DropdownMenuItem>
           )
         })}

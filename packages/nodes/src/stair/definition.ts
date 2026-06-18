@@ -406,8 +406,10 @@ import {
   stairRotateAffordance,
 } from './floorplan-affordances'
 import { stairFloorplanMoveTarget } from './floorplan-move'
+import { stairPaint } from './paint'
 import { stairParametrics } from './parametrics'
 import { StairNode } from './schema'
+import { stairSlots } from './slots'
 
 /**
  * Stair — Stage A. Composite node like roof: owns overall framing,
@@ -444,6 +446,8 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
       footprints: (node, ctx) =>
         ctx ? getStairFloorPlacedFootprints(node as StairNodeType, ctx.nodes) : [],
     },
+    slots: (node) => stairSlots(node as StairNodeType),
+    paint: stairPaint,
   },
 
   // Bespoke move shared with roof / roof-segment / stair-segment via

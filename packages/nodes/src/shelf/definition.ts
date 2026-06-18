@@ -4,8 +4,10 @@ import { buildShelfFloorplan } from './floorplan'
 import { shelfResizeAffordance, shelfRotateAffordance } from './floorplan-affordances'
 import { shelfFloorplanMoveTarget } from './floorplan-move'
 import { buildShelfGeometry, shelfRowSurfaceYs } from './geometry'
+import { shelfPaint } from './paint'
 import { shelfParametrics } from './parametrics'
 import { ShelfNode } from './schema'
+import { shelfSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.18
 const HEIGHT_HANDLE_OFFSET = 0.22
@@ -155,8 +157,8 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
     withBottom: true,
     bracketStyle: 'minimal',
     // material / materialPreset left undefined — geometry falls back to
-    // `DEFAULT_SHELF_MATERIAL` (off-white), and paint mode writes the
-    // chosen catalog material into these fields.
+    // the per-slot off-white default, and slot paint mode writes chosen
+    // catalog materials into `slots`.
   }),
 
   capabilities: {
@@ -183,6 +185,8 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    paint: shelfPaint,
+    slots: (n) => shelfSlots(n as ShelfNode),
     // Slab elevation lift via the generic `<FloorElevationSystem>` — a
     // shelf sitting over a raised slab visually rests on top of it.
     floorPlaced: {
@@ -233,6 +237,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
       s.bracketStyle,
       s.material,
       s.materialPreset,
+      JSON.stringify(s.slots ?? null),
     ])
   },
   floorplan: buildShelfFloorplan,
