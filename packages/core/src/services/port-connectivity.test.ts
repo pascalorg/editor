@@ -66,10 +66,11 @@ function sceneOf(...nodes: AnyNode[]): Record<AnyNodeId, AnyNode> {
   return Object.fromEntries(nodes.map((n) => [n.id, n])) as Record<AnyNodeId, AnyNode>
 }
 
-describe('port connectivity — fitting joint second hop', () => {
+describe('port connectivity — joint follow (stretch vs translate)', () => {
   // Layout: duct A ends at the fitting's inlet (−0.2,0,0); duct B starts at the
-  // fitting's outlet (+0.2,0,0). Dragging A's far end toward/through the
-  // fitting carries the fitting AND duct B's near endpoint along.
+  // fitting's outlet (+0.2,0,0). Both runs lie on the X axis. Dragging A's
+  // mated endpoint carries the fitting and duct B; how B reacts depends on
+  // whether the drag is along its axis (stretch) or across it (translate).
   function joint() {
     const fitting = makeNode('duct-fitting', { position: [0, 0, 0], system: 'supply' })
     const ductA = makeNode('duct-segment', {
@@ -89,41 +90,80 @@ describe('port connectivity — fitting joint second hop', () => {
     return { fitting, ductA, ductB }
   }
 
-  test('dragging duct A carries the fitting (rigid) and duct B (sibling endpoint)', () => {
-    const { fitting, ductA, ductB } = joint()
-    const nodes = sceneOf(fitting, ductA, ductB)
+  function movedA(end: Point): AnyNode {
+    const { ductA } = joint()
+    return { ...(ductA as Record<string, unknown>), path: [[-3, 0, 0], end] } as AnyNode
+  }
 
-    const connectivity = analyzePortConnectivity(ductA, nodes)
-    // The fitting follows rigidly…
+  test('the fitting and sibling run are picked up as carried connections', () => {
+    const { fitting, ductA, ductB } = joint()
+    const connectivity = analyzePortConnectivity(ductA, sceneOf(fitting, ductA, ductB))
     expect(
       connectivity.connections.find((c) => c.kind === 'rigid-node' && c.nodeId === fitting.id),
     ).toBeDefined()
-    // …and duct B is picked up as a second-hop sibling endpoint.
     expect(
-      connectivity.connections.find(
-        (c) => c.kind === 'duct-endpoint-follow' && c.nodeId === ductB.id,
-      ),
+      connectivity.connections.find((c) => c.kind === 'run' && c.nodeId === ductB.id),
     ).toBeDefined()
+  })
 
-    // Move duct A's mated endpoint (the 'end' port, path index 1) by +1 in Z.
-    const moved = {
-      ...(ductA as Record<string, unknown>),
-      path: [
-        [-3, 0, 0],
-        [-0.2, 0, 1],
-      ],
-    } as AnyNode
-    const updates = resolveConnectivityUpdates(connectivity, moved)
+  test('perpendicular drag translates the WHOLE sibling run (no skew)', () => {
+    const { fitting, ductA, ductB } = joint()
+    const nodes = sceneOf(fitting, ductA, ductB)
+    const connectivity = analyzePortConnectivity(ductA, nodes)
 
-    const fittingUpdate = updates.find((u) => u.id === fitting.id)
-    expect((fittingUpdate!.data as { position: Point }).position).toEqual([0, 0, 1])
+    // Move A's mated end +1 in Z — perpendicular to B's X axis.
+    const updates = resolveConnectivityUpdates(connectivity, movedA([-0.2, 0, 1]))
 
-    const bUpdate = updates.find((u) => u.id === ductB.id)
-    const bPath = (bUpdate!.data as { path: Point[] }).path
-    // Duct B's near end (index 0, on the outlet collar) rode +1 in Z…
+    expect(
+      (updates.find((u) => u.id === fitting.id)!.data as { position: Point }).position,
+    ).toEqual([0, 0, 1])
+    const bPath = (updates.find((u) => u.id === ductB.id)!.data as { path: Point[] }).path
+    // Both ends ride +1 in Z: the run keeps its length and direction.
     expect(bPath[0]).toEqual([0.2, 0, 1])
-    // …its far end stayed put (the run stretches).
+    expect(bPath[1]).toEqual([3, 0, 1])
+  })
+
+  test('parallel drag stretches the sibling run (only the near end slides)', () => {
+    const { fitting, ductA, ductB } = joint()
+    const nodes = sceneOf(fitting, ductA, ductB)
+    const connectivity = analyzePortConnectivity(ductA, nodes)
+
+    // Move A's mated end +0.5 in X — along B's axis (the fitting slides toward B).
+    const updates = resolveConnectivityUpdates(connectivity, movedA([0.3, 0, 0]))
+
+    const bPath = (updates.find((u) => u.id === ductB.id)!.data as { path: Point[] }).path
+    // Near end slid +0.5 in X; far end stayed put → the run shortened.
+    expect(bPath[0]).toEqual([0.7, 0, 0])
     expect(bPath[1]).toEqual([3, 0, 0])
+  })
+
+  test('perpendicular slide propagates through the sibling run to its far joint', () => {
+    // Extend the chain: duct B's far end (3,0,0) meets a second elbow, and duct
+    // C hangs off that elbow. A perpendicular drag should carry the whole chain.
+    const { fitting, ductA, ductB } = joint()
+    const elbow2 = makeNode('duct-fitting', { position: [3.2, 0, 0], system: 'supply' })
+    // elbow ports are ±0.2 on X around its position → inlet at (3,0,0) meets B.
+    const ductC = makeNode('duct-segment', {
+      path: [
+        [3.4, 0, 0],
+        [6, 0, 0],
+      ],
+      system: 'supply',
+    })
+    const nodes = sceneOf(fitting, ductA, ductB, elbow2, ductC)
+    const connectivity = analyzePortConnectivity(ductA, nodes)
+
+    const updates = resolveConnectivityUpdates(connectivity, movedA([-0.2, 0, 1]))
+
+    // Whole chain rode +1 in Z.
+    const bPath = (updates.find((u) => u.id === ductB.id)!.data as { path: Point[] }).path
+    expect(bPath[1]).toEqual([3, 0, 1])
+    expect((updates.find((u) => u.id === elbow2.id)!.data as { position: Point }).position).toEqual(
+      [3.2, 0, 1],
+    )
+    const cPath = (updates.find((u) => u.id === ductC.id)!.data as { path: Point[] }).path
+    expect(cPath[0]).toEqual([3.4, 0, 1])
+    expect(cPath[1]).toEqual([6, 0, 1])
   })
 
   test('an unrelated run not on the fitting is left alone', () => {

@@ -13,18 +13,29 @@ import type { AnyNode, AnyNodeId } from '../schema'
  *
  * Pure logic: it asks each node for its ports via `def.ports` (level-local
  * meters) and does arithmetic. No Three.js, no rendering — it lives in
- * core and is consumed by the editor's move tool and the duct-segment
- * system alike.
+ * core and is consumed by the editor's move tool and the duct/pipe
+ * selection affordances alike.
  *
- * Propagation is intentionally bounded. A moved node stretches the ducts
- * touching it (their near endpoint follows) and rigidly drags any fitting
- * mated collar-to-collar. It also carries the *sibling* ducts on that
- * dragged-along fitting — the other runs sharing the fitting's collars —
- * so dragging one duct's corner moves the whole joint together instead of
- * tearing the fitting away from its other legs. Their near endpoints
- * translate with the fitting; their far ends stay put (they stretch). It
- * stops there: it does NOT chase those far ends or hop onward through the
- * next fitting. Bounded and predictable — no runaway network rearrangement.
+ * ## Propagation model
+ *
+ * The joint graph is snapshotted once at drag start (`analyzePortConnectivity`)
+ * and walked every frame (`resolveConnectivityUpdates`) given the moved node's
+ * live transform. Deltas flow outward from the moved node through coincident
+ * ports:
+ *
+ * - **Fitting** (rigid): a collar pushed by delta `d` translates the whole
+ *   fitting by `d`; every other collar carries that same `d` onward.
+ * - **Run** (stretch + slide, never skew): an endpoint pushed by delta `d` is
+ *   split against the run's own axis. The *parallel* part slides only that
+ *   endpoint (the run lengthens / shortens); the *perpendicular* part
+ *   translates the entire run (so its direction is preserved). The far
+ *   endpoint therefore moves by just the perpendicular part, and that part
+ *   propagates onward to whatever is mated to the far endpoint.
+ *
+ * Propagation walks the whole connected component so a joint stays welded all
+ * the way down the chain, with a visited guard so cycles (looped runs) and
+ * shared joints terminate. First-reached (shortest path) wins on a node
+ * reachable two ways.
  */
 
 type Point = readonly [number, number, number]
@@ -34,52 +45,54 @@ type Point = readonly [number, number, number]
  *  generous slack for grid-snapped hand placement without false matches. */
 const COINCIDENT_EPS_M = 0.05
 
-/** A node attached to one of the moved node's ports, plus how it follows. */
+/** Below this (meters) a propagated delta is treated as zero — stops the
+ *  walk from chasing sub-millimeter perpendicular residue. */
+const DELTA_EPS_M = 1e-4
+
+/** A node carried by the edit, plus the snapshot needed to revert it. Kept
+ *  deliberately small: the move tools read only `kind` + `nodeId` and the
+ *  matching start snapshot to revert before the single tracked commit. */
 export type PortConnection =
   | {
-      /** Partner is a duct run: the endpoint touching the moved port slides
-       *  to track it (one hop — the far endpoint stays put, stretching the
-       *  run). */
-      kind: 'duct-endpoint'
-      nodeId: AnyNodeId
-      /** Index in the duct's `path` that tracks the moved port. */
-      pathIndex: number
-      /** The moved node's port id this endpoint follows. */
-      movedPortId: string
-      /** The duct's full path at edit-start (other points are preserved). */
-      startPath: Point[]
-    }
-  | {
-      /** Partner is another fitting mated collar-to-collar: it translates
-       *  rigidly so its collar stays on the moved collar. */
+      /** A fitting mated collar-to-collar: it translates rigidly. */
       kind: 'rigid-node'
       nodeId: AnyNodeId
-      movedPortId: string
-      /** Partner node's `position` at edit-start. */
+      /** Node's `position` at edit-start. */
       startPosition: Point
     }
   | {
-      /** A sibling duct hanging off one of the dragged-along fitting's OTHER
-       *  collars (second hop). The fitting follows the moved port rigidly, so
-       *  this run's near endpoint translates by that same delta to stay welded
-       *  to its collar — the whole joint moves together. The far endpoint
-       *  stays put (the run stretches). */
-      kind: 'duct-endpoint-follow'
+      /** A run whose endpoint(s) ride the edit: it stretches and/or
+       *  translates, never skews. */
+      kind: 'run'
       nodeId: AnyNodeId
-      /** Index in the run's `path` that rides the fitting. */
-      pathIndex: number
-      /** The moved node's port id whose delta drives the fitting (and so this
-       *  run's endpoint). */
-      movedPortId: string
-      /** The run's full path at edit-start (other points are preserved). */
+      /** The run's full `path` at edit-start. */
       startPath: Point[]
     }
 
+/** One node in the snapshotted joint graph (everything reachable from the
+ *  moved node, excluding the moved node itself). */
+type GraphNode = {
+  id: AnyNodeId
+  role: 'run' | 'fitting'
+  ports: ReadonlyArray<{ id: string; position: Point; system?: string }>
+  startPath?: Point[]
+  startPosition?: Point
+}
+
+/** Who else sits on a given node's port, keyed `nodeId` → `portId` → mates. */
+type Adjacency = Record<string, Record<string, Array<{ nodeId: AnyNodeId; portId: string }>>>
+
 export type PortConnectivity = {
   movedNodeId: AnyNodeId
-  /** The moved node's port world positions at edit-start, keyed by port id.
-   *  Used as the reference each connection's delta is measured from. */
+  /** The moved node's port world positions at edit-start, keyed by port id —
+   *  the reference each frame's delta is measured from. */
   startMovedPorts: Record<string, Point>
+  /** Reachable run/fitting nodes (excludes the moved node), keyed by id. */
+  graph: Record<string, GraphNode>
+  /** Port coincidence edges across the moved node + every graph node. */
+  adjacency: Adjacency
+  /** Flat list of carried nodes for the move tools' revert + "anything to
+   *  follow?" check. Derived from `graph`. */
   connections: PortConnection[]
 }
 
@@ -103,122 +116,149 @@ function distSq(a: Point, b: Point): number {
   return dx * dx + dy * dy + dz * dz
 }
 
+/** Two ports mate when they coincide AND don't cross incompatible systems
+ *  (a supply duct and a waste pipe that merely touch must not fuse). */
+function portsMate(
+  a: { position: Point; system?: string },
+  b: { position: Point; system?: string },
+  epsSq: number,
+): boolean {
+  if (distSq(a.position, b.position) > epsSq) return false
+  if (a.system && b.system && a.system !== b.system) return false
+  return true
+}
+
 /**
- * Snapshot which nodes are connected to `movedNode`'s ports, taken at the
+ * Snapshot the joint graph reachable from `movedNode`'s ports, taken at the
  * start of a move/resize. Call once before the drag; feed the result to
  * `resolveConnectivityUpdates` on every frame.
  *
- * Only `run`-role partners (segments — endpoint stretch) and `fitting`-role
- * partners (rigid follow) are tracked — terminals and equipment usually mount
- * to a surface and shouldn't be yanked off it when an adjacent fitting nudges.
+ * Only `run`-role partners (segments) and `fitting`-role partners are walked —
+ * terminals and equipment usually mount to a surface and shouldn't be yanked
+ * off it when an adjacent fitting nudges. Fittings that declare
+ * `portConnectivityFollow: false` are anchored fixtures (e.g. pipe-trap) and
+ * are skipped, so a connected run stretches against them instead.
  */
 export function analyzePortConnectivity(
   movedNode: AnyNode,
   nodes: Record<string, AnyNode>,
 ): PortConnectivity {
-  const movedPorts = portsOf(movedNode) ?? []
-  const startMovedPorts: Record<string, Point> = {}
-  const movedPortSystem: Record<string, string | undefined> = {}
-  for (const p of movedPorts) {
-    startMovedPorts[p.id] = p.position
-    movedPortSystem[p.id] = p.system
-  }
-
-  const connections: PortConnection[] = []
   const epsSq = COINCIDENT_EPS_M * COINCIDENT_EPS_M
 
+  const movedPorts = portsOf(movedNode) ?? []
+  const startMovedPorts: Record<string, Point> = {}
+  for (const p of movedPorts) startMovedPorts[p.id] = p.position
+
+  // Candidate partners: every run + every following fitting in the scene.
+  const candidates: GraphNode[] = []
   for (const other of Object.values(nodes)) {
     if (!other || other.id === movedNode.id) continue
-    // Generalised across every distribution family (HVAC duct + DWV pipe):
-    // `run` partners stretch an endpoint, `fitting` partners follow rigidly.
-    // Terminals/equipment mount to surfaces and are intentionally NOT dragged.
-    // Fittings that declare `portConnectivityFollow: false` are anchored
-    // fixtures (e.g. pipe-trap) — moving a connected run stretches the arm.
-    const otherRole = roleOf(other)
-    if (otherRole !== 'run' && otherRole !== 'fitting') continue
-    const otherDef = nodeRegistry.get(other.type)
-    if (otherRole === 'fitting' && otherDef?.portConnectivityFollow === false) continue
-    const otherPorts = portsOf(other)
-    if (!otherPorts) continue
+    const role = roleOf(other)
+    if (role !== 'run' && role !== 'fitting') continue
+    if (role === 'fitting' && nodeRegistry.get(other.type)?.portConnectivityFollow === false) {
+      continue
+    }
+    const ports = portsOf(other)
+    if (!ports) continue
+    const startPath =
+      role === 'run'
+        ? (other as unknown as { path?: Point[] }).path?.map((p) => [...p] as Point)
+        : undefined
+    if (role === 'run' && (!startPath || startPath.length < 2)) continue
+    const startPosition =
+      role === 'fitting'
+        ? (() => {
+            const pos = (other as unknown as { position?: Point }).position
+            return pos ? ([pos[0], pos[1], pos[2]] as Point) : undefined
+          })()
+        : undefined
+    if (role === 'fitting' && !startPosition) continue
+    candidates.push({ id: other.id as AnyNodeId, role, ports, startPath, startPosition })
+  }
 
-    for (const op of otherPorts) {
-      // Find which of the moved node's ports this partner port sits on.
-      let matchedId: string | null = null
-      for (const mp of movedPorts) {
-        if (distSq(op.position, mp.position) > epsSq) continue
-        // Don't fuse ports from incompatible systems (e.g. a supply duct
-        // and a waste pipe that happen to cross): only mate when both
-        // ports declare the same system, or at least one is unscoped.
-        const ms = movedPortSystem[mp.id]
-        if (ms && op.system && ms !== op.system) continue
-        matchedId = mp.id
-        break
-      }
-      if (!matchedId) continue
+  // Walk outward from the moved node, collecting every node reachable through
+  // coincident ports. The adjacency records each port's mates so the resolver
+  // can replay the same edges with live deltas.
+  const adjacency: Adjacency = {}
+  const addEdge = (nodeId: string, portId: string, mate: { nodeId: AnyNodeId; portId: string }) => {
+    const byPort = adjacency[nodeId] ?? {}
+    adjacency[nodeId] = byPort
+    const mates = byPort[portId] ?? []
+    byPort[portId] = mates
+    mates.push(mate)
+  }
 
-      if (otherRole === 'run') {
-        const path = (other as unknown as { path?: Point[] }).path
-        if (!Array.isArray(path) || path.length < 2) continue
-        // Port id 'start' → first point, 'end' → last point.
-        const pathIndex = op.id === 'start' ? 0 : path.length - 1
-        connections.push({
-          kind: 'duct-endpoint',
-          nodeId: other.id,
-          pathIndex,
-          movedPortId: matchedId,
-          startPath: path.map((p) => [...p] as Point),
-        })
-      } else {
-        const position = (other as unknown as { position?: Point }).position
-        if (!position) continue
-        connections.push({
-          kind: 'rigid-node',
-          nodeId: other.id,
-          movedPortId: matchedId,
-          startPosition: [position[0], position[1], position[2]],
-        })
+  const graph: Record<string, GraphNode> = {}
+  const visited = new Set<string>([movedNode.id])
+
+  // Seed: the moved node's own ports.
+  const queue: Array<{
+    id: string
+    ports: ReadonlyArray<{ id: string; position: Point; system?: string }>
+  }> = [{ id: movedNode.id, ports: movedPorts }]
+
+  while (queue.length > 0) {
+    const { id, ports } = queue.shift()!
+    for (const port of ports) {
+      for (const cand of candidates) {
+        if (cand.id === id) continue
+        for (const cp of cand.ports) {
+          if (!portsMate(port, cp, epsSq)) continue
+          addEdge(id, port.id, { nodeId: cand.id, portId: cp.id })
+          addEdge(cand.id, cp.id, { nodeId: id as AnyNodeId, portId: port.id })
+          if (!visited.has(cand.id)) {
+            visited.add(cand.id)
+            graph[cand.id] = cand
+            queue.push({ id: cand.id, ports: cand.ports })
+          }
+        }
       }
     }
   }
 
-  // Second hop: each fitting we drag rigidly carries its OTHER runs along.
-  // Find every run endpoint sitting on one of that fitting's collars (apart
-  // from the run we're already moving) and drive it by the same port delta,
-  // so the whole joint translates together instead of the fitting peeling
-  // off its other legs.
-  const rigidFittings = connections.filter(
-    (c): c is Extract<PortConnection, { kind: 'rigid-node' }> => c.kind === 'rigid-node',
+  const connections: PortConnection[] = Object.values(graph).map((g) =>
+    g.role === 'fitting'
+      ? { kind: 'rigid-node', nodeId: g.id, startPosition: g.startPosition! }
+      : { kind: 'run', nodeId: g.id, startPath: g.startPath! },
   )
-  const alreadyTracked = new Set(connections.map((c) => c.nodeId))
-  alreadyTracked.add(movedNode.id as AnyNodeId)
-  for (const fittingConn of rigidFittings) {
-    const fitting = nodes[fittingConn.nodeId]
-    if (!fitting) continue
-    const fittingPorts = portsOf(fitting) ?? []
-    for (const fp of fittingPorts) {
-      for (const other of Object.values(nodes)) {
-        if (!other || alreadyTracked.has(other.id as AnyNodeId)) continue
-        if (roleOf(other) !== 'run') continue
-        const path = (other as unknown as { path?: Point[] }).path
-        if (!Array.isArray(path) || path.length < 2) continue
-        const otherPorts = portsOf(other)
-        if (!otherPorts) continue
-        const ep = otherPorts.find((p) => distSq(p.position, fp.position) <= epsSq)
-        if (!ep) continue
-        if (ep.system && fp.system && ep.system !== fp.system) continue
-        connections.push({
-          kind: 'duct-endpoint-follow',
-          nodeId: other.id,
-          pathIndex: ep.id === 'start' ? 0 : path.length - 1,
-          movedPortId: fittingConn.movedPortId,
-          startPath: path.map((p) => [...p] as Point),
-        })
-        alreadyTracked.add(other.id as AnyNodeId)
-      }
-    }
-  }
 
-  return { movedNodeId: movedNode.id as AnyNodeId, connections, startMovedPorts }
+  return {
+    movedNodeId: movedNode.id as AnyNodeId,
+    startMovedPorts,
+    graph,
+    adjacency,
+    connections,
+  }
+}
+
+function add(a: Point, b: Point): Point {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+function sub(a: Point, b: Point): Point {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+function lenSq(v: Point): number {
+  return v[0] * v[0] + v[1] * v[1] + v[2] * v[2]
+}
+
+/** Split `delta` into the component along unit `axis` and the remainder. */
+function decompose(delta: Point, axis: Point): { parallel: Point; perp: Point } {
+  const dot = delta[0] * axis[0] + delta[1] * axis[1] + delta[2] * axis[2]
+  const parallel: Point = [axis[0] * dot, axis[1] * dot, axis[2] * dot]
+  return { parallel, perp: sub(delta, parallel) }
+}
+
+/** Unit direction of the run's segment adjacent to its `start` / `end` tip. */
+function endpointAxis(path: Point[], portId: string): Point {
+  const n = path.length
+  const [a, b] = portId === 'start' ? [path[1]!, path[0]!] : [path[n - 2]!, path[n - 1]!]
+  const dir = sub(b, a)
+  const l2 = lenSq(dir)
+  if (l2 < 1e-12) return [0, 0, 0]
+  const l = Math.sqrt(l2)
+  return [dir[0] / l, dir[1] / l, dir[2] / l]
 }
 
 /**
@@ -226,55 +266,77 @@ export function analyzePortConnectivity(
  * that keep every connected node attached. `previewNode` is the moved node
  * with its current drag position/rotation applied so its ports recompute.
  *
- * - Duct endpoint: set the tracked path point to the moved port's new
- *   position (the joint stays welded; the run stretches).
- * - Rigid fitting: translate by the moved port's delta so its mated collar
- *   rides along.
+ * Walks the snapshotted graph, propagating each port delta outward: fittings
+ * translate rigidly, runs stretch along their axis and translate across it
+ * (never skew), and the perpendicular part of a run's slide carries on to its
+ * far joint. Visited guard bounds cycles and shared joints.
  */
 export function resolveConnectivityUpdates(
   connectivity: PortConnectivity,
   previewNode: AnyNode,
 ): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  const { graph, adjacency, startMovedPorts, movedNodeId } = connectivity
+  if (Object.keys(graph).length === 0) return []
+
   const newPorts = portsOf(previewNode) ?? []
-  const newById: Record<string, Point> = {}
-  for (const p of newPorts) newById[p.id] = p.position
+  const newMovedPos: Record<string, Point> = {}
+  for (const p of newPorts) newMovedPos[p.id] = p.position
 
-  const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
-  for (const conn of connectivity.connections) {
-    const start = connectivity.startMovedPorts[conn.movedPortId]
-    const now = newById[conn.movedPortId]
-    if (!start || !now) continue
+  // Each queue item drives a node's port by a delta ("this collar / endpoint
+  // must move by this much"). Visited nodes resolve once (shortest path wins).
+  const queue: Array<{ nodeId: AnyNodeId; portId: string; delta: Point }> = []
+  const results: Record<string, { id: AnyNodeId; data: Partial<AnyNode> }> = {}
+  const visited = new Set<string>([movedNodeId])
 
-    if (conn.kind === 'duct-endpoint') {
-      const path = conn.startPath.map((p, i) =>
-        i === conn.pathIndex ? ([now[0], now[1], now[2]] as Point) : ([...p] as Point),
-      )
-      updates.push({ id: conn.nodeId, data: { path } as Partial<AnyNode> })
-    } else if (conn.kind === 'duct-endpoint-follow') {
-      // Sibling run on a dragged-along fitting: translate its near endpoint by
-      // the same port delta the fitting follows. Far end stays put (stretch).
-      const dx = now[0] - start[0]
-      const dy = now[1] - start[1]
-      const dz = now[2] - start[2]
-      const path = conn.startPath.map((p, i) =>
-        i === conn.pathIndex ? ([p[0] + dx, p[1] + dy, p[2] + dz] as Point) : ([...p] as Point),
-      )
-      updates.push({ id: conn.nodeId, data: { path } as Partial<AnyNode> })
-    } else {
-      const dx = now[0] - start[0]
-      const dy = now[1] - start[1]
-      const dz = now[2] - start[2]
-      updates.push({
-        id: conn.nodeId,
-        data: {
-          position: [
-            conn.startPosition[0] + dx,
-            conn.startPosition[1] + dy,
-            conn.startPosition[2] + dz,
-          ],
-        } as Partial<AnyNode>,
-      })
+  const enqueueMates = (nodeId: string, portId: string, delta: Point) => {
+    for (const mate of adjacency[nodeId]?.[portId] ?? []) {
+      if (visited.has(mate.nodeId)) continue
+      queue.push({ nodeId: mate.nodeId, portId: mate.portId, delta })
     }
   }
-  return updates
+
+  // Seed from the moved node's live port deltas.
+  for (const [portId, start] of Object.entries(startMovedPorts)) {
+    const now = newMovedPos[portId]
+    if (!now) continue
+    const delta = sub(now, start)
+    if (lenSq(delta) <= DELTA_EPS_M * DELTA_EPS_M) continue
+    enqueueMates(movedNodeId, portId, delta)
+  }
+
+  while (queue.length > 0) {
+    const { nodeId, portId, delta } = queue.shift()!
+    if (visited.has(nodeId)) continue
+    visited.add(nodeId)
+    const node = graph[nodeId]
+    if (!node) continue
+
+    if (node.role === 'fitting') {
+      const start = node.startPosition!
+      results[nodeId] = { id: nodeId, data: { position: add(start, delta) } as Partial<AnyNode> }
+      // Rigid: every other collar carries the same delta onward.
+      for (const p of node.ports) {
+        if (p.id === portId) continue
+        enqueueMates(nodeId, p.id, delta)
+      }
+    } else {
+      const startPath = node.startPath!
+      const nearIdx = portId === 'start' ? 0 : startPath.length - 1
+      const farPortId = portId === 'start' ? 'end' : 'start'
+      const axis = endpointAxis(startPath, portId)
+      const { parallel, perp } = decompose(delta, axis)
+      // Perpendicular part translates the whole run (preserves direction);
+      // the parallel part slides only the dragged endpoint (stretch).
+      const path = startPath.map((p) => add(p, perp))
+      path[nearIdx] = add(path[nearIdx]!, parallel)
+      results[nodeId] = { id: nodeId, data: { path } as Partial<AnyNode> }
+      // The far endpoint moved by just the perpendicular part — carry it on
+      // so the joint downstream stays welded.
+      if (lenSq(perp) > DELTA_EPS_M * DELTA_EPS_M) {
+        enqueueMates(nodeId, farPortId, perp)
+      }
+    }
+  }
+
+  return Object.values(results)
 }

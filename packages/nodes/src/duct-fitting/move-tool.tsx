@@ -27,12 +27,19 @@ import {
   collectGhostAlignmentCandidates,
   resolveGhostAlignment,
 } from '../shared/ghost-alignment'
+import { type RunMoveConnectivity, startRunMoveConnectivity } from '../shared/run-move-connectivity'
 import { buildDuctFittingGeometry } from './geometry'
 
 type Vec3 = [number, number, number]
 
 const GHOST_COLOR = '#818cf8'
 const GHOST_OPACITY = 0.5
+
+/** Screen pixels → meters for the Ctrl-vertical (riser) drag — matches the
+ *  duct draw tool's Alt-vertical feel. 100 px ≈ 1 m. */
+const VERTICAL_PIXELS_PER_METER = 100
+const VERTICAL_Y_MIN_M = -3
+const VERTICAL_Y_MAX_M = 10
 
 /** Snap a coordinate to the editor's live grid step. */
 function snapToGridStep(value: number): number {
@@ -174,36 +181,81 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     }
     if (existedAtStart) setMeshHidden(true)
 
+    // Carry connected ducts as the fitting slides: the part of the move along
+    // a run's axis stretches it, the part across translates the whole run (and
+    // propagates to its far joint). Snapshot once at drag start; only existing
+    // fittings are mated to anything.
+    const connectivity: RunMoveConnectivity | null = existedAtStart
+      ? startRunMoveConnectivity(node)
+      : null
+
     let lastPos: Vec3 = originalPosition
+    // Tracks whether the last frame held Alt: the fitting is detached from its
+    // connected ducts for the drag, so they stay put (no follow) and the
+    // commit omits their updates. Mirrors the duct endpoint's Alt-detach.
+    let lastDetached = false
+    // Anchor for the Ctrl-vertical (riser) drag: clientY + base Y captured the
+    // frame Ctrl is first held, so vertical mouse motion maps to Y. Cleared
+    // when Ctrl is released. Mirrors the draw tool's Alt-vertical anchor.
+    let verticalAnchor: { clientY: number; baseY: number } | null = null
 
     const onMove = (event: GridEvent) => {
       const bypass = event.nativeEvent?.shiftKey === true
+      // Alt = detach: drop the connected-duct follow so the fitting moves on
+      // its own, leaving every mated run where it sits.
+      const detached = event.nativeEvent?.altKey === true
+      // Ctrl/Cmd = vertical: XZ locks to where the fitting sits and the cursor's
+      // screen-Y drives the riser height (connected ducts still follow).
+      const vertical = event.nativeEvent?.ctrlKey === true || event.nativeEvent?.metaKey === true
+      const clientY = (event.nativeEvent as { clientY?: number } | undefined)?.clientY
       const snap = bypass ? (v: number) => v : snapToGridStep
-      let x = snap(event.localPosition[0])
-      let z = snap(event.localPosition[2])
 
-      // Alignment: snap the footprint box edges onto nearby geometry and
-      // publish guides (Alt / Shift bypass).
-      if (!bypass) {
-        const proposed: Aabb2D = {
-          minX: x + ox - hx,
-          maxX: x + ox + hx,
-          minZ: z + oz - hz,
-          maxZ: z + oz + hz,
-        }
-        const { dx, dz, guides } = resolveGhostAlignment(nodeId, proposed, candidates)
-        x += dx
-        z += dz
-        useAlignmentGuides.getState().set(guides)
-      } else {
+      let next: Vec3
+      if (vertical && typeof clientY === 'number') {
+        if (!verticalAnchor) verticalAnchor = { clientY, baseY: lastPos[1] }
+        // Screen +Y points down, so subtract to map "drag up = raise".
+        const dy = (verticalAnchor.clientY - clientY) / VERTICAL_PIXELS_PER_METER
+        const y = Math.min(
+          VERTICAL_Y_MAX_M,
+          Math.max(VERTICAL_Y_MIN_M, verticalAnchor.baseY + snap(dy)),
+        )
+        next = [lastPos[0], y, lastPos[2]]
         useAlignmentGuides.getState().clear()
+      } else {
+        verticalAnchor = null
+        let x = snap(event.localPosition[0])
+        let z = snap(event.localPosition[2])
+
+        // Alignment: snap the footprint box edges onto nearby geometry and
+        // publish guides (Alt / Shift bypass).
+        if (!bypass) {
+          const proposed: Aabb2D = {
+            minX: x + ox - hx,
+            maxX: x + ox + hx,
+            minZ: z + oz - hz,
+            maxZ: z + oz + hz,
+          }
+          const { dx, dz, guides } = resolveGhostAlignment(nodeId, proposed, candidates)
+          x += dx
+          z += dz
+          useAlignmentGuides.getState().set(guides)
+        } else {
+          useAlignmentGuides.getState().clear()
+        }
+        next = [x, lastPos[1], z]
       }
 
-      const next: Vec3 = [x, originalPosition[1], z]
-      if (next[0] !== lastPos[0] || next[2] !== lastPos[2]) triggerSFX('sfx:grid-snap')
+      if (next[0] !== lastPos[0] || next[1] !== lastPos[1] || next[2] !== lastPos[2]) {
+        triggerSFX('sfx:grid-snap')
+      }
       lastPos = next
+      lastDetached = detached
       hasMoved = true
       setCursorPos(next)
+      // Detached: keep the followers at their origin (drop any live overrides
+      // from a prior non-detached frame). Otherwise preview the follow.
+      if (detached) connectivity?.clear()
+      else connectivity?.preview({ position: next })
     }
 
     const commit = (event: GridEvent) => {
@@ -230,10 +282,24 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         useScene.getState().createNode(created as AnyNode, node.parentId as AnyNodeId)
         selectId = created.id as AnyNodeId
       } else {
-        useScene.getState().updateNode(nodeId, { position: lastPos } as Partial<AnyNode>)
+        // Fold connected-duct / sibling-run follow-updates into the SAME batch
+        // as the moved fitting so the whole joint is one undo step. Detached
+        // (Alt on the final frame): the joint is broken, so nothing follows.
+        const followUpdates = lastDetached
+          ? []
+          : (connectivity?.commitUpdates({ position: lastPos }) ?? [])
+        useScene
+          .getState()
+          .updateNodes([
+            { id: nodeId, data: { position: lastPos } as Partial<AnyNode> },
+            ...followUpdates,
+          ])
         useScene.getState().markDirty(nodeId)
       }
       useScene.temporal.getState().pause()
+      // Followers are committed to the store — drop their live overrides so
+      // renderers read the canonical path/position.
+      connectivity?.clear()
       setMeshHidden(false)
 
       useAlignmentGuides.getState().clear()
@@ -245,6 +311,7 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     }
 
     const onCancel = () => {
+      connectivity?.clear()
       if (existedAtStart) {
         setMeshHidden(false)
         useViewer.getState().setSelection({ selectedIds: [nodeId] })
@@ -264,6 +331,7 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', commit)
       emitter.off('tool:cancel', onCancel)
+      connectivity?.clear()
       useAlignmentGuides.getState().clear()
       if (existedAtStart) setMeshHidden(false)
       useScene.temporal.getState().resume()

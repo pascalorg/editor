@@ -1,10 +1,19 @@
 import {
+  type AnyNode,
   type AnyNodeId,
+  analyzePortConnectivity,
   type FloorplanAffordance,
   type FloorplanAffordanceSession,
+  type PortConnectivity,
+  resolveConnectivityUpdates,
   useScene,
 } from '@pascal-app/core'
 import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
+import {
+  type DuctElbowEndpoint,
+  detectDuctElbowEndpoint,
+  planDuctElbowEndpointReaim,
+} from './elbow-endpoint-reaim'
 
 /**
  * Shared "drag a path point" floor-plan affordance for polyline
@@ -13,6 +22,16 @@ import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
  * draggable handle per path vertex, moved freely on the plan (XZ) with
  * grid snap (Shift bypasses). The vertex's Y (elevation / slope) is held
  * fixed — plan editing never changes height.
+ *
+ * Like the 3D handles, dragging a vertex that sits on a fitting carries the
+ * joint along (port connectivity): the fitting follows, connected runs stretch
+ * along their own axis and translate across it, and that perpendicular slide
+ * propagates down the chain. And — duct only — dragging the free end of a
+ * straight run whose other end sits on an elbow re-aims that elbow to follow
+ * the drag (bend angle adapts) instead of translating it rigidly. Holding
+ * **Alt** detaches: the joint breaks for the drag so the vertex moves on its
+ * own (no elbow re-aim, no connectivity follow). Behavioral parity with the
+ * 3D selection tool.
  *
  * Wired via `def.floorplanAffordances['move-path-point']`; the floor-plan
  * builders emit `endpoint-handle` primitives carrying `{ pointIndex }` so
@@ -33,7 +52,7 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
     },
   }
   return {
-    start({ node, payload }): FloorplanAffordanceSession {
+    start({ node, payload, nodes }): FloorplanAffordanceSession {
       const { pointIndex } = payload as PathPointPayload
       const initialPath = node.path.map((p) => [...p] as [number, number, number])
       const target = initialPath[pointIndex]
@@ -41,18 +60,78 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
       // Hold the dragged vertex's elevation — the plan move only shifts XZ.
       const y = target[1]
 
+      // Connectivity snapshot: which fittings / runs are mated to this run's
+      // endpoints so they follow the drag. Only endpoints (first / last vertex)
+      // bear ports; interior vertices have no joint, so skip the analysis.
+      const isEndpoint = pointIndex === 0 || pointIndex === initialPath.length - 1
+
+      // Elbow re-aim (duct only): if this is a straight run whose OTHER end
+      // sits on an elbow collar, the elbow swings to follow the drag (junction
+      // + far collar fixed, bend angle adapts) — the 2D twin of the 3D
+      // selection handle's behaviour. Takes precedence over the rigid
+      // connectivity follow for this endpoint.
+      const elbowEndpoint: DuctElbowEndpoint | null =
+        isEndpoint && kind === 'duct-segment'
+          ? detectDuctElbowEndpoint(initialPath, pointIndex, nodes)
+          : null
+
+      const connectivity: PortConnectivity | null =
+        isEndpoint && !elbowEndpoint
+          ? analyzePortConnectivity(node as unknown as AnyNode, nodes)
+          : null
+
+      // Report every node the drag may write so the dispatcher snapshots them
+      // for the single-undo dance.
+      const affectedIds: AnyNodeId[] = [
+        node.id,
+        ...(elbowEndpoint ? [elbowEndpoint.elbow.id as AnyNodeId] : []),
+        ...(connectivity?.connections.map((c) => c.nodeId) ?? []),
+      ]
+
+      const followUpdates = (nextPath: [number, number, number][]) => {
+        if (!connectivity) return []
+        const preview = {
+          ...(node as unknown as Record<string, unknown>),
+          path: nextPath,
+        } as AnyNode
+        return resolveConnectivityUpdates(connectivity, preview).filter(
+          (u) => useScene.getState().nodes[u.id],
+        )
+      }
+
       return {
-        affectedIds: [node.id],
+        affectedIds,
         apply({ planPoint, modifiers }) {
           // Plan coords map x→world X, y→world Z.
           const raw: WallPlanPoint = [planPoint[0], planPoint[1]]
           const [sx, sz] = modifiers.shiftKey ? raw : snapPointToGrid(raw)
-          const nextPath = initialPath.map((p, i) =>
-            i === pointIndex ? ([sx, y, sz] as [number, number, number]) : p,
-          )
-          useScene
-            .getState()
-            .updateNodes([{ id: node.id, data: { path: nextPath } as Partial<unknown> as never }])
+          const dragged: [number, number, number] = [sx, y, sz]
+          // Alt = detach: break the joint for this drag — the elbow does NOT
+          // re-aim and mated fittings / runs do NOT follow; the vertex moves
+          // on its own. Mirrors the 3D selection drag and the wall corner.
+          const detached = modifiers.altKey
+          // Elbow re-aim: the elbow swings to follow the dragged end and the
+          // run rides its re-aimed collar. Out-of-range turns hold the frame.
+          if (!detached && elbowEndpoint) {
+            const plan = planDuctElbowEndpointReaim(elbowEndpoint, pointIndex, dragged)
+            if (!plan) return
+            useScene.getState().updateNodes([
+              { id: node.id, data: { path: plan.path } as Partial<unknown> as never },
+              {
+                id: plan.elbowUpdate.id,
+                data: plan.elbowUpdate.data as Partial<unknown> as never,
+              },
+            ])
+            return
+          }
+          const nextPath = initialPath.map((p, i) => (i === pointIndex ? dragged : p))
+          useScene.getState().updateNodes([
+            { id: node.id, data: { path: nextPath } as Partial<unknown> as never },
+            ...(detached ? [] : followUpdates(nextPath)).map((u) => ({
+              id: u.id,
+              data: u.data as Partial<unknown> as never,
+            })),
+          ])
         },
         canCommit() {
           const final = useScene.getState().nodes[node.id] as N | undefined

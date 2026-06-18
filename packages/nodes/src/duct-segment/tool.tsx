@@ -105,6 +105,11 @@ const ALT_PIXELS_PER_METER = 100
 const ALT_Y_MIN_M = -3
 const ALT_Y_MAX_M = 10
 
+/** green-500 — the project's bounding-box / placeable accent. The cursor
+ *  ring + vertical line recolour to this while the point is snapped onto an
+ *  existing run, so the coincidence reads with the familiar snap green. */
+const SNAP_CURSOR_COLOR = '#22c55e'
+
 function snap(value: number, step: number): number {
   if (step <= 0) return value
   return Math.round(value / step) * step
@@ -296,8 +301,9 @@ const DuctSegmentTool = () => {
   // Ceiling mode (toggle with C): the first point lands at the level's
   // ceiling height (duct top hugging the ceiling) instead of the floor.
   const [ceilingMode, setCeilingMode] = useState(false)
-  // When the cursor is within snap range of an existing duct's endpoint we
-  // surface a brighter indicator and commit at the endpoint's exact coords.
+  // The shared coordinate when the cursor is within snap range of an existing
+  // duct (null = free placement). Drives the green cursor highlight so the
+  // user sees the next click will join an existing run, not freeform-place.
   const [snapTarget, setSnapTarget] = useState<[number, number, number] | null>(null)
   // In ceiling mode, the ceiling the cursor is currently under — rendered as
   // a translucent overlay so the duct reads as hung against a real surface
@@ -939,13 +945,18 @@ const DuctSegmentTool = () => {
               fixed-height cursor. */}
           {isElevated ? (
             <CursorSphere
+              color={snapTarget ? SNAP_CURSOR_COLOR : undefined}
               dotAtTip
               height={cursorElevation}
               position={cursorGround}
               ref={cursorRef}
             />
           ) : (
-            <CursorSphere position={cursorPos} ref={cursorRef} />
+            <CursorSphere
+              color={snapTarget ? SNAP_CURSOR_COLOR : undefined}
+              position={cursorPos}
+              ref={cursorRef}
+            />
           )}
           {pillParts && (
             <group position={cursorPos}>
@@ -967,15 +978,6 @@ const DuctSegmentTool = () => {
             </group>
           )}
         </>
-      )}
-      {/* Endpoint-snap halo — brighter ring around the target endpoint
-          while the cursor is within snap range, so the user sees that the
-          next click will join an existing duct rather than freeform-place. */}
-      {snapTarget && (
-        <mesh layers={EDITOR_LAYER} position={snapTarget}>
-          <sphereGeometry args={[0.12, 24, 16]} />
-          <meshBasicMaterial color="#818cf8" depthTest={false} opacity={0.35} transparent />
-        </mesh>
       )}
       {/* Committed point pips */}
       {draftPoints.map((p, i) => (

@@ -65,7 +65,7 @@ describe('port connectivity — DWV pipe family', () => {
     nodeRegistry._reset()
   })
 
-  test('moving a pipe-fitting stretches the connected pipe-segment endpoint', () => {
+  test('moving a pipe-fitting carries the connected pipe-segment along', () => {
     // A sanitary tee at the origin; its run ports sit on ±X at the hub legs.
     const fitting = wasteTee()
     const outlet = portsOf('pipe-fitting', fitting as AnyNode).find((p) => p.id === 'outlet')!
@@ -79,21 +79,20 @@ describe('port connectivity — DWV pipe family', () => {
     }
 
     const connectivity = analyzePortConnectivity(fitting as AnyNode, nodes)
-    // The run must be picked up as a stretchable endpoint partner.
-    const endpoint = connectivity.connections.find(
-      (c) => c.kind === 'duct-endpoint' && c.nodeId === run.id,
-    )
+    // The run must be picked up as a carried partner.
+    const endpoint = connectivity.connections.find((c) => c.kind === 'run' && c.nodeId === run.id)
     expect(endpoint).toBeDefined()
 
-    // Move the fitting +1m in Z; the run's mated endpoint should follow.
+    // Move the fitting +1m in Z. That delta is PERPENDICULAR to the run's
+    // X-axis, so the whole run translates +Z (preserving direction, no skew).
     const moved = { ...(fitting as Record<string, unknown>), position: [0, 0, 1] } as AnyNode
     const updates = resolveConnectivityUpdates(connectivity, moved)
     const runUpdate = updates.find((u) => u.id === run.id)
     expect(runUpdate).toBeDefined()
     const newPath = (runUpdate!.data as { path: [number, number, number][] }).path
-    // Tracked endpoint moved by the same +1m in Z; far end stayed put.
+    // Both endpoints rode +1m in Z; the run kept its length and direction.
     expect(newPath[0]![2]).toBeCloseTo(outlet.position[2] + 1, 6)
-    expect(newPath[1]![2]).toBeCloseTo(outlet.position[2], 6)
+    expect(newPath[1]![2]).toBeCloseTo(outlet.position[2] + 1, 6)
   })
 
   test('incompatible systems do not fuse (a supply duct is not dragged by a waste fitting)', () => {

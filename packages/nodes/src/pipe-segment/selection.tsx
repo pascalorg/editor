@@ -15,13 +15,24 @@ import {
 import { DimensionPill, EDITOR_LAYER, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
-import { useEffect, useRef, useState } from 'react'
-import { type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  DoubleSide,
+  type Group,
+  type Object3D,
+  Plane,
+  Quaternion,
+  Raycaster,
+  Vector2,
+  Vector3,
+} from 'three'
 import { collectScenePorts, DWV_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 
-/** Handle pip radius (meters). */
-const HANDLE_RADIUS = 0.09
+/** Corner hex-disc radius (meters) — matches the duct corner handle. */
+const HANDLE_RADIUS = 0.11
+const HANDLE_COLOR = '#818cf8'
+const HANDLE_HOVER_COLOR = '#a5b4fc'
 /** Port-snap radius for dragged run endpoints (meters, XZ). */
 const PORT_SNAP_RADIUS_M = 0.4
 
@@ -294,35 +305,24 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
 
   return (
     <group>
-      {pipe.path.map((p, i) => {
-        const active = draggingIndex === i
-        const hovered = hoverIndex === i
-        return (
-          <mesh
-            key={`pipe-handle-${i}`}
-            layers={EDITOR_LAYER}
-            onPointerDown={onHandleDown(i)}
-            onPointerEnter={(e) => {
-              e.stopPropagation()
-              setHoverIndex(i)
-              if (draggingIndex === null) document.body.style.cursor = 'grab'
-            }}
-            onPointerLeave={() => {
-              setHoverIndex((prev) => (prev === i ? null : prev))
-              if (draggingIndex === null) document.body.style.cursor = ''
-            }}
-            position={p as Point}
-          >
-            <sphereGeometry args={[HANDLE_RADIUS, 16, 12]} />
-            <meshBasicMaterial
-              color={active || hovered ? '#7dd3fc' : '#38bdf8'}
-              depthTest={false}
-              opacity={active ? 1 : 0.85}
-              transparent
-            />
-          </mesh>
-        )
-      })}
+      {pipe.path.map((p, i) => (
+        <HexHandle
+          active={draggingIndex === i}
+          hovered={hoverIndex === i}
+          key={`pipe-handle-${i}`}
+          onPointerDown={onHandleDown(i)}
+          onPointerEnter={(e) => {
+            e.stopPropagation()
+            setHoverIndex(i)
+            if (draggingIndex === null) document.body.style.cursor = 'grab'
+          }}
+          onPointerLeave={() => {
+            setHoverIndex((prev) => (prev === i ? null : prev))
+            if (draggingIndex === null) document.body.style.cursor = ''
+          }}
+          position={p as Point}
+        />
+      ))}
       {draggingIndex !== null &&
         pipe.path[draggingIndex] &&
         (() => {
@@ -355,6 +355,81 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
             </Html>
           )
         })()}
+    </group>
+  )
+}
+
+/**
+ * Billboarded hexagon disc handle for a pipe path vertex — the same visual
+ * the duct corner handle uses, so corner editing reads consistently across
+ * kinds. A flat `CircleGeometry` with 6 segments is the click target; an
+ * outer hex ring frames it. The group copies the camera's WORLD rotation
+ * (compensating for the rotated pipe/level parent) so the hex stays
+ * face-on at any viewing angle.
+ */
+function HexHandle({
+  position,
+  active,
+  hovered,
+  onPointerDown,
+  onPointerEnter,
+  onPointerLeave,
+}: {
+  position: Point
+  active: boolean
+  hovered: boolean
+  onPointerDown: (e: ThreeEvent<PointerEvent>) => void
+  onPointerEnter: (e: ThreeEvent<PointerEvent>) => void
+  onPointerLeave: () => void
+}) {
+  const { camera } = useThree()
+  const groupRef = useRef<Group>(null)
+  const parentWorldQuat = useMemo(() => new Quaternion(), [])
+  const invParentWorldQuat = useMemo(() => new Quaternion(), [])
+  useFrame(() => {
+    const group = groupRef.current
+    if (!group) return
+    if (group.parent) {
+      group.parent.getWorldQuaternion(parentWorldQuat)
+      invParentWorldQuat.copy(parentWorldQuat).invert()
+      group.quaternion.copy(invParentWorldQuat).multiply(camera.quaternion)
+    } else {
+      group.quaternion.copy(camera.quaternion)
+    }
+  })
+
+  const color = active || hovered ? HANDLE_HOVER_COLOR : HANDLE_COLOR
+  const scale = hovered || active ? 1.25 : 1
+
+  return (
+    <group position={position} ref={groupRef} scale={scale}>
+      <mesh
+        layers={EDITOR_LAYER}
+        onPointerDown={onPointerDown}
+        onPointerEnter={onPointerEnter}
+        onPointerLeave={onPointerLeave}
+        renderOrder={1002}
+      >
+        <circleGeometry args={[HANDLE_RADIUS, 6]} />
+        <meshBasicMaterial
+          color={color}
+          depthTest={false}
+          depthWrite={false}
+          opacity={active ? 1 : 0.95}
+          side={DoubleSide}
+          transparent
+        />
+      </mesh>
+      <mesh renderOrder={1003}>
+        <ringGeometry args={[HANDLE_RADIUS, HANDLE_RADIUS * 1.18, 6]} />
+        <meshBasicMaterial
+          color={color}
+          depthTest={false}
+          depthWrite={false}
+          side={DoubleSide}
+          transparent
+        />
+      </mesh>
     </group>
   )
 }

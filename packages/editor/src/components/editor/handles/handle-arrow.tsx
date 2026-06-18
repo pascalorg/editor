@@ -64,7 +64,7 @@ const ROTATE_HANDLE_HALF_SWEEP = Math.PI / 3
 const ROTATE_RIBBON_HALF_WIDTH = 0.02
 const ROTATE_HEAD_HALF_WIDTH = 0.045
 const TRACKER_CUBE_SIZE = 0.16
-export const CORNER_HEX_RADIUS = 0.16
+export const CORNER_HEX_RADIUS = 0.11
 
 export type HandleArrowShape = 'chevron' | 'cross' | 'curved-arrow' | 'tracker' | 'corner-picker'
 export type HandleArrowInputShape = HandleArrowShape | 'arrow' | 'move-cross'
