@@ -96,7 +96,8 @@ export function ItemCatalog({
             onMouseEnter={() => triggerSFX('sfx:menu-hover')}
             type="button"
           >
-            <div className="relative aspect-square w-full overflow-hidden rounded-lg">
+            {/* min-h 兜底:首开网格列宽未定时仍占住高度,避免瓦片塌缩成文字行(防闪) */}
+            <div className="relative aspect-square min-h-[90px] w-full overflow-hidden rounded-lg">
               <img
                 alt={item.name}
                 className="h-full w-full object-cover"
