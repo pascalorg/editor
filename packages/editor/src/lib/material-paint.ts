@@ -13,7 +13,6 @@ import {
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
   getEffectiveStairSurfaceMaterial,
-  getEffectiveWallSurfaceMaterial,
   getLibraryMaterialIdFromRef,
   type MaterialSchema,
   type MaterialTarget,
@@ -26,7 +25,6 @@ import {
   type SlabNode,
   type StairNode,
   type StairSurfaceMaterialRole,
-  type WallNode,
   type WallSurfaceSide,
 } from '@pascal-app/core'
 
@@ -76,32 +74,6 @@ function getCatalogEntryForActivePaintMaterial(material: ActivePaintMaterial | n
 
 export function getActivePaintMaterialLabel(material: ActivePaintMaterial | null | undefined) {
   return getCatalogEntryForActivePaintMaterial(material)?.label ?? 'Custom'
-}
-
-export function buildWallSurfaceMaterialPatch(
-  node: WallNode,
-  targetSide: WallSurfaceSide,
-  material: MaterialSchema | undefined,
-  materialPreset: string | undefined,
-): Partial<WallNode> {
-  const nextSurfaceMaterial = { material, materialPreset }
-  const nextInterior =
-    targetSide === 'interior'
-      ? nextSurfaceMaterial
-      : getEffectiveWallSurfaceMaterial(node, 'interior')
-  const nextExterior =
-    targetSide === 'exterior'
-      ? nextSurfaceMaterial
-      : getEffectiveWallSurfaceMaterial(node, 'exterior')
-
-  return {
-    interiorMaterial: nextInterior.material,
-    interiorMaterialPreset: nextInterior.materialPreset,
-    exteriorMaterial: nextExterior.material,
-    exteriorMaterialPreset: nextExterior.materialPreset,
-    material: undefined,
-    materialPreset: undefined,
-  }
 }
 
 export function buildRoofSurfaceMaterialPatch(

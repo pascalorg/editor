@@ -20,6 +20,13 @@ export const WallNode = BaseNode.extend({
   interiorMaterialPreset: z.string().optional(),
   exteriorMaterial: MaterialSchema.optional(),
   exteriorMaterialPreset: z.string().optional(),
+  // Per-slot material overrides on the unified slot model, mirroring
+  // `SlabNode.slots`. Key = slot id (`interior` / `exterior`), value = a
+  // `MaterialRef` (`library:<id>` / `scene:<id>`). Absent = the declared slot
+  // default (`WALL_SLOT_DEFAULT`). The legacy `*Material*` fields above are
+  // read only by the load migration that moves them into `slots`; delete them
+  // in a follow-up once migrated scenes are the norm.
+  slots: z.record(z.string(), z.string()).optional(),
   thickness: z.number().optional(),
   height: z.number().optional(),
   curveOffset: z.number().optional(),

@@ -3,6 +3,7 @@
 import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
+import { parseMaterialRef, toSceneMaterialRef } from '../material-library'
 import { nodeRegistry } from '../registry/registry'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
@@ -18,9 +19,17 @@ import {
 import { segmentPointToRoofWallFace } from '../schema/nodes/roof-segment-walls'
 import { ShelfNode as ShelfNodeSchema } from '../schema/nodes/shelf'
 import { SiteNode } from '../schema/nodes/site'
-import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
+import {
+  getEffectiveStairSurfaceMaterial,
+  StairNode as StairNodeSchema,
+} from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
-import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
+import { getEffectiveWallSurfaceMaterial, type WallSurfaceSide } from '../schema/nodes/wall'
+import {
+  generateSceneMaterialId,
+  type SceneMaterial,
+  type SceneMaterialId,
+} from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import * as nodeActions from './actions/node-actions'
 import { resetSceneHistoryPauseDepth } from './history-control'
@@ -231,47 +240,162 @@ function migrateElevatorParent(
   }
 }
 
-function migrateWallSurfaceMaterials(node: Record<string, any>) {
-  const hasInterior =
-    node.interiorMaterial !== undefined || typeof node.interiorMaterialPreset === 'string'
-  const hasExterior =
-    node.exteriorMaterial !== undefined || typeof node.exteriorMaterialPreset === 'string'
-  const legacyFinish = {
-    material: node.material,
-    materialPreset: typeof node.materialPreset === 'string' ? node.materialPreset : undefined,
-  }
-
-  if (!(hasInterior || hasExterior)) {
-    if (legacyFinish.material === undefined && legacyFinish.materialPreset === undefined) {
-      return node
-    }
-
-    return {
-      ...node,
-      interiorMaterial: legacyFinish.material,
-      interiorMaterialPreset: legacyFinish.materialPreset,
-      exteriorMaterial: legacyFinish.material,
-      exteriorMaterialPreset: legacyFinish.materialPreset,
+// Reuse an already-minted scene material for an identical inline legacy
+// material so a whole building painted one custom colour collapses to one
+// shared datablock (mirrors `commitSlotPaint`'s dedupe-on-match).
+function findMintedSceneMaterialRef(
+  material: unknown,
+  mintedMaterials: Record<SceneMaterialId, SceneMaterial>,
+): string | undefined {
+  const target = JSON.stringify(material)
+  for (const sceneMaterial of Object.values(mintedMaterials)) {
+    if (JSON.stringify(sceneMaterial.material) === target) {
+      return toSceneMaterialRef(sceneMaterial.id)
     }
   }
+  return undefined
+}
 
-  if (!hasInterior) {
-    return {
-      ...node,
-      interiorMaterial: node.exteriorMaterial,
-      interiorMaterialPreset: node.exteriorMaterialPreset,
+// Turn a legacy surface spec (`{ material, materialPreset }`) into a
+// `MaterialRef`: a preset that's already a `library:`/`scene:` ref is used
+// as-is; an inline material mints (or reuses) a scene material. Returns
+// undefined when the spec carries no material. Shared by every legacy→slots
+// migration below.
+function legacySpecToMaterialRef(
+  spec: { material?: unknown; materialPreset?: unknown },
+  mintedMaterials: Record<SceneMaterialId, SceneMaterial>,
+): string | undefined {
+  if (typeof spec.materialPreset === 'string' && parseMaterialRef(spec.materialPreset)) {
+    return spec.materialPreset
+  }
+  if (spec.material !== undefined) {
+    const existing = findMintedSceneMaterialRef(spec.material, mintedMaterials)
+    if (existing) return existing
+    const id = generateSceneMaterialId()
+    mintedMaterials[id] = {
+      id,
+      name: `Material ${Object.keys(mintedMaterials).length + 1}`,
+      material: spec.material as SceneMaterial['material'],
     }
+    return toSceneMaterialRef(id)
+  }
+  return undefined
+}
+
+// Move the retired inline `material*` / `interiorMaterial*` / `exteriorMaterial*`
+// fields onto the unified `node.slots` model (interior / exterior → a
+// `library:`/`scene:` ref), minting scene materials for inline customs into
+// `mintedMaterials` (merged into the scene material map by the caller). Already
+// slot-modelled walls and walls with no legacy material are left untouched.
+function migrateWallSurfaceMaterials(
+  node: Record<string, any>,
+  mintedMaterials: Record<SceneMaterialId, SceneMaterial>,
+) {
+  if (node.slots && (node.slots.interior !== undefined || node.slots.exterior !== undefined)) {
+    return node
   }
 
-  if (!hasExterior) {
-    return {
-      ...node,
-      exteriorMaterial: node.interiorMaterial,
-      exteriorMaterialPreset: node.interiorMaterialPreset,
-    }
+  const slots: Record<string, string> = { ...(node.slots ?? {}) }
+  for (const side of ['interior', 'exterior'] as WallSurfaceSide[]) {
+    const spec = getEffectiveWallSurfaceMaterial(
+      node as Parameters<typeof getEffectiveWallSurfaceMaterial>[0],
+      side,
+    )
+    const ref = legacySpecToMaterialRef(spec, mintedMaterials)
+    if (ref) slots[side] = ref
   }
 
-  return node
+  if (Object.keys(slots).length === 0) {
+    return node
+  }
+
+  return {
+    ...node,
+    slots,
+    material: undefined,
+    materialPreset: undefined,
+    interiorMaterial: undefined,
+    interiorMaterialPreset: undefined,
+    exteriorMaterial: undefined,
+    exteriorMaterialPreset: undefined,
+  }
+}
+
+// Move a kind's single legacy `material` / `materialPreset` onto its declared
+// slots. A pre-slot-model node painted one material rendered that material on
+// every part (each slot resolves `node.slots[slot]` → legacy → default), so the
+// migration writes the same ref to every slot id the kind can expose — unused
+// conditional slots are harmless. Already slot-modelled or unpainted nodes are
+// left untouched. Mirrors `migrateWallSurfaceMaterials` for single-surface and
+// whole-object kinds (slab, ceiling, fence, column, shelf).
+function migrateSingleMaterialSlots(
+  node: Record<string, any>,
+  slotIds: readonly string[],
+  mintedMaterials: Record<SceneMaterialId, SceneMaterial>,
+) {
+  if (node.slots && Object.keys(node.slots).length > 0) {
+    return node
+  }
+
+  const ref = legacySpecToMaterialRef(
+    { material: node.material, materialPreset: node.materialPreset },
+    mintedMaterials,
+  )
+  if (!ref) {
+    return node
+  }
+
+  const slots: Record<string, string> = {}
+  for (const slotId of slotIds) slots[slotId] = ref
+
+  return { ...node, slots, material: undefined, materialPreset: undefined }
+}
+
+// Stair carries per-role legacy fields (`treadMaterial*` / `sideMaterial*` /
+// `railingMaterial*`) plus a catch-all. Map each to its slot via the same
+// fallback chain the renderer uses (`getEffectiveStairSurfaceMaterial`):
+// tread→treads, side→body, railing→railing. Runs after
+// `migrateStairSurfaceMaterials` has normalised the legacy fields.
+function migrateStairSurfaceSlots(
+  node: Record<string, any>,
+  mintedMaterials: Record<SceneMaterialId, SceneMaterial>,
+) {
+  if (node.slots && Object.keys(node.slots).length > 0) {
+    return node
+  }
+
+  const roleToSlot = [
+    ['tread', 'treads'],
+    ['side', 'body'],
+    ['railing', 'railing'],
+  ] as const
+
+  const slots: Record<string, string> = {}
+  for (const [role, slotId] of roleToSlot) {
+    const spec = getEffectiveStairSurfaceMaterial(
+      node as Parameters<typeof getEffectiveStairSurfaceMaterial>[0],
+      role,
+    )
+    const ref = legacySpecToMaterialRef(spec, mintedMaterials)
+    if (ref) slots[slotId] = ref
+  }
+
+  if (Object.keys(slots).length === 0) {
+    return node
+  }
+
+  return {
+    ...node,
+    slots,
+    material: undefined,
+    materialPreset: undefined,
+    treadMaterial: undefined,
+    treadMaterialPreset: undefined,
+    sideMaterial: undefined,
+    sideMaterialPreset: undefined,
+    railingMaterial: undefined,
+    railingMaterialPreset: undefined,
+  }
 }
 
 function migrateStairSurfaceMaterials(node: Record<string, any>) {
@@ -414,8 +538,14 @@ function migrateRoofSurfaceMaterials(node: Record<string, any>) {
   return next
 }
 
-function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
+function migrateNodes(nodes: Record<string, any>): {
+  nodes: Record<string, AnyNode>
+  mintedMaterials: Record<SceneMaterialId, SceneMaterial>
+} {
   const patchedNodes = { ...nodes }
+  // Scene materials minted while moving legacy wall fields onto `node.slots`;
+  // merged into the scene material map by the caller (`setScene`).
+  const mintedMaterials: Record<SceneMaterialId, SceneMaterial> = {}
   for (const [id, node] of Object.entries(patchedNodes)) {
     // 1. Item scale migration
     if (node.type === 'item' && !('scale' in node)) {
@@ -502,6 +632,7 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       if (normalized) {
         patchedNodes[id] = normalized
       }
+      patchedNodes[id] = migrateStairSurfaceSlots(patchedNodes[id], mintedMaterials)
     }
 
     if (node.type === 'stair-segment') {
@@ -512,7 +643,27 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
     }
 
     if (node.type === 'wall') {
-      patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id])
+      patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id], mintedMaterials)
+    }
+
+    if (node.type === 'slab' || node.type === 'ceiling') {
+      patchedNodes[id] = migrateSingleMaterialSlots(patchedNodes[id], ['surface'], mintedMaterials)
+    }
+
+    if (node.type === 'fence') {
+      patchedNodes[id] = migrateSingleMaterialSlots(
+        patchedNodes[id],
+        ['posts', 'infill', 'base', 'rail'],
+        mintedMaterials,
+      )
+    }
+
+    if (node.type === 'column') {
+      patchedNodes[id] = migrateSingleMaterialSlots(
+        patchedNodes[id],
+        ['shaft', 'base', 'capital', 'frame'],
+        mintedMaterials,
+      )
     }
 
     if (node.type === 'shelf') {
@@ -520,6 +671,11 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       if (normalized) {
         patchedNodes[id] = normalized
       }
+      patchedNodes[id] = migrateSingleMaterialSlots(
+        patchedNodes[id],
+        ['shelves', 'frame', 'back'],
+        mintedMaterials,
+      )
     }
 
     if (node.type === 'elevator') {
@@ -619,7 +775,7 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       }
     }
   }
-  return patchedNodes as Record<string, AnyNode>
+  return { nodes: patchedNodes as Record<string, AnyNode>, mintedMaterials }
 }
 
 function getNodeChildIds(node: AnyNode): AnyNodeId[] {
@@ -789,7 +945,11 @@ const useScene: UseSceneStore = create<SceneState>()(
 
       setScene: (nodes, rootNodeIds, extra) => {
         // Apply backward compatibility migrations
-        const patchedNodes = migrateNodes(nodes)
+        const { nodes: patchedNodes, mintedMaterials } = migrateNodes(nodes)
+        // Scene materials minted by the wall legacy→slots migration join the
+        // loaded palette (existing refs win on id collision — there are none,
+        // ids are freshly generated).
+        const materials = { ...mintedMaterials, ...(extra?.materials ?? {}) }
 
         // Remove orphans: nodes whose parentId points to a non-existent node
         const cleanedNodes = { ...patchedNodes }
@@ -811,7 +971,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           rootNodeIds,
           dirtyNodes: new Set<AnyNodeId>(),
           collections: extra?.collections ?? {},
-          materials: extra?.materials ?? {},
+          materials,
         })
 
         const normalizedRootNodeIds = normalizeRootNodeIds(cleanedNodes, rootNodeIds)
@@ -829,7 +989,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           rootNodeIds: normalizedRootNodeIds,
           dirtyNodes: new Set<AnyNodeId>(),
           collections: extra?.collections ?? {},
-          materials: extra?.materials ?? {},
+          materials,
         })
         // Mark all nodes as dirty to trigger re-validation
         Object.values(cleanedNodes).forEach((node) => {
