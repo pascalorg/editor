@@ -8,7 +8,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Eraser, RotateCcw } from 'lucide-react'
+import { Eraser, Plus, RotateCcw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
   buildResetSurfaceMaterialUpdates,
@@ -16,15 +16,16 @@ import {
 } from './../../../lib/material-paint'
 import useEditor from './../../../store/use-editor'
 import { Button } from '../primitives/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 import { MaterialPicker } from './material-picker'
-import { PanelSection } from './panel-section'
 import { SceneMaterialList } from './scene-material-list'
 
 /**
  * Material picker for paint mode. Embedders render this wherever paint controls
  * belong (the community editor places it in the Build sidebar while paint mode
- * is active). It owns the paint-target/material wiring so the host only needs
- * to mount it; it fills its container's width.
+ * is active). It fills its container's height and lays out as three bands: a
+ * fixed control/category header, a single scrolling catalog grid, and a fixed
+ * scene-material footer (always visible, with a `+` to add a custom material).
  */
 export function MaterialPaintPanel() {
   const activePaintMaterial = useEditor((state) => state.activePaintMaterial)
@@ -55,11 +56,33 @@ export function MaterialPaintPanel() {
     useScene.getState().updateNodes(buildResetSurfaceMaterialUpdates(nodes, selectedNode))
   }
 
+  // Create a blank custom scene material, select it as the brush (`scene:` ref so
+  // edits propagate), and open its inline editor. Available from any category.
+  const createCustomMaterial = () => {
+    const id = generateSceneMaterialId()
+    const count = Object.keys(useScene.getState().materials).length
+    useScene.getState().addSceneMaterial({
+      id,
+      name: `Material ${count + 1}`,
+      material: {
+        preset: 'custom',
+        properties: {
+          color: '#ffffff',
+          roughness: 0.5,
+          metalness: 0,
+          opacity: 1,
+          transparent: false,
+          side: 'front',
+        },
+      },
+    })
+    setActivePaintMaterial({ materialPreset: toSceneMaterialRef(id), sourceTarget: activePaintTarget })
+    setAutoEditMaterialId(id)
+  }
+
   return (
-    // Fill the host's scroll slot and own the scroll internally: the eraser /
-    // reset row stays pinned (shrink-0) while only the material list below
-    // scrolls. The category tabs pin too (sticky, inside the scroll region).
     <div className="flex h-full min-h-0 w-full flex-col">
+      {/* Fixed: eraser / reset. */}
       <div className="flex shrink-0 items-center gap-2 pb-2">
         <Button
           aria-pressed={paintEraser}
@@ -82,33 +105,47 @@ export function MaterialPaintPanel() {
           Reset all
         </Button>
       </div>
-      <div className="subtle-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto">
+
+      {/* Scrolls: category tabs (fixed inside) + catalog grid (the scroll). */}
+      <div className="min-h-0 flex-1">
         <MaterialPicker
-          onChange={(material) => {
-            // Custom-create: pre-create a scene material and select it as the
-            // brush via a `scene:` ref so painting stores the ref and edits to
-            // it propagate everywhere. The user edits it inline in the scene-
-            // material list below (auto-opened) — no separate right-side pane.
-            const id = generateSceneMaterialId()
-            const count = Object.keys(useScene.getState().materials).length
-            useScene.getState().addSceneMaterial({ id, name: `Material ${count + 1}`, material })
-            setActivePaintMaterial({
-              materialPreset: toSceneMaterialRef(id),
-              sourceTarget: activePaintTarget,
-            })
-            setAutoEditMaterialId(id)
-          }}
           onSelectMaterialPreset={(materialPreset) => {
             setActivePaintMaterial({ materialPreset, sourceTarget: activePaintTarget })
           }}
           selectedMaterialPreset={activePaintMaterial?.materialPreset}
-          value={activePaintMaterial?.material}
         />
-        {materialCount > 0 ? (
-          <PanelSection title="Scene materials">
+      </div>
+
+      {/* Fixed footer: scene materials, always visible, with a `+` to add one. */}
+      <div className="mt-2 shrink-0 space-y-1.5 border-border/60 border-t pt-2">
+        <div className="flex items-center justify-between">
+          <span className="font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
+            Scene materials
+          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                aria-label="Add material"
+                onClick={createCustomMaterial}
+                size="icon-sm"
+                type="button"
+                variant="outline"
+              >
+                <Plus />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Add material</TooltipContent>
+          </Tooltip>
+        </div>
+        <div className="subtle-scrollbar max-h-56 overflow-y-auto">
+          {materialCount > 0 ? (
             <SceneMaterialList autoEditId={autoEditMaterialId} />
-          </PanelSection>
-        ) : null}
+          ) : (
+            <p className="px-0.5 py-1 text-muted-foreground text-xs">
+              No custom materials yet — add one with +.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )
