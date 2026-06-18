@@ -12,18 +12,18 @@ import {
 } from '@pascal-app/viewer'
 import { FrontSide, Group, type Material, Mesh, type Texture } from 'three'
 import type { FenceNode } from './schema'
-import { FENCE_PANEL_SLOT_DEFAULT, FENCE_RAIL_SLOT_DEFAULT, type FenceSlotId } from './slots'
+import { FENCE_SLOT_DEFAULTS, type FenceSlotId } from './slots'
 
 /**
- * Stage B builder for fence. Splits the geometry into two paintable slots —
- * `panel` (posts / base / infill) and `rail` (the cap rail) — each its own Mesh
- * with a `userData.slotId` so the unified slot paint resolves and previews per
- * part.
+ * Stage B builder for fence. Splits the geometry into four paintable slots —
+ * `posts`, `infill`, `base`, `rail` (matching the build options in the panel) —
+ * each its own Mesh with a `userData.slotId` so the unified slot paint resolves
+ * and previews per part. Empty groups (no infill / floating base) are skipped.
  *
  * Per slot the material resolves: `node.slots[slotId]` (a shared scene material
  * or `library:` finish) → the legacy inline `node.material` / `materialPreset`
- * (pre-slot-model scenes, applied to both parts) → the declared slot default.
- * Textures-off collapses both parts to the themed joinery role.
+ * (pre-slot-model scenes, applied to every part) → the declared slot default.
+ * Textures-off collapses every part to the themed joinery role.
  *
  * Phase 6 cleanup moves the geometry math out of the legacy
  * `viewer/src/systems/fence/fence-system.tsx` into this folder once the legacy
@@ -37,10 +37,7 @@ type FenceMaterial = Material & {
   transparent: boolean
 }
 
-const SLOT_DEFAULTS: Record<FenceSlotId, string> = {
-  panel: FENCE_PANEL_SLOT_DEFAULT,
-  rail: FENCE_RAIL_SLOT_DEFAULT,
-}
+const FENCE_SLOT_ORDER: FenceSlotId[] = ['posts', 'infill', 'base', 'rail']
 
 const fenceMaterialCache = new Map<string, Material>()
 
@@ -67,7 +64,7 @@ function getFenceSlotMaterial(
     return getLegacyFenceMaterial(node, shading)
   }
 
-  return resolveSlotDefaultMaterial(SLOT_DEFAULTS[slotId], shading, 0.8)
+  return resolveSlotDefaultMaterial(FENCE_SLOT_DEFAULTS[slotId], shading, 0.8)
 }
 
 function getLegacyFenceMaterial(node: FenceNode, shading: RenderShading): Material {
@@ -113,7 +110,7 @@ export function buildFenceGeometry(
   const group = new Group()
   const geometries = generateFenceSlotGeometries(node)
 
-  for (const slotId of ['panel', 'rail'] as const) {
+  for (const slotId of FENCE_SLOT_ORDER) {
     const geometry = geometries[slotId]
     if (geometry.getAttribute('position') === undefined) continue
     const material = getFenceSlotMaterial(

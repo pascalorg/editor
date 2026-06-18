@@ -150,15 +150,17 @@ function getStyleDefaults(style: FenceNode['style']) {
   return { spacingFactor: 0.3, postFactor: 0.55, baseFactor: 1, topFactor: 0.75 }
 }
 
-export type FenceSlotParts = {
-  /** Posts, base/kickboard, and vertical infill — the fence body. */
-  panel: FencePart[]
-  /** Top rail (and the floating style's matching bottom rail). */
-  rail: FencePart[]
-}
+// Paint slots map 1:1 to the fence panel's build options (Structure + the
+// showInfill toggle): the end posts, the infill slats between them, the base
+// kickboard, and the top rail.
+export type FenceSlotId = 'posts' | 'infill' | 'base' | 'rail'
+
+export type FenceSlotParts = Record<FenceSlotId, FencePart[]>
 
 function createFenceParts(fence: FenceNode): FenceSlotParts {
-  const panel: FencePart[] = []
+  const posts: FencePart[] = []
+  const infill: FencePart[] = []
+  const base: FencePart[] = []
   const rail: FencePart[] = []
   const length = Math.max(getWallCurveLength(fence), 0.01)
   const panelDepth = Math.max(fence.thickness, 0.03)
@@ -178,7 +180,7 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
   const endInsetT = Math.max(0.501, 1 - edgeInset / length)
 
   if (!isFloating) {
-    panel.push(
+    base.push(
       ...createFenceCurveSpanParts(
         fence,
         0,
@@ -188,7 +190,7 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
         panelDepth * 1.05,
       ),
     )
-    panel.push(
+    base.push(
       ...createFenceCurveSpanParts(
         fence,
         0,
@@ -213,7 +215,9 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
       : verticalHeight
     const postY = fullHeightPost ? postHeight / 2 : verticalY
 
-    panel.push({
+    // End posts are the structural `posts` slot; the intermediate verticals are
+    // the `infill` slats (only present when showInfill adds them).
+    ;(isEdgePost ? posts : infill).push({
       position: [frame.point.x, postY, frame.point.y],
       rotationY: -frame.tangentAngle,
       scale: [postWidth, postHeight, Math.max(panelDepth * 0.35, 0.012)],
@@ -244,7 +248,7 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
     )
   }
 
-  return { panel, rail }
+  return { posts, infill, base, rail }
 }
 
 function mergeFenceParts(parts: FencePart[]): THREE.BufferGeometry {
@@ -262,21 +266,26 @@ function mergeFenceParts(parts: FencePart[]): THREE.BufferGeometry {
 }
 
 /**
- * Geometry split by paint slot: the body (posts / base / infill) and the rail
- * cap, each a separate merged BufferGeometry so the fence renderer can give
- * each its own material + `userData.slotId`.
+ * Geometry split by paint slot — posts, infill, base, rail — each a separate
+ * merged BufferGeometry (empty ones included) so the fence renderer can give
+ * each its own material + `userData.slotId`. Slots match the panel's build
+ * options 1:1.
  */
-export function generateFenceSlotGeometries(fence: FenceNode): {
-  panel: THREE.BufferGeometry
-  rail: THREE.BufferGeometry
-} {
-  const { panel, rail } = createFenceParts(fence)
-  return { panel: mergeFenceParts(panel), rail: mergeFenceParts(rail) }
+export function generateFenceSlotGeometries(
+  fence: FenceNode,
+): Record<FenceSlotId, THREE.BufferGeometry> {
+  const parts = createFenceParts(fence)
+  return {
+    posts: mergeFenceParts(parts.posts),
+    infill: mergeFenceParts(parts.infill),
+    base: mergeFenceParts(parts.base),
+    rail: mergeFenceParts(parts.rail),
+  }
 }
 
 export function generateFenceGeometry(fence: FenceNode) {
-  const { panel, rail } = createFenceParts(fence)
-  return mergeFenceParts([...panel, ...rail])
+  const { posts, infill, base, rail } = createFenceParts(fence)
+  return mergeFenceParts([...posts, ...infill, ...base, ...rail])
 }
 
 function updateFenceGeometry(fenceId: FenceNode['id']) {

@@ -15,10 +15,10 @@ import {
 
 // Declared catalog defaults for an unpainted roof, per the 4-slot layout
 // (0 wall/trim · 1 deck · 2 interior soffit · 3 shingle top). The wall/trim
-// band mirrors the wall kind's default (WALL_SLOT_DEFAULT = concrete-plate) so
-// a roof reads as continuous with the walls below it.
+// band mirrors the wall kind's default (WALL_SLOT_DEFAULT = concrete-drywall)
+// so a roof reads as continuous with the walls below it.
 const ROOF_DEFAULT_REFS: [string, string, string, string] = [
-  'library:concrete-plate',
+  'library:concrete-drywall',
   'library:preset-softwhite',
   'library:preset-softwhite',
   'library:roof-terracottatiles',

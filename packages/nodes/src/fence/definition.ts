@@ -165,7 +165,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
     surfaces: { sides: { faces: 'all' } },
     duplicable: true,
     deletable: true,
-    slots: () => fenceSlots(),
+    slots: (node) => fenceSlots(node as FenceNodeType),
     paint: fencePaint,
     // Placed by drawing the span with the two-click tool; a saved preset
     // seeds its build parameters via `toolDefaults.fence` (see `tool.tsx`
