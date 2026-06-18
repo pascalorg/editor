@@ -252,6 +252,10 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
 }
 
 function mergeFenceParts(parts: FencePart[]): THREE.BufferGeometry {
+  // An empty slot group (e.g. infill with showInfill off, or base on a floating
+  // fence) must not reach mergeGeometries — it throws on an empty array. The
+  // empty geometry has no position attribute, so the renderer skips its mesh.
+  if (parts.length === 0) return new THREE.BufferGeometry()
   const geometries = parts.map(createFencePartGeometry)
   const merged = mergeGeometries(geometries, false) ?? new THREE.BufferGeometry()
   geometries.forEach((geometry) => {
