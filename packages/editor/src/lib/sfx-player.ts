@@ -100,6 +100,15 @@ export const SFX: Record<string, SFXConfig> = {
     volumeRange: [0.5, 0.6],
     panJitter: 0.1,
   },
+  // Fired when a material is applied to a surface in paint mode. Painting can
+  // fire in quick succession across faces, so keep variation + a small gap.
+  paintApply: {
+    src: '/audios/sfx/paint_apply.mp3',
+    rateRange: [0.95, 1.05],
+    volumeRange: [0.85, 1.0],
+    panJitter: 0.12,
+    minIntervalMs: 60,
+  },
 } as const
 
 export type SFXName = keyof typeof SFX

@@ -1157,6 +1157,7 @@ export const SelectionManager = () => {
       }
 
       interaction.apply()
+      sfxEmitter.emit('sfx:paint-apply')
       if (activePreview?.key === interaction.key) {
         activePreview = null
       } else {
