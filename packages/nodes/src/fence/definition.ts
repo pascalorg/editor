@@ -154,6 +154,8 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
     topRailHeight: 0.04,
     groundClearance: 0,
     edgeInset: 0.015,
+    slatGap: 0.01,
+    postCap: 'pyramid',
     baseStyle: 'grounded',
     showInfill: true,
     color: '#ffffff',

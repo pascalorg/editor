@@ -3,8 +3,9 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
-export const FenceStyle = z.enum(['slat', 'rail', 'privacy'])
+export const FenceStyle = z.enum(['slat', 'rail', 'privacy', 'horizontal'])
 export const FenceBaseStyle = z.enum(['floating', 'grounded'])
+export const FencePostCap = z.enum(['none', 'flat', 'pyramid'])
 
 export const FenceNode = BaseNode.extend({
   id: objectId('fence'),
@@ -25,6 +26,10 @@ export const FenceNode = BaseNode.extend({
   topRailHeight: z.number().default(0.04),
   groundClearance: z.number().default(0),
   edgeInset: z.number().default(0.015),
+  // Reveal between the boards of a `horizontal` fence (0 = flush cladding).
+  slatGap: z.number().default(0.01),
+  // Topper drawn on each `horizontal`-fence post.
+  postCap: FencePostCap.default('pyramid'),
   baseStyle: FenceBaseStyle.default('grounded'),
   showInfill: z.boolean().default(true),
   color: z.string().default('#ffffff'),

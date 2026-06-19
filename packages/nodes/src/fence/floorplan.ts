@@ -20,7 +20,7 @@ import type { FenceNode } from './schema'
  *        b. White underlay — the visual "fence body" base layer.
  *        c. Dark accent — the actual fence outline.
  *   2. Style-aware markers at computed positions along the centerline:
- *        - `privacy`: rotated rectangle (vertical slat).
+ *        - `privacy` / `horizontal`: rotated rectangle (solid panel).
  *        - `rail`: concentric circle stack (post + ring + tiny center).
  *        - default `slat`: white X mark with a coloured X on top.
  *   3. Markers thinned when `showInfill === false` — only first + last
@@ -89,7 +89,7 @@ function buildMarker(
 ): FloorplanGeometry {
   const markerStrokeWidth = isActive ? 1.65 : 1.35
 
-  if (fence.style === 'privacy') {
+  if (fence.style === 'privacy' || fence.style === 'horizontal') {
     const w = clamp(fence.postSize * 0.58, 0.038, 0.068)
     const h = clamp(Math.max(fence.baseHeight * 0.5, fence.postSize * 1.4), 0.1, 0.17)
     // Surface plate underneath + accent rectangle on top — gives a clean
