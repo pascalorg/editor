@@ -16,6 +16,7 @@ type SFXEvents = {
   'sfx:snapshot-capture': undefined
   'sfx:menu-hover': undefined
   'sfx:menu-click': undefined
+  'sfx:paint-apply': undefined
 }
 
 /**
@@ -45,6 +46,7 @@ export function initSFXBus() {
   sfxEmitter.on('sfx:snapshot-capture', () => playSFX('snapshotCapture'))
   sfxEmitter.on('sfx:menu-hover', () => playSFX('menuHover'))
   sfxEmitter.on('sfx:menu-click', () => playSFX('menuClick'))
+  sfxEmitter.on('sfx:paint-apply', () => playSFX('paintApply'))
 }
 
 /**
