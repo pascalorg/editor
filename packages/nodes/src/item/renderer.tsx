@@ -44,6 +44,10 @@ type MutableMaterial = Material & {
   wireframe?: boolean
 }
 
+const isPlaceholderAsset = (src: string | undefined): boolean => {
+  return src === 'asset:placeholder' || src?.startsWith('asset://placeholder/') === true
+}
+
 const getMaterialForOriginal = (
   original: Material,
   shading: RenderShading,
@@ -100,6 +104,8 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
     <group position={node.position} ref={ref} rotation={node.rotation} visible={node.visible}>
       {roomClearPreview ? (
         <ClearPreviewModel node={node} />
+      ) : isPlaceholderAsset(node.asset.src) ? (
+        <PreviewModel node={node} />
       ) : (
         <>
           <ErrorBoundary fallback={<BrokenItemFallback node={node} />}>

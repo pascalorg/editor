@@ -31,19 +31,29 @@ type SceneNode = Record<string, unknown> & {
   children?: unknown
 }
 
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
+type JsonObject = { [key: string]: JsonValue }
+
 type SceneGraphNode = {
   id: string
   type: string
   name: string | null
   parentId: string | null
+  data?: JsonObject
   children: SceneGraphNode[]
   missing?: true
   cycle?: true
 }
 
 type SceneGraphValue = {
+  captures?: JsonObject[]
+  collections?: JsonObject
   roots: SceneGraphNode[]
   detachedNodes?: SceneGraphNode[]
+}
+
+const isJsonObject = (value: unknown): value is JsonObject => {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
 const isSceneNode = (value: unknown): value is SceneNode => {
@@ -76,11 +86,129 @@ const getChildIdsFromNode = (node: SceneNode): string[] => {
   return Array.from(childIds)
 }
 
+const toJsonValue = (value: unknown): JsonValue | undefined => {
+  if (value === undefined) return undefined
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (Array.isArray(value)) {
+    return value.map((entry) => toJsonValue(entry)).filter((entry) => entry !== undefined)
+  }
+  if (typeof value === 'object') {
+    const object: JsonObject = {}
+    for (const [key, entry] of Object.entries(value)) {
+      const json = toJsonValue(entry)
+      if (json !== undefined) object[key] = json
+    }
+    return object
+  }
+  return undefined
+}
+
+const getNodeData = (node: SceneNode): JsonObject | undefined => {
+  const data: JsonObject = {}
+  for (const [key, value] of Object.entries(node)) {
+    if (
+      key === 'children' ||
+      key === 'id' ||
+      key === 'name' ||
+      key === 'object' ||
+      key === 'parentId' ||
+      key === 'type'
+    ) {
+      continue
+    }
+    const json = toJsonValue(value)
+    if (json !== undefined) data[key] = json
+  }
+
+  return Object.keys(data).length > 0 ? data : undefined
+}
+
+const getPascalCaptureMetadataValue = (
+  node: SceneNode,
+  key: 'pascalCapture' | 'pascalCaptureRef',
+): JsonValue | null => {
+  const metadata = node.metadata
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return null
+  }
+
+  const pascalCapture = (metadata as Record<string, unknown>)[key]
+  const json = toJsonValue(pascalCapture)
+  return json === undefined ? null : json
+}
+
+const getCaptureString = (capture: JsonObject | null, key: string): string | null => {
+  const value = capture?.[key]
+  return typeof value === 'string' ? value : null
+}
+
+const getCaptureNumber = (capture: JsonObject | null, key: string): number | null => {
+  const value = capture?.[key]
+  return typeof value === 'number' ? value : null
+}
+
+const buildCaptureReferences = (nodes: Record<string, SceneNode>): JsonObject[] => {
+  const capturesByKey = new Map<string, JsonObject & { nodes: JsonObject[] }>()
+
+  for (const [id, node] of Object.entries(nodes)) {
+    const pascalCapture = getPascalCaptureMetadataValue(node, 'pascalCapture')
+    const pascalCaptureRef = getPascalCaptureMetadataValue(node, 'pascalCaptureRef')
+    if (!(pascalCapture || pascalCaptureRef)) continue
+
+    const pascalCaptureObject = isJsonObject(pascalCapture) ? pascalCapture : null
+    const pascalCaptureRefObject = isJsonObject(pascalCaptureRef) ? pascalCaptureRef : null
+    const source = pascalCaptureObject ?? pascalCaptureRefObject
+    const captureId = getCaptureString(source, 'captureId')
+    const captureKey = captureId ?? id
+    const bundle = pascalCaptureObject && isJsonObject(pascalCaptureObject.bundle)
+      ? pascalCaptureObject.bundle
+      : null
+    const artifacts = bundle && isJsonObject(bundle.artifacts) ? bundle.artifacts : null
+
+    const existing = capturesByKey.get(captureKey) ?? {
+      captureId,
+      projectId: getCaptureString(source, 'projectId'),
+      levelId: getCaptureString(source, 'levelId'),
+      sessionId: getCaptureString(source, 'sessionId'),
+      storagePrefix: getCaptureString(source, 'storagePrefix'),
+      artifactCounts: isJsonObject(source?.artifactCounts) ? source.artifactCounts : null,
+      artifactTotalFiles: getCaptureNumber(source, 'artifactTotalFiles'),
+      artifactTotalBytes: getCaptureNumber(source, 'artifactTotalBytes'),
+      artifacts: artifacts ?? null,
+      pascalCapture: pascalCapture ?? null,
+      nodes: [],
+    }
+
+    if (!existing.pascalCapture && pascalCapture) {
+      existing.pascalCapture = pascalCapture
+    }
+    if (!existing.artifacts && artifacts) {
+      existing.artifacts = artifacts
+    }
+    existing.nodes.push({
+      nodeId: id,
+      nodeType: typeof node.type === 'string' ? node.type : 'unknown',
+      nodeName: typeof node.name === 'string' ? node.name : null,
+      hasFullCaptureMetadata: Boolean(pascalCapture),
+    })
+    capturesByKey.set(captureKey, existing)
+  }
+
+  return Array.from(capturesByKey.values()).map((capture) => ({
+    ...capture,
+    nodes: capture.nodes.sort((a, b) => String(a.nodeId).localeCompare(String(b.nodeId))),
+  }))
+}
+
 const buildSceneGraphValue = (
   nodes: Record<string, SceneNode>,
   rootNodeIds: string[],
+  collections?: unknown,
 ): SceneGraphValue => {
   const childIdsByParent = new Map<string, Set<string>>()
+  const captures = buildCaptureReferences(nodes)
+  const collectionsJson = toJsonValue(collections)
 
   for (const [id, node] of Object.entries(nodes)) {
     const childIds = getChildIdsFromNode(node)
@@ -117,6 +245,7 @@ const buildSceneGraphValue = (
     const nodeType = typeof node.type === 'string' ? node.type : 'unknown'
     const nodeName = typeof node.name === 'string' ? node.name : null
     const parentId = typeof node.parentId === 'string' ? node.parentId : null
+    const data = getNodeData(node)
 
     if (path.has(id)) {
       return {
@@ -124,6 +253,7 @@ const buildSceneGraphValue = (
         type: nodeType,
         name: nodeName,
         parentId,
+        ...(data ? { data } : {}),
         cycle: true,
         children: [],
       }
@@ -139,6 +269,7 @@ const buildSceneGraphValue = (
       type: nodeType,
       name: nodeName,
       parentId,
+      ...(data ? { data } : {}),
       children: childIds.map((childId) => buildNode(childId, nextPath)),
     }
   }
@@ -146,12 +277,20 @@ const buildSceneGraphValue = (
   const roots = rootNodeIds.map((id) => buildNode(id, new Set()))
   const detachedNodeIds = Object.keys(nodes).filter((id) => !visited.has(id))
 
+  const value: SceneGraphValue = {
+    ...(captures.length > 0 ? { captures } : {}),
+    ...(collectionsJson && isJsonObject(collectionsJson) && Object.keys(collectionsJson).length > 0
+      ? { collections: collectionsJson }
+      : {}),
+    roots,
+  }
+
   if (detachedNodeIds.length === 0) {
-    return { roots }
+    return value
   }
 
   return {
-    roots,
+    ...value,
     detachedNodes: detachedNodeIds.map((id) => buildNode(id, new Set())),
   }
 }
@@ -165,6 +304,7 @@ export interface ProjectVisibility {
 export interface SettingsPanelProps {
   projectId?: string
   projectVisibility?: ProjectVisibility
+  captureDataDownloadHref?: string | null
   onVisibilityChange?: (
     field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
     value: boolean,
@@ -174,11 +314,13 @@ export interface SettingsPanelProps {
 export function SettingsPanel({
   projectId,
   projectVisibility,
+  captureDataDownloadHref,
   onVisibilityChange,
 }: SettingsPanelProps = {}) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const nodes = useScene((state) => state.nodes)
   const rootNodeIds = useScene((state) => state.rootNodeIds)
+  const collections = useScene((state) => state.collections)
   const setScene = useScene((state) => state.setScene)
   const clearScene = useScene((state) => state.clearScene)
   const resetSelection = useViewer((state) => state.resetSelection)
@@ -189,9 +331,15 @@ export function SettingsPanel({
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
   const sceneGraphValue = useMemo(
-    () => buildSceneGraphValue(nodes as Record<string, SceneNode>, rootNodeIds),
-    [nodes, rootNodeIds],
+    () => buildSceneGraphValue(nodes as Record<string, SceneNode>, rootNodeIds, collections),
+    [collections, nodes, rootNodeIds],
   )
+  const captureCount = sceneGraphValue.captures?.length ?? 0
+  const captureNodeReferenceCount =
+    sceneGraphValue.captures?.reduce((total, capture) => {
+      const captureNodes = capture.nodes
+      return total + (Array.isArray(captureNodes) ? captureNodes.length : 0)
+    }, 0) ?? 0
   const blockSceneGraphMutations = useCallback((event: SyntheticEvent) => {
     event.preventDefault()
     event.stopPropagation()
@@ -206,7 +354,13 @@ export function SettingsPanel({
   const isLocalProject = false // Props-based; only show cloud sections when projectId provided
 
   const handleSaveBuild = () => {
-    const sceneData = { nodes, rootNodeIds }
+    const captures = buildCaptureReferences(nodes as Record<string, SceneNode>)
+    const sceneData = {
+      nodes,
+      rootNodeIds,
+      collections,
+      ...(captures.length > 0 ? { captures } : {}),
+    }
     const json = JSON.stringify(sceneData, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -381,6 +535,14 @@ export function SettingsPanel({
           <Download className="size-4" />
           Export OBJ
         </Button>
+        {captureDataDownloadHref ? (
+          <Button asChild className="w-full justify-start gap-2" variant="outline">
+            <a href={captureDataDownloadHref}>
+              <Download className="size-4" />
+              Download capture data
+            </a>
+          </Button>
+        ) : null}
       </div>
 
       {/* Thumbnail Section (only for cloud projects) */}
@@ -447,6 +609,13 @@ export function SettingsPanel({
       {/* Scene Graph */}
       <div className="space-y-1">
         <label className="font-medium text-muted-foreground text-xs uppercase">Scene Graph</label>
+        {captureCount > 0 ? (
+          <div className="text-muted-foreground text-xs">
+            Exports {captureCount} capture{captureCount === 1 ? '' : 's'} across{' '}
+            {captureNodeReferenceCount} node{captureNodeReferenceCount === 1 ? '' : 's'} under
+            `captures`.
+          </div>
+        ) : null}
         <Dialog>
           <DialogTrigger asChild>
             <Button className="h-auto justify-start p-0 text-sm" variant="link">
