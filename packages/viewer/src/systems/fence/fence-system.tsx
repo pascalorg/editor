@@ -14,12 +14,18 @@ type FencePart = {
   position: [number, number, number]
   rotationY?: number
   scale: [number, number, number]
+  // A `pyramid` part is a 4-sided cone (square base aligned to the part axes),
+  // used for peaked post caps. Defaults to a box.
+  shape?: 'box' | 'pyramid'
 }
 
 const MIN_CURVE_SEGMENT_LENGTH = 0.18
 
 function createFencePartGeometry(part: FencePart) {
-  const geometry = new THREE.BoxGeometry(1, 1, 1)
+  const geometry =
+    part.shape === 'pyramid'
+      ? new THREE.ConeGeometry(0.5, 1, 4, 1, false, Math.PI / 4)
+      : new THREE.BoxGeometry(1, 1, 1)
   geometry.scale(part.scale[0], part.scale[1], part.scale[2])
   if (part.rotationY) {
     geometry.rotateY(part.rotationY)
@@ -157,7 +163,126 @@ export type FenceSlotId = 'posts' | 'infill' | 'base' | 'rail'
 
 export type FenceSlotParts = Record<FenceSlotId, FencePart[]>
 
+/**
+ * Horizontal-board fence — composite cladding boards stacked between square
+ * intermediate posts (each capped), instead of the vertical pickets the other
+ * styles draw. Posts march along the whole span at `postSpacing` (not just the
+ * two ends), the boards run full-length so they curve with the fence, and a
+ * thin reveal between boards leaves the groove shadow that reads as cladding.
+ */
+function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
+  const posts: FencePart[] = []
+  const infill: FencePart[] = []
+  const base: FencePart[] = []
+  const rail: FencePart[] = []
+
+  const length = Math.max(getWallCurveLength(fence), 0.01)
+  const panelDepth = Math.max(fence.thickness, 0.03)
+  const clearance = Math.max(fence.groundClearance, 0)
+  const isFloating = fence.baseStyle === 'floating'
+  const showInfill = fence.showInfill ?? true
+
+  const baseHeight = Math.max(fence.baseHeight, 0.04)
+  const topRailHeight = Math.max(fence.topRailHeight, 0.01)
+  const verticalHeight = Math.max(fence.height - baseHeight - topRailHeight, 0.08)
+  const baseY = isFloating ? clearance : 0
+
+  // Square posts stand proud of the recessed boards on both faces.
+  const postWidth = Math.max(fence.postSize * 1.4, 0.04)
+  const postDepth = postWidth
+  const boardDepth = Math.min(panelDepth, postDepth - 0.012)
+
+  // Grounded fences get a kickboard along the bottom; floating ones don't.
+  if (!isFloating) {
+    base.push(
+      ...createFenceCurveSpanParts(
+        fence,
+        0,
+        1,
+        baseY + baseHeight / 2,
+        baseHeight,
+        postDepth * 0.92,
+      ),
+    )
+  }
+
+  // Stack full-length boards between the kickboard and the top rail. The board
+  // height is derived to evenly fill the panel around a ~0.145 m target, with a
+  // constant reveal between each so the count adapts to any fence height.
+  if (showInfill) {
+    const reveal = Math.max(fence.slatGap ?? 0.01, 0)
+    const infillBottom = baseY + baseHeight
+    if (reveal < 0.002) {
+      // No reveal → one flush panel, so the stacked-board edge seams don't
+      // read as faint lines where the user asked for a smooth surface.
+      infill.push(
+        ...createFenceCurveSpanParts(
+          fence,
+          0,
+          1,
+          infillBottom + verticalHeight / 2,
+          verticalHeight,
+          boardDepth,
+        ),
+      )
+    } else {
+      const boardCount = Math.max(1, Math.round(verticalHeight / (0.145 + reveal)))
+      const slabHeight = Math.max((verticalHeight - reveal * (boardCount - 1)) / boardCount, 0.02)
+      for (let index = 0; index < boardCount; index += 1) {
+        const centerY = infillBottom + slabHeight / 2 + index * (slabHeight + reveal)
+        infill.push(...createFenceCurveSpanParts(fence, 0, 1, centerY, slabHeight, boardDepth))
+      }
+    }
+  }
+
+  // Top rail caps the boards.
+  rail.push(
+    ...createFenceCurveSpanParts(
+      fence,
+      0,
+      1,
+      baseY + baseHeight + verticalHeight + topRailHeight / 2,
+      topRailHeight,
+      Math.max(postDepth * 0.78, 0.02),
+    ),
+  )
+
+  // Posts at every `postSpacing`, anchored at both ends, each with a flat cap.
+  const spacing = Math.max(fence.postSpacing, postWidth * 1.4)
+  const postCount = Math.max(2, Math.floor(length / spacing) + 1)
+  const postHeight = baseHeight + verticalHeight + topRailHeight + clearance
+  const capHeight = Math.max(postWidth * 0.32, 0.03)
+  const cap = fence.postCap ?? 'pyramid'
+  for (let index = 0; index < postCount; index += 1) {
+    const t = postCount === 1 ? 0.5 : index / (postCount - 1)
+    const frame = getFencePointAt(fence, t)
+    posts.push({
+      position: [frame.point.x, postHeight / 2, frame.point.y],
+      rotationY: -frame.tangentAngle,
+      scale: [postWidth, postHeight, postDepth],
+    })
+    if (cap === 'flat') {
+      posts.push({
+        position: [frame.point.x, postHeight + capHeight / 2, frame.point.y],
+        rotationY: -frame.tangentAngle,
+        scale: [postWidth * 1.22, capHeight, postDepth * 1.22],
+      })
+    } else if (cap === 'pyramid') {
+      posts.push({
+        position: [frame.point.x, postHeight + capHeight * 0.9, frame.point.y],
+        rotationY: -frame.tangentAngle,
+        scale: [postWidth * 1.18, capHeight * 1.8, postDepth * 1.18],
+        shape: 'pyramid',
+      })
+    }
+  }
+
+  return { posts, infill, base, rail }
+}
+
 function createFenceParts(fence: FenceNode): FenceSlotParts {
+  if (fence.style === 'horizontal') return createHorizontalFenceParts(fence)
+
   const posts: FencePart[] = []
   const infill: FencePart[] = []
   const base: FencePart[] = []
