@@ -192,6 +192,9 @@ export interface PlacementCoordinatorConfig {
   initialState?: PlacementState
   /** Scale to use when lazily creating a draft (e.g. for wall/ceiling duplicates). Defaults to [1,1,1]. */
   defaultScale?: [number, number, number]
+  /** Painted slot overrides to seed onto a lazily-created draft (wall/ceiling
+   *  duplicates) so the duplicate keeps its materials. */
+  slots?: ItemNode['slots']
   /** Move-mode sessions keep the grabbed item offset from the first surface hit
    *  (floor / wall / ceiling / item-surface / shelf) instead of snapping the
    *  item's origin under the cursor. */
@@ -512,7 +515,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         0,
       ]
 
-      draftNode.create(gridPosition.current, asset, initRotation, configRef.current.defaultScale)
+      draftNode.create(
+        gridPosition.current,
+        asset,
+        initRotation,
+        configRef.current.defaultScale,
+        configRef.current.slots,
+      )
 
       const draft = draftNode.current
       if (draft) {
@@ -857,7 +866,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       draftNode.commit(result.nodeUpdate)
       if (configRef.current.onCommitted()) {
-        draftNode.create(gridPosition.current, asset, currentRotation)
+        draftNode.create(
+          gridPosition.current,
+          asset,
+          currentRotation,
+          configRef.current.defaultScale,
+          configRef.current.slots,
+        )
         const previewBounds = expandBoundsToGrid(
           getFallbackPreviewBounds(draftNode.current, asset, asset.attachTo),
           asset.attachTo,
