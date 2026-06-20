@@ -13,7 +13,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { ARROW_SCALE, HandleArrow, useEditor } from '@pascal-app/editor'
+import { swallowNextClick, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useState } from 'react'
@@ -21,7 +21,6 @@ import {
   Euler,
   type Group,
   type Object3D,
-  OrthographicCamera,
   Plane,
   Quaternion,
   Raycaster,
@@ -31,15 +30,18 @@ import {
 import {
   AXIS_VECTORS,
   cycleRotationAxis,
-  getRotationAxis,
+  ROTATE_STEP_RAD,
   type RotationAxis,
 } from '../shared/fitting-rotation'
+import { HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { fittingLegLength } from './ports'
 
 type Point = [number, number, number]
 
 /** Stand-off (meters) from the fitting body to each arrow. */
-const ARROW_GAP = 0.3
+const ARROW_GAP = 0.14
+
+const UP = new Vector3(0, 1, 0)
 
 function snap(value: number, step: number): number {
   if (step <= 0) return value
@@ -47,7 +49,7 @@ function snap(value: number, step: number): number {
 }
 
 /** Rough body radius (meters) — the larger of the fitting's two collar reaches,
- *  used to stand the arrows clear of the geometry. */
+ *  used to stand the handles clear of the geometry. */
 function fittingExtentM(node: DuctFittingNode): number {
   const d2 = (node as { diameter2?: number }).diameter2 ?? node.diameter
   return Math.max(fittingLegLength(node.diameter), fittingLegLength(d2))
@@ -58,25 +60,21 @@ type FittingTransform = { position?: Point; rotation?: Point }
 
 /**
  * Selection-time affordances for a placed duct fitting — the 3D twin of the
- * wall side handles, mirroring the duct-segment selection rig:
+ * duct-segment selection rig. A single CLICK-to-latch cube sits at the fitting
+ * center; clicking it opens (click again to close) a cluster of:
  *
- *  - **Height** (upright chevron above the body): raise / lower the fitting on
- *    a camera-facing vertical plane (riser editing). Connected runs follow.
- *  - **Move** (ground cross): hands off to `MoveDuctFittingTool` — the same
- *    click-to-place ghost move the floating Move button engages, with its own
- *    alignment guides, Ctrl-vertical, and Alt-detach.
- *  - **Rotate** (curved arrow): spin the fitting about the active rotation axis
- *    (Alt cycles it; R / T step it). Connected runs re-aim via port follow.
+ *  - **Six move arrows** (±X / ±Y / ±Z): translate the whole fitting along one
+ *    world axis. Connected runs follow via port connectivity.
+ *  - **Three rotation arcs** (X / Y / Z): spin the fitting about each world
+ *    axis. Connected runs re-aim via port follow.
  *
  * The handle rig is PORTALED into the fitting group's PARENT — never the
  * fitting group itself — because the selection outliner (`MergedOutlineNode`)
  * traces every descendant mesh of the SELECTED node, so a hit-area cylinder
- * parented under the fitting would be swept into its selection outline (the
- * stray circle around the arrows). Walls / doors / windows dodge it the same
- * way. The fitting's local `position` is expressed in the parent's frame, so
- * an identity group under the parent lets us place arrows at absolute
- * level-local coords with world-aligned axes (height = world up, rotate on the
- * world horizontal plane).
+ * parented under the fitting would be swept into its selection outline. Walls /
+ * doors / windows dodge it the same way. The fitting's local `position` is
+ * expressed in the parent's frame, so an identity group under the parent lets
+ * us place handles at absolute level-local coords with world-aligned axes.
  *
  * History does the single-undo dance: paused during the drag (live ticks are
  * untracked), reverted on release, resumed, then the final transform re-applied
@@ -90,9 +88,9 @@ const DuctFittingSelectionAffordance = () => {
     return node?.type === 'duct-fitting' ? (node as DuctFittingNode) : null
   })
 
-  // Alt cycles the active rotation axis while a single fitting is selected —
-  // the piece `def.keyboardActions` (R / T rotate) can't contribute. The pill
-  // above the fitting reads `useEditor.rotationAxis` to show it.
+  // Alt cycles the active rotation axis for the R / T keyboard rotate while a
+  // single fitting is selected (the gizmo's three arcs cover every axis on
+  // their own; this only keeps the keyboard action meaningful).
   const hasSelectedFitting = !!fitting
   useEffect(() => {
     if (!hasSelectedFitting) return
@@ -134,9 +132,10 @@ const DuctFittingSelectionAffordance = () => {
 const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target: Object3D }) => {
   const { camera, gl } = useThree()
   const [frame, setFrame] = useState<Group | null>(null)
-  const [hover, setHover] = useState<'height' | 'move' | 'rotate' | null>(null)
-  // True while a height / rotate drag is live — the arrows hide (the window
-  // pointer handlers own the gesture), exactly like the wall side handles.
+  // True while the cluster is latched open. Click the center cube to toggle.
+  const [open, setOpen] = useState(false)
+  // True while a move / rotate drag is live — the arrows hide (the window
+  // pointer handlers own the gesture), exactly like the duct-segment rig.
   const [dragging, setDragging] = useState(false)
 
   const makeRay = (clientX: number, clientY: number) => {
@@ -173,6 +172,23 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
   const toWorld = (p: Point): Vector3 =>
     frame ? frame.localToWorld(new Vector3(p[0], p[1], p[2])) : new Vector3(p[0], p[1], p[2])
 
+  /** Cursor's coordinate on one world axis, in the frame's local space. For Y
+   *  it rides a camera-facing vertical plane; for X / Z it projects onto the
+   *  horizontal plane through the fitting and reads back the local component. */
+  const sampleAxis = (
+    axis: RotationAxis,
+    clientX: number,
+    clientY: number,
+    anchorWorld: Vector3,
+  ): number | null => {
+    if (axis === 'y') return intersectVerticalY(clientX, clientY, anchorWorld)
+    const plane = new Plane().setFromNormalAndCoplanarPoint(UP, anchorWorld)
+    const hit = intersect(clientX, clientY, plane)
+    if (!hit || !frame) return null
+    const local = frame.worldToLocal(hit.clone())
+    return axis === 'x' ? local.x : local.z
+  }
+
   // Follow-updates for runs / fittings mated to this fitting, given a preview
   // transform. Endpoints whose ports didn't move resolve to a zero delta.
   const connectivityUpdates = (
@@ -187,11 +203,11 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
   }
 
   /**
-   * Shared lifecycle for the height / rotate arrow drags. `makeCompute` is
-   * built at pointer-down so it can capture the grab anchor (the cursor's
-   * start Y / bearing) and avoid a teleport. Each frame `compute` turns the
-   * cursor into the fitting's next transform; the fitting writes it and any
-   * mated runs follow via port connectivity.
+   * Shared lifecycle for the move / rotate drags. `makeCompute` is built at
+   * pointer-down so it can capture the grab anchor (cursor's start coord /
+   * bearing) and avoid a teleport. Each frame `compute` turns the cursor into
+   * the fitting's next transform; the fitting writes it and any mated runs
+   * follow via port connectivity. Lands as one undo step.
    */
   const beginDrag =
     (
@@ -234,6 +250,10 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       }
 
       const onUp = () => {
+        // Swallow the trailing synthetic click so it doesn't reach the
+        // background-click deselect handler (cleanup drops `inputDragging`
+        // synchronously here).
+        swallowNextClick()
         cleanup()
         // Single-undo dance: revert the fitting AND its followers to the
         // pre-drag state while history is still paused, resume, then re-apply
@@ -261,111 +281,185 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       window.addEventListener('pointercancel', onUp)
     }
 
-  // Height: raise / lower the fitting. Anchored to the cursor's start Y so the
-  // fitting doesn't jump on grab; clamped so it never drops below the floor.
-  const heightCompute = (e: ThreeEvent<PointerEvent>) => {
-    const anchorWorld = toWorld(fitting.position as Point)
-    const startY = intersectVerticalY(e.nativeEvent.clientX, e.nativeEvent.clientY, anchorWorld)
-    const baseY = fitting.position[1]
-    const fx = fitting.position[0]
-    const fz = fitting.position[2]
-    return (event: PointerEvent): FittingTransform | null => {
-      if (startY === null) return null
-      const y = intersectVerticalY(event.clientX, event.clientY, anchorWorld)
-      if (y === null) return null
-      const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
-      const ny = Math.max(0, baseY + snap(y - startY, step))
-      return { position: [fx, ny, fz] }
+  // Move: translate the fitting along one world axis, anchored to the cursor's
+  // start coord so it doesn't jump on grab. Y is clamped at the floor; Shift
+  // bypasses grid snapping.
+  const moveCompute =
+    (axis: RotationAxis) =>
+    (e: ThreeEvent<PointerEvent>): ((event: PointerEvent) => FittingTransform | null) => {
+      const anchorWorld = toWorld(fitting.position as Point)
+      const start = sampleAxis(axis, e.nativeEvent.clientX, e.nativeEvent.clientY, anchorWorld)
+      const base = [...fitting.position] as Point
+      const axisIndex = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
+      let lastDelta = Number.NaN
+      return (event: PointerEvent): FittingTransform | null => {
+        if (start === null) return null
+        const s = sampleAxis(axis, event.clientX, event.clientY, anchorWorld)
+        if (s === null) return null
+        const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+        const delta = snap(s - start, step)
+        if (delta === lastDelta) return null
+        lastDelta = delta
+        if (step > 0) triggerSFX('sfx:grid-snap')
+        const next = [...base] as Point
+        next[axisIndex] = (
+          axis === 'y' ? Math.max(0, base[axisIndex] + delta) : base[axisIndex] + delta
+        ) as number
+        return { position: next }
+      }
     }
-  }
 
-  // Rotate: spin the fitting about the active rotation axis. The cursor's
-  // bearing in the plane perpendicular to that axis (through the body center)
-  // drives the angle; world-frame premultiply so the axis means the screen
-  // X/Y/Z the user expects regardless of how the fitting is already turned.
-  const rotateCompute = (e: ThreeEvent<PointerEvent>) => {
-    const axis: RotationAxis = getRotationAxis()
-    const normal = AXIS_VECTORS[axis].clone()
-    const center = toWorld(fitting.position as Point)
-    const ref = axis === 'y' ? new Vector3(1, 0, 0) : new Vector3(0, 1, 0)
-    const u = ref
-      .clone()
-      .sub(normal.clone().multiplyScalar(ref.dot(normal)))
-      .normalize()
-    const v = new Vector3().crossVectors(normal, u)
-    const plane = new Plane().setFromNormalAndCoplanarPoint(normal, center)
-    const bearing = (clientX: number, clientY: number): number | null => {
-      const hit = intersect(clientX, clientY, plane)
-      if (!hit) return null
-      const d = hit.sub(center)
-      return Math.atan2(d.dot(v), d.dot(u))
+  // Rotate: spin the fitting about one world axis. The cursor's bearing in the
+  // plane perpendicular to that axis (through the body center) drives the
+  // angle; world-frame premultiply so the axis means the screen X/Y/Z the user
+  // expects regardless of how the fitting is already turned.
+  const rotateCompute =
+    (axis: RotationAxis) =>
+    (e: ThreeEvent<PointerEvent>): ((event: PointerEvent) => FittingTransform | null) => {
+      const normal = AXIS_VECTORS[axis].clone()
+      const center = toWorld(fitting.position as Point)
+      const ref = axis === 'y' ? new Vector3(1, 0, 0) : new Vector3(0, 1, 0)
+      const u = ref
+        .clone()
+        .sub(normal.clone().multiplyScalar(ref.dot(normal)))
+        .normalize()
+      const v = new Vector3().crossVectors(normal, u)
+      const plane = new Plane().setFromNormalAndCoplanarPoint(normal, center)
+      const bearing = (clientX: number, clientY: number): number | null => {
+        const hit = intersect(clientX, clientY, plane)
+        if (!hit) return null
+        const d = hit.sub(center)
+        return Math.atan2(d.dot(v), d.dot(u))
+      }
+      const startBearing = bearing(e.nativeEvent.clientX, e.nativeEvent.clientY)
+      const startQuat = new Quaternion().setFromEuler(
+        new Euler(fitting.rotation[0], fitting.rotation[1], fitting.rotation[2]),
+      )
+      return (event: PointerEvent): FittingTransform | null => {
+        if (startBearing === null) return null
+        const b = bearing(event.clientX, event.clientY)
+        if (b === null) return null
+        // Snap the turn to 45° steps; Shift = smooth (no snap).
+        const raw = b - startBearing
+        const delta = event.shiftKey ? raw : Math.round(raw / ROTATE_STEP_RAD) * ROTATE_STEP_RAD
+        const turn = new Quaternion().setFromAxisAngle(normal, delta)
+        const euler = new Euler().setFromQuaternion(turn.multiply(startQuat))
+        return { rotation: [euler.x, euler.y, euler.z] }
+      }
     }
-    const startBearing = bearing(e.nativeEvent.clientX, e.nativeEvent.clientY)
-    const startQuat = new Quaternion().setFromEuler(
-      new Euler(fitting.rotation[0], fitting.rotation[1], fitting.rotation[2]),
-    )
-    return (event: PointerEvent): FittingTransform | null => {
-      if (startBearing === null) return null
-      const b = bearing(event.clientX, event.clientY)
-      if (b === null) return null
-      const turn = new Quaternion().setFromAxisAngle(normal, b - startBearing)
-      const euler = new Euler().setFromQuaternion(turn.multiply(startQuat))
-      return { rotation: [euler.x, euler.y, euler.z] }
-    }
-  }
-
-  // Move: hand off to the ghost move tool the same way the floating drag
-  // engages it — `placementDragMode: true`. That flag (a) makes every handle
-  // hit-area inert (`handle-arrow.tsx`'s `hitAreaRaycast`) so this rig's own
-  // arrows stop swallowing the cursor's grid raycast, and (b) switches
-  // `MoveDuctFittingTool` to commit on pointer-release instead of a second
-  // click — press-drag-release, mid-air markup out of the way.
-  const onMoveDown = (e: ThreeEvent<PointerEvent>) => {
-    e.stopPropagation()
-    const editor = useEditor.getState()
-    editor.setPlacementDragMode(true)
-    // `setMovingNode`'s param union doesn't list duct-fitting, but the move
-    // tool is resolved by `movingNode.type` at runtime — the floating Move
-    // button engages a fitting the same way (`setMovingNode(node as any)`).
-    editor.setMovingNode(fitting as never)
-    useViewer.getState().setSelection({ selectedIds: [] })
-  }
 
   const extent = useMemo(() => fittingExtentM(fitting), [fitting])
   const p = fitting.position as Point
-  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const baseScale = zoom * ARROW_SCALE
+  const base = extent + ARROW_GAP
+
+  // Six whole-fitting move arrows, one per ± world axis.
+  const moveArrows: {
+    key: string
+    axis: RotationAxis
+    position: Point
+    rotationY: number
+    vertical?: 'up' | 'down'
+    cursor: Cursor
+  }[] = [
+    { key: '+x', axis: 'x', position: [p[0] + base, p[1], p[2]], rotationY: 0, cursor: 'grab' },
+    {
+      key: '-x',
+      axis: 'x',
+      position: [p[0] - base, p[1], p[2]],
+      rotationY: Math.PI,
+      cursor: 'grab',
+    },
+    {
+      key: '+z',
+      axis: 'z',
+      position: [p[0], p[1], p[2] + base],
+      rotationY: -Math.PI / 2,
+      cursor: 'grab',
+    },
+    {
+      key: '-z',
+      axis: 'z',
+      position: [p[0], p[1], p[2] - base],
+      rotationY: Math.PI / 2,
+      cursor: 'grab',
+    },
+    {
+      key: '+y',
+      axis: 'y',
+      position: [p[0], p[1] + base, p[2]],
+      rotationY: 0,
+      vertical: 'up',
+      cursor: 'ns-resize',
+    },
+    {
+      key: '-y',
+      axis: 'y',
+      position: [p[0], p[1] - base, p[2]],
+      rotationY: 0,
+      vertical: 'down',
+      cursor: 'ns-resize',
+    },
+  ]
+
+  // Three rotation arcs, one per world axis. Each arc wraps its axis (the
+  // shared `curved-arrow` wraps world +Y by default; `setFromUnitVectors`
+  // re-aims it) and sits at a diagonal offset in the plane it spins, so the
+  // three don't pile onto the move arrows.
+  const d = base * Math.SQRT1_2
+  const rotateArcs: { key: string; axis: RotationAxis; position: Point; rotation: Point }[] = (
+    ['x', 'y', 'z'] as RotationAxis[]
+  ).map((axis) => {
+    const q = new Quaternion().setFromUnitVectors(UP, AXIS_VECTORS[axis])
+    // Spin the arc in place about its own axis so the grip sits where we want
+    // it without moving its position.
+    if (axis === 'z') {
+      q.premultiply(new Quaternion().setFromAxisAngle(AXIS_VECTORS.z, Math.PI / 4))
+    } else if (axis === 'x') {
+      q.premultiply(new Quaternion().setFromAxisAngle(AXIS_VECTORS.x, (-145 * Math.PI) / 180))
+    } else if (axis === 'y') {
+      q.premultiply(new Quaternion().setFromAxisAngle(AXIS_VECTORS.y, (-45 * Math.PI) / 180))
+    }
+    const e = new Euler().setFromQuaternion(q)
+    const position: Point =
+      axis === 'x'
+        ? [p[0], p[1] + d, p[2] + d]
+        : axis === 'y'
+          ? [p[0] + d, p[1], p[2] + d]
+          : [p[0] + d, p[1] + d, p[2]]
+    return { key: `r${axis}`, axis, position, rotation: [e.x, e.y, e.z] }
+  })
 
   if (dragging) {
     return <group ref={setFrame} />
   }
   return (
     <group ref={setFrame}>
-      <HandleArrow
-        cursor="ns-resize"
-        hover={hover === 'height'}
-        indicatorRotation={[0, Math.PI / 2, Math.PI / 2]}
-        onHoverChange={(h) => setHover(h ? 'height' : null)}
-        onPointerDown={beginDrag('ns-resize', heightCompute)}
-        placement={{ position: [p[0], p[1] + extent + ARROW_GAP, p[2]], baseScale }}
-        shape="chevron"
-      />
-      <HandleArrow
-        cursor="move"
-        hover={hover === 'move'}
-        onHoverChange={(h) => setHover(h ? 'move' : null)}
-        onPointerDown={onMoveDown}
-        placement={{ position: p, baseScale }}
-        shape="cross"
-      />
-      <HandleArrow
-        cursor="grab"
-        hover={hover === 'rotate'}
-        onHoverChange={(h) => setHover(h ? 'rotate' : null)}
-        onPointerDown={beginDrag('grabbing', rotateCompute)}
-        placement={{ position: [p[0] + extent + ARROW_GAP, p[1], p[2]], baseScale }}
-        shape="curved-arrow"
-      />
+      <HandleCube active={open} onClick={() => setOpen((o) => !o)} position={p} />
+      {open && (
+        <>
+          {moveArrows.map((a) => (
+            <MoveChevron
+              cursor={a.cursor}
+              key={a.key}
+              onPointerDown={beginDrag(
+                a.axis === 'y' ? 'ns-resize' : 'grabbing',
+                moveCompute(a.axis),
+              )}
+              position={a.position}
+              rotationY={a.rotationY}
+              vertical={a.vertical}
+            />
+          ))}
+          {rotateArcs.map((arc) => (
+            <RotateArc
+              key={arc.key}
+              onPointerDown={beginDrag('grabbing', rotateCompute(arc.axis))}
+              position={arc.position}
+              rotation={arc.rotation}
+            />
+          ))}
+        </>
+      )}
     </group>
   )
 }

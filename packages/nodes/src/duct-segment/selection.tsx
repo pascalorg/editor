@@ -13,22 +13,15 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import {
-  ARROW_SCALE,
-  DimensionPill,
-  EDITOR_LAYER,
-  HandleArrow,
-  useEditor,
-} from '@pascal-app/editor'
+import { DimensionPill, swallowNextClick, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  DoubleSide,
+  Euler,
   type Group,
   type Object3D,
-  OrthographicCamera,
   Plane,
   Quaternion,
   Raycaster,
@@ -41,23 +34,19 @@ import {
   planElbowEndpointReaim,
 } from '../shared/elbow-endpoint-reaim'
 import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
+import { HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { INCHES_TO_METERS } from './geometry'
 
-/** Corner hex-disc radius (meters) — matches the wall corner picker. */
-const HANDLE_RADIUS = 0.11
-const HANDLE_COLOR = '#818cf8'
-const HANDLE_HOVER_COLOR = '#a5b4fc'
 /** Port-snap radius for dragged run endpoints (meters, XZ). */
 const PORT_SNAP_RADIUS_M = 0.4
 
-// In-world arrow handle layout (meters) — mirrors the wall side handles so
-// the duct affordances read as the same UI family.
-const SIDE_ARROW_GAP = 0.27
-const SIDE_ARROW_MIN_OFFSET = 0.33
-const HEIGHT_ARROW_OFFSET = 0.3
-/** Below this horizontal segment length (m) a side-move arrow is pointless
- *  (a riser collapses to a point in plan) and is skipped. */
-const MIN_PLAN_SEGMENT_LEN = 0.05
+// In-world arrow handle layout (meters) — the arrows stand off the run body so
+// they clear thick trunks.
+const CORNER_ARROW_GAP = 0.18
+const CORNER_ARROW_MIN_OFFSET = 0.24
+
+/** Roll snap increment — 45°, matching the fitting rotate step. Shift bypasses. */
+const ROLL_STEP_RAD = Math.PI / 4
 
 const UP = new Vector3(0, 1, 0)
 
@@ -74,20 +63,27 @@ function runRadiusM(duct: DuctSegmentNode): number {
 
 type Point = [number, number, number]
 
-type SideMoveHandle = {
+// What a corner arrow constrains its drag to: a single world-local axis
+// (X / Z horizontal, Y vertical).
+type DragKind = { axis: 'x' | 'z' | 'y' }
+
+type CornerArrow = {
   key: string
-  /** Segment whose two vertices both translate along the normal. */
-  segmentIndex: number
-  /** Unit XZ normal the arrow points along (away from the run body). */
-  normal: [number, number]
-  /** World-local arrow position (already offset off the body). */
+  /** Path point this arrow drives. */
+  index: number
+  kind: DragKind
+  /** World-local arrow position (offset off the point along its direction). */
   position: Point
   rotationY: number
+  /** Set for the vertical pair — tips the flat chevron up / down. */
+  vertical?: 'up' | 'down'
+  cursor: Cursor
 }
 
 /**
- * Selection-time editing for committed duct runs: one draggable handle
- * per path point.
+ * Selection-time editing for committed duct runs: each path point shows a
+ * cluster of directional arrows instead of a free-drag handle — four XZ
+ * chevrons (±X / ±Z) plus an up / down vertical pair.
  *
  * Handles are PORTALED into the duct's registered scene group so they
  * share its exact frame — path coords are node-local, and the level /
@@ -95,19 +91,17 @@ type SideMoveHandle = {
  * Drag raycasts run in world space and convert hits back into the
  * group's local frame before writing the path.
  *
- * Drag model: the point moves FREELY on the horizontal plane at its own
- * height (no axis lock) — like a wall corner. Dragged run endpoints snap
- * onto nearby typed ports so a loose run can be mated onto a fitting after
- * the fact. When the dragged endpoint belongs to a straight run whose OTHER
- * end sits on an elbow collar, the elbow re-aims to follow the drag
- * (junction + far collar fixed, bend angle adapts) instead of port-snapping.
+ * Drag model: each arrow locks the point to one axis. Dragged run endpoints
+ * still snap onto nearby typed ports so a loose run can be mated onto a
+ * fitting after the fact, and when the dragged
+ * endpoint belongs to a straight run whose OTHER end sits on an elbow collar,
+ * the elbow re-aims to follow the drag (junction + far collar fixed, bend
+ * angle adapts) instead of port-snapping.
  *
  * Modifiers (mirroring the wall corner drag):
  * - **Alt** detaches: the joint breaks for this drag — the elbow does NOT
  *   re-aim and mated fittings / runs do NOT follow; the endpoint moves on its
  *   own (port re-mate still allowed so it can be reattached elsewhere).
- * - **Cmd / Ctrl** switches to vertical movement (riser editing): XZ holds
- *   and the cursor drives Y.
  * - **Shift** bypasses grid snapping for a perfectly smooth precision drag.
  *
  * History does the single-undo dance: paused during the drag (the live
@@ -172,11 +166,18 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
   })
   const unit = useViewer((s) => s.unit)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null)
-  // True while a side-move / height / extend arrow drag is live. The arrows
-  // (and the dragged one) hide during the drag — the window pointer handlers
-  // own it from pointer-down — exactly like the wall side handles.
-  const [arrowDragging, setArrowDragging] = useState(false)
+  const [rolling, setRolling] = useState(false)
+  const [runMoving, setRunMoving] = useState(false)
+  // Which cube's arrow cluster is open. Hover proved too fiddly (the cursor has
+  // to bridge the gap between the dot and its offset arrows), so the cubes are
+  // CLICK-to-latch instead: clicking a cube opens its cluster and closes any
+  // other; clicking the same cube again closes it. A vertex cluster is keyed by
+  // its index, the run-center cluster by 'center'. Cleared on deselect (the
+  // whole rig unmounts) and after a drag commits.
+  type OpenCluster = number | 'center' | null
+  const [openCluster, setOpenCluster] = useState<OpenCluster>(null)
+  const toggleCluster = (key: Exclude<OpenCluster, null>) =>
+    setOpenCluster((cur) => (cur === key ? null : key))
   // Set while a drag is live; null otherwise. Holds everything the window
   // pointer handlers need so they never read stale React state.
   const dragRef = useRef<{
@@ -215,7 +216,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
 
   /**
    * Local-frame Y where the cursor ray meets a vertical plane through
-   * `anchorWorld` that faces the camera — drives Alt-vertical (riser) drag.
+   * `anchorWorld` that faces the camera — drives the up / down vertical drag.
    * Null when the ray is parallel to the plane.
    */
   const intersectVerticalY = (
@@ -282,23 +283,26 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     )
   }
 
-  const onHandleDown = (index: number) => (e: ThreeEvent<PointerEvent>) => {
+  // A corner arrow drag: the point is locked to one axis (X / Z / Y). All the
+  // rich behaviour — port-snap, elbow re-aim, connectivity follow, single-undo
+  // — is shared with every arrow; only the
+  // cursor→point projection differs per `kind`.
+  const onHandleDown = (index: number, kind: DragKind) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     const initialPath = duct.path.map((p) => [...p] as Point)
     const startPoint = initialPath[index]!
     const connectivity = analyzePortConnectivity(duct as AnyNode, useScene.getState().nodes)
     pauseSceneHistory(useScene)
     useViewer.getState().setInputDragging(true)
-    document.body.style.cursor = 'grabbing'
+    document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setDraggingIndex(index)
 
     const isEndpoint = index === 0 || index === initialPath.length - 1
 
     // Elbow re-aim: if this is a straight run whose OTHER end sits on an
     // elbow collar, the elbow swings to follow the drag (junction + far
-    // collar fixed, bend angle adapts) — so the dragged end moves freely in
-    // any direction instead of being locked to the segment's own axis, the
-    // way a wall corner drags. Detected once against a drag-start snapshot.
+    // collar fixed, bend angle adapts). Detected once against a drag-start
+    // snapshot.
     const elbowEndpoint: ElbowEndpoint | null = isEndpoint
       ? detectElbowEndpoint('duct-segment', initialPath, index, useScene.getState().nodes)
       : null
@@ -306,33 +310,34 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     const onMove = (event: PointerEvent) => {
       const drag = dragRef.current
       if (!drag) return
-      const current = drag.current
-      // Shift = precision: bypass grid snapping for a perfectly smooth
-      // drag (snap() is a no-op at step 0).
+      // Shift = precision: bypass grid snapping (snap() is a no-op at step 0).
       const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
-      // Alt = detach: break the joint for this drag — the endpoint moves on
-      // its own, no elbow re-aim and no connectivity follow (it can still
-      // port-snap to re-mate elsewhere). Mirrors the wall corner drag.
+      // Alt = detach: break the joint for this drag (it can still port-snap to
+      // re-mate elsewhere). Mirrors the wall corner drag.
       const detached = event.altKey
       let next: Point | null = null
-      if (event.metaKey || event.ctrlKey) {
-        // Cmd/Ctrl = vertical: keep XZ fixed and drive Y off the cursor
-        // against a vertical plane through the point (riser editing).
-        const y = intersectVerticalY(event.clientX, event.clientY, toWorld(current))
-        if (y !== null) next = [current[0], Math.max(0, snap(y, step)), current[2]]
+      if (kind.axis === 'y') {
+        // Vertical (riser): keep XZ pinned to the start and drive Y off the
+        // cursor against a vertical plane through the point.
+        const y = intersectVerticalY(event.clientX, event.clientY, toWorld(startPoint))
+        if (y !== null) next = [startPoint[0], Math.max(0, snap(y, step)), startPoint[2]]
       } else {
-        // Default: free movement on the horizontal plane at the point's
-        // height (no axis lock). Endpoints can port-snap to mate a fitting.
-        const plane = new Plane().setFromNormalAndCoplanarPoint(UP, toWorld(current))
+        // Horizontal: project the cursor onto the plane at the point's height,
+        // then lock to the arrow's axis (X / Z).
+        const plane = new Plane().setFromNormalAndCoplanarPoint(UP, toWorld(startPoint))
         const hit = intersect(event.clientX, event.clientY, plane)
         if (hit) {
           const local = toLocal(hit)
-          next = [snap(local[0], step), current[1], snap(local[2], step)]
-          // Port re-mate stays available whether detaching or free-dragging;
+          if (kind.axis === 'x') {
+            next = [snap(local[0], step), startPoint[1], startPoint[2]]
+          } else {
+            next = [startPoint[0], startPoint[1], snap(local[2], step)]
+          }
+          // Port re-mate stays available while detaching or free-dragging;
           // it's only suppressed while the elbow is actively re-aiming.
           if (isEndpoint && (detached || !drag.elbowEndpoint)) {
             const port = findNearestPortXZ(
-              [local[0], current[1], local[2]],
+              [next[0], startPoint[1], next[2]],
               collectScenePorts({ excludeNodeId: duct.id, systems: DUCT_PORT_SYSTEMS }),
               PORT_SNAP_RADIUS_M,
             )
@@ -341,17 +346,28 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         }
       }
       if (!next) return
-      if (next[0] === current[0] && next[1] === current[1] && next[2] === current[2]) return
+      if (next[0] === drag.current[0] && next[1] === drag.current[1] && next[2] === drag.current[2])
+        return
       const batch = buildDragBatch(drag, next, detached)
       if (!batch) return
       drag.current = next
       drag.detached = detached
+      // Tick on each new snapped position — the same grid-snap SFX the draw
+      // tools fire; the player debounces rapid repeats (minIntervalMs). Only
+      // when the grid is live (step > 0): Shift-precision has nothing to snap.
+      if (step > 0) triggerSFX('sfx:grid-snap')
       useScene.getState().updateNodes(batch)
     }
 
     const onUp = () => {
       const drag = dragRef.current
       if (!drag) return
+      // Swallow the trailing synthetic click so it doesn't reach the
+      // background-click deselect handler — `cleanup()` drops `inputDragging`
+      // synchronously here, so without this the click that fires after
+      // pointerup would land with the drag gate already down and clear the
+      // selection. Mirrors `useHandleDrag`'s onUp.
+      swallowNextClick()
       drag.cleanup()
       dragRef.current = null
       setDraggingIndex(null)
@@ -416,180 +432,277 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     window.addEventListener('pointercancel', onUp)
   }
 
-  /**
-   * Shared lifecycle for the in-world arrow handles (side-move / height /
-   * extend). Each frame `compute` turns the cursor into a full next path;
-   * the duct writes it and any mated fittings / runs follow via port
-   * connectivity. `makeCompute` is built at pointer-down so it can capture
-   * the grab anchor (height needs the cursor's start Y to avoid a teleport).
-   * History does the same single-undo dance as the corner-handle drag.
-   */
-  const beginArrowDrag =
-    (
-      cursor: string,
-      makeCompute: (
-        e: ThreeEvent<PointerEvent>,
-      ) => (event: PointerEvent, initialPath: Point[]) => Point[] | null,
-    ) =>
-    (e: ThreeEvent<PointerEvent>) => {
-      e.stopPropagation()
-      const initialPath = duct.path.map((p) => [...p] as Point)
-      const connectivity = analyzePortConnectivity(duct as AnyNode, useScene.getState().nodes)
-      const compute = makeCompute(e)
-      pauseSceneHistory(useScene)
-      useViewer.getState().setInputDragging(true)
-      setArrowDragging(true)
-      document.body.style.cursor = cursor
-      let currentPath = initialPath
-
-      const buildBatch = (path: Point[]): { id: AnyNodeId; data: Partial<AnyNode> }[] => [
-        { id: duct.id as AnyNodeId, data: { path } as Partial<AnyNode> },
-        ...connectivityUpdatesForPath(connectivity, path),
-      ]
-
-      const onMove = (event: PointerEvent) => {
-        const next = compute(event, initialPath)
-        if (!next) return
-        const same = next.every(
-          (p, i) =>
-            p[0] === currentPath[i]![0] &&
-            p[1] === currentPath[i]![1] &&
-            p[2] === currentPath[i]![2],
-        )
-        if (same) return
-        currentPath = next
-        useScene.getState().updateNodes(buildBatch(next))
-      }
-
-      const cleanup = () => {
-        window.removeEventListener('pointermove', onMove)
-        window.removeEventListener('pointerup', onUp)
-        window.removeEventListener('pointercancel', onUp)
-        useViewer.getState().setInputDragging(false)
-        setArrowDragging(false)
-        if (document.body.style.cursor === cursor) document.body.style.cursor = ''
-      }
-
-      const onUp = () => {
-        cleanup()
-        const moved = currentPath.some((p, i) => p.some((v, axis) => v !== initialPath[i]![axis]))
-        // Single-undo dance: revert the run AND its followers to their
-        // pre-drag state while history is still paused, resume, then re-apply
-        // the final batch as one tracked change.
-        const revertUpdates: { id: AnyNodeId; data: Partial<AnyNode> }[] = (
-          connectivity?.connections ?? []
-        ).map((conn) =>
-          conn.kind === 'rigid-node'
-            ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
-            : { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> },
-        )
-        useScene
-          .getState()
-          .updateNodes([
-            { id: duct.id as AnyNodeId, data: { path: initialPath } },
-            ...revertUpdates.filter((u) => useScene.getState().nodes[u.id]),
-          ])
-        resumeSceneHistory(useScene)
-        if (moved) useScene.getState().updateNodes(buildBatch(currentPath))
-      }
-
-      window.addEventListener('pointermove', onMove)
-      window.addEventListener('pointerup', onUp)
-      window.addEventListener('pointercancel', onUp)
-    }
-
-  // Side-move: slide one segment perpendicular to itself. Both its vertices
-  // translate by the same plan-normal offset; neighbours stretch and any
-  // mated joint follows via connectivity. Grid-snapped (Shift bypasses).
-  const sideMoveCompute =
-    (handle: SideMoveHandle) =>
-    () =>
-    (event: PointerEvent, initialPath: Point[]): Point[] | null => {
-      const a = initialPath[handle.segmentIndex]!
-      const b = initialPath[handle.segmentIndex + 1]!
-      const mid: Point = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]
-      const plane = new Plane().setFromNormalAndCoplanarPoint(UP, toWorld(mid))
-      const hit = intersect(event.clientX, event.clientY, plane)
+  // Roll: spin the rect / oval cross-section about the run (length) axis. The
+  // cursor's bearing in the plane perpendicular to the run direction (taken in
+  // the cross-section's own width / height basis so the angle maps 1:1 to the
+  // visible profile) drives the `roll` field. Round runs look identical at any
+  // roll, so the gizmo isn't rendered for them. Roll doesn't move the ports
+  // (they sit on the path, whose positions are unchanged), so mated runs /
+  // fittings need no follow — just the single-undo dance on the scalar field.
+  const onRollDown = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+    const axis = runAxisAndCenter(duct)
+    if (!axis) return
+    const startRoll = duct.roll
+    const dir = new Vector3(axis.dir[0], axis.dir[1], axis.dir[2])
+    const worldDir = target.localToWorld(dir.clone()).sub(target.localToWorld(new Vector3()))
+    worldDir.normalize()
+    const center = toWorld(axis.center)
+    // Width / height axes at roll 0, mapped to world — the bearing basis. This
+    // is the same construction `rectSectionAxes` uses, so a turn of the cursor
+    // by θ rolls the section by θ.
+    const xBase = new Vector3().crossVectors(UP, dir)
+    if (xBase.lengthSq() < 1e-8) xBase.set(1, 0, 0)
+    xBase.normalize()
+    const zBase = new Vector3().crossVectors(xBase, dir).normalize()
+    const u = target.localToWorld(xBase.clone()).sub(target.localToWorld(new Vector3())).normalize()
+    const v = target.localToWorld(zBase.clone()).sub(target.localToWorld(new Vector3())).normalize()
+    const plane = new Plane().setFromNormalAndCoplanarPoint(worldDir, center)
+    const bearing = (clientX: number, clientY: number): number | null => {
+      const hit = intersect(clientX, clientY, plane)
       if (!hit) return null
-      const local = toLocal(hit)
-      const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
-      const signed = snap(
-        (local[0] - mid[0]) * handle.normal[0] + (local[2] - mid[2]) * handle.normal[1],
-        step,
-      )
-      const ox = handle.normal[0] * signed
-      const oz = handle.normal[1] * signed
-      return initialPath.map((p, i) =>
-        i === handle.segmentIndex || i === handle.segmentIndex + 1
-          ? ([p[0] + ox, p[1], p[2] + oz] as Point)
-          : p,
-      )
+      const d = hit.sub(center)
+      return Math.atan2(d.dot(v), d.dot(u))
+    }
+    const startBearing = bearing(e.nativeEvent.clientX, e.nativeEvent.clientY)
+    pauseSceneHistory(useScene)
+    useViewer.getState().setInputDragging(true)
+    document.body.style.cursor = 'grabbing'
+    setRolling(true)
+    let current = startRoll
+
+    const onMove = (event: PointerEvent) => {
+      if (startBearing === null) return
+      const b = bearing(event.clientX, event.clientY)
+      if (b === null) return
+      // Snap the roll to 45° steps; Shift = smooth (no snap).
+      const raw = b - startBearing
+      const delta = event.shiftKey ? raw : Math.round(raw / ROLL_STEP_RAD) * ROLL_STEP_RAD
+      const next = startRoll + delta
+      if (next === current) return
+      current = next
+      useScene.getState().updateNode(duct.id, { roll: next })
     }
 
-  // Height: raise / lower the WHOLE run uniformly. Anchored to the cursor's
-  // start Y so the run doesn't jump on grab; clamped so the lowest vertex
-  // never drops below the level floor. 3D-only — plan editing never changes
-  // elevation (see the floor-plan path-point affordance).
-  const heightCompute = (anchor: Point) => (e: ThreeEvent<PointerEvent>) => {
-    const anchorWorld = toWorld(anchor)
-    const startY = intersectVerticalY(e.nativeEvent.clientX, e.nativeEvent.clientY, anchorWorld)
-    return (event: PointerEvent, initialPath: Point[]): Point[] | null => {
-      if (startY === null) return null
-      const y = intersectVerticalY(event.clientX, event.clientY, anchorWorld)
-      if (y === null) return null
-      const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
-      let dy = snap(y - startY, step)
-      const minY = Math.min(...initialPath.map((p) => p[1]))
-      if (dy < -minY) dy = -minY
-      return initialPath.map((p) => [p[0], p[1] + dy, p[2]] as Point)
+    const onUp = () => {
+      swallowNextClick()
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      useViewer.getState().setInputDragging(false)
+      document.body.style.cursor = ''
+      setRolling(false)
+      // Single-undo dance: revert to the pre-drag roll while paused, resume,
+      // then re-apply the final roll as one tracked change.
+      useScene.getState().updateNode(duct.id, { roll: startRoll })
+      resumeSceneHistory(useScene)
+      if (current !== startRoll) useScene.getState().updateNode(duct.id, { roll: current })
     }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
   }
 
-  const sideHandles = useMemo(() => getSideMoveHandles(duct), [duct])
-  const heightHandle = useMemo(() => getHeightHandle(duct), [duct])
+  // Move the WHOLE run, locked to one world axis (X / Y / Z). Every path point
+  // shifts by the same delta; mated fittings / runs follow via connectivity,
+  // and the gesture lands as a single undo step (the same dance the per-point
+  // drag uses). The six center arrows each bind one ± axis; the projection per
+  // axis is the only thing that differs.
+  const onRunMoveDown = (axis: 'x' | 'y' | 'z') => (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+    const initialPath = duct.path.map((p) => [...p] as Point)
+    const center = runAxisAndCenter(duct)?.center ?? initialPath[0]!
+    const connectivity = analyzePortConnectivity(duct as AnyNode, useScene.getState().nodes)
+    const anchorWorld = toWorld(center)
+    // Grab offset: cursor's start coordinate on the locked axis, so the run
+    // doesn't jump on grab.
+    const sample = (clientX: number, clientY: number): number | null => {
+      if (axis === 'y') return intersectVerticalY(clientX, clientY, anchorWorld)
+      const plane = new Plane().setFromNormalAndCoplanarPoint(UP, anchorWorld)
+      const hit = intersect(clientX, clientY, plane)
+      if (!hit) return null
+      return toLocal(hit)[axis === 'x' ? 0 : 2]
+    }
+    const startSample = sample(e.nativeEvent.clientX, e.nativeEvent.clientY)
+    const axisIndex = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
+    pauseSceneHistory(useScene)
+    useViewer.getState().setInputDragging(true)
+    document.body.style.cursor = axis === 'y' ? 'ns-resize' : 'grabbing'
+    setRunMoving(true)
+    let delta = 0
+
+    const shiftedPath = (d: number): Point[] =>
+      initialPath.map((p) => {
+        const next = [...p] as Point
+        next[axisIndex] = (
+          axis === 'y' ? Math.max(0, p[axisIndex] + d) : p[axisIndex] + d
+        ) as number
+        return next
+      })
+    const batchFor = (path: Point[]): { id: AnyNodeId; data: Partial<AnyNode> }[] => [
+      { id: duct.id as AnyNodeId, data: { path } },
+      ...connectivityUpdatesForPath(connectivity, path),
+    ]
+
+    const onMove = (event: PointerEvent) => {
+      if (startSample === null) return
+      const s = sample(event.clientX, event.clientY)
+      if (s === null) return
+      const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+      const next = snap(s - startSample, step)
+      if (next === delta) return
+      delta = next
+      if (step > 0) triggerSFX('sfx:grid-snap')
+      useScene.getState().updateNodes(batchFor(shiftedPath(next)))
+    }
+
+    const onUp = () => {
+      swallowNextClick()
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      useViewer.getState().setInputDragging(false)
+      document.body.style.cursor = ''
+      setRunMoving(false)
+      // Single-undo dance: revert run + followers while paused, resume, re-apply
+      // the final shift as one tracked change.
+      const reverts: { id: AnyNodeId; data: Partial<AnyNode> }[] = (
+        connectivity?.connections ?? []
+      ).map((conn) =>
+        conn.kind === 'rigid-node'
+          ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
+          : { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> },
+      )
+      useScene
+        .getState()
+        .updateNodes([
+          { id: duct.id as AnyNodeId, data: { path: initialPath } },
+          ...reverts.filter((u) => useScene.getState().nodes[u.id]),
+        ])
+      resumeSceneHistory(useScene)
+      if (delta !== 0) useScene.getState().updateNodes(batchFor(shiftedPath(delta)))
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+  }
+
+  const cornerArrows = useMemo(() => getCornerArrows(duct), [duct])
+  const rollGizmo = useMemo(() => (duct.shape === 'round' ? null : runAxisAndCenter(duct)), [duct])
+  // Run-center cube position (centroid centerline). The six whole-run move
+  // arrows + the roll arc are revealed on hover, like the per-vertex clusters.
+  const runCenter = useMemo<Point | null>(() => runAxisAndCenter(duct)?.center ?? null, [duct])
+  // Six whole-run move arrows, one per ± world axis, offset off the center.
+  const centerArrows = useMemo(() => {
+    if (!runCenter) return []
+    const base = Math.max(runRadiusM(duct) + CORNER_ARROW_GAP, CORNER_ARROW_MIN_OFFSET)
+    const dirs: {
+      key: string
+      axis: 'x' | 'y' | 'z'
+      offset: Point
+      rotationY: number
+      vertical?: 'up' | 'down'
+      cursor: Cursor
+    }[] = [
+      { key: '+x', axis: 'x', offset: [base, 0, 0], rotationY: 0, cursor: 'grab' },
+      { key: '-x', axis: 'x', offset: [-base, 0, 0], rotationY: Math.PI, cursor: 'grab' },
+      { key: '+z', axis: 'z', offset: [0, 0, base], rotationY: -Math.PI / 2, cursor: 'grab' },
+      { key: '-z', axis: 'z', offset: [0, 0, -base], rotationY: Math.PI / 2, cursor: 'grab' },
+      {
+        key: '+y',
+        axis: 'y',
+        offset: [0, base, 0],
+        rotationY: 0,
+        vertical: 'up',
+        cursor: 'ns-resize',
+      },
+      {
+        key: '-y',
+        axis: 'y',
+        offset: [0, -base, 0],
+        rotationY: 0,
+        vertical: 'down',
+        cursor: 'ns-resize',
+      },
+    ]
+    return dirs.map((d) => ({
+      ...d,
+      position: [
+        runCenter[0] + d.offset[0],
+        runCenter[1] + d.offset[1],
+        runCenter[2] + d.offset[2],
+      ] as Point,
+    }))
+  }, [duct, runCenter])
 
   return (
     <group ref={outerRef}>
-      {duct.path.map((p, i) => (
-        <HexHandle
-          active={draggingIndex === i}
-          hovered={hoverIndex === i}
-          key={`duct-handle-${i}`}
-          onPointerDown={onHandleDown(i)}
-          onPointerEnter={(e) => {
-            e.stopPropagation()
-            setHoverIndex(i)
-            if (draggingIndex === null) document.body.style.cursor = 'grab'
-          }}
-          onPointerLeave={() => {
-            setHoverIndex((prev) => (prev === i ? null : prev))
-            if (draggingIndex === null) document.body.style.cursor = ''
-          }}
-          position={p as Point}
-        />
-      ))}
-      {/* In-world move arrows — hidden while any handle drag is live (the
-          window pointer handlers own the gesture from pointer-down), exactly
-          like the wall side handles hide mid-drag. */}
-      {draggingIndex === null && !arrowDragging && (
-        <>
-          {sideHandles.map((h) => (
-            <ArrowHandle
-              key={h.key}
-              onPointerDown={beginArrowDrag('grabbing', sideMoveCompute(h))}
-              position={h.position}
-              rotationY={h.rotationY}
+      {/* Per-vertex affordances — hidden while a drag / roll is live (the window
+          pointer handlers own the gesture). Each vertex shows a small cube;
+          CLICKING the cube latches its directional cluster open (click again to
+          close), so a multi-bend run isn't a thicket of darts and the reveal
+          doesn't depend on a finicky hover. */}
+      {draggingIndex === null &&
+        !rolling &&
+        !runMoving &&
+        duct.path.map((p, i) => (
+          <group key={`vtx${i}`}>
+            <HandleCube
+              active={openCluster === i}
+              onClick={() => toggleCluster(i)}
+              position={p as Point}
             />
-          ))}
-          {heightHandle && (
-            <ArrowHandle
-              cursor="ns-resize"
-              onPointerDown={beginArrowDrag('ns-resize', heightCompute(heightHandle.anchor))}
-              position={heightHandle.position}
-              upright
-            />
+            {openCluster === i &&
+              cornerArrows
+                .filter((a) => a.index === i)
+                .map((a) => (
+                  <MoveChevron
+                    cursor={a.cursor}
+                    key={a.key}
+                    onPointerDown={onHandleDown(a.index, a.kind)}
+                    position={a.position}
+                    rotationY={a.rotationY}
+                    vertical={a.vertical}
+                  />
+                ))}
+          </group>
+        ))}
+      {/* Run-center cube — clicking it latches the whole-run cluster open: six
+          axis-locked move arrows (±X / ±Y / ±Z) plus the roll arc (rect / oval
+          only). The six arrows shift every path point by the same delta; the
+          roll arc spins the cross-section about the run axis. */}
+      {draggingIndex === null && !rolling && !runMoving && runCenter && (
+        <group>
+          <HandleCube
+            active={openCluster === 'center'}
+            onClick={() => toggleCluster('center')}
+            position={runCenter}
+          />
+          {openCluster === 'center' && (
+            <>
+              {centerArrows.map((a) => (
+                <MoveChevron
+                  cursor={a.cursor}
+                  key={a.key}
+                  onPointerDown={onRunMoveDown(a.axis)}
+                  position={a.position}
+                  rotationY={a.rotationY}
+                  vertical={a.vertical}
+                />
+              ))}
+              {rollGizmo && (
+                <RollHandle
+                  center={rollGizmo.center}
+                  dir={rollGizmo.dir}
+                  onPointerDown={onRollDown}
+                  radius={runRadiusM(duct) + CORNER_ARROW_GAP}
+                />
+              )}
+            </>
           )}
-        </>
+        </group>
       )}
       {draggingIndex !== null &&
         duct.path[draggingIndex] &&
@@ -628,174 +741,161 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
 }
 
 /**
- * Billboarded hexagon disc handle for a duct path vertex — the same visual
- * the wall corner picker uses, so corner editing reads consistently across
- * kinds. A flat `CircleGeometry` with 6 segments is the click target; an
- * outer hex ring frames it. The group copies the camera's WORLD rotation
- * (compensating for the rotated duct/level parent) so the hex stays
- * face-on at any viewing angle.
+ * Roll gizmo — the shared `RotateArc` re-oriented to wrap the run's length
+ * axis, seated at a FIXED corner of the section frame. It does NOT track
+ * `roll`, so the grip stays still while the user spins the duct (otherwise it
+ * chases the cursor and is hard to keep hold of). The angle is the top 45°
+ * corner (between the top and a side face); the position offset and the arc's
+ * spin share that one angle so it stays oriented.
  */
-function HexHandle({
-  position,
-  active,
-  hovered,
+function RollHandle({
+  center,
+  dir,
+  radius,
   onPointerDown,
-  onPointerEnter,
-  onPointerLeave,
 }: {
-  position: Point
-  active: boolean
-  hovered: boolean
+  center: Point
+  dir: Point
+  radius: number
   onPointerDown: (e: ThreeEvent<PointerEvent>) => void
-  onPointerEnter: (e: ThreeEvent<PointerEvent>) => void
-  onPointerLeave: () => void
 }) {
-  const { camera } = useThree()
-  const groupRef = useRef<Group>(null)
-  const parentWorldQuat = useMemo(() => new Quaternion(), [])
-  const invParentWorldQuat = useMemo(() => new Quaternion(), [])
-  useFrame(() => {
-    const group = groupRef.current
-    if (!group) return
-    if (group.parent) {
-      group.parent.getWorldQuaternion(parentWorldQuat)
-      invParentWorldQuat.copy(parentWorldQuat).invert()
-      group.quaternion.copy(invParentWorldQuat).multiply(camera.quaternion)
-    } else {
-      group.quaternion.copy(camera.quaternion)
+  const { position, rotation } = useMemo<{
+    position: Point
+    rotation: [number, number, number]
+  }>(() => {
+    const runDir = new Vector3(dir[0], dir[1], dir[2]).normalize()
+    const xBase = new Vector3().crossVectors(UP, runDir)
+    if (xBase.lengthSq() < 1e-8) xBase.set(1, 0, 0)
+    xBase.normalize()
+    const zBase = new Vector3().crossVectors(xBase, runDir).normalize()
+    const a = Math.PI / 4
+    // `-height` direction (top of the section frame), rotated to the corner.
+    const up = xBase.clone().multiplyScalar(Math.sin(a)).addScaledVector(zBase, -Math.cos(a))
+    const pos: Point = [
+      center[0] + up.x * radius,
+      center[1] + up.y * radius,
+      center[2] + up.z * radius,
+    ]
+    const q = new Quaternion().setFromUnitVectors(UP, runDir)
+    q.multiply(new Quaternion().setFromAxisAngle(UP, Math.PI))
+    // Spin the arc about the run axis so it sits on the corner, plus an extra
+    // 180° in place so the arc faces the other way without moving its position.
+    q.premultiply(new Quaternion().setFromAxisAngle(runDir, -a + Math.PI))
+    const e = new Euler().setFromQuaternion(q)
+    return { position: pos, rotation: [e.x, e.y, e.z] }
+  }, [center, dir, radius])
+
+  return <RotateArc onPointerDown={onPointerDown} position={position} rotation={rotation} />
+}
+
+// Per-point directional arrows: at every path vertex, four XZ chevrons
+// (±X / ±Z) plus an up / down vertical pair. `rotationY` orients the flat
+// chevron to point along its direction (the same `atan2(-z, x)` mapping the
+// wall move handles use). Arrows stand off the run body so they clear thick
+// trunks. At an axis-aligned endpoint the chevron that points back INTO the
+// run (toward the neighbour) is dropped — its outward twin already shortens /
+// lengthens that end either way, so the inward arrow is just a duplicate
+// buried against the duct body.
+function getCornerArrows(duct: DuctSegmentNode): CornerArrow[] {
+  const arrows: CornerArrow[] = []
+  const base = Math.max(runRadiusM(duct) + CORNER_ARROW_GAP, CORNER_ARROW_MIN_OFFSET)
+  const horizontals: { dir: [number, number]; axis: 'x' | 'z' }[] = [
+    { dir: [1, 0], axis: 'x' },
+    { dir: [-1, 0], axis: 'x' },
+    { dir: [0, 1], axis: 'z' },
+    { dir: [0, -1], axis: 'z' },
+  ]
+  const last = duct.path.length - 1
+  duct.path.forEach((p, i) => {
+    const inward = endpointInwardDir(duct, i, last)
+    for (const h of horizontals) {
+      // Skip the cardinal chevron pointing back into the run at an endpoint.
+      // `~1` dot ⇒ same direction as inward.
+      if (inward && h.dir[0] * inward[0] + h.dir[1] * inward[1] > 0.999) continue
+      arrows.push({
+        key: `pt${i}-${h.dir[0]}:${h.dir[1]}`,
+        index: i,
+        kind: { axis: h.axis },
+        position: [p[0] + h.dir[0] * base, p[1], p[2] + h.dir[1] * base],
+        rotationY: Math.atan2(-h.dir[1], h.dir[0]),
+        cursor: 'grab',
+      })
     }
+    arrows.push({
+      key: `pt${i}-up`,
+      index: i,
+      kind: { axis: 'y' },
+      position: [p[0], p[1] + base, p[2]],
+      rotationY: 0,
+      vertical: 'up',
+      cursor: 'ns-resize',
+    })
+    arrows.push({
+      key: `pt${i}-down`,
+      index: i,
+      kind: { axis: 'y' },
+      position: [p[0], p[1] - base, p[2]],
+      rotationY: 0,
+      vertical: 'down',
+      cursor: 'ns-resize',
+    })
   })
-
-  const color = active || hovered ? HANDLE_HOVER_COLOR : HANDLE_COLOR
-  const scale = hovered || active ? 1.25 : 1
-
-  return (
-    <group position={position} ref={groupRef} scale={scale}>
-      <mesh
-        layers={EDITOR_LAYER}
-        onPointerDown={onPointerDown}
-        onPointerEnter={onPointerEnter}
-        onPointerLeave={onPointerLeave}
-        renderOrder={1002}
-      >
-        <circleGeometry args={[HANDLE_RADIUS, 6]} />
-        <meshBasicMaterial
-          color={color}
-          depthTest={false}
-          depthWrite={false}
-          opacity={active ? 1 : 0.95}
-          side={DoubleSide}
-          transparent
-        />
-      </mesh>
-      <mesh renderOrder={1003}>
-        <ringGeometry args={[HANDLE_RADIUS, HANDLE_RADIUS * 1.18, 6]} />
-        <meshBasicMaterial
-          color={color}
-          depthTest={false}
-          depthWrite={false}
-          side={DoubleSide}
-          transparent
-        />
-      </mesh>
-    </group>
-  )
+  return arrows
 }
 
 /**
- * In-world chevron arrow handle — a thin wrapper over the editor's shared
- * `HandleArrow` so the duct side-move / height arrows render as the exact
- * same solid violet plate (depth-written, ink-edge outlined) the wall
- * arrows use, instead of a parallel flat reimplementation. Lays flat in the
- * XZ plane pointing along +X (yawed by `rotationY`); `upright` tips the
- * chevron vertical for the height handle, matching the wall height arrow's
- * `indicatorRotation`. Scales with ortho zoom for a constant on-screen size.
+ * Overall run direction and midpoint (node-local), for the roll gizmo. The
+ * direction is path[0]→last (the run's gross axis), falling back to the first
+ * segment when the ends coincide; the centre is their midpoint. Null when the
+ * run has no length to roll about.
  */
-function ArrowHandle({
-  position,
-  rotationY = 0,
-  upright = false,
-  cursor = 'grab',
-  onPointerDown,
-}: {
-  position: Point
-  rotationY?: number
-  upright?: boolean
-  cursor?: Cursor
-  onPointerDown: (e: ThreeEvent<PointerEvent>) => void
-}) {
-  const [hovered, setHovered] = useState(false)
-  const { camera } = useThree()
-  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const baseScale = zoom * ARROW_SCALE
-
-  return (
-    <HandleArrow
-      cursor={cursor}
-      hover={hovered}
-      // Upright (height): tip the flat chevron up to point along +Y — the
-      // same inner-rotation chain the wall height arrow uses.
-      indicatorRotation={upright ? [0, Math.PI / 2, Math.PI / 2] : undefined}
-      onHoverChange={setHovered}
-      onPointerDown={onPointerDown}
-      placement={{ position, rotation: [0, rotationY, 0], baseScale }}
-      shape="chevron"
-    />
-  )
-}
-
-// Per-segment side-move arrows: a front / back pair at each segment midpoint
-// that has a non-trivial plan length. Vertical risers (which collapse to a
-// point in plan) are skipped. The arrows sit one run-radius + gap off the
-// segment body along its plan normal; `rotationY` orients the flat chevron
-// to point outward (matching `buildWallMoveHandle`).
-function getSideMoveHandles(duct: DuctSegmentNode): SideMoveHandle[] {
-  const handles: SideMoveHandle[] = []
-  const offset = runRadiusM(duct) + SIDE_ARROW_GAP
-  const effOffset = Math.max(offset, SIDE_ARROW_MIN_OFFSET)
-  for (let i = 0; i < duct.path.length - 1; i++) {
-    const a = duct.path[i]!
-    const b = duct.path[i + 1]!
-    const dx = b[0] - a[0]
-    const dz = b[2] - a[2]
-    const len = Math.hypot(dx, dz)
-    if (len < MIN_PLAN_SEGMENT_LEN) continue
-    const normal: [number, number] = [-dz / len, dx / len]
-    const mid: Point = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]
-    for (const side of [1, -1] as const) {
-      const n: [number, number] = [normal[0] * side, normal[1] * side]
-      handles.push({
-        key: `side-${i}-${side}`,
-        segmentIndex: i,
-        normal: n,
-        position: [mid[0] + n[0] * effOffset, mid[1], mid[2] + n[1] * effOffset],
-        rotationY: Math.atan2(-n[1], n[0]),
-      })
-    }
+function runAxisAndCenter(duct: DuctSegmentNode): { dir: Point; center: Point } | null {
+  const path = duct.path
+  if (path.length < 2) return null
+  const a = path[0]!
+  const b = path[path.length - 1]!
+  let dx = b[0] - a[0]
+  let dy = b[1] - a[1]
+  let dz = b[2] - a[2]
+  let len = Math.hypot(dx, dy, dz)
+  if (len < 1e-6) {
+    const c = path[1]!
+    dx = c[0] - a[0]
+    dy = c[1] - a[1]
+    dz = c[2] - a[2]
+    len = Math.hypot(dx, dy, dz)
+    if (len < 1e-6) return null
   }
-  return handles
-}
-
-// Height arrow: a single upright chevron above the run's centroid. `anchor`
-// is the centroid in node-local coords — the drag reads the cursor's start Y
-// against a vertical plane through it so the run doesn't teleport on grab.
-function getHeightHandle(duct: DuctSegmentNode): { position: Point; anchor: Point } | null {
-  if (duct.path.length < 2) return null
-  let x = 0
-  let y = 0
-  let z = 0
-  for (const p of duct.path) {
-    x += p[0]
-    y += p[1]
-    z += p[2]
-  }
-  const count = duct.path.length
-  const anchor: Point = [x / count, y / count, z / count]
-  const top = Math.max(...duct.path.map((p) => p[1]))
   return {
-    anchor,
-    position: [anchor[0], top + runRadiusM(duct) + HEIGHT_ARROW_OFFSET, anchor[2]],
+    dir: [dx / len, dy / len, dz / len],
+    center: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2],
   }
+}
+
+// Inward run-axis unit direction (XZ) at endpoint `i`, pointing from the
+// endpoint toward its neighbour — but only when that direction is grid-aligned
+// (one of ±X / ±Z), since the cardinal chevrons it suppresses are themselves
+// axis-aligned. Null for interior points, collapsed-in-plan ends (a pure
+// riser), and diagonal runs (where no cardinal chevron lies on the axis).
+function endpointInwardDir(
+  duct: DuctSegmentNode,
+  i: number,
+  last: number,
+): [number, number] | null {
+  if ((i !== 0 && i !== last) || duct.path.length < 2) return null
+  const p = duct.path[i]!
+  const other = i === 0 ? duct.path[1]! : duct.path[last - 1]!
+  const dx = other[0] - p[0]
+  const dz = other[2] - p[2]
+  const len = Math.hypot(dx, dz)
+  if (len < 0.001) return null
+  const ux = dx / len
+  const uz = dz / len
+  // Only suppress when the inward direction is (near-)cardinal, so a diagonal
+  // run keeps all four chevrons (none overlaps its axis).
+  if (Math.abs(ux) > 0.999) return [Math.sign(ux), 0]
+  if (Math.abs(uz) > 0.999) return [0, Math.sign(uz)]
+  return null
 }
 
 export default DuctSegmentSelectionAffordance
