@@ -22,10 +22,13 @@ export function HandleCube({
   position,
   active,
   onClick,
+  rotationY = 0,
 }: {
   position: Point
   active: boolean
   onClick: () => void
+  /** Yaw (radians) so the cube can align with the run it sits on. */
+  rotationY?: number
 }) {
   const [hovered, setHovered] = useState(false)
   const { camera } = useThree()
@@ -41,7 +44,7 @@ export function HandleCube({
         e.stopPropagation()
         onClick()
       }}
-      placement={{ position, baseScale }}
+      placement={{ position, rotation: [0, rotationY, 0], baseScale }}
       shape="tracker"
     />
   )

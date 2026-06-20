@@ -58,8 +58,10 @@ export const DuctFittingNode = BaseNode.extend({
   width2: z.number().min(4).max(60).default(14),
   height2: z.number().min(3).max(40).default(8),
   // Elbow turn angle in degrees. Residential sheet-metal elbows come in
-  // 90° and 45°; adjustable elbows cover the range between.
-  angle: z.number().min(15).max(90).default(90),
+  // 90° and 45°; adjustable elbows cover the range between. 0° is a
+  // straight coupling — what an elbow flattens to when its run is dragged
+  // into line with the fixed collar.
+  angle: z.number().min(0).max(90).default(90),
   // Tee branch angle in degrees, measured off the +X (outlet) axis: 90°
   // is a square straight tee, <90° a lateral whose branch sweeps
   // downstream toward the outlet (flow merges), >90° leans the branch

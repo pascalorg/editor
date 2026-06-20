@@ -64,9 +64,19 @@ function runRadiusM(duct: DuctSegmentNode): number {
 
 type Point = [number, number, number]
 
-// What a corner arrow constrains its drag to: a single world-local axis
-// (X / Z horizontal, Y vertical).
-type DragKind = { axis: 'x' | 'z' | 'y' }
+// What a corner arrow constrains its drag to: the vertical world axis, or a
+// horizontal line along a run-relative direction (node-local XZ unit vector) —
+// so a duct drawn at any angle keeps along-run / across-run arrows instead of
+// world ±X / ±Z. `along` marks the pair that lies ON the run axis (lengthen /
+// shorten) vs the across pair (swing); the up / down pair swings too.
+type DragKind = { axis: 'y' } | { axis: 'horizontal'; dir: [number, number]; along: boolean }
+
+// What a run-center arrow translates the WHOLE run along: the vertical world
+// axis, or a horizontal line down a run-relative direction (node-local XZ unit
+// vector) — so the along-/across-run arrows align with the run instead of
+// world ±X / ±Z. Unlike a corner drag there's no pivot, so no swing: every
+// path point shifts by the same delta.
+type RunMoveKind = { axis: 'y' } | { axis: 'horizontal'; dir: [number, number] }
 
 type CornerArrow = {
   key: string
@@ -92,12 +102,14 @@ type CornerArrow = {
  * Drag raycasts run in world space and convert hits back into the
  * group's local frame before writing the path.
  *
- * Drag model: each arrow locks the point to one axis. Dragged run endpoints
- * still snap onto nearby typed ports so a loose run can be mated onto a
- * fitting after the fact, and when the dragged
- * endpoint belongs to a straight run whose OTHER end sits on an elbow collar,
- * the elbow re-aims to follow the drag (junction + far collar fixed, bend
- * angle adapts) instead of port-snapping.
+ * Drag model: the along-run arrow lengthens / shortens the run (locked to the
+ * run axis). The across-run (side) and up / down arrows instead SWING the
+ * grabbed endpoint around its neighbour at a fixed radius — the run pivots like
+ * a compass arm, keeping its length, rather than stretching. Dragged run
+ * endpoints still snap onto nearby typed ports (along-run drag) so a loose run
+ * can be mated onto a fitting after the fact, and when the dragged endpoint
+ * belongs to a straight run whose OTHER end sits on an elbow collar, the elbow
+ * re-aims to follow the drag (junction + far collar fixed, bend angle adapts).
  *
  * Modifiers (mirroring the wall corner drag):
  * - **Alt** detaches: the joint breaks for this drag — the elbow does NOT
@@ -236,6 +248,73 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     return hit ? toLocal(hit)[1] : null
   }
 
+  /**
+   * Length-preserving HORIZONTAL swing: the unit direction from `pivot` toward
+   * a point sharing the cursor's heading but keeping the run's current pitch
+   * (vertical component). Caller re-extends it to the fixed radius. Sweeping
+   * the end around the pivot in the horizontal plane (a yaw) without changing
+   * length. Null when the cursor sits on the pivot's vertical axis (no
+   * heading) or the ray misses.
+   */
+  const swingHorizontal = (event: PointerEvent, pivot: Point, startPoint: Point): Point | null => {
+    const r = Math.hypot(
+      startPoint[0] - pivot[0],
+      startPoint[1] - pivot[1],
+      startPoint[2] - pivot[2],
+    )
+    if (r < 1e-6) return null
+    const verticalN = (startPoint[1] - pivot[1]) / r
+    const horizN = Math.sqrt(Math.max(0, 1 - verticalN * verticalN))
+    const plane = new Plane().setFromNormalAndCoplanarPoint(UP, toWorld(pivot))
+    const hit = intersect(event.clientX, event.clientY, plane)
+    if (!hit) return null
+    const local = toLocal(hit)
+    const bx = local[0] - pivot[0]
+    const bz = local[2] - pivot[2]
+    const blen = Math.hypot(bx, bz)
+    if (blen < 1e-6) return null
+    return [(bx / blen) * horizN, verticalN, (bz / blen) * horizN]
+  }
+
+  /**
+   * Length-preserving VERTICAL swing: the unit direction from `pivot` toward
+   * the cursor within the vertical plane that contains the run's current
+   * horizontal heading — so the end tilts up / down (changing pitch) while its
+   * heading and length stay fixed. Falls back to a camera-facing vertical plane
+   * for a pure riser (no horizontal heading). Null when the ray misses.
+   */
+  const swingVertical = (event: PointerEvent, pivot: Point, startPoint: Point): Point | null => {
+    let hx = startPoint[0] - pivot[0]
+    let hz = startPoint[2] - pivot[2]
+    let hlen = Math.hypot(hx, hz)
+    if (hlen < 1e-6) {
+      // Pure riser: no heading — sweep in the plane facing the camera.
+      const forward = camera.getWorldDirection(new Vector3())
+      hx = forward.x
+      hz = forward.z
+      hlen = Math.hypot(hx, hz)
+      if (hlen < 1e-6) {
+        hx = 0
+        hz = 1
+        hlen = 1
+      }
+    }
+    const headingWorld = new Vector3(hx / hlen, 0, hz / hlen)
+    // Plane normal: horizontal, perpendicular to the heading — the plane stands
+    // upright and contains both the heading and world-up through the pivot.
+    const normal = new Vector3().crossVectors(UP, headingWorld).normalize()
+    const plane = new Plane().setFromNormalAndCoplanarPoint(normal, toWorld(pivot))
+    const hit = intersect(event.clientX, event.clientY, plane)
+    if (!hit) return null
+    const local = toLocal(hit)
+    const ax = local[0] - pivot[0]
+    const ay = local[1] - pivot[1]
+    const az = local[2] - pivot[2]
+    const len = Math.hypot(ax, ay, az)
+    if (len < 1e-6) return null
+    return [ax / len, ay / len, az / len]
+  }
+
   // Build the per-frame update batch for the dragged endpoint at `next`.
   // Detached (Alt): only the duct path moves — no elbow re-aim, no
   // connectivity follow. Elbow mode: the run rides the elbow's re-aimed
@@ -300,6 +379,22 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
 
     const isEndpoint = index === 0 || index === initialPath.length - 1
 
+    // Swing pivot: the across-run (side) and up / down arrows DON'T stretch the
+    // run — they sweep the grabbed point around its neighbour at a fixed radius
+    // (the segment's current length), so the run pivots like a compass arm
+    // instead of lengthening. The along-run pair keeps the plain lengthen /
+    // shorten. The pivot is the adjacent vertex; null when there's no neighbour
+    // (a lone point) or the grabbed segment has zero length.
+    const swings = kind.axis === 'y' || (kind.axis === 'horizontal' && !kind.along)
+    // Pivot only at an endpoint (its single neighbour is the unambiguous "other
+    // end"); interior vertices keep the plain per-axis drag.
+    const neighborIndex = index === 0 ? 1 : index === initialPath.length - 1 ? index - 1 : null
+    const pivot = neighborIndex !== null ? initialPath[neighborIndex]! : null
+    const radius = pivot
+      ? Math.hypot(startPoint[0] - pivot[0], startPoint[1] - pivot[1], startPoint[2] - pivot[2])
+      : 0
+    const canSwing = swings && isEndpoint && pivot !== null && radius > 1e-6
+
     // Elbow re-aim: if this is a straight run whose OTHER end sits on an
     // elbow collar, the elbow swings to follow the drag (junction + far
     // collar fixed, bend angle adapts). Detected once against a drag-start
@@ -317,36 +412,61 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       // re-mate elsewhere). Mirrors the wall corner drag.
       const detached = event.altKey
       let next: Point | null = null
-      if (kind.axis === 'y') {
+      if (canSwing && pivot) {
+        // Length-preserving swing: aim from the pivot toward the cursor and
+        // re-extend to the fixed radius. The up / down arrow swings in the
+        // vertical plane that contains the run (so it tilts the run up / down
+        // without changing its length); the side arrow swings in the
+        // horizontal plane (a yaw about the pivot).
+        const aim =
+          kind.axis === 'y'
+            ? swingVertical(event, pivot, startPoint)
+            : swingHorizontal(event, pivot, startPoint)
+        if (aim) {
+          // The swung endpoint follows the grid snap points by default; Shift
+          // sets step 0 so it sweeps smoothly. Snapping the landed coords (not
+          // the arc angle) keeps the endpoint on the grid like every other
+          // arrow, trading a hair of the fixed radius for grid alignment.
+          next = [
+            snap(pivot[0] + aim[0] * radius, step),
+            Math.max(0, snap(pivot[1] + aim[1] * radius, step)),
+            snap(pivot[2] + aim[2] * radius, step),
+          ]
+        }
+      } else if (kind.axis === 'y') {
         // Vertical (riser): keep XZ pinned to the start and drive Y off the
         // cursor against a vertical plane through the point.
         const y = intersectVerticalY(event.clientX, event.clientY, toWorld(startPoint))
         if (y !== null) next = [startPoint[0], Math.max(0, snap(y, step)), startPoint[2]]
       } else {
         // Horizontal: project the cursor onto the plane at the point's height,
-        // then lock to the arrow's axis (X / Z).
+        // then lock to the arrow's run-relative line (node-local XZ direction)
+        // through the point — so an angled run drags along / across itself, not
+        // world ±X / ±Z.
         const plane = new Plane().setFromNormalAndCoplanarPoint(UP, toWorld(startPoint))
         const hit = intersect(event.clientX, event.clientY, plane)
         if (hit) {
           const local = toLocal(hit)
-          if (kind.axis === 'x') {
-            next = [snap(local[0], step), startPoint[1], startPoint[2]]
-          } else {
-            next = [startPoint[0], startPoint[1], snap(local[2], step)]
-          }
-          // Port re-mate stays available while detaching or free-dragging;
-          // it's only suppressed while the elbow is actively re-aiming.
-          if (isEndpoint && (detached || !drag.elbowEndpoint)) {
-            const port = findNearestPortXZ(
-              [next[0], startPoint[1], next[2]],
-              collectScenePorts({ excludeNodeId: duct.id, systems: DUCT_PORT_SYSTEMS }),
-              PORT_SNAP_RADIUS_M,
-            )
-            if (port) next = [port.position[0], port.position[1], port.position[2]]
-          }
+          const [dx, dz] = kind.dir
+          // Signed displacement of the cursor along the lock direction, snapped.
+          const t = snap((local[0] - startPoint[0]) * dx + (local[2] - startPoint[2]) * dz, step)
+          next = [startPoint[0] + t * dx, startPoint[1], startPoint[2] + t * dz]
         }
       }
       if (!next) return
+      // Port re-mate for any endpoint arrow — the along-/across-run drags AND
+      // the length-preserving swings all snap onto a nearby typed port so a
+      // loose run can be mated onto a fitting after the fact (the swing's fixed
+      // radius yields to the port). Stays available while detaching or
+      // free-dragging; suppressed only while the elbow is actively re-aiming.
+      if (isEndpoint && (detached || !drag.elbowEndpoint)) {
+        const port = findNearestPortXZ(
+          [next[0], next[1], next[2]],
+          collectScenePorts({ excludeNodeId: duct.id, systems: DUCT_PORT_SYSTEMS }),
+          PORT_SNAP_RADIUS_M,
+        )
+        if (port) next = [port.position[0], port.position[1], port.position[2]]
+      }
       if (next[0] === drag.current[0] && next[1] === drag.current[1] && next[2] === drag.current[2])
         return
       const batch = buildDragBatch(drag, next, detached)
@@ -505,40 +625,46 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     window.addEventListener('pointercancel', onUp)
   }
 
-  // Move the WHOLE run, locked to one world axis (X / Y / Z). Every path point
-  // shifts by the same delta; mated fittings / runs follow via connectivity,
-  // and the gesture lands as a single undo step (the same dance the per-point
-  // drag uses). The six center arrows each bind one ± axis; the projection per
-  // axis is the only thing that differs.
-  const onRunMoveDown = (axis: 'x' | 'y' | 'z') => (e: ThreeEvent<PointerEvent>) => {
+  // Move the WHOLE run, locked to one direction: the vertical world axis, or a
+  // run-relative horizontal line (node-local XZ unit dir) so the along-/across-
+  // run arrows track the run instead of world ±X / ±Z. Every path point shifts
+  // by the same delta; mated fittings / runs follow via connectivity, and the
+  // gesture lands as a single undo step (the same dance the per-point drag
+  // uses). The center arrows each bind one direction; the projection is the
+  // only thing that differs.
+  const onRunMoveDown = (kind: RunMoveKind) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     const initialPath = duct.path.map((p) => [...p] as Point)
     const center = runAxisAndCenter(duct)?.center ?? initialPath[0]!
     const connectivity = analyzePortConnectivity(duct as AnyNode, useScene.getState().nodes)
     const anchorWorld = toWorld(center)
-    // Grab offset: cursor's start coordinate on the locked axis, so the run
-    // doesn't jump on grab.
+    // Grab offset: cursor's start coordinate along the locked direction (signed
+    // distance for the horizontal run-relative line), so the run doesn't jump
+    // on grab.
     const sample = (clientX: number, clientY: number): number | null => {
-      if (axis === 'y') return intersectVerticalY(clientX, clientY, anchorWorld)
+      if (kind.axis === 'y') return intersectVerticalY(clientX, clientY, anchorWorld)
       const plane = new Plane().setFromNormalAndCoplanarPoint(UP, anchorWorld)
       const hit = intersect(clientX, clientY, plane)
       if (!hit) return null
-      return toLocal(hit)[axis === 'x' ? 0 : 2]
+      const local = toLocal(hit)
+      return local[0] * kind.dir[0] + local[2] * kind.dir[1]
     }
     const startSample = sample(e.nativeEvent.clientX, e.nativeEvent.clientY)
-    const axisIndex = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
     pauseSceneHistory(useScene)
     useViewer.getState().setInputDragging(true)
-    document.body.style.cursor = axis === 'y' ? 'ns-resize' : 'grabbing'
+    document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setRunMoving(true)
     let delta = 0
 
     const shiftedPath = (d: number): Point[] =>
       initialPath.map((p) => {
         const next = [...p] as Point
-        next[axisIndex] = (
-          axis === 'y' ? Math.max(0, p[axisIndex] + d) : p[axisIndex] + d
-        ) as number
+        if (kind.axis === 'y') {
+          next[1] = Math.max(0, p[1] + d)
+        } else {
+          next[0] = p[0] + d * kind.dir[0]
+          next[2] = p[2] + d * kind.dir[1]
+        }
         return next
       })
     const batchFor = (path: Point[]): { id: AnyNodeId; data: Partial<AnyNode> }[] => [
@@ -595,47 +721,70 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
   // Run-center cube position (centroid centerline). The six whole-run move
   // arrows + the roll arc are revealed on hover, like the per-vertex clusters.
   const runCenter = useMemo<Point | null>(() => runAxisAndCenter(duct)?.center ?? null, [duct])
-  // Six whole-run move arrows, one per ± world axis, offset off the center.
+  // Yaw the center cube to the run's horizontal heading so it stays aligned
+  // with the run (matching the per-vertex cubes). A pure riser has no heading.
+  const runCenterYaw = useMemo<number>(() => {
+    const axis = runAxisAndCenter(duct)
+    if (!axis || Math.hypot(axis.dir[0], axis.dir[2]) < 1e-6) return 0
+    return Math.atan2(-axis.dir[2], axis.dir[0])
+  }, [duct])
+  // Six whole-run move arrows offset off the center: four horizontal (along-run
+  // ± and across-run ±, aligned to the run's XZ tangent so they track the run
+  // instead of world ±X / ±Z) plus the up / down vertical pair. All shift every
+  // path point rigidly — no swing (the whole run has no pivot).
   const centerArrows = useMemo(() => {
     if (!runCenter) return []
     const base = Math.max(runRadiusM(duct) + CORNER_ARROW_GAP, CORNER_ARROW_MIN_OFFSET)
-    const dirs: {
+    // Run's horizontal heading (node-local XZ). A pure riser has none → fall
+    // back to world +X so the arrows stay usable.
+    const axis = runAxisAndCenter(duct)
+    const t: [number, number] =
+      axis && Math.hypot(axis.dir[0], axis.dir[2]) > 1e-6
+        ? (() => {
+            const len = Math.hypot(axis.dir[0], axis.dir[2])
+            return [axis.dir[0] / len, axis.dir[2] / len]
+          })()
+        : [1, 0]
+    const runYaw = Math.atan2(-t[1], t[0])
+    const horiz: { key: string; dir: [number, number] }[] = [
+      { key: 'along+', dir: [t[0], t[1]] },
+      { key: 'along-', dir: [-t[0], -t[1]] },
+      { key: 'across+', dir: [-t[1], t[0]] },
+      { key: 'across-', dir: [t[1], -t[0]] },
+    ]
+    const arrows: {
       key: string
-      axis: 'x' | 'y' | 'z'
-      offset: Point
+      kind: RunMoveKind
+      position: Point
       rotationY: number
       vertical?: 'up' | 'down'
       cursor: Cursor
-    }[] = [
-      { key: '+x', axis: 'x', offset: [base, 0, 0], rotationY: 0, cursor: 'grab' },
-      { key: '-x', axis: 'x', offset: [-base, 0, 0], rotationY: Math.PI, cursor: 'grab' },
-      { key: '+z', axis: 'z', offset: [0, 0, base], rotationY: -Math.PI / 2, cursor: 'grab' },
-      { key: '-z', axis: 'z', offset: [0, 0, -base], rotationY: Math.PI / 2, cursor: 'grab' },
+    }[] = horiz.map(({ key, dir }) => ({
+      key,
+      kind: { axis: 'horizontal', dir },
+      position: [runCenter[0] + dir[0] * base, runCenter[1], runCenter[2] + dir[1] * base],
+      rotationY: Math.atan2(-dir[1], dir[0]),
+      cursor: 'grab',
+    }))
+    arrows.push(
       {
         key: '+y',
-        axis: 'y',
-        offset: [0, base, 0],
-        rotationY: 0,
+        kind: { axis: 'y' },
+        position: [runCenter[0], runCenter[1] + base, runCenter[2]],
+        rotationY: runYaw,
         vertical: 'up',
         cursor: 'ns-resize',
       },
       {
         key: '-y',
-        axis: 'y',
-        offset: [0, -base, 0],
-        rotationY: 0,
+        kind: { axis: 'y' },
+        position: [runCenter[0], runCenter[1] - base, runCenter[2]],
+        rotationY: runYaw,
         vertical: 'down',
         cursor: 'ns-resize',
       },
-    ]
-    return dirs.map((d) => ({
-      ...d,
-      position: [
-        runCenter[0] + d.offset[0],
-        runCenter[1] + d.offset[1],
-        runCenter[2] + d.offset[2],
-      ] as Point,
-    }))
+    )
+    return arrows
   }, [duct, runCenter])
 
   return (
@@ -654,6 +803,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
               active={openCluster === i}
               onClick={() => toggleCluster(i)}
               position={p as Point}
+              rotationY={vertexYaw(duct, i)}
             />
             {openCluster === i &&
               cornerArrows
@@ -680,6 +830,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
             active={openCluster === 'center'}
             onClick={() => toggleCluster('center')}
             position={runCenter}
+            rotationY={runCenterYaw}
           />
           {openCluster === 'center' && (
             <>
@@ -687,7 +838,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
                 <MoveChevron
                   cursor={a.cursor}
                   key={a.key}
-                  onPointerDown={onRunMoveDown(a.axis)}
+                  onPointerDown={onRunMoveDown(a.kind)}
                   position={a.position}
                   rotationY={a.rotationY}
                   vertical={a.vertical}
@@ -801,36 +952,49 @@ function RollHandle({
   return <RotateArc onPointerDown={onPointerDown} position={position} rotation={rotation} />
 }
 
-// Per-point directional arrows: at every path vertex, four XZ chevrons
-// (±X / ±Z) plus an up / down vertical pair. `rotationY` orients the flat
-// chevron to point along its direction (the same `atan2(-z, x)` mapping the
-// wall move handles use). Arrows stand off the run body so they clear thick
-// trunks. At an axis-aligned endpoint the chevron that points back INTO the
-// run (toward the neighbour) is dropped — its outward twin already shortens /
-// lengthens that end either way, so the inward arrow is just a duplicate
-// buried against the duct body.
+// Per-point directional arrows: at every path vertex, four horizontal chevrons
+// (along-run ± and across-run ±) plus an up / down vertical pair. The
+// horizontal pair is aligned to the run's node-local TANGENT at that vertex,
+// not world ±X / ±Z, so a duct drawn at any angle (or rotated) keeps
+// along-/across-run arrows. `rotationY` orients each flat chevron to point
+// along its direction (the same `atan2(-z, x)` mapping the wall move handles
+// use). Arrows stand off the run body so they clear thick trunks. At an
+// endpoint the chevron pointing back INTO the run (toward the neighbour) is
+// dropped — its outward twin already shortens / lengthens that end either way.
 function getCornerArrows(duct: DuctSegmentNode): CornerArrow[] {
   const arrows: CornerArrow[] = []
   const base = Math.max(runRadiusM(duct) + CORNER_ARROW_GAP, CORNER_ARROW_MIN_OFFSET)
-  const horizontals: { dir: [number, number]; axis: 'x' | 'z' }[] = [
-    { dir: [1, 0], axis: 'x' },
-    { dir: [-1, 0], axis: 'x' },
-    { dir: [0, 1], axis: 'z' },
-    { dir: [0, -1], axis: 'z' },
-  ]
   const last = duct.path.length - 1
   duct.path.forEach((p, i) => {
-    const inward = endpointInwardDir(duct, i, last)
-    for (const h of horizontals) {
-      // Skip the cardinal chevron pointing back into the run at an endpoint.
-      // `~1` dot ⇒ same direction as inward.
-      if (inward && h.dir[0] * inward[0] + h.dir[1] * inward[1] > 0.999) continue
+    // Run tangent at this vertex (node-local XZ). A pure-riser vertex has no
+    // horizontal extent → fall back to world +X so the arrows stay usable.
+    const t = vertexTangentXZ(duct, i) ?? [1, 0]
+    // Yaw that aligns a handle's local +X with the run tangent — shared by the
+    // up / down chevrons so their flat plates align with the run (the ±Y tip
+    // is added on top, and yawing about Y keeps them pointing up / down).
+    const runYaw = Math.atan2(-t[1], t[0])
+    // along the run (lengthen / shorten), then across it (swing — tangent
+    // rotated ±90°).
+    const dirs: { dir: [number, number]; along: boolean }[] = [
+      { dir: [t[0], t[1]], along: true },
+      { dir: [-t[0], -t[1]], along: true },
+      { dir: [-t[1], t[0]], along: false },
+      { dir: [t[1], -t[0]], along: false },
+    ]
+    // Inward (toward the run body) at an endpoint: i=0 the tangent points at
+    // the neighbour, i=last it points away — so inward is ∓tangent. Interior
+    // points keep all four arrows.
+    const inward: [number, number] | null =
+      i === 0 ? [t[0], t[1]] : i === last ? [-t[0], -t[1]] : null
+    for (const { dir, along } of dirs) {
+      const [dx, dz] = dir
+      if (inward && dx * inward[0] + dz * inward[1] > 0.999) continue
       arrows.push({
-        key: `pt${i}-${h.dir[0]}:${h.dir[1]}`,
+        key: `pt${i}-${dx.toFixed(3)}:${dz.toFixed(3)}`,
         index: i,
-        kind: { axis: h.axis },
-        position: [p[0] + h.dir[0] * base, p[1], p[2] + h.dir[1] * base],
-        rotationY: Math.atan2(-h.dir[1], h.dir[0]),
+        kind: { axis: 'horizontal', dir: [dx, dz], along },
+        position: [p[0] + dx * base, p[1], p[2] + dz * base],
+        rotationY: Math.atan2(-dz, dx),
         cursor: 'grab',
       })
     }
@@ -839,7 +1003,7 @@ function getCornerArrows(duct: DuctSegmentNode): CornerArrow[] {
       index: i,
       kind: { axis: 'y' },
       position: [p[0], p[1] + base, p[2]],
-      rotationY: 0,
+      rotationY: runYaw,
       vertical: 'up',
       cursor: 'ns-resize',
     })
@@ -848,12 +1012,46 @@ function getCornerArrows(duct: DuctSegmentNode): CornerArrow[] {
       index: i,
       kind: { axis: 'y' },
       position: [p[0], p[1] - base, p[2]],
-      rotationY: 0,
+      rotationY: runYaw,
       vertical: 'down',
       cursor: 'ns-resize',
     })
   })
   return arrows
+}
+
+/**
+ * Node-local XZ unit tangent of the run at vertex `i`: toward the neighbour at
+ * an endpoint, the averaged direction of the two adjacent segments at an
+ * interior corner. Null when the run has no horizontal extent there (a pure
+ * riser vertex), so the caller falls back to a world-aligned arrow.
+ */
+function vertexTangentXZ(duct: DuctSegmentNode, i: number): [number, number] | null {
+  const path = duct.path
+  const last = path.length - 1
+  if (last < 1) return null
+  const seg = (a: number, b: number): [number, number] | null => {
+    const dx = path[b]![0] - path[a]![0]
+    const dz = path[b]![2] - path[a]![2]
+    const len = Math.hypot(dx, dz)
+    return len < 1e-6 ? null : [dx / len, dz / len]
+  }
+  if (i === 0) return seg(0, 1)
+  if (i === last) return seg(last - 1, last)
+  const inc = seg(i - 1, i)
+  const out = seg(i, i + 1)
+  if (!inc) return out
+  if (!out) return inc
+  const sx = inc[0] + out[0]
+  const sz = inc[1] + out[1]
+  const len = Math.hypot(sx, sz)
+  return len < 1e-6 ? inc : [sx / len, sz / len]
+}
+
+/** Y-yaw that aligns a handle's local +X with the run tangent at vertex `i`. */
+function vertexYaw(duct: DuctSegmentNode, i: number): number {
+  const t = vertexTangentXZ(duct, i)
+  return t ? Math.atan2(-t[1], t[0]) : 0
 }
 
 /**
@@ -883,32 +1081,6 @@ function runAxisAndCenter(duct: DuctSegmentNode): { dir: Point; center: Point } 
     dir: [dx / len, dy / len, dz / len],
     center: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2],
   }
-}
-
-// Inward run-axis unit direction (XZ) at endpoint `i`, pointing from the
-// endpoint toward its neighbour — but only when that direction is grid-aligned
-// (one of ±X / ±Z), since the cardinal chevrons it suppresses are themselves
-// axis-aligned. Null for interior points, collapsed-in-plan ends (a pure
-// riser), and diagonal runs (where no cardinal chevron lies on the axis).
-function endpointInwardDir(
-  duct: DuctSegmentNode,
-  i: number,
-  last: number,
-): [number, number] | null {
-  if ((i !== 0 && i !== last) || duct.path.length < 2) return null
-  const p = duct.path[i]!
-  const other = i === 0 ? duct.path[1]! : duct.path[last - 1]!
-  const dx = other[0] - p[0]
-  const dz = other[2] - p[2]
-  const len = Math.hypot(dx, dz)
-  if (len < 0.001) return null
-  const ux = dx / len
-  const uz = dz / len
-  // Only suppress when the inward direction is (near-)cardinal, so a diagonal
-  // run keeps all four chevrons (none overlaps its axis).
-  if (Math.abs(ux) > 0.999) return [Math.sign(ux), 0]
-  if (Math.abs(uz) > 0.999) return [0, Math.sign(uz)]
-  return null
 }
 
 export default DuctSegmentSelectionAffordance

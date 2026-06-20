@@ -502,10 +502,29 @@ describe('planElbowRealign', () => {
     expect(dot(outlet.direction, [0, 0, 1])).toBeCloseTo(1, 6)
   })
 
-  test('arrival needing a turn outside 15–90° → null', () => {
+  test('shallow arrival flattens the elbow toward a straight coupling', () => {
     const elbow = existingElbow()
-    // Away nearly opposite the fixed inlet direction → turn < 15°.
-    expect(planElbowRealign(elbow, 'outlet', [0.99, 0, 0.14])).toBeNull()
+    // Away nearly opposite the fixed inlet direction → turn < 15°. Unlike
+    // fresh-fitting creation, an existing elbow flattens to this small angle
+    // instead of bailing, so the run can be dragged dead straight.
+    const plan = planElbowRealign(elbow, 'outlet', [0.99, 0, 0.14])
+    expect(plan).not.toBeNull()
+    expect(plan!.update.data.angle).toBeLessThan(15)
+    expect(plan!.update.data.angle).toBeGreaterThanOrEqual(0)
+  })
+
+  test('run dragged into line flattens the elbow to a straight 0° coupling', () => {
+    const elbow = existingElbow()
+    // The free outlet pulled exactly opposite the mated inlet → no turn left.
+    const inlet = getDuctFittingPorts(elbow).find((p) => p.id === 'inlet')!
+    const away: Point = [-inlet.direction[0], -inlet.direction[1], -inlet.direction[2]]
+    const plan = planElbowRealign(elbow, 'outlet', away)
+    expect(plan).not.toBeNull()
+    expect(plan!.update.data.angle).toBeCloseTo(0, 5)
+  })
+
+  test('a back-turn sharper than 90° still bails', () => {
+    const elbow = existingElbow()
     // Away aligned WITH the fixed collar direction → turn > 90°.
     expect(planElbowRealign(elbow, 'outlet', [-0.99, 0, 0.14])).toBeNull()
   })

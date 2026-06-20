@@ -504,10 +504,14 @@ function planElbowRealignCore(
   )
   const fixedWorld = snappedPortId === 'inlet' ? outletWorld : inletWorld
 
-  // New turn from the fixed collar / free collar pair.
+  // New turn from the fixed collar / free collar pair. Unlike fresh-fitting
+  // creation (which butt-joins near-straight runs rather than minting a flat
+  // elbow), an EXISTING elbow may flatten all the way to 0° — a straight
+  // coupling — when its run is dragged into line, so only the upper bound
+  // guards here.
   const spread = fixedWorld.angleTo(away)
   const turnNew = Math.PI - spread
-  if (turnNew < MIN_TURN_RAD || turnNew > MAX_TURN_RAD) return null
+  if (turnNew > MAX_TURN_RAD) return null
 
   // Local outward pair at the new angle, ordered (fixed, free) to match
   // the world pair.
@@ -518,16 +522,20 @@ function planElbowRealignCore(
 
   const localFrame = frame(fixedLocal, freeLocal)
   const worldFrame = frame(fixedWorld, away)
-  if (!localFrame || !worldFrame) return null
-  const rotation = new Quaternion().setFromRotationMatrix(
-    worldFrame.multiply(localFrame.transpose()),
-  )
+  // At (near-)straight the two collars are collinear, so the bend plane is
+  // undefined and `frame()` returns null. Map the fixed collar's local axis
+  // onto its world direction instead; the free collar (antiparallel) lands
+  // on `away` for free, and a straight coupling's roll is arbitrary.
+  const rotation =
+    localFrame && worldFrame
+      ? new Quaternion().setFromRotationMatrix(worldFrame.multiply(localFrame.transpose()))
+      : new Quaternion().setFromUnitVectors(fixedLocal, fixedWorld)
   const euler = new Euler().setFromQuaternion(rotation)
 
   const collar = new Vector3(...elbow.position).addScaledVector(away, leg)
 
   return {
-    angle: Math.min(90, (turnNew * 180) / Math.PI),
+    angle: Math.max(0, Math.min(90, (turnNew * 180) / Math.PI)),
     rotation: [euler.x, euler.y, euler.z],
     collarPoint: [collar.x, collar.y, collar.z],
   }
