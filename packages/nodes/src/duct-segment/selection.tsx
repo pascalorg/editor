@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Euler,
   type Group,
+  Matrix4,
   type Object3D,
   Plane,
   Quaternion,
@@ -744,9 +745,16 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
  * Roll gizmo — the shared `RotateArc` re-oriented to wrap the run's length
  * axis, seated at a FIXED corner of the section frame. It does NOT track
  * `roll`, so the grip stays still while the user spins the duct (otherwise it
- * chases the cursor and is hard to keep hold of). The angle is the top 45°
- * corner (between the top and a side face); the position offset and the arc's
- * spin share that one angle so it stays oriented.
+ * chases the cursor and is hard to keep hold of).
+ *
+ * The `curved-arrow` geometry wraps its LOCAL +Y (the spin axis) and bulges
+ * its arc apex along LOCAL +X. Orienting with a single `setFromUnitVectors`
+ * only pins the spin axis and leaves the apex pointing an arbitrary way, so the
+ * arc faced inconsistently across run directions. Instead we build a FULLY
+ * determined basis: +Y → run direction (the roll axis), +X → the top-outer 45°
+ * corner direction (so the apex always bulges outward at that corner), +Z the
+ * derived right-handed third axis. Position rides the same corner direction off
+ * the centre, so the grip and its curve always agree.
  */
 function RollHandle({
   center,
@@ -769,18 +777,23 @@ function RollHandle({
     xBase.normalize()
     const zBase = new Vector3().crossVectors(xBase, runDir).normalize()
     const a = Math.PI / 4
-    // `-height` direction (top of the section frame), rotated to the corner.
-    const up = xBase.clone().multiplyScalar(Math.sin(a)).addScaledVector(zBase, -Math.cos(a))
+    // Top-outer 45° corner of the section frame (between the top and a side
+    // face) — both the position offset and the arc apex ride this direction.
+    const cornerDir = xBase
+      .clone()
+      .multiplyScalar(Math.sin(a))
+      .addScaledVector(zBase, -Math.cos(a))
+      .normalize()
     const pos: Point = [
-      center[0] + up.x * radius,
-      center[1] + up.y * radius,
-      center[2] + up.z * radius,
+      center[0] + cornerDir.x * radius,
+      center[1] + cornerDir.y * radius,
+      center[2] + cornerDir.z * radius,
     ]
-    const q = new Quaternion().setFromUnitVectors(UP, runDir)
-    q.multiply(new Quaternion().setFromAxisAngle(UP, Math.PI))
-    // Spin the arc about the run axis so it sits on the corner, plus an extra
-    // 180° in place so the arc faces the other way without moving its position.
-    q.premultiply(new Quaternion().setFromAxisAngle(runDir, -a + Math.PI))
+    // Basis: X = apex/corner, Y = roll axis (run dir), Z = right-handed third.
+    const zAxis = new Vector3().crossVectors(cornerDir, runDir).normalize()
+    const q = new Quaternion().setFromRotationMatrix(
+      new Matrix4().makeBasis(cornerDir, runDir, zAxis),
+    )
     const e = new Euler().setFromQuaternion(q)
     return { position: pos, rotation: [e.x, e.y, e.z] }
   }, [center, dir, radius])

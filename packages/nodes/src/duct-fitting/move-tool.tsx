@@ -36,12 +36,6 @@ type Vec3 = [number, number, number]
 const GHOST_COLOR = '#818cf8'
 const GHOST_OPACITY = 0.5
 
-/** Screen pixels → meters for the Ctrl-vertical (riser) drag — matches the
- *  duct draw tool's Alt-vertical feel. 100 px ≈ 1 m. */
-const VERTICAL_PIXELS_PER_METER = 100
-const VERTICAL_Y_MIN_M = -3
-const VERTICAL_Y_MAX_M = 10
-
 /** Snap a coordinate to the editor's live grid step. */
 function snapToGridStep(value: number): number {
   const step = useEditor.getState().gridSnapStep
@@ -195,56 +189,34 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     // connected ducts for the drag, so they stay put (no follow) and the
     // commit omits their updates. Mirrors the duct endpoint's Alt-detach.
     let lastDetached = false
-    // Anchor for the Ctrl-vertical (riser) drag: clientY + base Y captured the
-    // frame Ctrl is first held, so vertical mouse motion maps to Y. Cleared
-    // when Ctrl is released. Mirrors the draw tool's Alt-vertical anchor.
-    let verticalAnchor: { clientY: number; baseY: number } | null = null
 
     const onMove = (event: GridEvent) => {
       const bypass = event.nativeEvent?.shiftKey === true
       // Alt = detach: drop the connected-duct follow so the fitting moves on
       // its own, leaving every mated run where it sits.
       const detached = event.nativeEvent?.altKey === true
-      // Ctrl/Cmd = vertical: XZ locks to where the fitting sits and the cursor's
-      // screen-Y drives the riser height (connected ducts still follow).
-      const vertical = event.nativeEvent?.ctrlKey === true || event.nativeEvent?.metaKey === true
-      const clientY = (event.nativeEvent as { clientY?: number } | undefined)?.clientY
       const snap = bypass ? (v: number) => v : snapToGridStep
 
-      let next: Vec3
-      if (vertical && typeof clientY === 'number') {
-        if (!verticalAnchor) verticalAnchor = { clientY, baseY: lastPos[1] }
-        // Screen +Y points down, so subtract to map "drag up = raise".
-        const dy = (verticalAnchor.clientY - clientY) / VERTICAL_PIXELS_PER_METER
-        const y = Math.min(
-          VERTICAL_Y_MAX_M,
-          Math.max(VERTICAL_Y_MIN_M, verticalAnchor.baseY + snap(dy)),
-        )
-        next = [lastPos[0], y, lastPos[2]]
-        useAlignmentGuides.getState().clear()
-      } else {
-        verticalAnchor = null
-        let x = snap(event.localPosition[0])
-        let z = snap(event.localPosition[2])
+      let x = snap(event.localPosition[0])
+      let z = snap(event.localPosition[2])
 
-        // Alignment: snap the footprint box edges onto nearby geometry and
-        // publish guides (Alt / Shift bypass).
-        if (!bypass) {
-          const proposed: Aabb2D = {
-            minX: x + ox - hx,
-            maxX: x + ox + hx,
-            minZ: z + oz - hz,
-            maxZ: z + oz + hz,
-          }
-          const { dx, dz, guides } = resolveGhostAlignment(nodeId, proposed, candidates)
-          x += dx
-          z += dz
-          useAlignmentGuides.getState().set(guides)
-        } else {
-          useAlignmentGuides.getState().clear()
+      // Alignment: snap the footprint box edges onto nearby geometry and
+      // publish guides (Alt / Shift bypass).
+      if (!bypass) {
+        const proposed: Aabb2D = {
+          minX: x + ox - hx,
+          maxX: x + ox + hx,
+          minZ: z + oz - hz,
+          maxZ: z + oz + hz,
         }
-        next = [x, lastPos[1], z]
+        const { dx, dz, guides } = resolveGhostAlignment(nodeId, proposed, candidates)
+        x += dx
+        z += dz
+        useAlignmentGuides.getState().set(guides)
+      } else {
+        useAlignmentGuides.getState().clear()
       }
+      const next: Vec3 = [x, lastPos[1], z]
 
       if (next[0] !== lastPos[0] || next[1] !== lastPos[1] || next[2] !== lastPos[2]) {
         triggerSFX('sfx:grid-snap')
