@@ -37,6 +37,7 @@ export type IndustryPackSpec = {
   knowledgeSchemaVersion?: string
   appCompatibility?: string
   locale?: string[]
+  capabilities?: Array<'factory_creation'>
   description?: string
   dependsOn?: ProfilePackDependency[]
   devices: IndustryPackDeviceSpec[]
@@ -181,6 +182,9 @@ export function normalizeIndustryPackSpec(raw: unknown): IndustryPackSpec {
     : undefined
   const factoryArchitectures = recordArray(raw.factoryArchitectures, 'factoryArchitectures')
   const processTemplates = recordArray(raw.processTemplates, 'processTemplates')
+  const capabilities = stringArray(raw.capabilities).filter(
+    (capability): capability is 'factory_creation' => capability === 'factory_creation',
+  )
   return {
     ...(stringValue(raw.id) ? { id: stringValue(raw.id) } : {}),
     ...(stringValue(raw.name) ? { name: stringValue(raw.name) } : {}),
@@ -190,6 +194,7 @@ export function normalizeIndustryPackSpec(raw: unknown): IndustryPackSpec {
     knowledgeSchemaVersion: stringValue(raw.knowledgeSchemaVersion) ?? '1.0',
     appCompatibility: stringValue(raw.appCompatibility) ?? '>=0.8.0',
     locale: stringArray(raw.locale).length ? stringArray(raw.locale) : ['zh-CN', 'en-US'],
+    ...(capabilities.length ? { capabilities } : {}),
     ...(stringValue(raw.description) ? { description: stringValue(raw.description) } : {}),
     ...(dependsOn?.length ? { dependsOn } : {}),
     devices: raw.devices.map((device) => normalizeDevice(device, industry)),
@@ -252,6 +257,7 @@ async function writeJson(file: string, value: unknown) {
 
 async function writeReadme(file: string, spec: IndustryPackSpec) {
   const title = spec.name ?? `${spec.industry} Profile Pack`
+  const factoryCapable = spec.capabilities?.includes('factory_creation') === true
   const lines = [
     `# ${title}`,
     '',
@@ -260,6 +266,44 @@ async function writeReadme(file: string, spec: IndustryPackSpec) {
     '## Devices',
     '',
     ...spec.devices.map((device) => `- ${device.name} (${device.id})`),
+    '',
+    '## Pack Type',
+    '',
+    factoryCapable
+      ? 'Factory-capable pack: supports factory/process creation through process templates and factory architectures.'
+      : 'Device-only pack: provides equipment profiles but does not claim factory/process creation support.',
+    ...(factoryCapable
+      ? [
+          '',
+          '## Factory Creation',
+          '',
+          'Supported whole-factory/process templates:',
+          '',
+          ...(spec.processTemplates?.length
+            ? spec.processTemplates.map(
+                (template) =>
+                  `- ${stringValue(template.processLabel) ?? stringValue(template.processId) ?? 'Process template'} (${stringValue(template.processId) ?? 'unknown'})`,
+              )
+            : ['- None declared']),
+          '',
+          'Supported factory scopes/modules:',
+          '',
+          ...(spec.factoryArchitectures?.length
+            ? spec.factoryArchitectures.flatMap((architecture) =>
+                Array.isArray(architecture.scopes) && architecture.scopes.length
+                  ? architecture.scopes
+                      .filter(isRecord)
+                      .map(
+                        (scope) =>
+                          `- ${stringValue(scope.label) ?? stringValue(scope.id) ?? 'Factory scope'} (${stringValue(scope.id) ?? 'unknown'})`,
+                      )
+                  : [
+                      `- ${stringValue(architecture.label) ?? stringValue(architecture.id) ?? 'Factory architecture'} (${stringValue(architecture.id) ?? 'unknown'})`,
+                    ],
+              )
+            : ['- None declared']),
+        ]
+      : []),
     ...(spec.factoryArchitectures?.length
       ? [
           '',
@@ -331,6 +375,7 @@ export async function scaffoldIndustryProfilePack(options: ScaffoldIndustryPackO
     knowledgeSchemaVersion: spec.knowledgeSchemaVersion ?? '1.0',
     appCompatibility: spec.appCompatibility ?? '>=0.8.0',
     locale: spec.locale ?? ['zh-CN', 'en-US'],
+    ...(spec.capabilities?.length ? { capabilities: spec.capabilities } : {}),
     description: spec.description ?? `Generated ${spec.industry} industry profile pack.`,
     ...(spec.dependsOn?.length ? { dependsOn: spec.dependsOn } : {}),
     profiles: [profileFile],

@@ -51,7 +51,7 @@
       "id": "potroom_electrolysis",
       "displayLabel": "电解车间",
       "order": 30,
-      "stationIds": ["electrolytic_cell", "pot_tending_crane"]
+      "stationIds": ["potline_module", "pot_tending_crane"]
     },
     {
       "id": "anode_handling",
@@ -89,7 +89,7 @@
     "secondaryAxis": "z",
     "indoorPotroom": true,
     "outdoorHeavyIndustry": true,
-    "longAxisStationId": "electrolytic_cell",
+    "longAxisStationId": "potline_module",
     "highestStationId": "dry_scrubber_baghouse",
     "sideBranchStationIds": [
       "rectifier_transformer_station",

@@ -361,7 +361,13 @@ async function main() {
     }
     const reportPath = path.join(outputDir, 'profile-pack-qa-report.json')
     await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
-    console.log(JSON.stringify({ reportPath, auditOk: audit.ok, validateOnly: true }, null, 2))
+    console.log(
+      JSON.stringify(
+        { reportPath, auditOk: audit.ok, packKind: audit.summary.packKind, validateOnly: true },
+        null,
+        2,
+      ),
+    )
     if (!audit.ok) process.exitCode = 1
     return
   }
@@ -386,7 +392,13 @@ async function main() {
   }
   const reportPath = path.join(outputDir, 'profile-pack-qa-report.json')
   await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
-  console.log(JSON.stringify({ reportPath, passed: report.passed, failed: report.failed }, null, 2))
+  console.log(
+    JSON.stringify(
+      { reportPath, packKind: audit.summary.packKind, passed: report.passed, failed: report.failed },
+      null,
+      2,
+    ),
+  )
   if (report.failed > 0) process.exitCode = 1
 }
 

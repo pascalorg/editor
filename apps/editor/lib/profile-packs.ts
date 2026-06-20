@@ -27,12 +27,15 @@ export type ProfilePackManifest = {
   qualityRules?: string[]
   editableSchemas?: string[]
   aliases?: string[]
+  capabilities?: ProfilePackCapability[]
   factoryArchitectures?: string[]
   processTemplates?: string[]
   equipmentContracts?: string[]
   catalogBindings?: string[]
   dependsOn?: ProfilePackDependency[]
 }
+
+export type ProfilePackCapability = 'factory_creation'
 
 export type ProfilePackDependency = {
   id: string
@@ -50,6 +53,8 @@ export type InstalledProfilePack = {
   layoutCount?: number
   partPresetCount?: number
   qualityRuleCount?: number
+  factoryArchitectureCount?: number
+  processTemplateCount?: number
   dependsOn?: ProfilePackDependency[]
   enabled: boolean
   path: string
@@ -68,6 +73,8 @@ export type CloudProfilePack = {
   layoutCount?: number
   partPresetCount?: number
   qualityRuleCount?: number
+  factoryArchitectureCount?: number
+  processTemplateCount?: number
   dependsOn?: ProfilePackDependency[]
   fileName: string
   source: 'local_simulated_cloud'
@@ -80,6 +87,7 @@ export type CloudProfilePack = {
   dependencyStatus: ProfilePackDependencyStatus
   governanceIssues: string[]
   governanceWarnings: string[]
+  packKind: 'device-only' | 'factory-capable'
 }
 
 export type ProfilePackPublishStatus = 'publishable' | 'needs_review' | 'blocked'
@@ -118,6 +126,8 @@ export type ProfilePackValidationResult = {
     qualityRules: Array<Record<string, unknown>>
     editableSchemas: EditableSchemaDefinition[]
     aliases: Array<Record<string, unknown>>
+    factoryArchitectures: Array<Record<string, unknown>>
+    processTemplates: Array<Record<string, unknown>>
   }
   warnings: string[]
 }
@@ -128,11 +138,14 @@ export type ProfilePackAuditResult = {
   issues: string[]
   warnings: string[]
   summary: {
+    packKind: 'device-only' | 'factory-capable'
     profileCount: number
     layoutCount: number
     partPresetCount: number
     qualityRuleCount: number
     editableSchemaCount: number
+    factoryArchitectureCount: number
+    processTemplateCount: number
   }
 }
 
@@ -243,6 +256,14 @@ export function normalizeProfilePackManifest(value: unknown): ProfilePackManifes
       ? { editableSchemas: stringArray(value.editableSchemas) }
       : {}),
     ...(stringArray(value.aliases).length > 0 ? { aliases: stringArray(value.aliases) } : {}),
+    ...(stringArray(value.capabilities).filter((capability) => capability === 'factory_creation')
+      .length > 0
+      ? {
+          capabilities: stringArray(value.capabilities).filter(
+            (capability): capability is ProfilePackCapability => capability === 'factory_creation',
+          ),
+        }
+      : {}),
     ...(stringArray(value.factoryArchitectures).length > 0
       ? { factoryArchitectures: stringArray(value.factoryArchitectures) }
       : {}),
@@ -439,6 +460,62 @@ function qualityRuleRequiredRoles(value: unknown): string[] {
   return stringArray(value.requiredRoles)
 }
 
+function processTemplateId(value: Record<string, unknown>) {
+  return stringValue(value.processId)
+}
+
+function processTemplateStations(value: Record<string, unknown>) {
+  return Array.isArray(value.stations) ? value.stations.filter(isRecord) : []
+}
+
+function stationText(value: Record<string, unknown>) {
+  return [
+    value.id,
+    value.role,
+    value.label,
+    value.displayLabel,
+    value.equipmentHint,
+    ...stringArray(value.safetyTags),
+  ]
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .join(' ')
+    .toLowerCase()
+}
+
+function profileCoversStation(profile: DeviceProfileDefinition, station: Record<string, unknown>) {
+  const text = stationText(station)
+  const candidates = [profile.id, profile.name, ...profile.aliases]
+    .filter((value) => value.trim().length > 0)
+    .map((value) => value.toLowerCase())
+  return candidates.some((candidate) => text.includes(candidate))
+}
+
+function nativeResolverCoversStation(station: Record<string, unknown>) {
+  const text = stationText(station)
+  return /pipe|pipeline|\u7ba1\u9053|\u76f4\u7ba1|tee|elbow|valve|flange|\u4e09\u901a|\u5f2f\u5934|\u9600|\u6cd5\u5170|tank|separator|buffer|vessel|storage|silo|water[_\s-]?treatment|\u50a8\u7f50|\u5206\u79bb\u5668|\u7f13\u51b2|\u5bb9\u5668|\u6c34\u5904\u7406|dc[_\s-]?power|rectifier|power cabinet|electrical cabinet|control|skid|pump|heat[_\s-]?exchanger|cooling|ventilation|\u7535\u6e90|\u7535\u67dc|\u63a7\u5236|\u64ac\u88c5|\u6cf5|\u51b7\u5374|\u901a\u98ce/i.test(
+    text,
+  )
+}
+
+function catalogResolverCoversStation(station: Record<string, unknown>) {
+  const text = stationText(station)
+  return /catalog|asset|item|mcc|cabinet|panel|conveyor|forklift|crane|\u5929\u8f66|\u8d77\u91cd|\u67dc|\u8f93\u9001/i.test(
+    text,
+  )
+}
+
+function processTemplateStationIds(value: Record<string, unknown>) {
+  return new Set(
+    processTemplateStations(value)
+      .map((station) => stringValue(station.id))
+      .filter((id): id is string => Boolean(id)),
+  )
+}
+
+function architectureModules(value: Record<string, unknown>) {
+  return Array.isArray(value.modules) ? value.modules.filter(isRecord) : []
+}
+
 export function auditProfilePackValidation(
   validation: ProfilePackValidationResult,
 ): ProfilePackAuditResult {
@@ -460,6 +537,15 @@ export function auditProfilePackValidation(
   }
   if (!manifest.locale?.length) {
     warnings.push('pack.json locale is recommended for cloud publishing.')
+  }
+  const isFactoryCapable = manifest.capabilities?.includes('factory_creation') === true
+  if (
+    !isFactoryCapable &&
+    (resources.factoryArchitectures.length || resources.processTemplates.length)
+  ) {
+    warnings.push(
+      'Pack includes factory resources but does not declare capabilities: ["factory_creation"].',
+    )
   }
 
   const profileIds = profiles.map((profile) => profile.id)
@@ -489,9 +575,72 @@ export function auditProfilePackValidation(
     ['part preset', partPresetResourceIds],
     ['quality rule', qualityRuleResourceIds],
     ['editable schema', resources.editableSchemas.map((schema) => schema.id)],
+    [
+      'factory architecture',
+      resources.factoryArchitectures.map(resourceId).filter((id): id is string => Boolean(id)),
+    ],
+    [
+      'process template',
+      resources.processTemplates.map(processTemplateId).filter((id): id is string => Boolean(id)),
+    ],
   ] as const) {
     for (const duplicate of duplicateIds(values)) {
       issues.push(`Duplicate ${kind} id "${duplicate}" in package.`)
+    }
+  }
+
+  if (isFactoryCapable) {
+    if (!manifest.factoryArchitectures?.length || resources.factoryArchitectures.length === 0) {
+      issues.push(
+        'Factory-capable pack must include at least one factoryArchitectures resource in pack.json.',
+      )
+    }
+    if (!manifest.processTemplates?.length || resources.processTemplates.length === 0) {
+      issues.push(
+        'Factory-capable pack must include at least one processTemplates resource in pack.json.',
+      )
+    }
+    const templateById = new Map(
+      resources.processTemplates
+        .map((template) => [processTemplateId(template), template] as const)
+        .filter((entry): entry is [string, Record<string, unknown>] => Boolean(entry[0])),
+    )
+    for (const template of resources.processTemplates) {
+      const templateId = processTemplateId(template) ?? 'unknown'
+      for (const station of processTemplateStations(template)) {
+        const stationId = stringValue(station.id) ?? 'unknown'
+        const covered =
+          profiles.some((profile) => profileCoversStation(profile, station)) ||
+          nativeResolverCoversStation(station) ||
+          catalogResolverCoversStation(station)
+        if (!covered) {
+          issues.push(
+            `Process template ${templateId} station "${stationId}" is not covered by a device profile, native resolver, or catalog resolver hint.`,
+          )
+        }
+      }
+    }
+    for (const architecture of resources.factoryArchitectures) {
+      const architectureId = resourceId(architecture) ?? 'unknown'
+      const processId = stringValue(architecture.processId)
+      const template = processId ? templateById.get(processId) : undefined
+      if (!processId || !template) {
+        issues.push(
+          `Factory architecture ${architectureId} references missing process template "${processId ?? 'unknown'}".`,
+        )
+        continue
+      }
+      const stationIds = processTemplateStationIds(template)
+      for (const module of architectureModules(architecture)) {
+        const moduleId = stringValue(module.id) ?? 'unknown'
+        for (const stationId of stringArray(module.stationIds)) {
+          if (!stationIds.has(stationId)) {
+            issues.push(
+              `Factory architecture ${architectureId} module "${moduleId}" references station "${stationId}" that is not in process template "${processId}".`,
+            )
+          }
+        }
+      }
     }
   }
 
@@ -551,11 +700,14 @@ export function auditProfilePackValidation(
     issues,
     warnings,
     summary: {
+      packKind: isFactoryCapable ? 'factory-capable' : 'device-only',
       profileCount: profiles.length,
       layoutCount: resources.layouts.length,
       partPresetCount: resources.partPresets.length,
       qualityRuleCount: resources.qualityRules.length,
       editableSchemaCount: resources.editableSchemas.length,
+      factoryArchitectureCount: resources.factoryArchitectures.length,
+      processTemplateCount: resources.processTemplates.length,
     },
   }
 }
@@ -570,6 +722,8 @@ async function loadPackResourcesFromDir(
     qualityRules: [],
     editableSchemas: [],
     aliases: [],
+    factoryArchitectures: [],
+    processTemplates: [],
   }
   const groups = [
     ['layouts', manifest.layouts ?? []],
@@ -577,6 +731,8 @@ async function loadPackResourcesFromDir(
     ['qualityRules', manifest.qualityRules ?? []],
     ['editableSchemas', manifest.editableSchemas ?? []],
     ['aliases', manifest.aliases ?? []],
+    ['factoryArchitectures', manifest.factoryArchitectures ?? []],
+    ['processTemplates', manifest.processTemplates ?? []],
   ] as const
   const resolvedDir = path.resolve(dir)
   for (const [key, files] of groups) {
@@ -611,6 +767,8 @@ function loadPackResourcesFromZip(
     qualityRules: [],
     editableSchemas: [],
     aliases: [],
+    factoryArchitectures: [],
+    processTemplates: [],
   }
   const groups = [
     ['layouts', manifest.layouts ?? []],
@@ -618,6 +776,8 @@ function loadPackResourcesFromZip(
     ['qualityRules', manifest.qualityRules ?? []],
     ['editableSchemas', manifest.editableSchemas ?? []],
     ['aliases', manifest.aliases ?? []],
+    ['factoryArchitectures', manifest.factoryArchitectures ?? []],
+    ['processTemplates', manifest.processTemplates ?? []],
   ] as const
   for (const [key, files] of groups) {
     for (const rel of files) {
@@ -814,6 +974,8 @@ export async function listCloudProfilePacks(): Promise<CloudProfilePack[]> {
         layoutCount: validation.resources.layouts.length,
         partPresetCount: validation.resources.partPresets.length,
         qualityRuleCount: validation.resources.qualityRules.length,
+        factoryArchitectureCount: validation.resources.factoryArchitectures.length,
+        processTemplateCount: validation.resources.processTemplates.length,
         dependsOn: validation.manifest.dependsOn,
         fileName: entry.name,
         source: 'local_simulated_cloud',
@@ -826,6 +988,7 @@ export async function listCloudProfilePacks(): Promise<CloudProfilePack[]> {
         dependencyStatus: validation.manifest.dependsOn?.length ? 'missing' : 'none',
         governanceIssues: audit.issues,
         governanceWarnings: audit.warnings,
+        packKind: audit.summary.packKind,
       })
     } catch {}
   }
@@ -852,11 +1015,14 @@ export async function listCloudProfilePacks(): Promise<CloudProfilePack[]> {
         issues: pack.governanceIssues,
         warnings: pack.governanceWarnings,
         summary: {
+          packKind: pack.packKind,
           profileCount: pack.profileCount,
           layoutCount: pack.layoutCount ?? 0,
           partPresetCount: pack.partPresetCount ?? 0,
           qualityRuleCount: pack.qualityRuleCount ?? 0,
           editableSchemaCount: 0,
+          factoryArchitectureCount: pack.factoryArchitectureCount ?? 0,
+          processTemplateCount: pack.processTemplateCount ?? 0,
         },
       },
       dependencyIssues,

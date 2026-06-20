@@ -10,6 +10,9 @@
     "zh-CN",
     "en-US"
   ],
+  "capabilities": [
+    "factory_creation"
+  ],
   "description": "Basic water and wastewater treatment equipment profiles for sedimentation, chemical dosing, filtration, pumping, pipe corridors, and sludge dewatering.",
   "profiles": [
     "profiles/generated.json"

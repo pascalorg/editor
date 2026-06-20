@@ -512,6 +512,108 @@ describe('profile packs', () => {
     )
   })
 
+  test('factory-capable audit requires factory resources and covered stations', async () => {
+    const root = await findRepoRoot()
+    const packDir = path.join(profilePackStoreRoot(root), KNOWLEDGE_PACK_DIR)
+    await fs.rm(packDir, { recursive: true, force: true })
+    await fs.mkdir(path.join(packDir, 'profiles'), { recursive: true })
+    await fs.mkdir(path.join(packDir, 'quality-rules'), { recursive: true })
+    await fs.mkdir(path.join(packDir, 'factory-architectures'), { recursive: true })
+    await fs.mkdir(path.join(packDir, 'process-templates'), { recursive: true })
+    await fs.writeFile(
+      path.join(packDir, 'pack.json'),
+      `${JSON.stringify(
+        {
+          id: 'industry.audit.factory',
+          name: 'Factory audit test pack',
+          industry: 'audit',
+          version: '0.0.1',
+          schemaVersion: '1.1',
+          capabilities: ['factory_creation'],
+          profiles: ['profiles/test-machine.json'],
+          qualityRules: ['quality-rules/test-machine.json'],
+          factoryArchitectures: ['factory-architectures/factory.json'],
+          processTemplates: ['process-templates/factory.json'],
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    )
+    await fs.writeFile(
+      path.join(packDir, 'profiles', 'test-machine.json'),
+      `${JSON.stringify(
+        {
+          id: 'audit.test_machine',
+          name: 'Audit machine',
+          aliases: ['audit machine'],
+          family: 'generic',
+          layoutFamily: 'box_enclosure_layout',
+          qualityRules: 'quality.audit.test_machine',
+          primarySemanticRole: 'machine_enclosure',
+          parts: [{ kind: 'generic_body', semanticRole: 'machine_enclosure', required: true }],
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    )
+    await fs.writeFile(
+      path.join(packDir, 'quality-rules', 'test-machine.json'),
+      `${JSON.stringify({ id: 'quality.audit.test_machine', requiredRoles: ['machine_enclosure'] })}\n`,
+      'utf8',
+    )
+    await fs.writeFile(
+      path.join(packDir, 'process-templates', 'factory.json'),
+      `${JSON.stringify({
+        processId: 'audit_factory_full',
+        processLabel: 'Audit factory',
+        stations: [
+          {
+            id: 'test_machine',
+            label: 'Audit machine station',
+            role: 'test_machine',
+            equipmentHint: 'audit.test_machine',
+          },
+          {
+            id: 'mystery_station',
+            label: 'Mystery station',
+            role: 'mystery_station',
+            equipmentHint: 'uncovered mystery unit',
+          },
+        ],
+      })}\n`,
+      'utf8',
+    )
+    await fs.writeFile(
+      path.join(packDir, 'factory-architectures', 'factory.json'),
+      `${JSON.stringify({
+        id: 'audit.factory.modular',
+        processId: 'audit_factory_full',
+        modules: [
+          { id: 'main', stationIds: ['test_machine'] },
+          { id: 'bad', stationIds: ['missing_station'] },
+        ],
+      })}\n`,
+      'utf8',
+    )
+
+    const audit = auditProfilePackValidation(await validateProfilePackDir(packDir))
+
+    expect(audit.summary).toMatchObject({
+      packKind: 'factory-capable',
+      factoryArchitectureCount: 1,
+      processTemplateCount: 1,
+    })
+    expect(audit.ok).toBe(false)
+    expect(audit.issues.join('\n')).toContain(
+      'Process template audit_factory_full station "mystery_station" is not covered',
+    )
+    expect(audit.issues.join('\n')).toContain(
+      'Factory architecture audit.factory.modular module "bad" references station "missing_station"',
+    )
+  })
+
   test('installs, toggles, and exposes enabled profile packs to the loader', async () => {
     await cleanInstalledPack()
     const installed = await installProfilePackZip(await cementZip())

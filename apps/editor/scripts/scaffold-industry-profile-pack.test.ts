@@ -31,6 +31,7 @@ describe('scaffold-industry-profile-pack', () => {
           id: 'industry.test-industry.basic',
           name: 'Test Industry Basic Pack',
           description: 'Generated test pack.',
+          capabilities: ['factory_creation'],
           factoryArchitectures: [
             {
               id: 'test_industry.factory.modular',
@@ -134,18 +135,25 @@ describe('scaffold-industry-profile-pack', () => {
     expect(result.manifest).toMatchObject({
       id: 'industry.test-industry.basic',
       version: '0.1.0',
+      capabilities: ['factory_creation'],
       profiles: ['profiles/generated.json'],
       factoryArchitectures: ['factory-architectures/generated.json'],
       processTemplates: ['process-templates/generated.json'],
       qualityRules: ['quality-rules/generated-quality.json'],
     })
     expect(validation.profiles).toHaveLength(1)
+    expect(validation.resources.factoryArchitectures).toHaveLength(1)
+    expect(validation.resources.processTemplates).toHaveLength(1)
     expect(validation.profiles[0]).toMatchObject({
       id: 'test_industry.test_machine',
       qualityRules: 'quality.test_industry.test_machine',
       primarySemanticRole: 'machine_body',
     })
     expect(audit).toMatchObject({ ok: true })
+    expect(audit.summary).toMatchObject({ packKind: 'factory-capable' })
+    expect(await fs.readFile(path.join(result.packDir, 'README.md'), 'utf8')).toContain(
+      'Factory-capable pack',
+    )
 
     expect(
       JSON.parse(

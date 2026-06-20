@@ -10,6 +10,9 @@
     "zh-CN",
     "en-US"
   ],
+  "capabilities": [
+    "factory_creation"
+  ],
   "description": "Basic equipment profiles for electrolytic aluminum smelters, covering potroom electrolysis, alumina handling, rectifier power supply, pot tending, fume treatment, molten aluminum transfer, anode assembly, holding furnace, and ingot casting scenarios.",
   "profiles": [
     "profiles/generated.json",

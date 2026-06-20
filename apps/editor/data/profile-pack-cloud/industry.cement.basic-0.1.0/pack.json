@@ -7,6 +7,7 @@
   "knowledgeSchemaVersion": "1.0",
   "appCompatibility": ">=0.8.0",
   "locale": ["zh-CN", "en-US"],
+  "capabilities": ["factory_creation"],
   "description": "Cement plant profile pack for common production-line equipment, covering pyroprocess, grinding, conveying, storage, dust collection, and packaging scenarios.",
   "profiles": [
     "profiles/pyroprocess.json",

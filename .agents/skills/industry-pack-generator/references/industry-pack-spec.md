@@ -9,6 +9,7 @@ Use this JSON shape as input to `apps/editor/scripts/scaffold-industry-profile-p
   "name": "Cement Basic Equipment Pack",
   "version": "0.1.0",
   "description": "Focused cement plant equipment pack.",
+  "capabilities": ["factory_creation"],
   "factoryArchitectures": [
     {
       "id": "cement.factory.modular",
@@ -83,9 +84,21 @@ Use this JSON shape as input to `apps/editor/scripts/scaffold-industry-profile-p
 - `name`: optional. Defaults to `{industry} Basic Equipment Pack`.
 - `version`: optional. Defaults to `0.1.0`.
 - `dependsOn`: optional for extension packs, for example `[{ "id": "industry.fine-chemical.basic", "version": ">=0.1.0" }]`.
-- `factoryArchitectures`: optional but recommended for basic packs. Defines the whole-plant module tree.
-- `processTemplates`: optional but recommended for basic packs. Defines stations, aliases, and station connections.
+- `capabilities`: optional. Use `["factory_creation"]` only when the pack includes factory/process knowledge.
+- `factoryArchitectures`: required when `capabilities` includes `factory_creation`; otherwise optional. Defines the whole-plant module tree.
+- `processTemplates`: required when `capabilities` includes `factory_creation`; otherwise optional. Defines stations, aliases, and station connections.
 - `devices`: required non-empty list.
+
+## Factory-Capable Pack Rules
+
+When `capabilities` includes `factory_creation`, QA enforces:
+
+- At least one `factoryArchitectures` resource.
+- At least one `processTemplates` resource.
+- Every process-template station must be covered by a device profile, native resolver, or catalog resolver hint.
+- Every architecture module `stationIds[]` entry must exist in the matching process template.
+
+If the pack only provides equipment profiles, omit `factory_creation`; QA will classify it as a `device-only` pack.
 
 ## Device Fields
 
@@ -109,6 +122,8 @@ The scaffold writes:
 - `factory-architectures/generated.json` when `factoryArchitectures` is provided
 - `process-templates/generated.json` when `processTemplates` is provided
 - `quality-rules/generated-quality.json`
+
+The generated `README.md` labels the pack as `factory-capable` or `device-only` and lists supported factory/process templates when factory creation is enabled.
 
 Run validation after generation:
 
