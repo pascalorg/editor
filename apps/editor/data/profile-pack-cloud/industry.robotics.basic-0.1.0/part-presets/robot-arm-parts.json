@@ -1,0 +1,89 @@
+[
+  {
+    "id": "robot_arm.base.heavy",
+    "partKind": "generic_base",
+    "defaults": {
+      "primaryColor": "#111827",
+      "secondaryColor": "#facc15"
+    },
+    "parameters": {
+      "length": { "from": "height", "scale": 0.3, "min": 0.42, "max": 0.72 },
+      "width": { "from": "height", "scale": 0.3, "min": 0.42, "max": 0.72 },
+      "height": { "from": "height", "scale": 0.18, "min": 0.26, "max": 0.5 }
+    }
+  },
+  {
+    "id": "robot_arm.joint.large",
+    "partKind": "generic_body",
+    "defaults": {
+      "primaryColor": "#facc15",
+      "secondaryColor": "#111827"
+    },
+    "parameters": {
+      "length": { "from": "height", "scale": 0.24, "min": 0.32, "max": 0.62 },
+      "width": { "from": "height", "scale": 0.2, "min": 0.28, "max": 0.5 },
+      "height": { "from": "height", "scale": 0.22, "min": 0.3, "max": 0.56 }
+    }
+  },
+  {
+    "id": "robot_arm.joint.medium",
+    "partKind": "generic_body",
+    "defaults": {
+      "primaryColor": "#facc15"
+    },
+    "parameters": {
+      "length": { "from": "height", "scale": 0.2, "min": 0.26, "max": 0.48 },
+      "width": { "from": "height", "scale": 0.16, "min": 0.22, "max": 0.42 },
+      "height": { "from": "height", "scale": 0.18, "min": 0.24, "max": 0.44 }
+    }
+  },
+  {
+    "id": "robot_arm.joint.small",
+    "partKind": "generic_panel",
+    "defaults": {
+      "primaryColor": "#111827"
+    },
+    "parameters": {
+      "length": { "from": "height", "scale": 0.14, "min": 0.16, "max": 0.32 },
+      "width": { "from": "height", "scale": 0.12, "min": 0.14, "max": 0.28 },
+      "height": { "from": "height", "scale": 0.12, "min": 0.14, "max": 0.28 }
+    }
+  },
+  {
+    "id": "robot_arm.link.upper",
+    "partKind": "generic_body",
+    "defaults": {
+      "primaryColor": "#facc15"
+    },
+    "parameters": {
+      "length": { "from": "height", "scale": 0.42, "min": 0.55, "max": 1.05 },
+      "width": { "from": "height", "scale": 0.12, "min": 0.16, "max": 0.32 },
+      "height": { "from": "height", "scale": 0.16, "min": 0.22, "max": 0.42 }
+    }
+  },
+  {
+    "id": "robot_arm.link.forearm",
+    "partKind": "generic_body",
+    "defaults": {
+      "primaryColor": "#facc15"
+    },
+    "parameters": {
+      "length": { "from": "height", "scale": 0.48, "min": 0.62, "max": 1.15 },
+      "width": { "from": "height", "scale": 0.11, "min": 0.15, "max": 0.3 },
+      "height": { "from": "height", "scale": 0.14, "min": 0.2, "max": 0.38 }
+    }
+  },
+  {
+    "id": "robot_arm.tool_flange",
+    "partKind": "generic_panel",
+    "defaults": {
+      "primaryColor": "#cbd5e1",
+      "secondaryColor": "#111827"
+    },
+    "parameters": {
+      "length": { "from": "height", "scale": 0.12, "min": 0.14, "max": 0.28 },
+      "width": { "from": "height", "scale": 0.08, "min": 0.1, "max": 0.2 },
+      "height": { "from": "height", "scale": 0.08, "min": 0.1, "max": 0.2 }
+    }
+  }
+]

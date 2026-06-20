@@ -134,6 +134,38 @@ describe('assessPrimitiveVisualQuality', () => {
     expect(result.metrics.jointCount).toBeGreaterThanOrEqual(3)
   })
 
+  test('composes robot arms with different axis counts without adding workcell clutter', () => {
+    const cases = [
+      { axisCount: 4, expected: ['wrist_roll_joint'], forbidden: ['wrist_pitch_joint'] },
+      { axisCount: 5, expected: ['wrist_roll_joint', 'wrist_pitch_joint'], forbidden: [] },
+      { axisCount: 6, expected: ['wrist_roll_joint', 'wrist_pitch_joint'], forbidden: [] },
+      {
+        axisCount: 7,
+        expected: ['redundant_axis_joint', 'wrist_roll_joint', 'wrist_pitch_joint'],
+        forbidden: [],
+      },
+    ]
+
+    for (const testCase of cases) {
+      const shapes = composeRobotArmPrimitives({
+        name: `${testCase.axisCount}-axis robot arm`,
+        axisCount: testCase.axisCount,
+        pose: 'work-ready',
+        endEffector: 'tool-flange',
+      })
+      const roles = new Set(shapes.map((shape) => shape.semanticRole))
+
+      expect(roles.has('robot_base')).toBe(true)
+      expect(roles.has('shoulder_joint')).toBe(true)
+      expect(roles.has('upper_arm')).toBe(true)
+      expect(roles.has('forearm')).toBe(true)
+      expect(roles.has('wrist_joint')).toBe(true)
+      expect(roles.has('work_table')).toBe(false)
+      for (const role of testCase.expected) expect(roles.has(role)).toBe(true)
+      for (const role of testCase.forbidden) expect(roles.has(role)).toBe(false)
+    }
+  })
+
   test('scores standing fan grill depth and blade readability', () => {
     const shapes = composePartPrimitives({
       name: 'Standing fan',
@@ -223,8 +255,20 @@ describe('assessPrimitiveVisualQuality', () => {
       name: 'AGV material cart',
       family: 'generic',
       parts: [
-        { kind: 'generic_body', semanticRole: 'vehicle_body', length: 1.4, width: 0.85, height: 0.28 },
-        { kind: 'generic_base', semanticRole: 'cargo_platform', length: 1.25, width: 0.72, height: 0.08 },
+        {
+          kind: 'generic_body',
+          semanticRole: 'vehicle_body',
+          length: 1.4,
+          width: 0.85,
+          height: 0.28,
+        },
+        {
+          kind: 'generic_base',
+          semanticRole: 'cargo_platform',
+          length: 1.25,
+          width: 0.72,
+          height: 0.08,
+        },
         { kind: 'wheel_set', semanticRole: 'wheel', count: 4, radius: 0.13, wheelWidth: 0.06 },
         { kind: 'bar_pair', semanticRole: 'bumper', length: 1.25, height: 0.12 },
         {

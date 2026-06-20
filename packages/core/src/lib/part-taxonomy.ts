@@ -59,6 +59,7 @@ export const GENERIC_PART_CAPABILITIES: GenericPartCapability[] = [
       'wheel_set',
       'vehicle_wheels',
       'bicycle_wheels',
+      'fan_blade',
       'radial_blades',
       'propeller_blade_set',
       'impeller_blades',

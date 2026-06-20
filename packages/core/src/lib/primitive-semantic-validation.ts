@@ -508,6 +508,8 @@ function normalizeRequiredRole(role: string): string {
       return 'volute_casing'
     case 'inlet':
     case 'inlet_nozzle':
+    case 'top_nozzle':
+    case 'feed_nozzle':
     case 'suction':
     case 'suction_nozzle':
     case 'inlet_port':
@@ -549,6 +551,7 @@ function normalizeRequiredRole(role: string): string {
       return 'access_platform'
     case 'top_manway':
     case 'manway':
+    case 'manway_flange':
       return 'inlet_port'
     case 'drain_nozzle':
     case 'drain_port':
@@ -762,6 +765,17 @@ function requiredRoles(brief: PrimitiveGeometryBrief | undefined): string[] {
   )
 }
 
+function roleAliases(sourceArgs: Record<string, unknown> | undefined, role: string): string[] {
+  const aliases = sourceArgs?.roleAliases
+  if (typeof aliases !== 'object' || aliases === null || Array.isArray(aliases)) return []
+  const raw = (aliases as Record<string, unknown>)[role]
+  return Array.isArray(raw)
+    ? raw
+        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        .map(normalizeRequiredRole)
+    : []
+}
+
 const INDUSTRIAL_SOFT_REQUIRED_ROLES = new Set([
   'access_panel',
   'access_platform',
@@ -806,7 +820,10 @@ function isIndustrialFamily(family: SemanticFamily): boolean {
 function shouldSoftFailRequiredRole(role: string, family: SemanticFamily): boolean {
   if (!isIndustrialFamily(family)) return false
   if (INDUSTRIAL_HARD_REQUIRED_ROLES.has(role)) return false
-  return INDUSTRIAL_SOFT_REQUIRED_ROLES.has(role) || /door|panel|platform|ladder|support|guard|bolt|label|header|row|rod|bar|unit|housing/.test(role)
+  return (
+    INDUSTRIAL_SOFT_REQUIRED_ROLES.has(role) ||
+    /door|panel|platform|ladder|support|guard|bolt|label|header|row|rod|bar|unit|housing/.test(role)
+  )
 }
 
 function hasComponentScopedBrief(brief: PrimitiveGeometryBrief | undefined): boolean {
@@ -1325,7 +1342,11 @@ function validateRequiredRoles(
   warnings: string[],
 ) {
   for (const role of requiredRoles(options.geometryBrief)) {
-    if (!satisfiesRequiredRole(facts, role)) {
+    const aliases = roleAliases(options.sourceArgs, role)
+    if (
+      !satisfiesRequiredRole(facts, role) &&
+      !aliases.some((alias) => satisfiesRequiredRole(facts, alias))
+    ) {
       const message = `required semantic role "${role}" is missing.`
       if (shouldSoftFailRequiredRole(role, family)) {
         warnings.push(message)
@@ -1501,9 +1522,23 @@ function validateMixer(facts: PrimitiveGeometryFacts, issues: string[], warnings
 }
 
 function hasAnyRole(facts: PrimitiveGeometryFacts, roles: string[]): boolean {
-  return roles.some(
-    (role) => (facts.roles[role] ?? 0) > 0 || (facts.sourcePartKinds[role] ?? 0) > 0,
-  )
+  return roles.some((role) => {
+    if ((facts.roles[role] ?? 0) > 0 || (facts.sourcePartKinds[role] ?? 0) > 0) return true
+    if (role === 'inlet_port') {
+      return hasAnyRole(facts, [
+        'top_nozzle',
+        'feed_nozzle',
+        'inlet_nozzle',
+        'suction_nozzle',
+        'manway',
+        'manway_flange',
+      ])
+    }
+    if (role === 'outlet_port') {
+      return hasAnyRole(facts, ['drain_nozzle', 'discharge_nozzle', 'outlet_nozzle'])
+    }
+    return false
+  })
 }
 
 function validateIndustrialFamily(
@@ -1549,8 +1584,7 @@ function validateIndustrialFamily(
       ),
     )
     const isGrateCooler =
-      grateCoolerIntent &&
-      satisfiesRequiredRole(facts, 'cooler_grate_bed') ||
+      (grateCoolerIntent && satisfiesRequiredRole(facts, 'cooler_grate_bed')) ||
       (grateCoolerIntent && satisfiesRequiredRole(facts, 'cooler_housing'))
     if (isGrateCooler) {
       if (!satisfiesRequiredRole(facts, 'cooler_grate_bed')) {
@@ -1564,7 +1598,9 @@ function validateIndustrialFamily(
     if (!hasAnyRole(facts, ['conveyor_frame', 'press_frame_rails', 'support_frame'])) {
       issues.push('material handling equipment requires a conveyor/frame structure.')
     }
-    if (!hasAnyRole(facts, ['belt_surface', 'roller_array', 'filter_plate_stack', 'screw_flight'])) {
+    if (
+      !hasAnyRole(facts, ['belt_surface', 'roller_array', 'filter_plate_stack', 'screw_flight'])
+    ) {
       issues.push('material handling equipment requires a belt surface or roller array.')
     }
   }

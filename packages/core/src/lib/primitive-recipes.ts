@@ -16,6 +16,9 @@ export type PrimitiveRecipeId =
   | 'robotArm.threeAxis'
   | 'mixer.impeller'
   | 'motor.servo'
+  | 'process.vesselShell'
+  | 'structure.platformLadder'
+  | 'enclosure.roundedBox'
 
 export interface PrimitiveRecipeParams {
   name?: string
@@ -39,6 +42,7 @@ export interface PrimitiveRecipeParams {
   vehicleStyle?: string
   valveStyle?: string
   handleStyle?: string
+  axis?: string
   axisCount?: number
   baseShape?: 'round' | 'square' | 'pedestal' | string
   endEffector?: 'gripper' | 'suction' | 'tool-flange' | string
@@ -67,6 +71,7 @@ export interface PrimitiveRecipeParams {
   rows?: number
   columns?: number
   holeCount?: number
+  count?: number
   holeDiameter?: number
   boltSpacing?: number
   nominalDiameter?: number
@@ -77,6 +82,10 @@ export interface PrimitiveRecipeParams {
   shankLength?: number
   threadLength?: number
   radius?: number
+  wallThickness?: number
+  cornerRadius?: number
+  railHeight?: number
+  rungCount?: number
   position?: Vec3
 }
 
@@ -2086,6 +2095,424 @@ function servoMotorBrief(input: ComposeRecipeInput): PrimitiveGeometryBrief {
   }
 }
 
+function recipeAxis(value: unknown, fallback: 'x' | 'y' | 'z'): 'x' | 'y' | 'z' {
+  return value === 'x' || value === 'y' || value === 'z' ? value : fallback
+}
+
+function vesselShellRecipe(): PrimitiveRecipeDefinition {
+  const id = 'process.vesselShell' as PrimitiveRecipeId
+  const aliases = [
+    'vessel shell',
+    'hollow vessel',
+    'pressure vessel shell',
+    'process vessel shell',
+    'tank shell',
+    '\u7a7a\u5fc3\u7f50\u4f53',
+    '\u53cd\u5e94\u91dc\u7b52\u4f53',
+    '\u538b\u529b\u5bb9\u5668\u58f3\u4f53',
+  ]
+  const compose = (input: ComposeRecipeInput): PrimitiveShapeInput[] => {
+    const params = recipeParams(input)
+    const scale = sizeScaleFor(params) ?? 1
+    const axis = recipeAxis(params.axis, 'x')
+    const length = clampNumber(numberValue(params.length, params.height), 1.2 * scale, 0.24, 8)
+    const radius = clampNumber(numberValue(params.radius, params.diameter), 0.28 * scale, 0.04, 2.4)
+    const wallThickness = clampNumber(
+      numberValue(params.wallThickness, params.thickness),
+      radius * 0.08,
+      radius * 0.025,
+      radius * 0.28,
+    )
+    const origin = positionFor(params, input) ?? [0, 0, 0]
+    const center: Vec3 = axis === 'y' ? [origin[0], origin[1] + length / 2, origin[2]] : origin
+    const name = nameFor(input, 'process vessel shell')
+    const shell = {
+      properties: { color: colorFor(params, '#94a3b8'), roughness: 0.42, metalness: 0.48 },
+    }
+    const dark = {
+      properties: {
+        color: stringValue(params.darkColor, '#1f2937') ?? '#1f2937',
+        roughness: 0.58,
+        metalness: 0.26,
+      },
+    }
+    const metal = {
+      properties: {
+        color: stringValue(params.metalColor, '#cbd5e1') ?? '#cbd5e1',
+        roughness: 0.28,
+        metalness: 0.78,
+      },
+    }
+    const headScale =
+      axis === 'x'
+        ? ([radius * 0.34, radius, radius] as Vec3)
+        : ([radius, radius * 0.34, radius] as Vec3)
+    const sideA =
+      axis === 'y'
+        ? [center[0], center[1] - length * 0.52, center[2]]
+        : [center[0] - length * 0.52, center[1], center[2]]
+    const sideB =
+      axis === 'y'
+        ? [center[0], center[1] + length * 0.52, center[2]]
+        : [center[0] + length * 0.52, center[1], center[2]]
+    return [
+      {
+        kind: 'hollow-cylinder',
+        name: `${name} hollow shell`,
+        semanticRole: 'vessel_shell',
+        position: center,
+        axis,
+        radius,
+        height: length,
+        wallThickness,
+        radialSegments: 56,
+        material: shell,
+      },
+      {
+        kind: 'sphere',
+        name: `${name} dished head A`,
+        semanticRole: 'vessel_head',
+        position: sideA as Vec3,
+        radius: 1,
+        scale: headScale,
+        widthSegments: 56,
+        heightSegments: 24,
+        material: shell,
+      },
+      {
+        kind: 'sphere',
+        name: `${name} dished head B`,
+        semanticRole: 'vessel_head',
+        position: sideB as Vec3,
+        radius: 1,
+        scale: headScale,
+        widthSegments: 56,
+        heightSegments: 24,
+        material: shell,
+      },
+      {
+        kind: 'torus',
+        name: `${name} front seam ring`,
+        semanticRole: 'vessel_seam',
+        position: sideA as Vec3,
+        axis,
+        majorRadius: radius * 1.01,
+        tubeRadius: wallThickness * 0.42,
+        radialSegments: 10,
+        tubularSegments: 48,
+        material: metal,
+      },
+      {
+        kind: 'torus',
+        name: `${name} rear seam ring`,
+        semanticRole: 'vessel_seam',
+        position: sideB as Vec3,
+        axis,
+        majorRadius: radius * 1.01,
+        tubeRadius: wallThickness * 0.42,
+        radialSegments: 10,
+        tubularSegments: 48,
+        material: metal,
+      },
+      {
+        kind: 'hollow-cylinder',
+        name: `${name} top nozzle`,
+        semanticRole: 'top_nozzle',
+        position:
+          axis === 'y'
+            ? [center[0] + radius * 0.92, center[1] + length * 0.18, center[2]]
+            : [center[0], center[1] + radius * 1.1, center[2]],
+        axis: axis === 'y' ? 'x' : 'y',
+        radius: radius * 0.16,
+        height: radius * 0.55,
+        wallThickness: wallThickness * 0.7,
+        radialSegments: 28,
+        material: shell,
+      },
+      {
+        kind: 'cylinder',
+        name: `${name} manway flange`,
+        semanticRole: 'manway_flange',
+        position:
+          axis === 'y'
+            ? [center[0] + radius * 1.08, center[1] - length * 0.16, center[2]]
+            : [center[0] - length * 0.18, center[1], center[2] + radius * 1.08],
+        axis: axis === 'y' ? 'x' : 'z',
+        radius: radius * 0.22,
+        height: wallThickness * 2.8,
+        radialSegments: 32,
+        material: dark,
+      },
+    ]
+  }
+
+  return {
+    id,
+    label: 'Process vessel shell',
+    aliases,
+    compose,
+    geometryBrief: (input) => {
+      const params = recipeParams(input)
+      return {
+        category: 'process_vessel_shell',
+        units: 'm',
+        coordinateConvention: 'axis may be x or y; vessel uses hollow shell plus dished heads',
+        expectedDimensions: {
+          length: numberValue(params.length, params.height),
+          radius: numberValue(params.radius, params.diameter),
+          wallThickness: numberValue(params.wallThickness, params.thickness),
+        },
+        requiredRoles: ['vessel_shell', 'vessel_head', 'vessel_seam', 'top_nozzle'],
+        validationTargets: [
+          'hollow cylindrical vessel shell',
+          'two dished heads',
+          'visible seam rings, nozzle, and manway flange',
+        ],
+      }
+    },
+  }
+}
+
+function platformLadderRecipe(): PrimitiveRecipeDefinition {
+  const id = 'structure.platformLadder' as PrimitiveRecipeId
+  const aliases = [
+    'industrial platform ladder',
+    'access platform ladder',
+    'platform with guardrail',
+    '\u68c0\u4fee\u5e73\u53f0\u722c\u68af',
+    '\u5de5\u4e1a\u5e73\u53f0\u62a4\u680f',
+  ]
+  const compose = (input: ComposeRecipeInput): PrimitiveShapeInput[] => {
+    const params = recipeParams(input)
+    const scale = sizeScaleFor(params) ?? 1
+    const length = clampNumber(numberValue(params.length), 0.9 * scale, 0.24, 4)
+    const width = clampNumber(numberValue(params.width), 0.52 * scale, 0.16, 2.4)
+    const height = clampNumber(numberValue(params.height), 1.2 * scale, 0.32, 5)
+    const railHeight = clampNumber(numberValue(params.railHeight), height * 0.34, 0.12, 1.2)
+    const rungCount = integerValue(numberValue(params.rungCount, params.count), 6, 3, 18)
+    const r = clampNumber(numberValue(params.radius, params.thickness), 0.018 * scale, 0.004, 0.08)
+    const origin = positionFor(params, input) ?? [0, 0, 0]
+    const name = nameFor(input, 'industrial access platform')
+    const steel = {
+      properties: { color: colorFor(params, '#94a3b8'), roughness: 0.34, metalness: 0.72 },
+    }
+    const deckY = origin[1] + height
+    const shapes: PrimitiveShapeInput[] = [
+      {
+        kind: 'box',
+        name: `${name} grated deck`,
+        semanticRole: 'platform_deck',
+        position: [origin[0], deckY, origin[2]],
+        length,
+        width,
+        height: r * 1.2,
+        material: steel,
+      },
+    ]
+    for (const x of [-length / 2, length / 2]) {
+      for (const z of [-width / 2, width / 2]) {
+        shapes.push({
+          kind: 'cylinder',
+          name: `${name} platform post`,
+          semanticRole: 'platform_post',
+          position: [origin[0] + x, origin[1] + height / 2, origin[2] + z],
+          axis: 'y',
+          radius: r,
+          height,
+          radialSegments: 12,
+          material: steel,
+        })
+      }
+    }
+    for (const z of [-width / 2, width / 2]) {
+      shapes.push({
+        kind: 'cylinder',
+        name: `${name} guard rail`,
+        semanticRole: 'guard_rail',
+        position: [origin[0], deckY + railHeight, origin[2] + z],
+        axis: 'x',
+        radius: r,
+        height: length,
+        radialSegments: 12,
+        material: steel,
+      })
+    }
+    const ladderX = origin[0] - length * 0.58
+    for (const z of [origin[2] - width * 0.36, origin[2] - width * 0.18]) {
+      shapes.push({
+        kind: 'cylinder',
+        name: `${name} ladder side rail`,
+        semanticRole: 'ladder_side_rail',
+        position: [ladderX, origin[1] + height / 2, z],
+        axis: 'y',
+        radius: r,
+        height,
+        radialSegments: 10,
+        material: steel,
+      })
+    }
+    for (let i = 0; i < rungCount; i += 1) {
+      shapes.push({
+        kind: 'cylinder',
+        name: `${name} ladder rung ${i + 1}`,
+        semanticRole: 'ladder_rung',
+        position: [
+          ladderX,
+          origin[1] + ((i + 1) / (rungCount + 1)) * height,
+          origin[2] - width * 0.27,
+        ],
+        axis: 'z',
+        radius: r * 0.65,
+        height: width * 0.18,
+        radialSegments: 10,
+        material: steel,
+      })
+    }
+    return shapes
+  }
+
+  return {
+    id,
+    label: 'Platform ladder',
+    aliases,
+    compose,
+    geometryBrief: (input) => {
+      const params = recipeParams(input)
+      return {
+        category: 'industrial_access_platform',
+        units: 'm',
+        coordinateConvention: '+Y up; platform deck at requested height',
+        expectedDimensions: {
+          length: numberValue(params.length),
+          width: numberValue(params.width),
+          height: numberValue(params.height),
+        },
+        requiredRoles: ['platform_deck', 'platform_post', 'guard_rail', 'ladder_rung'],
+        validationTargets: ['deck, posts, guard rails, ladder side rails, and rungs'],
+      }
+    },
+  }
+}
+
+function roundedBoxEnclosureRecipe(): PrimitiveRecipeDefinition {
+  const id = 'enclosure.roundedBox' as PrimitiveRecipeId
+  const aliases = [
+    'rounded machine enclosure',
+    'rounded box enclosure',
+    'machine cabinet enclosure',
+    'cabinet with door and window',
+    '\u5706\u89d2\u7bb1\u4f53',
+    '\u8bbe\u5907\u5916\u58f3',
+  ]
+  const compose = (input: ComposeRecipeInput): PrimitiveShapeInput[] => {
+    const params = recipeParams(input)
+    const scale = sizeScaleFor(params) ?? 1
+    const length = clampNumber(numberValue(params.length), 1.2 * scale, 0.18, 5)
+    const width = clampNumber(numberValue(params.width, params.depth), 0.52 * scale, 0.12, 2.4)
+    const height = clampNumber(numberValue(params.height), 0.82 * scale, 0.18, 3)
+    const cornerRadius = clampNumber(
+      numberValue(params.cornerRadius),
+      Math.min(length, width, height) * 0.06,
+      0,
+      Math.min(length, width, height) * 0.24,
+    )
+    const origin = positionFor(params, input) ?? [0, 0, 0]
+    const center: Vec3 = [origin[0], origin[1] + height / 2, origin[2]]
+    const name = nameFor(input, 'rounded machine enclosure')
+    const body = {
+      properties: { color: colorFor(params, '#64748b'), roughness: 0.46, metalness: 0.34 },
+    }
+    const dark = {
+      properties: {
+        color: stringValue(params.darkColor, '#111827') ?? '#111827',
+        roughness: 0.58,
+        metalness: 0.18,
+      },
+    }
+    const glass = {
+      preset: 'glass',
+      properties: {
+        color: stringValue(params.accentColor, '#38bdf8') ?? '#38bdf8',
+        roughness: 0.12,
+        metalness: 0.02,
+        opacity: 0.42,
+        transparent: true,
+      },
+    }
+    return [
+      {
+        kind: 'box',
+        name: `${name} rounded enclosure body`,
+        semanticRole: 'machine_enclosure',
+        position: center,
+        length,
+        width,
+        height,
+        cornerRadius,
+        cornerSegments: 8,
+        material: body,
+      },
+      {
+        kind: 'rounded-panel',
+        name: `${name} front door panel`,
+        semanticRole: 'access_door',
+        position: [center[0], center[1], center[2] + width * 0.515],
+        length: length * 0.76,
+        width: height * 0.68,
+        thickness: width * 0.035,
+        cornerRadius: cornerRadius * 0.65,
+        cornerSegments: 5,
+        material: body,
+      },
+      {
+        kind: 'rounded-panel',
+        name: `${name} inspection window`,
+        semanticRole: 'viewing_window',
+        position: [center[0], center[1] + height * 0.12, center[2] + width * 0.545],
+        length: length * 0.44,
+        width: height * 0.22,
+        thickness: width * 0.024,
+        cornerRadius: cornerRadius * 0.45,
+        cornerSegments: 5,
+        material: glass,
+      },
+      {
+        kind: 'capsule',
+        name: `${name} vertical handle`,
+        semanticRole: 'door_handle',
+        position: [center[0] + length * 0.32, center[1] - height * 0.04, center[2] + width * 0.56],
+        axis: 'y',
+        radius: Math.min(length, height) * 0.014,
+        height: height * 0.24,
+        radialSegments: 12,
+        material: dark,
+      },
+    ]
+  }
+
+  return {
+    id,
+    label: 'Rounded box enclosure',
+    aliases,
+    compose,
+    geometryBrief: (input) => {
+      const params = recipeParams(input)
+      return {
+        category: 'machine_enclosure',
+        units: 'm',
+        coordinateConvention: '+X length, +Y up, +Z depth/front',
+        expectedDimensions: {
+          length: numberValue(params.length),
+          width: numberValue(params.width, params.depth),
+          height: numberValue(params.height),
+        },
+        requiredRoles: ['machine_enclosure', 'access_door', 'viewing_window', 'door_handle'],
+        validationTargets: ['rounded body, editable door panel, transparent window, handle'],
+      }
+    },
+  }
+}
+
 const PRIMITIVE_RECIPES: PrimitiveRecipeDefinition[] = [
   spurGearRecipe(),
   chainSprocketRecipe(),
@@ -2100,6 +2527,9 @@ const PRIMITIVE_RECIPES: PrimitiveRecipeDefinition[] = [
   robotArmThreeAxisRecipe(),
   mixerImpellerRecipe(),
   servoMotorRecipe(),
+  vesselShellRecipe(),
+  platformLadderRecipe(),
+  roundedBoxEnclosureRecipe(),
 ]
 
 export function listPrimitiveRecipes(): PrimitiveRecipeDefinition[] {

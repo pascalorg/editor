@@ -1,0 +1,28 @@
+{
+  "id": "industry.cement.basic",
+  "name": "Cement Basic Equipment Pack",
+  "industry": "cement",
+  "version": "0.1.0",
+  "schemaVersion": "1.1",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": ["zh-CN", "en-US"],
+  "description": "Cement plant profile pack for common production-line equipment, covering pyroprocess, grinding, conveying, storage, dust collection, and packaging scenarios.",
+  "profiles": [
+    "profiles/pyroprocess.json",
+    "profiles/grinding.json",
+    "profiles/conveying.json",
+    "profiles/storage.json",
+    "profiles/dust-collection-packaging.json",
+    "profiles/plant-special-equipment.json"
+  ],
+  "factoryArchitectures": [
+    "factory-architectures/clinker-line.json",
+    "factory-architectures/cement-plant.json"
+  ],
+  "processTemplates": [
+    "process-templates/clinker-production-line.json",
+    "process-templates/cement-plant.json"
+  ],
+  "qualityRules": ["quality-rules/cement-quality.json"]
+}

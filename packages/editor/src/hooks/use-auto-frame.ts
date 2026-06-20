@@ -2,7 +2,7 @@
 
 import { emitter, useScene } from '@pascal-app/core'
 import { useEffect, useRef } from 'react'
-import { computeSceneBoundsXZ } from '../lib/scene-bounds'
+import { computeSceneBoundsXZ, pickSceneCameraFocusBounds } from '../lib/scene-bounds'
 
 /**
  * Auto-frame the camera onto a freshly loaded scene.
@@ -36,8 +36,12 @@ export function useAutoFrame(): void {
       // flags false; a `clearScene()` goes non-empty → empty and is ignored.
       if (!wasEmpty || isEmpty) return
 
-      const bounds = computeSceneBoundsXZ(state.nodes)
-      emitter.emit('camera-controls:fit-scene', bounds ? { bounds } : {})
+      const focus = pickSceneCameraFocusBounds(state.nodes)
+      const bounds = focus?.bounds ?? computeSceneBoundsXZ(state.nodes)
+      emitter.emit(
+        'camera-controls:fit-scene',
+        bounds ? { bounds, reason: focus?.reason ?? 'scene-bounds' } : {},
+      )
     })
 
     return unsubscribe

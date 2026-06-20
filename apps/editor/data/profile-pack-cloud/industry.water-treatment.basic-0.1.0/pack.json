@@ -1,0 +1,26 @@
+{
+  "id": "industry.water-treatment.basic",
+  "name": "Water Treatment Basic Equipment Pack",
+  "industry": "water-treatment",
+  "version": "0.1.0",
+  "schemaVersion": "1.1",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": [
+    "zh-CN",
+    "en-US"
+  ],
+  "description": "Basic water and wastewater treatment equipment profiles for sedimentation, chemical dosing, filtration, pumping, pipe corridors, and sludge dewatering.",
+  "profiles": [
+    "profiles/generated.json"
+  ],
+  "factoryArchitectures": [
+    "factory-architectures/generated.json"
+  ],
+  "processTemplates": [
+    "process-templates/generated.json"
+  ],
+  "qualityRules": [
+    "quality-rules/generated-quality.json"
+  ]
+}

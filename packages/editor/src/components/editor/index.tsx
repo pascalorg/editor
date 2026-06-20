@@ -3,6 +3,7 @@
 import { Icon } from '@iconify/react'
 import {
   type AnyNodeId,
+  emitter,
   initSpaceDetectionSync,
   initSpatialGridSync,
   spatialGridManager,
@@ -35,6 +36,7 @@ import {
   type SceneGraph,
   writePersistedSelection,
 } from '../../lib/scene'
+import { computeSceneBoundsXZ, pickSceneCameraFocusBounds } from '../../lib/scene-bounds'
 import { initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
@@ -173,6 +175,20 @@ function DeleteSelectionConfirmDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function emitFitSceneForGraph(sceneGraph: SceneGraph | null | undefined) {
+  if (!sceneGraph) {
+    emitter.emit('camera-controls:fit-scene', {})
+    return
+  }
+  const nodes = sceneGraph.nodes as Parameters<typeof pickSceneCameraFocusBounds>[0]
+  const focus = pickSceneCameraFocusBounds(nodes)
+  const bounds = focus?.bounds ?? computeSceneBoundsXZ(nodes)
+  emitter.emit(
+    'camera-controls:fit-scene',
+    bounds ? { bounds, reason: focus?.reason ?? 'scene-bounds' } : {},
   )
 }
 
@@ -1091,9 +1107,21 @@ export default function Editor({
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
         if (!cancelled) {
           applySceneGraphToEditor(sceneGraph)
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              if (!cancelled) emitFitSceneForGraph(sceneGraph)
+            })
+          })
         }
       } catch {
-        if (!cancelled) applySceneGraphToEditor(null)
+        if (!cancelled) {
+          applySceneGraphToEditor(null)
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              if (!cancelled) emitFitSceneForGraph(null)
+            })
+          })
+        }
       } finally {
         if (!cancelled) {
           setIsSceneLoading(false)

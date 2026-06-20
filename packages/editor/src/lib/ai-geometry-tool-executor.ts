@@ -4,6 +4,7 @@ import {
   getAssemblyGeometryBrief,
 } from '@pascal-app/core/lib/assembly-compose'
 import {
+  alignPrimaryShapeColorsToConstraints,
   extractUserGeometryConstraints,
   validateAssemblyConstraints,
 } from '@pascal-app/core/lib/assembly-constraints'
@@ -447,6 +448,146 @@ function simpleBoxPrimitiveFallbackShapes(
   return targetArgs.shapes as RawShape[]
 }
 
+function precisionIndustrialPartRoutingText(
+  sourceArgs: Record<string, unknown>,
+  prompt: string,
+  context?: GeometryToolExecutionContext,
+): string {
+  return [
+    prompt,
+    context?.blueprintCategory,
+    context?.blueprintRequiredRoles?.join(' '),
+    sourceArgs.name,
+    sourceArgs.object,
+    sourceArgs.category,
+    sourceArgs.geometryBrief,
+    JSON.stringify(sourceArgs.parts ?? []),
+  ]
+    .map(textOf)
+    .join(' ')
+    .toLowerCase()
+}
+
+function precisionIndustrialPartFallbackShapes(
+  targetArgs: Record<string, unknown>,
+  sourceArgs: Record<string, unknown>,
+  prompt: string,
+  context?: GeometryToolExecutionContext,
+): RawShape[] | undefined {
+  const text = precisionIndustrialPartRoutingText(sourceArgs, prompt, context)
+  const sourceFamily =
+    typeof sourceArgs.family === 'string' ? sourceArgs.family.trim().toLowerCase() : ''
+  const expectedDimensions = isRecord(readGeometryBrief(sourceArgs)?.expectedDimensions)
+    ? readGeometryBrief(sourceArgs)?.expectedDimensions
+    : {}
+  const length = firstNumber(sourceArgs.length, expectedDimensions?.length)
+  const width = firstNumber(sourceArgs.width, sourceArgs.depth, expectedDimensions?.width)
+  const height = firstNumber(sourceArgs.height, expectedDimensions?.height)
+  const explicitRadius = firstNumber(sourceArgs.radius)
+  const explicitDiameter = firstNumber(sourceArgs.diameter, expectedDimensions?.diameter)
+  const hasConcreteProfileRoute = sourceArgs.deviceProfile != null
+  const hasProfileRoute =
+    sourceArgs.deviceProfile != null ||
+    sourceArgs.deviceProfileDraft != null ||
+    sourceArgs.__deviceProfileDefinition != null
+
+  if (
+    !hasConcreteProfileRoute &&
+    /(\u5367\u5f0f|\u50a8\u7f50|\u538b\u529b\u7f50|\u538b\u529b\u5bb9\u5668|storage[_\s-]?tank|pressure[_\s-]?(tank|vessel)|horizontal[_\s-]?(tank|vessel))/i.test(
+      text,
+    ) &&
+    sourceFamily !== 'tank' &&
+    !/(\u53cd\u5e94\u91dc|\u53cd\u5e94\u5668|reactor|agitator|stirred)/i.test(text)
+  ) {
+    const tankRadius = explicitRadius ?? (explicitDiameter != null ? explicitDiameter / 2 : 0.34)
+    const parts: PartComposePartInput[] = [
+      {
+        kind: 'cylindrical_tank',
+        semanticRole: 'vessel_shell',
+        axis: 'x',
+        length: length ?? 2.2,
+        radius: tankRadius,
+      },
+    ]
+    const shapes = composePartPrimitives({
+      ...(sourceArgs as PartComposeInput),
+      name: typeof sourceArgs.name === 'string' ? sourceArgs.name : 'horizontal pressure tank',
+      detail: typeof sourceArgs.detail === 'string' ? sourceArgs.detail : 'medium',
+      parts,
+    }) as RawShape[]
+    if (shapes.length === 0) return undefined
+    targetArgs.__precisionPartRoute = 'cylindrical_tank'
+    targetArgs.family = 'tank'
+    targetArgs.parts = parts
+    return shapes
+  }
+
+  if (
+    !hasConcreteProfileRoute &&
+    !/(\u673a\u5668\u81c2|\u673a\u68b0\u81c2|\u516d\u8f74|\u4e03\u8f74|\u56db\u8f74|robot[_\s-]?arm|industrial[_\s-]?robot|six[_\s-]?axis|6[_\s-]?axis|seven[_\s-]?axis|7[_\s-]?axis|four[_\s-]?axis|4[_\s-]?axis|fanuc|kuka|abb)/i.test(
+      text,
+    ) &&
+    /(\u68c0\u4fee\u5e73\u53f0|\u5de5\u4e1a\u5e73\u53f0|\u722c\u68af|access[_\s-]?platform|inspection[_\s-]?platform|platform[_\s-]?ladder)/i.test(
+      text,
+    ) &&
+    !/(tank|reactor|pump|compressor|heat_exchanger|machine_tool|conveyor|outdoor_ac|fan|electrical|valve)/.test(
+      sourceFamily,
+    ) &&
+    !/(\u50a8\u7f50|\u538b\u529b\u7f50|\u538b\u529b\u5bb9\u5668|\u53cd\u5e94\u91dc|\u53cd\u5e94\u5668|storage[_\s-]?tank|pressure[_\s-]?(tank|vessel)|reactor|agitator|stirred)/i.test(
+      text,
+    )
+  ) {
+    const parts: PartComposePartInput[] = [
+      {
+        kind: 'platform_ladder',
+        semanticRole: 'access_platform',
+        length: length ?? 1,
+        width: width ?? 0.6,
+        height: height ?? 1.4,
+        count: firstNumber(sourceArgs.count) ?? 7,
+      },
+    ]
+    const shapes = composePartPrimitives({
+      ...(sourceArgs as PartComposeInput),
+      name: typeof sourceArgs.name === 'string' ? sourceArgs.name : 'industrial access platform',
+      detail: typeof sourceArgs.detail === 'string' ? sourceArgs.detail : 'medium',
+      parts,
+    }) as RawShape[]
+    if (shapes.length === 0) return undefined
+    targetArgs.__precisionPartRoute = 'platform_ladder'
+    targetArgs.family = 'generic'
+    targetArgs.parts = parts
+    return shapes
+  }
+
+  if (hasProfileRoute) return undefined
+
+  if (
+    /(\u5706\u89d2|\u7bb1\u4f53|\u673a\u67dc|\u5916\u58f3|rounded[_\s-]?(box|enclosure)|machine[_\s-]?enclosure|cabinet[_\s-]?enclosure)/i.test(
+      text,
+    ) &&
+    !/(machine_tool|electrical|kiosk|outdoor_ac)/.test(sourceFamily)
+  ) {
+    const shapes = composeRecipePrimitives({
+      recipeId: 'enclosure.roundedBox',
+      params: {
+        length: length ?? 1.2,
+        width: width ?? 0.52,
+        height: height ?? 0.9,
+        color: typeof sourceArgs.primaryColor === 'string' ? sourceArgs.primaryColor : undefined,
+        accentColor:
+          typeof sourceArgs.accentColor === 'string' ? sourceArgs.accentColor : undefined,
+      },
+    }) as RawShape[]
+    if (shapes.length === 0) return undefined
+    targetArgs.__precisionPartRoute = 'enclosure.roundedBox'
+    targetArgs.family = 'generic'
+    return shapes
+  }
+
+  return undefined
+}
+
 function getRawShapes(
   name: string,
   args: Record<string, unknown>,
@@ -480,6 +621,13 @@ function getRawShapes(
     if (robotShapes?.length) return robotShapes
     const hasExplicitParts =
       Array.isArray(dimensionAwarePartArgs.parts) && dimensionAwarePartArgs.parts.length > 0
+    const precisionShapes = precisionIndustrialPartFallbackShapes(
+      args,
+      dimensionAwarePartArgs,
+      prompt,
+      context,
+    )
+    if (precisionShapes?.length) return precisionShapes
     if (
       hasExplicitParts &&
       shouldUseCompactAircraftFallback(dimensionAwarePartArgs, prompt, context)
@@ -657,6 +805,7 @@ function getRawShapes(
 
 const INDUSTRIAL_PART_FAMILIES = new Set([
   'pump',
+  'fan',
   'conveyor',
   'electrical',
   'pipe_system',
@@ -1418,7 +1567,10 @@ function explicitProfileParts(parts: unknown): PartComposePartInput[] {
     const kind = String(part.kind ?? part.partType ?? part.type ?? '').trim()
     if (!kind) continue
     const semanticRole = String(part.semanticRole ?? '').trim()
-    const key = `${kind.toLowerCase()}::${semanticRole.toLowerCase()}`
+    const explicitId = String(part.id ?? '').trim()
+    const key = explicitId
+      ? `id::${explicitId.toLowerCase()}`
+      : `${kind.toLowerCase()}::${semanticRole.toLowerCase()}`
     if (seen.has(key)) continue
     seen.add(key)
     output.push({
@@ -1428,6 +1580,139 @@ function explicitProfileParts(parts: unknown): PartComposePartInput[] {
     })
   }
   return output
+}
+
+function stringRecordValue(value: unknown): Record<string, string> | undefined {
+  if (!isRecord(value)) return undefined
+  const entries = Object.entries(value).flatMap(([key, raw]) =>
+    typeof raw === 'string' && raw.trim() ? [[key, raw.trim()] as const] : [],
+  )
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
+function objectRecordValue(value: unknown): Record<string, Record<string, unknown>> | undefined {
+  if (!isRecord(value)) return undefined
+  const entries = Object.entries(value).flatMap(([key, raw]) =>
+    isRecord(raw) ? [[key, raw] as const] : [],
+  )
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
+function vec3Value(value: unknown): [number, number, number] | undefined {
+  return Array.isArray(value) &&
+    value.length >= 3 &&
+    value.slice(0, 3).every((item) => typeof item === 'number' && Number.isFinite(item))
+    ? ([value[0], value[1], value[2]] as [number, number, number])
+    : undefined
+}
+
+function positiveNumberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+function calculatedPresetParameters(
+  parameters: unknown,
+  dimensions: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!isRecord(parameters)) return {}
+  const output: Record<string, unknown> = {}
+  for (const [targetKey, rule] of Object.entries(parameters)) {
+    if (!isRecord(rule)) continue
+    const sourceKey = typeof rule.from === 'string' ? rule.from : undefined
+    const sourceValue = sourceKey ? positiveNumberValue(dimensions[sourceKey]) : undefined
+    if (sourceValue == null) continue
+    const scale = typeof rule.scale === 'number' && Number.isFinite(rule.scale) ? rule.scale : 1
+    const offset = typeof rule.offset === 'number' && Number.isFinite(rule.offset) ? rule.offset : 0
+    const min = typeof rule.min === 'number' && Number.isFinite(rule.min) ? rule.min : undefined
+    const max = typeof rule.max === 'number' && Number.isFinite(rule.max) ? rule.max : undefined
+    output[targetKey] = Math.max(
+      min ?? Number.NEGATIVE_INFINITY,
+      Math.min(max ?? Number.POSITIVE_INFINITY, sourceValue * scale + offset),
+    )
+  }
+  return output
+}
+
+function firstDefinedPartValue(part: PartComposePartInput, key: string): unknown {
+  return (part as Record<string, unknown>)[key]
+}
+
+function mergePartDefaults(
+  part: PartComposePartInput,
+  defaults: Record<string, unknown>,
+): PartComposePartInput {
+  const next = { ...part } as Record<string, unknown>
+  for (const [key, value] of Object.entries(defaults)) {
+    if (next[key] == null) next[key] = value
+  }
+  return next as PartComposePartInput
+}
+
+function placementForPart(
+  layoutTemplate: Record<string, unknown> | undefined,
+  part: PartComposePartInput,
+): Record<string, unknown> | undefined {
+  const placements = Array.isArray(layoutTemplate?.placements) ? layoutTemplate.placements : []
+  const role = String(part.semanticRole ?? '').toLowerCase()
+  const kind = String(part.kind ?? part.partType ?? part.type ?? '').toLowerCase()
+  return placements.filter(isRecord).find((placement) => {
+    const placementRole = String(placement.role ?? placement.semanticRole ?? '').toLowerCase()
+    const placementKind = String(placement.kind ?? '').toLowerCase()
+    return (
+      (placementRole.length > 0 && placementRole === role) ||
+      (placementKind.length > 0 && placementKind === kind)
+    )
+  })
+}
+
+function applyResourcePackPartKnowledge(
+  sourceArgs: Record<string, unknown>,
+  parts: readonly PartComposePartInput[],
+): PartComposePartInput[] {
+  const layoutHints = isRecord(sourceArgs.layoutHints) ? sourceArgs.layoutHints : undefined
+  const layoutTemplate = isRecord(layoutHints?.layoutTemplate)
+    ? (layoutHints.layoutTemplate as Record<string, unknown>)
+    : undefined
+  const partPresetRefs = stringRecordValue(sourceArgs.partPresets)
+  const partPresetDefinitions = objectRecordValue(sourceArgs.resolvedPartPresets)
+  if (!layoutTemplate && !partPresetRefs && !partPresetDefinitions) return [...parts]
+
+  const dimensions = {
+    length: sourceArgs.length,
+    width: sourceArgs.width,
+    height: sourceArgs.height,
+    diameter: sourceArgs.diameter,
+    radius: sourceArgs.radius,
+  }
+
+  return parts.map((part) => {
+    const role = String(part.semanticRole ?? '').trim()
+    const kind = String(part.kind ?? part.partType ?? part.type ?? '').trim()
+    const presetId =
+      (typeof part.preset === 'string' && part.preset.trim() ? part.preset.trim() : undefined) ??
+      partPresetRefs?.[role] ??
+      partPresetRefs?.[kind]
+    const preset = presetId ? partPresetDefinitions?.[presetId] : undefined
+    const defaults = isRecord(preset?.defaults) ? preset.defaults : undefined
+    const computed = calculatedPresetParameters(preset?.parameters, dimensions)
+    const placement = placementForPart(layoutTemplate, part)
+    const placementDimensions = isRecord(placement?.dimensions) ? placement.dimensions : undefined
+    const placementParams = isRecord(placement?.params) ? placement.params : undefined
+    let next = mergePartDefaults(part, {
+      ...(defaults ?? {}),
+      ...computed,
+      ...(placementDimensions ?? {}),
+      ...(placementParams ?? {}),
+    })
+    const position = vec3Value(placement?.position)
+    if (position && firstDefinedPartValue(next, 'position') == null) next = { ...next, position }
+    const rotation = vec3Value(placement?.rotation)
+    if (rotation && firstDefinedPartValue(next, 'rotation') == null) next = { ...next, rotation }
+    if (typeof placement?.anchor === 'string' && firstDefinedPartValue(next, 'anchor') == null) {
+      next = { ...next, anchor: placement.anchor }
+    }
+    return next
+  })
 }
 
 function shouldBuildRuntimeDraftProfile(args: Record<string, unknown>, prompt: string): boolean {
@@ -1499,44 +1784,13 @@ function registryPartFallbackShapes(
       ? { family, parts: explicitParts, warnings: [] }
       : normalizePartPlanForFamily(family, { ...profiledSourceArgs, prompt })
   if (!normalizedPlan?.parts.length) return undefined
-  const normalizedParts = profile
+  const roleAwareParts = profile
     ? applyProfilePartRoles(profile, normalizedPlan.parts)
     : normalizedPlan.parts
-
-  const partInput: PartComposeInput = {
-    ...(profiledSourceArgs as PartComposeInput),
-    name:
-      typeof profiledSourceArgs.name === 'string'
-        ? profiledSourceArgs.name
-        : typeof profiledSourceArgs.object === 'string'
-          ? profiledSourceArgs.object
-          : normalizedPlan.family.replace(/_/g, ' '),
-    family: normalizedPlan.family,
-    registryPartPlan: true,
-    autoComplete: false,
-    enhanceVisualDetails: false,
-    parts: normalizedParts,
-  }
-  const shapes = composePartPrimitives(partInput) as RawShape[]
-  if (shapes.length === 0) return undefined
-
-  const executionValidation = profile
-    ? profileExecutionSmokeValidation(profile, shapes, normalizedParts)
-    : undefined
-  const fullProfileValidation =
-    profile && profileValidation
-      ? validateDeviceProfileForExecution(profile, executionValidation)
-      : undefined
-  if (fullProfileValidation && !fullProfileValidation.ok) {
-    targetArgs.deviceProfileValidation = fullProfileValidation
-    targetArgs.profileFallbackReason = 'profile_execution_validation_failed'
-    return undefined
-  }
-
-  targetArgs.family = normalizedPlan.family
-  targetArgs.parts = normalizedParts
-  targetArgs.__registryPartPlan = true
-  targetArgs.layoutPlan = resolveLayout(
+  const normalizedParts = profile
+    ? applyResourcePackPartKnowledge(profiledSourceArgs, roleAwareParts)
+    : roleAwareParts
+  const layoutPlan = resolveLayout(
     {
       family: profile?.family ?? normalizedPlan.family,
       layoutFamily: profile?.layoutFamily,
@@ -1551,10 +1805,55 @@ function registryPartFallbackShapes(
         typeof profiledSourceArgs.diameter === 'number' ? profiledSourceArgs.diameter : undefined,
     },
   )
+  const layoutParts = layoutPlan.parts
+
+  const partInput: PartComposeInput = {
+    ...(profiledSourceArgs as PartComposeInput),
+    name:
+      typeof profiledSourceArgs.name === 'string'
+        ? profiledSourceArgs.name
+        : typeof profiledSourceArgs.object === 'string'
+          ? profiledSourceArgs.object
+          : normalizedPlan.family.replace(/_/g, ' '),
+    family: normalizedPlan.family,
+    registryPartPlan: true,
+    autoComplete: false,
+    enhanceVisualDetails: false,
+    parts: layoutParts,
+  }
+  const shapes = profile
+    ? applyProfileShapeRoles(profile, composePartPrimitives(partInput) as RawShape[])
+    : (composePartPrimitives(partInput) as RawShape[])
+  if (shapes.length === 0) return undefined
+
+  const executionValidation = profile
+    ? profileExecutionSmokeValidation(profile, shapes, layoutParts)
+    : undefined
+  const fullProfileValidation =
+    profile && profileValidation
+      ? validateDeviceProfileForExecution(profile, executionValidation)
+      : undefined
+  if (fullProfileValidation && !fullProfileValidation.ok) {
+    targetArgs.deviceProfileValidation = fullProfileValidation
+    targetArgs.profileFallbackReason = 'profile_execution_validation_failed'
+    return undefined
+  }
+
+  targetArgs.family = normalizedPlan.family
+  targetArgs.parts = layoutParts
+  targetArgs.__registryPartPlan = true
+  targetArgs.layoutPlan = layoutPlan
   if (profile) {
     targetArgs.deviceProfile = profile.id
     targetArgs.archetypeFamily = profile.archetypeFamily
     targetArgs.layoutFamily = profile.layoutFamily
+    targetArgs.layoutTemplate = profile.layoutTemplate
+    targetArgs.profileSourcePack = profile.sourcePack
+    targetArgs.profilePackId = profile.sourcePack?.id
+    targetArgs.profilePackVersion = profile.sourcePack?.version
+    targetArgs.partPresets = profile.partPresets
+    targetArgs.resolvedPartPresets = profile.resolvedPartPresets
+    targetArgs.qualityRules = profile.qualityRules
     targetArgs.profileSource = profile.source
     targetArgs.primarySemanticRole = profile.primarySemanticRole
     targetArgs.deviceProfileValidation = fullProfileValidation ?? profileValidation
@@ -1578,13 +1877,35 @@ function applyProfilePartRoles(
 ): PartComposePartInput[] {
   const remainingProfileParts = [...profile.parts]
   return normalizedParts.map((part) => {
-    const index = remainingProfileParts.findIndex(
-      (profilePart) =>
-        String(profilePart.kind).toLowerCase() === String(part.kind).toLowerCase() ||
-        String(profilePart.semanticRole).toLowerCase() === String(part.semanticRole).toLowerCase(),
-    )
-    if (index < 0) return part
-    const [profilePart] = remainingProfileParts.splice(index, 1)
+    const partId = String(part.id ?? '').toLowerCase()
+    const partKind = String(part.kind).toLowerCase()
+    const partRole = String(part.semanticRole).toLowerCase()
+    const findBy = (
+      predicate: (profilePart: DeviceProfileDefinition['parts'][number]) => boolean,
+    ) => remainingProfileParts.findIndex(predicate)
+    const index =
+      (partId
+        ? findBy((profilePart) => String(profilePart.id ?? '').toLowerCase() === partId)
+        : -1) ?? -1
+    const fallbackIndex =
+      index >= 0
+        ? index
+        : findBy(
+            (profilePart) =>
+              String(profilePart.kind).toLowerCase() === partKind &&
+              String(profilePart.semanticRole).toLowerCase() === partRole,
+          )
+    const roleIndex =
+      fallbackIndex >= 0
+        ? fallbackIndex
+        : findBy((profilePart) => String(profilePart.semanticRole).toLowerCase() === partRole)
+    const kindIndex =
+      roleIndex >= 0
+        ? roleIndex
+        : findBy((profilePart) => String(profilePart.kind).toLowerCase() === partKind)
+    const indexToUse = kindIndex
+    if (indexToUse < 0) return part
+    const [profilePart] = remainingProfileParts.splice(indexToUse, 1)
     if (!profilePart?.semanticRole) return part
     if (String(profilePart.kind).toLowerCase() === 'heat_exchanger') return part
     return {
@@ -1595,6 +1916,34 @@ function applyProfilePartRoles(
   })
 }
 
+function applyProfileShapeRoles(
+  profile: DeviceProfileDefinition,
+  shapes: readonly RawShape[],
+): RawShape[] {
+  const rolesByKind = new Map<string, string[]>()
+  for (const part of profile.parts) {
+    const kind = String(part.kind).toLowerCase()
+    const roles = rolesByKind.get(kind) ?? []
+    if (!roles.includes(part.semanticRole)) roles.push(part.semanticRole)
+    rolesByKind.set(kind, roles)
+  }
+  return shapes.map((shape) => {
+    const sourceKind = String(shape.sourcePartKind ?? shape.kind ?? '').toLowerCase()
+    const roles = rolesByKind.get(sourceKind)
+    if (!roles || roles.length !== 1) return shape
+    const role = roles[0]
+    if (!role) return shape
+    const currentRole = String(shape.semanticRole ?? '').toLowerCase()
+    const replaceableShellRole =
+      (sourceKind === 'cylindrical_tank' || sourceKind === 'agitator_tank') &&
+      (currentRole === 'vessel_shell' ||
+        currentRole === 'reactor_vessel_shell' ||
+        currentRole === 'cylindrical_shell')
+    if (currentRole && !replaceableShellRole) return shape
+    return { ...shape, semanticRole: role }
+  })
+}
+
 function profileExecutionSmokeValidation(
   profile: DeviceProfileDefinition,
   shapes: RawShape[],
@@ -1602,10 +1951,12 @@ function profileExecutionSmokeValidation(
 ): DeviceProfileValidation {
   const issues: string[] = []
   const warnings: string[] = []
+  const shapeLimit =
+    profileShapeLimit({ qualityRules: profile.qualityRules }) ?? MAX_GENERATED_GEOMETRY_SHAPES
   if (shapes.length === 0) issues.push(`Profile ${profile.id} produced no shapes.`)
-  if (shapes.length > MAX_GENERATED_GEOMETRY_SHAPES) {
+  if (shapes.length > shapeLimit) {
     issues.push(
-      `Profile ${profile.id} produced ${shapes.length} shapes, above limit ${MAX_GENERATED_GEOMETRY_SHAPES}.`,
+      `Profile ${profile.id} produced ${shapes.length} shapes, above limit ${shapeLimit}.`,
     )
   }
 
@@ -1683,6 +2034,80 @@ function isRobotArmRequest(args: Record<string, unknown>, prompt: string): boole
   )
 }
 
+function robotArmAxisCount(args: Record<string, unknown>, prompt: string): number {
+  const layoutHints = isRecord(args.layoutHints) ? args.layoutHints : undefined
+  const robotDefaults = isRecord(layoutHints?.robotArmDefaults)
+    ? layoutHints.robotArmDefaults
+    : undefined
+  const explicit = firstNumber(
+    args.axisCount,
+    args.axes,
+    args.joints,
+    robotDefaults?.axisCount,
+    robotDefaults?.axes,
+  )
+  if (explicit != null) return Math.max(3, Math.min(7, Math.round(explicit)))
+  const text = [prompt, args.name, args.object, args.style, args.category, args.geometryBrief]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  if (/seven[_\s-]?axis|7[_\s-]?axis|七轴|七軸/.test(text)) return 7
+  if (/six[_\s-]?axis|6[_\s-]?axis|六轴|六軸|fanuc|kuka|abb/.test(text)) return 6
+  if (/five[_\s-]?axis|5[_\s-]?axis|五轴|五軸/.test(text)) return 5
+  if (/four[_\s-]?axis|4[_\s-]?axis|四轴|四軸|scara/.test(text)) return 4
+  if (/three[_\s-]?axis|3[_\s-]?axis|三轴|三軸/.test(text)) return 3
+  return 6
+}
+
+function isRobotArmWorkcellRequest(args: Record<string, unknown>, prompt: string): boolean {
+  if (args.includeWorkcell === false || args.workcell === false || args.scope === 'arm_only') {
+    return false
+  }
+  const layoutHints = isRecord(args.layoutHints) ? args.layoutHints : undefined
+  const robotDefaults = isRecord(layoutHints?.robotArmDefaults)
+    ? layoutHints.robotArmDefaults
+    : undefined
+  if (
+    robotDefaults?.includeWorkcell === false ||
+    robotDefaults?.workcell === false ||
+    robotDefaults?.scope === 'arm_only'
+  ) {
+    return false
+  }
+  const text = [
+    prompt,
+    args.name,
+    args.object,
+    args.style,
+    args.category,
+    args.geometryBrief,
+    Array.isArray(args.parts)
+      ? args.parts
+          .filter(isRecord)
+          .map((part) => [part.kind, part.semanticRole, part.name, part.id].join(' '))
+          .join(' ')
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  const hasExplicitWorkcell =
+    /workcell|work[_\s-]?station|welding[_\s-]?cell|fixture|\u710a\u63a5\u5de5\u4f5c\u7ad9|\u5de5\u4f5c\u7ad9/.test(
+      text,
+    )
+  const hasNegatedAccessory =
+    /(no|without|exclude|\u4e0d\u8981|\u4e0d\u9700\u8981|\u65e0\u9700|\u7121\u9700|\u65e0)\s*(work[_\s-]?table|control[_\s-]?cabinet|safety[_\s-]?barrier|guard[_\s-]?rail|\u5de5\u4f5c\u53f0|\u63a7\u5236\u67dc|\u62a4\u680f|\u8b77\u6b04)/.test(
+      text,
+    ) ||
+    /(work[_\s-]?table|control[_\s-]?cabinet|safety[_\s-]?barrier|guard[_\s-]?rail|\u5de5\u4f5c\u53f0|\u63a7\u5236\u67dc|\u62a4\u680f|\u8b77\u6b04)\s*(not needed|excluded|\u4e0d\u8981|\u4e0d\u9700\u8981)/.test(
+      text,
+    )
+  if (hasNegatedAccessory && !hasExplicitWorkcell) return false
+  return /workcell|work[_\s-]?station|welding[_\s-]?cell|fixture|control[_\s-]?cabinet|safety[_\s-]?barrier|guard[_\s-]?rail|焊接工作站|工作站|控制柜|护栏|護欄/.test(
+    text,
+  )
+}
+
 function robotArmWorkstationFallbackShapes(
   targetArgs: Record<string, unknown>,
   sourceArgs: Record<string, unknown>,
@@ -1698,32 +2123,73 @@ function robotArmWorkstationFallbackShapes(
   const profiledSourceArgs = profile
     ? applyDeviceProfileToPartInput(profile, { ...sourceArgs, prompt })
     : sourceArgs
+  const layoutHints = isRecord(profiledSourceArgs.layoutHints)
+    ? profiledSourceArgs.layoutHints
+    : undefined
+  const robotDefaults = isRecord(layoutHints?.robotArmDefaults)
+    ? layoutHints.robotArmDefaults
+    : undefined
   const dimensions = parseDimensionSemantics(prompt)
-  const height = firstNumber(profiledSourceArgs.height, dimensions.height) ?? 1.8
-  const length = firstNumber(profiledSourceArgs.length, dimensions.length) ?? 2.2
+  const height =
+    firstNumber(profiledSourceArgs.height, dimensions.height, robotDefaults?.height) ?? 1.8
+  const length =
+    firstNumber(profiledSourceArgs.length, dimensions.length, robotDefaults?.length) ?? 2.2
   const width =
-    firstNumber(profiledSourceArgs.width, profiledSourceArgs.depth, dimensions.width) ?? 1.6
-  const reach = Math.max(0.8, Math.min(2.4, height * 0.72))
+    firstNumber(
+      profiledSourceArgs.width,
+      profiledSourceArgs.depth,
+      dimensions.width,
+      robotDefaults?.width,
+    ) ?? 1.6
+  const reach = Math.max(
+    0.8,
+    Math.min(2.4, firstNumber(profiledSourceArgs.reach, robotDefaults?.reach) ?? height * 0.72),
+  )
+  const axisCount = robotArmAxisCount(profiledSourceArgs, prompt)
+  const includeWorkcell = isRobotArmWorkcellRequest(profiledSourceArgs, prompt)
+  const endEffector =
+    typeof profiledSourceArgs.endEffector === 'string'
+      ? profiledSourceArgs.endEffector
+      : typeof robotDefaults?.endEffector === 'string'
+        ? robotDefaults.endEffector
+        : 'tool-flange'
+  const includeCableHarness =
+    typeof profiledSourceArgs.includeCableHarness === 'boolean'
+      ? profiledSourceArgs.includeCableHarness
+      : typeof robotDefaults?.includeCableHarness === 'boolean'
+        ? robotDefaults.includeCableHarness
+        : true
   const robotName =
     typeof profiledSourceArgs.name === 'string' && profiledSourceArgs.name.trim()
       ? profiledSourceArgs.name.trim()
-      : 'industrial robot welding cell'
+      : includeWorkcell
+        ? 'industrial robot welding cell'
+        : `${axisCount}-axis industrial robot arm`
   const robotShapes = composeRobotArmPrimitives({
     name: robotName,
-    axisCount: 6,
+    axisCount,
     pose: 'work-ready',
-    endEffector: 'tool-flange',
+    endEffector,
     reach,
+    includeCableHarness,
     primaryColor:
       typeof profiledSourceArgs.primaryColor === 'string'
         ? profiledSourceArgs.primaryColor
-        : '#facc15',
+        : typeof robotDefaults?.primaryColor === 'string'
+          ? robotDefaults.primaryColor
+          : '#facc15',
     secondaryColor:
       typeof profiledSourceArgs.secondaryColor === 'string'
         ? profiledSourceArgs.secondaryColor
-        : '#111827',
+        : typeof robotDefaults?.secondaryColor === 'string'
+          ? robotDefaults.secondaryColor
+          : '#111827',
     metalColor:
-      typeof profiledSourceArgs.metalColor === 'string' ? profiledSourceArgs.metalColor : '#cbd5e1',
+      typeof profiledSourceArgs.metalColor === 'string'
+        ? profiledSourceArgs.metalColor
+        : typeof robotDefaults?.metalColor === 'string'
+          ? robotDefaults.metalColor
+          : '#cbd5e1',
   }) as RawShape[]
 
   const workTableLength = Math.max(0.55, length * 0.32)
@@ -1818,6 +2284,14 @@ function robotArmWorkstationFallbackShapes(
     targetArgs.deviceProfile = profile.id
     targetArgs.archetypeFamily = profile.archetypeFamily
     targetArgs.layoutFamily = profile.layoutFamily
+    targetArgs.layoutTemplate = profile.layoutTemplate
+    targetArgs.profileSourcePack = profile.sourcePack
+    targetArgs.profilePackId = profile.sourcePack?.id
+    targetArgs.profilePackVersion = profile.sourcePack?.version
+    targetArgs.partPresets = profile.partPresets
+    targetArgs.resolvedPartPresets = profile.resolvedPartPresets
+    targetArgs.qualityRules = profile.qualityRules
+    targetArgs.layoutHints = profile.layoutHints
     targetArgs.profileSource = profile.source
     targetArgs.primarySemanticRole = profile.primarySemanticRole
     targetArgs.__deviceProfileDefinition = profile
@@ -1839,14 +2313,16 @@ function robotArmWorkstationFallbackShapes(
       'forearm',
       'wrist_joint',
       'end_effector',
-      'work_table',
-      'control_panel',
-      'safety_barrier',
-      'warning_label',
+      ...(includeWorkcell
+        ? ['work_table', 'control_panel', 'safety_barrier', 'warning_label']
+        : []),
     ],
   }
-  targetArgs.sourceStrategy = 'robot_arm_workstation_fallback'
-  return [...robotShapes, ...extras]
+  targetArgs.axisCount = axisCount
+  targetArgs.sourceStrategy = includeWorkcell
+    ? 'robot_arm_workstation_fallback'
+    : 'robot_arm_only_fallback'
+  return includeWorkcell ? [...robotShapes, ...extras] : robotShapes
 }
 
 function genericPrimitiveFallbackGeometryBrief(
@@ -4118,6 +4594,31 @@ function shouldEnforceHardAssemblyConstraints(args: Record<string, unknown>): bo
   return !(typeof args.deviceProfile === 'string' || isRecord(args.deviceProfileDraft))
 }
 
+function profileShapeLimit(args: Record<string, unknown>): number | undefined {
+  const candidates: number[] = []
+  const detailBudget = args.detailBudget
+  if (isRecord(detailBudget)) {
+    const maxShapes = detailBudget.maxShapes
+    if (typeof maxShapes === 'number' && Number.isFinite(maxShapes) && maxShapes > 0) {
+      candidates.push(Math.floor(maxShapes))
+    }
+  }
+
+  const rules = args.qualityRules
+  if (isRecord(rules)) {
+    const shapeCount = rules.shapeCount
+    if (isRecord(shapeCount)) {
+      const max = shapeCount.max
+      if (typeof max === 'number' && Number.isFinite(max) && max > MAX_GENERATED_GEOMETRY_SHAPES) {
+        candidates.push(Math.floor(max))
+      }
+    }
+  }
+
+  if (candidates.length === 0) return undefined
+  return Math.max(1, Math.min(...candidates))
+}
+
 export function executeGeometryToolCall(
   name: string,
   args: Record<string, unknown>,
@@ -4187,7 +4688,7 @@ export function executeGeometryToolCall(
     return { content: options.messages?.noShapes ?? 'No geometry could be created.' }
   }
 
-  const maxShapes = options.maxShapes ?? MAX_GENERATED_GEOMETRY_SHAPES
+  const maxShapes = options.maxShapes ?? profileShapeLimit(args) ?? MAX_GENERATED_GEOMETRY_SHAPES
   if (rawShapes.length > maxShapes) {
     const aircraftFallbackShapes = compactAircraftFallbackShapes(args, context.prompt, context)
     if (aircraftFallbackShapes && aircraftFallbackShapes.length <= maxShapes) {
@@ -4197,8 +4698,17 @@ export function executeGeometryToolCall(
     }
   }
   if (rawShapes.length > maxShapes && shouldAutoCompactShapeBudget(name, args)) {
+    const beforeShapeCount = rawShapes.length
     const compactedShapes = compactRawShapesToBudget(rawShapes, maxShapes, args)
-    if (compactedShapes.length <= maxShapes) rawShapes = compactedShapes
+    if (compactedShapes.length <= maxShapes) {
+      rawShapes = compactedShapes
+      args.detailBudgetApplied = true
+      args.detailBudgetCompaction = {
+        beforeShapeCount,
+        afterShapeCount: compactedShapes.length,
+        maxShapes,
+      }
+    }
   }
   if (rawShapes.length > maxShapes) {
     return {
@@ -4235,6 +4745,28 @@ export function executeGeometryToolCall(
     sourceArgs: args,
     geometryBrief,
   })
+  const profileDefinition = isRecord(args.__deviceProfileDefinition)
+    ? (args.__deviceProfileDefinition as unknown as DeviceProfileDefinition)
+    : undefined
+
+  if (!semanticValidation.ok && profileDefinition) {
+    const profileSemanticQuality = evaluateDeviceProfileQuality(profileDefinition, shapes, {
+      maxShapes,
+    })
+    if (profileSemanticQuality.issues.length === 0 && profileSemanticQuality.overallScore >= 0.65) {
+      semanticValidation = {
+        ...semanticValidation,
+        ok: true,
+        warnings: [
+          ...semanticValidation.warnings,
+          ...semanticValidation.issues.map(
+            (issue) => `Profile quality accepted despite generic semantic issue: ${issue}`,
+          ),
+        ],
+        issues: [],
+      }
+    }
+  }
 
   if (!semanticValidation.ok && isAircraftIntent(args, context.prompt, context)) {
     const aircraftFallbackShapes = compactAircraftFallbackShapes(args, context.prompt, context)
@@ -4282,9 +4814,6 @@ export function executeGeometryToolCall(
     prompt: context.prompt,
     geometryBrief,
   })
-  const profileDefinition = isRecord(args.__deviceProfileDefinition)
-    ? (args.__deviceProfileDefinition as unknown as DeviceProfileDefinition)
-    : undefined
   const profileQuality = profileDefinition
     ? evaluateDeviceProfileQuality(profileDefinition, shapes, {
         visualScore: visualQuality.score,
@@ -4327,6 +4856,17 @@ export function executeGeometryToolCall(
       context.prompt,
       userConstraintArgs(name, args),
     )
+    const colorAlignment = alignPrimaryShapeColorsToConstraints(
+      shapes as PrimitiveShapeInput[],
+      hardConstraints,
+    )
+    if (colorAlignment.changedCount > 0) {
+      shapes = colorAlignment.shapes as ShapeSpec[]
+      args.constraintWarnings = [
+        ...(Array.isArray(args.constraintWarnings) ? args.constraintWarnings : []),
+        ...colorAlignment.warnings,
+      ]
+    }
     const constraintValidation = validateAssemblyConstraints(
       shapes as PrimitiveShapeInput[],
       hardConstraints,
@@ -4337,6 +4877,8 @@ export function executeGeometryToolCall(
           'Invalid geometry tool call. Nothing was created.',
           'Hard user constraints were not preserved. Fix the arguments and call exactly one geometry tool again.',
           ...constraintValidation.issues.map((issue) => `- ${issue}`),
+          ...constraintValidation.warnings.map((warning) => `- Warning: ${warning}`),
+          ...colorAlignment.warnings.map((warning) => `- Warning: ${warning}`),
         ].join('\n'),
       }
     }

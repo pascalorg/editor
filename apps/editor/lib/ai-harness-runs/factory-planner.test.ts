@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  buildFactoryPlannerPrompt,
   fallbackFactoryPlan,
   parseFactoryPlan,
-  buildFactoryPlannerPrompt,
+  planFactoryRequest,
   shouldPreferFallbackFactoryPlan,
 } from './factory-planner'
 
@@ -34,6 +35,154 @@ describe('factory planner', () => {
     expect(plan.kind).toBe('geometry')
   })
 
+  test('routes water electrolysis workshop to a process line', () => {
+    const plan = fallbackFactoryPlan('创建一条化工厂水裂解车间')
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'water_electrolysis_hydrogen',
+        layoutStyle: 'linear',
+      },
+    })
+    if (plan.kind === 'process_line') {
+      expect(plan.process.stations.map((station) => station.role)).toEqual(
+        expect.arrayContaining([
+          'water_treatment',
+          'electrolyzer',
+          'dc_power_supply',
+          'hydrogen_separator',
+          'oxygen_separator',
+          'hydrogen_buffer',
+          'cooling_loop',
+          'control_and_safety',
+        ]),
+      )
+    }
+  })
+
+  test('routes cement clinker requests through the industry pack process template', () => {
+    const plan = fallbackFactoryPlan('\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u719f\u6599\u4ea7\u7ebf')
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'cement_clinker_production_line',
+        processLabel: 'Cement clinker production line',
+        processDisplayLabel: '\u6c34\u6ce5\u719f\u6599\u4ea7\u7ebf',
+        layoutStyle: 'linear',
+        dimensions: { length: 34, width: 12 },
+      },
+    })
+    if (plan.kind === 'process_line') {
+      expect(plan.process.stations.map((station) => station.id)).toEqual([
+        'raw_meal_feed',
+        'preheater_tower',
+        'rotary_kiln',
+        'grate_cooler',
+        'clinker_conveying',
+        'clinker_silo',
+        'bag_filter',
+      ])
+      expect(plan.process.connections).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            fromStationId: 'preheater_tower',
+            toStationId: 'bag_filter',
+            fromPortId: 'exhaust_gas_out',
+            toPortId: 'dust_gas_in',
+            visualKind: 'hot_gas_duct',
+          }),
+          expect.objectContaining({
+            fromStationId: 'grate_cooler',
+            toStationId: 'clinker_conveying',
+            visualKind: 'material_conveyor',
+          }),
+        ]),
+      )
+    }
+  })
+
+  test('routes full cement factory requests through the modular industry template', () => {
+    const plan = fallbackFactoryPlan('\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382')
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'cement_plant_full',
+        processLabel: 'Full cement plant',
+        processDisplayLabel: '\u6c34\u6ce5\u5de5\u5382',
+        layoutStyle: 'parallel_bays',
+        dimensions: { length: 66, width: 28 },
+      },
+    })
+    if (plan.kind === 'process_line') {
+      expect(plan.process.stations.map((station) => station.id)).toEqual(
+        expect.arrayContaining([
+          'limestone_crusher',
+          'pre_homogenization',
+          'raw_mill',
+          'raw_meal_silo',
+          'coal_mill',
+          'preheater_tower',
+          'rotary_kiln',
+          'kiln_hood',
+          'grate_cooler',
+          'tertiary_air_duct',
+          'kiln_tail_esp',
+          'cement_mill',
+          'cement_silo',
+          'cement_packer',
+          'whr_boiler',
+          'mcc_control',
+        ]),
+      )
+      expect(plan.process.connections).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            fromStationId: 'preheater_tower',
+            toStationId: 'kiln_tail_esp',
+            fromPortId: 'exhaust_gas_out',
+            toPortId: 'dust_gas_in',
+            visualKind: 'hot_gas_duct',
+          }),
+          expect.objectContaining({
+            fromStationId: 'clinker_crusher',
+            toStationId: 'clinker_conveying',
+            visualKind: 'material_conveyor',
+          }),
+          expect.objectContaining({
+            fromStationId: 'mcc_control',
+            toStationId: 'rotary_kiln',
+            visualKind: 'cable_tray',
+          }),
+        ]),
+      )
+    }
+  })
+
+  test('uses factory architecture tree to narrow cement plant requests to one station', () => {
+    const plan = fallbackFactoryPlan('generate a cement plant preheater tower')
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'cement_plant_full',
+        layoutStyle: 'cell',
+        architecture: {
+          id: 'cement.plant.modular_outdoor',
+          moduleIds: ['clinker_production'],
+          zoneDisplay: 'subtle',
+        },
+      },
+    })
+    if (plan.kind === 'process_line') {
+      expect(plan.process.stations.map((station) => station.id)).toEqual(['preheater_tower'])
+      expect(plan.process.connections).toEqual([])
+      expect(plan.process.dimensions?.length).toBeGreaterThanOrEqual(10)
+    }
+  })
+
   test('routes chemical factory reactor equipment to geometry instead of factory layout', () => {
     const plan = fallbackFactoryPlan(
       '\u751f\u6210\u4e00\u4e2a\u5316\u5de5\u5382\u7684\u53cd\u5e94\u91dc\u88c5\u7f6e',
@@ -41,7 +190,8 @@ describe('factory planner', () => {
 
     expect(plan).toMatchObject({
       kind: 'geometry',
-      equipmentName: '\u751f\u6210\u4e00\u4e2a\u5316\u5de5\u5382\u7684\u53cd\u5e94\u91dc\u88c5\u7f6e',
+      equipmentName:
+        '\u751f\u6210\u4e00\u4e2a\u5316\u5de5\u5382\u7684\u53cd\u5e94\u91dc\u88c5\u7f6e',
     })
   })
 
@@ -109,10 +259,137 @@ describe('factory planner', () => {
     })
   })
 
+  test('uses explicit industry template stations when LLM summarizes a known process', () => {
+    const plan = parseFactoryPlan(
+      JSON.stringify({
+        kind: 'process_line',
+        reason: 'known cement plant process',
+        process: {
+          processId: 'cement_plant_full',
+          processLabel: '\u6c34\u6ce5\u751f\u4ea7\u7ebf',
+          layoutStyle: 'linear',
+          stations: [
+            {
+              id: 'S1',
+              label: '\u539f\u6599\u50a8\u5b58\u4e0e\u914d\u6599',
+              role: 'raw_material_storage_and_dosing',
+            },
+            { id: 'S2', label: '\u751f\u6599\u78e8', role: 'raw_material_grinding' },
+            { id: 'S3', label: '\u751f\u6599\u5747\u5316\u5e93', role: 'raw_meal_homogenization' },
+            {
+              id: 'S4',
+              label: '\u9884\u70ed\u5668\u4e0e\u5206\u89e3\u7089',
+              role: 'preheating_and_precalcination',
+            },
+            { id: 'S5', label: '\u56de\u8f6c\u7a91', role: 'clinker_burning' },
+            { id: 'S6', label: '\u7be6\u51b7\u673a', role: 'clinker_cooling' },
+            { id: 'S7', label: '\u6c34\u6ce5\u78e8', role: 'cement_grinding' },
+            {
+              id: 'S8',
+              label: '\u6c34\u6ce5\u50a8\u5b58\u4e0e\u5305\u88c5',
+              role: 'cement_storage_and_packing',
+            },
+          ],
+        },
+      }),
+      '\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382',
+    )
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'cement_plant_full',
+        layoutStyle: 'parallel_bays',
+        dimensions: { length: 66, width: 28 },
+      },
+    })
+    if (plan?.kind === 'process_line') {
+      expect(plan.process.stations).toHaveLength(21)
+      expect(plan.process.stations.map((station) => station.id)).toEqual(
+        expect.arrayContaining(['limestone_crusher', 'kiln_hood', 'cement_packer', 'mcc_control']),
+      )
+      expect(plan.process.stations.map((station) => station.id)).not.toContain('S1')
+    }
+  })
+
+  test('prefers the complete industry template over a shorter LLM process summary', () => {
+    const fallbackPlan = fallbackFactoryPlan('\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382')
+    const llmPlan = parseFactoryPlan(
+      JSON.stringify({
+        kind: 'process_line',
+        reason: 'summarized cement factory',
+        process: {
+          processLabel: '\u6c34\u6ce5\u751f\u4ea7\u6d41\u7a0b',
+          domain: 'chemical',
+          layoutStyle: 'linear',
+          stations: [
+            {
+              id: 'crushing',
+              label: '\u77f3\u7070\u77f3\u7834\u788e',
+              role: '\u7834\u788e\u5de5\u6bb5',
+            },
+            {
+              id: 'preheater',
+              label: '\u9884\u70ed\u5668',
+              role: '\u9884\u70ed\u5de5\u6bb5',
+            },
+            { id: 'kiln', label: '\u56de\u8f6c\u7a91', role: '\u7145\u70e7\u5de5\u6bb5' },
+          ],
+        },
+      }),
+      '\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382',
+    )
+
+    expect(fallbackPlan).toMatchObject({
+      kind: 'process_line',
+      process: { processId: 'cement_plant_full' },
+    })
+    expect(llmPlan).toMatchObject({ kind: 'process_line' })
+    expect(shouldPreferFallbackFactoryPlan(llmPlan!, fallbackPlan)).toBe(true)
+  })
+
   test('planner prompt includes strict output schema', () => {
     const prompt = buildFactoryPlannerPrompt('\u751f\u6210\u4e00\u4e2a\u8f66\u95f4')
 
-    expect(prompt).toContain('"kind": "layout" | "catalog_item" | "geometry" | "missing"')
+    expect(prompt).toContain(
+      '"kind": "layout" | "process_line" | "catalog_item" | "geometry" | "missing"',
+    )
     expect(prompt).toContain('User request: \u751f\u6210\u4e00\u4e2a\u8f66\u95f4')
+  })
+
+  test('e2e smoke mode uses fallback planning without external AI', async () => {
+    const previous = process.env.FACTORY_E2E_SMOKE
+    process.env.FACTORY_E2E_SMOKE = '1'
+
+    try {
+      const planned = await planFactoryRequest({
+        prompt: 'create a hydrogen electrolysis workshop',
+      })
+
+      expect(planned.source).toBe('fallback')
+      expect(planned.plan).toMatchObject({
+        kind: 'process_line',
+        process: { processId: 'water_electrolysis_hydrogen' },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.FACTORY_E2E_SMOKE
+      else process.env.FACTORY_E2E_SMOKE = previous
+    }
+  })
+
+  test('run-level e2e smoke mode uses fallback planning without external AI', async () => {
+    const planned = await planFactoryRequest({
+      prompt: '\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382',
+      params: { e2eSmoke: true },
+    })
+
+    expect(planned.source).toBe('fallback')
+    expect(planned.plan).toMatchObject({
+      kind: 'process_line',
+      process: { processId: 'cement_plant_full' },
+    })
+    if (planned.plan.kind === 'process_line') {
+      expect(planned.plan.process.stations).toHaveLength(21)
+    }
   })
 })

@@ -1,0 +1,6 @@
+{
+  "id": "quality.cnc_machining_center",
+  "requiredRoles": ["machine_enclosure", "machine_base", "viewing_window", "spindle_head", "work_table", "control_panel", "display_screen"],
+  "forbiddenRoles": ["vehicle_body", "vehicle_window", "aircraft_fuselage", "aircraft_wing"],
+  "shapeCount": { "min": 8, "max": 36 }
+}

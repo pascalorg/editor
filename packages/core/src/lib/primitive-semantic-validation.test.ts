@@ -564,6 +564,24 @@ describe('validatePrimitiveSemantics', () => {
     expect(result.ok).toBe(true)
   })
 
+  test('accepts process vessel nozzles and manways as visible process ports', () => {
+    const shapes = composePartPrimitives({
+      name: 'Horizontal pressure storage tank',
+      parts: [
+        { kind: 'cylindrical_tank', semanticRole: 'vessel_shell', length: 2.2, radius: 0.34 },
+      ],
+    })
+
+    const result = validate(
+      shapes,
+      'horizontal pressure storage tank with top nozzle and manway flange',
+      'process_equipment',
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.issues).not.toContain('process equipment requires visible process ports.')
+  })
+
   test('accepts mixer impeller recipe with shaft, hub, and radial blades', () => {
     const shapes = composeRecipePrimitives({
       recipeId: 'mixer.impeller',

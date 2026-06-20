@@ -1,0 +1,129 @@
+[
+  {
+    "id": "quality.water_treatment.sedimentation_tank",
+    "requiredRoles": [
+      "clarifier_basin",
+      "open_water_surface",
+      "inlet_channel",
+      "outlet_weir",
+      "sludge_hopper",
+      "scraper_bridge",
+      "access_walkway",
+      "chemical_inlet",
+      "clarified_water_outlet",
+      "sludge_draw_off"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "robot_joint"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 90
+    }
+  },
+  {
+    "id": "quality.water_treatment.chemical_dosing_unit",
+    "requiredRoles": [
+      "chemical_storage_tank",
+      "containment_base",
+      "metering_pump_head",
+      "standby_metering_pump_head",
+      "pump_drive_unit",
+      "dosing_manifold",
+      "dosing_control_cabinet",
+      "dosing_outlet",
+      "chemical_makeup_inlet"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 100
+    }
+  },
+  {
+    "id": "quality.water_treatment.filter_vessel",
+    "requiredRoles": [
+      "filter_vessel_shell",
+      "filter_support_base",
+      "top_manhole",
+      "filter_inlet",
+      "filtered_water_outlet",
+      "backwash_drain",
+      "filter_access_ladder"
+    ],
+    "forbiddenRoles": [
+      "vehicle_wheel",
+      "robot_joint"
+    ],
+    "shapeCount": {
+      "min": 7,
+      "max": 90
+    }
+  },
+  {
+    "id": "quality.water_treatment.pump_skid",
+    "requiredRoles": [
+      "pump_volute",
+      "pump_baseplate",
+      "standby_pump_volute",
+      "main_drive_motor",
+      "standby_drive_motor",
+      "pump_suction_header",
+      "pump_discharge_header",
+      "valve_body",
+      "pump_control_panel"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 10,
+      "max": 130
+    }
+  },
+  {
+    "id": "quality.water_treatment.pipe_corridor",
+    "requiredRoles": [
+      "pipe_rack_frame",
+      "process_water_header",
+      "filtrate_return_header",
+      "chemical_dosing_line",
+      "instrument_air_line",
+      "valve_body",
+      "header_flange_set",
+      "return_header_flange_set"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 9,
+      "max": 140
+    }
+  },
+  {
+    "id": "quality.water_treatment.sludge_dewatering_machine",
+    "requiredRoles": [
+      "dewatering_screw_drum",
+      "machine_base",
+      "sludge_feed_hopper",
+      "sludge_feed_inlet",
+      "filtrate_tray",
+      "cake_discharge_chute",
+      "filtrate_return_outlet",
+      "screw_drive_unit",
+      "dewatering_control_panel"
+    ],
+    "forbiddenRoles": [
+      "vehicle_wheel",
+      "robot_joint"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 120
+    }
+  }
+]

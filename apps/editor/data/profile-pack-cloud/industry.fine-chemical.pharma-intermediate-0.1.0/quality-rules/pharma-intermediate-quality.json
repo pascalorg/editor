@@ -1,0 +1,13 @@
+[
+  {
+    "id": "quality.fine_chemical.pharma.crystallization_kettle",
+    "requiredRoles": ["reactor_vessel_shell", "hinged_manway_feed_port", "bottom_crystal_slurry_discharge", "support_leg", "agitator_motor", "conical_discharge_bottom"],
+    "shapeCount": { "min": 10, "max": 65 },
+    "forbiddenRoles": ["clean_access_platform", "platform_ladder", "guard_rail", "ladder_rung", "tilted_top_manway_cover"]
+  },
+  {
+    "id": "quality.fine_chemical.pharma.solvent_recovery_skid",
+    "requiredRoles": ["support_base", "solvent_recovery_column", "condenser_shell", "solvent_vapor_manifold"],
+    "shapeCount": { "min": 8, "max": 80 }
+  }
+]

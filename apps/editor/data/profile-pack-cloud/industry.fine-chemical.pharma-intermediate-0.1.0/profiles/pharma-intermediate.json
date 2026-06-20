@@ -1,0 +1,203 @@
+[
+  {
+    "id": "fine_chemical.pharma.crystallization_kettle",
+    "name": "Pharma intermediate crystallization kettle",
+    "aliases": [
+      "crystallization kettle",
+      "crystallizer",
+      "pharma crystallization reactor",
+      "结晶釜",
+      "医药中间体结晶釜"
+    ],
+    "industry": "fine-chemical.pharma-intermediate",
+    "family": "reactor",
+    "layoutFamily": "vessel_layout",
+    "archetypeFamily": "process_vessel",
+    "defaultDimensions": {
+      "diameter": 1.2,
+      "height": 1.75
+    },
+    "primarySemanticRole": "reactor_vessel_shell",
+    "qualityRules": "quality.fine_chemical.pharma.crystallization_kettle",
+    "parts": [
+      {
+        "kind": "agitator_tank",
+        "semanticRole": "reactor_vessel_shell",
+        "required": true,
+        "height": 1.45,
+        "radius": 0.56,
+        "primaryColor": "#c7d0d6",
+        "shellThickness": 0.035,
+        "bottomStyle": "conical",
+        "legStyle": "splayed",
+        "legCount": 3,
+        "motorColor": "#2563eb"
+      },
+      {
+        "kind": "flange_ring",
+        "semanticRole": "top_clamp_ring",
+        "position": [
+          0,
+          1.305,
+          0
+        ],
+        "axis": "y",
+        "radius": 0.54,
+        "depth": 0.03,
+        "includeBolts": false
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "hinged_manway_feed_port",
+        "required": true,
+        "position": [
+          0.34,
+          1.5,
+          0
+        ],
+        "axis": "y",
+        "radius": 0.12,
+        "length": 0.22
+      },
+      {
+        "kind": "flange_ring",
+        "semanticRole": "offset_manway_lid",
+        "position": [
+          -0.32,
+          1.46,
+          0.18
+        ],
+        "axis": "y",
+        "radius": 0.16,
+        "depth": 0.025,
+        "boltCount": 8,
+        "primaryColor": "#b8c2c8"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "bottom_crystal_slurry_discharge",
+        "required": true,
+        "position": [
+          0,
+          -0.34,
+          0
+        ],
+        "axis": "y",
+        "radius": 0.075,
+        "length": 0.24
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Compact stainless pharma crystallization kettle with squat jacketed vessel, top agitator motor, hinged manway/feed port, polished shell, bottom discharge, and splayed support legs.",
+    "editableSchemaRef": "vessel.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 72,
+      "parts": {
+        "top_clamp_ring": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        },
+        "offset_manway_lid": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        }
+      }
+    }
+  },
+  {
+    "id": "fine_chemical.pharma.solvent_recovery_skid",
+    "name": "Solvent recovery skid",
+    "aliases": [
+      "solvent recovery skid",
+      "solvent recovery unit",
+      "溶剂回收撬",
+      "溶剂回收单元"
+    ],
+    "industry": "fine-chemical.pharma-intermediate",
+    "family": "generic",
+    "layoutFamily": "generic_industrial_layout",
+    "archetypeFamily": "thermal_equipment",
+    "defaultDimensions": {
+      "length": 2.8,
+      "width": 1.2,
+      "height": 2.1
+    },
+    "primarySemanticRole": "solvent_recovery_column",
+    "qualityRules": "quality.fine_chemical.pharma.solvent_recovery_skid",
+    "parts": [
+      {
+        "kind": "skid_base",
+        "semanticRole": "support_base",
+        "required": true,
+        "length": 2.8,
+        "width": 1.2,
+        "height": 0.14
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "solvent_recovery_column",
+        "required": true,
+        "axis": "y",
+        "height": 1.8,
+        "radius": 0.22,
+        "position": [
+          -0.75,
+          1.02,
+          0
+        ]
+      },
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "condenser_shell",
+        "required": true,
+        "length": 1.3,
+        "radius": 0.16,
+        "position": [
+          0.48,
+          1.35,
+          0
+        ]
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "receiver_vessel",
+        "axis": "x",
+        "height": 0.8,
+        "radius": 0.18,
+        "position": [
+          0.62,
+          0.48,
+          0
+        ]
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "solvent_vapor_manifold",
+        "length": 1.8,
+        "radius": 0.035
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Compact solvent recovery skid with small column, condenser, receiver, piping, and support frame.",
+    "editableSchemaRef": "rotary_equipment.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 72,
+      "parts": {
+        "solvent_recovery_column": {
+          "detailLevel": "low",
+          "count": 5
+        },
+        "solvent_vapor_manifold": {
+          "detailLevel": "low",
+          "count": 5
+        }
+      }
+    }
+  }
+]

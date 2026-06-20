@@ -1,5 +1,5 @@
-import type { AssetInput } from '@pascal-app/core/schema'
 import { CATALOG_ITEMS, searchCatalogItems } from '@pascal-app/core/lib/asset-catalog'
+import type { AssetInput } from '@pascal-app/core/schema'
 
 type CatalogSummaryOptions = {
   query?: string
@@ -41,17 +41,15 @@ function catalogLine(item: AssetInput) {
 
 export function buildFactoryCatalogSummary(options: CatalogSummaryOptions = {}) {
   const maxItems = Math.max(10, Math.min(options.maxItems ?? 60, 120))
-  const queryTerms = (options.query ?? '')
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
+  const queryTerms = (options.query ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean)
   const queryMatches = options.query ? searchCatalogItems({ query: options.query }) : []
   const factoryItems = CATALOG_ITEMS.filter((item) =>
     itemTags(item).some((tag) => FACTORY_RELEVANT_TAGS.has(tag.toLowerCase())),
   )
   const ranked = [...queryMatches, ...factoryItems, ...CATALOG_ITEMS]
-    .filter((item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index)
+    .filter(
+      (item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index,
+    )
     .sort((a, b) => scoreCatalogItem(b, queryTerms) - scoreCatalogItem(a, queryTerms))
     .slice(0, maxItems)
 
@@ -75,11 +73,11 @@ export function buildFactoryAgentSystemPrompt(options: CatalogSummaryOptions = {
     'Your job is to turn user language into a factory/room/layout plan and a reviewable scene patch plan.',
     '',
     '===== DECISION ORDER =====',
-    '1. If the user asks for a room, house, workshop, factory shell, walls, doors, windows, floors, zones, aisles, or layout dimensions, use scene/layout operations. Do NOT ask geometry generation to model a whole room or house.',
-    '2. If the user asks for a concrete item/equipment and a matching catalog item exists, use the catalog item id and place_item semantics. Prefer exact id/name/tag matches.',
-    '3. If the catalog does not contain the requested item, or the user asks for custom machine/device geometry, call the geometry generation service to produce a GeneratedGeometryArtifact, then convert it to create patches.',
-    '4. If neither catalog nor geometry can safely satisfy the request, return missingAssets with the missing name and reason.',
-    '5. Do not apply patches automatically unless the user or execution mode explicitly asks to commit/apply them.',
+    '1. If the user asks for a process workshop or production process (for example water electrolysis / hydrogen generation), return a process_line plan with stations and connections. Do not collapse it to a plain factory shell.',
+    '2. If the user asks for a room, house, workshop shell, walls, doors, windows, floors, zones, aisles, or layout dimensions, use scene/layout operations. Do NOT ask geometry generation to model a whole room or house.',
+    '3. If the user asks for a concrete item/equipment and a matching catalog item exists, use the catalog item id and place_item semantics. Prefer exact id/name/tag matches.',
+    '4. For process-line stations, prefer native parametric nodes first (box, tank, pipe, pipe-fitting, cable-tray), and call primitive geometry only for missing core equipment. Avoid catalog GLB assets inside automatic process-line station resolution.',
+    '5. If neither native nodes nor geometry can safely satisfy the request, return missingAssets with the missing name and reason.',
     '',
     '===== SCENE / MCP LAYOUT CAPABILITIES =====',
     '- Project/scene: create_project, save_scene, validate_scene, verify_scene, get_scene.',
@@ -87,6 +85,8 @@ export function buildFactoryAgentSystemPrompt(options: CatalogSummaryOptions = {
     '- Openings and building elements: add_door, add_window, create_stair_between_levels, create_roof, cut_opening.',
     '- Items and bulk graph edits: search_assets, place_item, apply_patch.',
     '- Use these for buildings, rooms, factory shells, zones, walls, doors, windows, slabs, ceilings, and placement of known catalog assets.',
+    '- Process-line layout: compose station zones, station placements, connection routes, and metadata-rich create patches.',
+    '- Native industrial nodes available for factory composition: box, tank, pipe, pipe-fitting, cable-tray.',
     '',
     '===== CATALOG ITEMS PROVIDED BY SYSTEM =====',
     buildFactoryCatalogSummary(options),
@@ -95,6 +95,7 @@ export function buildFactoryAgentSystemPrompt(options: CatalogSummaryOptions = {
     '- Geometry tools can create editable generated equipment from primitives, parts, recipes, or assemblies.',
     '- Available routes: compose_recipe, compose_assembly, compose_parts, compose_robot_arm, compose_primitive, revise_geometry.',
     '- Good geometry-generation targets: conveyor, pump, fan, tank, compressor, heat exchanger, machine tool, robot arm, electrical/control cabinet, pipe system, valve, custom industrial device, custom long-tail equipment.',
+    '- For missing core equipment, call the geometry generation service after native-node lookup fails.',
     '- For reaction kettles/reactors/stirred tanks/pressure vessels (反应釜/反应器/搅拌罐/压力容器), prefer compose_assembly with family:"reactor" instead of hand-written compose_parts; the reactor assembly template supplies reactor_vessel_shell, heads, agitator, ports, and support base.',
     '- Good reusable generated parts include: conveyor_frame, roller_array, belt_surface, ribbed_motor_body, volute_casing, inlet_port, outlet_port, flange_ring, electrical_cabinet, cable_tray, pipe_run, pipe_elbow, valve_body, cylindrical_tank, platform_ladder, heat_exchanger, agitator_tank, pipe_rack.',
     '- Geometry generation outputs GeneratedGeometryArtifact only; factory agent must convert that artifact to patches and decide placement.',
@@ -103,7 +104,7 @@ export function buildFactoryAgentSystemPrompt(options: CatalogSummaryOptions = {
     '===== OUTPUT EXPECTATIONS =====',
     '- Prefer explicit ids: catalogItemId for catalog items, artifactId for generated geometry, nodeIds for created patch nodes.',
     '- Keep a missingAssets list whenever a requested equipment item cannot be resolved.',
-    '- For production lines, resolve each station in order: catalog item first, generated geometry second, placeholder/missingAsset last.',
+    '- For production lines, resolve each station in order: native node first, generated geometry second, placeholder/missingAsset last.',
   ].join('\n')
 }
 

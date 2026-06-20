@@ -54,6 +54,7 @@ og-test
 /apps/editor/public/items/articraft-assets.json
 /apps/editor/public/items/generated-assets.json
 /apps/editor/.generated/
+/apps/editor/.local/
 
 # Worktrees
 .worktrees

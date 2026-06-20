@@ -1,0 +1,440 @@
+import { describe, expect, test } from 'bun:test'
+import { fallbackFactoryPlan } from './factory-planner'
+import { composeProcessLine } from './process-line-composer'
+import { routeSegmentIntersectsClearanceBox } from './process-line-routing'
+
+function waterElectrolysisPlan() {
+  const plan = fallbackFactoryPlan('create a hydrogen electrolysis workshop')
+  if (plan.kind !== 'process_line') throw new Error('expected process line plan')
+  return plan.process
+}
+
+function cementClinkerPlan() {
+  const plan = fallbackFactoryPlan('\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u719f\u6599\u4ea7\u7ebf')
+  if (plan.kind !== 'process_line') throw new Error('expected cement clinker process line plan')
+  return plan.process
+}
+
+function cementPlantPlan() {
+  const plan = fallbackFactoryPlan('\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382')
+  if (plan.kind !== 'process_line') throw new Error('expected cement plant process line plan')
+  return plan.process
+}
+
+function isOrthogonalSegment(start: [number, number], end: [number, number]) {
+  return start[0] === end[0] || start[1] === end[1]
+}
+
+function stationCenter(result: ReturnType<typeof composeProcessLine>, stationId: string) {
+  const placement = result.stationPlacements.find((item) => item.stationId === stationId)
+  if (!placement) throw new Error(`missing station placement ${stationId}`)
+  return [placement.position[0], placement.position[2]]
+}
+
+describe('process line composer', () => {
+  test('composes water electrolysis workshop with native tanks and connections', () => {
+    const result = composeProcessLine({
+      prompt: 'create a hydrogen electrolysis workshop',
+      plan: waterElectrolysisPlan(),
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+    })
+
+    expect(result.summary).toContain('Water electrolysis hydrogen workshop')
+    expect(result.stationPlacements).toHaveLength(8)
+    expect(result.layoutDiagnostics).toEqual({
+      fits: true,
+      boundary: { length: 24, width: 9 },
+      diagnostics: [],
+    })
+    expect(result.layoutStrategy).toMatchObject({ style: 'parallel_bays', repaired: true })
+    expect(result.stationPlacements.every((placement) => placement.clearanceBox)).toBe(true)
+    expect(result.primitiveRequests.map((request) => request.station.role)).toContain(
+      'electrolyzer',
+    )
+    expect(result.patches.some((patch) => patch.node.type === 'tank')).toBe(true)
+    expect(result.patches.some((patch) => patch.node.type === 'pipe')).toBe(true)
+    expect(result.patches.some((patch) => patch.node.type === 'pipe-fitting')).toBe(true)
+    expect(result.patches.some((patch) => patch.node.type === 'cable-tray')).toBe(true)
+    expect(result.patches.some((patch) => patch.node.type === 'box')).toBe(true)
+    expect(result.patches.some((patch) => patch.node.type === 'item')).toBe(true)
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.type === 'item' &&
+          patch.node.metadata?.catalogItemId === 'factory-electric-box' &&
+          patch.node.metadata?.processCatalogQualified === true,
+      ),
+    ).toBe(true)
+    expect(
+      result.patches.every(
+        (patch) =>
+          patch.node.metadata?.generatedBy === 'factory-agent' &&
+          patch.node.metadata?.processId === 'water_electrolysis_hydrogen',
+      ),
+    ).toBe(true)
+  })
+
+  test('uses localized display labels for Chinese process line prompts', () => {
+    const result = composeProcessLine({
+      prompt: '\u521b\u5efa\u4e00\u6761\u5316\u5de5\u5382\u6c34\u88c2\u89e3\u8f66\u95f4',
+      plan: waterElectrolysisPlan(),
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+    })
+
+    const shellZone = result.patches.find(
+      (patch) => patch.node.type === 'zone' && patch.node.metadata?.role === 'layout-zone',
+    )
+    const waterZone = result.patches.find(
+      (patch) => patch.node.type === 'zone' && patch.node.metadata?.stationId === 'water_treatment',
+    )
+    const hydrogenTank = result.patches.find(
+      (patch) =>
+        patch.node.type === 'tank' && patch.node.metadata?.stationId === 'hydrogen_separator',
+    )
+
+    expect(shellZone?.node.name).toBe('\u7535\u89e3\u6c34\u5236\u6c22\u8f66\u95f4')
+    expect(shellZone?.node.metadata).toMatchObject({
+      processLabel: 'Water electrolysis hydrogen workshop',
+      processDisplayLabel: '\u7535\u89e3\u6c34\u5236\u6c22\u8f66\u95f4',
+    })
+    expect(waterZone?.node.name).toBe('\u7eaf\u6c34\u5904\u7406')
+    expect(waterZone?.node.metadata).toMatchObject({
+      stationLabel: 'Pure water treatment',
+      stationDisplayLabel: '\u7eaf\u6c34\u5904\u7406',
+    })
+    expect(hydrogenTank?.node.name).toBe('\u6c22\u6c14\u6c14\u6db2\u5206\u79bb\u5668')
+    expect(
+      result.stationPlacements.find((item) => item.stationId === 'electrolyzer'),
+    ).toMatchObject({
+      label: 'Electrolyzer stack array',
+      displayLabel: '\u7535\u89e3\u69fd\u7ec4',
+    })
+  })
+
+  test('routes process connections from equipment contract ports instead of station centers', () => {
+    const result = composeProcessLine({
+      prompt: 'create a hydrogen electrolysis workshop',
+      plan: waterElectrolysisPlan(),
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+    })
+
+    const waterPipe = result.patches.find(
+      (patch) =>
+        patch.node.type === 'pipe' &&
+        patch.node.metadata?.fromStationId === 'water_treatment' &&
+        patch.node.metadata?.toStationId === 'electrolyzer',
+    )
+    const powerTray = result.patches.find(
+      (patch) =>
+        patch.node.type === 'cable-tray' &&
+        patch.node.metadata?.fromStationId === 'dc_power_supply' &&
+        patch.node.metadata?.toStationId === 'electrolyzer',
+    )
+    const hydrogenPipe = result.patches.find(
+      (patch) =>
+        patch.node.type === 'pipe' &&
+        patch.node.metadata?.fromStationId === 'electrolyzer' &&
+        patch.node.metadata?.toStationId === 'hydrogen_separator',
+    )
+    const coolingPipe = result.patches.find(
+      (patch) =>
+        patch.node.type === 'pipe' &&
+        patch.node.metadata?.fromStationId === 'electrolyzer' &&
+        patch.node.metadata?.toStationId === 'cooling_loop',
+    )
+
+    expect(waterPipe?.node.metadata).toMatchObject({
+      fromPortId: 'pure_water_out',
+      toPortId: 'water_in',
+      fromPortProfileId: 'hydrogen_electrolysis.water_treatment.compact',
+      toPortProfileId: 'hydrogen_electrolysis.electrolyzer_skid.compact',
+    })
+    expect(powerTray?.node.metadata).toMatchObject({
+      fromPortId: 'dc_power_out',
+      toPortId: 'dc_power',
+    })
+    expect(hydrogenPipe?.node.metadata).toMatchObject({
+      fromPortId: 'hydrogen_out',
+      toPortId: 'gas_in',
+    })
+    expect(coolingPipe?.node.metadata).toMatchObject({
+      fromPortId: 'cooling_out',
+      toPortId: 'cooling_return',
+    })
+
+    if (!waterPipe || waterPipe.node.type !== 'pipe') throw new Error('expected water pipe')
+    expect(waterPipe.node.start).not.toEqual(stationCenter(result, 'water_treatment'))
+    expect(waterPipe.node.end).not.toEqual(stationCenter(result, 'electrolyzer'))
+    expect(waterPipe.node.elevation).toBe(0.875)
+
+    if (!powerTray || powerTray.node.type !== 'cable-tray') throw new Error('expected power tray')
+    expect(powerTray.node.elevation).toBe(2.4)
+  })
+
+  test('routes process connections around non-endpoint station clearance boxes', () => {
+    const result = composeProcessLine({
+      prompt: 'create a hydrogen electrolysis workshop',
+      plan: {
+        ...waterElectrolysisPlan(),
+        dimensions: { length: 18, width: 9 },
+      },
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+    })
+
+    const routedPipePatches = result.patches.filter(
+      (patch) =>
+        patch.node.type === 'pipe' &&
+        patch.node.metadata?.fromStationId === 'electrolyzer' &&
+        patch.node.metadata?.toStationId === 'hydrogen_separator',
+    )
+
+    expect(routedPipePatches.length).toBeGreaterThan(1)
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.type === 'pipe-fitting' &&
+          patch.node.metadata?.role === 'process-line-route-elbow' &&
+          patch.node.metadata?.fromStationId === 'electrolyzer' &&
+          patch.node.metadata?.toStationId === 'hydrogen_separator',
+      ),
+    ).toBe(true)
+
+    for (const [segmentIndex, patch] of routedPipePatches.entries()) {
+      if (patch.node.type !== 'pipe') throw new Error('expected pipe patch')
+      expect(patch.node.metadata).toMatchObject({
+        routeStyle: 'orthogonal',
+        routeSegmentIndex: segmentIndex,
+        routeSegmentCount: routedPipePatches.length,
+      })
+      expect(isOrthogonalSegment(patch.node.start, patch.node.end)).toBe(true)
+
+      for (const stationPlacement of result.stationPlacements) {
+        if (
+          stationPlacement.stationId === 'electrolyzer' ||
+          stationPlacement.stationId === 'hydrogen_separator'
+        ) {
+          continue
+        }
+        expect(
+          routeSegmentIntersectsClearanceBox(
+            patch.node.start,
+            patch.node.end,
+            stationPlacement.clearanceBox,
+          ),
+        ).toBe(false)
+      }
+    }
+
+    const connectionSegments = result.patches.filter(
+      (patch) => patch.node.type === 'pipe' || patch.node.type === 'cable-tray',
+    )
+    for (const patch of connectionSegments) {
+      if (patch.node.type !== 'pipe' && patch.node.type !== 'cable-tray') {
+        throw new Error('expected routed connection segment')
+      }
+      const fromStationId = patch.node.metadata?.fromStationId
+      const toStationId = patch.node.metadata?.toStationId
+      for (const stationPlacement of result.stationPlacements) {
+        if (
+          stationPlacement.stationId === fromStationId ||
+          stationPlacement.stationId === toStationId
+        ) {
+          continue
+        }
+        expect(
+          routeSegmentIntersectsClearanceBox(
+            patch.node.start,
+            patch.node.end,
+            stationPlacement.clearanceBox,
+          ),
+        ).toBe(false)
+      }
+    }
+  })
+
+  test('composes cement clinker line with industry-pack profile contracts and port hints', () => {
+    const result = composeProcessLine({
+      prompt: '\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u719f\u6599\u4ea7\u7ebf',
+      plan: cementClinkerPlan(),
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+    })
+
+    expect(result.summary).toContain('Cement clinker production line')
+    expect(result.stationPlacements).toHaveLength(7)
+    expect(result.layoutDiagnostics.fits).toBe(true)
+    expect(result.primitiveRequests.map((request) => request.equipmentContract?.profileId)).toEqual(
+      expect.arrayContaining([
+        'cement.preheater_tower',
+        'cement.rotary_kiln',
+        'cement.grate_cooler',
+        'cement.clinker_silo',
+        'cement.bag_filter',
+      ]),
+    )
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.type === 'zone' &&
+          patch.node.name === '\u56de\u8f6c\u7a91' &&
+          patch.node.metadata?.stationId === 'rotary_kiln',
+      ),
+    ).toBe(true)
+
+    const dedustingPipe = result.patches.find(
+      (patch) =>
+        patch.node.type === 'pipe' &&
+        patch.node.metadata?.fromStationId === 'preheater_tower' &&
+        patch.node.metadata?.toStationId === 'bag_filter',
+    )
+    expect(dedustingPipe?.node.metadata).toMatchObject({
+      fromPortIdHint: 'exhaust_gas_out',
+      toPortIdHint: 'dust_gas_in',
+      fromPortId: 'exhaust_gas_out',
+      toPortId: 'dust_gas_in',
+      fromPortProfileId: 'cement.preheater_tower',
+      toPortProfileId: 'cement.bag_filter',
+      visualKind: 'hot_gas_duct',
+      resolver: 'native-hot-gas-duct',
+    })
+    if (!dedustingPipe || dedustingPipe.node.type !== 'pipe') throw new Error('expected duct pipe')
+    expect(dedustingPipe.node.diameter).toBe(0.5)
+    expect(dedustingPipe.node.temperatureC).toBe(360)
+
+    const clinkerConveyor = result.patches.find(
+      (patch) =>
+        patch.node.type === 'cable-tray' &&
+        patch.node.metadata?.fromStationId === 'grate_cooler' &&
+        patch.node.metadata?.toStationId === 'clinker_conveying',
+    )
+    expect(clinkerConveyor?.node.metadata).toMatchObject({
+      visualKind: 'material_conveyor',
+      resolver: 'native-material-conveyor',
+    })
+    if (!clinkerConveyor || clinkerConveyor.node.type !== 'cable-tray') {
+      throw new Error('expected clinker material conveyor')
+    }
+    expect(clinkerConveyor.node.width).toBe(0.72)
+    expect(clinkerConveyor.node.elevation).toBe(1.05)
+  })
+
+  test('composes full cement plant from the modular industry template', () => {
+    const result = composeProcessLine({
+      prompt: '\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382',
+      plan: cementPlantPlan(),
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+    })
+
+    expect(result.summary).toContain('Full cement plant')
+    expect(result.stationPlacements).toHaveLength(21)
+    expect(result.layoutDiagnostics.fits).toBe(true)
+    expect(result.layoutStrategy).toMatchObject({ style: 'parallel_bays' })
+    const focusStationIds = result.focusBounds?.stationIds
+    expect(Array.isArray(focusStationIds)).toBe(true)
+    expect(result.focusBounds).toMatchObject({
+      reason: 'factory-key-process',
+    })
+    expect(focusStationIds as string[]).toEqual(
+      expect.arrayContaining([
+        'preheater_tower',
+        'rotary_kiln',
+        'kiln_hood',
+        'grate_cooler',
+        'clinker_crusher',
+        'process_stack',
+      ]),
+    )
+    expect(focusStationIds as string[]).not.toContain('limestone_crusher')
+    expect(focusStationIds as string[]).not.toContain('coal_mill')
+    expect(focusStationIds as string[]).not.toContain('whr_boiler')
+    expect(focusStationIds as string[]).not.toContain('mcc_control')
+    expect(focusStationIds as string[]).not.toContain('cement_mill')
+    expect(focusStationIds as string[]).not.toContain('cement_packer')
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.type === 'slab' &&
+          Array.isArray(patch.node.metadata?.factoryCameraFocus?.bounds?.center),
+      ),
+    ).toBe(true)
+    expect(result.primitiveRequests.map((request) => request.equipmentContract?.profileId)).toEqual(
+      expect.arrayContaining([
+        'cement.limestone_crusher',
+        'cement.stack_reclaimer',
+        'cement.vertical_raw_mill',
+        'cement.raw_meal_homogenization_silo',
+        'cement.coal_mill',
+        'cement.tertiary_air_duct',
+        'cement.esp_dust_collector',
+        'cement.cement_mill',
+        'cement.whr_boiler',
+      ]),
+    )
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.type === 'item' &&
+          patch.node.metadata?.stationId === 'mcc_control' &&
+          patch.node.metadata?.resolver === 'catalog-item',
+      ),
+    ).toBe(true)
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.type === 'zone' &&
+          patch.node.name === '\u77f3\u7070\u77f3\u7834\u788e\u673a' &&
+          patch.node.metadata?.stationId === 'limestone_crusher',
+      ),
+    ).toBe(true)
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.type === 'zone' &&
+          patch.node.name === '\u7be6\u51b7\u673a' &&
+          patch.node.metadata?.stationId === 'grate_cooler',
+      ),
+    ).toBe(true)
+
+    const rawMealPipe = result.patches.find(
+      (patch) =>
+        patch.node.type === 'pipe' &&
+        patch.node.metadata?.fromStationId === 'raw_meal_silo' &&
+        patch.node.metadata?.toStationId === 'preheater_tower',
+    )
+    expect(rawMealPipe?.node.metadata).toMatchObject({
+      fromPortId: 'raw_meal_out',
+      toPortId: 'raw_meal_in',
+      fromPortProfileId: 'cement.raw_meal_homogenization_silo',
+      toPortProfileId: 'cement.preheater_tower',
+    })
+
+    const clinkerConveyor = result.patches.find(
+      (patch) =>
+        patch.node.type === 'cable-tray' &&
+        patch.node.metadata?.fromStationId === 'clinker_crusher' &&
+        patch.node.metadata?.toStationId === 'clinker_conveying',
+    )
+    expect(clinkerConveyor?.node.metadata).toMatchObject({
+      visualKind: 'material_conveyor',
+      resolver: 'native-material-conveyor',
+    })
+    if (!clinkerConveyor || clinkerConveyor.node.type !== 'cable-tray') {
+      throw new Error('expected full-plant clinker material conveyor')
+    }
+    expect(clinkerConveyor.node.width).toBe(0.72)
+
+    const tertiaryAirDuct = result.patches.find(
+      (patch) =>
+        patch.node.type === 'pipe' &&
+        patch.node.metadata?.fromStationId === 'tertiary_air_duct' &&
+        patch.node.metadata?.toStationId === 'preheater_tower',
+    )
+    expect(tertiaryAirDuct?.node.metadata).toMatchObject({
+      visualKind: 'hot_gas_duct',
+      resolver: 'native-hot-gas-duct',
+    })
+    if (!tertiaryAirDuct || tertiaryAirDuct.node.type !== 'pipe') {
+      throw new Error('expected tertiary air duct pipe')
+    }
+    expect(tertiaryAirDuct.node.diameter).toBe(0.5)
+  })
+})

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Industry Pack Generator"
+  short_description: "Generate and validate Pascal industrial profile packs."
+  default_prompt: "Generate a Pascal industry profile pack from an industry brief, then validate it with the repository QA gates."

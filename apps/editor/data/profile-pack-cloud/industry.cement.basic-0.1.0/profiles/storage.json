@@ -1,0 +1,120 @@
+[
+  {
+    "id": "cement.clinker_silo",
+    "name": "熟料库",
+    "aliases": [
+      "熟料库",
+      "熟料筒仓",
+      "clinker silo",
+      "clinker storage silo"
+    ],
+    "industry": "cement",
+    "family": "tank",
+    "layoutFamily": "vessel_layout",
+    "archetypeFamily": "process_vessel",
+    "defaultDimensions": {
+      "length": 4,
+      "width": 4,
+      "height": 8,
+      "diameter": 3.6
+    },
+    "primarySemanticRole": "silo_shell",
+    "qualityRules": "quality.cement.clinker_silo",
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "silo_shell",
+        "required": true
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "silo_support_base",
+        "required": true
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "bottom_discharge_hopper",
+        "required": true
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "top_feed_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "bottom_discharge_outlet"
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "top_access_platform"
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "熟料储存筒仓 profile，包含筒体、支撑、底部料斗和顶部检修平台。",
+    "editableSchemaRef": "vessel.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 56
+    }
+  },
+  {
+    "id": "cement.cement_silo",
+    "name": "水泥库",
+    "aliases": [
+      "水泥库",
+      "水泥筒仓",
+      "cement silo",
+      "cement storage silo"
+    ],
+    "industry": "cement",
+    "family": "tank",
+    "layoutFamily": "vessel_layout",
+    "archetypeFamily": "process_vessel",
+    "defaultDimensions": {
+      "length": 3.6,
+      "width": 3.6,
+      "height": 7.5,
+      "diameter": 3.2
+    },
+    "primarySemanticRole": "cement_silo_shell",
+    "qualityRules": "quality.cement.cement_silo",
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "cement_silo_shell",
+        "required": true
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "silo_support_base",
+        "required": true
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "bulk_discharge_hopper",
+        "required": true
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "pneumatic_fill_manifold"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "bulk_discharge_outlet"
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "top_access_platform"
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "成品水泥储存筒仓 profile，包含筒体、气力输送管汇、底部卸料和检修平台。",
+    "editableSchemaRef": "vessel.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 56
+    }
+  }
+]

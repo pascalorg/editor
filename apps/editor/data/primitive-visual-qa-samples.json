@@ -1,0 +1,66 @@
+[
+  {
+    "id": "pharma_crystallization_kettle",
+    "label": "Pharma crystallization kettle",
+    "prompt": "Create a compact stainless pharma intermediate crystallization kettle with top agitator motor, offset manway lid, bottom conical discharge, and three splayed legs.",
+    "installPacks": ["industry.fine-chemical.pharma-intermediate@0.1.0"],
+    "requiredRoles": ["reactor_vessel_shell", "agitator_motor", "conical_discharge_bottom", "support_leg"],
+    "forbiddenRoles": ["tilted_top_manway_cover", "platform_ladder"],
+    "minQualityScore": 0.82,
+    "maxShapeCount": 80
+  },
+  {
+    "id": "cement_rotary_kiln",
+    "label": "Cement rotary kiln",
+    "prompt": "Create a cement plant rotary kiln with a long slightly inclined shell, riding rings, support rollers, girth gear, drive motor, kiln tail, and kiln head.",
+    "installPacks": ["industry.cement.basic@0.1.0"],
+    "requiredRoles": ["riding_ring", "support_roller"],
+    "requiredRoleGroups": [
+      ["kiln_shell", "vessel_shell"],
+      ["drive_unit", "kiln_drive_unit", "drive_motor"]
+    ],
+    "forbiddenRoles": ["vehicle_window", "chair_leg"],
+    "minQualityScore": 0.78,
+    "maxShapeCount": 120
+  },
+  {
+    "id": "logistics_agv",
+    "label": "Factory AGV",
+    "prompt": "Create a factory AGV cart with a low chassis, lidar sensor, emergency stop button, status light strip, and cargo deck.",
+    "installPacks": ["industry.logistics.basic@0.1.0"],
+    "requiredRoles": ["vehicle_body", "emergency_stop_button"],
+    "requiredRoleGroups": [
+      ["navigation_sensor", "front_navigation_sensor", "rear_navigation_sensor", "sensor_lens"],
+      ["status_light_strip", "left_status_light_strip", "right_status_light_strip"]
+    ],
+    "forbiddenRoles": ["vehicle_window", "headlight"],
+    "minQualityScore": 0.82,
+    "maxShapeCount": 80
+  },
+  {
+    "id": "cnc_machining_center",
+    "label": "CNC machining center",
+    "prompt": "Create a CNC machining center with an enclosed machine shell, viewing window, control panel, base, and chip removal area.",
+    "installPacks": ["industry.machine-tools.basic@0.1.0"],
+    "requiredRoles": ["machine_enclosure", "control_panel"],
+    "requiredRoleGroups": [["viewing_window", "vehicle_window", "window_panel"]],
+    "forbiddenRoles": ["vehicle_tire", "propeller_blade"],
+    "minQualityScore": 0.78,
+    "maxShapeCount": 100
+  },
+  {
+    "id": "six_axis_robot_arm",
+    "label": "Six-axis robot arm",
+    "prompt": "Create a six-axis industrial robot arm with base, rotary joints, upper arm, forearm, wrist, and end flange, without excessive decoration.",
+    "installPacks": ["industry.robotics.basic@0.1.0"],
+    "requiredRoles": ["robot_base"],
+    "requiredRoleGroups": [
+      ["robot_joint", "base_joint", "shoulder_joint", "elbow_joint", "wrist_joint", "wrist_pitch_joint", "wrist_roll_joint"],
+      ["robot_link", "upper_arm", "forearm"],
+      ["end_effector_mount", "tool_flange", "end_effector"]
+    ],
+    "forbiddenRoles": ["vehicle_window", "platform_ladder"],
+    "minQualityScore": 0.72,
+    "maxShapeCount": 120
+  }
+]

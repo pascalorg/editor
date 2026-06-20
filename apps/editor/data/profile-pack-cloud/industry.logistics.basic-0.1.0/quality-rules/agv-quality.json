@@ -1,0 +1,6 @@
+{
+  "id": "quality.agv_material_cart",
+  "requiredRoles": ["vehicle_body", "cargo_platform", "drive_wheel", "safety_bumper", "front_navigation_sensor", "left_status_light_strip", "emergency_stop_button"],
+  "forbiddenRoles": ["vehicle_cabin", "vehicle_window", "headlight", "vehicle_roof"],
+  "shapeCount": { "min": 12, "max": 42 }
+}

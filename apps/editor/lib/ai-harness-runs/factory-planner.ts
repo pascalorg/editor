@@ -1,6 +1,20 @@
-import { callConfiguredAi } from '@/lib/ai-provider'
 import { findCatalogItem, searchCatalogItems } from '@pascal-app/core/lib/asset-catalog'
+import { callConfiguredAi } from '@/lib/ai-provider'
 import { buildFactoryAgentSystemPrompt } from './factory-agent-prompt'
+import type {
+  ProcessConnectionMedium,
+  ProcessConnectionPlan,
+  ProcessConnectionVisualKind,
+  ProcessLineDomain,
+  ProcessLineLayoutStyle,
+  ProcessLinePlan,
+  ProcessStationPlan,
+} from './process-line-types'
+import {
+  allProcessTemplates,
+  buildProcessLinePlanFromTemplate,
+  matchProcessTemplate,
+} from './process-template-registry'
 
 export type FactoryPlan =
   | {
@@ -8,6 +22,11 @@ export type FactoryPlan =
       reason: string
       layoutType: 'house' | 'room' | 'factory' | 'production_line' | 'unknown'
       suggestedOperations: string[]
+    }
+  | {
+      kind: 'process_line'
+      reason: string
+      process: ProcessLinePlan
     }
   | {
       kind: 'catalog_item'
@@ -69,14 +88,173 @@ function stringValue(value: unknown) {
 }
 
 function stringArray(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
+}
+
+function numberValue(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+function slugValue(value: string, fallback: string) {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  return slug || fallback
+}
+
+function processDomain(value: unknown): ProcessLineDomain {
+  return value === 'chemical' ||
+    value === 'energy' ||
+    value === 'food' ||
+    value === 'assembly' ||
+    value === 'logistics' ||
+    value === 'metallurgy'
+    ? value
+    : 'generic'
+}
+
+function processLayoutStyle(value: unknown): ProcessLineLayoutStyle {
+  return value === 'u_shape' || value === 'cell' || value === 'parallel_bays' ? value : 'linear'
+}
+
+const PROCESS_CONNECTION_VISUAL_KINDS: ProcessConnectionVisualKind[] = [
+  'pipe',
+  'cable_tray',
+  'flow_arrow',
+  'material_conveyor',
+  'hot_material_chute',
+  'air_duct',
+  'hot_gas_duct',
+]
+
+function processConnectionVisualKind(
+  value: unknown,
+  medium?: ProcessConnectionMedium,
+): ProcessConnectionVisualKind {
+  if (value === 'busbar') return 'cable_tray'
+  if (value === 'pneumatic_pipe') return 'pipe'
+  if (value === 'fume_duct') return 'air_duct'
+  if (value === 'hot_metal_transfer' || value === 'hot_metal_chute') return 'hot_material_chute'
+  if (value === 'crane_transfer') return 'flow_arrow'
+  if (
+    typeof value === 'string' &&
+    PROCESS_CONNECTION_VISUAL_KINDS.includes(value as ProcessConnectionVisualKind)
+  ) {
+    return value as ProcessConnectionVisualKind
+  }
+  return medium === 'power' ? 'cable_tray' : 'pipe'
+}
+
+function normalizeStation(value: unknown, index: number): ProcessStationPlan | null {
+  if (!isRecord(value)) return null
+  const label =
+    stringValue(value.label) ??
+    stringValue(value.name) ??
+    stringValue(value.role) ??
+    `Station ${index + 1}`
+  const role = stringValue(value.role) ?? slugValue(label, `station_${index + 1}`)
+  const id = stringValue(value.id) ?? slugValue(role, `station_${index + 1}`)
+  if (!id || !role) return null
+  return {
+    id,
+    label,
+    ...(stringValue(value.displayLabel) ? { displayLabel: stringValue(value.displayLabel) } : {}),
+    role,
+    equipmentHint: stringValue(value.equipmentHint) ?? label,
+    footprintHint:
+      value.footprintHint === 'small' ||
+      value.footprintHint === 'medium' ||
+      value.footprintHint === 'large' ||
+      value.footprintHint === 'long' ||
+      value.footprintHint === 'tall'
+        ? value.footprintHint
+        : undefined,
+    safetyTags: stringArray(value.safetyTags),
+  }
+}
+
+function normalizeConnection(value: unknown): ProcessConnectionPlan | null {
+  if (!isRecord(value)) return null
+  const fromStationId = stringValue(value.fromStationId) ?? stringValue(value.from)
+  const toStationId = stringValue(value.toStationId) ?? stringValue(value.to)
+  if (!fromStationId || !toStationId) return null
+  const medium =
+    value.medium === 'water' ||
+    value.medium === 'hydrogen' ||
+    value.medium === 'oxygen' ||
+    value.medium === 'power' ||
+    value.medium === 'cooling' ||
+    value.medium === 'material' ||
+    value.medium === 'gas' ||
+    value.medium === 'molten_metal'
+      ? value.medium
+      : undefined
+  return {
+    fromStationId,
+    toStationId,
+    medium,
+    ...(stringValue(value.fromPortId) ? { fromPortId: stringValue(value.fromPortId) } : {}),
+    ...(stringValue(value.toPortId) ? { toPortId: stringValue(value.toPortId) } : {}),
+    visualKind: processConnectionVisualKind(value.visualKind, medium),
+  }
+}
+
+function templateById(processId: string | undefined) {
+  return processId
+    ? allProcessTemplates().find((template) => template.processId === processId)
+    : undefined
+}
+
+function normalizeProcessLinePlan(value: unknown, fallbackPrompt: string): ProcessLinePlan | null {
+  const source = isRecord(value) && isRecord(value.process) ? value.process : value
+  if (!isRecord(source)) return null
+  const processId = stringValue(source.processId)
+  const explicitTemplate = templateById(processId)
+  if (explicitTemplate) return buildProcessLinePlanFromTemplate(explicitTemplate, fallbackPrompt)
+
+  const template = matchProcessTemplate(fallbackPrompt)
+  const templatePlan = template ? buildProcessLinePlanFromTemplate(template, fallbackPrompt) : undefined
+  const stations = Array.isArray(source.stations)
+    ? source.stations
+        .map((station, index) => normalizeStation(station, index))
+        .filter((station): station is ProcessStationPlan => Boolean(station))
+    : []
+  const connections = Array.isArray(source.connections)
+    ? source.connections
+        .map(normalizeConnection)
+        .filter((connection): connection is ProcessConnectionPlan => Boolean(connection))
+    : []
+
+  if (stations.length < 2 && templatePlan) return templatePlan
+  if (stations.length < 2) return null
+
+  return {
+    processId: processId ?? templatePlan?.processId,
+    processLabel:
+      stringValue(source.processLabel) ??
+      stringValue(source.label) ??
+      templatePlan?.processLabel ??
+      fallbackPrompt,
+    ...(templatePlan?.sourcePack ? { sourcePack: { ...templatePlan.sourcePack } } : {}),
+    domain: processDomain(source.domain ?? templatePlan?.domain),
+    layoutStyle: processLayoutStyle(source.layoutStyle ?? templatePlan?.layoutStyle),
+    dimensions: {
+      length: numberValue(isRecord(source.dimensions) ? source.dimensions.length : undefined),
+      width: numberValue(isRecord(source.dimensions) ? source.dimensions.width : undefined),
+    },
+    stations,
+    connections: connections.length ? connections : (templatePlan?.connections ?? []),
+    safetyTags: stringArray(source.safetyTags).length
+      ? stringArray(source.safetyTags)
+      : templatePlan?.safetyTags,
+  }
 }
 
 function layoutType(value: unknown): FactoryLayoutType {
-  return value === 'house' ||
-    value === 'room' ||
-    value === 'factory' ||
-    value === 'production_line'
+  return value === 'house' || value === 'room' || value === 'factory' || value === 'production_line'
     ? value
     : 'unknown'
 }
@@ -91,6 +269,15 @@ function normalizePlan(value: unknown, fallbackPrompt: string): FactoryPlan | nu
       reason,
       layoutType: layoutType(value.layoutType),
       suggestedOperations: stringArray(value.suggestedOperations),
+    }
+  }
+  if (kind === 'process_line') {
+    const process = normalizeProcessLinePlan(value, fallbackPrompt)
+    if (!process) return null
+    return {
+      kind: 'process_line',
+      reason,
+      process,
     }
   }
   if (kind === 'catalog_item') {
@@ -151,13 +338,24 @@ const GEOMETRY_PATTERNS = [
 function inferLayoutType(prompt: string): FactoryLayoutType {
   if (/\u623f\u5b50|\bhouse\b/i.test(prompt)) return 'house'
   if (/\u623f\u95f4|\broom\b/i.test(prompt)) return 'room'
-  if (/\u4ea7\u7ebf|\u751f\u4ea7\u7ebf|\bproduction line\b|\bassembly line\b/i.test(prompt)) return 'production_line'
-  if (/\u5382\u623f|\u5de5\u5382|\u8f66\u95f4|\bfactory\b|\bworkshop\b/i.test(prompt)) return 'factory'
+  if (/\u4ea7\u7ebf|\u751f\u4ea7\u7ebf|\bproduction line\b|\bassembly line\b/i.test(prompt))
+    return 'production_line'
+  if (/\u5382\u623f|\u5de5\u5382|\u8f66\u95f4|\bfactory\b|\bworkshop\b/i.test(prompt))
+    return 'factory'
   return 'unknown'
 }
 
 export function fallbackFactoryPlan(prompt: string): FactoryPlan {
   const normalized = prompt.trim()
+  const processTemplate = matchProcessTemplate(normalized)
+  if (processTemplate) {
+    return {
+      kind: 'process_line',
+      reason:
+        'Request matches a known process-line template; compose stations, equipment, and connections.',
+      process: buildProcessLinePlanFromTemplate(processTemplate, normalized),
+    }
+  }
   const type = inferLayoutType(normalized)
   const isProductionLine = type === 'production_line'
   const catalogMatches = searchCatalogItems({ query: normalized }).slice(0, 1)
@@ -165,7 +363,8 @@ export function fallbackFactoryPlan(prompt: string): FactoryPlan {
   if (!isProductionLine && catalogItem) {
     return {
       kind: 'catalog_item',
-      reason: 'Request matches a provided catalog item; use the catalog item instead of geometry generation.',
+      reason:
+        'Request matches a provided catalog item; use the catalog item instead of geometry generation.',
       catalogItemId: catalogItem.id,
       equipmentName: catalogItem.name,
     }
@@ -196,7 +395,8 @@ export function fallbackFactoryPlan(prompt: string): FactoryPlan {
   if (catalogItem) {
     return {
       kind: 'catalog_item',
-      reason: 'Request matches a provided catalog item; use the catalog item instead of geometry generation.',
+      reason:
+        'Request matches a provided catalog item; use the catalog item instead of geometry generation.',
       catalogItemId: catalogItem.id,
       equipmentName: catalogItem.name,
     }
@@ -220,6 +420,15 @@ export function fallbackFactoryPlan(prompt: string): FactoryPlan {
 
 export function shouldPreferFallbackFactoryPlan(plan: FactoryPlan, fallbackPlan: FactoryPlan) {
   if (plan.kind === 'missing' && fallbackPlan.kind !== 'missing') return true
+  if (fallbackPlan.kind === 'process_line') {
+    if (plan.kind !== 'process_line') return true
+    if (plan.process.processId !== fallbackPlan.process.processId) return true
+    const fallbackStationIds = new Set(fallbackPlan.process.stations.map((station) => station.id))
+    const plannedStationIds = new Set(plan.process.stations.map((station) => station.id))
+    const missingTemplateStations = [...fallbackStationIds].some((id) => !plannedStationIds.has(id))
+    if (missingTemplateStations || plannedStationIds.size !== fallbackStationIds.size) return true
+    return plan.process.connections.length < fallbackPlan.process.connections.length
+  }
   if (fallbackPlan.kind === 'geometry' && plan.kind === 'layout') return true
   return (
     fallbackPlan.kind === 'layout' &&
@@ -236,9 +445,10 @@ export function buildFactoryPlannerPrompt(prompt: string) {
     'Decide exactly one route for the user request. Return strict JSON only; no markdown.',
     'Schema:',
     '{',
-    '  "kind": "layout" | "catalog_item" | "geometry" | "missing",',
+    '  "kind": "layout" | "process_line" | "catalog_item" | "geometry" | "missing",',
     '  "reason": "short reason",',
     '  "layoutType"?: "house" | "room" | "factory" | "production_line" | "unknown",',
+    '  "process"?: { "processId"?: string, "processLabel": string, "domain": "chemical|energy|food|assembly|logistics|metallurgy|generic", "layoutStyle": "linear|u_shape|cell|parallel_bays", "stations": [{ "id": string, "label": string, "role": string, "equipmentHint": string }], "connections": [{ "fromStationId": string, "toStationId": string, "medium"?: "water|hydrogen|oxygen|power|cooling|material|gas|molten_metal", "visualKind": "pipe|cable_tray|flow_arrow|material_conveyor|hot_material_chute|air_duct|hot_gas_duct" }] },',
     '  "suggestedOperations"?: ["create_room", "place_item", "apply_patch"],',
     '  "catalogItemId"?: "existing catalog id",',
     '  "equipmentName"?: "equipment name for catalog or geometry",',
@@ -253,8 +463,17 @@ export function buildFactoryPlannerPrompt(prompt: string) {
 
 export async function planFactoryRequest(input: {
   prompt: string
+  params?: Record<string, unknown>
   signal?: AbortSignal
 }): Promise<{ plan: FactoryPlan; source: 'llm' | 'fallback'; plannerText?: string }> {
+  if (
+    process.env.FACTORY_E2E_SMOKE === '1' ||
+    input.params?.e2eSmoke === true ||
+    input.params?.forceFallbackFactoryPlan === true
+  ) {
+    return { plan: fallbackFactoryPlan(input.prompt), source: 'fallback' }
+  }
+
   try {
     const { res, text } = await callConfiguredAi(
       {
@@ -273,9 +492,7 @@ export async function planFactoryRequest(input: {
     if (!res.ok) throw new Error(text)
     const data = JSON.parse(text)
     const content =
-      typeof data.choices?.[0]?.message?.content === 'string'
-        ? data.choices[0].message.content
-        : ''
+      typeof data.choices?.[0]?.message?.content === 'string' ? data.choices[0].message.content : ''
     const plan = parseFactoryPlan(content, input.prompt)
     if (plan) {
       const fallbackPlan = fallbackFactoryPlan(input.prompt)

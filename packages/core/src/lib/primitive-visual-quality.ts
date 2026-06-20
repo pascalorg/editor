@@ -406,7 +406,10 @@ function assessFanQuality(facts: PrimitiveGeometryFacts): PrimitiveVisualQuality
 
   const blades = factsBy(
     facts,
-    (fact) => hasRole(fact, ['fan_blade']) || fact.sourcePartKind === 'radial_blades',
+    (fact) =>
+      hasRole(fact, ['fan_blade']) ||
+      fact.sourcePartKind === 'radial_blades' ||
+      fact.sourcePartKind === 'fan_blade',
   ).filter((fact) => !/root/.test(nameOf(fact)))
   const grill = factsBy(
     facts,
@@ -430,7 +433,7 @@ function assessFanQuality(facts: PrimitiveGeometryFacts): PrimitiveVisualQuality
 
   if (blades.length < 3) {
     issues.push(`fan needs at least 3 readable blades, got ${blades.length}.`)
-    recommendations.push('Use radial_blades with count:3 for a recognizable fan silhouette.')
+    recommendations.push('Use fan_blade with count:3-6 for independent editable blades.')
   }
   if (rings.length < 3) {
     issues.push(`fan protective grill needs multiple concentric rings, got ${rings.length}.`)
@@ -448,7 +451,7 @@ function assessFanQuality(facts: PrimitiveGeometryFacts): PrimitiveVisualQuality
   }
   if (motor.length === 0) {
     warnings.push('fan lacks a visible rear motor housing behind the blades.')
-    recommendations.push('Add motor_housing behind radial_blades.')
+    recommendations.push('Add motor_housing behind fan_blade or radial_blades.')
   }
   if (support.length === 0) {
     warnings.push('fan lacks a pole/bracket support, so the assembly may float.')

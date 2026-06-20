@@ -183,6 +183,7 @@ export interface CameraControlFitSceneEvent {
     center: [number, number]
     size: [number, number]
   }
+  reason?: string
 }
 
 type CameraControlEvents = {

@@ -1,0 +1,23 @@
+{
+  "id": "articulated_robot.six_axis",
+  "family": "robot_workcell_layout",
+  "description": "Six-axis articulated robot skeleton. The current executor consumes metadata and robotArmDefaults, while future template resolver versions can use anchors and placements directly.",
+  "anchors": [
+    { "id": "base", "role": "robot_base", "position": [0, 0, 0] },
+    { "id": "shoulder", "role": "shoulder_joint", "relativeTo": "base", "offset": [0, 0.6, 0] },
+    { "id": "elbow", "role": "elbow_joint", "relativeTo": "shoulder", "offset": [-0.35, 0.62, 0] },
+    { "id": "wrist", "role": "wrist_joint", "relativeTo": "elbow", "offset": [0.82, 0.08, 0] },
+    { "id": "flange", "role": "tool_flange", "relativeTo": "wrist", "offset": [0.3, 0, 0] }
+  ],
+  "placements": [
+    { "role": "robot_base", "anchor": "base" },
+    { "role": "base_joint", "anchor": "base" },
+    { "role": "shoulder_joint", "anchor": "shoulder" },
+    { "role": "upper_arm", "between": ["shoulder", "elbow"] },
+    { "role": "elbow_joint", "anchor": "elbow" },
+    { "role": "forearm", "between": ["elbow", "wrist"] },
+    { "role": "wrist_joint", "anchor": "wrist" },
+    { "role": "tool_flange", "anchor": "flange" },
+    { "role": "end_effector", "anchor": "flange" }
+  ]
+}

@@ -5,6 +5,7 @@ import type {
   GeneratedGeometryPlacementSpec,
 } from '../../../../packages/editor/src/lib/ai-generated-geometry-nodes'
 import type { FactoryPlan } from './factory-planner'
+import { containsCjkText } from './process-line-localization'
 
 type Vec2 = [number, number]
 
@@ -106,6 +107,54 @@ function parentPatch(node: GeneratedGeometryCreatePatch['node'], parentId?: stri
   }
 }
 
+function stringMetadata(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined
+}
+
+function defaultRoomName(input: {
+  layoutType: Extract<FactoryPlan, { kind: 'layout' }>['layoutType']
+  useChinese: boolean
+}) {
+  if (input.useChinese) {
+    if (input.layoutType === 'factory') return '\u5de5\u5382\u8f66\u95f4'
+    if (input.layoutType === 'production_line') return '\u751f\u4ea7\u7ebf\u533a\u57df'
+    if (input.layoutType === 'house') return '\u751f\u6210\u623f\u5c4b'
+    return '\u751f\u6210\u623f\u95f4'
+  }
+  if (input.layoutType === 'factory') return 'Factory shell'
+  if (input.layoutType === 'production_line') return 'Production line area'
+  if (input.layoutType === 'house') return 'Generated house'
+  return 'Generated room'
+}
+
+function roomLabels(input: {
+  layoutType: Extract<FactoryPlan, { kind: 'layout' }>['layoutType']
+  prompt: string
+  metadata: Record<string, unknown>
+}) {
+  const metadataName = stringMetadata(input.metadata.processDisplayLabel)
+  const useChinese = containsCjkText(input.prompt) || containsCjkText(metadataName)
+  const roomName = metadataName ?? defaultRoomName({ layoutType: input.layoutType, useChinese })
+  if (!useChinese) {
+    return {
+      roomName,
+      floorName: `${roomName} floor`,
+      ceilingName: `${roomName} ceiling`,
+      wallName: (index: number) => `${roomName} wall ${index + 1}`,
+      doorName: input.layoutType === 'factory' ? 'Factory door' : 'Door',
+      windowName: 'Window',
+    }
+  }
+  return {
+    roomName,
+    floorName: `${roomName}\u5730\u9762`,
+    ceilingName: `${roomName}\u540a\u9876`,
+    wallName: (index: number) => `${roomName}\u5899${index + 1}`,
+    doorName: input.layoutType === 'factory' ? '\u8f66\u95f4\u5377\u5e18\u95e8' : '\u95e8',
+    windowName: '\u7a97\u6237',
+  }
+}
+
 export function buildFactoryLayoutCreatePatches(input: {
   prompt: string
   plan: Extract<FactoryPlan, { kind: 'layout' }>
@@ -127,14 +176,12 @@ export function buildFactoryLayoutCreatePatches(input: {
     sourcePrompt: input.prompt,
     ...input.placement.metadata,
   }
-  const roomName =
-    input.plan.layoutType === 'factory'
-      ? 'Factory shell'
-      : input.plan.layoutType === 'production_line'
-        ? 'Production line area'
-        : input.plan.layoutType === 'house'
-          ? 'Generated house'
-          : 'Generated room'
+  const labels = roomLabels({
+    layoutType: input.plan.layoutType,
+    prompt: input.prompt,
+    metadata: baseMetadata,
+  })
+  const roomName = labels.roomName
 
   const zone = ZoneNode.parse({
     name: roomName,
@@ -143,18 +190,18 @@ export function buildFactoryLayoutCreatePatches(input: {
     metadata: { ...baseMetadata, mcpTool: 'create_room', role: 'layout-zone' },
   })
   const slab = SlabNode.parse({
-    name: `${roomName} floor`,
+    name: labels.floorName,
     polygon,
     metadata: { ...baseMetadata, mcpTool: 'create_room', role: 'layout-floor' },
   })
   const ceiling = CeilingNode.parse({
-    name: `${roomName} ceiling`,
+    name: labels.ceilingName,
     polygon,
     metadata: { ...baseMetadata, mcpTool: 'create_room', role: 'layout-ceiling' },
   })
   const walls = polygon.map((start, index) =>
     WallNode.parse({
-      name: `${roomName} wall ${index + 1}`,
+      name: labels.wallName(index),
       start,
       end: polygon[(index + 1) % polygon.length]!,
       height: input.plan.layoutType === 'factory' ? 4.5 : 2.8,
@@ -169,7 +216,7 @@ export function buildFactoryLayoutCreatePatches(input: {
   const doorWidth = input.plan.layoutType === 'factory' ? 2.4 : 0.9
   const doorHeight = input.plan.layoutType === 'factory' ? 3.2 : 2.1
   const door = DoorNode.parse({
-    name: input.plan.layoutType === 'factory' ? 'Factory door' : 'Door',
+    name: labels.doorName,
     wallId: firstWall.id,
     parentId: firstWall.id,
     position: [wallLocalX(firstStart, firstEnd, 0.5, doorWidth), doorHeight / 2, 0],
@@ -186,7 +233,7 @@ export function buildFactoryLayoutCreatePatches(input: {
     const start = polygon[offsetIndex + 1]!
     const end = polygon[(offsetIndex + 2) % polygon.length]!
     return WindowNode.parse({
-      name: 'Window',
+      name: labels.windowName,
       wallId: wall.id,
       parentId: wall.id,
       position: [wallLocalX(start, end, 0.5, windowWidth), 1.55, 0],

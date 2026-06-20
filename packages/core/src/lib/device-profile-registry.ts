@@ -55,23 +55,122 @@ export interface ProfilePartSpec extends PartComposePartInput {
   kind: PartComposeKind | string
   semanticRole: string
   required?: boolean
+  preset?: string
   params?: Record<string, unknown>
   dimensionBindings?: Record<string, string>
+}
+
+export interface DeviceProfileSourcePack {
+  id: string
+  version: string
+  industry?: string
+}
+
+export interface DeviceProfileOverrideInfo {
+  id: string
+  name: string
+  source: DeviceProfileSource
+  sourcePack?: DeviceProfileSourcePack
+}
+
+export interface DeviceProfileShapeCountRule {
+  min?: number
+  max?: number
+}
+
+export interface DeviceProfileRangeRule {
+  min?: number
+  max?: number
+}
+
+export interface DeviceProfileQualityRules {
+  requiredRoles?: readonly string[]
+  forbiddenRoles?: readonly string[]
+  shapeCount?: DeviceProfileShapeCountRule
+  dimensionExpectations?: {
+    lengthToDiameterRatio?: DeviceProfileRangeRule
+  }
+}
+
+export type DeviceProfileRuleRef = string | Record<string, unknown>
+
+export type DeviceProfileDetailLevel = 'low' | 'medium' | 'high'
+
+export interface DeviceProfilePartDetailBudget {
+  detailLevel?: DeviceProfileDetailLevel
+  count?: number
+  ringCount?: number
+  spokeCount?: number
+  slatCount?: number
+  rungCount?: number
+  boltCount?: number
+  radialSegments?: number
+  levelCount?: number
+}
+
+export interface DeviceProfileDetailBudget {
+  detailLevel?: DeviceProfileDetailLevel
+  maxShapes?: number
+  parts?: Record<string, DeviceProfilePartDetailBudget>
+}
+
+export type EditablePropertyType = 'number' | 'integer' | 'boolean' | 'enum' | 'color' | 'string'
+
+export type EditablePropertyRole =
+  | 'structure'
+  | 'dimension'
+  | 'pose'
+  | 'material'
+  | 'detail'
+  | 'workcell'
+
+export interface EditablePropertyDefinition {
+  type: EditablePropertyType
+  default?: unknown
+  min?: number
+  max?: number
+  values?: readonly unknown[]
+  unit?: string
+  aliases?: readonly string[]
+  role?: EditablePropertyRole
+  description?: string
+}
+
+export interface EditableSchemaDefinition {
+  id: string
+  name: string
+  description?: string
+  properties: Record<string, EditablePropertyDefinition>
 }
 
 export interface DeviceProfileDefinition {
   id: string
   name: string
   aliases: readonly string[]
+  industry?: string
   layoutFamily?: LayoutFamilyId
+  layoutTemplate?: string
   archetypeFamily: DeviceArchetypeFamily
   family: string
   defaultDimensions?: DimensionDefaults
   parts: readonly ProfilePartSpec[]
   primarySemanticRole: string
   dimensionRules?: readonly DimensionRule[]
+  partPresets?: Record<string, string>
+  resolvedPartPresets?: Record<string, Record<string, unknown>>
+  proportionRules?: DeviceProfileRuleRef
+  qualityRules?: DeviceProfileRuleRef
+  detailBudget?: DeviceProfileDetailBudget
+  visualCues?: readonly string[]
+  layoutHints?: Record<string, unknown>
+  roleAliases?: Record<string, readonly string[]>
+  editableSchemaRef?: string
+  editableOverrides?: Record<string, Partial<EditablePropertyDefinition>>
+  resolvedEditableSchema?: EditableSchemaDefinition
   status: DeviceProfileStatus
   source: DeviceProfileSource
+  sourcePack?: DeviceProfileSourcePack
+  overrides?: readonly DeviceProfileOverrideInfo[]
   description: string
   forbiddenRoles?: readonly string[]
 }
@@ -391,11 +490,509 @@ export const DEVICE_PROFILE_DEFINITIONS = [
 
 export type DeviceProfileId = (typeof DEVICE_PROFILE_DEFINITIONS)[number]['id']
 
+export const EDITABLE_SCHEMA_DEFINITIONS = [
+  {
+    id: 'robot_arm.common',
+    name: 'Common robot arm editable properties',
+    description: 'Shared editable controls for articulated industrial robot arms.',
+    properties: {
+      axisCount: {
+        type: 'integer',
+        min: 3,
+        max: 7,
+        default: 6,
+        aliases: ['axis count', 'axes', 'joint count', '轴数', '几轴'],
+        role: 'structure',
+      },
+      reach: {
+        type: 'number',
+        min: 0.8,
+        max: 8,
+        default: 1.58,
+        unit: 'm',
+        aliases: ['reach', 'arm span', 'working radius', '臂展', '工作半径'],
+        role: 'dimension',
+      },
+      height: {
+        type: 'number',
+        min: 0.8,
+        max: 4,
+        default: 2.2,
+        unit: 'm',
+        aliases: ['height', 'overall height', '高度'],
+        role: 'dimension',
+      },
+      pose: {
+        type: 'enum',
+        values: ['work-ready', 'reach-forward', 'rest'],
+        default: 'work-ready',
+        aliases: ['pose', 'posture', '姿态'],
+        role: 'pose',
+      },
+      endEffector: {
+        type: 'enum',
+        values: ['tool-flange', 'gripper', 'suction'],
+        default: 'tool-flange',
+        aliases: ['end effector', 'tool', '末端', '末端工具', '夹爪', '吸盘', '法兰'],
+        role: 'structure',
+      },
+      primaryColor: {
+        type: 'color',
+        default: '#facc15',
+        aliases: ['main color', 'body color', '主体颜色', '颜色'],
+        role: 'material',
+      },
+      secondaryColor: {
+        type: 'color',
+        default: '#111827',
+        aliases: ['joint color', 'secondary color', '关节颜色'],
+        role: 'material',
+      },
+      metalColor: {
+        type: 'color',
+        default: '#cbd5e1',
+        aliases: ['metal color', 'flange color', '金属色'],
+        role: 'material',
+      },
+      includeCableHarness: {
+        type: 'boolean',
+        default: true,
+        aliases: ['cable', 'cable harness', '线缆', '线束'],
+        role: 'detail',
+      },
+      includeWorkcell: {
+        type: 'boolean',
+        default: false,
+        aliases: ['workcell', 'station', '工作站', '工位'],
+        role: 'workcell',
+      },
+      detailLevel: {
+        type: 'enum',
+        values: ['low', 'medium', 'high'],
+        default: 'medium',
+        aliases: ['detail', 'complexity', '细节', '精细度'],
+        role: 'detail',
+      },
+    },
+  },
+  {
+    id: 'vessel.common',
+    name: 'Common vessel editable properties',
+    description: 'Shared editable controls for tanks, reactors, silos, and process vessels.',
+    properties: {
+      height: {
+        type: 'number',
+        min: 0.2,
+        max: 40,
+        default: 1.6,
+        unit: 'm',
+        aliases: ['height', 'overall height', 'vessel height'],
+        role: 'dimension',
+      },
+      diameter: {
+        type: 'number',
+        min: 0.1,
+        max: 20,
+        default: 1,
+        unit: 'm',
+        aliases: ['diameter', 'vessel diameter', 'tank diameter'],
+        role: 'dimension',
+      },
+      length: {
+        type: 'number',
+        min: 0.2,
+        max: 80,
+        default: 2,
+        unit: 'm',
+        aliases: ['length', 'shell length', 'tank length'],
+        role: 'dimension',
+      },
+      primaryColor: {
+        type: 'color',
+        default: '#94a3b8',
+        aliases: ['main color', 'body color', 'color'],
+        role: 'material',
+      },
+      metalColor: {
+        type: 'color',
+        default: '#cbd5e1',
+        aliases: ['metal color', 'stainless color'],
+        role: 'material',
+      },
+      supportCount: {
+        type: 'integer',
+        min: 0,
+        max: 12,
+        default: 4,
+        aliases: ['support count', 'leg count'],
+        role: 'structure',
+      },
+    },
+  },
+  {
+    id: 'conveyor.common',
+    name: 'Common conveyor editable properties',
+    description: 'Shared editable controls for belt, screw, and bucket conveying equipment.',
+    properties: {
+      length: {
+        type: 'number',
+        min: 0.5,
+        max: 80,
+        default: 4,
+        unit: 'm',
+        aliases: ['length', 'conveyor length'],
+        role: 'dimension',
+      },
+      width: {
+        type: 'number',
+        min: 0.15,
+        max: 8,
+        default: 0.8,
+        unit: 'm',
+        aliases: ['width', 'belt width', 'trough width'],
+        role: 'dimension',
+      },
+      height: {
+        type: 'number',
+        min: 0.1,
+        max: 12,
+        default: 0.8,
+        unit: 'm',
+        aliases: ['height', 'support height'],
+        role: 'dimension',
+      },
+      inclineAngle: {
+        type: 'number',
+        min: -35,
+        max: 35,
+        default: 0,
+        unit: 'deg',
+        aliases: ['incline', 'slope angle'],
+        role: 'pose',
+      },
+      primaryColor: {
+        type: 'color',
+        default: '#64748b',
+        aliases: ['main color', 'frame color', 'color'],
+        role: 'material',
+      },
+    },
+  },
+  {
+    id: 'rotary_equipment.common',
+    name: 'Common rotary equipment editable properties',
+    description: 'Shared editable controls for kilns, mills, drums, and rotating shells.',
+    properties: {
+      length: {
+        type: 'number',
+        min: 0.5,
+        max: 120,
+        default: 6,
+        unit: 'm',
+        aliases: ['length', 'shell length', 'drum length'],
+        role: 'dimension',
+      },
+      diameter: {
+        type: 'number',
+        min: 0.1,
+        max: 20,
+        default: 1,
+        unit: 'm',
+        aliases: ['diameter', 'shell diameter', 'drum diameter'],
+        role: 'dimension',
+      },
+      primaryColor: {
+        type: 'color',
+        default: '#6b7280',
+        aliases: ['main color', 'shell color', 'color'],
+        role: 'material',
+      },
+      metalColor: {
+        type: 'color',
+        default: '#9ca3af',
+        aliases: ['metal color', 'ring color'],
+        role: 'material',
+      },
+    },
+  },
+  {
+    id: 'enclosure.common',
+    name: 'Common enclosure editable properties',
+    description: 'Shared editable controls for enclosed machines and electrical cabinets.',
+    properties: {
+      length: {
+        type: 'number',
+        min: 0.3,
+        max: 20,
+        default: 2,
+        unit: 'm',
+        aliases: ['length', 'machine length'],
+        role: 'dimension',
+      },
+      width: {
+        type: 'number',
+        min: 0.2,
+        max: 12,
+        default: 1,
+        unit: 'm',
+        aliases: ['width', 'machine width', 'depth'],
+        role: 'dimension',
+      },
+      height: {
+        type: 'number',
+        min: 0.2,
+        max: 12,
+        default: 1.4,
+        unit: 'm',
+        aliases: ['height', 'machine height'],
+        role: 'dimension',
+      },
+      primaryColor: {
+        type: 'color',
+        default: '#94a3b8',
+        aliases: ['main color', 'body color', 'color'],
+        role: 'material',
+      },
+      secondaryColor: {
+        type: 'color',
+        default: '#475569',
+        aliases: ['panel color', 'secondary color'],
+        role: 'material',
+      },
+    },
+  },
+  {
+    id: 'mobile_platform.common',
+    name: 'Common mobile platform editable properties',
+    description: 'Shared editable controls for AGV and AMR mobile equipment.',
+    properties: {
+      length: {
+        type: 'number',
+        min: 0.3,
+        max: 8,
+        default: 1.4,
+        unit: 'm',
+        aliases: ['length', 'vehicle length'],
+        role: 'dimension',
+      },
+      width: {
+        type: 'number',
+        min: 0.2,
+        max: 4,
+        default: 0.9,
+        unit: 'm',
+        aliases: ['width', 'vehicle width'],
+        role: 'dimension',
+      },
+      height: {
+        type: 'number',
+        min: 0.08,
+        max: 2,
+        default: 0.32,
+        unit: 'm',
+        aliases: ['height', 'vehicle height'],
+        role: 'dimension',
+      },
+      primaryColor: {
+        type: 'color',
+        default: '#e5e7eb',
+        aliases: ['main color', 'body color', 'color'],
+        role: 'material',
+      },
+      secondaryColor: {
+        type: 'color',
+        default: '#334155',
+        aliases: ['bumper color', 'secondary color'],
+        role: 'material',
+      },
+    },
+  },
+  {
+    id: 'tower_frame.common',
+    name: 'Common tower frame editable properties',
+    description:
+      'Shared editable controls for industrial towers, frames, and preheater structures.',
+    properties: {
+      height: {
+        type: 'number',
+        min: 1,
+        max: 80,
+        default: 12,
+        unit: 'm',
+        aliases: ['height', 'tower height'],
+        role: 'dimension',
+      },
+      width: {
+        type: 'number',
+        min: 0.5,
+        max: 30,
+        default: 4,
+        unit: 'm',
+        aliases: ['width', 'tower width', 'frame width'],
+        role: 'dimension',
+      },
+      depth: {
+        type: 'number',
+        min: 0.5,
+        max: 30,
+        default: 3,
+        unit: 'm',
+        aliases: ['depth', 'tower depth', 'frame depth'],
+        role: 'dimension',
+      },
+      levelCount: {
+        type: 'integer',
+        min: 1,
+        max: 12,
+        default: 5,
+        aliases: ['levels', 'floor count', 'platform count'],
+        role: 'structure',
+      },
+      primaryColor: {
+        type: 'color',
+        default: '#64748b',
+        aliases: ['main color', 'frame color', 'color'],
+        role: 'material',
+      },
+    },
+  },
+] as const satisfies readonly EditableSchemaDefinition[]
+
+function editablePropertyDefinition(value: unknown): EditablePropertyDefinition | undefined {
+  if (!isRecord(value)) return undefined
+  const type = typeof value.type === 'string' ? value.type : undefined
+  if (
+    type !== 'number' &&
+    type !== 'integer' &&
+    type !== 'boolean' &&
+    type !== 'enum' &&
+    type !== 'color' &&
+    type !== 'string'
+  ) {
+    return undefined
+  }
+  const role = typeof value.role === 'string' ? value.role : undefined
+  return {
+    type,
+    ...(value.default != null ? { default: value.default } : {}),
+    ...(typeof value.min === 'number' && Number.isFinite(value.min) ? { min: value.min } : {}),
+    ...(typeof value.max === 'number' && Number.isFinite(value.max) ? { max: value.max } : {}),
+    ...(Array.isArray(value.values) ? { values: value.values } : {}),
+    ...(typeof value.unit === 'string' && value.unit.trim() ? { unit: value.unit.trim() } : {}),
+    ...(stringArray(value.aliases).length ? { aliases: stringArray(value.aliases) } : {}),
+    ...(role === 'structure' ||
+    role === 'dimension' ||
+    role === 'pose' ||
+    role === 'material' ||
+    role === 'detail' ||
+    role === 'workcell'
+      ? { role }
+      : {}),
+    ...(typeof value.description === 'string' && value.description.trim()
+      ? { description: value.description.trim() }
+      : {}),
+  }
+}
+
+export function normalizeEditableSchemaInput(value: unknown): EditableSchemaDefinition | undefined {
+  if (!isRecord(value)) return undefined
+  const id = typeof value.id === 'string' && value.id.trim() ? value.id.trim() : undefined
+  const name = typeof value.name === 'string' && value.name.trim() ? value.name.trim() : id
+  const properties = isRecord(value.properties) ? value.properties : undefined
+  if (!id || !name || !properties) return undefined
+  const normalizedProperties = Object.fromEntries(
+    Object.entries(properties).flatMap(([key, raw]) => {
+      const property = editablePropertyDefinition(raw)
+      return property ? [[key, property] as const] : []
+    }),
+  )
+  if (Object.keys(normalizedProperties).length === 0) return undefined
+  return {
+    id,
+    name,
+    ...(typeof value.description === 'string' && value.description.trim()
+      ? { description: value.description.trim() }
+      : {}),
+    properties: normalizedProperties,
+  }
+}
+
+export function editableSchemaById(
+  schemas: readonly EditableSchemaDefinition[] = EDITABLE_SCHEMA_DEFINITIONS,
+) {
+  return new Map(schemas.map((schema) => [normalizeKey(schema.id), schema]))
+}
+
+function inferredEditableSchemaRef(profile: DeviceProfileDefinition): string | undefined {
+  const id = normalizeKey(profile.id)
+  const family = normalizeKey(profile.family)
+  const layoutFamily = normalizeKey(profile.layoutFamily)
+  const archetypeFamily = normalizeKey(profile.archetypeFamily)
+  const parts = profile.parts
+    .map((part) => normalizeKey([part.kind, part.semanticRole, part.id].filter(Boolean).join(' ')))
+    .join(' ')
+  const text = [id, family, layoutFamily, archetypeFamily, parts].join(' ')
+  if (family === 'robot_arm' || archetypeFamily === 'robotic_workcell') return 'robot_arm.common'
+  if (text.includes('mobile_platform') || /\bagv\b|\bamr\b/.test(text)) {
+    return 'mobile_platform.common'
+  }
+  if (text.includes('preheater') || text.includes('tower_frame') || text.includes('tower')) {
+    return 'tower_frame.common'
+  }
+  if (
+    archetypeFamily === 'rotating_fluid_machine' ||
+    archetypeFamily === 'thermal_equipment' ||
+    text.includes('rotary_kiln') ||
+    text.includes('mill_shell') ||
+    text.includes('drum')
+  ) {
+    return 'rotary_equipment.common'
+  }
+  if (family === 'conveyor' || archetypeFamily === 'material_handling') return 'conveyor.common'
+  if (
+    family === 'tank' ||
+    family === 'reactor' ||
+    layoutFamily === 'vessel_layout' ||
+    archetypeFamily === 'process_vessel'
+  ) {
+    return 'vessel.common'
+  }
+  if (
+    family === 'machine_tool' ||
+    family === 'electrical' ||
+    layoutFamily === 'box_enclosure_layout' ||
+    archetypeFamily === 'enclosed_machine' ||
+    archetypeFamily === 'electrical_enclosure'
+  ) {
+    return 'enclosure.common'
+  }
+  return undefined
+}
+
+export function resolveEditableSchemaForProfile(
+  profile: DeviceProfileDefinition,
+  schemas: readonly EditableSchemaDefinition[] = EDITABLE_SCHEMA_DEFINITIONS,
+): EditableSchemaDefinition | undefined {
+  const schemaRef = profile.editableSchemaRef ?? inferredEditableSchemaRef(profile)
+  const base =
+    profile.resolvedEditableSchema ??
+    (schemaRef ? editableSchemaById(schemas).get(normalizeKey(schemaRef)) : undefined)
+  if (!base) return undefined
+  const overrides = profile.editableOverrides ?? {}
+  const properties = { ...base.properties }
+  for (const [key, override] of Object.entries(overrides)) {
+    const existing = properties[key]
+    if (!existing) continue
+    properties[key] = { ...existing, ...override }
+  }
+  return { ...base, properties }
+}
+
 function normalizeKey(value: unknown): string {
   return typeof value === 'string'
     ? value
         .trim()
-        .replace(/[\s_-]+/g, '_')
+        .replace(/[\s_.-]+/g, '_')
         .toLowerCase()
     : ''
 }
@@ -425,6 +1022,36 @@ function containsAliasToken(normalizedText: string, alias: string): boolean {
   return false
 }
 
+function requestedRobotAxisCount(input: Record<string, unknown>): number | undefined {
+  const text = textOf([input.object, input.name, input.category, input.prompt, input.style])
+  if (/(seven[_\s-]?axis|7[_\s-]?axis|\u4e03\u8f74)/i.test(text)) return 7
+  if (/(six[_\s-]?axis|6[_\s-]?axis|\u516d\u8f74|fanuc|kuka|abb)/i.test(text)) return 6
+  if (/(five[_\s-]?axis|5[_\s-]?axis|\u4e94\u8f74)/i.test(text)) return 5
+  if (/(four[_\s-]?axis|4[_\s-]?axis|\u56db\u8f74|scara)/i.test(text)) return 4
+  if (/(three[_\s-]?axis|3[_\s-]?axis|\u4e09\u8f74)/i.test(text)) return 3
+  return undefined
+}
+
+function profileRobotAxisCount(profile: DeviceProfileDefinition): number | undefined {
+  const robotDefaults = isRecord(profile.layoutHints?.robotArmDefaults)
+    ? profile.layoutHints.robotArmDefaults
+    : undefined
+  const raw = robotDefaults?.axisCount ?? robotDefaults?.axes
+  return typeof raw === 'number' && Number.isFinite(raw) ? Math.round(raw) : undefined
+}
+
+function profileCompatibleWithPromptAxis(
+  profile: DeviceProfileDefinition,
+  input: Record<string, unknown>,
+): boolean {
+  const requestedAxisCount = requestedRobotAxisCount(input)
+  if (requestedAxisCount == null) return true
+  if (profile.family !== 'robot_arm' && profile.layoutFamily !== 'robot_workcell_layout')
+    return true
+  const profileAxisCount = profileRobotAxisCount(profile)
+  return profileAxisCount == null || profileAxisCount === requestedAxisCount
+}
+
 const profileAliasMap = new Map<string, DeviceProfileDefinition>()
 for (const profile of DEVICE_PROFILE_DEFINITIONS) {
   profileAliasMap.set(normalizeKey(profile.id), profile)
@@ -440,6 +1067,35 @@ function compareProfilePriority(
   right: DeviceProfileDefinition,
 ): number {
   return sourcePriority(right) - sourcePriority(left)
+}
+
+function profileOverrideInfo(profile: DeviceProfileDefinition): DeviceProfileOverrideInfo {
+  return {
+    id: profile.id,
+    name: profile.name,
+    source: profile.source,
+    ...(profile.sourcePack ? { sourcePack: profile.sourcePack } : {}),
+  }
+}
+
+function withProfileOverride(
+  winner: DeviceProfileDefinition,
+  overridden: DeviceProfileDefinition,
+): DeviceProfileDefinition {
+  const existing = winner.overrides ?? []
+  if (
+    existing.some(
+      (entry) =>
+        normalizeKey(entry.id) === normalizeKey(overridden.id) &&
+        entry.source === overridden.source,
+    )
+  ) {
+    return winner
+  }
+  return {
+    ...winner,
+    overrides: [...existing, profileOverrideInfo(overridden)],
+  }
 }
 
 export function mergeDeviceProfiles(
@@ -462,11 +1118,12 @@ export function mergeDeviceProfiles(
             `Device profile "${profile.id}" from ${profile.source} overrides ${existing.source}.`,
           )
         }
-        byId.set(key, profile)
+        byId.set(key, existing ? withProfileOverride(profile, existing) : profile)
       } else {
         warnings.push(
           `Device profile "${profile.id}" from ${profile.source} ignored because ${existing.source} has higher priority.`,
         )
+        byId.set(key, withProfileOverride(existing, profile))
       }
     }
   }
@@ -511,6 +1168,7 @@ function inferDeviceProfileFromProfiles(
       })),
     )
     .filter((candidate) => containsAliasToken(normalizedText, candidate.alias))
+    .filter((candidate) => profileCompatibleWithPromptAxis(candidate.profile, input))
   matches.sort((left, right) => {
     const priority = compareProfilePriority(left.profile, right.profile)
     return priority !== 0 ? priority : right.alias.length - left.alias.length
@@ -541,6 +1199,13 @@ export function inferDeviceProfileDefinition(
   profiles: readonly DeviceProfileDefinition[] = DEVICE_PROFILE_DEFINITIONS,
 ): DeviceProfileDefinition | undefined {
   if (profiles !== DEVICE_PROFILE_DEFINITIONS) {
+    const aliasMap = buildProfileAliasMap(profiles)
+    const explicit =
+      aliasMap.get(normalizeKey(input.deviceProfile)) ??
+      aliasMap.get(normalizeKey(input.profile)) ??
+      aliasMap.get(normalizeKey(input.deviceType))
+    if (explicit) return explicit
+
     return inferDeviceProfileFromProfiles(input, profiles)
   }
   const explicit =
@@ -556,7 +1221,9 @@ export function inferDeviceProfileDefinition(
       profile,
       alias: normalizeKey(alias),
     })),
-  ).filter((candidate) => containsAliasToken(normalizedText, candidate.alias))
+  )
+    .filter((candidate) => containsAliasToken(normalizedText, candidate.alias))
+    .filter((candidate) => profileCompatibleWithPromptAxis(candidate.profile, input))
   matches.sort((left, right) => right.alias.length - left.alias.length)
   return matches[0]?.profile
 }
@@ -815,6 +1482,104 @@ export function validateDeviceProfileSchema(
   }
   if (!Array.isArray(profile.aliases))
     warnings.push(`Profile ${profile.id} aliases should be an array.`)
+  if (profile.industry != null && typeof profile.industry !== 'string') {
+    issues.push(`Profile ${profile.id || '<unknown>'} industry must be a string.`)
+  }
+  if (profile.layoutTemplate != null && typeof profile.layoutTemplate !== 'string') {
+    issues.push(`Profile ${profile.id || '<unknown>'} layoutTemplate must be a string.`)
+  }
+  if (
+    profile.partPresets != null &&
+    (!isRecord(profile.partPresets) ||
+      Object.values(profile.partPresets).some((value) => typeof value !== 'string'))
+  ) {
+    issues.push(`Profile ${profile.id || '<unknown>'} partPresets must map roles to preset ids.`)
+  }
+  if (
+    profile.resolvedPartPresets != null &&
+    (!isRecord(profile.resolvedPartPresets) ||
+      Object.values(profile.resolvedPartPresets).some((value) => !isRecord(value)))
+  ) {
+    issues.push(`Profile ${profile.id || '<unknown>'} resolvedPartPresets must map ids to objects.`)
+  }
+  if (
+    profile.proportionRules != null &&
+    typeof profile.proportionRules !== 'string' &&
+    !isRecord(profile.proportionRules)
+  ) {
+    issues.push(`Profile ${profile.id || '<unknown>'} proportionRules must be a string or object.`)
+  }
+  if (
+    profile.qualityRules != null &&
+    typeof profile.qualityRules !== 'string' &&
+    !isRecord(profile.qualityRules)
+  ) {
+    issues.push(`Profile ${profile.id || '<unknown>'} qualityRules must be a string or object.`)
+  }
+  if (profile.detailBudget != null) {
+    if (!isRecord(profile.detailBudget)) {
+      issues.push(`Profile ${profile.id || '<unknown>'} detailBudget must be an object.`)
+    } else {
+      if (
+        profile.detailBudget.detailLevel != null &&
+        !detailLevel(profile.detailBudget.detailLevel)
+      ) {
+        issues.push(
+          `Profile ${profile.id || '<unknown>'} detailBudget.detailLevel must be low, medium, or high.`,
+        )
+      }
+      if (
+        profile.detailBudget.maxShapes != null &&
+        optionalNonNegativeInteger(profile.detailBudget.maxShapes) == null
+      ) {
+        issues.push(`Profile ${profile.id || '<unknown>'} detailBudget.maxShapes must be >= 0.`)
+      }
+      if (profile.detailBudget.parts != null && !isRecord(profile.detailBudget.parts)) {
+        issues.push(`Profile ${profile.id || '<unknown>'} detailBudget.parts must be an object.`)
+      }
+      const qualityRules = qualityRulesObject(profile)
+      const shapeMax = optionalPositiveNumber(qualityRules?.shapeCount?.max)
+      const budgetMax = optionalNonNegativeInteger(profile.detailBudget.maxShapes)
+      if (shapeMax != null && budgetMax != null && budgetMax > shapeMax) {
+        warnings.push(
+          `Profile ${profile.id} detailBudget.maxShapes exceeds qualityRules.shapeCount.max.`,
+        )
+      }
+    }
+  }
+  if (
+    profile.sourcePack != null &&
+    (!isRecord(profile.sourcePack) ||
+      typeof profile.sourcePack.id !== 'string' ||
+      typeof profile.sourcePack.version !== 'string')
+  ) {
+    issues.push(`Profile ${profile.id || '<unknown>'} sourcePack must include id and version.`)
+  }
+  if (profile.editableSchemaRef != null && typeof profile.editableSchemaRef !== 'string') {
+    issues.push(`Profile ${profile.id || '<unknown>'} editableSchemaRef must be a string.`)
+  }
+  if (
+    profile.editableOverrides != null &&
+    (!isRecord(profile.editableOverrides) ||
+      Object.values(profile.editableOverrides).some((value) => !isRecord(value)))
+  ) {
+    issues.push(
+      `Profile ${profile.id || '<unknown>'} editableOverrides must map properties to objects.`,
+    )
+  }
+  if (
+    profile.overrides != null &&
+    (!Array.isArray(profile.overrides) ||
+      profile.overrides.some(
+        (entry) =>
+          !isRecord(entry) ||
+          typeof entry.id !== 'string' ||
+          typeof entry.name !== 'string' ||
+          typeof entry.source !== 'string',
+      ))
+  ) {
+    issues.push(`Profile ${profile.id || '<unknown>'} overrides must be an array of profiles.`)
+  }
   if (!Array.isArray(profile.parts) || profile.parts.length === 0) {
     issues.push(`Profile ${profile.id || '<unknown>'} parts must be a non-empty array.`)
   }
@@ -866,6 +1631,10 @@ function shapeRoleTokens(shape: DeviceProfileQualityInputShape): string[] {
   return [shape.semanticRole, shape.sourcePartKind, shape.semanticGroup, shape.name]
     .map(roleKey)
     .filter(Boolean)
+}
+
+function profileRoleTokens(profile: DeviceProfileDefinition, role: string): string[] {
+  return [role, ...(profile.roleAliases?.[role] ?? [])].map(roleKey).filter(Boolean)
 }
 
 function positiveNumber(value: unknown): number | undefined {
@@ -924,6 +1693,43 @@ function dimensionMatchScore(actual: number | undefined, expected: number | unde
   return clamp01(1 - Math.max(0, ratio - 1) / 2)
 }
 
+function optionalPositiveNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+function qualityRulesObject(
+  profile: DeviceProfileDefinition,
+): DeviceProfileQualityRules | undefined {
+  return isRecord(profile.qualityRules)
+    ? (profile.qualityRules as unknown as DeviceProfileQualityRules)
+    : undefined
+}
+
+function uniqueStrings(values: readonly unknown[]) {
+  return Array.from(
+    new Set(
+      values.filter((value): value is string => typeof value === 'string' && value.trim() !== ''),
+    ),
+  )
+}
+
+function rangeContains(value: number, range: DeviceProfileRangeRule | undefined) {
+  if (!range) return true
+  if (typeof range.min === 'number' && value < range.min) return false
+  if (typeof range.max === 'number' && value > range.max) return false
+  return true
+}
+
+function rangeScore(value: number, range: DeviceProfileRangeRule | undefined) {
+  if (!range || rangeContains(value, range)) return 1
+  const min = optionalPositiveNumber(range.min)
+  const max = optionalPositiveNumber(range.max)
+  const target = min && value < min ? min : max && value > max ? max : value
+  if (!target || target <= 0) return 0.5
+  const ratio = value > target ? value / target : target / value
+  return clamp01(1 - Math.max(0, ratio - 1))
+}
+
 export function evaluateDeviceProfileQuality(
   profile: DeviceProfileDefinition,
   shapes: readonly DeviceProfileQualityInputShape[],
@@ -931,22 +1737,39 @@ export function evaluateDeviceProfileQuality(
 ): DeviceProfileQualityScore {
   const issues: string[] = []
   const warnings: string[] = []
+  const qualityRules = qualityRulesObject(profile)
   const shapeTokens = shapes.flatMap(shapeRoleTokens)
-  const hasToken = (role: string) => shapeTokens.includes(roleKey(role))
-  const requiredRoles = profile.parts
-    .filter((part) => part.required)
-    .map((part) => part.semanticRole)
-    .filter(Boolean)
+  const hasToken = (role: string) =>
+    profileRoleTokens(profile, role).some((token) => shapeTokens.includes(token))
+  const requiredRoles = uniqueStrings([
+    ...profile.parts.filter((part) => part.required).map((part) => part.semanticRole),
+    ...(qualityRules?.requiredRoles ?? []),
+  ])
   const requiredCoverage =
     requiredRoles.length === 0
       ? 1
       : requiredRoles.filter((role) => hasToken(role)).length / requiredRoles.length
   const primaryPresent = hasToken(profile.primarySemanticRole)
-  const forbiddenHits = (profile.forbiddenRoles ?? []).filter((role) => hasToken(role))
+  const forbiddenHits = uniqueStrings([
+    ...(profile.forbiddenRoles ?? []),
+    ...(qualityRules?.forbiddenRoles ?? []),
+  ]).filter((role) => hasToken(role))
   if (!primaryPresent) issues.push(`Primary role "${profile.primarySemanticRole}" is missing.`)
   if (requiredCoverage < 1) warnings.push('Not all required profile roles are represented.')
   if (forbiddenHits.length > 0) {
     issues.push(`Forbidden roles appeared: ${forbiddenHits.join(', ')}.`)
+  }
+  const shapeCountMin = optionalPositiveNumber(qualityRules?.shapeCount?.min)
+  const shapeCountMax =
+    options.maxShapes ??
+    optionalPositiveNumber(qualityRules?.shapeCount?.max) ??
+    optionalPositiveNumber(profile.detailBudget?.maxShapes) ??
+    96
+  if (shapeCountMin && shapes.length < shapeCountMin) {
+    warnings.push(`Shape count ${shapes.length} is below profile minimum ${shapeCountMin}.`)
+  }
+  if (shapeCountMax && shapes.length > shapeCountMax) {
+    issues.push(`Shape count ${shapes.length} exceeds profile maximum ${shapeCountMax}.`)
   }
 
   const semanticScore = clamp01(
@@ -960,10 +1783,35 @@ export function evaluateDeviceProfileQuality(
         dimensionMatchScore(bounds.size[1], defaults.height)) /
       3
     : 0
-  const maxShapes = options.maxShapes ?? 96
   const shapeCountScore =
-    shapes.length === 0 ? 0 : shapes.length > maxShapes ? maxShapes / shapes.length : 1
-  const geometryScore = clamp01(dimensionScore * 0.55 + shapeCountScore * 0.45)
+    shapes.length === 0
+      ? 0
+      : shapeCountMin && shapes.length < shapeCountMin
+        ? shapes.length / shapeCountMin
+        : shapes.length > shapeCountMax
+          ? shapeCountMax / shapes.length
+          : 1
+  const ratioRule = qualityRules?.dimensionExpectations?.lengthToDiameterRatio
+  const lengthToDiameterRatio =
+    bounds && Math.min(bounds.size[1], bounds.size[2]) > 0
+      ? bounds.size[0] / Math.min(bounds.size[1], bounds.size[2])
+      : undefined
+  if (
+    typeof lengthToDiameterRatio === 'number' &&
+    ratioRule &&
+    !rangeContains(lengthToDiameterRatio, ratioRule)
+  ) {
+    warnings.push(
+      `Length-to-diameter ratio ${lengthToDiameterRatio.toFixed(2)} is outside profile expectation.`,
+    )
+  }
+  const ratioExpectationScore =
+    typeof lengthToDiameterRatio === 'number' && ratioRule
+      ? rangeScore(lengthToDiameterRatio, ratioRule)
+      : 1
+  const geometryScore = clamp01(
+    dimensionScore * 0.45 + shapeCountScore * 0.35 + ratioExpectationScore * 0.2,
+  )
   const editableShapes = shapes.filter(
     (shape) => shape.sourcePartKind || shape.semanticRole || shape.semanticGroup,
   ).length
@@ -1000,6 +1848,12 @@ export function evaluateDeviceProfileQuality(
             boundsHeight: bounds.size[1],
           }
         : {}),
+      ...(typeof lengthToDiameterRatio === 'number'
+        ? {
+            lengthToDiameterRatio,
+            ratioExpectationScore,
+          }
+        : {}),
     },
   }
 }
@@ -1033,6 +1887,131 @@ function dimensionDefaults(value: unknown): DimensionDefaults | undefined {
   return Object.keys(dimensions).length > 0 ? dimensions : undefined
 }
 
+function stringRecord(value: unknown): Record<string, string> | undefined {
+  if (!isRecord(value)) return undefined
+  const entries = Object.entries(value).flatMap(([key, raw]) =>
+    typeof raw === 'string' && raw.trim() ? [[key, raw.trim()] as const] : [],
+  )
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
+function ruleRef(value: unknown): DeviceProfileRuleRef | undefined {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (isRecord(value)) return value
+  return undefined
+}
+
+function detailLevel(value: unknown): DeviceProfileDetailLevel | undefined {
+  return value === 'low' || value === 'medium' || value === 'high' ? value : undefined
+}
+
+function optionalNonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined
+}
+
+function profilePartDetailBudget(value: unknown): DeviceProfilePartDetailBudget | undefined {
+  if (!isRecord(value)) return undefined
+  const budget: DeviceProfilePartDetailBudget = {
+    ...(detailLevel(value.detailLevel) ? { detailLevel: detailLevel(value.detailLevel) } : {}),
+    ...(optionalNonNegativeInteger(value.count) != null
+      ? { count: optionalNonNegativeInteger(value.count) }
+      : {}),
+    ...(optionalNonNegativeInteger(value.ringCount) != null
+      ? { ringCount: optionalNonNegativeInteger(value.ringCount) }
+      : {}),
+    ...(optionalNonNegativeInteger(value.spokeCount) != null
+      ? { spokeCount: optionalNonNegativeInteger(value.spokeCount) }
+      : {}),
+    ...(optionalNonNegativeInteger(value.slatCount) != null
+      ? { slatCount: optionalNonNegativeInteger(value.slatCount) }
+      : {}),
+    ...(optionalNonNegativeInteger(value.rungCount) != null
+      ? { rungCount: optionalNonNegativeInteger(value.rungCount) }
+      : {}),
+    ...(optionalNonNegativeInteger(value.boltCount) != null
+      ? { boltCount: optionalNonNegativeInteger(value.boltCount) }
+      : {}),
+    ...(optionalNonNegativeInteger(value.radialSegments) != null
+      ? { radialSegments: optionalNonNegativeInteger(value.radialSegments) }
+      : {}),
+    ...(optionalNonNegativeInteger(value.levelCount) != null
+      ? { levelCount: optionalNonNegativeInteger(value.levelCount) }
+      : {}),
+  }
+  return Object.keys(budget).length > 0 ? budget : undefined
+}
+
+function profileDetailBudget(value: unknown): DeviceProfileDetailBudget | undefined {
+  if (!isRecord(value)) return undefined
+  const parts = isRecord(value.parts)
+    ? Object.fromEntries(
+        Object.entries(value.parts).flatMap(([key, raw]) => {
+          const budget = profilePartDetailBudget(raw)
+          return budget ? [[key, budget] as const] : []
+        }),
+      )
+    : undefined
+  const budget: DeviceProfileDetailBudget = {
+    ...(detailLevel(value.detailLevel) ? { detailLevel: detailLevel(value.detailLevel) } : {}),
+    ...(optionalNonNegativeInteger(value.maxShapes) != null
+      ? { maxShapes: optionalNonNegativeInteger(value.maxShapes) }
+      : {}),
+    ...(parts && Object.keys(parts).length > 0 ? { parts } : {}),
+  }
+  return Object.keys(budget).length > 0 ? budget : undefined
+}
+
+function editableOverrides(
+  value: unknown,
+): Record<string, Partial<EditablePropertyDefinition>> | undefined {
+  if (!isRecord(value)) return undefined
+  const entries = Object.entries(value).flatMap(([key, raw]) =>
+    isRecord(raw) ? [[key, raw as Partial<EditablePropertyDefinition>] as const] : [],
+  )
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
+function sourcePack(value: unknown): DeviceProfileSourcePack | undefined {
+  if (!isRecord(value)) return undefined
+  const id = typeof value.id === 'string' && value.id.trim() ? value.id.trim() : undefined
+  const version =
+    typeof value.version === 'string' && value.version.trim() ? value.version.trim() : undefined
+  if (!id || !version) return undefined
+  return {
+    id,
+    version,
+    ...(typeof value.industry === 'string' && value.industry.trim()
+      ? { industry: value.industry.trim() }
+      : {}),
+  }
+}
+
+function profileOverrides(value: unknown): DeviceProfileOverrideInfo[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const overrides = value.filter(isRecord).flatMap((entry) => {
+    const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : undefined
+    const name =
+      typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : (id ?? undefined)
+    const source: DeviceProfileSource | undefined =
+      entry.source === 'builtin' ||
+      entry.source === 'workspace' ||
+      entry.source === 'imported_pack' ||
+      entry.source === 'generated_candidate'
+        ? entry.source
+        : undefined
+    if (!id || !name || !source) return []
+    return [
+      {
+        id,
+        name,
+        source,
+        ...(sourcePack(entry.sourcePack) ? { sourcePack: sourcePack(entry.sourcePack) } : {}),
+      },
+    ]
+  })
+  return overrides.length > 0 ? overrides : undefined
+}
+
 function profileParts(value: unknown): ProfilePartSpec[] {
   if (!Array.isArray(value)) return []
   return value.filter(isRecord).flatMap((part) => {
@@ -1040,6 +2019,42 @@ function profileParts(value: unknown): ProfilePartSpec[] {
     const semanticRole = typeof part.semanticRole === 'string' ? part.semanticRole : undefined
     if (!kind || !semanticRole) return []
     return [{ ...part, kind, semanticRole } as ProfilePartSpec]
+  })
+}
+
+function detailBudgetForPart(
+  budget: DeviceProfileDetailBudget | undefined,
+  part: ProfilePartSpec,
+): DeviceProfilePartDetailBudget | undefined {
+  const entries = budget?.parts ? Object.entries(budget.parts) : []
+  const keys = [part.id, part.semanticRole, part.kind]
+    .filter(Boolean)
+    .map((key) => normalizeKey(key))
+  const matched = entries.find(([key]) => keys.includes(normalizeKey(key)))?.[1]
+  if (matched) return matched
+  return budget?.detailLevel ? { detailLevel: budget.detailLevel } : undefined
+}
+
+function applyDeviceProfileDetailBudget(
+  parts: readonly ProfilePartSpec[],
+  budget: DeviceProfileDetailBudget | undefined,
+): ProfilePartSpec[] {
+  if (!budget) return [...parts]
+  return parts.map((part) => {
+    const partBudget = detailBudgetForPart(budget, part)
+    if (!partBudget) return part
+    return {
+      ...part,
+      ...(partBudget.detailLevel ? { detailLevel: partBudget.detailLevel } : {}),
+      ...(partBudget.count != null ? { count: partBudget.count } : {}),
+      ...(partBudget.ringCount != null ? { ringCount: partBudget.ringCount } : {}),
+      ...(partBudget.spokeCount != null ? { spokeCount: partBudget.spokeCount } : {}),
+      ...(partBudget.slatCount != null ? { slatCount: partBudget.slatCount } : {}),
+      ...(partBudget.rungCount != null ? { rungCount: partBudget.rungCount } : {}),
+      ...(partBudget.boltCount != null ? { boltCount: partBudget.boltCount } : {}),
+      ...(partBudget.radialSegments != null ? { radialSegments: partBudget.radialSegments } : {}),
+      ...(partBudget.levelCount != null ? { levelCount: partBudget.levelCount } : {}),
+    }
   })
 }
 
@@ -1074,7 +2089,13 @@ export function normalizeDeviceProfileInput(
     id,
     name,
     aliases: stringArray(value.aliases),
+    ...(typeof value.industry === 'string' && value.industry.trim()
+      ? { industry: value.industry.trim() }
+      : {}),
     ...(layoutFamily ? { layoutFamily } : {}),
+    ...(typeof value.layoutTemplate === 'string' && value.layoutTemplate.trim()
+      ? { layoutTemplate: value.layoutTemplate.trim() }
+      : {}),
     archetypeFamily:
       typeof value.archetypeFamily === 'string'
         ? (value.archetypeFamily as DeviceArchetypeFamily)
@@ -1088,6 +2109,36 @@ export function normalizeDeviceProfileInput(
     dimensionRules: Array.isArray(value.dimensionRules)
       ? (value.dimensionRules.filter(isRecord) as unknown as DimensionRule[])
       : undefined,
+    ...(stringRecord(value.partPresets) ? { partPresets: stringRecord(value.partPresets) } : {}),
+    ...(isRecord(value.resolvedPartPresets)
+      ? {
+          resolvedPartPresets: value.resolvedPartPresets as Record<string, Record<string, unknown>>,
+        }
+      : {}),
+    ...(ruleRef(value.proportionRules) ? { proportionRules: ruleRef(value.proportionRules) } : {}),
+    ...(ruleRef(value.qualityRules) ? { qualityRules: ruleRef(value.qualityRules) } : {}),
+    ...(profileDetailBudget(value.detailBudget)
+      ? { detailBudget: profileDetailBudget(value.detailBudget) }
+      : {}),
+    visualCues: stringArray(value.visualCues),
+    layoutHints: isRecord(value.layoutHints) ? value.layoutHints : undefined,
+    roleAliases: isRecord(value.roleAliases)
+      ? Object.fromEntries(
+          Object.entries(value.roleAliases).flatMap(([role, aliases]) => {
+            const normalizedAliases = stringArray(aliases)
+            return normalizedAliases.length > 0 ? [[role, normalizedAliases]] : []
+          }),
+        )
+      : undefined,
+    ...(typeof value.editableSchemaRef === 'string' && value.editableSchemaRef.trim()
+      ? { editableSchemaRef: value.editableSchemaRef.trim() }
+      : {}),
+    ...(editableOverrides(value.editableOverrides)
+      ? { editableOverrides: editableOverrides(value.editableOverrides) }
+      : {}),
+    ...(normalizeEditableSchemaInput(value.resolvedEditableSchema)
+      ? { resolvedEditableSchema: normalizeEditableSchemaInput(value.resolvedEditableSchema) }
+      : {}),
     status:
       value.status === 'runtime_draft' ||
       value.status === 'candidate' ||
@@ -1105,6 +2156,8 @@ export function normalizeDeviceProfileInput(
             value.source === 'generated_candidate'
           ? value.source
           : source,
+    ...(sourcePack(value.sourcePack) ? { sourcePack: sourcePack(value.sourcePack) } : {}),
+    ...(profileOverrides(value.overrides) ? { overrides: profileOverrides(value.overrides) } : {}),
     description:
       typeof value.description === 'string' && value.description.trim()
         ? value.description.trim()
@@ -1119,18 +2172,40 @@ export function applyDeviceProfileToPartInput(
 ): Record<string, unknown> {
   const dimensions = profile.defaultDimensions ?? {}
   const explicitParts = Array.isArray(input.parts) ? input.parts.filter(isRecord) : []
+  const parts = applyDeviceProfileDetailBudget(
+    [...explicitParts, ...profile.parts] as ProfilePartSpec[],
+    profile.detailBudget,
+  )
   return {
     ...input,
     family: profile.family,
     deviceProfile: profile.id,
     layoutFamily: profile.layoutFamily ?? normalizeLayoutFamilyId(profile.family),
+    layoutTemplate: profile.layoutTemplate,
     archetypeFamily: profile.archetypeFamily,
+    profileIndustry: profile.industry,
     profileSource: profile.source,
+    profileSourcePack: profile.sourcePack,
+    profilePackId: profile.sourcePack?.id,
+    profilePackVersion: profile.sourcePack?.version,
+    profileOverrides: profile.overrides,
+    overrodeBuiltin: profile.overrides?.some((entry) => entry.source === 'builtin') === true,
     primarySemanticRole: profile.primarySemanticRole,
+    partPresets: profile.partPresets,
+    resolvedPartPresets: profile.resolvedPartPresets,
+    proportionRules: profile.proportionRules,
+    qualityRules: profile.qualityRules,
+    detailBudget: profile.detailBudget,
+    visualCues: profile.visualCues,
+    layoutHints: profile.layoutHints,
+    roleAliases: profile.roleAliases,
+    editableSchemaRef: profile.editableSchemaRef,
+    editableOverrides: profile.editableOverrides,
+    resolvedEditableSchema: profile.resolvedEditableSchema,
     length: input.length ?? dimensions.length,
     width: input.width ?? input.depth ?? input.diameter ?? dimensions.width ?? dimensions.diameter,
     height: input.height ?? dimensions.height,
-    parts: [...explicitParts, ...profile.parts],
+    parts,
   }
 }
 
@@ -1140,7 +2215,7 @@ export function deviceProfileCapabilitySummary(
   return (profiles as readonly DeviceProfileDefinition[])
     .map(
       (profile) =>
-        `${profile.id}: status=${profile.status} source=${profile.source} layoutFamily=${profile.layoutFamily ?? normalizeLayoutFamilyId(profile.family) ?? 'unknown'} family=${profile.family} primary=${profile.primarySemanticRole} aliases=${profile.aliases.join('|')} parts=${profile.parts
+        `${profile.id}: status=${profile.status} source=${profile.source}${profile.sourcePack ? ` pack=${profile.sourcePack.id}@${profile.sourcePack.version}` : ''} layoutFamily=${profile.layoutFamily ?? normalizeLayoutFamilyId(profile.family) ?? 'unknown'}${profile.layoutTemplate ? ` layoutTemplate=${profile.layoutTemplate}` : ''} family=${profile.family} primary=${profile.primarySemanticRole} aliases=${profile.aliases.join('|')} parts=${profile.parts
           .map((part) => `${part.kind}:${part.semanticRole ?? part.kind}`)
           .join(', ')}`,
     )

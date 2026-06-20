@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  alignPrimaryShapeColorsToConstraints,
   extractUserGeometryConstraints,
   inferAssemblyFamily,
   validateAssemblyConstraints,
@@ -129,9 +130,9 @@ describe('assembly family registry integration', () => {
       },
     )
 
-    expect(result.ok).toBe(false)
-    expect(result.issues).toContain(
-      'Hard constraint failed: expected primary color #111827, got #94a3b8.',
+    expect(result.ok).toBe(true)
+    expect(result.warnings).toContain(
+      'Soft constraint warning: expected primary color #111827, got #94a3b8.',
     )
 
     const extractedConstraints = extractUserGeometryConstraints(
@@ -154,5 +155,51 @@ describe('assembly family registry integration', () => {
 
     expect(extractedConstraints.primaryColor).toBeUndefined()
     expect(extracted.ok).toBe(true)
+  })
+
+  test('auto-aligns primary shape colors without changing non-primary details', () => {
+    const aligned = alignPrimaryShapeColorsToConstraints(
+      [
+        {
+          kind: 'box',
+          semanticRole: 'motor_housing',
+          length: 0.4,
+          width: 0.2,
+          height: 0.2,
+          material: { properties: { color: '#30343b' } },
+        },
+        {
+          kind: 'torus',
+          semanticRole: 'protective_grill',
+          material: { properties: { color: '#d1d5db' } },
+        },
+      ],
+      {
+        family: 'fan',
+        primaryColor: { value: '#ef4444', source: 'prompt', priority: 'hard' },
+      },
+    )
+
+    expect(aligned.changedCount).toBe(1)
+    expect(aligned.shapes[0]?.material?.properties?.color).toBe('#ef4444')
+    expect(aligned.shapes[1]?.material?.properties?.color).toBe('#d1d5db')
+  })
+
+  test('does not parse hex color literals as meter dimensions', () => {
+    const constraints = extractUserGeometryConstraints(
+      'Create an industrial pedestal fan. Use red and black colors.',
+      {
+        family: 'fan',
+        primaryColor: '#CC0000',
+        secondaryColor: '#111111',
+        parts: [
+          { kind: 'motor_housing', params: { primaryColor: '#CC0000' } },
+          { kind: 'protective_grill', params: { metalColor: '#111111' } },
+        ],
+      },
+    )
+
+    expect(constraints.length).toBeUndefined()
+    expect(constraints.primaryColor?.value).toBe('#CC0000')
   })
 })

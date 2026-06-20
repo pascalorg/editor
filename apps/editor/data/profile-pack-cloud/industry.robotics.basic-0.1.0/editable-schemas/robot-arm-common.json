@@ -1,0 +1,84 @@
+{
+  "id": "robot_arm.common",
+  "name": "Common robot arm editable properties",
+  "description": "Shared editable controls for articulated industrial robot arms in the robotics pack.",
+  "properties": {
+    "axisCount": {
+      "type": "integer",
+      "min": 3,
+      "max": 7,
+      "default": 6,
+      "aliases": ["axis count", "axes", "joint count", "轴数", "几轴"],
+      "role": "structure"
+    },
+    "reach": {
+      "type": "number",
+      "min": 0.8,
+      "max": 8,
+      "default": 1.58,
+      "unit": "m",
+      "aliases": ["reach", "arm span", "working radius", "臂展", "工作半径"],
+      "role": "dimension"
+    },
+    "height": {
+      "type": "number",
+      "min": 0.8,
+      "max": 4,
+      "default": 2.2,
+      "unit": "m",
+      "aliases": ["height", "overall height", "高度"],
+      "role": "dimension"
+    },
+    "pose": {
+      "type": "enum",
+      "values": ["work-ready", "reach-forward", "rest"],
+      "default": "work-ready",
+      "aliases": ["pose", "posture", "姿态"],
+      "role": "pose"
+    },
+    "endEffector": {
+      "type": "enum",
+      "values": ["tool-flange", "gripper", "suction"],
+      "default": "tool-flange",
+      "aliases": ["end effector", "tool", "末端", "末端工具", "夹爪", "吸盘", "法兰"],
+      "role": "structure"
+    },
+    "primaryColor": {
+      "type": "color",
+      "default": "#facc15",
+      "aliases": ["main color", "body color", "主体颜色", "颜色"],
+      "role": "material"
+    },
+    "secondaryColor": {
+      "type": "color",
+      "default": "#111827",
+      "aliases": ["joint color", "secondary color", "关节颜色"],
+      "role": "material"
+    },
+    "metalColor": {
+      "type": "color",
+      "default": "#cbd5e1",
+      "aliases": ["metal color", "flange color", "金属色"],
+      "role": "material"
+    },
+    "includeCableHarness": {
+      "type": "boolean",
+      "default": true,
+      "aliases": ["cable", "cable harness", "线缆", "线束"],
+      "role": "detail"
+    },
+    "includeWorkcell": {
+      "type": "boolean",
+      "default": false,
+      "aliases": ["workcell", "station", "工作站", "工位"],
+      "role": "workcell"
+    },
+    "detailLevel": {
+      "type": "enum",
+      "values": ["low", "medium", "high"],
+      "default": "medium",
+      "aliases": ["detail", "complexity", "细节", "精细度"],
+      "role": "detail"
+    }
+  }
+}

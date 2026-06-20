@@ -1,0 +1,345 @@
+[
+  {
+    "id": "quality.cement.rotary_kiln",
+    "requiredRoles": [
+      "vessel_shell",
+      "kiln_support_base",
+      "riding_ring",
+      "support_roller",
+      "girth_gear",
+      "kiln_drive_unit",
+      "kiln_tail_feed_hopper",
+      "kiln_head_outlet"
+    ],
+    "forbiddenRoles": [
+      "vehicle_tire",
+      "vehicle_cabin",
+      "aircraft_wing"
+    ],
+    "shapeCount": {
+      "min": 24,
+      "max": 90
+    },
+    "dimensionExpectations": {
+      "lengthToDiameterRatio": {
+        "min": 8,
+        "max": 18
+      }
+    }
+  },
+  {
+    "id": "quality.cement.grate_cooler",
+    "requiredRoles": [
+      "cooler_grate_bed",
+      "cooler_housing",
+      "support_base"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 60
+    }
+  },
+  {
+    "id": "quality.cement.preheater_tower",
+    "requiredRoles": [
+      "preheater_tower_body",
+      "tower_diagonal_brace",
+      "multi_level_platform",
+      "internal_stair_flight",
+      "preheater_cyclone",
+      "preheater_gas_duct",
+      "meal_drop_pipe",
+      "central_meal_collection_hopper"
+    ],
+    "shapeCount": {
+      "min": 70,
+      "max": 230
+    }
+  },
+  {
+    "id": "quality.cement.cyclone_separator",
+    "requiredRoles": [
+      "cyclone_body",
+      "tangential_gas_inlet",
+      "gas_outlet"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 48
+    }
+  },
+  {
+    "id": "quality.cement.vertical_raw_mill",
+    "requiredRoles": [
+      "mill_base",
+      "mill_body",
+      "grinding_head"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 70
+    }
+  },
+  {
+    "id": "quality.cement.cement_mill",
+    "requiredRoles": [
+      "mill_shell",
+      "mill_support_base",
+      "mill_trunnion_bearing"
+    ],
+    "shapeCount": {
+      "min": 12,
+      "max": 80
+    },
+    "dimensionExpectations": {
+      "lengthToDiameterRatio": {
+        "min": 2.4,
+        "max": 6
+      }
+    }
+  },
+  {
+    "id": "quality.cement.roller_press",
+    "requiredRoles": [
+      "machine_base",
+      "roller_press_body",
+      "press_roll_pair"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 60
+    }
+  },
+  {
+    "id": "quality.cement.belt_conveyor",
+    "requiredRoles": [
+      "conveyor_frame",
+      "support_rollers",
+      "belt_surface"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 60
+    }
+  },
+  {
+    "id": "quality.cement.screw_conveyor",
+    "requiredRoles": [
+      "trough_frame",
+      "screw_flight"
+    ],
+    "shapeCount": {
+      "min": 7,
+      "max": 60
+    }
+  },
+  {
+    "id": "quality.cement.bucket_elevator",
+    "requiredRoles": [
+      "elevator_leg_casing",
+      "boot_section"
+    ],
+    "shapeCount": {
+      "min": 7,
+      "max": 60
+    }
+  },
+  {
+    "id": "quality.cement.clinker_silo",
+    "requiredRoles": [
+      "silo_shell",
+      "silo_support_base",
+      "bottom_discharge_hopper"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 70
+    }
+  },
+  {
+    "id": "quality.cement.cement_silo",
+    "requiredRoles": [
+      "cement_silo_shell",
+      "silo_support_base",
+      "bulk_discharge_hopper"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 70
+    }
+  },
+  {
+    "id": "quality.cement.bag_filter",
+    "requiredRoles": [
+      "filter_housing",
+      "hopper_base"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 70
+    }
+  },
+  {
+    "id": "quality.cement.cement_packer",
+    "requiredRoles": [
+      "packer_base",
+      "packer_body",
+      "cement_feed_hopper"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 70
+    }
+  },
+  {
+    "id": "quality.cement.limestone_crusher",
+    "requiredRoles": [
+      "crusher_base",
+      "crusher_housing",
+      "limestone_feed_hopper",
+      "crushed_material_discharge",
+      "crusher_drive_unit"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 80
+    }
+  },
+  {
+    "id": "quality.cement.stack_reclaimer",
+    "requiredRoles": [
+      "reclaimer_bridge",
+      "stockpile_conveyor",
+      "reclaimer_travel_car",
+      "bucket_wheel",
+      "rail_track"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 80
+    }
+  },
+  {
+    "id": "quality.cement.raw_meal_homogenization_silo",
+    "requiredRoles": [
+      "raw_meal_silo_shell",
+      "silo_support_base",
+      "bottom_discharge_hopper",
+      "top_feed_inlet",
+      "raw_meal_out"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 80
+    }
+  },
+  {
+    "id": "quality.cement.coal_mill",
+    "requiredRoles": [
+      "mill_base",
+      "coal_mill_body",
+      "dynamic_separator",
+      "mill_drive_unit"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 80
+    }
+  },
+  {
+    "id": "quality.cement.kiln_burner",
+    "requiredRoles": [
+      "burner_lance",
+      "primary_air_pipe",
+      "fuel_pipe",
+      "burner_carriage",
+      "flame_out",
+      "fuel_in"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 80
+    }
+  },
+  {
+    "id": "quality.cement.kiln_hood",
+    "requiredRoles": [
+      "hood_base",
+      "kiln_hood_shell",
+      "kiln_head_in",
+      "burner_opening",
+      "hot_clinker_out"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 80
+    }
+  },
+  {
+    "id": "quality.cement.tertiary_air_duct",
+    "requiredRoles": [
+      "tertiary_air_duct_shell",
+      "cooler_air_in",
+      "tertiary_air_out",
+      "duct_supports"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 80
+    }
+  },
+  {
+    "id": "quality.cement.clinker_crusher",
+    "requiredRoles": [
+      "crusher_base",
+      "clinker_crusher_housing",
+      "hot_clinker_in",
+      "crushed_clinker_out"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 80
+    }
+  },
+  {
+    "id": "quality.cement.esp_dust_collector",
+    "requiredRoles": [
+      "esp_support_base",
+      "esp_collector_chambers",
+      "dust_hopper_bank",
+      "dust_gas_in",
+      "clean_air_out"
+    ],
+    "shapeCount": {
+      "min": 7,
+      "max": 80
+    }
+  },
+  {
+    "id": "quality.cement.process_stack",
+    "requiredRoles": [
+      "stack_base_plinth",
+      "stack_shell",
+      "stack_gas_in",
+      "stack_outlet"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 80
+    }
+  },
+  {
+    "id": "quality.cement.whr_boiler",
+    "requiredRoles": [
+      "boiler_base",
+      "boiler_casing",
+      "tube_bank",
+      "hot_gas_in",
+      "cooled_gas_out"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 80
+    }
+  }
+]

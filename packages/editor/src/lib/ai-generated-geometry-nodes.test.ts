@@ -75,6 +75,51 @@ describe('ai generated geometry nodes', () => {
     expect(createdNodes[1]).toMatchObject({ type: 'cylinder', position: [1, 0.8, 0] })
   })
 
+  test('preserves generated shape selectors on child node metadata', () => {
+    const { createdNodes } = buildGeneratedGeometryNodes(
+      artifact({
+        shapes: [
+          {
+            kind: 'box',
+            name: 'fan blade 1',
+            semanticRole: 'fan_blade',
+            semanticGroup: 'front_fan',
+            sourcePartKind: 'radial_blades',
+            sourcePartId: 'blade_a',
+            editableHints: { primaryDimension: 'length', canScale: ['length'] },
+            position: [10, 0.25, 20],
+            rotation: [0, 0, 0],
+            length: 0.8,
+            width: 0.08,
+            height: 0.04,
+          },
+        ],
+        transforms: [{ position: [10, 0.25, 20], rotation: [0, 0, 0] }],
+        createdNames: ['fan blade 1'],
+      }),
+    )
+
+    expect(createdNodes[0]?.metadata).toMatchObject({
+      artifactId: 'ai_geometry_patch_test',
+      shapeIndex: 0,
+      semanticRole: 'fan_blade',
+      sourcePartKind: 'radial_blades',
+      editableHints: { primaryDimension: 'length', canScale: ['length'] },
+      generatedShape: {
+        label: 'fan blade 1',
+        selector: {
+          index: 0,
+          semanticRole: 'fan_blade',
+          semanticGroup: 'front_fan',
+          sourcePartKind: 'radial_blades',
+          sourcePartId: 'blade_a',
+          kind: 'box',
+          nameIncludes: 'fan blade 1',
+        },
+      },
+    })
+  })
+
   test('creates a single-node patch with placement override metadata', () => {
     const single = artifact({
       assemblyName: null,

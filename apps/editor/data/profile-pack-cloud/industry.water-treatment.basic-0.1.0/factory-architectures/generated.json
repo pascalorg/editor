@@ -1,0 +1,33 @@
+[
+  {
+    "id": "water_treatment.factory.basic",
+    "label": "Water treatment plant basic architecture",
+    "industry": "water-treatment",
+    "processId": "water_treatment_plant_basic",
+    "layoutStyle": "linear",
+    "defaultDimensions": {
+      "length": 48,
+      "width": 22
+    },
+    "modules": [
+      {
+        "id": "water_line",
+        "displayLabel": "水处理主线",
+        "order": 10,
+        "stationIds": [
+          "sedimentation_tank",
+          "chemical_dosing_unit",
+          "filter_vessel",
+          "pump_skid",
+          "pipe_corridor",
+          "sludge_dewatering_machine"
+        ]
+      }
+    ],
+    "notes": [
+      "Place the sedimentation tank as the largest upstream basin.",
+      "Keep the dosing unit near the inlet side of the clarifier.",
+      "Use the pipe corridor as a visible utility spine connecting filtered water and pump discharge."
+    ]
+  }
+]

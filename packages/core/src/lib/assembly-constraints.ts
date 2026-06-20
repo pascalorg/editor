@@ -28,6 +28,7 @@ export type UserGeometryConstraints = {
 export type AssemblyConstraintValidation = {
   ok: boolean
   issues: string[]
+  warnings: string[]
 }
 
 const PROMPT_COLOR_AS_PART_DETAIL_FAMILIES = new Set<AssemblyObjectFamily>([
@@ -150,6 +151,10 @@ const COLOR_HEX: Array<[RegExp, string]> = [
 
 function promptColor(prompt: string): string | undefined {
   return COLOR_HEX.find(([pattern]) => pattern.test(prompt))?.[1]
+}
+
+function stripColorLiterals(text: string): string {
+  return text.replace(/#[0-9a-f]{3,8}\b/gi, ' ')
 }
 
 function promptDimensions(prompt: string, family: AssemblyObjectFamily): Record<string, number> {
@@ -280,7 +285,7 @@ export function extractUserGeometryConstraints(
 ): UserGeometryConstraints {
   const params = isRecord(args.params) ? args.params : {}
   const family = inferAssemblyFamily(prompt, args)
-  const dimensions = promptDimensions(`${prompt} ${textOf(args)}`, family)
+  const dimensions = promptDimensions(stripColorLiterals(`${prompt} ${textOf(args)}`), family)
   const explicitDimensions = dimensionArgs(args, family)
   const constraints: UserGeometryConstraints = {
     family,
@@ -398,6 +403,45 @@ export function materialFromColor(color?: string): PrimitiveMaterialInput | unde
   return color ? { properties: { color } } : undefined
 }
 
+export function alignPrimaryShapeColorsToConstraints(
+  shapes: PrimitiveShapeInput[],
+  constraints: UserGeometryConstraints,
+): { shapes: PrimitiveShapeInput[]; changedCount: number; warnings: string[] } {
+  if (!constraints.primaryColor) return { shapes, changedCount: 0, warnings: [] }
+
+  const expected = constraints.primaryColor.value
+  const expectedLower = expected.toLowerCase()
+  const primary = new Set(primaryShapes(shapes, constraints.family))
+  if (primary.size === 0) return { shapes, changedCount: 0, warnings: [] }
+
+  let changedCount = 0
+  const aligned = shapes.map((shape) => {
+    if (!primary.has(shape)) return shape
+    const actual = shapeColor(shape)
+    if (actual?.toLowerCase() === expectedLower) return shape
+    changedCount += 1
+    return {
+      ...shape,
+      material: {
+        ...shape.material,
+        properties: {
+          ...shape.material?.properties,
+          color: expected,
+        },
+      },
+    }
+  })
+
+  return {
+    shapes: changedCount > 0 ? aligned : shapes,
+    changedCount,
+    warnings:
+      changedCount > 0
+        ? [`Auto-aligned ${changedCount} primary shape color(s) to ${expected}.`]
+        : [],
+  }
+}
+
 function primaryDimension(
   shape: PrimitiveShapeInput,
   dimension: 'length' | 'width' | 'height',
@@ -423,6 +467,7 @@ export function validateAssemblyConstraints(
   constraints: UserGeometryConstraints,
 ): AssemblyConstraintValidation {
   const issues: string[] = []
+  const warnings: string[] = []
   if (
     constraints.length != null &&
     !RAW_PRIMARY_LENGTH_UNRELIABLE_FAMILIES.has(constraints.family)
@@ -474,10 +519,10 @@ export function validateAssemblyConstraints(
     const candidates = primaryShapes(shapes, constraints.family)
     const actual = candidates.map(shapeColor).find(Boolean)
     if (actual && actual.toLowerCase() !== constraints.primaryColor.value.toLowerCase()) {
-      issues.push(
-        `Hard constraint failed: expected primary color ${constraints.primaryColor.value}, got ${actual}.`,
+      warnings.push(
+        `Soft constraint warning: expected primary color ${constraints.primaryColor.value}, got ${actual}.`,
       )
     }
   }
-  return { ok: issues.length === 0, issues }
+  return { ok: issues.length === 0, issues, warnings }
 }

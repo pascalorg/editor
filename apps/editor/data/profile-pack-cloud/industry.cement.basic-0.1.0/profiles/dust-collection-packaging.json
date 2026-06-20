@@ -1,0 +1,142 @@
+[
+  {
+    "id": "cement.bag_filter",
+    "name": "袋收尘器",
+    "aliases": [
+      "袋收尘器",
+      "袋式除尘器",
+      "bag filter",
+      "baghouse filter",
+      "dust collector"
+    ],
+    "industry": "cement",
+    "family": "generic",
+    "layoutFamily": "generic_industrial_layout",
+    "archetypeFamily": "generic_industrial",
+    "defaultDimensions": {
+      "length": 2.8,
+      "width": 1.8,
+      "height": 3
+    },
+    "primarySemanticRole": "filter_housing",
+    "qualityRules": "quality.cement.bag_filter",
+    "parts": [
+      {
+        "kind": "generic_body",
+        "semanticRole": "filter_housing",
+        "required": true
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "hopper_base",
+        "required": true
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "access_doors"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "clean_air_manifold"
+      },
+      {
+        "kind": "generic_spout",
+        "semanticRole": "dust_discharge"
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "maintenance_platform"
+      },
+      {
+        "kind": "generic_detail_accent",
+        "semanticRole": "filter_bag_rows"
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "水泥厂除尘系统袋收尘器 profile。",
+    "editableSchemaRef": "enclosure.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 56,
+      "parts": {
+        "access_doors": {
+          "detailLevel": "low"
+        },
+        "filter_bag_rows": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        }
+      }
+    }
+  },
+  {
+    "id": "cement.cement_packer",
+    "name": "水泥包装机",
+    "aliases": [
+      "水泥包装机",
+      "包装机",
+      "cement packer",
+      "rotary packer",
+      "packing machine"
+    ],
+    "industry": "cement",
+    "family": "machine_tool",
+    "layoutFamily": "box_enclosure_layout",
+    "archetypeFamily": "enclosed_machine",
+    "defaultDimensions": {
+      "length": 2.6,
+      "width": 1.8,
+      "height": 2.2
+    },
+    "primarySemanticRole": "packer_body",
+    "qualityRules": "quality.cement.cement_packer",
+    "parts": [
+      {
+        "kind": "generic_base",
+        "semanticRole": "packer_base",
+        "required": true
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "packer_body",
+        "required": true
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "cement_feed_hopper",
+        "required": true
+      },
+      {
+        "kind": "discharge_chute",
+        "semanticRole": "bag_discharge_chute"
+      },
+      {
+        "kind": "operator_panel",
+        "semanticRole": "operator_panel"
+      },
+      {
+        "kind": "display_screen",
+        "semanticRole": "weighing_display"
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "rotary_drive_unit"
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "袋装水泥包装机 profile，包含机体、进料斗、出袋端、控制面板和传动。",
+    "editableSchemaRef": "enclosure.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 56,
+      "parts": {
+        "operator_panel": {
+          "detailLevel": "low"
+        }
+      }
+    }
+  }
+]

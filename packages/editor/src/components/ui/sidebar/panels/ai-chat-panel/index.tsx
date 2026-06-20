@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AssetInput,
   type AnyNodeId,
+  emitter,
   ItemNode,
   type Vec3,
   useScene,
@@ -31,6 +32,8 @@ import {
   type GeneratedGeometryArtifact,
   type GeneratedGeometryShapeSpec as ShapeSpec,
 } from '../../../../../lib/ai-generated-geometry'
+import { buildFactoryScenePatchOperations } from '../../../../../lib/factory-scene-patch-apply'
+import { validateFactoryScenePatches } from '../../../../../lib/factory-scene-patch-safety'
 import { useViewer } from '@pascal-app/viewer'
 import { Icon } from '@iconify/react'
 import { OrbitControls, useGLTF } from '@react-three/drei'
@@ -640,9 +643,22 @@ const COMPOSE_PARTS_TOOL = {
                   'ergonomic_shell',
                   'streamlined_body',
                   'lofted_panel',
+                  'mobile_platform_chassis',
+                  'lidar_sensor',
+                  'emergency_stop_button',
+                  'status_light_strip',
+                  'operator_panel',
+                  'guard_fence',
+                  'pallet_table',
+                  'bearing_block',
+                  'coupling_guard',
+                  'motor_gearbox_unit',
+                  'pipe_manifold',
+                  'hopper_body',
+                  'service_platform',
                 ],
                 description:
-                  'Reusable procedural part. kiosk_body/kiosk_roof/kiosk_opening/kiosk_counter/kiosk_sign/kiosk_awning build small kiosks, ticket booths, vendor stalls, newsstands, small pavilions, and sheds. generic_body/generic_base/generic_panel/generic_handle/generic_spout/generic_control_panel/generic_display/generic_foot_set/generic_opening/generic_detail_accent cover unknown long-tail equipment, simple objects, and devices while preserving semantic part roles. aircraft_fuselage/aircraft_wing/aircraft_engine/aircraft_vertical_stabilizer/aircraft_horizontal_stabilizer/aircraft_landing_gear are family-registry parts for complete aircraft; use parts[].params to tune length, span, engine count/radius, window count, colors, and landing gear. chimney_stack creates a tall tapered industrial chimney with base, rim, lift seams, access door, and optional red-white warning bands. pyramid creates a four-sided pyramid from length/width/height; set truncated:true or topScale/topRadius to make a flat-top truncated pyramid/frustum. vent_grill creates framed grille/louver panels; bolt_pattern creates screws/fasteners; leg_set creates support feet; nameplate creates rating plates; pipe_port/inlet_port/outlet_port create nozzles. propeller_blade_set creates count-based radial propeller/impeller/mixer paddle sets, including taiji-half circular-cropped blades with longitudinal curve; airfoil_blade creates continuous swept/tapered aircraft/turbine-like blades for local blade details, not complete aircraft layout; curved_lens_panel creates tinted non-rectangular lenses/visors; ergonomic_shell creates smooth mouse/controller/appliance shells; streamlined_body creates aerodynamic fuselage/car/train/appliance bodies; lofted_panel creates section-to-section transition fairings/panels. protective_grill creates a shallow domed fan cage; radial_blades creates airfoil-like fan blades; desk_top/leg_set/drawer_stack build office desks; electrical_cabinet/cable_tray build power/control cabinets and tray routes; pipe_run/pipe_elbow build process piping; wheel/wheel_set/window_panel/window_strip/body_shell/tube_frame/fork/light_pair/bar_pair are generic building blocks whose meaning comes from semanticRole; bicycle_* and vehicle_* aliases remain accepted but new calls should prefer generic parts; volute_casing creates pump/blower scroll casing; impeller_blades creates pump/turbine vanes; pipe/inlet/outlet/flange/bolt parts create industrial connection details; ribbed_motor_body, conveyor_frame, roller_array, belt_surface, cylindrical_tank, valve_body, handwheel, gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, and platform_ladder cover common factory equipment.',
+                  'Reusable procedural part. kiosk_body/kiosk_roof/kiosk_opening/kiosk_counter/kiosk_sign/kiosk_awning build small kiosks, ticket booths, vendor stalls, newsstands, small pavilions, and sheds. generic_body/generic_base/generic_panel/generic_handle/generic_spout/generic_control_panel/generic_display/generic_foot_set/generic_opening/generic_detail_accent cover unknown long-tail equipment, simple objects, and devices while preserving semantic part roles. mobile_platform_chassis/lidar_sensor/status_light_strip/emergency_stop_button build AGV/AMR mobile platforms. operator_panel/guard_fence/pallet_table/bearing_block/coupling_guard/motor_gearbox_unit/pipe_manifold/hopper_body/service_platform are reusable industrial equipment accessories for workcells, conveyors, process machines, and packaged equipment. aircraft_fuselage/aircraft_wing/aircraft_engine/aircraft_vertical_stabilizer/aircraft_horizontal_stabilizer/aircraft_landing_gear are family-registry parts for complete aircraft; use parts[].params to tune length, span, engine count/radius, window count, colors, and landing gear. chimney_stack creates a tall tapered industrial chimney with base, rim, lift seams, access door, and optional red-white warning bands. pyramid creates a four-sided pyramid from length/width/height; set truncated:true or topScale/topRadius to make a flat-top truncated pyramid/frustum. vent_grill creates framed grille/louver panels; bolt_pattern creates screws/fasteners; leg_set creates support feet; nameplate creates rating plates; pipe_port/inlet_port/outlet_port create nozzles. propeller_blade_set creates count-based radial propeller/impeller/mixer paddle sets, including taiji-half circular-cropped blades with longitudinal curve; airfoil_blade creates continuous swept/tapered aircraft/turbine-like blades for local blade details, not complete aircraft layout; curved_lens_panel creates tinted non-rectangular lenses/visors; ergonomic_shell creates smooth mouse/controller/appliance shells; streamlined_body creates aerodynamic fuselage/car/train/appliance bodies; lofted_panel creates section-to-section transition fairings/panels. protective_grill creates a shallow domed fan cage; radial_blades creates airfoil-like fan blades; desk_top/leg_set/drawer_stack build office desks; electrical_cabinet/cable_tray build power/control cabinets and tray routes; pipe_run/pipe_elbow build process piping; wheel/wheel_set/window_panel/window_strip/body_shell/tube_frame/fork/light_pair/bar_pair are generic building blocks whose meaning comes from semanticRole; bicycle_* and vehicle_* aliases remain accepted but new calls should prefer generic parts; volute_casing creates pump/blower scroll casing; impeller_blades creates pump/turbine vanes; pipe/inlet/outlet/flange/bolt parts create industrial connection details; ribbed_motor_body, conveyor_frame, roller_array, belt_surface, cylindrical_tank, valve_body, handwheel, gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, and platform_ladder cover common factory equipment.',
               },
               partType: {
                 type: 'string',
@@ -658,7 +674,7 @@ const COMPOSE_PARTS_TOOL = {
               params: {
                 type: 'object',
                 description:
-                  'LLM-safe adjustable part parameters. Prefer params for family parts instead of raw coordinates. Kiosk examples: kiosk_body {length,width,height,primaryColor}; kiosk_roof {length,width,height,variant:pitch|flat}; kiosk_opening {length,height}; kiosk_counter {length,width,thickness}; kiosk_sign {length,height,accentColor}. Generic examples: generic_body {length,width,height,primaryColor,cornerRadius}; generic_base {length,width,thickness}; generic_spout {length,radius}; generic_control_panel/generic_display/generic_opening {length,height,thickness}. Vehicle examples: body_shell {length,width,height,primaryColor,vehicleStyle}; wheel_set {count:2|4|6,radius,width,hubColor}; window_strip {height,tint,opacity}. Aircraft examples: aircraft_fuselage {length,width,height,count,primaryColor,accentColor,noseRoundness}; aircraft_wing {length,width,thickness,bladeSweep}; aircraft_engine {count,radius,length,width}; aircraft_landing_gear {length,width,radius}. Values are normalized and clamped by the tool.',
+                  'LLM-safe adjustable part parameters. Prefer params for family parts instead of raw coordinates. Kiosk examples: kiosk_body {length,width,height,primaryColor}; kiosk_roof {length,width,height,variant:pitch|flat}; kiosk_opening {length,height}; kiosk_counter {length,width,thickness}; kiosk_sign {length,height,accentColor}. Generic examples: generic_body {length,width,height,primaryColor,cornerRadius}; generic_base {length,width,thickness}; generic_spout {length,radius}; generic_control_panel/generic_display/generic_opening {length,height,thickness}. Industrial accessory examples: bearing_block {length,width,height,radius}; coupling_guard {length,radius,thickness}; motor_gearbox_unit {length,height,radius}; pipe_manifold {length,radius,count}; hopper_body {length,width,height}; service_platform {length,width,height,overallHeight}. Vehicle examples: body_shell {length,width,height,primaryColor,vehicleStyle}; wheel_set {count:2|4|6,radius,width,hubColor}; window_strip {height,tint,opacity}. Aircraft examples: aircraft_fuselage {length,width,height,count,primaryColor,accentColor,noseRoundness}; aircraft_wing {length,width,thickness,bladeSweep}; aircraft_engine {count,radius,length,width}; aircraft_landing_gear {length,width,radius}. Values are normalized and clamped by the tool.',
               },
               style: {
                 type: 'string',
@@ -1331,10 +1347,16 @@ function formatPrimitiveRunMessage(analysis: string | undefined, generate: strin
 function formatFactoryRunResult(data: unknown) {
   const result = isRecord(data) ? data : {}
   const patches = Array.isArray(result.patches) ? result.patches : []
+  const createPatchCount = patches.filter((patch) => isRecord(patch) && patch.op === 'create').length
+  const updatePatchCount = patches.filter((patch) => isRecord(patch) && patch.op === 'update').length
+  const deletePatchCount = patches.filter((patch) => isRecord(patch) && patch.op === 'delete').length
   const nodeIds = Array.isArray(result.nodeIds)
     ? result.nodeIds.map((id) => String(id)).filter(Boolean)
     : []
   const missingAssets = Array.isArray(result.missingAssets) ? result.missingAssets : []
+  const editSummary = Array.isArray(result.editSummary)
+    ? result.editSummary.map(String).filter(Boolean).slice(0, 6)
+    : []
   const geometryRunId =
     typeof result.geometryRunId === 'string' ? result.geometryRunId : undefined
   const applied = result.applied === true
@@ -1353,15 +1375,52 @@ function formatFactoryRunResult(data: unknown) {
       return `- ${name}: ${reason}`
     })
     .filter(Boolean)
+  const layoutDiagnostics = isRecord(result.layoutDiagnostics)
+    ? result.layoutDiagnostics
+    : undefined
+  const layoutDiagnosticCount = Array.isArray(layoutDiagnostics?.diagnostics)
+    ? layoutDiagnostics.diagnostics.length
+    : 0
+  const layoutStrategy = isRecord(result.layoutStrategy) ? result.layoutStrategy : undefined
+  const layoutStyle =
+    typeof layoutStrategy?.style === 'string' ? ` via ${layoutStrategy.style}` : ''
+  const layoutLine = layoutDiagnostics
+    ? `- Layout: ${layoutDiagnostics.fits === true ? 'fits' : 'needs review'}${layoutStyle} (${layoutDiagnosticCount} diagnostics)`
+    : undefined
+  const qualityReport = isRecord(result.qualityReport) ? result.qualityReport : undefined
+  const qualityScore =
+    typeof qualityReport?.score === 'number' ? Math.round(qualityReport.score) : undefined
+  const qualityPassed =
+    typeof qualityReport?.passed === 'boolean' ? qualityReport.passed : undefined
+  const qualityIssues = Array.isArray(qualityReport?.issues) ? qualityReport.issues : []
+  const qualityIssueLines = qualityIssues
+    .slice(0, 3)
+    .map((item) => {
+      if (!isRecord(item)) return null
+      const severity = typeof item.severity === 'string' ? item.severity : 'issue'
+      const message = typeof item.message === 'string' ? item.message : undefined
+      return message ? `- ${severity}: ${message}` : null
+    })
+    .filter(Boolean)
+  const qualityLine =
+    qualityScore == null
+      ? undefined
+      : `- Quality: ${qualityPassed ? 'passed' : 'needs review'} (${qualityScore}/100, ${qualityIssues.length} issues)`
 
   return [
     '**Factory draft:**',
     artifactTitle ? `- Geometry artifact: ${artifactTitle}` : '- Geometry artifact: none',
-    `- Create patches: ${patches.length}`,
+    updatePatchCount > 0 || deletePatchCount > 0
+      ? `- Scene patches: ${patches.length} (${createPatchCount} create, ${updatePatchCount} update, ${deletePatchCount} delete)`
+      : `- Create patches: ${createPatchCount}`,
+    layoutLine,
+    qualityLine,
     nodeIds.length ? `- Node ids: ${nodeIds.join(', ')}` : '- Node ids: none',
     geometryRunId ? `- Geometry run: ${geometryRunId}` : undefined,
     `- Applied to canvas: ${applied ? 'yes' : 'no'}`,
+    editSummary.length ? `\n**Edits:**\n${editSummary.map((line) => `- ${line}`).join('\n')}` : undefined,
     missingLines.length ? `\n**Missing assets:**\n${missingLines.join('\n')}` : undefined,
+    qualityIssueLines.length ? `\n**Quality issues:**\n${qualityIssueLines.join('\n')}` : undefined,
     applied
       ? '\nPatches were applied to the current canvas.'
       : '\nPatches are prepared for review only. Nothing was applied to the canvas.',
@@ -1370,30 +1429,104 @@ function formatFactoryRunResult(data: unknown) {
     .join('\n')
 }
 
-function applyFactoryRunCreatePatchesToCanvas(data: unknown): string[] {
+function buildFactorySelectionSnapshot() {
+  const scene = useScene.getState()
+  const selectedIds = useViewer.getState().selection.selectedIds.map(String).filter(Boolean)
+  if (!selectedIds.length) return undefined
+
+  const nodes: Array<Record<string, unknown>> = []
+  const seen = new Set<string>()
+  const collect = (id: string) => {
+    if (seen.has(id)) return
+    seen.add(id)
+    const node = scene.nodes[id as AnyNodeId]
+    if (!node) return
+    const record = node as unknown as Record<string, unknown>
+    nodes.push({
+      id: node.id,
+      type: node.type,
+      name: typeof node.name === 'string' ? node.name : undefined,
+      parentId: typeof node.parentId === 'string' ? node.parentId : undefined,
+      children: Array.isArray(record.children) ? record.children.map(String) : undefined,
+      color: typeof record.color === 'string' ? record.color : undefined,
+      kind: typeof record.kind === 'string' ? record.kind : undefined,
+      shellColor: typeof record.shellColor === 'string' ? record.shellColor : undefined,
+      length: typeof record.length === 'number' ? record.length : undefined,
+      width: typeof record.width === 'number' ? record.width : undefined,
+      height: typeof record.height === 'number' ? record.height : undefined,
+      depth: typeof record.depth === 'number' ? record.depth : undefined,
+      thickness: typeof record.thickness === 'number' ? record.thickness : undefined,
+      radius: typeof record.radius === 'number' ? record.radius : undefined,
+      majorRadius: typeof record.majorRadius === 'number' ? record.majorRadius : undefined,
+      tubeRadius: typeof record.tubeRadius === 'number' ? record.tubeRadius : undefined,
+      position: Array.isArray(record.position) ? record.position : undefined,
+      rotation: Array.isArray(record.rotation) ? record.rotation : undefined,
+      scale: Array.isArray(record.scale) ? record.scale : undefined,
+      material: isRecord(record.material) ? record.material : undefined,
+      materialPreset: typeof record.materialPreset === 'string' ? record.materialPreset : undefined,
+      metadata: isRecord(record.metadata) ? record.metadata : undefined,
+    })
+    if (node.type === 'assembly' && Array.isArray(record.children)) {
+      for (const childId of record.children) {
+        if (typeof childId === 'string') collect(childId)
+      }
+    }
+  }
+
+  for (const id of selectedIds) collect(id)
+  return nodes.length ? { selectedIds, nodes } : undefined
+}
+
+function applyFactoryRunPatchesToCanvas(data: unknown): string[] {
   const result = isRecord(data) ? data : {}
   if (result.applied === true) return []
+  const qualityReport = isRecord(result.qualityReport) ? result.qualityReport : undefined
+  if (qualityReport?.passed === false) {
+    console.warn('[factory-agent] Refused factory patches that failed quality gate', qualityReport)
+    return []
+  }
   const patches = Array.isArray(result.patches) ? result.patches : []
   if (patches.length === 0) return []
 
   const scene = useScene.getState()
   const selectedLevelId = useViewer.getState().selection.levelId
-  const createdIds: string[] = []
+  const safety = validateFactoryScenePatches(patches, {
+    allowProcessLineCatalogItems: true,
+    existingNodeIds: Object.keys(scene.nodes),
+    fallbackParentId: selectedLevelId,
+  })
+  if (!safety.safe) {
+    console.warn('[factory-agent] Refused unsafe scene patches', safety.issues)
+    return []
+  }
 
-  for (const patch of patches) {
-    if (!isRecord(patch) || patch.op !== 'create' || !isRecord(patch.node)) continue
-    const node = patch.node as unknown as AnyNode
-    if (typeof node.id !== 'string' || typeof node.type !== 'string') continue
-    const patchParentId = typeof patch.parentId === 'string' ? patch.parentId : undefined
-    const parentId = (patchParentId ?? selectedLevelId ?? undefined) as AnyNodeId | undefined
-    scene.createNode(node, parentId)
-    createdIds.push(node.id)
+  const { createOps, createdIds, deleteIds, updateOps, updatedIds } =
+    buildFactoryScenePatchOperations(patches, {
+      existingNodeIds: Object.keys(scene.nodes),
+      fallbackParentId: selectedLevelId,
+    })
+
+  if (createOps.length > 0) {
+    scene.createNodes(createOps)
+  }
+  if (updateOps.length > 0) {
+    scene.updateNodes(updateOps)
+  }
+  if (deleteIds.length > 0) {
+    scene.deleteNodes(deleteIds)
   }
 
   if (createdIds.length > 0) {
     useViewer.getState().setSelection({ selectedIds: [createdIds[0]!] })
+  } else if (deleteIds.length > 0) {
+    const deleted = new Set(deleteIds.map(String))
+    const remainingSelectedIds = useViewer
+      .getState()
+      .selection.selectedIds.map(String)
+      .filter((id) => !deleted.has(id))
+    useViewer.getState().setSelection({ selectedIds: remainingSelectedIds as AnyNodeId[] })
   }
-  return createdIds
+  return [...createdIds, ...updatedIds, ...deleteIds.map(String)]
 }
 
 interface ChatMessage {
@@ -1435,6 +1568,35 @@ type ChatImageAttachment = {
   type: string
   size: number
   dataUrl: string
+}
+
+type ProfilePackSummary = {
+  id: string
+  name: string
+  industry: string
+  version: string
+  profileCount: number
+  enabled: boolean
+  path: string
+}
+
+type ProfilePackDebugSummary = {
+  id: string
+  name: string
+  source: string
+  sourcePack?: { id?: string; version?: string }
+  family: string
+  layoutFamily?: string
+  primarySemanticRole: string
+  partCount: number
+  overrides?: unknown[]
+}
+
+type ProfilePackApiSummary = {
+  enabledCount?: number
+  profileCount?: number
+  loadedProfileCount?: number
+  conflictCount?: number
 }
 
 type ApiContentPart =
@@ -2098,6 +2260,7 @@ function GeneratedArtifactCardShell({
   meta,
   status,
   preview,
+  details,
   hint,
   actions,
 }: {
@@ -2105,6 +2268,7 @@ function GeneratedArtifactCardShell({
   meta: React.ReactNode
   status: string
   preview: React.ReactNode
+  details?: React.ReactNode
   hint: React.ReactNode
   actions: React.ReactNode
 }) {
@@ -2122,11 +2286,146 @@ function GeneratedArtifactCardShell({
 
       {preview}
 
+      {details}
+
       <div className="rounded-lg border border-border/50 bg-accent/20 px-2 py-1 text-[10px] text-muted-foreground">
         {hint}
       </div>
 
       {actions}
+    </div>
+  )
+}
+
+type GeometryProfileDetailsModel = {
+  profileId?: string
+  profileSource?: string
+  sourcePack?: string
+  family?: string
+  layoutFamily?: string
+  quality?: number
+  requiredCoverage?: number
+  primaryPresent?: boolean
+  requiredRoles: string[]
+  missingRoles: string[]
+  warnings: string[]
+  issues: string[]
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function sourcePackLabel(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined
+  const record = value as Record<string, unknown>
+  const id = stringValue(record.id)
+  const version = stringValue(record.version)
+  return id ? `${id}${version ? `@${version}` : ''}` : undefined
+}
+
+function roleTokens(value: unknown): string[] {
+  if (typeof value !== 'string') return []
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  return normalized ? [normalized, ...normalized.split('_').filter((token) => token.length > 2)] : []
+}
+
+function buildGeometryProfileDetails(artifact: GeneratedGeometryArtifact): GeometryProfileDetailsModel | null {
+  const sourceArgs = artifact.sourceArgs ?? {}
+  const draft = sourceArgs.deviceProfileDraft
+  const embedded = sourceArgs.__deviceProfileDefinition
+  const profileId =
+    stringValue(sourceArgs.deviceProfile) ??
+    (draft && typeof draft === 'object' ? stringValue((draft as Record<string, unknown>).id) : undefined) ??
+    (embedded && typeof embedded === 'object'
+      ? stringValue((embedded as Record<string, unknown>).id)
+      : undefined)
+  const profileSource = stringValue(sourceArgs.profileSource)
+  const quality = artifact.profileQuality
+  const sourcePack = sourcePackLabel(sourceArgs.sourcePack)
+  const parts = Array.isArray(sourceArgs.parts) ? (sourceArgs.parts as Record<string, unknown>[]) : []
+  const requiredRoles = parts
+    .filter((part) => part && typeof part === 'object' && part.required === true)
+    .map((part) => stringValue(part.semanticRole))
+    .filter(Boolean) as string[]
+  const shapeTokens = artifact.shapes.flatMap((shape) => [
+    ...roleTokens(shape.semanticRole),
+    ...roleTokens(shape.sourcePartKind),
+  ])
+  const missingRoles = requiredRoles.filter((role) => {
+    const tokens = roleTokens(role)
+    return !tokens.some((token) => shapeTokens.includes(token))
+  })
+  const hasAnyDetails =
+    profileId ||
+    profileSource ||
+    quality ||
+    requiredRoles.length > 0 ||
+    stringValue(sourceArgs.family) ||
+    stringValue(sourceArgs.layoutFamily)
+  if (!hasAnyDetails) return null
+  return {
+    profileId,
+    profileSource,
+    sourcePack,
+    family: stringValue(sourceArgs.family),
+    layoutFamily: stringValue(sourceArgs.layoutFamily),
+    quality: typeof quality?.overallScore === 'number' ? quality.overallScore : undefined,
+    requiredCoverage:
+      typeof quality?.metrics?.requiredCoverage === 'number'
+        ? quality.metrics.requiredCoverage
+        : requiredRoles.length > 0
+          ? (requiredRoles.length - missingRoles.length) / requiredRoles.length
+          : undefined,
+    primaryPresent:
+      typeof quality?.metrics?.primaryPresent === 'number'
+        ? quality.metrics.primaryPresent >= 1
+        : undefined,
+    requiredRoles,
+    missingRoles,
+    warnings: quality?.warnings ?? [],
+    issues: quality?.issues ?? [],
+  }
+}
+
+function percentLabel(value: number | undefined) {
+  return typeof value === 'number' ? `${Math.round(value * 100)}%` : '-'
+}
+
+function GeometryProfileDetails({ details }: { details: GeometryProfileDetailsModel }) {
+  const sourceLabel = details.sourcePack
+    ? `${details.profileSource ?? 'profile'} · ${details.sourcePack}`
+    : details.profileSource
+  return (
+    <div className="space-y-1.5 rounded-lg border border-sky-400/20 bg-sky-400/5 px-2 py-1.5 text-[10px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex items-center gap-1 rounded border border-sky-400/30 bg-sky-400/10 px-1.5 py-0.5 text-sky-200">
+          <Icon className="size-3" icon="mdi:database-search-outline" />
+          {details.profileId ?? 'draft profile'}
+        </span>
+        {sourceLabel ? <span>{sourceLabel}</span> : null}
+        {details.family ? <span>family={details.family}</span> : null}
+        {details.layoutFamily ? <span>layout={details.layoutFamily}</span> : null}
+      </div>
+      <div className="grid grid-cols-3 gap-1 text-[10px]">
+        <div>质量 {percentLabel(details.quality)}</div>
+        <div>必需角色 {percentLabel(details.requiredCoverage)}</div>
+        <div>主形体 {details.primaryPresent === false ? '缺失' : '命中'}</div>
+      </div>
+      {details.requiredRoles.length > 0 ? (
+        <div className="truncate">
+          required: {details.requiredRoles.slice(0, 6).join(', ')}
+          {details.requiredRoles.length > 6 ? '...' : ''}
+        </div>
+      ) : null}
+      {details.missingRoles.length > 0 ? (
+        <div className="text-amber-300">缺失: {details.missingRoles.slice(0, 5).join(', ')}</div>
+      ) : null}
+      {details.issues.length > 0 || details.warnings.length > 0 ? (
+        <div className="truncate text-amber-300">
+          {details.issues[0] ?? details.warnings[0]}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -2149,6 +2448,7 @@ function GeneratedGeometryCard({
   const canSave = !artifact.savedAt && !artifact.supersededBy
   const canPlace = !artifact.supersededBy
   const canReplace = Boolean(artifact.replaceNodeIds?.length && !artifact.replacedAt && !artifact.supersededBy)
+  const profileDetails = buildGeometryProfileDetails(artifact)
 
   return (
     <GeneratedArtifactCardShell
@@ -2190,7 +2490,8 @@ function GeneratedGeometryCard({
           ? 'Drag the preview to rotate. If it is not right, keep typing revision notes and I will use this geometry as context.'
           : 'Older preview is static. The latest generated result remains interactive.'
       }
-      meta={`${artifact.createdNames.length} parts 路 ${artifact.sourceTool} 路 v${artifact.version}`}
+      details={profileDetails ? <GeometryProfileDetails details={profileDetails} /> : undefined}
+      meta={`${artifact.createdNames.length} parts · ${artifact.sourceTool} · v${artifact.version}`}
       preview={
         interactivePreview ? (
           <GeneratedGeometryPreview artifact={artifact} />
@@ -2421,6 +2722,20 @@ const aiChatPanelState: AiChatPanelStateSnapshot = {
   inputExpanded: false,
 }
 
+type FactoryE2eBridge = {
+  sceneNodes: () => Record<string, unknown>
+  applyFactoryRun: (data: unknown) => string[]
+  cameraView: (view: 'isometric' | 'top' | 'side') => void
+  selectNode: (nodeId: string) => void
+  selectedIds: () => string[]
+}
+
+declare global {
+  interface Window {
+    __pascalFactoryE2e?: FactoryE2eBridge
+  }
+}
+
 export function AiChatPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>(aiChatPanelState.messages)
   const [input, setInput] = useState(aiChatPanelState.input)
@@ -2445,9 +2760,16 @@ export function AiChatPanel() {
   const [imageAttachment, setImageAttachment] = useState<ChatImageAttachment | undefined>(
     aiChatPanelState.imageAttachment,
   )
+  const [profilePacks, setProfilePacks] = useState<ProfilePackSummary[]>([])
+  const [profilePackDebug, setProfilePackDebug] = useState<ProfilePackDebugSummary[]>([])
+  const [profilePackSummary, setProfilePackSummary] = useState<ProfilePackApiSummary>({})
+  const [profilePackWarningCount, setProfilePackWarningCount] = useState(0)
+  const [profilePackImporting, setProfilePackImporting] = useState(false)
+  const [profilePackStatus, setProfilePackStatus] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const profilePackInputRef = useRef<HTMLInputElement>(null)
   const activeAbortControllerRef = useRef<AbortController | null>(null)
   const activeRunEventSourcesRef = useRef<Map<string, EventSource>>(new Map())
   const appliedFactoryRunIdsRef = useRef<Set<string>>(new Set())
@@ -2463,6 +2785,47 @@ export function AiChatPanel() {
   const aiProxyUrl = process.env.NEXT_PUBLIC_AI_PROXY_URL ?? '/api/ai-chat/completions'
   const model = process.env.NEXT_PUBLIC_AI_MODEL ?? 'gpt-4o'
   const articraftViewerUrl = process.env.NEXT_PUBLIC_ARTICRAFT_VIEWER_URL ?? 'http://127.0.0.1:8765'
+  const selectedCanvasIds = useViewer((state) => state.selection.selectedIds)
+  const sceneNodes = useScene((state) => state.nodes)
+  const factorySelectionLabel = useMemo(() => {
+    const selectedNodes = selectedCanvasIds
+      .map((id) => sceneNodes[id as AnyNodeId])
+      .filter((node): node is AnyNode => Boolean(node))
+    if (!selectedNodes.length) return 'none'
+
+    const nodeLabel = (node: AnyNode) =>
+      typeof node.name === 'string' && node.name.trim() ? node.name.trim() : node.type
+    const containingAssembly = (node: AnyNode): AnyNode | undefined => {
+      let parentId = (node as { parentId?: unknown }).parentId
+      const visited = new Set<string>()
+      while (typeof parentId === 'string' && !visited.has(parentId)) {
+        visited.add(parentId)
+        const parent = sceneNodes[parentId as AnyNodeId]
+        if (!parent) return undefined
+        if (parent.type === 'assembly') return parent
+        parentId = (parent as { parentId?: unknown }).parentId
+      }
+      return undefined
+    }
+
+    const firstAssembly = containingAssembly(selectedNodes[0]!)
+    if (
+      firstAssembly &&
+      selectedNodes.every((node) => containingAssembly(node)?.id === firstAssembly.id)
+    ) {
+      const partLabels = selectedNodes.slice(0, 4).map(nodeLabel)
+      const extra =
+        selectedNodes.length > partLabels.length
+          ? ` +${selectedNodes.length - partLabels.length}`
+          : ''
+      if (selectedNodes.length === 1) return `${nodeLabel(firstAssembly)} > ${partLabels[0]}`
+      return `${nodeLabel(firstAssembly)} > ${selectedNodes.length} parts: ${partLabels.join(', ')}${extra}`
+    }
+
+    const labels = selectedNodes.slice(0, 3).map((node) => `${nodeLabel(node)} (${node.type})`)
+    const extra = selectedNodes.length > labels.length ? ` +${selectedNodes.length - labels.length}` : ''
+    return labels.join(', ') + extra
+  }, [sceneNodes, selectedCanvasIds])
 
   useEffect(() => {
     const persisted = readPersistedAiChatPanelState()
@@ -2568,8 +2931,103 @@ export function AiChatPanel() {
   }, [])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    const queryEnabled = new URLSearchParams(window.location.search).get('factoryE2e') === '1'
+    if (process.env.NEXT_PUBLIC_FACTORY_E2E_SMOKE !== '1' && !queryEnabled) return
+
+    window.__pascalFactoryE2e = {
+      sceneNodes: () => useScene.getState().nodes as unknown as Record<string, unknown>,
+      applyFactoryRun: (data: unknown) => applyFactoryRunPatchesToCanvas(data),
+      cameraView: (view) => {
+        if (view === 'isometric') {
+          emitter.emit('camera-controls:fit-scene', {})
+          return
+        }
+        if (view === 'top') {
+          emitter.emit('camera-controls:top-view')
+          return
+        }
+        emitter.emit('camera-controls:top-view')
+        window.setTimeout(() => emitter.emit('camera-controls:orbit-cw'), 0)
+      },
+      selectNode: (nodeId: string) => {
+        if (!nodeId) return
+        useViewer.getState().setSelection({ selectedIds: [nodeId as AnyNodeId] })
+      },
+      selectedIds: () => useViewer.getState().selection.selectedIds.map(String),
+    }
+
+    return () => {
+      delete window.__pascalFactoryE2e
+    }
+  }, [])
+
+  useEffect(() => {
     if (loading) setModeMenuOpen(false)
   }, [loading])
+
+  const refreshProfilePacks = useCallback(async () => {
+    try {
+      const response = await fetch('/api/profile-packs', { cache: 'no-store' })
+      if (!response.ok) return
+      const data = (await response.json()) as {
+        packs?: ProfilePackSummary[]
+        profileDebug?: ProfilePackDebugSummary[]
+        summary?: ProfilePackApiSummary
+        warnings?: unknown[]
+      }
+      setProfilePacks(Array.isArray(data.packs) ? data.packs : [])
+      setProfilePackDebug(Array.isArray(data.profileDebug) ? data.profileDebug : [])
+      setProfilePackSummary(data.summary ?? {})
+      setProfilePackWarningCount(Array.isArray(data.warnings) ? data.warnings.length : 0)
+    } catch {
+      // The pack summary is non-critical; geometry generation still works without it.
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshProfilePacks()
+  }, [refreshProfilePacks])
+
+  const handleProfilePackSelected = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.currentTarget.files?.[0]
+      event.currentTarget.value = ''
+      if (!file) return
+      if (!/\.zip$/i.test(file.name)) {
+        setProfilePackStatus('请选择 .zip 行业资源包。')
+        return
+      }
+      setProfilePackImporting(true)
+      setProfilePackStatus('正在导入行业资源包...')
+      try {
+        const form = new FormData()
+        form.set('file', file)
+        const response = await fetch('/api/profile-packs', {
+          method: 'POST',
+          body: form,
+        })
+        const data = (await response.json()) as {
+          pack?: ProfilePackSummary
+          message?: string
+          error?: string
+        }
+        if (!response.ok || !data.pack) {
+          throw new Error(data.message ?? data.error ?? '行业资源包导入失败。')
+        }
+        setProfilePackStatus(
+          `已启用 ${data.pack.name}，新增 ${data.pack.profileCount} 个设备 profile。`,
+        )
+        await refreshProfilePacks()
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        setProfilePackStatus(`行业资源包导入失败：${message}`)
+      } finally {
+        setProfilePackImporting(false)
+      }
+    },
+    [refreshProfilePacks],
+  )
 
   const markGenerationStopped = useCallback((content = 'Generation stopped.') => {
     setMessages((prev) => {
@@ -3565,12 +4023,11 @@ export function AiChatPanel() {
   )
 
   const completeFactoryRun = useCallback((runId: string, data: unknown) => {
-    const appliedNodeIds = appliedFactoryRunIdsRef.current.has(runId)
-      ? []
-      : applyFactoryRunCreatePatchesToCanvas(data)
+    const alreadyApplied = appliedFactoryRunIdsRef.current.has(runId)
+    const appliedNodeIds = alreadyApplied ? [] : applyFactoryRunPatchesToCanvas(data)
     if (appliedNodeIds.length > 0) appliedFactoryRunIdsRef.current.add(runId)
     const displayData =
-      isRecord(data) && appliedNodeIds.length > 0
+      isRecord(data) && (alreadyApplied || appliedNodeIds.length > 0)
         ? {
             ...data,
             applied: true,
@@ -3675,7 +4132,7 @@ export function AiChatPanel() {
                   ...messageItem,
                   content: [
                     '**Factory draft:**',
-                    patchCount == null ? '- Patch plan ready.' : `- Create patches: ${patchCount}`,
+                    patchCount == null ? '- Patch plan ready.' : `- Scene patches: ${patchCount}`,
                     `- Missing assets: ${missingAssets}`,
                     '- Waiting for final run result...',
                   ].join('\n'),
@@ -4599,6 +5056,7 @@ export function AiChatPanel() {
     setLoading(true)
 
     try {
+      const selection = buildFactorySelectionSnapshot()
       const res = await fetch('/api/ai-harness/runs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4608,6 +5066,7 @@ export function AiChatPanel() {
           prompt: text,
           context: {
             recentMessages: messages,
+            ...(selection ? { selection } : {}),
           },
         }),
         signal: controller.signal,
@@ -4686,6 +5145,14 @@ export function AiChatPanel() {
   const isFactoryConversation = resolvedConversationPurpose === 'factory'
   const isAssetConversation = resolvedConversationPurpose === 'asset'
   const primitiveHasConfig = Boolean(aiProxyUrl || (baseUrl && apiKey))
+  const enabledProfilePacks = profilePacks.filter((pack) => pack.enabled)
+  const enabledProfileCount = enabledProfilePacks.reduce((sum, pack) => sum + pack.profileCount, 0)
+  const loadedProfileCount = profilePackSummary.loadedProfileCount ?? profilePackDebug.length
+  const profileConflictCount = profilePackSummary.conflictCount ?? 0
+  const enabledPackNames = enabledProfilePacks
+    .slice(0, 2)
+    .map((pack) => pack.industry || pack.name)
+    .join(', ')
   const showImageUpload = generationMode === 'image-to-3d' || generationMode === 'articraft'
   const canSend =
     !loading &&
@@ -4856,6 +5323,7 @@ export function AiChatPanel() {
               </div>
               <button
                 className="group w-full rounded-2xl border border-border/70 bg-accent/25 p-3 text-left transition-colors hover:border-[#a684ff]/60 hover:bg-[#a684ff]/10"
+                data-testid="ai-chat-factory-purpose"
                 onClick={() => selectConversationPurpose('factory')}
                 type="button"
               >
@@ -4938,7 +5406,7 @@ export function AiChatPanel() {
                 这里将用于通过自然语言创建厂房、车间、房间和工厂布局，并连续修改当前 AI 目标。
               </p>
               <p className="mt-2 text-[10px] leading-relaxed text-amber-300/90">
-                当前已接入工厂草稿执行：会生成几何 artifact 与 create patches，但不会自动应用到画布。
+                当前已接入工厂创建/修改执行：会生成可编辑 scene patches（create/update），并默认应用到画布。
               </p>
             </div>
             <div className="grid gap-1.5 text-[11px] text-muted-foreground">
@@ -5275,6 +5743,60 @@ export function AiChatPanel() {
           ref={imageInputRef}
           type="file"
         />
+        <input
+          accept=".zip,application/zip,application/x-zip-compressed"
+          className="hidden"
+          disabled={profilePackImporting}
+          onChange={handleProfilePackSelected}
+          ref={profilePackInputRef}
+          type="file"
+        />
+        {generationMode === 'primitive' ? (
+          <div className="mb-1.5 rounded-lg border border-border/60 bg-accent/20 px-2 py-1.5">
+            <div className="flex items-center gap-2">
+              <Icon className="size-3.5 shrink-0 text-[#a684ff]" icon="mdi:package-variant" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[10px] text-muted-foreground">
+                  已启用 {enabledProfilePacks.length} 个资源包 / 包内 {enabledProfileCount} 个 profile / 总加载{' '}
+                  {loadedProfileCount} 个
+                </div>
+                <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] text-muted-foreground/80">
+                  {enabledPackNames ? <span>{enabledPackNames}</span> : <span>未安装行业包时使用内置 profile</span>}
+                  {profileConflictCount > 0 ? <span>覆盖冲突 {profileConflictCount}</span> : null}
+                  {profilePackWarningCount > 0 ? <span>警告 {profilePackWarningCount}</span> : null}
+                </div>
+                {profilePackStatus ? (
+                  <div className="mt-0.5 truncate text-[10px] text-muted-foreground/80">
+                    {profilePackStatus}
+                  </div>
+                ) : null}
+              </div>
+              <a
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff]"
+                href="/profile-packs"
+                rel="noreferrer"
+                target="_blank"
+                title="下载和管理行业资源包"
+              >
+                <Icon className="size-3.5" icon="mdi:cloud-download-outline" />
+                下载/管理
+              </a>
+              <button
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={profilePackImporting}
+                onClick={() => profilePackInputRef.current?.click()}
+                title="导入行业资源包 zip"
+                type="button"
+              >
+                <Icon
+                  className={cn('size-3.5', profilePackImporting && 'animate-spin')}
+                  icon={profilePackImporting ? 'mdi:loading' : 'mdi:archive-arrow-up-outline'}
+                />
+                导入
+              </button>
+            </div>
+          </div>
+        ) : null}
         <div className="relative">
           <textarea
             className={cn(
@@ -5336,7 +5858,32 @@ export function AiChatPanel() {
               <span className="font-medium">创建与修改工厂</span>
             </div>
             <div className="mt-1 text-[9px] text-muted-foreground">
-              当前目标：生成 factory patch plan · 不自动应用到画布
+              当前目标：生成/修改 factory scene patch plan · 默认应用到画布
+            </div>
+          </div>
+          <div className="mb-2 rounded-lg border border-[#a684ff]/25 bg-[#a684ff]/10 px-2.5 py-1.5">
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <Icon
+                className="size-3.5 shrink-0 text-[#a684ff]"
+                icon="mdi:cursor-default-click-outline"
+              />
+              <span className="min-w-0 truncate">已选中：{factorySelectionLabel}</span>
+            </div>
+            <div className="mt-1 text-[9px] leading-snug text-muted-foreground/80">
+              单击选整机，双击内部零件进入部件编辑；Ctrl 点击可追加或取消多选。
+            </div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {['make blue', 'move left 1m', 'rotate 90 degrees', 'delete this'].map((hint) => (
+                <button
+                  className="rounded-md border border-border/50 px-1.5 py-0.5 text-[9px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff]"
+                  disabled={loading}
+                  key={hint}
+                  onClick={() => setInput(hint)}
+                  type="button"
+                >
+                  {hint}
+                </button>
+              ))}
             </div>
           </div>
           <div className="relative">
@@ -5345,6 +5892,7 @@ export function AiChatPanel() {
                 'w-full resize-none rounded-lg border border-border/60 bg-accent/30 px-2.5 py-1.5 pr-8 pb-11 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-[#a684ff]/50 focus:outline-none focus:ring-1 focus:ring-[#a684ff]/30',
                 inputExpanded ? 'min-h-[132px]' : 'min-h-[72px]',
               )}
+              data-testid="factory-chat-input"
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleFactoryKeyDown}
               placeholder="描述你想创建或修改的工厂布局…"
@@ -5367,6 +5915,7 @@ export function AiChatPanel() {
                   ? 'cursor-not-allowed opacity-50'
                   : 'hover:bg-accent hover:text-[#a684ff]',
               )}
+              data-testid="factory-chat-send"
               disabled={!input.trim() || loading}
               onClick={sendFactoryMessage}
               title="Send"

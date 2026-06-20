@@ -4,11 +4,15 @@ import {
   DEVICE_PROFILE_DEFINITIONS,
   type DeviceProfileDefinition,
   type DeviceProfileSource,
+  EDITABLE_SCHEMA_DEFINITIONS,
+  type EditableSchemaDefinition,
   mergeDeviceProfiles,
   normalizeDeviceProfileInput,
+  resolveEditableSchemaForProfile,
   validateDeviceProfileDefinition,
 } from '@pascal-app/core/lib/device-profile-registry'
 import { findRepoRoot } from './generated-assets/manifest'
+import { enabledProfilePackDirs, validateProfilePackDir } from './profile-packs'
 
 type ProfileSourceDir = {
   dir: string
@@ -18,6 +22,17 @@ type ProfileSourceDir = {
 export type LoadedDeviceProfiles = {
   profiles: DeviceProfileDefinition[]
   warnings: string[]
+  knowledgeResources?: {
+    layouts: Array<Record<string, unknown>>
+    partPresets: Array<Record<string, unknown>>
+    qualityRules: Array<Record<string, unknown>>
+    editableSchemas: EditableSchemaDefinition[]
+    aliases: Array<Record<string, unknown>>
+  }
+}
+
+export type LoadDeviceProfilesOptions = {
+  extraPackDirs?: readonly string[]
 }
 
 async function exists(dir: string) {
@@ -37,7 +52,7 @@ async function collectProfileFiles(dir: string): Promise<string[]> {
     const fullPath = path.join(dir, entry.name)
     if (entry.isDirectory()) {
       files.push(...(await collectProfileFiles(fullPath)))
-    } else if (/\.(json|ya?ml)$/i.test(entry.name)) {
+    } else if (entry.name !== 'pack.json' && /\.(json|ya?ml)$/i.test(entry.name)) {
       files.push(fullPath)
     }
   }
@@ -182,8 +197,85 @@ async function loadProfilesFromDir({
   return { profiles, warnings }
 }
 
-export async function loadDeviceProfiles(): Promise<LoadedDeviceProfiles> {
+function resourceId(resource: Record<string, unknown>) {
+  return typeof resource.id === 'string' && resource.id.trim() ? resource.id.trim() : undefined
+}
+
+function resourceById(resources: readonly Record<string, unknown>[]) {
+  return new Map(
+    resources.flatMap((resource) => {
+      const id = resourceId(resource)
+      return id ? [[id, resource] as const] : []
+    }),
+  )
+}
+
+function resolveProfileKnowledgeResources(
+  profiles: readonly DeviceProfileDefinition[],
+  resources: NonNullable<LoadedDeviceProfiles['knowledgeResources']>,
+): DeviceProfileDefinition[] {
+  const layouts = resourceById(resources.layouts)
+  const partPresets = resourceById(resources.partPresets)
+  const qualityRules = resourceById(resources.qualityRules)
+  const editableSchemas = [...resources.editableSchemas, ...EDITABLE_SCHEMA_DEFINITIONS]
+
+  return profiles.map((profile) => {
+    const layoutTemplate =
+      typeof profile.layoutTemplate === 'string' ? layouts.get(profile.layoutTemplate) : undefined
+    const resolvedPartPresets = Object.fromEntries(
+      Object.values(profile.partPresets ?? {}).flatMap((presetId) => {
+        const preset = partPresets.get(presetId)
+        return preset ? [[presetId, preset] as const] : []
+      }),
+    )
+    const qualityRule =
+      typeof profile.qualityRules === 'string' ? qualityRules.get(profile.qualityRules) : undefined
+    const resolvedEditableSchema = resolveEditableSchemaForProfile(profile, editableSchemas)
+
+    return {
+      ...profile,
+      ...(layoutTemplate
+        ? {
+            layoutHints: {
+              ...(profile.layoutHints ?? {}),
+              layoutTemplate,
+            },
+          }
+        : {}),
+      ...(Object.keys(resolvedPartPresets).length > 0 ? { resolvedPartPresets } : {}),
+      ...(qualityRule ? { qualityRules: qualityRule } : {}),
+      ...(resolvedEditableSchema ? { resolvedEditableSchema } : {}),
+    }
+  })
+}
+
+async function loadProfilesFromPackDir(dir: string): Promise<LoadedDeviceProfiles> {
+  try {
+    const validation = await validateProfilePackDir(dir)
+    const profiles = resolveProfileKnowledgeResources(validation.profiles, validation.resources)
+    return {
+      profiles,
+      knowledgeResources: validation.resources,
+      warnings: validation.warnings.map((warning) => `${validation.manifest.id}: ${warning}`),
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { profiles: [], warnings: [`Failed to load device profile pack ${dir}: ${message}`] }
+  }
+}
+
+export async function loadDeviceProfiles(
+  options: LoadDeviceProfilesOptions = {},
+): Promise<LoadedDeviceProfiles> {
   const root = await findRepoRoot()
+  const enabledPackDirs = await enabledProfilePackDirs()
+  const extraPackDirs = Array.from(
+    new Set(
+      (options.extraPackDirs ?? [])
+        .filter((dir): dir is string => typeof dir === 'string' && dir.trim().length > 0)
+        .map((dir) => path.resolve(dir)),
+    ),
+  )
   const sourceDirs: ProfileSourceDir[] = [
     {
       dir: path.join(root, 'apps', 'editor', 'data', 'device-profile-packs'),
@@ -196,14 +288,35 @@ export async function loadDeviceProfiles(): Promise<LoadedDeviceProfiles> {
     },
   ]
   const loaded = await Promise.all(sourceDirs.map(loadProfilesFromDir))
+  const enabledPacks = await Promise.all(
+    [...enabledPackDirs, ...extraPackDirs].map(loadProfilesFromPackDir),
+  )
+  const packResources: NonNullable<LoadedDeviceProfiles['knowledgeResources']> = {
+    layouts: enabledPacks.flatMap((entry) => entry.knowledgeResources?.layouts ?? []),
+    partPresets: enabledPacks.flatMap((entry) => entry.knowledgeResources?.partPresets ?? []),
+    qualityRules: enabledPacks.flatMap((entry) => entry.knowledgeResources?.qualityRules ?? []),
+    editableSchemas: enabledPacks.flatMap(
+      (entry) => entry.knowledgeResources?.editableSchemas ?? [],
+    ),
+    aliases: enabledPacks.flatMap((entry) => entry.knowledgeResources?.aliases ?? []),
+  }
+  const importedProfiles = [
+    ...(loaded[0]?.profiles ?? []),
+    ...enabledPacks.flatMap((entry) => entry.profiles),
+  ]
   const merged = mergeDeviceProfiles([
     loaded[1]?.profiles ?? [],
-    loaded[0]?.profiles ?? [],
+    importedProfiles,
     DEVICE_PROFILE_DEFINITIONS,
     loaded[2]?.profiles ?? [],
   ])
   return {
     profiles: merged.profiles,
-    warnings: [...loaded.flatMap((entry) => entry.warnings), ...merged.warnings],
+    knowledgeResources: packResources,
+    warnings: [
+      ...loaded.flatMap((entry) => entry.warnings),
+      ...enabledPacks.flatMap((entry) => entry.warnings),
+      ...merged.warnings,
+    ],
   }
 }

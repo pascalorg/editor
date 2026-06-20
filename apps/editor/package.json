@@ -7,7 +7,15 @@
     "dev": "dotenv -e ../../.env.local -- next dev --port 3002",
     "build": "dotenv -e ../../.env.local -- next build",
     "start": "next start",
+    "e2e": "playwright test",
+    "e2e:factory": "playwright test e2e/factory-ai.spec.ts",
+    "factory:render-qa": "playwright test e2e/factory-render-quality.spec.ts",
+    "factory:render-qa:full": "FACTORY_RENDER_QA_MODE=full playwright test e2e/factory-render-quality.spec.ts",
+    "factory:full-run-qa": "bun scripts/factory-full-run-qa.ts",
     "lint": "biome lint",
+    "profile-pack:scaffold": "bun scripts/scaffold-industry-profile-pack.ts",
+    "profile-pack:qa": "bun scripts/profile-pack-qa.ts",
+    "profile-pack:validate": "bun scripts/profile-pack-qa.ts --validate-only",
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
@@ -42,6 +50,7 @@
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
+    "@playwright/test": "^1.61.0",
     "@types/draco3d": "^1.4.10",
     "@types/howler": "^2.2.12",
     "@types/node": "^22.19.12",

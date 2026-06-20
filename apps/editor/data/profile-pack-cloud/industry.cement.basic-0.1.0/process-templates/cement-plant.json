@@ -1,0 +1,260 @@
+{
+  "processId": "cement_plant_full",
+  "processLabel": "Full cement plant",
+  "processDisplayLabel": "\u6c34\u6ce5\u5de5\u5382",
+  "domain": "chemical",
+  "aliases": [
+    "\u6c34\u6ce5\u5de5\u5382",
+    "\u6c34\u6ce5\u5382",
+    "\u5b8c\u6574\u6c34\u6ce5\u5382",
+    "\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382",
+    "\u521b\u5efa\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382",
+    "cement plant",
+    "full cement plant",
+    "cement factory"
+  ],
+  "requiredRoles": [
+    "limestone_crusher",
+    "pre_homogenization",
+    "raw_mill",
+    "raw_meal_silo",
+    "coal_mill",
+    "preheater_tower",
+    "rotary_kiln",
+    "kiln_burner",
+    "kiln_hood",
+    "grate_cooler",
+    "clinker_crusher",
+    "clinker_conveying",
+    "clinker_silo",
+    "kiln_tail_esp",
+    "process_stack",
+    "cement_mill",
+    "cement_silo",
+    "cement_packer",
+    "whr_boiler",
+    "mcc_control"
+  ],
+  "defaultLayoutStyle": "parallel_bays",
+  "defaultDimensions": {
+    "length": 66,
+    "width": 28
+  },
+  "safetyTags": ["hot_material", "dust", "rotating_equipment", "heavy_industry"],
+  "stations": [
+    {
+      "id": "limestone_crusher",
+      "label": "Limestone crusher",
+      "displayLabel": "\u77f3\u7070\u77f3\u7834\u788e\u673a",
+      "role": "limestone_crusher",
+      "equipmentHint": "cement.limestone_crusher heavy limestone crusher with feed hopper, crusher housing, drive unit, and discharge chute",
+      "footprintHint": "large",
+      "safetyTags": ["material", "dust", "rotating_equipment"]
+    },
+    {
+      "id": "pre_homogenization",
+      "label": "Stacker reclaimer",
+      "displayLabel": "\u5806\u53d6\u6599\u673a",
+      "role": "pre_homogenization",
+      "equipmentHint": "cement.stack_reclaimer limestone pre-homogenization stacker reclaimer with bridge boom, bucket wheel, and stockpile conveyor",
+      "footprintHint": "long",
+      "safetyTags": ["material", "conveyor"]
+    },
+    {
+      "id": "raw_mill",
+      "label": "Raw mill",
+      "displayLabel": "\u539f\u6599\u78e8",
+      "role": "raw_mill",
+      "equipmentHint": "cement.vertical_raw_mill vertical raw mill with feed hopper, grinding body, hot gas inlet, and drive unit",
+      "footprintHint": "large",
+      "safetyTags": ["dust", "rotating_equipment"]
+    },
+    {
+      "id": "raw_meal_silo",
+      "label": "Raw meal homogenization silo",
+      "displayLabel": "\u751f\u6599\u5747\u5316\u5e93",
+      "role": "raw_meal_silo",
+      "equipmentHint": "cement.raw_meal_homogenization_silo tall raw meal homogenization silo with top feed, aeration floor, and discharge outlet",
+      "footprintHint": "tall",
+      "safetyTags": ["storage", "dust"]
+    },
+    {
+      "id": "coal_mill",
+      "label": "Coal mill",
+      "displayLabel": "\u7164\u78e8",
+      "role": "coal_mill",
+      "equipmentHint": "cement.coal_mill fuel preparation coal mill with separator, feed hopper, inert gas duct, and drive unit",
+      "footprintHint": "large",
+      "safetyTags": ["fuel", "dust"]
+    },
+    {
+      "id": "preheater_tower",
+      "label": "Preheater tower",
+      "displayLabel": "\u9884\u70ed\u5668\u5854",
+      "role": "preheater_tower",
+      "equipmentHint": "cement.preheater_tower cyclone preheater tower with calciner riser, platforms, meal drop pipes, and gas ducts",
+      "footprintHint": "tall",
+      "safetyTags": ["hot_gas", "dust", "height"]
+    },
+    {
+      "id": "rotary_kiln",
+      "label": "Rotary kiln",
+      "displayLabel": "\u56de\u8f6c\u7a91",
+      "role": "rotary_kiln",
+      "equipmentHint": "cement.rotary_kiln long inclined rotary kiln with riding rings, support rollers, girth gear, and drive unit",
+      "footprintHint": "long",
+      "safetyTags": ["hot_material", "rotating_equipment"]
+    },
+    {
+      "id": "kiln_burner",
+      "label": "Kiln burner",
+      "displayLabel": "\u7a91\u5934\u71c3\u70e7\u5668",
+      "role": "kiln_burner",
+      "equipmentHint": "cement.kiln_burner multi-channel cement kiln burner lance with fuel pipe, primary air pipe, and burner carriage",
+      "footprintHint": "long",
+      "safetyTags": ["fuel", "hot_material"]
+    },
+    {
+      "id": "kiln_hood",
+      "label": "Kiln hood",
+      "displayLabel": "\u7a91\u5934\u7f69",
+      "role": "kiln_hood",
+      "equipmentHint": "cement.kiln_hood kiln hood enclosing kiln head discharge, burner opening, and cooler inlet transition",
+      "footprintHint": "large",
+      "safetyTags": ["hot_material"]
+    },
+    {
+      "id": "grate_cooler",
+      "label": "Grate cooler",
+      "displayLabel": "\u7be6\u51b7\u673a",
+      "role": "grate_cooler",
+      "equipmentHint": "cement.grate_cooler clinker grate cooler with hot clinker inlet, grate bed, drive unit, and service platform",
+      "footprintHint": "long",
+      "safetyTags": ["hot_material", "cooling_air"]
+    },
+    {
+      "id": "tertiary_air_duct",
+      "label": "Tertiary air duct",
+      "displayLabel": "\u4e09\u6b21\u98ce\u7ba1",
+      "role": "tertiary_air_duct",
+      "equipmentHint": "cement.tertiary_air_duct large hot tertiary air duct between clinker cooler and preheater calciner",
+      "footprintHint": "long",
+      "safetyTags": ["hot_gas"]
+    },
+    {
+      "id": "clinker_crusher",
+      "label": "Clinker crusher",
+      "displayLabel": "\u719f\u6599\u7834\u788e\u673a",
+      "role": "clinker_crusher",
+      "equipmentHint": "cement.clinker_crusher clinker crusher at cooler discharge with crusher rolls, chute, and drive",
+      "footprintHint": "large",
+      "safetyTags": ["hot_material", "rotating_equipment"]
+    },
+    {
+      "id": "clinker_conveying",
+      "label": "Clinker conveyor",
+      "displayLabel": "\u719f\u6599\u8f93\u9001",
+      "role": "clinker_conveying",
+      "equipmentHint": "cement.belt_conveyor clinker conveyor transferring cooled clinker to storage",
+      "footprintHint": "long",
+      "safetyTags": ["material", "conveyor"]
+    },
+    {
+      "id": "clinker_silo",
+      "label": "Clinker silo",
+      "displayLabel": "\u719f\u6599\u5e93",
+      "role": "clinker_silo",
+      "equipmentHint": "cement.clinker_silo tall clinker storage silo with top feed inlet and bottom discharge hopper",
+      "footprintHint": "tall",
+      "safetyTags": ["storage", "dust"]
+    },
+    {
+      "id": "kiln_tail_esp",
+      "label": "Kiln tail ESP",
+      "displayLabel": "\u7a91\u5c3e\u7535\u6536\u5c18",
+      "role": "kiln_tail_esp",
+      "equipmentHint": "cement.esp_dust_collector kiln tail electrostatic precipitator with inlet plenum, collector chambers, hoppers, and outlet duct",
+      "footprintHint": "large",
+      "safetyTags": ["dust", "exhaust"]
+    },
+    {
+      "id": "process_stack",
+      "label": "Process stack",
+      "displayLabel": "\u70df\u56f1",
+      "role": "process_stack",
+      "equipmentHint": "cement.process_stack tall industrial cement kiln exhaust stack with base plinth, stack shell, warning bands, and outlet",
+      "footprintHint": "tall",
+      "safetyTags": ["exhaust", "height"]
+    },
+    {
+      "id": "cement_mill",
+      "label": "Cement mill",
+      "displayLabel": "\u6c34\u6ce5\u78e8",
+      "role": "cement_mill",
+      "equipmentHint": "cement.cement_mill cement grinding mill with mill shell, trunnion bearings, feed inlet, product outlet, and drive",
+      "footprintHint": "long",
+      "safetyTags": ["dust", "rotating_equipment"]
+    },
+    {
+      "id": "cement_silo",
+      "label": "Cement silo",
+      "displayLabel": "\u6c34\u6ce5\u5e93",
+      "role": "cement_silo",
+      "equipmentHint": "cement.cement_silo finished cement storage silo with pneumatic fill manifold and bulk discharge outlet",
+      "footprintHint": "tall",
+      "safetyTags": ["storage", "dust"]
+    },
+    {
+      "id": "cement_packer",
+      "label": "Cement packer",
+      "displayLabel": "\u6c34\u6ce5\u5305\u88c5\u673a",
+      "role": "cement_packer",
+      "equipmentHint": "cement.cement_packer rotary cement packer with feed hopper, packing body, discharge chute, and operator panel",
+      "footprintHint": "large",
+      "safetyTags": ["packaging", "dust"]
+    },
+    {
+      "id": "whr_boiler",
+      "label": "Waste heat recovery boiler",
+      "displayLabel": "\u4f59\u70ed\u9505\u7089",
+      "role": "whr_boiler",
+      "equipmentHint": "cement.whr_boiler cement kiln waste heat recovery boiler with vertical casing, tube bank, gas inlet, gas outlet, and service platform",
+      "footprintHint": "tall",
+      "safetyTags": ["hot_gas", "utility"]
+    },
+    {
+      "id": "mcc_control",
+      "label": "MCC and control cabinet",
+      "displayLabel": "MCC\u63a7\u5236\u67dc",
+      "role": "mcc_control",
+      "equipmentHint": "industrial MCC motor control center and process control cabinet row for cement plant utilities",
+      "footprintHint": "large",
+      "safetyTags": ["power", "control"]
+    }
+  ],
+  "connections": [
+    { "fromStationId": "limestone_crusher", "toStationId": "pre_homogenization", "medium": "material", "visualKind": "material_conveyor", "fromPortId": "crushed_material_out", "toPortId": "raw_material_in" },
+    { "fromStationId": "pre_homogenization", "toStationId": "raw_mill", "medium": "material", "visualKind": "material_conveyor", "fromPortId": "blended_material_out", "toPortId": "raw_feed_in" },
+    { "fromStationId": "raw_mill", "toStationId": "raw_meal_silo", "medium": "material", "visualKind": "material_conveyor", "fromPortId": "raw_meal_out", "toPortId": "top_feed_inlet" },
+    { "fromStationId": "raw_meal_silo", "toStationId": "preheater_tower", "medium": "material", "visualKind": "pipe", "fromPortId": "raw_meal_out", "toPortId": "raw_meal_in" },
+    { "fromStationId": "preheater_tower", "toStationId": "rotary_kiln", "medium": "material", "visualKind": "hot_material_chute", "fromPortId": "hot_meal_out", "toPortId": "hot_meal_in" },
+    { "fromStationId": "coal_mill", "toStationId": "kiln_burner", "medium": "material", "visualKind": "pipe", "fromPortId": "pulverized_fuel_out", "toPortId": "fuel_in" },
+    { "fromStationId": "kiln_burner", "toStationId": "kiln_hood", "medium": "material", "visualKind": "pipe", "fromPortId": "flame_out", "toPortId": "burner_opening" },
+    { "fromStationId": "rotary_kiln", "toStationId": "kiln_hood", "medium": "material", "visualKind": "hot_material_chute", "fromPortId": "clinker_out", "toPortId": "kiln_head_in" },
+    { "fromStationId": "kiln_hood", "toStationId": "grate_cooler", "medium": "material", "visualKind": "hot_material_chute", "fromPortId": "hot_clinker_out", "toPortId": "hot_clinker_in" },
+    { "fromStationId": "grate_cooler", "toStationId": "clinker_crusher", "medium": "material", "visualKind": "hot_material_chute", "fromPortId": "cooled_clinker_out", "toPortId": "hot_clinker_in" },
+    { "fromStationId": "clinker_crusher", "toStationId": "clinker_conveying", "medium": "material", "visualKind": "material_conveyor", "fromPortId": "crushed_clinker_out", "toPortId": "material_in" },
+    { "fromStationId": "clinker_conveying", "toStationId": "clinker_silo", "medium": "material", "visualKind": "material_conveyor", "fromPortId": "material_out", "toPortId": "top_feed_inlet" },
+    { "fromStationId": "clinker_silo", "toStationId": "cement_mill", "medium": "material", "visualKind": "material_conveyor", "fromPortId": "bottom_discharge_outlet", "toPortId": "feed_inlet" },
+    { "fromStationId": "cement_mill", "toStationId": "cement_silo", "medium": "material", "visualKind": "material_conveyor", "fromPortId": "product_outlet", "toPortId": "top_feed_inlet" },
+    { "fromStationId": "cement_silo", "toStationId": "cement_packer", "medium": "material", "visualKind": "material_conveyor", "fromPortId": "bulk_discharge_outlet", "toPortId": "cement_feed_inlet" },
+    { "fromStationId": "preheater_tower", "toStationId": "kiln_tail_esp", "medium": "material", "visualKind": "hot_gas_duct", "fromPortId": "exhaust_gas_out", "toPortId": "dust_gas_in" },
+    { "fromStationId": "kiln_tail_esp", "toStationId": "process_stack", "medium": "material", "visualKind": "air_duct", "fromPortId": "clean_air_out", "toPortId": "stack_gas_in" },
+    { "fromStationId": "grate_cooler", "toStationId": "tertiary_air_duct", "medium": "material", "visualKind": "hot_gas_duct", "fromPortId": "cooler_exhaust_out", "toPortId": "cooler_air_in" },
+    { "fromStationId": "tertiary_air_duct", "toStationId": "preheater_tower", "medium": "material", "visualKind": "hot_gas_duct", "fromPortId": "tertiary_air_out", "toPortId": "tertiary_air_in" },
+    { "fromStationId": "preheater_tower", "toStationId": "whr_boiler", "medium": "material", "visualKind": "hot_gas_duct", "fromPortId": "exhaust_gas_out", "toPortId": "hot_gas_in" },
+    { "fromStationId": "mcc_control", "toStationId": "raw_mill", "medium": "power", "visualKind": "cable_tray", "fromPortId": "power_out", "toPortId": "power_in" },
+    { "fromStationId": "mcc_control", "toStationId": "rotary_kiln", "medium": "power", "visualKind": "cable_tray", "fromPortId": "power_out", "toPortId": "power_in" },
+    { "fromStationId": "mcc_control", "toStationId": "cement_mill", "medium": "power", "visualKind": "cable_tray", "fromPortId": "power_out", "toPortId": "power_in" }
+  ]
+}

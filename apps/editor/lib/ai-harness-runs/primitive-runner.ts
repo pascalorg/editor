@@ -1,3 +1,9 @@
+import {
+  applyDeviceProfileToPartInput,
+  type DeviceProfileDefinition,
+  evaluateDeviceProfileQuality,
+  inferDeviceProfileDefinition,
+} from '@pascal-app/core/lib/device-profile-registry'
 import { callConfiguredAi } from '@/lib/ai-provider'
 import {
   type AiChatHarnessMessage,
@@ -24,6 +30,11 @@ import {
 } from '../../../../packages/editor/src/lib/ai-geometry-tool-executor'
 import { persistDeviceProfileCandidateFromArtifact } from '../device-profile-candidates'
 import { loadDeviceProfiles } from '../device-profiles'
+import { type IndustryPackRef, resolveIndustryPackDir } from './industry-factory-knowledge'
+import {
+  applyProfileEditablePatchToArgs,
+  resolveProfileEditablePatch,
+} from './profile-editable-patches'
 import { appendRunEvent, isTerminalStatus, loadRun, updateRun } from './run-store'
 
 type ApiMessage = {
@@ -89,8 +100,15 @@ type PartBlueprint = {
 }
 
 type PrimitiveRouteMetrics = {
-  route: 'deterministic' | 'stage2_fallback'
+  route: 'profile' | 'deterministic' | 'stage2_fallback'
   stage1HasBlueprint: boolean
+  selectedProfile?: string
+  profileSource?: string
+  profilePackId?: string
+  layoutTemplate?: string
+  overrodeBuiltin?: boolean
+  profileOverrides?: unknown[]
+  profileQualityScore?: number
   deterministicIntent: boolean
   deterministicAttempted: boolean
   deterministicSucceeded: boolean
@@ -100,10 +118,16 @@ type PrimitiveRouteMetrics = {
     | 'no_deterministic_intent'
     | 'planner_issues'
     | 'direct_execution_no_artifact'
+    | 'profile_no_artifact'
   family?: string
   component?: string
   deterministicTool?: string
   plannerIssues?: string[]
+  stage3QualityScore?: number
+  stage3Passed?: boolean
+  stage3Issues?: string[]
+  stage3Warnings?: string[]
+  stage3RepairApplied?: boolean
   stage2ToolCallCount: number
   repairCallCount: number
 }
@@ -123,7 +147,7 @@ const GEOMETRY_TOOL_NAMES = new Set([
 const PRIMITIVE_TOOLS: ComposeTool[] = [
   tool(
     'compose_recipe',
-    'Create one editable object from a deterministic instruction sheet. Recipes stay small and reference generic parts with semantic roles; use only for closed-form professional standard parts such as gear.spur, sprocket.chain, pipe.flange, pipe.elbow90, fastener.hexBolt, bearing.pillowBlock, coupling.flexible, plate.perforated, valve.gate/ball, robotArm.threeAxis, mixer.impeller, and motor.servo. Do not use this for open-ended complete equipment such as vehicles, outdoor AC units, machine tools, industrial robot arms, pumps, conveyors, fans, tanks, towers, reactors, compressors, grate coolers, aircraft, or broad industrial archetypes.',
+    'Create one editable object from a deterministic instruction sheet. Recipes stay small and reference generic parts with semantic roles; use only for closed-form professional standard parts such as gear.spur, sprocket.chain, pipe.flange, pipe.elbow90, fastener.hexBolt, bearing.pillowBlock, coupling.flexible, plate.perforated, valve.gate/ball, robotArm.threeAxis, mixer.impeller, motor.servo, process.vesselShell, structure.platformLadder, and enclosure.roundedBox. Do not use this for open-ended complete equipment such as vehicles, outdoor AC units, machine tools, industrial robot arms, pumps, conveyors, fans, tanks, towers, reactors, compressors, grate coolers, aircraft, or broad industrial archetypes.',
   ),
   tool(
     'compose_assembly',
@@ -131,7 +155,7 @@ const PRIMITIVE_TOOLS: ComposeTool[] = [
   ),
   tool(
     'compose_parts',
-    'Create one editable object from the reusable building-block library. Prefer this when explicitly selecting parts or when compose_assembly does not support the requested family. Use generic kernels such as chimney_stack, aircraft_fuselage, wheel/wheel_set, window_panel/window_strip, body_shell, tube_frame, fork, light_pair, bar_pair, streamlined_body, lofted_panel, airfoil_blade, pyramid, pipe/flange/bolt parts, and assign semanticRole for context-specific meaning. For a complete bicycle, use exactly wheel_set semanticRole:"bicycle_tire" count:2 + tube_frame semanticRole:"bicycle_frame" + fork semanticRole:"bicycle_fork" + handlebar + saddle + chain_loop; do not invent bicycle_crank/chainring/pedals part kinds. For complete aircraft/airplanes/airliners, use parts:[{kind:"aircraft_fuselage", id:"aircraft_fuselage"}] with top-level length/primaryColor and let defaults add wings, engines, T-tail, windows, and landing gear; do not hand-place generic airfoil_blade/streamlined_body/wheel_set parts for complete aircraft. For industrial chimneys/smokestacks, use parts:[{kind:"chimney_stack", semanticRole:"chimney_body", height, radius, warningStripes:true}] and do not use vertical_pole/circular_base/cylinder. Use pyramid for square/rectangular pyramids, Egyptian-style pyramids, pointed rooftops, and cone-like shapes with a square base; set truncated:true or topScale to make a flat-top truncated pyramid. Prefer relationship fields over raw coordinates: alignAbove, alignBeside with side, centeredOn, connectTo with connectPoint/childPoint, around with aroundCount/aroundRadius, and array:{count,axis,spacing} for repeated linear parts.',
+    'Create one editable object from the reusable building-block library. Prefer this when explicitly selecting parts or when compose_assembly does not support the requested family. Use generic kernels such as chimney_stack, aircraft_fuselage, wheel/wheel_set, window_panel/window_strip, body_shell, tube_frame, fork, light_pair, bar_pair, streamlined_body, lofted_panel, airfoil_blade, pyramid, pipe/flange/bolt parts, and assign semanticRole for context-specific meaning. For complete fans, prefer fan_blade with count:3-6 so each blade is independently editable; radial_blades is kept only as a compatibility composite. For a complete bicycle, use exactly wheel_set semanticRole:"bicycle_tire" count:2 + tube_frame semanticRole:"bicycle_frame" + fork semanticRole:"bicycle_fork" + handlebar + saddle + chain_loop; do not invent bicycle_crank/chainring/pedals part kinds. For complete aircraft/airplanes/airliners, use parts:[{kind:"aircraft_fuselage", id:"aircraft_fuselage"}] with top-level length/primaryColor and let defaults add wings, engines, T-tail, windows, and landing gear; do not hand-place generic airfoil_blade/streamlined_body/wheel_set parts for complete aircraft. For industrial chimneys/smokestacks, use parts:[{kind:"chimney_stack", semanticRole:"chimney_body", height, radius, warningStripes:true}] and do not use vertical_pole/circular_base/cylinder. Use pyramid for square/rectangular pyramids, Egyptian-style pyramids, pointed rooftops, and cone-like shapes with a square base; set truncated:true or topScale to make a flat-top truncated pyramid. Prefer relationship fields over raw coordinates: alignAbove, alignBeside with side, centeredOn, connectTo with connectPoint/childPoint, around with aroundCount/aroundRadius, and array:{count,axis,spacing} for repeated linear parts.',
   ),
   tool(
     'compose_robot_arm',
@@ -462,6 +486,24 @@ function stringFromContext(context: Record<string, unknown>, key: string) {
   return typeof value === 'string' ? value : undefined
 }
 
+function industryPackRefFromContext(context: Record<string, unknown>): IndustryPackRef | undefined {
+  const value = context.industrySourcePack
+  if (!isRecord(value)) return undefined
+  const id = typeof value.id === 'string' && value.id.trim() ? value.id.trim() : undefined
+  const version =
+    typeof value.version === 'string' && value.version.trim() ? value.version.trim() : undefined
+  const industry =
+    typeof value.industry === 'string' && value.industry.trim() ? value.industry.trim() : undefined
+  if (!id || !version) return undefined
+  return { id, version, ...(industry ? { industry } : {}) }
+}
+
+function extraDeviceProfilePackDirsFromContext(context: Record<string, unknown>) {
+  const ref = industryPackRefFromContext(context)
+  const dir = ref ? resolveIndustryPackDir(ref) : undefined
+  return dir ? [dir] : []
+}
+
 function latestArtifactFromContext(context: Record<string, unknown>, key = 'latestArtifact') {
   const value = context[key]
   return isRecord(value) ? (value as unknown as GeneratedGeometryArtifact) : null
@@ -556,6 +598,501 @@ function executeTool(
   )
 }
 
+export function precisionPartDeterministicRoute(
+  userPrompt: string,
+  revisionTarget: GeneratedGeometryArtifact | null,
+):
+  | {
+      label: string
+      family: string
+      args: Record<string, unknown>
+    }
+  | undefined {
+  if (revisionTarget) return undefined
+  const text = userPrompt.toLowerCase()
+  const robotArmIntent =
+    /(\u673a\u5668\u81c2|\u673a\u68b0\u81c2|\u516d\u8f74|\u4e03\u8f74|\u56db\u8f74|robot[_\s-]?arm|industrial[_\s-]?robot|six[_\s-]?axis|6[_\s-]?axis|seven[_\s-]?axis|7[_\s-]?axis|four[_\s-]?axis|4[_\s-]?axis|fanuc|kuka|abb)/i.test(
+      text,
+    )
+  if (robotArmIntent) {
+    const axisCount = robotArmAxisCountFromPrompt(text)
+    return {
+      label: `${axisCount}-axis industrial robot arm`,
+      family: 'robot_arm',
+      args: {
+        name: `${axisCount}-axis industrial robot arm`,
+        family: 'robot_arm',
+        axisCount,
+        includeWorkcell: false,
+        height: 2.2,
+        endEffector: 'tool-flange',
+      },
+    }
+  }
+
+  const fanIntent =
+    /(\u5de5\u4e1a\u98ce\u6247|\u843d\u5730\u6247|\u7535\u98ce\u6247|\u98ce\u6247|industrial[_\s-]?(pedestal[_\s-]?)?fan|standing[_\s-]?fan|pedestal[_\s-]?fan)/i.test(
+      text,
+    ) && !/(fanuc)/i.test(text)
+  if (fanIntent) {
+    const primaryColor = fanPrimaryColorFromPrompt(text)
+    const bladeCount = fanBladeCountFromPrompt(text)
+    return {
+      label: 'industrial pedestal fan',
+      family: 'fan',
+      args: {
+        name: 'industrial pedestal fan',
+        family: 'fan',
+        primaryColor,
+        metalColor: '#cbd5e1',
+        parts: [
+          {
+            id: 'base',
+            kind: 'circular_base',
+            semanticRole: 'fan_base',
+            radius: 0.28,
+            height: 0.06,
+            primaryColor: '#111827',
+          },
+          {
+            id: 'pole',
+            kind: 'vertical_pole',
+            semanticRole: 'fan_pole',
+            alignAbove: 'base',
+            radius: 0.024,
+            height: 1.05,
+            metalColor: '#111827',
+          },
+          {
+            id: 'yoke',
+            kind: 'support_bracket',
+            semanticRole: 'fan_yoke',
+            alignAbove: 'pole',
+            width: 0.18,
+            height: 0.14,
+            depth: 0.14,
+            metalColor: '#111827',
+          },
+          {
+            id: 'motor',
+            kind: 'motor_housing',
+            semanticRole: 'motor_housing',
+            alignAbove: 'yoke',
+            radius: 0.13,
+            depth: 0.18,
+            primaryColor,
+          },
+          {
+            id: 'blades',
+            kind: 'fan_blade',
+            semanticRole: 'fan_blade',
+            centeredOn: 'motor',
+            count: bladeCount,
+            length: 0.32,
+            width: 0.1,
+            thickness: 0.012,
+            pitch: 0.28,
+            primaryColor,
+            includeHub: true,
+          },
+          {
+            id: 'grill',
+            kind: 'protective_grill',
+            semanticRole: 'protective_grill',
+            centeredOn: 'motor',
+            side: 'front',
+            radius: 0.37,
+            depth: 0.08,
+            detailLevel: 'low',
+          },
+        ],
+      },
+    }
+  }
+
+  const tankIntent =
+    /(\u5367\u5f0f|\u50a8\u7f50|\u538b\u529b\u7f50|\u538b\u529b\u5bb9\u5668|storage[_\s-]?tank|pressure[_\s-]?(tank|vessel)|horizontal[_\s-]?(tank|vessel))/i.test(
+      text,
+    ) && !/(\u53cd\u5e94\u91dc|\u53cd\u5e94\u5668|reactor|agitator|stirred)/i.test(text)
+  if (tankIntent) {
+    return {
+      label: 'horizontal pressure tank',
+      family: 'tank',
+      args: {
+        name: 'horizontal pressure storage tank',
+        family: 'generic',
+        parts: [
+          {
+            kind: 'cylindrical_tank',
+            semanticRole: 'vessel_shell',
+            axis: 'x',
+            length: 2.2,
+            radius: 0.34,
+          },
+        ],
+      },
+    }
+  }
+
+  const platformIntent =
+    !robotArmIntent &&
+    /(\u68c0\u4fee\u5e73\u53f0|\u5de5\u4e1a\u5e73\u53f0|\u722c\u68af|access[_\s-]?platform|inspection[_\s-]?platform|platform[_\s-]?ladder)/i.test(
+      text,
+    ) &&
+    !/(\u50a8\u7f50|\u538b\u529b\u7f50|\u538b\u529b\u5bb9\u5668|\u53cd\u5e94\u91dc|\u53cd\u5e94\u5668|storage[_\s-]?tank|pressure[_\s-]?(tank|vessel)|reactor|agitator|stirred)/i.test(
+      text,
+    )
+  if (platformIntent) {
+    return {
+      label: 'industrial platform ladder',
+      family: 'generic',
+      args: {
+        name: 'industrial inspection platform ladder',
+        family: 'generic',
+        parts: [
+          {
+            kind: 'platform_ladder',
+            semanticRole: 'access_platform',
+            length: 1.2,
+            width: 0.7,
+            height: 1.6,
+            count: 7,
+          },
+        ],
+      },
+    }
+  }
+
+  return undefined
+}
+
+function robotArmAxisCountFromPrompt(text: string): number {
+  if (/(seven[_\s-]?axis|7[_\s-]?axis|\u4e03\u8f74)/i.test(text)) return 7
+  if (/(six[_\s-]?axis|6[_\s-]?axis|\u516d\u8f74|fanuc|kuka|abb)/i.test(text)) return 6
+  if (/(five[_\s-]?axis|5[_\s-]?axis|\u4e94\u8f74)/i.test(text)) return 5
+  if (/(four[_\s-]?axis|4[_\s-]?axis|\u56db\u8f74|scara)/i.test(text)) return 4
+  if (/(three[_\s-]?axis|3[_\s-]?axis|\u4e09\u8f74)/i.test(text)) return 3
+  return 6
+}
+
+function fanBladeCountFromPrompt(text: string): number {
+  if (/(\u516d\u7247|\u516d\u53f6|six|6)/i.test(text)) return 6
+  if (/(\u4e94\u7247|\u4e94\u53f6|five|5)/i.test(text)) return 5
+  if (/(\u56db\u7247|\u56db\u53f6|four|4)/i.test(text)) return 4
+  if (/(\u4e09\u7247|\u4e09\u53f6|three|3)/i.test(text)) return 3
+  return 5
+}
+
+function fanPrimaryColorFromPrompt(text: string): string {
+  if (/(\u84dd|blue)/i.test(text)) return '#3b82f6'
+  if (/(\u7ea2|red)/i.test(text)) return '#ef4444'
+  if (/(\u9ed1|black)/i.test(text)) return '#111827'
+  if (/(\u767d|white)/i.test(text)) return '#f8fafc'
+  if (/(\u9ec4|yellow)/i.test(text)) return '#facc15'
+  return '#ef4444'
+}
+
+type Stage3RepairPlan = {
+  label: string
+  tool: 'compose_parts'
+  args: Record<string, unknown>
+}
+
+type Stage3QualityReview = {
+  passed: boolean
+  score: number
+  issues: string[]
+  warnings: string[]
+  repairPlan?: Stage3RepairPlan
+}
+
+export function stage3QualityReview(
+  userPrompt: string,
+  artifact: GeneratedGeometryArtifact,
+): Stage3QualityReview {
+  const text = userPrompt.toLowerCase()
+  const roles = new Set(artifact.shapes.map((shape) => shape.semanticRole).filter(Boolean))
+  const sourceKinds = new Set(artifact.shapes.map((shape) => shape.sourcePartKind).filter(Boolean))
+  const issues: string[] = []
+  const warnings: string[] = []
+  let repairPlan: Stage3RepairPlan | undefined
+
+  const hasAllRoles = (requiredRoles: string[]) => {
+    const missing = requiredRoles.filter((role) => !roles.has(role))
+    for (const role of missing) issues.push(`Stage3 missing required role "${role}".`)
+    return missing.length === 0
+  }
+  const hasForbiddenRole = (forbiddenRoles: string[]) => {
+    const found = forbiddenRoles.filter((role) => roles.has(role))
+    for (const role of found) issues.push(`Stage3 found unrelated role "${role}".`)
+    return found.length > 0
+  }
+
+  const tankIntent =
+    /(\u5367\u5f0f|\u50a8\u7f50|\u538b\u529b\u7f50|\u538b\u529b\u5bb9\u5668|storage[_\s-]?tank|pressure[_\s-]?(tank|vessel)|horizontal[_\s-]?(tank|vessel))/i.test(
+      text,
+    ) && !/(\u53cd\u5e94\u91dc|\u53cd\u5e94\u5668|reactor|agitator|stirred)/i.test(text)
+  if (tankIntent) {
+    const required = [
+      'vessel_shell',
+      'vessel_head',
+      'top_nozzle',
+      'manway_flange',
+      'saddle_support',
+    ]
+    const complete = hasAllRoles(required)
+    const unrelated = hasForbiddenRole([
+      'fan_blades',
+      'protective_grill',
+      'machine_body',
+      'machine_enclosure',
+      'auger_screw',
+      'bicycle_tire',
+    ])
+    if (!sourceKinds.has('cylindrical_tank')) {
+      issues.push('Stage3 pressure tank must be backed by cylindrical_tank.')
+    }
+    if (!complete || unrelated || !sourceKinds.has('cylindrical_tank')) {
+      repairPlan = {
+        label: 'canonical horizontal pressure tank',
+        tool: 'compose_parts',
+        args: {
+          name: 'horizontal pressure storage tank',
+          family: 'generic',
+          parts: [
+            {
+              kind: 'cylindrical_tank',
+              semanticRole: 'vessel_shell',
+              axis: 'x',
+              length: 2.2,
+              radius: 0.34,
+            },
+          ],
+        },
+      }
+    }
+  }
+
+  const platformIntent =
+    !/(\u673a\u5668\u81c2|\u673a\u68b0\u81c2|\u516d\u8f74|\u4e03\u8f74|\u56db\u8f74|robot[_\s-]?arm|industrial[_\s-]?robot|six[_\s-]?axis|6[_\s-]?axis|seven[_\s-]?axis|7[_\s-]?axis|four[_\s-]?axis|4[_\s-]?axis|fanuc|kuka|abb)/i.test(
+      text,
+    ) &&
+    /(\u68c0\u4fee\u5e73\u53f0|\u5de5\u4e1a\u5e73\u53f0|\u722c\u68af|access[_\s-]?platform|inspection[_\s-]?platform|platform[_\s-]?ladder)/i.test(
+      text,
+    ) &&
+    !/(\u50a8\u7f50|\u538b\u529b\u7f50|\u538b\u529b\u5bb9\u5668|\u53cd\u5e94\u91dc|\u53cd\u5e94\u5668|storage[_\s-]?tank|pressure[_\s-]?(tank|vessel)|reactor|agitator|stirred)/i.test(
+      text,
+    )
+  if (platformIntent) {
+    const complete = hasAllRoles([
+      'access_platform',
+      'platform_post',
+      'guard_rail',
+      'ladder_side_rail',
+      'ladder_rung',
+    ])
+    const unrelated = hasForbiddenRole([
+      'bicycle_tire',
+      'vehicle_tire',
+      'vessel_shell',
+      'machine_body',
+      'fan_blades',
+    ])
+    if (!sourceKinds.has('platform_ladder')) {
+      issues.push('Stage3 inspection platform must be backed by platform_ladder.')
+    }
+    if (!complete || unrelated || !sourceKinds.has('platform_ladder')) {
+      repairPlan = {
+        label: 'canonical industrial platform ladder',
+        tool: 'compose_parts',
+        args: {
+          name: 'industrial inspection platform ladder',
+          family: 'generic',
+          parts: [
+            {
+              kind: 'platform_ladder',
+              semanticRole: 'access_platform',
+              length: 1.2,
+              width: 0.7,
+              height: 1.6,
+              count: 7,
+            },
+          ],
+        },
+      }
+    }
+  }
+
+  if (artifact.shapes.length > 70) {
+    warnings.push(`Stage3 high shape count (${artifact.shapes.length}); prefer reusable parts.`)
+  }
+  const score = Math.max(0, Math.min(1, 1 - issues.length * 0.18 - warnings.length * 0.05))
+  return {
+    passed: issues.length === 0 && score >= 0.75,
+    score,
+    issues,
+    warnings,
+    repairPlan,
+  }
+}
+
+async function applyStage3QualityGate(input: {
+  runId: string
+  userPrompt: string
+  artifact: GeneratedGeometryArtifact
+  revisionTarget: GeneratedGeometryArtifact | null
+  loadedDeviceProfiles: Awaited<ReturnType<typeof loadDeviceProfiles>>
+  routeMetrics: PrimitiveRouteMetrics
+  signal: AbortSignal
+}): Promise<{ artifact: GeneratedGeometryArtifact; content?: string }> {
+  const review = stage3QualityReview(input.userPrompt, input.artifact)
+  input.routeMetrics.stage3QualityScore = review.score
+  input.routeMetrics.stage3Passed = review.passed
+  input.routeMetrics.stage3Issues = review.issues
+  input.routeMetrics.stage3Warnings = review.warnings
+  await appendRunEvent(input.runId, {
+    type: 'message',
+    message: review.passed ? 'Stage3 quality gate passed' : 'Stage3 quality gate flagged issues',
+    data: { stage: 'stage3-quality', review },
+  })
+
+  if (review.passed || !review.repairPlan) return { artifact: input.artifact }
+
+  input.routeMetrics.stage3RepairApplied = true
+  await appendRunEvent(input.runId, {
+    type: 'tool-call',
+    message: review.repairPlan.tool,
+    data: {
+      stage: 'stage3-repair',
+      name: review.repairPlan.tool,
+      arguments: review.repairPlan.args,
+      repairLabel: review.repairPlan.label,
+    },
+  })
+  throwIfAborted(input.signal)
+  const repaired = executeTool(
+    review.repairPlan.tool,
+    review.repairPlan.args,
+    input.userPrompt,
+    input.revisionTarget,
+    null,
+    input.loadedDeviceProfiles,
+  )
+  await appendRunEvent(input.runId, {
+    type: 'tool-result',
+    message: repaired.content,
+    data: {
+      stage: 'stage3-repair',
+      name: review.repairPlan.tool,
+      artifact: repaired.artifact,
+      repairLabel: review.repairPlan.label,
+    },
+  })
+  if (!repaired.artifact) return { artifact: input.artifact, content: repaired.content }
+
+  const repairedReview = stage3QualityReview(input.userPrompt, repaired.artifact)
+  input.routeMetrics.stage3QualityScore = repairedReview.score
+  input.routeMetrics.stage3Passed = repairedReview.passed
+  input.routeMetrics.stage3Issues = repairedReview.issues
+  input.routeMetrics.stage3Warnings = repairedReview.warnings
+  await appendRunEvent(input.runId, {
+    type: 'message',
+    message: repairedReview.passed
+      ? 'Stage3 deterministic repair passed'
+      : 'Stage3 deterministic repair still has issues',
+    data: { stage: 'stage3-quality', review: repairedReview },
+  })
+  return {
+    artifact: repaired.artifact,
+    content: [`Stage3 repaired geometry using ${review.repairPlan.label}.`, repaired.content].join(
+      '\n',
+    ),
+  }
+}
+
+function shouldUseDeterministicProfileRoute(input: {
+  profile: DeviceProfileDefinition | undefined
+  userPrompt: string
+  revisionTarget: GeneratedGeometryArtifact | null
+}) {
+  if (!input.profile) return false
+  if (input.revisionTarget) return false
+  if (isLikelyGeometryRevisionRequest(input.userPrompt, input.revisionTarget)) return false
+  return input.profile.status === 'stable'
+}
+
+function buildProfileRouteArgs(
+  profile: DeviceProfileDefinition,
+  userPrompt: string,
+): Record<string, unknown> {
+  const rawProfile = profile as DeviceProfileDefinition & {
+    visualCues?: readonly string[]
+    layoutHints?: Record<string, unknown>
+  }
+  const geometryBrief = [
+    `Device profile ${profile.id} (${profile.name}) from ${profile.source}.`,
+    profile.sourcePack
+      ? `Source pack: ${profile.sourcePack.id}@${profile.sourcePack.version}.`
+      : undefined,
+    profile.layoutTemplate ? `Layout template: ${profile.layoutTemplate}.` : undefined,
+    profile.description,
+    rawProfile.visualCues?.length ? `Visual cues: ${rawProfile.visualCues.join('; ')}.` : undefined,
+    rawProfile.layoutHints ? `Layout hints: ${JSON.stringify(rawProfile.layoutHints)}.` : undefined,
+    `User request: ${userPrompt}`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+  return applyDeviceProfileToPartInput(profile, {
+    prompt: userPrompt,
+    name: profile.name,
+    object: profile.name,
+    category: profile.id,
+    deviceProfile: profile.id,
+    profile: profile.id,
+    geometryBrief,
+    ...(rawProfile.layoutHints ? { layoutHints: rawProfile.layoutHints } : {}),
+    forceProfile: true,
+  })
+}
+
+function profileForArtifact(
+  artifact: GeneratedGeometryArtifact | null,
+  profiles: readonly DeviceProfileDefinition[],
+): DeviceProfileDefinition | undefined {
+  if (!artifact || !isRecord(artifact.sourceArgs)) return undefined
+  return inferDeviceProfileDefinition(
+    {
+      deviceProfile: artifact.sourceArgs.deviceProfile,
+      profile: artifact.sourceArgs.profile,
+      deviceType: artifact.sourceArgs.deviceType,
+      prompt: artifact.userPrompt,
+      name: artifact.sourceArgs.name,
+      object: artifact.sourceArgs.object,
+    },
+    profiles,
+  )
+}
+
+function profileForEditableRevision(
+  userPrompt: string,
+  revisionTarget: GeneratedGeometryArtifact | null,
+  profiles: readonly DeviceProfileDefinition[],
+): DeviceProfileDefinition | undefined {
+  const promptProfile = inferDeviceProfileDefinition(
+    { prompt: userPrompt, name: userPrompt, object: userPrompt },
+    profiles,
+  )
+  if (promptProfile?.family === 'robot_arm') return promptProfile
+  return profileForArtifact(revisionTarget, profiles)
+}
+
+function artifactShapesForProfileQuality(artifact: GeneratedGeometryArtifact) {
+  return artifact.shapes.map((shape, index) => ({
+    ...shape,
+    position: artifact.transforms[index]?.position ?? shape.position,
+  }))
+}
+
 function chooseGeometryToolCall(toolCalls: ToolCall[]) {
   return toolCalls.find((call) => GEOMETRY_TOOL_NAMES.has(call.function.name))
 }
@@ -648,7 +1185,8 @@ async function runPrimitiveRun(runId: string) {
             contextDecision,
           })
         : (stringFromContext(context, 'analysisContext') ?? harnessContext)
-    const loadedDeviceProfiles = await loadDeviceProfiles()
+    const extraPackDirs = extraDeviceProfilePackDirsFromContext(context)
+    const loadedDeviceProfiles = await loadDeviceProfiles({ extraPackDirs })
 
     await appendRunEvent(runId, {
       type: 'message',
@@ -663,7 +1201,467 @@ async function runPrimitiveRun(runId: string) {
           stage: 'device-profiles',
           warnings: loadedDeviceProfiles.warnings,
           profileCount: loadedDeviceProfiles.profiles.length,
+          extraPackCount: extraPackDirs.length,
         },
+      })
+    }
+
+    const editableRevisionProfile = profileForEditableRevision(
+      userPrompt,
+      latestArtifactCandidate,
+      loadedDeviceProfiles.profiles,
+    )
+    const editablePatch = resolveProfileEditablePatch(
+      userPrompt,
+      latestArtifactCandidate,
+      editableRevisionProfile,
+    )
+    if (latestArtifactCandidate && editableRevisionProfile && editablePatch) {
+      const previousProfile = profileForArtifact(
+        latestArtifactCandidate,
+        loadedDeviceProfiles.profiles,
+      )
+      const sourceArgs = isRecord(latestArtifactCandidate.sourceArgs)
+        ? latestArtifactCandidate.sourceArgs
+        : {}
+      const baseArgs =
+        previousProfile?.id === editableRevisionProfile.id && Object.keys(sourceArgs).length > 0
+          ? { ...sourceArgs }
+          : buildProfileRouteArgs(editableRevisionProfile, userPrompt)
+      const revisionArgs = applyProfileEditablePatchToArgs(
+        {
+          ...baseArgs,
+          deviceProfile: editableRevisionProfile.id,
+          profile: editableRevisionProfile.id,
+          profileSource: editableRevisionProfile.source,
+          profileSourcePack: editableRevisionProfile.sourcePack,
+          profilePackId: editableRevisionProfile.sourcePack?.id,
+          profilePackVersion: editableRevisionProfile.sourcePack?.version,
+          editableSchemaRef: editableRevisionProfile.editableSchemaRef,
+          resolvedEditableSchema: editableRevisionProfile.resolvedEditableSchema,
+        },
+        editablePatch,
+      )
+      const routeMetrics: PrimitiveRouteMetrics = {
+        route: 'deterministic',
+        stage1HasBlueprint: false,
+        selectedProfile: editableRevisionProfile.id,
+        profileSource: editableRevisionProfile.source,
+        ...(editableRevisionProfile.sourcePack
+          ? { profilePackId: editableRevisionProfile.sourcePack.id }
+          : {}),
+        ...(editableRevisionProfile.layoutTemplate
+          ? { layoutTemplate: editableRevisionProfile.layoutTemplate }
+          : {}),
+        overrodeBuiltin:
+          editableRevisionProfile.overrides?.some((entry) => entry.source === 'builtin') === true,
+        deterministicIntent: true,
+        deterministicAttempted: true,
+        deterministicSucceeded: false,
+        stage2Called: false,
+        family: editableRevisionProfile.family,
+        deterministicTool: 'compose_parts',
+        stage2ToolCallCount: 0,
+        repairCallCount: 0,
+      }
+      const profileAnalysis = [
+        `Resolved editable profile patch for "${editableRevisionProfile.id}".`,
+        `Patch: ${editablePatch.reason}.`,
+        'Using deterministic compose_parts revision route before LLM Stage2.',
+      ].join('\n')
+      await appendRunEvent(runId, {
+        type: 'message',
+        message: profileAnalysis,
+        data: {
+          stage: 'profile-editable-revision',
+          selectedProfile: editableRevisionProfile.id,
+          patch: editablePatch,
+        },
+      })
+      await appendRunEvent(runId, {
+        type: 'tool-call',
+        message: 'compose_parts',
+        data: {
+          name: 'compose_parts',
+          arguments: revisionArgs,
+          deterministic: true,
+          editablePatch,
+        },
+      })
+      throwIfAborted(signal)
+      const directResult = executeTool(
+        'compose_parts',
+        revisionArgs,
+        userPrompt,
+        latestArtifactCandidate,
+        null,
+        loadedDeviceProfiles,
+      )
+      await appendRunEvent(runId, {
+        type: 'tool-result',
+        message: directResult.content,
+        data: { name: 'compose_parts', artifact: directResult.artifact, deterministic: true },
+      })
+      await appendRunEvent(runId, {
+        type: 'progress',
+        message: directResult.content,
+        data: {
+          stage: 'generate',
+          route: 'profile-editable-revision',
+          results: [directResult.content],
+          artifact: directResult.artifact,
+        },
+      })
+
+      if (directResult.artifact) {
+        routeMetrics.deterministicSucceeded = true
+        const profileQuality = evaluateDeviceProfileQuality(
+          editableRevisionProfile,
+          artifactShapesForProfileQuality(directResult.artifact),
+          { visualScore: 0.82 },
+        )
+        routeMetrics.profileQualityScore = profileQuality.overallScore
+        if (await shouldStopRun(runId, signal)) return
+        const result = {
+          contextDecision,
+          analysis: profileAnalysis,
+          results: [directResult.content],
+          lastContent: 'Deterministic editable profile revision completed.',
+          artifact: directResult.artifact,
+          sourceTool: directResult.artifact.sourceTool,
+          sourceArgs: directResult.artifact.sourceArgs,
+          geometryBrief: directResult.artifact.geometryBrief,
+          shapes: directResult.artifact.shapes,
+          transforms: directResult.artifact.transforms,
+          shapeCount: directResult.artifact.shapes.length,
+          selectedProfile: {
+            id: editableRevisionProfile.id,
+            name: editableRevisionProfile.name,
+            source: editableRevisionProfile.source,
+            sourcePack: editableRevisionProfile.sourcePack,
+            industry: editableRevisionProfile.industry,
+            family: editableRevisionProfile.family,
+            layoutFamily: editableRevisionProfile.layoutFamily,
+            layoutTemplate: editableRevisionProfile.layoutTemplate,
+            editableSchemaRef: editableRevisionProfile.editableSchemaRef,
+            primarySemanticRole: editableRevisionProfile.primarySemanticRole,
+          },
+          editablePatch,
+          profileQuality,
+          metrics: {
+            primitiveRoute: routeMetrics,
+            deviceProfiles: {
+              count: loadedDeviceProfiles.profiles.length,
+              warnings: loadedDeviceProfiles.warnings,
+            },
+          },
+          profileSources: {
+            count: loadedDeviceProfiles.profiles.length,
+            warnings: loadedDeviceProfiles.warnings,
+          },
+        }
+        await appendRunEvent(runId, {
+          type: 'message',
+          message: 'Primitive route metrics',
+          data: { stage: 'route-metrics', primitiveRoute: routeMetrics },
+        })
+        await appendRunEvent(runId, { type: 'result', data: result })
+        await updateRun(runId, {
+          status: 'succeeded',
+          completedAt: new Date().toISOString(),
+          result,
+        })
+        await appendRunEvent(runId, {
+          type: 'status',
+          message: 'succeeded',
+          data: { status: 'succeeded' },
+        })
+        return
+      }
+    }
+
+    const selectedProfile = inferDeviceProfileDefinition(
+      { prompt: userPrompt, name: userPrompt, object: userPrompt },
+      loadedDeviceProfiles.profiles,
+    )
+    if (
+      shouldUseDeterministicProfileRoute({
+        profile: selectedProfile,
+        userPrompt,
+        revisionTarget,
+      })
+    ) {
+      const profile = selectedProfile!
+      const routeMetrics: PrimitiveRouteMetrics = {
+        route: 'profile',
+        stage1HasBlueprint: false,
+        selectedProfile: profile.id,
+        profileSource: profile.source,
+        ...(profile.sourcePack ? { profilePackId: profile.sourcePack.id } : {}),
+        ...(profile.layoutTemplate ? { layoutTemplate: profile.layoutTemplate } : {}),
+        overrodeBuiltin: profile.overrides?.some((entry) => entry.source === 'builtin') === true,
+        ...(profile.overrides?.length ? { profileOverrides: [...profile.overrides] } : {}),
+        deterministicIntent: true,
+        deterministicAttempted: true,
+        deterministicSucceeded: false,
+        stage2Called: false,
+        family: profile.family,
+        deterministicTool: 'compose_parts',
+        stage2ToolCallCount: 0,
+        repairCallCount: 0,
+      }
+      const profileArgs = buildProfileRouteArgs(profile, userPrompt)
+      const profileAnalysis = [
+        `Matched device profile "${profile.id}" from ${profile.source}.`,
+        profile.sourcePack
+          ? `Using resource pack ${profile.sourcePack.id}@${profile.sourcePack.version}.`
+          : undefined,
+        profile.overrides?.some((entry) => entry.source === 'builtin')
+          ? 'This profile overrides a builtin fallback profile.'
+          : undefined,
+        'Using deterministic compose_parts route before LLM Stage2.',
+      ]
+        .filter(Boolean)
+        .join('\n')
+
+      await appendRunEvent(runId, {
+        type: 'message',
+        message: profileAnalysis,
+        data: {
+          stage: 'profile-router',
+          selectedProfile: profile.id,
+          profileSource: profile.source,
+          profilePackId: profile.sourcePack?.id,
+          overrodeBuiltin: profile.overrides?.some((entry) => entry.source === 'builtin') === true,
+        },
+      })
+      await appendRunEvent(runId, {
+        type: 'tool-call',
+        message: 'compose_parts',
+        data: { name: 'compose_parts', arguments: profileArgs, deterministic: true },
+      })
+      throwIfAborted(signal)
+      const directResult = executeTool(
+        'compose_parts',
+        profileArgs,
+        userPrompt,
+        revisionTarget,
+        null,
+        loadedDeviceProfiles,
+      )
+      await appendRunEvent(runId, {
+        type: 'tool-result',
+        message: directResult.content,
+        data: { name: 'compose_parts', artifact: directResult.artifact, deterministic: true },
+      })
+      await appendRunEvent(runId, {
+        type: 'progress',
+        message: directResult.content,
+        data: {
+          stage: 'generate',
+          route: 'profile',
+          results: [directResult.content],
+          artifact: directResult.artifact,
+        },
+      })
+
+      if (directResult.artifact) {
+        routeMetrics.deterministicSucceeded = true
+        const profileQuality = evaluateDeviceProfileQuality(
+          profile,
+          artifactShapesForProfileQuality(directResult.artifact),
+          { visualScore: 0.82 },
+        )
+        routeMetrics.profileQualityScore = profileQuality.overallScore
+        if (await shouldStopRun(runId, signal)) return
+        const result = {
+          contextDecision,
+          analysis: profileAnalysis,
+          results: [directResult.content],
+          lastContent: 'Deterministic device profile route completed.',
+          artifact: directResult.artifact,
+          sourceTool: directResult.artifact.sourceTool,
+          sourceArgs: directResult.artifact.sourceArgs,
+          geometryBrief: directResult.artifact.geometryBrief,
+          shapes: directResult.artifact.shapes,
+          transforms: directResult.artifact.transforms,
+          shapeCount: directResult.artifact.shapes.length,
+          selectedProfile: {
+            id: profile.id,
+            name: profile.name,
+            source: profile.source,
+            sourcePack: profile.sourcePack,
+            industry: profile.industry,
+            overrodeBuiltin:
+              profile.overrides?.some((entry) => entry.source === 'builtin') === true,
+            overrides: profile.overrides,
+            family: profile.family,
+            layoutFamily: profile.layoutFamily,
+            layoutTemplate: profile.layoutTemplate,
+            partPresets: profile.partPresets,
+            proportionRules: profile.proportionRules,
+            qualityRules: profile.qualityRules,
+            primarySemanticRole: profile.primarySemanticRole,
+          },
+          profileQuality,
+          metrics: {
+            primitiveRoute: routeMetrics,
+            deviceProfiles: {
+              count: loadedDeviceProfiles.profiles.length,
+              warnings: loadedDeviceProfiles.warnings,
+            },
+          },
+          profileSources: {
+            count: loadedDeviceProfiles.profiles.length,
+            warnings: loadedDeviceProfiles.warnings,
+          },
+        }
+        await appendRunEvent(runId, {
+          type: 'message',
+          message: 'Primitive route metrics',
+          data: { stage: 'route-metrics', primitiveRoute: routeMetrics },
+        })
+        await appendRunEvent(runId, { type: 'result', data: result })
+        await updateRun(runId, {
+          status: 'succeeded',
+          completedAt: new Date().toISOString(),
+          result,
+        })
+        await appendRunEvent(runId, {
+          type: 'status',
+          message: 'succeeded',
+          data: { status: 'succeeded' },
+        })
+        return
+      }
+
+      routeMetrics.fallbackReason = 'profile_no_artifact'
+      await appendRunEvent(runId, {
+        type: 'message',
+        message: 'Profile route produced no artifact; falling back to Stage1/Stage2.',
+        data: { stage: 'profile-router', primitiveRoute: routeMetrics },
+      })
+    }
+
+    const preflightPrecisionRoute = precisionPartDeterministicRoute(userPrompt, revisionTarget)
+    if (preflightPrecisionRoute) {
+      const routeMetrics: PrimitiveRouteMetrics = {
+        route: 'deterministic',
+        stage1HasBlueprint: false,
+        deterministicIntent: true,
+        deterministicAttempted: true,
+        deterministicSucceeded: false,
+        stage2Called: false,
+        family: preflightPrecisionRoute.family,
+        deterministicTool: 'compose_parts',
+        stage2ToolCallCount: 0,
+        repairCallCount: 0,
+      }
+      const routeAnalysis = `Matched deterministic precision route "${preflightPrecisionRoute.label}" before LLM Stage1.`
+      await appendRunEvent(runId, {
+        type: 'message',
+        message: routeAnalysis,
+        data: {
+          stage: 'deterministic-preflight',
+          intent: preflightPrecisionRoute.label,
+          tool: 'compose_parts',
+        },
+      })
+      await appendRunEvent(runId, {
+        type: 'tool-call',
+        message: 'compose_parts',
+        data: {
+          name: 'compose_parts',
+          arguments: preflightPrecisionRoute.args,
+          deterministic: true,
+        },
+      })
+      throwIfAborted(signal)
+      const directResult = executeTool(
+        'compose_parts',
+        preflightPrecisionRoute.args,
+        userPrompt,
+        revisionTarget,
+        null,
+        loadedDeviceProfiles,
+      )
+      await appendRunEvent(runId, {
+        type: 'tool-result',
+        message: directResult.content,
+        data: {
+          name: 'compose_parts',
+          artifact: directResult.artifact,
+          deterministic: true,
+        },
+      })
+      await appendRunEvent(runId, {
+        type: 'progress',
+        message: directResult.content,
+        data: {
+          stage: 'generate',
+          route: 'deterministic-precision-preflight',
+          results: [directResult.content],
+          artifact: directResult.artifact,
+        },
+      })
+
+      if (directResult.artifact) {
+        routeMetrics.deterministicSucceeded = true
+        const stage3Review = stage3QualityReview(userPrompt, directResult.artifact)
+        routeMetrics.stage3QualityScore = stage3Review.score
+        routeMetrics.stage3Passed = stage3Review.passed
+        routeMetrics.stage3Issues = stage3Review.issues
+        routeMetrics.stage3Warnings = stage3Review.warnings
+        if (await shouldStopRun(runId, signal)) return
+        const result = {
+          contextDecision,
+          analysis: routeAnalysis,
+          results: [directResult.content],
+          lastContent: routeAnalysis,
+          artifact: directResult.artifact,
+          sourceTool: directResult.artifact.sourceTool,
+          sourceArgs: directResult.artifact.sourceArgs,
+          geometryBrief: directResult.artifact.geometryBrief,
+          shapes: directResult.artifact.shapes,
+          transforms: directResult.artifact.transforms,
+          shapeCount: directResult.artifact.shapes.length,
+          metrics: {
+            primitiveRoute: routeMetrics,
+            deviceProfiles: {
+              count: loadedDeviceProfiles.profiles.length,
+              warnings: loadedDeviceProfiles.warnings,
+            },
+          },
+          profileSources: {
+            count: loadedDeviceProfiles.profiles.length,
+            warnings: loadedDeviceProfiles.warnings,
+          },
+        }
+        await appendRunEvent(runId, {
+          type: 'message',
+          message: 'Primitive route metrics',
+          data: { stage: 'route-metrics', primitiveRoute: routeMetrics },
+        })
+        await appendRunEvent(runId, { type: 'result', data: result })
+        await updateRun(runId, {
+          status: 'succeeded',
+          completedAt: new Date().toISOString(),
+          result,
+        })
+        await appendRunEvent(runId, {
+          type: 'status',
+          message: 'succeeded',
+          data: { status: 'succeeded' },
+        })
+        return
+      }
+
+      routeMetrics.fallbackReason = 'direct_execution_no_artifact'
+      await appendRunEvent(runId, {
+        type: 'message',
+        message:
+          'Deterministic precision route produced no artifact; falling back to Stage1/Stage2.',
+        data: { stage: 'deterministic-preflight', primitiveRoute: routeMetrics },
       })
     }
 
@@ -694,6 +1692,102 @@ async function runPrimitiveRun(runId: string) {
     }
     const deterministicResults: string[] = []
     let deterministicLastContent = ''
+    const precisionPartRoute = precisionPartDeterministicRoute(userPrompt, revisionTarget)
+    if (precisionPartRoute) {
+      routeMetrics.deterministicIntent = true
+      routeMetrics.fallbackReason = undefined
+      routeMetrics.family = precisionPartRoute.family
+      routeMetrics.deterministicTool = 'compose_parts'
+      deterministicLastContent = `Deterministic precision part route planned ${precisionPartRoute.label}.`
+      await appendRunEvent(runId, {
+        type: 'message',
+        message: deterministicLastContent,
+        data: {
+          stage: 'deterministic-plan',
+          intent: precisionPartRoute.label,
+          tool: 'compose_parts',
+          issues: [],
+        },
+      })
+
+      routeMetrics.deterministicAttempted = true
+      await appendRunEvent(runId, {
+        type: 'tool-call',
+        message: 'compose_parts',
+        data: {
+          name: 'compose_parts',
+          arguments: precisionPartRoute.args,
+          deterministic: true,
+        },
+      })
+      throwIfAborted(signal)
+      const directResult = executeTool(
+        'compose_parts',
+        precisionPartRoute.args,
+        userPrompt,
+        revisionTarget,
+        null,
+        loadedDeviceProfiles,
+      )
+      deterministicResults.push(directResult.content)
+      await appendRunEvent(runId, {
+        type: 'tool-result',
+        message: directResult.content,
+        data: {
+          name: 'compose_parts',
+          artifact: directResult.artifact,
+          deterministic: true,
+        },
+      })
+      await appendRunEvent(runId, {
+        type: 'progress',
+        message: directResult.content,
+        data: {
+          stage: 'generate',
+          route: 'deterministic-precision-part',
+          results: deterministicResults,
+          artifact: directResult.artifact,
+        },
+      })
+
+      if (directResult.artifact) {
+        routeMetrics.route = 'deterministic'
+        routeMetrics.deterministicSucceeded = true
+        if (await shouldStopRun(runId, signal)) return
+        const result = {
+          contextDecision,
+          analysis,
+          results: deterministicResults,
+          lastContent: deterministicLastContent,
+          artifact: directResult.artifact,
+          metrics: {
+            primitiveRoute: routeMetrics,
+            deviceProfiles: {
+              count: loadedDeviceProfiles.profiles.length,
+              warnings: loadedDeviceProfiles.warnings,
+            },
+          },
+        }
+        await appendRunEvent(runId, {
+          type: 'message',
+          message: 'Primitive route metrics',
+          data: { stage: 'route-metrics', primitiveRoute: routeMetrics },
+        })
+        await appendRunEvent(runId, { type: 'result', data: result })
+        await updateRun(runId, {
+          status: 'succeeded',
+          completedAt: new Date().toISOString(),
+          result,
+        })
+        await appendRunEvent(runId, {
+          type: 'status',
+          message: 'succeeded',
+          data: { status: 'succeeded' },
+        })
+        return
+      }
+      routeMetrics.fallbackReason = 'direct_execution_no_artifact'
+    }
     const deterministicCreateIntent = blueprint
       ? inferCreateIntentFromBlueprint('compose_parts', {}, blueprint, userPrompt)
       : undefined
@@ -965,7 +2059,19 @@ async function runPrimitiveRun(runId: string) {
             message: result.content,
             data: { name: call.function.name, artifact: result.artifact },
           })
-          if (result.artifact) artifact = result.artifact
+          if (result.artifact) {
+            const stage3 = await applyStage3QualityGate({
+              runId,
+              userPrompt,
+              artifact: result.artifact,
+              revisionTarget,
+              loadedDeviceProfiles,
+              routeMetrics,
+              signal,
+            })
+            artifact = stage3.artifact
+            if (stage3.content) results.push(stage3.content)
+          }
         }
       }
 

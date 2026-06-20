@@ -1,0 +1,1123 @@
+[
+  {
+    "id": "cement.limestone_crusher",
+    "name": "Limestone crusher",
+    "aliases": [
+      "limestone crusher",
+      "cement crusher",
+      "stone crusher",
+      "石灰石破碎机",
+      "破碎机"
+    ],
+    "industry": "cement",
+    "family": "machine_tool",
+    "layoutFamily": "box_enclosure_layout",
+    "archetypeFamily": "material_handling",
+    "defaultDimensions": {
+      "length": 4.2,
+      "width": 2.4,
+      "height": 2.6
+    },
+    "primarySemanticRole": "crusher_housing",
+    "parts": [
+      {
+        "kind": "generic_base",
+        "semanticRole": "crusher_base",
+        "required": true,
+        "length": 4.1,
+        "width": 2.3,
+        "height": 0.28
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "crusher_housing",
+        "required": true,
+        "length": 3.2,
+        "width": 1.8,
+        "height": 1.45,
+        "position": [
+          0,
+          0.9,
+          0
+        ]
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "limestone_feed_hopper",
+        "required": true,
+        "length": 1.7,
+        "width": 1.5,
+        "height": 1.15,
+        "position": [
+          -1.2,
+          1.85,
+          0
+        ]
+      },
+      {
+        "kind": "discharge_chute",
+        "semanticRole": "crushed_material_discharge",
+        "required": true,
+        "position": [
+          1.7,
+          0.65,
+          0
+        ]
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "crusher_drive_unit",
+        "required": true,
+        "position": [
+          0.9,
+          0.52,
+          -1.35
+        ]
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "maintenance_doors",
+        "position": [
+          0,
+          1,
+          -0.94
+        ]
+      }
+    ],
+    "visualCues": [
+      "feed hopper over a heavy crusher housing",
+      "side drive unit",
+      "discharge chute toward downstream conveyor"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Conceptual cement limestone crusher profile for factory generation.",
+    "qualityRules": "quality.cement.limestone_crusher",
+    "editableSchemaRef": "conveyor.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 52,
+      "parts": {
+        "maintenance_doors": {
+          "detailLevel": "low"
+        }
+      }
+    }
+  },
+  {
+    "id": "cement.stack_reclaimer",
+    "name": "Stacker reclaimer",
+    "aliases": [
+      "stacker reclaimer",
+      "reclaimer",
+      "pre-homogenization",
+      "堆取料机",
+      "预均化"
+    ],
+    "industry": "cement",
+    "family": "conveyor",
+    "layoutFamily": "linear_transport_layout",
+    "archetypeFamily": "material_handling",
+    "defaultDimensions": {
+      "length": 10,
+      "width": 2.6,
+      "height": 2.8
+    },
+    "primarySemanticRole": "reclaimer_bridge",
+    "parts": [
+      {
+        "kind": "conveyor_frame",
+        "semanticRole": "reclaimer_bridge",
+        "required": true,
+        "length": 9.6,
+        "width": 0.55,
+        "height": 0.42,
+        "position": [
+          0,
+          1.35,
+          0
+        ]
+      },
+      {
+        "kind": "belt_surface",
+        "semanticRole": "stockpile_conveyor",
+        "required": true,
+        "length": 9.2,
+        "width": 0.42,
+        "position": [
+          0,
+          1.55,
+          0
+        ]
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "reclaimer_travel_car",
+        "required": true,
+        "length": 1.2,
+        "width": 1.05,
+        "height": 1.1,
+        "position": [
+          -2.2,
+          0.85,
+          0
+        ]
+      },
+      {
+        "kind": "flange_ring",
+        "semanticRole": "bucket_wheel",
+        "required": true,
+        "radius": 0.48,
+        "position": [
+          -3.15,
+          1.05,
+          0
+        ]
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "rail_track",
+        "required": true,
+        "length": 10,
+        "width": 2.2,
+        "height": 0.08,
+        "position": [
+          0,
+          0.05,
+          0
+        ]
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "operator_walkway",
+        "position": [
+          1.4,
+          1.75,
+          0.44
+        ]
+      }
+    ],
+    "visualCues": [
+      "long bridge over material stockpile",
+      "bucket wheel on one side",
+      "belt conveyor along the bridge"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Conceptual stacker/reclaimer for limestone pre-homogenization.",
+    "qualityRules": "quality.cement.stack_reclaimer",
+    "editableSchemaRef": "conveyor.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 52,
+      "parts": {
+        "bucket_wheel": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        }
+      }
+    }
+  },
+  {
+    "id": "cement.raw_meal_homogenization_silo",
+    "name": "Raw meal homogenization silo",
+    "aliases": [
+      "raw meal silo",
+      "homogenization silo",
+      "生料均化库",
+      "生料库"
+    ],
+    "industry": "cement",
+    "family": "tank",
+    "layoutFamily": "vessel_layout",
+    "archetypeFamily": "process_vessel",
+    "defaultDimensions": {
+      "length": 4.2,
+      "width": 4.2,
+      "height": 8.5,
+      "diameter": 3.8
+    },
+    "primarySemanticRole": "raw_meal_silo_shell",
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "raw_meal_silo_shell",
+        "required": true,
+        "height": 7.2,
+        "radius": 1.75,
+        "position": [
+          0,
+          4,
+          0
+        ]
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "silo_support_base",
+        "required": true,
+        "length": 3.9,
+        "width": 3.9,
+        "height": 0.25,
+        "position": [
+          0,
+          0.12,
+          0
+        ]
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "bottom_discharge_hopper",
+        "required": true,
+        "length": 2.5,
+        "width": 2.5,
+        "height": 1,
+        "position": [
+          0,
+          0.9,
+          0
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "top_feed_inlet",
+        "required": true,
+        "position": [
+          0,
+          8,
+          0
+        ]
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "raw_meal_out",
+        "required": true,
+        "position": [
+          1.9,
+          0.85,
+          0
+        ]
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "aeration_floor_manifold",
+        "position": [
+          0,
+          0.55,
+          0
+        ]
+      }
+    ],
+    "visualCues": [
+      "tall cylindrical homogenization silo",
+      "bottom discharge hopper",
+      "top feed inlet",
+      "aeration floor manifold"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Conceptual raw meal homogenization silo for cement plant layout.",
+    "qualityRules": "quality.cement.raw_meal_homogenization_silo",
+    "editableSchemaRef": "vessel.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 56
+    }
+  },
+  {
+    "id": "cement.coal_mill",
+    "name": "Coal mill",
+    "aliases": [
+      "coal mill",
+      "fuel mill",
+      "煤磨",
+      "燃料制备"
+    ],
+    "industry": "cement",
+    "family": "machine_tool",
+    "layoutFamily": "box_enclosure_layout",
+    "archetypeFamily": "enclosed_machine",
+    "defaultDimensions": {
+      "length": 3.4,
+      "width": 2.4,
+      "height": 3.6
+    },
+    "primarySemanticRole": "coal_mill_body",
+    "parts": [
+      {
+        "kind": "generic_base",
+        "semanticRole": "mill_base",
+        "required": true,
+        "length": 3.2,
+        "width": 2.2,
+        "height": 0.25
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "coal_mill_body",
+        "required": true,
+        "length": 2.4,
+        "width": 1.7,
+        "height": 1.7,
+        "position": [
+          0,
+          1,
+          0
+        ]
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "dynamic_separator",
+        "required": true,
+        "axis": "y",
+        "height": 1.2,
+        "radius": 0.62,
+        "position": [
+          0,
+          2.35,
+          0
+        ]
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "coal_feed_hopper",
+        "position": [
+          -1.15,
+          1.75,
+          0
+        ]
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "inert_gas_duct",
+        "position": [
+          1.15,
+          2.1,
+          0
+        ]
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "mill_drive_unit",
+        "required": true,
+        "position": [
+          0.8,
+          0.52,
+          -1.25
+        ]
+      }
+    ],
+    "visualCues": [
+      "compact vertical mill body",
+      "separator above mill",
+      "coal feed hopper",
+      "inert gas duct"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Conceptual coal mill profile for cement kiln fuel preparation.",
+    "qualityRules": "quality.cement.coal_mill",
+    "editableSchemaRef": "rotary_equipment.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 72
+    }
+  },
+  {
+    "id": "cement.kiln_burner",
+    "name": "Kiln burner",
+    "aliases": [
+      "kiln burner",
+      "cement burner",
+      "窑头燃烧器",
+      "燃烧器"
+    ],
+    "industry": "cement",
+    "family": "generic",
+    "layoutFamily": "linear_transport_layout",
+    "archetypeFamily": "thermal_equipment",
+    "defaultDimensions": {
+      "length": 3.8,
+      "width": 0.9,
+      "height": 1.2
+    },
+    "primarySemanticRole": "burner_lance",
+    "parts": [
+      {
+        "kind": "pipe_run",
+        "semanticRole": "burner_lance",
+        "required": true,
+        "axis": "x",
+        "length": 3.5,
+        "radius": 0.11,
+        "position": [
+          0,
+          0.8,
+          0
+        ]
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "primary_air_pipe",
+        "required": true,
+        "axis": "x",
+        "length": 3.2,
+        "radius": 0.07,
+        "position": [
+          0,
+          0.95,
+          0.18
+        ]
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "fuel_pipe",
+        "required": true,
+        "axis": "x",
+        "length": 3.2,
+        "radius": 0.045,
+        "position": [
+          0,
+          1.04,
+          -0.16
+        ]
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "burner_carriage",
+        "required": true,
+        "length": 1.7,
+        "width": 0.75,
+        "height": 0.18,
+        "position": [
+          -0.75,
+          0.18,
+          0
+        ]
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "flame_out",
+        "required": true,
+        "position": [
+          1.95,
+          0.8,
+          0
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "fuel_in",
+        "required": true,
+        "position": [
+          -1.95,
+          0.92,
+          0
+        ]
+      }
+    ],
+    "visualCues": [
+      "long burner lance",
+      "parallel air and fuel pipes",
+      "small carriage base",
+      "front flame outlet"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Conceptual multi-channel kiln burner for cement pyroprocess visualization.",
+    "qualityRules": "quality.cement.kiln_burner",
+    "editableSchemaRef": "rotary_equipment.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 90
+    }
+  },
+  {
+    "id": "cement.kiln_hood",
+    "name": "Kiln hood",
+    "aliases": [
+      "kiln hood",
+      "kiln head hood",
+      "窑头罩"
+    ],
+    "industry": "cement",
+    "family": "generic",
+    "layoutFamily": "generic_industrial_layout",
+    "archetypeFamily": "thermal_equipment",
+    "defaultDimensions": {
+      "length": 3.2,
+      "width": 2.4,
+      "height": 2.4
+    },
+    "primarySemanticRole": "kiln_hood_shell",
+    "parts": [
+      {
+        "kind": "generic_base",
+        "semanticRole": "hood_base",
+        "required": true,
+        "length": 3.2,
+        "width": 2.4,
+        "height": 0.22
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "kiln_hood_shell",
+        "required": true,
+        "length": 2.6,
+        "width": 2,
+        "height": 1.7,
+        "position": [
+          0,
+          1.1,
+          0
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "kiln_head_in",
+        "required": true,
+        "position": [
+          -1.45,
+          1.1,
+          0
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "burner_opening",
+        "required": true,
+        "position": [
+          -1.45,
+          1.35,
+          -0.42
+        ]
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "hot_clinker_out",
+        "required": true,
+        "position": [
+          1.45,
+          0.72,
+          0
+        ]
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "hood_service_platform",
+        "position": [
+          0.2,
+          2.1,
+          0.95
+        ]
+      }
+    ],
+    "visualCues": [
+      "large hood around kiln discharge",
+      "burner opening",
+      "transition outlet to cooler"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Conceptual kiln head hood connecting kiln, burner, and clinker cooler.",
+    "qualityRules": "quality.cement.kiln_hood",
+    "editableSchemaRef": "rotary_equipment.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 90
+    }
+  },
+  {
+    "id": "cement.tertiary_air_duct",
+    "name": "Tertiary air duct",
+    "aliases": [
+      "tertiary air duct",
+      "三次风管",
+      "三次风"
+    ],
+    "industry": "cement",
+    "family": "generic",
+    "layoutFamily": "linear_transport_layout",
+    "archetypeFamily": "thermal_equipment",
+    "defaultDimensions": {
+      "length": 6.2,
+      "width": 0.9,
+      "height": 1.4
+    },
+    "primarySemanticRole": "tertiary_air_duct_shell",
+    "parts": [
+      {
+        "kind": "pipe_run",
+        "semanticRole": "tertiary_air_duct_shell",
+        "required": true,
+        "axis": "x",
+        "length": 5.8,
+        "radius": 0.26,
+        "position": [
+          0,
+          1.05,
+          0
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "cooler_air_in",
+        "required": true,
+        "position": [
+          -3.05,
+          1.05,
+          0
+        ]
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "tertiary_air_out",
+        "required": true,
+        "position": [
+          3.05,
+          1.05,
+          0
+        ]
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "duct_supports",
+        "required": true,
+        "length": 5.6,
+        "width": 0.65,
+        "height": 0.18,
+        "position": [
+          0,
+          0.18,
+          0
+        ]
+      },
+      {
+        "kind": "flange_ring",
+        "semanticRole": "duct_expansion_joint",
+        "position": [
+          0,
+          1.05,
+          0
+        ]
+      }
+    ],
+    "visualCues": [
+      "large horizontal hot air duct",
+      "flanged expansion joint",
+      "support base"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Conceptual tertiary air duct between cooler and calciner/preheater.",
+    "qualityRules": "quality.cement.tertiary_air_duct",
+    "editableSchemaRef": "conveyor.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 52,
+      "parts": {
+        "duct_expansion_joint": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        }
+      }
+    }
+  },
+  {
+    "id": "cement.clinker_crusher",
+    "name": "Clinker crusher",
+    "aliases": [
+      "clinker crusher",
+      "熟料破碎机",
+      "熟料破碎"
+    ],
+    "industry": "cement",
+    "family": "machine_tool",
+    "layoutFamily": "box_enclosure_layout",
+    "archetypeFamily": "material_handling",
+    "defaultDimensions": {
+      "length": 3,
+      "width": 1.8,
+      "height": 1.8
+    },
+    "primarySemanticRole": "clinker_crusher_housing",
+    "parts": [
+      {
+        "kind": "generic_base",
+        "semanticRole": "crusher_base",
+        "required": true,
+        "length": 2.9,
+        "width": 1.7,
+        "height": 0.22
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "clinker_crusher_housing",
+        "required": true,
+        "length": 2.4,
+        "width": 1.35,
+        "height": 1.1,
+        "position": [
+          0,
+          0.78,
+          0
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "hot_clinker_in",
+        "required": true,
+        "position": [
+          -1.45,
+          1,
+          0
+        ]
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "crushed_clinker_out",
+        "required": true,
+        "position": [
+          1.45,
+          0.58,
+          0
+        ]
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "crusher_drive_unit",
+        "position": [
+          0.75,
+          0.45,
+          -1
+        ]
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "roll_access_cover",
+        "position": [
+          0,
+          1.18,
+          0
+        ]
+      }
+    ],
+    "visualCues": [
+      "compact crusher below cooler outlet",
+      "inlet and discharge ports",
+      "side drive"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Conceptual clinker crusher for cooler discharge.",
+    "qualityRules": "quality.cement.clinker_crusher",
+    "editableSchemaRef": "conveyor.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 52,
+      "parts": {
+        "roll_access_cover": {
+          "detailLevel": "low"
+        }
+      }
+    }
+  },
+  {
+    "id": "cement.esp_dust_collector",
+    "name": "Electrostatic precipitator",
+    "aliases": [
+      "ESP",
+      "electrostatic precipitator",
+      "kiln tail ESP",
+      "电收尘",
+      "静电除尘"
+    ],
+    "industry": "cement",
+    "family": "generic",
+    "layoutFamily": "generic_industrial_layout",
+    "archetypeFamily": "generic_industrial",
+    "defaultDimensions": {
+      "length": 5.2,
+      "width": 2.2,
+      "height": 3.2
+    },
+    "primarySemanticRole": "esp_collector_chambers",
+    "parts": [
+      {
+        "kind": "generic_base",
+        "semanticRole": "esp_support_base",
+        "required": true,
+        "length": 5.1,
+        "width": 2,
+        "height": 0.22
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "esp_collector_chambers",
+        "required": true,
+        "length": 4.5,
+        "width": 1.8,
+        "height": 2,
+        "position": [
+          0,
+          1.55,
+          0
+        ]
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "dust_hopper_bank",
+        "required": true,
+        "length": 4,
+        "width": 1.45,
+        "height": 0.9,
+        "position": [
+          0,
+          0.72,
+          0
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "dust_gas_in",
+        "required": true,
+        "position": [
+          -2.7,
+          1.65,
+          0
+        ]
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "clean_air_out",
+        "required": true,
+        "position": [
+          2.7,
+          1.75,
+          0
+        ]
+      },
+      {
+        "kind": "generic_detail_accent",
+        "semanticRole": "electrode_field_rows",
+        "position": [
+          0,
+          2.25,
+          0
+        ]
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "top_service_platform",
+        "position": [
+          0,
+          2.8,
+          0.95
+        ]
+      }
+    ],
+    "visualCues": [
+      "long rectangular ESP chamber",
+      "multiple dust hoppers below",
+      "large inlet and outlet plenums"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Conceptual electrostatic precipitator profile for cement kiln exhaust.",
+    "qualityRules": "quality.cement.esp_dust_collector",
+    "editableSchemaRef": "rotary_equipment.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 90
+    }
+  },
+  {
+    "id": "cement.process_stack",
+    "name": "Process stack",
+    "aliases": [
+      "process stack",
+      "cement stack",
+      "chimney",
+      "smokestack",
+      "烟囱"
+    ],
+    "industry": "cement",
+    "family": "generic",
+    "layoutFamily": "vessel_layout",
+    "archetypeFamily": "generic_industrial",
+    "defaultDimensions": {
+      "length": 2.4,
+      "width": 2.4,
+      "height": 10,
+      "diameter": 1.2
+    },
+    "primarySemanticRole": "stack_shell",
+    "parts": [
+      {
+        "kind": "skid_base",
+        "semanticRole": "stack_base_plinth",
+        "required": true,
+        "length": 2.2,
+        "width": 2.2,
+        "height": 0.35
+      },
+      {
+        "kind": "chimney_stack",
+        "semanticRole": "stack_shell",
+        "required": true,
+        "height": 9.2,
+        "radius": 0.42,
+        "position": [
+          0,
+          4.9,
+          0
+        ],
+        "warningStripes": true
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "stack_gas_in",
+        "required": true,
+        "position": [
+          -0.75,
+          1.15,
+          0
+        ]
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "stack_outlet",
+        "required": true,
+        "position": [
+          0,
+          9.75,
+          0
+        ]
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "stack_access_platform",
+        "position": [
+          0,
+          6,
+          0.55
+        ]
+      }
+    ],
+    "visualCues": [
+      "tall chimney stack",
+      "base inlet duct",
+      "warning bands",
+      "access platform"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Conceptual process exhaust stack for cement plant visualization.",
+    "qualityRules": "quality.cement.process_stack",
+    "editableSchemaRef": "vessel.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 56
+    }
+  },
+  {
+    "id": "cement.whr_boiler",
+    "name": "Waste heat recovery boiler",
+    "aliases": [
+      "whr boiler",
+      "waste heat recovery boiler",
+      "AQC boiler",
+      "SP boiler",
+      "余热锅炉",
+      "余热发电"
+    ],
+    "industry": "cement",
+    "family": "generic",
+    "layoutFamily": "generic_industrial_layout",
+    "archetypeFamily": "thermal_equipment",
+    "defaultDimensions": {
+      "length": 3.8,
+      "width": 2.4,
+      "height": 5.2
+    },
+    "primarySemanticRole": "boiler_casing",
+    "parts": [
+      {
+        "kind": "generic_base",
+        "semanticRole": "boiler_base",
+        "required": true,
+        "length": 3.6,
+        "width": 2.2,
+        "height": 0.25
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "boiler_casing",
+        "required": true,
+        "length": 2.8,
+        "width": 1.8,
+        "height": 4.1,
+        "position": [
+          0,
+          2.35,
+          0
+        ]
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "tube_bank",
+        "required": true,
+        "position": [
+          0,
+          2.55,
+          0
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "hot_gas_in",
+        "required": true,
+        "position": [
+          -1.85,
+          3.2,
+          0
+        ]
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "cooled_gas_out",
+        "required": true,
+        "position": [
+          1.85,
+          3.2,
+          0
+        ]
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "boiler_service_platform",
+        "position": [
+          0.15,
+          4.4,
+          1.05
+        ]
+      }
+    ],
+    "visualCues": [
+      "tall boiler casing",
+      "visible tube bank/manifold",
+      "hot gas inlet and outlet",
+      "service platform"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Conceptual cement kiln waste heat recovery boiler profile.",
+    "qualityRules": "quality.cement.whr_boiler",
+    "editableSchemaRef": "rotary_equipment.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 72
+    }
+  }
+]

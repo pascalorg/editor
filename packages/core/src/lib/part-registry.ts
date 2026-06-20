@@ -24,6 +24,46 @@ export interface PartDefinition {
   description: string
 }
 
+export type PartEditableParameterRole =
+  | 'dimension'
+  | 'quantity'
+  | 'material'
+  | 'shape'
+  | 'detail'
+  | 'placement'
+  | 'metadata'
+
+export interface PartEditableParameter {
+  name: string
+  type: PartParameterType
+  role: PartEditableParameterRole
+  min?: number
+  max?: number
+  default?: unknown
+  values?: readonly unknown[]
+  description?: string
+}
+
+export interface PartCapabilityMetadata {
+  id: string
+  family: string
+  kind: string
+  semanticRole?: string
+  aliases: readonly string[]
+  required: boolean
+  attachTo?: string
+  layoutRole?: string
+  description: string
+  editableParameters: readonly PartEditableParameter[]
+  editableProperties: readonly string[]
+  dimensionProperties: readonly string[]
+  quantityProperties: readonly string[]
+  materialProperties: readonly string[]
+  shapeProperties: readonly string[]
+  detailProperties: readonly string[]
+  placementProperties: readonly string[]
+}
+
 export interface NormalizedPartPlan {
   family: string
   parts: PartComposePartInput[]
@@ -181,6 +221,143 @@ export const DESK_PART_DEFINITIONS: readonly PartDefinition[] = [
       count: { type: 'integer', min: 1, max: 6, default: 3 },
       primaryColor: { type: 'color', default: '#a16207' },
       secondaryColor: { type: 'color', default: '#c08457' },
+    },
+  },
+]
+
+export const FAN_PART_DEFINITIONS: readonly PartDefinition[] = [
+  {
+    id: 'fan.circular_base',
+    family: 'fan',
+    kind: 'circular_base',
+    semanticRole: 'fan_base',
+    aliases: ['base', 'round_base', 'pedestal_base', 'fan_base'],
+    required: true,
+    description: 'Weighted circular base for a standing or pedestal fan.',
+    params: {
+      radius: { type: 'number', min: 0.05, max: 2, default: 0.28 },
+      height: { type: 'number', min: 0.01, max: 0.4, default: 0.08 },
+      primaryColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'fan.vertical_pole',
+    family: 'fan',
+    kind: 'vertical_pole',
+    semanticRole: 'fan_pole',
+    aliases: ['pole', 'stand', 'vertical_pole', 'pedestal_pole'],
+    required: true,
+    attachTo: 'circular_base',
+    layoutRole: 'vertical_support',
+    description: 'Vertical support pole for a standing fan.',
+    params: {
+      radius: { type: 'number', min: 0.005, max: 0.15, default: 0.025 },
+      height: { type: 'number', min: 0.05, max: 4, default: 1.05 },
+      metalColor: { type: 'color', default: '#64748b' },
+    },
+  },
+  {
+    id: 'fan.support_bracket',
+    family: 'fan',
+    kind: 'support_bracket',
+    semanticRole: 'fan_yoke',
+    aliases: ['support_bracket', 'yoke', 'tilt_bracket', 'neck_bracket'],
+    attachTo: 'vertical_pole',
+    layoutRole: 'head_support',
+    description: 'Yoke or bracket between pole and fan head.',
+    params: {
+      width: { type: 'number', min: 0.04, max: 1, default: 0.24 },
+      height: { type: 'number', min: 0.03, max: 0.8, default: 0.16 },
+      depth: { type: 'number', min: 0.01, max: 0.3, default: 0.045 },
+      metalColor: { type: 'color', default: '#64748b' },
+    },
+  },
+  {
+    id: 'fan.motor_housing',
+    family: 'fan',
+    kind: 'motor_housing',
+    semanticRole: 'motor_housing',
+    aliases: ['motor', 'motor_housing', 'rear_motor', 'fan_head'],
+    required: true,
+    attachTo: 'support_bracket',
+    layoutRole: 'fan_head_center',
+    description: 'Rear motor housing at the center of the fan head.',
+    params: {
+      radius: { type: 'number', min: 0.03, max: 0.5, default: 0.11 },
+      depth: { type: 'number', min: 0.03, max: 0.8, default: 0.16 },
+      primaryColor: { type: 'color', default: '#30343b' },
+    },
+  },
+  {
+    id: 'fan.fan_blade',
+    family: 'fan',
+    kind: 'fan_blade',
+    semanticRole: 'fan_blade',
+    aliases: ['fan_blade', 'blade', 'editable_blade', 'independent_blade'],
+    required: true,
+    attachTo: 'motor_housing',
+    layoutRole: 'radial_blade_array',
+    description: 'Independent editable fan blade array; each generated blade has its own part id.',
+    params: {
+      count: { type: 'integer', min: 1, max: 16, default: 1 },
+      length: { type: 'number', min: 0.04, max: 1.2, default: 0.24 },
+      width: { type: 'number', min: 0.012, max: 0.55 },
+      thickness: { type: 'number', min: 0.003, max: 0.08, default: 0.018 },
+      pitch: { type: 'number', min: -0.8, max: 0.8, default: 0.24 },
+      bladeSweep: { type: 'number', min: -0.55, max: 0.55 },
+      primaryColor: { type: 'color', default: '#8ec5ff' },
+      includeHub: { type: 'boolean', default: true },
+    },
+  },
+  {
+    id: 'fan.radial_blades',
+    family: 'fan',
+    kind: 'radial_blades',
+    semanticRole: 'fan_blade',
+    aliases: ['fan_blades', 'radial_blades', 'blade_set', 'impeller'],
+    attachTo: 'motor_housing',
+    layoutRole: 'radial_blade_set',
+    description: 'Composite radial fan blade set kept for compatibility with older profiles.',
+    params: {
+      count: { type: 'integer', min: 2, max: 8, default: 3 },
+      bladeRadius: { type: 'number', min: 0.05, max: 1.4, default: 0.28 },
+      bladeWidth: { type: 'number', min: 0.01, max: 0.8 },
+      bladePitch: { type: 'number', min: -0.65, max: 0.65, default: 0.24 },
+      primaryColor: { type: 'color', default: '#8ec5ff' },
+    },
+  },
+  {
+    id: 'fan.protective_grill',
+    family: 'fan',
+    kind: 'protective_grill',
+    semanticRole: 'protective_grill',
+    aliases: ['grill', 'grille', 'cage', 'guard', 'protective_grill'],
+    attachTo: 'motor_housing',
+    layoutRole: 'front_guard',
+    description: 'Protective cage with rings and spokes around the fan blades.',
+    params: {
+      radius: { type: 'number', min: 0.08, max: 2, default: 0.36 },
+      depth: { type: 'number', min: 0.005, max: 0.6, default: 0.12 },
+      detailLevel: { type: 'enum', values: ['low', 'medium', 'high'], default: 'medium' },
+      ringCount: { type: 'integer', min: 1, max: 8, default: 4 },
+      spokeCount: { type: 'integer', min: 6, max: 36, default: 18 },
+      wireRadius: { type: 'number', min: 0.002, max: 0.05 },
+      metalColor: { type: 'color', default: '#d1d5db' },
+    },
+  },
+  {
+    id: 'fan.control_knob',
+    family: 'fan',
+    kind: 'control_knob',
+    semanticRole: 'control_knob',
+    aliases: ['knob', 'control_knob', 'speed_knob'],
+    attachTo: 'vertical_pole',
+    layoutRole: 'control_detail',
+    description: 'Small speed or oscillation control knob.',
+    params: {
+      radius: { type: 'number', min: 0.01, max: 0.2, default: 0.045 },
+      depth: { type: 'number', min: 0.004, max: 0.12, default: 0.025 },
+      accentColor: { type: 'color', default: '#ef4444' },
     },
   },
 ]
@@ -504,6 +681,530 @@ export const GENERIC_PART_DEFINITIONS: readonly PartDefinition[] = [
       accentColor: { type: 'color', default: '#38bdf8' },
     },
   },
+  {
+    id: 'generic.manway_lid',
+    family: 'generic',
+    kind: 'manway_lid',
+    semanticRole: 'manway_lid',
+    aliases: ['manway_lid', 'manway_cover', 'access_lid', 'hatch_cover'],
+    description: 'Flat bolted manway or access cover for process vessels.',
+    params: {
+      radius: { type: 'number', min: 0.04, max: 1, default: 0.18 },
+      thickness: { type: 'number', min: 0.006, max: 0.25, default: 0.035 },
+      boltCount: { type: 'integer', min: 0, max: 24, default: 8 },
+      axis: { type: 'enum', values: ['x', 'y', 'z'], default: 'y' },
+      metalColor: { type: 'color', default: '#cbd5e1' },
+      darkColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'generic.sanitary_nozzle',
+    family: 'generic',
+    kind: 'sanitary_nozzle',
+    semanticRole: 'sanitary_nozzle',
+    aliases: ['sanitary_nozzle', 'tri_clamp_nozzle', 'hygienic_nozzle', 'short_nozzle'],
+    description: 'Short hygienic vessel nozzle with clamp bead.',
+    params: {
+      radius: { type: 'number', min: 0.01, max: 0.5, default: 0.08 },
+      length: { type: 'number', min: 0.03, max: 1, default: 0.18 },
+      axis: { type: 'enum', values: ['x', 'y', 'z'], default: 'y' },
+      metalColor: { type: 'color', default: '#cbd5e1' },
+    },
+  },
+  {
+    id: 'generic.flanged_nozzle',
+    family: 'generic',
+    kind: 'flanged_nozzle',
+    semanticRole: 'flanged_nozzle',
+    aliases: ['flanged_nozzle', 'process_nozzle', 'nozzle_with_flange', 'flanged_pipe_nozzle'],
+    description: 'Process vessel nozzle with a visible raised flange and bolt pattern.',
+    params: {
+      radius: { type: 'number', min: 0.015, max: 0.8, default: 0.09 },
+      length: { type: 'number', min: 0.06, max: 1.8, default: 0.26 },
+      flangeRadius: { type: 'number', min: 0.03, max: 2.2, default: 0.16 },
+      flangeThickness: { type: 'number', min: 0.008, max: 0.22, default: 0.025 },
+      boltCount: { type: 'integer', min: 0, max: 24, default: 8 },
+      includeBolts: { type: 'boolean', default: true },
+      axis: { type: 'enum', values: ['x', 'y', 'z'], default: 'y' },
+      side: { type: 'enum', values: ['front', 'back', 'left', 'right', 'top', 'bottom'] },
+      metalColor: { type: 'color', default: '#cbd5e1' },
+    },
+  },
+  {
+    id: 'generic.inspection_hatch',
+    family: 'generic',
+    kind: 'inspection_hatch',
+    semanticRole: 'inspection_hatch',
+    aliases: ['inspection_hatch', 'access_hatch', 'round_hatch'],
+    description:
+      'Round inspection hatch with a hinge block and handle for vessel or enclosure faces.',
+    params: {
+      radius: { type: 'number', min: 0.04, max: 1.2, default: 0.18 },
+      thickness: { type: 'number', min: 0.006, max: 0.28, default: 0.035 },
+      axis: { type: 'enum', values: ['x', 'y', 'z'], default: 'z' },
+      side: { type: 'enum', values: ['front', 'back', 'left', 'right', 'top', 'bottom'] },
+      metalColor: { type: 'color', default: '#cbd5e1' },
+      darkColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'generic.jacket_shell',
+    family: 'generic',
+    kind: 'jacket_shell',
+    semanticRole: 'jacket_shell',
+    aliases: ['jacket_shell', 'outer_jacket', 'thermal_jacket', 'cooling_jacket', 'heating_jacket'],
+    description: 'Visible outer thermal jacket sleeve for process vessels.',
+    params: {
+      radius: { type: 'number', min: 0.08, max: 3, default: 0.52 },
+      height: { type: 'number', min: 0.12, max: 8, default: 1.1 },
+      thickness: { type: 'number', min: 0.004, max: 0.12, default: 0.018 },
+      opacity: { type: 'number', min: 0.08, max: 1, default: 0.28 },
+      primaryColor: { type: 'color', default: '#dbe3ea' },
+      metalColor: { type: 'color', default: '#cbd5e1' },
+    },
+  },
+  {
+    id: 'generic.sight_glass',
+    family: 'generic',
+    kind: 'sight_glass',
+    semanticRole: 'sight_glass',
+    aliases: ['sight_glass', 'inspection_glass', 'view_glass', 'viewing_glass'],
+    description: 'Transparent vessel inspection glass with a metal rim.',
+    params: {
+      length: { type: 'number', min: 0.03, max: 1.4, default: 0.18 },
+      height: { type: 'number', min: 0.03, max: 1.6, default: 0.24 },
+      thickness: { type: 'number', min: 0.002, max: 0.08, default: 0.012 },
+      side: {
+        type: 'enum',
+        values: ['left', 'right', 'top', 'bottom', 'front', 'back'],
+        default: 'front',
+      },
+      opacity: { type: 'number', min: 0.12, max: 0.9, default: 0.42 },
+      color: { type: 'color', default: '#93c5fd' },
+      metalColor: { type: 'color', default: '#cbd5e1' },
+    },
+  },
+  {
+    id: 'generic.sample_valve',
+    family: 'generic',
+    kind: 'sample_valve',
+    semanticRole: 'sample_valve',
+    aliases: ['sample_valve', 'sampling_valve', 'sampling_port', 'sample_cock'],
+    description: 'Small vessel sampling valve with handle.',
+    params: {
+      radius: { type: 'number', min: 0.008, max: 0.25, default: 0.045 },
+      length: { type: 'number', min: 0.04, max: 0.8, default: 0.22 },
+      side: { type: 'enum', values: ['left', 'right', 'front', 'back'], default: 'front' },
+      metalColor: { type: 'color', default: '#cbd5e1' },
+      darkColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'generic.instrument_port',
+    family: 'generic',
+    kind: 'instrument_port',
+    semanticRole: 'instrument_port',
+    aliases: [
+      'instrument_port',
+      'gauge_port',
+      'thermowell',
+      'pressure_gauge',
+      'temperature_probe',
+      'sensor_port',
+    ],
+    description: 'Small gauge, thermowell, or instrument connection.',
+    params: {
+      radius: { type: 'number', min: 0.006, max: 0.22, default: 0.035 },
+      length: { type: 'number', min: 0.03, max: 0.7, default: 0.16 },
+      axis: { type: 'enum', values: ['x', 'y', 'z'], default: 'y' },
+      metalColor: { type: 'color', default: '#cbd5e1' },
+      darkColor: { type: 'color', default: '#0f172a' },
+    },
+  },
+  {
+    id: 'generic.stainless_highlight_panel',
+    family: 'generic',
+    kind: 'stainless_highlight_panel',
+    semanticRole: 'stainless_highlight_panel',
+    aliases: [
+      'stainless_highlight_panel',
+      'metal_highlight_panel',
+      'polished_highlight',
+      'stainless_reflection',
+    ],
+    description:
+      'Subtle polished stainless reflection patch for cylindrical or flat equipment shells.',
+    params: {
+      length: { type: 'number', min: 0.02, max: 1.2, default: 0.16 },
+      height: { type: 'number', min: 0.04, max: 4, default: 0.6 },
+      thickness: { type: 'number', min: 0.001, max: 0.05, default: 0.006 },
+      side: {
+        type: 'enum',
+        values: ['left', 'right', 'top', 'bottom', 'front', 'back'],
+        default: 'front',
+      },
+      opacity: { type: 'number', min: 0.12, max: 0.95, default: 0.5 },
+      color: { type: 'color', default: '#f8fafc' },
+    },
+  },
+  {
+    id: 'generic.mobile_platform_chassis',
+    family: 'generic',
+    kind: 'mobile_platform_chassis',
+    semanticRole: 'vehicle_body',
+    aliases: [
+      'mobile_platform_chassis',
+      'mobile_chassis',
+      'agv_chassis',
+      'amr_chassis',
+      'robot_platform_chassis',
+      'low_platform_body',
+    ],
+    description:
+      'Low rounded mobile robot or AGV chassis with dark bumper skirt, main body, top load deck, and side status seams.',
+    params: {
+      length: { type: 'number', min: 0.3, max: 4, default: 1.45 },
+      width: { type: 'number', min: 0.24, max: 2.4, default: 0.9 },
+      height: { type: 'number', min: 0.08, max: 1.2, default: 0.28 },
+      cornerRadius: { type: 'number', min: 0, max: 0.5, default: 0.16 },
+      primaryColor: { type: 'color', default: '#e5e7eb' },
+      secondaryColor: { type: 'color', default: '#334155' },
+      darkColor: { type: 'color', default: '#111827' },
+      accentColor: { type: 'color', default: '#38bdf8' },
+    },
+  },
+  {
+    id: 'generic.lidar_sensor',
+    family: 'generic',
+    kind: 'lidar_sensor',
+    semanticRole: 'navigation_sensor',
+    aliases: [
+      'lidar',
+      'lidar_sensor',
+      'laser_scanner',
+      'navigation_sensor',
+      'safety_scanner',
+      'front_scanner',
+    ],
+    description: 'Compact lidar or laser safety scanner with dark housing and translucent lens.',
+    params: {
+      radius: { type: 'number', min: 0.012, max: 0.18, default: 0.045 },
+      height: { type: 'number', min: 0.006, max: 0.35 },
+      length: { type: 'number', min: 0.006, max: 0.35 },
+      axis: { type: 'enum', values: ['x', 'y', 'z'], default: 'x' },
+      darkColor: { type: 'color', default: '#0f172a' },
+      accentColor: { type: 'color', default: '#38bdf8' },
+    },
+  },
+  {
+    id: 'generic.emergency_stop_button',
+    family: 'generic',
+    kind: 'emergency_stop_button',
+    semanticRole: 'emergency_stop_button',
+    aliases: ['emergency_stop', 'emergency_stop_button', 'e_stop', 'e_stop_button', 'stop_button'],
+    description: 'Red emergency stop button with dark base and protective guard ring.',
+    params: {
+      radius: { type: 'number', min: 0.012, max: 0.16, default: 0.04 },
+      height: { type: 'number', min: 0.006, max: 0.25 },
+      length: { type: 'number', min: 0.006, max: 0.25 },
+      axis: { type: 'enum', values: ['x', 'y', 'z'], default: 'y' },
+      color: { type: 'color', default: '#ef4444' },
+      darkColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'generic.status_light_strip',
+    family: 'generic',
+    kind: 'status_light_strip',
+    semanticRole: 'status_light_strip',
+    aliases: [
+      'status_light_strip',
+      'light_strip',
+      'led_strip',
+      'signal_light_strip',
+      'indicator_strip',
+    ],
+    description:
+      'Thin colored status light strip for AGVs, robot cells, and industrial enclosures.',
+    params: {
+      length: { type: 'number', min: 0.04, max: 4, default: 0.7 },
+      height: { type: 'number', min: 0.008, max: 0.25, default: 0.035 },
+      thickness: { type: 'number', min: 0.002, max: 0.08, default: 0.012 },
+      side: { type: 'enum', values: ['left', 'right', 'front', 'back'], default: 'left' },
+      color: { type: 'color', default: '#38bdf8' },
+      accentColor: { type: 'color', default: '#38bdf8' },
+    },
+  },
+  {
+    id: 'generic.operator_panel',
+    family: 'generic',
+    kind: 'operator_panel',
+    semanticRole: 'control_panel',
+    aliases: ['operator_panel', 'hmi_panel', 'control_pendant', 'operator_console'],
+    description: 'Operator HMI/control panel with enclosure body, display screen, and buttons.',
+    params: {
+      width: { type: 'number', min: 0.12, max: 1.2, default: 0.32 },
+      height: { type: 'number', min: 0.18, max: 2, default: 0.62 },
+      depth: { type: 'number', min: 0.03, max: 0.5, default: 0.12 },
+      primaryColor: { type: 'color', default: '#e5e7eb' },
+      darkColor: { type: 'color', default: '#0f172a' },
+      accentColor: { type: 'color', default: '#22c55e' },
+    },
+  },
+  {
+    id: 'generic.guard_fence',
+    family: 'generic',
+    kind: 'guard_fence',
+    semanticRole: 'safety_barrier',
+    aliases: ['guard_fence', 'safety_fence', 'safety_guard', 'guard_rail', 'barrier_fence'],
+    description: 'Reusable safety fence or guard rail with posts and horizontal rails.',
+    params: {
+      length: { type: 'number', min: 0.25, max: 8, default: 1.8 },
+      height: { type: 'number', min: 0.2, max: 3, default: 0.9 },
+      width: { type: 'number', min: 0.02, max: 0.5, default: 0.08 },
+      count: { type: 'integer', min: 2, max: 12, default: 4 },
+      radius: { type: 'number', min: 0.006, max: 0.08, default: 0.018 },
+      color: { type: 'color', default: '#facc15' },
+      darkColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'generic.pallet_table',
+    family: 'generic',
+    kind: 'pallet_table',
+    semanticRole: 'pallet_table',
+    aliases: ['pallet_table', 'pallet_station', 'pallet_deck', 'fixture_table'],
+    description: 'Reusable pallet or fixture table with deck and four support legs.',
+    params: {
+      length: { type: 'number', min: 0.25, max: 4, default: 1 },
+      width: { type: 'number', min: 0.2, max: 3, default: 0.7 },
+      height: { type: 'number', min: 0.08, max: 1.2, default: 0.28 },
+      primaryColor: { type: 'color', default: '#475569' },
+      darkColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'generic.bearing_block',
+    family: 'generic',
+    kind: 'bearing_block',
+    semanticRole: 'bearing_block',
+    aliases: [
+      'bearing_block',
+      'pillow_block',
+      'pillow_block_bearing',
+      'bearing_housing',
+      'mounted_bearing',
+    ],
+    description:
+      'Mounted bearing or pillow block with base, housing, bearing ring, bore, and mounting bolts.',
+    params: {
+      length: { type: 'number', min: 0.12, max: 1.6, default: 0.42 },
+      width: { type: 'number', min: 0.08, max: 1, default: 0.22 },
+      height: { type: 'number', min: 0.08, max: 1.2, default: 0.26 },
+      radius: { type: 'number', min: 0.015, max: 0.4, default: 0.07 },
+      metalColor: { type: 'color', default: '#64748b' },
+      darkColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'generic.coupling_guard',
+    family: 'generic',
+    kind: 'coupling_guard',
+    semanticRole: 'coupling_guard',
+    aliases: ['coupling_guard', 'shaft_guard', 'coupling_cover', 'rotating_shaft_guard'],
+    description: 'Half-cylinder safety guard over a shaft coupling with end flange plates.',
+    params: {
+      length: { type: 'number', min: 0.16, max: 2.4, default: 0.58 },
+      radius: { type: 'number', min: 0.04, max: 0.7, default: 0.16 },
+      thickness: { type: 'number', min: 0.006, max: 0.16, default: 0.028 },
+      color: { type: 'color', default: '#facc15' },
+      darkColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'generic.motor_gearbox_unit',
+    family: 'generic',
+    kind: 'motor_gearbox_unit',
+    semanticRole: 'drive_unit',
+    aliases: [
+      'motor_gearbox_unit',
+      'motor_reducer_unit',
+      'drive_unit',
+      'gearmotor',
+      'motor_gearbox',
+    ],
+    description: 'Compact drive unit with ribbed motor, gearbox housing, and output shaft.',
+    params: {
+      length: { type: 'number', min: 0.3, max: 4, default: 1.05 },
+      height: { type: 'number', min: 0.12, max: 1.8, default: 0.38 },
+      radius: { type: 'number', min: 0.05, max: 0.8, default: 0.18 },
+      primaryColor: { type: 'color', default: '#64748b' },
+      secondaryColor: { type: 'color', default: '#475569' },
+      darkColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'generic.pipe_manifold',
+    family: 'generic',
+    kind: 'pipe_manifold',
+    semanticRole: 'pipe_manifold',
+    aliases: ['pipe_manifold', 'manifold', 'header_pipe', 'branch_manifold'],
+    description: 'Process pipe manifold with a header pipe and repeated branch ports.',
+    params: {
+      length: { type: 'number', min: 0.25, max: 6, default: 1.2 },
+      radius: { type: 'number', min: 0.012, max: 0.4, default: 0.065 },
+      count: { type: 'integer', min: 2, max: 10, default: 4 },
+      metalColor: { type: 'color', default: '#94a3b8' },
+    },
+  },
+  {
+    id: 'generic.hopper_body',
+    family: 'generic',
+    kind: 'hopper_body',
+    semanticRole: 'hopper_body',
+    aliases: ['hopper_body', 'feed_hopper', 'material_hopper', 'inlet_hopper'],
+    description: 'Tapered material hopper with outlet throat and support legs.',
+    params: {
+      length: { type: 'number', min: 0.25, max: 4, default: 0.9 },
+      width: { type: 'number', min: 0.2, max: 3, default: 0.7 },
+      height: { type: 'number', min: 0.25, max: 3.5, default: 0.8 },
+      topLengthScale: { type: 'number', min: 0.2, max: 3, default: 1.65 },
+      topWidthScale: { type: 'number', min: 0.2, max: 3, default: 1.45 },
+      primaryColor: { type: 'color', default: '#94a3b8' },
+      darkColor: { type: 'color', default: '#374151' },
+    },
+  },
+  {
+    id: 'generic.conical_hopper',
+    family: 'generic',
+    kind: 'conical_hopper',
+    semanticRole: 'conical_hopper',
+    aliases: ['conical_hopper', 'cone_hopper', 'cone_discharge_hopper'],
+    description: 'Round conical discharge hopper with outlet collar and optional support legs.',
+    params: {
+      radiusTop: { type: 'number', min: 0.08, max: 3, default: 0.42 },
+      radiusBottom: { type: 'number', min: 0.02, max: 1.2, default: 0.08 },
+      outletRadius: { type: 'number', min: 0.02, max: 1.2, default: 0.08 },
+      height: { type: 'number', min: 0.18, max: 5, default: 0.82 },
+      radialSegments: { type: 'integer', min: 4, max: 64, default: 32 },
+      includeSupportLegs: { type: 'boolean', default: true },
+      primaryColor: { type: 'color', default: '#94a3b8' },
+      darkColor: { type: 'color', default: '#374151' },
+    },
+  },
+  {
+    id: 'generic.structural_tower_frame',
+    family: 'generic',
+    kind: 'structural_tower_frame',
+    semanticRole: 'preheater_tower_body',
+    aliases: [
+      'structural_tower_frame',
+      'tower_frame',
+      'steel_tower_frame',
+      'preheater_tower_frame',
+      'multi_level_tower_frame',
+      '塔架',
+      '钢结构塔架',
+    ],
+    description:
+      'Multi-level industrial steel tower frame with columns, beams, grated decks, guard rails, and ladder.',
+    params: {
+      length: { type: 'number', min: 0.8, max: 12, default: 2.2 },
+      width: { type: 'number', min: 0.6, max: 8, default: 1.6 },
+      height: { type: 'number', min: 1.4, max: 18, default: 6 },
+      levelCount: { type: 'integer', min: 2, max: 9, default: 5 },
+      bayCount: { type: 'integer', min: 1, max: 5, default: 2 },
+      stairFlights: { type: 'integer', min: 2, max: 9, default: 5 },
+      stairPlacement: { type: 'enum', values: ['inside', 'outside'], default: 'outside' },
+      externalStairs: { type: 'boolean', default: true },
+      includeDiagonalBraces: { type: 'boolean', default: true },
+      thickness: { type: 'number', min: 0.025, max: 0.18, default: 0.06 },
+      metalColor: { type: 'color', default: '#475569' },
+      darkColor: { type: 'color', default: '#111827' },
+      accentColor: { type: 'color', default: '#1f2937' },
+    },
+  },
+  {
+    id: 'generic.cyclone_separator_unit',
+    family: 'generic',
+    kind: 'cyclone_separator_unit',
+    semanticRole: 'preheater_cyclone',
+    aliases: [
+      'cyclone_separator_unit',
+      'cyclone_unit',
+      'preheater_cyclone',
+      'cyclone_stage',
+      'cyclone_separator',
+      '旋风筒',
+      '旋风分离器',
+    ],
+    description:
+      'Cyclone separator stage with cylindrical body, conical hopper, top outlet, tangential inlet, and meal drop pipe.',
+    params: {
+      height: { type: 'number', min: 0.45, max: 4, default: 1.2 },
+      radius: { type: 'number', min: 0.08, max: 1.4, default: 0.26 },
+      bodyHeight: { type: 'number', min: 0.2, max: 2.8 },
+      depth: { type: 'number', min: 0.08, max: 1.6 },
+      length: { type: 'number', min: 0.05, max: 1.4 },
+      thickness: { type: 'number', min: 0.025, max: 0.7 },
+      primaryColor: { type: 'color', default: '#9ca3af' },
+      metalColor: { type: 'color', default: '#64748b' },
+      darkColor: { type: 'color', default: '#1f2937' },
+    },
+  },
+  {
+    id: 'generic.service_platform',
+    family: 'generic',
+    kind: 'service_platform',
+    semanticRole: 'service_platform',
+    aliases: ['service_platform', 'maintenance_platform', 'inspection_platform', 'access_deck'],
+    description: 'Service or inspection platform with deck, posts, guard rails, and access ladder.',
+    params: {
+      length: { type: 'number', min: 0.3, max: 6, default: 1.2 },
+      width: { type: 'number', min: 0.2, max: 3, default: 0.65 },
+      height: { type: 'number', min: 0.2, max: 3.5, default: 0.9 },
+      overallHeight: { type: 'number', min: 0.18, max: 1.4, default: 0.4 },
+      detailLevel: { type: 'enum', values: ['low', 'medium', 'high'], default: 'medium' },
+      metalColor: { type: 'color', default: '#64748b' },
+      color: { type: 'color', default: '#facc15' },
+    },
+  },
+  {
+    id: 'generic.platform_with_ladder',
+    family: 'generic',
+    kind: 'platform_with_ladder',
+    semanticRole: 'service_platform',
+    aliases: ['platform_with_ladder', 'maintenance_platform_ladder', 'access_platform_ladder'],
+    description: 'Service platform with guard rails and explicit ladder rails/rungs.',
+    params: {
+      length: { type: 'number', min: 0.3, max: 6, default: 1.2 },
+      width: { type: 'number', min: 0.2, max: 3, default: 0.65 },
+      height: { type: 'number', min: 0.2, max: 3.5, default: 0.9 },
+      overallHeight: { type: 'number', min: 0.18, max: 1.4, default: 0.4 },
+      detailLevel: { type: 'enum', values: ['low', 'medium', 'high'], default: 'medium' },
+      rungCount: { type: 'integer', min: 3, max: 16, default: 6 },
+      metalColor: { type: 'color', default: '#64748b' },
+      color: { type: 'color', default: '#facc15' },
+    },
+  },
+  {
+    id: 'generic.chimney_stack',
+    family: 'generic',
+    kind: 'chimney_stack',
+    semanticRole: 'stack_shell',
+    aliases: ['chimney_stack', 'process_stack', 'smokestack', 'exhaust_stack', 'stack_shell'],
+    description:
+      'Tall industrial exhaust stack with optional bands, platform, and inlet connection.',
+    params: {
+      height: { type: 'number', min: 0.8, max: 30, default: 6 },
+      radius: { type: 'number', min: 0.05, max: 2, default: 0.28 },
+      thickness: { type: 'number', min: 0.01, max: 0.2, default: 0.04 },
+      bandCount: { type: 'integer', min: 0, max: 8, default: 3 },
+      warningStripes: { type: 'boolean', default: false },
+      metalColor: { type: 'color', default: '#9ca3af' },
+      accentColor: { type: 'color', default: '#ef4444' },
+    },
+  },
 ]
 
 export const KIOSK_PART_DEFINITIONS: readonly PartDefinition[] = [
@@ -707,6 +1408,7 @@ export const PUMP_PART_DEFINITIONS: readonly PartDefinition[] = [
       radius: { type: 'number', min: 0.03, max: 0.9, default: 0.12 },
       tubeRadius: { type: 'number', min: 0.004, max: 0.15, default: 0.018 },
       axis: { type: 'enum', values: ['x', 'y', 'z'], default: 'z' },
+      detailLevel: { type: 'enum', values: ['low', 'medium', 'high'], default: 'medium' },
       boltCount: { type: 'integer', min: 4, max: 16, default: 8 },
       metalColor: { type: 'color', default: '#cbd5e1' },
     },
@@ -908,6 +1610,7 @@ export const PIPE_SYSTEM_PART_DEFINITIONS: readonly PartDefinition[] = [
       radius: { type: 'number', min: 0.02, max: 1.2, default: 0.09 },
       tubeRadius: { type: 'number', min: 0.004, max: 0.18, default: 0.014 },
       axis: { type: 'enum', values: ['x', 'y', 'z'], default: 'x' },
+      detailLevel: { type: 'enum', values: ['low', 'medium', 'high'], default: 'medium' },
       boltCount: { type: 'integer', min: 4, max: 16, default: 8 },
       metalColor: { type: 'color', default: '#cbd5e1' },
     },
@@ -964,6 +1667,141 @@ export const TANK_PART_DEFINITIONS: readonly PartDefinition[] = [
     },
   },
   {
+    id: 'tank.flange_ring',
+    family: 'tank',
+    kind: 'flange_ring',
+    semanticRole: 'flange_ring',
+    aliases: ['flange_ring', 'riding_ring', 'tyre_ring', 'girth_gear', 'support_ring'],
+    attachTo: 'cylindrical_tank',
+    layoutRole: 'shell_ring',
+    description: 'Reusable vessel or kiln shell ring, including riding rings and girth gears.',
+    params: {
+      radius: { type: 'number', min: 0.02, max: 3, default: 0.6 },
+      tubeRadius: { type: 'number', min: 0.004, max: 0.3, default: 0.04 },
+      depth: { type: 'number', min: 0.006, max: 0.3, default: 0.035 },
+      detailLevel: { type: 'enum', values: ['low', 'medium', 'high'], default: 'medium' },
+      boltCount: { type: 'integer', min: 3, max: 24, default: 6 },
+      includeBolts: { type: 'boolean', default: true },
+      metalColor: { type: 'color', default: '#64748b' },
+    },
+  },
+  {
+    id: 'tank.bearing_block',
+    family: 'tank',
+    kind: 'bearing_block',
+    semanticRole: 'bearing_block',
+    aliases: ['bearing_block', 'support_roller', 'trunnion_roller', 'pillow_block'],
+    attachTo: 'cylindrical_tank',
+    layoutRole: 'shell_support_roller',
+    description: 'Mounted bearing or support roller block for horizontal vessels and rotary kilns.',
+    params: {
+      length: { type: 'number', min: 0.12, max: 1.6, default: 0.42 },
+      width: { type: 'number', min: 0.08, max: 1, default: 0.22 },
+      height: { type: 'number', min: 0.08, max: 1.2, default: 0.26 },
+      radius: { type: 'number', min: 0.015, max: 0.4, default: 0.07 },
+      metalColor: { type: 'color', default: '#64748b' },
+      darkColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'tank.support_roller_pair',
+    family: 'tank',
+    kind: 'support_roller_pair',
+    semanticRole: 'support_roller',
+    aliases: [
+      'support_roller_pair',
+      'support_roller_station',
+      'trunnion_roller_pair',
+      'kiln_support_roller',
+      '托轮组',
+    ],
+    attachTo: 'cylindrical_tank',
+    layoutRole: 'kiln_support_station',
+    description:
+      'Rotary kiln support station with a foundation, two trunnion rollers, and a small thrust roller.',
+    params: {
+      length: { type: 'number', min: 0.28, max: 3, default: 0.9 },
+      width: { type: 'number', min: 0.28, max: 4, default: 1.18 },
+      height: { type: 'number', min: 0.12, max: 1.4, default: 0.34 },
+      radius: { type: 'number', min: 0.035, max: 0.5, default: 0.095 },
+      rollerLength: { type: 'number', min: 0.08, max: 1.2, default: 0.28 },
+      metalColor: { type: 'color', default: '#64748b' },
+      rollerColor: { type: 'color', default: '#374151' },
+      darkColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'tank.motor_gearbox_unit',
+    family: 'tank',
+    kind: 'motor_gearbox_unit',
+    semanticRole: 'drive_unit',
+    aliases: ['motor_gearbox_unit', 'drive_unit', 'gearmotor', 'motor_reducer_unit'],
+    attachTo: 'cylindrical_tank',
+    layoutRole: 'side_drive_unit',
+    description: 'Compact side drive with motor, gearbox housing, and output shaft.',
+    params: {
+      length: { type: 'number', min: 0.3, max: 4, default: 1.05 },
+      height: { type: 'number', min: 0.12, max: 1.8, default: 0.38 },
+      radius: { type: 'number', min: 0.05, max: 0.8, default: 0.18 },
+      primaryColor: { type: 'color', default: '#64748b' },
+      secondaryColor: { type: 'color', default: '#475569' },
+      darkColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'tank.coupling_guard',
+    family: 'tank',
+    kind: 'coupling_guard',
+    semanticRole: 'coupling_guard',
+    aliases: ['coupling_guard', 'shaft_guard', 'coupling_cover'],
+    attachTo: 'motor_gearbox_unit',
+    layoutRole: 'drive_guard',
+    description: 'Half-cylinder safety guard over a drive coupling.',
+    params: {
+      length: { type: 'number', min: 0.16, max: 2.4, default: 0.58 },
+      radius: { type: 'number', min: 0.04, max: 0.7, default: 0.16 },
+      thickness: { type: 'number', min: 0.006, max: 0.16, default: 0.028 },
+      color: { type: 'color', default: '#facc15' },
+      darkColor: { type: 'color', default: '#111827' },
+    },
+  },
+  {
+    id: 'tank.hopper_body',
+    family: 'tank',
+    kind: 'hopper_body',
+    semanticRole: 'hopper_body',
+    aliases: ['hopper_body', 'feed_hopper', 'inlet_hopper', 'discharge_hopper'],
+    attachTo: 'cylindrical_tank',
+    layoutRole: 'feed_hopper',
+    description: 'Tapered feed or discharge hopper attached to process vessels.',
+    params: {
+      length: { type: 'number', min: 0.12, max: 3, default: 0.65 },
+      width: { type: 'number', min: 0.12, max: 3, default: 0.48 },
+      height: { type: 'number', min: 0.12, max: 3, default: 0.72 },
+      primaryColor: { type: 'color', default: '#94a3b8' },
+      metalColor: { type: 'color', default: '#64748b' },
+    },
+  },
+  {
+    id: 'tank.service_platform',
+    family: 'tank',
+    kind: 'service_platform',
+    semanticRole: 'service_platform',
+    aliases: ['service_platform', 'inspection_platform', 'maintenance_platform', 'guard_rail'],
+    attachTo: 'cylindrical_tank',
+    layoutRole: 'access_platform',
+    description: 'Service platform with support posts, guard rails, and access ladder.',
+    params: {
+      length: { type: 'number', min: 0.3, max: 8, default: 1.4 },
+      width: { type: 'number', min: 0.16, max: 2, default: 0.42 },
+      height: { type: 'number', min: 0.08, max: 3, default: 0.75 },
+      overallHeight: { type: 'number', min: 0.08, max: 3, default: 0.45 },
+      detailLevel: { type: 'enum', values: ['low', 'medium', 'high'], default: 'medium' },
+      metalColor: { type: 'color', default: '#64748b' },
+      color: { type: 'color', default: '#facc15' },
+    },
+  },
+  {
     id: 'tank.inlet_port',
     family: 'tank',
     kind: 'inlet_port',
@@ -1007,6 +1845,8 @@ export const TANK_PART_DEFINITIONS: readonly PartDefinition[] = [
       width: { type: 'number', min: 0.12, max: 3, default: 0.48 },
       height: { type: 'number', min: 0.2, max: 6, default: 1.2 },
       radius: { type: 'number', min: 0.004, max: 0.08, default: 0.018 },
+      detailLevel: { type: 'enum', values: ['low', 'medium', 'high'], default: 'medium' },
+      rungCount: { type: 'integer', min: 4, max: 16, default: 6 },
       metalColor: { type: 'color', default: '#94a3b8' },
     },
   },
@@ -1024,8 +1864,12 @@ export const REACTOR_PART_DEFINITIONS: readonly PartDefinition[] = [
     params: {
       height: { type: 'number', min: 0.2, max: 5, default: 1.4 },
       radius: { type: 'number', min: 0.06, max: 2, default: 0.42 },
+      bottomStyle: { type: 'enum', values: ['dished', 'conical'], default: 'dished' },
+      legStyle: { type: 'enum', values: ['vertical', 'splayed'], default: 'vertical' },
+      legCount: { type: 'integer', min: 3, max: 4, default: 4 },
       primaryColor: { type: 'color', default: '#94a3b8' },
       metalColor: { type: 'color', default: '#cbd5e1' },
+      motorColor: { type: 'color', default: '#1f2937' },
     },
   },
   {
@@ -1074,6 +1918,8 @@ export const REACTOR_PART_DEFINITIONS: readonly PartDefinition[] = [
       width: { type: 'number', min: 0.12, max: 3, default: 0.48 },
       height: { type: 'number', min: 0.2, max: 6, default: 1.2 },
       radius: { type: 'number', min: 0.004, max: 0.08, default: 0.018 },
+      detailLevel: { type: 'enum', values: ['low', 'medium', 'high'], default: 'medium' },
+      rungCount: { type: 'integer', min: 4, max: 16, default: 6 },
       metalColor: { type: 'color', default: '#94a3b8' },
     },
   },
@@ -1401,6 +2247,7 @@ export const MACHINE_TOOL_PART_DEFINITIONS: readonly PartDefinition[] = [
       length: { type: 'number', min: 0.06, max: 3, default: 0.48 },
       height: { type: 'number', min: 0.04, max: 2, default: 0.48 },
       thickness: { type: 'number', min: 0.004, max: 0.12, default: 0.02 },
+      detailLevel: { type: 'enum', values: ['low', 'medium', 'high'], default: 'medium' },
       slatCount: { type: 'integer', min: 2, max: 18, default: 6 },
       color: { type: 'color', default: '#475569' },
     },
@@ -1463,6 +2310,7 @@ export const MACHINE_TOOL_PART_DEFINITIONS: readonly PartDefinition[] = [
 const partDefinitionsByFamily = new Map<string, readonly PartDefinition[]>([
   ['vehicle', VEHICLE_PART_DEFINITIONS],
   ['desk', DESK_PART_DEFINITIONS],
+  ['fan', FAN_PART_DEFINITIONS],
   ['aircraft', AIRCRAFT_PART_DEFINITIONS],
   ['generic', GENERIC_PART_DEFINITIONS],
   ['kiosk', KIOSK_PART_DEFINITIONS],
@@ -1479,6 +2327,7 @@ const partDefinitionsByFamily = new Map<string, readonly PartDefinition[]>([
 
 const INDUSTRIAL_PART_FAMILIES = new Set([
   'pump',
+  'fan',
   'conveyor',
   'electrical',
   'pipe_system',
@@ -2325,7 +3174,9 @@ function normalizePartForDefinition(
   const centeredOn = preserveLayoutFields ? stringValue(raw.centeredOn) : undefined
   const alignAbove = preserveLayoutFields ? stringValue(raw.alignAbove) : undefined
   const alignBeside = preserveLayoutFields ? stringValue(raw.alignBeside) : undefined
-  const semanticRole = definition.semanticRole
+  const semanticRole = preserveLayoutFields
+    ? (stringValue(raw.semanticRole) ?? definition.semanticRole)
+    : definition.semanticRole
   let part: PartComposePartInput = {
     kind: definition.kind,
     ...(semanticRole ? { semanticRole } : {}),
@@ -2395,6 +3246,7 @@ function normalizeFamilyPartPlan(
   const rawParts = Array.isArray(input.parts) ? input.parts.filter(isRecord) : []
   const normalizedParts: PartComposePartInput[] = []
   const seen = new Set<string>()
+  const seenDefinitionIds = new Set<string>()
 
   for (const raw of rawParts) {
     const definition = definitionForPart(family, raw)
@@ -2404,15 +3256,19 @@ function normalizeFamilyPartPlan(
       )
       continue
     }
-    if (seen.has(definition.id)) continue
-    seen.add(definition.id)
+    const explicitId = stringValue(raw.id)
+    const dedupeKey = explicitId ? `${definition.id}:${normalizeKey(explicitId)}` : definition.id
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+    seenDefinitionIds.add(definition.id)
     normalizedParts.push(normalizePartForDefinition(family, definition, raw, input, warnings))
   }
 
   for (const definition of definitions) {
-    if (!definition.required || seen.has(definition.id)) continue
+    if (!definition.required || seenDefinitionIds.has(definition.id)) continue
     normalizedParts.push(normalizePartForDefinition(family, definition, {}, input, warnings))
     seen.add(definition.id)
+    seenDefinitionIds.add(definition.id)
   }
 
   if (family === 'vehicle' && !seen.has('seam_ring')) normalizedParts.push({ kind: 'seam_ring' })
@@ -2463,13 +3319,135 @@ export function getPartDefinitions(family: string): readonly PartDefinition[] {
   return partDefinitionsByFamily.get(family) ?? []
 }
 
-export function partCapabilitySummary(family?: string): string {
+const DIMENSION_PARAMETER_NAMES = new Set([
+  'length',
+  'width',
+  'height',
+  'depth',
+  'thickness',
+  'radius',
+  'diameter',
+  'radiusTop',
+  'radiusBottom',
+  'majorRadius',
+  'tubeRadius',
+  'wheelRadius',
+  'wheelWidth',
+  'motorLength',
+  'motorRadius',
+  'casingLength',
+  'casingRadius',
+  'casingDepth',
+  'shellDiameter',
+  'shellRadius',
+  'vesselHeight',
+  'tankHeight',
+  'portDiameter',
+  'nozzleDiameter',
+  'pipeDiameter',
+  'pipeRadius',
+  'bendRadius',
+  'supportHeight',
+])
+
+const MATERIAL_PARAMETER_PATTERN = /(color|colour|tint|opacity|metalness|roughness|material)/i
+const QUANTITY_PARAMETER_PATTERN = /(count|rows|columns|segments|slats|ribs|fins|bolts|doors)/i
+const PLACEMENT_PARAMETER_PATTERN = /(offset|spacing|side|axis|angle|rotation|slope|position)/i
+const DETAIL_PARAMETER_PATTERN =
+  /(detail|stripe|label|nameplate|vent|window|door|ladder|platform|handle)/i
+const SHAPE_PARAMETER_PATTERN =
+  /(style|variant|round|radius|taper|arc|sweep|curve|blade|tooth|profile|truncated|topScale)/i
+
+function partEditableParameterRole(
+  key: string,
+  parameter: PartParameterDefinition,
+): PartEditableParameterRole {
+  if (parameter.type === 'color' || MATERIAL_PARAMETER_PATTERN.test(key)) return 'material'
+  if (parameter.type === 'integer' || QUANTITY_PARAMETER_PATTERN.test(key)) return 'quantity'
+  if (DIMENSION_PARAMETER_NAMES.has(key)) return 'dimension'
+  if (PLACEMENT_PARAMETER_PATTERN.test(key)) return 'placement'
+  if (DETAIL_PARAMETER_PATTERN.test(key)) return 'detail'
+  if (parameter.type === 'enum' || SHAPE_PARAMETER_PATTERN.test(key)) return 'shape'
+  if (parameter.type === 'string' || parameter.type === 'boolean') return 'metadata'
+  return 'shape'
+}
+
+function editableParameterFromDefinition(
+  key: string,
+  parameter: PartParameterDefinition,
+): PartEditableParameter {
+  return {
+    name: key,
+    type: parameter.type,
+    role: partEditableParameterRole(key, parameter),
+    ...(parameter.min != null ? { min: parameter.min } : {}),
+    ...(parameter.max != null ? { max: parameter.max } : {}),
+    ...(parameter.default != null ? { default: parameter.default } : {}),
+    ...(parameter.values ? { values: parameter.values } : {}),
+    ...(parameter.description ? { description: parameter.description } : {}),
+  }
+}
+
+function parameterNamesForRole(
+  parameters: readonly PartEditableParameter[],
+  role: PartEditableParameterRole,
+): string[] {
+  return parameters
+    .filter((parameter) => parameter.role === role)
+    .map((parameter) => parameter.name)
+}
+
+export function getPartCapabilityMetadata(family?: string): readonly PartCapabilityMetadata[] {
   const definitions = family
     ? getPartDefinitions(family)
     : Array.from(partDefinitionsByFamily.values()).flat()
-  return definitions
-    .map((definition) => {
-      const params = Object.entries(definition.params)
+  return definitions.map((definition) => {
+    const editableParameters = Object.entries(definition.params).map(([key, parameter]) =>
+      editableParameterFromDefinition(key, parameter),
+    )
+    return {
+      id: definition.id,
+      family: definition.family,
+      kind: definition.kind,
+      ...(definition.semanticRole ? { semanticRole: definition.semanticRole } : {}),
+      aliases: definition.aliases,
+      required: definition.required === true,
+      ...(definition.attachTo ? { attachTo: definition.attachTo } : {}),
+      ...(definition.layoutRole ? { layoutRole: definition.layoutRole } : {}),
+      description: definition.description,
+      editableParameters,
+      editableProperties: editableParameters.map((parameter) => parameter.name),
+      dimensionProperties: parameterNamesForRole(editableParameters, 'dimension'),
+      quantityProperties: parameterNamesForRole(editableParameters, 'quantity'),
+      materialProperties: parameterNamesForRole(editableParameters, 'material'),
+      shapeProperties: parameterNamesForRole(editableParameters, 'shape'),
+      detailProperties: parameterNamesForRole(editableParameters, 'detail'),
+      placementProperties: parameterNamesForRole(editableParameters, 'placement'),
+    }
+  })
+}
+
+function summarizeEditableGroups(metadata: PartCapabilityMetadata): string {
+  const groups = [
+    metadata.dimensionProperties.length
+      ? `dimensions=${metadata.dimensionProperties.join('|')}`
+      : '',
+    metadata.quantityProperties.length ? `quantities=${metadata.quantityProperties.join('|')}` : '',
+    metadata.materialProperties.length ? `materials=${metadata.materialProperties.join('|')}` : '',
+    metadata.shapeProperties.length ? `shape=${metadata.shapeProperties.join('|')}` : '',
+    metadata.detailProperties.length ? `details=${metadata.detailProperties.join('|')}` : '',
+    metadata.placementProperties.length
+      ? `placement=${metadata.placementProperties.join('|')}`
+      : '',
+  ].filter(Boolean)
+  return groups.length ? ` editable(${groups.join('; ')})` : ''
+}
+
+export function partCapabilitySummary(family?: string): string {
+  return getPartCapabilityMetadata(family)
+    .map((metadata) => {
+      const definition = partAliasMapByFamily.get(metadata.family)?.get(normalizeKey(metadata.id))
+      const params = Object.entries(definition?.params ?? {})
         .map(([key, param]) => {
           if (param.values?.length) return `${key}=${param.values.join('|')}`
           const range =
@@ -2477,7 +3455,8 @@ export function partCapabilitySummary(family?: string): string {
           return `${key}:${param.type}${range}`
         })
         .join(', ')
-      return `${definition.id}: ${params}`
+      const role = metadata.semanticRole ? ` role=${metadata.semanticRole}` : ''
+      return `${metadata.id}${role}: ${params}${summarizeEditableGroups(metadata)}`
     })
     .join('\n')
 }
@@ -2488,6 +3467,22 @@ export function normalizeVehiclePartPlan(input: Record<string, unknown>): Normal
 
 export function normalizeDeskPartPlan(input: Record<string, unknown>): NormalizedPartPlan {
   return normalizeFamilyPartPlan('desk', DESK_PART_DEFINITIONS, input)
+}
+
+export function normalizeFanPartPlan(input: Record<string, unknown>): NormalizedPartPlan {
+  const plan = normalizeFamilyPartPlan('fan', FAN_PART_DEFINITIONS, input)
+  for (const part of plan.parts) {
+    if (part.kind !== 'protective_grill') continue
+    const detailLevel = `${part.detailLevel ?? part.grillDetailLevel ?? ''}`.toLowerCase()
+    if (/low|simple|coarse|light|\u4f4e|\u7b80/i.test(detailLevel)) {
+      part.ringCount = 3
+      part.spokeCount = 12
+    } else if (/high|fine|detailed|dense|\u9ad8|\u7ec6|\u5bc6/i.test(detailLevel)) {
+      part.ringCount = 5
+      part.spokeCount = 24
+    }
+  }
+  return plan
 }
 
 export function normalizeAircraftPartPlan(input: Record<string, unknown>): NormalizedPartPlan {
@@ -2616,6 +3611,7 @@ export function normalizePartPlanForFamily(
   family: string,
   input: Record<string, unknown>,
 ): NormalizedPartPlan | undefined {
+  if (family === 'fan') return normalizeFanPartPlan(input)
   const definitions = getPartDefinitions(family)
   if (definitions.length === 0) return undefined
   return normalizeFamilyPartPlan(family, definitions, input)

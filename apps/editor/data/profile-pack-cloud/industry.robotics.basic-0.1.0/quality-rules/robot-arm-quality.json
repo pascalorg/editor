@@ -1,0 +1,19 @@
+{
+  "id": "quality.robot_arm.six_axis",
+  "requiredRoles": [
+    "robot_base",
+    "base_joint",
+    "shoulder_joint",
+    "upper_arm",
+    "elbow_joint",
+    "forearm",
+    "wrist_joint",
+    "tool_flange",
+    "end_effector"
+  ],
+  "forbiddenRoles": ["work_table", "control_panel", "safety_barrier", "vehicle_body", "wheel"],
+  "shapeCount": {
+    "min": 9,
+    "max": 28
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "industry.machine-tools.basic",
+  "name": "Machine Tools Basic Equipment Pack",
+  "industry": "machine-tools",
+  "version": "0.1.0",
+  "schemaVersion": "1.1",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": ["zh-CN", "en-US"],
+  "description": "Basic machine-tool profiles that can override builtin generic CNC fallbacks.",
+  "profiles": ["profiles/cnc.json"],
+  "qualityRules": ["quality-rules/cnc-quality.json"]
+}

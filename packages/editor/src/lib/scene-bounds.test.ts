@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode } from '@pascal-app/core/schema'
-import { computeSceneBoundsXZ } from './scene-bounds'
+import { computeSceneBoundsXZ, pickSceneCameraFocusBounds } from './scene-bounds'
 
 function makeWall(start: [number, number], end: [number, number]): AnyNode {
   return {
@@ -179,5 +179,40 @@ describe('computeSceneBoundsXZ', () => {
     // NaN should be ignored; the usable points are (4,2), (0,0), (1,1).
     expect(bounds!.min).toEqual([0, 0])
     expect(bounds!.max).toEqual([4, 2])
+  })
+
+  test('picks factory camera focus bounds from node metadata', () => {
+    const focus = {
+      reason: 'factory-key-process',
+      stationIds: ['preheater_tower', 'rotary_kiln'],
+      bounds: {
+        min: [-4, -2],
+        max: [8, 3],
+        center: [2, 0.5],
+        size: [12, 5],
+      },
+    }
+    const nodes: AnyNode[] = [
+      makeZone([
+        [-30, -10],
+        [30, -10],
+        [30, 10],
+        [-30, 10],
+      ]),
+      {
+        ...makeZone([
+          [-4, -2],
+          [8, -2],
+          [8, 3],
+          [-4, 3],
+        ]),
+        metadata: { factoryCameraFocus: focus },
+      } as AnyNode,
+    ]
+
+    expect(pickSceneCameraFocusBounds(nodes)).toEqual({
+      reason: 'factory-key-process',
+      bounds: focus.bounds,
+    })
   })
 })

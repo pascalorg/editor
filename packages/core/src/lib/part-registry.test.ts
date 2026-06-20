@@ -1,14 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  getPartCapabilityMetadata,
   normalizeAircraftPartPlan,
   normalizeCompressorPartPlan,
   normalizeConveyorPartPlan,
   normalizeDeskPartPlan,
   normalizeElectricalPartPlan,
+  normalizeFanPartPlan,
   normalizeGenericPartPlan,
   normalizeHeatExchangerPartPlan,
   normalizeKioskPartPlan,
   normalizeMachineToolPartPlan,
+  normalizePartPlanForFamily,
   normalizePipeSystemPartPlan,
   normalizePumpPartPlan,
   normalizeReactorPartPlan,
@@ -24,6 +27,275 @@ describe('part registry', () => {
     expect(summary).toContain('vehicle.body_shell')
     expect(summary).toContain('wheel_set')
     expect(summary).toContain('radius:number[0.15,0.8]')
+    expect(summary).toContain('editable(dimensions=length|width|height')
+    expect(summary).toContain('materials=primaryColor')
+  })
+
+  test('classifies reusable part parameters for profile packs and LLM edits', () => {
+    const metadata = getPartCapabilityMetadata('pump')
+    const motor = metadata.find((part) => part.kind === 'ribbed_motor_body')
+    const flange = metadata.find((part) => part.kind === 'flange_ring')
+
+    expect(motor).toEqual(
+      expect.objectContaining({
+        id: 'pump.ribbed_motor_body',
+        family: 'pump',
+        semanticRole: 'drive_motor',
+        dimensionProperties: expect.arrayContaining(['length', 'radius']),
+        quantityProperties: expect.arrayContaining(['slatCount']),
+        materialProperties: expect.arrayContaining(['primaryColor']),
+      }),
+    )
+    expect(flange).toEqual(
+      expect.objectContaining({
+        kind: 'flange_ring',
+        quantityProperties: expect.arrayContaining(['boltCount']),
+        dimensionProperties: expect.arrayContaining(['radius']),
+        detailProperties: expect.arrayContaining(['detailLevel']),
+      }),
+    )
+  })
+
+  test('exposes independent fan blade arrays for editable fan profiles', () => {
+    const metadata = getPartCapabilityMetadata('fan')
+    const blade = metadata.find((part) => part.kind === 'fan_blade')
+    const grill = metadata.find((part) => part.kind === 'protective_grill')
+
+    expect(blade).toEqual(
+      expect.objectContaining({
+        id: 'fan.fan_blade',
+        semanticRole: 'fan_blade',
+        quantityProperties: expect.arrayContaining(['count']),
+        dimensionProperties: expect.arrayContaining(['length', 'width', 'thickness']),
+        materialProperties: expect.arrayContaining(['primaryColor']),
+      }),
+    )
+    expect(grill).toEqual(
+      expect.objectContaining({
+        id: 'fan.protective_grill',
+        semanticRole: 'protective_grill',
+        detailProperties: expect.arrayContaining(['detailLevel']),
+      }),
+    )
+
+    const plan = normalizeFanPartPlan({
+      parts: [
+        { id: 'blades', kind: 'fan_blade', count: 6, primaryColor: '#ef4444' },
+        { id: 'grill', kind: 'protective_grill', detailLevel: 'low' },
+      ],
+    })
+    expect(plan.parts.some((part) => part.kind === 'fan_blade' && part.count === 6)).toBe(true)
+    expect(plan.parts.find((part) => part.kind === 'protective_grill')).toEqual(
+      expect.objectContaining({ detailLevel: 'low', ringCount: 3, spokeCount: 12 }),
+    )
+    expect(
+      normalizePartPlanForFamily('fan', {
+        parts: [{ id: 'grill', kind: 'protective_grill', detailLevel: 'low' }],
+      })?.parts.find((part) => part.kind === 'protective_grill'),
+    ).toEqual(expect.objectContaining({ ringCount: 3, spokeCount: 12 }))
+  })
+
+  test('preserves repeated industrial parts when explicit ids distinguish instances', () => {
+    const plan = normalizeTankPartPlan({
+      parts: [
+        { id: 'riding-ring-tail', kind: 'flange_ring', semanticRole: 'riding_ring' },
+        { id: 'riding-ring-head', kind: 'flange_ring', semanticRole: 'riding_ring' },
+        { id: 'girth-gear', kind: 'flange_ring', semanticRole: 'girth_gear' },
+        { id: 'support-roller-tail', kind: 'bearing_block', semanticRole: 'support_roller' },
+        { id: 'support-roller-head', kind: 'bearing_block', semanticRole: 'support_roller' },
+      ],
+    })
+
+    expect(plan.parts.filter((part) => part.kind === 'flange_ring')).toHaveLength(3)
+    expect(plan.parts.filter((part) => part.kind === 'bearing_block')).toHaveLength(2)
+    expect(plan.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'girth-gear', semanticRole: 'girth_gear' }),
+        expect.objectContaining({ id: 'support-roller-head', semanticRole: 'support_roller' }),
+      ]),
+    )
+  })
+
+  test('exposes reusable mobile platform parts for industrial profile packs', () => {
+    const metadata = getPartCapabilityMetadata('generic')
+    const chassis = metadata.find((part) => part.kind === 'mobile_platform_chassis')
+    const lidar = metadata.find((part) => part.kind === 'lidar_sensor')
+    const eStop = metadata.find((part) => part.kind === 'emergency_stop_button')
+    const lightStrip = metadata.find((part) => part.kind === 'status_light_strip')
+    const operatorPanel = metadata.find((part) => part.kind === 'operator_panel')
+    const guardFence = metadata.find((part) => part.kind === 'guard_fence')
+    const palletTable = metadata.find((part) => part.kind === 'pallet_table')
+    const bearingBlock = metadata.find((part) => part.kind === 'bearing_block')
+    const couplingGuard = metadata.find((part) => part.kind === 'coupling_guard')
+    const motorGearbox = metadata.find((part) => part.kind === 'motor_gearbox_unit')
+    const pipeManifold = metadata.find((part) => part.kind === 'pipe_manifold')
+    const hopperBody = metadata.find((part) => part.kind === 'hopper_body')
+    const servicePlatform = metadata.find((part) => part.kind === 'service_platform')
+
+    expect(chassis).toEqual(
+      expect.objectContaining({
+        id: 'generic.mobile_platform_chassis',
+        semanticRole: 'vehicle_body',
+        dimensionProperties: expect.arrayContaining(['length', 'width', 'height']),
+        materialProperties: expect.arrayContaining(['primaryColor', 'secondaryColor']),
+      }),
+    )
+    expect(lidar).toEqual(
+      expect.objectContaining({
+        semanticRole: 'navigation_sensor',
+        dimensionProperties: expect.arrayContaining(['radius', 'height']),
+        placementProperties: expect.arrayContaining(['axis']),
+      }),
+    )
+    expect(eStop).toEqual(
+      expect.objectContaining({
+        semanticRole: 'emergency_stop_button',
+        materialProperties: expect.arrayContaining(['color']),
+      }),
+    )
+    expect(lightStrip).toEqual(
+      expect.objectContaining({
+        semanticRole: 'status_light_strip',
+        placementProperties: expect.arrayContaining(['side']),
+      }),
+    )
+    expect(operatorPanel).toEqual(
+      expect.objectContaining({
+        semanticRole: 'control_panel',
+        materialProperties: expect.arrayContaining(['primaryColor', 'accentColor']),
+      }),
+    )
+    expect(guardFence).toEqual(
+      expect.objectContaining({
+        semanticRole: 'safety_barrier',
+        quantityProperties: expect.arrayContaining(['count']),
+      }),
+    )
+    expect(palletTable).toEqual(
+      expect.objectContaining({
+        semanticRole: 'pallet_table',
+        dimensionProperties: expect.arrayContaining(['length', 'width', 'height']),
+      }),
+    )
+    expect(bearingBlock).toEqual(
+      expect.objectContaining({
+        semanticRole: 'bearing_block',
+        dimensionProperties: expect.arrayContaining(['length', 'width', 'height', 'radius']),
+      }),
+    )
+    expect(couplingGuard).toEqual(
+      expect.objectContaining({
+        semanticRole: 'coupling_guard',
+        dimensionProperties: expect.arrayContaining(['length', 'radius', 'thickness']),
+      }),
+    )
+    expect(motorGearbox).toEqual(
+      expect.objectContaining({
+        semanticRole: 'drive_unit',
+        materialProperties: expect.arrayContaining(['primaryColor', 'secondaryColor']),
+      }),
+    )
+    expect(pipeManifold).toEqual(
+      expect.objectContaining({
+        semanticRole: 'pipe_manifold',
+        quantityProperties: expect.arrayContaining(['count']),
+      }),
+    )
+    expect(hopperBody).toEqual(
+      expect.objectContaining({
+        semanticRole: 'hopper_body',
+        dimensionProperties: expect.arrayContaining(['length', 'width', 'height']),
+      }),
+    )
+    expect(servicePlatform).toEqual(
+      expect.objectContaining({
+        semanticRole: 'service_platform',
+        dimensionProperties: expect.arrayContaining(['length', 'width', 'height']),
+        shapeProperties: expect.arrayContaining(['overallHeight']),
+        detailProperties: expect.arrayContaining(['detailLevel']),
+      }),
+    )
+  })
+
+  test('exposes reusable process-vessel detail parts for industry packs', () => {
+    const metadata = getPartCapabilityMetadata('generic')
+    const details = new Map(metadata.map((part) => [part.kind, part]))
+
+    expect(details.get('manway_lid')).toEqual(
+      expect.objectContaining({
+        semanticRole: 'manway_lid',
+        dimensionProperties: expect.arrayContaining(['radius', 'thickness']),
+        quantityProperties: expect.arrayContaining(['boltCount']),
+      }),
+    )
+    expect(details.get('sanitary_nozzle')).toEqual(
+      expect.objectContaining({
+        semanticRole: 'sanitary_nozzle',
+        placementProperties: expect.arrayContaining(['axis']),
+      }),
+    )
+    expect(details.get('flanged_nozzle')).toEqual(
+      expect.objectContaining({
+        semanticRole: 'flanged_nozzle',
+        dimensionProperties: expect.arrayContaining(['radius', 'length']),
+        shapeProperties: expect.arrayContaining(['flangeRadius', 'flangeThickness']),
+        quantityProperties: expect.arrayContaining(['boltCount']),
+        placementProperties: expect.arrayContaining(['axis', 'side']),
+      }),
+    )
+    expect(details.get('inspection_hatch')).toEqual(
+      expect.objectContaining({
+        semanticRole: 'inspection_hatch',
+        dimensionProperties: expect.arrayContaining(['radius', 'thickness']),
+        placementProperties: expect.arrayContaining(['axis', 'side']),
+      }),
+    )
+    expect(details.get('jacket_shell')).toEqual(
+      expect.objectContaining({
+        semanticRole: 'jacket_shell',
+        dimensionProperties: expect.arrayContaining(['radius', 'height', 'thickness']),
+      }),
+    )
+    expect(details.get('sight_glass')).toEqual(
+      expect.objectContaining({
+        semanticRole: 'sight_glass',
+        placementProperties: expect.arrayContaining(['side']),
+        materialProperties: expect.arrayContaining(['color']),
+      }),
+    )
+    expect(details.get('sample_valve')).toEqual(
+      expect.objectContaining({
+        semanticRole: 'sample_valve',
+        placementProperties: expect.arrayContaining(['side']),
+      }),
+    )
+    expect(details.get('instrument_port')).toEqual(
+      expect.objectContaining({
+        semanticRole: 'instrument_port',
+        placementProperties: expect.arrayContaining(['axis']),
+      }),
+    )
+    expect(details.get('stainless_highlight_panel')).toEqual(
+      expect.objectContaining({
+        semanticRole: 'stainless_highlight_panel',
+        materialProperties: expect.arrayContaining(['color']),
+      }),
+    )
+    expect(details.get('conical_hopper')).toEqual(
+      expect.objectContaining({
+        semanticRole: 'conical_hopper',
+        dimensionProperties: expect.arrayContaining(['radiusTop', 'radiusBottom', 'height']),
+        shapeProperties: expect.arrayContaining(['outletRadius']),
+        quantityProperties: expect.arrayContaining(['radialSegments']),
+      }),
+    )
+    expect(details.get('platform_with_ladder')).toEqual(
+      expect.objectContaining({
+        semanticRole: 'service_platform',
+        dimensionProperties: expect.arrayContaining(['length', 'width', 'height']),
+        quantityProperties: expect.arrayContaining(['rungCount']),
+      }),
+    )
   })
 
   test('normalizes vehicle part aliases and clamps unsafe parameters', () => {
@@ -436,7 +708,7 @@ describe('part registry', () => {
         expect.objectContaining({
           id: 'viewing_panel',
           kind: 'generic_panel',
-          semanticRole: 'viewing_panel',
+          semanticRole: 'viewing_window',
           centeredOn: 'enclosure',
           side: 'front',
           length: 0.9,

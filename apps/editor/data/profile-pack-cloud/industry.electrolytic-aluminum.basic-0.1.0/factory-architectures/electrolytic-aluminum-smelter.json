@@ -1,0 +1,109 @@
+{
+  "id": "electrolytic_aluminum.smelter.modular_potline",
+  "label": "Electrolytic aluminum smelter modular architecture",
+  "industry": "electrolytic-aluminum",
+  "processId": "electrolytic_aluminum_smelter_full",
+  "layoutStyle": "parallel_bays",
+  "defaultDimensions": {
+    "length": 72,
+    "width": 32
+  },
+  "scopes": [
+    {
+      "id": "potroom_core",
+      "label": "Potroom electrolysis core",
+      "includeModules": ["rectifier_power", "alumina_handling", "potroom_electrolysis", "fume_treatment"]
+    },
+    {
+      "id": "metal_transfer_and_casting",
+      "label": "Molten metal transfer and casting",
+      "includeModules": ["potroom_electrolysis", "metal_transfer", "holding_and_casting"]
+    },
+    {
+      "id": "full_smelter",
+      "label": "Full electrolytic aluminum smelter",
+      "includeModules": [
+        "rectifier_power",
+        "alumina_handling",
+        "potroom_electrolysis",
+        "anode_handling",
+        "fume_treatment",
+        "metal_transfer",
+        "holding_and_casting",
+        "utilities"
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "id": "rectifier_power",
+      "displayLabel": "整流供电",
+      "order": 10,
+      "stationIds": ["rectifier_transformer_station"]
+    },
+    {
+      "id": "alumina_handling",
+      "displayLabel": "氧化铝储运与加料",
+      "order": 20,
+      "stationIds": ["alumina_storage_silo", "alumina_conveying_line"]
+    },
+    {
+      "id": "potroom_electrolysis",
+      "displayLabel": "电解车间",
+      "order": 30,
+      "stationIds": ["electrolytic_cell", "pot_tending_crane"]
+    },
+    {
+      "id": "anode_handling",
+      "displayLabel": "阳极组装与更换",
+      "order": 40,
+      "stationIds": ["anode_assembly_station"]
+    },
+    {
+      "id": "fume_treatment",
+      "displayLabel": "电解烟气净化",
+      "order": 50,
+      "stationIds": ["dry_scrubber_baghouse"]
+    },
+    {
+      "id": "metal_transfer",
+      "displayLabel": "出铝与铝液转运",
+      "order": 60,
+      "stationIds": ["vacuum_tapping_ladle"]
+    },
+    {
+      "id": "holding_and_casting",
+      "displayLabel": "保温与铸锭",
+      "order": 70,
+      "stationIds": ["molten_aluminum_holding_furnace", "continuous_ingot_casting_line"]
+    },
+    {
+      "id": "utilities",
+      "displayLabel": "辅助系统",
+      "order": 80,
+      "stationIds": ["rectifier_transformer_station", "dry_scrubber_baghouse"]
+    }
+  ],
+  "layoutHints": {
+    "primaryAxis": "x",
+    "secondaryAxis": "z",
+    "indoorPotroom": true,
+    "outdoorHeavyIndustry": true,
+    "longAxisStationId": "electrolytic_cell",
+    "highestStationId": "dry_scrubber_baghouse",
+    "sideBranchStationIds": [
+      "rectifier_transformer_station",
+      "alumina_storage_silo",
+      "dry_scrubber_baghouse",
+      "anode_assembly_station"
+    ],
+    "scale": "conceptual",
+    "notes": [
+      "Represent the potroom as one or more long parallel electrolytic-cell bays.",
+      "Keep rectifier power beside the potline and show copper busbar transfer into electrolytic cells.",
+      "Place alumina storage and conveying upstream of potroom feed points.",
+      "Place dry scrubber and baghouse as a side exhaust-treatment branch from the potroom.",
+      "Place vacuum tapping ladles between potroom and holding/casting area."
+    ]
+  }
+}

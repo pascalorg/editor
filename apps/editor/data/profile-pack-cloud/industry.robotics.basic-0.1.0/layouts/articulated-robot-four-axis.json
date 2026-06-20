@@ -1,0 +1,24 @@
+{
+  "id": "articulated_robot.four_axis",
+  "family": "robot_workcell_layout",
+  "description": "Four-axis articulated robot skeleton for compact pick-and-place arms. The executor consumes robotArmDefaults.axisCount=4 and can use these anchors in future layout resolver versions.",
+  "anchors": [
+    { "id": "base", "role": "robot_base", "position": [0, 0, 0] },
+    { "id": "shoulder", "role": "shoulder_joint", "relativeTo": "base", "offset": [0, 0.55, 0] },
+    { "id": "elbow", "role": "elbow_joint", "relativeTo": "shoulder", "offset": [-0.28, 0.52, 0] },
+    { "id": "wrist", "role": "wrist_joint", "relativeTo": "elbow", "offset": [0.68, 0.06, 0] },
+    { "id": "flange", "role": "tool_flange", "relativeTo": "wrist", "offset": [0.24, 0, 0] }
+  ],
+  "placements": [
+    { "role": "robot_base", "anchor": "base" },
+    { "role": "base_joint", "anchor": "base" },
+    { "role": "shoulder_joint", "anchor": "shoulder" },
+    { "role": "upper_arm", "between": ["shoulder", "elbow"] },
+    { "role": "elbow_joint", "anchor": "elbow" },
+    { "role": "forearm", "between": ["elbow", "wrist"] },
+    { "role": "wrist_roll_joint", "anchor": "wrist" },
+    { "role": "wrist_joint", "anchor": "wrist" },
+    { "role": "tool_flange", "anchor": "flange" },
+    { "role": "end_effector", "anchor": "flange" }
+  ]
+}

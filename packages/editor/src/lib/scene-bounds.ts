@@ -24,8 +24,65 @@ export type SceneBoundsXZ = {
   size: [number, number]
 }
 
+export type SceneCameraFocusBounds = {
+  bounds: SceneBoundsXZ
+  reason?: string
+}
+
 // A very small guard against degenerate bounds (e.g. a single wall of zero length).
 const MIN_BOUNDS_EXTENT = 0.0001
+
+function isFiniteVec2(value: unknown): value is [number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    typeof value[0] === 'number' &&
+    typeof value[1] === 'number' &&
+    Number.isFinite(value[0]) &&
+    Number.isFinite(value[1])
+  )
+}
+
+function readSceneBoundsXZ(value: unknown): SceneBoundsXZ | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Record<string, unknown>
+  if (
+    !(
+      isFiniteVec2(record.min) &&
+      isFiniteVec2(record.max) &&
+      isFiniteVec2(record.center) &&
+      isFiniteVec2(record.size)
+    )
+  ) {
+    return null
+  }
+  return {
+    min: record.min,
+    max: record.max,
+    center: record.center,
+    size: record.size,
+  }
+}
+
+export function pickSceneCameraFocusBounds(
+  nodes: AnyNode[] | Record<string, AnyNode>,
+): SceneCameraFocusBounds | null {
+  const list: AnyNode[] = Array.isArray(nodes) ? nodes : Object.values(nodes)
+  for (const node of list) {
+    const metadata = (node as unknown as { metadata?: unknown }).metadata
+    if (!metadata || typeof metadata !== 'object') continue
+    const focus = (metadata as Record<string, unknown>).factoryCameraFocus
+    if (!focus || typeof focus !== 'object') continue
+    const bounds = readSceneBoundsXZ((focus as Record<string, unknown>).bounds)
+    if (!bounds) continue
+    const reason = (focus as Record<string, unknown>).reason
+    return {
+      bounds,
+      ...(typeof reason === 'string' ? { reason } : {}),
+    }
+  }
+  return null
+}
 
 function extendPoint(
   acc: { minX: number; minZ: number; maxX: number; maxZ: number; hasPoint: boolean },

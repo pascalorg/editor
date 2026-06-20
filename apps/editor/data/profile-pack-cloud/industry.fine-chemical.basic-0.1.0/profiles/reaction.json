@@ -1,0 +1,134 @@
+[
+  {
+    "id": "fine_chemical.stirred_batch_reactor",
+    "name": "Stirred batch reactor",
+    "aliases": [
+      "stirred batch reactor",
+      "reaction kettle",
+      "glass lined reactor",
+      "jacketed reactor",
+      "fine chemical reactor",
+      "反应釜",
+      "搅拌反应釜",
+      "精细化工反应釜"
+    ],
+    "industry": "fine-chemical",
+    "family": "reactor",
+    "layoutFamily": "vessel_layout",
+    "archetypeFamily": "process_vessel",
+    "defaultDimensions": {
+      "diameter": 1.4,
+      "height": 2.8
+    },
+    "primarySemanticRole": "reactor_vessel_shell",
+    "qualityRules": "quality.fine_chemical.stirred_batch_reactor",
+    "parts": [
+      {
+        "kind": "agitator_tank",
+        "semanticRole": "reactor_vessel_shell",
+        "required": true,
+        "height": 2.6,
+        "radius": 0.62
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "feed_nozzle",
+        "required": true
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "bottom_discharge_nozzle",
+        "required": true
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "utility_jacket_manifold",
+        "length": 1,
+        "radius": 0.045,
+        "branchCount": 3
+      },
+      {
+        "kind": "platform_ladder",
+        "semanticRole": "access_platform",
+        "height": 1.5,
+        "length": 1.1,
+        "width": 0.65
+      }
+    ],
+    "visualCues": [
+      "vertical dished vessel",
+      "top agitator motor",
+      "feed and bottom discharge nozzles",
+      "side utility manifold",
+      "access platform"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Batch stirred reactor profile for common fine-chemical reaction steps.",
+    "editableSchemaRef": "vessel.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 72,
+      "parts": {
+        "access_platform": {
+          "detailLevel": "low",
+          "count": 6,
+          "rungCount": 6
+        }
+      }
+    }
+  },
+  {
+    "id": "fine_chemical.mixing_tank",
+    "name": "Fine chemical mixing tank",
+    "aliases": [
+      "mixing tank",
+      "blend tank",
+      "preparation tank",
+      "配料罐",
+      "搅拌罐"
+    ],
+    "industry": "fine-chemical",
+    "family": "reactor",
+    "layoutFamily": "vessel_layout",
+    "archetypeFamily": "process_vessel",
+    "defaultDimensions": {
+      "diameter": 1.2,
+      "height": 2.2
+    },
+    "primarySemanticRole": "reactor_vessel_shell",
+    "qualityRules": "quality.fine_chemical.mixing_tank",
+    "parts": [
+      {
+        "kind": "agitator_tank",
+        "semanticRole": "reactor_vessel_shell",
+        "required": true,
+        "height": 2.1,
+        "radius": 0.52
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "liquid_feed_nozzle"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "transfer_outlet"
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "support_base",
+        "length": 1.4,
+        "width": 1,
+        "height": 0.14
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Agitated preparation / blending tank used across fine-chemical production.",
+    "editableSchemaRef": "vessel.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 72
+    }
+  }
+]

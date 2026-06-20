@@ -1,0 +1,235 @@
+[
+  {
+    "id": "cement.vertical_raw_mill",
+    "name": "立磨",
+    "aliases": [
+      "立磨",
+      "生料立磨",
+      "煤粉立磨",
+      "vertical raw mill",
+      "vertical roller mill",
+      "VRM"
+    ],
+    "industry": "cement",
+    "family": "machine_tool",
+    "layoutFamily": "box_enclosure_layout",
+    "archetypeFamily": "enclosed_machine",
+    "defaultDimensions": {
+      "length": 3.4,
+      "width": 2.6,
+      "height": 4.2
+    },
+    "primarySemanticRole": "mill_body",
+    "qualityRules": "quality.cement.vertical_raw_mill",
+    "parts": [
+      {
+        "kind": "generic_base",
+        "semanticRole": "mill_base",
+        "required": true
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "mill_body",
+        "required": true
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "grinding_head",
+        "required": true
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "raw_material_feed"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "hot_gas_inlet_header"
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "mill_drive_unit"
+      },
+      {
+        "kind": "operator_panel",
+        "semanticRole": "local_control_panel"
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "水泥生料或煤粉立磨 profile，包含磨体、进料斗、热风管、主传动和本地控制。",
+    "editableSchemaRef": "rotary_equipment.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 72,
+      "parts": {
+        "grinding_head": {
+          "detailLevel": "low"
+        },
+        "local_control_panel": {
+          "detailLevel": "low"
+        }
+      }
+    }
+  },
+  {
+    "id": "cement.cement_mill",
+    "name": "水泥磨",
+    "aliases": [
+      "水泥磨",
+      "球磨机",
+      "cement mill",
+      "ball mill"
+    ],
+    "industry": "cement",
+    "family": "tank",
+    "layoutFamily": "vessel_layout",
+    "archetypeFamily": "enclosed_machine",
+    "defaultDimensions": {
+      "length": 7,
+      "width": 2.2,
+      "height": 2.2,
+      "diameter": 1.8
+    },
+    "primarySemanticRole": "mill_shell",
+    "qualityRules": "quality.cement.cement_mill",
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "mill_shell",
+        "required": true,
+        "axis": "x"
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "mill_support_base",
+        "required": true
+      },
+      {
+        "kind": "flange_ring",
+        "semanticRole": "mill_riding_ring",
+        "required": true
+      },
+      {
+        "kind": "bearing_block",
+        "semanticRole": "mill_trunnion_bearing",
+        "required": true
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "mill_drive_unit"
+      },
+      {
+        "kind": "coupling_guard",
+        "semanticRole": "mill_coupling_guard"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "feed_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "product_outlet"
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "卧式水泥磨或球磨机 profile，包含筒体、轴承座、传动和进出料端。",
+    "editableSchemaRef": "rotary_equipment.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 72,
+      "parts": {
+        "mill_riding_ring": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        },
+        "mill_coupling_guard": {
+          "detailLevel": "low",
+          "ringCount": 3,
+          "spokeCount": 12
+        }
+      }
+    }
+  },
+  {
+    "id": "cement.roller_press",
+    "name": "辊压机",
+    "aliases": [
+      "辊压机",
+      "roller press",
+      "high pressure grinding roll",
+      "HPGR"
+    ],
+    "industry": "cement",
+    "family": "machine_tool",
+    "layoutFamily": "box_enclosure_layout",
+    "archetypeFamily": "enclosed_machine",
+    "defaultDimensions": {
+      "length": 2.8,
+      "width": 2,
+      "height": 2.2
+    },
+    "primarySemanticRole": "roller_press_body",
+    "qualityRules": "quality.cement.roller_press",
+    "parts": [
+      {
+        "kind": "generic_base",
+        "semanticRole": "machine_base",
+        "required": true
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "roller_press_body",
+        "required": true
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "press_roll_pair",
+        "required": true
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "material_feed_hopper"
+      },
+      {
+        "kind": "discharge_chute",
+        "semanticRole": "pressed_material_discharge"
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "roller_press_drive_unit"
+      },
+      {
+        "kind": "guard_fence",
+        "semanticRole": "safety_guard"
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "水泥粉磨系统辊压机 profile，表达机架、辊对、进料斗、出料端和传动防护。",
+    "editableSchemaRef": "enclosure.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 56,
+      "parts": {
+        "roller_press_body": {
+          "detailLevel": "low",
+          "count": 5
+        },
+        "press_roll_pair": {
+          "detailLevel": "low"
+        },
+        "roller_press_drive_unit": {
+          "detailLevel": "low",
+          "count": 5
+        },
+        "safety_guard": {
+          "detailLevel": "low",
+          "ringCount": 3,
+          "spokeCount": 12
+        }
+      }
+    }
+  }
+]

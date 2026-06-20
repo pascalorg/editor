@@ -85,6 +85,76 @@ Profile-aware quality produces:
 
 Low scores trigger repair/fallback. High-quality runtime drafts can become generated candidates, but they are never promoted to `stable` automatically.
 
+## Subpart Selection And Editing
+
+Factory editing should support three selection scopes:
+
+```txt
+factory/process scope -> equipment assembly scope -> subpart/shape scope
+```
+
+The default user experience is:
+
+- If nothing is selected, natural-language edits operate on the factory or the latest generated object.
+- If an assembly is selected, edits operate on that equipment assembly and can expand to its editable child nodes.
+- If a generated subpart or shape is selected, edits operate only on that selected semantic part unless the user asks for all matching parts.
+
+Example:
+
+```txt
+Select one fan blade -> "make this blade longer"
+Select fan assembly -> "make all blades longer"
+Select water treatment plant -> "add another filter vessel"
+```
+
+Generated primitive shapes already carry the metadata needed for subpart targeting:
+
+```ts
+type PrimitiveShapeSelector = {
+  index?: number
+  occurrence?: number
+  semanticRole?: string
+  semanticGroup?: string
+  sourcePartKind?: string
+  sourcePartId?: string
+  kind?: string
+  nameIncludes?: string
+}
+```
+
+The renderer and selection context should preserve this metadata when converting generated artifacts into scene nodes. A selected subpart should be represented as a stable edit target:
+
+```ts
+type SelectedGeneratedSubpart = {
+  assemblyId: string
+  nodeId: string
+  shapeIndex?: number
+  selector: PrimitiveShapeSelector
+  label?: string
+  editableHints?: {
+    canScale?: string[]
+    primaryDimension?: string
+    minFactor?: number
+    maxFactor?: number
+  }
+}
+```
+
+Natural-language revision should prefer the selected subpart selector over broad role matching. This prevents requests such as "make it larger" from modifying every `fan_blade` when the user intentionally selected one blade.
+
+Subpart edits are divided into two paths:
+
+- **Instance edit**: modifies only the selected scene node or generated shape. Use this for one-off changes such as color, length, offset, rotation, or material.
+- **Profile/preset edit**: modifies the source profile, part preset, or layout data. Use this only when the user explicitly asks for future generated equipment of the same type to inherit the change.
+
+The first implementation target should cover:
+
+- select a child shape inside a generated assembly,
+- show its semantic label in the UI,
+- pass `SelectedGeneratedSubpart` into the AI harness run context,
+- route color, material, scale, resize, rotate, move, remove, and replace requests through `revise_geometry`,
+- keep assembly-level edits working as the fallback.
+
 ## Migration Rule
 
 Legacy executable ids remain supported as aliases and execution capabilities:

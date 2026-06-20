@@ -1,0 +1,28 @@
+{
+  "id": "industry.electrolytic-aluminum.basic",
+  "name": "Electrolytic Aluminum Basic Equipment Pack",
+  "industry": "electrolytic-aluminum",
+  "version": "0.1.0",
+  "schemaVersion": "1.1",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": [
+    "zh-CN",
+    "en-US"
+  ],
+  "description": "Basic equipment profiles for electrolytic aluminum smelters, covering potroom electrolysis, alumina handling, rectifier power supply, pot tending, fume treatment, molten aluminum transfer, anode assembly, holding furnace, and ingot casting scenarios.",
+  "profiles": [
+    "profiles/generated.json",
+    "profiles/potline-module.json"
+  ],
+  "factoryArchitectures": [
+    "factory-architectures/electrolytic-aluminum-smelter.json"
+  ],
+  "processTemplates": [
+    "process-templates/electrolytic-aluminum-smelter.json",
+    "process-templates/potroom-casting-line.json"
+  ],
+  "qualityRules": [
+    "quality-rules/generated-quality.json"
+  ]
+}

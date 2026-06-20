@@ -1,0 +1,27 @@
+{
+  "id": "quality.robot_arm.four_axis",
+  "requiredRoles": [
+    "robot_base",
+    "base_joint",
+    "shoulder_joint",
+    "upper_arm",
+    "elbow_joint",
+    "forearm",
+    "wrist_roll_joint",
+    "wrist_joint",
+    "tool_flange",
+    "end_effector"
+  ],
+  "forbiddenRoles": [
+    "wrist_pitch_joint",
+    "work_table",
+    "control_panel",
+    "safety_barrier",
+    "vehicle_body",
+    "wheel"
+  ],
+  "shapeCount": {
+    "min": 8,
+    "max": 24
+  }
+}

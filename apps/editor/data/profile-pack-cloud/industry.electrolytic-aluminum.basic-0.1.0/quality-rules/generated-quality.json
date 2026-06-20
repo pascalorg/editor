@@ -1,0 +1,213 @@
+[
+  {
+    "id": "quality.electrolytic_aluminum.electrolytic_cell",
+    "requiredRoles": [
+      "cell_body",
+      "pot_hood_panel",
+      "anode_cover_row",
+      "high_current_busbar",
+      "alumina_feed_manifold",
+      "potroom_service_platform"
+    ],
+    "forbiddenRoles": [
+      "vehicle_wheel",
+      "vehicle_cabin",
+      "aircraft_wing"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 80
+    }
+  },
+  {
+    "id": "quality.electrolytic_aluminum.potline_module",
+    "requiredRoles": [
+      "cell_body",
+      "pot_hood_panel",
+      "anode_cover_row",
+      "high_current_busbar",
+      "alumina_feed_manifold",
+      "fume_collection_header",
+      "potroom_service_platform",
+      "metal_tap"
+    ],
+    "forbiddenRoles": [
+      "vehicle_wheel",
+      "vehicle_cabin",
+      "aircraft_wing"
+    ],
+    "shapeCount": {
+      "min": 28,
+      "max": 180
+    }
+  },
+  {
+    "id": "quality.electrolytic_aluminum.pot_tending_crane",
+    "requiredRoles": [
+      "crane_bridge_girder",
+      "crane_runway_rail",
+      "tool_carriage",
+      "hoist_drive_unit",
+      "operator_cabin",
+      "anode_changing_tool",
+      "crane_maintenance_walkway"
+    ],
+    "forbiddenRoles": [
+      "vehicle_tire",
+      "aircraft_engine"
+    ],
+    "shapeCount": {
+      "min": 10,
+      "max": 90
+    }
+  },
+  {
+    "id": "quality.electrolytic_aluminum.rectifier_transformer_station",
+    "requiredRoles": [
+      "rectifier_transformer_body",
+      "cooling_radiator_bank",
+      "rectifier_cabinet",
+      "power_control_panel",
+      "dc_busbar_bridge",
+      "electrical_safety_fence"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "propeller_blade"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 70
+    }
+  },
+  {
+    "id": "quality.electrolytic_aluminum.alumina_storage_silo",
+    "requiredRoles": [
+      "silo_shell",
+      "silo_discharge_cone",
+      "pneumatic_conveying_pipe",
+      "silo_access_platform"
+    ],
+    "forbiddenRoles": [
+      "vehicle_wheel",
+      "operator_cabin"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 75
+    }
+  },
+  {
+    "id": "quality.electrolytic_aluminum.alumina_conveying_line",
+    "requiredRoles": [
+      "conveyor_frame",
+      "roller_bed",
+      "covered_conveyor_belt",
+      "feed_hopper",
+      "conveyor_drive_unit"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "vessel_head"
+    ],
+    "shapeCount": {
+      "min": 12,
+      "max": 90
+    }
+  },
+  {
+    "id": "quality.electrolytic_aluminum.dry_scrubber_baghouse",
+    "requiredRoles": [
+      "baghouse_filter_body",
+      "dust_collection_hopper",
+      "gas_inlet_header",
+      "clean_gas_stack",
+      "induced_draft_fan",
+      "filter_maintenance_platform"
+    ],
+    "forbiddenRoles": [
+      "vehicle_wheel",
+      "aircraft_wing"
+    ],
+    "shapeCount": {
+      "min": 12,
+      "max": 110
+    }
+  },
+  {
+    "id": "quality.electrolytic_aluminum.vacuum_tapping_ladle",
+    "requiredRoles": [
+      "ladle_shell",
+      "vacuum_suction_nozzle",
+      "tapping_spout_pipe",
+      "lifting_trunnion",
+      "ladle_transport_saddle"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "conveyor_belt"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 70
+    }
+  },
+  {
+    "id": "quality.electrolytic_aluminum.anode_assembly_station",
+    "requiredRoles": [
+      "anode_assembly_frame",
+      "carbon_block_table",
+      "anode_carbon_block",
+      "anode_rodding_bar",
+      "assembly_control_panel",
+      "assembly_safety_guard"
+    ],
+    "forbiddenRoles": [
+      "vehicle_wheel",
+      "aircraft_engine"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 85
+    }
+  },
+  {
+    "id": "quality.electrolytic_aluminum.molten_aluminum_holding_furnace",
+    "requiredRoles": [
+      "furnace_shell",
+      "furnace_access_door",
+      "tap_spout",
+      "refractory_support_base",
+      "furnace_exhaust_stack",
+      "furnace_operator_platform"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "conveyor_belt"
+    ],
+    "shapeCount": {
+      "min": 10,
+      "max": 85
+    }
+  },
+  {
+    "id": "quality.electrolytic_aluminum.continuous_ingot_casting_line",
+    "requiredRoles": [
+      "casting_conveyor_frame",
+      "ingot_mold_chain",
+      "repeated_ingot_mold",
+      "pouring_tundish",
+      "caster_drive_unit",
+      "casting_control_panel",
+      "casting_safety_guard"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "aircraft_wing"
+    ],
+    "shapeCount": {
+      "min": 14,
+      "max": 105
+    }
+  }
+]

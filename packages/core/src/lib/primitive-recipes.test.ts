@@ -47,6 +47,9 @@ describe('primitive recipe registry', () => {
       'robotArm.threeAxis',
       'mixer.impeller',
       'motor.servo',
+      'process.vesselShell',
+      'structure.platformLadder',
+      'enclosure.roundedBox',
     ])
 
     expect(findPrimitiveRecipe({ name: '20 tooth spur gear' })?.id).toBe('gear.spur')
@@ -60,6 +63,15 @@ describe('primitive recipe registry', () => {
     expect(findPrimitiveRecipe({ name: 'quarter turn ball valve' })?.id).toBe('valve.ball')
     expect(findPrimitiveRecipe({ name: 'industrial servo motor' })?.id).toBe('motor.servo')
     expect(findPrimitiveRecipe({ name: '\u4f3a\u670d\u7535\u673a' })?.id).toBe('motor.servo')
+    expect(findPrimitiveRecipe({ name: 'hollow pressure vessel shell' })?.id).toBe(
+      'process.vesselShell',
+    )
+    expect(findPrimitiveRecipe({ name: 'access platform ladder with guardrail' })?.id).toBe(
+      'structure.platformLadder',
+    )
+    expect(findPrimitiveRecipe({ name: 'rounded machine cabinet enclosure' })?.id).toBe(
+      'enclosure.roundedBox',
+    )
     expect(findPrimitiveRecipe({ name: 'mud mixer with three flat blades' })?.id).toBe(
       'mixer.impeller',
     )
@@ -229,6 +241,56 @@ describe('primitive recipe registry', () => {
     expect(shapes.filter((shape) => shape.semanticRole === 'perforation_hole')).toHaveLength(15)
     expect(getPrimitiveRecipeGeometryBrief({ recipeId: 'plate.perforated' })?.category).toBe(
       'perforated_plate',
+    )
+  })
+
+  test('composes a hollow process vessel shell recipe with heads and nozzles', () => {
+    const shapes = composeRecipePrimitives({
+      recipeId: 'process.vesselShell',
+      params: { length: 1.6, radius: 0.32, wallThickness: 0.025 },
+    })
+    const roles = new Set(shapes.map((shape) => shape.semanticRole).filter(Boolean))
+
+    expect(shapes.find((shape) => shape.semanticRole === 'vessel_shell')?.kind).toBe(
+      'hollow-cylinder',
+    )
+    expect(shapes.filter((shape) => shape.semanticRole === 'vessel_head')).toHaveLength(2)
+    expect(roles.has('vessel_seam')).toBe(true)
+    expect(roles.has('top_nozzle')).toBe(true)
+    expect(roles.has('manway_flange')).toBe(true)
+    expect(getPrimitiveRecipeGeometryBrief({ recipeId: 'process.vesselShell' })?.category).toBe(
+      'process_vessel_shell',
+    )
+  })
+
+  test('composes an industrial platform ladder recipe with guard rails', () => {
+    const shapes = composeRecipePrimitives({
+      recipeId: 'structure.platformLadder',
+      params: { length: 1, width: 0.6, height: 1.4, rungCount: 7 },
+    })
+
+    expect(shapes.some((shape) => shape.semanticRole === 'platform_deck')).toBe(true)
+    expect(shapes.filter((shape) => shape.semanticRole === 'platform_post')).toHaveLength(4)
+    expect(shapes.filter((shape) => shape.semanticRole === 'guard_rail').length).toBeGreaterThan(1)
+    expect(shapes.filter((shape) => shape.semanticRole === 'ladder_rung')).toHaveLength(7)
+    expect(
+      getPrimitiveRecipeGeometryBrief({ recipeId: 'structure.platformLadder' })?.category,
+    ).toBe('industrial_access_platform')
+  })
+
+  test('composes a rounded box enclosure recipe with a transparent viewing window', () => {
+    const shapes = composeRecipePrimitives({
+      recipeId: 'enclosure.roundedBox',
+      params: { length: 1.4, width: 0.5, height: 1.1 },
+    })
+    const window = shapes.find((shape) => shape.semanticRole === 'viewing_window')
+
+    expect(shapes.find((shape) => shape.semanticRole === 'machine_enclosure')?.kind).toBe('box')
+    expect(shapes.some((shape) => shape.semanticRole === 'access_door')).toBe(true)
+    expect(window?.kind).toBe('rounded-panel')
+    expect(window?.material?.properties?.transparent).toBe(true)
+    expect(getPrimitiveRecipeGeometryBrief({ recipeId: 'enclosure.roundedBox' })?.category).toBe(
+      'machine_enclosure',
     )
   })
 

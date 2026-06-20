@@ -158,6 +158,251 @@ describe('resolveLayout', () => {
     )
     expect(electrical.bounds.size[1]).toBeCloseTo(1.8, 5)
   })
+
+  test('places vessel parts with internal anchors and attachToRole', () => {
+    const plan = resolveLayout(
+      { family: 'reactor', layoutFamily: 'vessel_layout' },
+      [
+        { kind: 'agitator_tank', semanticRole: 'reactor_vessel_shell', height: 2.4, radius: 0.55 },
+        {
+          kind: 'flanged_nozzle',
+          semanticRole: 'feed_nozzle',
+          attachToRole: 'reactor_vessel_shell',
+          anchor: 'top',
+          offset: [0.18, 0, 0],
+        },
+        {
+          kind: 'platform_ladder',
+          semanticRole: 'access_platform',
+          attachToRole: 'reactor_vessel_shell',
+          anchor: 'service_side',
+        },
+        {
+          kind: 'skid_base',
+          semanticRole: 'support_base',
+          attachToRole: 'reactor_vessel_shell',
+          anchor: 'bottom',
+        },
+      ],
+      { height: 2.6, diameter: 1.2 },
+    )
+
+    const shell = plan.placements.find((part) => part.semanticRole === 'reactor_vessel_shell')
+    const nozzle = plan.placements.find((part) => part.semanticRole === 'feed_nozzle')
+    const platform = plan.placements.find((part) => part.semanticRole === 'access_platform')
+    const support = plan.placements.find((part) => part.semanticRole === 'support_base')
+
+    expect(plan.anchors.map((anchor) => anchor.id)).toEqual(
+      expect.arrayContaining([
+        'top',
+        'bottom',
+        'front',
+        'back',
+        'left',
+        'right',
+        'shell_center',
+        'drive_side',
+        'service_side',
+      ]),
+    )
+    expect(nozzle?.position[1]).toBeGreaterThan(shell?.position[1] ?? 0)
+    expect(nozzle?.position[0]).toBeCloseTo(0.18, 5)
+    expect(platform?.position[2]).toBeGreaterThan(shell?.position[2] ?? 0)
+    expect(support?.position[1]).toBeLessThan(shell?.position[1] ?? 0)
+  })
+
+  test('aligns rotating equipment rings, rollers, and drive units by role', () => {
+    const plan = resolveLayout(
+      { family: 'tank', layoutFamily: 'rotating_machine_layout' },
+      [
+        {
+          kind: 'cylindrical_tank',
+          semanticRole: 'vessel_shell',
+          length: 4.8,
+          radius: 0.55,
+          axis: 'x',
+        },
+        {
+          id: 'riding-ring',
+          kind: 'flange_ring',
+          semanticRole: 'riding_ring',
+          attachToRole: 'vessel_shell',
+          anchor: 'shell_center',
+          arrayAlong: 'length',
+          count: 2,
+        },
+        {
+          id: 'support-roller',
+          kind: 'bearing_block',
+          semanticRole: 'support_roller',
+          attachToRole: 'vessel_shell',
+          anchor: 'bottom',
+          arrayAlong: 'length',
+          count: 2,
+        },
+        {
+          kind: 'motor_gearbox_unit',
+          semanticRole: 'kiln_drive_unit',
+          attachToRole: 'vessel_shell',
+          anchor: 'drive_side',
+        },
+      ],
+      { length: 5, width: 1.4, height: 1.2, diameter: 1.1 },
+    )
+
+    const shell = plan.placements.find((part) => part.semanticRole === 'vessel_shell')
+    const rings = plan.placements.filter((part) => part.semanticRole === 'riding_ring')
+    const rollers = plan.placements.filter((part) => part.semanticRole === 'support_roller')
+    const drive = plan.placements.find((part) => part.semanticRole === 'kiln_drive_unit')
+
+    expect(rings).toHaveLength(2)
+    expect(rollers).toHaveLength(2)
+    expect(rings[0]?.position[0]).toBeLessThan(rings[1]?.position[0] ?? 0)
+    expect(rollers[0]?.position[0]).toBeCloseTo(rings[0]?.position[0] ?? 0, 5)
+    expect(drive?.position[0]).toBeLessThan(shell?.position[0] ?? 0)
+  })
+})
+
+describe('industrial detail parts', () => {
+  test('composes process-vessel details without falling back to generic pipe ports', () => {
+    const shapes = composePartPrimitives({
+      name: 'test process vessel',
+      family: 'generic',
+      length: 1.2,
+      width: 1.2,
+      height: 1.8,
+      parts: [
+        {
+          kind: 'manway_lid',
+          semanticRole: 'offset_manway_lid',
+          position: [0.25, 1.72, 0],
+          axis: 'y',
+        },
+        {
+          kind: 'sanitary_nozzle',
+          semanticRole: 'top_feed_nozzle',
+          position: [-0.25, 1.76, 0],
+          axis: 'y',
+        },
+        {
+          kind: 'jacket_shell',
+          semanticRole: 'thermal_jacket',
+          radius: 0.58,
+          height: 1.15,
+          position: [0, 0.78, 0],
+        },
+        { kind: 'sight_glass', semanticRole: 'front_sight_glass', side: 'front' },
+        { kind: 'sample_valve', semanticRole: 'sample_valve', side: 'right' },
+        {
+          kind: 'instrument_port',
+          semanticRole: 'temperature_probe',
+          position: [0, 1.95, 0.16],
+          axis: 'y',
+        },
+        {
+          kind: 'stainless_highlight_panel',
+          semanticRole: 'polished_shell_highlight',
+          side: 'front',
+        },
+      ],
+    })
+
+    const roles = new Set(shapes.map((shape) => shape.semanticRole))
+    const sourceKinds = new Set(shapes.map((shape) => shape.sourcePartKind))
+
+    expect([...sourceKinds]).toEqual(
+      expect.arrayContaining([
+        'manway_lid',
+        'sanitary_nozzle',
+        'jacket_shell',
+        'sight_glass',
+        'sample_valve',
+        'instrument_port',
+        'stainless_highlight_panel',
+      ]),
+    )
+    expect([...roles]).toEqual(
+      expect.arrayContaining([
+        'offset_manway_lid',
+        'top_feed_nozzle',
+        'thermal_jacket',
+        'front_sight_glass',
+        'sample_valve',
+        'temperature_probe',
+        'polished_shell_highlight',
+      ]),
+    )
+    expect(shapes.some((shape) => shape.semanticRole === 'inlet_port')).toBe(false)
+  })
+
+  test('composes reusable industrial utility details for profile packs', () => {
+    const shapes = composePartPrimitives({
+      name: 'industrial detail kit',
+      family: 'generic',
+      length: 1.4,
+      width: 1.1,
+      height: 1.6,
+      parts: [
+        {
+          kind: 'flanged_nozzle',
+          semanticRole: 'side_flanged_nozzle',
+          side: 'front',
+          radius: 0.08,
+          length: 0.25,
+        },
+        {
+          kind: 'inspection_hatch',
+          semanticRole: 'front_inspection_hatch',
+          side: 'front',
+          radius: 0.16,
+        },
+        {
+          kind: 'conical_hopper',
+          semanticRole: 'bottom_conical_hopper',
+          radiusTop: 0.42,
+          radiusBottom: 0.08,
+          height: 0.75,
+          position: [0, 0.35, 0],
+        },
+        {
+          kind: 'platform_with_ladder',
+          semanticRole: 'service_platform',
+          length: 1.1,
+          width: 0.55,
+          height: 0.9,
+          rungCount: 5,
+          position: [0.95, 0.9, 0],
+        },
+      ],
+    })
+
+    const roles = new Set(shapes.map((shape) => shape.semanticRole))
+    const sourceKinds = new Set(shapes.map((shape) => shape.sourcePartKind))
+
+    expect([...sourceKinds]).toEqual(
+      expect.arrayContaining([
+        'flanged_nozzle',
+        'inspection_hatch',
+        'conical_hopper',
+        'platform_with_ladder',
+      ]),
+    )
+    expect([...roles]).toEqual(
+      expect.arrayContaining([
+        'side_flanged_nozzle',
+        'nozzle_flange',
+        'front_inspection_hatch',
+        'hatch_handle',
+        'bottom_conical_hopper',
+        'hopper_outlet_collar',
+        'support_leg',
+        'service_platform',
+        'ladder_rung',
+      ]),
+    )
+    expect(shapes.filter((shape) => shape.semanticRole === 'ladder_rung')).toHaveLength(5)
+    expect(shapes.some((shape) => shape.sourcePartKind === 'pipe_port')).toBe(false)
+  })
 })
 
 function cylinderEndpoints(shape: {
@@ -248,6 +493,207 @@ describe('composePartPrimitives', () => {
     const blades = shapes.filter((shape) => Boolean(shape.name?.match(/ blade \d+$/)))
     expect(blades).toHaveLength(4)
     expect(blades.every((shape) => shape.kind === 'extrude')).toBe(true)
+  })
+
+  test('composes independent editable fan blade arrays', () => {
+    const shapes = composePartPrimitives({
+      name: 'Industrial pedestal fan',
+      detail: 'medium',
+      parts: [
+        {
+          id: 'fan_blades',
+          kind: 'fan_blade',
+          count: 6,
+          length: 0.32,
+          width: 0.09,
+          thickness: 0.018,
+          primaryColor: '#ef4444',
+        },
+      ],
+    })
+
+    const blades = shapes.filter((shape) => shape.semanticRole === 'fan_blade')
+    expect(blades).toHaveLength(6)
+    expect(blades.every((shape) => shape.sourcePartKind === 'fan_blade')).toBe(true)
+    expect(new Set(blades.map((shape) => shape.sourcePartId)).size).toBe(6)
+    expect(blades.every((shape) => shape.editableHints?.primaryDimension === 'length')).toBe(true)
+    expect(blades.every((shape) => shape.material?.properties?.color === '#ef4444')).toBe(true)
+  })
+
+  test('composes cylindrical tank parts as hollow vessels with heads, seams, and supports', () => {
+    const shapes = composePartPrimitives({
+      name: 'Horizontal process vessel',
+      parts: [{ kind: 'cylindrical_tank', length: 1.8, radius: 0.32, axis: 'x' }],
+    })
+
+    expect(shapes.find((shape) => shape.semanticRole === 'vessel_shell')?.kind).toBe(
+      'hollow-cylinder',
+    )
+    expect(shapes.filter((shape) => shape.semanticRole === 'vessel_head')).toHaveLength(2)
+    expect(shapes.filter((shape) => shape.semanticRole === 'vessel_seam')).toHaveLength(2)
+    expect(shapes.some((shape) => shape.semanticRole === 'top_nozzle')).toBe(true)
+    expect(shapes.filter((shape) => shape.semanticRole === 'saddle_support')).toHaveLength(2)
+  })
+
+  test('composes agitator tank parts with vessel shell, heads, mixer, nozzles, and legs', () => {
+    const shapes = composePartPrimitives({
+      name: 'Stirred reactor',
+      parts: [{ kind: 'agitator_tank', height: 1.1, radius: 0.34 }],
+    })
+    const roles = new Set(shapes.map((shape) => shape.semanticRole).filter(Boolean))
+
+    expect(shapes.find((shape) => shape.semanticRole === 'reactor_vessel_shell')?.kind).toBe(
+      'hollow-cylinder',
+    )
+    expect(shapes.filter((shape) => shape.semanticRole === 'vessel_head')).toHaveLength(2)
+    expect(roles.has('agitator_motor')).toBe(true)
+    expect(roles.has('feed_nozzle')).toBe(true)
+    expect(roles.has('manway_flange')).toBe(true)
+    expect(shapes.filter((shape) => shape.semanticRole === 'support_leg')).toHaveLength(4)
+  })
+
+  test('composes vehicle wheel sets with tire, rim, spokes, hubs, and axles', () => {
+    const shapes = composePartPrimitives({
+      name: 'Factory AGV vehicle',
+      detail: 'high',
+      parts: [{ kind: 'wheel_set', semanticRole: 'vehicle_tire', count: 4 }],
+    })
+
+    expect(shapes.filter((shape) => shape.semanticRole === 'vehicle_tire')).toHaveLength(4)
+    expect(shapes.filter((shape) => shape.semanticRole === 'wheel_rim')).toHaveLength(4)
+    expect(shapes.filter((shape) => shape.semanticRole === 'wheel_hub')).toHaveLength(4)
+    expect(shapes.filter((shape) => shape.semanticRole === 'wheel_axle')).toHaveLength(2)
+    expect(shapes.filter((shape) => shape.semanticRole === 'wheel_spoke')).toHaveLength(20)
+  })
+
+  test('composes mobile platform industrial details for AGV profiles', () => {
+    const shapes = composePartPrimitives({
+      name: 'Factory AGV',
+      length: 1.45,
+      width: 0.9,
+      height: 0.48,
+      parts: [
+        { kind: 'mobile_platform_chassis', semanticRole: 'vehicle_body' },
+        {
+          kind: 'lidar_sensor',
+          semanticRole: 'front_navigation_sensor',
+          axis: 'x',
+          position: [0.75, 0.21, 0],
+        },
+        {
+          kind: 'status_light_strip',
+          semanticRole: 'left_status_light_strip',
+          side: 'left',
+        },
+        {
+          kind: 'emergency_stop_button',
+          semanticRole: 'emergency_stop_button',
+          position: [0.42, 0.37, 0.22],
+        },
+      ],
+    })
+    const roles = new Set(shapes.map((shape) => shape.semanticRole))
+
+    expect(roles.has('vehicle_body')).toBe(true)
+    expect(roles.has('lower_bumper_skirt')).toBe(true)
+    expect(roles.has('cargo_platform')).toBe(true)
+    expect(roles.has('front_navigation_sensor')).toBe(true)
+    expect(roles.has('sensor_lens')).toBe(true)
+    expect(roles.has('left_status_light_strip')).toBe(true)
+    expect(roles.has('emergency_stop_button')).toBe(true)
+    expect(roles.has('emergency_stop_guard')).toBe(true)
+    expect(shapes.every((shape) => shape.sourcePartKind !== 'generic_body')).toBe(true)
+  })
+
+  test('composes reusable industrial workcell accessory parts', () => {
+    const shapes = composePartPrimitives({
+      name: 'Robot workcell',
+      length: 2,
+      width: 1.2,
+      height: 1.4,
+      parts: [
+        { kind: 'operator_panel', semanticRole: 'control_panel' },
+        { kind: 'guard_fence', semanticRole: 'safety_barrier', count: 5 },
+        { kind: 'pallet_table', semanticRole: 'pallet_table' },
+        { kind: 'bearing_block', semanticRole: 'bearing_block' },
+        { kind: 'coupling_guard', semanticRole: 'coupling_guard' },
+        { kind: 'motor_gearbox_unit', semanticRole: 'drive_unit' },
+        { kind: 'pipe_manifold', semanticRole: 'pipe_manifold', count: 3 },
+        { kind: 'hopper_body', semanticRole: 'hopper_body' },
+        { kind: 'service_platform', semanticRole: 'service_platform' },
+      ],
+    })
+    const roles = new Set(shapes.map((shape) => shape.semanticRole))
+
+    expect(roles.has('control_panel')).toBe(true)
+    expect(roles.has('display_screen')).toBe(true)
+    expect(roles.has('control_button')).toBe(true)
+    expect(roles.has('safety_barrier')).toBe(true)
+    expect(roles.has('guard_fence_post')).toBe(true)
+    expect(roles.has('pallet_table')).toBe(true)
+    expect(roles.has('support_leg')).toBe(true)
+    expect(roles.has('bearing_block')).toBe(true)
+    expect(roles.has('bearing_ring')).toBe(true)
+    expect(roles.has('coupling_guard')).toBe(true)
+    expect(roles.has('drive_motor')).toBe(true)
+    expect(roles.has('drive_unit')).toBe(true)
+    expect(roles.has('output_shaft')).toBe(true)
+    expect(roles.has('pipe_manifold')).toBe(true)
+    expect(roles.has('manifold_branch')).toBe(true)
+    expect(roles.has('hopper_body')).toBe(true)
+    expect(roles.has('hopper_outlet')).toBe(true)
+    expect(roles.has('service_platform')).toBe(true)
+    expect(roles.has('access_ladder')).toBe(true)
+  })
+
+  test('composes access platform ladder parts with guard rails and ladder side rails', () => {
+    const shapes = composePartPrimitives({
+      name: 'Inspection platform',
+      parts: [{ kind: 'platform_ladder', height: 1.4, length: 1, width: 0.6, count: 6 }],
+    })
+
+    expect(shapes.some((shape) => shape.semanticRole === 'access_platform')).toBe(true)
+    expect(shapes.filter((shape) => shape.semanticRole === 'platform_post')).toHaveLength(4)
+    expect(shapes.filter((shape) => shape.semanticRole === 'guard_rail').length).toBeGreaterThan(3)
+    expect(shapes.filter((shape) => shape.semanticRole === 'ladder_side_rail')).toHaveLength(2)
+    expect(shapes.filter((shape) => shape.semanticRole === 'ladder_rung')).toHaveLength(6)
+  })
+
+  test('composes preheater tower frame and cyclone separator units', () => {
+    const shapes = composePartPrimitives({
+      name: 'Cement preheater',
+      parts: [
+        {
+          kind: 'structural_tower_frame',
+          semanticRole: 'preheater_tower_body',
+          length: 2.4,
+          width: 1.5,
+          height: 6,
+          levelCount: 5,
+          stairFlights: 5,
+        },
+        {
+          kind: 'cyclone_separator_unit',
+          semanticRole: 'preheater_cyclone',
+          height: 1.2,
+          radius: 0.24,
+          position: [-0.5, 5.1, 0],
+        },
+      ],
+    })
+    const roles = new Set(shapes.map((shape) => shape.semanticRole))
+
+    expect(roles.has('preheater_tower_body')).toBe(true)
+    expect(roles.has('multi_level_platform')).toBe(true)
+    expect(roles.has('tower_column')).toBe(true)
+    expect(roles.has('tower_beam')).toBe(true)
+    expect(roles.has('tower_diagonal_brace')).toBe(true)
+    expect(roles.has('external_stair_flight')).toBe(true)
+    expect(roles.has('external_stair_landing')).toBe(true)
+    expect(roles.has('preheater_cyclone')).toBe(true)
+    expect(roles.has('cyclone_cone')).toBe(true)
+    expect(roles.has('preheater_gas_duct')).toBe(true)
+    expect(roles.has('meal_drop_pipe')).toBe(true)
   })
 
   test('composes pyramid parts as four-sided cones', () => {
@@ -1778,6 +2224,71 @@ describe('composePartPrimitives', () => {
     expect(fan.some((shape) => shape.name?.includes('bracket crossbar'))).toBe(true)
     expect(fan.some((shape) => shape.name?.includes('motor housing'))).toBe(true)
     expect(fan.filter((shape) => Boolean(shape.name?.match(/ blade \d+$/)))).toHaveLength(3)
+  })
+
+  test('controls protective grill complexity with detail levels', () => {
+    const low = composePartPrimitives({
+      name: 'Low detail grill',
+      autoComplete: false,
+      parts: [{ kind: 'protective_grill', detailLevel: 'low' }],
+    })
+    const medium = composePartPrimitives({
+      name: 'Medium detail grill',
+      autoComplete: false,
+      parts: [{ kind: 'protective_grill', detailLevel: 'medium' }],
+    })
+    const high = composePartPrimitives({
+      name: 'High detail grill',
+      autoComplete: false,
+      parts: [{ kind: 'protective_grill', detailLevel: 'high' }],
+    })
+
+    expect(low.length).toBeLessThan(medium.length)
+    expect(medium.length).toBeLessThan(high.length)
+    expect(low.filter((shape) => shape.name?.includes('grill front ring'))).toHaveLength(3)
+    expect(low.filter((shape) => shape.name?.includes('grill spoke'))).toHaveLength(12)
+    expect(low.filter((shape) => shape.name?.includes('grill side rib'))).toHaveLength(6)
+    expect(high.filter((shape) => shape.name?.includes('grill spoke'))).toHaveLength(24)
+  })
+
+  test('applies detail levels to reusable industrial detail parts', () => {
+    const lowVent = composePartPrimitives({
+      name: 'Low detail vent',
+      autoComplete: false,
+      parts: [{ kind: 'vent_slats', detailLevel: 'low' }],
+    })
+    const highVent = composePartPrimitives({
+      name: 'High detail vent',
+      autoComplete: false,
+      parts: [{ kind: 'vent_slats', detailLevel: 'high' }],
+    })
+    const lowFlange = composePartPrimitives({
+      name: 'Low detail flange',
+      autoComplete: false,
+      parts: [{ kind: 'flange_ring', detailLevel: 'low' }],
+    })
+    const highFlange = composePartPrimitives({
+      name: 'High detail flange',
+      autoComplete: false,
+      parts: [{ kind: 'flange_ring', detailLevel: 'high' }],
+    })
+    const lowLadder = composePartPrimitives({
+      name: 'Low detail ladder',
+      autoComplete: false,
+      parts: [{ kind: 'platform_ladder', detailLevel: 'low', height: 1.4 }],
+    })
+    const highLadder = composePartPrimitives({
+      name: 'High detail ladder',
+      autoComplete: false,
+      parts: [{ kind: 'platform_ladder', detailLevel: 'high', height: 1.4 }],
+    })
+
+    expect(lowVent.filter((shape) => shape.name?.includes('vent slat'))).toHaveLength(4)
+    expect(highVent.filter((shape) => shape.name?.includes('vent slat'))).toHaveLength(10)
+    expect(lowFlange.filter((shape) => shape.name?.includes('flange bolt'))).toHaveLength(4)
+    expect(highFlange.filter((shape) => shape.name?.includes('flange bolt'))).toHaveLength(10)
+    expect(lowLadder.filter((shape) => shape.name?.includes('ladder rung'))).toHaveLength(5)
+    expect(highLadder.filter((shape) => shape.name?.includes('ladder rung'))).toHaveLength(10)
   })
 
   test('scores visual details and can enhance detailed blueprints', () => {

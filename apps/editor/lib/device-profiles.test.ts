@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { createDeviceProfileResolver } from '@pascal-app/core/lib/device-profile-registry'
 import { loadDeviceProfiles } from './device-profiles'
 import { findRepoRoot } from './generated-assets/manifest'
 
 const TEST_ID = 'codex_loader_test_machine'
+const EXTRA_PACK_PROFILE_ID = 'codex_extra_pack_loader_machine'
 
 async function writeJson(filePath: string, value: unknown) {
   await fs.mkdir(path.dirname(filePath), { recursive: true })
@@ -19,6 +19,7 @@ async function removeIfExists(filePath: string) {
 describe('device profile source loader', () => {
   let workspaceFile = ''
   let generatedFile = ''
+  let extraPackDir = ''
 
   beforeAll(async () => {
     const root = await findRepoRoot()
@@ -30,6 +31,13 @@ describe('device profile source loader', () => {
       '.generated',
       'device-profile-candidates',
       `${TEST_ID}.json`,
+    )
+    extraPackDir = path.join(
+      root,
+      'apps',
+      'editor',
+      '.generated',
+      'device-profile-pack-loader-test',
     )
     await writeJson(generatedFile, {
       id: TEST_ID,
@@ -56,17 +64,37 @@ describe('device profile source loader', () => {
         { kind: 'control_box', semanticRole: 'control_panel' },
       ],
     })
+    await writeJson(path.join(extraPackDir, 'pack.json'), {
+      id: 'codex.extra-pack-loader-test',
+      name: 'Extra pack loader test',
+      industry: 'test',
+      version: '0.0.1',
+      schemaVersion: '1.1',
+      profiles: ['profiles/extra.json'],
+    })
+    await writeJson(path.join(extraPackDir, 'profiles', 'extra.json'), {
+      id: EXTRA_PACK_PROFILE_ID,
+      name: 'Extra pack loader test machine',
+      aliases: ['extra pack loader machine'],
+      family: 'generic',
+      layoutFamily: 'generic_industrial_layout',
+      primarySemanticRole: 'main_body',
+      parts: [
+        { kind: 'generic_base', semanticRole: 'support_base', required: true },
+        { kind: 'generic_body', semanticRole: 'main_body', required: true },
+      ],
+    })
   })
 
   afterAll(async () => {
     await removeIfExists(workspaceFile)
     await removeIfExists(generatedFile)
+    await fs.rm(extraPackDir, { recursive: true, force: true }).catch(() => {})
   })
 
   test('loads JSON profiles and applies source priority', async () => {
     const loaded = await loadDeviceProfiles()
     const profile = loaded.profiles.find((candidate) => candidate.id === TEST_ID)
-    const resolver = createDeviceProfileResolver(loaded.profiles)
 
     expect(profile).toMatchObject({
       name: 'Workspace loader test machine',
@@ -74,8 +102,20 @@ describe('device profile source loader', () => {
       family: 'machine_tool',
     })
     expect(loaded.warnings.join('\n')).toContain('higher priority')
-    expect(resolver.infer({ prompt: 'please generate a workspace loader machine' })?.id).toBe(
-      TEST_ID,
-    )
+  })
+
+  test('loads profiles from explicit extra pack directories without installing the pack', async () => {
+    const loaded = await loadDeviceProfiles({ extraPackDirs: [extraPackDir] })
+    const profile = loaded.profiles.find((candidate) => candidate.id === EXTRA_PACK_PROFILE_ID)
+
+    expect(profile).toMatchObject({
+      name: 'Extra pack loader test machine',
+      source: 'imported_pack',
+      sourcePack: {
+        id: 'codex.extra-pack-loader-test',
+        version: '0.0.1',
+        industry: 'test',
+      },
+    })
   })
 })

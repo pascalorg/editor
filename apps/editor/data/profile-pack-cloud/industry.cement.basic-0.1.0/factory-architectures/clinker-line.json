@@ -1,0 +1,63 @@
+{
+  "id": "cement.clinker_line.linear_outdoor",
+  "label": "Cement clinker production line architecture",
+  "industry": "cement",
+  "processId": "cement_clinker_production_line",
+  "layoutStyle": "linear",
+  "defaultDimensions": {
+    "length": 34,
+    "width": 12
+  },
+  "zones": [
+    {
+      "id": "raw_meal_feed_zone",
+      "label": "Raw meal feed",
+      "displayLabel": "\u751f\u6599\u5582\u6599",
+      "order": 1
+    },
+    {
+      "id": "preheater_zone",
+      "label": "Preheater and calciner",
+      "displayLabel": "\u9884\u70ed\u5206\u89e3",
+      "order": 2
+    },
+    {
+      "id": "kiln_zone",
+      "label": "Rotary kiln burning",
+      "displayLabel": "\u56de\u8f6c\u7a91\u7145\u70e7",
+      "order": 3
+    },
+    {
+      "id": "cooling_zone",
+      "label": "Clinker cooling",
+      "displayLabel": "\u719f\u6599\u51b7\u5374",
+      "order": 4
+    },
+    {
+      "id": "storage_zone",
+      "label": "Clinker conveying and storage",
+      "displayLabel": "\u719f\u6599\u8f93\u9001\u50a8\u5b58",
+      "order": 5
+    },
+    {
+      "id": "dedusting_zone",
+      "label": "Dedusting",
+      "displayLabel": "\u7a91\u5c3e\u9664\u5c18",
+      "order": 6,
+      "side": "right"
+    }
+  ],
+  "layoutHints": {
+    "primaryAxis": "x",
+    "outdoorHeavyIndustry": true,
+    "highestStationId": "preheater_tower",
+    "longAxisStationId": "rotary_kiln",
+    "sideBranchStationIds": ["bag_filter"],
+    "scale": "conceptual",
+    "notes": [
+      "Keep the preheater tower upstream of the rotary kiln tail.",
+      "Place the grate cooler at the kiln head downstream side.",
+      "Place the bag filter as an offset side branch for kiln/preheater exhaust visualization."
+    ]
+  }
+}

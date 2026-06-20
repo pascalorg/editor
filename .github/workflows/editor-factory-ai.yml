@@ -1,0 +1,92 @@
+name: editor-factory-ai
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/editor/app/api/ai-harness/**'
+      - 'apps/editor/e2e/**'
+      - 'apps/editor/lib/ai-harness-runs/**'
+      - 'apps/editor/package.json'
+      - 'apps/editor/playwright.config.ts'
+      - 'packages/core/src/lib/**'
+      - 'packages/core/src/schema/**'
+      - 'packages/editor/src/components/ui/sidebar/panels/ai-chat-panel/**'
+      - 'packages/editor/src/lib/factory-scene-patch-safety*'
+      - 'packages/viewer/src/store/**'
+      - 'bun.lock'
+      - '.github/workflows/editor-factory-ai.yml'
+  pull_request:
+    paths:
+      - 'apps/editor/app/api/ai-harness/**'
+      - 'apps/editor/e2e/**'
+      - 'apps/editor/lib/ai-harness-runs/**'
+      - 'apps/editor/package.json'
+      - 'apps/editor/playwright.config.ts'
+      - 'packages/core/src/lib/**'
+      - 'packages/core/src/schema/**'
+      - 'packages/editor/src/components/ui/sidebar/panels/ai-chat-panel/**'
+      - 'packages/editor/src/lib/factory-scene-patch-safety*'
+      - 'packages/viewer/src/store/**'
+      - 'bun.lock'
+      - '.github/workflows/editor-factory-ai.yml'
+
+jobs:
+  factory-ai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.0
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Biome check
+        run: >
+          bunx biome check
+          apps/editor/e2e/factory-ai.spec.ts
+          apps/editor/lib/ai-harness-runs/factory-agent-prompt.ts
+          apps/editor/lib/ai-harness-runs/factory-agent-prompt.test.ts
+          apps/editor/lib/ai-harness-runs/factory-ai-regression.test.ts
+          apps/editor/lib/ai-harness-runs/factory-planner.ts
+          apps/editor/lib/ai-harness-runs/factory-planner.test.ts
+          apps/editor/lib/ai-harness-runs/factory-runner.ts
+          apps/editor/lib/ai-harness-runs/factory-runner.test.ts
+          apps/editor/lib/ai-harness-runs/factory-selection-edit.ts
+          apps/editor/lib/ai-harness-runs/factory-selection-edit.test.ts
+          apps/editor/lib/ai-harness-runs/primitive-generation-service.ts
+          apps/editor/lib/ai-harness-runs/primitive-generation-service.test.ts
+          apps/editor/lib/ai-harness-runs/process-equipment-resolver.ts
+          apps/editor/lib/ai-harness-runs/process-equipment-resolver.test.ts
+          apps/editor/lib/ai-harness-runs/process-line-layout.ts
+          apps/editor/lib/ai-harness-runs/process-line-layout.test.ts
+          apps/editor/lib/ai-harness-runs/process-line-composer.ts
+          apps/editor/lib/ai-harness-runs/process-line-composer.test.ts
+          apps/editor/lib/ai-harness-runs/process-line-routing.ts
+          apps/editor/lib/ai-harness-runs/process-line-types.ts
+          apps/editor/lib/ai-harness-runs/process-template-registry.ts
+          apps/editor/playwright.config.ts
+          packages/editor/src/components/ui/sidebar/panels/ai-chat-panel/index.tsx
+          packages/editor/src/lib/factory-scene-patch-safety.ts
+          packages/editor/src/lib/factory-scene-patch-safety.test.ts
+
+      - name: Typecheck editor app
+        run: bun run --cwd apps/editor check-types
+
+      - name: Typecheck editor package
+        run: bun run --cwd packages/editor check-types
+
+      - name: Factory unit tests
+        run: bun test apps/editor/lib/ai-harness-runs packages/editor/src/lib/factory-scene-patch-safety.test.ts
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Factory browser smoke
+        run: bun run --cwd apps/editor e2e:factory

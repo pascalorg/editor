@@ -48,6 +48,49 @@ function clampPanelCornerRadius(shape: ShapeSpec) {
   return clampD(shape.cornerRadius, 0.04, 0, Math.max(0, Math.min(length, width) / 2 - 0.001))
 }
 
+function compactRecord(value: Record<string, unknown>) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined))
+}
+
+function generatedShapeMetadata(input: {
+  artifact: GeneratedGeometryArtifact
+  shape: ShapeSpec
+  shapeIndex: number
+}) {
+  const selector = compactRecord({
+    index: input.shapeIndex,
+    semanticRole: input.shape.semanticRole,
+    semanticGroup: input.shape.semanticGroup,
+    sourcePartKind: input.shape.sourcePartKind,
+    sourcePartId: input.shape.sourcePartId,
+    kind: input.shape.kind,
+    nameIncludes: input.shape.name,
+  })
+
+  return compactRecord({
+    generatedBy: 'ai-geometry',
+    artifactId: input.artifact.id,
+    artifactTitle: input.artifact.title,
+    shapeIndex: input.shapeIndex,
+    shapeKind: input.shape.kind,
+    semanticRole: input.shape.semanticRole,
+    semanticGroup: input.shape.semanticGroup,
+    sourcePartKind: input.shape.sourcePartKind,
+    sourcePartId: input.shape.sourcePartId,
+    editableHints: input.shape.editableHints,
+    generatedShape: compactRecord({
+      assemblyName: input.artifact.assemblyName,
+      selector,
+      label:
+        input.shape.name ??
+        input.shape.semanticRole ??
+        input.shape.sourcePartId ??
+        input.shape.sourcePartKind ??
+        input.shape.kind,
+    }),
+  })
+}
+
 export function buildGeneratedGeometryNodes(artifact: GeneratedGeometryArtifact) {
   const shouldCreateAssembly = artifact.shapes.length > 1
   const created: string[] = []
@@ -344,7 +387,16 @@ export function buildGeneratedGeometryNodes(artifact: GeneratedGeometryArtifact)
       }
 
       if (!node) continue
-      createdNodes.push(node)
+      createdNodes.push(
+        withNodeMetadata(
+          node,
+          generatedShapeMetadata({
+            artifact,
+            shape,
+            shapeIndex: i,
+          }),
+        ),
+      )
       created.push(displayName)
     } catch {
       // Invalid tool output is skipped after clamping.

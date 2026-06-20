@@ -1,0 +1,201 @@
+[
+  {
+    "id": "cement.belt_conveyor",
+    "name": "皮带输送机",
+    "aliases": [
+      "皮带输送机",
+      "胶带输送机",
+      "belt conveyor",
+      "cement belt conveyor"
+    ],
+    "industry": "cement",
+    "family": "conveyor",
+    "layoutFamily": "linear_transport_layout",
+    "archetypeFamily": "material_handling",
+    "defaultDimensions": {
+      "length": 8,
+      "width": 0.9,
+      "height": 0.8
+    },
+    "primarySemanticRole": "belt_surface",
+    "qualityRules": "quality.cement.belt_conveyor",
+    "parts": [
+      {
+        "kind": "conveyor_frame",
+        "semanticRole": "conveyor_frame",
+        "required": true
+      },
+      {
+        "kind": "roller_array",
+        "semanticRole": "support_rollers",
+        "required": true
+      },
+      {
+        "kind": "belt_surface",
+        "semanticRole": "belt_surface",
+        "required": true
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "head_drive_unit"
+      },
+      {
+        "kind": "bearing_block",
+        "semanticRole": "tail_pulley_bearing"
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "transfer_chute"
+      },
+      {
+        "kind": "warning_label",
+        "semanticRole": "safety_warning"
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "水泥厂通用皮带输送机 profile，包含机架、托辊、皮带、头部驱动和转运溜槽。",
+    "editableSchemaRef": "conveyor.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 52,
+      "parts": {
+        "support_rollers": {
+          "detailLevel": "low",
+          "count": 5
+        },
+        "safety_warning": {
+          "detailLevel": "low"
+        }
+      }
+    }
+  },
+  {
+    "id": "cement.screw_conveyor",
+    "name": "螺旋输送机",
+    "aliases": [
+      "螺旋输送机",
+      "绞龙",
+      "screw conveyor",
+      "auger conveyor"
+    ],
+    "industry": "cement",
+    "family": "conveyor",
+    "layoutFamily": "linear_transport_layout",
+    "archetypeFamily": "material_handling",
+    "defaultDimensions": {
+      "length": 4.5,
+      "width": 0.65,
+      "height": 0.8
+    },
+    "primarySemanticRole": "screw_flight",
+    "qualityRules": "quality.cement.screw_conveyor",
+    "parts": [
+      {
+        "kind": "conveyor_frame",
+        "semanticRole": "trough_frame",
+        "required": true
+      },
+      {
+        "kind": "roller_array",
+        "semanticRole": "screw_flight",
+        "required": true
+      },
+      {
+        "kind": "belt_surface",
+        "semanticRole": "trough_cover"
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "screw_drive_unit"
+      },
+      {
+        "kind": "bearing_block",
+        "semanticRole": "end_bearing"
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "powder_inlet_hopper"
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "粉料或颗粒物输送用螺旋输送机 profile，表达槽体、螺旋、端部轴承和驱动。",
+    "editableSchemaRef": "conveyor.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 52,
+      "parts": {
+        "screw_flight": {
+          "detailLevel": "low",
+          "count": 5
+        }
+      }
+    }
+  },
+  {
+    "id": "cement.bucket_elevator",
+    "name": "斗式提升机",
+    "aliases": [
+      "斗式提升机",
+      "提升机",
+      "bucket elevator"
+    ],
+    "industry": "cement",
+    "family": "generic",
+    "layoutFamily": "generic_industrial_layout",
+    "archetypeFamily": "material_handling",
+    "defaultDimensions": {
+      "length": 1.2,
+      "width": 0.9,
+      "height": 6
+    },
+    "primarySemanticRole": "elevator_leg_casing",
+    "qualityRules": "quality.cement.bucket_elevator",
+    "parts": [
+      {
+        "kind": "generic_body",
+        "semanticRole": "elevator_leg_casing",
+        "required": true
+      },
+      {
+        "kind": "generic_base",
+        "semanticRole": "boot_section",
+        "required": true
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "inspection_door"
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "inlet_boot_hopper"
+      },
+      {
+        "kind": "generic_spout",
+        "semanticRole": "discharge_spout"
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "head_drive_unit"
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "head_service_platform"
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "垂直输送熟料、粉料或原料的斗式提升机 profile。",
+    "editableSchemaRef": "conveyor.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 52,
+      "parts": {
+        "inspection_door": {
+          "detailLevel": "low"
+        }
+      }
+    }
+  }
+]

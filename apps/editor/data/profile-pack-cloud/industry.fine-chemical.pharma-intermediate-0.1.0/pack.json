@@ -1,0 +1,19 @@
+{
+  "id": "industry.fine-chemical.pharma-intermediate",
+  "name": "Fine Chemical Pharma Intermediate Pack",
+  "industry": "fine-chemical.pharma-intermediate",
+  "version": "0.1.0",
+  "schemaVersion": "1.1",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": ["zh-CN", "en-US"],
+  "description": "Pharmaceutical intermediate extension pack. The fine-chemical base pack is installed automatically as a dependency.",
+  "dependsOn": [
+    {
+      "id": "industry.fine-chemical.basic",
+      "version": ">=0.1.0"
+    }
+  ],
+  "profiles": ["profiles/pharma-intermediate.json"],
+  "qualityRules": ["quality-rules/pharma-intermediate-quality.json"]
+}

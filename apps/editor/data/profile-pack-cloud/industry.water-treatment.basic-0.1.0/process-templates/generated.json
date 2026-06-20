@@ -1,0 +1,166 @@
+[
+  {
+    "processId": "water_treatment_plant_basic",
+    "processLabel": "Water treatment plant",
+    "processDisplayLabel": "水处理厂",
+    "domain": "generic",
+    "aliases": [
+      "水处理厂",
+      "污水处理厂",
+      "净水厂",
+      "自来水处理站",
+      "water treatment plant",
+      "wastewater treatment plant",
+      "sewage treatment plant"
+    ],
+    "requiredRoles": [
+      "sedimentation_tank",
+      "chemical_dosing_unit",
+      "filter_vessel",
+      "pump_skid",
+      "pipe_corridor",
+      "sludge_dewatering_machine"
+    ],
+    "defaultLayoutStyle": "linear",
+    "defaultDimensions": {
+      "length": 48,
+      "width": 22
+    },
+    "safetyTags": [
+      "water",
+      "chemical_dosing",
+      "sludge",
+      "pump"
+    ],
+    "stations": [
+      {
+        "id": "sedimentation_tank",
+        "label": "Sedimentation tank",
+        "displayLabel": "沉淀池",
+        "role": "sedimentation_tank",
+        "equipmentHint": "water_treatment.sedimentation_tank rectangular sedimentation clarifier basin with open water surface, inlet channel, outlet weir, sludge hopper, scraper bridge, and access walkway",
+        "footprintHint": "large",
+        "safetyTags": [
+          "water",
+          "basin",
+          "sludge"
+        ]
+      },
+      {
+        "id": "chemical_dosing_unit",
+        "label": "Chemical dosing unit",
+        "displayLabel": "加药装置",
+        "role": "chemical_dosing_unit",
+        "equipmentHint": "water_treatment.chemical_dosing_unit chemical dosing skid with chemical tank, metering pump pair, dosing manifold, control cabinet, and containment base",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "chemical",
+          "dosing",
+          "pump"
+        ]
+      },
+      {
+        "id": "filter_vessel",
+        "label": "Filter vessel",
+        "displayLabel": "过滤罐",
+        "role": "filter_vessel",
+        "equipmentHint": "water_treatment.filter_vessel vertical pressure filter tank with cylindrical shell, top manway, inlet outlet nozzles, bottom drain, and access ladder",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "pressure",
+          "water",
+          "filter"
+        ]
+      },
+      {
+        "id": "pump_skid",
+        "label": "Pump skid",
+        "displayLabel": "泵组",
+        "role": "pump_skid",
+        "equipmentHint": "water_treatment.pump_skid parallel pump group with skid base, two centrifugal pumps, electric motors, inlet outlet headers, valves, and control panel",
+        "footprintHint": "large",
+        "safetyTags": [
+          "rotating_equipment",
+          "water",
+          "power"
+        ]
+      },
+      {
+        "id": "pipe_corridor",
+        "label": "Pipe corridor",
+        "displayLabel": "管廊",
+        "role": "pipe_corridor",
+        "equipmentHint": "water_treatment.pipe_corridor pipe rack corridor with steel supports, multiple parallel pipelines, cable tray, valves, and walkway",
+        "footprintHint": "long",
+        "safetyTags": [
+          "pipe",
+          "utility",
+          "walkway"
+        ]
+      },
+      {
+        "id": "sludge_dewatering_machine",
+        "label": "Sludge dewatering machine",
+        "displayLabel": "污泥脱水机",
+        "role": "sludge_dewatering_machine",
+        "equipmentHint": "water_treatment.sludge_dewatering_machine screw press sludge dewatering machine with feed hopper, enclosed screw drum, filtrate tray, cake discharge chute, and drive unit",
+        "footprintHint": "large",
+        "safetyTags": [
+          "sludge",
+          "rotating_equipment",
+          "dewatering"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "fromStationId": "chemical_dosing_unit",
+        "toStationId": "sedimentation_tank",
+        "medium": "material",
+        "visualKind": "pipe",
+        "fromPortId": "dosing_outlet",
+        "toPortId": "chemical_inlet"
+      },
+      {
+        "fromStationId": "sedimentation_tank",
+        "toStationId": "filter_vessel",
+        "medium": "water",
+        "visualKind": "pipe",
+        "fromPortId": "clarified_water_outlet",
+        "toPortId": "filter_inlet"
+      },
+      {
+        "fromStationId": "filter_vessel",
+        "toStationId": "pump_skid",
+        "medium": "water",
+        "visualKind": "pipe",
+        "fromPortId": "filtered_water_outlet",
+        "toPortId": "pump_suction_header"
+      },
+      {
+        "fromStationId": "pump_skid",
+        "toStationId": "pipe_corridor",
+        "medium": "water",
+        "visualKind": "pipe",
+        "fromPortId": "pump_discharge_header",
+        "toPortId": "process_water_header"
+      },
+      {
+        "fromStationId": "sedimentation_tank",
+        "toStationId": "sludge_dewatering_machine",
+        "medium": "material",
+        "visualKind": "pipe",
+        "fromPortId": "sludge_draw_off",
+        "toPortId": "sludge_feed_inlet"
+      },
+      {
+        "fromStationId": "sludge_dewatering_machine",
+        "toStationId": "pipe_corridor",
+        "medium": "water",
+        "visualKind": "pipe",
+        "fromPortId": "filtrate_return_outlet",
+        "toPortId": "filtrate_return_header"
+      }
+    ]
+  }
+]

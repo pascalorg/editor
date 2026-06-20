@@ -14,11 +14,14 @@ describe('factory agent prompt', () => {
     expect(summary).toContain('id:factory-extractor')
   })
 
-  test('explains catalog-first, layout, and geometry fallback decisions', () => {
+  test('explains catalog item, native process-line, layout, and geometry fallback decisions', () => {
     const prompt = buildFactoryAgentSystemPrompt({ query: 'conveyor line', maxItems: 20 })
 
     expect(prompt).toContain('If the user asks for a room, house')
     expect(prompt).toContain('matching catalog item exists')
+    expect(prompt).toContain(
+      'For production lines, resolve each station in order: native node first',
+    )
     expect(prompt).toContain('call the geometry generation service')
     expect(prompt).toContain('SCENE / MCP LAYOUT CAPABILITIES')
     expect(prompt).toContain('GEOMETRY GENERATION CAPABILITIES')

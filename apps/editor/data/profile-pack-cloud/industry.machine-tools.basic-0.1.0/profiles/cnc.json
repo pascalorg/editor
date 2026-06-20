@@ -1,0 +1,168 @@
+[
+  {
+    "id": "cnc_machining_center",
+    "name": "CNC machining center",
+    "aliases": [
+      "cnc machining center",
+      "cnc machine",
+      "cnc mill",
+      "vertical machining center",
+      "vmc",
+      "jia gong zhong xin",
+      "shu kong ji chuang",
+      "数控机床",
+      "加工中心",
+      "立式加工中心"
+    ],
+    "industry": "machine-tools",
+    "layoutFamily": "box_enclosure_layout",
+    "archetypeFamily": "enclosed_machine",
+    "family": "machine_tool",
+    "defaultDimensions": {
+      "length": 2.8,
+      "width": 1.1,
+      "height": 1.7
+    },
+    "parts": [
+      {
+        "kind": "generic_base",
+        "semanticRole": "machine_base",
+        "required": true,
+        "length": 2.8,
+        "width": 1.1,
+        "height": 0.18
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "machine_enclosure",
+        "required": true,
+        "length": 2.45,
+        "width": 1,
+        "height": 1.35,
+        "position": [
+          0,
+          0.82,
+          0
+        ],
+        "cornerRadius": 0.08,
+        "primaryColor": "#f8fafc"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "viewing_window",
+        "required": true,
+        "length": 0.82,
+        "height": 0.58,
+        "position": [
+          0.18,
+          1.08,
+          0.54
+        ],
+        "rotation": [
+          1.5708,
+          0,
+          0
+        ],
+        "accentColor": "#38bdf8",
+        "opacity": 0.48
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "spindle_head",
+        "required": true,
+        "length": 0.38,
+        "height": 0.42,
+        "position": [
+          -0.45,
+          1.18,
+          0.46
+        ],
+        "color": "#64748b"
+      },
+      {
+        "kind": "generic_base",
+        "semanticRole": "work_table",
+        "required": true,
+        "length": 0.95,
+        "width": 0.42,
+        "height": 0.08,
+        "position": [
+          0.15,
+          0.48,
+          0.36
+        ],
+        "color": "#1f2937"
+      },
+      {
+        "kind": "operator_panel",
+        "semanticRole": "control_panel",
+        "required": true,
+        "width": 0.34,
+        "depth": 0.16,
+        "height": 0.62,
+        "position": [
+          1.12,
+          0.92,
+          0.62
+        ]
+      },
+      {
+        "kind": "vent_slats",
+        "semanticRole": "vent_panel",
+        "length": 0.5,
+        "height": 0.34,
+        "count": 5,
+        "position": [
+          -0.72,
+          0.8,
+          0.54
+        ]
+      },
+      {
+        "kind": "warning_label",
+        "semanticRole": "safety_label",
+        "position": [
+          0.86,
+          0.56,
+          0.55
+        ]
+      }
+    ],
+    "primarySemanticRole": "machine_enclosure",
+    "qualityRules": "quality.cnc_machining_center",
+    "visualCues": [
+      "large enclosed machine body",
+      "blue viewing window",
+      "front work table",
+      "spindle head",
+      "side control panel",
+      "vent slats"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Profile-pack CNC machining center with explicit enclosure, viewing window, spindle head, work table, controls, vents, and safety label.",
+    "editableSchemaRef": "enclosure.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 56,
+      "parts": {
+        "viewing_window": {
+          "detailLevel": "low"
+        },
+        "spindle_head": {
+          "detailLevel": "low"
+        },
+        "control_panel": {
+          "detailLevel": "low"
+        },
+        "vent_panel": {
+          "detailLevel": "low",
+          "count": 5
+        },
+        "safety_label": {
+          "detailLevel": "low"
+        }
+      }
+    }
+  }
+]

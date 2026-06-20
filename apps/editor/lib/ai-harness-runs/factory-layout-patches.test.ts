@@ -72,4 +72,32 @@ describe('factory layout patches', () => {
     const doorPatch = plan.patches.find((patch) => patch.node.type === 'door')
     expect(doorPatch?.parentId).toMatch(/^wall_/)
   })
+
+  test('uses Chinese process display name for factory shell labels', () => {
+    const plan = buildFactoryLayoutCreatePatches({
+      prompt: '\u521b\u5efa\u4e00\u6761\u5316\u5de5\u5382\u6c34\u88c2\u89e3\u8f66\u95f4',
+      plan: {
+        kind: 'layout',
+        reason: 'factory workshop',
+        layoutType: 'factory',
+        suggestedOperations: ['create_room', 'place_item'],
+      },
+      placement: {
+        parentId: 'level_factory',
+        generatedBy: 'factory-agent',
+        metadata: { processDisplayLabel: '\u7535\u89e3\u6c34\u5236\u6c22\u8f66\u95f4' },
+      },
+    })
+
+    expect(plan.patches[0]?.node.name).toBe('\u7535\u89e3\u6c34\u5236\u6c22\u8f66\u95f4')
+    expect(plan.patches.find((patch) => patch.node.type === 'slab')?.node.name).toBe(
+      '\u7535\u89e3\u6c34\u5236\u6c22\u8f66\u95f4\u5730\u9762',
+    )
+    expect(plan.patches.find((patch) => patch.node.type === 'door')?.node.name).toBe(
+      '\u8f66\u95f4\u5377\u5e18\u95e8',
+    )
+    expect(plan.patches.find((patch) => patch.node.type === 'window')?.node.name).toBe(
+      '\u7a97\u6237',
+    )
+  })
 })

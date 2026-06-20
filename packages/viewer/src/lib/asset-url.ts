@@ -1,13 +1,18 @@
 import { loadAssetUrl } from '@pascal-app/core'
 
-export const ASSETS_CDN_URL = process.env.NEXT_PUBLIC_ASSETS_CDN_URL || 'https://editor.pascal.app'
+export const ASSETS_CDN_URL = process.env.NEXT_PUBLIC_ASSETS_CDN_URL?.replace(/\/$/, '') ?? ''
+
+function resolveHostedPath(url: string) {
+  const normalizedPath = url.startsWith('/') ? url : `/${url}`
+  return ASSETS_CDN_URL ? `${ASSETS_CDN_URL}${normalizedPath}` : normalizedPath
+}
 
 /**
  * Resolves an asset URL to the appropriate format:
  * - If URL starts with http:// or https://, return as-is (external URL)
  * - If URL starts with asset://, resolve from IndexedDB storage
- * - If URL starts with /, prepend CDN URL (absolute path)
- * - Otherwise, prepend CDN URL (relative path)
+ * - If NEXT_PUBLIC_ASSETS_CDN_URL is configured, prepend it to hosted paths
+ * - Otherwise, keep hosted paths same-origin
  */
 export async function resolveAssetUrl(url: string | undefined | null): Promise<string | null> {
   if (!url) return null
@@ -22,9 +27,7 @@ export async function resolveAssetUrl(url: string | undefined | null): Promise<s
     return loadAssetUrl(url)
   }
 
-  // Absolute or relative path - prepend CDN URL
-  const normalizedPath = url.startsWith('/') ? url : `/${url}`
-  return `${ASSETS_CDN_URL}${normalizedPath}`
+  return resolveHostedPath(url)
 }
 
 /**
@@ -45,7 +48,5 @@ export function resolveCdnUrl(url: string | undefined | null): string | null {
     return null
   }
 
-  // Absolute or relative path - prepend CDN URL
-  const normalizedPath = url.startsWith('/') ? url : `/${url}`
-  return `${ASSETS_CDN_URL}${normalizedPath}`
+  return resolveHostedPath(url)
 }

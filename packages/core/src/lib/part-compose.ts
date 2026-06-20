@@ -19,6 +19,7 @@ export type PartComposeKind =
   | 'circular_base'
   | 'vertical_pole'
   | 'motor_housing'
+  | 'fan_blade'
   | 'radial_blades'
   | 'protective_grill'
   | 'pyramid'
@@ -45,6 +46,15 @@ export type PartComposeKind =
   | 'inlet_port'
   | 'outlet_port'
   | 'flange_ring'
+  | 'flanged_nozzle'
+  | 'manway_lid'
+  | 'inspection_hatch'
+  | 'sanitary_nozzle'
+  | 'jacket_shell'
+  | 'sight_glass'
+  | 'sample_valve'
+  | 'instrument_port'
+  | 'stainless_highlight_panel'
   | 'bolt_pattern'
   | 'control_box'
   | 'ribbed_motor_body'
@@ -104,6 +114,24 @@ export type PartComposeKind =
   | 'generic_foot_set'
   | 'generic_opening'
   | 'generic_detail_accent'
+  | 'mobile_platform_chassis'
+  | 'lidar_sensor'
+  | 'emergency_stop_button'
+  | 'status_light_strip'
+  | 'operator_panel'
+  | 'guard_fence'
+  | 'pallet_table'
+  | 'bearing_block'
+  | 'support_roller_pair'
+  | 'structural_tower_frame'
+  | 'cyclone_separator_unit'
+  | 'coupling_guard'
+  | 'motor_gearbox_unit'
+  | 'pipe_manifold'
+  | 'hopper_body'
+  | 'conical_hopper'
+  | 'service_platform'
+  | 'platform_with_ladder'
   | 'kiosk_body'
   | 'kiosk_roof'
   | 'kiosk_opening'
@@ -132,6 +160,11 @@ export interface PartComposePartInput {
   partName?: string
   style?: string
   variant?: string
+  detail?: PartComposeDetail | string
+  detailLevel?: PartComposeDetail | string
+  grillDetailLevel?: PartComposeDetail | string
+  bottomStyle?: string
+  legStyle?: string
   valveStyle?: string
   handleStyle?: string
   state?: string
@@ -139,6 +172,7 @@ export interface PartComposePartInput {
   position?: Vec3
   rotation?: Vec3
   connectTo?: string | number
+  attachToRole?: string
   connectPoint?: string
   childPoint?: string
   centeredOn?: string | number
@@ -157,6 +191,7 @@ export interface PartComposePartInput {
   cornerPattern?: boolean
   cornerInset?: number
   array?: { count?: number; axis?: PartAxis | string; spacing?: number }
+  arrayAlong?: PartAxis | 'length' | 'width' | 'height' | string
   arrayAxis?: PartAxis | string
   arrayOffset?: number
   relationGap?: number
@@ -164,9 +199,15 @@ export interface PartComposePartInput {
   childAnchor?: string
   axis?: PartAxis | string
   side?: PartSide | string
+  offset?: Vec3 | number
   outletAngle?: number
   radius?: number
   diameter?: number
+  radiusTop?: number
+  radiusBottom?: number
+  outletRadius?: number
+  flangeRadius?: number
+  flangeThickness?: number
   bendRadius?: number
   dimensions?: Record<string, unknown>
   height?: number
@@ -179,9 +220,21 @@ export interface PartComposePartInput {
   cornerRadius?: number
   cornerSegments?: number
   count?: number
+  portCount?: number
   doorCount?: number
   legCount?: number
   ringCount?: number
+  rungCount?: number
+  rollerLength?: number
+  radialSegments?: number
+  levelCount?: number
+  bayCount?: number
+  stageCount?: number
+  stairFlights?: number
+  stairSide?: PartSide | string
+  stairPlacement?: 'inside' | 'outside' | string
+  externalStairs?: boolean
+  includeDiagonalBraces?: boolean
   spokeCount?: number
   wireRadius?: number
   wheelRadius?: number
@@ -202,6 +255,8 @@ export interface PartComposePartInput {
   cabinTopWidthScale?: number
   truncated?: boolean
   topScale?: number | [number, number]
+  topLengthScale?: number
+  topWidthScale?: number
   topRadius?: number
   topLength?: number
   topWidth?: number
@@ -232,8 +287,11 @@ export interface PartComposePartInput {
   slatCount?: number
   boltCount?: number
   includeBolts?: boolean
+  includeSupportLegs?: boolean
+  includeHub?: boolean
   material?: PrimitiveMaterialInput
   materialPreset?: string
+  preset?: string
   semanticRole?: string
   semanticGroup?: string
   sourcePartKind?: string
@@ -242,8 +300,11 @@ export interface PartComposePartInput {
   primaryColor?: string
   secondaryColor?: string
   metalColor?: string
+  motorColor?: string
+  rollerColor?: string
   darkColor?: string
   accentColor?: string
+  opacity?: number
 }
 
 export interface PartComposeInput {
@@ -678,6 +739,11 @@ function normalizePartKind(kind: unknown): PartComposeKind | null {
     case 'head_housing':
       return 'motor_housing'
     case 'blades':
+    case 'blade':
+    case 'fan_blade':
+    case 'fanblade':
+    case 'impeller_fan_blade':
+      return 'fan_blade'
     case 'fan_blades':
     case 'radial_blades':
       return 'radial_blades'
@@ -866,6 +932,86 @@ function normalizePartKind(kind: unknown): PartComposeKind | null {
     case 'accent':
     case 'trim':
       return 'generic_detail_accent'
+    case 'mobile_platform_chassis':
+    case 'mobile_chassis':
+    case 'agv_chassis':
+    case 'amr_chassis':
+    case 'robot_platform_chassis':
+      return 'mobile_platform_chassis'
+    case 'lidar_sensor':
+    case 'laser_scanner':
+    case 'navigation_sensor':
+    case 'safety_scanner':
+    case 'scanner':
+      return 'lidar_sensor'
+    case 'emergency_stop_button':
+    case 'e_stop':
+    case 'e_stop_button':
+    case 'emergency_button':
+    case 'stop_button':
+      return 'emergency_stop_button'
+    case 'status_light_strip':
+    case 'light_strip':
+    case 'led_strip':
+    case 'signal_light_strip':
+    case 'status_strip':
+      return 'status_light_strip'
+    case 'operator_panel':
+    case 'hmi_panel':
+    case 'control_pendant':
+    case 'operator_console':
+      return 'operator_panel'
+    case 'guard_fence':
+    case 'safety_fence':
+    case 'safety_guard':
+    case 'guard_rail':
+    case 'barrier_fence':
+      return 'guard_fence'
+    case 'pallet_table':
+    case 'pallet_station':
+    case 'pallet_deck':
+    case 'fixture_table':
+      return 'pallet_table'
+    case 'bearing_block':
+    case 'pillow_block':
+    case 'pillow_block_bearing':
+    case 'bearing_housing':
+    case 'mounted_bearing':
+      return 'bearing_block'
+    case 'coupling_guard':
+    case 'shaft_guard':
+    case 'coupling_cover':
+    case 'rotating_shaft_guard':
+      return 'coupling_guard'
+    case 'motor_gearbox_unit':
+    case 'motor_reducer_unit':
+    case 'drive_unit':
+    case 'gearmotor':
+    case 'motor_gearbox':
+      return 'motor_gearbox_unit'
+    case 'pipe_manifold':
+    case 'manifold':
+    case 'header_pipe':
+    case 'branch_manifold':
+      return 'pipe_manifold'
+    case 'hopper_body':
+    case 'feed_hopper':
+    case 'material_hopper':
+    case 'inlet_hopper':
+      return 'hopper_body'
+    case 'conical_hopper':
+    case 'cone_hopper':
+    case 'cone_discharge_hopper':
+      return 'conical_hopper'
+    case 'service_platform':
+    case 'maintenance_platform':
+    case 'inspection_platform':
+    case 'access_deck':
+      return 'service_platform'
+    case 'platform_with_ladder':
+    case 'maintenance_platform_ladder':
+    case 'access_platform_ladder':
+      return 'platform_with_ladder'
     case 'kiosk_body':
     case 'booth_body':
     case 'small_building_body':
@@ -1014,6 +1160,57 @@ function normalizePartKind(kind: unknown): PartComposeKind | null {
     case 'mounting_flange':
     case 'pipe_flange':
       return 'flange_ring'
+    case 'flanged_nozzle':
+    case 'flanged_pipe_nozzle':
+    case 'nozzle_with_flange':
+    case 'process_nozzle':
+      return 'flanged_nozzle'
+    case 'manway_lid':
+    case 'manway_cover':
+    case 'manway_hatch':
+    case 'access_lid':
+    case 'hatch_cover':
+      return 'manway_lid'
+    case 'inspection_hatch':
+    case 'access_hatch':
+    case 'round_hatch':
+      return 'inspection_hatch'
+    case 'sanitary_nozzle':
+    case 'tri_clamp_nozzle':
+    case 'hygienic_nozzle':
+    case 'short_nozzle':
+    case 'feed_stub':
+      return 'sanitary_nozzle'
+    case 'jacket_shell':
+    case 'outer_jacket':
+    case 'thermal_jacket':
+    case 'cooling_jacket':
+    case 'heating_jacket':
+      return 'jacket_shell'
+    case 'sight_glass':
+    case 'sightglass':
+    case 'inspection_glass':
+    case 'view_glass':
+    case 'viewing_glass':
+      return 'sight_glass'
+    case 'sample_valve':
+    case 'sampling_valve':
+    case 'sampling_port':
+    case 'sample_cock':
+      return 'sample_valve'
+    case 'instrument_port':
+    case 'gauge_port':
+    case 'thermowell':
+    case 'pressure_gauge':
+    case 'temperature_probe':
+    case 'sensor_port':
+      return 'instrument_port'
+    case 'stainless_highlight_panel':
+    case 'metal_highlight_panel':
+    case 'polished_highlight':
+    case 'vertical_highlight':
+    case 'stainless_reflection':
+      return 'stainless_highlight_panel'
     case 'bolts':
     case 'bolt_pattern':
     case 'bolt_circle':
@@ -1040,6 +1237,23 @@ function normalizePartKind(kind: unknown): PartComposeKind | null {
     case 'roller_array':
     case 'conveyor_rollers':
       return 'roller_array'
+    case 'support_roller_pair':
+    case 'support_roller_station':
+    case 'trunnion_roller_pair':
+    case 'kiln_support_roller':
+      return 'support_roller_pair'
+    case 'structural_tower_frame':
+    case 'tower_frame':
+    case 'steel_tower_frame':
+    case 'preheater_tower_frame':
+    case 'multi_level_tower_frame':
+      return 'structural_tower_frame'
+    case 'cyclone_separator_unit':
+    case 'cyclone_unit':
+    case 'preheater_cyclone':
+    case 'cyclone_stage':
+    case 'cyclone_separator':
+      return 'cyclone_separator_unit'
     case 'belt':
     case 'belt_surface':
     case 'conveyor_belt':
@@ -2034,21 +2248,118 @@ function composeRadialBlades(
   return shapes
 }
 
-function composeProtectiveGrill(
+function composeFanBladeArray(
   input: PartComposeInput,
   part: PartComposePartInput,
   origin: Vec3,
 ): PrimitiveShapeInput[] {
   const center = add(origin, part.position ?? [0, 1.18, 0.04])
+  const count = clampInt(part.count ?? part.aroundCount, 1, 1, 16)
+  const bladeLength = clamp(part.length ?? part.bladeRadius ?? part.radius, 0.24, 0.04, 1.2)
+  const bladeWidth = clamp(
+    part.bladeWidth ?? part.width,
+    bladeLength * 0.26,
+    bladeLength * 0.06,
+    bladeLength * 0.55,
+  )
+  const thickness = clamp(part.thickness ?? part.depth ?? part.height, 0.018, 0.003, 0.08)
+  const pitch = clamp(part.pitch ?? part.bladePitch, 0.24, -0.8, 0.8)
+  const sweep = clamp(part.bladeSweep, bladeWidth * 0.32, -bladeWidth, bladeWidth)
+  const hubRadius = clamp(part.wireRadius, bladeLength * 0.22, 0.01, bladeLength * 0.45)
+  const rootWidth = clamp(part.rootWidth, bladeWidth * 0.42, bladeWidth * 0.16, bladeWidth)
+  const profile: [number, number][] = [
+    [0, -rootWidth * 0.5],
+    [bladeLength * 0.18, -bladeWidth * 0.42 + sweep * 0.12],
+    [bladeLength * 0.54, -bladeWidth * 0.55 + sweep * 0.38],
+    [bladeLength * 0.96, -bladeWidth * 0.25 + sweep],
+    [bladeLength, bladeWidth * 0.08 + sweep * 0.92],
+    [bladeLength * 0.72, bladeWidth * 0.44 + sweep * 0.46],
+    [bladeLength * 0.24, bladeWidth * 0.36 + sweep * 0.14],
+    [0, rootWidth * 0.5],
+  ]
+  const mat = partMaterial(
+    part,
+    material(
+      part.primaryColor ?? input.accentColor ?? input.primaryColor ?? '#8ec5ff',
+      0.42,
+      0.05,
+      0.86,
+    ),
+  )
+  const hubMat = material(input.darkColor ?? '#25272c', 0.48, 0.35)
+  const radialCenter = hubRadius + bladeLength * 0.5
+  const baseId = part.id ?? part.name ?? part.partName ?? 'fan_blade'
+  const shapes: PrimitiveShapeInput[] = []
+
+  for (let index = 0; index < count; index += 1) {
+    const angle = part.aroundAngle ?? angularStep(index, count, -Math.PI / 2)
+    shapes.push({
+      kind: 'extrude',
+      name: `${part.name ?? input.name ?? 'object'} fan blade ${index + 1}`,
+      semanticRole: part.semanticRole ?? 'fan_blade',
+      semanticGroup: part.semanticGroup ?? 'fan_blades',
+      sourcePartKind: part.sourcePartKind ?? 'fan_blade',
+      sourcePartId: count > 1 ? `${baseId}_${index + 1}` : baseId,
+      editableHints: {
+        primaryDimension: 'length',
+        canScale: ['primary', 'length', 'width', 'thickness'],
+        minFactor: 0.35,
+        maxFactor: 2.2,
+      },
+      position: radialPoint(center, angle, radialCenter, Math.sin(index * 1.7) * thickness * 0.2),
+      rotation: radialExtrudeRotationInLocalPlane(angle, pitch),
+      profile,
+      depth: thickness,
+      bevelSize: thickness * 0.16,
+      bevelThickness: thickness * 0.18,
+      bevelSegments: 2,
+      curveSegments: 10,
+      material: mat,
+    })
+  }
+
+  if (part.includeHub !== false && count > 1) {
+    shapes.push({
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} fan blade hub`,
+      semanticRole: 'fan_hub',
+      semanticGroup: part.semanticGroup ?? 'fan_blades',
+      sourcePartKind: part.sourcePartKind ?? 'fan_blade',
+      sourcePartId: `${baseId}_hub`,
+      position: center,
+      axis: 'z',
+      radius: hubRadius,
+      height: Math.max(thickness * 2.4, 0.045),
+      radialSegments: 32,
+      material: hubMat,
+    })
+  }
+
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeProtectiveGrill(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const detailLevel = partDetailLevel(input, part)
+  const segmentDetail =
+    detailLevel === 'high' ? 'high' : detailLevel === 'low' ? 'low' : input.detail
+  const defaultRingCount = detailLevel === 'high' ? 5 : detailLevel === 'low' ? 3 : 4
+  const defaultSpokeCount = detailLevel === 'high' ? 24 : detailLevel === 'low' ? 12 : 18
+  const center = add(origin, part.position ?? [0, 1.18, 0.04])
   const radius = clamp(part.radius, 0.36, 0.08, 2)
   const cageDepth = clamp(part.depth, 0.12, 0.005, 0.6)
   const domeDepth = clamp(part.domeDepth, cageDepth * 0.72, 0.005, radius * 0.85)
-  const ringCount = clampInt(part.ringCount ?? part.count, input.detail === 'low' ? 3 : 4, 1, 8)
-  const spokeCount = clampInt(part.spokeCount, input.detail === 'high' ? 24 : 18, 6, 36)
+  const ringCount = clampInt(part.ringCount ?? part.count, defaultRingCount, 1, 8)
+  const spokeCount = clampInt(part.spokeCount, defaultSpokeCount, 6, 36)
   const wireRadius = clamp(part.wireRadius, radius * 0.018, 0.002, 0.05)
   const grillMat = partMaterial(part, material(input.metalColor ?? '#d1d5db', 0.38, 0.62))
   const shapes: PrimitiveShapeInput[] = []
   const frontZForRatio = (ratio: number) => center[2] + domeDepth * (1 - ratio * ratio)
+  const ringTubularSegments = ringSegments(segmentDetail)
+  const ringRadialSegments = Math.max(12, Math.round(ringTubularSegments * 0.35))
 
   for (let i = 0; i < ringCount; i += 1) {
     const ratio = ringCount === 1 ? 1 : 0.22 + (i / (ringCount - 1)) * 0.78
@@ -2059,8 +2370,8 @@ function composeProtectiveGrill(
       axis: 'z',
       majorRadius: radius * ratio,
       tubeRadius: wireRadius,
-      radialSegments: Math.max(12, Math.round(ringSegments(input.detail) * 0.35)),
-      tubularSegments: ringSegments(input.detail),
+      radialSegments: ringRadialSegments,
+      tubularSegments: ringTubularSegments,
       material: grillMat,
     })
   }
@@ -2073,19 +2384,8 @@ function composeProtectiveGrill(
       axis: 'z',
       majorRadius: radius,
       tubeRadius: wireRadius,
-      radialSegments: Math.max(12, Math.round(ringSegments(input.detail) * 0.35)),
-      tubularSegments: ringSegments(input.detail),
-      material: grillMat,
-    },
-    {
-      kind: 'torus',
-      name: `${part.name ?? input.name ?? 'object'} grill rear inner support ring`,
-      position: [center[0], center[1], center[2] - cageDepth * 0.82],
-      axis: 'z',
-      majorRadius: radius * 0.42,
-      tubeRadius: wireRadius * 0.82,
-      radialSegments: Math.max(12, Math.round(ringSegments(input.detail) * 0.35)),
-      tubularSegments: Math.max(24, Math.round(ringSegments(input.detail) * 0.75)),
+      radialSegments: ringRadialSegments,
+      tubularSegments: ringTubularSegments,
       material: grillMat,
     },
     {
@@ -2095,10 +2395,24 @@ function composeProtectiveGrill(
       axis: 'z',
       radius: radius * 0.13,
       height: wireRadius * 2.2,
-      radialSegments: Math.max(24, Math.round(ringSegments(input.detail) * 0.6)),
+      radialSegments: Math.max(24, Math.round(ringTubularSegments * 0.6)),
       material: grillMat,
     },
   )
+
+  if (detailLevel !== 'low') {
+    shapes.splice(shapes.length - 1, 0, {
+      kind: 'torus',
+      name: `${part.name ?? input.name ?? 'object'} grill rear inner support ring`,
+      position: [center[0], center[1], center[2] - cageDepth * 0.82],
+      axis: 'z',
+      majorRadius: radius * 0.42,
+      tubeRadius: wireRadius * 0.82,
+      radialSegments: ringRadialSegments,
+      tubularSegments: Math.max(24, Math.round(ringTubularSegments * 0.75)),
+      material: grillMat,
+    })
+  }
 
   const innerRatio = 0.12
   const spokeStartZ = frontZForRatio(innerRatio)
@@ -2127,7 +2441,10 @@ function composeProtectiveGrill(
     })
   }
 
-  const sideRibCount = Math.max(6, Math.min(18, Math.round(spokeCount / 2)))
+  const sideRibCount =
+    detailLevel === 'high'
+      ? Math.max(12, Math.min(18, Math.round(spokeCount / 2)))
+      : Math.max(6, Math.min(12, Math.round(spokeCount / 2)))
   for (let i = 0; i < sideRibCount; i += 1) {
     const angle = angularStep(i, sideRibCount)
     const dx = Math.cos(angle)
@@ -2145,6 +2462,34 @@ function composeProtectiveGrill(
   }
 
   return shapes
+}
+
+function partDetailLevel(input: PartComposeInput, part: PartComposePartInput): PartComposeDetail {
+  const raw =
+    `${part.detailLevel ?? part.grillDetailLevel ?? part.detail ?? input.detail ?? ''}`.toLowerCase()
+  if (/(low|simple|coarse|light|\u4f4e|\u7b80)/i.test(raw)) return 'low'
+  if (/(high|fine|detailed|dense|\u9ad8|\u7ec6|\u5bc6)/i.test(raw)) return 'high'
+  return 'medium'
+}
+
+function detailDefaultInt(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  values: Record<PartComposeDetail, number>,
+): number {
+  return values[partDetailLevel(input, part)]
+}
+
+function detailSegmentLevel(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+): PartComposeDetail {
+  const detailLevel = partDetailLevel(input, part)
+  if (detailLevel !== 'medium') return detailLevel
+  const raw = `${input.detail ?? ''}`.toLowerCase()
+  if (/(low|simple|coarse|light|\u4f4e|\u7b80)/i.test(raw)) return 'low'
+  if (/(high|fine|detailed|dense|\u9ad8|\u7ec6|\u5bc6)/i.test(raw)) return 'high'
+  return 'medium'
 }
 
 function composePyramid(
@@ -2306,8 +2651,13 @@ function composeVentSlats(
   origin: Vec3,
   kind: 'vent_slats' | 'vent_grill' = 'vent_slats',
 ): PrimitiveShapeInput[] {
+  const detailLevel = partDetailLevel(input, part)
   const center = add(origin, part.position ?? [0, 0.5, 0.02])
-  const count = clampInt(part.slatCount ?? part.count, kind === 'vent_grill' ? 8 : 6, 2, 20)
+  const defaultCount =
+    kind === 'vent_grill'
+      ? detailDefaultInt(input, part, { low: 5, medium: 8, high: 12 })
+      : detailDefaultInt(input, part, { low: 4, medium: 6, high: 10 })
+  const count = clampInt(part.slatCount ?? part.count, defaultCount, 2, 20)
   const width = clamp(part.width ?? part.length, 0.5, 0.05, 3)
   const height = clamp(part.height, 0.018, 0.004, 0.08)
   const spacing = clamp(part.depth, 0.055, 0.01, 0.3)
@@ -2331,7 +2681,7 @@ function composeVentSlats(
       width: panelHeight + frameWidth * 2.2,
       thickness: panelDepth,
       cornerRadius: frameWidth * 1.2,
-      cornerSegments: 3,
+      cornerSegments: detailLevel === 'high' ? 4 : detailLevel === 'low' ? 1 : 3,
       material: recessMat,
     },
     {
@@ -2342,7 +2692,7 @@ function composeVentSlats(
       width: frameWidth,
       height: frameWidth,
       cornerRadius: frameWidth * 0.25,
-      cornerSegments: 3,
+      cornerSegments: detailLevel === 'low' ? 1 : 3,
       material: frameMat,
     },
     {
@@ -2353,7 +2703,7 @@ function composeVentSlats(
       width: frameWidth,
       height: frameWidth,
       cornerRadius: frameWidth * 0.25,
-      cornerSegments: 3,
+      cornerSegments: detailLevel === 'low' ? 1 : 3,
       material: frameMat,
     },
     {
@@ -2364,7 +2714,7 @@ function composeVentSlats(
       width: frameWidth,
       height: panelHeight,
       cornerRadius: frameWidth * 0.25,
-      cornerSegments: 3,
+      cornerSegments: detailLevel === 'low' ? 1 : 3,
       material: frameMat,
     },
     {
@@ -2375,7 +2725,7 @@ function composeVentSlats(
       width: frameWidth,
       height: panelHeight,
       cornerRadius: frameWidth * 0.25,
-      cornerSegments: 3,
+      cornerSegments: detailLevel === 'low' ? 1 : 3,
       material: frameMat,
     },
   ]
@@ -2390,11 +2740,11 @@ function composeVentSlats(
       width: height,
       height,
       cornerRadius: height * 0.3,
-      cornerSegments: 3,
+      cornerSegments: detailLevel === 'low' ? 1 : 3,
       material: slatMat,
     })
   }
-  if (kind === 'vent_grill') {
+  if (kind === 'vent_grill' && detailLevel !== 'low') {
     for (const offset of [-0.25, 0.25]) {
       shapes.push({
         kind: 'box',
@@ -3858,7 +4208,7 @@ function composePipePort(
   const pipeMat = partMaterial(part, material(input.primaryColor ?? '#6b7280', 0.45, 0.35))
   const shapes: PrimitiveShapeInput[] = [
     {
-      kind: 'cylinder',
+      kind: 'hollow-cylinder',
       name: `${part.name ?? input.name ?? 'object'} ${label.replace('_', ' ')}`,
       position: center,
       axis,
@@ -3888,12 +4238,18 @@ function composeFlangeRing(
   part: PartComposePartInput,
   origin: Vec3,
 ): PrimitiveShapeInput[] {
+  const segmentDetail = detailSegmentLevel(input, part)
   const side = partSide(part.side)
   const axis = side ? axisForSide(side, 'z') : partAxis(part.axis, 'z')
   const center = add(origin, part.position ?? [0, 0.55, 0.5])
   const radius = clamp(part.radius, 0.12, 0.02, 1)
   const thickness = clamp(part.depth ?? part.height, 0.035, 0.006, 0.3)
-  const boltCount = clampInt(part.boltCount ?? part.count, 6, 3, 20)
+  const boltCount = clampInt(
+    part.boltCount ?? part.count,
+    detailDefaultInt(input, part, { low: 4, medium: 6, high: 10 }),
+    3,
+    20,
+  )
   const mat = partMaterial(part, material(input.metalColor ?? '#9ca3af', 0.34, 0.68))
   const gasketMat = material(input.darkColor ?? '#111827', 0.62, 0.08)
   const shapes: PrimitiveShapeInput[] = [
@@ -3904,7 +4260,7 @@ function composeFlangeRing(
       axis,
       radius,
       height: thickness,
-      radialSegments: ringSegments(input.detail),
+      radialSegments: ringSegments(segmentDetail),
       wallThickness: radius * 0.28,
       material: mat,
     },
@@ -3916,7 +4272,7 @@ function composeFlangeRing(
       majorRadius: radius * 0.62,
       tubeRadius: radius * 0.035,
       radialSegments: 12,
-      tubularSegments: Math.max(24, Math.round(ringSegments(input.detail) * 0.65)),
+      tubularSegments: Math.max(24, Math.round(ringSegments(segmentDetail) * 0.65)),
       material: gasketMat,
     },
   ]
@@ -3939,6 +4295,571 @@ function composeFlangeRing(
     )
   }
   return applyPartRotation(shapes, center, part.rotation)
+}
+
+function panelRotationForSide(side: PartSide | undefined): Vec3 {
+  switch (side) {
+    case 'left':
+    case 'right':
+      return [0, Math.PI / 2, 0]
+    case 'top':
+    case 'bottom':
+      return [Math.PI / 2, 0, 0]
+    default:
+      return [0, 0, 0]
+  }
+}
+
+function defaultSurfacePosition(input: PartComposeInput, side: PartSide | undefined): Vec3 {
+  const length = input.length ?? input.diameter ?? (input.radius ? input.radius * 2 : 1)
+  const width =
+    input.width ?? input.depth ?? input.diameter ?? (input.radius ? input.radius * 2 : 0.8)
+  const height = input.height ?? 1.2
+  switch (side) {
+    case 'left':
+      return [-length * 0.51, height * 0.56, 0]
+    case 'right':
+      return [length * 0.51, height * 0.56, 0]
+    case 'back':
+      return [0, height * 0.56, -width * 0.51]
+    case 'top':
+      return [0, height * 1.02, 0]
+    case 'bottom':
+      return [0, -height * 0.02, 0]
+    default:
+      return [0, height * 0.56, width * 0.51]
+  }
+}
+
+function composeManwayLid(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const segmentDetail = detailSegmentLevel(input, part)
+  const side = partSide(part.side)
+  const axis = side ? axisForSide(side, 'y') : partAxis(part.axis, 'y')
+  const center = add(origin, part.position ?? defaultSurfacePosition(input, side ?? 'top'))
+  const radius = clamp(
+    part.radius,
+    input.radius ?? (input.diameter ? input.diameter / 2 : 0.18),
+    0.04,
+    1,
+  )
+  const thickness = clamp(part.thickness ?? part.depth ?? part.height, 0.035, 0.006, 0.25)
+  const boltCount = clampInt(
+    part.boltCount ?? part.count,
+    detailDefaultInt(input, part, { low: 4, medium: 8, high: 12 }),
+    0,
+    24,
+  )
+  const lidMat = partMaterial(
+    part,
+    material(part.metalColor ?? input.metalColor ?? '#cbd5e1', 0.28, 0.78),
+  )
+  const darkMat = material(part.darkColor ?? input.darkColor ?? '#111827', 0.55, 0.2)
+  const role = genericPartRole(part, 'manway_lid')
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} manway lid`,
+      semanticRole: role,
+      position: center,
+      axis,
+      radius,
+      height: thickness,
+      radialSegments: ringSegments(segmentDetail),
+      material: lidMat,
+    },
+    {
+      kind: 'torus',
+      name: `${part.name ?? input.name ?? 'object'} manway gasket`,
+      semanticRole: 'manway_gasket',
+      position: offsetAlongAxis(center, axis, thickness * 0.55),
+      axis,
+      majorRadius: radius * 0.72,
+      tubeRadius: radius * 0.035,
+      radialSegments: 12,
+      tubularSegments: Math.max(24, Math.round(ringSegments(segmentDetail) * 0.65)),
+      material: darkMat,
+    },
+    {
+      kind: 'capsule',
+      name: `${part.name ?? input.name ?? 'object'} manway handle`,
+      semanticRole: 'manway_handle',
+      position: offsetAlongAxis(center, axis, thickness * 0.9),
+      axis: axis === 'x' ? 'z' : 'x',
+      radius: Math.max(0.006, radius * 0.055),
+      height: radius * 0.78,
+      radialSegments: 10,
+      capSegments: 3,
+      material: darkMat,
+    },
+  ]
+  if (boltCount > 0) {
+    shapes.push(
+      ...composeBoltPattern(
+        input,
+        {
+          ...part,
+          name: `${part.name ?? input.name ?? 'object'} manway`,
+          position: center,
+          rotation: undefined,
+          axis,
+          radius: radius * 0.82,
+          count: boltCount,
+          depth: thickness * 1.3,
+          wireRadius: radius * 0.045,
+        },
+        [0, 0, 0],
+      ),
+    )
+  }
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeSanitaryNozzle(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const segmentDetail = detailSegmentLevel(input, part)
+  const side = partSide(part.side)
+  const axis = side ? axisForSide(side, 'y') : partAxis(part.axis, 'y')
+  const sign = signForSide(side, axis)
+  const center = add(origin, part.position ?? defaultSurfacePosition(input, side ?? 'top'))
+  const radius = clamp(part.radius, 0.08, 0.01, 0.5)
+  const length = clamp(part.length ?? part.depth ?? part.height, 0.18, 0.03, 1)
+  const mat = partMaterial(
+    part,
+    material(part.metalColor ?? input.metalColor ?? '#cbd5e1', 0.24, 0.82),
+  )
+  const role = genericPartRole(part, 'sanitary_nozzle')
+  const outer = offsetAlongAxis(center, axis, (length / 2) * sign)
+  return applyPartRotation(
+    [
+      {
+        kind: 'hollow-cylinder',
+        name: `${part.name ?? input.name ?? 'object'} sanitary nozzle`,
+        semanticRole: role,
+        position: center,
+        axis,
+        radius,
+        height: length,
+        radialSegments: Math.max(20, Math.round(ringSegments(input.detail) * 0.55)),
+        wallThickness: radius * 0.16,
+        material: mat,
+      },
+      {
+        kind: 'torus',
+        name: `${part.name ?? input.name ?? 'object'} sanitary clamp bead`,
+        semanticRole: 'sanitary_clamp_bead',
+        position: outer,
+        axis,
+        majorRadius: radius * 1.08,
+        tubeRadius: radius * 0.08,
+        radialSegments: 12,
+        tubularSegments: Math.max(24, Math.round(ringSegments(input.detail) * 0.65)),
+        material: mat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeFlangedNozzle(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const segmentDetail = detailSegmentLevel(input, part)
+  const side = partSide(part.side)
+  const axis = side ? axisForSide(side, 'y') : partAxis(part.axis, 'y')
+  const sign = signForSide(side, axis)
+  const center = add(origin, part.position ?? defaultSurfacePosition(input, side ?? 'front'))
+  const radius = clamp(part.radius, 0.09, 0.015, 0.8)
+  const length = clamp(part.length ?? part.depth ?? part.height, 0.26, 0.06, 1.8)
+  const flangeRadius = clamp(part.flangeRadius, radius * 1.75, radius * 1.1, radius * 3.2)
+  const flangeThickness = clamp(part.flangeThickness ?? part.thickness, radius * 0.28, 0.008, 0.22)
+  const mat = partMaterial(
+    part,
+    material(part.metalColor ?? input.metalColor ?? '#cbd5e1', 0.24, 0.82),
+  )
+  const role = genericPartRole(part, 'flanged_nozzle')
+  const nozzleCenter = offsetAlongAxis(center, axis, length * 0.22 * sign)
+  const flangeCenter = offsetAlongAxis(center, axis, length * 0.58 * sign)
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'hollow-cylinder',
+      name: `${part.name ?? input.name ?? 'object'} flanged nozzle neck`,
+      semanticRole: role,
+      sourcePartKind: 'flanged_nozzle',
+      position: nozzleCenter,
+      axis,
+      radius,
+      height: length,
+      radialSegments: Math.max(24, Math.round(ringSegments(segmentDetail) * 0.65)),
+      wallThickness: radius * 0.14,
+      material: mat,
+    },
+    {
+      kind: 'hollow-cylinder',
+      name: `${part.name ?? input.name ?? 'object'} nozzle flange`,
+      semanticRole: 'nozzle_flange',
+      sourcePartKind: 'flanged_nozzle',
+      position: flangeCenter,
+      axis,
+      radius: flangeRadius,
+      height: flangeThickness,
+      wallThickness: Math.max(radius * 0.22, flangeRadius - radius * 1.05),
+      radialSegments: ringSegments(segmentDetail),
+      material: mat,
+    },
+  ]
+  if (part.includeBolts !== false) {
+    shapes.push(
+      ...composeBoltPattern(
+        input,
+        {
+          ...part,
+          name: `${part.name ?? input.name ?? 'object'} nozzle flange`,
+          position: flangeCenter,
+          rotation: undefined,
+          axis,
+          radius: flangeRadius * 0.76,
+          count: clampInt(
+            part.boltCount ?? part.count,
+            detailDefaultInt(input, part, { low: 4, medium: 8, high: 12 }),
+            0,
+            24,
+          ),
+          depth: flangeThickness * 1.4,
+          wireRadius: flangeRadius * 0.035,
+        },
+        [0, 0, 0],
+      ),
+    )
+  }
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeInspectionHatch(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const side = partSide(part.side)
+  const axis = side ? axisForSide(side, 'z') : partAxis(part.axis, 'z')
+  const center = add(origin, part.position ?? defaultSurfacePosition(input, side ?? 'front'))
+  const radius = clamp(part.radius, 0.18, 0.04, 1.2)
+  const thickness = clamp(part.thickness ?? part.depth ?? part.height, 0.035, 0.006, 0.28)
+  const hatchMat = partMaterial(
+    part,
+    material(part.metalColor ?? input.metalColor ?? '#cbd5e1', 0.3, 0.75),
+  )
+  const darkMat = material(part.darkColor ?? input.darkColor ?? '#111827', 0.55, 0.18)
+  const role = genericPartRole(part, 'inspection_hatch')
+  const handleAxis = axis === 'x' ? 'z' : 'x'
+  return applyPartRotation(
+    [
+      {
+        kind: 'cylinder',
+        name: `${part.name ?? input.name ?? 'object'} inspection hatch cover`,
+        semanticRole: role,
+        sourcePartKind: 'inspection_hatch',
+        position: center,
+        axis,
+        radius,
+        height: thickness,
+        radialSegments: ringSegments(input.detail),
+        material: hatchMat,
+      },
+      {
+        kind: 'box',
+        name: `${part.name ?? input.name ?? 'object'} hatch hinge block`,
+        semanticRole: 'hatch_hinge',
+        sourcePartKind: 'inspection_hatch',
+        position: add(offsetAlongAxis(center, axis, thickness * 0.7), [radius * 0.78, 0, 0]),
+        length: radius * 0.18,
+        width: thickness * 1.2,
+        height: radius * 0.42,
+        material: darkMat,
+      },
+      {
+        kind: 'capsule',
+        name: `${part.name ?? input.name ?? 'object'} hatch handle`,
+        semanticRole: 'hatch_handle',
+        sourcePartKind: 'inspection_hatch',
+        position: offsetAlongAxis(center, axis, thickness * 0.95),
+        axis: handleAxis,
+        radius: Math.max(0.006, radius * 0.045),
+        height: radius * 0.72,
+        radialSegments: 10,
+        capSegments: 3,
+        material: darkMat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeJacketShell(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const axis = partAxis(part.axis, 'y')
+  const radius = clamp(
+    part.radius,
+    input.radius ? input.radius * 1.06 : (input.diameter ?? 1) * 0.53,
+    0.08,
+    3,
+  )
+  const height = clamp(part.height, (input.height ?? 1.4) * 0.74, 0.12, 8)
+  const center = add(origin, part.position ?? [0, height * 0.5, 0])
+  const opacity = clamp(part.opacity, 0.28, 0.08, 1)
+  const mat = partMaterial(
+    part,
+    material(part.primaryColor ?? input.secondaryColor ?? '#dbe3ea', 0.3, 0.56, opacity),
+  )
+  const seamMat = material(part.metalColor ?? input.metalColor ?? '#cbd5e1', 0.24, 0.82)
+  const role = genericPartRole(part, 'jacket_shell')
+  return applyPartRotation(
+    [
+      {
+        kind: 'hollow-cylinder',
+        name: `${part.name ?? input.name ?? 'object'} jacket shell`,
+        semanticRole: role,
+        position: center,
+        axis,
+        radius,
+        height,
+        radialSegments: ringSegments(input.detail),
+        wallThickness: clamp(part.thickness, radius * 0.025, 0.004, 0.12),
+        material: mat,
+      },
+      {
+        kind: 'torus',
+        name: `${part.name ?? input.name ?? 'object'} jacket upper seam`,
+        semanticRole: 'jacket_seam',
+        position: offsetAlongAxis(center, axis, height * 0.5),
+        axis,
+        majorRadius: radius,
+        tubeRadius: radius * 0.018,
+        radialSegments: 12,
+        tubularSegments: Math.max(24, Math.round(ringSegments(input.detail) * 0.65)),
+        material: seamMat,
+      },
+      {
+        kind: 'torus',
+        name: `${part.name ?? input.name ?? 'object'} jacket lower seam`,
+        semanticRole: 'jacket_seam',
+        position: offsetAlongAxis(center, axis, -height * 0.5),
+        axis,
+        majorRadius: radius,
+        tubeRadius: radius * 0.018,
+        radialSegments: 12,
+        tubularSegments: Math.max(24, Math.round(ringSegments(input.detail) * 0.65)),
+        material: seamMat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeSightGlass(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const side = partSide(part.side) ?? 'front'
+  const center = add(origin, part.position ?? defaultSurfacePosition(input, side))
+  const length = clamp(part.length, 0.18, 0.03, 1.4)
+  const height = clamp(part.height ?? part.width, 0.24, 0.03, 1.6)
+  const thickness = clamp(part.thickness ?? part.depth, 0.012, 0.002, 0.08)
+  const rotation = part.rotation ?? panelRotationForSide(side)
+  const glass = material(
+    part.color ?? input.accentColor ?? '#93c5fd',
+    0.06,
+    0.02,
+    clamp(part.opacity, 0.42, 0.12, 0.9),
+  )
+  const rim = material(part.metalColor ?? input.metalColor ?? '#cbd5e1', 0.25, 0.82)
+  const role = genericPartRole(part, 'sight_glass')
+  return [
+    {
+      kind: 'rounded-panel',
+      name: `${part.name ?? input.name ?? 'object'} sight glass rim`,
+      semanticRole: 'sight_glass_rim',
+      position: center,
+      rotation,
+      length: length * 1.18,
+      width: height * 1.14,
+      thickness: thickness * 1.25,
+      cornerRadius: Math.min(length, height) * 0.16,
+      cornerSegments: 5,
+      material: rim,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${part.name ?? input.name ?? 'object'} sight glass`,
+      semanticRole: role,
+      position: offsetAlongAxis(
+        center,
+        axisForSide(side, 'z'),
+        signForSide(side, axisForSide(side, 'z')) * thickness * 0.8,
+      ),
+      rotation,
+      length,
+      width: height,
+      thickness,
+      cornerRadius: Math.min(length, height) * 0.14,
+      cornerSegments: 5,
+      material: glass,
+    },
+  ]
+}
+
+function composeSampleValve(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const side = partSide(part.side) ?? 'front'
+  const axis = axisForSide(side, 'z')
+  const sign = signForSide(side, axis)
+  const center = add(origin, part.position ?? defaultSurfacePosition(input, side))
+  const radius = clamp(part.radius, 0.045, 0.008, 0.25)
+  const length = clamp(part.length ?? part.depth ?? part.height, 0.22, 0.04, 0.8)
+  const mat = partMaterial(
+    part,
+    material(part.metalColor ?? input.metalColor ?? '#cbd5e1', 0.27, 0.78),
+  )
+  const dark = material(part.darkColor ?? input.darkColor ?? '#111827', 0.48, 0.35)
+  const role = genericPartRole(part, 'sample_valve')
+  const knobCenter = offsetAlongAxis(center, axis, length * 0.42 * sign)
+  return applyPartRotation(
+    [
+      {
+        kind: 'hollow-cylinder',
+        name: `${part.name ?? input.name ?? 'object'} sample valve nozzle`,
+        semanticRole: role,
+        position: center,
+        axis,
+        radius,
+        height: length,
+        radialSegments: 20,
+        wallThickness: radius * 0.18,
+        material: mat,
+      },
+      {
+        kind: 'sphere',
+        name: `${part.name ?? input.name ?? 'object'} sample valve body`,
+        semanticRole: 'sample_valve_body',
+        position: knobCenter,
+        radius: radius * 1.25,
+        widthSegments: 20,
+        heightSegments: 12,
+        material: mat,
+      },
+      {
+        kind: 'capsule',
+        name: `${part.name ?? input.name ?? 'object'} sample valve handle`,
+        semanticRole: 'sample_valve_handle',
+        position: offsetAlongAxis(knobCenter, 'y', radius * 1.35),
+        axis: 'x',
+        radius: radius * 0.18,
+        height: radius * 3.2,
+        radialSegments: 10,
+        capSegments: 3,
+        material: dark,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeInstrumentPort(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const side = partSide(part.side)
+  const axis = side ? axisForSide(side, 'y') : partAxis(part.axis, 'y')
+  const sign = signForSide(side, axis)
+  const center = add(origin, part.position ?? defaultSurfacePosition(input, side ?? 'top'))
+  const radius = clamp(part.radius, 0.035, 0.006, 0.22)
+  const length = clamp(part.length ?? part.depth ?? part.height, 0.16, 0.03, 0.7)
+  const mat = partMaterial(
+    part,
+    material(part.metalColor ?? input.metalColor ?? '#cbd5e1', 0.24, 0.8),
+  )
+  const dark = material(part.darkColor ?? input.darkColor ?? '#0f172a', 0.48, 0.3)
+  const role = genericPartRole(part, 'instrument_port')
+  const head = offsetAlongAxis(center, axis, length * 0.62 * sign)
+  return applyPartRotation(
+    [
+      {
+        kind: 'cylinder',
+        name: `${part.name ?? input.name ?? 'object'} instrument stem`,
+        semanticRole: role,
+        position: center,
+        axis,
+        radius,
+        height: length,
+        radialSegments: 18,
+        material: mat,
+      },
+      {
+        kind: 'cylinder',
+        name: `${part.name ?? input.name ?? 'object'} instrument gauge`,
+        semanticRole: 'instrument_gauge',
+        position: head,
+        axis,
+        radius: radius * 1.8,
+        height: radius * 0.65,
+        radialSegments: 24,
+        material: dark,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeStainlessHighlightPanel(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const side = partSide(part.side) ?? 'front'
+  const center = add(origin, part.position ?? defaultSurfacePosition(input, side))
+  const length = clamp(part.length, (input.length ?? input.diameter ?? 1) * 0.16, 0.02, 1.2)
+  const height = clamp(part.height ?? part.width, (input.height ?? 1.2) * 0.55, 0.04, 4)
+  const thickness = clamp(part.thickness ?? part.depth, 0.006, 0.001, 0.05)
+  const mat = partMaterial(
+    part,
+    material(part.color ?? '#f8fafc', 0.18, 0.68, clamp(part.opacity, 0.5, 0.12, 0.95)),
+  )
+  return [
+    {
+      kind: 'rounded-panel',
+      name: `${part.name ?? input.name ?? 'object'} stainless highlight panel`,
+      semanticRole: genericPartRole(part, 'stainless_highlight_panel'),
+      position: center,
+      rotation: part.rotation ?? panelRotationForSide(side),
+      length,
+      width: height,
+      thickness,
+      cornerRadius: Math.min(length, height) * 0.35,
+      cornerSegments: 6,
+      material: mat,
+    },
+  ]
 }
 
 function composeBoltPattern(
@@ -4211,24 +5132,41 @@ function composeCylindricalTank(
   const center = add(origin, part.position ?? [0, 0.55, 0])
   const radius = clamp(part.radius, 0.24, 0.05, 2)
   const length = clamp(part.length ?? part.height, 0.9, 0.16, 6)
+  const wallThickness = clamp(
+    part.thickness ?? part.shellThickness,
+    radius * 0.075,
+    radius * 0.02,
+    radius * 0.28,
+  )
   const mat = partMaterial(part, material(input.primaryColor ?? '#94a3b8', 0.42, 0.48))
+  const metal = material(input.metalColor ?? '#cbd5e1', 0.28, 0.76)
+  const dark = material(input.darkColor ?? '#1f2937', 0.56, 0.24)
+  const supportMat = material(input.darkColor ?? '#334155', 0.58, 0.36)
+  const headScale = axis === 'x' ? [radius * 0.36, radius, radius] : [radius, radius * 0.36, radius]
+  const leftEnd = offsetAlongAxis(center, axis, -length * 0.52)
+  const rightEnd = offsetAlongAxis(center, axis, length * 0.52)
   const shapes: PrimitiveShapeInput[] = [
     {
-      kind: 'cylinder',
+      kind: 'hollow-cylinder',
       name: `${part.name ?? input.name ?? 'object'} cylindrical tank shell`,
+      semanticRole: part.semanticRole ?? 'vessel_shell',
+      sourcePartKind: part.sourcePartKind ?? 'cylindrical_tank',
       position: center,
       axis,
       radius,
       height: length,
+      wallThickness,
       radialSegments: ringSegments(input.detail),
       material: mat,
     },
     {
       kind: 'sphere',
       name: `${part.name ?? input.name ?? 'object'} tank left dished end`,
-      position: offsetAlongAxis(center, axis, -length * 0.52),
+      semanticRole: 'vessel_head',
+      sourcePartKind: part.sourcePartKind ?? 'cylindrical_tank',
+      position: leftEnd,
       radius: 1,
-      scale: axis === 'x' ? [radius * 0.36, radius, radius] : [radius, radius * 0.36, radius],
+      scale: headScale as Vec3,
       widthSegments: ringSegments(input.detail),
       heightSegments: Math.max(16, Math.round(ringSegments(input.detail) * 0.5)),
       material: mat,
@@ -4236,25 +5174,107 @@ function composeCylindricalTank(
     {
       kind: 'sphere',
       name: `${part.name ?? input.name ?? 'object'} tank right dished end`,
-      position: offsetAlongAxis(center, axis, length * 0.52),
+      semanticRole: 'vessel_head',
+      sourcePartKind: part.sourcePartKind ?? 'cylindrical_tank',
+      position: rightEnd,
       radius: 1,
-      scale: axis === 'x' ? [radius * 0.36, radius, radius] : [radius, radius * 0.36, radius],
+      scale: headScale as Vec3,
       widthSegments: ringSegments(input.detail),
       heightSegments: Math.max(16, Math.round(ringSegments(input.detail) * 0.5)),
       material: mat,
     },
     {
-      kind: 'cylinder',
+      kind: 'torus',
+      name: `${part.name ?? input.name ?? 'object'} tank left seam ring`,
+      semanticRole: 'vessel_seam',
+      sourcePartKind: part.sourcePartKind ?? 'cylindrical_tank',
+      position: leftEnd,
+      axis,
+      majorRadius: radius * 1.01,
+      tubeRadius: wallThickness * 0.48,
+      radialSegments: 10,
+      tubularSegments: Math.max(24, Math.round(ringSegments(input.detail) * 0.7)),
+      material: metal,
+    },
+    {
+      kind: 'torus',
+      name: `${part.name ?? input.name ?? 'object'} tank right seam ring`,
+      semanticRole: 'vessel_seam',
+      sourcePartKind: part.sourcePartKind ?? 'cylindrical_tank',
+      position: rightEnd,
+      axis,
+      majorRadius: radius * 1.01,
+      tubeRadius: wallThickness * 0.48,
+      radialSegments: 10,
+      tubularSegments: Math.max(24, Math.round(ringSegments(input.detail) * 0.7)),
+      material: metal,
+    },
+    {
+      kind: 'hollow-cylinder',
       name: `${part.name ?? input.name ?? 'object'} tank top nozzle`,
+      semanticRole: 'top_nozzle',
+      sourcePartKind: part.sourcePartKind ?? 'cylindrical_tank',
       position: [center[0], center[1] + radius * 1.08, center[2]],
       axis: 'y',
       radius: radius * 0.16,
       height: radius * 0.35,
+      wallThickness: wallThickness * 0.65,
       radialSegments: 20,
-      wallThickness: radius * 0.035,
       material: mat,
     },
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} tank manway flange`,
+      semanticRole: 'manway_flange',
+      sourcePartKind: part.sourcePartKind ?? 'cylindrical_tank',
+      position:
+        axis === 'x'
+          ? [center[0] - length * 0.18, center[1], center[2] + radius * 1.04]
+          : [center[0] + radius * 1.04, center[1] + length * 0.16, center[2]],
+      axis: axis === 'x' ? 'z' : 'x',
+      radius: radius * 0.22,
+      height: wallThickness * 3,
+      radialSegments: 28,
+      material: dark,
+    },
   ]
+  if (axis === 'x') {
+    for (const x of [-length * 0.28, length * 0.28]) {
+      shapes.push({
+        kind: 'box',
+        name: `${part.name ?? input.name ?? 'object'} tank saddle support`,
+        semanticRole: 'saddle_support',
+        sourcePartKind: part.sourcePartKind ?? 'cylindrical_tank',
+        position: [center[0] + x, center[1] - radius * 0.86, center[2]],
+        length: radius * 0.48,
+        width: radius * 1.72,
+        height: radius * 0.32,
+        cornerRadius: radius * 0.08,
+        cornerSegments: 3,
+        material: supportMat,
+      })
+    }
+  } else {
+    for (const [x, z] of [
+      [radius * 0.72, radius * 0.72],
+      [radius * 0.72, -radius * 0.72],
+      [-radius * 0.72, radius * 0.72],
+      [-radius * 0.72, -radius * 0.72],
+    ] as const) {
+      shapes.push({
+        kind: 'cylinder',
+        name: `${part.name ?? input.name ?? 'object'} tank support leg`,
+        semanticRole: 'support_leg',
+        sourcePartKind: part.sourcePartKind ?? 'cylindrical_tank',
+        position: [center[0] + x, center[1] - length * 0.5 - radius * 0.28, center[2] + z],
+        axis: 'y',
+        radius: radius * 0.045,
+        height: radius * 0.56,
+        radialSegments: 12,
+        material: supportMat,
+      })
+    }
+  }
   return applyPartRotation(shapes, center, part.rotation)
 }
 
@@ -5418,6 +6438,7 @@ function composeWheelSet(
   const wheelWidth = clamp(part.wheelWidth ?? part.depth, radius * 0.42, 0.012, 0.6)
   const tireMat = partMaterial(part, material(input.darkColor ?? '#111827', 0.72, 0.02))
   const rimMat = material(input.metalColor ?? '#d1d5db', 0.25, 0.75)
+  const hubDarkMat = material(input.darkColor ?? '#1f2937', 0.48, 0.36)
   const axis =
     tireRole === 'bicycle_tire' || tireRole === 'vehicle_tire' ? 'z' : partAxis(part.axis, 'z')
   const shapes: PrimitiveShapeInput[] = []
@@ -5451,6 +6472,20 @@ function composeWheelSet(
       material: tireMat,
     })
     shapes.push({
+      kind: 'torus',
+      name: `${part.name ?? input.name ?? 'object'} ${label} wheel rim ring`,
+      semanticRole: tireRole === 'bicycle_tire' ? 'bicycle_rim' : 'wheel_rim',
+      sourcePartKind:
+        part.sourcePartKind ?? (tireRole === 'bicycle_tire' ? 'bicycle_wheels' : 'wheel_set'),
+      position: wheelCenter,
+      axis,
+      majorRadius: radius * 0.55,
+      tubeRadius: Math.max(radius * 0.045, wheelWidth * 0.06),
+      radialSegments: 8,
+      tubularSegments: Math.max(24, Math.round(ringSegments(input.detail) * 0.55)),
+      material: rimMat,
+    })
+    shapes.push({
       kind: 'cylinder',
       name: `${part.name ?? input.name ?? 'object'} ${label} wheel hub`,
       semanticRole: tireRole === 'bicycle_tire' ? 'bicycle_hub' : 'wheel_hub',
@@ -5463,7 +6498,50 @@ function composeWheelSet(
       radialSegments: 20,
       material: rimMat,
     })
+    if (input.detail === 'high' || input.enhanceVisualDetails === true) {
+      const spokeCount = tireRole === 'bicycle_tire' ? 8 : 5
+      for (let spoke = 0; spoke < spokeCount; spoke += 1) {
+        const angle = angularStep(spoke, spokeCount)
+        const spokeLength = radius * 0.58
+        shapes.push({
+          kind: 'capsule',
+          name: `${part.name ?? input.name ?? 'object'} ${label} wheel spoke ${spoke + 1}`,
+          semanticRole: tireRole === 'bicycle_tire' ? 'bicycle_spoke' : 'wheel_spoke',
+          sourcePartKind:
+            part.sourcePartKind ?? (tireRole === 'bicycle_tire' ? 'bicycle_wheels' : 'wheel_set'),
+          position: [
+            wheelCenter[0] + Math.cos(angle) * radius * 0.28,
+            wheelCenter[1] + Math.sin(angle) * radius * 0.28,
+            wheelCenter[2],
+          ],
+          rotation: [0, 0, angle],
+          axis: 'x',
+          radius: Math.max(radius * 0.018, 0.004),
+          height: spokeLength,
+          radialSegments: 8,
+          capSegments: 2,
+          material: hubDarkMat,
+        })
+      }
+    }
   })
+  if (axis === 'z' && count >= 4) {
+    const axleXs = Array.from(new Set(positions.map((position) => Number(position[0].toFixed(4)))))
+    for (const x of axleXs) {
+      shapes.push({
+        kind: 'cylinder',
+        name: `${part.name ?? input.name ?? 'object'} wheel axle`,
+        semanticRole: 'wheel_axle',
+        sourcePartKind: part.sourcePartKind ?? 'wheel_set',
+        position: [center[0] + x, center[1], center[2]],
+        axis: 'z',
+        radius: radius * 0.12,
+        height: width + wheelWidth * 1.2,
+        radialSegments: 16,
+        material: hubDarkMat,
+      })
+    }
+  }
   return applyPartRotation(shapes, center, part.rotation)
 }
 
@@ -5997,6 +7075,1369 @@ function composeGenericFootSet(
   return applyPartRotation(shapes, center, part.rotation)
 }
 
+function composeMobilePlatformChassis(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const length = clamp(part.length, input.length ?? 1.45, 0.3, 4)
+  const width = clamp(part.width ?? part.depth, input.width ?? input.depth ?? 0.9, 0.24, 2.4)
+  const height = clamp(part.height, input.height ?? 0.28, 0.08, 1.2)
+  const center = add(origin, part.position ?? [0, height * 0.5, 0])
+  const cornerRadius = clamp(
+    part.cornerRadius,
+    Math.min(length, width) * 0.18,
+    0,
+    Math.min(length, width) * 0.35,
+  )
+  const bodyMat = material(part.primaryColor ?? input.primaryColor ?? '#e5e7eb', 0.48, 0.08)
+  const skirtMat = material(part.darkColor ?? input.darkColor ?? '#111827', 0.62, 0.12)
+  const deckMat = material(part.secondaryColor ?? input.secondaryColor ?? '#334155', 0.55, 0.12)
+  const seamMat = material(part.accentColor ?? input.accentColor ?? '#38bdf8', 0.35, 0.02, 0.9)
+  const skirtHeight = Math.max(0.035, height * 0.32)
+  const deckThickness = Math.max(0.024, height * 0.16)
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'rounded-panel',
+      name: `${part.name ?? input.name ?? 'mobile platform'} lower bumper skirt`,
+      semanticRole: 'lower_bumper_skirt',
+      sourcePartKind: 'mobile_platform_chassis',
+      position: [center[0], center[1] - height * 0.35, center[2]],
+      length: length * 1.04,
+      width: width * 1.04,
+      thickness: skirtHeight,
+      cornerRadius: cornerRadius * 1.02,
+      cornerSegments: part.cornerSegments ?? 8,
+      material: skirtMat,
+    },
+    {
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'mobile platform'} rounded chassis body`,
+      semanticRole: part.semanticRole ?? 'vehicle_body',
+      sourcePartKind: 'mobile_platform_chassis',
+      position: center,
+      length,
+      width,
+      height,
+      cornerRadius,
+      cornerSegments: part.cornerSegments ?? 8,
+      material: bodyMat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${part.name ?? input.name ?? 'mobile platform'} top load deck`,
+      semanticRole: 'cargo_platform',
+      sourcePartKind: 'mobile_platform_chassis',
+      position: [center[0], center[1] + height * 0.52, center[2]],
+      length: length * 0.74,
+      width: width * 0.68,
+      thickness: deckThickness,
+      cornerRadius: Math.min(length, width) * 0.07,
+      cornerSegments: 5,
+      material: deckMat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${part.name ?? input.name ?? 'mobile platform'} left side status seam`,
+      semanticRole: 'status_light_strip',
+      sourcePartKind: 'mobile_platform_chassis',
+      position: [center[0], center[1] + height * 0.02, center[2] + width * 0.53],
+      length: length * 0.62,
+      width: Math.max(0.018, height * 0.08),
+      thickness: Math.max(0.006, width * 0.01),
+      cornerRadius: Math.max(0.01, height * 0.05),
+      cornerSegments: 3,
+      material: seamMat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${part.name ?? input.name ?? 'mobile platform'} right side status seam`,
+      semanticRole: 'status_light_strip',
+      sourcePartKind: 'mobile_platform_chassis',
+      position: [center[0], center[1] + height * 0.02, center[2] - width * 0.53],
+      length: length * 0.62,
+      width: Math.max(0.018, height * 0.08),
+      thickness: Math.max(0.006, width * 0.01),
+      cornerRadius: Math.max(0.01, height * 0.05),
+      cornerSegments: 3,
+      material: seamMat,
+    },
+  ]
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeLidarSensor(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const radius = clamp(part.radius, 0.045, 0.012, 0.18)
+  const height = clamp(part.height ?? part.length, radius * 0.8, radius * 0.25, radius * 2.5)
+  const center = add(origin, part.position ?? [0, 0.24, 0])
+  const bodyMat = partMaterial(
+    part,
+    material(part.darkColor ?? input.darkColor ?? '#0f172a', 0.42, 0.3),
+  )
+  const lensMat = material(part.accentColor ?? input.accentColor ?? '#38bdf8', 0.18, 0.02, 0.72)
+  const axis = partAxis(part.axis, 'x')
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'mobile platform'} lidar housing`,
+      semanticRole: part.semanticRole ?? 'navigation_sensor',
+      sourcePartKind: 'lidar_sensor',
+      position: center,
+      axis,
+      radius,
+      height,
+      radialSegments: 24,
+      material: bodyMat,
+    },
+    {
+      kind: 'sphere',
+      name: `${part.name ?? input.name ?? 'mobile platform'} lidar lens`,
+      semanticRole: 'sensor_lens',
+      sourcePartKind: 'lidar_sensor',
+      position: offsetAlongAxis(center, axis, height * 0.52),
+      radius: radius * 0.55,
+      scale: axis === 'x' ? [0.35, 0.68, 1] : axis === 'z' ? [1, 0.68, 0.35] : [0.8, 0.35, 0.8],
+      material: lensMat,
+    },
+  ]
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeEmergencyStopButton(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const radius = clamp(part.radius, 0.04, 0.012, 0.16)
+  const height = clamp(part.height ?? part.length, radius * 0.55, radius * 0.2, radius * 1.8)
+  const center = add(origin, part.position ?? [0.35, 0.38, 0.2])
+  const axis = partAxis(part.axis, 'y')
+  const baseMat = material(input.darkColor ?? '#111827', 0.55, 0.25)
+  const redMat = partMaterial(part, material(part.color ?? '#ef4444', 0.38, 0.02))
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'mobile platform'} emergency stop base`,
+      semanticRole: 'emergency_stop_base',
+      sourcePartKind: 'emergency_stop_button',
+      position: offsetAlongAxis(center, axis, -height * 0.35),
+      axis,
+      radius: radius * 1.12,
+      height: height * 0.38,
+      radialSegments: 24,
+      material: baseMat,
+    },
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'mobile platform'} emergency stop button`,
+      semanticRole: part.semanticRole ?? 'emergency_stop_button',
+      sourcePartKind: 'emergency_stop_button',
+      position: center,
+      axis,
+      radius,
+      height,
+      radialSegments: 28,
+      material: redMat,
+    },
+    {
+      kind: 'torus',
+      name: `${part.name ?? input.name ?? 'mobile platform'} emergency stop guard ring`,
+      semanticRole: 'emergency_stop_guard',
+      sourcePartKind: 'emergency_stop_button',
+      position: offsetAlongAxis(center, axis, height * 0.08),
+      axis,
+      majorRadius: radius * 1.1,
+      tubeRadius: radius * 0.08,
+      radialSegments: 8,
+      tubularSegments: 28,
+      material: baseMat,
+    },
+  ]
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeStatusLightStrip(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const objectLength = input.length ?? 1.4
+  const objectWidth = input.width ?? input.depth ?? 0.85
+  const length = clamp(part.length, objectLength * 0.5, 0.04, 4)
+  const stripHeight = clamp(part.height ?? part.width, 0.035, 0.008, 0.25)
+  const thickness = clamp(part.thickness ?? part.depth, 0.012, 0.002, 0.08)
+  const side = partSide(part.side)
+  const defaultZ =
+    side === 'left'
+      ? objectWidth * 0.52
+      : side === 'right'
+        ? -objectWidth * 0.52
+        : objectWidth * 0.52
+  const center = add(origin, part.position ?? [0, (input.height ?? 0.45) * 0.45, defaultZ])
+  const lightMat = partMaterial(
+    part,
+    material(part.color ?? part.accentColor ?? input.accentColor ?? '#38bdf8', 0.18, 0.02, 0.82),
+  )
+  return applyPartRotation(
+    [
+      {
+        kind: 'rounded-panel',
+        name: `${part.name ?? input.name ?? 'mobile platform'} status light strip`,
+        semanticRole: part.semanticRole ?? 'status_light_strip',
+        semanticGroup: part.semanticGroup ?? 'generic_parts',
+        sourcePartKind: 'status_light_strip',
+        position: center,
+        length,
+        width: stripHeight,
+        thickness,
+        cornerRadius: Math.min(length, stripHeight) * 0.3,
+        cornerSegments: 4,
+        material: lightMat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeOperatorPanel(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const height = clamp(part.height, 0.62, 0.18, 2)
+  const width = clamp(part.width ?? part.length, 0.32, 0.12, 1.2)
+  const depth = clamp(part.depth ?? part.thickness, 0.12, 0.03, 0.5)
+  const center = add(
+    origin,
+    part.position ?? [
+      (input.length ?? 1.6) * 0.42,
+      height * 0.55,
+      (input.width ?? input.depth ?? 0.8) * 0.52,
+    ],
+  )
+  const bodyMat = partMaterial(
+    part,
+    material(part.primaryColor ?? input.primaryColor ?? '#e5e7eb', 0.48, 0.08),
+  )
+  const screenMat = material(part.darkColor ?? '#0f172a', 0.24, 0.02)
+  const buttonMat = material(part.accentColor ?? input.accentColor ?? '#22c55e', 0.3, 0.02)
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'machine'} operator panel body`,
+      semanticRole: part.semanticRole ?? 'control_panel',
+      sourcePartKind: 'operator_panel',
+      position: center,
+      length: width,
+      width: depth,
+      height,
+      cornerRadius: Math.min(width, depth, height) * 0.08,
+      cornerSegments: 4,
+      material: bodyMat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${part.name ?? input.name ?? 'machine'} operator panel screen`,
+      semanticRole: 'display_screen',
+      sourcePartKind: 'operator_panel',
+      position: [center[0], center[1] + height * 0.16, center[2] + depth * 0.54],
+      length: width * 0.62,
+      width: height * 0.22,
+      thickness: 0.012,
+      cornerRadius: width * 0.04,
+      cornerSegments: 3,
+      material: screenMat,
+    },
+  ]
+  for (const x of [-0.18, 0, 0.18]) {
+    shapes.push({
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'machine'} operator panel button`,
+      semanticRole: 'control_button',
+      sourcePartKind: 'operator_panel',
+      position: [center[0] + x * width, center[1] - height * 0.16, center[2] + depth * 0.55],
+      axis: 'z',
+      radius: Math.max(0.012, width * 0.035),
+      height: 0.012,
+      radialSegments: 14,
+      material: buttonMat,
+    })
+  }
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeGuardFence(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const length = clamp(part.length, input.length ?? 1.8, 0.25, 8)
+  const height = clamp(part.height, 0.9, 0.2, 3)
+  const width = clamp(part.width ?? part.depth, 0.08, 0.02, 0.5)
+  const postRadius = clamp(part.radius ?? part.wireRadius, 0.018, 0.006, 0.08)
+  const count = clampInt(part.count, 4, 2, 12)
+  const center = add(
+    origin,
+    part.position ?? [0, height * 0.5, -(input.width ?? input.depth ?? 1) * 0.55],
+  )
+  const postMat = partMaterial(
+    part,
+    material(part.color ?? input.accentColor ?? '#facc15', 0.42, 0.16),
+  )
+  const railMat = material(part.darkColor ?? input.darkColor ?? '#111827', 0.5, 0.12)
+  const shapes: PrimitiveShapeInput[] = []
+  for (let i = 0; i < count; i += 1) {
+    const x = center[0] - length / 2 + (length * i) / Math.max(1, count - 1)
+    shapes.push({
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'machine'} guard fence post ${i + 1}`,
+      semanticRole: 'guard_fence_post',
+      sourcePartKind: 'guard_fence',
+      position: [x, center[1], center[2]],
+      axis: 'y',
+      radius: postRadius,
+      height,
+      radialSegments: 10,
+      material: postMat,
+    })
+  }
+  for (const y of [center[1] + height * 0.28, center[1] - height * 0.12]) {
+    shapes.push({
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'machine'} guard fence rail`,
+      semanticRole: part.semanticRole ?? 'safety_barrier',
+      sourcePartKind: 'guard_fence',
+      position: [center[0], y, center[2]],
+      length,
+      width,
+      height: Math.max(0.025, postRadius * 1.8),
+      material: railMat,
+    })
+  }
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composePalletTable(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const length = clamp(part.length, 1, 0.25, 4)
+  const width = clamp(part.width ?? part.depth, 0.7, 0.2, 3)
+  const height = clamp(part.height, 0.28, 0.08, 1.2)
+  const center = add(origin, part.position ?? [0, height * 0.5, 0])
+  const deckMat = partMaterial(
+    part,
+    material(part.primaryColor ?? input.primaryColor ?? '#475569', 0.55, 0.12),
+  )
+  const legMat = material(part.darkColor ?? input.darkColor ?? '#111827', 0.55, 0.2)
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'rounded-panel',
+      name: `${part.name ?? input.name ?? 'machine'} pallet table deck`,
+      semanticRole: part.semanticRole ?? 'pallet_table',
+      sourcePartKind: 'pallet_table',
+      position: [center[0], center[1] + height * 0.45, center[2]],
+      length,
+      width,
+      thickness: Math.max(0.045, height * 0.16),
+      cornerRadius: Math.min(length, width) * 0.04,
+      cornerSegments: 3,
+      material: deckMat,
+    },
+  ]
+  for (const x of [-1, 1]) {
+    for (const z of [-1, 1]) {
+      shapes.push({
+        kind: 'box',
+        name: `${part.name ?? input.name ?? 'machine'} pallet table leg`,
+        semanticRole: 'support_leg',
+        sourcePartKind: 'pallet_table',
+        position: [center[0] + x * length * 0.38, center[1], center[2] + z * width * 0.36],
+        length: Math.max(0.04, length * 0.04),
+        width: Math.max(0.04, width * 0.05),
+        height,
+        material: legMat,
+      })
+    }
+  }
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeBearingBlock(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const length = clamp(part.length, 0.42, 0.12, 1.6)
+  const width = clamp(part.width ?? part.depth, 0.22, 0.08, 1)
+  const height = clamp(part.height, 0.26, 0.08, 1.2)
+  const radius = clamp(part.radius ?? part.diameter, Math.min(width, height) * 0.24, 0.015, 0.4)
+  const center = add(origin, part.position ?? [0, height * 0.5, 0])
+  const bodyMat = partMaterial(
+    part,
+    material(part.metalColor ?? input.metalColor ?? '#64748b', 0.72, 0.22),
+  )
+  const darkMat = material(part.darkColor ?? input.darkColor ?? '#111827', 0.5, 0.18)
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'machine'} bearing block base`,
+      semanticRole: 'bearing_base',
+      sourcePartKind: 'bearing_block',
+      position: [center[0], center[1] - height * 0.34, center[2]],
+      length,
+      width,
+      height: height * 0.22,
+      cornerRadius: Math.min(length, width) * 0.06,
+      cornerSegments: 3,
+      material: bodyMat,
+    },
+    {
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'machine'} bearing block housing`,
+      semanticRole: part.semanticRole ?? 'bearing_block',
+      sourcePartKind: 'bearing_block',
+      position: [center[0], center[1], center[2]],
+      length: length * 0.55,
+      width: width * 0.86,
+      height: height * 0.72,
+      cornerRadius: Math.min(width, height) * 0.12,
+      cornerSegments: 5,
+      material: bodyMat,
+    },
+    {
+      kind: 'torus',
+      name: `${part.name ?? input.name ?? 'machine'} bearing ring`,
+      semanticRole: 'bearing_ring',
+      sourcePartKind: 'bearing_block',
+      position: [center[0], center[1] + height * 0.04, center[2] + width * 0.45],
+      axis: 'z',
+      majorRadius: radius,
+      tubeRadius: Math.max(0.008, radius * 0.18),
+      radialSegments: 10,
+      tubularSegments: 32,
+      material: darkMat,
+    },
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'machine'} bearing bore`,
+      semanticRole: 'bearing_bore',
+      sourcePartKind: 'bearing_block',
+      position: [center[0], center[1] + height * 0.04, center[2] + width * 0.46],
+      axis: 'z',
+      radius: radius * 0.58,
+      height: Math.max(0.018, width * 0.08),
+      radialSegments: 24,
+      material: darkMat,
+    },
+  ]
+  for (const x of [-1, 1]) {
+    shapes.push({
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'machine'} bearing mounting bolt`,
+      semanticRole: 'mounting_bolt',
+      sourcePartKind: 'bearing_block',
+      position: [
+        center[0] + x * length * 0.34,
+        center[1] - height * 0.21,
+        center[2] + width * 0.18,
+      ],
+      axis: 'y',
+      radius: Math.max(0.008, radius * 0.16),
+      height: height * 0.05,
+      radialSegments: 12,
+      material: darkMat,
+    })
+  }
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeSupportRollerPair(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const length = clamp(part.length, 0.9, 0.28, 3)
+  const width = clamp(part.width ?? part.depth, 1.18, 0.28, 4)
+  const height = clamp(part.height, 0.34, 0.12, 1.4)
+  const rollerRadius = clamp(part.radius ?? part.wheelRadius, height * 0.28, 0.035, 0.5)
+  const rollerLength = clamp(part.rollerLength ?? part.thickness, width * 0.24, 0.08, width * 0.48)
+  const center = add(origin, part.position ?? [0, height * 0.5, 0])
+  const bodyMat = partMaterial(
+    part,
+    material(part.metalColor ?? input.metalColor ?? '#64748b', 0.68, 0.28),
+  )
+  const darkMat = material(part.darkColor ?? input.darkColor ?? '#111827', 0.54, 0.28)
+  const rollerMat = material(part.rollerColor ?? part.metalColor ?? '#374151', 0.38, 0.62)
+  const role = part.semanticRole ?? 'support_roller'
+  const rollerY = center[1] + height * 0.16
+  const rollerZ = Math.max(width * 0.22, rollerRadius * 1.7)
+  const blockLength = Math.max(length * 0.18, rollerRadius * 1.2)
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'kiln'} support roller foundation`,
+      semanticRole: 'support_roller_base',
+      sourcePartKind: 'support_roller_pair',
+      position: [center[0], center[1] - height * 0.32, center[2]],
+      length,
+      width,
+      height: height * 0.26,
+      cornerRadius: Math.min(length, width) * 0.035,
+      cornerSegments: 3,
+      material: bodyMat,
+    },
+  ]
+  for (const side of [-1, 1]) {
+    const z = center[2] + side * rollerZ
+    shapes.push(
+      {
+        kind: 'cylinder',
+        name: `${part.name ?? input.name ?? 'kiln'} ${side < 0 ? 'left' : 'right'} support roller`,
+        semanticRole: role,
+        sourcePartKind: 'support_roller_pair',
+        position: [center[0], rollerY, z],
+        axis: 'x',
+        radius: rollerRadius,
+        height: rollerLength,
+        radialSegments: Math.max(24, Math.round(ringSegments(input.detail) * 0.5)),
+        material: rollerMat,
+      },
+      {
+        kind: 'box',
+        name: `${part.name ?? input.name ?? 'kiln'} ${side < 0 ? 'left' : 'right'} roller pedestal`,
+        semanticRole: 'support_roller_pedestal',
+        sourcePartKind: 'support_roller_pair',
+        position: [center[0], center[1] - height * 0.05, z],
+        length: blockLength,
+        width: rollerLength * 1.18,
+        height: height * 0.28,
+        cornerRadius: Math.min(blockLength, rollerLength) * 0.05,
+        cornerSegments: 3,
+        material: bodyMat,
+      },
+    )
+  }
+  shapes.push({
+    kind: 'cylinder',
+    name: `${part.name ?? input.name ?? 'kiln'} thrust roller`,
+    semanticRole: 'thrust_roller',
+    sourcePartKind: 'support_roller_pair',
+    position: [center[0] + length * 0.32, rollerY + rollerRadius * 0.2, center[2]],
+    axis: 'z',
+    radius: rollerRadius * 0.48,
+    height: Math.max(0.04, width * 0.08),
+    radialSegments: 20,
+    material: darkMat,
+  })
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeStructuralTowerFrame(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const length = clamp(part.length, 2.2, 0.8, 12)
+  const width = clamp(part.width ?? part.depth, 1.6, 0.6, 8)
+  const height = clamp(part.height, 6, 1.4, 18)
+  const levels = Math.max(2, Math.min(9, Math.round(part.levelCount ?? part.count ?? 5)))
+  const bayCount = Math.max(1, Math.min(5, Math.round(part.bayCount ?? 2)))
+  const columnSize = clamp(part.thickness, Math.min(length, width) * 0.035, 0.025, 0.18)
+  const deckThickness = Math.max(0.018, columnSize * 0.45)
+  const includeDiagonalBraces = part.includeDiagonalBraces !== false
+  const includeExternalStairs = part.externalStairs !== false
+  const stairFlights = Math.max(2, Math.min(levels, Math.round(part.stairFlights ?? levels)))
+  const stairSide = part.stairSide === 'left' ? -1 : 1
+  const stairPlacement = part.stairPlacement === 'inside' ? 'inside' : 'outside'
+  const center = add(origin, part.position ?? [0, height / 2, 0])
+  const bottomY = center[1] - height / 2
+  const frameMat = partMaterial(
+    part,
+    material(part.darkColor ?? input.darkColor ?? '#111827', 0.58, 0.42),
+  )
+  const deckMat = material(part.metalColor ?? input.metalColor ?? '#475569', 0.72, 0.3, 0.28)
+  const railMat = material(part.accentColor ?? input.accentColor ?? '#1f2937', 0.54, 0.34)
+  const shapes: PrimitiveShapeInput[] = []
+  const cornerXs = [-length / 2, length / 2]
+  const cornerZs = [-width / 2, width / 2]
+
+  for (const x of cornerXs) {
+    for (const z of cornerZs) {
+      shapes.push({
+        kind: 'box',
+        name: `${part.name ?? input.name ?? 'tower'} corner column`,
+        semanticRole: 'tower_column',
+        sourcePartKind: 'structural_tower_frame',
+        position: [center[0] + x, center[1], center[2] + z],
+        length: columnSize,
+        width: columnSize,
+        height,
+        material: frameMat,
+      })
+    }
+  }
+
+  for (let bay = 1; bay < bayCount; bay += 1) {
+    const x = -length / 2 + (length * bay) / bayCount
+    for (const z of cornerZs) {
+      shapes.push({
+        kind: 'box',
+        name: `${part.name ?? input.name ?? 'tower'} intermediate column`,
+        semanticRole: 'tower_column',
+        sourcePartKind: 'structural_tower_frame',
+        position: [center[0] + x, center[1], center[2] + z],
+        length: columnSize * 0.85,
+        width: columnSize * 0.85,
+        height,
+        material: frameMat,
+      })
+    }
+  }
+
+  for (let level = 0; level <= levels; level += 1) {
+    const y = bottomY + (height * level) / levels
+    for (const z of cornerZs) {
+      shapes.push({
+        kind: 'box',
+        name: `${part.name ?? input.name ?? 'tower'} level ${level} longitudinal beam`,
+        semanticRole: level === 0 ? (part.semanticRole ?? 'preheater_tower_body') : 'tower_beam',
+        sourcePartKind: 'structural_tower_frame',
+        position: [center[0], y, center[2] + z],
+        length,
+        width: columnSize,
+        height: columnSize,
+        material: frameMat,
+      })
+    }
+    for (const x of cornerXs) {
+      shapes.push({
+        kind: 'box',
+        name: `${part.name ?? input.name ?? 'tower'} level ${level} transverse beam`,
+        semanticRole: 'tower_beam',
+        sourcePartKind: 'structural_tower_frame',
+        position: [center[0] + x, y, center[2]],
+        length: columnSize,
+        width,
+        height: columnSize,
+        material: frameMat,
+      })
+    }
+    if (level > 0) {
+      shapes.push({
+        kind: 'box',
+        name: `${part.name ?? input.name ?? 'tower'} level ${level} grated platform`,
+        semanticRole: 'multi_level_platform',
+        sourcePartKind: 'structural_tower_frame',
+        position: [center[0], y + deckThickness * 0.55, center[2]],
+        length: length * 0.95,
+        width: width * 0.95,
+        height: deckThickness,
+        material: deckMat,
+      })
+      shapes.push(
+        {
+          kind: 'box',
+          name: `${part.name ?? input.name ?? 'tower'} level ${level} front guard rail`,
+          semanticRole: 'platform_guard_rail',
+          sourcePartKind: 'structural_tower_frame',
+          position: [center[0], y + columnSize * 2.2, center[2] + width * 0.5],
+          length: length,
+          width: columnSize * 0.55,
+          height: columnSize * 0.55,
+          material: railMat,
+        },
+        {
+          kind: 'box',
+          name: `${part.name ?? input.name ?? 'tower'} level ${level} rear guard rail`,
+          semanticRole: 'platform_guard_rail',
+          sourcePartKind: 'structural_tower_frame',
+          position: [center[0], y + columnSize * 2.2, center[2] - width * 0.5],
+          length,
+          width: columnSize * 0.55,
+          height: columnSize * 0.55,
+          material: railMat,
+        },
+      )
+    }
+  }
+
+  if (includeDiagonalBraces) {
+    const bayHeight = height / levels
+    const braceLength = Math.hypot(length, bayHeight)
+    const braceAngle = Math.atan2(bayHeight, length)
+    for (let level = 0; level < levels; level += 1) {
+      const y = bottomY + bayHeight * (level + 0.5)
+      for (const z of cornerZs) {
+        shapes.push(
+          {
+            kind: 'box',
+            name: `${part.name ?? input.name ?? 'tower'} level ${level + 1} diagonal brace`,
+            semanticRole: 'tower_diagonal_brace',
+            sourcePartKind: 'structural_tower_frame',
+            position: [center[0], y, center[2] + z],
+            length: braceLength,
+            width: columnSize * 0.42,
+            height: columnSize * 0.42,
+            rotation: [0, 0, braceAngle],
+            material: railMat,
+          },
+          {
+            kind: 'box',
+            name: `${part.name ?? input.name ?? 'tower'} level ${level + 1} cross brace`,
+            semanticRole: 'tower_diagonal_brace',
+            sourcePartKind: 'structural_tower_frame',
+            position: [center[0], y, center[2] + z],
+            length: braceLength,
+            width: columnSize * 0.38,
+            height: columnSize * 0.38,
+            rotation: [0, 0, -braceAngle],
+            material: railMat,
+          },
+        )
+      }
+    }
+  }
+
+  if (includeExternalStairs) {
+    const stairDepth = Math.max(columnSize * 5, width * (stairPlacement === 'inside' ? 0.2 : 0.24))
+    const stairWidth = Math.max(
+      columnSize * 2.4,
+      length * (stairPlacement === 'inside' ? 0.07 : 0.08),
+    )
+    const sideX =
+      stairPlacement === 'inside'
+        ? center[0] + stairSide * (length * 0.5 - stairWidth * 0.8 - columnSize * 2.2)
+        : center[0] + stairSide * (length * 0.5 + columnSize * 3.2)
+    const stairCenterZ =
+      stairPlacement === 'inside'
+        ? center[2] + width * 0.18
+        : center[2] + width * 0.5 + columnSize * 2.4
+    const flightHeight = height / stairFlights
+    const flightRun = Math.max(stairDepth * 0.72, columnSize * 5)
+    const flightLength = Math.hypot(flightRun, flightHeight * 0.72)
+    const flightAngle = Math.atan2(flightHeight * 0.72, flightRun)
+
+    for (let flight = 0; flight < stairFlights; flight += 1) {
+      const y = bottomY + flightHeight * (flight + 0.5)
+      const direction = flight % 2 === 0 ? 1 : -1
+      shapes.push(
+        {
+          kind: 'box',
+          name: `${part.name ?? input.name ?? 'tower'} ${stairPlacement} stair flight ${flight + 1}`,
+          semanticRole:
+            stairPlacement === 'inside' ? 'internal_stair_flight' : 'external_stair_flight',
+          sourcePartKind: 'structural_tower_frame',
+          position: [sideX, y, stairCenterZ + direction * stairDepth * 0.18],
+          length: stairWidth,
+          width: flightLength,
+          height: columnSize * 0.48,
+          rotation: [direction * flightAngle, 0, 0],
+          material: deckMat,
+        },
+        {
+          kind: 'box',
+          name: `${part.name ?? input.name ?? 'tower'} ${stairPlacement} stair landing ${flight + 1}`,
+          semanticRole:
+            stairPlacement === 'inside' ? 'internal_stair_landing' : 'external_stair_landing',
+          sourcePartKind: 'structural_tower_frame',
+          position: [
+            sideX,
+            bottomY + flightHeight * (flight + 1),
+            stairCenterZ - direction * stairDepth * 0.34,
+          ],
+          length: stairWidth * 1.35,
+          width: stairDepth * 0.45,
+          height: deckThickness,
+          material: deckMat,
+        },
+        {
+          kind: 'box',
+          name: `${part.name ?? input.name ?? 'tower'} ${stairPlacement} stair guard rail ${flight + 1}`,
+          semanticRole:
+            stairPlacement === 'inside' ? 'internal_stair_guard_rail' : 'external_stair_guard_rail',
+          sourcePartKind: 'structural_tower_frame',
+          position: [
+            sideX + stairSide * stairWidth * 0.58,
+            y + columnSize * 1.8,
+            stairCenterZ + direction * stairDepth * 0.18,
+          ],
+          length: columnSize * 0.52,
+          width: flightLength,
+          height: columnSize * 0.55,
+          rotation: [direction * flightAngle, 0, 0],
+          material: railMat,
+        },
+      )
+    }
+  } else {
+    shapes.push({
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'tower'} vertical access ladder`,
+      semanticRole: 'access_ladder',
+      sourcePartKind: 'structural_tower_frame',
+      position: [center[0] - length * 0.56, center[1], center[2] + width * 0.56],
+      length: columnSize * 1.1,
+      width: columnSize * 2.4,
+      height: height * 0.86,
+      material: railMat,
+    })
+  }
+
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeCycloneSeparatorUnit(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const height = clamp(part.height, 1.2, 0.45, 4)
+  const radius = clamp(part.radius ?? part.diameter, 0.26, 0.08, 1.4)
+  const coneHeight = clamp(part.depth, height * 0.28, height * 0.16, height * 0.42)
+  const bodyHeight = clamp(part.bodyHeight, height * 0.48, height * 0.28, height * 0.68)
+  const outletHeight = clamp(part.length, height * 0.2, height * 0.08, height * 0.34)
+  const ductRadius = clamp(part.thickness, radius * 0.26, 0.025, radius * 0.5)
+  const center = add(origin, part.position ?? [0, height / 2, 0])
+  const bottomY = center[1] - height / 2
+  const coneCenterY = bottomY + coneHeight / 2
+  const bodyCenterY = bottomY + coneHeight + bodyHeight / 2
+  const topY = bottomY + coneHeight + bodyHeight
+  const sideSign = part.side === 'left' ? -1 : 1
+  const shellMat = partMaterial(
+    part,
+    material(part.primaryColor ?? input.primaryColor ?? '#9ca3af', 0.38, 0.44),
+  )
+  const darkMat = material(part.darkColor ?? input.darkColor ?? '#1f2937', 0.56, 0.28)
+  const ductMat = material(part.metalColor ?? input.metalColor ?? '#64748b', 0.48, 0.42)
+  const segments = Math.max(24, Math.round(ringSegments(input.detail) * 0.75))
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'cyclone'} cylindrical cyclone body`,
+      semanticRole: part.semanticRole ?? 'preheater_cyclone',
+      sourcePartKind: 'cyclone_separator_unit',
+      position: [center[0], bodyCenterY, center[2]],
+      axis: 'y',
+      radius,
+      height: bodyHeight,
+      radialSegments: segments,
+      material: shellMat,
+    },
+    {
+      kind: 'frustum',
+      name: `${part.name ?? input.name ?? 'cyclone'} conical lower hopper`,
+      semanticRole: 'cyclone_cone',
+      sourcePartKind: 'cyclone_separator_unit',
+      position: [center[0], coneCenterY, center[2]],
+      axis: 'y',
+      radiusTop: radius,
+      radiusBottom: radius * 0.22,
+      height: coneHeight,
+      radialSegments: segments,
+      material: shellMat,
+    },
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'cyclone'} top outlet riser`,
+      semanticRole: 'cyclone_top_outlet',
+      sourcePartKind: 'cyclone_separator_unit',
+      position: [center[0], topY + outletHeight / 2, center[2]],
+      axis: 'y',
+      radius: radius * 0.46,
+      height: outletHeight,
+      radialSegments: Math.max(20, Math.round(segments * 0.66)),
+      material: ductMat,
+    },
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'cyclone'} tangential gas inlet`,
+      semanticRole: 'preheater_gas_duct',
+      sourcePartKind: 'cyclone_separator_unit',
+      position: [center[0] + sideSign * radius * 1.12, bodyCenterY + bodyHeight * 0.22, center[2]],
+      axis: 'x',
+      radius: ductRadius,
+      height: radius * 1.2,
+      radialSegments: 16,
+      material: ductMat,
+    },
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'cyclone'} meal drop pipe`,
+      semanticRole: 'meal_drop_pipe',
+      sourcePartKind: 'cyclone_separator_unit',
+      position: [center[0], bottomY - height * 0.18, center[2]],
+      axis: 'y',
+      radius: radius * 0.14,
+      height: height * 0.36,
+      radialSegments: 14,
+      material: darkMat,
+    },
+    {
+      kind: 'torus',
+      name: `${part.name ?? input.name ?? 'cyclone'} body flange band`,
+      semanticRole: 'cyclone_connection_band',
+      sourcePartKind: 'cyclone_separator_unit',
+      position: [center[0], topY - bodyHeight * 0.08, center[2]],
+      axis: 'y',
+      majorRadius: radius * 1.01,
+      tubeRadius: Math.max(0.006, radius * 0.035),
+      radialSegments: 8,
+      tubularSegments: segments,
+      material: darkMat,
+    },
+  ]
+
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeCouplingGuard(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const length = clamp(part.length, 0.58, 0.16, 2.4)
+  const radius = clamp(part.radius ?? part.diameter, 0.16, 0.04, 0.7)
+  const thickness = clamp(part.thickness, 0.028, 0.006, 0.16)
+  const center = add(origin, part.position ?? [0, radius, 0])
+  const guardMat = partMaterial(
+    part,
+    material(part.color ?? input.accentColor ?? '#facc15', 0.42, 0.16),
+  )
+  const darkMat = material(part.darkColor ?? input.darkColor ?? '#111827', 0.5, 0.16)
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'half-cylinder',
+      name: `${part.name ?? input.name ?? 'machine'} coupling guard cover`,
+      semanticRole: part.semanticRole ?? 'coupling_guard',
+      sourcePartKind: 'coupling_guard',
+      position: center,
+      axis: 'x',
+      radius,
+      height: length,
+      thickness,
+      radialSegments: 24,
+      material: guardMat,
+    },
+  ]
+  for (const x of [-1, 1]) {
+    shapes.push({
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'machine'} coupling guard end flange`,
+      semanticRole: 'guard_end_flange',
+      sourcePartKind: 'coupling_guard',
+      position: [center[0] + x * length * 0.5, center[1] - radius * 0.12, center[2]],
+      length: thickness,
+      width: radius * 2.05,
+      height: radius * 0.18,
+      material: darkMat,
+    })
+  }
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeMotorGearboxUnit(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const length = clamp(part.length, 1.05, 0.3, 4)
+  const radius = clamp(part.radius ?? part.diameter, 0.18, 0.05, 0.8)
+  const height = clamp(part.height, radius * 2.1, 0.12, 1.8)
+  const center = add(origin, part.position ?? [0, height * 0.52, 0])
+  const motorMat = partMaterial(
+    part,
+    material(part.primaryColor ?? input.primaryColor ?? '#64748b', 0.68, 0.22),
+  )
+  const gearboxMat = material(part.secondaryColor ?? input.secondaryColor ?? '#475569', 0.72, 0.2)
+  const darkMat = material(part.darkColor ?? input.darkColor ?? '#111827', 0.5, 0.18)
+  const motorLength = length * 0.55
+  const gearboxLength = length * 0.26
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'machine'} drive motor`,
+      semanticRole: 'drive_motor',
+      sourcePartKind: 'motor_gearbox_unit',
+      position: [center[0] - length * 0.16, center[1], center[2]],
+      axis: 'x',
+      radius,
+      height: motorLength,
+      radialSegments: 32,
+      material: motorMat,
+    },
+    {
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'machine'} gearbox housing`,
+      semanticRole: part.semanticRole ?? 'gearbox_body',
+      sourcePartKind: 'motor_gearbox_unit',
+      position: [center[0] + length * 0.32, center[1], center[2]],
+      length: gearboxLength,
+      width: radius * 1.85,
+      height: height,
+      cornerRadius: radius * 0.12,
+      cornerSegments: 4,
+      material: gearboxMat,
+    },
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'machine'} output shaft`,
+      semanticRole: 'output_shaft',
+      sourcePartKind: 'motor_gearbox_unit',
+      position: [center[0] + length * 0.52, center[1], center[2]],
+      axis: 'x',
+      radius: radius * 0.18,
+      height: length * 0.18,
+      radialSegments: 20,
+      material: darkMat,
+    },
+  ]
+  for (let i = 0; i < 6; i += 1) {
+    shapes.push({
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'machine'} motor cooling rib`,
+      semanticRole: 'motor_cooling_rib',
+      sourcePartKind: 'motor_gearbox_unit',
+      position: [
+        center[0] - length * 0.16 - motorLength * 0.32 + i * motorLength * 0.13,
+        center[1] + radius,
+        center[2],
+      ],
+      length: motorLength * 0.05,
+      width: radius * 1.55,
+      height: Math.max(0.015, radius * 0.08),
+      material: darkMat,
+    })
+  }
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composePipeManifold(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const length = clamp(part.length, 1.2, 0.25, 6)
+  const radius = clamp(part.radius ?? part.diameter, 0.065, 0.012, 0.4)
+  const count = clampInt(part.count ?? part.portCount, 4, 2, 10)
+  const center = add(origin, part.position ?? [0, radius * 2.2, 0])
+  const pipeMat = partMaterial(
+    part,
+    material(part.metalColor ?? input.metalColor ?? '#94a3b8', 0.8, 0.22),
+  )
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'hollow-cylinder',
+      name: `${part.name ?? input.name ?? 'machine'} manifold header`,
+      semanticRole: part.semanticRole ?? 'pipe_manifold',
+      sourcePartKind: 'pipe_manifold',
+      position: center,
+      axis: 'x',
+      radius,
+      height: length,
+      wallThickness: Math.max(0.004, radius * 0.16),
+      radialSegments: 28,
+      material: pipeMat,
+    },
+  ]
+  for (let i = 0; i < count; i += 1) {
+    const x = center[0] - length * 0.38 + (length * 0.76 * i) / Math.max(1, count - 1)
+    shapes.push({
+      kind: 'hollow-cylinder',
+      name: `${part.name ?? input.name ?? 'machine'} manifold branch ${i + 1}`,
+      semanticRole: 'manifold_branch',
+      sourcePartKind: 'pipe_manifold',
+      position: [x, center[1] + radius * 1.9, center[2]],
+      axis: 'y',
+      radius: radius * 0.62,
+      height: radius * 3.2,
+      wallThickness: Math.max(0.003, radius * 0.12),
+      radialSegments: 20,
+      material: pipeMat,
+    })
+  }
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeHopperBody(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const length = clamp(part.length, 0.9, 0.25, 4)
+  const width = clamp(part.width ?? part.depth, 0.7, 0.2, 3)
+  const height = clamp(part.height, 0.8, 0.25, 3.5)
+  const center = add(origin, part.position ?? [0, height * 0.62, 0])
+  const topLengthScale = Array.isArray(part.topScale)
+    ? clamp(part.topScale[0], 1.65, 0.2, 3)
+    : clamp(typeof part.topScale === 'number' ? part.topScale : part.topLengthScale, 1.65, 0.2, 3)
+  const topWidthScale = Array.isArray(part.topScale)
+    ? clamp(part.topScale[1], 1.45, 0.2, 3)
+    : clamp(typeof part.topScale === 'number' ? part.topScale : part.topWidthScale, 1.45, 0.2, 3)
+  const bodyMat = partMaterial(
+    part,
+    material(part.primaryColor ?? input.primaryColor ?? '#94a3b8', 0.55, 0.14),
+  )
+  const darkMat = material(part.darkColor ?? input.darkColor ?? '#374151', 0.5, 0.16)
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'trapezoid-prism',
+      name: `${part.name ?? input.name ?? 'machine'} tapered hopper body`,
+      semanticRole: part.semanticRole ?? 'hopper_body',
+      sourcePartKind: 'hopper_body',
+      position: center,
+      length,
+      width,
+      height,
+      topScale: [topLengthScale, topWidthScale],
+      topLengthScale,
+      topWidthScale,
+      material: bodyMat,
+    },
+    {
+      kind: 'frustum',
+      name: `${part.name ?? input.name ?? 'machine'} hopper outlet throat`,
+      semanticRole: 'hopper_outlet',
+      sourcePartKind: 'hopper_body',
+      position: [center[0], center[1] - height * 0.58, center[2]],
+      axis: 'y',
+      radiusTop: Math.min(length, width) * 0.22,
+      radiusBottom: Math.min(length, width) * 0.1,
+      height: height * 0.25,
+      radialSegments: 4,
+      material: darkMat,
+    },
+  ]
+  for (const x of [-1, 1]) {
+    for (const z of [-1, 1]) {
+      shapes.push({
+        kind: 'box',
+        name: `${part.name ?? input.name ?? 'machine'} hopper support leg`,
+        semanticRole: 'hopper_support_leg',
+        sourcePartKind: 'hopper_body',
+        position: [center[0] + x * length * 0.38, height * 0.28, center[2] + z * width * 0.36],
+        length: Math.max(0.035, length * 0.035),
+        width: Math.max(0.035, width * 0.04),
+        height: height * 0.56,
+        material: darkMat,
+      })
+    }
+  }
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeConicalHopper(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const radiusTop = clamp(part.radiusTop ?? part.radius ?? part.width, 0.42, 0.08, 3)
+  const radiusBottom = clamp(
+    part.radiusBottom ?? part.outletRadius,
+    radiusTop * 0.18,
+    0.02,
+    radiusTop,
+  )
+  const height = clamp(part.height, 0.82, 0.18, 5)
+  const center = add(origin, part.position ?? [0, height * 0.5, 0])
+  const mat = partMaterial(
+    part,
+    material(part.primaryColor ?? input.primaryColor ?? '#94a3b8', 0.52, 0.16),
+  )
+  const darkMat = material(part.darkColor ?? input.darkColor ?? '#374151', 0.5, 0.16)
+  const role = genericPartRole(part, 'conical_hopper')
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'frustum',
+      name: `${part.name ?? input.name ?? 'machine'} conical hopper`,
+      semanticRole: role,
+      sourcePartKind: 'conical_hopper',
+      position: center,
+      axis: 'y',
+      radiusTop,
+      radiusBottom,
+      height,
+      radialSegments: clampInt(part.radialSegments, 32, 4, 64),
+      material: mat,
+    },
+    {
+      kind: 'hollow-cylinder',
+      name: `${part.name ?? input.name ?? 'machine'} hopper outlet collar`,
+      semanticRole: 'hopper_outlet_collar',
+      sourcePartKind: 'conical_hopper',
+      position: [center[0], center[1] - height * 0.52, center[2]],
+      axis: 'y',
+      radius: radiusBottom * 1.08,
+      height: Math.max(0.04, height * 0.08),
+      wallThickness: Math.max(0.004, radiusBottom * 0.12),
+      radialSegments: 24,
+      material: darkMat,
+    },
+  ]
+  if (part.includeSupportLegs !== false) {
+    for (const angle of [Math.PI / 4, (Math.PI * 3) / 4, (Math.PI * 5) / 4, (Math.PI * 7) / 4]) {
+      shapes.push({
+        kind: 'cylinder',
+        name: `${part.name ?? input.name ?? 'machine'} hopper support leg`,
+        semanticRole: 'support_leg',
+        sourcePartKind: 'conical_hopper',
+        position: [
+          center[0] + Math.cos(angle) * radiusTop * 0.72,
+          height * 0.25,
+          center[2] + Math.sin(angle) * radiusTop * 0.72,
+        ],
+        axis: 'y',
+        radius: Math.max(0.014, radiusTop * 0.035),
+        height: height * 0.5,
+        radialSegments: 8,
+        material: darkMat,
+      })
+    }
+  }
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeServicePlatform(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const length = clamp(part.length, 1.2, 0.3, 6)
+  const width = clamp(part.width ?? part.depth, 0.65, 0.2, 3)
+  const height = clamp(part.height, 0.9, 0.2, 3.5)
+  const railHeight = clamp(part.overallHeight, height * 0.42, 0.18, 1.4)
+  const center = add(origin, part.position ?? [0, height, 0])
+  const deckMat = partMaterial(
+    part,
+    material(part.metalColor ?? input.metalColor ?? '#64748b', 0.65, 0.18),
+  )
+  const railMat = material(part.color ?? input.accentColor ?? '#facc15', 0.42, 0.12)
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'rounded-panel',
+      name: `${part.name ?? input.name ?? 'machine'} service platform deck`,
+      semanticRole: part.semanticRole ?? 'service_platform',
+      sourcePartKind: 'service_platform',
+      position: center,
+      length,
+      width,
+      thickness: Math.max(0.04, height * 0.06),
+      cornerRadius: Math.min(length, width) * 0.025,
+      cornerSegments: 2,
+      material: deckMat,
+    },
+  ]
+  for (const x of [-1, 1]) {
+    for (const z of [-1, 1]) {
+      shapes.push({
+        kind: 'cylinder',
+        name: `${part.name ?? input.name ?? 'machine'} platform post`,
+        semanticRole: 'platform_post',
+        sourcePartKind: 'service_platform',
+        position: [
+          center[0] + x * length * 0.46,
+          center[1] + railHeight * 0.5,
+          center[2] + z * width * 0.44,
+        ],
+        axis: 'y',
+        radius: 0.018,
+        height: railHeight,
+        radialSegments: 10,
+        material: railMat,
+      })
+    }
+  }
+  for (const z of [-1, 1]) {
+    shapes.push({
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'machine'} platform guard rail`,
+      semanticRole: 'guard_rail',
+      sourcePartKind: 'service_platform',
+      position: [center[0], center[1] + railHeight * 0.85, center[2] + z * width * 0.44],
+      length,
+      width: 0.035,
+      height: 0.035,
+      material: railMat,
+    })
+  }
+  shapes.push({
+    kind: 'box',
+    name: `${part.name ?? input.name ?? 'machine'} access ladder`,
+    semanticRole: 'access_ladder',
+    sourcePartKind: 'service_platform',
+    position: [center[0] - length * 0.48, center[1] - height * 0.35, center[2]],
+    length: 0.04,
+    width: width * 0.35,
+    height,
+    material: railMat,
+  })
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composePlatformWithLadder(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const shapes = composeServicePlatform(input, part, origin)
+  const center = add(origin, part.position ?? [0, clamp(part.height, 0.9, 0.2, 3.5), 0])
+  const length = clamp(part.length, 1.2, 0.3, 6)
+  const width = clamp(part.width ?? part.depth, 0.65, 0.2, 3)
+  const height = clamp(part.height, 0.9, 0.2, 3.5)
+  const railMat = material(part.color ?? input.accentColor ?? '#facc15', 0.42, 0.12)
+  const rungCount = clampInt(
+    part.rungCount ?? part.count,
+    detailDefaultInt(input, part, { low: 4, medium: 6, high: 10 }),
+    3,
+    16,
+  )
+  const ladderX = center[0] - length * 0.52
+  const ladderZ = center[2] - width * 0.18
+  for (const zOffset of [-0.08, 0.08]) {
+    shapes.push({
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'machine'} ladder side rail`,
+      semanticRole: 'ladder_side_rail',
+      sourcePartKind: 'platform_with_ladder',
+      position: [ladderX, center[1] - height * 0.45, ladderZ + zOffset],
+      axis: 'y',
+      radius: 0.014,
+      height,
+      radialSegments: 8,
+      material: railMat,
+    })
+  }
+  for (let index = 0; index < rungCount; index += 1) {
+    shapes.push({
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'machine'} ladder rung ${index + 1}`,
+      semanticRole: 'ladder_rung',
+      sourcePartKind: 'platform_with_ladder',
+      position: [
+        ladderX,
+        center[1] - height * 0.88 + (height * 0.78 * index) / Math.max(1, rungCount - 1),
+        ladderZ,
+      ],
+      axis: 'z',
+      radius: 0.012,
+      height: 0.22,
+      radialSegments: 8,
+      material: railMat,
+    })
+  }
+  return shapes.map((shape) =>
+    shape.sourcePartKind === 'service_platform'
+      ? { ...shape, sourcePartKind: 'platform_with_ladder' }
+      : shape,
+  )
+}
+
 function kioskTotalDimensions(input: PartComposeInput) {
   const length = clamp(input.length, 1.8, 0.4, 8)
   const width = clamp(input.width ?? input.depth, 1.2, 0.3, 5)
@@ -6367,19 +8808,21 @@ function composeHeatExchanger(
       radialSegments: ringSegments(input.detail),
       material: mat,
     },
-    ...[-0.36, -0.12, 0.12, 0.36].map((offset): PrimitiveShapeInput => ({
-      kind: 'cylinder',
-      name: `${part.name ?? input.name ?? 'object'} heat exchanger tube bundle`,
-      position:
-        axis === 'x'
-          ? [center[0], center[1] + radius * offset, center[2] + radius * 0.18]
-          : [center[0] + radius * offset, center[1], center[2] + radius * 0.18],
-      axis,
-      radius: radius * 0.035,
-      height: length * 0.86,
-      radialSegments: 10,
-      material: material(input.metalColor ?? '#cbd5e1', 0.3, 0.75),
-    })),
+    ...[-0.36, -0.12, 0.12, 0.36].map(
+      (offset): PrimitiveShapeInput => ({
+        kind: 'cylinder',
+        name: `${part.name ?? input.name ?? 'object'} heat exchanger tube bundle`,
+        position:
+          axis === 'x'
+            ? [center[0], center[1] + radius * offset, center[2] + radius * 0.18]
+            : [center[0] + radius * offset, center[1], center[2] + radius * 0.18],
+        axis,
+        radius: radius * 0.035,
+        height: length * 0.86,
+        radialSegments: 10,
+        material: material(input.metalColor ?? '#cbd5e1', 0.3, 0.75),
+      }),
+    ),
     ...composePipePort(
       input,
       {
@@ -6420,32 +8863,86 @@ function composeAgitatorTank(
   const center = add(origin, part.position ?? [0, 0.58, 0])
   const radius = clamp(part.radius, 0.24, 0.06, 1.5)
   const height = clamp(part.height ?? part.length, 0.7, 0.2, 3)
+  const wallThickness = clamp(
+    part.thickness ?? part.shellThickness,
+    radius * 0.075,
+    radius * 0.02,
+    radius * 0.28,
+  )
   const mat = partMaterial(part, material(input.primaryColor ?? '#94a3b8', 0.42, 0.46))
   const metal = material(input.metalColor ?? '#cbd5e1', 0.28, 0.78)
+  const dark = material(part.motorColor ?? input.darkColor ?? '#1f2937', 0.56, 0.24)
+  const legStyle = String(part.legStyle ?? '').toLowerCase()
+  const bottomStyle = String(part.bottomStyle ?? '').toLowerCase()
+  const legCount = clampInt(part.legCount ?? part.count, legStyle === 'splayed' ? 3 : 4, 3, 4)
   const shapes: PrimitiveShapeInput[] = [
     {
-      kind: 'cylinder',
+      kind: 'hollow-cylinder',
       name: `${part.name ?? input.name ?? 'object'} agitator tank shell`,
+      semanticRole: part.semanticRole ?? 'reactor_vessel_shell',
+      sourcePartKind: part.sourcePartKind ?? 'agitator_tank',
       position: center,
       axis: 'y',
       radius,
       height,
+      wallThickness,
       radialSegments: ringSegments(input.detail),
       material: mat,
     },
     {
+      kind: 'sphere',
+      name: `${part.name ?? input.name ?? 'object'} agitator top dished head`,
+      semanticRole: 'vessel_head',
+      sourcePartKind: part.sourcePartKind ?? 'agitator_tank',
+      position: [center[0], center[1] + height * 0.52, center[2]],
+      radius: 1,
+      scale: [radius, radius * 0.32, radius],
+      widthSegments: ringSegments(input.detail),
+      heightSegments: Math.max(16, Math.round(ringSegments(input.detail) * 0.5)),
+      material: mat,
+    },
+    {
+      kind: 'sphere',
+      name: `${part.name ?? input.name ?? 'object'} agitator bottom dished head`,
+      semanticRole: 'vessel_head',
+      sourcePartKind: part.sourcePartKind ?? 'agitator_tank',
+      position: [center[0], center[1] - height * 0.52, center[2]],
+      radius: 1,
+      scale: [radius, radius * 0.26, radius],
+      widthSegments: ringSegments(input.detail),
+      heightSegments: Math.max(16, Math.round(ringSegments(input.detail) * 0.5)),
+      material: mat,
+    },
+    {
+      kind: 'torus',
+      name: `${part.name ?? input.name ?? 'object'} agitator top seam ring`,
+      semanticRole: 'vessel_seam',
+      sourcePartKind: part.sourcePartKind ?? 'agitator_tank',
+      position: [center[0], center[1] + height * 0.5, center[2]],
+      axis: 'y',
+      majorRadius: radius * 1.01,
+      tubeRadius: wallThickness * 0.45,
+      radialSegments: 10,
+      tubularSegments: Math.max(24, Math.round(ringSegments(input.detail) * 0.7)),
+      material: metal,
+    },
+    {
       kind: 'cylinder',
       name: `${part.name ?? input.name ?? 'object'} agitator motor`,
+      semanticRole: 'agitator_motor',
+      sourcePartKind: part.sourcePartKind ?? 'agitator_tank',
       position: [center[0], center[1] + height * 0.66, center[2]],
       axis: 'y',
       radius: radius * 0.22,
       height: radius * 0.38,
       radialSegments: 24,
-      material: material(input.darkColor ?? '#1f2937', 0.5, 0.28),
+      material: dark,
     },
     {
       kind: 'cylinder',
       name: `${part.name ?? input.name ?? 'object'} agitator shaft`,
+      semanticRole: 'agitator_shaft',
+      sourcePartKind: part.sourcePartKind ?? 'agitator_tank',
       position: [center[0], center[1] + height * 0.05, center[2]],
       axis: 'y',
       radius: radius * 0.035,
@@ -6456,6 +8953,8 @@ function composeAgitatorTank(
     {
       kind: 'cylinder',
       name: `${part.name ?? input.name ?? 'object'} agitator hub`,
+      semanticRole: 'agitator_hub',
+      sourcePartKind: part.sourcePartKind ?? 'agitator_tank',
       position: [center[0], center[1] - height * 0.22, center[2]],
       axis: 'y',
       radius: radius * 0.12,
@@ -6464,11 +8963,28 @@ function composeAgitatorTank(
       material: metal,
     },
   ]
+  if (bottomStyle === 'conical') {
+    shapes.push({
+      kind: 'frustum',
+      name: `${part.name ?? input.name ?? 'object'} conical discharge bottom`,
+      semanticRole: 'conical_discharge_bottom',
+      sourcePartKind: part.sourcePartKind ?? 'agitator_tank',
+      position: [center[0], center[1] - height * 0.52 - radius * 0.18, center[2]],
+      axis: 'y',
+      radiusTop: radius * 0.42,
+      radiusBottom: radius * 0.12,
+      height: radius * 0.36,
+      radialSegments: ringSegments(input.detail),
+      material: mat,
+    })
+  }
   for (let i = 0; i < 3; i += 1) {
     const angle = (i * Math.PI * 2) / 3
     shapes.push({
       kind: 'capsule',
       name: `${part.name ?? input.name ?? 'object'} agitator blade ${i + 1}`,
+      semanticRole: 'reactor_impeller',
+      sourcePartKind: part.sourcePartKind ?? 'agitator_tank',
       position: [
         center[0] + Math.cos(angle) * radius * 0.22,
         center[1] - height * 0.22,
@@ -6481,6 +8997,63 @@ function composeAgitatorTank(
       radialSegments: 10,
       capSegments: 3,
       material: metal,
+    })
+  }
+  shapes.push(
+    {
+      kind: 'hollow-cylinder',
+      name: `${part.name ?? input.name ?? 'object'} agitator side inlet nozzle`,
+      semanticRole: 'feed_nozzle',
+      sourcePartKind: part.sourcePartKind ?? 'agitator_tank',
+      position: [center[0] - radius * 1.06, center[1] + height * 0.16, center[2]],
+      axis: 'x',
+      radius: radius * 0.13,
+      height: radius * 0.48,
+      wallThickness: wallThickness * 0.65,
+      radialSegments: 20,
+      material: mat,
+    },
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} agitator manway flange`,
+      semanticRole: 'manway_flange',
+      sourcePartKind: part.sourcePartKind ?? 'agitator_tank',
+      position: [center[0] + radius * 1.04, center[1] + height * 0.1, center[2]],
+      axis: 'x',
+      radius: radius * 0.2,
+      height: wallThickness * 3,
+      radialSegments: 28,
+      material: dark,
+    },
+  )
+  for (let i = 0; i < legCount; i += 1) {
+    const angle =
+      legCount === 3 ? -Math.PI / 2 + (i * Math.PI * 2) / 3 : Math.PI / 4 + (i * Math.PI * 2) / 4
+    const topRadius = radius * 0.58
+    const footRadius = legStyle === 'splayed' ? radius * 0.86 : radius * 0.62
+    const topY = center[1] - height * 0.5 - radius * 0.02
+    const bottomY = center[1] - height * 0.5 - radius * 0.5
+    const start: Vec3 = [
+      center[0] + Math.cos(angle) * topRadius,
+      topY,
+      center[2] + Math.sin(angle) * topRadius,
+    ]
+    const end: Vec3 = [
+      center[0] + Math.cos(angle) * footRadius,
+      bottomY,
+      center[2] + Math.sin(angle) * footRadius,
+    ]
+    shapes.push({
+      ...tubeBetween(
+        `${part.name ?? input.name ?? 'object'} agitator support leg`,
+        start,
+        end,
+        radius * 0.04,
+        dark,
+      ),
+      semanticRole: 'support_leg',
+      sourcePartKind: part.sourcePartKind ?? 'agitator_tank',
+      radialSegments: 12,
     })
   }
   return applyPartRotation(shapes, center, part.rotation)
@@ -6555,10 +9128,18 @@ function composePlatformLadder(
   const height = clamp(part.height, 0.9, 0.25, 4)
   const r = clamp(part.radius ?? part.wireRadius, 0.018, 0.004, 0.08)
   const steel = partMaterial(part, material(input.metalColor ?? '#94a3b8', 0.34, 0.72))
+  const defaultRungCount = detailDefaultInt(input, part, {
+    low: Math.max(4, Math.round(height / 0.26)),
+    medium: Math.max(5, Math.round(height / 0.18)),
+    high: Math.max(7, Math.round(height / 0.14)),
+  })
+  const rungCount = clampInt(part.rungCount ?? part.count, defaultRungCount, 4, 16)
   const shapes: PrimitiveShapeInput[] = [
     {
       kind: 'box',
       name: `${part.name ?? input.name ?? 'object'} access platform deck`,
+      semanticRole: part.semanticRole ?? 'access_platform',
+      sourcePartKind: part.sourcePartKind ?? 'platform_ladder',
       position: [center[0], center[1] + height * 0.18, center[2]],
       length,
       width,
@@ -6566,11 +9147,30 @@ function composePlatformLadder(
       material: steel,
     },
   ]
+  for (let i = 1; i < 4; i += 1) {
+    shapes.push({
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'object'} platform deck grating ${i}`,
+      semanticRole: 'platform_grating',
+      sourcePartKind: part.sourcePartKind ?? 'platform_ladder',
+      position: [
+        center[0],
+        center[1] + height * 0.185,
+        center[2] - width * 0.35 + i * width * 0.18,
+      ],
+      length: length * 0.92,
+      width: r * 0.36,
+      height: r * 0.9,
+      material: steel,
+    })
+  }
   for (const x of [-length / 2, length / 2]) {
     for (const z of [-width / 2, width / 2]) {
       shapes.push({
         kind: 'cylinder',
         name: `${part.name ?? input.name ?? 'object'} platform support post`,
+        semanticRole: 'platform_post',
+        sourcePartKind: part.sourcePartKind ?? 'platform_ladder',
         position: [center[0] + x, center[1] - height * 0.25, center[2] + z],
         axis: 'y',
         radius: r,
@@ -6580,23 +9180,63 @@ function composePlatformLadder(
       })
     }
   }
-  shapes.push({
-    kind: 'cylinder',
-    name: `${part.name ?? input.name ?? 'object'} platform guard rail front`,
-    position: [center[0], center[1] + height * 0.42, center[2] + width / 2],
-    axis: 'x',
-    radius: r,
-    height: length,
-    radialSegments: 12,
-    material: steel,
-  })
-  for (let i = 0; i < 5; i += 1) {
+  for (const [name, z] of [
+    ['front', width / 2],
+    ['back', -width / 2],
+  ] as const) {
+    shapes.push({
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} platform guard rail ${name}`,
+      semanticRole: 'guard_rail',
+      sourcePartKind: part.sourcePartKind ?? 'platform_ladder',
+      position: [center[0], center[1] + height * 0.42, center[2] + z],
+      axis: 'x',
+      radius: r,
+      height: length,
+      radialSegments: 12,
+      material: steel,
+    })
+  }
+  for (const [name, x] of [
+    ['left', -length / 2],
+    ['right', length / 2],
+  ] as const) {
+    shapes.push({
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} platform side guard rail ${name}`,
+      semanticRole: 'guard_rail',
+      sourcePartKind: part.sourcePartKind ?? 'platform_ladder',
+      position: [center[0] + x, center[1] + height * 0.42, center[2]],
+      axis: 'z',
+      radius: r,
+      height: width,
+      radialSegments: 12,
+      material: steel,
+    })
+  }
+  for (const z of [center[2] - width * 0.68, center[2] - width * 0.48]) {
+    shapes.push({
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} ladder side rail`,
+      semanticRole: 'ladder_side_rail',
+      sourcePartKind: part.sourcePartKind ?? 'platform_ladder',
+      position: [center[0] - length * 0.62, center[1] - height * 0.1, z],
+      axis: 'y',
+      radius: r,
+      height: height * 0.92,
+      radialSegments: 10,
+      material: steel,
+    })
+  }
+  for (let i = 0; i < rungCount; i += 1) {
     shapes.push({
       kind: 'cylinder',
       name: `${part.name ?? input.name ?? 'object'} ladder rung ${i + 1}`,
+      semanticRole: 'ladder_rung',
+      sourcePartKind: part.sourcePartKind ?? 'platform_ladder',
       position: [
         center[0] - length * 0.62,
-        center[1] - height * 0.55 + (i + 1) * height * 0.16,
+        center[1] - height * 0.55 + ((i + 1) * (height * 0.82)) / (rungCount + 1),
         center[2] - width * 0.58,
       ],
       axis: 'z',
@@ -7088,6 +9728,7 @@ function partCenter(part: PartComposePartInput, kind: PartComposeKind | null): V
       return [0, height / 2 + 0.08, 0]
     }
     case 'motor_housing':
+    case 'fan_blade':
     case 'radial_blades':
     case 'protective_grill':
       return [0, 1.18, kind === 'motor_housing' ? -0.024 : 0.04]
@@ -7117,6 +9758,12 @@ function partCenter(part: PartComposePartInput, kind: PartComposeKind | null): V
       return [0, 0.22, 0.2]
     case 'skid_base':
       return [0, 0.06, 0]
+    case 'support_roller_pair':
+      return [0, 0.22, 0]
+    case 'structural_tower_frame':
+      return [0, clamp(part.height, 5, 1, 16) / 2, 0]
+    case 'cyclone_separator_unit':
+      return [0, clamp(part.height, 1.2, 0.3, 4) / 2, 0]
     case 'rounded_machine_body':
       return [0, 0.45, 0]
     case 'flange_ring':
@@ -7201,6 +9848,13 @@ function partHalfExtents(part: PartComposePartInput, kind: PartComposeKind | nul
       const motorRadius = clamp(part.radius, 0.11, 0.03, 0.5)
       const motorDepth = clamp(part.depth ?? part.length ?? part.height, 0.16, 0.03, 0.8)
       return [motorRadius, motorRadius, motorDepth / 2]
+    }
+    case 'fan_blade': {
+      const bladeLength = clamp(part.length ?? part.bladeRadius ?? part.radius, 0.24, 0.04, 1.2)
+      const bladeWidth = clamp(part.bladeWidth ?? part.width, bladeLength * 0.24, 0.012, 0.55)
+      const bladeDepth = clamp(part.thickness ?? part.depth ?? part.height, 0.018, 0.003, 0.08)
+      const hubRadius = clamp(part.wireRadius, bladeLength * 0.22, 0.01, bladeLength * 0.45)
+      return [hubRadius + bladeLength, bladeWidth / 2, bladeDepth / 2]
     }
     case 'radial_blades': {
       const bladeRadius = clamp(part.bladeRadius ?? part.radius, 0.28, 0.05, 1.4)
@@ -8197,6 +10851,79 @@ function layoutRole(part: PartComposePartInput) {
     : layoutKind(part)
 }
 
+function normalizeLayoutAnchor(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+  if (normalized === 'center') return 'shell_center'
+  return normalized
+}
+
+function layoutOffset(value: unknown): Vec3 {
+  if (Array.isArray(value) && value.length >= 3) {
+    const [x, y, z] = value
+    return [
+      typeof x === 'number' && Number.isFinite(x) ? x : 0,
+      typeof y === 'number' && Number.isFinite(y) ? y : 0,
+      typeof z === 'number' && Number.isFinite(z) ? z : 0,
+    ]
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return [value, 0, 0]
+  return [0, 0, 0]
+}
+
+function addLayoutOffset(position: Vec3, offset: unknown): Vec3 {
+  return add(position, layoutOffset(offset))
+}
+
+function arrayAlongAxis(value: unknown): PartAxis | undefined {
+  const normalized = normalizeLayoutAnchor(value)
+  if (normalized === 'x' || normalized === 'length') return 'x'
+  if (normalized === 'y' || normalized === 'height' || normalized === 'vertical') return 'y'
+  if (normalized === 'z' || normalized === 'width' || normalized === 'depth') return 'z'
+  return undefined
+}
+
+function layoutAxisSize(axis: PartAxis, dimensions: Required<LayoutDimensions>) {
+  if (axis === 'x') return dimensions.length
+  if (axis === 'y') return dimensions.height
+  return dimensions.width
+}
+
+function distributeArrayAlong(
+  part: PartComposePartInput,
+  position: Vec3,
+  dimensions: Required<LayoutDimensions>,
+) {
+  const axis = arrayAlongAxis(part.arrayAlong)
+  const count = axis ? clampInt(part.count, 1, 1, 64) : 1
+  if (!axis || count <= 1) return [{ part, position }]
+  const spacing = clamp(
+    part.array?.spacing ?? part.arrayOffset,
+    (layoutAxisSize(axis, dimensions) * 0.72) / Math.max(1, count - 1),
+    0.02,
+    100,
+  )
+  const axisIndex = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
+  return Array.from({ length: count }, (_, index) => {
+    const nextPosition: Vec3 = [...position]
+    nextPosition[axisIndex] += (index - (count - 1) / 2) * spacing
+    return {
+      part: {
+        ...part,
+        id: part.id ? `${part.id}_${index + 1}` : undefined,
+        sourcePartId: part.sourcePartId ? `${part.sourcePartId}_${index + 1}` : undefined,
+        count: undefined,
+        arrayAlong: undefined,
+        arrayOffset: undefined,
+      },
+      position: nextPosition,
+    }
+  })
+}
+
 function inferLayoutFamily(profile: LayoutProfileInput): LayoutFamilyId | undefined {
   if (profile.layoutFamily) return profile.layoutFamily
   switch (profile.family) {
@@ -8263,29 +10990,62 @@ function layoutAnchors(
   const length = dimensions.length
   const width = dimensions.width
   const height = dimensions.height
+  const internal: LayoutAnchor[] = [
+    { id: 'shell_center', role: 'shell_center', position: [0, height * 0.52, 0] },
+    { id: 'top', role: 'top', position: [0, height, 0] },
+    { id: 'bottom', role: 'bottom', position: [0, 0, 0] },
+    { id: 'front', role: 'front', position: [0, height * 0.52, width * 0.52] },
+    { id: 'back', role: 'back', position: [0, height * 0.52, -width * 0.52] },
+    { id: 'left', role: 'left', position: [-length * 0.52, height * 0.52, 0] },
+    { id: 'right', role: 'right', position: [length * 0.52, height * 0.52, 0] },
+    { id: 'drive_side', role: 'drive_side', position: [-length * 0.42, height * 0.42, 0] },
+    { id: 'service_side', role: 'service_side', position: [0, height * 0.55, width * 0.58] },
+  ]
   const rotating: LayoutAnchor[] = [
     { id: 'base', role: 'support_base', position: [0, height * 0.08, 0] },
-    { id: 'drive', role: 'drive_motor', position: [-length * 0.25, height * 0.42, 0] },
+    { id: 'drive', role: 'drive_motor', position: [-length * 0.28, height * 0.42, 0] },
     { id: 'process_body', role: 'main_casing', position: [length * 0.18, height * 0.42, 0] },
     { id: 'inlet', role: 'inlet_port', position: [length * 0.35, height * 0.42, width * 0.45] },
     { id: 'outlet', role: 'outlet_port', position: [length * 0.22, height * 0.68, 0] },
+    { id: 'shell_center', role: 'shell_center', position: [0, height * 0.48, 0] },
+    { id: 'drive_side', role: 'drive_side', position: [-length * 0.42, height * 0.36, 0] },
+    {
+      id: 'service_side',
+      role: 'service_side',
+      position: [length * 0.18, height * 0.72, width * 0.55],
+    },
   ]
   const vessel: LayoutAnchor[] = [
     { id: 'shell', role: 'vessel_shell', position: [0, height * 0.52, 0] },
+    { id: 'shell_center', role: 'shell_center', position: [0, height * 0.52, 0] },
     { id: 'support', role: 'support_base', position: [0, height * 0.08, 0] },
     { id: 'top_nozzle', role: 'top_nozzle', position: [0, height * 1.03, 0] },
-    { id: 'side_nozzle', role: 'side_nozzle', position: [width * 0.48, height * 0.42, 0] },
-    { id: 'access', role: 'access_platform', position: [-width * 0.55, height * 0.5, 0] },
+    { id: 'side_nozzle', role: 'side_nozzle', position: [0, height * 0.48, width * 0.56] },
+    {
+      id: 'access',
+      role: 'access_platform',
+      position: [-length * 0.44, height * 0.5, width * 0.52],
+    },
+    { id: 'drive_side', role: 'drive_side', position: [-length * 0.45, height * 0.22, 0] },
+    {
+      id: 'service_side',
+      role: 'service_side',
+      position: [-length * 0.44, height * 0.5, width * 0.52],
+    },
   ]
   const linear: LayoutAnchor[] = [
     { id: 'frame', role: 'transport_frame', position: [0, height * 0.42, 0] },
     { id: 'repeaters', role: 'repeating_elements', position: [0, height * 0.7, 0] },
     { id: 'surface', role: 'transport_surface', position: [0, height * 0.75, 0] },
     { id: 'drive', role: 'drive_motor', position: [-length * 0.44, height * 0.42, 0] },
+    { id: 'shell_center', role: 'shell_center', position: [0, height * 0.48, 0] },
+    { id: 'drive_side', role: 'drive_side', position: [-length * 0.48, height * 0.42, 0] },
+    { id: 'service_side', role: 'service_side', position: [0, height * 0.68, width * 0.55] },
   ]
   const box: LayoutAnchor[] = [
     { id: 'base', role: 'support_base', position: [0, height * 0.06, 0] },
     { id: 'body', role: 'enclosure_body', position: [0, height * 0.52, 0] },
+    { id: 'shell_center', role: 'shell_center', position: [0, height * 0.52, 0] },
     { id: 'front_panel', role: 'front_panel', position: [0, height * 0.55, width * 0.51] },
     {
       id: 'controls',
@@ -8297,19 +11057,76 @@ function layoutAnchors(
       role: 'detail_elements',
       position: [-length * 0.3, height * 0.68, width * 0.53],
     },
+    { id: 'drive_side', role: 'drive_side', position: [-length * 0.46, height * 0.38, 0] },
+    {
+      id: 'service_side',
+      role: 'service_side',
+      position: [length * 0.46, height * 0.58, width * 0.52],
+    },
   ]
+  const mergeInternal = (anchors: LayoutAnchor[]) => {
+    const ids = new Set(anchors.map((anchor) => anchor.id))
+    return [...anchors, ...internal.filter((anchor) => !ids.has(anchor.id))]
+  }
   switch (layoutFamily) {
     case 'rotating_machine_layout':
-      return rotating
+      return mergeInternal(rotating)
     case 'vessel_layout':
-      return vessel
+      return mergeInternal(vessel)
     case 'linear_transport_layout':
-      return linear
+      return mergeInternal(linear)
     case 'box_enclosure_layout':
     case 'generic_industrial_layout':
-      return box
+      return mergeInternal(box)
     default:
-      return box
+      return mergeInternal(box)
+  }
+}
+
+function sideAnchorForPart(part: PartComposePartInput) {
+  return normalizeLayoutAnchor(part.anchor) ?? normalizeLayoutAnchor(part.side)
+}
+
+function roleKey(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim().toLowerCase() : undefined
+}
+
+function attachRolePosition(
+  part: PartComposePartInput,
+  parent: PartPlacement | undefined,
+  parentPart: PartComposePartInput | undefined,
+  dimensions: Required<LayoutDimensions>,
+): Vec3 | undefined {
+  if (!parent || !parentPart) return undefined
+  const anchor = sideAnchorForPart(part) ?? 'shell_center'
+  const parentExtents = partHalfExtents(parentPart, normalizedPartKind(parentPart))
+  const childExtents = partHalfExtents(part, normalizedPartKind(part))
+  const center = parent.position
+  const along = (axis: PartAxis, sign: 1 | -1) => {
+    const index = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
+    const next: Vec3 = [...center]
+    next[index] += sign * (parentExtents[index] + childExtents[index] * 0.5)
+    return next
+  }
+  switch (anchor) {
+    case 'top':
+      return along('y', 1)
+    case 'bottom':
+      return along('y', -1)
+    case 'front':
+      return along('z', 1)
+    case 'back':
+      return along('z', -1)
+    case 'left':
+      return along('x', -1)
+    case 'right':
+      return along('x', 1)
+    case 'drive_side':
+      return [center[0] - dimensions.length * 0.36, center[1], center[2]]
+    case 'service_side':
+      return [center[0], center[1], center[2] + dimensions.width * 0.58]
+    default:
+      return center
   }
 }
 
@@ -8327,17 +11144,56 @@ function resolveLayoutPlan(
   const layoutFamily = inferLayoutFamily(profile)
   const anchors = layoutAnchors(layoutFamily, resolvedDimensions)
   const anchorMap = new Map(anchors.map((anchor) => [anchor.id, anchor]))
-  const placements = parts.map((part, index): PartPlacement => {
+  const placements: PartPlacement[] = []
+  const placedParts: PartComposePartInput[] = []
+  const rolePlacements = new Map<string, { placement: PartPlacement; part: PartComposePartInput }>()
+  const registerPlacement = (
+    part: PartComposePartInput,
+    index: number,
+    anchorId: string,
+    position: Vec3,
+  ) => {
     const role = layoutRole(part)
-    const anchorId = anchorForRole(layoutFamily, role)
-    const anchor = anchorMap.get(anchorId) ?? anchors[0]
-    const explicitPosition = Array.isArray(part.position) ? (part.position as Vec3) : undefined
-    return {
+    const placement: PartPlacement = {
       partId: String(part.id ?? `${layoutKind(part)}-${index + 1}`),
       kind: layoutKind(part),
       semanticRole: role,
       anchorId,
-      position: explicitPosition ?? anchor?.position ?? [0, resolvedDimensions.height / 2, 0],
+      position,
+    }
+    placements.push(placement)
+    placedParts.push({ ...part, position })
+    const semanticKey = roleKey(role)
+    if (semanticKey && !rolePlacements.has(semanticKey))
+      rolePlacements.set(semanticKey, { placement, part })
+    const kindKey = roleKey(layoutKind(part))
+    if (kindKey && !rolePlacements.has(kindKey)) rolePlacements.set(kindKey, { placement, part })
+  }
+  parts.forEach((part, index) => {
+    const role = layoutRole(part)
+    const explicitAnchorId = sideAnchorForPart(part)
+    const anchorId =
+      explicitAnchorId && anchorMap.has(explicitAnchorId)
+        ? explicitAnchorId
+        : anchorForRole(layoutFamily, role)
+    const anchor = anchorMap.get(anchorId) ?? anchors[0]
+    const explicitPosition = Array.isArray(part.position) ? (part.position as Vec3) : undefined
+    const attachKey = roleKey(part.attachToRole)
+    const attached = attachKey ? rolePlacements.get(attachKey) : undefined
+    const attachedPosition = attachRolePosition(
+      part,
+      attached?.placement,
+      attached?.part,
+      resolvedDimensions,
+    )
+    const basePosition = addLayoutOffset(
+      explicitPosition ??
+        attachedPosition ??
+        anchor?.position ?? [0, resolvedDimensions.height / 2, 0],
+      part.offset,
+    )
+    for (const expanded of distributeArrayAlong(part, basePosition, resolvedDimensions)) {
+      registerPlacement(expanded.part, placedParts.length, anchorId, expanded.position)
     }
   })
   return {
@@ -8350,7 +11206,7 @@ function resolveLayoutPlan(
       max: [resolvedDimensions.length / 2, resolvedDimensions.height, resolvedDimensions.width / 2],
       size: [resolvedDimensions.length, resolvedDimensions.height, resolvedDimensions.width],
     },
-    parts: [...parts],
+    parts: placedParts,
   }
 }
 
@@ -8495,7 +11351,7 @@ function familySpecForParts(present: PartComposeKind[]): PartFamilySpec {
     }
   }
 
-  if (has('radial_blades') || has('protective_grill')) {
+  if (has('fan_blade') || has('radial_blades') || has('protective_grill')) {
     return {
       family: 'fan',
       required: [
@@ -8503,7 +11359,10 @@ function familySpecForParts(present: PartComposeKind[]): PartFamilySpec {
         group('pole', ['vertical_pole'], { kind: 'vertical_pole' }),
         group('support bracket', ['support_bracket'], { kind: 'support_bracket' }),
         group('motor housing', ['motor_housing'], { kind: 'motor_housing' }),
-        group('fan blades', ['radial_blades'], { kind: 'radial_blades', count: 3 }),
+        group('editable fan blades', ['fan_blade', 'radial_blades'], {
+          kind: 'fan_blade',
+          count: 3,
+        }),
         group('protective grill', ['protective_grill'], { kind: 'protective_grill' }),
       ],
       optional: ['control_knob'],
@@ -9140,6 +11999,8 @@ function semanticRoleForPartShape(kind: PartComposeKind, shape: PrimitiveShapeIn
       return 'chain_loop'
     case 'radial_blades':
       return name.includes('blade root') ? 'fan_blade_root' : 'fan_blade'
+    case 'fan_blade':
+      return name.includes('hub') ? 'fan_hub' : 'fan_blade'
     case 'propeller_blade_set':
       if (name.includes('hub')) return 'propeller_hub'
       return 'propeller_blade'
@@ -9210,6 +12071,108 @@ function semanticRoleForPartShape(kind: PartComposeKind, shape: PrimitiveShapeIn
       return 'opening'
     case 'generic_detail_accent':
       return 'detail_accent'
+    case 'manway_lid':
+      if (name.includes('gasket')) return 'manway_gasket'
+      if (name.includes('handle')) return 'manway_handle'
+      if (name.includes('bolt')) return 'manway_bolt'
+      return 'manway_lid'
+    case 'sanitary_nozzle':
+      if (name.includes('bead')) return 'sanitary_clamp_bead'
+      return 'sanitary_nozzle'
+    case 'jacket_shell':
+      if (name.includes('seam')) return 'jacket_seam'
+      return 'jacket_shell'
+    case 'sight_glass':
+      if (name.includes('rim')) return 'sight_glass_rim'
+      return 'sight_glass'
+    case 'sample_valve':
+      if (name.includes('handle')) return 'sample_valve_handle'
+      if (name.includes('body')) return 'sample_valve_body'
+      return 'sample_valve'
+    case 'instrument_port':
+      if (name.includes('gauge')) return 'instrument_gauge'
+      return 'instrument_port'
+    case 'stainless_highlight_panel':
+      return 'stainless_highlight_panel'
+    case 'mobile_platform_chassis':
+      if (name.includes('skirt')) return 'lower_bumper_skirt'
+      if (name.includes('deck')) return 'cargo_platform'
+      if (name.includes('status')) return 'status_light_strip'
+      return 'vehicle_body'
+    case 'lidar_sensor':
+      return name.includes('lens') ? 'sensor_lens' : 'navigation_sensor'
+    case 'emergency_stop_button':
+      if (name.includes('base')) return 'emergency_stop_base'
+      if (name.includes('guard')) return 'emergency_stop_guard'
+      return 'emergency_stop_button'
+    case 'status_light_strip':
+      return 'status_light_strip'
+    case 'operator_panel':
+      if (name.includes('screen')) return 'display_screen'
+      if (name.includes('button')) return 'control_button'
+      return 'control_panel'
+    case 'guard_fence':
+      if (name.includes('post')) return 'guard_fence_post'
+      return 'safety_barrier'
+    case 'pallet_table':
+      if (name.includes('leg')) return 'support_leg'
+      return 'pallet_table'
+    case 'bearing_block':
+      if (name.includes('base')) return 'bearing_base'
+      if (name.includes('ring')) return 'bearing_ring'
+      if (name.includes('bore')) return 'bearing_bore'
+      if (name.includes('bolt')) return 'mounting_bolt'
+      return 'bearing_block'
+    case 'structural_tower_frame':
+      if (name.includes('platform')) return 'multi_level_platform'
+      if (name.includes('rail')) return 'platform_guard_rail'
+      if (name.includes('internal stair flight')) return 'internal_stair_flight'
+      if (name.includes('internal stair landing')) return 'internal_stair_landing'
+      if (name.includes('stair flight')) return 'external_stair_flight'
+      if (name.includes('stair landing')) return 'external_stair_landing'
+      if (name.includes('diagonal') || name.includes('cross brace')) return 'tower_diagonal_brace'
+      if (name.includes('ladder')) return 'access_ladder'
+      if (name.includes('column')) return 'tower_column'
+      if (name.includes('beam')) return 'tower_beam'
+      return 'preheater_tower_body'
+    case 'cyclone_separator_unit':
+      if (name.includes('hopper') || name.includes('cone')) return 'cyclone_cone'
+      if (name.includes('outlet')) return 'cyclone_top_outlet'
+      if (name.includes('inlet') || name.includes('duct')) return 'preheater_gas_duct'
+      if (name.includes('drop pipe')) return 'meal_drop_pipe'
+      if (name.includes('band')) return 'cyclone_connection_band'
+      return 'preheater_cyclone'
+    case 'coupling_guard':
+      if (name.includes('flange')) return 'guard_end_flange'
+      return 'coupling_guard'
+    case 'motor_gearbox_unit':
+      if (name.includes('motor')) return 'drive_motor'
+      if (name.includes('shaft')) return 'output_shaft'
+      if (name.includes('rib')) return 'motor_cooling_rib'
+      return 'gearbox_body'
+    case 'pipe_manifold':
+      if (name.includes('branch')) return 'manifold_branch'
+      return 'pipe_manifold'
+    case 'hopper_body':
+      if (name.includes('outlet')) return 'hopper_outlet'
+      if (name.includes('leg')) return 'hopper_support_leg'
+      return 'hopper_body'
+    case 'conical_hopper':
+      if (name.includes('outlet')) return 'hopper_outlet_collar'
+      if (name.includes('leg')) return 'support_leg'
+      return 'conical_hopper'
+    case 'service_platform':
+      if (name.includes('post')) return 'platform_post'
+      if (name.includes('rail')) return 'guard_rail'
+      if (name.includes('ladder')) return 'access_ladder'
+      return 'service_platform'
+    case 'platform_with_ladder':
+      if (name.includes('rung')) return 'ladder_rung'
+      if (name.includes('side rail')) return 'ladder_side_rail'
+      if (name.includes('post')) return 'platform_post'
+      if (name.includes('rail')) return 'guard_rail'
+      if (name.includes('ladder')) return 'access_ladder'
+      return 'service_platform'
     case 'kiosk_body':
       return 'kiosk_body'
     case 'kiosk_roof':
@@ -9250,6 +12213,15 @@ function semanticRoleForPartShape(kind: PartComposeKind, shape: PrimitiveShapeIn
         return name.includes('bolt') ? 'flange_outlet_bolt' : 'flange_outlet'
       }
       return name.includes('bolt') ? 'flange_bolt' : 'flange_ring'
+    case 'flanged_nozzle':
+      if (name.includes('flange'))
+        return name.includes('bolt') ? 'nozzle_flange_bolt' : 'nozzle_flange'
+      if (name.includes('neck')) return 'flanged_nozzle'
+      return 'flanged_nozzle'
+    case 'inspection_hatch':
+      if (name.includes('hinge')) return 'hatch_hinge'
+      if (name.includes('handle')) return 'hatch_handle'
+      return 'inspection_hatch'
     case 'valve_body':
       if (name.includes('seat ring')) return 'seat_ring'
       if (name.includes('ball bore')) return 'valve_bore'
@@ -9418,6 +12390,9 @@ export function composePartPrimitives(input: PartComposeInput = {}): PrimitiveSh
       case 'motor_housing':
         shapes.push(...composeMotorHousing(input, part, origin, index))
         break
+      case 'fan_blade':
+        shapes.push(...composeFanBladeArray(input, part, origin))
+        break
       case 'radial_blades':
         shapes.push(...composeRadialBlades(input, part, origin))
         break
@@ -9510,6 +12485,60 @@ export function composePartPrimitives(input: PartComposeInput = {}): PrimitiveSh
       case 'generic_foot_set':
         shapes.push(...composeGenericFootSet(input, part, origin))
         break
+      case 'mobile_platform_chassis':
+        shapes.push(...composeMobilePlatformChassis(input, part, origin))
+        break
+      case 'lidar_sensor':
+        shapes.push(...composeLidarSensor(input, part, origin))
+        break
+      case 'emergency_stop_button':
+        shapes.push(...composeEmergencyStopButton(input, part, origin))
+        break
+      case 'status_light_strip':
+        shapes.push(...composeStatusLightStrip(input, part, origin))
+        break
+      case 'operator_panel':
+        shapes.push(...composeOperatorPanel(input, part, origin))
+        break
+      case 'guard_fence':
+        shapes.push(...composeGuardFence(input, part, origin))
+        break
+      case 'pallet_table':
+        shapes.push(...composePalletTable(input, part, origin))
+        break
+      case 'bearing_block':
+        shapes.push(...composeBearingBlock(input, part, origin))
+        break
+      case 'support_roller_pair':
+        shapes.push(...composeSupportRollerPair(input, part, origin))
+        break
+      case 'structural_tower_frame':
+        shapes.push(...composeStructuralTowerFrame(input, part, origin))
+        break
+      case 'cyclone_separator_unit':
+        shapes.push(...composeCycloneSeparatorUnit(input, part, origin))
+        break
+      case 'coupling_guard':
+        shapes.push(...composeCouplingGuard(input, part, origin))
+        break
+      case 'motor_gearbox_unit':
+        shapes.push(...composeMotorGearboxUnit(input, part, origin))
+        break
+      case 'pipe_manifold':
+        shapes.push(...composePipeManifold(input, part, origin))
+        break
+      case 'hopper_body':
+        shapes.push(...composeHopperBody(input, part, origin))
+        break
+      case 'conical_hopper':
+        shapes.push(...composeConicalHopper(input, part, origin))
+        break
+      case 'service_platform':
+        shapes.push(...composeServicePlatform(input, part, origin))
+        break
+      case 'platform_with_ladder':
+        shapes.push(...composePlatformWithLadder(input, part, origin))
+        break
       case 'kiosk_body':
         shapes.push(...composeKioskBody(input, part, origin))
         break
@@ -9542,6 +12571,33 @@ export function composePartPrimitives(input: PartComposeInput = {}): PrimitiveSh
         break
       case 'flange_ring':
         shapes.push(...composeFlangeRing(input, part, origin))
+        break
+      case 'flanged_nozzle':
+        shapes.push(...composeFlangedNozzle(input, part, origin))
+        break
+      case 'manway_lid':
+        shapes.push(...composeManwayLid(input, part, origin))
+        break
+      case 'inspection_hatch':
+        shapes.push(...composeInspectionHatch(input, part, origin))
+        break
+      case 'sanitary_nozzle':
+        shapes.push(...composeSanitaryNozzle(input, part, origin))
+        break
+      case 'jacket_shell':
+        shapes.push(...composeJacketShell(input, part, origin))
+        break
+      case 'sight_glass':
+        shapes.push(...composeSightGlass(input, part, origin))
+        break
+      case 'sample_valve':
+        shapes.push(...composeSampleValve(input, part, origin))
+        break
+      case 'instrument_port':
+        shapes.push(...composeInstrumentPort(input, part, origin))
+        break
+      case 'stainless_highlight_panel':
+        shapes.push(...composeStainlessHighlightPanel(input, part, origin))
         break
       case 'bolt_pattern':
         shapes.push(...composeBoltPattern(input, part, origin))

@@ -1,0 +1,116 @@
+{
+  "id": "cement.plant.modular_outdoor",
+  "label": "Cement plant modular architecture",
+  "industry": "cement",
+  "processId": "cement_plant_full",
+  "layoutStyle": "parallel_bays",
+  "defaultDimensions": {
+    "length": 66,
+    "width": 28
+  },
+  "scopes": [
+    {
+      "id": "pyro_line",
+      "label": "Clinker burning line",
+      "includeModules": ["clinker_production", "gas_and_dedusting"]
+    },
+    {
+      "id": "clinker_system",
+      "label": "Complete clinker production system",
+      "includeModules": [
+        "raw_material_preparation",
+        "raw_meal_preparation",
+        "fuel_preparation",
+        "clinker_production",
+        "gas_and_dedusting",
+        "clinker_storage"
+      ]
+    },
+    {
+      "id": "cement_plant",
+      "label": "Full cement plant",
+      "includeModules": [
+        "raw_material_preparation",
+        "raw_meal_preparation",
+        "fuel_preparation",
+        "clinker_production",
+        "gas_and_dedusting",
+        "clinker_storage",
+        "cement_grinding",
+        "packing_and_dispatch",
+        "utilities"
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "id": "raw_material_preparation",
+      "displayLabel": "\u77f3\u7070\u77f3\u7834\u788e\u4e0e\u9884\u5747\u5316",
+      "order": 10,
+      "stationIds": ["limestone_crusher", "pre_homogenization"]
+    },
+    {
+      "id": "raw_meal_preparation",
+      "displayLabel": "\u751f\u6599\u5236\u5907",
+      "order": 20,
+      "stationIds": ["raw_mill", "raw_meal_silo"]
+    },
+    {
+      "id": "fuel_preparation",
+      "displayLabel": "\u71c3\u6599\u5236\u5907",
+      "order": 30,
+      "stationIds": ["coal_mill", "kiln_burner"]
+    },
+    {
+      "id": "clinker_production",
+      "displayLabel": "\u719f\u6599\u70e7\u6210",
+      "order": 40,
+      "stationIds": ["preheater_tower", "rotary_kiln", "kiln_hood", "grate_cooler"]
+    },
+    {
+      "id": "gas_and_dedusting",
+      "displayLabel": "\u70df\u6c14\u4e0e\u6536\u5c18",
+      "order": 50,
+      "stationIds": ["tertiary_air_duct", "kiln_tail_esp", "process_stack"]
+    },
+    {
+      "id": "clinker_storage",
+      "displayLabel": "\u719f\u6599\u50a8\u8fd0",
+      "order": 60,
+      "stationIds": ["clinker_crusher", "clinker_conveying", "clinker_silo"]
+    },
+    {
+      "id": "cement_grinding",
+      "displayLabel": "\u6c34\u6ce5\u7c89\u78e8",
+      "order": 70,
+      "stationIds": ["cement_mill", "cement_silo"]
+    },
+    {
+      "id": "packing_and_dispatch",
+      "displayLabel": "\u5305\u88c5\u53d1\u8fd0",
+      "order": 80,
+      "stationIds": ["cement_packer"]
+    },
+    {
+      "id": "utilities",
+      "displayLabel": "\u8f85\u52a9\u7cfb\u7edf",
+      "order": 90,
+      "stationIds": ["whr_boiler", "mcc_control"]
+    }
+  ],
+  "layoutHints": {
+    "primaryAxis": "x",
+    "secondaryAxis": "z",
+    "outdoorHeavyIndustry": true,
+    "highestStationId": "preheater_tower",
+    "longAxisStationId": "rotary_kiln",
+    "sideBranchStationIds": ["coal_mill", "kiln_tail_esp", "process_stack", "whr_boiler", "mcc_control"],
+    "scale": "conceptual",
+    "notes": [
+      "Treat scopes as selections from one factory architecture tree instead of separate hardcoded plants.",
+      "Keep raw material and raw meal preparation upstream of the pyro line.",
+      "Place fuel preparation and gas/dedusting as side modules around the preheater and kiln.",
+      "Place grinding and packing downstream of clinker storage for full cement plant requests."
+    ]
+  }
+}

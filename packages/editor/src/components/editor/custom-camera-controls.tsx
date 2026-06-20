@@ -13,6 +13,7 @@ import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { Box3, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../lib/constants'
+import { computeSceneBoundsXZ, pickSceneCameraFocusBounds } from '../../lib/scene-bounds'
 import useEditor from '../../store/use-editor'
 
 const currentTarget = new Vector3()
@@ -402,7 +403,7 @@ export const CustomCameraControls = () => {
       focusNode(nodeId)
     }
 
-    const handleFitScene = ({ bounds }: CameraControlFitSceneEvent) => {
+    const handleFitScene = ({ bounds, reason }: CameraControlFitSceneEvent) => {
       if (!controls.current || isPreviewMode) return
       if (!bounds) {
         // Restore default framing pose when no bounds were computed.
@@ -414,8 +415,9 @@ export const CustomCameraControls = () => {
       // Use the longer horizontal extent to size the orbit radius so the whole
       // footprint sits in view regardless of aspect ratio.
       const maxExtent = Math.max(w, d)
-      const distance = Math.max(maxExtent * 1.4, 15)
-      const height = Math.max(maxExtent * 0.8, 10)
+      const isFactoryFocus = reason === 'factory-key-process'
+      const distance = Math.max(maxExtent * (isFactoryFocus ? 1.05 : 1.4), 15)
+      const height = Math.max(maxExtent * (isFactoryFocus ? 0.55 : 0.8), 10)
       controls.current.setLookAt(cx + distance * 0.7, height, cz + distance * 0.7, cx, 0, cz, true)
     }
 
@@ -427,7 +429,15 @@ export const CustomCameraControls = () => {
     emitter.on('camera-controls:orbit-ccw', handleOrbitCCW)
     emitter.on('camera-controls:fit-scene', handleFitScene)
 
+    const initialFitFrame = requestAnimationFrame(() => {
+      const nodes = useScene.getState().nodes as Parameters<typeof pickSceneCameraFocusBounds>[0]
+      const focus = pickSceneCameraFocusBounds(nodes)
+      const bounds = focus?.bounds ?? computeSceneBoundsXZ(nodes)
+      if (bounds) handleFitScene({ bounds, reason: focus?.reason ?? 'scene-bounds' })
+    })
+
     return () => {
+      cancelAnimationFrame(initialFitFrame)
       emitter.off('camera-controls:capture', handleNodeCapture)
       emitter.off('camera-controls:focus', handleNodeFocus)
       emitter.off('camera-controls:view', handleNodeView)

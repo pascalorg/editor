@@ -97,9 +97,9 @@ export const FAMILY_DEFINITIONS = [
   {
     id: 'fan',
     aliases: ['fan', 'standing fan', 'desk fan', 'ventilator', 'industrial fan'],
-    requiredParts: ['circular_base', 'vertical_pole', 'motor_housing', 'radial_blades'],
-    optionalParts: ['support_bracket', 'protective_grill', 'control_knob'],
-    primarySemanticRoles: ['motor_housing', 'radial_blades'],
+    requiredParts: ['circular_base', 'vertical_pole', 'motor_housing', 'fan_blade'],
+    optionalParts: ['radial_blades', 'support_bracket', 'protective_grill', 'control_knob'],
+    primarySemanticRoles: ['motor_housing', 'fan_blade', 'radial_blades'],
     layoutStrategy: 'fan_layout',
     defaultDimensions: { length: 0.7, width: 0.7, height: 1.35 },
     description: 'Fan assembled from base, pole, motor housing, blades, and guard.',

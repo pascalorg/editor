@@ -1,0 +1,52 @@
+[
+  {
+    "id": "quality.fine_chemical.stirred_batch_reactor",
+    "requiredRoles": ["reactor_vessel_shell", "agitator_motor", "agitator_shaft", "reactor_impeller"],
+    "shapeCount": { "min": 10, "max": 80 }
+  },
+  {
+    "id": "quality.fine_chemical.mixing_tank",
+    "requiredRoles": ["reactor_vessel_shell", "agitator_motor", "reactor_impeller"],
+    "shapeCount": { "min": 8, "max": 70 }
+  },
+  {
+    "id": "quality.fine_chemical.nutsche_filter",
+    "requiredRoles": ["filter_vessel_shell", "support_base"],
+    "shapeCount": { "min": 6, "max": 55 }
+  },
+  {
+    "id": "quality.fine_chemical.filter_press",
+    "requiredRoles": ["filter_press_frame", "filter_plate_stack", "filtrate_header"],
+    "shapeCount": { "min": 6, "max": 60 }
+  },
+  {
+    "id": "quality.fine_chemical.centrifuge",
+    "requiredRoles": ["centrifuge_bowl_housing", "machine_base", "centrifuge_drive_unit"],
+    "shapeCount": { "min": 8, "max": 70 }
+  },
+  {
+    "id": "quality.fine_chemical.shell_tube_condenser",
+    "requiredRoles": ["heat_exchanger_shell", "support_base"],
+    "shapeCount": { "min": 8, "max": 70 }
+  },
+  {
+    "id": "quality.fine_chemical.distillation_column",
+    "requiredRoles": ["distillation_column_shell", "feed_nozzle", "access_platform"],
+    "shapeCount": { "min": 10, "max": 90 }
+  },
+  {
+    "id": "quality.fine_chemical.vacuum_tray_dryer",
+    "requiredRoles": ["dryer_chamber", "sealed_front_door", "vacuum_manifold"],
+    "shapeCount": { "min": 6, "max": 60 }
+  },
+  {
+    "id": "quality.fine_chemical.solvent_storage_tank",
+    "requiredRoles": ["vessel_shell", "support_base"],
+    "shapeCount": { "min": 8, "max": 70 }
+  },
+  {
+    "id": "quality.fine_chemical.metering_pump_skid",
+    "requiredRoles": ["support_base", "pump_volute", "drive_unit", "dosing_manifold"],
+    "shapeCount": { "min": 8, "max": 70 }
+  }
+]

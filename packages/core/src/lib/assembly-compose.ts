@@ -559,9 +559,9 @@ function composeFanAssembly(input: AssemblyComposeInput, constraints: UserGeomet
       },
       {
         id: 'fan_blades',
-        kind: 'radial_blades',
+        kind: 'fan_blade',
         count: 3,
-        bladeRadius: radius * 0.76,
+        length: radius * 0.58,
         bladeWidth: radius * 0.18,
         position: [0, headCenterY, 0],
       },
@@ -2021,7 +2021,7 @@ export function planAssemblyParts(input: AssemblyComposeInput = {}): AssemblyPar
       return [
         { role: 'enclosure', capability: 'structure.enclosure', partKind: 'rounded_machine_body' },
         { role: 'grille', capability: 'visual.glass_label_vent', partKind: 'vent_grill' },
-        { role: 'fan', capability: 'mechanical.wheel_rotor', partKind: 'radial_blades' },
+        { role: 'fan', capability: 'mechanical.wheel_rotor', partKind: 'fan_blade' },
         { role: 'ports', capability: 'connection.pipe_port', partKind: 'pipe_port' },
       ]
     case 'machine_tool':
@@ -2165,7 +2165,7 @@ function assemblyRequiredRoles(family: AssemblyObjectFamily): string[] {
         'outlet_chute',
       ]
     case 'fan':
-      return ['motor_housing', 'radial_blades', 'protective_grill']
+      return ['motor_housing', 'fan_blade', 'protective_grill']
     case 'pump':
       return ['volute_casing', 'inlet_port', 'outlet_port']
     case 'conveyor':

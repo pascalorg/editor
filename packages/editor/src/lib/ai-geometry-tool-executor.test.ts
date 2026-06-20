@@ -4,6 +4,10 @@ import { executeGeometryToolCall, normalizeGeometryToolShapes } from './ai-geome
 type TestSourcePart = {
   kind?: unknown
   position?: number[]
+  length?: number
+  width?: number
+  height?: number
+  primaryColor?: string
 }
 
 function sourceParts(value: unknown): TestSourcePart[] {
@@ -609,6 +613,37 @@ describe('AI geometry tool executor', () => {
     expect(result.artifact).toBeUndefined()
     expect(result.content).toContain('too complex')
     expect(result.content).toContain('limit is 2')
+  })
+
+  test('compacts compose_parts output to profile detail budgets', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'budgeted enclosure',
+        deviceProfileDraft: {
+          id: 'budgeted_enclosure',
+          name: 'Budgeted enclosure',
+          family: 'generic',
+          layoutFamily: 'box_enclosure_layout',
+          primarySemanticRole: 'machine_body',
+          parts: [{ kind: 'generic_body', semanticRole: 'machine_body', required: true }],
+        },
+        detailBudget: { maxShapes: 8 },
+        qualityRules: { shapeCount: { max: 8 } },
+        parts: [
+          { kind: 'generic_body', semanticRole: 'machine_body', required: true },
+          { kind: 'vent_slats', semanticRole: 'vent_panel', detailLevel: 'high' },
+          { kind: 'flange_ring', semanticRole: 'service_flange', detailLevel: 'high' },
+        ],
+      },
+      { prompt: 'make a compact industrial enclosure with vents and flange details' },
+    )
+
+    expect(result.artifact?.shapes.length).toBeLessThanOrEqual(8)
+    expect(result.artifact?.sourceArgs).toMatchObject({
+      detailBudgetApplied: true,
+      detailBudgetCompaction: { maxShapes: 8, afterShapeCount: 8 },
+    })
   })
 
   test('rejects legacy compose_object tool calls after object templates are retired', () => {
@@ -2842,6 +2877,41 @@ describe('AI geometry tool executor', () => {
   })
 
   test('routes robot welding cell compose_parts requests through robot arm fallback', () => {
+    const armOnly = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'robot_arm',
+        name: 'six axis robot arm',
+        includeWorkcell: false,
+        height: 2.2,
+      },
+      {
+        prompt:
+          'generate a six-axis industrial robot arm with base, shoulder, upper arm, elbow, forearm, wrist, and tool flange only',
+      },
+    )
+    const armOnlyRoles = new Set(armOnly.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(armOnly.artifact?.sourceArgs).toMatchObject({
+      family: 'robot_arm',
+      axisCount: 6,
+      includeWorkcell: false,
+      sourceStrategy: 'robot_arm_only_fallback',
+    })
+    expect(armOnly.artifact?.shapes.length).toBeLessThanOrEqual(14)
+    expect(armOnlyRoles.has('robot_base')).toBe(true)
+    expect(armOnlyRoles.has('shoulder_joint')).toBe(true)
+    expect(armOnlyRoles.has('upper_arm')).toBe(true)
+    expect(armOnlyRoles.has('elbow_joint')).toBe(true)
+    expect(armOnlyRoles.has('forearm')).toBe(true)
+    expect(armOnlyRoles.has('wrist_roll_joint')).toBe(true)
+    expect(armOnlyRoles.has('wrist_pitch_joint')).toBe(true)
+    expect(armOnlyRoles.has('wrist_joint')).toBe(true)
+    expect(armOnlyRoles.has('tool_flange')).toBe(true)
+    expect(armOnlyRoles.has('work_table')).toBe(false)
+    expect(armOnlyRoles.has('control_panel')).toBe(false)
+    expect(armOnlyRoles.has('safety_barrier')).toBe(false)
+
     const result = executeGeometryToolCall(
       'compose_parts',
       {
@@ -2877,6 +2947,97 @@ describe('AI geometry tool executor', () => {
     expect(roles.has('work_table')).toBe(true)
     expect(roles.has('control_panel')).toBe(true)
     expect(roles.has('safety_barrier')).toBe(true)
+  })
+
+  test('uses robotics resource-pack profile metadata for six-axis robot arms', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        deviceProfile: 'robotics.six_axis_industrial_robot_arm',
+        family: 'robot_arm',
+        name: 'six-axis industrial robot arm',
+      },
+      {
+        prompt: 'generate a six-axis industrial robot arm only, no work table or guard rail',
+        deviceProfiles: [
+          {
+            id: 'robotics.six_axis_industrial_robot_arm',
+            name: 'Six-axis industrial robot arm',
+            aliases: ['six-axis industrial robot arm', 'robot arm'],
+            industry: 'robotics',
+            family: 'robot_arm',
+            layoutFamily: 'robot_workcell_layout',
+            layoutTemplate: 'articulated_robot.six_axis',
+            archetypeFamily: 'robotic_workcell',
+            defaultDimensions: { length: 2.2, width: 1.2, height: 2.2 },
+            primarySemanticRole: 'robot_base',
+            status: 'stable',
+            source: 'imported_pack',
+            sourcePack: { id: 'industry.robotics.basic', version: '0.1.0' },
+            layoutHints: {
+              robotArmDefaults: {
+                axisCount: 6,
+                includeWorkcell: false,
+                reach: 1.58,
+                primaryColor: '#facc15',
+                secondaryColor: '#111827',
+              },
+              layoutTemplate: { id: 'articulated_robot.six_axis' },
+            },
+            qualityRules: {
+              id: 'quality.robot_arm.six_axis',
+              requiredRoles: [
+                'robot_base',
+                'base_joint',
+                'shoulder_joint',
+                'upper_arm',
+                'elbow_joint',
+                'forearm',
+                'wrist_joint',
+                'tool_flange',
+                'end_effector',
+              ],
+              forbiddenRoles: ['work_table', 'control_panel', 'safety_barrier'],
+              shapeCount: { min: 9, max: 28 },
+            },
+            parts: [
+              { kind: 'generic_base', semanticRole: 'robot_base', required: true },
+              { kind: 'generic_body', semanticRole: 'base_joint', required: true },
+              { kind: 'generic_body', semanticRole: 'shoulder_joint', required: true },
+              { kind: 'generic_body', semanticRole: 'upper_arm', required: true },
+              { kind: 'generic_body', semanticRole: 'elbow_joint', required: true },
+              { kind: 'generic_body', semanticRole: 'forearm', required: true },
+              { kind: 'generic_panel', semanticRole: 'wrist_joint', required: true },
+              { kind: 'generic_panel', semanticRole: 'tool_flange', required: true },
+              { kind: 'generic_panel', semanticRole: 'end_effector', required: true },
+            ],
+            roleAliases: {
+              wrist_joint: ['wrist_roll_joint', 'wrist_pitch_joint', 'wrist_yaw_joint'],
+              tool_flange: ['flange', 'end_effector'],
+            },
+            description: 'Resource-pack robot arm profile.',
+          },
+        ],
+      },
+    )
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(result.artifact?.sourceArgs).toMatchObject({
+      deviceProfile: 'robotics.six_axis_industrial_robot_arm',
+      profilePackId: 'industry.robotics.basic',
+      layoutTemplate: 'articulated_robot.six_axis',
+      sourceStrategy: 'robot_arm_only_fallback',
+      axisCount: 6,
+      qualityRules: { id: 'quality.robot_arm.six_axis' },
+    })
+    expect(result.artifact?.geometryBrief?.category).toBe('robot_arm')
+    expect(roles.has('robot_base')).toBe(true)
+    expect(roles.has('shoulder_joint')).toBe(true)
+    expect(roles.has('upper_arm')).toBe(true)
+    expect(roles.has('forearm')).toBe(true)
+    expect(roles.has('work_table')).toBe(false)
+    expect(roles.has('control_panel')).toBe(false)
+    expect(roles.has('safety_barrier')).toBe(false)
   })
 
   test('routes palletizer device profiles through robot workcell fallback', () => {
@@ -3037,6 +3198,112 @@ describe('AI geometry tool executor', () => {
     )
   })
 
+  test('reroutes generic inspection platform output through the precision platform ladder part', () => {
+    const noPartResult = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'industrial inspection platform ladder',
+        family: 'bicycle',
+      },
+      {
+        prompt:
+          'generate an industrial inspection platform ladder with guard rails, side rails, and rungs',
+      },
+    )
+    expect(noPartResult.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: 'platform_ladder' })]),
+    )
+
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'industrial inspection platform ladder',
+        family: 'bicycle',
+        deviceProfileDraft: {
+          id: 'wrong_platform_draft',
+          family: 'vehicle',
+          layoutFamily: 'vehicle_layout',
+        },
+        parts: [
+          { kind: 'generic_panel', semanticRole: 'platform_floor', length: 2.4, width: 0.8 },
+          { kind: 'generic_foot_set', semanticRole: 'support_column', count: 4 },
+          { kind: 'generic_body', semanticRole: 'ladder_rail' },
+        ],
+      },
+      {
+        prompt:
+          'generate an industrial inspection platform ladder with guard rails, side rails, and rungs',
+      },
+    )
+
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(result.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: 'platform_ladder' })]),
+    )
+    expect(roles.has('access_platform')).toBe(true)
+    expect(roles.has('guard_rail')).toBe(true)
+    expect(roles.has('ladder_side_rail')).toBe(true)
+    expect(roles.has('ladder_rung')).toBe(true)
+    expect(result.artifact?.shapes.some((shape) => shape.sourcePartKind === 'generic_panel')).toBe(
+      false,
+    )
+  })
+
+  test('reroutes mixed pressure tank output through the precision cylindrical tank part', () => {
+    const noPartResult = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'horizontal pressure storage tank',
+        family: 'machine_tool',
+      },
+      {
+        prompt:
+          'generate a horizontal pressure storage tank with hollow cylindrical shell, dished heads, top nozzle, manway flange, and saddle supports',
+      },
+    )
+    expect(noPartResult.artifact?.sourceArgs.family).toBe('tank')
+    expect(noPartResult.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: 'cylindrical_tank' })]),
+    )
+
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'horizontal pressure storage tank',
+        family: 'reactor',
+        deviceProfileDraft: {
+          id: 'wrong_pressure_tank_draft',
+          family: 'reactor',
+          layoutFamily: 'vessel_layout',
+        },
+        parts: [
+          { kind: 'cylindrical_tank', semanticRole: 'cylindrical_shell' },
+          { kind: 'ribbed_motor_body', semanticRole: 'ribbed_motor_body' },
+          { kind: 'volute_casing', semanticRole: 'volute_casing' },
+        ],
+      },
+      {
+        prompt:
+          'generate a horizontal pressure storage tank with hollow cylindrical shell, dished heads, top nozzle, manway flange, and saddle supports',
+      },
+    )
+
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(result.artifact?.sourceArgs.family).toBe('tank')
+    expect(result.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: 'cylindrical_tank' })]),
+    )
+    expect(roles.has('vessel_shell')).toBe(true)
+    expect(roles.has('vessel_head')).toBe(true)
+    expect(roles.has('top_nozzle')).toBe(true)
+    expect(roles.has('saddle_support')).toBe(true)
+    expect(roles.has('volute_casing')).toBe(false)
+  })
+
   test('routes desk requests without explicit parts through registry-normalized parts', () => {
     const result = executeGeometryToolCall(
       'compose_parts',
@@ -3183,6 +3450,88 @@ describe('AI geometry tool executor', () => {
     expect(packagingRoles.has('display_screen')).toBe(true)
   })
 
+  test('applies resource-pack layout templates and part presets to profile parts', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        deviceProfile: 'pack.template_machine',
+        family: 'machine_tool',
+      },
+      {
+        prompt: 'generate a template machine from resource pack',
+        deviceProfiles: [
+          {
+            id: 'pack.template_machine',
+            name: 'Template machine',
+            aliases: ['template machine'],
+            family: 'machine_tool',
+            layoutFamily: 'box_enclosure_layout',
+            layoutTemplate: 'layout.template_machine',
+            archetypeFamily: 'enclosed_machine',
+            defaultDimensions: { length: 2, width: 1, height: 1.2 },
+            primarySemanticRole: 'machine_enclosure',
+            status: 'stable',
+            source: 'imported_pack',
+            sourcePack: { id: 'industry.test.templates', version: '1.0.0' },
+            partPresets: {
+              machine_enclosure: 'preset.machine_body',
+              control_panel: 'preset.control_panel',
+            },
+            resolvedPartPresets: {
+              'preset.machine_body': {
+                id: 'preset.machine_body',
+                defaults: { length: 1.4, width: 0.7, height: 0.8, primaryColor: '#2563eb' },
+              },
+              'preset.control_panel': {
+                id: 'preset.control_panel',
+                parameters: {
+                  width: { from: 'width', scale: 0.24 },
+                  height: { from: 'height', scale: 0.3 },
+                },
+              },
+            },
+            layoutHints: {
+              layoutTemplate: {
+                id: 'layout.template_machine',
+                placements: [
+                  { role: 'machine_enclosure', position: [0, 0.55, 0] },
+                  { role: 'control_panel', position: [0.78, 0.62, 0.54] },
+                ],
+              },
+            },
+            parts: [
+              { kind: 'generic_body', semanticRole: 'machine_enclosure', required: true },
+              { kind: 'control_box', semanticRole: 'control_panel', required: true },
+            ],
+            description: 'Template machine profile backed by resource-pack knowledge.',
+          },
+        ],
+      },
+    )
+
+    const parts = sourceParts(result.artifact?.sourceArgs.parts)
+    const body = parts.find((part) => part.kind === 'generic_body')
+    const panel = parts.find((part) => part.kind === 'control_box')
+
+    expect(result.artifact).toBeDefined()
+    expect(body).toMatchObject({
+      position: [0, 0.55, 0],
+      length: 1.4,
+      width: 0.7,
+      height: 0.8,
+      primaryColor: '#2563eb',
+    })
+    expect(panel).toMatchObject({
+      position: [0.78, 0.62, 0.54],
+      width: 0.24,
+      height: 0.36,
+    })
+    expect(result.artifact?.sourceArgs).toMatchObject({
+      profilePackId: 'industry.test.templates',
+      layoutTemplate: 'layout.template_machine',
+    })
+  })
+
   test('builds draft profiles for unknown industrial equipment before generic fallback', () => {
     const cases = [
       {
@@ -3275,19 +3624,47 @@ describe('AI geometry tool executor', () => {
           {
             id: 'agv_material_cart',
             name: 'AGV material cart',
-            aliases: ['vga cart'],
+            aliases: ['vga cart', 'agv小车', '自动搬运车'],
             layoutFamily: 'generic_industrial_layout',
             archetypeFamily: 'material_handling',
             family: 'generic',
-            defaultDimensions: { length: 1.4, width: 0.85, height: 0.55 },
+            defaultDimensions: { length: 1.45, width: 0.9, height: 0.48 },
             parts: [
-              { kind: 'generic_body', semanticRole: 'vehicle_body', required: true },
-              { kind: 'generic_base', semanticRole: 'cargo_platform', required: true },
-              { kind: 'wheel_set', semanticRole: 'wheel', required: true },
-              { kind: 'bar_pair', semanticRole: 'bumper', required: true },
-              { kind: 'generic_detail_accent', semanticRole: 'navigation_sensor', required: true },
+              { kind: 'mobile_platform_chassis', semanticRole: 'vehicle_body', required: true },
+              { kind: 'wheel_set', semanticRole: 'drive_wheel', required: true },
+              { kind: 'bar_pair', semanticRole: 'safety_bumper', required: true },
+              { kind: 'lidar_sensor', semanticRole: 'front_navigation_sensor', required: true },
+              { kind: 'lidar_sensor', semanticRole: 'rear_navigation_sensor', required: true },
+              {
+                kind: 'status_light_strip',
+                semanticRole: 'left_status_light_strip',
+                required: true,
+              },
+              {
+                kind: 'status_light_strip',
+                semanticRole: 'right_status_light_strip',
+                required: true,
+              },
+              {
+                kind: 'emergency_stop_button',
+                semanticRole: 'emergency_stop_button',
+                required: true,
+              },
             ],
             primarySemanticRole: 'vehicle_body',
+            qualityRules: {
+              requiredRoles: [
+                'vehicle_body',
+                'cargo_platform',
+                'drive_wheel',
+                'safety_bumper',
+                'front_navigation_sensor',
+                'left_status_light_strip',
+                'emergency_stop_button',
+              ],
+              forbiddenRoles: ['vehicle_cabin', 'vehicle_window', 'headlight', 'vehicle_roof'],
+              shapeCount: { min: 12, max: 40 },
+            },
             status: 'stable',
             source: 'workspace',
             description: 'Factory AGV cart.',
@@ -3303,7 +3680,11 @@ describe('AI geometry tool executor', () => {
       primarySemanticRole: 'vehicle_body',
     })
     expect(roles.has('vehicle_body')).toBe(true)
-    expect(roles.has('navigation_sensor')).toBe(true)
+    expect(roles.has('front_navigation_sensor')).toBe(true)
+    expect(roles.has('left_status_light_strip')).toBe(true)
+    expect(roles.has('emergency_stop_button')).toBe(true)
+    expect(roles.has('vehicle_window')).toBe(false)
+    expect(roles.has('vehicle_cabin')).toBe(false)
     expect(roles.has('cart_body')).toBe(false)
   })
 
