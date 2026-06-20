@@ -83,6 +83,25 @@ function withFactoryQuality(result: FactoryRunResult): FactoryRunResult {
   return { ...result, qualityReport: evaluateFactoryQuality(result) }
 }
 
+export function failedFactoryRunStatus(
+  result: FactoryRunResult,
+  fallbackFailed: boolean,
+  fallbackError: string,
+) {
+  if (result.qualityReport?.passed === false) {
+    return {
+      failed: true,
+      error:
+        result.qualityReport.issues.find((issue) => issue.severity === 'error')?.message ??
+        result.qualityReport.summary,
+    }
+  }
+  if (fallbackFailed) {
+    return { failed: true, error: fallbackError }
+  }
+  return { failed: false, error: undefined }
+}
+
 function isAbortError(error: unknown) {
   return (
     (error instanceof DOMException && error.name === 'AbortError') ||
@@ -809,10 +828,14 @@ async function runFactoryRun(runId: string) {
       placement,
     })
     if (selectionEditResult) {
-      const failed = selectionEditResult.missingAssets.some((asset) => asset.required)
+      const runStatus = failedFactoryRunStatus(
+        selectionEditResult,
+        selectionEditResult.missingAssets.some((asset) => asset.required),
+        selectionEditResult.missingAssets[0]?.reason ?? 'selection edit failed',
+      )
       await appendRunEvent(runId, {
         type: 'message',
-        message: failed
+        message: runStatus.failed
           ? 'Selection edit could not be resolved.'
           : 'Selection edit patch plan generated; patches are ready.',
         data: {
@@ -825,17 +848,15 @@ async function runFactoryRun(runId: string) {
       })
       await appendRunEvent(runId, { type: 'result', data: selectionEditResult })
       await updateRun(runId, {
-        status: failed ? 'failed' : 'succeeded',
+        status: runStatus.failed ? 'failed' : 'succeeded',
         completedAt: new Date().toISOString(),
-        ...(failed
-          ? { error: selectionEditResult.missingAssets[0]?.reason ?? 'selection edit failed' }
-          : {}),
+        ...(runStatus.failed ? { error: runStatus.error } : {}),
         result: selectionEditResult,
       })
       await appendRunEvent(runId, {
         type: 'status',
-        message: failed ? 'failed' : 'succeeded',
-        data: { status: failed ? 'failed' : 'succeeded' },
+        message: runStatus.failed ? 'failed' : 'succeeded',
+        data: { status: runStatus.failed ? 'failed' : 'succeeded', error: runStatus.error },
       })
       return
     }
@@ -883,15 +904,21 @@ async function runFactoryRun(runId: string) {
         },
       })
       await appendRunEvent(runId, { type: 'result', data: processLineResult })
+      const runStatus = failedFactoryRunStatus(
+        processLineResult,
+        false,
+        'Factory process line failed quality checks.',
+      )
       await updateRun(runId, {
-        status: 'succeeded',
+        status: runStatus.failed ? 'failed' : 'succeeded',
         completedAt: new Date().toISOString(),
+        ...(runStatus.failed ? { error: runStatus.error } : {}),
         result: processLineResult,
       })
       await appendRunEvent(runId, {
         type: 'status',
-        message: 'succeeded',
-        data: { status: 'succeeded' },
+        message: runStatus.failed ? 'failed' : 'succeeded',
+        data: { status: runStatus.failed ? 'failed' : 'succeeded', error: runStatus.error },
       })
       return
     }
@@ -922,18 +949,21 @@ async function runFactoryRun(runId: string) {
         },
       })
       await appendRunEvent(runId, { type: 'result', data: planResult })
+      const runStatus = failedFactoryRunStatus(
+        planResult,
+        planned.plan.kind === 'missing',
+        planResult.missingAssets[0]?.reason ?? 'missing asset',
+      )
       await updateRun(runId, {
-        status: planned.plan.kind === 'missing' ? 'failed' : 'succeeded',
+        status: runStatus.failed ? 'failed' : 'succeeded',
         completedAt: new Date().toISOString(),
-        ...(planned.plan.kind === 'missing'
-          ? { error: planResult.missingAssets[0]?.reason ?? 'missing asset' }
-          : {}),
+        ...(runStatus.failed ? { error: runStatus.error } : {}),
         result: planResult,
       })
       await appendRunEvent(runId, {
         type: 'status',
-        message: planned.plan.kind === 'missing' ? 'failed' : 'succeeded',
-        data: { status: planned.plan.kind === 'missing' ? 'failed' : 'succeeded' },
+        message: runStatus.failed ? 'failed' : 'succeeded',
+        data: { status: runStatus.failed ? 'failed' : 'succeeded', error: runStatus.error },
       })
       return
     }
@@ -986,16 +1016,21 @@ async function runFactoryRun(runId: string) {
       },
     })
     await appendRunEvent(runId, { type: 'result', data: result })
+    const runStatus = failedFactoryRunStatus(
+      result,
+      !result.artifact,
+      result.missingAssets[0]?.reason ?? 'missing asset',
+    )
     await updateRun(runId, {
-      status: result.artifact ? 'succeeded' : 'failed',
+      status: runStatus.failed ? 'failed' : 'succeeded',
       completedAt: new Date().toISOString(),
-      ...(result.artifact ? {} : { error: result.missingAssets[0]?.reason ?? 'missing asset' }),
+      ...(runStatus.failed ? { error: runStatus.error } : {}),
       result,
     })
     await appendRunEvent(runId, {
       type: 'status',
-      message: result.artifact ? 'succeeded' : 'failed',
-      data: { status: result.artifact ? 'succeeded' : 'failed' },
+      message: runStatus.failed ? 'failed' : 'succeeded',
+      data: { status: runStatus.failed ? 'failed' : 'succeeded', error: runStatus.error },
     })
   } catch (error) {
     if (isAbortError(error) || controller.signal.aborted) {

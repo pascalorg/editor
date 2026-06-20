@@ -9,6 +9,7 @@ import {
   buildFactoryRunResultFromPlan,
   buildFactoryRunResultFromProcessLine,
   buildFactoryRunResultFromSelectionEdit,
+  failedFactoryRunStatus,
 } from './factory-runner'
 import type { PrimitiveGeometryGenerationRequest } from './primitive-generation-service'
 import { composeProcessLine } from './process-line-composer'
@@ -274,6 +275,57 @@ describe('factory runner helpers', () => {
         },
       ],
       missingAssets: [],
+    })
+  })
+
+  test('fails run status when factory quality gate fails', () => {
+    const result = buildFactoryRunResultFromPlan({
+      prompt: 'create a 3m x 3m house',
+      plannerSource: 'fallback',
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+      plan: {
+        kind: 'layout',
+        reason: 'house is layout',
+        layoutType: 'house',
+        suggestedOperations: ['create_room'],
+      },
+    })
+    if (!result) throw new Error('expected layout result')
+
+    const status = failedFactoryRunStatus(
+      {
+        ...result,
+        qualityReport: {
+          score: 45,
+          passed: false,
+          summary: 'Factory quality failed (45/100).',
+          issueCount: { error: 1, warning: 0, info: 0 },
+          checks: {
+            patchCount: result.patches.length,
+            createdNodeCount: result.created.length,
+            primitiveQualityCount: 0,
+            catalogItemCount: 0,
+            localAssetCount: 0,
+            missingAssetCount: 0,
+            duplicateNodeIdCount: 0,
+            routeCollisionCount: 0,
+          },
+          issues: [
+            {
+              severity: 'error',
+              code: 'layout_does_not_fit',
+              message: 'Generated process layout does not fit.',
+            },
+          ],
+        },
+      },
+      false,
+      'fallback failure',
+    )
+
+    expect(status).toEqual({
+      failed: true,
+      error: 'Generated process layout does not fit.',
     })
   })
 

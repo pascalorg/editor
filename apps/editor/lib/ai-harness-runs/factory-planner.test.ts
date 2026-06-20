@@ -161,6 +161,37 @@ describe('factory planner', () => {
     }
   })
 
+  test('expands cement factory process quantities from explicit user wording', () => {
+    const plan = fallbackFactoryPlan(
+      '\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5382\uff0c\u6709\u4e24\u4e2a\u719f\u6599\u5de5\u5e8f\uff0c\u8f93\u51fa\u7684\u719f\u6599\u5230\u56db\u4e2a\u78e8\u673a',
+    )
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: { processId: 'cement_plant_full' },
+    })
+    if (plan.kind === 'process_line') {
+      expect(plan.process.stations.map((station) => station.id)).toEqual(
+        expect.arrayContaining([
+          'preheater_tower_2',
+          'rotary_kiln_2',
+          'cement_mill_2',
+          'cement_mill_3',
+          'cement_mill_4',
+        ]),
+      )
+      expect(plan.process.connections).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ fromStationId: 'clinker_silo', toStationId: 'cement_mill_4' }),
+          expect.objectContaining({ fromStationId: 'rotary_kiln_2', toStationId: 'kiln_hood_2' }),
+        ]),
+      )
+      expect(plan.process.stations).toHaveLength(28)
+      expect(plan.process.dimensions?.length).toBeGreaterThan(66)
+      expect(plan.process.dimensions?.width).toBeGreaterThan(28)
+    }
+  })
+
   test('uses factory architecture tree to narrow cement plant requests to one station', () => {
     const plan = fallbackFactoryPlan('generate a cement plant preheater tower')
 
@@ -259,7 +290,7 @@ describe('factory planner', () => {
     })
   })
 
-  test('uses explicit industry template stations when LLM summarizes a known process', () => {
+  test('uses explicit industry template stations when LLM only names a known process', () => {
     const plan = parseFactoryPlan(
       JSON.stringify({
         kind: 'process_line',
@@ -267,29 +298,6 @@ describe('factory planner', () => {
         process: {
           processId: 'cement_plant_full',
           processLabel: '\u6c34\u6ce5\u751f\u4ea7\u7ebf',
-          layoutStyle: 'linear',
-          stations: [
-            {
-              id: 'S1',
-              label: '\u539f\u6599\u50a8\u5b58\u4e0e\u914d\u6599',
-              role: 'raw_material_storage_and_dosing',
-            },
-            { id: 'S2', label: '\u751f\u6599\u78e8', role: 'raw_material_grinding' },
-            { id: 'S3', label: '\u751f\u6599\u5747\u5316\u5e93', role: 'raw_meal_homogenization' },
-            {
-              id: 'S4',
-              label: '\u9884\u70ed\u5668\u4e0e\u5206\u89e3\u7089',
-              role: 'preheating_and_precalcination',
-            },
-            { id: 'S5', label: '\u56de\u8f6c\u7a91', role: 'clinker_burning' },
-            { id: 'S6', label: '\u7be6\u51b7\u673a', role: 'clinker_cooling' },
-            { id: 'S7', label: '\u6c34\u6ce5\u78e8', role: 'cement_grinding' },
-            {
-              id: 'S8',
-              label: '\u6c34\u6ce5\u50a8\u5b58\u4e0e\u5305\u88c5',
-              role: 'cement_storage_and_packing',
-            },
-          ],
         },
       }),
       '\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382',
@@ -310,6 +318,37 @@ describe('factory planner', () => {
       )
       expect(plan.process.stations.map((station) => station.id)).not.toContain('S1')
     }
+  })
+
+  test('keeps explicit expanded topology over the default process template', () => {
+    const fallbackPlan = fallbackFactoryPlan('\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382')
+    if (fallbackPlan.kind !== 'process_line') throw new Error('expected process line fallback')
+    const llmPlan = {
+      kind: 'process_line' as const,
+      reason: 'customized cement factory',
+      process: {
+        ...fallbackPlan.process,
+        stations: [
+          ...fallbackPlan.process.stations,
+          {
+            ...fallbackPlan.process.stations.find((station) => station.id === 'cement_mill')!,
+            id: 'cement_mill_2',
+            label: 'Cement mill 2',
+          },
+        ],
+        connections: [
+          ...fallbackPlan.process.connections,
+          {
+            fromStationId: 'clinker_silo',
+            toStationId: 'cement_mill_2',
+            medium: 'material' as const,
+            visualKind: 'material_conveyor' as const,
+          },
+        ],
+      },
+    }
+
+    expect(shouldPreferFallbackFactoryPlan(llmPlan, fallbackPlan)).toBe(false)
   })
 
   test('prefers the complete industry template over a shorter LLM process summary', () => {

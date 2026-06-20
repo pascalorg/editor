@@ -97,6 +97,29 @@ function numberValue(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 }
 
+function integerValue(value: string | undefined) {
+  if (!value) return undefined
+  if (/^\d+$/.test(value)) return Number(value)
+  const chineseDigits: Record<string, number> = {
+    '\u4e00': 1,
+    '\u4e8c': 2,
+    '\u4e24': 2,
+    '\u4e09': 3,
+    '\u56db': 4,
+    '\u4e94': 5,
+    '\u516d': 6,
+    '\u4e03': 7,
+    '\u516b': 8,
+    '\u4e5d': 9,
+    '\u5341': 10,
+  }
+  return chineseDigits[value]
+}
+
+function clampInteger(value: number | undefined, min: number, max: number) {
+  return value == null ? undefined : Math.max(min, Math.min(max, Math.floor(value)))
+}
+
 function slugValue(value: string, fallback: string) {
   const slug = value
     .toLowerCase()
@@ -208,15 +231,151 @@ function templateById(processId: string | undefined) {
     : undefined
 }
 
+function promptQuantity(prompt: string, target: RegExp) {
+  const numberToken = String.raw`(\d+|[\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341])`
+  const beforeTarget = new RegExp(`${numberToken}\\s*(?:\u4e2a|\u6761|\u5957)?\\s*${target.source}`, 'i')
+  const afterTarget = new RegExp(`${target.source}\\s*${numberToken}`, 'i')
+  return integerValue(beforeTarget.exec(prompt)?.[1] ?? afterTarget.exec(prompt)?.[1])
+}
+
+function duplicateStation(
+  station: ProcessStationPlan,
+  index: number,
+  overrides?: Partial<ProcessStationPlan>,
+): ProcessStationPlan {
+  return {
+    ...station,
+    id: `${station.id}_${index}`,
+    label: `${station.label} ${index}`,
+    ...(station.displayLabel ? { displayLabel: `${station.displayLabel} ${index}` } : {}),
+    ...overrides,
+  }
+}
+
+function duplicateConnection(
+  connection: ProcessConnectionPlan,
+  fromStationId: string,
+  toStationId: string,
+): ProcessConnectionPlan {
+  return {
+    ...connection,
+    fromStationId,
+    toStationId,
+  }
+}
+
+function duplicateConnectionsForStationSet(
+  connections: ProcessConnectionPlan[],
+  stationIds: Set<string>,
+  index: number,
+) {
+  return connections
+    .filter(
+      (connection) =>
+        stationIds.has(connection.fromStationId) || stationIds.has(connection.toStationId),
+    )
+    .map((connection) =>
+      duplicateConnection(
+        connection,
+        stationIds.has(connection.fromStationId)
+          ? `${connection.fromStationId}_${index}`
+          : connection.fromStationId,
+        stationIds.has(connection.toStationId)
+          ? `${connection.toStationId}_${index}`
+          : connection.toStationId,
+      ),
+    )
+}
+
+function applyPromptProcessQuantities(plan: ProcessLinePlan, prompt: string): ProcessLinePlan {
+  if (plan.processId !== 'cement_plant_full') return plan
+  const clinkerLineCount = clampInteger(
+    promptQuantity(prompt, /\u719f\u6599(?:\u5de5\u5e8f|\u7ebf|\u751f\u4ea7\u7ebf)/),
+    1,
+    8,
+  )
+  const cementMillCount = clampInteger(
+    promptQuantity(prompt, /(?:\u6c34\u6ce5)?\u78e8(?:\u673a)?|cement\s+mill/),
+    1,
+    12,
+  )
+  if ((clinkerLineCount ?? 1) <= 1 && (cementMillCount ?? 1) <= 1) return plan
+
+  const stations = [...plan.stations]
+  const connections = [...plan.connections]
+  const stationById = new Map(plan.stations.map((station) => [station.id, station]))
+  const clinkerStationIds = new Set(['preheater_tower', 'rotary_kiln', 'kiln_hood', 'grate_cooler'])
+  const clinkerStations = [...clinkerStationIds]
+    .map((stationId) => stationById.get(stationId))
+    .filter((station): station is ProcessStationPlan => Boolean(station))
+  for (let index = 2; index <= (clinkerLineCount ?? 1); index += 1) {
+    stations.push(...clinkerStations.map((station) => duplicateStation(station, index)))
+    connections.push(...duplicateConnectionsForStationSet(plan.connections, clinkerStationIds, index))
+  }
+
+  const cementMill = stationById.get('cement_mill')
+  if (cementMill) {
+    const cementMillConnections = plan.connections.filter(
+      (connection) =>
+        connection.fromStationId === 'cement_mill' || connection.toStationId === 'cement_mill',
+    )
+    for (let index = 2; index <= (cementMillCount ?? 1); index += 1) {
+      stations.push(duplicateStation(cementMill, index))
+      connections.push(
+        ...cementMillConnections.map((connection) =>
+          duplicateConnection(
+            connection,
+            connection.fromStationId === 'cement_mill'
+              ? `cement_mill_${index}`
+              : connection.fromStationId,
+            connection.toStationId === 'cement_mill' ? `cement_mill_${index}` : connection.toStationId,
+          ),
+        ),
+      )
+    }
+  }
+
+  const clinkerMultiplier = Math.max(0, (clinkerLineCount ?? 1) - 1)
+  const millMultiplier = Math.max(0, (cementMillCount ?? 1) - 1)
+  return {
+    ...plan,
+    dimensions: {
+      length: Math.round(((plan.dimensions?.length ?? 66) * (1 + clinkerMultiplier * 0.12 + millMultiplier * 0.06)) * 10) / 10,
+      width: Math.round(((plan.dimensions?.width ?? 28) * (1 + clinkerMultiplier * 0.18 + millMultiplier * 0.08)) * 10) / 10,
+    },
+    stations,
+    connections,
+    architecture: plan.architecture
+      ? {
+          ...plan.architecture,
+          keyFocusStationIds: [
+            ...(plan.architecture.keyFocusStationIds ?? []),
+            ...stations
+              .map((station) => station.id)
+              .filter((id) => /^(preheater_tower|rotary_kiln|cement_mill)_\d+$/.test(id)),
+          ],
+        }
+      : plan.architecture,
+  }
+}
+
+function sourceDimensions(source: Record<string, unknown>, templatePlan?: ProcessLinePlan) {
+  const dimensions = isRecord(source.dimensions) ? source.dimensions : {}
+  return {
+    length: numberValue(dimensions.length) ?? templatePlan?.dimensions?.length,
+    width: numberValue(dimensions.width) ?? templatePlan?.dimensions?.width,
+  }
+}
+
 function normalizeProcessLinePlan(value: unknown, fallbackPrompt: string): ProcessLinePlan | null {
   const source = isRecord(value) && isRecord(value.process) ? value.process : value
   if (!isRecord(source)) return null
   const processId = stringValue(source.processId)
   const explicitTemplate = templateById(processId)
-  if (explicitTemplate) return buildProcessLinePlanFromTemplate(explicitTemplate, fallbackPrompt)
-
-  const template = matchProcessTemplate(fallbackPrompt)
-  const templatePlan = template ? buildProcessLinePlanFromTemplate(template, fallbackPrompt) : undefined
+  const template = explicitTemplate ?? matchProcessTemplate(fallbackPrompt)
+  const templatePlan = template
+    ? applyPromptProcessQuantities(buildProcessLinePlanFromTemplate(template, fallbackPrompt), fallbackPrompt)
+    : undefined
   const stations = Array.isArray(source.stations)
     ? source.stations
         .map((station, index) => normalizeStation(station, index))
@@ -238,13 +397,14 @@ function normalizeProcessLinePlan(value: unknown, fallbackPrompt: string): Proce
       stringValue(source.label) ??
       templatePlan?.processLabel ??
       fallbackPrompt,
+    ...(templatePlan?.processDisplayLabel
+      ? { processDisplayLabel: templatePlan.processDisplayLabel }
+      : {}),
+    ...(templatePlan?.architecture ? { architecture: { ...templatePlan.architecture } } : {}),
     ...(templatePlan?.sourcePack ? { sourcePack: { ...templatePlan.sourcePack } } : {}),
     domain: processDomain(source.domain ?? templatePlan?.domain),
     layoutStyle: processLayoutStyle(source.layoutStyle ?? templatePlan?.layoutStyle),
-    dimensions: {
-      length: numberValue(isRecord(source.dimensions) ? source.dimensions.length : undefined),
-      width: numberValue(isRecord(source.dimensions) ? source.dimensions.width : undefined),
-    },
+    dimensions: sourceDimensions(source, templatePlan),
     stations,
     connections: connections.length ? connections : (templatePlan?.connections ?? []),
     safetyTags: stringArray(source.safetyTags).length
@@ -353,7 +513,10 @@ export function fallbackFactoryPlan(prompt: string): FactoryPlan {
       kind: 'process_line',
       reason:
         'Request matches a known process-line template; compose stations, equipment, and connections.',
-      process: buildProcessLinePlanFromTemplate(processTemplate, normalized),
+      process: applyPromptProcessQuantities(
+        buildProcessLinePlanFromTemplate(processTemplate, normalized),
+        normalized,
+      ),
     }
   }
   const type = inferLayoutType(normalized)
@@ -426,7 +589,12 @@ export function shouldPreferFallbackFactoryPlan(plan: FactoryPlan, fallbackPlan:
     const fallbackStationIds = new Set(fallbackPlan.process.stations.map((station) => station.id))
     const plannedStationIds = new Set(plan.process.stations.map((station) => station.id))
     const missingTemplateStations = [...fallbackStationIds].some((id) => !plannedStationIds.has(id))
-    if (missingTemplateStations || plannedStationIds.size !== fallbackStationIds.size) return true
+    const explicitTopology =
+      plan.process.stations.length > fallbackPlan.process.stations.length ||
+      plan.process.connections.length > fallbackPlan.process.connections.length
+    if (!explicitTopology && (missingTemplateStations || plannedStationIds.size !== fallbackStationIds.size)) {
+      return true
+    }
     return plan.process.connections.length < fallbackPlan.process.connections.length
   }
   if (fallbackPlan.kind === 'geometry' && plan.kind === 'layout') return true
