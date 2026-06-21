@@ -28,10 +28,10 @@ import {
   Vector3,
 } from 'three'
 import {
-  detectElbowEndpoint,
-  type ElbowEndpoint,
-  planElbowEndpointReaim,
-} from '../shared/elbow-endpoint-reaim'
+  detectFittingEndpoint,
+  type FittingEndpoint,
+  planFittingEndpointReaim,
+} from '../shared/fitting-endpoint-reaim'
 import { collectScenePorts, DWV_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 
 /** Corner hex-disc radius (meters) — matches the duct corner handle. */
@@ -132,7 +132,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     // Set when the run's OTHER end sits on an elbow collar: the elbow re-aims
     // to follow this drag instead of translating rigidly (mutually exclusive
     // with `connectivity`-driven follow for this endpoint).
-    elbowEndpoint: ElbowEndpoint | null
+    fittingEndpoint: FittingEndpoint | null
     // True while Alt is held: the joint is detached for this drag, so the
     // final commit must omit elbow / connectivity updates. Tracked live so
     // `onUp` knows what the last frame did.
@@ -186,13 +186,13 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     next: Point,
     detached: boolean,
   ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
-    if (!detached && drag.elbowEndpoint) {
-      const plan = planElbowEndpointReaim(drag.elbowEndpoint, drag.index, next)
+    if (!detached && drag.fittingEndpoint) {
+      const plan = planFittingEndpointReaim(drag.fittingEndpoint, drag.index, next)
       // Out of the elbow's buildable turn range — hold this frame.
       if (!plan) return null
       return [
         { id: pipe.id as AnyNodeId, data: { path: plan.path } },
-        { id: plan.elbowUpdate.id, data: plan.elbowUpdate.data as Partial<AnyNode> },
+        { id: plan.fittingUpdate.id, data: plan.fittingUpdate.data },
       ]
     }
     const path = pipe.path.map((p, i) => (i === drag.index ? next : p)) as Point[]
@@ -241,8 +241,8 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     // collar fixed, bend angle adapts) — so the dragged end moves freely in
     // any direction instead of being locked to the segment's own axis, the
     // way a wall corner drags. Detected once against a drag-start snapshot.
-    const elbowEndpoint: ElbowEndpoint | null = isEndpoint
-      ? detectElbowEndpoint('pipe-segment', initialPath, index, useScene.getState().nodes)
+    const fittingEndpoint: FittingEndpoint | null = isEndpoint
+      ? detectFittingEndpoint('pipe-segment', initialPath, index, useScene.getState().nodes)
       : null
 
     const onMove = (event: PointerEvent) => {
@@ -272,7 +272,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
           next = [snap(local[0], step), current[1], snap(local[2], step)]
           // Port re-mate stays available whether detaching or free-dragging;
           // it's only suppressed while the elbow is actively re-aiming.
-          if (isEndpoint && (detached || !drag.elbowEndpoint)) {
+          if (isEndpoint && (detached || !drag.fittingEndpoint)) {
             const port = findNearestPortXZ(
               [local[0], current[1], local[2]],
               collectScenePorts({ excludeNodeId: pipe.id, systems: DWV_PORT_SYSTEMS }),
@@ -308,16 +308,8 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       // detached nothing else moved, so only the run needs reverting.
       const revertUpdates: { id: AnyNodeId; data: Partial<AnyNode> }[] = detached
         ? []
-        : drag.elbowEndpoint
-          ? [
-              {
-                id: drag.elbowEndpoint.elbow.id as AnyNodeId,
-                data: {
-                  angle: drag.elbowEndpoint.elbow.angle,
-                  rotation: drag.elbowEndpoint.elbow.rotation,
-                } as Partial<AnyNode>,
-              },
-            ]
+        : drag.fittingEndpoint
+          ? [drag.fittingEndpoint.revert]
           : (drag.connectivity?.connections ?? []).map((conn) =>
               conn.kind === 'rigid-node'
                 ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
@@ -350,7 +342,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       current: startPoint,
       cleanup,
       connectivity,
-      elbowEndpoint,
+      fittingEndpoint,
       detached: false,
     }
     window.addEventListener('pointermove', onMove)

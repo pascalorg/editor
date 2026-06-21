@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNodeId, emitter, type GridEvent, LinesetNode, useScene } from '@pascal-app/core'
+import { emitter, type GridEvent, LinesetNode, useScene } from '@pascal-app/core'
 import {
   CursorSphere,
   DimensionPill,
@@ -16,7 +16,6 @@ import { type Group, Vector3 } from 'three'
 import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { collectScenePorts, findNearestPortXZ, REFRIGERANT_PORT_SYSTEMS } from '../shared/ports'
-import { planLinesetConnect } from './connect'
 import { linesetDefinition } from './definition'
 
 /**
@@ -103,30 +102,16 @@ const LinesetTool = () => {
         Math.abs(start[2] - end[2]) < 1e-4
       if (sameSpot) return
 
-      // Fold into any existing run that shares this segment's endpoint, so
-      // two runs meeting at a coordinate become one mitered path instead of
-      // overlapping nodes. Only same-level runs are candidates — lineset
-      // paths are level-local.
-      const scene = useScene.getState()
-      const existing = Object.values(scene.nodes).filter(
-        (n): n is LinesetNode =>
-          n?.type === 'lineset' && (n.parentId as AnyNodeId | null) === activeLevelId,
-      )
-      const plan = planLinesetConnect(existing, start, end)
-
-      if (plan.kind === 'create') {
-        const lineset = LinesetNode.parse({
-          ...linesetDefinition.defaults(),
-          name: 'Lineset',
-          path: plan.path,
-        })
-        scene.createNode(lineset, activeLevelId)
-      } else if (plan.kind === 'extend') {
-        scene.updateNode(plan.id, { path: plan.path })
-      } else {
-        scene.updateNode(plan.id, { path: plan.path })
-        scene.deleteNode(plan.deleteId)
-      }
+      // Each drawn segment is its own standalone two-point lineset node — the
+      // refrigerant-loop sibling of duct-segment. Independent nodes mean each
+      // segment selects and deletes on its own, rather than folding into one
+      // mitered polyline run.
+      const lineset = LinesetNode.parse({
+        ...linesetDefinition.defaults(),
+        name: 'Lineset',
+        path: [start, end],
+      })
+      useScene.getState().createNode(lineset, activeLevelId)
       triggerSFX('sfx:item-place')
       setDraftPoints([])
       setSnapTarget(null)

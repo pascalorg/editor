@@ -1,9 +1,13 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
+  analyzePortConnectivity,
   type LinesetNode,
+  type PortConnectivity,
   pauseSceneHistory,
+  resolveConnectivityUpdates,
   resumeSceneHistory,
   sceneRegistry,
   useScene,
@@ -32,6 +36,12 @@ type Point = [number, number, number]
  * Selection-time editing for committed lineset runs: one draggable handle
  * per path point. Mirrors the duct-segment path-handle system, but dragged
  * run endpoints snap onto refrigerant ports only.
+ *
+ * Dragging an endpoint that sits on another lineset's endpoint (a shared
+ * joint) carries the mated segment(s) along via port connectivity, so a run
+ * built from separate two-point linesets still edits as one welded piece.
+ * Hold **Alt** to detach — the joint breaks for that drag and the vertex moves
+ * on its own (and can re-snap onto a refrigerant port).
  *
  * Handles are PORTALED into the lineset's registered scene group so they
  * share its exact frame. Drag raycasts run in world space and convert hits
@@ -76,7 +86,27 @@ const LinesetPointHandles = ({ lineset, target }: { lineset: LinesetNode; target
     initialPath: Point[]
     current: Point
     cleanup: () => void
+    // Joint snapshot taken at pointer-down: which linesets are mated to this
+    // run's endpoints so they follow as the endpoint moves.
+    connectivity: PortConnectivity | null
+    // True while Alt is held: the joint is detached, so the commit omits the
+    // connectivity follow.
+    detached: boolean
   } | null>(null)
+
+  // Follow-updates for linesets mated to this run's endpoints, given the run's
+  // live path. Unchanged endpoints resolve to a zero delta, so only the dragged
+  // endpoint's partner actually moves.
+  const followUpdates = (
+    connectivity: PortConnectivity | null,
+    path: Point[],
+  ): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
+    if (!connectivity) return []
+    const preview = { ...(lineset as unknown as Record<string, unknown>), path } as AnyNode
+    return resolveConnectivityUpdates(connectivity, preview).filter(
+      (u) => useScene.getState().nodes[u.id],
+    )
+  }
 
   const makeRay = (clientX: number, clientY: number) => {
     const rect = gl.domElement.getBoundingClientRect()
@@ -120,6 +150,7 @@ const LinesetPointHandles = ({ lineset, target }: { lineset: LinesetNode; target
     e.stopPropagation()
     const initialPath = lineset.path.map((p) => [...p] as Point)
     const startPoint = initialPath[index]!
+    const connectivity = analyzePortConnectivity(lineset as AnyNode, useScene.getState().nodes)
     pauseSceneHistory(useScene)
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = 'grabbing'
@@ -149,8 +180,11 @@ const LinesetPointHandles = ({ lineset, target }: { lineset: LinesetNode; target
       if (!drag) return
       const current = drag.current
       const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+      // Alt = detach: free-plane move (and port re-snap), joint broken so
+      // mated segments don't follow.
+      const detached = event.altKey
       let next: Point | null = null
-      if (event.altKey) {
+      if (detached) {
         const plane = new Plane().setFromNormalAndCoplanarPoint(UP, toWorld(current))
         const hit = intersect(event.clientX, event.clientY, plane)
         if (hit) {
@@ -179,8 +213,14 @@ const LinesetPointHandles = ({ lineset, target }: { lineset: LinesetNode; target
       if (!next) return
       if (next[0] === current[0] && next[1] === current[1] && next[2] === current[2]) return
       drag.current = next
+      drag.detached = detached
       const path = lineset.path.map((p, i) => (i === drag.index ? next! : p)) as Point[]
-      useScene.getState().updateNode(lineset.id, { path })
+      useScene
+        .getState()
+        .updateNodes([
+          { id: lineset.id as AnyNodeId, data: { path } as Partial<AnyNode> },
+          ...(detached ? [] : followUpdates(drag.connectivity, path)),
+        ])
     }
 
     const onUp = () => {
@@ -189,15 +229,37 @@ const LinesetPointHandles = ({ lineset, target }: { lineset: LinesetNode; target
       drag.cleanup()
       dragRef.current = null
       setDraggingIndex(null)
+      const detached = drag.detached
       const finalPath = drag.initialPath.map((p, i) =>
         i === drag.index ? drag.current : p,
       ) as Point[]
-      useScene.getState().updateNode(lineset.id, { path: drag.initialPath })
+      // Single-undo dance: revert the run AND whatever followed (still paused),
+      // resume, then re-apply the final batch as one tracked change.
+      const revert = detached
+        ? []
+        : (drag.connectivity?.connections ?? []).map((conn) =>
+            conn.kind === 'rigid-node'
+              ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
+              : { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> },
+          )
+      useScene
+        .getState()
+        .updateNodes([
+          { id: lineset.id as AnyNodeId, data: { path: drag.initialPath } as Partial<AnyNode> },
+          ...revert.filter((u) => useScene.getState().nodes[u.id]),
+        ])
       resumeSceneHistory(useScene)
       const moved = finalPath[drag.index]!.some(
         (v, axis) => v !== drag.initialPath[drag.index]![axis],
       )
-      if (moved) useScene.getState().updateNode(lineset.id, { path: finalPath })
+      if (moved) {
+        useScene
+          .getState()
+          .updateNodes([
+            { id: lineset.id as AnyNodeId, data: { path: finalPath } as Partial<AnyNode> },
+            ...(detached ? [] : followUpdates(drag.connectivity, finalPath)),
+          ])
+      }
     }
 
     const cleanup = () => {
@@ -208,7 +270,14 @@ const LinesetPointHandles = ({ lineset, target }: { lineset: LinesetNode; target
       document.body.style.cursor = ''
     }
 
-    dragRef.current = { index, initialPath, current: startPoint, cleanup }
+    dragRef.current = {
+      index,
+      initialPath,
+      current: startPoint,
+      cleanup,
+      connectivity,
+      detached: false,
+    }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onUp)

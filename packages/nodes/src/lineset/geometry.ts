@@ -46,8 +46,12 @@ function buildRun(
  *
  * One line per node — what the ghost previews is exactly what commits. To run
  * the suction line beside the liquid line, draw them as two separate linesets
- * rather than rendering both together off one path. Joint spheres cap interior
- * corners so turns read as continuous pipe.
+ * rather than rendering both together off one path.
+ *
+ * Each line is a standalone two-point node (no fitting system, unlike ducts),
+ * so a sphere caps BOTH endpoints. On a free end it just rounds the cap; where
+ * two segments share a coordinate the coincident spheres fill the miter gap, so
+ * the turn reads as continuous pipe.
  *
  * Children are level-local meters; `<ParametricNodeRenderer>` owns the
  * node transform (identity today — the path is absolute within the level).
@@ -87,8 +91,10 @@ export function buildLinesetGeometry(node: LinesetNode): Group {
     }
   }
 
-  // Joint caps at interior corners so turns read as continuous pipe.
-  for (let i = 1; i < points.length - 1; i++) {
+  // Spherical caps at every point. Interior corners read as continuous pipe;
+  // endpoint caps round the open ends and, where two separate segments share a
+  // coordinate, the coincident spheres fill the miter so the turn looks welded.
+  for (let i = 0; i < points.length; i++) {
     const joint = new Mesh(new SphereGeometry(copperR, RADIAL_SEGMENTS, 10), copperMat)
     joint.name = `lineset-copper-joint-${i}`
     joint.position.copy(points[i] as Vector3)

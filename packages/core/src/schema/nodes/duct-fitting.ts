@@ -45,7 +45,7 @@ export const DuctFittingNode = BaseNode.extend({
   // matching the trunk the fitting sits in. Reducers ignore the shape.
   // When non-round, `diameter` carries the area-equivalent round size
   // (drives leg lengths + advertised ports).
-  shape: z.enum(['round', 'rect', 'oval']).default('round'),
+  shape: z.enum(['round', 'rect', 'oval']).default('rect'),
   // Rect / oval run-leg profile in inches (used when shape ≠ 'round').
   width: z.number().min(4).max(60).default(14),
   height: z.number().min(3).max(40).default(8),
@@ -53,7 +53,7 @@ export const DuctFittingNode = BaseNode.extend({
   // rect / oval profile matching the duct drawn off the tap. When
   // non-round, `diameter2` carries the branch's area-equivalent round
   // size. A cross's two opposed branches share this one profile.
-  shape2: z.enum(['round', 'rect', 'oval']).default('round'),
+  shape2: z.enum(['round', 'rect', 'oval']).default('rect'),
   // Rect / oval branch profile in inches (used when shape2 ≠ 'round').
   width2: z.number().min(4).max(60).default(14),
   height2: z.number().min(3).max(40).default(8),

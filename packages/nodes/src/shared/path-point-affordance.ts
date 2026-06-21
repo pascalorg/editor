@@ -10,10 +10,10 @@ import {
 } from '@pascal-app/core'
 import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
 import {
-  detectElbowEndpoint,
-  type ElbowEndpoint,
-  planElbowEndpointReaim,
-} from './elbow-endpoint-reaim'
+  detectFittingEndpoint,
+  type FittingEndpoint,
+  planFittingEndpointReaim,
+} from './fitting-endpoint-reaim'
 
 /**
  * Shared "drag a path point" floor-plan affordance for polyline
@@ -65,17 +65,17 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
       // bear ports; interior vertices have no joint, so skip the analysis.
       const isEndpoint = pointIndex === 0 || pointIndex === initialPath.length - 1
 
-      // Elbow re-aim (duct / pipe): if this is a straight run whose OTHER end
-      // sits on an elbow collar, the elbow swings to follow the drag (junction
-      // + far collar fixed, bend angle adapts) — the 2D twin of the 3D
-      // selection handle's behaviour. Takes precedence over the rigid
-      // connectivity follow for this endpoint.
-      const elbowEndpoint: ElbowEndpoint | null = isEndpoint
-        ? detectElbowEndpoint(kind, initialPath, pointIndex, nodes)
+      // Fitting re-aim (duct / pipe): if this is a straight run whose OTHER
+      // end sits on an elbow collar (bend angle adapts) or a duct tee branch
+      // collar (branch lean adapts), the fitting swings to follow the drag —
+      // the 2D twin of the 3D selection handle's behaviour. Takes precedence
+      // over the rigid connectivity follow for this endpoint.
+      const fittingEndpoint: FittingEndpoint | null = isEndpoint
+        ? detectFittingEndpoint(kind, initialPath, pointIndex, nodes)
         : null
 
       const connectivity: PortConnectivity | null =
-        isEndpoint && !elbowEndpoint
+        isEndpoint && !fittingEndpoint
           ? analyzePortConnectivity(node as unknown as AnyNode, nodes)
           : null
 
@@ -83,7 +83,7 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
       // for the single-undo dance.
       const affectedIds: AnyNodeId[] = [
         node.id,
-        ...(elbowEndpoint ? [elbowEndpoint.elbow.id as AnyNodeId] : []),
+        ...(fittingEndpoint ? [fittingEndpoint.fitting.id as AnyNodeId] : []),
         ...(connectivity?.connections.map((c) => c.nodeId) ?? []),
       ]
 
@@ -109,16 +109,17 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
           // re-aim and mated fittings / runs do NOT follow; the vertex moves
           // on its own. Mirrors the 3D selection drag and the wall corner.
           const detached = modifiers.altKey
-          // Elbow re-aim: the elbow swings to follow the dragged end and the
-          // run rides its re-aimed collar. Out-of-range turns hold the frame.
-          if (!detached && elbowEndpoint) {
-            const plan = planElbowEndpointReaim(elbowEndpoint, pointIndex, dragged)
+          // Fitting re-aim: the fitting swings to follow the dragged end and
+          // the run rides its re-aimed collar. Out-of-range turns hold the
+          // frame.
+          if (!detached && fittingEndpoint) {
+            const plan = planFittingEndpointReaim(fittingEndpoint, pointIndex, dragged)
             if (!plan) return
             useScene.getState().updateNodes([
               { id: node.id, data: { path: plan.path } as Partial<unknown> as never },
               {
-                id: plan.elbowUpdate.id,
-                data: plan.elbowUpdate.data as Partial<unknown> as never,
+                id: plan.fittingUpdate.id,
+                data: plan.fittingUpdate.data as Partial<unknown> as never,
               },
             ])
             return

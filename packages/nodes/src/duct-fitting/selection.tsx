@@ -335,6 +335,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       const startQuat = new Quaternion().setFromEuler(
         new Euler(fitting.rotation[0], fitting.rotation[1], fitting.rotation[2]),
       )
+      let lastStep = Number.NaN
       return (event: PointerEvent): FittingTransform | null => {
         if (startBearing === null) return null
         const b = bearing(event.clientX, event.clientY)
@@ -342,6 +343,15 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         // Snap the turn to 45° steps; Shift = smooth (no snap).
         const raw = b - startBearing
         const delta = event.shiftKey ? raw : Math.round(raw / ROTATE_STEP_RAD) * ROTATE_STEP_RAD
+        // Tick the rotate SFX each time a fresh snap step is crossed (snapped
+        // turns only — a smooth Shift-drag has no discrete steps to mark).
+        if (!event.shiftKey) {
+          const step = Math.round(raw / ROTATE_STEP_RAD)
+          if (step !== lastStep) {
+            lastStep = step
+            triggerSFX('sfx:item-rotate')
+          }
+        }
         const turn = new Quaternion().setFromAxisAngle(normal, delta)
         const euler = new Euler().setFromQuaternion(turn.multiply(startQuat))
         return { rotation: [euler.x, euler.y, euler.z] }

@@ -30,10 +30,10 @@ import {
   Vector3,
 } from 'three'
 import {
-  detectElbowEndpoint,
-  type ElbowEndpoint,
-  planElbowEndpointReaim,
-} from '../shared/elbow-endpoint-reaim'
+  detectFittingEndpoint,
+  type FittingEndpoint,
+  planFittingEndpointReaim,
+} from '../shared/fitting-endpoint-reaim'
 import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 import { HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { INCHES_TO_METERS } from './geometry'
@@ -201,10 +201,11 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     // Connectivity snapshot taken at pointer-down: which fittings / ducts are
     // mated to this run's endpoints, so they follow as the endpoint moves.
     connectivity: PortConnectivity | null
-    // Set when the run's OTHER end sits on an elbow collar: the elbow re-aims
-    // to follow this drag instead of translating rigidly (mutually exclusive
-    // with `connectivity`-driven follow for this endpoint).
-    elbowEndpoint: ElbowEndpoint | null
+    // Set when the run's OTHER end sits on a re-aimable fitting collar (an
+    // elbow inlet/outlet, or a tee branch): the fitting re-aims to follow this
+    // drag instead of translating rigidly (mutually exclusive with
+    // `connectivity`-driven follow for this endpoint).
+    fittingEndpoint: FittingEndpoint | null
     // True while Alt is held: the joint is detached for this drag, so the
     // final commit must omit elbow / connectivity updates. Tracked live so
     // `onUp` knows what the last frame did.
@@ -316,22 +317,23 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
   }
 
   // Build the per-frame update batch for the dragged endpoint at `next`.
-  // Detached (Alt): only the duct path moves — no elbow re-aim, no
-  // connectivity follow. Elbow mode: the run rides the elbow's re-aimed
-  // collar and the elbow swings to fit. Otherwise: the dragged point moves
-  // and any mated fittings / runs translate via connectivity.
+  // Detached (Alt): only the duct path moves — no fitting re-aim, no
+  // connectivity follow. Re-aim mode: the run rides the fitting's re-aimed
+  // collar and the fitting swings to fit (elbow body turns, or a tee branch
+  // leans). Otherwise: the dragged point moves and any mated fittings / runs
+  // translate via connectivity.
   const buildDragBatch = (
     drag: NonNullable<typeof dragRef.current>,
     next: Point,
     detached: boolean,
   ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
-    if (!detached && drag.elbowEndpoint) {
-      const plan = planElbowEndpointReaim(drag.elbowEndpoint, drag.index, next)
-      // Out of the elbow's buildable turn range — hold this frame.
+    if (!detached && drag.fittingEndpoint) {
+      const plan = planFittingEndpointReaim(drag.fittingEndpoint, drag.index, next)
+      // Out of the fitting's buildable range — hold this frame.
       if (!plan) return null
       return [
         { id: duct.id as AnyNodeId, data: { path: plan.path } },
-        { id: plan.elbowUpdate.id, data: plan.elbowUpdate.data as Partial<AnyNode> },
+        { id: plan.fittingUpdate.id, data: plan.fittingUpdate.data },
       ]
     }
     const path = duct.path.map((p, i) => (i === drag.index ? next : p)) as Point[]
@@ -395,12 +397,12 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       : 0
     const canSwing = swings && isEndpoint && pivot !== null && radius > 1e-6
 
-    // Elbow re-aim: if this is a straight run whose OTHER end sits on an
-    // elbow collar, the elbow swings to follow the drag (junction + far
-    // collar fixed, bend angle adapts). Detected once against a drag-start
-    // snapshot.
-    const elbowEndpoint: ElbowEndpoint | null = isEndpoint
-      ? detectElbowEndpoint('duct-segment', initialPath, index, useScene.getState().nodes)
+    // Fitting re-aim: if this is a straight run whose OTHER end sits on an
+    // elbow collar (junction + far collar fixed, bend angle adapts) or a tee
+    // branch collar (run legs fixed, branch lean adapts), the fitting swings
+    // to follow the drag. Detected once against a drag-start snapshot.
+    const fittingEndpoint: FittingEndpoint | null = isEndpoint
+      ? detectFittingEndpoint('duct-segment', initialPath, index, useScene.getState().nodes)
       : null
 
     const onMove = (event: PointerEvent) => {
@@ -458,8 +460,8 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       // the length-preserving swings all snap onto a nearby typed port so a
       // loose run can be mated onto a fitting after the fact (the swing's fixed
       // radius yields to the port). Stays available while detaching or
-      // free-dragging; suppressed only while the elbow is actively re-aiming.
-      if (isEndpoint && (detached || !drag.elbowEndpoint)) {
+      // free-dragging; suppressed only while a fitting is actively re-aiming.
+      if (isEndpoint && (detached || !drag.fittingEndpoint)) {
         const port = findNearestPortXZ(
           [next[0], next[1], next[2]],
           collectScenePorts({ excludeNodeId: duct.id, systems: DUCT_PORT_SYSTEMS }),
@@ -503,16 +505,8 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       // detached nothing else moved, so only the run needs reverting.
       const revertUpdates: { id: AnyNodeId; data: Partial<AnyNode> }[] = detached
         ? []
-        : drag.elbowEndpoint
-          ? [
-              {
-                id: drag.elbowEndpoint.elbow.id as AnyNodeId,
-                data: {
-                  angle: drag.elbowEndpoint.elbow.angle,
-                  rotation: drag.elbowEndpoint.elbow.rotation,
-                } as Partial<AnyNode>,
-              },
-            ]
+        : drag.fittingEndpoint
+          ? [drag.fittingEndpoint.revert]
           : (drag.connectivity?.connections ?? []).map((conn) =>
               conn.kind === 'rigid-node'
                 ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
@@ -545,7 +539,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       current: startPoint,
       cleanup,
       connectivity,
-      elbowEndpoint,
+      fittingEndpoint,
       detached: false,
     }
     window.addEventListener('pointermove', onMove)
@@ -591,6 +585,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     document.body.style.cursor = 'grabbing'
     setRolling(true)
     let current = startRoll
+    let lastStep = Number.NaN
 
     const onMove = (event: PointerEvent) => {
       if (startBearing === null) return
@@ -602,6 +597,15 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       const next = startRoll + delta
       if (next === current) return
       current = next
+      // Tick the rotate SFX each time a fresh snap step is crossed (snapped
+      // rolls only — a smooth Shift-drag has no discrete steps to mark).
+      if (!event.shiftKey) {
+        const step = Math.round(raw / ROLL_STEP_RAD)
+        if (step !== lastStep) {
+          lastStep = step
+          triggerSFX('sfx:item-rotate')
+        }
+      }
       useScene.getState().updateNode(duct.id, { roll: next })
     }
 
