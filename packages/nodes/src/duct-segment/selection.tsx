@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   analyzePortConnectivity,
   type Cursor,
+  type DuctFittingNode,
   type DuctSegmentNode,
   type PortConnectivity,
   pauseSceneHistory,
@@ -34,8 +35,10 @@ import {
   type FittingEndpoint,
   planFittingEndpointReaim,
 } from '../shared/fitting-endpoint-reaim'
+import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
 import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 import { HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
+import { planVerticalOffsets, type VerticalOffsetPlan } from '../shared/vertical-offset'
 import { INCHES_TO_METERS } from './geometry'
 
 /** Port-snap radius for dragged run endpoints (meters, XZ). */
@@ -181,6 +184,14 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
   const [rolling, setRolling] = useState(false)
   const [runMoving, setRunMoving] = useState(false)
+  // Auto-routed offset preview shown while the run-center cube's ±Y arrows
+  // lift / lower a connected run: the elbows + plumb riser the release will
+  // mint are ghosted (the run itself lifts live). Null when the move is a
+  // plain translate (open ends, or a move too short to offset).
+  const [verticalGhost, setVerticalGhost] = useState<{
+    fittings: DuctFittingNode[]
+    risers: DuctSegmentNode[]
+  } | null>(null)
   // Which cube's arrow cluster is open. Hover proved too fiddly (the cursor has
   // to bridge the gap between the dot and its offset arrows), so the cubes are
   // CLICK-to-latch instead: clicking a cube opens its cluster and closes any
@@ -640,8 +651,19 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     e.stopPropagation()
     const initialPath = duct.path.map((p) => [...p] as Point)
     const center = runAxisAndCenter(duct)?.center ?? initialPath[0]!
-    const connectivity = analyzePortConnectivity(duct as AnyNode, useScene.getState().nodes)
+    const nodesById = useScene.getState().nodes
+    const connectivity = analyzePortConnectivity(duct as AnyNode, nodesById)
     const anchorWorld = toWorld(center)
+    // Cross-section the auto-routed offset fittings inherit (vertical move).
+    const profile = {
+      shape: duct.shape,
+      diameter: duct.diameter,
+      width: duct.width,
+      height: duct.height,
+    }
+    // Other runs' / fittings' ports, for the offset planner to read a
+    // connected partner's collar direction at each lifted end.
+    const scenePorts = collectScenePorts({ excludeNodeId: duct.id, systems: DUCT_PORT_SYSTEMS })
     // Grab offset: cursor's start coordinate along the locked direction (signed
     // distance for the horizontal run-relative line), so the run doesn't jump
     // on grab.
@@ -659,6 +681,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setRunMoving(true)
     let delta = 0
+    // Set to the last frame's auto-routed offset plan (vertical move with a
+    // connected end and room to offset); null when the frame was a plain
+    // translate. `onUp` reads it to decide create-on-release vs. re-translate.
+    let offsetPlan: VerticalOffsetPlan | null = null
 
     const shiftedPath = (d: number): Point[] =>
       initialPath.map((p) => {
@@ -685,7 +711,39 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       if (next === delta) return
       delta = next
       if (step > 0) triggerSFX('sfx:grid-snap')
-      useScene.getState().updateNodes(batchFor(shiftedPath(next)))
+      // Vertical move: connected ends stay welded to their (stationary)
+      // partner via an auto-routed elbow → riser → elbow offset, instead of
+      // dragging the whole network up. Open ends (or moves too short to
+      // offset) fall back to the plain translate-with-follow.
+      offsetPlan =
+        kind.axis === 'y' && next !== 0
+          ? planVerticalOffsets({
+              duct,
+              dy: next,
+              profile,
+              connections: connectivity?.connections ?? [],
+              scenePorts,
+              nodesById,
+            })
+          : null
+      if (offsetPlan) {
+        // Lift the run to the offset path; trim run-offset partners back one
+        // leg, and let connectivity-follow (seeded from followPath, which zeroes
+        // the offset ends) lift any FITTING / open partner so its elbow rides
+        // up and its riser lengthens into a clean L. Ghost the new elbows +
+        // riser; they're minted for real on release.
+        useScene
+          .getState()
+          .updateNodes([
+            { id: duct.id as AnyNodeId, data: { path: offsetPlan.ductPath } },
+            ...offsetPlan.updates.filter((u) => useScene.getState().nodes[u.id]),
+            ...connectivityUpdatesForPath(connectivity, offsetPlan.followPath),
+          ])
+        setVerticalGhost({ fittings: offsetPlan.fittings, risers: offsetPlan.risers })
+      } else {
+        setVerticalGhost(null)
+        useScene.getState().updateNodes(batchFor(shiftedPath(next)))
+      }
     }
 
     const onUp = () => {
@@ -696,15 +754,24 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       useViewer.getState().setInputDragging(false)
       document.body.style.cursor = ''
       setRunMoving(false)
+      setVerticalGhost(null)
       // Single-undo dance: revert run + followers while paused, resume, re-apply
       // the final shift as one tracked change.
       const reverts: { id: AnyNodeId; data: Partial<AnyNode> }[] = (
         connectivity?.connections ?? []
-      ).map((conn) =>
-        conn.kind === 'rigid-node'
-          ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
-          : { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> },
-      )
+      ).map((conn) => {
+        if (conn.kind !== 'rigid-node') {
+          return { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> }
+        }
+        // Rigid partners translate (position) — but a connected elbow may have
+        // RE-AIMED (rotation + angle) for the clean-L offset, so restore those
+        // from the drag-start snapshot too.
+        const start = nodesById[conn.nodeId] as Record<string, unknown> | undefined
+        const data: Record<string, unknown> = { position: conn.startPosition }
+        if (start?.rotation !== undefined) data.rotation = start.rotation
+        if (start?.angle !== undefined) data.angle = start.angle
+        return { id: conn.nodeId, data: data as Partial<AnyNode> }
+      })
       useScene
         .getState()
         .updateNodes([
@@ -712,7 +779,26 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           ...reverts.filter((u) => useScene.getState().nodes[u.id]),
         ])
       resumeSceneHistory(useScene)
-      if (delta !== 0) useScene.getState().updateNodes(batchFor(shiftedPath(delta)))
+      if (delta === 0) return
+      const plan = offsetPlan
+      if (plan) {
+        // Create the auto-routed elbows + riser and apply the lifted path,
+        // run-partner trims, and the connectivity-follow for any fitting / open
+        // partner (seeded from followPath) as one tracked change.
+        useScene.getState().applyNodeChanges({
+          create: [...plan.fittings, ...plan.risers].map((node) => ({
+            node,
+            parentId: (duct.parentId ?? undefined) as AnyNodeId | undefined,
+          })),
+          update: [
+            { id: duct.id as AnyNodeId, data: { path: plan.ductPath } },
+            ...plan.updates.filter((u) => useScene.getState().nodes[u.id]),
+            ...connectivityUpdatesForPath(connectivity, plan.followPath),
+          ],
+        })
+      } else {
+        useScene.getState().updateNodes(batchFor(shiftedPath(delta)))
+      }
     }
 
     window.addEventListener('pointermove', onMove)
@@ -793,6 +879,15 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
 
   return (
     <group ref={outerRef}>
+      {/* Auto-routed offset preview (vertical run-center move): the elbows +
+          plumb riser the release will mint, ghosted while the run lifts live.
+          Built from the same nodes the commit creates, so what's shown lands. */}
+      {verticalGhost?.fittings.map((f) => (
+        <FittingGhost fitting={f} key={`vghost-fit-${f.id}`} />
+      ))}
+      {verticalGhost?.risers.map((r) => (
+        <DuctSegmentGhost duct={r} key={`vghost-riser-${r.id}`} />
+      ))}
       {/* Per-vertex affordances — hidden while a drag / roll is live (the window
           pointer handlers own the gesture). Each vertex shows a small cube;
           CLICKING the cube latches its directional cluster open (click again to

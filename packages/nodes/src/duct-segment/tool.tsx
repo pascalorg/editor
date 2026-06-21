@@ -27,14 +27,11 @@ import {
   DoubleSide,
   type Group,
   Matrix4,
-  Mesh,
-  MeshBasicMaterial,
   Path,
   Shape,
   ShapeGeometry,
   Vector3,
 } from 'three'
-import { buildDuctFittingGeometry } from '../duct-fitting/geometry'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import {
   planCrossAtRunBody,
@@ -44,6 +41,7 @@ import {
 } from '../shared/auto-fitting'
 import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
+import { FittingGhost } from '../shared/mep-ghost'
 import {
   collectScenePorts,
   DUCT_PORT_SYSTEMS,
@@ -1026,35 +1024,6 @@ const DuctSegmentTool = () => {
       ))}
     </LevelOffsetGroup>
   )
-}
-
-/**
- * Translucent ghost of an auto-inserted fitting, built from the same
- * geometry the placed node uses so the preview matches the result. The
- * node already carries its level-local `position` / `rotation`, so the
- * group is rendered at the origin (the builder bakes the transform in via
- * the renderer normally — here we apply it ourselves).
- */
-function FittingGhost({ fitting }: { fitting: DuctFittingNode }) {
-  const ghost = useMemo(() => {
-    const group = buildDuctFittingGeometry(fitting)
-    group.position.set(...fitting.position)
-    group.rotation.set(fitting.rotation[0], fitting.rotation[1], fitting.rotation[2])
-    group.traverse((child) => {
-      child.layers.set(EDITOR_LAYER)
-      if (child instanceof Mesh) {
-        child.material = new MeshBasicMaterial({
-          color: '#818cf8',
-          depthTest: false,
-          transparent: true,
-          opacity: PREVIEW_OPACITY,
-        })
-        child.renderOrder = 999
-      }
-    })
-    return group
-  }, [fitting])
-  return <primitive object={ghost} />
 }
 
 /**
