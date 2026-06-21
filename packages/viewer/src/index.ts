@@ -23,6 +23,14 @@ export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useNodeEvents } from './hooks/use-node-events'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
 export { createCylinderGeometry } from './lib/create-cylinder-geometry'
+export {
+  Brush,
+  csgEvaluator,
+  csgGeometry,
+  ensureRenderableGeometryAttributes,
+  prepareBrushForCSG,
+  SUBTRACTION,
+} from './lib/csg-utils'
 export type { EdgeMode } from './lib/edge-style'
 export { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from './lib/layers'
 export { clearViewerMaterialCaches, getViewerMaterialCacheSize } from './lib/material-cache'

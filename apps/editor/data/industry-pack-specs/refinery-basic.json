@@ -1,0 +1,1065 @@
+{
+  "industry": "refinery",
+  "id": "industry.refinery.basic",
+  "name": "炼油厂基础行业包",
+  "version": "0.1.0",
+  "description": "面向一句话创建炼油厂的基础行业包，覆盖原油罐区、常减压、转化/加氢、硫回收、火炬、公用工程和产品罐区。",
+  "capabilities": [
+    "factory_creation"
+  ],
+  "factoryArchitectures": [
+    {
+      "id": "refinery.factory.basic_refinery",
+      "label": "炼油厂基础架构",
+      "industry": "refinery",
+      "processId": "refinery_basic_complex",
+      "layoutStyle": "parallel_bays",
+      "defaultDimensions": {
+        "length": 92,
+        "width": 42
+      },
+      "scopes": [
+        {
+          "id": "basic_refinery",
+          "label": "基础炼油厂",
+          "includeModules": [
+            "crude_tank_farm",
+            "primary_distillation",
+            "conversion_treating",
+            "product_offsites",
+            "utilities_safety"
+          ]
+        }
+      ],
+      "modules": [
+        {
+          "id": "crude_tank_farm",
+          "displayLabel": "原油罐区",
+          "order": 10,
+          "stationIds": [
+            "crude_storage_tank",
+            "desalter"
+          ]
+        },
+        {
+          "id": "primary_distillation",
+          "displayLabel": "常减压蒸馏",
+          "order": 20,
+          "stationIds": [
+            "atmospheric_distillation_unit",
+            "vacuum_distillation_unit"
+          ]
+        },
+        {
+          "id": "conversion_treating",
+          "displayLabel": "转化与加氢",
+          "order": 30,
+          "stationIds": [
+            "fluid_catalytic_cracking_unit",
+            "hydrotreating_unit",
+            "catalytic_reformer_unit"
+          ]
+        },
+        {
+          "id": "product_offsites",
+          "displayLabel": "成品与外操",
+          "order": 40,
+          "stationIds": [
+            "product_storage_tank",
+            "pipe_rack"
+          ]
+        },
+        {
+          "id": "utilities_safety",
+          "displayLabel": "公用工程与安全",
+          "order": 50,
+          "stationIds": [
+            "sulfur_recovery_unit",
+            "flare_system",
+            "utility_boiler",
+            "control_room"
+          ]
+        }
+      ],
+      "layoutHints": {
+        "primaryAxis": "x",
+        "secondaryAxis": "z",
+        "indoorWorkshop": false,
+        "highestStationId": "atmospheric_distillation_unit",
+        "longAxisStationId": "pipe_rack",
+        "sideBranchStationIds": [
+          "crude_storage_tank",
+          "product_storage_tank",
+          "sulfur_recovery_unit",
+          "flare_system",
+          "utility_boiler",
+          "control_room"
+        ],
+        "scale": "conceptual",
+        "notes": [
+          "罐区和外操区与主体工艺装置保持间隔，避免把储罐塞进高温高压设备区。",
+          "常减压位于流程前段，FCC、加氢和重整位于中后段，产品罐区位于下游。",
+          "火炬系统作为安全设施布置在侧后方，远离控制室和主体工艺线。",
+          "管廊沿主流程侧边贯穿，用于表达炼油厂大量管线但不覆盖核心设备。"
+        ]
+      }
+    }
+  ],
+  "processTemplates": [
+    {
+      "processId": "refinery_basic_complex",
+      "processLabel": "Basic oil refinery complex",
+      "processDisplayLabel": "基础炼油厂",
+      "domain": "refinery",
+      "aliases": [
+        "炼油厂",
+        "原油炼油厂",
+        "石油炼化厂",
+        "炼油装置",
+        "生成一个炼油厂",
+        "做一个炼油厂",
+        "创建一个炼油厂",
+        "oil refinery",
+        "refinery plant",
+        "basic refinery complex"
+      ],
+      "requiredRoles": [
+        "crude_storage_tank",
+        "desalter",
+        "atmospheric_distillation_unit",
+        "vacuum_distillation_unit",
+        "fluid_catalytic_cracking_unit",
+        "hydrotreating_unit",
+        "catalytic_reformer_unit",
+        "sulfur_recovery_unit",
+        "flare_system",
+        "product_storage_tank",
+        "pipe_rack",
+        "utility_boiler",
+        "control_room"
+      ],
+      "defaultLayoutStyle": "parallel_bays",
+      "defaultDimensions": {
+        "length": 92,
+        "width": 42
+      },
+      "safetyTags": [
+        "flammable",
+        "high_temperature",
+        "pressure_equipment",
+        "process_pipe"
+      ],
+      "stations": [
+        {
+          "id": "crude_storage_tank",
+          "label": "Crude storage tank farm",
+          "displayLabel": "原油储罐",
+          "role": "crude_storage_tank",
+          "equipmentHint": "refinery.crude_storage_tank catalog storage tank for crude oil tank farm with inlet outlet nozzles and containment area",
+          "footprintHint": "large",
+          "safetyTags": [
+            "storage",
+            "flammable"
+          ]
+        },
+        {
+          "id": "desalter",
+          "label": "Crude desalter",
+          "displayLabel": "电脱盐器",
+          "role": "desalter",
+          "equipmentHint": "refinery.desalter horizontal desalter vessel with inlet outlet water drain and transformer control box",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "pressure_vessel",
+            "electrical"
+          ]
+        },
+        {
+          "id": "atmospheric_distillation_unit",
+          "label": "Atmospheric distillation unit",
+          "displayLabel": "常压蒸馏塔",
+          "role": "atmospheric_distillation_unit",
+          "equipmentHint": "refinery.atmospheric_distillation_unit tall crude atmospheric distillation column with fired heater heat exchanger pipe manifold service platforms and side draw nozzles",
+          "footprintHint": "tall",
+          "safetyTags": [
+            "distillation",
+            "high_temperature"
+          ]
+        },
+        {
+          "id": "vacuum_distillation_unit",
+          "label": "Vacuum distillation unit",
+          "displayLabel": "减压蒸馏塔",
+          "role": "vacuum_distillation_unit",
+          "equipmentHint": "refinery.vacuum_distillation_unit tall vacuum tower with fired heater condenser exchanger vacuum line and service platform",
+          "footprintHint": "tall",
+          "safetyTags": [
+            "distillation",
+            "vacuum"
+          ]
+        },
+        {
+          "id": "fluid_catalytic_cracking_unit",
+          "label": "Fluid catalytic cracking unit",
+          "displayLabel": "催化裂化装置",
+          "role": "fluid_catalytic_cracking_unit",
+          "equipmentHint": "refinery.fluid_catalytic_cracking_unit FCC reactor regenerator pair with riser cyclone separator catalyst standpipe and stack",
+          "footprintHint": "large",
+          "safetyTags": [
+            "conversion",
+            "high_temperature"
+          ]
+        },
+        {
+          "id": "hydrotreating_unit",
+          "label": "Hydrotreating unit",
+          "displayLabel": "加氢精制装置",
+          "role": "hydrotreating_unit",
+          "equipmentHint": "refinery.hydrotreating_unit hydrotreater reactor train with heat exchanger separator hydrogen inlet and product outlet",
+          "footprintHint": "large",
+          "safetyTags": [
+            "hydrogen",
+            "pressure_vessel"
+          ]
+        },
+        {
+          "id": "catalytic_reformer_unit",
+          "label": "Catalytic reformer",
+          "displayLabel": "催化重整装置",
+          "role": "catalytic_reformer_unit",
+          "equipmentHint": "refinery.catalytic_reformer_unit reformer reactor train with fired heater heat exchanger separator and gas outlet",
+          "footprintHint": "large",
+          "safetyTags": [
+            "reformer",
+            "hydrogen"
+          ]
+        },
+        {
+          "id": "sulfur_recovery_unit",
+          "label": "Sulfur recovery unit",
+          "displayLabel": "硫回收装置",
+          "role": "sulfur_recovery_unit",
+          "equipmentHint": "refinery.sulfur_recovery_unit Claus sulfur recovery unit with thermal reactor condenser vessel and tail gas stack",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "sour_gas",
+            "emissions"
+          ]
+        },
+        {
+          "id": "flare_system",
+          "label": "Flare system",
+          "displayLabel": "火炬系统",
+          "role": "flare_system",
+          "equipmentHint": "refinery.flare_system tall flare stack with knock-out drum inlet line and warning bands",
+          "footprintHint": "tall",
+          "safetyTags": [
+            "relief",
+            "flare"
+          ]
+        },
+        {
+          "id": "product_storage_tank",
+          "label": "Product storage tank farm",
+          "displayLabel": "成品储罐",
+          "role": "product_storage_tank",
+          "equipmentHint": "refinery.product_storage_tank catalog storage tank for gasoline diesel product tank farm with loading outlet",
+          "footprintHint": "large",
+          "safetyTags": [
+            "storage",
+            "flammable"
+          ]
+        },
+        {
+          "id": "pipe_rack",
+          "label": "Main pipe rack",
+          "displayLabel": "主管廊",
+          "role": "pipe_rack",
+          "equipmentHint": "refinery.pipe_rack long elevated process pipe rack with multiple parallel pipe runs and support frames",
+          "footprintHint": "long",
+          "safetyTags": [
+            "process_pipe",
+            "support"
+          ]
+        },
+        {
+          "id": "utility_boiler",
+          "label": "Utility boiler",
+          "displayLabel": "公用工程锅炉",
+          "role": "utility_boiler",
+          "equipmentHint": "refinery.utility_boiler utility boiler and steam header with stack and control box",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "steam",
+            "utilities"
+          ]
+        },
+        {
+          "id": "control_room",
+          "label": "Control room",
+          "displayLabel": "中控室",
+          "role": "control_room",
+          "equipmentHint": "refinery.control_room refinery control room and MCC cabinet area placed away from flare and high temperature units",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "control",
+            "occupied_building"
+          ]
+        }
+      ],
+      "connections": [
+        {
+          "fromStationId": "crude_storage_tank",
+          "toStationId": "desalter",
+          "medium": "material",
+          "visualKind": "pipe",
+          "label": "原油进料"
+        },
+        {
+          "fromStationId": "desalter",
+          "toStationId": "atmospheric_distillation_unit",
+          "medium": "material",
+          "visualKind": "pipe",
+          "label": "脱盐原油"
+        },
+        {
+          "fromStationId": "atmospheric_distillation_unit",
+          "toStationId": "vacuum_distillation_unit",
+          "medium": "material",
+          "visualKind": "pipe",
+          "label": "常压渣油"
+        },
+        {
+          "fromStationId": "vacuum_distillation_unit",
+          "toStationId": "fluid_catalytic_cracking_unit",
+          "medium": "material",
+          "visualKind": "pipe",
+          "label": "蜡油"
+        },
+        {
+          "fromStationId": "atmospheric_distillation_unit",
+          "toStationId": "hydrotreating_unit",
+          "medium": "material",
+          "visualKind": "pipe",
+          "label": "柴油馏分"
+        },
+        {
+          "fromStationId": "atmospheric_distillation_unit",
+          "toStationId": "catalytic_reformer_unit",
+          "medium": "material",
+          "visualKind": "pipe",
+          "label": "石脑油"
+        },
+        {
+          "fromStationId": "fluid_catalytic_cracking_unit",
+          "toStationId": "product_storage_tank",
+          "medium": "material",
+          "visualKind": "pipe",
+          "label": "汽柴油组分"
+        },
+        {
+          "fromStationId": "hydrotreating_unit",
+          "toStationId": "product_storage_tank",
+          "medium": "material",
+          "visualKind": "pipe",
+          "label": "加氢产品"
+        },
+        {
+          "fromStationId": "catalytic_reformer_unit",
+          "toStationId": "product_storage_tank",
+          "medium": "material",
+          "visualKind": "pipe",
+          "label": "重整油"
+        },
+        {
+          "fromStationId": "hydrotreating_unit",
+          "toStationId": "sulfur_recovery_unit",
+          "medium": "gas",
+          "visualKind": "pipe",
+          "label": "酸性气"
+        },
+        {
+          "fromStationId": "fluid_catalytic_cracking_unit",
+          "toStationId": "flare_system",
+          "medium": "gas",
+          "visualKind": "pipe",
+          "label": "放空气"
+        },
+        {
+          "fromStationId": "pipe_rack",
+          "toStationId": "atmospheric_distillation_unit",
+          "medium": "cooling",
+          "visualKind": "pipe",
+          "label": "主管廊接入"
+        },
+        {
+          "fromStationId": "utility_boiler",
+          "toStationId": "pipe_rack",
+          "medium": "water",
+          "visualKind": "pipe",
+          "label": "蒸汽"
+        },
+        {
+          "fromStationId": "control_room",
+          "toStationId": "pipe_rack",
+          "medium": "power",
+          "visualKind": "cable_tray",
+          "label": "仪控电缆"
+        }
+      ],
+      "layoutHints": {
+        "preferredArchitectureId": "refinery.factory.basic_refinery",
+        "cameraFocusStationIds": [
+          "atmospheric_distillation_unit",
+          "vacuum_distillation_unit",
+          "fluid_catalytic_cracking_unit",
+          "crude_storage_tank",
+          "product_storage_tank"
+        ],
+        "mainProcessStationIds": [
+          "desalter",
+          "atmospheric_distillation_unit",
+          "vacuum_distillation_unit",
+          "fluid_catalytic_cracking_unit",
+          "hydrotreating_unit",
+          "catalytic_reformer_unit"
+        ],
+        "offsiteStationIds": [
+          "crude_storage_tank",
+          "product_storage_tank",
+          "flare_system",
+          "control_room"
+        ]
+      }
+    }
+  ],
+  "devices": [
+    {
+      "id": "crude_storage_tank",
+      "name": "Crude storage tank",
+      "aliases": [
+        "原油储罐",
+        "原油罐区",
+        "crude storage tank",
+        "crude tank farm"
+      ],
+      "description": "炼油厂原油罐区储罐。",
+      "family": "tank",
+      "layoutFamily": "vessel_layout",
+      "preferredResolver": "catalog-item",
+      "defaultDimensions": {
+        "length": 5.6,
+        "width": 5.6,
+        "height": 4.2
+      },
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "vessel_shell",
+          "height": 4.2,
+          "radius": 2.4,
+          "axis": "y",
+          "primaryColor": "#cbd5e1"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "feed_inlet"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "product_outlet"
+        },
+        {
+          "kind": "platform_ladder",
+          "semanticRole": "access_ladder"
+        }
+      ],
+      "primarySemanticRole": "vessel_shell",
+      "qualityRequiredRoles": [
+        "vessel_shell",
+        "feed_inlet",
+        "product_outlet"
+      ]
+    },
+    {
+      "id": "product_storage_tank",
+      "name": "Product storage tank",
+      "aliases": [
+        "成品储罐",
+        "汽柴油储罐",
+        "product storage tank",
+        "finished product tank farm"
+      ],
+      "description": "炼油厂汽油、柴油等成品油罐区储罐。",
+      "family": "tank",
+      "layoutFamily": "vessel_layout",
+      "preferredResolver": "catalog-item",
+      "defaultDimensions": {
+        "length": 5.2,
+        "width": 5.2,
+        "height": 3.8
+      },
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "vessel_shell",
+          "height": 3.8,
+          "radius": 2.2,
+          "axis": "y",
+          "primaryColor": "#e5e7eb"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "feed_inlet"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "loading_outlet"
+        },
+        {
+          "kind": "platform_ladder",
+          "semanticRole": "access_ladder"
+        }
+      ],
+      "primarySemanticRole": "vessel_shell",
+      "qualityRequiredRoles": [
+        "vessel_shell",
+        "feed_inlet",
+        "loading_outlet"
+      ]
+    },
+    {
+      "id": "desalter",
+      "name": "Crude desalter",
+      "aliases": [
+        "电脱盐器",
+        "脱盐罐",
+        "crude desalter"
+      ],
+      "description": "常减压前处理的卧式电脱盐容器。",
+      "family": "tank",
+      "layoutFamily": "vessel_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 4.8,
+        "width": 1.4,
+        "height": 1.6
+      },
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "desalter_vessel",
+          "length": 4.6,
+          "radius": 0.62,
+          "axis": "x",
+          "primaryColor": "#94a3b8"
+        },
+        {
+          "kind": "skid_base",
+          "semanticRole": "support_base"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "crude_inlet"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "desalted_crude_outlet"
+        },
+        {
+          "kind": "control_box",
+          "semanticRole": "electrical_control_box"
+        }
+      ],
+      "primarySemanticRole": "desalter_vessel"
+    },
+    {
+      "id": "atmospheric_distillation_unit",
+      "name": "Atmospheric distillation unit",
+      "aliases": [
+        "常压蒸馏塔",
+        "常压塔",
+        "crude distillation unit",
+        "atmospheric distillation unit"
+      ],
+      "description": "原油初馏常压蒸馏装置，带加热炉、换热器和侧线。",
+      "family": "distillation_column",
+      "layoutFamily": "distillation_column_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 6.4,
+        "width": 3.4,
+        "height": 9.5
+      },
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "distillation_column_shell",
+          "height": 9,
+          "radius": 0.72,
+          "axis": "y",
+          "primaryColor": "#d1d5db"
+        },
+        {
+          "kind": "flange_ring",
+          "semanticRole": "tray_band"
+        },
+        {
+          "kind": "heat_exchanger",
+          "semanticRole": "preheat_exchanger"
+        },
+        {
+          "kind": "generic_body",
+          "semanticRole": "fired_heater"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "side_draw_manifold"
+        },
+        {
+          "kind": "service_platform",
+          "semanticRole": "service_platform"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "crude_feed_inlet"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "overhead_product_outlet"
+        }
+      ],
+      "primarySemanticRole": "distillation_column_shell",
+      "qualityRequiredRoles": [
+        "distillation_column_shell",
+        "preheat_exchanger",
+        "fired_heater",
+        "side_draw_manifold"
+      ]
+    },
+    {
+      "id": "vacuum_distillation_unit",
+      "name": "Vacuum distillation unit",
+      "aliases": [
+        "减压蒸馏塔",
+        "减压塔",
+        "vacuum distillation unit",
+        "vacuum tower"
+      ],
+      "description": "处理常压渣油的减压蒸馏装置。",
+      "family": "distillation_column",
+      "layoutFamily": "distillation_column_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 5.8,
+        "width": 3.2,
+        "height": 8.2
+      },
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "vacuum_column_shell",
+          "height": 7.8,
+          "radius": 0.82,
+          "axis": "y",
+          "primaryColor": "#cbd5e1"
+        },
+        {
+          "kind": "heat_exchanger",
+          "semanticRole": "condenser_exchanger"
+        },
+        {
+          "kind": "generic_body",
+          "semanticRole": "vacuum_heater"
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "vacuum_line"
+        },
+        {
+          "kind": "service_platform",
+          "semanticRole": "service_platform"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "atmospheric_residue_inlet"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "vacuum_gas_oil_outlet"
+        }
+      ],
+      "primarySemanticRole": "vacuum_column_shell"
+    },
+    {
+      "id": "fluid_catalytic_cracking_unit",
+      "name": "Fluid catalytic cracking unit",
+      "aliases": [
+        "催化裂化装置",
+        "FCC装置",
+        "fluid catalytic cracking",
+        "FCC unit"
+      ],
+      "description": "催化裂化反应再生装置，表达反应器、再生器、提升管、旋风分离和烟囱。",
+      "family": "reactor",
+      "layoutFamily": "vessel_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 7.2,
+        "width": 4.2,
+        "height": 7.2
+      },
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "fcc_reactor",
+          "height": 5.8,
+          "radius": 0.65,
+          "axis": "y",
+          "primaryColor": "#d1d5db"
+        },
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "catalyst_regenerator",
+          "height": 5.2,
+          "radius": 0.82,
+          "axis": "y",
+          "primaryColor": "#bfc7d5"
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "riser_pipe"
+        },
+        {
+          "kind": "cyclone_separator_unit",
+          "semanticRole": "cyclone_separator"
+        },
+        {
+          "kind": "chimney_stack",
+          "semanticRole": "flue_gas_stack"
+        },
+        {
+          "kind": "service_platform",
+          "semanticRole": "service_platform"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "vacuum_gas_oil_inlet"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "cracked_product_outlet"
+        }
+      ],
+      "primarySemanticRole": "fcc_reactor",
+      "qualityRequiredRoles": [
+        "fcc_reactor",
+        "catalyst_regenerator",
+        "riser_pipe",
+        "cyclone_separator"
+      ]
+    },
+    {
+      "id": "hydrotreating_unit",
+      "name": "Hydrotreating unit",
+      "aliases": [
+        "加氢精制装置",
+        "加氢装置",
+        "hydrotreating unit",
+        "hydrotreater"
+      ],
+      "description": "加氢精制反应器列，包含反应器、换热器、分离罐和氢气入口。",
+      "family": "reactor",
+      "layoutFamily": "vessel_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 6.4,
+        "width": 3.2,
+        "height": 4.6
+      },
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "hydrotreater_reactor",
+          "height": 4.2,
+          "radius": 0.55,
+          "axis": "y",
+          "primaryColor": "#cbd5e1"
+        },
+        {
+          "kind": "heat_exchanger",
+          "semanticRole": "feed_effluent_exchanger"
+        },
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "high_pressure_separator",
+          "length": 2.2,
+          "radius": 0.42,
+          "axis": "x"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "hydrogen_header"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "hydrogen_inlet"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "treated_product_outlet"
+        }
+      ],
+      "primarySemanticRole": "hydrotreater_reactor"
+    },
+    {
+      "id": "catalytic_reformer_unit",
+      "name": "Catalytic reformer unit",
+      "aliases": [
+        "催化重整装置",
+        "重整装置",
+        "catalytic reformer",
+        "reformer unit"
+      ],
+      "description": "石脑油重整反应器列，包含多段反应器、加热炉、换热器和气液分离。",
+      "family": "reactor",
+      "layoutFamily": "vessel_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 7.2,
+        "width": 3.4,
+        "height": 4.4
+      },
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "reformer_reactor_train",
+          "height": 4,
+          "radius": 0.48,
+          "axis": "y",
+          "primaryColor": "#d1d5db"
+        },
+        {
+          "kind": "generic_body",
+          "semanticRole": "reformer_fired_heater"
+        },
+        {
+          "kind": "heat_exchanger",
+          "semanticRole": "reformer_exchanger"
+        },
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "reformer_separator",
+          "length": 1.8,
+          "radius": 0.36,
+          "axis": "x"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "naphtha_inlet"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "reformate_outlet"
+        }
+      ],
+      "primarySemanticRole": "reformer_reactor_train"
+    },
+    {
+      "id": "sulfur_recovery_unit",
+      "name": "Sulfur recovery unit",
+      "aliases": [
+        "硫回收装置",
+        "Claus装置",
+        "sulfur recovery unit",
+        "Claus unit"
+      ],
+      "description": "酸性气硫回收单元，包含热反应器、冷凝器和尾气烟囱。",
+      "family": "reactor",
+      "layoutFamily": "vessel_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 5.4,
+        "width": 2.8,
+        "height": 4.6
+      },
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "claus_reactor",
+          "length": 2.2,
+          "radius": 0.48,
+          "axis": "x"
+        },
+        {
+          "kind": "heat_exchanger",
+          "semanticRole": "sulfur_condenser"
+        },
+        {
+          "kind": "chimney_stack",
+          "semanticRole": "tail_gas_stack"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "acid_gas_inlet"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "sulfur_outlet"
+        }
+      ],
+      "primarySemanticRole": "claus_reactor"
+    },
+    {
+      "id": "flare_system",
+      "name": "Flare system",
+      "aliases": [
+        "火炬系统",
+        "火炬塔",
+        "flare system",
+        "flare stack"
+      ],
+      "description": "炼油厂放空火炬系统，包含火炬筒和入口分液罐。",
+      "family": "generic",
+      "layoutFamily": "generic_industrial_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 4.2,
+        "width": 2.6,
+        "height": 10
+      },
+      "parts": [
+        {
+          "kind": "chimney_stack",
+          "semanticRole": "flare_stack",
+          "height": 9.5,
+          "radius": 0.28,
+          "warningStripes": true
+        },
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "knockout_drum",
+          "length": 2.2,
+          "radius": 0.36,
+          "axis": "x"
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "relief_gas_inlet"
+        }
+      ],
+      "primarySemanticRole": "flare_stack"
+    },
+    {
+      "id": "pipe_rack",
+      "name": "Main pipe rack",
+      "aliases": [
+        "主管廊",
+        "管廊",
+        "pipe rack",
+        "main pipe rack"
+      ],
+      "description": "炼油厂主流程侧边管廊。",
+      "family": "pipe_system",
+      "layoutFamily": "linear_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 12,
+        "width": 1.4,
+        "height": 2.2
+      },
+      "parts": [
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "main_pipe_header",
+          "length": 10,
+          "count": 6
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "parallel_pipe_run",
+          "length": 10,
+          "radius": 0.055,
+          "axis": "x"
+        },
+        {
+          "kind": "structural_tower_frame",
+          "semanticRole": "pipe_rack_support_frame",
+          "height": 2.4,
+          "levelCount": 2
+        }
+      ],
+      "primarySemanticRole": "main_pipe_header"
+    },
+    {
+      "id": "utility_boiler",
+      "name": "Utility boiler",
+      "aliases": [
+        "公用工程锅炉",
+        "锅炉房",
+        "utility boiler",
+        "steam boiler"
+      ],
+      "description": "炼油厂公用工程锅炉和蒸汽总管。",
+      "family": "generic",
+      "layoutFamily": "generic_industrial_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 4.6,
+        "width": 2.6,
+        "height": 4.2
+      },
+      "parts": [
+        {
+          "kind": "generic_body",
+          "semanticRole": "boiler_body"
+        },
+        {
+          "kind": "chimney_stack",
+          "semanticRole": "boiler_stack",
+          "height": 4.2,
+          "radius": 0.22
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "steam_header"
+        },
+        {
+          "kind": "control_box",
+          "semanticRole": "boiler_control_box"
+        }
+      ],
+      "primarySemanticRole": "boiler_body"
+    },
+    {
+      "id": "control_room",
+      "name": "Control room and MCC",
+      "aliases": [
+        "中控室",
+        "控制室",
+        "MCC",
+        "control room"
+      ],
+      "description": "炼油厂中控室和电气控制柜区域。",
+      "family": "generic",
+      "layoutFamily": "generic_industrial_layout",
+      "preferredResolver": "catalog-item",
+      "defaultDimensions": {
+        "length": 4.6,
+        "width": 2.4,
+        "height": 2.4
+      },
+      "parts": [
+        {
+          "kind": "generic_body",
+          "semanticRole": "control_room_body"
+        },
+        {
+          "kind": "control_box",
+          "semanticRole": "mcc_panel"
+        }
+      ],
+      "primarySemanticRole": "control_room_body"
+    }
+  ]
+}

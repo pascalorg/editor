@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   expandPrimitiveShapeArrays,
+  extractPrimitiveShapeContract,
   type PrimitiveArrayExpandableShape,
   resolvePrimitiveWorldTransforms,
 } from './primitive-compose'
@@ -49,6 +50,39 @@ describe('resolvePrimitiveWorldTransforms', () => {
       [1.4, 2, 3.3],
     ])
     expect(shapes.every((shape) => !('array' in (shape.params ?? {})))).toBe(true)
+  })
+
+  test('extracts geometry capability contracts from primitive shapes', () => {
+    const contract = extractPrimitiveShapeContract({
+      kind: 'sweep',
+      position: [0, 0, 0],
+      path: [
+        [0, 0, 0],
+        [1, 0, 0],
+      ],
+      radius: 0.1,
+      bevelRadius: 0.02,
+      duct: { crossSection: 'round', radius: 0.1, wallThickness: 0.02 },
+      ports: [
+        {
+          id: 'out',
+          kind: 'outlet',
+          position: [1, 0, 0],
+          normal: [1, 0, 0],
+          radius: 0.1,
+        },
+      ],
+      cutouts: [{ id: 'access', kind: 'round', radius: 0.05 }],
+      pattern: { id: 'bolts', kind: 'radial', count: 8 },
+    })
+
+    expect(contract).toMatchObject({
+      duct: { crossSection: 'round', radius: 0.1 },
+      bevel: { radius: 0.02 },
+      ports: [{ id: 'out', kind: 'outlet' }],
+      cutouts: [{ id: 'access', kind: 'round' }],
+      pattern: { id: 'bolts', kind: 'radial', count: 8 },
+    })
   })
 
   test('connects child bottom to parent top without manual half-height offset', () => {

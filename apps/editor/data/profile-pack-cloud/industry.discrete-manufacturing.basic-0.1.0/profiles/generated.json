@@ -1,0 +1,912 @@
+[
+  {
+    "id": "discrete_manufacturing.cnc_machining_center",
+    "name": "CNC machining center",
+    "aliases": [
+      "CNC加工中心",
+      "加工中心",
+      "数控加工中心",
+      "机加工中心",
+      "cnc machining center",
+      "vertical machining center"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "box_enclosure_layout",
+    "family": "machine_tool",
+    "defaultDimensions": {
+      "length": 3.4,
+      "width": 2.2,
+      "height": 2.4
+    },
+    "parts": [
+      {
+        "kind": "rounded_machine_body",
+        "semanticRole": "machine_enclosure",
+        "required": true,
+        "length": 3.2,
+        "width": 1.8,
+        "height": 2.1,
+        "color": "#d8dde5"
+      },
+      {
+        "kind": "generic_opening",
+        "semanticRole": "sliding_door_window",
+        "required": true,
+        "attachToRole": "machine_enclosure",
+        "anchor": "front",
+        "color": "#84b7d8"
+      },
+      {
+        "kind": "generic_control_panel",
+        "semanticRole": "cnc_control_panel",
+        "required": true,
+        "attachToRole": "machine_enclosure",
+        "anchor": "service_side"
+      },
+      {
+        "kind": "status_light_strip",
+        "semanticRole": "machine_stack_light",
+        "attachToRole": "machine_enclosure",
+        "anchor": "top"
+      },
+      {
+        "kind": "generic_spout",
+        "semanticRole": "chip_discharge_port",
+        "required": true,
+        "attachToRole": "machine_enclosure",
+        "anchor": "back"
+      }
+    ],
+    "primarySemanticRole": "machine_enclosure",
+    "qualityRules": "quality.discrete_manufacturing.cnc_machining_center",
+    "visualCues": [
+      "box enclosure",
+      "front sliding door",
+      "blue window",
+      "side control panel"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.robot_workcell",
+    "name": "Robot workcell",
+    "aliases": [
+      "机器人工作站",
+      "六轴机器人工作站",
+      "机械臂工作站",
+      "robot workcell",
+      "robot handling cell"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "robot_workcell_layout",
+    "family": "robot_arm",
+    "defaultDimensions": {
+      "length": 4.2,
+      "width": 3.4,
+      "height": 2.6
+    },
+    "parts": [
+      {
+        "kind": "circular_base",
+        "semanticRole": "robot_base",
+        "required": true,
+        "radius": 0.42,
+        "height": 0.18,
+        "color": "#f59e0b"
+      },
+      {
+        "kind": "vertical_pole",
+        "semanticRole": "shoulder_joint",
+        "required": true,
+        "attachToRole": "robot_base",
+        "anchor": "top",
+        "height": 0.9,
+        "radius": 0.16,
+        "color": "#f59e0b"
+      },
+      {
+        "kind": "support_bracket",
+        "semanticRole": "upper_arm",
+        "required": true,
+        "attachToRole": "robot_shoulder",
+        "anchor": "top",
+        "length": 1,
+        "color": "#f59e0b"
+      },
+      {
+        "kind": "support_bracket",
+        "semanticRole": "forearm",
+        "required": true,
+        "attachToRole": "upper_arm",
+        "anchor": "front",
+        "length": 0.9,
+        "color": "#f59e0b"
+      },
+      {
+        "kind": "flange_ring",
+        "semanticRole": "tool_flange",
+        "required": true,
+        "attachToRole": "forearm",
+        "anchor": "front"
+      },
+      {
+        "kind": "pallet_table",
+        "semanticRole": "work_table",
+        "required": true,
+        "position": [
+          0.85,
+          0.35,
+          0.75
+        ]
+      },
+      {
+        "kind": "guard_fence",
+        "semanticRole": "safety_barrier",
+        "required": true,
+        "position": [
+          0,
+          0.65,
+          0
+        ],
+        "length": 4,
+        "width": 3.2
+      }
+    ],
+    "primarySemanticRole": "robot_base",
+    "qualityRules": "quality.discrete_manufacturing.robot_workcell",
+    "visualCues": [
+      "six-axis robot",
+      "guard fence",
+      "fixture table",
+      "orange articulated arm"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.assembly_workstation",
+    "name": "Assembly workstation",
+    "aliases": [
+      "装配工位",
+      "人工装配台",
+      "装配工作站",
+      "assembly workstation",
+      "manual assembly station"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "box_enclosure_layout",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 2.4,
+      "width": 1.2,
+      "height": 2
+    },
+    "parts": [
+      {
+        "kind": "pallet_table",
+        "semanticRole": "workbench",
+        "required": true,
+        "length": 2.2,
+        "width": 0.9,
+        "height": 0.85
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "fixture_plate",
+        "required": true,
+        "attachToRole": "workbench",
+        "anchor": "top",
+        "color": "#a3a3a3"
+      },
+      {
+        "kind": "cable_tray",
+        "semanticRole": "tool_rail",
+        "required": true,
+        "attachToRole": "workbench",
+        "anchor": "back"
+      },
+      {
+        "kind": "operator_panel",
+        "semanticRole": "operator_hmi",
+        "attachToRole": "workbench",
+        "anchor": "service_side"
+      },
+      {
+        "kind": "status_light_strip",
+        "semanticRole": "andon_light",
+        "attachToRole": "tool_rail",
+        "anchor": "top"
+      }
+    ],
+    "primarySemanticRole": "workbench",
+    "qualityRules": "quality.discrete_manufacturing.assembly_workstation",
+    "visualCues": [
+      "bench",
+      "fixture plate",
+      "tool rail",
+      "operator panel"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.roller_conveyor",
+    "name": "Roller conveyor",
+    "aliases": [
+      "滚筒输送线",
+      "滚筒线",
+      "输送线",
+      "roller conveyor",
+      "assembly conveyor"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "linear_transport_layout",
+    "family": "conveyor",
+    "defaultDimensions": {
+      "length": 8,
+      "width": 1.1,
+      "height": 0.9
+    },
+    "parts": [
+      {
+        "kind": "conveyor_frame",
+        "semanticRole": "conveyor_frame",
+        "required": true,
+        "length": 8,
+        "width": 1,
+        "height": 0.45
+      },
+      {
+        "kind": "roller_array",
+        "semanticRole": "roller_bed",
+        "required": true,
+        "attachToRole": "conveyor_frame",
+        "anchor": "top",
+        "count": 12
+      },
+      {
+        "kind": "belt_surface",
+        "semanticRole": "transfer_surface",
+        "required": true,
+        "attachToRole": "conveyor_frame",
+        "anchor": "top",
+        "length": 7.8
+      },
+      {
+        "kind": "ribbed_motor_body",
+        "semanticRole": "conveyor_drive_motor",
+        "attachToRole": "conveyor_frame",
+        "anchor": "drive_side"
+      },
+      {
+        "kind": "guard_fence",
+        "semanticRole": "side_guard",
+        "attachToRole": "conveyor_frame",
+        "anchor": "left"
+      }
+    ],
+    "primarySemanticRole": "conveyor_frame",
+    "qualityRules": "quality.discrete_manufacturing.roller_conveyor",
+    "visualCues": [
+      "long roller bed",
+      "drive motor",
+      "side guards"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.vision_inspection_station",
+    "name": "Vision inspection station",
+    "aliases": [
+      "视觉检测工位",
+      "视觉检测站",
+      "检测工位",
+      "vision inspection station",
+      "inspection station"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "box_enclosure_layout",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 2,
+      "width": 1.4,
+      "height": 2.2
+    },
+    "parts": [
+      {
+        "kind": "generic_base",
+        "semanticRole": "inspection_base",
+        "required": true,
+        "length": 1.8,
+        "width": 1.2,
+        "height": 0.25
+      },
+      {
+        "kind": "structural_tower_frame",
+        "semanticRole": "inspection_frame",
+        "required": true,
+        "attachToRole": "inspection_base",
+        "anchor": "top",
+        "height": 1.8,
+        "levelCount": 2
+      },
+      {
+        "kind": "generic_display",
+        "semanticRole": "inspection_display",
+        "required": true,
+        "attachToRole": "inspection_frame",
+        "anchor": "service_side"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "camera_light_panel",
+        "required": true,
+        "attachToRole": "inspection_frame",
+        "anchor": "top",
+        "color": "#e0f2fe"
+      },
+      {
+        "kind": "generic_spout",
+        "semanticRole": "reject_chute",
+        "attachToRole": "inspection_base",
+        "anchor": "right"
+      }
+    ],
+    "primarySemanticRole": "inspection_frame",
+    "qualityRules": "quality.discrete_manufacturing.vision_inspection_station",
+    "visualCues": [
+      "inspection frame",
+      "camera light panel",
+      "display",
+      "reject chute"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.packaging_station",
+    "name": "Packaging station",
+    "aliases": [
+      "包装工位",
+      "包装站",
+      "封箱机",
+      "packaging station",
+      "carton sealer"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "linear_transport_layout",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 3.2,
+      "width": 1.2,
+      "height": 1.6
+    },
+    "parts": [
+      {
+        "kind": "conveyor_frame",
+        "semanticRole": "packaging_conveyor",
+        "required": true,
+        "length": 3,
+        "width": 0.9,
+        "height": 0.55
+      },
+      {
+        "kind": "rounded_machine_body",
+        "semanticRole": "packaging_body",
+        "required": true,
+        "attachToRole": "packaging_conveyor",
+        "anchor": "top",
+        "length": 1.1,
+        "width": 0.95,
+        "height": 0.9,
+        "color": "#e5e7eb"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "tape_head",
+        "required": true,
+        "attachToRole": "packaging_body",
+        "anchor": "front",
+        "color": "#facc15"
+      },
+      {
+        "kind": "control_box",
+        "semanticRole": "packaging_control_box",
+        "attachToRole": "packaging_body",
+        "anchor": "service_side"
+      },
+      {
+        "kind": "roller_array",
+        "semanticRole": "discharge_rollers",
+        "attachToRole": "packaging_conveyor",
+        "anchor": "back",
+        "count": 5
+      }
+    ],
+    "primarySemanticRole": "packaging_body",
+    "qualityRules": "quality.discrete_manufacturing.packaging_station",
+    "visualCues": [
+      "carton sealer",
+      "conveyor bed",
+      "tape head",
+      "control box"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.agv_tugger",
+    "name": "AGV tugger",
+    "aliases": [
+      "AGV小车",
+      "AMR小车",
+      "牵引AGV",
+      "移动机器人",
+      "agv tugger",
+      "amr tugger"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "vehicle_layout",
+    "family": "vehicle",
+    "defaultDimensions": {
+      "length": 1.6,
+      "width": 0.9,
+      "height": 0.45
+    },
+    "parts": [
+      {
+        "kind": "mobile_platform_chassis",
+        "semanticRole": "mobile_platform_chassis",
+        "required": true,
+        "length": 1.55,
+        "width": 0.85,
+        "height": 0.28,
+        "color": "#2563eb"
+      },
+      {
+        "kind": "lidar_sensor",
+        "semanticRole": "front_lidar",
+        "required": true,
+        "attachToRole": "mobile_platform_chassis",
+        "anchor": "front"
+      },
+      {
+        "kind": "emergency_stop_button",
+        "semanticRole": "emergency_stop",
+        "required": true,
+        "attachToRole": "mobile_platform_chassis",
+        "anchor": "top"
+      },
+      {
+        "kind": "status_light_strip",
+        "semanticRole": "status_light",
+        "attachToRole": "mobile_platform_chassis",
+        "anchor": "front"
+      },
+      {
+        "kind": "generic_handle",
+        "semanticRole": "tow_hitch",
+        "attachToRole": "mobile_platform_chassis",
+        "anchor": "back"
+      }
+    ],
+    "primarySemanticRole": "mobile_platform_chassis",
+    "qualityRules": "quality.discrete_manufacturing.agv_tugger",
+    "visualCues": [
+      "low blue mobile base",
+      "lidar",
+      "emergency stop",
+      "tow hitch"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.storage_rack",
+    "name": "Storage rack",
+    "aliases": [
+      "立体料架",
+      "仓储货架",
+      "原料货架",
+      "storage rack",
+      "warehouse rack"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "box_enclosure_layout",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 4,
+      "width": 1.2,
+      "height": 3
+    },
+    "parts": [
+      {
+        "kind": "structural_tower_frame",
+        "semanticRole": "rack_frame",
+        "required": true,
+        "length": 4,
+        "width": 1.1,
+        "height": 3,
+        "levelCount": 4
+      },
+      {
+        "kind": "pallet_table",
+        "semanticRole": "pallet_load",
+        "required": true,
+        "attachToRole": "rack_frame",
+        "anchor": "front",
+        "arrayAlong": "height",
+        "count": 3
+      },
+      {
+        "kind": "warning_label",
+        "semanticRole": "rack_label",
+        "attachToRole": "rack_frame",
+        "anchor": "service_side"
+      }
+    ],
+    "primarySemanticRole": "rack_frame",
+    "qualityRules": "quality.discrete_manufacturing.storage_rack",
+    "visualCues": [
+      "tall rack",
+      "multiple shelf levels",
+      "pallet loads"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.line_control_cabinet",
+    "name": "Line control cabinet",
+    "aliases": [
+      "产线控制柜",
+      "电控柜",
+      "PLC控制柜",
+      "line control cabinet",
+      "control cabinet row"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "box_enclosure_layout",
+    "family": "electrical",
+    "defaultDimensions": {
+      "length": 2.4,
+      "width": 0.55,
+      "height": 2
+    },
+    "parts": [
+      {
+        "kind": "electrical_cabinet",
+        "semanticRole": "control_cabinet",
+        "required": true,
+        "length": 2.2,
+        "width": 0.5,
+        "height": 1.9
+      },
+      {
+        "kind": "generic_display",
+        "semanticRole": "hmi_panel",
+        "required": true,
+        "attachToRole": "control_cabinet",
+        "anchor": "front"
+      },
+      {
+        "kind": "cable_tray",
+        "semanticRole": "cable_tray",
+        "attachToRole": "control_cabinet",
+        "anchor": "top"
+      },
+      {
+        "kind": "warning_label",
+        "semanticRole": "electrical_warning_label",
+        "attachToRole": "control_cabinet",
+        "anchor": "front"
+      }
+    ],
+    "primarySemanticRole": "control_cabinet",
+    "qualityRules": "quality.discrete_manufacturing.line_control_cabinet",
+    "visualCues": [
+      "cabinet row",
+      "HMI panel",
+      "cable tray",
+      "warning labels"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.compressor_skid",
+    "name": "Compressor skid",
+    "aliases": [
+      "空压机撬装",
+      "空压机组",
+      "压缩空气站",
+      "compressor skid",
+      "air compressor skid"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "rotating_machine_layout",
+    "family": "compressor",
+    "defaultDimensions": {
+      "length": 2.6,
+      "width": 1.1,
+      "height": 1.2
+    },
+    "parts": [
+      {
+        "kind": "skid_base",
+        "semanticRole": "compressor_skid_base",
+        "required": true,
+        "length": 2.5,
+        "width": 1,
+        "height": 0.18
+      },
+      {
+        "kind": "rounded_machine_body",
+        "semanticRole": "compressor_body",
+        "required": true,
+        "attachToRole": "compressor_skid_base",
+        "anchor": "top",
+        "length": 1.1,
+        "width": 0.55,
+        "height": 0.65
+      },
+      {
+        "kind": "ribbed_motor_body",
+        "semanticRole": "drive_motor",
+        "required": true,
+        "attachToRole": "compressor_body",
+        "anchor": "drive_side"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "air_inlet",
+        "attachToRole": "compressor_body",
+        "anchor": "left"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "compressed_air_outlet",
+        "attachToRole": "compressor_body",
+        "anchor": "right"
+      },
+      {
+        "kind": "control_box",
+        "semanticRole": "compressor_control_box",
+        "attachToRole": "compressor_skid_base",
+        "anchor": "service_side"
+      }
+    ],
+    "primarySemanticRole": "compressor_body",
+    "qualityRules": "quality.discrete_manufacturing.compressor_skid",
+    "visualCues": [
+      "skid base",
+      "rounded compressor body",
+      "motor",
+      "ports",
+      "control box"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.pallet_table",
+    "name": "Pallet kitting table",
+    "aliases": [
+      "托盘备料台",
+      "备料台",
+      "托盘工位",
+      "pallet table",
+      "kitting table"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "box_enclosure_layout",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 1.8,
+      "width": 1.1,
+      "height": 0.75
+    },
+    "parts": [
+      {
+        "kind": "pallet_table",
+        "semanticRole": "pallet_table",
+        "required": true,
+        "length": 1.8,
+        "width": 1.1,
+        "height": 0.75
+      },
+      {
+        "kind": "generic_detail_accent",
+        "semanticRole": "material_bins",
+        "required": true,
+        "attachToRole": "pallet_table",
+        "anchor": "top",
+        "arrayAlong": "width",
+        "count": 3
+      }
+    ],
+    "primarySemanticRole": "pallet_table",
+    "qualityRules": "quality.discrete_manufacturing.pallet_table",
+    "visualCues": [
+      "low table",
+      "material bins",
+      "kitting surface"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.chip_conveyor",
+    "name": "Chip conveyor",
+    "aliases": [
+      "排屑输送机",
+      "排屑机",
+      "chip conveyor",
+      "scrap conveyor"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "linear_transport_layout",
+    "family": "conveyor",
+    "defaultDimensions": {
+      "length": 2.8,
+      "width": 0.55,
+      "height": 0.9
+    },
+    "parts": [
+      {
+        "kind": "conveyor_frame",
+        "semanticRole": "chip_conveyor_frame",
+        "required": true,
+        "length": 2.8,
+        "width": 0.5,
+        "height": 0.35,
+        "rotation": [
+          0,
+          0,
+          -0.18
+        ]
+      },
+      {
+        "kind": "belt_surface",
+        "semanticRole": "chip_belt",
+        "required": true,
+        "attachToRole": "chip_conveyor_frame",
+        "anchor": "top"
+      },
+      {
+        "kind": "generic_spout",
+        "semanticRole": "chip_discharge_chute",
+        "attachToRole": "chip_conveyor_frame",
+        "anchor": "back"
+      },
+      {
+        "kind": "ribbed_motor_body",
+        "semanticRole": "chip_conveyor_drive",
+        "attachToRole": "chip_conveyor_frame",
+        "anchor": "drive_side"
+      }
+    ],
+    "primarySemanticRole": "chip_conveyor_frame",
+    "qualityRules": "quality.discrete_manufacturing.chip_conveyor",
+    "visualCues": [
+      "small inclined conveyor",
+      "trough",
+      "discharge chute",
+      "drive motor"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.safety_fence",
+    "name": "Safety fence",
+    "aliases": [
+      "安全围栏",
+      "机器人围栏",
+      "防护围栏",
+      "safety fence",
+      "robot guarding fence"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "box_enclosure_layout",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 4,
+      "width": 3,
+      "height": 1.8
+    },
+    "parts": [
+      {
+        "kind": "guard_fence",
+        "semanticRole": "safety_fence",
+        "required": true,
+        "length": 4,
+        "width": 3,
+        "height": 1.8
+      },
+      {
+        "kind": "warning_label",
+        "semanticRole": "safety_warning_label",
+        "attachToRole": "safety_fence",
+        "anchor": "front"
+      }
+    ],
+    "primarySemanticRole": "safety_fence",
+    "qualityRules": "quality.discrete_manufacturing.safety_fence",
+    "visualCues": [
+      "mesh fence",
+      "posts",
+      "gate",
+      "warning label"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.pipe_corridor",
+    "name": "Utility pipe corridor",
+    "aliases": [
+      "公用管廊",
+      "压缩空气管廊",
+      "车间管廊",
+      "utility pipe corridor",
+      "pipe rack"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "pipe_valve_layout",
+    "family": "pipe_system",
+    "defaultDimensions": {
+      "length": 9,
+      "width": 1,
+      "height": 2.2
+    },
+    "parts": [
+      {
+        "kind": "pipe_run",
+        "semanticRole": "compressed_air_pipe",
+        "required": true,
+        "length": 9,
+        "radius": 0.06,
+        "axis": "x"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "coolant_pipe",
+        "required": true,
+        "position": [
+          0,
+          0.18,
+          0.16
+        ],
+        "length": 8.8,
+        "radius": 0.045,
+        "axis": "x"
+      },
+      {
+        "kind": "pipe_elbow",
+        "semanticRole": "utility_pipe_elbow",
+        "required": true,
+        "attachToRole": "compressed_air_pipe",
+        "anchor": "right"
+      },
+      {
+        "kind": "valve_body",
+        "semanticRole": "utility_valve",
+        "attachToRole": "compressed_air_pipe",
+        "anchor": "service_side"
+      }
+    ],
+    "primarySemanticRole": "compressed_air_pipe",
+    "qualityRules": "quality.discrete_manufacturing.pipe_corridor",
+    "visualCues": [
+      "long pipe rack",
+      "parallel utility pipe",
+      "cable tray",
+      "valve"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  }
+]

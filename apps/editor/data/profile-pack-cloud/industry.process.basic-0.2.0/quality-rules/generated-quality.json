@@ -1,0 +1,224 @@
+[
+  {
+    "id": "quality.process.raw_material_tank",
+    "requiredRoles": [
+      "vessel_shell",
+      "support_skid",
+      "top_inlet",
+      "bottom_outlet",
+      "access_ladder"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 55
+    }
+  },
+  {
+    "id": "quality.process.metering_pump_skid",
+    "requiredRoles": [
+      "pump_volute",
+      "pump_skid_base",
+      "drive_motor",
+      "pump_pipe_manifold",
+      "local_control_panel"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 50
+    }
+  },
+  {
+    "id": "quality.process.mixing_tank",
+    "requiredRoles": [
+      "mixing_vessel_shell",
+      "feed_inlet",
+      "mixing_outlet",
+      "support_skid",
+      "access_ladder"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 65
+    }
+  },
+  {
+    "id": "quality.process.stirred_reactor",
+    "requiredRoles": [
+      "reactor_vessel_shell",
+      "reactor_feed_nozzle",
+      "reactor_discharge_nozzle",
+      "reactor_pipe_manifold",
+      "service_platform_ladder"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 75
+    }
+  },
+  {
+    "id": "quality.process.heat_exchanger",
+    "requiredRoles": [
+      "heat_exchanger_shell",
+      "exchanger_saddle_skid",
+      "process_inlet",
+      "process_outlet",
+      "utility_pipe_manifold"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 55
+    }
+  },
+  {
+    "id": "quality.process.filter_vessel",
+    "requiredRoles": [
+      "filter_vessel_shell",
+      "filter_support_skid",
+      "filter_inlet",
+      "filter_outlet",
+      "filter_pipe_manifold"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 50
+    }
+  },
+  {
+    "id": "quality.process.centrifuge",
+    "requiredRoles": [
+      "centrifuge_bowl_housing",
+      "centrifuge_skid_base",
+      "centrifuge_drive_motor",
+      "centrifuge_discharge",
+      "centrifuge_operator_panel"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 55
+    }
+  },
+  {
+    "id": "quality.process.tray_dryer",
+    "requiredRoles": [
+      "dryer_chamber",
+      "dryer_base",
+      "front_access_door",
+      "vacuum_pipe_manifold",
+      "dryer_control_panel"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 50
+    }
+  },
+  {
+    "id": "quality.process.product_storage_tank",
+    "requiredRoles": [
+      "vessel_shell",
+      "support_skid",
+      "product_inlet",
+      "product_outlet",
+      "access_ladder"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 55
+    }
+  },
+  {
+    "id": "quality.process.packaging_station",
+    "requiredRoles": [
+      "packaging_conveyor",
+      "packaging_body",
+      "packaging_control_box",
+      "discharge_rollers"
+    ],
+    "shapeCount": {
+      "min": 4,
+      "max": 50
+    }
+  },
+  {
+    "id": "quality.process.pipe_corridor",
+    "requiredRoles": [
+      "process_pipe",
+      "utility_pipe",
+      "pipe_elbow",
+      "valve_body",
+      "pipe_flange"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 60
+    }
+  },
+  {
+    "id": "quality.process.control_cabinet",
+    "requiredRoles": [
+      "control_cabinet",
+      "hmi_panel",
+      "cable_tray",
+      "electrical_warning_label"
+    ],
+    "shapeCount": {
+      "min": 4,
+      "max": 35
+    }
+  },
+  {
+    "id": "quality.process.bulk_material_silo",
+    "requiredRoles": [
+      "silo_shell",
+      "conical_hopper_bottom",
+      "silo_support_frame",
+      "silo_discharge_spout",
+      "level_indicator"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 65
+    }
+  },
+  {
+    "id": "quality.process.valve_station",
+    "requiredRoles": [
+      "manifold_pipe",
+      "valve_station_skid",
+      "valve_body",
+      "manifold_flange"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 55
+    }
+  },
+  {
+    "id": "quality.process.utility_blower",
+    "requiredRoles": [
+      "blower_casing",
+      "blower_skid_base",
+      "blower_impeller",
+      "drive_motor",
+      "air_inlet",
+      "air_outlet"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 60
+    }
+  },
+  {
+    "id": "quality.process.air_compressor_skid",
+    "requiredRoles": [
+      "compressor_body",
+      "compressor_skid_base",
+      "drive_motor",
+      "air_pipe_manifold",
+      "compressor_control_box"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 55
+    }
+  }
+]

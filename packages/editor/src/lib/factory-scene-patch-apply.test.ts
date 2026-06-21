@@ -82,13 +82,13 @@ describe('factory scene patch apply', () => {
     expect(operations.updateOps).toEqual([
       {
         id: level.id,
-        data: {
-          material: undefined,
-          shellMaterialPreset: undefined,
-          name: 'Factory level',
+          data: {
+            material: undefined,
+            shellMaterialPreset: undefined,
+            name: 'Factory level',
+          } as Record<string, unknown>,
         },
-      },
-    ])
+      ])
   })
 
   test('keeps updates that target nodes created earlier in the same run', () => {

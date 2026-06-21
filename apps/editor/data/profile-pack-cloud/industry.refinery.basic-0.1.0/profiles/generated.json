@@ -1,0 +1,865 @@
+[
+  {
+    "id": "refinery.crude_storage_tank",
+    "name": "Crude storage tank",
+    "aliases": [
+      "原油储罐",
+      "原油罐区",
+      "crude storage tank",
+      "crude tank farm"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "native-tank",
+    "family": "tank",
+    "defaultDimensions": {
+      "length": 5.6,
+      "width": 5.6,
+      "height": 4.2
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "vessel_shell",
+        "height": 4.2,
+        "radius": 2.4,
+        "axis": "y",
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "feed_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "product_outlet"
+      },
+      {
+        "kind": "platform_ladder",
+        "semanticRole": "access_ladder"
+      }
+    ],
+    "primarySemanticRole": "vessel_shell",
+    "qualityRules": "quality.refinery.crude_storage_tank",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "炼油厂原油罐区储罐。"
+  },
+  {
+    "id": "refinery.product_storage_tank",
+    "name": "Product storage tank",
+    "aliases": [
+      "成品储罐",
+      "汽柴油储罐",
+      "product storage tank",
+      "finished product tank farm"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "native-tank",
+    "family": "tank",
+    "defaultDimensions": {
+      "length": 5.2,
+      "width": 5.2,
+      "height": 3.8
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "vessel_shell",
+        "height": 3.8,
+        "radius": 2.2,
+        "axis": "y",
+        "primaryColor": "#e5e7eb"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "feed_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "loading_outlet"
+      },
+      {
+        "kind": "platform_ladder",
+        "semanticRole": "access_ladder"
+      }
+    ],
+    "primarySemanticRole": "vessel_shell",
+    "qualityRules": "quality.refinery.product_storage_tank",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "炼油厂汽油、柴油等成品油罐区储罐。"
+  },
+  {
+    "id": "refinery.intermediate_storage_tank",
+    "name": "Intermediate storage tank",
+    "aliases": [
+      "\u4e2d\u95f4\u6599\u50a8\u7f50",
+      "\u534a\u6210\u54c1\u7f50\u533a",
+      "\u4e2d\u95f4\u7f50\u533a",
+      "intermediate storage tank",
+      "semi finished tank farm",
+      "intermediate tank farm"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "native-tank",
+    "family": "tank",
+    "defaultDimensions": {
+      "length": 4.8,
+      "width": 4.8,
+      "height": 3.6
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "vessel_shell",
+        "height": 3.6,
+        "radius": 2.0,
+        "axis": "y",
+        "primaryColor": "#d1d5db"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "distillate_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "conversion_feed_outlet"
+      },
+      {
+        "kind": "platform_ladder",
+        "semanticRole": "access_ladder"
+      }
+    ],
+    "primarySemanticRole": "vessel_shell",
+    "qualityRules": "quality.refinery.intermediate_storage_tank",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Intermediate naphtha, gas oil, and blend-component tankage between distillation and conversion units."
+  },
+  {
+    "id": "refinery.desalter",
+    "name": "Crude desalter",
+    "aliases": [
+      "电脱盐器",
+      "脱盐罐",
+      "crude desalter"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "profile-parts",
+    "family": "tank",
+    "defaultDimensions": {
+      "length": 4.8,
+      "width": 1.4,
+      "height": 1.6
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "desalter_vessel",
+        "length": 4.6,
+        "radius": 0.62,
+        "axis": "x",
+        "primaryColor": "#94a3b8"
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "support_base"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "crude_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "desalted_crude_outlet"
+      },
+      {
+        "kind": "control_box",
+        "semanticRole": "electrical_control_box"
+      }
+    ],
+    "primarySemanticRole": "desalter_vessel",
+    "qualityRules": "quality.refinery.desalter",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "常减压前处理的卧式电脱盐容器。"
+  },
+  {
+    "id": "refinery.atmospheric_distillation_unit",
+    "name": "Atmospheric distillation unit",
+    "aliases": [
+      "常压蒸馏塔",
+      "常压塔",
+      "crude distillation unit",
+      "atmospheric distillation unit"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "distillation_column_layout",
+    "preferredResolver": "profile-parts",
+    "family": "distillation_column",
+    "defaultDimensions": {
+      "length": 7.2,
+      "width": 4.2,
+      "height": 11.2
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "distillation_column_shell",
+        "height": 11,
+        "radius": 0.72,
+        "axis": "y",
+        "position": [
+          -1.7,
+          3.05,
+          0
+        ],
+        "primaryColor": "#d1d5db"
+      },
+      {
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "distillation_column_shell",
+        "anchor": "shell_center"
+      },
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "preheat_exchanger",
+        "length": 2.6,
+        "radius": 0.34,
+        "axis": "x",
+        "position": [
+          1.6,
+          0.75,
+          -0.9
+        ]
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "fired_heater",
+        "length": 1.8,
+        "width": 1.2,
+        "height": 2.3,
+        "position": [
+          1.75,
+          1.15,
+          0.95
+        ],
+        "primaryColor": "#9ca3af"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "side_draw_manifold",
+        "length": 3.4,
+        "radius": 0.08,
+        "position": [
+          -1.7,
+          4.2,
+          0.9
+        ]
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "service_platform",
+        "attachToRole": "distillation_column_shell",
+        "anchor": "service_side",
+        "offset": [
+          0,
+          1.8,
+          0
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "crude_feed_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "overhead_product_outlet"
+      }
+    ],
+    "primarySemanticRole": "distillation_column_shell",
+    "qualityRules": "quality.refinery.atmospheric_distillation_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "原油初馏常压蒸馏装置，带加热炉、换热器和侧线。"
+  },
+  {
+    "id": "refinery.vacuum_distillation_unit",
+    "name": "Vacuum distillation unit",
+    "aliases": [
+      "减压蒸馏塔",
+      "减压塔",
+      "vacuum distillation unit",
+      "vacuum tower"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "distillation_column_layout",
+    "preferredResolver": "profile-parts",
+    "family": "distillation_column",
+    "defaultDimensions": {
+      "length": 6.4,
+      "width": 3.8,
+      "height": 10.4
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "vacuum_column_shell",
+        "height": 10,
+        "radius": 0.82,
+        "axis": "y",
+        "position": [
+          -1.35,
+          3.05,
+          0
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "condenser_exchanger",
+        "length": 2.4,
+        "radius": 0.34,
+        "axis": "x",
+        "position": [
+          1.4,
+          0.75,
+          -0.85
+        ]
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "vacuum_heater",
+        "length": 1.7,
+        "width": 1.1,
+        "height": 2,
+        "position": [
+          1.55,
+          1,
+          0.9
+        ],
+        "primaryColor": "#9ca3af"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "vacuum_line",
+        "length": 2.8,
+        "radius": 0.08,
+        "position": [
+          -1.35,
+          4,
+          0.85
+        ]
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "service_platform",
+        "attachToRole": "vacuum_column_shell",
+        "anchor": "service_side",
+        "offset": [
+          0,
+          1.6,
+          0
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "atmospheric_residue_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "vacuum_gas_oil_outlet"
+      }
+    ],
+    "primarySemanticRole": "vacuum_column_shell",
+    "qualityRules": "quality.refinery.vacuum_distillation_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "处理常压渣油的减压蒸馏装置。"
+  },
+  {
+    "id": "refinery.fluid_catalytic_cracking_unit",
+    "name": "Fluid catalytic cracking unit",
+    "aliases": [
+      "催化裂化装置",
+      "FCC装置",
+      "fluid catalytic cracking",
+      "FCC unit"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "profile-parts",
+    "family": "reactor",
+    "defaultDimensions": {
+      "length": 7.2,
+      "width": 4.2,
+      "height": 7.2
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "fcc_reactor",
+        "height": 5.8,
+        "radius": 0.65,
+        "axis": "y",
+        "position": [
+          -1.9,
+          2.95,
+          -0.45
+        ],
+        "primaryColor": "#d1d5db"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "catalyst_regenerator",
+        "height": 5.2,
+        "radius": 0.82,
+        "axis": "y",
+        "position": [
+          0.2,
+          2.65,
+          0.35
+        ],
+        "primaryColor": "#bfc7d5"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "main_fractionator",
+        "height": 6.2,
+        "radius": 0.58,
+        "axis": "y",
+        "position": [
+          2.2,
+          3.05,
+          -0.35
+        ],
+        "primaryColor": "#d9dee8"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "riser_pipe",
+        "length": 3.2,
+        "radius": 0.09,
+        "position": [
+          -0.85,
+          3.7,
+          -0.1
+        ]
+      },
+      {
+        "kind": "cyclone_separator_unit",
+        "semanticRole": "cyclone_separator"
+      },
+      {
+        "kind": "chimney_stack",
+        "semanticRole": "flue_gas_stack"
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "service_platform"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "vacuum_gas_oil_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "cracked_product_outlet"
+      }
+    ],
+    "primarySemanticRole": "fcc_reactor",
+    "qualityRules": "quality.refinery.fluid_catalytic_cracking_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "催化裂化反应再生装置，表达反应器、再生器、提升管、旋风分离和烟囱。"
+  },
+  {
+    "id": "refinery.hydrotreating_unit",
+    "name": "Hydrotreating unit",
+    "aliases": [
+      "加氢精制装置",
+      "加氢装置",
+      "hydrotreating unit",
+      "hydrotreater"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "profile-parts",
+    "family": "reactor",
+    "defaultDimensions": {
+      "length": 6.4,
+      "width": 3.2,
+      "height": 4.6
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "hydrotreater_reactor",
+        "height": 4.2,
+        "radius": 0.55,
+        "axis": "y",
+        "position": [
+          -1.45,
+          2.15,
+          -0.35
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "feed_effluent_exchanger",
+        "length": 2.4,
+        "radius": 0.3,
+        "axis": "x",
+        "position": [
+          0.8,
+          0.68,
+          -0.85
+        ]
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "high_pressure_separator",
+        "length": 3.4,
+        "radius": 0.48,
+        "axis": "x",
+        "position": [
+          1.4,
+          0.85,
+          0.75
+        ],
+        "primaryColor": "#dbe3ee"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "hydrogen_header",
+        "length": 3.2,
+        "radius": 0.07,
+        "position": [
+          0.15,
+          1.8,
+          0.9
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "hydrogen_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "treated_product_outlet"
+      }
+    ],
+    "primarySemanticRole": "hydrotreater_reactor",
+    "qualityRules": "quality.refinery.hydrotreating_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "加氢精制反应器列，包含反应器、换热器、分离罐和氢气入口。"
+  },
+  {
+    "id": "refinery.catalytic_reformer_unit",
+    "name": "Catalytic reformer unit",
+    "aliases": [
+      "催化重整装置",
+      "重整装置",
+      "catalytic reformer",
+      "reformer unit"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "profile-parts",
+    "family": "reactor",
+    "defaultDimensions": {
+      "length": 7.2,
+      "width": 3.4,
+      "height": 4.4
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "reformer_reactor_train",
+        "height": 4,
+        "radius": 0.48,
+        "axis": "y",
+        "position": [
+          -1.8,
+          2.05,
+          -0.45
+        ],
+        "primaryColor": "#d1d5db"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "reformer_fired_heater",
+        "length": 1.7,
+        "width": 1.1,
+        "height": 2.1,
+        "position": [
+          0.25,
+          1.05,
+          0.85
+        ],
+        "primaryColor": "#9ca3af"
+      },
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "reformer_exchanger",
+        "length": 2.2,
+        "radius": 0.3,
+        "axis": "x",
+        "position": [
+          1.25,
+          0.68,
+          -0.85
+        ]
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "reformer_separator",
+        "length": 2.8,
+        "radius": 0.42,
+        "axis": "x",
+        "position": [
+          2.05,
+          0.78,
+          0.7
+        ],
+        "primaryColor": "#dbe3ee"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "naphtha_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "reformate_outlet"
+      }
+    ],
+    "primarySemanticRole": "reformer_reactor_train",
+    "qualityRules": "quality.refinery.catalytic_reformer_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "石脑油重整反应器列，包含多段反应器、加热炉、换热器和气液分离。"
+  },
+  {
+    "id": "refinery.sulfur_recovery_unit",
+    "name": "Sulfur recovery unit",
+    "aliases": [
+      "硫回收装置",
+      "Claus装置",
+      "sulfur recovery unit",
+      "Claus unit"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "profile-parts",
+    "family": "reactor",
+    "defaultDimensions": {
+      "length": 5.4,
+      "width": 2.8,
+      "height": 4.6
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "claus_reactor",
+        "length": 2.2,
+        "radius": 0.48,
+        "axis": "x"
+      },
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "sulfur_condenser"
+      },
+      {
+        "kind": "chimney_stack",
+        "semanticRole": "tail_gas_stack"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "acid_gas_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "sulfur_outlet"
+      }
+    ],
+    "primarySemanticRole": "claus_reactor",
+    "qualityRules": "quality.refinery.sulfur_recovery_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "酸性气硫回收单元，包含热反应器、冷凝器和尾气烟囱。"
+  },
+  {
+    "id": "refinery.flare_system",
+    "name": "Flare system",
+    "aliases": [
+      "火炬系统",
+      "火炬塔",
+      "flare system",
+      "flare stack"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "generic_industrial_layout",
+    "preferredResolver": "profile-parts",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 4.2,
+      "width": 2.6,
+      "height": 10
+    },
+    "parts": [
+      {
+        "kind": "chimney_stack",
+        "semanticRole": "flare_stack",
+        "height": 9.5,
+        "radius": 0.28,
+        "warningStripes": true
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "knockout_drum",
+        "length": 2.2,
+        "radius": 0.36,
+        "axis": "x"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "relief_gas_inlet"
+      }
+    ],
+    "primarySemanticRole": "flare_stack",
+    "qualityRules": "quality.refinery.flare_system",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "炼油厂放空火炬系统，包含火炬筒和入口分液罐。"
+  },
+  {
+    "id": "refinery.pipe_rack",
+    "name": "Main pipe rack",
+    "aliases": [
+      "主管廊",
+      "管廊",
+      "pipe rack",
+      "main pipe rack"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "linear_layout",
+    "preferredResolver": "profile-parts",
+    "family": "pipe_system",
+    "defaultDimensions": {
+      "length": 12,
+      "width": 1.4,
+      "height": 2.2
+    },
+    "parts": [
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "main_pipe_header",
+        "length": 10,
+        "count": 6
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "parallel_pipe_run",
+        "length": 10,
+        "radius": 0.055,
+        "axis": "x"
+      },
+      {
+        "kind": "structural_tower_frame",
+        "semanticRole": "pipe_rack_support_frame",
+        "height": 2.4,
+        "levelCount": 2
+      }
+    ],
+    "primarySemanticRole": "main_pipe_header",
+    "qualityRules": "quality.refinery.pipe_rack",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "炼油厂主流程侧边管廊。"
+  },
+  {
+    "id": "refinery.utility_boiler",
+    "name": "Utility boiler",
+    "aliases": [
+      "公用工程锅炉",
+      "锅炉房",
+      "utility boiler",
+      "steam boiler"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "generic_industrial_layout",
+    "preferredResolver": "profile-parts",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 4.6,
+      "width": 2.6,
+      "height": 4.2
+    },
+    "parts": [
+      {
+        "kind": "generic_body",
+        "semanticRole": "boiler_body"
+      },
+      {
+        "kind": "chimney_stack",
+        "semanticRole": "boiler_stack",
+        "height": 4.2,
+        "radius": 0.22
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "steam_header"
+      },
+      {
+        "kind": "control_box",
+        "semanticRole": "boiler_control_box"
+      }
+    ],
+    "primarySemanticRole": "boiler_body",
+    "qualityRules": "quality.refinery.utility_boiler",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "炼油厂公用工程锅炉和蒸汽总管。"
+  },
+  {
+    "id": "refinery.control_room",
+    "name": "Control room and MCC",
+    "aliases": [
+      "中控室",
+      "控制室",
+      "MCC",
+      "control room"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "generic_industrial_layout",
+    "preferredResolver": "catalog-item",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 4.6,
+      "width": 2.4,
+      "height": 2.4
+    },
+    "parts": [
+      {
+        "kind": "generic_body",
+        "semanticRole": "control_room_body"
+      },
+      {
+        "kind": "control_box",
+        "semanticRole": "mcc_panel"
+      }
+    ],
+    "primarySemanticRole": "control_room_body",
+    "qualityRules": "quality.refinery.control_room",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "炼油厂中控室和电气控制柜区域。"
+  }
+]

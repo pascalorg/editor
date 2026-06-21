@@ -53,12 +53,7 @@ function shapeExtents(shape: GeneratedGeometryShapeSpec): Vec3 {
     case 'capsule':
     case 'cone':
     case 'frustum': {
-      const radius = Math.max(
-        shape.radius ?? 0,
-        shape.radiusTop ?? 0,
-        shape.radiusBottom ?? 0,
-        0.1,
-      )
+      const radius = Math.max(shape.radius ?? 0, shape.radiusTop ?? 0, shape.radiusBottom ?? 0, 0.1)
       const height = shape.height ?? 1
       if (shape.axis === 'x') return [height, radius * 2, radius * 2]
       if (shape.axis === 'z') return [radius * 2, radius * 2, height]
@@ -133,14 +128,107 @@ function scaleValue(value: number | undefined, factor: number) {
   return value == null ? value : rounded(value * factor)
 }
 
-function scaledShape(shape: GeneratedGeometryShapeSpec, scale: Vec3): GeneratedGeometryShapeSpec {
+function scaleOptionalPosition(position: Vec3 | undefined, center: Vec3, scale: Vec3) {
+  return position ? scalePosition(position, center, scale) : position
+}
+
+function scalePrimitiveContractFields(
+  shape: GeneratedGeometryShapeSpec,
+  center: Vec3,
+  scale: Vec3,
+): Pick<GeneratedGeometryShapeSpec, 'ports' | 'cutouts' | 'pattern' | 'duct'> {
+  const minScale = Math.min(scale[0], scale[1], scale[2])
+  return {
+    ports: shape.ports?.map((port) => ({
+      ...port,
+      position: scaleOptionalPosition(port.position, center, scale),
+      radius: scaleValue(port.radius, minScale),
+      width: scaleValue(port.width, scale[0]),
+      height: scaleValue(port.height, scale[1]),
+    })),
+    cutouts: shape.cutouts?.map((cutout) => ({
+      ...cutout,
+      position: scaleOptionalPosition(cutout.position, center, scale),
+      length: scaleValue(cutout.length, scale[0]),
+      width: scaleValue(cutout.width, scale[2]),
+      height: scaleValue(cutout.height, scale[1]),
+      radius: scaleValue(cutout.radius, minScale),
+      depth: scaleValue(cutout.depth, minScale),
+      bevelRadius: scaleValue(cutout.bevelRadius, minScale),
+    })),
+    pattern: shape.pattern
+      ? {
+          ...shape.pattern,
+          radius: scaleValue(shape.pattern.radius, minScale),
+          spacing: Array.isArray(shape.pattern.spacing)
+            ? [
+                rounded(shape.pattern.spacing[0] * scale[0]),
+                rounded(shape.pattern.spacing[1] * scale[1]),
+                rounded(shape.pattern.spacing[2] * scale[2]),
+              ]
+            : scaleValue(shape.pattern.spacing, minScale),
+          step: shape.pattern.step
+            ? [
+                rounded(shape.pattern.step[0] * scale[0]),
+                rounded(shape.pattern.step[1] * scale[1]),
+                rounded(shape.pattern.step[2] * scale[2]),
+              ]
+            : undefined,
+          instances: shape.pattern.instances?.map((instance) => ({
+            ...instance,
+            position: instance.position
+              ? [
+                  rounded(instance.position[0] * scale[0]),
+                  rounded(instance.position[1] * scale[1]),
+                  rounded(instance.position[2] * scale[2]),
+                ]
+              : instance.position,
+          })),
+        }
+      : undefined,
+    duct: shape.duct
+      ? {
+          ...shape.duct,
+          width: scaleValue(shape.duct.width, scale[0]),
+          height: scaleValue(shape.duct.height, scale[1]),
+          radius: scaleValue(shape.duct.radius, minScale),
+          wallThickness: scaleValue(shape.duct.wallThickness, minScale),
+          taper: shape.duct.taper
+            ? {
+                startWidth: scaleValue(shape.duct.taper.startWidth, scale[0]),
+                startHeight: scaleValue(shape.duct.taper.startHeight, scale[1]),
+                startRadius: scaleValue(shape.duct.taper.startRadius, minScale),
+                endWidth: scaleValue(shape.duct.taper.endWidth, scale[0]),
+                endHeight: scaleValue(shape.duct.taper.endHeight, scale[1]),
+                endRadius: scaleValue(shape.duct.taper.endRadius, minScale),
+              }
+            : undefined,
+          branchPorts: shape.duct.branchPorts?.map((port) => ({
+            ...port,
+            position: scaleOptionalPosition(port.position, center, scale),
+            radius: scaleValue(port.radius, minScale),
+            width: scaleValue(port.width, scale[0]),
+            height: scaleValue(port.height, scale[1]),
+          })),
+        }
+      : undefined,
+  }
+}
+
+function scaledShape(
+  shape: GeneratedGeometryShapeSpec,
+  scale: Vec3,
+  center: Vec3,
+): GeneratedGeometryShapeSpec {
   const minXZ = Math.min(scale[0], scale[2])
+  const contractFields = scalePrimitiveContractFields(shape, center, scale)
   switch (shape.kind) {
     case 'box':
     case 'wedge':
     case 'trapezoid-prism':
       return {
         ...shape,
+        ...contractFields,
         length: scaleValue(shape.length, scale[0]),
         width: scaleValue(shape.width, scale[2]),
         height: scaleValue(shape.height, scale[1]),
@@ -148,6 +236,7 @@ function scaledShape(shape: GeneratedGeometryShapeSpec, scale: Vec3): GeneratedG
     case 'rounded-panel':
       return {
         ...shape,
+        ...contractFields,
         length: scaleValue(shape.length, scale[0]),
         width: scaleValue(shape.width, scale[2]),
         thickness: scaleValue(shape.thickness, scale[1]),
@@ -167,6 +256,7 @@ function scaledShape(shape: GeneratedGeometryShapeSpec, scale: Vec3): GeneratedG
             : minXZ
       return {
         ...shape,
+        ...contractFields,
         height: scaleValue(shape.height, axialScale),
         radius: scaleValue(shape.radius, radialScale),
         radiusTop: scaleValue(shape.radiusTop, radialScale),
@@ -179,6 +269,7 @@ function scaledShape(shape: GeneratedGeometryShapeSpec, scale: Vec3): GeneratedG
       const existing = shape.scale ?? [1, 1, 1]
       return {
         ...shape,
+        ...contractFields,
         scale: [
           rounded(existing[0] * scale[0]),
           rounded(existing[1] * scale[1]),
@@ -190,6 +281,7 @@ function scaledShape(shape: GeneratedGeometryShapeSpec, scale: Vec3): GeneratedG
       const factor = Math.min(scale[0], scale[1], scale[2])
       return {
         ...shape,
+        ...contractFields,
         majorRadius: scaleValue(shape.majorRadius, factor),
         tubeRadius: scaleValue(shape.tubeRadius, factor),
         radius: scaleValue(shape.radius, factor),
@@ -198,6 +290,7 @@ function scaledShape(shape: GeneratedGeometryShapeSpec, scale: Vec3): GeneratedG
     case 'sweep':
       return {
         ...shape,
+        ...contractFields,
         radius: scaleValue(shape.radius, Math.min(scale[0], scale[1], scale[2])),
         path: shape.path?.map((point) => [
           rounded(point[0] * scale[0]),
@@ -206,7 +299,7 @@ function scaledShape(shape: GeneratedGeometryShapeSpec, scale: Vec3): GeneratedG
         ]),
       }
     default:
-      return shape
+      return { ...shape, ...contractFields }
   }
 }
 
@@ -246,7 +339,7 @@ function scaleArtifactToEnvelope(
       ...artifact,
       assemblyPosition: scalePosition(artifact.assemblyPosition, center, scale),
       shapes: artifact.shapes.map((shape, index) => ({
-        ...scaledShape(shape, scale),
+        ...scaledShape(shape, scale, center),
         position: scalePosition(shapePosition(artifact, shape, index), center, scale),
       })),
       transforms: artifact.transforms.map((transform) => ({
@@ -372,7 +465,9 @@ function withContractMarkers(
     addedPortMarkers.push(port.id)
   }
 
-  const requiredRoles = (contract.requiredRoles ?? []).filter((role) => !hasRole({ ...artifact, shapes }, role))
+  const requiredRoles = (contract.requiredRoles ?? []).filter(
+    (role) => !hasRole({ ...artifact, shapes }, role),
+  )
   requiredRoles.forEach((role, index) => {
     const count = Math.max(1, requiredRoles.length)
     const x =
@@ -445,7 +540,10 @@ export function alignFactoryPrimitiveArtifactToContract(input: {
   }
 
   const scaled = scaleArtifactToEnvelope(input.artifact, input.contract)
-  const marked = withContractMarkers(normalizeAssemblyPositionToBase(scaled.artifact), input.contract)
+  const marked = withContractMarkers(
+    normalizeAssemblyPositionToBase(scaled.artifact),
+    input.contract,
+  )
   const applied =
     Boolean(scaled.scale) ||
     marked.addedPortMarkers.length > 0 ||

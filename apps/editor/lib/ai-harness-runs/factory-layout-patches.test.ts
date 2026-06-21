@@ -73,6 +73,38 @@ describe('factory layout patches', () => {
     expect(doorPatch?.parentId).toMatch(/^wall_/)
   })
 
+  test('places requested top-left layout inside provided scene bounds', () => {
+    const plan = buildFactoryLayoutCreatePatches({
+      prompt: '\u5728\u5de6\u4e0a\u89d2\u653e\u4e00\u4e2a3\u7c73\u4e583\u7c73\u7684\u623f\u5b50',
+      plan: housePlan,
+      placement: {
+        generatedBy: 'factory-agent',
+        metadata: {
+          sceneBounds: {
+            min: [-10, -6],
+            max: [10, 6],
+            center: [0, 0],
+            size: [20, 12],
+          },
+        },
+      },
+    })
+
+    const zone = plan.patches[0]?.node
+    expect(zone).toMatchObject({
+      type: 'zone',
+      polygon: [
+        [-9, -5],
+        [-6, -5],
+        [-6, -2],
+        [-9, -2],
+      ],
+      metadata: {
+        layoutPlacementIntent: 'top-left',
+      },
+    })
+  })
+
   test('uses Chinese process display name for factory shell labels', () => {
     const plan = buildFactoryLayoutCreatePatches({
       prompt: '\u521b\u5efa\u4e00\u6761\u5316\u5de5\u5382\u6c34\u88c2\u89e3\u8f66\u95f4',

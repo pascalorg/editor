@@ -1,4 +1,10 @@
-import { CableTrayNode, PipeFittingNode, PipeNode, ZoneNode } from '@pascal-app/core/schema'
+import {
+  CableTrayNode,
+  PipeFittingNode,
+  PipeNode,
+  SweepNode,
+  ZoneNode,
+} from '@pascal-app/core/schema'
 import type {
   GeneratedGeometryCreatePatch,
   GeneratedGeometryPlacementSpec,
@@ -23,9 +29,9 @@ import type {
   ProcessConnectionMedium,
   ProcessConnectionPlan,
   ProcessConnectionVisualKind,
-  ProcessLineFocusBounds,
   ProcessLayoutDiagnostics,
   ProcessLayoutStrategy,
+  ProcessLineFocusBounds,
   ProcessLinePlan,
   ProcessPrimitiveRequest,
   ProcessStationPlan,
@@ -123,7 +129,7 @@ function connectionRenderSpec(
       resolver: 'native-hot-material-chute',
       color: '#b45309',
       elevation: 1.6,
-      diameter: 0.34,
+      diameter: 0.18,
       insulated: true,
       temperatureC: 650,
     }
@@ -135,7 +141,7 @@ function connectionRenderSpec(
       resolver: 'native-air-duct',
       color: '#64748b',
       elevation: 2.8,
-      diameter: 0.42,
+      diameter: 0.14,
       insulated: false,
       temperatureC: 80,
     }
@@ -145,9 +151,9 @@ function connectionRenderSpec(
       nodeKind: 'pipe',
       label: 'hot gas duct',
       resolver: 'native-hot-gas-duct',
-      color: '#92400e',
+      color: '#8b5e34',
       elevation: 3.2,
-      diameter: 0.5,
+      diameter: 0.16,
       insulated: true,
       temperatureC: 360,
     }
@@ -279,7 +285,7 @@ function pipeMedium(medium?: ProcessConnectionMedium) {
 }
 
 function pipeDiameter(medium?: ProcessConnectionMedium) {
-  if (medium === 'gas') return 0.28
+  if (medium === 'gas') return 0.14
   if (medium === 'molten_metal') return 0.3
   return medium === 'hydrogen' || medium === 'oxygen' ? 0.12 : 0.16
 }
@@ -488,6 +494,138 @@ function createConnectionFittings(input: {
   return patches
 }
 
+function isCementTertiaryAirStation(plan: ProcessLinePlan, stationId: string) {
+  return plan.processId === 'cement_plant_full' && stationId === 'tertiary_air_duct'
+}
+
+function isCementTertiaryAirConnection(plan: ProcessLinePlan, connection: ProcessConnectionPlan) {
+  if (plan.processId !== 'cement_plant_full') return false
+  return (
+    (connection.fromStationId === 'grate_cooler' &&
+      connection.toStationId === 'tertiary_air_duct') ||
+    (connection.fromStationId === 'tertiary_air_duct' &&
+      connection.toStationId === 'preheater_tower')
+  )
+}
+
+function pathCenter(points: Array<[number, number, number]>): [number, number, number] {
+  const xs = points.map((point) => point[0])
+  const ys = points.map((point) => point[1])
+  const zs = points.map((point) => point[2])
+  return [
+    (Math.min(...xs) + Math.max(...xs)) / 2,
+    (Math.min(...ys) + Math.max(...ys)) / 2,
+    (Math.min(...zs) + Math.max(...zs)) / 2,
+  ]
+}
+
+function createCementTertiaryAirDuctPatch(input: {
+  plan: ProcessLinePlan
+  placements: Map<string, StationPlacement>
+  stationPlacements: StationPlacement[]
+  boundary: { length: number; width: number; centerX?: number; centerZ?: number }
+  routeObstacles: ProcessRouteObstacle[]
+  portOverrides?: ProcessRoutePortOverrides
+  sourcePrompt: string
+  placement: GeneratedGeometryPlacementSpec
+}) {
+  if (input.plan.processId !== 'cement_plant_full') return []
+  const coolerConnection = input.plan.connections.find(
+    (connection) =>
+      connection.fromStationId === 'grate_cooler' && connection.toStationId === 'tertiary_air_duct',
+  )
+  const preheaterConnection = input.plan.connections.find(
+    (connection) =>
+      connection.fromStationId === 'tertiary_air_duct' &&
+      connection.toStationId === 'preheater_tower',
+  )
+  if (!coolerConnection || !preheaterConnection) return []
+
+  const virtualConnection: ProcessConnectionPlan = {
+    fromStationId: 'grate_cooler',
+    toStationId: 'preheater_tower',
+    medium: 'gas',
+    visualKind: 'hot_gas_duct',
+    fromPortId: coolerConnection.fromPortId,
+    toPortId: preheaterConnection.toPortId,
+  }
+  const route = routeProcessConnection({
+    plan: input.plan,
+    connection: virtualConnection,
+    connectionIndex: input.plan.connections.indexOf(coolerConnection),
+    placements: input.placements,
+    stationPlacements: input.stationPlacements,
+    boundary: input.boundary,
+    portOverrides: input.portOverrides,
+    routeObstacles: input.routeObstacles,
+  })
+  const fromPoint = route?.fromPort?.point ?? input.placements.get('grate_cooler')?.position
+  const toPoint = route?.toPort?.point ?? input.placements.get('preheater_tower')?.position
+  if (!fromPoint || !toPoint) return []
+
+  const fromHeight = route?.fromPort?.height ?? 1.4
+  const toHeight = route?.toPort?.height ?? 5.9
+  const highPointHeight = Math.max(fromHeight, toHeight, 5.2)
+  const start: [number, number, number] = [
+    fromPoint[0],
+    Math.max(fromHeight + 0.25, 1.8),
+    fromPoint[1],
+  ]
+  const mid: [number, number, number] = [
+    (fromPoint[0] + toPoint[0]) / 2,
+    highPointHeight,
+    (fromPoint[1] + toPoint[1]) / 2,
+  ]
+  const end: [number, number, number] = [toPoint[0], toHeight, toPoint[1]]
+  const path = [start, mid, end]
+  const node = SweepNode.parse({
+    name: '\u4e09\u6b21\u98ce\u7ba1\u8de8\u7ebf\u98ce\u7ba1',
+    position: pathCenter(path),
+    path,
+    radius: 0.18,
+    tubularSegments: 16,
+    radialSegments: 4,
+    material: {
+      preset: 'metal',
+      properties: {
+        color: '#8b5e34',
+        roughness: 0.58,
+        metalness: 0.22,
+      },
+    },
+    metadata: {
+      ...processMetadata({
+        plan: input.plan,
+        sourcePrompt: input.sourcePrompt,
+        placement: input.placement,
+      }),
+      role: 'process-line-route-equipment',
+      stationId: 'tertiary_air_duct',
+      stationRole: 'tertiary_air_duct',
+      stationLabel: 'Tertiary air duct',
+      stationDisplayLabel: '\u4e09\u6b21\u98ce\u7ba1',
+      connectionRole: 'gas',
+      visualKind: 'hot_gas_duct',
+      fromStationId: 'grate_cooler',
+      toStationId: 'preheater_tower',
+      viaStationId: 'tertiary_air_duct',
+      fromPortId: route?.fromPort?.portId ?? coolerConnection.fromPortId,
+      toPortId: route?.toPort?.portId ?? preheaterConnection.toPortId,
+      fromPortMedium: route?.fromPort?.medium ?? 'gas',
+      toPortMedium: route?.toPort?.medium ?? 'gas',
+      resolver: 'native-rectangular-duct-sweep',
+      primitiveContract: {
+        duct: {
+          crossSection: 'rectangular',
+          width: 0.46,
+          height: 0.28,
+        },
+      },
+    },
+  })
+  return [parentPatch(node, input.placement)]
+}
+
 const CEMENT_KEY_PROCESS_STATIONS = [
   'preheater_tower',
   'rotary_kiln',
@@ -613,6 +751,7 @@ export function composeProcessLine(input: {
     plan.stations.forEach((station, stationIndex) => {
       const stationPlacement = stationPlacements[stationIndex]
       if (!stationPlacement) return
+      if (isCementTertiaryAirStation(plan, station.id)) return
       const resolved = resolveProcessStationEquipment({
         plan,
         station,
@@ -653,38 +792,51 @@ export function composeProcessLine(input: {
   }
 
   const connectionPatches = sections.connections
-    ? plan.connections.flatMap((connection, connectionIndex) => {
-        const routeObstacles = [...stationRouteObstacles, ...(input.routeObstacles ?? [])]
-        const route = routeProcessConnection({
+    ? [
+        ...createCementTertiaryAirDuctPatch({
           plan,
-          connection,
-          connectionIndex,
           placements: placementByStation,
           stationPlacements,
           boundary: layoutBoundary,
+          routeObstacles: [...stationRouteObstacles, ...(input.routeObstacles ?? [])],
           portOverrides: input.portOverrides,
-          routeObstacles,
-        })
-        if (!route) return []
-        return [
-          ...createConnectionPatches({
+          sourcePrompt: input.prompt,
+          placement: input.placement,
+        }),
+        ...plan.connections.flatMap((connection, connectionIndex) => {
+          if (isCementTertiaryAirConnection(plan, connection)) return []
+          const routeObstacles = [...stationRouteObstacles, ...(input.routeObstacles ?? [])]
+          const route = routeProcessConnection({
             plan,
             connection,
             connectionIndex,
-            route,
-            sourcePrompt: input.prompt,
-            placement: input.placement,
-          }),
-          ...createRouteElbowFittings({
-            plan,
-            connection,
-            connectionIndex,
-            route,
-            sourcePrompt: input.prompt,
-            placement: input.placement,
-          }),
-        ]
-      })
+            placements: placementByStation,
+            stationPlacements,
+            boundary: layoutBoundary,
+            portOverrides: input.portOverrides,
+            routeObstacles,
+          })
+          if (!route) return []
+          return [
+            ...createConnectionPatches({
+              plan,
+              connection,
+              connectionIndex,
+              route,
+              sourcePrompt: input.prompt,
+              placement: input.placement,
+            }),
+            ...createRouteElbowFittings({
+              plan,
+              connection,
+              connectionIndex,
+              route,
+              sourcePrompt: input.prompt,
+              placement: input.placement,
+            }),
+          ]
+        }),
+      ]
     : []
   const fittingPatches = sections.connections
     ? createConnectionFittings({

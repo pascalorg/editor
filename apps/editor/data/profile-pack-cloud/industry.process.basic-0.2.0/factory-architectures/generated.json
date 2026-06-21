@@ -1,0 +1,155 @@
+[
+  {
+    "id": "process.factory.basic_process_plant",
+    "label": "流程行业基础工厂架构",
+    "industry": "process",
+    "processId": "process_industry_basic_plant",
+    "layoutStyle": "parallel_bays",
+    "defaultDimensions": {
+      "length": 58,
+      "width": 26
+    },
+    "scopes": [
+      {
+        "id": "basic_process_line",
+        "label": "基础流程生产线",
+        "includeModules": [
+          "raw_material_storage",
+          "reaction_preparation",
+          "thermal_exchange",
+          "separation",
+          "product_storage",
+          "utilities_control",
+          "bulk_handling",
+          "valve_manifold",
+          "utility_air"
+        ]
+      },
+      {
+        "id": "full_process_plant",
+        "label": "流程行业基础工厂",
+        "includeModules": [
+          "raw_material_storage",
+          "reaction_preparation",
+          "thermal_exchange",
+          "separation",
+          "drying_packaging",
+          "product_storage",
+          "utilities_control",
+          "bulk_handling",
+          "valve_manifold",
+          "utility_air"
+        ]
+      }
+    ],
+    "modules": [
+      {
+        "id": "raw_material_storage",
+        "displayLabel": "原料储存与计量",
+        "order": 10,
+        "stationIds": [
+          "raw_material_tank",
+          "metering_pump_skid"
+        ]
+      },
+      {
+        "id": "reaction_preparation",
+        "displayLabel": "配料搅拌与反应",
+        "order": 20,
+        "stationIds": [
+          "mixing_tank",
+          "stirred_reactor"
+        ]
+      },
+      {
+        "id": "thermal_exchange",
+        "displayLabel": "换热调温",
+        "order": 30,
+        "stationIds": [
+          "heat_exchanger"
+        ]
+      },
+      {
+        "id": "separation",
+        "displayLabel": "过滤与离心分离",
+        "order": 40,
+        "stationIds": [
+          "filter_vessel",
+          "centrifuge"
+        ]
+      },
+      {
+        "id": "drying_packaging",
+        "displayLabel": "干燥与包装",
+        "order": 50,
+        "stationIds": [
+          "tray_dryer",
+          "packaging_station"
+        ]
+      },
+      {
+        "id": "product_storage",
+        "displayLabel": "成品储存",
+        "order": 60,
+        "stationIds": [
+          "product_storage_tank"
+        ]
+      },
+      {
+        "id": "utilities_control",
+        "displayLabel": "管廊与控制",
+        "order": 70,
+        "stationIds": [
+          "pipe_corridor",
+          "control_cabinet"
+        ]
+      },
+      {
+        "id": "bulk_handling",
+        "displayLabel": "???????",
+        "order": 15,
+        "stationIds": [
+          "bulk_material_silo"
+        ]
+      },
+      {
+        "id": "utility_air",
+        "displayLabel": "???????",
+        "order": 72,
+        "stationIds": [
+          "utility_blower",
+          "air_compressor_skid"
+        ]
+      },
+      {
+        "id": "valve_manifold",
+        "displayLabel": "????",
+        "order": 45,
+        "stationIds": [
+          "valve_station"
+        ]
+      }
+    ],
+    "layoutHints": {
+      "primaryAxis": "x",
+      "secondaryAxis": "z",
+      "indoorWorkshop": false,
+      "highestStationId": "stirred_reactor",
+      "longAxisStationId": "pipe_corridor",
+      "sideBranchStationIds": [
+        "metering_pump_skid",
+        "pipe_corridor",
+        "control_cabinet",
+        "utility_blower",
+        "air_compressor_skid"
+      ],
+      "scale": "conceptual",
+      "notes": [
+        "储罐和计量泵放在流程入口侧，反应与分离设备放在中段。",
+        "换热器靠近反应釜和分离设备，减少管线跨距。",
+        "管廊沿流程侧边布置，控制柜远离主要管线和高温设备。",
+        "干燥、成品储罐和包装位于流程下游。"
+      ]
+    }
+  }
+]

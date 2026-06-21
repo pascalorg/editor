@@ -43,6 +43,7 @@ const CATALOG_EQUIPMENT_PROFILES: CatalogEquipmentProfile[] = [
   },
   {
     assetId: 'factory-barrel',
+    families: ['tank', 'storage_tank'],
     rolePatterns: [/barrel|drum|storage/i],
     aliases: [/barrel|drum|storage|\u6876|\u50a8\u7f50|\u5b58\u50a8/i],
     rejectWhenContractHasPorts: true,
@@ -76,6 +77,7 @@ function profileCanSatisfyContract(
   contract: ProcessEquipmentContract | undefined,
 ) {
   if (!contract) return true
+  if (contract.preferredResolver === 'catalog-item') return true
   if (profile.families?.includes(contract.equipmentFamily)) return true
   if (profile.rejectWhenContractHasPorts && contract.ports.length > 0) return false
   if (!profile.allowedPortMedia) return contract.ports.length === 0

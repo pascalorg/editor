@@ -40,6 +40,8 @@ type RawProcessTemplate = {
 
 let cachedTemplates: ProcessTemplate[] | undefined
 let cachedArchitectures: IndustryFactoryArchitecture[] | undefined
+let cachedTemplatesSignature: string | undefined
+let cachedArchitecturesSignature: string | undefined
 
 type FactoryArchitectureScope = {
   id: string
@@ -93,6 +95,36 @@ function stringArray(value: unknown): string[] {
 
 function numberValue(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+function semverParts(version: string | undefined) {
+  return (version ?? '0.0.0').split('.').map((part) => Number.parseInt(part, 10) || 0)
+}
+
+function compareSemver(left: string | undefined, right: string | undefined) {
+  const leftParts = semverParts(left)
+  const rightParts = semverParts(right)
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0)
+    if (difference !== 0) return difference
+  }
+  return 0
+}
+
+function keepLatestByPackAndResource<T extends { sourcePack?: IndustryPackRef }>(
+  values: T[],
+  resourceId: (value: T) => string,
+) {
+  const byKey = new Map<string, T>()
+  for (const value of values) {
+    const packId = value.sourcePack?.id ?? 'builtin'
+    const key = `${packId}:${resourceId(value)}`
+    const previous = byKey.get(key)
+    if (!previous || compareSemver(value.sourcePack?.version, previous.sourcePack?.version) > 0) {
+      byKey.set(key, value)
+    }
+  }
+  return [...byKey.values()]
 }
 
 function processDomain(value: unknown): ProcessLineDomain {
@@ -196,6 +228,44 @@ function findRepoRootSync(start = process.cwd()) {
 
 function profilePackCloudRoot() {
   return path.join(findRepoRootSync(), 'apps', 'editor', 'data', 'profile-pack-cloud')
+}
+
+function fileSignature(file: string) {
+  try {
+    const stat = fs.statSync(file)
+    return `${file}:${stat.mtimeMs}:${stat.size}`
+  } catch {
+    return `${file}:missing`
+  }
+}
+
+function resourceCacheSignature(
+  root: string,
+  resourceKey: 'processTemplates' | 'factoryArchitectures',
+) {
+  if (!fs.existsSync(root)) return 'missing-root'
+  const parts: string[] = []
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const dir = path.join(root, entry.name)
+    const manifestPath = path.join(dir, 'pack.json')
+    parts.push(fileSignature(manifestPath))
+    if (!fs.existsSync(manifestPath)) continue
+    let manifest: IndustryFactoryManifest | null = null
+    try {
+      manifest = normalizeManifest(readJson(manifestPath))
+    } catch {
+      continue
+    }
+    const resolvedDir = path.resolve(dir)
+    for (const rel of manifest?.[resourceKey] ?? []) {
+      if (!safeRelativePath(rel)) continue
+      const file = path.resolve(dir, rel)
+      if (!(file === resolvedDir || file.startsWith(`${resolvedDir}${path.sep}`))) continue
+      parts.push(fileSignature(file))
+    }
+  }
+  return parts.sort().join('|')
 }
 
 function normalizeManifest(raw: unknown): IndustryFactoryManifest | null {
@@ -408,42 +478,54 @@ function loadArchitecturesFromPackDir(dir: string) {
 }
 
 export function loadIndustryProcessTemplates() {
-  if (cachedTemplates) return cachedTemplates
   const root = profilePackCloudRoot()
+  const signature = resourceCacheSignature(root, 'processTemplates')
+  if (cachedTemplates && cachedTemplatesSignature === signature) return cachedTemplates
   if (!fs.existsSync(root)) {
     cachedTemplates = []
+    cachedTemplatesSignature = signature
     return cachedTemplates
   }
-  cachedTemplates = fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .flatMap((entry) => {
-      try {
-        return loadTemplatesFromPackDir(path.join(root, entry.name))
-      } catch {
-        return []
-      }
-    })
+  cachedTemplates = keepLatestByPackAndResource(
+    fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .flatMap((entry) => {
+        try {
+          return loadTemplatesFromPackDir(path.join(root, entry.name))
+        } catch {
+          return []
+        }
+      }),
+    (template) => template.processId,
+  )
+  cachedTemplatesSignature = signature
   return cachedTemplates
 }
 
 export function loadIndustryFactoryArchitectures() {
-  if (cachedArchitectures) return cachedArchitectures
   const root = profilePackCloudRoot()
+  const signature = resourceCacheSignature(root, 'factoryArchitectures')
+  if (cachedArchitectures && cachedArchitecturesSignature === signature) return cachedArchitectures
   if (!fs.existsSync(root)) {
     cachedArchitectures = []
+    cachedArchitecturesSignature = signature
     return cachedArchitectures
   }
-  cachedArchitectures = fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .flatMap((entry) => {
-      try {
-        return loadArchitecturesFromPackDir(path.join(root, entry.name))
-      } catch {
-        return []
-      }
-    })
+  cachedArchitectures = keepLatestByPackAndResource(
+    fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .flatMap((entry) => {
+        try {
+          return loadArchitecturesFromPackDir(path.join(root, entry.name))
+        } catch {
+          return []
+        }
+      }),
+    (architecture) => architecture.id,
+  )
+  cachedArchitecturesSignature = signature
   return cachedArchitectures
 }
 

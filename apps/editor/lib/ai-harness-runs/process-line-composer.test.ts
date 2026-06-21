@@ -21,6 +21,12 @@ function cementPlantPlan() {
   return plan.process
 }
 
+function refineryPlan() {
+  const plan = fallbackFactoryPlan('\u751f\u6210\u4e00\u4e2a\u70bc\u6cb9\u5382')
+  if (plan.kind !== 'process_line') throw new Error('expected refinery process line plan')
+  return plan.process
+}
+
 function isOrthogonalSegment(start: [number, number], end: [number, number]) {
   return start[0] === end[0] || start[1] === end[1]
 }
@@ -287,17 +293,20 @@ describe('process line composer', () => {
         patch.node.metadata?.toStationId === 'bag_filter',
     )
     expect(dedustingPipe?.node.metadata).toMatchObject({
+      connectionRole: 'gas',
       fromPortIdHint: 'exhaust_gas_out',
       toPortIdHint: 'dust_gas_in',
       fromPortId: 'exhaust_gas_out',
       toPortId: 'dust_gas_in',
+      fromPortMedium: 'gas',
+      toPortMedium: 'gas',
       fromPortProfileId: 'cement.preheater_tower',
       toPortProfileId: 'cement.bag_filter',
       visualKind: 'hot_gas_duct',
       resolver: 'native-hot-gas-duct',
     })
     if (!dedustingPipe || dedustingPipe.node.type !== 'pipe') throw new Error('expected duct pipe')
-    expect(dedustingPipe.node.diameter).toBe(0.5)
+    expect(dedustingPipe.node.diameter).toBe(0.16)
     expect(dedustingPipe.node.temperatureC).toBe(360)
 
     const clinkerConveyor = result.patches.find(
@@ -363,11 +372,13 @@ describe('process line composer', () => {
         'cement.vertical_raw_mill',
         'cement.raw_meal_homogenization_silo',
         'cement.coal_mill',
-        'cement.tertiary_air_duct',
         'cement.esp_dust_collector',
         'cement.cement_mill',
         'cement.whr_boiler',
       ]),
+    )
+    expect(result.primitiveRequests.map((request) => request.equipmentContract?.profileId)).not.toContain(
+      'cement.tertiary_air_duct',
     )
     expect(
       result.patches.some(
@@ -424,17 +435,96 @@ describe('process line composer', () => {
 
     const tertiaryAirDuct = result.patches.find(
       (patch) =>
-        patch.node.type === 'pipe' &&
-        patch.node.metadata?.fromStationId === 'tertiary_air_duct' &&
+        patch.node.type === 'sweep' &&
+        patch.node.metadata?.stationId === 'tertiary_air_duct' &&
+        patch.node.metadata?.fromStationId === 'grate_cooler' &&
         patch.node.metadata?.toStationId === 'preheater_tower',
     )
     expect(tertiaryAirDuct?.node.metadata).toMatchObject({
+      connectionRole: 'gas',
+      fromPortMedium: 'gas',
+      toPortMedium: 'gas',
       visualKind: 'hot_gas_duct',
-      resolver: 'native-hot-gas-duct',
+      resolver: 'native-rectangular-duct-sweep',
+      primitiveContract: {
+        duct: {
+          crossSection: 'rectangular',
+          width: 0.46,
+          height: 0.28,
+        },
+      },
     })
-    if (!tertiaryAirDuct || tertiaryAirDuct.node.type !== 'pipe') {
-      throw new Error('expected tertiary air duct pipe')
+    if (!tertiaryAirDuct || tertiaryAirDuct.node.type !== 'sweep') {
+      throw new Error('expected tertiary air duct sweep')
     }
-    expect(tertiaryAirDuct.node.diameter).toBe(0.5)
+    expect(tertiaryAirDuct.node.path).toHaveLength(3)
+    expect(tertiaryAirDuct.node.path[0]?.[1]).toBeGreaterThan(1.5)
+    expect(tertiaryAirDuct.node.path[2]?.[1]).toBeGreaterThan(4)
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.type === 'pipe' &&
+          patch.node.metadata?.fromStationId === 'tertiary_air_duct' &&
+          patch.node.metadata?.toStationId === 'preheater_tower',
+      ),
+    ).toBe(false)
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.type === 'pipe' &&
+          patch.node.metadata?.fromStationId === 'grate_cooler' &&
+          patch.node.metadata?.toStationId === 'tertiary_air_duct',
+      ),
+    ).toBe(false)
+
+    const ductDiameters = result.patches
+      .filter(
+        (patch) =>
+          patch.node.type === 'pipe' &&
+          (patch.node.metadata?.visualKind === 'hot_gas_duct' ||
+            patch.node.metadata?.visualKind === 'air_duct'),
+      )
+      .map((patch) => (patch.node.type === 'pipe' ? patch.node.diameter : 0))
+    expect(Math.max(...ductDiameters)).toBeLessThanOrEqual(0.16)
+  })
+
+  test('composes refinery with crude, intermediate, and product native tank farms', () => {
+    const result = composeProcessLine({
+      prompt: '\u751f\u6210\u4e00\u4e2a\u70bc\u6cb9\u5382',
+      plan: refineryPlan(),
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+    })
+
+    expect(result.summary).toContain('Basic oil refinery complex')
+    expect(result.stationPlacements).toHaveLength(14)
+    expect(result.layoutStrategy).toMatchObject({ style: 'parallel_bays' })
+
+    const tankStations = result.patches
+      .filter((patch) => patch.node.type === 'tank')
+      .map((patch) => patch.node.metadata?.stationId)
+
+    expect(tankStations).toEqual(
+      expect.arrayContaining([
+        'crude_storage_tank',
+        'intermediate_storage_tank',
+        'product_storage_tank',
+      ]),
+    )
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.type === 'item' &&
+          ['crude_storage_tank', 'intermediate_storage_tank', 'product_storage_tank'].includes(
+            String(patch.node.metadata?.stationId),
+          ),
+      ),
+    ).toBe(false)
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.metadata?.fromStationId === 'intermediate_storage_tank' &&
+          patch.node.metadata?.toStationId === 'fluid_catalytic_cracking_unit',
+      ),
+    ).toBe(true)
   })
 })

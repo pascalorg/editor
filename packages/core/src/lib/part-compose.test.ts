@@ -264,6 +264,41 @@ describe('resolveLayout', () => {
 })
 
 describe('industrial detail parts', () => {
+  test('emits bottom-layer contracts for ports, ducts, cutouts, and patterns', () => {
+    const shapes = composePartPrimitives({
+      name: 'industrial contract kit',
+      family: 'generic',
+      parts: [
+        { id: 'pipe', kind: 'pipe_run', axis: 'x', length: 1.2, radius: 0.06 },
+        { id: 'elbow', kind: 'pipe_elbow', position: [0, 0.4, 0], radius: 0.05 },
+        { id: 'rollers', kind: 'roller_array', count: 4, length: 1.2 },
+        { id: 'bolts', kind: 'bolt_pattern', count: 6, radius: 0.2 },
+        { id: 'cabinet', kind: 'electrical_cabinet', position: [1, 0.5, 0], doorCount: 2 },
+      ],
+    })
+
+    const pipe = shapes.find(
+      (shape) => shape.name?.includes('pipe run') && shape.kind === 'hollow-cylinder',
+    )
+    const elbow = shapes.find(
+      (shape) => shape.name?.includes('pipe elbow') && shape.kind === 'sweep',
+    )
+    const roller = shapes.find((shape) => shape.name?.includes('conveyor roller'))
+    const bolt = shapes.find((shape) => shape.name?.includes('bolt 1'))
+    const cabinet = shapes.find((shape) => shape.name?.includes('electrical cabinet body'))
+
+    expect(pipe?.duct).toMatchObject({ crossSection: 'round', radius: 0.06 })
+    expect(pipe?.ports).toHaveLength(2)
+    expect(elbow?.duct).toMatchObject({ crossSection: 'round', radius: 0.05 })
+    expect(elbow?.ports?.map((port) => port.kind)).toEqual(['inlet', 'outlet'])
+    expect(roller?.pattern).toMatchObject({ kind: 'linear', count: 4, mode: 'expanded' })
+    expect(bolt?.pattern).toMatchObject({ kind: 'radial', count: 6, mode: 'expanded' })
+    expect(cabinet?.cutouts?.map((cutout) => cutout.semanticRole)).toEqual(
+      expect.arrayContaining(['access_door', 'nameplate', 'vent']),
+    )
+    expect(cabinet?.ports?.[0]).toMatchObject({ kind: 'access', semanticRole: 'access_door' })
+  })
+
   test('composes process-vessel details without falling back to generic pipe ports', () => {
     const shapes = composePartPrimitives({
       name: 'test process vessel',

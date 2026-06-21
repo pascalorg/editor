@@ -1,0 +1,29 @@
+{
+  "id": "industry.discrete-manufacturing.basic",
+  "name": "离散制造基础包",
+  "industry": "discrete-manufacturing",
+  "version": "0.1.0",
+  "schemaVersion": "1.1",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": [
+    "zh-CN",
+    "en-US"
+  ],
+  "capabilities": [
+    "factory_creation"
+  ],
+  "description": "Basic factory-capable pack for discrete manufacturing workshops, covering machining, robotic workcells, assembly, inspection, packaging, AGV logistics, warehousing, utilities, and line control.",
+  "profiles": [
+    "profiles/generated.json"
+  ],
+  "factoryArchitectures": [
+    "factory-architectures/generated.json"
+  ],
+  "processTemplates": [
+    "process-templates/generated.json"
+  ],
+  "qualityRules": [
+    "quality-rules/generated-quality.json"
+  ]
+}

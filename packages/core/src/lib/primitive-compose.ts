@@ -58,6 +58,110 @@ export interface PrimitiveArrayInput {
   spacing?: Vec3 | number
   step?: Vec3
   axis?: PrimitiveAxis | string
+  mode?: 'expand' | 'metadata' | 'instanced' | string
+  patternId?: string
+}
+
+export type PrimitiveCutoutKind = 'rectangular' | 'round' | 'slot' | 'polygon' | string
+export type PrimitivePortKind =
+  | 'inlet'
+  | 'outlet'
+  | 'access'
+  | 'support'
+  | 'drive'
+  | 'instrument'
+  | 'generic'
+  | string
+export type PrimitivePatternKind = 'linear' | 'grid' | 'radial' | string
+export type PrimitiveDuctCrossSection = 'round' | 'rectangular' | 'oval' | string
+
+export interface PrimitiveCutoutInput {
+  id?: string
+  kind: PrimitiveCutoutKind
+  semanticRole?: string
+  position?: Vec3
+  normal?: Vec3
+  axis?: PrimitiveAxis | string
+  length?: number
+  width?: number
+  height?: number
+  radius?: number
+  depth?: number
+  profile?: [number, number][]
+  through?: boolean
+  bevelRadius?: number
+  bevelSegments?: number
+}
+
+export interface PrimitivePortMarkerInput {
+  id?: string
+  kind?: PrimitivePortKind
+  semanticRole?: string
+  position?: Vec3
+  normal?: Vec3
+  axis?: PrimitiveAxis | string
+  radius?: number
+  width?: number
+  height?: number
+  direction?: 'in' | 'out' | 'bidirectional' | string
+  connectsTo?: string
+}
+
+export interface PrimitivePatternInput {
+  id?: string
+  kind: PrimitivePatternKind
+  semanticRole?: string
+  count?: number
+  columns?: number
+  rows?: number
+  layers?: number
+  spacing?: Vec3 | number
+  step?: Vec3
+  axis?: PrimitiveAxis | string
+  radius?: number
+  startAngle?: number
+  endAngle?: number
+  sourceShapeId?: string
+  mode?: 'expanded' | 'metadata' | 'instanced' | string
+  instances?: Array<{
+    position?: Vec3
+    rotation?: Vec3
+    scale?: Vec3
+    name?: string
+  }>
+}
+
+export interface PrimitiveDuctInput {
+  crossSection?: PrimitiveDuctCrossSection
+  width?: number
+  height?: number
+  radius?: number
+  wallThickness?: number
+  taper?: {
+    startWidth?: number
+    startHeight?: number
+    startRadius?: number
+    endWidth?: number
+    endHeight?: number
+    endRadius?: number
+  }
+  branchPorts?: PrimitivePortMarkerInput[]
+}
+
+export interface PrimitiveBevelContract {
+  radius?: number
+  chamfer?: number
+  segments?: number
+  size?: number
+  thickness?: number
+}
+
+export interface PrimitiveShapeContract {
+  cutouts?: PrimitiveCutoutInput[]
+  ports?: PrimitivePortMarkerInput[]
+  pattern?: PrimitivePatternInput
+  duct?: PrimitiveDuctInput
+  bevel?: PrimitiveBevelContract
 }
 
 export type PrimitiveEditableDimension =
@@ -102,6 +206,8 @@ export interface PrimitiveShapeInput {
   depth?: number
   thickness?: number
   cornerRadius?: number
+  bevelRadius?: number
+  chamfer?: number
   cornerSegments?: number
   radius?: number
   axis?: PrimitiveAxis | string
@@ -144,6 +250,10 @@ export interface PrimitiveShapeInput {
   bevelSegments?: number
   curveSegments?: number
   closed?: boolean
+  cutouts?: PrimitiveCutoutInput[]
+  ports?: PrimitivePortMarkerInput[]
+  pattern?: PrimitivePatternInput
+  duct?: PrimitiveDuctInput
   array?: PrimitiveArrayInput
   arrayCount?: number
   arrayStep?: Vec3
@@ -190,6 +300,37 @@ function vec3Field(value: unknown): Vec3 | undefined {
     value.slice(0, 3).every((entry) => typeof entry === 'number' && Number.isFinite(entry))
     ? [value[0] as number, value[1] as number, value[2] as number]
     : undefined
+}
+
+function compactPrimitiveContract<T extends object>(value: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(([, entry]) => {
+      if (entry === undefined) return false
+      if (Array.isArray(entry)) return entry.length > 0
+      if (isRecord(entry)) return Object.keys(entry).length > 0
+      return true
+    }),
+  ) as Partial<T>
+}
+
+export function extractPrimitiveShapeContract(
+  shape: PrimitiveShapeInput,
+): PrimitiveShapeContract | undefined {
+  const bevel = compactPrimitiveContract<PrimitiveBevelContract>({
+    radius: shape.bevelRadius ?? shape.cornerRadius,
+    chamfer: shape.chamfer,
+    segments: shape.bevelSegments ?? shape.cornerSegments,
+    size: shape.bevelSize,
+    thickness: shape.bevelThickness,
+  })
+  const contract = compactPrimitiveContract<PrimitiveShapeContract>({
+    cutouts: shape.cutouts,
+    ports: shape.ports,
+    pattern: shape.pattern,
+    duct: shape.duct,
+    bevel: Object.keys(bevel).length > 0 ? bevel : undefined,
+  })
+  return Object.keys(contract).length > 0 ? (contract as PrimitiveShapeContract) : undefined
 }
 
 function arrayStepFromAxis(axis: unknown, spacing: unknown): Vec3 | undefined {

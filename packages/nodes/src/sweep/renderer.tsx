@@ -10,6 +10,7 @@ import {
 } from '@pascal-app/viewer'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { primitiveContractFromMetadata } from '../shared/primitive-contract-rendering'
 
 function centerGeometry(geo: THREE.BufferGeometry) {
   geo.computeBoundingBox()
@@ -20,6 +21,44 @@ function centerGeometry(geo: THREE.BufferGeometry) {
   geo.translate(-center.x, -center.y, -center.z)
   geo.computeBoundingBox()
   geo.computeBoundingSphere()
+}
+
+function pathCenter(points: THREE.Vector3[]) {
+  const box = new THREE.Box3().setFromPoints(points)
+  const center = new THREE.Vector3()
+  box.getCenter(center)
+  return center
+}
+
+function rectangularDuctSegments(node: SweepNode) {
+  const duct = primitiveContractFromMetadata(node.metadata)?.duct
+  if (duct?.crossSection !== 'rectangular') return []
+  const points = (
+    node.path ?? [
+      [-0.5, 0, 0],
+      [0.5, 0, 0],
+    ]
+  ).map(([x, y, z]) => new THREE.Vector3(x, y, z))
+  const center = pathCenter(points)
+  const width = Math.max(0.01, duct.width ?? node.radius * 2)
+  const height = Math.max(0.01, duct.height ?? node.radius * 2)
+  const segments: Array<{ position: THREE.Vector3; quaternion: THREE.Quaternion; length: number }> =
+    []
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const start = points[index]
+    const end = points[index + 1]
+    if (!start || !end) continue
+    const vector = end.clone().sub(start)
+    const length = vector.length()
+    if (length <= 0.001) continue
+    const position = start.clone().add(end).multiplyScalar(0.5).sub(center)
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(1, 0, 0),
+      vector.normalize(),
+    )
+    segments.push({ position, quaternion, length })
+  }
+  return segments.map((segment) => ({ ...segment, width, height }))
 }
 
 export const SweepRenderer = ({ node }: { node: SweepNode }) => {
@@ -67,6 +106,7 @@ export const SweepRenderer = ({ node }: { node: SweepNode }) => {
     centerGeometry(geo)
     return geo
   }, [node.path, node.radius, node.tubularSegments, node.radialSegments, node.closed])
+  const ductSegments = useMemo(() => rectangularDuctSegments(node), [node])
 
   return (
     <group
@@ -78,13 +118,29 @@ export const SweepRenderer = ({ node }: { node: SweepNode }) => {
       visible={node.visible}
       {...handlers}
     >
-      <mesh
-        castShadow
-        geometry={geometry}
-        material={material}
-        name="primitive-solid"
-        receiveShadow
-      />
+      {ductSegments.length > 0 ? (
+        ductSegments.map((segment, index) => (
+          <mesh
+            castShadow
+            key={`${node.id}:duct:${index}`}
+            material={material}
+            name="rectangular-duct-segment"
+            position={segment.position}
+            quaternion={segment.quaternion}
+            receiveShadow
+          >
+            <boxGeometry args={[segment.length, segment.height, segment.width]} />
+          </mesh>
+        ))
+      ) : (
+        <mesh
+          castShadow
+          geometry={geometry}
+          material={material}
+          name="primitive-solid"
+          receiveShadow
+        />
+      )}
     </group>
   )
 }

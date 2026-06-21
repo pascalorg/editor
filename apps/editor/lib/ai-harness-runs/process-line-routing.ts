@@ -1,14 +1,14 @@
+import { resolveProcessEquipmentContract } from './process-equipment-contracts'
 import type {
   ProcessConnectionMedium,
   ProcessConnectionPlan,
   ProcessEquipmentContract,
   ProcessEquipmentPort,
   ProcessLinePlan,
-  ProcessStationPlan,
   ProcessStationClearanceBox,
+  ProcessStationPlan,
   StationPlacement,
 } from './process-line-types'
-import { resolveProcessEquipmentContract } from './process-equipment-contracts'
 
 export type ProcessRoutePoint = [number, number]
 
@@ -263,9 +263,9 @@ function routeElevation(input: {
   const fromHeight = input.fromPort?.height
   const toHeight = input.toPort?.height
   if (fromHeight != null && toHeight != null) return rounded((fromHeight + toHeight) / 2)
-  if (input.connection.visualKind === 'air_duct') return 2.8
-  if (input.connection.visualKind === 'hot_gas_duct') return 3.2
-  if (input.connection.visualKind === 'hot_material_chute') return 1.6
+  if (input.connection.visualKind === 'air_duct') return 2.35
+  if (input.connection.visualKind === 'hot_gas_duct') return 2.65
+  if (input.connection.visualKind === 'hot_material_chute') return 1.35
   return 1.15
 }
 

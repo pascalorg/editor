@@ -1,0 +1,190 @@
+[
+  {
+    "id": "discrete_manufacturing.factory.flexible_workshop",
+    "label": "Discrete manufacturing flexible workshop architecture",
+    "industry": "discrete-manufacturing",
+    "processId": "discrete_manufacturing_flexible_workshop",
+    "layoutStyle": "parallel_bays",
+    "defaultDimensions": {
+      "length": 62,
+      "width": 30
+    },
+    "scopes": [
+      {
+        "id": "machining_cell",
+        "label": "Machining cell",
+        "includeModules": [
+          "machining",
+          "inspection",
+          "line_control",
+          "fixture_preparation",
+          "testing"
+        ]
+      },
+      {
+        "id": "assembly_cell",
+        "label": "Assembly and robot cell",
+        "includeModules": [
+          "robotics",
+          "assembly",
+          "line_control",
+          "fixture_preparation",
+          "testing",
+          "palletizing"
+        ]
+      },
+      {
+        "id": "full_workshop",
+        "label": "Full discrete manufacturing workshop",
+        "includeModules": [
+          "raw_material_storage",
+          "machining",
+          "robotics",
+          "assembly",
+          "inspection",
+          "packaging",
+          "intralogistics",
+          "line_control",
+          "utilities",
+          "fixture_preparation",
+          "testing",
+          "palletizing",
+          "material_handling"
+        ]
+      }
+    ],
+    "modules": [
+      {
+        "id": "raw_material_storage",
+        "displayLabel": "Material storage and kitting",
+        "order": 10,
+        "stationIds": [
+          "storage_rack",
+          "pallet_table"
+        ]
+      },
+      {
+        "id": "machining",
+        "displayLabel": "CNC machining",
+        "order": 20,
+        "stationIds": [
+          "cnc_machining_center",
+          "chip_conveyor"
+        ]
+      },
+      {
+        "id": "robotics",
+        "displayLabel": "Robot handling",
+        "order": 30,
+        "stationIds": [
+          "robot_workcell",
+          "safety_fence"
+        ]
+      },
+      {
+        "id": "assembly",
+        "displayLabel": "Assembly line",
+        "order": 40,
+        "stationIds": [
+          "assembly_workstation",
+          "roller_conveyor"
+        ]
+      },
+      {
+        "id": "inspection",
+        "displayLabel": "Inspection and test",
+        "order": 50,
+        "stationIds": [
+          "vision_inspection_station"
+        ]
+      },
+      {
+        "id": "packaging",
+        "displayLabel": "Packing and dispatch",
+        "order": 60,
+        "stationIds": [
+          "packaging_station"
+        ]
+      },
+      {
+        "id": "intralogistics",
+        "displayLabel": "Intralogistics",
+        "order": 70,
+        "stationIds": [
+          "agv_tugger",
+          "pipe_corridor"
+        ]
+      },
+      {
+        "id": "line_control",
+        "displayLabel": "Line control",
+        "order": 80,
+        "stationIds": [
+          "line_control_cabinet"
+        ]
+      },
+      {
+        "id": "utilities",
+        "displayLabel": "Compressed air and utilities",
+        "order": 90,
+        "stationIds": [
+          "compressor_skid",
+          "pipe_corridor"
+        ]
+      },
+      {
+        "id": "fixture_preparation",
+        "displayLabel": "Fixture preparation",
+        "order": 15,
+        "stationIds": [
+          "fixture_table"
+        ]
+      },
+      {
+        "id": "testing",
+        "displayLabel": "Functional test",
+        "order": 55,
+        "stationIds": [
+          "test_bench"
+        ]
+      },
+      {
+        "id": "palletizing",
+        "displayLabel": "Palletizing and staging",
+        "order": 65,
+        "stationIds": [
+          "palletizing_workcell"
+        ]
+      },
+      {
+        "id": "material_handling",
+        "displayLabel": "Material handling carts",
+        "order": 75,
+        "stationIds": [
+          "material_cart",
+          "agv_tugger"
+        ]
+      }
+    ],
+    "layoutHints": {
+      "primaryAxis": "x",
+      "secondaryAxis": "z",
+      "indoorWorkshop": true,
+      "highestStationId": "storage_rack",
+      "longAxisStationId": "roller_conveyor",
+      "sideBranchStationIds": [
+        "line_control_cabinet",
+        "compressor_skid",
+        "storage_rack",
+        "material_cart"
+      ],
+      "scale": "conceptual",
+      "notes": [
+        "Keep machining and robot handling in adjacent bays so robot loading can serve CNC equipment.",
+        "Place assembly and conveyor downstream of machining.",
+        "Place inspection before packaging and dispatch.",
+        "Use AGV and pipe corridor as logistics and utility spines along the workshop side."
+      ]
+    }
+  }
+]

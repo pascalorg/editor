@@ -1,0 +1,1723 @@
+{
+  "industry": "process",
+  "id": "industry.process.basic",
+  "name": "流程行业基础包",
+  "version": "0.2.0",
+  "description": "????????? v0.2??????????????????????????????????????????????????????????????????????????????????????",
+  "capabilities": [
+    "factory_creation"
+  ],
+  "factoryArchitectures": [
+    {
+      "id": "process.factory.basic_process_plant",
+      "label": "流程行业基础工厂架构",
+      "industry": "process",
+      "processId": "process_industry_basic_plant",
+      "layoutStyle": "parallel_bays",
+      "defaultDimensions": {
+        "length": 58,
+        "width": 26
+      },
+      "scopes": [
+        {
+          "id": "basic_process_line",
+          "label": "基础流程生产线",
+          "includeModules": [
+            "raw_material_storage",
+            "reaction_preparation",
+            "thermal_exchange",
+            "separation",
+            "product_storage",
+            "utilities_control",
+            "bulk_handling",
+            "valve_manifold",
+            "utility_air"
+          ]
+        },
+        {
+          "id": "full_process_plant",
+          "label": "流程行业基础工厂",
+          "includeModules": [
+            "raw_material_storage",
+            "reaction_preparation",
+            "thermal_exchange",
+            "separation",
+            "drying_packaging",
+            "product_storage",
+            "utilities_control",
+            "bulk_handling",
+            "valve_manifold",
+            "utility_air"
+          ]
+        }
+      ],
+      "modules": [
+        {
+          "id": "raw_material_storage",
+          "displayLabel": "原料储存与计量",
+          "order": 10,
+          "stationIds": [
+            "raw_material_tank",
+            "metering_pump_skid"
+          ]
+        },
+        {
+          "id": "reaction_preparation",
+          "displayLabel": "配料搅拌与反应",
+          "order": 20,
+          "stationIds": [
+            "mixing_tank",
+            "stirred_reactor"
+          ]
+        },
+        {
+          "id": "thermal_exchange",
+          "displayLabel": "换热调温",
+          "order": 30,
+          "stationIds": [
+            "heat_exchanger"
+          ]
+        },
+        {
+          "id": "separation",
+          "displayLabel": "过滤与离心分离",
+          "order": 40,
+          "stationIds": [
+            "filter_vessel",
+            "centrifuge"
+          ]
+        },
+        {
+          "id": "drying_packaging",
+          "displayLabel": "干燥与包装",
+          "order": 50,
+          "stationIds": [
+            "tray_dryer",
+            "packaging_station"
+          ]
+        },
+        {
+          "id": "product_storage",
+          "displayLabel": "成品储存",
+          "order": 60,
+          "stationIds": [
+            "product_storage_tank"
+          ]
+        },
+        {
+          "id": "utilities_control",
+          "displayLabel": "管廊与控制",
+          "order": 70,
+          "stationIds": [
+            "pipe_corridor",
+            "control_cabinet"
+          ]
+        },
+        {
+          "id": "bulk_handling",
+          "displayLabel": "???????",
+          "order": 15,
+          "stationIds": [
+            "bulk_material_silo"
+          ]
+        },
+        {
+          "id": "utility_air",
+          "displayLabel": "???????",
+          "order": 72,
+          "stationIds": [
+            "utility_blower",
+            "air_compressor_skid"
+          ]
+        },
+        {
+          "id": "valve_manifold",
+          "displayLabel": "????",
+          "order": 45,
+          "stationIds": [
+            "valve_station"
+          ]
+        }
+      ],
+      "layoutHints": {
+        "primaryAxis": "x",
+        "secondaryAxis": "z",
+        "indoorWorkshop": false,
+        "highestStationId": "stirred_reactor",
+        "longAxisStationId": "pipe_corridor",
+        "sideBranchStationIds": [
+          "metering_pump_skid",
+          "pipe_corridor",
+          "control_cabinet",
+          "utility_blower",
+          "air_compressor_skid"
+        ],
+        "scale": "conceptual",
+        "notes": [
+          "储罐和计量泵放在流程入口侧，反应与分离设备放在中段。",
+          "换热器靠近反应釜和分离设备，减少管线跨距。",
+          "管廊沿流程侧边布置，控制柜远离主要管线和高温设备。",
+          "干燥、成品储罐和包装位于流程下游。"
+        ]
+      }
+    }
+  ],
+  "processTemplates": [
+    {
+      "processId": "process_industry_basic_plant",
+      "processLabel": "Process industry basic plant",
+      "processDisplayLabel": "流程行业基础工厂",
+      "domain": "chemical",
+      "aliases": [
+        "流程行业基础包",
+        "流程行业基础工厂",
+        "流程工业基础工厂",
+        "流程工业工厂",
+        "流程生产线",
+        "通用流程车间",
+        "化工流程车间",
+        "基础流程生产线",
+        "做一个流程行业基础工厂",
+        "生成一个流程行业基础工厂",
+        "process industry plant",
+        "process plant",
+        "basic process plant",
+        "process production line"
+      ],
+      "requiredRoles": [
+        "raw_material_tank",
+        "metering_pump_skid",
+        "mixing_tank",
+        "stirred_reactor",
+        "heat_exchanger",
+        "filter_vessel",
+        "centrifuge",
+        "product_storage_tank",
+        "pipe_corridor",
+        "control_cabinet",
+        "utility_blower",
+        "air_compressor_skid",
+        "bulk_material_silo",
+        "valve_station"
+      ],
+      "defaultLayoutStyle": "parallel_bays",
+      "defaultDimensions": {
+        "length": 58,
+        "width": 26
+      },
+      "safetyTags": [
+        "process_pipe",
+        "chemical",
+        "rotating_equipment",
+        "utilities"
+      ],
+      "stations": [
+        {
+          "id": "raw_material_tank",
+          "label": "Raw material storage tank",
+          "displayLabel": "原料储罐",
+          "role": "raw_material_tank",
+          "equipmentHint": "process.raw_material_tank vertical raw material storage tank with cylindrical shell, inlet outlet nozzles, ladder, and skid legs",
+          "footprintHint": "large",
+          "safetyTags": [
+            "storage",
+            "material"
+          ]
+        },
+        {
+          "id": "metering_pump_skid",
+          "label": "Metering pump skid",
+          "displayLabel": "计量泵撬",
+          "role": "metering_pump_skid",
+          "equipmentHint": "process.metering_pump_skid compact metering pump skid with pump casing, drive motor, pipe manifold, base frame, and control panel",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "pump",
+            "rotating_equipment"
+          ]
+        },
+        {
+          "id": "mixing_tank",
+          "label": "Mixing tank",
+          "displayLabel": "配料搅拌罐",
+          "role": "mixing_tank",
+          "equipmentHint": "process.mixing_tank vertical mixing tank with cylindrical vessel, top agitator, feed inlet, discharge outlet, and service ladder",
+          "footprintHint": "large",
+          "safetyTags": [
+            "mixing",
+            "vessel"
+          ]
+        },
+        {
+          "id": "stirred_reactor",
+          "label": "Stirred reactor",
+          "displayLabel": "搅拌反应釜",
+          "role": "stirred_reactor",
+          "equipmentHint": "process.stirred_reactor jacketed stirred reactor with rounded cylindrical vessel, top agitator, manway, nozzles, pipe manifold, and service platform",
+          "footprintHint": "large",
+          "safetyTags": [
+            "reactor",
+            "pressure_vessel"
+          ]
+        },
+        {
+          "id": "heat_exchanger",
+          "label": "Heat exchanger",
+          "displayLabel": "管壳式换热器",
+          "role": "heat_exchanger",
+          "equipmentHint": "process.heat_exchanger horizontal shell and tube heat exchanger on skid with end caps, pipe ports, and support saddles",
+          "footprintHint": "long",
+          "safetyTags": [
+            "thermal",
+            "pressure_vessel"
+          ]
+        },
+        {
+          "id": "filter_vessel",
+          "label": "Filter vessel",
+          "displayLabel": "过滤器",
+          "role": "filter_vessel",
+          "equipmentHint": "process.filter_vessel vertical process filter vessel with cylindrical body, pipe nozzles, bottom outlet, and skid support",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "separation",
+            "filter"
+          ]
+        },
+        {
+          "id": "centrifuge",
+          "label": "Centrifuge",
+          "displayLabel": "离心机",
+          "role": "centrifuge",
+          "equipmentHint": "process.centrifuge industrial centrifuge with cylindrical bowl housing, motor drive, outlet chute, skid base, and operator panel",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "separation",
+            "rotating_equipment"
+          ]
+        },
+        {
+          "id": "tray_dryer",
+          "label": "Tray dryer",
+          "displayLabel": "真空托盘干燥机",
+          "role": "tray_dryer",
+          "equipmentHint": "process.tray_dryer rectangular vacuum tray dryer chamber with front door, pipe manifold, skid base, and control panel",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "drying",
+            "thermal"
+          ]
+        },
+        {
+          "id": "product_storage_tank",
+          "label": "Product storage tank",
+          "displayLabel": "成品储罐",
+          "role": "product_storage_tank",
+          "equipmentHint": "process.product_storage_tank vertical product storage tank with cylindrical shell, outlet nozzle, inlet nozzle, ladder, and support skirt",
+          "footprintHint": "large",
+          "safetyTags": [
+            "storage",
+            "product"
+          ]
+        },
+        {
+          "id": "packaging_station",
+          "label": "Packaging station",
+          "displayLabel": "包装工位",
+          "role": "packaging_station",
+          "equipmentHint": "process.packaging_station downstream packaging station with conveyor frame, compact packing body, control box, and discharge rollers",
+          "footprintHint": "large",
+          "safetyTags": [
+            "packaging",
+            "conveyor"
+          ]
+        },
+        {
+          "id": "pipe_corridor",
+          "label": "Process pipe corridor",
+          "displayLabel": "工艺管廊",
+          "role": "pipe_corridor",
+          "equipmentHint": "process.pipe_corridor long process pipe corridor with parallel pipes, pipe elbows, valves, flanges, and utility header",
+          "footprintHint": "long",
+          "safetyTags": [
+            "pipe",
+            "utility"
+          ]
+        },
+        {
+          "id": "control_cabinet",
+          "label": "Control cabinet",
+          "displayLabel": "控制柜",
+          "role": "control_cabinet",
+          "equipmentHint": "process.control_cabinet electrical control cabinet with HMI display, cable tray, warning labels, and cabinet doors",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "electrical",
+            "control"
+          ]
+        },
+        {
+          "id": "bulk_material_silo",
+          "label": "Bulk material silo",
+          "displayLabel": "????",
+          "role": "bulk_material_silo",
+          "equipmentHint": "process.bulk_material_silo vertical bulk material silo with cylindrical bin, conical hopper bottom, support frame, outlet spout, and level indicator",
+          "footprintHint": "tall",
+          "safetyTags": [
+            "storage",
+            "bulk_material"
+          ]
+        },
+        {
+          "id": "valve_station",
+          "label": "Valve manifold station",
+          "displayLabel": "???",
+          "role": "valve_station",
+          "equipmentHint": "process.valve_station process valve manifold station with parallel pipes, valve bodies, handwheels, flanges, and compact support skid",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "pipe",
+            "valve"
+          ]
+        },
+        {
+          "id": "utility_blower",
+          "label": "Utility blower",
+          "displayLabel": "????",
+          "role": "utility_blower",
+          "equipmentHint": "process.utility_blower industrial utility blower with volute casing, impeller, drive motor, inlet outlet ports, and skid base",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "rotating_equipment",
+            "air"
+          ]
+        },
+        {
+          "id": "air_compressor_skid",
+          "label": "Air compressor skid",
+          "displayLabel": "????",
+          "role": "air_compressor_skid",
+          "equipmentHint": "process.air_compressor_skid compressed air compressor skid with rounded compressor body, ribbed drive motor, receiver pipe ports, and local control box",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "compressed_air",
+            "utility"
+          ]
+        }
+      ],
+      "connections": [
+        {
+          "fromStationId": "raw_material_tank",
+          "toStationId": "metering_pump_skid",
+          "medium": "material",
+          "visualKind": "pipe",
+          "fromPortId": "raw_outlet",
+          "toPortId": "pump_suction"
+        },
+        {
+          "fromStationId": "metering_pump_skid",
+          "toStationId": "mixing_tank",
+          "medium": "material",
+          "visualKind": "pipe",
+          "fromPortId": "pump_discharge",
+          "toPortId": "mixing_feed"
+        },
+        {
+          "fromStationId": "mixing_tank",
+          "toStationId": "stirred_reactor",
+          "medium": "material",
+          "visualKind": "pipe",
+          "fromPortId": "mixing_outlet",
+          "toPortId": "reactor_feed"
+        },
+        {
+          "fromStationId": "stirred_reactor",
+          "toStationId": "heat_exchanger",
+          "medium": "material",
+          "visualKind": "pipe",
+          "fromPortId": "reactor_outlet",
+          "toPortId": "exchanger_process_in"
+        },
+        {
+          "fromStationId": "heat_exchanger",
+          "toStationId": "filter_vessel",
+          "medium": "material",
+          "visualKind": "pipe",
+          "fromPortId": "exchanger_process_out",
+          "toPortId": "filter_inlet"
+        },
+        {
+          "fromStationId": "filter_vessel",
+          "toStationId": "centrifuge",
+          "medium": "material",
+          "visualKind": "pipe",
+          "fromPortId": "filter_outlet",
+          "toPortId": "centrifuge_feed"
+        },
+        {
+          "fromStationId": "centrifuge",
+          "toStationId": "tray_dryer",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "wet_solid_out",
+          "toPortId": "dryer_feed"
+        },
+        {
+          "fromStationId": "tray_dryer",
+          "toStationId": "product_storage_tank",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "dryer_out",
+          "toPortId": "product_inlet"
+        },
+        {
+          "fromStationId": "product_storage_tank",
+          "toStationId": "packaging_station",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "product_outlet",
+          "toPortId": "packaging_in"
+        },
+        {
+          "fromStationId": "pipe_corridor",
+          "toStationId": "stirred_reactor",
+          "medium": "cooling",
+          "visualKind": "pipe",
+          "fromPortId": "cooling_header",
+          "toPortId": "reactor_jacket"
+        },
+        {
+          "fromStationId": "pipe_corridor",
+          "toStationId": "heat_exchanger",
+          "medium": "water",
+          "visualKind": "pipe",
+          "fromPortId": "utility_header",
+          "toPortId": "exchanger_utility_in"
+        },
+        {
+          "fromStationId": "control_cabinet",
+          "toStationId": "metering_pump_skid",
+          "medium": "power",
+          "visualKind": "cable_tray",
+          "fromPortId": "mcc_out",
+          "toPortId": "pump_drive"
+        },
+        {
+          "fromStationId": "control_cabinet",
+          "toStationId": "stirred_reactor",
+          "medium": "power",
+          "visualKind": "cable_tray",
+          "fromPortId": "mcc_out",
+          "toPortId": "agitator_drive"
+        },
+        {
+          "fromStationId": "bulk_material_silo",
+          "toStationId": "mixing_tank",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "silo_discharge",
+          "toPortId": "mixing_solid_feed"
+        },
+        {
+          "fromStationId": "filter_vessel",
+          "toStationId": "valve_station",
+          "medium": "material",
+          "visualKind": "pipe",
+          "fromPortId": "filter_outlet",
+          "toPortId": "valve_inlet"
+        },
+        {
+          "fromStationId": "valve_station",
+          "toStationId": "centrifuge",
+          "medium": "material",
+          "visualKind": "pipe",
+          "fromPortId": "valve_outlet",
+          "toPortId": "centrifuge_feed"
+        },
+        {
+          "fromStationId": "utility_blower",
+          "toStationId": "pipe_corridor",
+          "medium": "gas",
+          "visualKind": "air_duct",
+          "fromPortId": "blower_discharge",
+          "toPortId": "air_header"
+        },
+        {
+          "fromStationId": "air_compressor_skid",
+          "toStationId": "pipe_corridor",
+          "medium": "gas",
+          "visualKind": "pipe",
+          "fromPortId": "compressed_air_out",
+          "toPortId": "air_header"
+        }
+      ]
+    }
+  ],
+  "devices": [
+    {
+      "id": "raw_material_tank",
+      "name": "Raw material storage tank",
+      "aliases": [
+        "原料储罐",
+        "原料罐",
+        "储罐",
+        "立式储罐",
+        "raw material tank",
+        "storage tank"
+      ],
+      "family": "tank",
+      "layoutFamily": "vessel_layout",
+      "defaultDimensions": {
+        "length": 2.2,
+        "width": 2.2,
+        "height": 4.2
+      },
+      "primarySemanticRole": "vessel_shell",
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "vessel_shell",
+          "required": true,
+          "radius": 0.95,
+          "height": 3.6,
+          "color": "#cbd5e1"
+        },
+        {
+          "kind": "skid_base",
+          "semanticRole": "support_skid",
+          "required": true,
+          "length": 2.2,
+          "width": 2.2,
+          "height": 0.25
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "top_inlet",
+          "required": true,
+          "attachToRole": "vessel_shell",
+          "anchor": "top"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "bottom_outlet",
+          "required": true,
+          "attachToRole": "vessel_shell",
+          "anchor": "bottom"
+        },
+        {
+          "kind": "platform_ladder",
+          "semanticRole": "access_ladder",
+          "attachToRole": "vessel_shell",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "vessel_shell",
+        "top_inlet",
+        "bottom_outlet"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 55
+      },
+      "visualCues": [
+        "vertical tank",
+        "top inlet",
+        "bottom outlet",
+        "ladder"
+      ]
+    },
+    {
+      "id": "metering_pump_skid",
+      "name": "Metering pump skid",
+      "aliases": [
+        "计量泵撬",
+        "泵组",
+        "加药泵撬",
+        "metering pump skid",
+        "pump skid"
+      ],
+      "family": "pump",
+      "layoutFamily": "rotating_machine_layout",
+      "defaultDimensions": {
+        "length": 2.4,
+        "width": 1.1,
+        "height": 1.2
+      },
+      "primarySemanticRole": "pump_volute",
+      "parts": [
+        {
+          "kind": "skid_base",
+          "semanticRole": "pump_skid_base",
+          "required": true,
+          "length": 2.3,
+          "width": 1,
+          "height": 0.18
+        },
+        {
+          "kind": "volute_casing",
+          "semanticRole": "pump_volute",
+          "required": true,
+          "attachToRole": "pump_skid_base",
+          "anchor": "top"
+        },
+        {
+          "kind": "motor_gearbox_unit",
+          "semanticRole": "drive_motor",
+          "required": true,
+          "attachToRole": "pump_volute",
+          "anchor": "drive_side"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "pump_pipe_manifold",
+          "required": true,
+          "attachToRole": "pump_volute",
+          "anchor": "front"
+        },
+        {
+          "kind": "operator_panel",
+          "semanticRole": "local_control_panel",
+          "attachToRole": "pump_skid_base",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "pump_volute",
+        "drive_motor",
+        "pump_pipe_manifold"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 50
+      },
+      "visualCues": [
+        "pump skid",
+        "volute casing",
+        "motor",
+        "pipe manifold"
+      ]
+    },
+    {
+      "id": "mixing_tank",
+      "name": "Mixing tank",
+      "aliases": [
+        "配料搅拌罐",
+        "搅拌罐",
+        "混合罐",
+        "mixing tank",
+        "blend tank"
+      ],
+      "family": "reactor",
+      "layoutFamily": "vessel_layout",
+      "defaultDimensions": {
+        "length": 2.5,
+        "width": 2.5,
+        "height": 4
+      },
+      "primarySemanticRole": "mixing_vessel_shell",
+      "parts": [
+        {
+          "kind": "agitator_tank",
+          "semanticRole": "mixing_vessel_shell",
+          "required": true,
+          "radius": 1,
+          "height": 3.3,
+          "color": "#d1d5db"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "feed_inlet",
+          "required": true,
+          "attachToRole": "mixing_vessel_shell",
+          "anchor": "top"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "mixing_outlet",
+          "required": true,
+          "attachToRole": "mixing_vessel_shell",
+          "anchor": "bottom"
+        },
+        {
+          "kind": "skid_base",
+          "semanticRole": "support_skid",
+          "required": true,
+          "attachToRole": "mixing_vessel_shell",
+          "anchor": "bottom"
+        },
+        {
+          "kind": "platform_ladder",
+          "semanticRole": "access_ladder",
+          "attachToRole": "mixing_vessel_shell",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "mixing_vessel_shell",
+        "feed_inlet",
+        "mixing_outlet"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 65
+      },
+      "visualCues": [
+        "vertical mixing vessel",
+        "top agitator",
+        "feed inlet",
+        "bottom outlet"
+      ]
+    },
+    {
+      "id": "stirred_reactor",
+      "name": "Stirred reactor",
+      "aliases": [
+        "搅拌反应釜",
+        "反应釜",
+        "釜式反应器",
+        "stirred reactor",
+        "jacketed reactor"
+      ],
+      "family": "reactor",
+      "layoutFamily": "vessel_layout",
+      "defaultDimensions": {
+        "length": 2.8,
+        "width": 2.8,
+        "height": 4.6
+      },
+      "primarySemanticRole": "reactor_vessel_shell",
+      "parts": [
+        {
+          "kind": "agitator_tank",
+          "semanticRole": "reactor_vessel_shell",
+          "required": true,
+          "radius": 1.1,
+          "height": 3.8,
+          "color": "#d6d3d1"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "reactor_feed_nozzle",
+          "required": true,
+          "attachToRole": "reactor_vessel_shell",
+          "anchor": "top"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "reactor_discharge_nozzle",
+          "required": true,
+          "attachToRole": "reactor_vessel_shell",
+          "anchor": "bottom"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "reactor_pipe_manifold",
+          "required": true,
+          "attachToRole": "reactor_vessel_shell",
+          "anchor": "front"
+        },
+        {
+          "kind": "platform_ladder",
+          "semanticRole": "service_platform_ladder",
+          "required": true,
+          "attachToRole": "reactor_vessel_shell",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "reactor_vessel_shell",
+        "reactor_feed_nozzle",
+        "reactor_discharge_nozzle",
+        "service_platform_ladder"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 75
+      },
+      "visualCues": [
+        "jacketed stirred reactor",
+        "top agitator",
+        "pipe nozzles",
+        "service platform"
+      ]
+    },
+    {
+      "id": "heat_exchanger",
+      "name": "Shell and tube heat exchanger",
+      "aliases": [
+        "管壳式换热器",
+        "换热器",
+        "冷凝器",
+        "shell and tube heat exchanger",
+        "heat exchanger"
+      ],
+      "family": "heat_exchanger",
+      "layoutFamily": "vessel_layout",
+      "defaultDimensions": {
+        "length": 4.2,
+        "width": 1.2,
+        "height": 1.4
+      },
+      "primarySemanticRole": "heat_exchanger_shell",
+      "parts": [
+        {
+          "kind": "heat_exchanger",
+          "semanticRole": "heat_exchanger_shell",
+          "required": true,
+          "length": 3.8,
+          "radius": 0.45,
+          "color": "#cbd5e1"
+        },
+        {
+          "kind": "skid_base",
+          "semanticRole": "exchanger_saddle_skid",
+          "required": true,
+          "length": 4.1,
+          "width": 1,
+          "height": 0.18
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "process_inlet",
+          "required": true,
+          "attachToRole": "heat_exchanger_shell",
+          "anchor": "left"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "process_outlet",
+          "required": true,
+          "attachToRole": "heat_exchanger_shell",
+          "anchor": "right"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "utility_pipe_manifold",
+          "attachToRole": "heat_exchanger_shell",
+          "anchor": "top"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "heat_exchanger_shell",
+        "process_inlet",
+        "process_outlet"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 55
+      },
+      "visualCues": [
+        "horizontal cylinder",
+        "end caps",
+        "pipe ports",
+        "support saddle"
+      ]
+    },
+    {
+      "id": "filter_vessel",
+      "name": "Process filter vessel",
+      "aliases": [
+        "过滤器",
+        "过滤罐",
+        "工艺过滤器",
+        "process filter",
+        "filter vessel"
+      ],
+      "family": "tank",
+      "layoutFamily": "vessel_layout",
+      "defaultDimensions": {
+        "length": 1.8,
+        "width": 1.8,
+        "height": 3
+      },
+      "primarySemanticRole": "filter_vessel_shell",
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "filter_vessel_shell",
+          "required": true,
+          "radius": 0.75,
+          "height": 2.4,
+          "color": "#d1d5db"
+        },
+        {
+          "kind": "skid_base",
+          "semanticRole": "filter_support_skid",
+          "required": true,
+          "length": 1.8,
+          "width": 1.8,
+          "height": 0.18
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "filter_inlet",
+          "required": true,
+          "attachToRole": "filter_vessel_shell",
+          "anchor": "top"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "filter_outlet",
+          "required": true,
+          "attachToRole": "filter_vessel_shell",
+          "anchor": "bottom"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "filter_pipe_manifold",
+          "attachToRole": "filter_vessel_shell",
+          "anchor": "front"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "filter_vessel_shell",
+        "filter_inlet",
+        "filter_outlet"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 50
+      },
+      "visualCues": [
+        "vertical filter vessel",
+        "top inlet",
+        "bottom outlet",
+        "pipe manifold"
+      ]
+    },
+    {
+      "id": "centrifuge",
+      "name": "Industrial centrifuge",
+      "aliases": [
+        "离心机",
+        "工业离心机",
+        "分离离心机",
+        "industrial centrifuge",
+        "centrifuge"
+      ],
+      "family": "generic",
+      "layoutFamily": "generic_industrial_layout",
+      "defaultDimensions": {
+        "length": 2.2,
+        "width": 1.3,
+        "height": 1.4
+      },
+      "primarySemanticRole": "centrifuge_bowl_housing",
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "centrifuge_bowl_housing",
+          "required": true,
+          "radius": 0.55,
+          "height": 1.1,
+          "color": "#cbd5e1"
+        },
+        {
+          "kind": "skid_base",
+          "semanticRole": "centrifuge_skid_base",
+          "required": true,
+          "length": 2.1,
+          "width": 1.2,
+          "height": 0.18
+        },
+        {
+          "kind": "motor_gearbox_unit",
+          "semanticRole": "centrifuge_drive_motor",
+          "required": true,
+          "attachToRole": "centrifuge_bowl_housing",
+          "anchor": "drive_side"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "centrifuge_discharge",
+          "required": true,
+          "attachToRole": "centrifuge_bowl_housing",
+          "anchor": "front"
+        },
+        {
+          "kind": "operator_panel",
+          "semanticRole": "centrifuge_operator_panel",
+          "attachToRole": "centrifuge_skid_base",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "centrifuge_bowl_housing",
+        "centrifuge_drive_motor",
+        "centrifuge_discharge"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 55
+      },
+      "visualCues": [
+        "horizontal industrial centrifuge",
+        "bowl housing",
+        "drive motor",
+        "discharge port"
+      ]
+    },
+    {
+      "id": "tray_dryer",
+      "name": "Vacuum tray dryer",
+      "aliases": [
+        "真空托盘干燥机",
+        "干燥机",
+        "托盘干燥机",
+        "vacuum tray dryer",
+        "tray dryer"
+      ],
+      "family": "machine_tool",
+      "layoutFamily": "box_enclosure_layout",
+      "defaultDimensions": {
+        "length": 2.2,
+        "width": 1.4,
+        "height": 1.8
+      },
+      "primarySemanticRole": "dryer_chamber",
+      "parts": [
+        {
+          "kind": "generic_base",
+          "semanticRole": "dryer_base",
+          "required": true,
+          "length": 2.1,
+          "width": 1.3,
+          "height": 0.22
+        },
+        {
+          "kind": "generic_body",
+          "semanticRole": "dryer_chamber",
+          "required": true,
+          "attachToRole": "dryer_base",
+          "anchor": "top",
+          "length": 1.8,
+          "width": 1.1,
+          "height": 1.3,
+          "color": "#d1d5db"
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "front_access_door",
+          "required": true,
+          "attachToRole": "dryer_chamber",
+          "anchor": "front",
+          "color": "#94a3b8"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "vacuum_pipe_manifold",
+          "required": true,
+          "attachToRole": "dryer_chamber",
+          "anchor": "top"
+        },
+        {
+          "kind": "operator_panel",
+          "semanticRole": "dryer_control_panel",
+          "attachToRole": "dryer_chamber",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "dryer_chamber",
+        "front_access_door",
+        "vacuum_pipe_manifold"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 50
+      },
+      "visualCues": [
+        "rectangular dryer chamber",
+        "front door",
+        "vacuum pipe",
+        "control panel"
+      ]
+    },
+    {
+      "id": "product_storage_tank",
+      "name": "Product storage tank",
+      "aliases": [
+        "成品储罐",
+        "产品储罐",
+        "成品罐",
+        "product storage tank",
+        "finished product tank"
+      ],
+      "family": "tank",
+      "layoutFamily": "vessel_layout",
+      "defaultDimensions": {
+        "length": 2.2,
+        "width": 2.2,
+        "height": 4
+      },
+      "primarySemanticRole": "vessel_shell",
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "vessel_shell",
+          "required": true,
+          "radius": 0.95,
+          "height": 3.4,
+          "color": "#cbd5e1"
+        },
+        {
+          "kind": "skid_base",
+          "semanticRole": "support_skid",
+          "required": true,
+          "length": 2.2,
+          "width": 2.2,
+          "height": 0.25
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "product_inlet",
+          "required": true,
+          "attachToRole": "vessel_shell",
+          "anchor": "top"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "product_outlet",
+          "required": true,
+          "attachToRole": "vessel_shell",
+          "anchor": "bottom"
+        },
+        {
+          "kind": "platform_ladder",
+          "semanticRole": "access_ladder",
+          "attachToRole": "vessel_shell",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "vessel_shell",
+        "product_inlet",
+        "product_outlet"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 55
+      },
+      "visualCues": [
+        "finished product storage tank",
+        "vertical cylinder",
+        "outlet nozzle",
+        "ladder"
+      ]
+    },
+    {
+      "id": "packaging_station",
+      "name": "Process packaging station",
+      "aliases": [
+        "包装工位",
+        "包装站",
+        "包装机",
+        "process packaging station",
+        "packaging station"
+      ],
+      "family": "conveyor",
+      "layoutFamily": "linear_transport_layout",
+      "defaultDimensions": {
+        "length": 3.2,
+        "width": 1.2,
+        "height": 1.6
+      },
+      "primarySemanticRole": "packaging_conveyor",
+      "parts": [
+        {
+          "kind": "conveyor_frame",
+          "semanticRole": "packaging_conveyor",
+          "required": true,
+          "length": 3,
+          "width": 0.9,
+          "height": 0.55
+        },
+        {
+          "kind": "rounded_machine_body",
+          "semanticRole": "packaging_body",
+          "required": true,
+          "attachToRole": "packaging_conveyor",
+          "anchor": "top",
+          "length": 1.1,
+          "width": 0.95,
+          "height": 0.9,
+          "color": "#e5e7eb"
+        },
+        {
+          "kind": "control_box",
+          "semanticRole": "packaging_control_box",
+          "required": true,
+          "attachToRole": "packaging_body",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "roller_array",
+          "semanticRole": "discharge_rollers",
+          "attachToRole": "packaging_conveyor",
+          "anchor": "back",
+          "count": 5
+        }
+      ],
+      "qualityRequiredRoles": [
+        "packaging_conveyor",
+        "packaging_body",
+        "packaging_control_box"
+      ],
+      "shapeCount": {
+        "min": 4,
+        "max": 50
+      },
+      "visualCues": [
+        "packaging conveyor",
+        "packing body",
+        "control box",
+        "discharge rollers"
+      ]
+    },
+    {
+      "id": "pipe_corridor",
+      "name": "Process pipe corridor",
+      "aliases": [
+        "工艺管廊",
+        "管廊",
+        "流程管廊",
+        "process pipe corridor",
+        "pipe rack"
+      ],
+      "family": "pipe_system",
+      "layoutFamily": "pipe_valve_layout",
+      "defaultDimensions": {
+        "length": 9,
+        "width": 1,
+        "height": 2.2
+      },
+      "primarySemanticRole": "process_pipe",
+      "parts": [
+        {
+          "kind": "pipe_run",
+          "semanticRole": "process_pipe",
+          "required": true,
+          "length": 9,
+          "radius": 0.06,
+          "axis": "x"
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "utility_pipe",
+          "required": true,
+          "position": [
+            0,
+            0.18,
+            0.16
+          ],
+          "length": 8.8,
+          "radius": 0.045,
+          "axis": "x"
+        },
+        {
+          "kind": "pipe_elbow",
+          "semanticRole": "pipe_elbow",
+          "required": true,
+          "attachToRole": "process_pipe",
+          "anchor": "right"
+        },
+        {
+          "kind": "valve_body",
+          "semanticRole": "valve_body",
+          "required": true,
+          "attachToRole": "process_pipe",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "flange_ring",
+          "semanticRole": "pipe_flange",
+          "attachToRole": "process_pipe",
+          "anchor": "left"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "process_pipe",
+        "utility_pipe",
+        "valve_body"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 60
+      },
+      "visualCues": [
+        "long process pipe",
+        "parallel utility pipe",
+        "valve",
+        "flange"
+      ]
+    },
+    {
+      "id": "control_cabinet",
+      "name": "Process control cabinet",
+      "aliases": [
+        "控制柜",
+        "电控柜",
+        "PLC控制柜",
+        "process control cabinet",
+        "control cabinet"
+      ],
+      "family": "electrical",
+      "layoutFamily": "box_enclosure_layout",
+      "defaultDimensions": {
+        "length": 2,
+        "width": 0.55,
+        "height": 2
+      },
+      "primarySemanticRole": "control_cabinet",
+      "parts": [
+        {
+          "kind": "electrical_cabinet",
+          "semanticRole": "control_cabinet",
+          "required": true,
+          "length": 1.9,
+          "width": 0.5,
+          "height": 1.9
+        },
+        {
+          "kind": "generic_display",
+          "semanticRole": "hmi_panel",
+          "required": true,
+          "attachToRole": "control_cabinet",
+          "anchor": "front"
+        },
+        {
+          "kind": "cable_tray",
+          "semanticRole": "cable_tray",
+          "required": true,
+          "attachToRole": "control_cabinet",
+          "anchor": "top"
+        },
+        {
+          "kind": "warning_label",
+          "semanticRole": "electrical_warning_label",
+          "attachToRole": "control_cabinet",
+          "anchor": "front"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "control_cabinet",
+        "hmi_panel",
+        "cable_tray"
+      ],
+      "shapeCount": {
+        "min": 4,
+        "max": 35
+      },
+      "visualCues": [
+        "electrical cabinet",
+        "HMI display",
+        "cable tray",
+        "warning label"
+      ]
+    },
+    {
+      "id": "bulk_material_silo",
+      "name": "Bulk material silo",
+      "aliases": [
+        "????",
+        "??",
+        "???",
+        "bulk material silo",
+        "powder silo"
+      ],
+      "family": "tank",
+      "layoutFamily": "vessel_layout",
+      "defaultDimensions": {
+        "length": 2.2,
+        "width": 2.2,
+        "height": 5
+      },
+      "primarySemanticRole": "silo_shell",
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "silo_shell",
+          "required": true,
+          "radius": 0.9,
+          "height": 3.2,
+          "color": "#cbd5e1"
+        },
+        {
+          "kind": "hopper_body",
+          "semanticRole": "conical_hopper_bottom",
+          "required": true,
+          "attachToRole": "silo_shell",
+          "anchor": "bottom",
+          "color": "#bfc7d5"
+        },
+        {
+          "kind": "structural_tower_frame",
+          "semanticRole": "silo_support_frame",
+          "required": true,
+          "attachToRole": "silo_shell",
+          "anchor": "bottom",
+          "height": 1.4,
+          "levelCount": 2
+        },
+        {
+          "kind": "generic_spout",
+          "semanticRole": "silo_discharge_spout",
+          "required": true,
+          "attachToRole": "conical_hopper_bottom",
+          "anchor": "bottom"
+        },
+        {
+          "kind": "generic_detail_accent",
+          "semanticRole": "level_indicator",
+          "attachToRole": "silo_shell",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "silo_shell",
+        "conical_hopper_bottom",
+        "silo_discharge_spout"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 65
+      },
+      "visualCues": [
+        "tall silo",
+        "cylindrical bin",
+        "conical hopper bottom",
+        "support frame"
+      ]
+    },
+    {
+      "id": "valve_station",
+      "name": "Valve manifold station",
+      "aliases": [
+        "???",
+        "??",
+        "???",
+        "valve manifold",
+        "valve station"
+      ],
+      "family": "pipe_system",
+      "layoutFamily": "pipe_valve_layout",
+      "defaultDimensions": {
+        "length": 2.6,
+        "width": 1,
+        "height": 1.2
+      },
+      "primarySemanticRole": "manifold_pipe",
+      "parts": [
+        {
+          "kind": "skid_base",
+          "semanticRole": "valve_station_skid",
+          "required": true,
+          "length": 2.5,
+          "width": 0.9,
+          "height": 0.16
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "manifold_pipe",
+          "required": true,
+          "attachToRole": "valve_station_skid",
+          "anchor": "top",
+          "length": 2.4,
+          "radius": 0.055,
+          "axis": "x"
+        },
+        {
+          "kind": "valve_body",
+          "semanticRole": "valve_body",
+          "required": true,
+          "attachToRole": "manifold_pipe",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "valve_body",
+          "semanticRole": "valve_body",
+          "required": true,
+          "attachToRole": "manifold_pipe",
+          "anchor": "right"
+        },
+        {
+          "kind": "flange_ring",
+          "semanticRole": "manifold_flange",
+          "attachToRole": "manifold_pipe",
+          "anchor": "left"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "manifold_pipe",
+        "valve_body",
+        "manifold_flange"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 55
+      },
+      "visualCues": [
+        "pipe manifold",
+        "multiple valves",
+        "flanges",
+        "compact skid"
+      ]
+    },
+    {
+      "id": "utility_blower",
+      "name": "Utility blower",
+      "aliases": [
+        "????",
+        "???",
+        "????",
+        "utility blower",
+        "industrial blower"
+      ],
+      "family": "fan",
+      "layoutFamily": "rotating_machine_layout",
+      "defaultDimensions": {
+        "length": 2,
+        "width": 1.2,
+        "height": 1.4
+      },
+      "primarySemanticRole": "blower_casing",
+      "parts": [
+        {
+          "kind": "skid_base",
+          "semanticRole": "blower_skid_base",
+          "required": true,
+          "length": 2,
+          "width": 1,
+          "height": 0.18
+        },
+        {
+          "kind": "volute_casing",
+          "semanticRole": "blower_casing",
+          "required": true,
+          "attachToRole": "blower_skid_base",
+          "anchor": "top"
+        },
+        {
+          "kind": "impeller_blades",
+          "semanticRole": "blower_impeller",
+          "required": true,
+          "attachToRole": "blower_casing",
+          "anchor": "shell_center",
+          "bladeCount": 8
+        },
+        {
+          "kind": "motor_gearbox_unit",
+          "semanticRole": "drive_motor",
+          "required": true,
+          "attachToRole": "blower_casing",
+          "anchor": "drive_side"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "air_inlet",
+          "attachToRole": "blower_casing",
+          "anchor": "front"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "air_outlet",
+          "required": true,
+          "attachToRole": "blower_casing",
+          "anchor": "top"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "blower_casing",
+        "blower_impeller",
+        "drive_motor",
+        "air_outlet"
+      ],
+      "shapeCount": {
+        "min": 6,
+        "max": 60
+      },
+      "visualCues": [
+        "volute blower casing",
+        "impeller",
+        "drive motor",
+        "air outlet"
+      ]
+    },
+    {
+      "id": "air_compressor_skid",
+      "name": "Air compressor skid",
+      "aliases": [
+        "????",
+        "????",
+        "?????",
+        "air compressor skid",
+        "compressed air skid"
+      ],
+      "family": "compressor",
+      "layoutFamily": "rotating_machine_layout",
+      "defaultDimensions": {
+        "length": 2.8,
+        "width": 1.1,
+        "height": 1.3
+      },
+      "primarySemanticRole": "compressor_body",
+      "parts": [
+        {
+          "kind": "skid_base",
+          "semanticRole": "compressor_skid_base",
+          "required": true,
+          "length": 2.7,
+          "width": 1,
+          "height": 0.18
+        },
+        {
+          "kind": "rounded_machine_body",
+          "semanticRole": "compressor_body",
+          "required": true,
+          "attachToRole": "compressor_skid_base",
+          "anchor": "top",
+          "length": 1.2,
+          "width": 0.55,
+          "height": 0.65,
+          "color": "#d1d5db"
+        },
+        {
+          "kind": "ribbed_motor_body",
+          "semanticRole": "drive_motor",
+          "required": true,
+          "attachToRole": "compressor_body",
+          "anchor": "drive_side"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "air_pipe_manifold",
+          "required": true,
+          "attachToRole": "compressor_body",
+          "anchor": "front"
+        },
+        {
+          "kind": "control_box",
+          "semanticRole": "compressor_control_box",
+          "attachToRole": "compressor_skid_base",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "compressor_body",
+        "drive_motor",
+        "air_pipe_manifold"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 55
+      },
+      "visualCues": [
+        "compressor skid",
+        "rounded compressor body",
+        "ribbed motor",
+        "air pipe manifold"
+      ]
+    }
+  ]
+}

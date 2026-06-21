@@ -4,6 +4,7 @@ import type {
   PrimitiveGeometryBrief,
   PrimitiveMaterialInput,
   PrimitiveRevisionOperation,
+  PrimitiveShapeContract,
   ResolvedPrimitiveTransform,
   Vec3,
 } from '@pascal-app/core'
@@ -26,6 +27,8 @@ export interface GeneratedGeometryShapeSpec {
   depth?: number
   thickness?: number
   cornerRadius?: number
+  bevelRadius?: number
+  chamfer?: number
   cornerSegments?: number
   radius?: number
   axis?: string
@@ -68,6 +71,10 @@ export interface GeneratedGeometryShapeSpec {
   attachTo?: number | string
   anchor?: string
   childAnchor?: string
+  cutouts?: PrimitiveShapeContract['cutouts']
+  ports?: PrimitiveShapeContract['ports']
+  pattern?: PrimitiveShapeContract['pattern']
+  duct?: PrimitiveShapeContract['duct']
 }
 
 type ShapeSpec = GeneratedGeometryShapeSpec

@@ -1,4 +1,4 @@
-import type { Vec3 } from '@pascal-app/core/lib/primitive-compose'
+import { extractPrimitiveShapeContract, type Vec3 } from '@pascal-app/core/lib/primitive-compose'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -34,29 +34,122 @@ const clampI = (v: unknown, fallback: number, min: number, max: number) =>
   Math.round(clampD(v, fallback, min, max))
 
 function clampCornerRadius(shape: ShapeSpec) {
-  if (shape.cornerRadius == null) return undefined
+  const radius = shape.cornerRadius ?? shape.bevelRadius ?? shape.chamfer
+  if (radius == null) return undefined
   const length = clampD(shape.length, 1.0)
   const width = clampD(shape.width, 1.0)
   const height = clampD(shape.height, 1.0)
-  return clampD(shape.cornerRadius, 0, 0, Math.max(0, Math.min(length, width, height) / 2 - 0.001))
+  return clampD(radius, 0, 0, Math.max(0, Math.min(length, width, height) / 2 - 0.001))
 }
 
 function clampPanelCornerRadius(shape: ShapeSpec) {
-  if (shape.cornerRadius == null) return undefined
+  const radius = shape.cornerRadius ?? shape.bevelRadius ?? shape.chamfer
+  if (radius == null) return undefined
   const length = clampD(shape.length, 1.0)
   const width = clampD(shape.width, 0.5)
-  return clampD(shape.cornerRadius, 0.04, 0, Math.max(0, Math.min(length, width) / 2 - 0.001))
+  return clampD(radius, 0.04, 0, Math.max(0, Math.min(length, width) / 2 - 0.001))
 }
 
 function compactRecord(value: Record<string, unknown>) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined))
 }
 
-function generatedShapeMetadata(input: {
+function subtractVec3(left: Vec3 | undefined, right: Vec3 | undefined): Vec3 | undefined {
+  if (!left || !right) return left
+  return [left[0] - right[0], left[1] - right[1], left[2] - right[2]]
+}
+
+function shapeWorldPosition(input: {
   artifact: GeneratedGeometryArtifact
   shape: ShapeSpec
   shapeIndex: number
 }) {
+  return input.artifact.transforms[input.shapeIndex]?.position ?? input.shape.position
+}
+
+function localPrimitiveContract(input: {
+  artifact: GeneratedGeometryArtifact
+  shape: ShapeSpec
+  shapeIndex: number
+  patternInstances?: Array<{ position?: Vec3; rotation?: Vec3; scale?: Vec3; name?: string }>
+}) {
+  const contract = extractPrimitiveShapeContract(input.shape)
+  if (!contract) return undefined
+  const origin = shapeWorldPosition(input)
+  const cutouts = contract.cutouts?.map((cutout) => ({
+    ...cutout,
+    position: subtractVec3(cutout.position, origin),
+  }))
+  const ports = contract.ports?.map((port) => ({
+    ...port,
+    position: subtractVec3(port.position, origin),
+  }))
+  return compactRecord({
+    ...contract,
+    cutouts,
+    ports,
+    pattern: contract.pattern
+      ? compactRecord({
+          ...contract.pattern,
+          ...(input.patternInstances?.length
+            ? { mode: 'instanced', instances: input.patternInstances }
+            : {}),
+        })
+      : undefined,
+  })
+}
+
+function generatedPatternInstances(input: {
+  artifact: GeneratedGeometryArtifact
+  group: number[]
+}): Array<{ position?: Vec3; rotation?: Vec3; scale?: Vec3; name?: string }> {
+  const firstIndex = input.group[0]
+  if (firstIndex == null) return []
+  const firstShape = input.artifact.shapes[firstIndex]
+  if (!firstShape) return []
+  const firstPosition = shapeWorldPosition({
+    artifact: input.artifact,
+    shape: firstShape,
+    shapeIndex: firstIndex,
+  })
+  const firstRotation = input.artifact.transforms[firstIndex]?.rotation ?? firstShape.rotation
+  return input.group
+    .map((shapeIndex) => {
+      const shape = input.artifact.shapes[shapeIndex]
+      if (!shape) return undefined
+      const transform = input.artifact.transforms[shapeIndex]
+      const position = shapeWorldPosition({ artifact: input.artifact, shape, shapeIndex })
+      const rotation = transform?.rotation ?? shape.rotation
+      return compactRecord({
+        position: subtractVec3(position, firstPosition),
+        rotation: subtractVec3(rotation, firstRotation),
+        scale: shape.scale,
+        name: shape.name,
+      })
+    })
+    .filter((entry): entry is { position?: Vec3; rotation?: Vec3; scale?: Vec3; name?: string } =>
+      Boolean(entry),
+    )
+}
+
+function patternGroups(shapes: readonly ShapeSpec[]) {
+  const groups = new Map<string, number[]>()
+  shapes.forEach((shape, index) => {
+    const patternId = shape.pattern?.id
+    if (!patternId || shape.pattern?.mode !== 'expanded') return
+    const key = `${shape.kind}:${patternId}`
+    groups.set(key, [...(groups.get(key) ?? []), index])
+  })
+  return [...groups.values()].filter((group) => group.length > 1)
+}
+
+function generatedShapeMetadata(input: {
+  artifact: GeneratedGeometryArtifact
+  shape: ShapeSpec
+  shapeIndex: number
+  patternInstances?: Array<{ position?: Vec3; rotation?: Vec3; scale?: Vec3; name?: string }>
+}) {
+  const primitiveContract = localPrimitiveContract(input)
   const selector = compactRecord({
     index: input.shapeIndex,
     semanticRole: input.shape.semanticRole,
@@ -78,6 +171,7 @@ function generatedShapeMetadata(input: {
     sourcePartKind: input.shape.sourcePartKind,
     sourcePartId: input.shape.sourcePartId,
     editableHints: input.shape.editableHints,
+    primitiveContract,
     generatedShape: compactRecord({
       assemblyName: input.artifact.assemblyName,
       selector,
@@ -95,8 +189,18 @@ export function buildGeneratedGeometryNodes(artifact: GeneratedGeometryArtifact)
   const shouldCreateAssembly = artifact.shapes.length > 1
   const created: string[] = []
   const createdNodes: AnyNode[] = []
+  const patternInstancesByLead = new Map<number, ReturnType<typeof generatedPatternInstances>>()
+  const skippedPatternShapeIndexes = new Set<number>()
+
+  for (const group of patternGroups(artifact.shapes)) {
+    const lead = group[0]
+    if (lead == null) continue
+    patternInstancesByLead.set(lead, generatedPatternInstances({ artifact, group }))
+    for (const shapeIndex of group.slice(1)) skippedPatternShapeIndexes.add(shapeIndex)
+  }
 
   for (let i = 0; i < artifact.shapes.length; i++) {
+    if (skippedPatternShapeIndexes.has(i)) continue
     const shape = artifact.shapes[i]
     const transform = artifact.transforms[i]
     if (!shape) continue
@@ -394,6 +498,7 @@ export function buildGeneratedGeometryNodes(artifact: GeneratedGeometryArtifact)
             artifact,
             shape,
             shapeIndex: i,
+            patternInstances: patternInstancesByLead.get(i),
           }),
         ),
       )

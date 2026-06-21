@@ -249,8 +249,8 @@ const CEMENT_CLINKER_PROFILES: EquipmentProfile[] = [
     ports: [
       { id: 'raw_meal_in', medium: 'material', side: 'left', height: 6.2, offset: 0 },
       { id: 'hot_meal_out', medium: 'material', side: 'right', height: 1.1, offset: -0.2 },
-      { id: 'tertiary_air_in', medium: 'material', side: 'back', height: 5.9, offset: 0.15 },
-      { id: 'exhaust_gas_out', medium: 'material', side: 'top', height: 7.8, offset: 0.25 },
+      { id: 'tertiary_air_in', medium: 'gas', side: 'back', height: 5.9, offset: 0.15 },
+      { id: 'exhaust_gas_out', medium: 'gas', side: 'top', height: 7.8, offset: 0.25 },
     ],
   },
   {
@@ -274,7 +274,7 @@ const CEMENT_CLINKER_PROFILES: EquipmentProfile[] = [
     ports: [
       { id: 'hot_meal_in', medium: 'material', side: 'left', height: 0.9, offset: 0 },
       { id: 'clinker_out', medium: 'material', side: 'right', height: 0.65, offset: 0 },
-      { id: 'kiln_exhaust_out', medium: 'material', side: 'left', height: 1.1, offset: -0.25 },
+      { id: 'kiln_exhaust_out', medium: 'gas', side: 'left', height: 1.1, offset: -0.25 },
       { id: 'power_in', medium: 'power', side: 'back', height: 0.55, offset: 0.25 },
     ],
   },
@@ -292,7 +292,7 @@ const CEMENT_CLINKER_PROFILES: EquipmentProfile[] = [
     ports: [
       { id: 'hot_clinker_in', medium: 'material', side: 'left', height: 0.95, offset: 0 },
       { id: 'cooled_clinker_out', medium: 'material', side: 'right', height: 0.45, offset: 0 },
-      { id: 'cooler_exhaust_out', medium: 'material', side: 'top', height: 1.35, offset: 0.25 },
+      { id: 'cooler_exhaust_out', medium: 'gas', side: 'top', height: 1.35, offset: 0.25 },
     ],
   },
   {
@@ -337,8 +337,8 @@ const CEMENT_CLINKER_PROFILES: EquipmentProfile[] = [
     preferredResolver: 'primitive',
     requiredRoles: ['filter_housing', 'hopper_base'],
     ports: [
-      { id: 'dust_gas_in', medium: 'material', side: 'left', height: 2.1, offset: -0.35 },
-      { id: 'clean_air_out', medium: 'material', side: 'top', height: 2.85, offset: 0 },
+      { id: 'dust_gas_in', medium: 'gas', side: 'left', height: 2.1, offset: -0.35 },
+      { id: 'clean_air_out', medium: 'gas', side: 'top', height: 2.85, offset: 0 },
       { id: 'dust_discharge', medium: 'material', side: 'right', height: 0.45, offset: 0.35 },
     ],
   },
@@ -388,7 +388,7 @@ const CEMENT_CLINKER_PROFILES: EquipmentProfile[] = [
     ports: [
       { id: 'raw_feed_in', medium: 'material', side: 'left', height: 2.6, offset: -0.25 },
       { id: 'raw_meal_out', medium: 'material', side: 'right', height: 3.5, offset: 0.25 },
-      { id: 'hot_gas_in', medium: 'material', side: 'back', height: 1.8, offset: 0 },
+      { id: 'hot_gas_in', medium: 'gas', side: 'back', height: 1.8, offset: 0 },
       { id: 'power_in', medium: 'power', side: 'back', height: 0.85, offset: -0.45 },
     ],
   },
@@ -420,7 +420,7 @@ const CEMENT_CLINKER_PROFILES: EquipmentProfile[] = [
     ports: [
       { id: 'coal_feed_in', medium: 'material', side: 'left', height: 1.75, offset: 0 },
       { id: 'pulverized_fuel_out', medium: 'material', side: 'right', height: 2.8, offset: 0 },
-      { id: 'hot_gas_in', medium: 'material', side: 'back', height: 1.6, offset: 0 },
+      { id: 'hot_gas_in', medium: 'gas', side: 'back', height: 1.6, offset: 0 },
     ],
   },
   {
@@ -462,8 +462,8 @@ const CEMENT_CLINKER_PROFILES: EquipmentProfile[] = [
     preferredResolver: 'primitive',
     requiredRoles: ['tertiary_air_duct_shell', 'cooler_air_in', 'tertiary_air_out'],
     ports: [
-      { id: 'cooler_air_in', medium: 'material', side: 'left', height: 1.05, offset: 0 },
-      { id: 'tertiary_air_out', medium: 'material', side: 'right', height: 1.05, offset: 0 },
+      { id: 'cooler_air_in', medium: 'gas', side: 'left', height: 1.05, offset: 0 },
+      { id: 'tertiary_air_out', medium: 'gas', side: 'right', height: 1.05, offset: 0 },
     ],
   },
   {
@@ -492,8 +492,8 @@ const CEMENT_CLINKER_PROFILES: EquipmentProfile[] = [
     preferredResolver: 'primitive',
     requiredRoles: ['esp_collector_chambers', 'dust_hopper_bank'],
     ports: [
-      { id: 'dust_gas_in', medium: 'material', side: 'left', height: 1.65, offset: 0 },
-      { id: 'clean_air_out', medium: 'material', side: 'right', height: 1.75, offset: 0 },
+      { id: 'dust_gas_in', medium: 'gas', side: 'left', height: 1.65, offset: 0 },
+      { id: 'clean_air_out', medium: 'gas', side: 'right', height: 1.75, offset: 0 },
       { id: 'dust_discharge', medium: 'material', side: 'right', height: 0.45, offset: 0.5 },
     ],
   },
@@ -507,7 +507,7 @@ const CEMENT_CLINKER_PROFILES: EquipmentProfile[] = [
     preferredResolver: 'primitive',
     requiredRoles: ['stack_shell', 'stack_base_plinth'],
     ports: [
-      { id: 'stack_gas_in', medium: 'material', side: 'left', height: 1.15, offset: 0 },
+      { id: 'stack_gas_in', medium: 'gas', side: 'left', height: 1.15, offset: 0 },
       { id: 'stack_outlet', medium: 'material', side: 'top', height: 9.75, offset: 0 },
     ],
   },
@@ -570,8 +570,8 @@ const CEMENT_CLINKER_PROFILES: EquipmentProfile[] = [
     preferredResolver: 'primitive',
     requiredRoles: ['boiler_casing', 'tube_bank', 'hot_gas_in'],
     ports: [
-      { id: 'hot_gas_in', medium: 'material', side: 'left', height: 3.2, offset: 0 },
-      { id: 'cooled_gas_out', medium: 'material', side: 'right', height: 3.2, offset: 0 },
+      { id: 'hot_gas_in', medium: 'gas', side: 'left', height: 3.2, offset: 0 },
+      { id: 'cooled_gas_out', medium: 'gas', side: 'right', height: 3.2, offset: 0 },
     ],
   },
   {
@@ -656,7 +656,9 @@ function materializeProfile(profile: EquipmentProfile): ProcessEquipmentContract
     ...(profile.requiredRoles ? { requiredRoles: [...profile.requiredRoles] } : {}),
     ...(profile.preferredTool ? { preferredTool: profile.preferredTool } : {}),
     ...(profile.preferredResolver ? { preferredResolver: profile.preferredResolver } : {}),
-    ...(profile.profileParts ? { profileParts: profile.profileParts.map((part) => ({ ...part })) } : {}),
+    ...(profile.profileParts
+      ? { profileParts: profile.profileParts.map((part) => ({ ...part })) }
+      : {}),
     ...(profile.primarySemanticRole ? { primarySemanticRole: profile.primarySemanticRole } : {}),
   }
 }
@@ -717,7 +719,11 @@ function inferPortHeight(input: {
     typeof input.part?.height === 'number' && Number.isFinite(input.part.height)
       ? input.part.height
       : undefined
-  if (position) return Math.max(0.1, Math.min(input.contract.envelope.height, position[1] + (partHeight ?? 0) / 2))
+  if (position)
+    return Math.max(
+      0.1,
+      Math.min(input.contract.envelope.height, position[1] + (partHeight ?? 0) / 2),
+    )
   return Math.max(0.2, input.contract.envelope.height * 0.55)
 }
 
@@ -863,7 +869,9 @@ function inferProfilePackPortsFromParts(
       id: role,
       medium: inferProfilePackPortMedium(role),
       side,
-      height: position ? Math.max(0.1, Math.min(envelope.height, position[1])) : envelope.height * 0.55,
+      height: position
+        ? Math.max(0.1, Math.min(envelope.height, position[1]))
+        : envelope.height * 0.55,
       offset: inferPortOffset({ side, part }),
     })
   }
@@ -994,7 +1002,10 @@ function loadProfilePackContracts() {
   return cachedProfilePackContracts
 }
 
-function resolveProfilePackContract(plan: ProcessLinePlan | undefined, station: ProcessStationPlan) {
+function resolveProfilePackContract(
+  plan: ProcessLinePlan | undefined,
+  station: ProcessStationPlan,
+) {
   const text = stationText(station)
   const identity = stationIdentityText(station)
   const allProfiles = loadProfilePackContracts()
@@ -1015,9 +1026,7 @@ function resolveProfilePackContract(plan: ProcessLinePlan | undefined, station: 
     )
   })
   if (exact) return exact
-  return profiles.find((profile) =>
-    profile.aliases.some((pattern) => pattern.test(text)),
-  )
+  return profiles.find((profile) => profile.aliases.some((pattern) => pattern.test(text)))
 }
 
 export function resolveProcessEquipmentContract(input: {

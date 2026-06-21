@@ -74,28 +74,17 @@ function electrolyzerArtifactWithShiftedWaterPort(prompt: string): GeneratedGeom
         length: 3.8,
         width: 1.1,
         height: 1.35,
-      },
-      {
-        kind: 'box',
-        name: 'water_in port marker',
-        semanticRole: 'water_in',
-        sourcePartKind: 'connection_port',
-        position: [-1.7, 0.82, 0.44],
-        rotation: [0, 0, 0],
-        length: 0.14,
-        width: 0.14,
-        height: 0.14,
+        ports: [{ id: 'water_in', kind: 'inlet', position: [-1.7, 0.82, 0.44] }],
       },
     ],
     transforms: [
       { position: [0, 0.12, 0], rotation: [0, 0, 0] },
       { position: [0, 0.92, 0], rotation: [0, 0, 0] },
-      { position: [-1.7, 0.82, 0.44], rotation: [0, 0, 0] },
     ],
     assemblyName: 'Electrolyzer stack array',
     assemblyPosition: [0, 0, 0],
-    createdNames: ['Electrolyzer skid', 'Electrolyzer housing', 'water_in port marker'],
-    shapeDetails: '- electrolyzer with shifted water_in marker',
+    createdNames: ['Electrolyzer skid', 'Electrolyzer housing'],
+    shapeDetails: '- electrolyzer with shifted primitiveContract water_in port',
   }
 }
 
@@ -168,6 +157,30 @@ describe('factory runner helpers', () => {
         lineId: 'line_params',
         lineRole: 'main-line',
         equipmentRole: 'conveyor',
+      },
+    })
+  })
+
+  test('carries scene bounds from context into placement metadata', () => {
+    const placement = buildFactoryPlacementSpec({
+      context: {
+        scene: {
+          bounds: {
+            min: [-10, -6],
+            max: [10, 6],
+            center: [0, 0],
+            size: [20, 12],
+          },
+        },
+      },
+    })
+
+    expect(placement.metadata).toMatchObject({
+      sceneBounds: {
+        min: [-10, -6],
+        max: [10, 6],
+        center: [0, 0],
+        size: [20, 12],
       },
     })
   })

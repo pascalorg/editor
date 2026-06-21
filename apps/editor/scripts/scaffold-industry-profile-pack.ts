@@ -18,6 +18,7 @@ export type IndustryPackDeviceSpec = {
   family?: string
   layoutFamily?: string
   archetypeFamily?: string
+  preferredResolver?: 'catalog-item' | 'native-box' | 'native-tank' | 'primitive' | 'profile-parts'
   defaultDimensions?: Record<string, number>
   parts: Array<JsonRecord & { kind: string; semanticRole: string; required?: boolean }>
   primarySemanticRole: string
@@ -89,6 +90,18 @@ function qualityRuleId(profileIdValue: string, explicit?: string) {
   return explicit?.trim() || `quality.${profileIdValue}`
 }
 
+function preferredResolver(
+  value: unknown,
+): IndustryPackDeviceSpec['preferredResolver'] | undefined {
+  return value === 'catalog-item' ||
+    value === 'native-box' ||
+    value === 'native-tank' ||
+    value === 'primitive' ||
+    value === 'profile-parts'
+    ? value
+    : undefined
+}
+
 function normalizeDevice(raw: unknown, industry: string): IndustryPackDeviceSpec {
   if (!isRecord(raw)) throw new Error('Each devices[] item must be an object.')
   const id = stringValue(raw.id)
@@ -127,6 +140,9 @@ function normalizeDevice(raw: unknown, industry: string): IndustryPackDeviceSpec
     ...(stringValue(raw.archetypeFamily)
       ? { archetypeFamily: stringValue(raw.archetypeFamily) }
       : {}),
+    ...(preferredResolver(raw.preferredResolver)
+      ? { preferredResolver: preferredResolver(raw.preferredResolver) }
+      : {}),
     ...(defaultDimensions ? { defaultDimensions } : {}),
     parts,
     primarySemanticRole,
@@ -158,6 +174,38 @@ function recordArray(value: unknown, fieldName: string): JsonRecord[] | undefine
   })
 }
 
+const FORBIDDEN_FACTORY_ARCHITECTURE_FIELDS = ['parameters', 'flows']
+const FORBIDDEN_FACTORY_MODULE_FIELDS = [
+  'countParam',
+  'defaultCount',
+  'minCount',
+  'maxCount',
+  'replicatedStationIds',
+]
+
+function assertSingleProcessFactoryArchitectures(factoryArchitectures: JsonRecord[] | undefined) {
+  for (const [architectureIndex, architecture] of factoryArchitectures?.entries() ?? []) {
+    for (const field of FORBIDDEN_FACTORY_ARCHITECTURE_FIELDS) {
+      if (field in architecture) {
+        throw new Error(
+          `Spec factoryArchitectures[${architectureIndex}].${field} is not supported; factory creation uses one process template per request.`,
+        )
+      }
+    }
+    const modules = Array.isArray(architecture.modules) ? architecture.modules : []
+    for (const [moduleIndex, module] of modules.entries()) {
+      if (!isRecord(module)) continue
+      for (const field of FORBIDDEN_FACTORY_MODULE_FIELDS) {
+        if (field in module) {
+          throw new Error(
+            `Spec factoryArchitectures[${architectureIndex}].modules[${moduleIndex}].${field} is not supported; model each factory request as one default process line.`,
+          )
+        }
+      }
+    }
+  }
+}
+
 export function normalizeIndustryPackSpec(raw: unknown): IndustryPackSpec {
   if (!isRecord(raw)) throw new Error('Industry pack spec must be an object.')
   const industry = stringValue(raw.industry)
@@ -182,6 +230,7 @@ export function normalizeIndustryPackSpec(raw: unknown): IndustryPackSpec {
     : undefined
   const factoryArchitectures = recordArray(raw.factoryArchitectures, 'factoryArchitectures')
   const processTemplates = recordArray(raw.processTemplates, 'processTemplates')
+  assertSingleProcessFactoryArchitectures(factoryArchitectures)
   const capabilities = stringArray(raw.capabilities).filter(
     (capability): capability is 'factory_creation' => capability === 'factory_creation',
   )
@@ -225,6 +274,7 @@ function profileFromDevice(device: IndustryPackDeviceSpec, industry: string) {
     industry,
     layoutFamily: device.layoutFamily ?? 'generic_industrial_layout',
     ...(device.archetypeFamily ? { archetypeFamily: device.archetypeFamily } : {}),
+    ...(device.preferredResolver ? { preferredResolver: device.preferredResolver } : {}),
     family: device.family ?? 'generic',
     ...(device.defaultDimensions ? { defaultDimensions: device.defaultDimensions } : {}),
     parts: device.parts,

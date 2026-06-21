@@ -1,7 +1,4 @@
-import {
-  composePartPrimitives,
-  type PartComposeInput,
-} from '@pascal-app/core/lib/part-compose'
+import { composePartPrimitives, type PartComposeInput } from '@pascal-app/core/lib/part-compose'
 import {
   type PrimitiveShapeInput,
   resolvePrimitiveWorldTransforms,
@@ -11,14 +8,20 @@ import {
   computeGeneratedAssemblyPosition,
   createGeneratedGeometryId,
   formatGeneratedShapeDetails,
-  inferGeneratedAssemblyName,
   type GeneratedGeometryArtifact,
+  inferGeneratedAssemblyName,
 } from '../../../../packages/editor/src/lib/ai-generated-geometry-core'
-import { buildGeneratedGeometryCreatePatches } from '../../../../packages/editor/src/lib/ai-generated-geometry-nodes'
 import type {
   GeneratedGeometryCreatePatch,
   GeneratedGeometryPlacementSpec,
 } from '../../../../packages/editor/src/lib/ai-generated-geometry-nodes'
+import { buildGeneratedGeometryCreatePatches } from '../../../../packages/editor/src/lib/ai-generated-geometry-nodes'
+import {
+  type ProcessCatalogEquipmentMatch,
+  resolveProcessCatalogEquipment,
+} from './process-catalog-resolver'
+import { resolveProcessEquipmentContract } from './process-equipment-contracts'
+import { stationDisplayLabel } from './process-line-localization'
 import type {
   FactoryRouteObstacleMetadata,
   ProcessEquipmentContract,
@@ -27,12 +30,6 @@ import type {
   ProcessStationPlan,
   StationPlacement,
 } from './process-line-types'
-import { resolveProcessEquipmentContract } from './process-equipment-contracts'
-import { stationDisplayLabel } from './process-line-localization'
-import {
-  resolveProcessCatalogEquipment,
-  type ProcessCatalogEquipmentMatch,
-} from './process-catalog-resolver'
 
 export type ProcessStationEquipmentResolver =
   | 'catalog-item'
@@ -85,8 +82,7 @@ function routeObstacleForStation(input: {
   source: FactoryRouteObstacleMetadata['source']
   height?: number
 }): FactoryRouteObstacleMetadata {
-  const length =
-    input.equipmentContract?.envelope.length ?? input.stationPlacement.footprint.length
+  const length = input.equipmentContract?.envelope.length ?? input.stationPlacement.footprint.length
   const width = input.equipmentContract?.envelope.width ?? input.stationPlacement.footprint.width
   const height = input.height ?? input.equipmentContract?.envelope.height ?? 1.2
   const yaw = input.stationPlacement.rotation[1] ?? 0
@@ -133,7 +129,8 @@ function itemScaleForPlacement(input: {
   const targetLength =
     input.equipmentContract?.envelope.length ?? input.stationPlacement.footprint.length
   const targetHeight = input.equipmentContract?.envelope.height
-  const targetWidth = input.equipmentContract?.envelope.width ?? input.stationPlacement.footprint.width
+  const targetWidth =
+    input.equipmentContract?.envelope.width ?? input.stationPlacement.footprint.width
   return [
     assetWidth > 0 ? targetLength / assetWidth : 1,
     targetHeight && assetHeight > 0 ? targetHeight / assetHeight : 1,
@@ -466,7 +463,9 @@ function createProfilePartsPatch(input: {
   }))
   if (!artifactShapes.length) return null
 
-  const transforms = resolvePrimitiveWorldTransforms(artifactShapes, { positionMode: 'world-center' })
+  const transforms = resolvePrimitiveWorldTransforms(artifactShapes, {
+    positionMode: 'world-center',
+  })
   const assemblyPosition = computeGeneratedAssemblyPosition(transforms)
   const artifact: GeneratedGeometryArtifact = {
     id: createGeneratedGeometryId(),
@@ -533,6 +532,21 @@ export function resolveProcessStationEquipment(input: {
     station: input.station,
   })
   const withContract = { ...input, equipmentContract }
+  if (equipmentContract?.preferredResolver === 'native-tank') {
+    const routeObstacle = routeObstacleForStation({
+      stationPlacement: input.stationPlacement,
+      equipmentContract,
+      source: 'native',
+    })
+    return {
+      patches: [createNativeTankPatch(withContract)],
+      primitiveRequest: null,
+      routeObstacle,
+      resolved: true,
+      resolver: 'native-tank',
+      reason: 'station equipment contract selected native tank',
+    }
+  }
   if (equipmentContract?.preferredResolver === 'profile-parts') {
     const profileParts = createProfilePartsPatch({
       ...input,
@@ -594,22 +608,6 @@ export function resolveProcessStationEquipment(input: {
       reason: 'station equipment contract selected native box',
     }
   }
-  if (equipmentContract?.preferredResolver === 'native-tank') {
-    const routeObstacle = routeObstacleForStation({
-      stationPlacement: input.stationPlacement,
-      equipmentContract,
-      source: 'native',
-    })
-    return {
-      patches: [createNativeTankPatch(withContract)],
-      primitiveRequest: null,
-      routeObstacle,
-      resolved: true,
-      resolver: 'native-tank',
-      reason: 'station equipment contract selected native tank',
-    }
-  }
-
   if (isPipeFittingLikeStation(input.station)) {
     const routeObstacle = routeObstacleForStation({
       stationPlacement: input.stationPlacement,

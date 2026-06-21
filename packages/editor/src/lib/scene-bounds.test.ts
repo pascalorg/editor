@@ -186,10 +186,10 @@ describe('computeSceneBoundsXZ', () => {
       reason: 'factory-key-process',
       stationIds: ['preheater_tower', 'rotary_kiln'],
       bounds: {
-        min: [-4, -2],
-        max: [8, 3],
-        center: [2, 0.5],
-        size: [12, 5],
+        min: [-4, -2] as [number, number],
+        max: [8, 3] as [number, number],
+        center: [2, 0.5] as [number, number],
+        size: [12, 5] as [number, number],
       },
     }
     const nodes: AnyNode[] = [

@@ -127,6 +127,38 @@ function recordFromRunContext(context: unknown) {
   return isRecord(context) ? context : {}
 }
 
+function finiteVec2(value: unknown): [number, number] | undefined {
+  if (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    typeof value[0] === 'number' &&
+    typeof value[1] === 'number' &&
+    Number.isFinite(value[0]) &&
+    Number.isFinite(value[1])
+  ) {
+    return [value[0], value[1]]
+  }
+  return undefined
+}
+
+function sceneBoundsFromContext(context: Record<string, unknown>) {
+  const scene = isRecord(context.scene) ? context.scene : undefined
+  const candidates = [context.sceneBounds, scene?.bounds]
+  for (const candidate of candidates) {
+    if (!isRecord(candidate)) continue
+    const min = finiteVec2(candidate.min)
+    const max = finiteVec2(candidate.max)
+    if (!min || !max) continue
+    return {
+      min,
+      max,
+      ...(finiteVec2(candidate.center) ? { center: finiteVec2(candidate.center)! } : {}),
+      ...(finiteVec2(candidate.size) ? { size: finiteVec2(candidate.size)! } : {}),
+    }
+  }
+  return undefined
+}
+
 export function buildFactoryGeometryPrompt(prompt: string, params?: Record<string, unknown>) {
   const equipmentName = stringValue(params?.equipmentName)
   const lineRole = stringValue(params?.lineRole)
@@ -151,6 +183,7 @@ export function buildFactoryPlacementSpec(input: {
   const lineId = stringValue(params.lineId) ?? stringValue(context.lineId)
   const lineRole = stringValue(params.lineRole) ?? stringValue(context.lineRole)
   const equipmentRole = stringValue(params.equipmentRole) ?? stringValue(context.equipmentRole)
+  const sceneBounds = sceneBoundsFromContext(context)
   return {
     ...(parentId ? { parentId } : {}),
     position: vec3Value(params.position) ?? vec3Value(context.position),
@@ -160,6 +193,7 @@ export function buildFactoryPlacementSpec(input: {
       ...(lineId ? { lineId } : {}),
       ...(lineRole ? { lineRole } : {}),
       ...(equipmentRole ? { equipmentRole } : {}),
+      ...(sceneBounds ? { sceneBounds } : {}),
     },
   }
 }
@@ -527,19 +561,12 @@ function extractArtifactPortOverrides(input: {
 
   const endpoints: ProcessRoutePortEndpoint[] = []
   for (const port of contract.ports) {
-    const shapeIndex = input.artifact.shapes.findIndex((_, index) =>
-      Boolean(
-        artifactShapePortId({
-          artifact: input.artifact,
-          shapeIndex: index,
-          expectedPortId: port.id,
-        }),
-      ),
-    )
-    if (shapeIndex < 0) continue
-    const shape = input.artifact.shapes[shapeIndex]
-    if (!shape) continue
-    const transformPosition = input.artifact.transforms[shapeIndex]?.position ?? shape.position
+    const portPosition = artifactPrimitivePortPosition({
+      artifact: input.artifact,
+      expectedPortId: port.id,
+    })
+    if (!portPosition) continue
+    const transformPosition = portPosition
     const localX = transformPosition[0] - input.artifact.assemblyPosition[0]
     const localY = transformPosition[1] - input.artifact.assemblyPosition[1]
     const localZ = transformPosition[2] - input.artifact.assemblyPosition[2]
@@ -559,6 +586,36 @@ function extractArtifactPortOverrides(input: {
     })
   }
   return endpoints
+}
+
+function artifactPrimitivePortPosition(input: {
+  artifact: GeneratedGeometryArtifact
+  expectedPortId: string
+}): Vec3 | undefined {
+  const expected = input.expectedPortId.toLowerCase()
+  for (const [shapeIndex, shape] of input.artifact.shapes.entries()) {
+    for (const port of shape.ports ?? []) {
+      const ids = [port.id, port.semanticRole].filter((value): value is string => Boolean(value))
+      if (!ids.some((id) => id.toLowerCase() === expected || id.toLowerCase().includes(expected))) {
+        continue
+      }
+      return port.position ?? input.artifact.transforms[shapeIndex]?.position ?? shape.position
+    }
+  }
+
+  const shapeIndex = input.artifact.shapes.findIndex((_, index) =>
+    Boolean(
+      artifactShapePortId({
+        artifact: input.artifact,
+        shapeIndex: index,
+        expectedPortId: input.expectedPortId,
+      }),
+    ),
+  )
+  if (shapeIndex < 0) return undefined
+  const shape = input.artifact.shapes[shapeIndex]
+  if (!shape) return undefined
+  return input.artifact.transforms[shapeIndex]?.position ?? shape.position
 }
 
 function addPortOverrides(

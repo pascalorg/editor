@@ -120,6 +120,98 @@ describe('ai generated geometry nodes', () => {
     })
   })
 
+  test('preserves primitive geometry contracts on generated node metadata', () => {
+    const { createdNodes } = buildGeneratedGeometryNodes(
+      artifact({
+        shapes: [
+          {
+            kind: 'box',
+            name: 'access cabinet',
+            position: [10, 0.5, 20],
+            rotation: [0, 0, 0],
+            length: 1,
+            width: 0.4,
+            height: 1,
+            bevelRadius: 0.05,
+            cutouts: [{ id: 'door', kind: 'rectangular', semanticRole: 'access_door' }],
+            ports: [{ id: 'front_access', kind: 'access', semanticRole: 'access_door' }],
+            pattern: { id: 'vents', kind: 'linear', count: 4 },
+            duct: { crossSection: 'rectangular', width: 0.4, height: 0.2 },
+          },
+        ],
+        transforms: [{ position: [10, 0.5, 20], rotation: [0, 0, 0] }],
+        createdNames: ['access cabinet'],
+      }),
+    )
+
+    expect(createdNodes[0]).toMatchObject({ type: 'box', cornerRadius: 0.05 })
+    expect(createdNodes[0]?.metadata).toMatchObject({
+      primitiveContract: {
+        bevel: { radius: 0.05 },
+        cutouts: [{ id: 'door', semanticRole: 'access_door' }],
+        ports: [{ id: 'front_access', kind: 'access' }],
+        pattern: { id: 'vents', kind: 'linear', count: 4 },
+        duct: { crossSection: 'rectangular', width: 0.4, height: 0.2 },
+      },
+    })
+  })
+
+  test('normalizes primitive contract positions and packs expanded patterns as instances', () => {
+    const { createdNodes } = buildGeneratedGeometryNodes(
+      artifact({
+        shapes: [
+          {
+            kind: 'cylinder',
+            name: 'bolt 1',
+            position: [10, 0.5, 20],
+            rotation: [0, 0, 0],
+            radius: 0.03,
+            height: 0.1,
+            pattern: { id: 'bolt_ring', kind: 'radial', count: 2, mode: 'expanded' },
+            ports: [{ id: 'bolt_access', kind: 'access', position: [10, 0.6, 20] }],
+          },
+          {
+            kind: 'cylinder',
+            name: 'bolt 2',
+            position: [10.4, 0.5, 20],
+            rotation: [0, 0, 0],
+            radius: 0.03,
+            height: 0.1,
+            pattern: { id: 'bolt_ring', kind: 'radial', count: 2, mode: 'expanded' },
+          },
+        ],
+        transforms: [
+          { position: [10, 0.5, 20], rotation: [0, 0, 0] },
+          { position: [10.4, 0.5, 20], rotation: [0, 0, 0] },
+        ],
+        createdNames: ['bolt 1', 'bolt 2'],
+      }),
+    )
+
+    expect(createdNodes).toHaveLength(1)
+    const metadata = createdNodes[0]?.metadata as
+      | {
+          primitiveContract?: {
+            ports?: Array<{ id?: string; position?: number[] }>
+            pattern?: { id?: string; mode?: string; instances?: Array<{ position?: number[] }> }
+          }
+        }
+      | undefined
+    const contract = metadata?.primitiveContract as
+      | {
+          ports?: Array<{ id?: string; position?: number[] }>
+          pattern?: { id?: string; mode?: string; instances?: Array<{ position?: number[] }> }
+        }
+      | undefined
+    expect(contract?.ports?.[0]?.id).toBe('bolt_access')
+    expect(contract?.ports?.[0]?.position?.[1]).toBeCloseTo(0.1, 6)
+    expect(contract?.pattern?.id).toBe('bolt_ring')
+    expect(contract?.pattern?.mode).toBe('instanced')
+    expect(contract?.pattern?.instances).toHaveLength(2)
+    expect(contract?.pattern?.instances?.[0]?.position).toEqual([0, 0, 0])
+    expect(contract?.pattern?.instances?.[1]?.position?.[0]).toBeCloseTo(0.4, 6)
+  })
+
   test('creates a single-node patch with placement override metadata', () => {
     const single = artifact({
       assemblyName: null,

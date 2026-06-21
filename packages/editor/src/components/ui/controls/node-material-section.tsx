@@ -17,6 +17,7 @@ import {
 import useEditor from '../../../store/use-editor'
 import { MaterialSwatchField } from './material-swatch-field'
 import { PanelSection } from './panel-section'
+import { SliderControl } from './slider-control'
 
 type NodeMaterialSectionProps = {
   nodeId?: AnyNodeId
@@ -102,36 +103,62 @@ export function NodeMaterialSection({ nodeId: explicitNodeId }: NodeMaterialSect
         {targets.map((target) => {
           const values = readTargetValues(node, target)
           const properties = resolveEditableProperties(values)
+          const transparencyPercent = Math.round((1 - properties.opacity) * 100)
           return (
-            <MaterialSwatchField
-              key={target.key}
-              label={getMaterialTargetLabel(target)}
-              selectedMaterialPreset={values.materialPreset}
-              value={values.material}
-              onChange={(material) =>
-                writeMaterial(target, {
-                  material: {
-                    preset: 'custom',
-                    properties: {
-                      ...properties,
-                      ...material.properties,
-                      transparent:
-                        (material.properties?.opacity ?? properties.opacity) < 1 ||
-                        (material.properties?.transparent ?? properties.transparent),
+            <div className="space-y-1" key={target.key}>
+              <MaterialSwatchField
+                label={getMaterialTargetLabel(target)}
+                selectedMaterialPreset={values.materialPreset}
+                value={values.material}
+                onChange={(material) =>
+                  writeMaterial(target, {
+                    material: {
+                      preset: 'custom',
+                      properties: {
+                        ...properties,
+                        ...material.properties,
+                        transparent:
+                          (material.properties?.opacity ?? properties.opacity) < 1 ||
+                          (material.properties?.transparent ?? properties.transparent),
+                      },
                     },
-                  },
-                  materialPreset: undefined,
-                })
-              }
-              onOpenChange={(open) => {
-                if (open && nodeId && isMaterialTargetRole(target.key)) {
-                  setSelectedMaterialTarget({ nodeId, role: target.key })
+                    materialPreset: undefined,
+                  })
                 }
-              }}
-              onSelectMaterialPreset={(materialPreset) =>
-                writeMaterial(target, { material: undefined, materialPreset })
-              }
-            />
+                onOpenChange={(open) => {
+                  if (open && nodeId && isMaterialTargetRole(target.key)) {
+                    setSelectedMaterialTarget({ nodeId, role: target.key })
+                  }
+                }}
+                onSelectMaterialPreset={(materialPreset) =>
+                  writeMaterial(target, { material: undefined, materialPreset })
+                }
+              />
+              <SliderControl
+                label={'\u900f\u660e\u5ea6'}
+                max={100}
+                min={0}
+                precision={0}
+                step={1}
+                unit="%"
+                value={transparencyPercent}
+                onChange={(nextTransparencyPercent) => {
+                  const transparency = Math.min(1, Math.max(0, nextTransparencyPercent / 100))
+                  const opacity = 1 - transparency
+                  writeMaterial(target, {
+                    material: {
+                      preset: 'custom',
+                      properties: {
+                        ...properties,
+                        opacity,
+                        transparent: transparency > 0,
+                      },
+                    },
+                    materialPreset: undefined,
+                  })
+                }}
+              />
+            </div>
           )
         })}
       </div>

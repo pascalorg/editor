@@ -1,3 +1,7 @@
+import {
+  applyFactoryArchitectureToPlan,
+  loadIndustryProcessTemplates,
+} from './industry-factory-knowledge'
 import type {
   ProcessConnectionPlan,
   ProcessLineDomain,
@@ -5,10 +9,6 @@ import type {
   ProcessLinePlan,
   ProcessStationPlan,
 } from './process-line-types'
-import {
-  applyFactoryArchitectureToPlan,
-  loadIndustryProcessTemplates,
-} from './industry-factory-knowledge'
 
 export type ProcessTemplate = {
   processId: string
@@ -161,10 +161,28 @@ export function allProcessTemplates(): ProcessTemplate[] {
   return [...PROCESS_TEMPLATES, ...loadIndustryProcessTemplates()]
 }
 
+function isFactoryScopePrompt(prompt: string) {
+  return /\u5de5\u5382|\u5382|\u8f66\u95f4|\bfactory\b|\bplant\b|\bworkshop\b|\bsmelter\b/i.test(
+    prompt,
+  )
+}
+
+function isWholeFactoryTemplate(template: ProcessTemplate) {
+  return (
+    /\b(full|factory|plant|smelter|workshop)\b/i.test(template.processId) ||
+    /\b(full|factory|plant|smelter|workshop)\b/i.test(template.processLabel) ||
+    /\u5de5\u5382|\u8f66\u95f4/.test(template.processDisplayLabel ?? '')
+  )
+}
+
 export function matchProcessTemplate(prompt: string): ProcessTemplate | undefined {
-  return allProcessTemplates().find((template) =>
+  const matches = allProcessTemplates().filter((template) =>
     template.aliases.some((pattern) => pattern.test(prompt)),
   )
+  if (isFactoryScopePrompt(prompt)) {
+    return matches.find(isWholeFactoryTemplate) ?? matches[0]
+  }
+  return matches[0]
 }
 
 export function buildProcessLinePlanFromTemplate(

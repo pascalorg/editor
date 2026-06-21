@@ -11,9 +11,14 @@ import {
 } from '@pascal-app/viewer'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import type * as THREE from 'three'
+import {
+  applyInstanceMatrices,
+  primitivePatternInstances,
+} from '../shared/primitive-contract-rendering'
 
 export const CylinderRenderer = ({ node }: { node: CylinderNode }) => {
   const ref = useRef<THREE.Group>(null!)
+  const instancedRef = useRef<THREE.InstancedMesh>(null)
 
   useRegistry(node.id, 'cylinder', ref)
 
@@ -49,6 +54,11 @@ export const CylinderRenderer = ({ node }: { node: CylinderNode }) => {
       }),
     [node.radius, node.height, node.radialSegments, node.wallThickness],
   )
+  const instances = primitivePatternInstances(node.metadata)
+
+  useLayoutEffect(() => {
+    applyInstanceMatrices(instancedRef.current, instances)
+  }, [instances])
 
   return (
     <group
@@ -60,13 +70,23 @@ export const CylinderRenderer = ({ node }: { node: CylinderNode }) => {
       visible={node.visible}
       {...handlers}
     >
-      <mesh
-        castShadow
-        geometry={geometry}
-        material={material}
-        name="cylinder-solid"
-        receiveShadow
-      />
+      {instances.length > 1 ? (
+        <instancedMesh
+          args={[geometry, material, instances.length]}
+          castShadow
+          name="cylinder-solid-instances"
+          receiveShadow
+          ref={instancedRef}
+        />
+      ) : (
+        <mesh
+          castShadow
+          geometry={geometry}
+          material={material}
+          name="cylinder-solid"
+          receiveShadow
+        />
+      )}
     </group>
   )
 }

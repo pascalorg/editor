@@ -474,6 +474,17 @@ function offsetAlongAxis(center: Vec3, axis: PartAxis, distance: number): Vec3 {
   }
 }
 
+function axisNormal(axis: PartAxis, sign: -1 | 1 = 1): Vec3 {
+  switch (axis) {
+    case 'x':
+      return [sign, 0, 0]
+    case 'y':
+      return [0, sign, 0]
+    default:
+      return [0, 0, sign]
+  }
+}
+
 function rotateVec(v: Vec3, euler: Vec3): Vec3 {
   let [x, y, z] = v
 
@@ -504,6 +515,20 @@ function applyPartRotation(
       ? add(pivot, rotateVec(sub(shape.position, pivot), rotation))
       : shape.position,
     rotation: add(shape.rotation ?? [0, 0, 0], rotation),
+    cutouts: shape.cutouts?.map((cutout) => ({
+      ...cutout,
+      position: cutout.position
+        ? add(pivot, rotateVec(sub(cutout.position, pivot), rotation))
+        : cutout.position,
+      normal: cutout.normal ? rotateVec(cutout.normal, rotation) : cutout.normal,
+    })),
+    ports: shape.ports?.map((port) => ({
+      ...port,
+      position: port.position
+        ? add(pivot, rotateVec(sub(port.position, pivot), rotation))
+        : port.position,
+      normal: port.normal ? rotateVec(port.normal, rotation) : port.normal,
+    })),
   }))
 }
 
@@ -4216,6 +4241,24 @@ function composePipePort(
       height: length,
       radialSegments: Math.max(20, Math.round(ringSegments(input.detail) * 0.55)),
       wallThickness: radius * 0.18,
+      duct: {
+        crossSection: 'round',
+        radius,
+        wallThickness: radius * 0.18,
+      },
+      ports: [
+        {
+          id: label,
+          kind: label === 'inlet_port' ? 'inlet' : label === 'outlet_port' ? 'outlet' : 'generic',
+          semanticRole: label,
+          position: rimCenter,
+          normal: axisNormal(axis, sign),
+          axis,
+          radius,
+          direction:
+            label === 'inlet_port' ? 'in' : label === 'outlet_port' ? 'out' : 'bidirectional',
+        },
+      ],
       material: pipeMat,
     },
     {
@@ -4875,6 +4918,17 @@ function composeBoltPattern(
   const boltRadius = clamp(part.wireRadius ?? part.width, radius * 0.08, 0.003, 0.08)
   const boltDepth = clamp(part.depth ?? part.height, boltRadius * 1.5, 0.004, 0.2)
   const boltMat = partMaterial(part, material(input.darkColor ?? '#1f2937', 0.42, 0.5))
+  const pattern = {
+    id: `${part.id ?? part.sourcePartId ?? part.name ?? 'bolt_pattern'}_radial`,
+    kind: 'radial' as const,
+    semanticRole: part.semanticRole ?? 'bolt_pattern',
+    count,
+    axis,
+    radius,
+    startAngle: 0,
+    endAngle: Math.PI * 2,
+    mode: 'expanded' as const,
+  }
   const shapes = Array.from({ length: count }, (_, i) => {
     const angle = angularStep(i, count)
     return {
@@ -4885,6 +4939,7 @@ function composeBoltPattern(
       radius: boltRadius,
       height: boltDepth,
       radialSegments: 12,
+      pattern,
       material: boltMat,
     }
   })
@@ -5081,6 +5136,15 @@ function composeRollerArray(
   const width = clamp(part.width, 0.46, 0.08, 2)
   const radius = clamp(part.radius, 0.035, 0.008, 0.18)
   const mat = partMaterial(part, material(input.metalColor ?? '#cbd5e1', 0.26, 0.82))
+  const pattern = {
+    id: `${part.id ?? part.sourcePartId ?? part.name ?? 'roller_array'}_linear`,
+    kind: 'linear' as const,
+    semanticRole: part.semanticRole ?? 'roller_array',
+    count,
+    axis: 'x' as const,
+    spacing: count > 1 ? length / (count - 1) : 0,
+    mode: 'expanded' as const,
+  }
   const shapes = Array.from({ length: count }, (_, i) => ({
     kind: 'cylinder' as const,
     name: `${part.name ?? input.name ?? 'object'} conveyor roller ${i + 1}`,
@@ -5093,6 +5157,7 @@ function composeRollerArray(
     radius,
     height: width,
     radialSegments: 20,
+    pattern,
     material: mat,
   }))
   return applyPartRotation(shapes, center, part.rotation)
@@ -5145,6 +5210,12 @@ function composeCylindricalTank(
   const headScale = axis === 'x' ? [radius * 0.36, radius, radius] : [radius, radius * 0.36, radius]
   const leftEnd = offsetAlongAxis(center, axis, -length * 0.52)
   const rightEnd = offsetAlongAxis(center, axis, length * 0.52)
+  const topNozzleCenter: Vec3 = [center[0], center[1] + radius * 1.08, center[2]]
+  const manwayCenter: Vec3 =
+    axis === 'x'
+      ? [center[0] - length * 0.18, center[1], center[2] + radius * 1.04]
+      : [center[0] + radius * 1.04, center[1] + length * 0.16, center[2]]
+  const manwayAxis = axis === 'x' ? 'z' : 'x'
   const shapes: PrimitiveShapeInput[] = [
     {
       kind: 'hollow-cylinder',
@@ -5157,6 +5228,77 @@ function composeCylindricalTank(
       height: length,
       wallThickness,
       radialSegments: ringSegments(input.detail),
+      duct: {
+        crossSection: 'round',
+        radius,
+        wallThickness,
+      },
+      ports: [
+        {
+          id: 'vessel_left_head',
+          kind: 'support',
+          semanticRole: 'vessel_head',
+          position: leftEnd,
+          normal: axisNormal(axis, -1),
+          axis,
+          radius,
+          direction: 'bidirectional',
+        },
+        {
+          id: 'vessel_right_head',
+          kind: 'support',
+          semanticRole: 'vessel_head',
+          position: rightEnd,
+          normal: axisNormal(axis, 1),
+          axis,
+          radius,
+          direction: 'bidirectional',
+        },
+        {
+          id: 'top_nozzle',
+          kind: 'generic',
+          semanticRole: 'top_nozzle',
+          position: topNozzleCenter,
+          normal: axisNormal('y', 1),
+          axis: 'y',
+          radius: radius * 0.16,
+          direction: 'bidirectional',
+        },
+        {
+          id: 'manway',
+          kind: 'access',
+          semanticRole: 'manway_flange',
+          position: manwayCenter,
+          normal: axisNormal(manwayAxis, 1),
+          axis: manwayAxis,
+          radius: radius * 0.22,
+          direction: 'bidirectional',
+        },
+      ],
+      cutouts: [
+        {
+          id: 'top_nozzle_opening',
+          kind: 'round',
+          semanticRole: 'top_nozzle',
+          position: topNozzleCenter,
+          normal: axisNormal('y', 1),
+          axis: 'y',
+          radius: radius * 0.16,
+          through: true,
+          bevelRadius: wallThickness * 0.5,
+        },
+        {
+          id: 'manway_opening',
+          kind: 'round',
+          semanticRole: 'manway_flange',
+          position: manwayCenter,
+          normal: axisNormal(manwayAxis, 1),
+          axis: manwayAxis,
+          radius: radius * 0.22,
+          through: true,
+          bevelRadius: wallThickness * 0.5,
+        },
+      ],
       material: mat,
     },
     {
@@ -5214,7 +5356,7 @@ function composeCylindricalTank(
       name: `${part.name ?? input.name ?? 'object'} tank top nozzle`,
       semanticRole: 'top_nozzle',
       sourcePartKind: part.sourcePartKind ?? 'cylindrical_tank',
-      position: [center[0], center[1] + radius * 1.08, center[2]],
+      position: topNozzleCenter,
       axis: 'y',
       radius: radius * 0.16,
       height: radius * 0.35,
@@ -5227,11 +5369,8 @@ function composeCylindricalTank(
       name: `${part.name ?? input.name ?? 'object'} tank manway flange`,
       semanticRole: 'manway_flange',
       sourcePartKind: part.sourcePartKind ?? 'cylindrical_tank',
-      position:
-        axis === 'x'
-          ? [center[0] - length * 0.18, center[1], center[2] + radius * 1.04]
-          : [center[0] + radius * 1.04, center[1] + length * 0.16, center[2]],
-      axis: axis === 'x' ? 'z' : 'x',
+      position: manwayCenter,
+      axis: manwayAxis,
       radius: radius * 0.22,
       height: wallThickness * 3,
       radialSegments: 28,
@@ -9460,6 +9599,7 @@ function composeElectricalCabinet(
   const warning = material('#f59e0b', 0.5, 0.02)
   const metal = material(input.metalColor ?? '#cbd5e1', 0.28, 0.74)
   const doorCount = clampInt(part.doorCount, 1, 1, 4)
+  const frontNormal: Vec3 = [0, 0, 1]
   const shapes: PrimitiveShapeInput[] = [
     {
       kind: 'box',
@@ -9469,7 +9609,63 @@ function composeElectricalCabinet(
       width,
       height,
       cornerRadius: Math.min(length, width, height) * 0.035,
+      bevelRadius: Math.min(length, width, height) * 0.035,
       cornerSegments: 4,
+      cutouts: [
+        {
+          id: 'cabinet_door_recess',
+          kind: 'rectangular',
+          semanticRole: 'access_door',
+          position: [center[0], center[1], center[2] + width * 0.51],
+          normal: frontNormal,
+          axis: 'z',
+          length: length * 0.92,
+          height: height * 0.86,
+          depth: width * 0.035,
+          bevelRadius: Math.min(length, height) * 0.02,
+        },
+        {
+          id: 'cabinet_nameplate_recess',
+          kind: 'rectangular',
+          semanticRole: 'nameplate',
+          position: [
+            center[0] - length * 0.22,
+            center[1] - height * 0.22,
+            center[2] + width * 0.56,
+          ],
+          normal: frontNormal,
+          axis: 'z',
+          length: length * 0.24,
+          height: height * 0.055,
+          depth: width * 0.02,
+          bevelRadius: length * 0.008,
+        },
+        {
+          id: 'cabinet_vent_opening',
+          kind: 'slot',
+          semanticRole: 'vent',
+          position: [center[0], center[1] - height * 0.28, center[2] + width * 0.56],
+          normal: frontNormal,
+          axis: 'z',
+          length: length * 0.42,
+          height: height * 0.16,
+          depth: width * 0.02,
+          bevelRadius: height * 0.006,
+        },
+      ],
+      ports: [
+        {
+          id: 'cabinet_access_front',
+          kind: 'access',
+          semanticRole: 'access_door',
+          position: [center[0], center[1], center[2] + width * 0.56],
+          normal: frontNormal,
+          axis: 'z',
+          width: length * 0.92,
+          height: height * 0.86,
+          direction: 'bidirectional',
+        },
+      ],
       material: bodyMat,
     },
     {
@@ -9570,6 +9766,9 @@ function composePipeRun(
   const center = add(origin, part.position ?? [0, 0.55, 0])
   const pipeMat = partMaterial(part, material(input.primaryColor ?? '#64748b', 0.42, 0.42))
   const metal = material(input.metalColor ?? '#cbd5e1', 0.28, 0.75)
+  const wallThickness = clamp(part.depth, radius * 0.18, radius * 0.05, radius * 0.45)
+  const start = offsetAlongAxis(center, axis, -length / 2)
+  const end = offsetAlongAxis(center, axis, length / 2)
   const shapes: PrimitiveShapeInput[] = [
     {
       kind: 'hollow-cylinder',
@@ -9578,14 +9777,41 @@ function composePipeRun(
       axis,
       radius,
       height: length,
-      wallThickness: clamp(part.depth, radius * 0.18, radius * 0.05, radius * 0.45),
+      wallThickness,
       radialSegments: 24,
+      duct: {
+        crossSection: 'round',
+        radius,
+        wallThickness,
+      },
+      ports: [
+        {
+          id: 'pipe_start',
+          kind: 'inlet',
+          semanticRole: 'pipe_start',
+          position: start,
+          normal: axisNormal(axis, -1),
+          axis,
+          radius,
+          direction: 'in',
+        },
+        {
+          id: 'pipe_end',
+          kind: 'outlet',
+          semanticRole: 'pipe_end',
+          position: end,
+          normal: axisNormal(axis, 1),
+          axis,
+          radius,
+          direction: 'out',
+        },
+      ],
       material: pipeMat,
     },
     {
       kind: 'torus',
       name: `${part.name ?? input.name ?? 'object'} pipe run left coupling`,
-      position: offsetAlongAxis(center, axis, -length / 2),
+      position: start,
       axis,
       majorRadius: radius,
       tubeRadius: radius * 0.12,
@@ -9596,7 +9822,7 @@ function composePipeRun(
     {
       kind: 'torus',
       name: `${part.name ?? input.name ?? 'object'} pipe run right coupling`,
-      position: offsetAlongAxis(center, axis, length / 2),
+      position: end,
       axis,
       majorRadius: radius,
       tubeRadius: radius * 0.12,
@@ -9622,6 +9848,8 @@ function composePipeElbow(
   )
   const center = add(origin, part.position ?? [0, 0.55, 0])
   const mat = partMaterial(part, material(input.primaryColor ?? '#64748b', 0.42, 0.42))
+  const start: Vec3 = [center[0] - bendRadius, center[1], center[2]]
+  const end: Vec3 = [center[0], center[1], center[2] + bendRadius]
   const shapes: PrimitiveShapeInput[] = [
     {
       kind: 'sweep',
@@ -9636,12 +9864,39 @@ function composePipeElbow(
       radius,
       radialSegments: 16,
       tubularSegments: 32,
+      duct: {
+        crossSection: 'round',
+        radius,
+        wallThickness: radius * 0.18,
+      },
+      ports: [
+        {
+          id: 'elbow_start',
+          kind: 'inlet',
+          semanticRole: 'pipe_start',
+          position: start,
+          normal: [-1, 0, 0],
+          axis: 'x',
+          radius,
+          direction: 'in',
+        },
+        {
+          id: 'elbow_end',
+          kind: 'outlet',
+          semanticRole: 'pipe_end',
+          position: end,
+          normal: [0, 0, 1],
+          axis: 'z',
+          radius,
+          direction: 'out',
+        },
+      ],
       material: mat,
     },
     {
       kind: 'torus',
       name: `${part.name ?? input.name ?? 'object'} elbow start rim`,
-      position: [center[0] - bendRadius, center[1], center[2]],
+      position: start,
       axis: 'x',
       majorRadius: radius,
       tubeRadius: radius * 0.12,
@@ -9652,7 +9907,7 @@ function composePipeElbow(
     {
       kind: 'torus',
       name: `${part.name ?? input.name ?? 'object'} elbow end rim`,
-      position: [center[0], center[1], center[2] + bendRadius],
+      position: end,
       axis: 'z',
       majorRadius: radius,
       tubeRadius: radius * 0.12,

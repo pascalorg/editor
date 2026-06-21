@@ -28,11 +28,11 @@
     "clinker_conveying",
     "clinker_silo",
     "kiln_tail_esp",
+    "whr_boiler",
     "process_stack",
     "cement_mill",
     "cement_silo",
     "cement_packer",
-    "whr_boiler",
     "mcc_control"
   ],
   "defaultLayoutStyle": "parallel_bays",
@@ -178,6 +178,15 @@
       "safetyTags": ["dust", "exhaust"]
     },
     {
+      "id": "whr_boiler",
+      "label": "Waste heat recovery boiler",
+      "displayLabel": "\u4f59\u70ed\u9505\u7089",
+      "role": "whr_boiler",
+      "equipmentHint": "cement.whr_boiler cement kiln waste heat recovery boiler with vertical casing, tube bank, gas inlet, gas outlet, and service platform",
+      "footprintHint": "tall",
+      "safetyTags": ["hot_gas", "utility"]
+    },
+    {
       "id": "process_stack",
       "label": "Process stack",
       "displayLabel": "\u70df\u56f1",
@@ -214,15 +223,6 @@
       "safetyTags": ["packaging", "dust"]
     },
     {
-      "id": "whr_boiler",
-      "label": "Waste heat recovery boiler",
-      "displayLabel": "\u4f59\u70ed\u9505\u7089",
-      "role": "whr_boiler",
-      "equipmentHint": "cement.whr_boiler cement kiln waste heat recovery boiler with vertical casing, tube bank, gas inlet, gas outlet, and service platform",
-      "footprintHint": "tall",
-      "safetyTags": ["hot_gas", "utility"]
-    },
-    {
       "id": "mcc_control",
       "label": "MCC and control cabinet",
       "displayLabel": "MCC\u63a7\u5236\u67dc",
@@ -248,11 +248,11 @@
     { "fromStationId": "clinker_silo", "toStationId": "cement_mill", "medium": "material", "visualKind": "material_conveyor", "fromPortId": "bottom_discharge_outlet", "toPortId": "feed_inlet" },
     { "fromStationId": "cement_mill", "toStationId": "cement_silo", "medium": "material", "visualKind": "material_conveyor", "fromPortId": "product_outlet", "toPortId": "top_feed_inlet" },
     { "fromStationId": "cement_silo", "toStationId": "cement_packer", "medium": "material", "visualKind": "material_conveyor", "fromPortId": "bulk_discharge_outlet", "toPortId": "cement_feed_inlet" },
-    { "fromStationId": "preheater_tower", "toStationId": "kiln_tail_esp", "medium": "material", "visualKind": "hot_gas_duct", "fromPortId": "exhaust_gas_out", "toPortId": "dust_gas_in" },
-    { "fromStationId": "kiln_tail_esp", "toStationId": "process_stack", "medium": "material", "visualKind": "air_duct", "fromPortId": "clean_air_out", "toPortId": "stack_gas_in" },
-    { "fromStationId": "grate_cooler", "toStationId": "tertiary_air_duct", "medium": "material", "visualKind": "hot_gas_duct", "fromPortId": "cooler_exhaust_out", "toPortId": "cooler_air_in" },
-    { "fromStationId": "tertiary_air_duct", "toStationId": "preheater_tower", "medium": "material", "visualKind": "hot_gas_duct", "fromPortId": "tertiary_air_out", "toPortId": "tertiary_air_in" },
-    { "fromStationId": "preheater_tower", "toStationId": "whr_boiler", "medium": "material", "visualKind": "hot_gas_duct", "fromPortId": "exhaust_gas_out", "toPortId": "hot_gas_in" },
+    { "fromStationId": "preheater_tower", "toStationId": "kiln_tail_esp", "medium": "gas", "visualKind": "hot_gas_duct", "fromPortId": "exhaust_gas_out", "toPortId": "dust_gas_in" },
+    { "fromStationId": "kiln_tail_esp", "toStationId": "process_stack", "medium": "gas", "visualKind": "air_duct", "fromPortId": "clean_air_out", "toPortId": "stack_gas_in" },
+    { "fromStationId": "grate_cooler", "toStationId": "tertiary_air_duct", "medium": "gas", "visualKind": "hot_gas_duct", "fromPortId": "cooler_exhaust_out", "toPortId": "cooler_air_in" },
+    { "fromStationId": "tertiary_air_duct", "toStationId": "preheater_tower", "medium": "gas", "visualKind": "hot_gas_duct", "fromPortId": "tertiary_air_out", "toPortId": "tertiary_air_in" },
+    { "fromStationId": "preheater_tower", "toStationId": "whr_boiler", "medium": "gas", "visualKind": "hot_gas_duct", "fromPortId": "exhaust_gas_out", "toPortId": "hot_gas_in" },
     { "fromStationId": "mcc_control", "toStationId": "raw_mill", "medium": "power", "visualKind": "cable_tray", "fromPortId": "power_out", "toPortId": "power_in" },
     { "fromStationId": "mcc_control", "toStationId": "rotary_kiln", "medium": "power", "visualKind": "cable_tray", "fromPortId": "power_out", "toPortId": "power_in" },
     { "fromStationId": "mcc_control", "toStationId": "cement_mill", "medium": "power", "visualKind": "cable_tray", "fromPortId": "power_out", "toPortId": "power_in" }

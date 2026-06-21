@@ -103,6 +103,29 @@ describe('factory planner', () => {
     }
   })
 
+  test('routes standalone clinker process wording through one clinker process template', () => {
+    const plan = fallbackFactoryPlan('\u751f\u6210\u719f\u6599\u5de5\u5e8f')
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'cement_clinker_production_line',
+        dimensions: { length: 34, width: 12 },
+      },
+    })
+    if (plan.kind === 'process_line') {
+      expect(plan.process.stations.map((station) => station.id)).toEqual([
+        'raw_meal_feed',
+        'preheater_tower',
+        'rotary_kiln',
+        'grate_cooler',
+        'clinker_conveying',
+        'clinker_silo',
+        'bag_filter',
+      ])
+    }
+  })
+
   test('routes full cement factory requests through the modular industry template', () => {
     const plan = fallbackFactoryPlan('\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382')
 
@@ -161,9 +184,118 @@ describe('factory planner', () => {
     }
   })
 
-  test('expands cement factory process quantities from explicit user wording', () => {
+  test('routes discrete manufacturing workshop through the industry pack process template', () => {
+    const plan = fallbackFactoryPlan('生成一个离散制造柔性车间')
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'discrete_manufacturing_flexible_workshop',
+        processLabel: 'Discrete manufacturing flexible workshop',
+        processDisplayLabel: '离散制造柔性车间',
+        layoutStyle: 'parallel_bays',
+      },
+    })
+    if (plan.kind === 'process_line') {
+      expect(plan.process.stations.map((station) => station.id)).toEqual(
+        expect.arrayContaining([
+          'cnc_machining_center',
+          'robot_workcell',
+          'assembly_workstation',
+          'roller_conveyor',
+          'vision_inspection_station',
+          'packaging_station',
+          'agv_tugger',
+          'storage_rack',
+          'line_control_cabinet',
+          'fixture_table',
+          'test_bench',
+          'material_cart',
+          'palletizing_workcell',
+        ]),
+      )
+      expect(plan.process.sourcePack).toMatchObject({
+        id: 'industry.discrete-manufacturing.basic',
+        version: '0.2.0',
+      })
+    }
+  })
+
+  test('routes process industry plant through the process foundation pack', () => {
+    const plan = fallbackFactoryPlan('生成一个流程行业基础工厂')
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'process_industry_basic_plant',
+        processLabel: 'Process industry basic plant',
+        processDisplayLabel: '流程行业基础工厂',
+        layoutStyle: 'parallel_bays',
+      },
+    })
+    if (plan.kind === 'process_line') {
+      expect(plan.process.stations.map((station) => station.id)).toEqual(
+        expect.arrayContaining([
+          'raw_material_tank',
+          'metering_pump_skid',
+          'mixing_tank',
+          'stirred_reactor',
+          'heat_exchanger',
+          'filter_vessel',
+          'centrifuge',
+          'pipe_corridor',
+          'control_cabinet',
+          'bulk_material_silo',
+          'utility_blower',
+          'air_compressor_skid',
+          'valve_station',
+        ]),
+      )
+      expect(plan.process.sourcePack).toMatchObject({
+        id: 'industry.process.basic',
+        version: '0.2.0',
+      })
+    }
+  })
+
+  test('keeps electrolytic aluminum factory generation on a single potline', () => {
     const plan = fallbackFactoryPlan(
-      '\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5382\uff0c\u6709\u4e24\u4e2a\u719f\u6599\u5de5\u5e8f\uff0c\u8f93\u51fa\u7684\u719f\u6599\u5230\u56db\u4e2a\u78e8\u673a',
+      '\u751f\u6210\u4e00\u4e2a\u7535\u89e3\u94dd\u5382\uff0c\u4e24\u4e2a\u7535\u89e3\u69fd\u5217',
+    )
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: { processId: 'electrolytic_aluminum_smelter_full' },
+    })
+    if (plan.kind === 'process_line') {
+      expect(plan.process.stations.map((station) => station.id)).toEqual(
+        expect.arrayContaining([
+          'rectifier_transformer_station',
+          'alumina_storage_silo',
+          'alumina_conveying_line',
+          'potline_module',
+          'pot_tending_crane',
+          'dry_scrubber_baghouse',
+        ]),
+      )
+      expect(plan.process.stations.map((station) => station.id)).not.toEqual(
+        expect.arrayContaining([
+          'potline_module_2',
+          'pot_tending_crane_2',
+          'dc_busbar_distribution',
+          'alumina_feed_distribution',
+          'potline_fume_collection_header',
+        ]),
+      )
+      expect(plan.process.architecture).toMatchObject({
+        id: 'electrolytic_aluminum.smelter.modular_potline',
+      })
+    }
+  })
+
+  test('keeps cement factory generation on the default single production line', () => {
+    const plan = fallbackFactoryPlan(
+      '\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5382\uff0c\u4e24\u4e2a\u719f\u6599\u5de5\u5e8f\uff0c\u56db\u4e2a\u6c34\u6ce5\u5de5\u5e8f',
     )
 
     expect(plan).toMatchObject({
@@ -173,22 +305,36 @@ describe('factory planner', () => {
     if (plan.kind === 'process_line') {
       expect(plan.process.stations.map((station) => station.id)).toEqual(
         expect.arrayContaining([
+          'preheater_tower',
+          'rotary_kiln',
+          'kiln_burner',
+          'grate_cooler',
+          'cement_mill',
+          'cement_silo',
+        ]),
+      )
+      expect(plan.process.stations.map((station) => station.id)).not.toEqual(
+        expect.arrayContaining([
           'preheater_tower_2',
           'rotary_kiln_2',
+          'kiln_burner_2',
           'cement_mill_2',
           'cement_mill_3',
           'cement_mill_4',
+          'raw_meal_distribution',
+          'clinker_distribution',
         ]),
       )
-      expect(plan.process.connections).toEqual(
+      expect(plan.process.connections).not.toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ fromStationId: 'clinker_silo', toStationId: 'cement_mill_4' }),
-          expect.objectContaining({ fromStationId: 'rotary_kiln_2', toStationId: 'kiln_hood_2' }),
+          expect.objectContaining({ toStationId: 'preheater_tower_2' }),
+          expect.objectContaining({ toStationId: 'cement_mill_4' }),
         ]),
       )
-      expect(plan.process.stations).toHaveLength(28)
-      expect(plan.process.dimensions?.length).toBeGreaterThan(66)
-      expect(plan.process.dimensions?.width).toBeGreaterThan(28)
+      expect(plan.process.architecture).toMatchObject({
+        id: 'cement.plant.modular_outdoor',
+      })
+      expect(plan.process.dimensions).toEqual({ length: 66, width: 28 })
     }
   })
 

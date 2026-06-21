@@ -1,0 +1,198 @@
+[
+  {
+    "id": "quality.refinery.crude_storage_tank",
+    "requiredRoles": [
+      "vessel_shell",
+      "feed_inlet",
+      "product_outlet",
+      "access_ladder"
+    ],
+    "shapeCount": {
+      "min": 3,
+      "max": 32
+    }
+  },
+  {
+    "id": "quality.refinery.product_storage_tank",
+    "requiredRoles": [
+      "vessel_shell",
+      "feed_inlet",
+      "loading_outlet",
+      "access_ladder"
+    ],
+    "shapeCount": {
+      "min": 3,
+      "max": 32
+    }
+  },
+  {
+    "id": "quality.refinery.intermediate_storage_tank",
+    "requiredRoles": [
+      "vessel_shell",
+      "distillate_inlet",
+      "conversion_feed_outlet",
+      "access_ladder"
+    ],
+    "shapeCount": {
+      "min": 3,
+      "max": 32
+    }
+  },
+  {
+    "id": "quality.refinery.desalter",
+    "requiredRoles": [
+      "desalter_vessel",
+      "support_base",
+      "crude_inlet",
+      "desalted_crude_outlet",
+      "electrical_control_box"
+    ],
+    "shapeCount": {
+      "min": 3,
+      "max": 40
+    }
+  },
+  {
+    "id": "quality.refinery.atmospheric_distillation_unit",
+    "requiredRoles": [
+      "distillation_column_shell",
+      "tray_band",
+      "preheat_exchanger",
+      "fired_heater",
+      "side_draw_manifold",
+      "service_platform",
+      "crude_feed_inlet",
+      "overhead_product_outlet"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 64
+    }
+  },
+  {
+    "id": "quality.refinery.vacuum_distillation_unit",
+    "requiredRoles": [
+      "vacuum_column_shell",
+      "condenser_exchanger",
+      "vacuum_heater",
+      "vacuum_line",
+      "service_platform",
+      "atmospheric_residue_inlet",
+      "vacuum_gas_oil_outlet"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 56
+    }
+  },
+  {
+    "id": "quality.refinery.fluid_catalytic_cracking_unit",
+    "requiredRoles": [
+      "fcc_reactor",
+      "catalyst_regenerator",
+      "main_fractionator",
+      "riser_pipe",
+      "cyclone_separator",
+      "flue_gas_stack",
+      "service_platform",
+      "vacuum_gas_oil_inlet",
+      "cracked_product_outlet"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 72
+    }
+  },
+  {
+    "id": "quality.refinery.hydrotreating_unit",
+    "requiredRoles": [
+      "hydrotreater_reactor",
+      "feed_effluent_exchanger",
+      "high_pressure_separator",
+      "hydrogen_header",
+      "hydrogen_inlet",
+      "treated_product_outlet"
+    ],
+    "shapeCount": {
+      "min": 4,
+      "max": 48
+    }
+  },
+  {
+    "id": "quality.refinery.catalytic_reformer_unit",
+    "requiredRoles": [
+      "reformer_reactor_train",
+      "reformer_fired_heater",
+      "reformer_exchanger",
+      "reformer_separator",
+      "naphtha_inlet",
+      "reformate_outlet"
+    ],
+    "shapeCount": {
+      "min": 4,
+      "max": 48
+    }
+  },
+  {
+    "id": "quality.refinery.sulfur_recovery_unit",
+    "requiredRoles": [
+      "claus_reactor",
+      "sulfur_condenser",
+      "tail_gas_stack",
+      "acid_gas_inlet",
+      "sulfur_outlet"
+    ],
+    "shapeCount": {
+      "min": 3,
+      "max": 40
+    }
+  },
+  {
+    "id": "quality.refinery.flare_system",
+    "requiredRoles": [
+      "flare_stack",
+      "knockout_drum",
+      "relief_gas_inlet"
+    ],
+    "shapeCount": {
+      "min": 2,
+      "max": 24
+    }
+  },
+  {
+    "id": "quality.refinery.pipe_rack",
+    "requiredRoles": [
+      "main_pipe_header",
+      "parallel_pipe_run",
+      "pipe_rack_support_frame"
+    ],
+    "shapeCount": {
+      "min": 2,
+      "max": 24
+    }
+  },
+  {
+    "id": "quality.refinery.utility_boiler",
+    "requiredRoles": [
+      "boiler_body",
+      "boiler_stack",
+      "steam_header",
+      "boiler_control_box"
+    ],
+    "shapeCount": {
+      "min": 3,
+      "max": 32
+    }
+  },
+  {
+    "id": "quality.refinery.control_room",
+    "requiredRoles": [
+      "control_room_body",
+      "mcc_panel"
+    ],
+    "shapeCount": {
+      "min": 1,
+      "max": 24
+    }
+  }
+]

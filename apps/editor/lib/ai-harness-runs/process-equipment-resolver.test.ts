@@ -65,6 +65,18 @@ const electrolyticAluminumPlan: ProcessLinePlan = {
   ],
 }
 
+const refineryPlan: ProcessLinePlan = {
+  ...plan,
+  processId: 'refinery_basic_complex',
+  processLabel: 'Basic oil refinery complex',
+  domain: 'generic',
+  sourcePack: {
+    id: 'industry.refinery.basic',
+    version: '0.1.0',
+    industry: 'refinery',
+  },
+}
+
 const placement: StationPlacement = {
   stationId: 'station',
   role: 'station',
@@ -377,6 +389,46 @@ describe('process equipment resolver', () => {
     expect(result.patches[0]?.node.metadata?.equipmentContract).toMatchObject({
       equipmentFamily: 'electrical.mcc_control',
     })
+  })
+
+  test('keeps refinery tank-farm profiles on native editable tank nodes', () => {
+    const station: ProcessStationPlan = {
+      id: 'crude_storage_tank',
+      label: 'Crude storage tank farm',
+      role: 'crude_storage_tank',
+      equipmentHint:
+        'refinery.crude_storage_tank storage tank for crude oil tank farm with inlet outlet nozzles',
+      footprintHint: 'large',
+    }
+    const result = resolveProcessStationEquipment({
+      plan: refineryPlan,
+      station,
+      stationPlacement: {
+        ...placement,
+        stationId: station.id,
+        role: station.role,
+        label: station.label,
+        footprint: { length: 5.6, width: 5.6 },
+      },
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+      metadata: {
+        generatedBy: 'factory-agent',
+        processId: refineryPlan.processId,
+        stationId: station.id,
+        stationRole: station.role,
+      },
+    })
+
+    expect(result.resolver).toBe('native-tank')
+    expect(result.patches[0]?.node.type).toBe('tank')
+    expect(result.patches[0]?.node.metadata).toMatchObject({
+      resolver: 'native-tank',
+      equipmentContract: {
+        profileId: 'refinery.crude_storage_tank',
+        preferredResolver: 'native-tank',
+      },
+    })
+    expect(result.patches[0]?.node.metadata?.catalogItemId).toBeUndefined()
   })
 
   test('infers process ports from resource-pack profile parts', () => {

@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { auditProfilePackValidation, validateProfilePackDir } from '../lib/profile-packs'
-import { scaffoldIndustryProfilePack } from './scaffold-industry-profile-pack'
+import { normalizeIndustryPackSpec, scaffoldIndustryProfilePack } from './scaffold-industry-profile-pack'
 
 const tempRoots: string[] = []
 
@@ -168,5 +168,42 @@ describe('scaffold-industry-profile-pack', () => {
         await fs.readFile(path.join(result.packDir, 'process-templates', 'generated.json'), 'utf8'),
       ),
     ).toHaveLength(1)
+  })
+
+  test('rejects factory architecture quantity expansion fields', () => {
+    expect(() =>
+      normalizeIndustryPackSpec({
+        industry: 'test-industry',
+        capabilities: ['factory_creation'],
+        factoryArchitectures: [
+          {
+            id: 'test.factory',
+            label: 'Test factory',
+            industry: 'test-industry',
+            processId: 'test_full',
+            layoutStyle: 'linear',
+            defaultDimensions: { length: 12, width: 6 },
+            modules: [
+              {
+                id: 'main_line',
+                order: 10,
+                stationIds: ['test_machine'],
+                countParam: 'lineCount',
+              },
+            ],
+          },
+        ],
+        processTemplates: [],
+        devices: [
+          {
+            id: 'test_machine',
+            name: 'Test machine',
+            aliases: ['test machine'],
+            primarySemanticRole: 'machine_body',
+            parts: [{ kind: 'generic_body', semanticRole: 'machine_body' }],
+          },
+        ],
+      }),
+    ).toThrow(/countParam is not supported/)
   })
 })

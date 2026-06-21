@@ -1,0 +1,29 @@
+{
+  "id": "industry.process.basic",
+  "name": "流程行业基础包",
+  "industry": "process",
+  "version": "0.1.0",
+  "schemaVersion": "1.1",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": [
+    "zh-CN",
+    "en-US"
+  ],
+  "capabilities": [
+    "factory_creation"
+  ],
+  "description": "流程行业基础资源包，面向化工、环保、食品、制药等流程型工厂的通用几何搭建，覆盖储罐、泵组、搅拌、反应、换热、过滤、离心、干燥、包装、管廊和控制柜。",
+  "profiles": [
+    "profiles/generated.json"
+  ],
+  "factoryArchitectures": [
+    "factory-architectures/generated.json"
+  ],
+  "processTemplates": [
+    "process-templates/generated.json"
+  ],
+  "qualityRules": [
+    "quality-rules/generated-quality.json"
+  ]
+}

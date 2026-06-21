@@ -1,0 +1,108 @@
+[
+  {
+    "id": "refinery.factory.basic_refinery",
+    "label": "炼油厂基础架构",
+    "industry": "refinery",
+    "processId": "refinery_basic_complex",
+    "layoutStyle": "parallel_bays",
+    "defaultDimensions": {
+      "length": 92,
+      "width": 42
+    },
+    "scopes": [
+      {
+        "id": "basic_refinery",
+        "label": "基础炼油厂",
+        "includeModules": [
+          "crude_tank_farm",
+          "primary_distillation",
+          "intermediate_tank_farm",
+          "conversion_treating",
+          "product_offsites",
+          "utilities_safety"
+        ]
+      }
+    ],
+    "modules": [
+      {
+        "id": "crude_tank_farm",
+        "displayLabel": "原油罐区",
+        "order": 10,
+        "stationIds": [
+          "crude_storage_tank",
+          "desalter"
+        ]
+      },
+      {
+        "id": "primary_distillation",
+        "displayLabel": "常减压蒸馏",
+        "order": 20,
+        "stationIds": [
+          "atmospheric_distillation_unit",
+          "vacuum_distillation_unit"
+        ]
+      },
+      {
+        "id": "intermediate_tank_farm",
+        "displayLabel": "\u4e2d\u95f4\u6599\u7f50\u533a",
+        "order": 25,
+        "stationIds": [
+          "intermediate_storage_tank"
+        ]
+      },
+      {
+        "id": "conversion_treating",
+        "displayLabel": "转化与加氢",
+        "order": 30,
+        "stationIds": [
+          "fluid_catalytic_cracking_unit",
+          "hydrotreating_unit",
+          "catalytic_reformer_unit"
+        ]
+      },
+      {
+        "id": "product_offsites",
+        "displayLabel": "成品与外操",
+        "order": 40,
+        "stationIds": [
+          "product_storage_tank",
+          "pipe_rack"
+        ]
+      },
+      {
+        "id": "utilities_safety",
+        "displayLabel": "公用工程与安全",
+        "order": 50,
+        "stationIds": [
+          "sulfur_recovery_unit",
+          "flare_system",
+          "utility_boiler",
+          "control_room"
+        ]
+      }
+    ],
+    "layoutHints": {
+      "primaryAxis": "x",
+      "secondaryAxis": "z",
+      "indoorWorkshop": false,
+      "highestStationId": "atmospheric_distillation_unit",
+      "longAxisStationId": "pipe_rack",
+      "sideBranchStationIds": [
+        "crude_storage_tank",
+        "intermediate_storage_tank",
+        "product_storage_tank",
+        "sulfur_recovery_unit",
+        "flare_system",
+        "utility_boiler",
+        "control_room"
+      ],
+      "scale": "conceptual",
+      "notes": [
+        "罐区和外操区与主体工艺装置保持间隔，避免把储罐塞进高温高压设备区。",
+        "常减压位于流程前段，FCC、加氢和重整位于中后段，产品罐区位于下游。",
+        "火炬系统作为安全设施布置在侧后方，远离控制室和主体工艺线。",
+        "管廊沿主流程侧边贯穿，用于表达炼油厂大量管线但不覆盖核心设备。"
+      ]
+    }
+  }
+]

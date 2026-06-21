@@ -97,6 +97,7 @@ When `capabilities` includes `factory_creation`, QA enforces:
 - At least one `processTemplates` resource.
 - Every process-template station must be covered by a device profile, native resolver, or catalog resolver hint.
 - Every architecture module `stationIds[]` entry must exist in the matching process template.
+- Factory creation is intentionally single-process-template per request. Do not add quantity expansion fields such as `parameters`, `flows`, `countParam`, `defaultCount`, `minCount`, `maxCount`, or `replicatedStationIds`.
 
 If the pack only provides equipment profiles, omit `factory_creation`; QA will classify it as a `device-only` pack.
 

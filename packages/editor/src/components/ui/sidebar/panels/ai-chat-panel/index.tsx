@@ -34,6 +34,7 @@ import {
 } from '../../../../../lib/ai-generated-geometry'
 import { buildFactoryScenePatchOperations } from '../../../../../lib/factory-scene-patch-apply'
 import { validateFactoryScenePatches } from '../../../../../lib/factory-scene-patch-safety'
+import { computeSceneBoundsXZ, pickSceneCameraFocusBounds } from '../../../../../lib/scene-bounds'
 import { useViewer } from '@pascal-app/viewer'
 import { Icon } from '@iconify/react'
 import { OrbitControls, useGLTF } from '@react-three/drei'
@@ -1475,6 +1476,16 @@ function buildFactorySelectionSnapshot() {
 
   for (const id of selectedIds) collect(id)
   return nodes.length ? { selectedIds, nodes } : undefined
+}
+
+function buildFactorySceneContext() {
+  const scene = useScene.getState()
+  const bounds = computeSceneBoundsXZ(scene.nodes as Parameters<typeof computeSceneBoundsXZ>[0])
+  if (!bounds) return undefined
+  return {
+    bounds,
+    nodeCount: Object.keys(scene.nodes).length,
+  }
 }
 
 function applyFactoryRunPatchesToCanvas(data: unknown): string[] {
@@ -2940,7 +2951,14 @@ export function AiChatPanel() {
       applyFactoryRun: (data: unknown) => applyFactoryRunPatchesToCanvas(data),
       cameraView: (view) => {
         if (view === 'isometric') {
-          emitter.emit('camera-controls:fit-scene', {})
+          const nodes = useScene.getState()
+            .nodes as Parameters<typeof pickSceneCameraFocusBounds>[0]
+          const focus = pickSceneCameraFocusBounds(nodes)
+          const bounds = focus?.bounds ?? computeSceneBoundsXZ(nodes)
+          emitter.emit(
+            'camera-controls:fit-scene',
+            bounds ? { bounds, reason: focus?.reason ?? 'scene-bounds' } : {},
+          )
           return
         }
         if (view === 'top') {
@@ -5057,6 +5075,7 @@ export function AiChatPanel() {
 
     try {
       const selection = buildFactorySelectionSnapshot()
+      const sceneContext = buildFactorySceneContext()
       const res = await fetch('/api/ai-harness/runs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5067,6 +5086,7 @@ export function AiChatPanel() {
           context: {
             recentMessages: messages,
             ...(selection ? { selection } : {}),
+            ...(sceneContext ? { scene: sceneContext } : {}),
           },
         }),
         signal: controller.signal,

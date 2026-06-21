@@ -2,7 +2,10 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { DeviceProfileDefinition } from '@pascal-app/core/lib/device-profile-registry'
+import {
+  type DeviceProfileDefinition,
+  evaluateDeviceProfileQuality,
+} from '@pascal-app/core/lib/device-profile-registry'
 import { generatePrimitiveGeometryDraft } from '../lib/ai-harness-runs/primitive-generation-service'
 import { findRepoRoot, sanitizeSegment } from '../lib/generated-assets/manifest'
 import {
@@ -155,6 +158,13 @@ function artifactSourceArgs(artifact: unknown) {
   return isRecord(artifact.sourceArgs) ? artifact.sourceArgs : {}
 }
 
+function profileWithResolvedQualityRule(
+  profile: DeviceProfileDefinition,
+  qualityRule: Record<string, unknown> | undefined,
+) {
+  return qualityRule ? { ...profile, qualityRules: qualityRule } : profile
+}
+
 function renderHtml(artifact: unknown, label: string) {
   const payload = JSON.stringify(artifact).replace(/</g, '\\u003c')
   return `<!doctype html>
@@ -299,8 +309,19 @@ async function runProfileQa(
   const roles = rolesFromArtifact(artifact)
   const missingRoles = requiredRoles.filter((role) => !roles.has(role))
   if (missingRoles.length) warnings.push(`missing roles: ${missingRoles.join(', ')}`)
-  const qualityScore = artifact?.profileQuality?.overallScore ?? 0
   const shapeCount = artifact?.shapes?.length ?? 0
+  const profileQuality =
+    artifact?.profileQuality ??
+    (artifact?.shapes
+      ? evaluateDeviceProfileQuality(
+          profileWithResolvedQualityRule(profile, qualityRule),
+          artifact.shapes,
+          {
+            maxShapes: profileDetailBudgetMaxShapes(profile),
+          },
+        )
+      : undefined)
+  const qualityScore = profileQuality?.overallScore ?? 0
   const maxShapes = profileDetailBudgetMaxShapes(profile)
   const sourceArgs = artifactSourceArgs(artifact)
   const detailBudgetApplied = sourceArgs.detailBudgetApplied === true
@@ -394,7 +415,12 @@ async function main() {
   await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
   console.log(
     JSON.stringify(
-      { reportPath, packKind: audit.summary.packKind, passed: report.passed, failed: report.failed },
+      {
+        reportPath,
+        packKind: audit.summary.packKind,
+        passed: report.passed,
+        failed: report.failed,
+      },
       null,
       2,
     ),

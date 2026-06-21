@@ -1,5 +1,12 @@
 import type { AnyNodeId } from '@pascal-app/core/schema'
-import { CeilingNode, DoorNode, SlabNode, WallNode, WindowNode, ZoneNode } from '@pascal-app/core/schema'
+import {
+  CeilingNode,
+  DoorNode,
+  SlabNode,
+  WallNode,
+  WindowNode,
+  ZoneNode,
+} from '@pascal-app/core/schema'
 import type {
   GeneratedGeometryCreatePatch,
   GeneratedGeometryPlacementSpec,
@@ -8,6 +15,12 @@ import type { FactoryPlan } from './factory-planner'
 import { containsCjkText } from './process-line-localization'
 
 type Vec2 = [number, number]
+type SceneBoundsLike = {
+  min: Vec2
+  max: Vec2
+  center?: Vec2
+  size?: Vec2
+}
 
 export type FactoryLayoutPatchPlan = {
   patches: GeneratedGeometryCreatePatch[]
@@ -39,7 +52,9 @@ function numbersFromText(text: string) {
 }
 
 function numberBeforeKeyword(text: string, keyword: RegExp) {
-  const match = text.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(?:m|\\u7c73|meter|meters)?\\s*(?:${keyword.source})`, 'i'))
+  const match = text.match(
+    new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(?:m|\\u7c73|meter|meters)?\\s*(?:${keyword.source})`, 'i'),
+  )
   const value = match?.[1] ? Number(match[1]) : Number.NaN
   return Number.isFinite(value) && value > 0 ? value : undefined
 }
@@ -52,7 +67,12 @@ export function inferFactoryLayoutDimensions(input: {
   const params = input.params ?? {}
   const dimensionParams = isRecord(params.dimensions) ? params.dimensions : {}
   const explicitLength = firstNumber(params.length, dimensionParams.length)
-  const explicitWidth = firstNumber(params.width, params.depth, dimensionParams.width, dimensionParams.depth)
+  const explicitWidth = firstNumber(
+    params.width,
+    params.depth,
+    dimensionParams.width,
+    dimensionParams.depth,
+  )
   if (explicitLength && explicitWidth) return { length: explicitLength, width: explicitWidth }
 
   const normalized = input.prompt.replace(/[\u00d7\uff0a]/g, '*')
@@ -104,6 +124,100 @@ function parentPatch(node: GeneratedGeometryCreatePatch['node'], parentId?: stri
     op: 'create' as const,
     node,
     ...(parentId ? { parentId: parentId as AnyNodeId } : {}),
+  }
+}
+
+function finiteVec2(value: unknown): Vec2 | undefined {
+  if (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    typeof value[0] === 'number' &&
+    typeof value[1] === 'number' &&
+    Number.isFinite(value[0]) &&
+    Number.isFinite(value[1])
+  ) {
+    return [value[0], value[1]]
+  }
+  return undefined
+}
+
+function sceneBoundsFromMetadata(metadata: Record<string, unknown>): SceneBoundsLike | undefined {
+  const candidates = [
+    metadata.sceneBounds,
+    isRecord(metadata.scene) ? metadata.scene.bounds : undefined,
+  ]
+  for (const candidate of candidates) {
+    if (!isRecord(candidate)) continue
+    const min = finiteVec2(candidate.min)
+    const max = finiteVec2(candidate.max)
+    if (!min || !max) continue
+    return {
+      min,
+      max,
+      ...(finiteVec2(candidate.center) ? { center: finiteVec2(candidate.center)! } : {}),
+      ...(finiteVec2(candidate.size) ? { size: finiteVec2(candidate.size)! } : {}),
+    }
+  }
+  return undefined
+}
+
+function layoutPlacementIntent(prompt: string) {
+  const normalized = prompt.toLowerCase()
+  const horizontal = /\u5de6|left|west/.test(normalized)
+    ? 'left'
+    : /\u53f3|right|east/.test(normalized)
+      ? 'right'
+      : undefined
+  const vertical = /\u4e0a|top|upper|north/.test(normalized)
+    ? 'top'
+    : /\u4e0b|bottom|lower|south/.test(normalized)
+      ? 'bottom'
+      : undefined
+  return { horizontal, vertical }
+}
+
+function resolveLayoutCenter(input: {
+  prompt: string
+  dimensions: { length: number; width: number }
+  metadata: Record<string, unknown>
+  placement: GeneratedGeometryPlacementSpec
+}) {
+  const explicitX = input.placement.position?.[0]
+  const explicitZ = input.placement.position?.[2]
+  if (explicitX != null || explicitZ != null) {
+    return {
+      centerX: explicitX ?? 0,
+      centerZ: explicitZ ?? 0,
+      placementIntent: 'explicit-position',
+    }
+  }
+
+  const bounds = sceneBoundsFromMetadata(input.metadata)
+  const intent = layoutPlacementIntent(input.prompt)
+  if (!bounds || (!intent.horizontal && !intent.vertical)) {
+    return { centerX: 0, centerZ: 0, placementIntent: 'default-origin' }
+  }
+
+  const margin = 1
+  const defaultCenterX = bounds.center?.[0] ?? (bounds.min[0] + bounds.max[0]) / 2
+  const defaultCenterZ = bounds.center?.[1] ?? (bounds.min[1] + bounds.max[1]) / 2
+  const centerX =
+    intent.horizontal === 'left'
+      ? bounds.min[0] + margin + input.dimensions.length / 2
+      : intent.horizontal === 'right'
+        ? bounds.max[0] - margin - input.dimensions.length / 2
+        : defaultCenterX
+  const centerZ =
+    intent.vertical === 'top'
+      ? bounds.min[1] + margin + input.dimensions.width / 2
+      : intent.vertical === 'bottom'
+        ? bounds.max[1] - margin - input.dimensions.width / 2
+        : defaultCenterZ
+
+  return {
+    centerX,
+    centerZ,
+    placementIntent: `${intent.vertical ?? 'center'}-${intent.horizontal ?? 'center'}`,
   }
 }
 
@@ -166,16 +280,26 @@ export function buildFactoryLayoutCreatePatches(input: {
     plan: input.plan,
     params: input.params,
   })
-  const centerX = input.placement.position?.[0] ?? 0
-  const centerZ = input.placement.position?.[2] ?? 0
-  const polygon = rectanglePolygon(centerX, centerZ, dimensions.length, dimensions.width)
-  const parentId = typeof input.placement.parentId === 'string' ? input.placement.parentId : undefined
+  const parentId =
+    typeof input.placement.parentId === 'string' ? input.placement.parentId : undefined
   const baseMetadata = {
     generatedBy: input.placement.generatedBy ?? 'factory-agent',
     factoryLayoutType: input.plan.layoutType,
     sourcePrompt: input.prompt,
     ...input.placement.metadata,
   }
+  const center = resolveLayoutCenter({
+    prompt: input.prompt,
+    dimensions,
+    metadata: baseMetadata,
+    placement: input.placement,
+  })
+  const polygon = rectanglePolygon(
+    center.centerX,
+    center.centerZ,
+    dimensions.length,
+    dimensions.width,
+  )
   const labels = roomLabels({
     layoutType: input.plan.layoutType,
     prompt: input.prompt,
@@ -187,7 +311,12 @@ export function buildFactoryLayoutCreatePatches(input: {
     name: roomName,
     polygon,
     color: input.plan.layoutType === 'factory' ? '#94a3b8' : '#60a5fa',
-    metadata: { ...baseMetadata, mcpTool: 'create_room', role: 'layout-zone' },
+    metadata: {
+      ...baseMetadata,
+      mcpTool: 'create_room',
+      role: 'layout-zone',
+      layoutPlacementIntent: center.placementIntent,
+    },
   })
   const slab = SlabNode.parse({
     name: labels.floorName,
@@ -228,7 +357,10 @@ export function buildFactoryLayoutCreatePatches(input: {
     metadata: { ...baseMetadata, mcpTool: 'add_door', role: 'layout-door' },
   })
 
-  const windowWidth = Math.min(1.5, Math.max(0.8, Math.min(dimensions.length, dimensions.width) / 3))
+  const windowWidth = Math.min(
+    1.5,
+    Math.max(0.8, Math.min(dimensions.length, dimensions.width) / 3),
+  )
   const windows = walls.slice(1, 3).map((wall, offsetIndex) => {
     const start = polygon[offsetIndex + 1]!
     const end = polygon[(offsetIndex + 2) % polygon.length]!

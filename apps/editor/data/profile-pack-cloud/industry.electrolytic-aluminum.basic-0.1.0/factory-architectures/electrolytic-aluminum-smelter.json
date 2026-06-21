@@ -12,12 +12,21 @@
     {
       "id": "potroom_core",
       "label": "Potroom electrolysis core",
-      "includeModules": ["rectifier_power", "alumina_handling", "potroom_electrolysis", "fume_treatment"]
+      "includeModules": [
+        "rectifier_power",
+        "alumina_handling",
+        "potroom_electrolysis",
+        "fume_treatment"
+      ]
     },
     {
       "id": "metal_transfer_and_casting",
       "label": "Molten metal transfer and casting",
-      "includeModules": ["potroom_electrolysis", "metal_transfer", "holding_and_casting"]
+      "includeModules": [
+        "potroom_electrolysis",
+        "metal_transfer",
+        "holding_and_casting"
+      ]
     },
     {
       "id": "full_smelter",
@@ -39,49 +48,69 @@
       "id": "rectifier_power",
       "displayLabel": "整流供电",
       "order": 10,
-      "stationIds": ["rectifier_transformer_station"]
+      "stationIds": [
+        "rectifier_transformer_station"
+      ]
     },
     {
       "id": "alumina_handling",
       "displayLabel": "氧化铝储运与加料",
       "order": 20,
-      "stationIds": ["alumina_storage_silo", "alumina_conveying_line"]
+      "stationIds": [
+        "alumina_storage_silo",
+        "alumina_conveying_line"
+      ]
     },
     {
       "id": "potroom_electrolysis",
       "displayLabel": "电解车间",
       "order": 30,
-      "stationIds": ["potline_module", "pot_tending_crane"]
+      "stationIds": [
+        "potline_module",
+        "pot_tending_crane"
+      ]
     },
     {
       "id": "anode_handling",
       "displayLabel": "阳极组装与更换",
       "order": 40,
-      "stationIds": ["anode_assembly_station"]
+      "stationIds": [
+        "anode_assembly_station"
+      ]
     },
     {
       "id": "fume_treatment",
       "displayLabel": "电解烟气净化",
       "order": 50,
-      "stationIds": ["dry_scrubber_baghouse"]
+      "stationIds": [
+        "dry_scrubber_baghouse"
+      ]
     },
     {
       "id": "metal_transfer",
       "displayLabel": "出铝与铝液转运",
       "order": 60,
-      "stationIds": ["vacuum_tapping_ladle"]
+      "stationIds": [
+        "vacuum_tapping_ladle"
+      ]
     },
     {
       "id": "holding_and_casting",
       "displayLabel": "保温与铸锭",
       "order": 70,
-      "stationIds": ["molten_aluminum_holding_furnace", "continuous_ingot_casting_line"]
+      "stationIds": [
+        "molten_aluminum_holding_furnace",
+        "continuous_ingot_casting_line"
+      ]
     },
     {
       "id": "utilities",
       "displayLabel": "辅助系统",
       "order": 80,
-      "stationIds": ["rectifier_transformer_station", "dry_scrubber_baghouse"]
+      "stationIds": [
+        "rectifier_transformer_station",
+        "dry_scrubber_baghouse"
+      ]
     }
   ],
   "layoutHints": {
