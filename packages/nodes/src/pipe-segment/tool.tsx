@@ -93,6 +93,28 @@ function findNearbyPort(point: [number, number, number]): ScenePort | null {
   )
 }
 
+function pipeEndPort(pipe: PipeSegmentNode, id: 'start' | 'end'): ScenePort | null {
+  if (pipe.path.length < 2) return null
+  const index = id === 'start' ? 0 : pipe.path.length - 1
+  const neighborIndex = id === 'start' ? 1 : pipe.path.length - 2
+  const position = pipe.path[index]!
+  const neighbor = pipe.path[neighborIndex]!
+  const dx = position[0] - neighbor[0]
+  const dy = position[1] - neighbor[1]
+  const dz = position[2] - neighbor[2]
+  const len = Math.hypot(dx, dy, dz)
+  const direction: [number, number, number] =
+    len < 1e-9 ? [1, 0, 0] : [dx / len, dy / len, dz / len]
+  return {
+    id,
+    nodeId: pipe.id,
+    position,
+    direction,
+    diameter: pipe.diameter,
+    system: pipe.system,
+  }
+}
+
 function projectToAngleLock(
   from: [number, number, number],
   raw: [number, number, number],
@@ -310,11 +332,14 @@ const PipeSegmentTool = () => {
           ...(cross ? [cross.runUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
         ],
       })
+      const nextPipe = pipes.at(-1)
+      const nextStart = nextPipe ? nextPipe.path[nextPipe.path.length - 1]! : end
+      const nextPort = nextPipe ? pipeEndPort(nextPipe, 'end') : endPort
       triggerSFX('sfx:item-place')
-      setDraftStart(null)
+      setDraftStart(nextStart)
       setSnapTarget(null)
-      startPortRef.current = null
-      startBodyRef.current = null
+      startPortRef.current = nextPort
+      startBodyRef.current = nextPort ? null : endBody
       altAnchorRef.current = null
       setAltActive(false)
     }

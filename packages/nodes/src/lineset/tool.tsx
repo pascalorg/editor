@@ -19,14 +19,15 @@ import { collectScenePorts, findNearestPortXZ, REFRIGERANT_PORT_SYSTEMS } from '
 import { linesetDefinition } from './definition'
 
 /**
- * One-segment-at-a-time placement tool for refrigerant linesets — the
- * refrigerant-loop sibling of the duct-segment tool.
+ * Continuous placement tool for refrigerant linesets — the refrigerant-loop
+ * sibling of the duct-segment tool.
  *
  * Mouse-driven model:
  *   - **First click** anchors the run start. Within range of a refrigerant
  *     service port (a condenser / coil valve, or another lineset's end) it
  *     snaps onto the port so a run mates flush.
- *   - **Second click** commits a two-point lineset and re-arms the tool.
+ *   - **Second click** commits a two-point lineset and keeps its far end
+ *     anchored, so the next click continues the run like wall / duct drafting.
  *   - The in-flight end is angle-locked to the nearest 45° step in XZ from
  *     the start; Y stays at the start's height. Hold **Shift** to release.
  *   - Hold **Alt** → vertical mode. XZ locks to the start; vertical mouse
@@ -113,7 +114,7 @@ const LinesetTool = () => {
       })
       useScene.getState().createNode(lineset, activeLevelId)
       triggerSFX('sfx:item-place')
-      setDraftPoints([])
+      setDraftPoints([end])
       setSnapTarget(null)
       altAnchorRef.current = null
       setAltActive(false)

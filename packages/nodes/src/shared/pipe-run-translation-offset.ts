@@ -1,28 +1,27 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  DuctSegmentNode,
+  PipeSegmentNode,
   type PortConnection,
 } from '@pascal-app/core'
-import { fittingLegLength } from '../duct-fitting/ports'
-import type { DuctFittingNode } from '../duct-fitting/schema'
-import {
-  type DuctProfile,
-  planElbowAtPort,
-  planElbowRealign,
-  profileDiameterIn,
-} from './auto-fitting'
+import { pipeFittingLegLength } from '../pipe-fitting/ports'
+import type { PipeFittingNode } from '../pipe-fitting/schema'
+import { planPipeElbowAtPort, planPipeElbowRealign } from './auto-fitting'
 import type { ScenePort } from './ports'
 
 type Point = [number, number, number]
+type PipeProfile = {
+  diameter: number
+  pipeMaterial: PipeFittingNode['pipeMaterial']
+}
 
 const COINCIDENT_EPS_M = 0.05
 const MIN_CONNECTOR_M = 0.05
 
-export type RunTranslationOffsetPlan = {
-  ductPath: Point[]
-  fittings: DuctFittingNode[]
-  connectors: DuctSegmentNode[]
+export type PipeRunTranslationOffsetPlan = {
+  pipePath: Point[]
+  fittings: PipeFittingNode[]
+  connectors: PipeSegmentNode[]
   updates: { id: AnyNodeId; data: Partial<AnyNode> }[]
 }
 
@@ -64,60 +63,51 @@ function portLike(position: Point, direction: Point, system: string): ScenePort 
   } as unknown as ScenePort
 }
 
-function connectorRun(from: Point, to: Point, duct: DuctSegmentNode): DuctSegmentNode {
-  return DuctSegmentNode.parse({
+function connectorRun(from: Point, to: Point, pipe: PipeSegmentNode): PipeSegmentNode {
+  return PipeSegmentNode.parse({
     object: 'node',
     parentId: null,
     visible: true,
     metadata: {},
-    name: duct.name ?? 'Duct run',
+    name: pipe.name ?? 'Pipe run',
     path: [from, to],
-    shape: duct.shape,
-    diameter: duct.diameter,
-    width: duct.width,
-    height: duct.height,
-    roll: duct.roll,
-    ductMaterial: duct.ductMaterial,
-    insulated: duct.insulated,
-    insulationR: duct.insulationR,
-    system: duct.system,
+    diameter: pipe.diameter,
+    pipeMaterial: pipe.pipeMaterial,
+    system: pipe.system,
   })
 }
 
-function elbowProfilePatch(profile: DuctProfile): Partial<DuctFittingNode> {
-  const diameter = profileDiameterIn(profile)
+function pipeElbowProfilePatch(profile: PipeProfile): Partial<PipeFittingNode> {
   return {
-    shape: profile.shape,
-    width: profile.width,
-    height: profile.height,
-    diameter,
-    diameter2: diameter,
+    diameter: profile.diameter,
+    diameter2: profile.diameter,
+    pipeMaterial: profile.pipeMaterial,
   }
 }
 
-export function planRunTranslationOffsets(args: {
-  duct: DuctSegmentNode
+export function planPipeRunTranslationOffsets(args: {
+  pipe: PipeSegmentNode
   translatedPath: Point[]
-  profile: DuctProfile
+  profile: PipeProfile
   connections: PortConnection[]
   scenePorts: ScenePort[]
   nodesById: Record<string, AnyNode>
-}): RunTranslationOffsetPlan | null {
-  const { duct, translatedPath, profile, connections, scenePorts, nodesById } = args
-  if (duct.path.length < 2 || translatedPath.length !== duct.path.length) return null
+}): PipeRunTranslationOffsetPlan | null {
+  const { pipe, translatedPath, profile, connections, scenePorts, nodesById } = args
+  if (pipe.path.length < 2 || translatedPath.length !== pipe.path.length) return null
   if (connections.length === 0) return null
 
-  const leg = fittingLegLength(profileDiameterIn(profile))
+  const leg = pipeFittingLegLength(profile.diameter)
   const minOffset = 2 * leg + MIN_CONNECTOR_M
   const eps2 = COINCIDENT_EPS_M * COINCIDENT_EPS_M
-  const ductPath = translatedPath.map((p) => [...p] as Point)
-  const fittings: DuctFittingNode[] = []
-  const connectors: DuctSegmentNode[] = []
+  const pipePath = translatedPath.map((p) => [...p] as Point)
+  const fittings: PipeFittingNode[] = []
+  const connectors: PipeSegmentNode[] = []
   const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
   let routedAny = false
 
-  for (const endIdx of duct.path.length > 1 ? [0, duct.path.length - 1] : [0]) {
-    const startEnd = duct.path[endIdx]!
+  for (const endIdx of pipe.path.length > 1 ? [0, pipe.path.length - 1] : [0]) {
+    const startEnd = pipe.path[endIdx]!
     const movedEnd = translatedPath[endIdx]!
     const delta = sub(movedEnd, startEnd)
     const offsetDir = unit(delta)
@@ -132,28 +122,30 @@ export function planRunTranslationOffsets(args: {
     const conn = connections.find((c) => c.nodeId === partnerPort.nodeId)
     if (!conn) continue
 
-    const ductPortDir = endpointOutwardDir(translatedPath, endIdx)
-    const top = planElbowAtPort(
-      portLike(movedEnd, ductPortDir, duct.system),
+    const pipePortDir = endpointOutwardDir(translatedPath, endIdx)
+    const top = planPipeElbowAtPort(
+      portLike(movedEnd, pipePortDir, pipe.system),
       neg(offsetDir),
-      profile,
+      profile.diameter,
+      profile.pipeMaterial,
     )
     if (!top) return null
 
     if (conn.kind === 'run') {
-      const bottom = planElbowAtPort(
+      const bottom = planPipeElbowAtPort(
         portLike(
           [startEnd[0], startEnd[1], startEnd[2]],
           [partnerPort.direction[0], partnerPort.direction[1], partnerPort.direction[2]],
-          duct.system,
+          pipe.system,
         ),
         offsetDir,
-        profile,
+        profile.diameter,
+        profile.pipeMaterial,
       )
       if (!bottom) return null
       fittings.push(bottom.fitting, top.fitting)
-      connectors.push(connectorRun(bottom.collarPoint, top.collarPoint, duct))
-      ductPath[endIdx] = top.trimmedPortPoint
+      connectors.push(connectorRun(bottom.collarPoint, top.collarPoint, pipe))
+      pipePath[endIdx] = top.trimmedPortPoint
 
       const path = conn.startPath.map((p) => [...p] as Point)
       const tip = path.findIndex((p) => distSq(p, startEnd) <= eps2)
@@ -166,25 +158,25 @@ export function planRunTranslationOffsets(args: {
     }
 
     const partner = nodesById[conn.nodeId]
-    if (!partner || partner.type !== 'duct-fitting') return null
+    if (!partner || partner.type !== 'pipe-fitting') return null
     const elbow = {
-      ...(partner as DuctFittingNode),
-      ...elbowProfilePatch(profile),
-    } as DuctFittingNode
+      ...(partner as PipeFittingNode),
+      ...pipeElbowProfilePatch(profile),
+    } as PipeFittingNode
     if (elbow.fittingType !== 'elbow') return null
-    const realign = planElbowRealign(elbow, partnerPort.id, offsetDir)
+    const realign = planPipeElbowRealign(elbow, partnerPort.id, offsetDir)
     if (!realign) return null
 
     fittings.push(top.fitting)
-    connectors.push(connectorRun(realign.collarPoint, top.collarPoint, duct))
-    ductPath[endIdx] = top.trimmedPortPoint
+    connectors.push(connectorRun(realign.collarPoint, top.collarPoint, pipe))
+    pipePath[endIdx] = top.trimmedPortPoint
     updates.push({
       id: elbow.id,
-      data: { ...elbowProfilePatch(profile), ...realign.update.data } as Partial<AnyNode>,
+      data: { ...pipeElbowProfilePatch(profile), ...realign.update.data } as Partial<AnyNode>,
     })
     routedAny = true
   }
 
   if (!routedAny) return null
-  return { ductPath, fittings, connectors, updates }
+  return { pipePath, fittings, connectors, updates }
 }

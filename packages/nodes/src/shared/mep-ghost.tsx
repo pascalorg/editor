@@ -1,11 +1,18 @@
 'use client'
 
-import type { DuctFittingNode, DuctSegmentNode } from '@pascal-app/core'
+import type {
+  DuctFittingNode,
+  DuctSegmentNode,
+  PipeFittingNode,
+  PipeSegmentNode,
+} from '@pascal-app/core'
 import { EDITOR_LAYER } from '@pascal-app/editor'
 import { useMemo } from 'react'
 import { Mesh, MeshBasicMaterial } from 'three'
 import { buildDuctFittingGeometry } from '../duct-fitting/geometry'
 import { buildDuctSegmentGeometry } from '../duct-segment/geometry'
+import { buildPipeFittingGeometry } from '../pipe-fitting/geometry'
+import { buildPipeSegmentGeometry } from '../pipe-segment/geometry'
 import { INVALID_GHOST_COLOR, VALID_GHOST_COLOR } from './ghost-materials'
 
 /** Indigo-400 — the shared MEP preview accent (matches the draw-tool ghost). */
@@ -69,5 +76,31 @@ export function DuctSegmentGhost({ duct, tint }: { duct: DuctSegmentNode; tint?:
     ghostify(group, tint)
     return group
   }, [duct, tint])
+  return <primitive object={ghost} />
+}
+
+export function PipeFittingGhost({
+  fitting,
+  tint,
+}: {
+  fitting: PipeFittingNode
+  tint?: GhostTint
+}) {
+  const ghost = useMemo(() => {
+    const group = buildPipeFittingGeometry(fitting)
+    group.position.set(...fitting.position)
+    group.rotation.set(fitting.rotation[0], fitting.rotation[1], fitting.rotation[2])
+    ghostify(group, tint)
+    return group
+  }, [fitting, tint])
+  return <primitive object={ghost} />
+}
+
+export function PipeSegmentGhost({ pipe, tint }: { pipe: PipeSegmentNode; tint?: GhostTint }) {
+  const ghost = useMemo(() => {
+    const group = buildPipeSegmentGeometry(pipe)
+    ghostify(group, tint)
+    return group
+  }, [pipe, tint])
   return <primitive object={ghost} />
 }

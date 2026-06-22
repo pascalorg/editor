@@ -28,12 +28,13 @@ import { liquidLineDefinition } from './definition'
 import { useLiquidLineToolOptions } from './options'
 
 /**
- * One-segment-at-a-time placement tool for standalone liquid lines — the same
- * draw model as the lineset tool (the line it used to be a rail of):
+ * Continuous placement tool for standalone liquid lines — the same draw model
+ * as the lineset tool (the line it used to be a rail of):
  *   - **First click** anchors the run start; within range of a refrigerant
  *     service port it snaps onto it so a run mates flush.
- *   - **Second click** commits a two-point line and re-arms; the in-flight end
- *     is angle-locked to 45° (Shift frees it), Alt drags it vertical.
+ *   - **Second click** commits a two-point line and keeps its far end anchored;
+ *     the in-flight end is angle-locked to 45° (Shift frees it), Alt drags it
+ *     vertical.
  *
  * **Follow mode** (toggled by the MEP panel's Follow button or the `F` key):
  * instead of free-drawing, hover an existing lineset and click — a liquid line
@@ -300,7 +301,7 @@ const LiquidLineTool = () => {
       })
       useScene.getState().createNode(line, activeLevelId)
       triggerSFX('sfx:item-place')
-      setDraftPoints([])
+      setDraftPoints([end])
       setSnapTarget(null)
       altAnchorRef.current = null
       setAltActive(false)
