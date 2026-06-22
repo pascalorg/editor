@@ -85,6 +85,16 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
       clearRoofSurfacePlacementGuides()
     }
 
+    const resolveSnappedTarget = (event: RoofEvent): RelativeRoofDragTarget | null => {
+      const rawTarget = roofDrag.resolve(event)
+      if (!rawTarget) return null
+      return snapRoofSurfaceNodeTarget({
+        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+        node,
+        bypass: event.nativeEvent?.shiftKey === true,
+      })
+    }
+
     // Resolve which segment the cursor is over, then derive the same
     // preview transform stack the placement tool uses (`skylight/tool.tsx`):
     // analytical surface normal in segment-local frame → outer yaw =
@@ -93,16 +103,11 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     // same via its `if (!hit) return` guard.
     const updateFromHit = (event: RoofEvent) => {
       const roof = event.node as RoofNode
-      const rawTarget = roofDrag.resolve(event)
-      if (!rawTarget) {
+      const target = resolveSnappedTarget(event)
+      if (!target) {
         clearTarget()
         return false
       }
-      const target = snapRoofSurfaceNodeTarget({
-        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
-        node,
-        bypass: event.nativeEvent?.shiftKey === true,
-      })
       lastTarget = target
       const normal = getAnalyticalNormal(target.localX, target.localZ, target.segment)
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
@@ -145,7 +150,7 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
       if (committed) return
       const st = useScene.getState()
 
-      const target = lastTarget ?? roofDrag.resolve(event)
+      const target = lastTarget ?? resolveSnappedTarget(event)
       if (!target) return
       committed = true
 

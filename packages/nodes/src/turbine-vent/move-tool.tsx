@@ -81,17 +81,22 @@ export default function MoveTurbineVentTool({ node }: { node: TurbineVentNode })
       clearRoofSurfacePlacementGuides()
     }
 
-    const updatePreview = (event: RoofEvent) => {
+    const resolveSnappedTarget = (event: RoofEvent): RelativeRoofDragTarget | null => {
       const rawTarget = roofDrag.resolve(event)
-      if (!rawTarget) {
-        clearTarget()
-        return
-      }
-      const target = snapRoofSurfaceNodeTarget({
+      if (!rawTarget) return null
+      return snapRoofSurfaceNodeTarget({
         target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
         node,
         bypass: event.nativeEvent?.shiftKey === true,
       })
+    }
+
+    const updatePreview = (event: RoofEvent) => {
+      const target = resolveSnappedTarget(event)
+      if (!target) {
+        clearTarget()
+        return
+      }
       lastTarget = target
 
       const sx = Math.round(target.localX * 20) / 20
@@ -125,7 +130,7 @@ export default function MoveTurbineVentTool({ node }: { node: TurbineVentNode })
 
     const onRoofClick = (event: RoofEvent) => {
       if (committed) return
-      const target = lastTarget ?? roofDrag.resolve(event)
+      const target = lastTarget ?? resolveSnappedTarget(event)
       if (!target) return
       committed = true
       const targetSegmentId = target.segment.id as AnyNodeId
