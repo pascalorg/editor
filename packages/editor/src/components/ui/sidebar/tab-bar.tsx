@@ -25,6 +25,8 @@ interface TabBarProps {
 const FALLBACK_MORE_BUTTON_WIDTH = 78
 const FALLBACK_TAB_WIDTH = 56
 const TAB_GAP = 2
+// Style follow-up: left panel tabs follow the MeasureNavi 10px Library Tabs rule.
+const SIDEBAR_TAB_TEXT = 'mn-sidebar-tab-text font-medium'
 
 export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
   const [isOverflowOpen, setIsOverflowOpen] = useState(false)
@@ -105,7 +107,7 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
       >
         {tabs.map((tab) => (
           <span
-            className="relative inline-flex h-7 items-center rounded-md px-2 font-medium text-sm"
+            className={cn('relative inline-flex h-7 items-center rounded-md px-2', SIDEBAR_TAB_TEXT)}
             key={tab.id}
             ref={(element) => {
               measureRefs.current[tab.id] = element
@@ -115,7 +117,7 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
           </span>
         ))}
         <span
-          className="relative inline-flex h-7 items-center gap-1 rounded-md px-2 font-medium text-sm"
+          className={cn('relative inline-flex h-7 items-center gap-1 rounded-md px-2', SIDEBAR_TAB_TEXT)}
           ref={moreMeasureRef}
         >
           <MoreHorizontal className="h-4 w-4" aria-hidden />
@@ -127,7 +129,8 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
         return (
           <button
             className={cn(
-              'relative h-7 min-w-0 rounded-md px-2 font-medium text-sm transition-colors',
+              'relative h-7 min-w-0 rounded-md px-2 transition-colors',
+              SIDEBAR_TAB_TEXT,
               isActive
                 ? 'bg-accent text-foreground'
                 : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
@@ -146,7 +149,8 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
           <button
             aria-expanded={isOverflowOpen}
             className={cn(
-              'relative flex h-7 items-center gap-1 rounded-md px-2 font-medium text-sm transition-colors',
+              'relative flex h-7 items-center gap-1 rounded-md px-2 transition-colors',
+              SIDEBAR_TAB_TEXT,
               isOverflowActive
                 ? 'bg-accent text-foreground'
                 : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
@@ -164,7 +168,8 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
                 return (
                   <button
                     className={cn(
-                      'flex h-8 w-full items-center rounded-sm px-2 text-left font-medium text-sm transition-colors',
+                      'flex h-8 w-full items-center rounded-sm px-2 text-left transition-colors',
+                      SIDEBAR_TAB_TEXT,
                       isActive
                         ? 'bg-accent text-foreground'
                         : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
@@ -230,7 +235,7 @@ export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailPr
                     // Style follow-up: selected rail item uses the MeasureNavi 3px teal indicator.
                     <span className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r-full bg-primary" />
                   )}
-                  {tab.icon ?? tab.label.charAt(0)}
+                  {tab.icon ?? <span className="mn-rail-fallback-text">{tab.label.charAt(0)}</span>}
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">{tab.label}</TooltipContent>

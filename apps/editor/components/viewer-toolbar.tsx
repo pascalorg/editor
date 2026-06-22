@@ -51,6 +51,10 @@ const TOOLBAR_CONTAINER =
 const TOOLBAR_BTN =
   'flex w-8 items-center justify-center text-muted-foreground/80 transition-colors hover:bg-white/8 hover:text-foreground/90'
 
+// Style follow-up: toolbar text follows the MeasureNavi 11px button type token.
+const TOOLBAR_TEXT = 'mn-toolbar-text font-medium'
+const MENU_META_TEXT = 'mn-menu-meta-text'
+
 function requestWalkthroughPointerLock() {
   const canvas = document.querySelector<HTMLCanvasElement>('[data-pascal-viewer-3d] canvas')
   if (!canvas) return
@@ -146,7 +150,8 @@ function ViewModeControl() {
               aria-label={mode.label}
               aria-pressed={isActive}
               className={cn(
-                'flex items-center justify-center gap-1.5 px-2.5 font-medium text-xs transition-colors',
+                'flex items-center justify-center gap-1.5 px-2.5 transition-colors',
+                TOOLBAR_TEXT,
                 isActive
                   ? 'bg-white/10 text-foreground'
                   : 'text-muted-foreground/70 hover:bg-white/8 hover:text-muted-foreground',
@@ -228,7 +233,7 @@ function LevelModeToggle() {
         ) : (
           <IconifyIcon height={14} icon="charm:stack-push" width={14} />
         )}
-        <span className="font-medium text-xs">{levelModeLabels[levelMode] ?? 'Stack'}</span>
+        <span className={TOOLBAR_TEXT}>{levelModeLabels[levelMode] ?? 'Stack'}</span>
       </button>
     </ToolbarTooltip>
   )
@@ -259,7 +264,7 @@ function WallModeToggle() {
         type="button"
       >
         <Image alt="" className="h-4 w-4 object-contain" height={16} src={config.icon} width={16} />
-        <span className="font-medium text-xs">{config.label}</span>
+        <span className={TOOLBAR_TEXT}>{config.label}</span>
       </button>
     </ToolbarTooltip>
   )
@@ -315,7 +320,7 @@ function DisplayMenu() {
             type="button"
           >
             <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
-            <span className="font-medium text-xs">Display</span>
+            <span className={TOOLBAR_TEXT}>Display</span>
           </button>
         </DropdownMenuTrigger>
       </ToolbarTooltip>
@@ -337,14 +342,16 @@ function DisplayMenu() {
         <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setMagneticSnap(!magneticSnap))}>
           <Magnet className="h-4 w-4" />
           <span>Magnetic snap</span>
-          <span className="ml-auto text-muted-foreground text-xs">
+          <span className={cn('ml-auto text-muted-foreground', MENU_META_TEXT)}>
             {magneticSnap ? 'On' : 'Off'}
           </span>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShadows(!shadows))}>
           <Contrast className="h-4 w-4" />
           <span>Shadows</span>
-          <span className="ml-auto text-muted-foreground text-xs">{shadows ? 'On' : 'Off'}</span>
+          <span className={cn('ml-auto text-muted-foreground', MENU_META_TEXT)}>
+            {shadows ? 'On' : 'Off'}
+          </span>
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={(e) =>
@@ -359,7 +366,7 @@ function DisplayMenu() {
             width={16}
           />
           <span>Camera</span>
-          <span className="ml-auto text-muted-foreground text-xs">
+          <span className={cn('ml-auto text-muted-foreground', MENU_META_TEXT)}>
             {cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}
           </span>
         </DropdownMenuItem>
@@ -370,7 +377,7 @@ function DisplayMenu() {
             {unit === 'metric' ? 'm' : 'ft'}
           </span>
           <span>Units</span>
-          <span className="ml-auto text-muted-foreground text-xs">
+          <span className={cn('ml-auto text-muted-foreground', MENU_META_TEXT)}>
             {unit === 'metric' ? 'Metric' : 'Imperial'}
           </span>
         </DropdownMenuItem>
@@ -381,7 +388,9 @@ function DisplayMenu() {
           <DropdownMenuSubTrigger>
             <activeShading.icon className="h-4 w-4" />
             <span>Render</span>
-            <span className="ml-auto text-muted-foreground text-xs">{activeShading.name}</span>
+            <span className={cn('ml-auto text-muted-foreground', MENU_META_TEXT)}>
+              {activeShading.name}
+            </span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
             {SHADING_OPTIONS.map((option) => {
@@ -391,7 +400,9 @@ function DisplayMenu() {
                   <OptionIcon className="h-4 w-4" />
                   <div className="flex flex-col">
                     <span className="text-foreground">{option.name}</span>
-                    <span className="text-muted-foreground text-xs">{option.detail}</span>
+                    <span className={cn('text-muted-foreground', MENU_META_TEXT)}>
+                      {option.detail}
+                    </span>
                   </div>
                   {shading === option.id ? (
                     <Check className="ml-auto h-4 w-4 text-foreground" />
@@ -406,14 +417,18 @@ function DisplayMenu() {
           <DropdownMenuSubTrigger>
             <PenLine className="h-4 w-4" />
             <span>Edges</span>
-            <span className="ml-auto text-muted-foreground text-xs">{activeEdges.name}</span>
+            <span className={cn('ml-auto text-muted-foreground', MENU_META_TEXT)}>
+              {activeEdges.name}
+            </span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
             {EDGE_OPTIONS.map((option) => (
               <DropdownMenuItem key={option.id} onSelect={() => setEdges(option.id)}>
                 <div className="flex flex-col">
                   <span className="text-foreground">{option.name}</span>
-                  <span className="text-muted-foreground text-xs">{option.detail}</span>
+                  <span className={cn('text-muted-foreground', MENU_META_TEXT)}>
+                    {option.detail}
+                  </span>
                 </div>
                 {edges === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
               </DropdownMenuItem>
@@ -425,7 +440,7 @@ function DisplayMenu() {
           <DropdownMenuSubTrigger>
             <SwatchBook className="h-4 w-4" />
             <span>Theme</span>
-            <span className="ml-auto truncate text-muted-foreground text-xs">
+            <span className={cn('ml-auto truncate text-muted-foreground', MENU_META_TEXT)}>
               {activeTheme.name}
             </span>
           </DropdownMenuSubTrigger>
@@ -491,7 +506,10 @@ function PreviewButton() {
   return (
     <ToolbarTooltip label="Preview mode">
       <button
-        className="mn-toolbar-text flex items-center gap-1.5 px-2.5 font-medium text-muted-foreground/80 transition-colors hover:bg-white/8 hover:text-foreground/90"
+        className={cn(
+          'flex items-center gap-1.5 px-2.5 text-muted-foreground/80 transition-colors hover:bg-white/8 hover:text-foreground/90',
+          TOOLBAR_TEXT,
+        )}
         onClick={() => useEditor.getState().setPreviewMode(true)}
         type="button"
       >
@@ -506,7 +524,10 @@ function AllScenesButton() {
   return (
     <ToolbarTooltip label="All scenes">
       <Link
-        className="mn-toolbar-text flex items-center px-2.5 font-medium text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground/90"
+        className={cn(
+          'flex items-center px-2.5 text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground/90',
+          TOOLBAR_TEXT,
+        )}
         href="/scenes"
       >
         All scenes

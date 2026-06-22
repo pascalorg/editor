@@ -25,7 +25,7 @@ export function MobileTabBar({ tabs, activeTab, onTabPress }: MobileTabBarProps)
         return (
           <button
             className={cn(
-              'flex flex-1 flex-col items-center justify-center gap-0.5 text-xs transition-colors',
+              'mn-sidebar-tab-text flex flex-1 flex-col items-center justify-center gap-0.5 transition-colors',
               isActive ? 'text-foreground' : 'text-muted-foreground',
             )}
             key={tab.id}

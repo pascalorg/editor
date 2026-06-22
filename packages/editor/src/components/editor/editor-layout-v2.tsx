@@ -110,7 +110,10 @@ function LeftColumn({
   }, [setWidth, setIsCollapsed, setIsDragging])
 
   return (
-    <div className="relative z-10 flex h-full flex-shrink-0 bg-sidebar text-sidebar-foreground">
+    <div
+      className="relative z-10 flex h-full flex-shrink-0 bg-sidebar text-sidebar-foreground"
+      data-pascal-sidebar-shell
+    >
       <IconRail
         activeTab={activePanel}
         collapsed={isCollapsed}
@@ -120,6 +123,7 @@ function LeftColumn({
       {!isCollapsed && (
         <div
           className="relative flex h-full flex-col"
+          data-pascal-sidebar-panel
           style={{
             width,
             transition: isDragging ? 'none' : 'width 150ms ease',
@@ -160,8 +164,7 @@ function RightColumn({
     <div
       className="relative flex min-w-0 flex-1 flex-col overflow-hidden"
       style={{
-        borderTopLeftRadius: 16,
-        clipPath: 'inset(0 0 0 0 round 16px 0 0 0)',
+        // Style follow-up: keep the editor canvas edge square per MeasureNavi shell rules.
         boxShadow: '-4px -2px 16px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.04)',
       }}
     >
