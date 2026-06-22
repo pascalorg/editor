@@ -166,6 +166,38 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
     expect(cPath[1]).toEqual([6, 0, 1])
   })
 
+  test('a run reached from both ends applies both endpoint deltas', () => {
+    const moved = makeNode('duct-segment', {
+      path: [
+        [0, 0, 0],
+        [3, 0, 0],
+      ],
+      system: 'supply',
+    })
+    const follower = makeNode('duct-segment', {
+      path: [
+        [0, 0, 0],
+        [3, 0, 0],
+      ],
+      system: 'supply',
+    })
+    const nodes = sceneOf(moved, follower)
+    const connectivity = analyzePortConnectivity(moved, nodes)
+    const preview = {
+      ...(moved as Record<string, unknown>),
+      path: [
+        [0, 0, 1],
+        [3, 0, 2],
+      ],
+    } as AnyNode
+
+    const updates = resolveConnectivityUpdates(connectivity, preview)
+
+    const path = (updates.find((u) => u.id === follower.id)!.data as { path: Point[] }).path
+    expect(path[0]).toEqual([0, 0, 1])
+    expect(path[1]).toEqual([3, 0, 2])
+  })
+
   test('an unrelated run not on the fitting is left alone', () => {
     const { fitting, ductA, ductB } = joint()
     const distant = makeNode('duct-segment', {

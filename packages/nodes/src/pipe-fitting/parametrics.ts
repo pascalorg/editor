@@ -71,7 +71,7 @@ export const pipeFittingParametrics: ParametricDescriptor<PipeFittingNode> = {
           key: 'angle',
           kind: 'number',
           unit: '°',
-          min: 15,
+          min: 0,
           max: 90,
           step: 7.5,
           visibleIf: (n) => n.fittingType === 'elbow',

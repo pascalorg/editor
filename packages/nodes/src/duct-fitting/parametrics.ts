@@ -212,7 +212,7 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
           key: 'angle',
           kind: 'number',
           unit: '°',
-          min: 15,
+          min: 0,
           max: 90,
           step: 15,
           visibleIf: (n) => n.fittingType === 'elbow',
