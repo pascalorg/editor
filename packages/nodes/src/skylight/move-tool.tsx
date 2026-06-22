@@ -22,8 +22,14 @@ import {
   createRelativeRoofDrag,
   type RelativeRoofDragTarget,
   roofSegmentLocalToBuildingLocal,
+  snapRelativeRoofDragTarget,
 } from '../shared/relative-roof-drag'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfaceNodePlacementGuides,
+  snapRoofSurfaceNodeTarget,
+} from '../shared/roof-surface-placement-guides'
 import SkylightPreview from './preview'
 
 export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
@@ -76,6 +82,7 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     const clearTarget = () => {
       lastTarget = null
       setHasHit(false)
+      clearRoofSurfacePlacementGuides()
     }
 
     // Resolve which segment the cursor is over, then derive the same
@@ -86,11 +93,16 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     // same via its `if (!hit) return` guard.
     const updateFromHit = (event: RoofEvent) => {
       const roof = event.node as RoofNode
-      const target = roofDrag.resolve(event)
-      if (!target) {
+      const rawTarget = roofDrag.resolve(event)
+      if (!rawTarget) {
         clearTarget()
         return false
       }
+      const target = snapRoofSurfaceNodeTarget({
+        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+        node,
+        bypass: event.nativeEvent?.shiftKey === true,
+      })
       lastTarget = target
       const normal = getAnalyticalNormal(target.localX, target.localZ, target.segment)
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
@@ -103,6 +115,12 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
         ]),
       )
       setHasHit(true)
+      publishRoofSurfaceNodePlacementGuides({
+        roof,
+        segment: target.segment,
+        center: [target.localX, target.localY, target.localZ],
+        node,
+      })
       return true
     }
 
@@ -176,6 +194,7 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
       if (obj) obj.visible = true
 
       triggerSFX('sfx:item-place')
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
       event.stopPropagation()
     }
@@ -196,6 +215,7 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
         }
         useScene.getState().deleteNode(node.id as AnyNodeId)
         markToolCancelConsumed()
+        clearRoofSurfacePlacementGuides()
         exitMoveMode()
         return
       }
@@ -216,6 +236,7 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
 
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
     }
 
@@ -245,6 +266,7 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
 
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
+      clearRoofSurfacePlacementGuides()
       useScene.temporal.getState().resume()
     }
   }, [exitMoveMode, node])

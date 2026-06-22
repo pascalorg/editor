@@ -5,6 +5,7 @@ import {
   type ParametricDescriptor,
   useScene,
 } from '@pascal-app/core'
+import { Vector3 } from 'three'
 import {
   ductPortDiameterIn,
   equivalentDiameterIn,
@@ -34,10 +35,13 @@ type DuctMate = { duct: DuctSegmentNode; endIndex: number }
  * port id. Auto-minted joints place duct ends exactly on the collar, so
  * a tight distance check is enough — no connectivity graph yet.
  */
-function matedDucts(fitting: DuctFittingNode): Map<string, DuctMate> {
+function matedDucts(
+  fitting: DuctFittingNode,
+  nodes: Record<AnyNodeId, AnyNode> = useScene.getState().nodes,
+): Map<string, DuctMate> {
   const mates = new Map<string, DuctMate>()
   const ports = getDuctFittingPorts(fitting)
-  for (const node of Object.values(useScene.getState().nodes)) {
+  for (const node of Object.values(nodes)) {
     if (node.type !== 'duct-segment') continue
     const duct = node as DuctSegmentNode
     for (const endIndex of [0, duct.path.length - 1]) {
@@ -161,6 +165,38 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
       if (Object.keys(data).length > 0) updates.push({ id: mate.duct.id, data })
     }
     return [...updates, ...autoOffsetInvalidationUpdates(useScene.getState().nodes, next.id)]
+  },
+
+  // Deleting an auto-inserted elbow restores the corner it replaced: both
+  // mated runs were pulled back one leg onto its collars, with the
+  // junction (the fitting's position) sitting exactly on the corner they
+  // originally met at. Re-extend each mated endpoint back to that junction
+  // so the L-shape returns to its pre-fitting length. Scoped to elbows —
+  // tees / crosses split a trunk into two separate nodes, which can't be
+  // re-joined by moving an endpoint.
+  onDelete: (fitting, nodes) => {
+    if (fitting.fittingType !== 'elbow') return []
+    const junction = new Vector3(...fitting.position)
+    const updates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }> = []
+    for (const mate of matedDucts(fitting, nodes).values()) {
+      const end = mate.duct.path[mate.endIndex]
+      if (!end) continue
+      const dx = end[0] - junction.x
+      const dy = end[1] - junction.y
+      const dz = end[2] - junction.z
+      if (dx * dx + dy * dy + dz * dz < 1e-12) continue
+      const path = mate.duct.path.map((p) => [...p] as Point)
+      path[mate.endIndex] = [junction.x, junction.y, junction.z]
+      const data: Partial<DuctSegmentNode> = { path }
+      const metadata = refreshedAutoOffsetMetadata(mate.duct, mate.endIndex, [
+        junction.x,
+        junction.y,
+        junction.z,
+      ])
+      if (metadata) data.metadata = metadata as DuctSegmentNode['metadata']
+      updates.push({ id: mate.duct.id, data })
+    }
+    return updates
   },
   groups: [
     {

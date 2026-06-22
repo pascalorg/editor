@@ -267,7 +267,7 @@ describe('roofSiblingSpacingGuides', () => {
     ])
   })
 
-  test('does not measure to a roof item outside the aligned center lane', async () => {
+  test('measures to a roof item whose bounding box crosses the guide lane', async () => {
     const { roofFaceKey, roofGuideBounds, roofSiblingSpacingGuides } = await import(
       './roof-surface-placement-guides'
     )
@@ -275,6 +275,189 @@ describe('roofSiblingSpacingGuides', () => {
     useScene.setState({
       nodes: {
         offset: roofItem('offset', [2, 0, 1.2]),
+      },
+    } as never)
+
+    const faceKey = roofFaceKey(getRoofSurfaceFaceBoundsAt(segment, 0, 1).polygon)
+    const guides = roofSiblingSpacingGuides({
+      segment,
+      movingBounds: roofGuideBounds([0, 0, 1], { width: 1, depth: 1 }),
+      faceKey,
+      dimension: (id, from, to) => ({ id, from, to }),
+    })
+
+    expect(guides).toEqual([
+      {
+        id: 'roof-sibling:right',
+        from: [0.5, 1],
+        to: [1.5, 1],
+      },
+    ])
+  })
+
+  test('adds a red alignment guide when roof item centers align on a lane', async () => {
+    const { roofFaceKey, roofGuideBounds, roofSiblingSpacing } = await import(
+      './roof-surface-placement-guides'
+    )
+    const segment = fixtureSegment({ children: ['aligned'] as never })
+    useScene.setState({
+      nodes: {
+        aligned: roofItem('aligned', [2, 0, 1]),
+      },
+    } as never)
+
+    const faceKey = roofFaceKey(getRoofSurfaceFaceBoundsAt(segment, 0, 1).polygon)
+    const spacing = roofSiblingSpacing({
+      segment,
+      movingBounds: roofGuideBounds([0, 0, 1], { width: 1, depth: 1 }),
+      faceKey,
+      dimension: (id, from, to) => ({ kind: 'dimension', id, from, to }),
+      alignLine: (id, from, to) => ({ kind: 'align-line', id, from, to }),
+    })
+
+    expect(spacing.guides).toContainEqual({
+      kind: 'align-line',
+      id: 'roof-align:z',
+      from: [-0.5, 1],
+      to: [2.5, 1],
+    })
+  })
+
+  test('adds an alignment guide when roof item bounding-box edges align', async () => {
+    const { roofFaceKey, roofGuideBounds, roofSiblingSpacing } = await import(
+      './roof-surface-placement-guides'
+    )
+    const segment = fixtureSegment({ children: ['aligned'] as never })
+    useScene.setState({
+      nodes: {
+        aligned: roofItem('aligned', [2, 0, 1]),
+      },
+    } as never)
+
+    const faceKey = roofFaceKey(getRoofSurfaceFaceBoundsAt(segment, 0, 1).polygon)
+    const spacing = roofSiblingSpacing({
+      segment,
+      movingBounds: roofGuideBounds([0, 0, 2], { width: 1, depth: 1 }),
+      faceKey,
+      dimension: (id, from, to) => ({ kind: 'dimension', id, from, to }),
+      alignLine: (id, from, to) => ({ kind: 'align-line', id, from, to }),
+    })
+
+    expect(spacing.guides).toContainEqual({
+      kind: 'align-line',
+      id: 'roof-align:z',
+      from: [-0.5, 1.5],
+      to: [2.5, 1.5],
+    })
+  })
+
+  test('snaps a dragged roof item onto a nearby sibling bounding-box alignment', async () => {
+    const { snapRoofSurfaceNodeTarget } = await import('./roof-surface-placement-guides')
+    const segment = fixtureSegment({ children: ['aligned'] as never })
+    useScene.setState({
+      nodes: {
+        aligned: roofItem('aligned', [2, 0, 1]),
+      },
+    } as never)
+
+    const snapped = snapRoofSurfaceNodeTarget({
+      target: {
+        segment,
+        localX: 0,
+        localY: 0,
+        localZ: 2.04,
+        hit: {} as never,
+      },
+      node: roofItem('moving', [0, 0, 0]),
+    })
+
+    expect(snapped.localZ).toBeCloseTo(2)
+  })
+
+  test('adds equal-spacing badges for a roof item between evenly spaced siblings', async () => {
+    const { roofFaceKey, roofGuideBounds, roofSiblingSpacing } = await import(
+      './roof-surface-placement-guides'
+    )
+    const segment = fixtureSegment({ children: ['left', 'right'] as never })
+    useScene.setState({
+      nodes: {
+        left: roofItem('left', [-2, 0, 1]),
+        right: roofItem('right', [2, 0, 1]),
+      },
+    } as never)
+
+    const faceKey = roofFaceKey(getRoofSurfaceFaceBoundsAt(segment, 0, 1).polygon)
+    const spacing = roofSiblingSpacing({
+      segment,
+      movingBounds: roofGuideBounds([0, 0, 1], { width: 1, depth: 1 }),
+      faceKey,
+      dimension: (id, from, to) => ({ kind: 'dimension', id, from, to }),
+      badge: (id, at, value) => ({ kind: 'badge', id, at, value }),
+    })
+
+    expect(spacing.guides).toContainEqual({
+      kind: 'badge',
+      id: 'roof-spacing:x:0',
+      at: [-1, 1],
+      value: 1,
+    })
+    expect(spacing.guides).toContainEqual({
+      kind: 'badge',
+      id: 'roof-spacing:x:1',
+      at: [1, 1],
+      value: 1,
+    })
+  })
+
+  test('adds equal-spacing badges for mixed roof item types on the same lane', async () => {
+    const { roofFaceKey, roofGuideBounds, roofSiblingSpacing, roofSurfaceFootprintFromNode } =
+      await import('./roof-surface-placement-guides')
+    const segment = fixtureSegment({ children: ['chimney', 'vent'] as never })
+    const chimney = chimneyItem('chimney', [0, 0, 1])
+    const vent = roofItem('vent', [0, 0, 1], { type: 'turbine-vent', diameter: 0.6, height: 0.7 })
+    const movingFootprint = { width: 1.4, depth: 1 }
+    const movingBounds = roofGuideBounds([0, 0, 1], movingFootprint)
+    const gap = 0.8
+    const chimneyWidth = roofSurfaceFootprintFromNode(chimney, { segment }).width
+    const ventWidth = roofSurfaceFootprintFromNode(vent, { segment }).width
+    useScene.setState({
+      nodes: {
+        chimney: { ...chimney, position: [movingBounds.minX - gap - chimneyWidth / 2, 0, 1] },
+        vent: { ...vent, position: [movingBounds.maxX + gap + ventWidth / 2, 0, 1] },
+      },
+    } as never)
+
+    const faceKey = roofFaceKey(getRoofSurfaceFaceBoundsAt(segment, 0, 1).polygon)
+    const spacing = roofSiblingSpacing({
+      segment,
+      movingBounds,
+      faceKey,
+      dimension: (id, from, to) => ({ kind: 'dimension', id, from, to }),
+      badge: (id, at, value) => ({ kind: 'badge', id, at, value }),
+    })
+
+    expect(spacing.guides).toContainEqual({
+      kind: 'badge',
+      id: 'roof-spacing:x:0',
+      at: [movingBounds.minX - gap / 2, 1],
+      value: 0.8,
+    })
+    expect(spacing.guides).toContainEqual({
+      kind: 'badge',
+      id: 'roof-spacing:x:1',
+      at: [movingBounds.maxX + gap / 2, 1],
+      value: 0.8,
+    })
+  })
+
+  test('does not measure to a roof item outside the guide lane bounding box', async () => {
+    const { roofFaceKey, roofGuideBounds, roofSiblingSpacingGuides } = await import(
+      './roof-surface-placement-guides'
+    )
+    const segment = fixtureSegment({ children: ['offset'] as never })
+    useScene.setState({
+      nodes: {
+        offset: roofItem('offset', [2, 0, 2]),
       },
     } as never)
 

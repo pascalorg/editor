@@ -1533,6 +1533,23 @@ export type ParametricDescriptor<N> = {
    * `updateNodes`.
    */
   reconcile?: (prev: N, next: N) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
+  /**
+   * Deletion companion to `reconcile`: when a node of this kind is about
+   * to be removed, return patches for OTHER nodes that must follow to
+   * undo whatever the node imposed on its neighbours — e.g. an
+   * auto-inserted elbow re-extends the duct runs it trimmed back onto the
+   * corner it replaced. Called with the node and the live scene `nodes`
+   * map BEFORE the deletion lands; patches targeting nodes also being
+   * deleted are ignored. Applied in the same `set` as the delete so it's
+   * one undo step. Fires only on `deleteNodes` (user-intent deletes) —
+   * NOT on `applyNodeChanges`, whose deletes are internal re-routes that
+   * rewrite neighbours explicitly in the same batch and would fight a
+   * restore.
+   */
+  onDelete?: (
+    node: N,
+    nodes: Record<AnyNodeId, AnyNode>,
+  ) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
   customPanel?: () => Promise<{ default: ComponentType<{ node: N }> }>
   /**
    * Extra buttons rendered in the inspector's Actions section

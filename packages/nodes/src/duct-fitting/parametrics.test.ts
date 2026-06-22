@@ -134,6 +134,51 @@ describe('ductFittingParametrics', () => {
     expect(basePath?.[0]).toEqual([...nextOutlet.position])
   })
 
+  test('deleting an elbow re-extends mated runs back onto the junction', () => {
+    const fitting = rectElbow()
+    const ports = getDuctFittingPorts(fitting)
+    const outlet = ports.find((p) => p.id === 'outlet')!
+    const inlet = ports.find((p) => p.id === 'inlet')!
+    // Two runs meeting the elbow's collars — the L-shape the elbow trimmed.
+    const outletRun = verticalRectRunFrom([...outlet.position] as Point, 0)
+    const inletRun = DuctSegmentNode.parse({
+      ...verticalRectRunFrom([...inlet.position] as Point, 0),
+      id: 'duct-segment_inlet' as AnyNodeId,
+      path: [
+        [...inlet.position] as Point,
+        [inlet.position[0] - 3, inlet.position[1], inlet.position[2]],
+      ],
+    })
+
+    const nodes: Record<AnyNodeId, AnyNode> = {
+      [fitting.id]: fitting as AnyNode,
+      [outletRun.id]: outletRun as AnyNode,
+      [inletRun.id]: inletRun as AnyNode,
+    }
+
+    const updates = ductFittingParametrics.onDelete?.(fitting, nodes) ?? []
+    const outletUpdate = updates.find((u) => u.id === outletRun.id)
+    const inletUpdate = updates.find((u) => u.id === inletRun.id)
+
+    // Both mated endpoints snap back to the junction (the original corner).
+    expect((outletUpdate?.data as Partial<DuctSegmentNode>).path?.[0]).toEqual([
+      ...fitting.position,
+    ])
+    expect((inletUpdate?.data as Partial<DuctSegmentNode>).path?.[0]).toEqual([...fitting.position])
+  })
+
+  test('deleting a tee leaves mated runs untouched', () => {
+    const tee = DuctFittingNode.parse({ ...rectElbow(), fittingType: 'tee' })
+    const outlet = getDuctFittingPorts(tee).find((p) => p.id === 'outlet')!
+    const duct = verticalRectRunFrom([...outlet.position] as Point, 0)
+    const nodes: Record<AnyNodeId, AnyNode> = {
+      [tee.id]: tee as AnyNode,
+      [duct.id]: duct as AnyNode,
+    }
+
+    expect(ductFittingParametrics.onDelete?.(tee, nodes) ?? []).toEqual([])
+  })
+
   test('resizing a generated fitting clears the owner duct auto-offset tag', () => {
     const fitting = rectElbow()
     const outlet = getDuctFittingPorts(fitting).find((p) => p.id === 'outlet')!

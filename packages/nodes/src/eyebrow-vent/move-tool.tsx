@@ -5,6 +5,7 @@ import {
   type EyebrowVentNode,
   emitter,
   type RoofEvent,
+  type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
   useScene,
@@ -21,8 +22,14 @@ import {
   createRelativeRoofDrag,
   type RelativeRoofDragTarget,
   roofSegmentLocalToBuildingLocal,
+  snapRelativeRoofDragTarget,
 } from '../shared/relative-roof-drag'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfaceNodePlacementGuides,
+  snapRoofSurfaceNodeTarget,
+} from '../shared/roof-surface-placement-guides'
 import EyebrowVentPreview from './preview'
 
 /**
@@ -71,14 +78,20 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
       lastSnap = null
       setPreviewPos(null)
       setPreviewSurfaceQuat(null)
+      clearRoofSurfacePlacementGuides()
     }
 
     const updatePreview = (event: RoofEvent) => {
-      const target = roofDrag.resolve(event)
-      if (!target) {
+      const rawTarget = roofDrag.resolve(event)
+      if (!rawTarget) {
         clearTarget()
         return
       }
+      const target = snapRoofSurfaceNodeTarget({
+        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+        node,
+        bypass: event.nativeEvent?.shiftKey === true,
+      })
       lastTarget = target
 
       const sx = Math.round(target.localX * 20) / 20
@@ -101,6 +114,12 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
           target.localZ,
         ]),
       )
+      publishRoofSurfaceNodePlacementGuides({
+        roof: event.node as RoofNode,
+        segment: target.segment,
+        center: [target.localX, target.localY, target.localZ],
+        node,
+      })
       event.stopPropagation()
     }
 
@@ -147,6 +166,7 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
       if (obj) obj.visible = true
 
       triggerSFX('sfx:item-place')
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
       event.stopPropagation()
     }
@@ -165,6 +185,7 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
         useScene.getState().deleteNode(node.id as AnyNodeId)
         useScene.temporal.getState().resume()
         markToolCancelConsumed()
+        clearRoofSurfacePlacementGuides()
         exitMoveMode()
         return
       }
@@ -184,6 +205,7 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
 
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
     }
 
@@ -213,6 +235,7 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
 
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
+      clearRoofSurfacePlacementGuides()
       useScene.temporal.getState().resume()
     }
   }, [exitMoveMode, node])

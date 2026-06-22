@@ -10,6 +10,7 @@ import type { DuctFittingNode } from '../duct-fitting/schema'
 import { rollToContinueAcrossElbow } from '../duct-segment/geometry'
 import {
   type DuctProfile,
+  type ElbowJointPlan,
   planElbowAtPort,
   planElbowRealign,
   profileDiameterIn,
@@ -52,6 +53,7 @@ const COINCIDENT_EPS_M = 0.05
 /** Shortest riser worth minting — below this there's no room to offset, so
  *  the caller keeps the plain vertical translate. */
 const MIN_RISER_M = 0.05
+const MAX_TRANSITION_STEPS = 8
 
 /**
  * Three-state outcome of a connected vertical lift:
@@ -103,6 +105,24 @@ function distSq(a: Point | readonly number[], b: Point | readonly number[]): num
   return dx * dx + dy * dy + dz * dz
 }
 
+function addPoint(a: Point, b: Point): Point {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+function subPoint(a: Point, b: Point): Point {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+function lenSq(v: Point): number {
+  return v[0] * v[0] + v[1] * v[1] + v[2] * v[2]
+}
+
+function decompose(delta: Point, axis: Point): { parallel: Point; perp: Point } {
+  const dot = delta[0] * axis[0] + delta[1] * axis[1] + delta[2] * axis[2]
+  const parallel: Point = [axis[0] * dot, axis[1] * dot, axis[2] * dot]
+  return { parallel, perp: subPoint(delta, parallel) }
+}
+
 function distToAxisSq(point: Point, origin: Point, axis: Point): number {
   const dx = point[0] - origin[0]
   const dy = point[1] - origin[1]
@@ -125,6 +145,16 @@ function endpointOutwardDir(path: ReadonlyArray<readonly number[]>, idx: number)
   const d: Point = [a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!]
   const len = Math.hypot(d[0], d[1], d[2])
   return len < 1e-9 ? [1, 0, 0] : [d[0] / len, d[1] / len, d[2] / len]
+}
+
+function endpointAxis(path: Point[], portId: string): Point {
+  const n = path.length
+  const [a, b] = portId === 'start' ? [path[1]!, path[0]!] : [path[n - 2]!, path[n - 1]!]
+  const dir = subPoint(b, a)
+  const l2 = lenSq(dir)
+  if (l2 < 1e-12) return [0, 0, 0]
+  const l = Math.sqrt(l2)
+  return [dir[0] / l, dir[1] / l, dir[2] / l]
 }
 
 function collectDuctPortsFromNodes(
@@ -173,28 +203,223 @@ function collectDuctConnections(
   scenePorts: ScenePort[],
 ): PortConnection[] {
   const eps2 = COINCIDENT_EPS_M * COINCIDENT_EPS_M
+  const portsByNode = new Map<AnyNodeId, ScenePort[]>()
+  for (const port of scenePorts) {
+    const list = portsByNode.get(port.nodeId) ?? []
+    list.push(port)
+    portsByNode.set(port.nodeId, list)
+  }
+
   const connections = new Map<AnyNodeId, PortConnection>()
+  const queue: ScenePort[] = []
   for (const endIdx of duct.path.length > 1 ? [0, duct.path.length - 1] : [0]) {
     const end = duct.path[endIdx]!
-    const mate = scenePorts.find((port) => distSq(port.position, end) <= eps2)
-    if (!mate || connections.has(mate.nodeId)) continue
-    const node = nodes[mate.nodeId]
-    if (!node) continue
-    if (node.type === 'duct-segment') {
-      connections.set(mate.nodeId, {
-        kind: 'run',
-        nodeId: mate.nodeId,
-        startPath: (node as DuctSegmentNode).path.map((p) => [...p] as Point),
-      })
-    } else if (node.type === 'duct-fitting') {
-      connections.set(mate.nodeId, {
-        kind: 'rigid-node',
-        nodeId: mate.nodeId,
-        startPosition: [...(node as DuctFittingNode).position] as Point,
-      })
+    queue.push({
+      id: endIdx === 0 ? 'start' : 'end',
+      nodeId: duct.id as AnyNodeId,
+      position: end,
+      direction: endpointOutwardDir(duct.path, endIdx),
+      diameter: 0,
+      system: duct.system,
+    })
+  }
+
+  while (queue.length > 0) {
+    const source = queue.shift()!
+    for (const mate of scenePorts) {
+      if (mate.nodeId === source.nodeId) continue
+      if (source.system && mate.system && source.system !== mate.system) continue
+      if (distSq(mate.position, source.position) > eps2) continue
+      if (connections.has(mate.nodeId)) continue
+      const node = nodes[mate.nodeId]
+      if (!node) continue
+      if (node.type === 'duct-segment') {
+        connections.set(mate.nodeId, {
+          kind: 'run',
+          nodeId: mate.nodeId,
+          startPath: (node as DuctSegmentNode).path.map((p) => [...p] as Point),
+        })
+      } else if (node.type === 'duct-fitting') {
+        connections.set(mate.nodeId, {
+          kind: 'rigid-node',
+          nodeId: mate.nodeId,
+          startPosition: [...(node as DuctFittingNode).position] as Point,
+        })
+      } else {
+        continue
+      }
+      for (const port of portsByNode.get(mate.nodeId) ?? []) {
+        if (port.id !== mate.id) queue.push(port)
+      }
     }
   }
   return [...connections.values()]
+}
+
+function mergeUpdates(
+  updates: { id: AnyNodeId; data: Partial<AnyNode> }[],
+): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  const byId = new Map<AnyNodeId, { id: AnyNodeId; data: Partial<AnyNode> }>()
+  for (const update of updates) {
+    byId.set(update.id, {
+      id: update.id,
+      data: { ...(byId.get(update.id)?.data ?? {}), ...update.data } as Partial<AnyNode>,
+    })
+  }
+  return [...byId.values()]
+}
+
+function uniqueNodeIds(ids: AnyNodeId[]): AnyNodeId[] {
+  return [...new Set(ids)]
+}
+
+function resolveExplicitFollowUpdates(args: {
+  duct: DuctSegmentNode
+  followPath: Point[]
+  scenePorts: ScenePort[]
+  nodesById: Record<string, AnyNode>
+}): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  const eps2 = COINCIDENT_EPS_M * COINCIDENT_EPS_M
+  const movedId = args.duct.id as AnyNodeId
+  type LocalPort = { id: string; nodeId: AnyNodeId; position: Point; system?: string }
+  type LocalNode = {
+    id: AnyNodeId
+    role: 'run' | 'fitting'
+    ports: LocalPort[]
+    path?: Point[]
+    position?: Point
+  }
+  const portsByNode = new Map<AnyNodeId, LocalPort[]>()
+  const addPort = (port: LocalPort) => {
+    const list = portsByNode.get(port.nodeId) ?? []
+    list.push(port)
+    portsByNode.set(port.nodeId, list)
+  }
+
+  if (args.duct.path.length >= 2) {
+    addPort({
+      id: 'start',
+      nodeId: movedId,
+      position: [...args.duct.path[0]!] as Point,
+      system: args.duct.system,
+    })
+    addPort({
+      id: 'end',
+      nodeId: movedId,
+      position: [...args.duct.path[args.duct.path.length - 1]!] as Point,
+      system: args.duct.system,
+    })
+  }
+
+  for (const port of args.scenePorts) {
+    const node = args.nodesById[port.nodeId]
+    if (!node) continue
+    let id = port.id
+    if (node.type === 'duct-segment') {
+      const path = (node as DuctSegmentNode).path
+      if (path.length < 2) continue
+      if (distSq(port.position, path[0]!) <= eps2) id = 'start'
+      else if (distSq(port.position, path[path.length - 1]!) <= eps2) id = 'end'
+    }
+    addPort({
+      id,
+      nodeId: port.nodeId,
+      position: [...port.position] as Point,
+      system: port.system,
+    })
+  }
+
+  const nodes = new Map<AnyNodeId, LocalNode>()
+  for (const [id, ports] of portsByNode) {
+    if (id === movedId) {
+      nodes.set(id, { id, role: 'run', ports, path: args.duct.path.map((p) => [...p] as Point) })
+      continue
+    }
+    const node = args.nodesById[id]
+    if (!node) continue
+    if (node.type === 'duct-segment') {
+      nodes.set(id, {
+        id,
+        role: 'run',
+        ports,
+        path: (node as DuctSegmentNode).path.map((p) => [...p] as Point),
+      })
+    } else if (node.type === 'duct-fitting') {
+      nodes.set(id, {
+        id,
+        role: 'fitting',
+        ports,
+        position: [...(node as DuctFittingNode).position] as Point,
+      })
+    }
+  }
+
+  const adjacency = new Map<string, { nodeId: AnyNodeId; portId: string }[]>()
+  const key = (nodeId: AnyNodeId, portId: string) => `${nodeId}:${portId}`
+  const allPorts = [...nodes.values()].flatMap((node) => node.ports)
+  for (let i = 0; i < allPorts.length; i++) {
+    const a = allPorts[i]!
+    for (let j = i + 1; j < allPorts.length; j++) {
+      const b = allPorts[j]!
+      if (a.nodeId === b.nodeId) continue
+      if (a.system && b.system && a.system !== b.system) continue
+      if (distSq(a.position, b.position) > eps2) continue
+      const ak = key(a.nodeId, a.id)
+      const bk = key(b.nodeId, b.id)
+      adjacency.set(ak, [...(adjacency.get(ak) ?? []), { nodeId: b.nodeId, portId: b.id }])
+      adjacency.set(bk, [...(adjacency.get(bk) ?? []), { nodeId: a.nodeId, portId: a.id }])
+    }
+  }
+
+  const queue: { nodeId: AnyNodeId; portId: string; delta: Point }[] = []
+  const visited = new Set<AnyNodeId>([movedId])
+  const enqueueMates = (nodeId: AnyNodeId, portId: string, delta: Point) => {
+    for (const mate of adjacency.get(key(nodeId, portId)) ?? []) {
+      if (visited.has(mate.nodeId)) continue
+      queue.push({ ...mate, delta })
+    }
+  }
+
+  const start = args.duct.path[0]
+  const nextStart = args.followPath[0]
+  if (start && nextStart) {
+    const delta = subPoint(nextStart as Point, start as Point)
+    if (lenSq(delta) > 1e-8) enqueueMates(movedId, 'start', delta)
+  }
+  const last = args.duct.path.length - 1
+  const end = args.duct.path[last]
+  const nextEnd = args.followPath[last]
+  if (end && nextEnd) {
+    const delta = subPoint(nextEnd as Point, end as Point)
+    if (lenSq(delta) > 1e-8) enqueueMates(movedId, 'end', delta)
+  }
+
+  const results: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
+  while (queue.length > 0) {
+    const { nodeId, portId, delta } = queue.shift()!
+    if (visited.has(nodeId)) continue
+    visited.add(nodeId)
+    const node = nodes.get(nodeId)
+    if (!node) continue
+    if (node.role === 'fitting') {
+      const position = addPoint(node.position!, delta)
+      results.push({ id: nodeId, data: { position } as Partial<AnyNode> })
+      for (const port of node.ports) {
+        if (port.id !== portId) enqueueMates(nodeId, port.id, delta)
+      }
+      continue
+    }
+    const path = node.path!.map((p) => [...p] as Point)
+    const nearIdx = portId === 'start' ? 0 : path.length - 1
+    const farPortId = portId === 'start' ? 'end' : 'start'
+    const axis = endpointAxis(path, portId)
+    const { parallel, perp } = decompose(delta, axis)
+    const nextPath = path.map((p) => addPoint(p, perp))
+    nextPath[nearIdx] = addPoint(nextPath[nearIdx]!, parallel)
+    results.push({ id: nodeId, data: { path: nextPath } as Partial<AnyNode> })
+    if (lenSq(perp) > 1e-8) enqueueMates(nodeId, farPortId, perp)
+  }
+  return results
 }
 
 /** Classifies whether the partner run's segment ADJACENT to its tip at
@@ -270,6 +495,24 @@ function rollForRiser(sourceDir: Point, sourceRoll: number, riserDir: Point): nu
   )
 }
 
+function planElbowFromCollar(args: {
+  collarPoint: Point
+  elbowPortOutDir: Point
+  awayDir: Point
+  duct: DuctSegmentNode
+  profile: DuctProfile
+}): ElbowJointPlan | null {
+  const { collarPoint, elbowPortOutDir, awayDir, duct, profile } = args
+  const leg = fittingLegLength(profileDiameterIn(profile))
+  const junction: Point = [
+    collarPoint[0] - elbowPortOutDir[0] * leg,
+    collarPoint[1] - elbowPortOutDir[1] * leg,
+    collarPoint[2] - elbowPortOutDir[2] * leg,
+  ]
+  const portDir: Point = [-elbowPortOutDir[0], -elbowPortOutDir[1], -elbowPortOutDir[2]]
+  return planElbowAtPort(portLike(junction, portDir, duct.system), awayDir, profile)
+}
+
 function elbowProfilePatch(profile: DuctProfile): Partial<DuctFittingNode> {
   const diameter = profileDiameterIn(profile)
   return {
@@ -301,6 +544,12 @@ type RiserCollapseAction =
     }
   | { status: 'snap'; dy: number }
   | null
+
+type TransitionOptions = {
+  allowTransitionSnap: boolean
+  allowEarlySnap: boolean
+  depth: number
+}
 
 function directRiserCollapseAction(args: {
   riserId: AnyNodeId
@@ -506,7 +755,11 @@ export function planVerticalOffsets(args: {
    *  re-aim). */
   nodesById: Record<string, AnyNode>
 }): VerticalOffsetResult {
-  return planVerticalOffsetsAtDy(args, args.dy, true)
+  return planVerticalOffsetsAtDy(args, args.dy, {
+    allowTransitionSnap: true,
+    allowEarlySnap: true,
+    depth: 0,
+  })
 }
 
 function planVerticalOffsetsAtDy(
@@ -519,7 +772,7 @@ function planVerticalOffsetsAtDy(
     nodesById: Record<string, AnyNode>
   },
   routeDy: number,
-  allowTransitionSnap: boolean,
+  options: TransitionOptions,
 ): VerticalOffsetResult {
   const { duct, profile, connections, scenePorts, nodesById } = args
   const dy = routeDy
@@ -577,9 +830,46 @@ function planVerticalOffsetsAtDy(
       const partner = nodesById[conn.nodeId]
       if (!partner || partner.type !== 'duct-fitting') return { status: 'invalid' }
       const elbow = partner as DuctFittingNode
-      if (elbow.fittingType !== 'elbow') return { status: 'invalid' }
       const profilePatch = elbowProfilePatch(profile)
       const profiledElbow = { ...elbow, ...profilePatch } as DuctFittingNode
+      if (profiledElbow.fittingType !== 'elbow') {
+        if (!hasOffsetRoom) return { status: 'invalid' }
+        const partnerDir: Point = [
+          partnerPort.direction[0],
+          partnerPort.direction[1],
+          partnerPort.direction[2],
+        ]
+        const leg = fittingLegLength(profileDiameterIn(profile))
+        const ductCollar: Point = [
+          liftedEnd[0] - ductPortDir[0] * leg * 2,
+          liftedEnd[1] - ductPortDir[1] * leg * 2,
+          liftedEnd[2] - ductPortDir[2] * leg * 2,
+        ]
+        const bottom = planElbowFromCollar({
+          collarPoint: endPos,
+          elbowPortOutDir: [-partnerDir[0], -partnerDir[1], -partnerDir[2]],
+          awayDir: up,
+          duct,
+          profile,
+        })
+        const top = planElbowFromCollar({
+          collarPoint: ductCollar,
+          elbowPortOutDir: [-ductPortDir[0], -ductPortDir[1], -ductPortDir[2]],
+          awayDir: down,
+          duct,
+          profile,
+        })
+        if (!bottom || !top) return { status: 'invalid' }
+
+        fittings.push(bottom.fitting, top.fitting)
+        risers.push(
+          makeRiser(bottom.collarPoint, top.collarPoint, duct, rollForRiser(partnerDir, 0, up)),
+        )
+        ductPath[endIdx] = top.trimmedPortPoint
+        followPath[endIdx] = [...startPath[endIdx]!] as Point
+        offsetAny = true
+        continue
+      }
       const riserAction = fittingRiserAction({
         fitting: profiledElbow,
         matedPortId: partnerPort.id,
@@ -592,7 +882,7 @@ function planVerticalOffsetsAtDy(
         scenePorts,
         nodesById,
         eps2,
-        allowEarlySnap: allowTransitionSnap,
+        allowEarlySnap: options.allowEarlySnap,
       })
       if (riserAction?.status === 'stretch') {
         offsetAny = true
@@ -606,8 +896,8 @@ function planVerticalOffsetsAtDy(
         offsetAny = true
         continue
       }
-      if (riserAction?.status === 'snap' && allowTransitionSnap) {
-        return continueAfterTransitionSnap(args, routeDy, riserAction.dy)
+      if (riserAction?.status === 'snap' && options.allowTransitionSnap) {
+        return continueAfterTransitionSnap(args, routeDy, riserAction.dy, options)
       }
       if (riserAction?.status === 'snap') return { status: 'invalid' }
       // Minting the top elbow + riser needs elbow-leg + riser room.
@@ -681,10 +971,10 @@ function planVerticalOffsetsAtDy(
         scenePorts,
         nodesById,
         eps2,
-        allowEarlySnap: allowTransitionSnap,
+        allowEarlySnap: options.allowEarlySnap,
       })
-      if (collapse?.status === 'snap' && allowTransitionSnap) {
-        return continueAfterTransitionSnap(args, routeDy, collapse.dy)
+      if (collapse?.status === 'snap' && options.allowTransitionSnap) {
+        return continueAfterTransitionSnap(args, routeDy, collapse.dy, options)
       }
       if (collapse?.status === 'collapse') {
         ductPath[endIdx] = collapse.ductPoint
@@ -762,20 +1052,35 @@ function continueAfterTransitionSnap(
   },
   requestedDy: number,
   snappedDy: number,
+  options: TransitionOptions,
 ): VerticalOffsetResult {
-  const snapped = planVerticalOffsetsAtDy(args, snappedDy, false)
+  const snapped = planVerticalOffsetsAtDy(args, snappedDy, {
+    allowTransitionSnap: false,
+    allowEarlySnap: false,
+    depth: options.depth,
+  })
   if (snapped?.status !== 'valid') return snapped
 
   const remainingDy = requestedDy - snapped.plan.dy
   if (Math.abs(remainingDy) <= MIN_RISER_M || Math.sign(remainingDy) !== Math.sign(requestedDy)) {
     return snapped
   }
+  if (options.depth >= MAX_TRANSITION_STEPS) return snapped
 
   const nodesById: Record<string, AnyNode> = { ...args.nodesById }
   for (const id of snapped.plan.delete ?? []) {
     delete nodesById[id]
   }
   for (const update of snapped.plan.updates) {
+    const current = nodesById[update.id]
+    if (current) nodesById[update.id] = { ...current, ...update.data } as AnyNode
+  }
+  for (const update of resolveExplicitFollowUpdates({
+    duct: args.duct,
+    followPath: snapped.plan.followPath,
+    scenePorts: args.scenePorts,
+    nodesById: args.nodesById,
+  })) {
     const current = nodesById[update.id]
     if (current) nodesById[update.id] = { ...current, ...update.data } as AnyNode
   }
@@ -800,20 +1105,24 @@ function continueAfterTransitionSnap(
       nodesById,
     },
     remainingDy,
-    false,
+    {
+      allowTransitionSnap: true,
+      allowEarlySnap: false,
+      depth: options.depth + 1,
+    },
   )
 
   if (continued?.status !== 'valid') return snapped
   return {
     status: 'valid',
     plan: {
-      dy: requestedDy,
+      dy: snapped.plan.dy + continued.plan.dy,
       ductPath: continued.plan.ductPath,
       followPath: continued.plan.followPath,
       fittings: [...snapped.plan.fittings, ...continued.plan.fittings],
       risers: [...snapped.plan.risers, ...continued.plan.risers],
-      updates: [...snapped.plan.updates, ...continued.plan.updates],
-      delete: [...(snapped.plan.delete ?? []), ...(continued.plan.delete ?? [])],
+      updates: mergeUpdates([...snapped.plan.updates, ...continued.plan.updates]),
+      delete: uniqueNodeIds([...(snapped.plan.delete ?? []), ...(continued.plan.delete ?? [])]),
     },
   }
 }

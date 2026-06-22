@@ -17,7 +17,9 @@ import {
 // Indigo — matches the wall/window 3D proximity guide accent so every
 // "distance to edge" readout reads the same across the app.
 const GUIDE_COLOR = 0x81_8c_f8
+const ALIGN_COLOR = 0xef_44_44
 const PILL_BG = '#6366f1'
+const BADGE_BG = '#ec4899'
 // Lift the lines a hair off the sloped surface so they don't z-fight the
 // roof + dormer ghost.
 const SURFACE_LIFT = 0.02
@@ -32,8 +34,29 @@ const guideMaterial = new LineBasicNodeMaterial({
   toneMapped: false,
   transparent: true,
 })
+const alignMaterial = new LineBasicNodeMaterial({
+  color: ALIGN_COLOR,
+  depthTest: false,
+  depthWrite: false,
+  toneMapped: false,
+  transparent: true,
+})
 
 type Vec3 = [number, number, number]
+type DormerGuide =
+  | {
+      id: string
+      from: Vec3
+      to: Vec3
+      kind: 'align-line' | 'dimension'
+      value?: number
+    }
+  | {
+      id: string
+      at: Vec3
+      kind: 'badge'
+      value: number
+    }
 
 /**
  * Live "distance to roof edge" guides shown while a dormer ghost is being
@@ -83,7 +106,7 @@ export function DormerPlacementGuides({
   const xInterval = faceBounds.xIntervalAtZ(cz)
   const zInterval = faceBounds.zIntervalAtX(cx)
 
-  const guides: { id: string; from: Vec3; to: Vec3; value: number }[] = []
+  const guides: DormerGuide[] = []
   const push = (id: string, ax: number, az: number, bx: number, bz: number) => {
     const from: Vec3 = [ax, surfaceY(ax, az), az]
     const to: Vec3 = [bx, surfaceY(bx, bz), bz]
@@ -93,10 +116,11 @@ export function DormerPlacementGuides({
       id,
       from,
       to,
+      kind: 'dimension',
       value,
     })
   }
-  const siblingSpacing = roofSiblingSpacing({
+  const siblingSpacing = roofSiblingSpacing<DormerGuide>({
     segment,
     movingId,
     movingBounds,
@@ -106,7 +130,28 @@ export function DormerPlacementGuides({
       const to: Vec3 = [bx, surfaceY(bx, bz), bz]
       const value = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2])
       if (value < MIN_GAP_M) return null
-      return { id, from, to, value }
+      return { id, from, to, kind: 'dimension', value }
+    },
+    alignLine: (id, [ax, az], [bx, bz]) => {
+      const from: Vec3 = [ax, surfaceY(ax, az), az]
+      const to: Vec3 = [bx, surfaceY(bx, bz), bz]
+      const value = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2])
+      if (value < MIN_GAP_M) return null
+      return { id, from, to, kind: 'align-line' }
+    },
+    badge: (id, [x, z], value) => {
+      if (value < MIN_GAP_M) return null
+      return {
+        id,
+        at: [x, surfaceY(x, z), z],
+        kind: 'badge',
+        value,
+      }
+    },
+    measure: ([ax, az], [bx, bz]) => {
+      const ay = surfaceY(ax, az)
+      const by = surfaceY(bx, bz)
+      return Math.hypot(bx - ax, by - ay, bz - az)
     },
   })
   if (xInterval) {
@@ -136,23 +181,66 @@ export function DormerPlacementGuides({
   return (
     <>
       {guides.map((g) => (
-        <GuideLine from={g.from} key={g.id} pill={formatMeasurement(g.value, unit)} to={g.to} />
+        <Guide key={g.id} guide={g} unit={unit} />
       ))}
     </>
   )
 }
 
-function GuideLine({ from, to, pill }: { from: Vec3; to: Vec3; pill: string }) {
+function Guide({ guide, unit }: { guide: DormerGuide; unit: 'metric' | 'imperial' }) {
+  if (guide.kind === 'badge') {
+    return <GuideBadge at={guide.at} pill={`= ${formatMeasurement(guide.value, unit)}`} />
+  }
+
+  return (
+    <GuideLine
+      from={guide.from}
+      kind={guide.kind}
+      pill={guide.value === undefined ? undefined : formatMeasurement(guide.value, unit)}
+      to={guide.to}
+    />
+  )
+}
+
+function GuideBadge({ at, pill }: { at: Vec3; pill: string }) {
+  return (
+    <Html
+      center
+      position={at}
+      style={{ pointerEvents: 'none', userSelect: 'none' }}
+      zIndexRange={[20, 0]}
+    >
+      <div
+        className="whitespace-nowrap rounded-[3px] px-[5px] py-[2px] font-semibold font-sans text-[11px] text-white"
+        style={{ backgroundColor: BADGE_BG }}
+      >
+        {pill}
+      </div>
+    </Html>
+  )
+}
+
+function GuideLine({
+  from,
+  to,
+  pill,
+  kind,
+}: {
+  from: Vec3
+  to: Vec3
+  pill?: string
+  kind: DormerGuide['kind']
+}) {
   const { line, position } = useMemo(() => {
     const position = new Float32BufferAttribute(new Float32Array(6), 3)
     const geometry = new BufferGeometry()
     geometry.setAttribute('position', position)
-    const line = new ThreeLine(geometry, guideMaterial)
+    const line = new ThreeLine(geometry, kind === 'align-line' ? alignMaterial : guideMaterial)
     line.frustumCulled = false
     line.layers.set(EDITOR_LAYER)
     line.renderOrder = 1000
     return { line, position }
-  }, [])
+  }, [kind])
 
   position.setXYZ(0, from[0], from[1], from[2])
   position.setXYZ(1, to[0], to[1], to[2])
@@ -165,19 +253,21 @@ function GuideLine({ from, to, pill }: { from: Vec3; to: Vec3; pill: string }) {
   return (
     <>
       <primitive object={line} />
-      <Html
-        center
-        position={mid}
-        style={{ pointerEvents: 'none', userSelect: 'none' }}
-        zIndexRange={[20, 0]}
-      >
-        <div
-          className="whitespace-nowrap rounded-[3px] px-[5px] py-[2px] font-medium font-sans text-[11px] text-white"
-          style={{ backgroundColor: PILL_BG }}
+      {pill ? (
+        <Html
+          center
+          position={mid}
+          style={{ pointerEvents: 'none', userSelect: 'none' }}
+          zIndexRange={[20, 0]}
         >
-          {pill}
-        </div>
-      </Html>
+          <div
+            className="whitespace-nowrap rounded-[3px] px-[5px] py-[2px] font-medium font-sans text-[11px] text-white"
+            style={{ backgroundColor: PILL_BG }}
+          >
+            {pill}
+          </div>
+        </Html>
+      ) : null}
     </>
   )
 }

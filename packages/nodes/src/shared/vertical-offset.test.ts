@@ -222,6 +222,71 @@ describe('planVerticalOffsets', () => {
   })
 
   test.each([
+    { label: 'tee branch', fittingType: 'tee' as const, portId: 'branch' },
+    { label: 'cross branch', fittingType: 'cross' as const, portId: 'branch' },
+  ])('routes a vertical offset from a stationary $label fitting', ({ fittingType, portId }) => {
+    const fitting = DuctFittingNode.parse({
+      object: 'node',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      name: fittingType,
+      fittingType,
+      shape: 'rect',
+      width: RECT_PROFILE.width,
+      height: RECT_PROFILE.height,
+      diameter: profileDiameterIn(RECT_PROFILE),
+      shape2: 'rect',
+      width2: RECT_PROFILE.width,
+      height2: RECT_PROFILE.height,
+      diameter2: profileDiameterIn(RECT_PROFILE),
+      ductMaterial: 'sheet-metal',
+      system: 'supply',
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      angle: 90,
+      branchAngle: 90,
+    })
+    const fittingPorts = getDuctFittingPorts(fitting)
+    const branch = fittingPorts.find((p) => p.id === portId)!
+    const moved = rectRun([
+      [...branch.position],
+      [
+        branch.position[0] + branch.direction[0] * 4,
+        branch.position[1] + branch.direction[1] * 4,
+        branch.position[2] + branch.direction[2] * 4,
+      ],
+    ])
+
+    const result = planVerticalOffsets({
+      duct: moved,
+      dy: 1.2,
+      profile: RECT_PROFILE,
+      connections: [fittingConnection(fitting)],
+      scenePorts: fittingPorts.map((p) => ({ ...p, nodeId: fitting.id })),
+      nodesById: {
+        [moved.id]: moved as AnyNode,
+        [fitting.id]: fitting as AnyNode,
+      },
+    })
+
+    expect(result?.status).toBe('valid')
+    if (result?.status !== 'valid') return
+    expect(result.plan.fittings).toHaveLength(2)
+    expect(result.plan.risers).toHaveLength(1)
+    expect(result.plan.updates.some((u) => u.id === fitting.id)).toBe(false)
+    expect(result.plan.followPath[0]).toEqual(moved.path[0])
+    expect(result.plan.ductPath[0]?.[1]).toBeCloseTo(branch.position[1] + 1.2, 6)
+    const bottomPorts = getDuctFittingPorts(result.plan.fittings[0]!)
+    const topPorts = getDuctFittingPorts(result.plan.fittings[1]!)
+    const riser = result.plan.risers[0]!
+    expect(bottomPorts.some((p) => distSq(p.position, branch.position) < 1e-9)).toBe(true)
+    expect(bottomPorts.some((p) => distSq(p.position, riser.path[0]!) < 1e-9)).toBe(true)
+    expect(topPorts.some((p) => distSq(p.position, riser.path[1]!) < 1e-9)).toBe(true)
+    expect(topPorts.some((p) => distSq(p.position, result.plan.ductPath[0]!) < 1e-9)).toBe(true)
+  })
+
+  test.each([
     { label: 'up', dy: 1 },
     { label: 'down', dy: -0.5 },
   ])('$label moves an elbow-connected top run by stretching the existing vertical riser', ({
@@ -531,6 +596,80 @@ describe('planVerticalOffsets', () => {
     expect(result.plan.delete).toEqual(expect.arrayContaining([leftTop.fitting.id, leftRiser.id]))
     expect(result.plan.delete ?? []).not.toContain(rightTop.fitting.id)
     expect(result.plan.delete ?? []).not.toContain(rightRiser.id)
+  })
+
+  test('consumes multiple side alignments during one continuous drag', () => {
+    const leftBottom = planElbowAtPort(portLike([0, 0.5, 0], [1, 0, 0]), [0, 1, 0], RECT_PROFILE)
+    const leftTop = planElbowAtPort(portLike([0, 1.2, 0], [-1, 0, 0]), [0, -1, 0], RECT_PROFILE)
+    const rightBottom = planElbowAtPort(portLike([4, -1, 0], [-1, 0, 0]), [0, 1, 0], RECT_PROFILE)
+    const rightTop = planElbowAtPort(portLike([4, 1.2, 0], [1, 0, 0]), [0, -1, 0], RECT_PROFILE)
+    expect(leftBottom && leftTop && rightBottom && rightTop).toBeTruthy()
+    if (!leftBottom || !leftTop || !rightBottom || !rightTop) return
+
+    const leftRiser = rectRun([leftBottom.collarPoint, leftTop.collarPoint])
+    const rightRiser = rectRun([rightBottom.collarPoint, rightTop.collarPoint])
+    const topRun = rectRun([leftTop.trimmedPortPoint, rightTop.trimmedPortPoint])
+    const dy = -3.1
+    const result = planVerticalOffsets({
+      duct: topRun,
+      dy,
+      profile: RECT_PROFILE,
+      connections: [
+        fittingConnection(leftTop.fitting),
+        fittingConnection(rightTop.fitting),
+        runConnection(leftRiser),
+        runConnection(rightRiser),
+        fittingConnection(leftBottom.fitting),
+        fittingConnection(rightBottom.fitting),
+      ],
+      scenePorts: [
+        ...getDuctFittingPorts(leftTop.fitting).map((p) => ({
+          ...p,
+          nodeId: leftTop.fitting.id,
+        })),
+        ...getDuctFittingPorts(rightTop.fitting).map((p) => ({
+          ...p,
+          nodeId: rightTop.fitting.id,
+        })),
+        ...getDuctFittingPorts(leftBottom.fitting).map((p) => ({
+          ...p,
+          nodeId: leftBottom.fitting.id,
+        })),
+        ...getDuctFittingPorts(rightBottom.fitting).map((p) => ({
+          ...p,
+          nodeId: rightBottom.fitting.id,
+        })),
+        runPort(leftRiser, leftRiser.path[0]!, [0, -1, 0]),
+        runPort(leftRiser, leftRiser.path[1]!, [0, 1, 0]),
+        runPort(rightRiser, rightRiser.path[0]!, [0, -1, 0]),
+        runPort(rightRiser, rightRiser.path[1]!, [0, 1, 0]),
+      ],
+      nodesById: {
+        [topRun.id]: topRun as AnyNode,
+        [leftTop.fitting.id]: leftTop.fitting as AnyNode,
+        [rightTop.fitting.id]: rightTop.fitting as AnyNode,
+        [leftBottom.fitting.id]: leftBottom.fitting as AnyNode,
+        [rightBottom.fitting.id]: rightBottom.fitting as AnyNode,
+        [leftRiser.id]: leftRiser as AnyNode,
+        [rightRiser.id]: rightRiser as AnyNode,
+      },
+    })
+
+    expect(result?.status).toBe('valid')
+    if (result?.status !== 'valid') return
+    expect(result.plan.dy).toBeCloseTo(dy, 6)
+    expect(result.plan.ductPath[0]?.[1]).toBeCloseTo(topRun.path[0]![1] + dy, 6)
+    expect(result.plan.ductPath[1]?.[1]).toBeCloseTo(topRun.path[1]![1] + dy, 6)
+    expect(result.plan.delete).toEqual(
+      expect.arrayContaining([
+        leftTop.fitting.id,
+        leftRiser.id,
+        rightTop.fitting.id,
+        rightRiser.id,
+      ]),
+    )
+    expect(result.plan.updates.some((u) => u.id === leftBottom.fitting.id)).toBe(true)
+    expect(result.plan.updates.some((u) => u.id === rightBottom.fitting.id)).toBe(true)
   })
 
   test('snaps downward through the short-riser dead band into the collapse route', () => {

@@ -19,10 +19,12 @@ import { buildRidgeVentGeometry } from '../ridge-vent/geometry'
 import { buildFrameGeometry } from '../skylight/frame-csg'
 import { buildSolarPanelGeometry } from '../solar-panel/geometry'
 import { buildTurbineVentGeometry } from '../turbine-vent/geometry'
-import { getRoofSurfaceFaceBoundsAt } from './roof-surface'
+import type { RelativeRoofDragTarget } from './relative-roof-drag'
+import { getRoofSurfaceFaceBoundsAt, getSurfaceY } from './roof-surface'
 
 const MIN_DIMENSION_M = 0.02
 const ALIGNMENT_THRESHOLD_M = 0.08
+const EQUAL_SPACING_THRESHOLD_M = 0.03
 
 const tmp = new THREE.Vector3()
 const tmpA = new THREE.Vector3()
@@ -50,6 +52,27 @@ type RoofGuideSide = 'left' | 'right' | 'bottom' | 'top'
 type RoofSiblingSpacingResult<T> = {
   guides: T[]
   blockedSides: Record<RoofGuideSide, boolean>
+}
+
+type RoofAlignmentFeature = 'min' | 'center' | 'max'
+
+type RoofAlignmentCandidate = {
+  axis: 'x' | 'z'
+  coord: number
+  gap: number
+  from: [number, number]
+  to: [number, number]
+}
+
+type RoofEqualSpacingItem = {
+  bounds: RoofGuideBounds
+  moving: boolean
+}
+
+type RoofEqualSpacingGap = {
+  value: number
+  from: [number, number]
+  to: [number, number]
 }
 
 export function roofSurfaceFootprintFromNode(
@@ -251,6 +274,36 @@ export function publishRoofSurfacePlacementGuides(args: {
       value,
     }
   }
+  const alignLine = (
+    id: string,
+    from: [number, number],
+    to: [number, number],
+  ): OpeningGuide3D | null => {
+    const from3 = toBuilding(from[0], from[1])
+    const to3 = toBuilding(to[0], to[1])
+    const value = tmpA.set(...from3).distanceTo(tmpB.set(...to3))
+    if (value <= MIN_DIMENSION_M) return null
+    return {
+      kind: 'align-line',
+      id,
+      from: from3,
+      to: to3,
+    }
+  }
+  const measure = (from: [number, number], to: [number, number]): number => {
+    const from3 = toBuilding(from[0], from[1])
+    const to3 = toBuilding(to[0], to[1])
+    return tmpA.set(...from3).distanceTo(tmpB.set(...to3))
+  }
+  const badge = (id: string, at: [number, number], value: number): OpeningGuide3D | null => {
+    if (value <= MIN_DIMENSION_M) return null
+    return {
+      kind: 'badge',
+      id,
+      at: toBuilding(at[0], at[1]),
+      value,
+    }
+  }
 
   const guides: OpeningGuide3D[] = []
   const siblingSpacing =
@@ -262,6 +315,9 @@ export function publishRoofSurfacePlacementGuides(args: {
           movingBounds: bounds,
           faceKey,
           dimension,
+          alignLine,
+          badge,
+          measure,
         })
 
   if (mode === 'linear-edge') {
@@ -325,6 +381,71 @@ export function publishRoofSurfacePlacementGuides(args: {
   useOpeningGuides.getState().set(guides)
 }
 
+export function publishRoofSurfaceNodePlacementGuides(args: {
+  roof: RoofNode
+  segment: RoofSegmentNode
+  center: readonly [number, number, number]
+  node: unknown
+  mode?: RoofSurfaceGuideMode
+  movingId?: string
+}): void {
+  const movingId =
+    args.movingId ??
+    ((args.node as { id?: unknown }).id && typeof (args.node as { id?: unknown }).id === 'string'
+      ? (args.node as { id: string }).id
+      : undefined)
+
+  publishRoofSurfacePlacementGuides({
+    roof: args.roof,
+    segment: args.segment,
+    center: args.center,
+    footprint: roofSurfaceFootprintFromNode(args.node, { segment: args.segment }),
+    mode: args.mode,
+    movingId,
+  })
+}
+
+export function snapRoofSurfaceNodeTarget(args: {
+  target: RelativeRoofDragTarget
+  node: unknown
+  movingId?: string
+  bypass?: boolean
+}): RelativeRoofDragTarget {
+  if (args.bypass) return args.target
+
+  const movingId =
+    args.movingId ??
+    ((args.node as { id?: unknown }).id && typeof (args.node as { id?: unknown }).id === 'string'
+      ? (args.node as { id: string }).id
+      : undefined)
+  const movingBounds = roofGuideBounds(
+    [args.target.localX, args.target.localY, args.target.localZ],
+    roofSurfaceFootprintFromNode(args.node, { segment: args.target.segment }),
+  )
+  const faceKey = roofFaceKey(
+    getRoofSurfaceFaceBoundsAt(args.target.segment, args.target.localX, args.target.localZ).polygon,
+  )
+  const snap = roofAlignmentSnap({
+    segment: args.target.segment,
+    movingId,
+    movingBounds,
+    faceKey,
+  })
+  if (!snap) return args.target
+
+  const localX = args.target.localX + (snap.dx ?? 0)
+  const localZ = args.target.localZ + (snap.dz ?? 0)
+  const surfaceOffsetY =
+    args.target.localY - getSurfaceY(args.target.localX, args.target.localZ, args.target.segment)
+  const localY = getSurfaceY(localX, localZ, args.target.segment) + surfaceOffsetY
+  return {
+    ...args.target,
+    localX,
+    localY,
+    localZ,
+  }
+}
+
 export function clearRoofSurfacePlacementGuides(): void {
   useOpeningGuides.getState().clear()
 }
@@ -370,6 +491,9 @@ export function roofSiblingSpacing<T>(args: {
   movingBounds: RoofGuideBounds
   faceKey: string
   dimension: (id: string, from: [number, number], to: [number, number]) => T | null
+  alignLine?: (id: string, from: [number, number], to: [number, number]) => T | null
+  badge?: (id: string, at: [number, number], value: number) => T | null
+  measure?: (from: [number, number], to: [number, number]) => number
 }): RoofSiblingSpacingResult<T> {
   const out: T[] = []
   const nodes = useScene.getState().nodes
@@ -377,6 +501,10 @@ export function roofSiblingSpacing<T>(args: {
   let right: { bounds: RoofGuideBounds; gap: number } | null = null
   let bottom: { bounds: RoofGuideBounds; gap: number } | null = null
   let top: { bounds: RoofGuideBounds; gap: number } | null = null
+  let xAlign: RoofAlignmentCandidate | null = null
+  let zAlign: RoofAlignmentCandidate | null = null
+  const xLane: RoofGuideBounds[] = []
+  const zLane: RoofGuideBounds[] = []
 
   for (const childId of args.segment.children ?? []) {
     if (childId === args.movingId) continue
@@ -389,8 +517,11 @@ export function roofSiblingSpacing<T>(args: {
 
     const footprint = roofSurfaceFootprintFromNode(sibling, { segment: args.segment })
     const bounds = roofGuideBounds(position as [number, number, number], footprint)
+    xAlign = nearerAlignment(xAlign, detectRoofAlignment(args.movingBounds, bounds, 'x'))
+    zAlign = nearerAlignment(zAlign, detectRoofAlignment(args.movingBounds, bounds, 'z'))
 
     if (sameGuideLane(args.movingBounds, bounds, 'x')) {
+      xLane.push(bounds)
       const gapToLeft = args.movingBounds.minX - bounds.maxX
       if (gapToLeft > MIN_DIMENSION_M && (!left || gapToLeft < left.gap)) {
         left = { bounds, gap: gapToLeft }
@@ -402,6 +533,7 @@ export function roofSiblingSpacing<T>(args: {
     }
 
     if (sameGuideLane(args.movingBounds, bounds, 'z')) {
+      zLane.push(bounds)
       const gapToBottom = args.movingBounds.minZ - bounds.maxZ
       if (gapToBottom > MIN_DIMENSION_M && (!bottom || gapToBottom < bottom.gap)) {
         bottom = { bounds, gap: gapToBottom }
@@ -445,6 +577,34 @@ export function roofSiblingSpacing<T>(args: {
     )
     if (guide) out.push(guide)
   }
+  if (args.alignLine) {
+    if (xAlign) {
+      const guide = args.alignLine('roof-align:x', xAlign.from, xAlign.to)
+      if (guide) out.push(guide)
+    }
+    if (zAlign) {
+      const guide = args.alignLine('roof-align:z', zAlign.from, zAlign.to)
+      if (guide) out.push(guide)
+    }
+  }
+  if (args.badge) {
+    pushRoofEqualSpacingBadges({
+      axis: 'x',
+      movingBounds: args.movingBounds,
+      siblings: xLane,
+      badge: args.badge,
+      measure: args.measure,
+      out,
+    })
+    pushRoofEqualSpacingBadges({
+      axis: 'z',
+      movingBounds: args.movingBounds,
+      siblings: zLane,
+      badge: args.badge,
+      measure: args.measure,
+      out,
+    })
+  }
 
   return {
     guides: out,
@@ -457,11 +617,212 @@ export function roofSiblingSpacing<T>(args: {
   }
 }
 
+function pushRoofEqualSpacingBadges<T>(args: {
+  axis: 'x' | 'z'
+  movingBounds: RoofGuideBounds
+  siblings: RoofGuideBounds[]
+  badge: (id: string, at: [number, number], value: number) => T | null
+  measure?: (from: [number, number], to: [number, number]) => number
+  out: T[]
+}): void {
+  if (args.siblings.length < 2) return
+  const items: RoofEqualSpacingItem[] = [
+    { bounds: args.movingBounds, moving: true },
+    ...args.siblings.map((bounds) => ({ bounds, moving: false })),
+  ].sort((a, b) =>
+    args.axis === 'x' ? a.bounds.centerX - b.bounds.centerX : a.bounds.centerZ - b.bounds.centerZ,
+  )
+  const movingIndex = items.findIndex((item) => item.moving)
+  if (movingIndex < 0) return
+
+  const gaps: RoofEqualSpacingGap[] = []
+  for (let i = 0; i < items.length - 1; i++) {
+    const a = items[i]
+    const b = items[i + 1]
+    if (!a || !b) continue
+    const from: [number, number] =
+      args.axis === 'x'
+        ? [a.bounds.maxX, args.movingBounds.centerZ]
+        : [args.movingBounds.centerX, a.bounds.maxZ]
+    const to: [number, number] =
+      args.axis === 'x'
+        ? [b.bounds.minX, args.movingBounds.centerZ]
+        : [args.movingBounds.centerX, b.bounds.minZ]
+    const value = args.measure?.(from, to) ?? Math.hypot(to[0] - from[0], to[1] - from[1])
+    gaps.push({ value, from, to })
+  }
+
+  let best: { value: number; gaps: RoofEqualSpacingGap[] } | null = null
+  for (let lo = 0; lo < gaps.length; lo++) {
+    let min = Number.POSITIVE_INFINITY
+    let max = Number.NEGATIVE_INFINITY
+    for (let hi = lo; hi < gaps.length; hi++) {
+      const gap = gaps[hi]
+      if (!gap || gap.value < MIN_DIMENSION_M) break
+      min = Math.min(min, gap.value)
+      max = Math.max(max, gap.value)
+      if (max - min > EQUAL_SPACING_THRESHOLD_M) break
+
+      const gapCount = hi - lo + 1
+      if (gapCount < 2) continue
+      const firstItem = lo
+      const lastItem = hi + 1
+      if (movingIndex < firstItem || movingIndex > lastItem) continue
+      if (best !== null && gapCount <= best.gaps.length) continue
+
+      const run = gaps.slice(lo, hi + 1)
+      best = {
+        value: run.reduce((sum, g) => sum + g.value, 0) / run.length,
+        gaps: run,
+      }
+    }
+  }
+
+  best?.gaps.forEach((gap, index) => {
+    const guide = args.badge(
+      `roof-spacing:${args.axis}:${index}`,
+      mid2(gap.from, gap.to),
+      best.value,
+    )
+    if (guide) args.out.push(guide)
+  })
+}
+
+function mid2(a: [number, number], b: [number, number]): [number, number] {
+  return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+}
+
 function sameGuideLane(a: RoofGuideBounds, b: RoofGuideBounds, axis: 'x' | 'z'): boolean {
   if (axis === 'x') {
-    return Math.abs(a.centerZ - b.centerZ) <= ALIGNMENT_THRESHOLD_M
+    return valueWithinRange(a.centerZ, b.minZ, b.maxZ)
   }
-  return Math.abs(a.centerX - b.centerX) <= ALIGNMENT_THRESHOLD_M
+  return valueWithinRange(a.centerX, b.minX, b.maxX)
+}
+
+function valueWithinRange(value: number, min: number, max: number): boolean {
+  return value >= min - ALIGNMENT_THRESHOLD_M && value <= max + ALIGNMENT_THRESHOLD_M
+}
+
+function roofAlignmentSnap(args: {
+  segment: RoofSegmentNode
+  movingId?: string
+  movingBounds: RoofGuideBounds
+  faceKey: string
+}): { dx?: number; dz?: number } | null {
+  const nodes = useScene.getState().nodes
+  let bestX: { delta: number; gap: number } | null = null
+  let bestZ: { delta: number; gap: number } | null = null
+
+  for (const childId of args.segment.children ?? []) {
+    if (childId === args.movingId) continue
+    const sibling = nodes[childId as AnyNodeId]
+    if (!isRoofGuideSibling(sibling)) continue
+    const position = sibling.position
+    if (!Array.isArray(position)) continue
+    const siblingFace = getRoofSurfaceFaceBoundsAt(args.segment, position[0] ?? 0, position[2] ?? 0)
+    if (roofFaceKey(siblingFace.polygon) !== args.faceKey) continue
+
+    const footprint = roofSurfaceFootprintFromNode(sibling, { segment: args.segment })
+    const siblingBounds = roofGuideBounds(position as [number, number, number], footprint)
+    bestX = nearerSnap(bestX, detectRoofAlignmentSnap(args.movingBounds, siblingBounds, 'x'))
+    bestZ = nearerSnap(bestZ, detectRoofAlignmentSnap(args.movingBounds, siblingBounds, 'z'))
+  }
+
+  if (!bestX && !bestZ) return null
+  return {
+    dx: bestX?.delta,
+    dz: bestZ?.delta,
+  }
+}
+
+function detectRoofAlignmentSnap(
+  moving: RoofGuideBounds,
+  sibling: RoofGuideBounds,
+  axis: 'x' | 'z',
+): { delta: number; gap: number } | null {
+  let best: { delta: number; gap: number } | null = null
+  for (const movingFeature of ROOF_ALIGNMENT_FEATURES) {
+    const movingCoord = roofFeatureCoord(moving, axis, movingFeature)
+    for (const siblingFeature of ROOF_ALIGNMENT_FEATURES) {
+      const siblingCoord = roofFeatureCoord(sibling, axis, siblingFeature)
+      const delta = siblingCoord - movingCoord
+      const gap = Math.abs(delta)
+      if (gap <= ALIGNMENT_THRESHOLD_M && (!best || gap < best.gap)) {
+        best = { delta, gap }
+      }
+    }
+  }
+  return best
+}
+
+function nearerSnap(
+  current: { delta: number; gap: number } | null,
+  candidate: { delta: number; gap: number } | null,
+): { delta: number; gap: number } | null {
+  if (!candidate) return current
+  if (!current || candidate.gap < current.gap) return candidate
+  return current
+}
+
+function detectRoofAlignment(
+  moving: RoofGuideBounds,
+  sibling: RoofGuideBounds,
+  axis: 'x' | 'z',
+): RoofAlignmentCandidate | null {
+  let best: RoofAlignmentCandidate | null = null
+  for (const movingFeature of ROOF_ALIGNMENT_FEATURES) {
+    const movingCoord = roofFeatureCoord(moving, axis, movingFeature)
+    for (const siblingFeature of ROOF_ALIGNMENT_FEATURES) {
+      const siblingCoord = roofFeatureCoord(sibling, axis, siblingFeature)
+      const gap = Math.abs(siblingCoord - movingCoord)
+      if (gap > ALIGNMENT_THRESHOLD_M || (best && gap >= best.gap)) continue
+      const coord = siblingCoord
+      if (axis === 'x') {
+        best = {
+          axis,
+          coord,
+          gap,
+          from: [coord, Math.min(moving.minZ, sibling.minZ)],
+          to: [coord, Math.max(moving.maxZ, sibling.maxZ)],
+        }
+      } else {
+        best = {
+          axis,
+          coord,
+          gap,
+          from: [Math.min(moving.minX, sibling.minX), coord],
+          to: [Math.max(moving.maxX, sibling.maxX), coord],
+        }
+      }
+    }
+  }
+  return best
+}
+
+const ROOF_ALIGNMENT_FEATURES: RoofAlignmentFeature[] = ['center', 'min', 'max']
+
+function roofFeatureCoord(
+  bounds: RoofGuideBounds,
+  axis: 'x' | 'z',
+  feature: RoofAlignmentFeature,
+): number {
+  if (axis === 'x') {
+    if (feature === 'min') return bounds.minX
+    if (feature === 'max') return bounds.maxX
+    return bounds.centerX
+  }
+  if (feature === 'min') return bounds.minZ
+  if (feature === 'max') return bounds.maxZ
+  return bounds.centerZ
+}
+
+function nearerAlignment(
+  current: RoofAlignmentCandidate | null,
+  candidate: RoofAlignmentCandidate | null,
+): RoofAlignmentCandidate | null {
+  if (!candidate) return current
+  if (!current || candidate.gap < current.gap) return candidate
+  return current
 }
 
 function isRoofGuideSibling(node: AnyNode | undefined): node is AnyNode & {
