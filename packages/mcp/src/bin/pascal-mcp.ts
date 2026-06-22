@@ -62,14 +62,13 @@ async function main(): Promise<void> {
   }
 
   const store = await createSceneStore()
-  const server = createPascalMcpServer({ bridge, store })
 
   if (values.http) {
     const portNum = Number.parseInt(values.port ?? '3917', 10)
     if (!Number.isFinite(portNum) || portNum < 0 || portNum > 65_535) {
       throw new Error(`invalid --port value: ${values.port}`)
     }
-    const handle = await connectHttp(server, portNum, {
+    const handle = await connectHttp(() => createPascalMcpServer({ bridge, store }), portNum, {
       host: values.host,
       authToken: values['auth-token'],
       allowedOrigins: values['cors-origin'],
@@ -86,6 +85,7 @@ async function main(): Promise<void> {
     process.on('SIGTERM', shutdown)
   } else {
     // --stdio is the default when no transport flag is passed.
+    const server = createPascalMcpServer({ bridge, store })
     await connectStdio(server)
     console.error('[pascal-mcp] stdio server running')
   }
