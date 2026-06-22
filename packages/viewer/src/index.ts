@@ -157,6 +157,9 @@ export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 // 800+ lines of CSG / mitering logic during Phase 3. These exports are
 // removed in Phase 6 when the legacy mount points are deleted.
 export { WallSystem } from './systems/wall/wall-system'
-export { WindowAnimationSystem } from './systems/window/window-animation-system'
+export {
+  poseWindowMovingParts,
+  WindowAnimationSystem,
+} from './systems/window/window-animation-system'
 export { buildWindowPreviewMesh, WindowSystem } from './systems/window/window-system'
 export { ZoneSystem } from './systems/zone/zone-system'
