@@ -15,6 +15,7 @@ import {
   readAutoOffsetTag,
   withAutoOffsetTag,
 } from '../shared/auto-offset-tag'
+import { DuctFittingSizeSwapEditor } from './inspector-editors'
 import { getDuctFittingPorts } from './ports'
 import type { DuctFittingNode } from './schema'
 
@@ -238,6 +239,13 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
           min: 3,
           max: 40,
           step: 1,
+          visibleIf: (n) =>
+            n.fittingType === 'transition' || (n.shape !== 'round' && n.fittingType !== 'reducer'),
+        },
+        {
+          key: 'swapWidthHeight',
+          kind: 'custom',
+          component: DuctFittingSizeSwapEditor,
           visibleIf: (n) =>
             n.fittingType === 'transition' || (n.shape !== 'round' && n.fittingType !== 'reducer'),
         },

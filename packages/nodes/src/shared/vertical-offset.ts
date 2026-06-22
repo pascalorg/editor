@@ -114,6 +114,10 @@ function distToAxisSq(point: Point, origin: Point, axis: Point): number {
   return px * px + py * py + pz * pz
 }
 
+function crossesVerticalTarget(startY: number, endY: number, targetY: number): boolean {
+  return Math.abs(endY - targetY) <= COINCIDENT_EPS_M || (startY - targetY) * (endY - targetY) < 0
+}
+
 /** Outward unit direction at the run endpoint `idx` (0 = start, last = end). */
 function endpointOutwardDir(path: ReadonlyArray<readonly number[]>, idx: number): Point {
   const last = path.length - 1
@@ -121,6 +125,76 @@ function endpointOutwardDir(path: ReadonlyArray<readonly number[]>, idx: number)
   const d: Point = [a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!]
   const len = Math.hypot(d[0], d[1], d[2])
   return len < 1e-9 ? [1, 0, 0] : [d[0] / len, d[1] / len, d[2] / len]
+}
+
+function collectDuctPortsFromNodes(
+  nodes: Record<string, AnyNode>,
+  excludeNodeId: AnyNodeId,
+): ScenePort[] {
+  const ports: ScenePort[] = []
+  for (const node of Object.values(nodes)) {
+    if (!node || node.id === excludeNodeId) continue
+    if (node.type === 'duct-fitting') {
+      ports.push(
+        ...getDuctFittingPorts(node as DuctFittingNode).map((port) => ({
+          ...port,
+          nodeId: node.id as AnyNodeId,
+        })),
+      )
+    } else if (node.type === 'duct-segment') {
+      const duct = node as DuctSegmentNode
+      if (duct.path.length < 2) continue
+      ports.push(
+        {
+          id: 'start',
+          nodeId: duct.id as AnyNodeId,
+          position: duct.path[0]!,
+          direction: endpointOutwardDir(duct.path, 0),
+          diameter: 0,
+          system: duct.system,
+        },
+        {
+          id: 'end',
+          nodeId: duct.id as AnyNodeId,
+          position: duct.path[duct.path.length - 1]!,
+          direction: endpointOutwardDir(duct.path, duct.path.length - 1),
+          diameter: 0,
+          system: duct.system,
+        },
+      )
+    }
+  }
+  return ports
+}
+
+function collectDuctConnections(
+  duct: DuctSegmentNode,
+  nodes: Record<string, AnyNode>,
+  scenePorts: ScenePort[],
+): PortConnection[] {
+  const eps2 = COINCIDENT_EPS_M * COINCIDENT_EPS_M
+  const connections = new Map<AnyNodeId, PortConnection>()
+  for (const endIdx of duct.path.length > 1 ? [0, duct.path.length - 1] : [0]) {
+    const end = duct.path[endIdx]!
+    const mate = scenePorts.find((port) => distSq(port.position, end) <= eps2)
+    if (!mate || connections.has(mate.nodeId)) continue
+    const node = nodes[mate.nodeId]
+    if (!node) continue
+    if (node.type === 'duct-segment') {
+      connections.set(mate.nodeId, {
+        kind: 'run',
+        nodeId: mate.nodeId,
+        startPath: (node as DuctSegmentNode).path.map((p) => [...p] as Point),
+      })
+    } else if (node.type === 'duct-fitting') {
+      connections.set(mate.nodeId, {
+        kind: 'rigid-node',
+        nodeId: mate.nodeId,
+        startPosition: [...(node as DuctFittingNode).position] as Point,
+      })
+    }
+  }
+  return [...connections.values()]
 }
 
 /** Classifies whether the partner run's segment ADJACENT to its tip at
@@ -240,6 +314,7 @@ function directRiserCollapseAction(args: {
   scenePorts: ScenePort[]
   nodesById: Record<string, AnyNode>
   eps2: number
+  allowEarlySnap: boolean
 }): RiserCollapseAction {
   const {
     riserId,
@@ -253,6 +328,7 @@ function directRiserCollapseAction(args: {
     scenePorts,
     nodesById,
     eps2,
+    allowEarlySnap,
   } = args
   const tip = riserPath.findIndex((p) => distSq(p, riserTopPoint) <= eps2)
   if (tip !== 0 && tip !== riserPath.length - 1) return null
@@ -279,7 +355,13 @@ function directRiserCollapseAction(args: {
   ]
   if (distToAxisSq(collarOnLiftedLevel, liftedDuctPoint, ductPortDir) > eps2) return null
   if (Math.abs(realign.collarPoint[1] - liftedDuctPoint[1]) > COINCIDENT_EPS_M) {
-    return { status: 'snap', dy: realign.collarPoint[1] - ductEndPoint[1] }
+    if (
+      allowEarlySnap ||
+      crossesVerticalTarget(ductEndPoint[1], liftedDuctPoint[1], realign.collarPoint[1])
+    ) {
+      return { status: 'snap', dy: realign.collarPoint[1] - ductEndPoint[1] }
+    }
+    return null
   }
   return {
     status: 'collapse',
@@ -306,6 +388,7 @@ function fittingRiserAction(args: {
   scenePorts: ScenePort[]
   nodesById: Record<string, AnyNode>
   eps2: number
+  allowEarlySnap: boolean
 }): FittingRiserAction {
   const {
     fitting,
@@ -319,6 +402,7 @@ function fittingRiserAction(args: {
     scenePorts,
     nodesById,
     eps2,
+    allowEarlySnap,
   } = args
   const ports = getDuctFittingPorts(fitting)
   for (const port of ports) {
@@ -379,8 +463,14 @@ function fittingRiserAction(args: {
         continue
       }
       if (Math.abs(realign.collarPoint[1] - liftedDuctPoint[1]) > COINCIDENT_EPS_M) {
-        if (stretch === 'stretch') return { status: 'stretch' }
-        return { status: 'snap', dy: realign.collarPoint[1] - ductEndPoint[1] }
+        if (
+          crossesVerticalTarget(ductEndPoint[1], liftedDuctPoint[1], realign.collarPoint[1]) ||
+          (allowEarlySnap && stretch === 'invalid')
+        ) {
+          return { status: 'snap', dy: realign.collarPoint[1] - ductEndPoint[1] }
+        }
+        if (stretch === 'stretch' || stretch === 'invalid') return { status: 'stretch' }
+        continue
       }
       return {
         status: 'collapse',
@@ -502,6 +592,7 @@ function planVerticalOffsetsAtDy(
         scenePorts,
         nodesById,
         eps2,
+        allowEarlySnap: allowTransitionSnap,
       })
       if (riserAction?.status === 'stretch') {
         offsetAny = true
@@ -516,7 +607,7 @@ function planVerticalOffsetsAtDy(
         continue
       }
       if (riserAction?.status === 'snap' && allowTransitionSnap) {
-        return planVerticalOffsetsAtDy(args, riserAction.dy, false)
+        return continueAfterTransitionSnap(args, routeDy, riserAction.dy)
       }
       if (riserAction?.status === 'snap') return { status: 'invalid' }
       // Minting the top elbow + riser needs elbow-leg + riser room.
@@ -590,9 +681,10 @@ function planVerticalOffsetsAtDy(
         scenePorts,
         nodesById,
         eps2,
+        allowEarlySnap: allowTransitionSnap,
       })
       if (collapse?.status === 'snap' && allowTransitionSnap) {
-        return planVerticalOffsetsAtDy(args, collapse.dy, false)
+        return continueAfterTransitionSnap(args, routeDy, collapse.dy)
       }
       if (collapse?.status === 'collapse') {
         ductPath[endIdx] = collapse.ductPoint
@@ -656,5 +748,72 @@ function planVerticalOffsetsAtDy(
   return {
     status: 'valid',
     plan: { dy, ductPath, followPath, fittings, risers, updates, delete: deletes },
+  }
+}
+
+function continueAfterTransitionSnap(
+  args: {
+    duct: DuctSegmentNode
+    dy: number
+    profile: DuctProfile
+    connections: PortConnection[]
+    scenePorts: ScenePort[]
+    nodesById: Record<string, AnyNode>
+  },
+  requestedDy: number,
+  snappedDy: number,
+): VerticalOffsetResult {
+  const snapped = planVerticalOffsetsAtDy(args, snappedDy, false)
+  if (snapped?.status !== 'valid') return snapped
+
+  const remainingDy = requestedDy - snapped.plan.dy
+  if (Math.abs(remainingDy) <= MIN_RISER_M || Math.sign(remainingDy) !== Math.sign(requestedDy)) {
+    return snapped
+  }
+
+  const nodesById: Record<string, AnyNode> = { ...args.nodesById }
+  for (const id of snapped.plan.delete ?? []) {
+    delete nodesById[id]
+  }
+  for (const update of snapped.plan.updates) {
+    const current = nodesById[update.id]
+    if (current) nodesById[update.id] = { ...current, ...update.data } as AnyNode
+  }
+  for (const node of [...snapped.plan.fittings, ...snapped.plan.risers]) {
+    nodesById[node.id as AnyNodeId] = node as AnyNode
+  }
+
+  const collapsedDuct = DuctSegmentNode.parse({
+    ...args.duct,
+    path: snapped.plan.ductPath,
+  })
+  nodesById[collapsedDuct.id as AnyNodeId] = collapsedDuct as AnyNode
+  const scenePorts = collectDuctPortsFromNodes(nodesById, collapsedDuct.id as AnyNodeId)
+  const connections = collectDuctConnections(collapsedDuct, nodesById, scenePorts)
+  const continued = planVerticalOffsetsAtDy(
+    {
+      ...args,
+      duct: collapsedDuct,
+      dy: remainingDy,
+      connections,
+      scenePorts,
+      nodesById,
+    },
+    remainingDy,
+    false,
+  )
+
+  if (continued?.status !== 'valid') return snapped
+  return {
+    status: 'valid',
+    plan: {
+      dy: requestedDy,
+      ductPath: continued.plan.ductPath,
+      followPath: continued.plan.followPath,
+      fittings: [...snapped.plan.fittings, ...continued.plan.fittings],
+      risers: [...snapped.plan.risers, ...continued.plan.risers],
+      updates: [...snapped.plan.updates, ...continued.plan.updates],
+      delete: [...(snapped.plan.delete ?? []), ...(continued.plan.delete ?? [])],
+    },
   }
 }

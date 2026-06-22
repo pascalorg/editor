@@ -465,6 +465,74 @@ describe('planVerticalOffsets', () => {
     expect(result.plan.ductPath[1]?.[1]).toBeCloseTo(0.5, 6)
   })
 
+  test('continues past one unequal side without snapping to the lower side early', () => {
+    const leftBottom = planElbowAtPort(portLike([0, 0.5, 0], [1, 0, 0]), [0, 1, 0], RECT_PROFILE)
+    const leftTop = planElbowAtPort(portLike([0, 1.2, 0], [-1, 0, 0]), [0, -1, 0], RECT_PROFILE)
+    const rightBottom = planElbowAtPort(portLike([4, -1, 0], [-1, 0, 0]), [0, 1, 0], RECT_PROFILE)
+    const rightTop = planElbowAtPort(portLike([4, 1.2, 0], [1, 0, 0]), [0, -1, 0], RECT_PROFILE)
+    expect(leftBottom && leftTop && rightBottom && rightTop).toBeTruthy()
+    if (!leftBottom || !leftTop || !rightBottom || !rightTop) return
+
+    const leftRiser = rectRun([leftBottom.collarPoint, leftTop.collarPoint])
+    const rightRiser = rectRun([rightBottom.collarPoint, rightTop.collarPoint])
+    const topRun = rectRun([leftTop.trimmedPortPoint, rightTop.trimmedPortPoint])
+    const result = planVerticalOffsets({
+      duct: topRun,
+      dy: -1.8,
+      profile: RECT_PROFILE,
+      connections: [
+        fittingConnection(leftTop.fitting),
+        fittingConnection(rightTop.fitting),
+        runConnection(leftRiser),
+        runConnection(rightRiser),
+        fittingConnection(leftBottom.fitting),
+        fittingConnection(rightBottom.fitting),
+      ],
+      scenePorts: [
+        ...getDuctFittingPorts(leftTop.fitting).map((p) => ({
+          ...p,
+          nodeId: leftTop.fitting.id,
+        })),
+        ...getDuctFittingPorts(rightTop.fitting).map((p) => ({
+          ...p,
+          nodeId: rightTop.fitting.id,
+        })),
+        ...getDuctFittingPorts(leftBottom.fitting).map((p) => ({
+          ...p,
+          nodeId: leftBottom.fitting.id,
+        })),
+        ...getDuctFittingPorts(rightBottom.fitting).map((p) => ({
+          ...p,
+          nodeId: rightBottom.fitting.id,
+        })),
+        runPort(leftRiser, leftRiser.path[0]!, [0, -1, 0]),
+        runPort(leftRiser, leftRiser.path[1]!, [0, 1, 0]),
+        runPort(rightRiser, rightRiser.path[0]!, [0, -1, 0]),
+        runPort(rightRiser, rightRiser.path[1]!, [0, 1, 0]),
+      ],
+      nodesById: {
+        [topRun.id]: topRun as AnyNode,
+        [leftTop.fitting.id]: leftTop.fitting as AnyNode,
+        [rightTop.fitting.id]: rightTop.fitting as AnyNode,
+        [leftBottom.fitting.id]: leftBottom.fitting as AnyNode,
+        [rightBottom.fitting.id]: rightBottom.fitting as AnyNode,
+        [leftRiser.id]: leftRiser as AnyNode,
+        [rightRiser.id]: rightRiser as AnyNode,
+      },
+    })
+
+    expect(result?.status).toBe('valid')
+    if (result?.status !== 'valid') return
+    expect(result.plan.dy).toBeCloseTo(-1.8, 6)
+    expect(result.plan.ductPath[0]?.[1]).toBeCloseTo(-0.6, 6)
+    expect(result.plan.ductPath[1]?.[1]).toBeCloseTo(-0.6, 6)
+    expect(result.plan.fittings).toHaveLength(1)
+    expect(result.plan.risers).toHaveLength(1)
+    expect(result.plan.delete).toEqual(expect.arrayContaining([leftTop.fitting.id, leftRiser.id]))
+    expect(result.plan.delete ?? []).not.toContain(rightTop.fitting.id)
+    expect(result.plan.delete ?? []).not.toContain(rightRiser.id)
+  })
+
   test('snaps downward through the short-riser dead band into the collapse route', () => {
     const leftBottom = planElbowAtPort(portLike([0, 0, 0], [1, 0, 0]), [0, 1, 0], RECT_PROFILE)
     const leftTop = planElbowAtPort(portLike([0, 1.2, 0], [-1, 0, 0]), [0, -1, 0], RECT_PROFILE)
@@ -568,6 +636,42 @@ describe('planVerticalOffsets', () => {
     const reaimedPorts = getDuctFittingPorts(reaimedBottom)
     expect(reaimedPorts.some((p) => distSq(p.position, result.plan.ductPath[0]!) < 1e-9)).toBe(true)
     expect(verticalPort).toBeDefined()
+  })
+
+  test('continues routing after a collapse without needing a new drag', () => {
+    const bottom = planElbowAtPort(portLike([0, 0, 0], [1, 0, 0]), [0, 1, 0], RECT_PROFILE)
+    expect(bottom).toBeTruthy()
+    if (!bottom) return
+
+    const bottomPorts = getDuctFittingPorts(bottom.fitting)
+    const riserTop: Point = [bottom.collarPoint[0], 1.2, bottom.collarPoint[2]]
+    const riser = rectRun([bottom.collarPoint, riserTop])
+    const topRun = rectRun([riserTop, [4, riserTop[1], riserTop[2]]])
+
+    const result = planVerticalOffsets({
+      duct: topRun,
+      dy: -2.4,
+      profile: RECT_PROFILE,
+      connections: [runConnection(riser), fittingConnection(bottom.fitting)],
+      scenePorts: [
+        ...bottomPorts.map((p) => ({ ...p, nodeId: bottom.fitting.id })),
+        runPort(riser, bottom.collarPoint, [0, -1, 0]),
+        runPort(riser, riserTop, [0, 1, 0]),
+      ],
+      nodesById: {
+        [topRun.id]: topRun as AnyNode,
+        [riser.id]: riser as AnyNode,
+        [bottom.fitting.id]: bottom.fitting as AnyNode,
+      },
+    })
+
+    expect(result?.status).toBe('valid')
+    if (result?.status !== 'valid') return
+    expect(result.plan.dy).toBeCloseTo(-2.4, 6)
+    expect(result.plan.delete).toEqual(expect.arrayContaining([riser.id]))
+    expect(result.plan.fittings.length).toBeGreaterThan(0)
+    expect(result.plan.risers.length).toBeGreaterThan(0)
+    expect(result.plan.ductPath[0]?.[1]).toBeLessThan(0)
   })
 
   test.each([

@@ -13,6 +13,7 @@ import {
   resolveConnectivityUpdates,
   resumeSceneHistory,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { DimensionPill, swallowNextClick, triggerSFX, useEditor } from '@pascal-app/editor'
@@ -726,6 +727,38 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
 
     pauseSceneHistory(useScene)
 
+    const ensureSceneObjectsVisible = (ids: Iterable<AnyNodeId>) => {
+      const scene = useScene.getState()
+      for (const id of ids) {
+        const obj = sceneRegistry.nodes.get(id)
+        if (obj) {
+          obj.visible = true
+          obj.traverse((child) => {
+            child.visible = true
+          })
+        }
+        if (scene.nodes[id]) scene.markDirty(id)
+      }
+    }
+    const livePreviewIds = new Set<AnyNodeId>()
+    const publishLivePreview = (updates: { id: AnyNodeId; data: Partial<AnyNode> }[]) => {
+      const scene = useScene.getState()
+      const entries = updates
+        .filter((update) => scene.nodes[update.id])
+        .map((update) => [update.id, update.data as Record<string, unknown>] as const)
+      if (entries.length === 0) return
+      useLiveNodeOverrides.getState().setMany(entries)
+      for (const [id] of entries) {
+        livePreviewIds.add(id)
+        scene.markDirty(id)
+      }
+    }
+    const clearLivePreview = () => {
+      const overrides = useLiveNodeOverrides.getState()
+      for (const id of livePreviewIds) overrides.clear(id)
+      livePreviewIds.clear()
+    }
+
     // Connectivity + ports are read from an IN-MEMORY post-rewind scene (the
     // logical L), so click-only pointerdown doesn't visually snap the committed
     // offset down to the floor. The real scene is only rewound after the first
@@ -837,18 +870,26 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
 
     const restoreOriginalOffsetPreview = () => {
       const scene = useScene.getState()
+      const partnerUpdates = originalPartnerReverts()
+      const updates = [
+        {
+          id: duct.id as AnyNodeId,
+          data: { path: duct.path, metadata: duct.metadata } as Partial<AnyNode>,
+        },
+        ...partnerUpdates,
+      ]
+      publishLivePreview(updates)
       scene.applyNodeChanges({
         create: mintedSnapshots
           .filter((n) => !scene.nodes[n.id])
           .map((node) => ({ node, parentId })),
-        update: [
-          {
-            id: duct.id as AnyNodeId,
-            data: { path: duct.path, metadata: duct.metadata } as Partial<AnyNode>,
-          },
-          ...originalPartnerReverts(),
-        ],
+        update: updates,
       })
+      ensureSceneObjectsVisible([
+        duct.id as AnyNodeId,
+        ...mintedSnapshots.map((node) => node.id as AnyNodeId),
+        ...partnerUpdates.map((update) => update.id),
+      ])
     }
 
     const restorePreviewDeleted = (keepDeleted: readonly AnyNodeId[] = []) => {
@@ -865,27 +906,33 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         }
         previewDeletedSnapshots.delete(id)
       }
-      if (create.length > 0) scene.applyNodeChanges({ create })
+      if (create.length > 0) {
+        scene.applyNodeChanges({ create })
+        ensureSceneObjectsVisible(create.map(({ node }) => node.id as AnyNodeId))
+      }
     }
 
     const applyLogicalBasePreview = () => {
       if (!tag) return
       const scene = useScene.getState()
+      const updates = [
+        {
+          id: duct.id as AnyNodeId,
+          data: {
+            path: logicalPath,
+            metadata: withoutAutoOffsetTag(duct.metadata),
+          } as Partial<AnyNode>,
+        },
+        ...tag.base
+          .filter((b) => b.id !== (duct.id as AnyNodeId) && scene.nodes[b.id])
+          .map((b) => ({ id: b.id, data: b.data as Partial<AnyNode> })),
+      ]
+      publishLivePreview(updates)
       scene.applyNodeChanges({
         delete: mintedIds.filter((id) => scene.nodes[id]),
-        update: [
-          {
-            id: duct.id as AnyNodeId,
-            data: {
-              path: logicalPath,
-              metadata: withoutAutoOffsetTag(duct.metadata),
-            } as Partial<AnyNode>,
-          },
-          ...tag.base
-            .filter((b) => b.id !== (duct.id as AnyNodeId) && scene.nodes[b.id])
-            .map((b) => ({ id: b.id, data: b.data as Partial<AnyNode> })),
-        ],
+        update: updates,
       })
+      ensureSceneObjectsVisible(updates.map((update) => update.id))
     }
 
     const onMove = (event: PointerEvent) => {
@@ -929,14 +976,18 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           if (node) previewDeletedSnapshots.set(id, node)
         }
         restorePreviewDeleted(plan.delete ?? [])
+        const followUpdates = connectivityUpdatesForPath(connectivity, plan.followPath)
+        const updates = [
+          { id: duct.id as AnyNodeId, data: { path: plan.ductPath } },
+          ...plan.updates.filter((u) => scene.nodes[u.id]),
+          ...followUpdates,
+        ]
+        publishLivePreview(updates)
         scene.applyNodeChanges({
           delete: deletePreview,
-          update: [
-            { id: duct.id as AnyNodeId, data: { path: plan.ductPath } },
-            ...plan.updates.filter((u) => scene.nodes[u.id]),
-            ...connectivityUpdatesForPath(connectivity, plan.followPath),
-          ],
+          update: updates,
         })
+        ensureSceneObjectsVisible(updates.map((update) => update.id))
         setVerticalGhost({ tint: 'valid', fittings: plan.fittings, risers: plan.risers })
       } else if (offsetResult?.status === 'invalid') {
         // No clean offset at this height. Keep the last committed network
@@ -951,7 +1002,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         restorePreviewDeleted()
         applyLogicalBasePreview()
         setVerticalGhost(null)
-        useScene.getState().updateNodes(batchFor(shiftedPath(next)))
+        const updates = batchFor(shiftedPath(next))
+        publishLivePreview(updates)
+        useScene.getState().updateNodes(updates)
+        ensureSceneObjectsVisible(updates.map((update) => update.id))
       }
     }
 
@@ -964,31 +1018,38 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       document.body.style.cursor = ''
       setRunMoving(false)
       setVerticalGhost(null)
+      clearLivePreview()
       // Single-undo dance: while paused, revert to the PRE-drag baseline (the
       // original Z — recreate the minted nodes the rewind deleted and restore
       // the run + partners), resume, then write the final state as ONE tracked
       // change so undo jumps straight back to the original.
       const restore = useScene.getState()
+      const restoredPreviewNodes = Array.from(previewDeletedSnapshots.values()).filter(
+        (node) => !restore.nodes[node.id],
+      )
+      const restoredMintedNodes = mintedSnapshots.filter((n) => !restore.nodes[n.id])
+      const restoreUpdates = [
+        {
+          id: duct.id as AnyNodeId,
+          data: { path: duct.path, metadata: duct.metadata } as Partial<AnyNode>,
+        },
+        ...originalPartnerReverts(),
+      ]
       restore.applyNodeChanges({
         create: [
-          ...mintedSnapshots
-            .filter((n) => !restore.nodes[n.id])
-            .map((node) => ({ node, parentId })),
-          ...Array.from(previewDeletedSnapshots.values())
-            .filter((node) => !restore.nodes[node.id])
-            .map((node) => ({
-              node,
-              parentId: (node.parentId ?? undefined) as AnyNodeId | undefined,
-            })),
+          ...restoredMintedNodes.map((node) => ({ node, parentId })),
+          ...restoredPreviewNodes.map((node) => ({
+            node,
+            parentId: (node.parentId ?? undefined) as AnyNodeId | undefined,
+          })),
         ],
-        update: [
-          {
-            id: duct.id as AnyNodeId,
-            data: { path: duct.path, metadata: duct.metadata } as Partial<AnyNode>,
-          },
-          ...originalPartnerReverts(),
-        ],
+        update: restoreUpdates,
       })
+      ensureSceneObjectsVisible([
+        ...restoredMintedNodes.map((node) => node.id as AnyNodeId),
+        ...restoredPreviewNodes.map((node) => node.id as AnyNodeId),
+        ...restoreUpdates.map((update) => update.id),
+      ])
       resumeSceneHistory(useScene)
       if (delta === 0) return
       const dyEff = baseDy + delta
@@ -1013,45 +1074,53 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           minted: minted.map((n) => n.id as AnyNodeId),
           base,
         }
+        const followUpdates = connectivityUpdatesForPath(connectivity, plan.followPath)
+        const updates = [
+          {
+            id: duct.id as AnyNodeId,
+            data: {
+              path: plan.ductPath,
+              metadata: hasMintedOffset
+                ? withAutoOffsetTag(duct.metadata, newTag)
+                : withoutAutoOffsetTag(duct.metadata),
+            } as Partial<AnyNode>,
+          },
+          ...plan.updates.filter((u) => scene.nodes[u.id]),
+          ...followUpdates,
+        ]
         scene.applyNodeChanges({
           create: minted.map((node) => ({ node, parentId })),
           delete: [
             ...mintedIds.filter((id) => scene.nodes[id]),
             ...(plan.delete ?? []).filter((id) => scene.nodes[id]),
           ],
-          update: [
-            {
-              id: duct.id as AnyNodeId,
-              data: {
-                path: plan.ductPath,
-                metadata: hasMintedOffset
-                  ? withAutoOffsetTag(duct.metadata, newTag)
-                  : withoutAutoOffsetTag(duct.metadata),
-              } as Partial<AnyNode>,
-            },
-            ...plan.updates.filter((u) => scene.nodes[u.id]),
-            ...connectivityUpdatesForPath(connectivity, plan.followPath),
-          ],
+          update: updates,
         })
+        ensureSceneObjectsVisible([
+          ...minted.map((node) => node.id as AnyNodeId),
+          ...updates.map((update) => update.id),
+        ])
       } else if (tag && dyEff === 0) {
         // Dragged a re-grabbed offset all the way back to its logical L: the Z
         // dissolves for good — delete the minted nodes, drop the tag, and leave
         // the run + partners on the clean L.
+        const updates = [
+          {
+            id: duct.id as AnyNodeId,
+            data: {
+              path: logicalPath,
+              metadata: withoutAutoOffsetTag(duct.metadata),
+            } as Partial<AnyNode>,
+          },
+          ...tag.base
+            .filter((b) => b.id !== (duct.id as AnyNodeId) && scene.nodes[b.id])
+            .map((b) => ({ id: b.id, data: b.data as Partial<AnyNode> })),
+        ]
         scene.applyNodeChanges({
           delete: mintedIds.filter((id) => scene.nodes[id]),
-          update: [
-            {
-              id: duct.id as AnyNodeId,
-              data: {
-                path: logicalPath,
-                metadata: withoutAutoOffsetTag(duct.metadata),
-              } as Partial<AnyNode>,
-            },
-            ...tag.base
-              .filter((b) => b.id !== (duct.id as AnyNodeId) && scene.nodes[b.id])
-              .map((b) => ({ id: b.id, data: b.data as Partial<AnyNode> })),
-          ],
+          update: updates,
         })
+        ensureSceneObjectsVisible(updates.map((update) => update.id))
       } else {
         // Plain translate, or a horizontal connected slide that can be
         // rerouted with elbows + a connector instead of dragging the network.
@@ -1068,16 +1137,22 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
               })
             : null
         if (translationPlan) {
+          const created = [...translationPlan.fittings, ...translationPlan.connectors]
+          const updates = [
+            { id: duct.id as AnyNodeId, data: { path: translationPlan.ductPath } },
+            ...translationPlan.updates,
+          ]
           scene.applyNodeChanges({
-            create: [...translationPlan.fittings, ...translationPlan.connectors].map((node) => ({
+            create: created.map((node) => ({
               node: node as AnyNode,
               parentId,
             })),
-            update: [
-              { id: duct.id as AnyNodeId, data: { path: translationPlan.ductPath } },
-              ...translationPlan.updates,
-            ],
+            update: updates,
           })
+          ensureSceneObjectsVisible([
+            ...created.map((node) => node.id as AnyNodeId),
+            ...updates.map((update) => update.id),
+          ])
           return
         }
         const updates = batchFor(finalPath)
@@ -1105,6 +1180,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           }
         }
         useScene.getState().updateNodes(updates)
+        ensureSceneObjectsVisible(updates.map((update) => update.id))
       }
     }
 
