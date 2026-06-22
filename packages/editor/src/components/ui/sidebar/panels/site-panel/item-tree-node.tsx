@@ -15,13 +15,13 @@ import {
 import { TreeNodeActions } from './tree-node-actions'
 
 const CATEGORY_ICONS: Record<string, string> = {
-  door: '/icons/door.png',
-  window: '/icons/window.png',
-  furniture: '/icons/couch.png',
-  appliance: '/icons/appliance.png',
-  kitchen: '/icons/kitchen.png',
-  bathroom: '/icons/bathroom.png',
-  outdoor: '/icons/tree.png',
+  door: '/icons/door.webp',
+  window: '/icons/window.webp',
+  furniture: '/icons/couch.webp',
+  appliance: '/icons/appliance.webp',
+  kitchen: '/icons/kitchen.webp',
+  bathroom: '/icons/bathroom.webp',
+  outdoor: '/icons/tree.webp',
 }
 
 interface ItemTreeNodeProps {
@@ -88,7 +88,7 @@ export const ItemTreeNode = memo(function ItemTreeNode({
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const iconSrc = CATEGORY_ICONS[asset?.category ?? ''] || '/icons/couch.png'
+  const iconSrc = CATEGORY_ICONS[asset?.category ?? ''] || '/icons/couch.webp'
   const snapTarget = resolveNodeSnapTarget(node)
   const defaultName = asset?.name || 'Item'
   const hasChildren = children.length > 0

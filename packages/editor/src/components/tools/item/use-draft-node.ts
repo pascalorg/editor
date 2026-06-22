@@ -27,12 +27,14 @@ export interface DraftNodeHandle {
   readonly current: ItemNode | null
   /** Whether the current draft was adopted (move mode) vs created (create mode) */
   readonly isAdopted: boolean
-  /** Create a new draft item at the given position. Returns the created node or null. */
+  /** Create a new draft item at the given position. Returns the created node or null.
+   *  `slots` seeds painted slot overrides so duplicates keep their materials. */
   create: (
     gridPosition: Vector3,
     asset: AssetInput,
     rotation?: [number, number, number],
     scale?: [number, number, number],
+    slots?: ItemNode['slots'],
   ) => ItemNode | null
   /** Take ownership of an existing scene node as the draft (for move mode). */
   adopt: (node: ItemNode) => void
@@ -61,6 +63,7 @@ export function useDraftNode(): DraftNodeHandle {
       asset: AssetInput,
       rotation?: [number, number, number],
       scale?: [number, number, number],
+      slots?: ItemNode['slots'],
     ): ItemNode | null => {
       const currentLevelId = useViewer.getState().selection.levelId
       if (!currentLevelId) return null
@@ -73,6 +76,7 @@ export function useDraftNode(): DraftNodeHandle {
         asset,
         parentId: currentLevelId,
         metadata: { isTransient: true },
+        ...(slots ? { slots } : {}),
       })
 
       useScene.getState().createNode(node, currentLevelId)
@@ -180,6 +184,8 @@ export function useDraftNode(): DraftNodeHandle {
       rotation: updateProps.rotation ?? draft.rotation,
       scale: updateProps.scale ?? draft.scale,
       side: updateProps.side ?? draft.side,
+      // Carry painted slot overrides so a duplicated item keeps its materials.
+      ...(draft.slots ? { slots: draft.slots } : {}),
       // Roof host — see the move-mode commit above for why this must be
       // forwarded explicitly.
       roofSegmentId: updateProps.roofSegmentId,

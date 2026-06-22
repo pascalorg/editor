@@ -13,7 +13,6 @@ import {
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
   getEffectiveStairSurfaceMaterial,
-  getEffectiveWallSurfaceMaterial,
   getLibraryMaterialIdFromRef,
   type MaterialSchema,
   type MaterialTarget,
@@ -26,28 +25,29 @@ import {
   type SlabNode,
   type StairNode,
   type StairSurfaceMaterialRole,
-  type WallNode,
   type WallSurfaceSide,
 } from '@pascal-app/core'
 
-export type PaintableMaterialTarget = Extract<
-  MaterialTarget,
-  | 'wall'
-  | 'roof'
-  | 'stair'
-  | 'fence'
-  | 'column'
-  | 'slab'
-  | 'ceiling'
-  | 'shelf'
-  | 'chimney'
-  | 'dormer'
-  | 'box-vent'
-  | 'ridge-vent'
-  | 'turbine-vent'
-  | 'cupola'
-  | 'eyebrow-vent'
->
+export type PaintableMaterialTarget =
+  | Extract<
+      MaterialTarget,
+      | 'wall'
+      | 'roof'
+      | 'stair'
+      | 'fence'
+      | 'column'
+      | 'slab'
+      | 'ceiling'
+      | 'shelf'
+      | 'chimney'
+      | 'dormer'
+      | 'box-vent'
+      | 'ridge-vent'
+      | 'turbine-vent'
+      | 'cupola'
+      | 'eyebrow-vent'
+    >
+  | 'item'
 
 export type SingleSurfaceMaterialRole = 'surface'
 
@@ -74,32 +74,6 @@ function getCatalogEntryForActivePaintMaterial(material: ActivePaintMaterial | n
 
 export function getActivePaintMaterialLabel(material: ActivePaintMaterial | null | undefined) {
   return getCatalogEntryForActivePaintMaterial(material)?.label ?? 'Custom'
-}
-
-export function buildWallSurfaceMaterialPatch(
-  node: WallNode,
-  targetSide: WallSurfaceSide,
-  material: MaterialSchema | undefined,
-  materialPreset: string | undefined,
-): Partial<WallNode> {
-  const nextSurfaceMaterial = { material, materialPreset }
-  const nextInterior =
-    targetSide === 'interior'
-      ? nextSurfaceMaterial
-      : getEffectiveWallSurfaceMaterial(node, 'interior')
-  const nextExterior =
-    targetSide === 'exterior'
-      ? nextSurfaceMaterial
-      : getEffectiveWallSurfaceMaterial(node, 'exterior')
-
-  return {
-    interiorMaterial: nextInterior.material,
-    interiorMaterialPreset: nextInterior.materialPreset,
-    exteriorMaterial: nextExterior.material,
-    exteriorMaterialPreset: nextExterior.materialPreset,
-    material: undefined,
-    materialPreset: undefined,
-  }
 }
 
 export function buildRoofSurfaceMaterialPatch(
@@ -179,6 +153,7 @@ export function buildResetSurfaceMaterialUpdates(
       if (
         key === 'material' ||
         key === 'materialPreset' ||
+        key === 'slots' ||
         key.endsWith('Material') ||
         key.endsWith('MaterialPreset')
       ) {
@@ -276,6 +251,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
       | ChimneyMaterialRole
       | DormerSurfaceMaterialRole
       | SingleSurfaceMaterialRole
+      | string
   } | null
 }): ActivePaintMaterial | null {
   const { nodes, selectedId, selectedMaterialTarget } = params
@@ -378,8 +354,6 @@ export function resolveActivePaintMaterialFromSelection(params: {
   if (
     (selectedNode.type === 'fence' ||
       selectedNode.type === 'column' ||
-      selectedNode.type === 'slab' ||
-      selectedNode.type === 'ceiling' ||
       selectedNode.type === 'shelf') &&
     selectedMaterialTarget.role === 'surface'
   ) {
@@ -442,6 +416,10 @@ export function resolvePaintTargetFromSelection(params: {
 
   if (selectedNode.type === 'shelf') {
     return 'shelf'
+  }
+
+  if (selectedNode.type === 'item') {
+    return 'item'
   }
 
   if (selectedNode.type === 'chimney') {

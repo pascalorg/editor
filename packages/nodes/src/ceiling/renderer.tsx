@@ -15,51 +15,13 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { float, mix, positionWorld, smoothstep } from 'three/tsl'
-import { BackSide, FrontSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
+import { BackSide, type Mesh } from 'three/webgpu'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
+import { ceilingColorFromRef, getCeilingMaterials } from './materials'
+import { CEILING_SLOT_DEFAULT_COLOR } from './slots'
 
 function createEmptyGeometry() {
   return createPlaceholderGeometry()
-}
-
-const gridScale = 5
-const gridX = positionWorld.x.mul(gridScale).fract()
-const gridY = positionWorld.z.mul(gridScale).fract()
-const lineWidth = 0.05
-const lineX = smoothstep(lineWidth, 0, gridX).add(smoothstep(1.0 - lineWidth, 1.0, gridX))
-const lineY = smoothstep(lineWidth, 0, gridY).add(smoothstep(1.0 - lineWidth, 1.0, gridY))
-const gridPattern = lineX.max(lineY)
-const gridOpacity = mix(float(0.2), float(0.6), gridPattern)
-
-function createCeilingMaterials(color = '#999999') {
-  const topMaterial = new MeshBasicNodeMaterial({
-    color,
-    transparent: true,
-    depthWrite: false,
-    side: FrontSide,
-  })
-  topMaterial.opacityNode = gridOpacity
-
-  const bottomMaterial = new MeshBasicNodeMaterial({
-    color,
-    transparent: true,
-    side: BackSide,
-  })
-
-  return { topMaterial, bottomMaterial }
-}
-
-const ceilingMaterialCache = new Map<string, ReturnType<typeof createCeilingMaterials>>()
-
-function getCeilingMaterials(color = '#999999') {
-  const cacheKey = color
-  const cached = ceilingMaterialCache.get(cacheKey)
-  if (cached) return cached
-
-  const materials = createCeilingMaterials(color)
-  ceilingMaterialCache.set(cacheKey, materials)
-  return materials
 }
 
 export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
@@ -80,6 +42,9 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  // Subscribe to the scene-material library so editing a `scene:` material the
+  // ceiling slot references re-tints it live.
+  const sceneMaterials = useScene((s) => s.materials)
   const liveTransform = useLiveTransforms((s) => s.get(node.id))
   const ceilingY = (node.height ?? 2.5) - 0.01 + (liveTransform?.position[1] ?? 0)
   const position: [number, number, number] = [
@@ -97,18 +62,15 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   )
 
   const materials = useMemo(() => {
-    // Untextured ceilings (and everything in textures-off mode) take the themed
-    // 'ceiling' role colour; only an explicit preset/material keeps a texture.
-    const hasExplicit = Boolean(node.materialPreset || node.material)
-    if (!textures || !hasExplicit) {
-      // Bottom (seen from inside the room, looking up) stays opaque so the
-      // ceiling reads as a solid surface. Top uses the transparent
-      // grid-pattern material so the ceiling stays see-through whenever
-      // the editor reveals the `ceiling-grid` overlay (placing a
-      // ceiling-hosted item, or selecting one of its children — e.g.
-      // after committing a placement). Without this the top mesh shipped
-      // an opaque surface-role material, so a top-down camera lost view
-      // of everything under the ceiling once the overlay turned on.
+    // Textures-off mode takes the themed 'ceiling' role colour — the guaranteed
+    // escape hatch, independent of any slot override. The bottom (seen from
+    // inside the room, looking up) stays opaque so the ceiling reads as a solid
+    // surface; the top keeps the transparent grid material so a top-down camera
+    // can see through the ceiling whenever the `ceiling-grid` overlay is
+    // revealed (placing a ceiling-hosted item, or selecting one of its
+    // children). Without that the top mesh would ship an opaque surface-role
+    // material and a top-down camera would lose everything under the ceiling.
+    if (!textures) {
       const ceilingColor = resolveSurfaceColor('ceiling', colorPreset, sceneTheme)
       return {
         topMaterial: getCeilingMaterials(ceilingColor).topMaterial,
@@ -116,14 +78,26 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
       }
     }
 
-    const preset = getMaterialPresetByRef(node.materialPreset)
-    const props = preset?.mapProperties ?? resolveMaterial(node.material)
-    const color = props.color || '#999999'
-    return getCeilingMaterials(color)
+    // Unified slot override — shared scene material or catalog `library:` finish
+    // (resolved to its base colour; a ceiling renders flat-tinted, not mapped).
+    const slotColor = ceilingColorFromRef(node.slots?.surface, sceneMaterials)
+    if (slotColor) return getCeilingMaterials(slotColor)
+
+    // Legacy inline material / preset (scenes painted before the slot model).
+    if (node.materialPreset || node.material) {
+      const preset = getMaterialPresetByRef(node.materialPreset)
+      const props = preset?.mapProperties ?? resolveMaterial(node.material)
+      return getCeilingMaterials(props.color || '#999999')
+    }
+
+    // Declared slot default.
+    return getCeilingMaterials(CEILING_SLOT_DEFAULT_COLOR)
   }, [
     textures,
     colorPreset,
     sceneTheme,
+    sceneMaterials,
+    node.slots,
     node.materialPreset,
     node.material,
     node.material?.preset,

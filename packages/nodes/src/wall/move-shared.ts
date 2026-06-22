@@ -2,7 +2,9 @@ import {
   type AnyNodeId,
   DEFAULT_WALL_HEIGHT,
   getMaterialPresetByRef,
+  parseMaterialRef,
   resolveMaterial,
+  type SceneMaterialId,
   useScene,
   type WallMoveBridgePlan,
   type WallNode,
@@ -109,7 +111,25 @@ function wallSegmentExists(
   )
 }
 
+// Resolve a wall slot ref (`library:`/`scene:`) to a swatch colour, or
+// undefined when the ref is absent / dangling / colourless.
+function resolveWallSlotRefColor(ref: string | undefined): string | undefined {
+  const parsed = parseMaterialRef(ref)
+  if (!parsed) return undefined
+  if (parsed.kind === 'library') {
+    return getMaterialPresetByRef(ref)?.mapProperties.color ?? undefined
+  }
+  const sceneMaterial = useScene.getState().materials[parsed.id as SceneMaterialId]
+  return sceneMaterial ? resolveMaterial(sceneMaterial.material).color : undefined
+}
+
 export function getWallGhostColor(wall: WallNode) {
+  const slotColor =
+    resolveWallSlotRefColor(wall.slots?.interior) ?? resolveWallSlotRefColor(wall.slots?.exterior)
+  if (slotColor) {
+    return slotColor
+  }
+
   const presetColor =
     getMaterialPresetByRef(wall.materialPreset)?.mapProperties.color ??
     getMaterialPresetByRef(wall.interiorMaterialPreset)?.mapProperties.color ??

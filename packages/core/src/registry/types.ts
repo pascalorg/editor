@@ -1,7 +1,8 @@
 import type { ComponentType } from 'react'
-import type { BufferGeometry, Object3D } from 'three'
+import type { BufferGeometry, Object3D, Ray } from 'three'
 import type { ZodObject, z } from 'zod'
 import type { MaterialSchema } from '../schema/material'
+import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { HandleList } from './handles'
 import type { CloneNodesIntoOptions, Subtree } from './subtree'
@@ -43,6 +44,15 @@ export type GeometryContext = {
    * has cheap access to siblings through `ctx.siblings`).
    */
   levelData?: unknown
+  /**
+   * The scene's shared material library (`useScene.materials`), passed so a
+   * pure geometry builder can resolve `scene:<id>` slot refs without importing
+   * `useScene`. Populated by `<GeometrySystem>` for every `def.geometry` call;
+   * undefined for `def.floorplan`. `library:<id>` refs resolve against the
+   * static catalog and need no store, so builders only consult this for
+   * `scene:` refs.
+   */
+  materials?: Record<SceneMaterialId, SceneMaterial>
   /**
    * Optional view state — only populated for `def.floorplan` builders. The
    * 2D floor-plan layer surfaces selection / hover here so kinds can vary
@@ -1125,6 +1135,16 @@ export type Capabilities = {
   ceilingCut?: CeilingCutCapability
   paint?: PaintCapability
   /**
+   * Declares the kind's paintable slots — the `{ slotId, label, default }`
+   * contract shared by items (scanned from the GLB) and procedural kinds
+   * (declared here). Procedural generators tag their emitted geometry with
+   * `userData.slotId` and resolve each slot's material from
+   * `node.slots[slotId]` → this declaration's `default` → role colour. The
+   * declaration is a function of the node because a kind's slot set can depend
+   * on its parameters (a shelf has a `back` slot only when it has a back).
+   */
+  slots?: (node: AnyNode) => SlotDeclaration[]
+  /**
    * Kind is placed by clicking on a wall (door, window). When set, the
    * floor-plan layer lets wall background clicks pass through during
    * placement / move-on-wall — the placement tool's `wall:click` event
@@ -1215,6 +1235,19 @@ export type Capabilities = {
  * the `selectedMaterialTarget` round-trip, the paint-mode toolbar.
  * Kinds with no paint behaviour omit `paint`.
  */
+/**
+ * One paintable slot a kind exposes. `slotId` is the stable key written into
+ * `node.slots`; `label` is the human name (sentence case). `default` is the
+ * slot's fallback appearance when no override is set — either a `MaterialRef`
+ * (`library:<id>` / `scene:<id>`) or a `#rrggbb` colour. Mirrors the shape
+ * items derive from their GLB material names.
+ */
+export type SlotDeclaration = {
+  slotId: string
+  label: string
+  default?: string
+}
+
 export type PaintCapability = {
   /**
    * Resolve which logical surface the user clicked. Returns `null`
@@ -1227,6 +1260,14 @@ export type PaintCapability = {
    * `role`. Returned partial is merged into the node by the editor.
    */
   buildPatch: (args: PaintPatchArgs) => Partial<AnyNode>
+  /**
+   * Optional: fully own the click-commit instead of the default
+   * `updateNode(node.id, buildPatch(...))`. Kinds whose commit has a side
+   * effect (items create a scene material for one-off colours, then store a
+   * `scene:<id>` ref) implement this; kinds that just patch the node omit it.
+   * Must perform its mutations as a single undo step.
+   */
+  commit?: (args: PaintPatchArgs) => void
   /**
    * Apply a preview to the kind's registered mesh subtree at
    * `role`. The kind builds whatever preview material(s) it needs
@@ -1270,6 +1311,16 @@ export type PaintResolveArgs = {
   localPosition?: readonly [number, number, number]
   /** Optional: name of the three.js object that received the hit. Stair uses this. */
   hitObjectName?: string
+  /** Optional: the three.js object that received the pointer hit. Items read userData.slotId off it. */
+  hitObject?: Object3D
+  /**
+   * Optional: the pointer's world ray, so a kind can re-raycast its OWN subtree
+   * to pick the precise sub-mesh under the cursor — independent of what the
+   * shared scene raycast hit first. Door/window use this: their opening proxy
+   * (a proud invisible cutout) wins the scene raycast over the wall in front of
+   * the recessed door body, then they re-raycast their parts to find the slot.
+   */
+  ray?: Ray
 }
 
 export type PaintPatchArgs = {

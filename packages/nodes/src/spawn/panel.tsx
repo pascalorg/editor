@@ -95,7 +95,7 @@ export default function SpawnPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/spawn-point.png"
+      icon="/icons/spawn-point.webp"
       onClose={handleClose}
       title="Spawn Point"
       width={300}

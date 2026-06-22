@@ -24,7 +24,7 @@ type ControlConfig = {
 const controls: ControlConfig[] = [
   {
     id: 'select',
-    imageSrc: '/icons/select.png',
+    imageSrc: '/icons/select.webp',
     label: 'Select',
     shortcut: 'V',
     color: 'hover:bg-blue-500/20 hover:text-blue-400',
@@ -32,7 +32,7 @@ const controls: ControlConfig[] = [
   },
   {
     id: 'zone',
-    imageSrc: '/icons/zone.png',
+    imageSrc: '/icons/zone.webp',
     label: 'Zone',
     shortcut: 'Z',
     color: 'hover:bg-green-500/20 hover:text-green-400',

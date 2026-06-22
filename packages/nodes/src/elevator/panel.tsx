@@ -471,7 +471,7 @@ export default function ElevatorPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/elevator.png"
+      icon="/icons/elevator.webp"
       onClose={handleClose}
       title={node.name || 'Elevator'}
       width={300}

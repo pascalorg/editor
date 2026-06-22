@@ -10,8 +10,10 @@ import {
   ceilingMoveVertexAffordance,
 } from './floorplan-affordances'
 import { ceilingFloorplanMoveTarget } from './floorplan-move'
+import { ceilingPaint } from './paint'
 import { ceilingParametrics } from './parametrics'
 import { CeilingNode } from './schema'
+import { ceilingSlots } from './slots'
 
 const HEIGHT_HANDLE_OFFSET = 0.22
 const MIN_CEILING_HEIGHT = 0.5
@@ -102,6 +104,10 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
     },
     duplicable: true,
     deletable: true,
+    // Unified slot model: one paintable underside surface with a declared
+    // default, painted through the registry `capabilities.paint` dispatch.
+    slots: () => ceilingSlots(),
+    paint: ceilingPaint,
   },
 
   relations: {
@@ -157,7 +163,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   presentation: {
     label: 'Ceiling',
     description: 'A polygon-bounded ceiling surface that hosts ceiling-mounted items.',
-    icon: { kind: 'url', src: '/icons/ceiling.png' },
+    icon: { kind: 'url', src: '/icons/ceiling.webp' },
     paletteSection: 'structure',
     paletteOrder: 40,
   },

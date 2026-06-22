@@ -29,7 +29,6 @@ import useEditor from '../../../store/use-editor'
 import { MobilePanelSheet } from './mobile-panel-sheet'
 import { MobileSelectionBar } from './mobile-selection-bar'
 import { getNodeDisplay } from './node-display'
-import { PaintPanel } from './paint-panel'
 import { ParametricInspector } from './parametric-inspector'
 import { ReferencePanel } from './reference-panel'
 
@@ -174,9 +173,6 @@ export function PanelManager({ inspectorFooter }: { inspectorFooter?: React.Reac
   const selectedZoneId = useViewer((s) => s.selection.zoneId)
   const setSelection = useViewer((s) => s.setSelection)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
-  const isPaintPanelOpen = useEditor((s) => s.isPaintPanelOpen)
-  const mode = useEditor((s) => s.mode)
-  const activePaintMaterial = useEditor((s) => s.activePaintMaterial)
   // Only subscribe to the *type* of the single-selected node — string primitive
   // so we don't re-render on unrelated scene mutations.
   const selectedNodeType = useScene((s) => {
@@ -206,15 +202,6 @@ export function PanelManager({ inspectorFooter }: { inspectorFooter?: React.Reac
   // Show reference panel if a reference is selected
   if (selectedReferenceId) {
     return <ReferencePanel />
-  }
-
-  if (
-    isPaintPanelOpen &&
-    mode === 'material-paint' &&
-    activePaintMaterial?.material?.properties &&
-    !activePaintMaterial.materialPreset
-  ) {
-    return <PaintPanel />
   }
 
   if (selectedZoneId && selectedIds.length === 0) {

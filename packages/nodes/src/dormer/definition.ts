@@ -509,7 +509,7 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
   presentation: {
     label: 'Dormer',
     description: 'House-shaped protrusion on a roof segment.',
-    icon: { kind: 'url', src: '/icons/roof.png' },
+    icon: { kind: 'url', src: '/icons/roof.webp' },
     paletteSection: 'structure',
     paletteOrder: 125,
   },

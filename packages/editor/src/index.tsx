@@ -12,6 +12,27 @@ export { default as Editor } from './components/editor'
 // surface uses the shorter, shell-friendly names from the unified
 // preset-system spec.
 export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
+// Embed surface — the editor's real in-canvas affordances, so a host can mount
+// authentic selection handles, interactive build tools, and the mover on top
+// of a bare `<Viewer>` without the full `<Editor>` shell.
+//  - `NodeArrowHandles` renders the selected node's registry resize/rotate/move
+//    handles.
+//  - `MoveTool` runs the kind-owned mover once a translate handle arms
+//    `useEditor.movingNode`.
+//  - `ToolManager` mounts the active registry build tool (wall / door / window /
+//    …) for interactive placement when `useEditor` is in build mode with a
+//    tool, plus the snap/alignment guide layers. Mount it only while a tool is
+//    active to avoid its select-mode boundary editors.
+//  - `Grid` is the interactive drafting plane: it raycasts the pointer and
+//    emits the `grid:move` / `grid:click` events the build tools consume (the
+//    wall tool is driven entirely by them; door/window use them for free-follow
+//    alongside the viewer's `wall:*` mesh events). Without it the tools mount
+//    but their cursor never tracks the pointer. Mount it while a tool is active.
+// All read `useViewer` selection + `useEditor` state, and cooperate with host
+// camera controls via the `useViewer.inputDragging` / `useEditor.movingNode`
+// flags. Tools place onto `useViewer.selection.levelId`, so the host must set a
+// building + level selection first.
+export { Grid } from './components/editor/grid'
 export {
   DimensionPill,
   type DimensionPillPart,
@@ -34,6 +55,7 @@ export {
   type HandleArrowProps,
   InvisibleHandleHitArea,
   NO_RAYCAST,
+  NodeArrowHandles,
   swallowNextClick,
   useArrowMaterial,
   useInvisibleHitAreaMaterial,
@@ -60,6 +82,7 @@ export {
   type FencePlanPoint,
   snapFenceDraftPoint,
 } from './components/tools/fence/fence-drafting'
+export { MoveTool } from './components/tools/item/move-tool'
 // Placement-math helpers — shared by kind-owned placement tools in
 // `@pascal-app/nodes` (wall curve sagitta snap, door / window placement,
 // item drop) so kinds don't reach into editor internals.
@@ -121,6 +144,7 @@ export {
   DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
 } from './components/tools/stair/stair-defaults'
+export { ToolManager } from './components/tools/tool-manager'
 export {
   createWallOnCurrentLevel,
   getSegmentGridStep,
@@ -246,7 +270,6 @@ export {
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
-  buildWallSurfaceMaterialPatch,
   getActivePaintMaterialLabel,
   hasActivePaintMaterial,
 } from './lib/material-paint'

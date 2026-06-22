@@ -55,7 +55,7 @@ export const SlabTreeNode = memo(function SlabTreeNode({
       expanded={false}
       hasChildren={false}
       icon={
-        <Image alt="" className="object-contain" height={14} src="/icons/floor.png" width={14} />
+        <Image alt="" className="object-contain" height={14} src="/icons/floor.webp" width={14} />
       }
       isHovered={isHovered}
       isLast={isLast}
