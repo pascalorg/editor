@@ -119,7 +119,8 @@ export function FunctionTreePanel({
       {/* Root nodes as a category grid — icon when available, otherwise a
           two-letter abbreviation, with the full name in a hover tooltip.
           Mirrors the Build tab's tile grid so the two panels read the same. */}
-      <TooltipProvider delayDuration={0} disableHoverableContent>
+      {/* Style follow-up: MeasureNavi tooltips use a 300-500ms delay. */}
+      <TooltipProvider delayDuration={400} disableHoverableContent>
         <div className="grid shrink-0 grid-cols-5 gap-1.5 border-border/70 border-b p-2">
           {functionTree.map((root) => {
             const isActive = activeRoot?.slug === root.slug

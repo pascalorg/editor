@@ -39,6 +39,7 @@ import {
   SwatchBook,
 } from 'lucide-react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { type ReactNode, useCallback } from 'react'
 import { flushSync } from 'react-dom'
 import { cn } from '@/lib/utils'
@@ -490,13 +491,26 @@ function PreviewButton() {
   return (
     <ToolbarTooltip label="Preview mode">
       <button
-        className="flex items-center gap-1.5 px-2.5 font-medium text-muted-foreground/80 text-xs transition-colors hover:bg-white/8 hover:text-foreground/90"
+        className="mn-toolbar-text flex items-center gap-1.5 px-2.5 font-medium text-muted-foreground/80 transition-colors hover:bg-white/8 hover:text-foreground/90"
         onClick={() => useEditor.getState().setPreviewMode(true)}
         type="button"
       >
         <Eye className="h-3.5 w-3.5 shrink-0" />
         <span>Preview</span>
       </button>
+    </ToolbarTooltip>
+  )
+}
+
+function AllScenesButton() {
+  return (
+    <ToolbarTooltip label="All scenes">
+      <Link
+        className="mn-toolbar-text flex items-center px-2.5 font-medium text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground/90"
+        href="/scenes"
+      >
+        All scenes
+      </Link>
     </ToolbarTooltip>
   )
 }
@@ -521,6 +535,7 @@ export function CommunityViewerToolbarRight() {
       <div className="my-1.5 w-px bg-border/50" />
       <WalkthroughButton />
       <PreviewButton />
+      <AllScenesButton />
     </div>
   )
 }

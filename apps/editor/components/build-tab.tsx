@@ -159,7 +159,8 @@ export function BuildTab() {
 
   return (
     <div className="flex h-full flex-col gap-3 p-3">
-      <TooltipProvider delayDuration={0} disableHoverableContent>
+      {/* Style follow-up: MeasureNavi tooltips use a 300-500ms delay. */}
+      <TooltipProvider delayDuration={400} disableHoverableContent>
         <div
           className="grid gap-1.5"
           style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
@@ -208,7 +209,8 @@ export function BuildTab() {
       ) : selectedTypeId === 'roof' && roofFeatures.length > 0 ? (
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
           <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">Features</div>
-          <TooltipProvider delayDuration={0} disableHoverableContent>
+          {/* Style follow-up: MeasureNavi tooltips use a 300-500ms delay. */}
+          <TooltipProvider delayDuration={400} disableHoverableContent>
             <div
               className="grid gap-1.5"
               style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}

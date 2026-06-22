@@ -163,7 +163,8 @@ function SidebarProvider({
 
   return (
     <SidebarContext.Provider value={contextValue}>
-      <TooltipProvider delayDuration={0}>
+      {/* Style follow-up: MeasureNavi tooltips use a 300-500ms delay. */}
+      <TooltipProvider delayDuration={400}>
         <div
           className={cn(
             'group/sidebar-wrapper pointer-events-none flex min-h-svh w-full has-data-[variant=inset]:bg-sidebar',

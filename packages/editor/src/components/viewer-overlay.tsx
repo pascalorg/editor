@@ -436,7 +436,8 @@ export const ViewerOverlay = ({
 
       {/* Controls Panel - Bottom Center */}
       <div className="dark absolute bottom-6 left-1/2 z-20 -translate-x-1/2 text-foreground">
-        <TooltipProvider delayDuration={0}>
+        {/* Style follow-up: MeasureNavi tooltips use a 300-500ms delay. */}
+        <TooltipProvider delayDuration={400}>
           <div className="pointer-events-auto flex h-14 flex-row items-center justify-center gap-1.5 rounded-2xl border border-border/40 bg-background/95 p-1.5 shadow-lg backdrop-blur-xl transition-colors duration-200 ease-out">
             {/* Scans and Guides Visibility */}
             {canShowScans && (

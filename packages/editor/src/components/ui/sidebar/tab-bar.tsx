@@ -202,8 +202,9 @@ interface IconRailProps {
  */
 export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailProps) {
   return (
-    <TooltipProvider delayDuration={0} disableHoverableContent>
-      <div className="flex h-full w-14 shrink-0 flex-col items-center gap-1 border-border/50 border-r py-2">
+    <TooltipProvider delayDuration={400} disableHoverableContent>
+      {/* Style follow-up: MeasureNavi rail is 58px wide with 42px icon buttons. */}
+      <div className="flex h-full w-[58px] shrink-0 flex-col items-center gap-1 border-border/50 border-r py-2">
         {tabs.map((tab) => {
           // Only show the active highlight while the panel is open. When
           // collapsed nothing is "open", so every icon reads as unselected.
@@ -213,7 +214,7 @@ export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailPr
               <TooltipTrigger asChild>
                 <button
                   className={cn(
-                    'group flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 [&_img]:transition-[opacity,filter] [&_img]:duration-200',
+                    'group relative flex h-[42px] w-[42px] items-center justify-center rounded-xl transition-all duration-200 [&_img]:transition-[opacity,filter] [&_img]:duration-200',
                     showActive
                       ? 'bg-accent text-foreground shadow-sm [&_img]:opacity-100 [&_img]:grayscale-0'
                       : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground [&_img]:opacity-60 [&_img]:grayscale hover:[&_img]:opacity-100 hover:[&_img]:grayscale-0',
@@ -225,6 +226,10 @@ export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailPr
                   onMouseEnter={() => triggerSFX('sfx:menu-hover')}
                   type="button"
                 >
+                  {showActive && (
+                    // Style follow-up: selected rail item uses the MeasureNavi 3px teal indicator.
+                    <span className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r-full bg-primary" />
+                  )}
                   {tab.icon ?? tab.label.charAt(0)}
                 </button>
               </TooltipTrigger>

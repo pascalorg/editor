@@ -6,28 +6,32 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
+  /* Style follow-up: MeasureNavi light theme uses Inter as the UI font. */
   --font-sans:
-    var(--font-barlow), var(--font-geist-sans), ui-sans-serif, system-ui,
+    var(--font-inter), var(--font-geist-sans), ui-sans-serif, system-ui,
     sans-serif;
   --font-mono:
-    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+    var(--font-jetbrains-mono), var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
     Consolas, monospace;
   --font-pixel:
     var(--font-geist-pixel-square), var(--font-geist-mono), ui-monospace,
     SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* Style follow-up: legacy font-barlow utilities now resolve to Inter. */
   --font-barlow:
-    var(--font-barlow), var(--font-geist-sans), ui-sans-serif, system-ui,
+    var(--font-inter), var(--font-geist-sans), ui-sans-serif, system-ui,
     sans-serif;
 }
 
 @theme inline {
+  /* Style follow-up: keep Tailwind font tokens aligned with MeasureNavi. */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-barlow), sans-serif;
-  --font-mono: var(--font-geist-mono), monospace;
+  --font-sans: var(--font-inter), sans-serif;
+  --font-mono: var(--font-jetbrains-mono), monospace;
   --font-pixel:
     var(--font-geist-pixel-square), var(--font-geist-mono), monospace;
-  --font-barlow: var(--font-barlow), sans-serif;
+  /* Style follow-up: keep existing font-barlow class names visually aligned with Inter. */
+  --font-barlow: var(--font-inter), sans-serif;
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
