@@ -5,13 +5,16 @@ import {
   type ParametricDescriptor,
   useScene,
 } from '@pascal-app/core'
-import { Vector3 } from 'three'
 import {
   ductPortDiameterIn,
   equivalentDiameterIn,
   ovalEquivalentDiameterIn,
-  rollToContinueAcrossElbow,
 } from '../duct-segment/geometry'
+import {
+  autoOffsetInvalidationUpdates,
+  readAutoOffsetTag,
+  withAutoOffsetTag,
+} from '../shared/auto-offset-tag'
 import { getDuctFittingPorts } from './ports'
 import type { DuctFittingNode } from './schema'
 
@@ -20,6 +23,8 @@ const clampDiameter = (d: number) => Math.min(48, Math.max(2, d))
 
 /** A duct endpoint sitting this close to a collar counts as mated. */
 const MATE_TOL_M = 0.03
+
+type Point = [number, number, number]
 
 type DuctMate = { duct: DuctSegmentNode; endIndex: number }
 
@@ -49,6 +54,25 @@ function matedDucts(fitting: DuctFittingNode): Map<string, DuctMate> {
     }
   }
   return mates
+}
+
+function refreshedAutoOffsetMetadata(
+  duct: DuctSegmentNode,
+  endIndex: number,
+  target: Point,
+): Record<string, unknown> | null {
+  const tag = readAutoOffsetTag(duct)
+  if (!tag) return null
+  let changed = false
+  const base = tag.base.map((patch) => {
+    if (patch.id !== duct.id || !Array.isArray(patch.data.path)) return patch
+    const path = patch.data.path.map((p) => (Array.isArray(p) ? [...p] : p))
+    if (!Array.isArray(path[endIndex])) return patch
+    path[endIndex] = [...target]
+    changed = true
+    return { ...patch, data: { ...patch.data, path } }
+  })
+  return changed ? withAutoOffsetTag(duct.metadata, { ...tag, base }) : null
 }
 
 export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
@@ -127,34 +151,15 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
         path[mate.endIndex] = [...target.position]
         data.path = path
       }
-      // Steep rect / oval runs also re-derive their cross-section roll
-      // so a riser's profile stays continuous through the fitting (same
-      // continuity the draw tool computes; runs flipped to rect after
-      // drawing never got it). Horizontal runs are left alone — their
-      // roll-0 orientation is canonical and re-deriving it from a
-      // possibly-stale riser roll would corrupt it.
-      if (next.shape !== 'round' && mate.duct.shape !== 'round') {
-        const away = mate.duct.path[mate.endIndex === 0 ? 1 : mate.duct.path.length - 2]
-        const source = getDuctFittingPorts(next).find(
-          (p) => p.id !== portId && p.id !== 'branch' && p.id !== 'branch2',
-        )
-        if (away && source) {
-          const newDir = new Vector3(away[0] - end[0], away[1] - end[1], away[2] - end[2])
-          if (newDir.lengthSq() >= 1e-10) {
-            newDir.normalize()
-            if (Math.abs(newDir.y) >= Math.SQRT1_2) {
-              const srcMate = mates.get(source.id)
-              const srcRoll = srcMate && srcMate.duct.shape !== 'round' ? srcMate.duct.roll : 0
-              const srcDir = new Vector3(...source.direction)
-              const roll = rollToContinueAcrossElbow(srcDir, srcRoll, srcDir, newDir)
-              if (Math.abs(roll - mate.duct.roll) > 1e-6) data.roll = roll
-            }
-          }
-        }
-      }
+      const metadata = refreshedAutoOffsetMetadata(
+        mate.duct,
+        mate.endIndex,
+        target.position as Point,
+      )
+      if (metadata) data.metadata = metadata as DuctSegmentNode['metadata']
       if (Object.keys(data).length > 0) updates.push({ id: mate.duct.id, data })
     }
-    return updates
+    return [...updates, ...autoOffsetInvalidationUpdates(useScene.getState().nodes, next.id)]
   },
   groups: [
     {

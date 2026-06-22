@@ -625,10 +625,7 @@ const PipeSegmentTool = () => {
           dimension pill rides just above the cursor. */}
       {cursorPos && (
         <>
-          <CursorSphere
-            color={snapTarget ? SNAP_CURSOR_COLOR : undefined}
-            position={cursorPos}
-          />
+          <CursorSphere color={snapTarget ? SNAP_CURSOR_COLOR : undefined} position={cursorPos} />
           {pillParts && (
             <group position={cursorPos}>
               <Html

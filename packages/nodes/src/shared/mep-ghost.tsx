@@ -6,18 +6,32 @@ import { useMemo } from 'react'
 import { Mesh, MeshBasicMaterial } from 'three'
 import { buildDuctFittingGeometry } from '../duct-fitting/geometry'
 import { buildDuctSegmentGeometry } from '../duct-segment/geometry'
+import { INVALID_GHOST_COLOR, VALID_GHOST_COLOR } from './ghost-materials'
 
 /** Indigo-400 — the shared MEP preview accent (matches the draw-tool ghost). */
 export const GHOST_COLOR = '#818cf8'
 export const GHOST_OPACITY = 0.55
 
+/** Tint state for an auto-routed offset preview: green = a buildable offset
+ *  that will mint on release, red = no valid offset at this height (the run
+ *  lifts as a preview only and snaps back). Undefined = the neutral indigo
+ *  preview used everywhere else. */
+export type GhostTint = 'valid' | 'invalid' | undefined
+
+function ghostColor(tint: GhostTint): number | string {
+  if (tint === 'valid') return VALID_GHOST_COLOR
+  if (tint === 'invalid') return INVALID_GHOST_COLOR
+  return GHOST_COLOR
+}
+
 /** Repaint every mesh in `group` as a translucent, depth-test-free preview. */
-function ghostify(group: { traverse: (cb: (child: object) => void) => void }) {
+function ghostify(group: { traverse: (cb: (child: object) => void) => void }, tint: GhostTint) {
+  const color = ghostColor(tint)
   group.traverse((child) => {
     if (child instanceof Mesh) {
       child.layers.set(EDITOR_LAYER)
       child.material = new MeshBasicMaterial({
-        color: GHOST_COLOR,
+        color,
         depthTest: false,
         transparent: true,
         opacity: GHOST_OPACITY,
@@ -33,14 +47,14 @@ function ghostify(group: { traverse: (cb: (child: object) => void) => void }) {
  * level-local `position` / `rotation`, applied here on the group (the
  * renderer normally bakes that in).
  */
-export function FittingGhost({ fitting }: { fitting: DuctFittingNode }) {
+export function FittingGhost({ fitting, tint }: { fitting: DuctFittingNode; tint?: GhostTint }) {
   const ghost = useMemo(() => {
     const group = buildDuctFittingGeometry(fitting)
     group.position.set(...fitting.position)
     group.rotation.set(fitting.rotation[0], fitting.rotation[1], fitting.rotation[2])
-    ghostify(group)
+    ghostify(group, tint)
     return group
-  }, [fitting])
+  }, [fitting, tint])
   return <primitive object={ghost} />
 }
 
@@ -49,11 +63,11 @@ export function FittingGhost({ fitting }: { fitting: DuctFittingNode }) {
  * the node's transform is identity, so the built group renders at the origin
  * — the same frame the fitting ghosts use.
  */
-export function DuctSegmentGhost({ duct }: { duct: DuctSegmentNode }) {
+export function DuctSegmentGhost({ duct, tint }: { duct: DuctSegmentNode; tint?: GhostTint }) {
   const ghost = useMemo(() => {
     const group = buildDuctSegmentGeometry(duct)
-    ghostify(group)
+    ghostify(group, tint)
     return group
-  }, [duct])
+  }, [duct, tint])
   return <primitive object={ghost} />
 }

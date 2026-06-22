@@ -23,6 +23,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useState } from 'react'
 import { Box3, Euler, type Material, type Mesh, MeshBasicMaterial, Vector3 } from 'three'
+import { autoOffsetInvalidationUpdates } from '../shared/auto-offset-tag'
 import {
   type Aabb2D,
   collectGhostAlignmentCandidates,
@@ -264,13 +265,13 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         const followUpdates = lastDetached
           ? []
           : (connectivity?.commitUpdates({ position: lastPos }) ?? [])
-        useScene
-          .getState()
-          .updateNodes([
-            { id: nodeId, data: { position: lastPos } as Partial<AnyNode> },
-            ...followUpdates,
-          ])
-        useScene.getState().markDirty(nodeId)
+        const scene = useScene.getState()
+        scene.updateNodes([
+          { id: nodeId, data: { position: lastPos } as Partial<AnyNode> },
+          ...followUpdates,
+          ...autoOffsetInvalidationUpdates(scene.nodes, nodeId),
+        ])
+        scene.markDirty(nodeId)
       }
       useScene.temporal.getState().pause()
       // Followers are committed to the store — drop their live overrides so

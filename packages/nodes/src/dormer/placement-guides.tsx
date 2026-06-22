@@ -8,6 +8,11 @@ import { useEffect, useMemo } from 'react'
 import { BufferGeometry, Float32BufferAttribute, Line as ThreeLine } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import { getRoofSurfaceFaceBoundsAt } from '../shared/roof-surface'
+import {
+  roofFaceKey,
+  roofGuideBounds,
+  roofSiblingSpacing,
+} from '../shared/roof-surface-placement-guides'
 
 // Indigo — matches the wall/window 3D proximity guide accent so every
 // "distance to edge" readout reads the same across the app.
@@ -52,12 +57,14 @@ export function DormerPlacementGuides({
   width,
   depth,
   rotation,
+  movingId,
 }: {
   segment: RoofSegmentNode
   center: Vec3
   width: number
   depth: number
   rotation: number
+  movingId?: string
 }) {
   const unit = useViewer((s) => s.unit)
 
@@ -69,6 +76,7 @@ export function DormerPlacementGuides({
   const sin = Math.sin(rotation)
   const halfX = Math.abs(cos) * halfW + Math.abs(sin) * halfD
   const halfZ = Math.abs(sin) * halfW + Math.abs(cos) * halfD
+  const movingBounds = roofGuideBounds(center, { width, depth, rotation })
 
   const surfaceY = (x: number, z: number): number => faceBounds.surfaceYAt(x, z) + SURFACE_LIFT
 
@@ -88,20 +96,42 @@ export function DormerPlacementGuides({
       value,
     })
   }
+  const siblingSpacing = roofSiblingSpacing({
+    segment,
+    movingId,
+    movingBounds,
+    faceKey: roofFaceKey(faceBounds.polygon),
+    dimension: (id, [ax, az], [bx, bz]) => {
+      const from: Vec3 = [ax, surfaceY(ax, az), az]
+      const to: Vec3 = [bx, surfaceY(bx, bz), bz]
+      const value = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2])
+      if (value < MIN_GAP_M) return null
+      return { id, from, to, value }
+    },
+  })
   if (xInterval) {
     const [faceMinX, faceMaxX] = xInterval
     const itemMinX = Math.max(faceMinX, Math.min(faceMaxX, cx - halfX))
     const itemMaxX = Math.max(faceMinX, Math.min(faceMaxX, cx + halfX))
-    if (itemMinX > faceMinX + MIN_GAP_M) push('left', faceMinX, cz, itemMinX, cz)
-    if (itemMaxX < faceMaxX - MIN_GAP_M) push('right', itemMaxX, cz, faceMaxX, cz)
+    if (!siblingSpacing.blockedSides.left && itemMinX > faceMinX + MIN_GAP_M) {
+      push('left', faceMinX, cz, itemMinX, cz)
+    }
+    if (!siblingSpacing.blockedSides.right && itemMaxX < faceMaxX - MIN_GAP_M) {
+      push('right', itemMaxX, cz, faceMaxX, cz)
+    }
   }
   if (zInterval) {
     const [faceMinZ, faceMaxZ] = zInterval
     const itemMinZ = Math.max(faceMinZ, Math.min(faceMaxZ, cz - halfZ))
     const itemMaxZ = Math.max(faceMinZ, Math.min(faceMaxZ, cz + halfZ))
-    if (itemMinZ > faceMinZ + MIN_GAP_M) push('back', cx, faceMinZ, cx, itemMinZ)
-    if (itemMaxZ < faceMaxZ - MIN_GAP_M) push('front', cx, itemMaxZ, cx, faceMaxZ)
+    if (!siblingSpacing.blockedSides.bottom && itemMinZ > faceMinZ + MIN_GAP_M) {
+      push('back', cx, faceMinZ, cx, itemMinZ)
+    }
+    if (!siblingSpacing.blockedSides.top && itemMaxZ < faceMaxZ - MIN_GAP_M) {
+      push('front', cx, itemMaxZ, cx, faceMaxZ)
+    }
   }
+  guides.push(...siblingSpacing.guides)
 
   return (
     <>

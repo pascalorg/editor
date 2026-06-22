@@ -168,7 +168,7 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Start segment' },
-    { key: 'Click again', label: 'Place it (locked to 45°)' },
+    { key: 'Click again', label: 'Place and continue' },
     { key: 'Shift', label: 'Free angle' },
     { key: 'Alt + drag', label: 'Go vertical ↕, click to place' },
     { key: '[ / ]', label: 'Duct diameter down / up' },

@@ -6,7 +6,8 @@ import {
   analyzePortConnectivity,
   type Cursor,
   type DuctFittingNode,
-  type DuctSegmentNode,
+  DuctSegmentNode,
+  nodeRegistry,
   type PortConnectivity,
   pauseSceneHistory,
   resolveConnectivityUpdates,
@@ -31,14 +32,24 @@ import {
   Vector3,
 } from 'three'
 import {
+  type AutoOffsetBasePatch,
+  type AutoOffsetTag,
+  newAutoOffsetGroupId,
+  readAutoOffsetTag,
+  translateAutoOffsetBase,
+  withAutoOffsetTag,
+  withoutAutoOffsetTag,
+} from '../shared/auto-offset-tag'
+import {
   detectFittingEndpoint,
   type FittingEndpoint,
   planFittingEndpointReaim,
 } from '../shared/fitting-endpoint-reaim'
 import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
 import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
+import { planRunTranslationOffsets } from '../shared/run-translation-offset'
 import { HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
-import { planVerticalOffsets, type VerticalOffsetPlan } from '../shared/vertical-offset'
+import { planVerticalOffsets, type VerticalOffsetResult } from '../shared/vertical-offset'
 import { INCHES_TO_METERS } from './geometry'
 
 /** Port-snap radius for dragged run endpoints (meters, XZ). */
@@ -53,6 +64,28 @@ const CORNER_ARROW_MIN_OFFSET = 0.24
 const ROLL_STEP_RAD = Math.PI / 4
 
 const UP = new Vector3(0, 1, 0)
+
+function verticalRewindTagDisabled(_tag: AutoOffsetTag | null): AutoOffsetTag | null {
+  return null
+}
+
+function collectPortsFromNodes(
+  nodes: Record<string, AnyNode>,
+  filter: { excludeNodeId?: AnyNodeId; systems?: readonly string[] } = {},
+): ReturnType<typeof collectScenePorts> {
+  const { excludeNodeId, systems } = filter
+  const result: ReturnType<typeof collectScenePorts> = []
+  for (const node of Object.values(nodes)) {
+    if (!node || node.id === excludeNodeId) continue
+    const ports = nodeRegistry.get(node.type)?.ports?.(node)
+    if (!ports) continue
+    for (const port of ports) {
+      if (systems && port.system !== undefined && !systems.includes(port.system)) continue
+      result.push({ ...port, nodeId: node.id })
+    }
+  }
+  return result
+}
 
 function snap(value: number, step: number): number {
   if (step <= 0) return value
@@ -71,8 +104,11 @@ type Point = [number, number, number]
 // horizontal line along a run-relative direction (node-local XZ unit vector) —
 // so a duct drawn at any angle keeps along-run / across-run arrows instead of
 // world ±X / ±Z. `along` marks the pair that lies ON the run axis (lengthen /
-// shorten) vs the across pair (swing); the up / down pair swings too.
-type DragKind = { axis: 'y' } | { axis: 'horizontal'; dir: [number, number]; along: boolean }
+// shorten) vs the across pair (swing). Most up / down arrows swing too, except
+// pure vertical risers where the outward ±Y arrow IS the run axis.
+type DragKind =
+  | { axis: 'y'; along?: boolean }
+  | { axis: 'horizontal'; dir: [number, number]; along: boolean }
 
 // What a run-center arrow translates the WHOLE run along: the vertical world
 // axis, or a horizontal line down a run-relative direction (node-local XZ unit
@@ -185,10 +221,16 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
   const [rolling, setRolling] = useState(false)
   const [runMoving, setRunMoving] = useState(false)
   // Auto-routed offset preview shown while the run-center cube's ±Y arrows
-  // lift / lower a connected run: the elbows + plumb riser the release will
-  // mint are ghosted (the run itself lifts live). Null when the move is a
-  // plain translate (open ends, or a move too short to offset).
+  // lift / lower a connected run. Two flavours:
+  //  - `valid` (green): the elbows + plumb riser the release will mint are
+  //    ghosted while the run lifts + trims live; release commits them.
+  //  - `invalid` (red): no clean offset fits at this height. ONLY the dragged
+  //    run lifts (as a red preview); every partner is frozen and the release
+  //    snaps back, committing nothing. The fittings/risers arrays are empty
+  //    here — there's nothing buildable to ghost, the run body carries the cue.
+  // Null when the move is a plain translate (open ends, or no connections).
   const [verticalGhost, setVerticalGhost] = useState<{
+    tint: 'valid' | 'invalid'
     fittings: DuctFittingNode[]
     risers: DuctSegmentNode[]
   } | null>(null)
@@ -398,7 +440,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     // instead of lengthening. The along-run pair keeps the plain lengthen /
     // shorten. The pivot is the adjacent vertex; null when there's no neighbour
     // (a lone point) or the grabbed segment has zero length.
-    const swings = kind.axis === 'y' || (kind.axis === 'horizontal' && !kind.along)
+    const swings = kind.axis === 'y' ? kind.along !== true : !kind.along
     // Pivot only at an endpoint (its single neighbour is the unambiguous "other
     // end"); interior vertices keep the plain per-axis drag.
     const neighborIndex = index === 0 ? 1 : index === initialPath.length - 1 ? index - 1 : null
@@ -649,10 +691,9 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
   // only thing that differs.
   const onRunMoveDown = (kind: RunMoveKind) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
+    const parentId = (duct.parentId ?? undefined) as AnyNodeId | undefined
     const initialPath = duct.path.map((p) => [...p] as Point)
     const center = runAxisAndCenter(duct)?.center ?? initialPath[0]!
-    const nodesById = useScene.getState().nodes
-    const connectivity = analyzePortConnectivity(duct as AnyNode, nodesById)
     const anchorWorld = toWorld(center)
     // Cross-section the auto-routed offset fittings inherit (vertical move).
     const profile = {
@@ -661,9 +702,54 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       width: duct.width,
       height: duct.height,
     }
-    // Other runs' / fittings' ports, for the offset planner to read a
-    // connected partner's collar direction at each lifted end.
-    const scenePorts = collectScenePorts({ excludeNodeId: duct.id, systems: DUCT_PORT_SYSTEMS })
+
+    // Auto-generated offsets become normal independent geometry after creation:
+    // vertical center drags plan against the CURRENT fittings/runs, not the old
+    // logical-L tag. The tag is still read so vertical commits can strip stale
+    // metadata and horizontal moves can translate a stored base if one remains.
+    const isVertical = kind.axis === 'y'
+    const preRewindNodes = useScene.getState().nodes
+    const existingTag = readAutoOffsetTag(duct)
+    const tag = isVertical ? verticalRewindTagDisabled(existingTag) : null
+    const runBase = tag?.base.find((b) => b.id === (duct.id as AnyNodeId))
+    const logicalPath = ((runBase?.data as { path?: Point[] } | undefined)?.path?.map(
+      (p) => [...p] as Point,
+    ) ?? initialPath) as Point[]
+    const baseDy = tag?.dy ?? 0
+    const mintedIds = (tag?.minted ?? []) as AnyNodeId[]
+    // Snapshots of the existing minted nodes, so the pre-commit revert can
+    // restore the original Z (the single-undo baseline) before the final write.
+    const mintedSnapshots = mintedIds
+      .map((id) => preRewindNodes[id])
+      .filter((n): n is AnyNode => Boolean(n))
+    const previewDeletedSnapshots = new Map<AnyNodeId, AnyNode>()
+
+    pauseSceneHistory(useScene)
+
+    // Connectivity + ports are read from an IN-MEMORY post-rewind scene (the
+    // logical L), so click-only pointerdown doesn't visually snap the committed
+    // offset down to the floor. The real scene is only rewound after the first
+    // actual drag delta, inside `applyLogicalBasePreview`.
+    const nodesById: Record<string, AnyNode> = { ...preRewindNodes }
+    if (tag) {
+      for (const id of mintedIds) delete nodesById[id]
+      for (const b of tag.base) {
+        const current = nodesById[b.id]
+        if (current) nodesById[b.id] = { ...current, ...b.data } as AnyNode
+      }
+    }
+    const logicalDuct = DuctSegmentNode.parse({
+      ...duct,
+      path: logicalPath,
+      metadata: withoutAutoOffsetTag(duct.metadata),
+    })
+    nodesById[duct.id as AnyNodeId] = logicalDuct as AnyNode
+    const connectivity = analyzePortConnectivity(logicalDuct as AnyNode, nodesById)
+    const scenePorts = collectPortsFromNodes(nodesById, {
+      excludeNodeId: duct.id as AnyNodeId,
+      systems: DUCT_PORT_SYSTEMS,
+    })
+
     // Grab offset: cursor's start coordinate along the locked direction (signed
     // distance for the horizontal run-relative line), so the run doesn't jump
     // on grab.
@@ -676,21 +762,23 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       return local[0] * kind.dir[0] + local[2] * kind.dir[1]
     }
     const startSample = sample(e.nativeEvent.clientX, e.nativeEvent.clientY)
-    pauseSceneHistory(useScene)
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setRunMoving(true)
     let delta = 0
-    // Set to the last frame's auto-routed offset plan (vertical move with a
-    // connected end and room to offset); null when the frame was a plain
-    // translate. `onUp` reads it to decide create-on-release vs. re-translate.
-    let offsetPlan: VerticalOffsetPlan | null = null
+    // Last frame's offset outcome (vertical move only): a valid plan to mint on
+    // release, an invalid marker (preview-only, snap back), or null for a plain
+    // translate. `onUp` reads it to decide create vs. translate vs. nothing.
+    let offsetResult: VerticalOffsetResult = null
 
+    // Shift the LOGICAL L: vertical adds the carried `baseDy` plus this drag's
+    // delta (so a re-drag accumulates from the L, not the lifted Z); horizontal
+    // (always untagged → baseDy 0, logicalPath === initialPath) slides in plane.
     const shiftedPath = (d: number): Point[] =>
-      initialPath.map((p) => {
+      logicalPath.map((p) => {
         const next = [...p] as Point
         if (kind.axis === 'y') {
-          next[1] = Math.max(0, p[1] + d)
+          next[1] = Math.max(0, p[1] + baseDy + d)
         } else {
           next[0] = p[0] + d * kind.dir[0]
           next[2] = p[2] + d * kind.dir[1]
@@ -702,6 +790,104 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       ...connectivityUpdatesForPath(connectivity, path),
     ]
 
+    // Patches restoring every connected partner to its post-rewind (logical-L)
+    // pose — runs by path, fittings by position (+ a re-aimed elbow's rotation /
+    // angle). Used to FREEZE partners on an invalid frame.
+    const partnerReverts = (): { id: AnyNodeId; data: Partial<AnyNode> }[] =>
+      (connectivity?.connections ?? [])
+        .map((conn) => {
+          if (conn.kind !== 'rigid-node') {
+            return { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> }
+          }
+          const start = nodesById[conn.nodeId] as Record<string, unknown> | undefined
+          const data: Record<string, unknown> = { position: conn.startPosition }
+          if (start?.rotation !== undefined) data.rotation = start.rotation
+          if (start?.angle !== undefined) data.angle = start.angle
+          return { id: conn.nodeId, data: data as Partial<AnyNode> }
+        })
+        .filter((u) => useScene.getState().nodes[u.id])
+
+    // Base for a NEWLY formed offset (untagged run): the logical L IS the
+    // drag-start pose, so the L is `initialPath` and partners are at their
+    // start paths / poses. A re-drag carries the existing tag's base forward.
+    const freshBase = (): AutoOffsetBasePatch[] => [
+      { id: duct.id as AnyNodeId, data: { path: initialPath } },
+      ...partnerReverts().map((u) => ({ id: u.id, data: u.data as Record<string, unknown> })),
+    ]
+
+    // Patches restoring partners to their PRE-rewind (original Z) poses — the
+    // single-undo baseline. Untagged: same as the L (no rewind happened).
+    const originalPartnerReverts = (): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
+      if (!tag) return partnerReverts()
+      return tag.base
+        .filter((b) => b.id !== (duct.id as AnyNodeId))
+        .map((b) => {
+          const orig = preRewindNodes[b.id] as Record<string, unknown> | undefined
+          if (!orig) return null
+          if ('path' in orig) return { id: b.id, data: { path: orig.path } as Partial<AnyNode> }
+          const data: Record<string, unknown> = {}
+          if (orig.position !== undefined) data.position = orig.position
+          if (orig.rotation !== undefined) data.rotation = orig.rotation
+          if (orig.angle !== undefined) data.angle = orig.angle
+          return { id: b.id, data: data as Partial<AnyNode> }
+        })
+        .filter((u): u is { id: AnyNodeId; data: Partial<AnyNode> } => u !== null)
+        .filter((u) => useScene.getState().nodes[u.id])
+    }
+
+    const restoreOriginalOffsetPreview = () => {
+      const scene = useScene.getState()
+      scene.applyNodeChanges({
+        create: mintedSnapshots
+          .filter((n) => !scene.nodes[n.id])
+          .map((node) => ({ node, parentId })),
+        update: [
+          {
+            id: duct.id as AnyNodeId,
+            data: { path: duct.path, metadata: duct.metadata } as Partial<AnyNode>,
+          },
+          ...originalPartnerReverts(),
+        ],
+      })
+    }
+
+    const restorePreviewDeleted = (keepDeleted: readonly AnyNodeId[] = []) => {
+      const keep = new Set<AnyNodeId>(keepDeleted)
+      const scene = useScene.getState()
+      const create: { node: AnyNode; parentId?: AnyNodeId }[] = []
+      for (const [id, node] of previewDeletedSnapshots) {
+        if (keep.has(id)) continue
+        if (!scene.nodes[id]) {
+          create.push({
+            node,
+            parentId: (node.parentId ?? undefined) as AnyNodeId | undefined,
+          })
+        }
+        previewDeletedSnapshots.delete(id)
+      }
+      if (create.length > 0) scene.applyNodeChanges({ create })
+    }
+
+    const applyLogicalBasePreview = () => {
+      if (!tag) return
+      const scene = useScene.getState()
+      scene.applyNodeChanges({
+        delete: mintedIds.filter((id) => scene.nodes[id]),
+        update: [
+          {
+            id: duct.id as AnyNodeId,
+            data: {
+              path: logicalPath,
+              metadata: withoutAutoOffsetTag(duct.metadata),
+            } as Partial<AnyNode>,
+          },
+          ...tag.base
+            .filter((b) => b.id !== (duct.id as AnyNodeId) && scene.nodes[b.id])
+            .map((b) => ({ id: b.id, data: b.data as Partial<AnyNode> })),
+        ],
+      })
+    }
+
     const onMove = (event: PointerEvent) => {
       if (startSample === null) return
       const s = sample(event.clientX, event.clientY)
@@ -711,36 +897,59 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       if (next === delta) return
       delta = next
       if (step > 0) triggerSFX('sfx:grid-snap')
+      const dyEff = baseDy + next
       // Vertical move: connected ends stay welded to their (stationary)
-      // partner via an auto-routed elbow → riser → elbow offset, instead of
-      // dragging the whole network up. Open ends (or moves too short to
-      // offset) fall back to the plain translate-with-follow.
-      offsetPlan =
-        kind.axis === 'y' && next !== 0
+      // partner via an auto-routed elbow → riser → elbow offset, planned from
+      // the LOGICAL L by the accumulated lift. The planner returns valid (offset
+      // fits), invalid (connected but no clean offset at this height), or null
+      // (no connections, or dyEff 0 → back at the L → plain translate).
+      offsetResult =
+        isVertical && dyEff !== 0
           ? planVerticalOffsets({
-              duct,
-              dy: next,
+              duct: logicalDuct,
+              dy: dyEff,
               profile,
               connections: connectivity?.connections ?? [],
               scenePorts,
               nodesById,
             })
           : null
-      if (offsetPlan) {
+      if (offsetResult?.status === 'valid') {
+        applyLogicalBasePreview()
         // Lift the run to the offset path; trim run-offset partners back one
         // leg, and let connectivity-follow (seeded from followPath, which zeroes
         // the offset ends) lift any FITTING / open partner so its elbow rides
         // up and its riser lengthens into a clean L. Ghost the new elbows +
-        // riser; they're minted for real on release.
-        useScene
-          .getState()
-          .updateNodes([
-            { id: duct.id as AnyNodeId, data: { path: offsetPlan.ductPath } },
-            ...offsetPlan.updates.filter((u) => useScene.getState().nodes[u.id]),
-            ...connectivityUpdatesForPath(connectivity, offsetPlan.followPath),
-          ])
-        setVerticalGhost({ fittings: offsetPlan.fittings, risers: offsetPlan.risers })
+        // riser GREEN; they're minted for real on release.
+        const plan = offsetResult.plan
+        const scene = useScene.getState()
+        const deletePreview = (plan.delete ?? []).filter((id) => scene.nodes[id])
+        for (const id of deletePreview) {
+          const node = scene.nodes[id]
+          if (node) previewDeletedSnapshots.set(id, node)
+        }
+        restorePreviewDeleted(plan.delete ?? [])
+        scene.applyNodeChanges({
+          delete: deletePreview,
+          update: [
+            { id: duct.id as AnyNodeId, data: { path: plan.ductPath } },
+            ...plan.updates.filter((u) => scene.nodes[u.id]),
+            ...connectivityUpdatesForPath(connectivity, plan.followPath),
+          ],
+        })
+        setVerticalGhost({ tint: 'valid', fittings: plan.fittings, risers: plan.risers })
+      } else if (offsetResult?.status === 'invalid') {
+        // No clean offset at this height. Keep the last committed network
+        // visible (including any prior auto-offset we rewound at drag-start)
+        // and show a RED ghost of the run where it WOULD lift to. Nothing is
+        // committed on release, so the run snaps back to its prior state.
+        restorePreviewDeleted()
+        restoreOriginalOffsetPreview()
+        const lifted = DuctSegmentNode.parse({ ...logicalDuct, path: shiftedPath(next) })
+        setVerticalGhost({ tint: 'invalid', fittings: [], risers: [lifted] })
       } else {
+        restorePreviewDeleted()
+        applyLogicalBasePreview()
         setVerticalGhost(null)
         useScene.getState().updateNodes(batchFor(shiftedPath(next)))
       }
@@ -755,49 +964,147 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       document.body.style.cursor = ''
       setRunMoving(false)
       setVerticalGhost(null)
-      // Single-undo dance: revert run + followers while paused, resume, re-apply
-      // the final shift as one tracked change.
-      const reverts: { id: AnyNodeId; data: Partial<AnyNode> }[] = (
-        connectivity?.connections ?? []
-      ).map((conn) => {
-        if (conn.kind !== 'rigid-node') {
-          return { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> }
-        }
-        // Rigid partners translate (position) — but a connected elbow may have
-        // RE-AIMED (rotation + angle) for the clean-L offset, so restore those
-        // from the drag-start snapshot too.
-        const start = nodesById[conn.nodeId] as Record<string, unknown> | undefined
-        const data: Record<string, unknown> = { position: conn.startPosition }
-        if (start?.rotation !== undefined) data.rotation = start.rotation
-        if (start?.angle !== undefined) data.angle = start.angle
-        return { id: conn.nodeId, data: data as Partial<AnyNode> }
+      // Single-undo dance: while paused, revert to the PRE-drag baseline (the
+      // original Z — recreate the minted nodes the rewind deleted and restore
+      // the run + partners), resume, then write the final state as ONE tracked
+      // change so undo jumps straight back to the original.
+      const restore = useScene.getState()
+      restore.applyNodeChanges({
+        create: [
+          ...mintedSnapshots
+            .filter((n) => !restore.nodes[n.id])
+            .map((node) => ({ node, parentId })),
+          ...Array.from(previewDeletedSnapshots.values())
+            .filter((node) => !restore.nodes[node.id])
+            .map((node) => ({
+              node,
+              parentId: (node.parentId ?? undefined) as AnyNodeId | undefined,
+            })),
+        ],
+        update: [
+          {
+            id: duct.id as AnyNodeId,
+            data: { path: duct.path, metadata: duct.metadata } as Partial<AnyNode>,
+          },
+          ...originalPartnerReverts(),
+        ],
       })
-      useScene
-        .getState()
-        .updateNodes([
-          { id: duct.id as AnyNodeId, data: { path: initialPath } },
-          ...reverts.filter((u) => useScene.getState().nodes[u.id]),
-        ])
       resumeSceneHistory(useScene)
       if (delta === 0) return
-      const plan = offsetPlan
-      if (plan) {
-        // Create the auto-routed elbows + riser and apply the lifted path,
-        // run-partner trims, and the connectivity-follow for any fitting / open
-        // partner (seeded from followPath) as one tracked change.
-        useScene.getState().applyNodeChanges({
-          create: [...plan.fittings, ...plan.risers].map((node) => ({
-            node,
-            parentId: (duct.parentId ?? undefined) as AnyNodeId | undefined,
-          })),
+      const dyEff = baseDy + delta
+      const result = offsetResult
+      // Invalid lift: nothing buildable at this height — keep the prior state
+      // (the revert above already restored it) and commit nothing.
+      if (result?.status === 'invalid') return
+      const scene = useScene.getState()
+      if (result?.status === 'valid') {
+        // Mint the new offset (fresh elbows + riser), delete any prior minted,
+        // trim run-offset partners, lift fitting / open partners via
+        // connectivity-follow, and stamp the run with the offset tag — all one
+        // tracked change. The base (logical L) is carried forward unchanged.
+        const plan = result.plan
+        const group = tag?.group ?? newAutoOffsetGroupId()
+        const base = tag?.base ?? freshBase()
+        const minted = [...plan.fittings, ...plan.risers]
+        const hasMintedOffset = minted.length > 0
+        const newTag = {
+          group,
+          dy: plan.dy,
+          minted: minted.map((n) => n.id as AnyNodeId),
+          base,
+        }
+        scene.applyNodeChanges({
+          create: minted.map((node) => ({ node, parentId })),
+          delete: [
+            ...mintedIds.filter((id) => scene.nodes[id]),
+            ...(plan.delete ?? []).filter((id) => scene.nodes[id]),
+          ],
           update: [
-            { id: duct.id as AnyNodeId, data: { path: plan.ductPath } },
-            ...plan.updates.filter((u) => useScene.getState().nodes[u.id]),
+            {
+              id: duct.id as AnyNodeId,
+              data: {
+                path: plan.ductPath,
+                metadata: hasMintedOffset
+                  ? withAutoOffsetTag(duct.metadata, newTag)
+                  : withoutAutoOffsetTag(duct.metadata),
+              } as Partial<AnyNode>,
+            },
+            ...plan.updates.filter((u) => scene.nodes[u.id]),
             ...connectivityUpdatesForPath(connectivity, plan.followPath),
           ],
         })
+      } else if (tag && dyEff === 0) {
+        // Dragged a re-grabbed offset all the way back to its logical L: the Z
+        // dissolves for good — delete the minted nodes, drop the tag, and leave
+        // the run + partners on the clean L.
+        scene.applyNodeChanges({
+          delete: mintedIds.filter((id) => scene.nodes[id]),
+          update: [
+            {
+              id: duct.id as AnyNodeId,
+              data: {
+                path: logicalPath,
+                metadata: withoutAutoOffsetTag(duct.metadata),
+              } as Partial<AnyNode>,
+            },
+            ...tag.base
+              .filter((b) => b.id !== (duct.id as AnyNodeId) && scene.nodes[b.id])
+              .map((b) => ({ id: b.id, data: b.data as Partial<AnyNode> })),
+          ],
+        })
       } else {
-        useScene.getState().updateNodes(batchFor(shiftedPath(delta)))
+        // Plain translate, or a horizontal connected slide that can be
+        // rerouted with elbows + a connector instead of dragging the network.
+        const finalPath = shiftedPath(delta)
+        const translationPlan =
+          !isVertical && connectivity
+            ? planRunTranslationOffsets({
+                duct: logicalDuct,
+                translatedPath: finalPath,
+                profile,
+                connections: connectivity.connections,
+                scenePorts,
+                nodesById,
+              })
+            : null
+        if (translationPlan) {
+          scene.applyNodeChanges({
+            create: [...translationPlan.fittings, ...translationPlan.connectors].map((node) => ({
+              node: node as AnyNode,
+              parentId,
+            })),
+            update: [
+              { id: duct.id as AnyNodeId, data: { path: translationPlan.ductPath } },
+              ...translationPlan.updates,
+            ],
+          })
+          return
+        }
+        const updates = batchFor(finalPath)
+        if (isVertical && existingTag) {
+          updates[0] = {
+            ...updates[0]!,
+            data: {
+              ...updates[0]!.data,
+              metadata: withoutAutoOffsetTag(duct.metadata),
+            } as Partial<AnyNode>,
+          }
+        }
+        if (!isVertical && existingTag && kind.axis === 'horizontal') {
+          const movedTag = translateAutoOffsetBase(existingTag, [
+            delta * kind.dir[0],
+            0,
+            delta * kind.dir[1],
+          ])
+          updates[0] = {
+            ...updates[0]!,
+            data: {
+              ...updates[0]!.data,
+              metadata: withAutoOffsetTag(duct.metadata, movedTag),
+            } as Partial<AnyNode>,
+          }
+        }
+        useScene.getState().updateNodes(updates)
       }
     }
 
@@ -879,14 +1186,15 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
 
   return (
     <group ref={outerRef}>
-      {/* Auto-routed offset preview (vertical run-center move): the elbows +
-          plumb riser the release will mint, ghosted while the run lifts live.
-          Built from the same nodes the commit creates, so what's shown lands. */}
+      {/* Auto-routed offset preview (vertical run-center move). Valid (green):
+          the elbows + plumb riser the release will mint, ghosted while the real
+          run lifts live. Invalid (red): a single ghost of the run at the
+          attempted height — the real network is frozen and release snaps back. */}
       {verticalGhost?.fittings.map((f) => (
-        <FittingGhost fitting={f} key={`vghost-fit-${f.id}`} />
+        <FittingGhost fitting={f} key={`vghost-fit-${f.id}`} tint={verticalGhost.tint} />
       ))}
       {verticalGhost?.risers.map((r) => (
-        <DuctSegmentGhost duct={r} key={`vghost-riser-${r.id}`} />
+        <DuctSegmentGhost duct={r} key={`vghost-riser-${r.id}`} tint={verticalGhost.tint} />
       ))}
       {/* Per-vertex affordances — hidden while a drag / roll is live (the window
           pointer handlers own the gesture). Each vertex shows a small cube;
@@ -1055,9 +1363,11 @@ function RollHandle({
 // (along-run ± and across-run ±) plus an up / down vertical pair. The
 // horizontal pair is aligned to the run's node-local TANGENT at that vertex,
 // not world ±X / ±Z, so a duct drawn at any angle (or rotated) keeps
-// along-/across-run arrows. `rotationY` orients each flat chevron to point
-// along its direction (the same `atan2(-z, x)` mapping the wall move handles
-// use). Arrows stand off the run body so they clear thick trunks. At an
+// along-/across-run arrows. Pure vertical risers have no XZ tangent, so their
+// horizontal arrows become side-swing controls and the outward ±Y chevron
+// becomes the along-run length handle. `rotationY` orients each flat chevron to
+// point along its direction (the same `atan2(-z, x)` mapping the wall move
+// handles use). Arrows stand off the run body so they clear thick trunks. At an
 // endpoint the chevron pointing back INTO the run (toward the neighbour) is
 // dropped — its outward twin already shortens / lengthens that end either way.
 function getCornerArrows(duct: DuctSegmentNode): CornerArrow[] {
@@ -1066,25 +1376,35 @@ function getCornerArrows(duct: DuctSegmentNode): CornerArrow[] {
   const last = duct.path.length - 1
   duct.path.forEach((p, i) => {
     // Run tangent at this vertex (node-local XZ). A pure-riser vertex has no
-    // horizontal extent → fall back to world +X so the arrows stay usable.
-    const t = vertexTangentXZ(duct, i) ?? [1, 0]
+    // horizontal extent, so keep its side arrows world-cardinal and let the
+    // outward vertical arrow carry the along-run action.
+    const tangentXZ = vertexTangentXZ(duct, i)
+    const verticalTangentY = tangentXZ ? null : vertexTangentY(duct, i)
+    const t = tangentXZ ?? ([1, 0] as [number, number])
     // Yaw that aligns a handle's local +X with the run tangent — shared by the
     // up / down chevrons so their flat plates align with the run (the ±Y tip
     // is added on top, and yawing about Y keeps them pointing up / down).
     const runYaw = Math.atan2(-t[1], t[0])
     // along the run (lengthen / shorten), then across it (swing — tangent
     // rotated ±90°).
-    const dirs: { dir: [number, number]; along: boolean }[] = [
-      { dir: [t[0], t[1]], along: true },
-      { dir: [-t[0], -t[1]], along: true },
-      { dir: [-t[1], t[0]], along: false },
-      { dir: [t[1], -t[0]], along: false },
-    ]
+    const dirs: { dir: [number, number]; along: boolean }[] = tangentXZ
+      ? [
+          { dir: [t[0], t[1]], along: true },
+          { dir: [-t[0], -t[1]], along: true },
+          { dir: [-t[1], t[0]], along: false },
+          { dir: [t[1], -t[0]], along: false },
+        ]
+      : [
+          { dir: [1, 0], along: false },
+          { dir: [-1, 0], along: false },
+          { dir: [0, 1], along: false },
+          { dir: [0, -1], along: false },
+        ]
     // Inward (toward the run body) at an endpoint: i=0 the tangent points at
     // the neighbour, i=last it points away — so inward is ∓tangent. Interior
     // points keep all four arrows.
     const inward: [number, number] | null =
-      i === 0 ? [t[0], t[1]] : i === last ? [-t[0], -t[1]] : null
+      tangentXZ && i === 0 ? [t[0], t[1]] : tangentXZ && i === last ? [-t[0], -t[1]] : null
     for (const { dir, along } of dirs) {
       const [dx, dz] = dir
       if (inward && dx * inward[0] + dz * inward[1] > 0.999) continue
@@ -1097,24 +1417,27 @@ function getCornerArrows(duct: DuctSegmentNode): CornerArrow[] {
         cursor: 'grab',
       })
     }
-    arrows.push({
-      key: `pt${i}-up`,
-      index: i,
-      kind: { axis: 'y' },
-      position: [p[0], p[1] + base, p[2]],
-      rotationY: runYaw,
-      vertical: 'up',
-      cursor: 'ns-resize',
-    })
-    arrows.push({
-      key: `pt${i}-down`,
-      index: i,
-      kind: { axis: 'y' },
-      position: [p[0], p[1] - base, p[2]],
-      rotationY: runYaw,
-      vertical: 'down',
-      cursor: 'ns-resize',
-    })
+    // Inward at a vertical endpoint is the chevron that points back toward the
+    // neighbour; hide it so a riser endpoint exposes one clear outer length
+    // handle along the duct instead of a misleading up/down swing pair.
+    const inwardY =
+      verticalTangentY && i === 0
+        ? verticalTangentY
+        : verticalTangentY && i === last
+          ? -verticalTangentY
+          : null
+    for (const sign of [1, -1] as const) {
+      if (inwardY === sign) continue
+      arrows.push({
+        key: `pt${i}-${sign > 0 ? 'up' : 'down'}`,
+        index: i,
+        kind: { axis: 'y', along: verticalTangentY !== null },
+        position: [p[0], p[1] + sign * base, p[2]],
+        rotationY: runYaw,
+        vertical: sign > 0 ? 'up' : 'down',
+        cursor: 'ns-resize',
+      })
+    }
   })
   return arrows
 }
@@ -1145,6 +1468,31 @@ function vertexTangentXZ(duct: DuctSegmentNode, i: number): [number, number] | n
   const sz = inc[1] + out[1]
   const len = Math.hypot(sx, sz)
   return len < 1e-6 ? inc : [sx / len, sz / len]
+}
+
+/**
+ * Node-local Y tangent for a vertex whose adjacent run direction is vertical.
+ * Uses the same endpoint orientation convention as `vertexTangentXZ`: start
+ * points toward its neighbour, end points away from its previous neighbour.
+ */
+function vertexTangentY(duct: DuctSegmentNode, i: number): 1 | -1 | null {
+  const path = duct.path
+  const last = path.length - 1
+  if (last < 1) return null
+  const seg = (a: number, b: number): 1 | -1 | null => {
+    const dx = path[b]![0] - path[a]![0]
+    const dy = path[b]![1] - path[a]![1]
+    const dz = path[b]![2] - path[a]![2]
+    if (Math.hypot(dx, dz) > 1e-6 || Math.abs(dy) < 1e-6) return null
+    return dy > 0 ? 1 : -1
+  }
+  if (i === 0) return seg(0, 1)
+  if (i === last) return seg(last - 1, last)
+  const inc = seg(i - 1, i)
+  const out = seg(i, i + 1)
+  if (!inc) return out
+  if (!out) return inc
+  return inc === out ? inc : null
 }
 
 /** Y-yaw that aligns a handle's local +X with the run tangent at vertex `i`. */

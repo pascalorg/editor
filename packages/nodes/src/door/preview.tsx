@@ -29,7 +29,7 @@ const DoorPreview = ({
     const m = buildDoorPreviewMesh(node)
     m.layers.set(EDITOR_LAYER)
     return m
-  }, [node.width, node.height, node.frameDepth, node.openingShape, node.doorType, node.leafCount])
+  }, [node])
 
   // Ghost treatment (clone + tint + raycast-off) re-applies if the tint flips;
   // its cleanup only disposes the clones it made.

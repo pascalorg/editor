@@ -13,20 +13,34 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { swallowNextClick, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  ARROW_COLOR,
+  EDITOR_LAYER,
+  swallowNextClick,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
+import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useState } from 'react'
 import {
+  BufferGeometry,
   Euler,
+  Float32BufferAttribute,
   type Group,
+  LineSegments,
   type Object3D,
+  OrthographicCamera,
   Plane,
   Quaternion,
   Raycaster,
+  SphereGeometry,
   Vector2,
   Vector3,
 } from 'three'
+import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
+import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { autoOffsetInvalidationUpdates } from '../shared/auto-offset-tag'
 import {
   AXIS_VECTORS,
   cycleRotationAxis,
@@ -40,12 +54,22 @@ type Point = [number, number, number]
 
 /** Stand-off (meters) from the fitting body to each arrow. */
 const ARROW_GAP = 0.14
+const RESIZE_HANDLE_GAP = 0.18
+const RESIZE_STEP_IN = 1
+const RESIZE_GUIDE_DASH = 0.07
+const RESIZE_GUIDE_GAP = 0.045
+const RESIZE_SPHERE_RADIUS = 0.065
+const RESIZE_HIT_RADIUS = 0.13
 
 const UP = new Vector3(0, 1, 0)
 
 function snap(value: number, step: number): number {
   if (step <= 0) return value
   return Math.round(value / step) * step
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
 }
 
 /** Rough body radius (meters) — the larger of the fitting's two collar reaches,
@@ -57,16 +81,194 @@ function fittingExtentM(node: DuctFittingNode): number {
 
 /** The transform a drag frame writes onto the fitting. */
 type FittingTransform = { position?: Point; rotation?: Point }
+type FittingDimension = 'width' | 'height'
+
+function fittingParameterPatch(node: DuctFittingNode): Partial<DuctFittingNode> {
+  return {
+    fittingType: node.fittingType,
+    shape: node.shape,
+    width: node.width,
+    height: node.height,
+    shape2: node.shape2,
+    width2: node.width2,
+    height2: node.height2,
+    angle: node.angle,
+    branchAngle: node.branchAngle,
+    diameter: node.diameter,
+    diameter2: node.diameter2,
+    ductMaterial: node.ductMaterial,
+    system: node.system,
+  }
+}
+
+function preserveFittingParameters(
+  node: DuctFittingNode,
+  data: Partial<DuctFittingNode>,
+): Partial<AnyNode> {
+  return { ...fittingParameterPatch(node), ...data } as Partial<AnyNode>
+}
+
+function canResizeRunProfile(node: DuctFittingNode): boolean {
+  return (
+    node.fittingType === 'transition' || (node.fittingType !== 'reducer' && node.shape !== 'round')
+  )
+}
+
+function dimensionBounds(dimension: FittingDimension): { min: number; max: number } {
+  return dimension === 'width' ? { min: 4, max: 60 } : { min: 3, max: 40 }
+}
+
+function closestAxisParameterToRay(
+  axisOrigin: Vector3,
+  axisDirection: Vector3,
+  ray: Raycaster['ray'],
+) {
+  const originToRay = axisOrigin.clone().sub(ray.origin)
+  const b = axisDirection.dot(ray.direction)
+  const d = axisDirection.dot(originToRay)
+  const e = ray.direction.dot(originToRay)
+  const denominator = 1 - b * b
+  if (Math.abs(denominator) < 1e-6) return -d
+  const axisParameter = (b * e - d) / denominator
+  const rayParameter = e + b * axisParameter
+  return rayParameter < 0 ? -d : axisParameter
+}
+
+function DashedResizeGuide({ from, to }: { from: Point; to: Point }) {
+  const line = useMemo(() => {
+    const a = new Vector3(from[0], from[1], from[2])
+    const b = new Vector3(to[0], to[1], to[2])
+    const span = b.clone().sub(a)
+    const length = span.length()
+    const points: number[] = []
+    if (length > 1e-4) {
+      const dir = span.clone().normalize()
+      let t = 0
+      while (t < length) {
+        const start = a.clone().addScaledVector(dir, t)
+        const end = a.clone().addScaledVector(dir, Math.min(t + RESIZE_GUIDE_DASH, length))
+        points.push(start.x, start.y, start.z, end.x, end.y, end.z)
+        t += RESIZE_GUIDE_DASH + RESIZE_GUIDE_GAP
+      }
+    }
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new Float32BufferAttribute(new Float32Array(points), 3))
+    const material = new LineBasicNodeMaterial({
+      color: ARROW_COLOR,
+      transparent: true,
+      opacity: 0.8,
+      depthWrite: false,
+    })
+    const next = new LineSegments(geometry, material)
+    next.frustumCulled = false
+    next.layers.set(EDITOR_LAYER)
+    next.renderOrder = 1002
+    next.raycast = () => {}
+    return next
+  }, [from, to])
+
+  useEffect(
+    () => () => {
+      line.geometry.dispose()
+      ;(line.material as LineBasicNodeMaterial).dispose()
+    },
+    [line],
+  )
+
+  return <primitive object={line} />
+}
+
+function ResizeSphereHandle({
+  cursor,
+  onPointerDown,
+  position,
+}: {
+  cursor: Cursor
+  onPointerDown: (event: ThreeEvent<PointerEvent>) => void
+  position: Point
+}) {
+  const { camera } = useThree()
+  const [hovered, setHovered] = useState(false)
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const sphereGeometry = useMemo(() => new SphereGeometry(RESIZE_SPHERE_RADIUS, 18, 12), [])
+  const hitGeometry = useMemo(() => new SphereGeometry(RESIZE_HIT_RADIUS, 12, 8), [])
+  const sphereMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: ARROW_COLOR,
+        transparent: true,
+        opacity: 0.92,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+  const hitMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: ARROW_COLOR,
+        transparent: true,
+        opacity: 0,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+
+  useEffect(() => {
+    sphereMaterial.opacity = hovered ? 1 : 0.92
+  }, [sphereMaterial, hovered])
+  useEffect(
+    () => () => {
+      hitGeometry.dispose()
+      sphereGeometry.dispose()
+      sphereMaterial.dispose()
+      hitMaterial.dispose()
+    },
+    [hitGeometry, hitMaterial, sphereGeometry, sphereMaterial],
+  )
+
+  const consumePress = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    event.nativeEvent.stopPropagation()
+    event.nativeEvent.stopImmediatePropagation()
+    swallowNextClick()
+    onPointerDown(event)
+  }
+
+  return (
+    <group position={position} scale={zoom}>
+      <mesh
+        geometry={hitGeometry}
+        material={hitMaterial}
+        onPointerDown={consumePress}
+        onPointerEnter={(event) => {
+          event.stopPropagation()
+          setHovered(true)
+          document.body.style.cursor = cursor
+        }}
+        onPointerLeave={(event) => {
+          event.stopPropagation()
+          setHovered(false)
+          if (document.body.style.cursor === cursor) document.body.style.cursor = ''
+        }}
+      />
+      <mesh geometry={sphereGeometry} material={sphereMaterial} renderOrder={1004} />
+    </group>
+  )
+}
 
 /**
  * Selection-time affordances for a placed duct fitting — the 3D twin of the
- * duct-segment selection rig. A single CLICK-to-latch cube sits at the fitting
- * center; clicking it opens (click again to close) a cluster of:
+ * duct-segment selection rig. A CLICK-to-latch cube sits at the fitting center;
+ * clicking it opens (click again to close) a cluster of:
  *
  *  - **Six move arrows** (±X / ±Y / ±Z): translate the whole fitting along one
  *    world axis. Connected runs follow via port connectivity.
  *  - **Three rotation arcs** (X / Y / Z): spin the fitting about each world
  *    axis. Connected runs re-aim via port follow.
+ *  - **Two profile cubes** on the fitting's visible side/top faces: resize
+ *    non-round fitting width and height without occupying the inside corner.
  *
  * The handle rig is PORTALED into the fitting group's PARENT — never the
  * fitting group itself — because the selection outliner (`MergedOutlineNode`)
@@ -137,6 +339,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
   // True while a move / rotate drag is live — the arrows hide (the window
   // pointer handlers own the gesture), exactly like the duct-segment rig.
   const [dragging, setDragging] = useState(false)
+  const [sideSign, setSideSign] = useState(1)
 
   const makeRay = (clientX: number, clientY: number) => {
     const rect = gl.domElement.getBoundingClientRect()
@@ -152,6 +355,12 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
     const hit = new Vector3()
     return makeRay(clientX, clientY).intersectPlane(plane, hit) ? hit : null
   }
+  const sampleAxisParameter = (
+    clientX: number,
+    clientY: number,
+    axisOrigin: Vector3,
+    axisDirection: Vector3,
+  ): number => closestAxisParameterToRay(axisOrigin, axisDirection, makeRay(clientX, clientY))
   /** World hit on a vertical, camera-facing plane through `anchorWorld`,
    *  returned as a level-local Y (the frame is axis-aligned to the parent). */
   const intersectVerticalY = (
@@ -171,6 +380,13 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
 
   const toWorld = (p: Point): Vector3 =>
     frame ? frame.localToWorld(new Vector3(p[0], p[1], p[2])) : new Vector3(p[0], p[1], p[2])
+  const axisToWorld = (origin: Point, axis: Vector3): Vector3 => {
+    const originWorld = toWorld(origin)
+    const tipWorld = frame
+      ? frame.localToWorld(new Vector3(origin[0] + axis.x, origin[1] + axis.y, origin[2] + axis.z))
+      : new Vector3(origin[0] + axis.x, origin[1] + axis.y, origin[2] + axis.z)
+    return tipWorld.sub(originWorld).normalize()
+  }
 
   /** Cursor's coordinate on one world axis, in the frame's local space. For Y
    *  it rides a camera-facing vertical plane; for X / Z it projects onto the
@@ -197,9 +413,20 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
   ): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
     if (!connectivity) return []
     const preview = { ...(fitting as Record<string, unknown>), ...transform } as AnyNode
-    return resolveConnectivityUpdates(connectivity, preview).filter(
-      (u) => useScene.getState().nodes[u.id],
-    )
+    const nodes = useScene.getState().nodes
+    return resolveConnectivityUpdates(connectivity, preview)
+      .filter((u) => nodes[u.id])
+      .map((u) => {
+        const node = nodes[u.id]
+        if (node?.type !== 'duct-fitting') return u
+        return {
+          id: u.id,
+          data: preserveFittingParameters(
+            node as DuctFittingNode,
+            u.data as Partial<DuctFittingNode>,
+          ),
+        }
+      })
   }
 
   /**
@@ -229,7 +456,10 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       let current: FittingTransform | null = null
 
       const buildBatch = (t: FittingTransform): { id: AnyNodeId; data: Partial<AnyNode> }[] => [
-        { id: fitting.id as AnyNodeId, data: t as Partial<AnyNode> },
+        {
+          id: fitting.id as AnyNodeId,
+          data: preserveFittingParameters(fitting, t as Partial<DuctFittingNode>),
+        },
         ...connectivityUpdates(connectivity, t),
       ]
 
@@ -260,20 +490,39 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         // the final transform as one tracked change.
         const reverts: { id: AnyNodeId; data: Partial<AnyNode> }[] = (
           connectivity?.connections ?? []
-        ).map((conn) =>
-          conn.kind === 'rigid-node'
-            ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
-            : { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> },
-        )
+        ).map((conn) => {
+          if (conn.kind !== 'rigid-node') {
+            return { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> }
+          }
+          const node = useScene.getState().nodes[conn.nodeId]
+          return {
+            id: conn.nodeId,
+            data:
+              node?.type === 'duct-fitting'
+                ? preserveFittingParameters(node as DuctFittingNode, {
+                    position: conn.startPosition as Point,
+                  })
+                : ({ position: conn.startPosition } as Partial<AnyNode>),
+          }
+        })
         useScene.getState().updateNodes([
           {
             id: fitting.id as AnyNodeId,
-            data: { position: initialPosition, rotation: initialRotation } as Partial<AnyNode>,
+            data: preserveFittingParameters(fitting, {
+              position: initialPosition,
+              rotation: initialRotation,
+            }),
           },
           ...reverts.filter((u) => useScene.getState().nodes[u.id]),
         ])
         resumeSceneHistory(useScene)
-        if (current) useScene.getState().updateNodes(buildBatch(current))
+        if (current) {
+          const scene = useScene.getState()
+          scene.updateNodes([
+            ...buildBatch(current),
+            ...autoOffsetInvalidationUpdates(scene.nodes, fitting.id as AnyNodeId),
+          ])
+        }
       }
 
       window.addEventListener('pointermove', onMove)
@@ -358,9 +607,160 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       }
     }
 
+  const beginDimensionDrag =
+    (dimension: FittingDimension, axisLocal: Vector3, cursor: Cursor) =>
+    (e: ThreeEvent<PointerEvent>) => {
+      e.stopPropagation()
+      const baseValue = fitting[dimension]
+      const initialPatch = { [dimension]: baseValue } as Partial<DuctFittingNode>
+      const centerWorld = toWorld(fitting.position as Point)
+      const axisWorld = axisToWorld(fitting.position as Point, axisLocal)
+      const start = sampleAxisParameter(
+        e.nativeEvent.clientX,
+        e.nativeEvent.clientY,
+        centerWorld,
+        axisWorld,
+      )
+      const { min, max } = dimensionBounds(dimension)
+      pauseSceneHistory(useScene)
+      useViewer.getState().setInputDragging(true)
+      setDragging(true)
+      document.body.style.cursor = cursor
+      let current: Partial<DuctFittingNode> | null = null
+      let lastValue = Number.NaN
+
+      const apply = (patch: Partial<DuctFittingNode>) => {
+        useScene.getState().updateNodes([
+          {
+            id: fitting.id as AnyNodeId,
+            data: preserveFittingParameters(fitting, patch),
+          },
+        ])
+      }
+
+      const onMove = (event: PointerEvent) => {
+        const rawDeltaM =
+          sampleAxisParameter(event.clientX, event.clientY, centerWorld, axisWorld) - start
+        const deltaIn = (rawDeltaM / INCHES_TO_METERS) * 2
+        const nextRaw = baseValue + deltaIn
+        const nextValue = clamp(event.shiftKey ? nextRaw : snap(nextRaw, RESIZE_STEP_IN), min, max)
+        if (nextValue === lastValue) return
+        lastValue = nextValue
+        current = { [dimension]: nextValue } as Partial<DuctFittingNode>
+        if (!event.shiftKey) triggerSFX('sfx:grid-snap')
+        apply(current)
+      }
+
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
+        useViewer.getState().setInputDragging(false)
+        setDragging(false)
+        if (document.body.style.cursor === cursor) document.body.style.cursor = ''
+      }
+
+      const onUp = () => {
+        swallowNextClick()
+        cleanup()
+        apply(initialPatch)
+        resumeSceneHistory(useScene)
+        if (current) apply(current)
+      }
+
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
+    }
+
   const extent = useMemo(() => fittingExtentM(fitting), [fitting])
   const p = fitting.position as Point
   const base = extent + ARROW_GAP
+  const fittingRotation = useMemo(
+    () => new Euler(fitting.rotation[0], fitting.rotation[1], fitting.rotation[2]),
+    [fitting.rotation],
+  )
+  const profileAxes = useMemo(() => {
+    const hingeAxis = new Vector3(0, 1, 0).applyEuler(fittingRotation).normalize()
+    const sideAxis = new Vector3(0, 0, 1).applyEuler(fittingRotation).normalize()
+    const hingeIsVertical = Math.abs(hingeAxis.y) >= Math.SQRT1_2
+    const hingeDimension: FittingDimension = hingeIsVertical ? 'height' : 'width'
+    const sideDimension: FittingDimension = hingeIsVertical ? 'width' : 'height'
+    const hingeEntry = { key: hingeDimension, axis: hingeAxis }
+    const sideEntry = { key: sideDimension, axis: sideAxis }
+    return Math.abs(hingeAxis.dot(UP)) >= Math.abs(sideAxis.dot(UP))
+      ? { top: hingeEntry, side: sideEntry }
+      : { top: sideEntry, side: hingeEntry }
+  }, [fittingRotation])
+  const topAxis = useMemo(() => {
+    const axis = profileAxes.top.axis.clone()
+    return axis.dot(UP) >= 0 ? axis : axis.multiplyScalar(-1)
+  }, [profileAxes])
+  const baseSideAxis = profileAxes.side.axis
+  const sideAxis = useMemo(
+    () => baseSideAxis.clone().multiplyScalar(sideSign),
+    [baseSideAxis, sideSign],
+  )
+  useFrame(() => {
+    if (!frame) return
+    const cameraPosition = camera.getWorldPosition(new Vector3())
+    const cameraLocal = frame.worldToLocal(cameraPosition)
+    const toCamera = cameraLocal.sub(new Vector3(p[0], p[1], p[2]))
+    const nextSign = baseSideAxis.dot(toCamera) >= 0 ? 1 : -1
+    setSideSign((current) => (current === nextSign ? current : nextSign))
+  })
+  const resizeHandleBase = extent + RESIZE_HANDLE_GAP
+  const resizeHandles: {
+    key: FittingDimension
+    axis: Vector3
+    cursor: Cursor
+    guideFrom: Point
+    guideTo: Point
+    position: Point
+  }[] = canResizeRunProfile(fitting)
+    ? [
+        {
+          key: profileAxes.top.key,
+          axis: topAxis,
+          cursor: 'ns-resize',
+          guideFrom: [
+            p[0] + topAxis.x * resizeHandleBase,
+            p[1] + topAxis.y * resizeHandleBase,
+            p[2] + topAxis.z * resizeHandleBase,
+          ],
+          guideTo: [
+            p[0] + topAxis.x * Math.max(extent * 0.18, 0.04),
+            p[1] + topAxis.y * Math.max(extent * 0.18, 0.04),
+            p[2] + topAxis.z * Math.max(extent * 0.18, 0.04),
+          ],
+          position: [
+            p[0] + topAxis.x * resizeHandleBase,
+            p[1] + topAxis.y * resizeHandleBase,
+            p[2] + topAxis.z * resizeHandleBase,
+          ],
+        },
+        {
+          key: profileAxes.side.key,
+          axis: sideAxis,
+          cursor: 'ew-resize',
+          guideFrom: [
+            p[0] + sideAxis.x * resizeHandleBase,
+            p[1] + sideAxis.y * resizeHandleBase,
+            p[2] + sideAxis.z * resizeHandleBase,
+          ],
+          guideTo: [
+            p[0] + sideAxis.x * Math.max(extent * 0.18, 0.04),
+            p[1] + sideAxis.y * Math.max(extent * 0.18, 0.04),
+            p[2] + sideAxis.z * Math.max(extent * 0.18, 0.04),
+          ],
+          position: [
+            p[0] + sideAxis.x * resizeHandleBase,
+            p[1] + sideAxis.y * resizeHandleBase,
+            p[2] + sideAxis.z * resizeHandleBase,
+          ],
+        },
+      ]
+    : []
 
   // Six whole-fitting move arrows, one per ± world axis.
   const moveArrows: {
@@ -445,6 +845,17 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
   return (
     <group ref={setFrame}>
       <HandleCube active={open} onClick={() => setOpen((o) => !o)} position={p} />
+      {!open &&
+        resizeHandles.map((handle) => (
+          <group key={handle.key}>
+            <DashedResizeGuide from={handle.guideFrom} to={handle.guideTo} />
+            <ResizeSphereHandle
+              cursor={handle.cursor}
+              onPointerDown={beginDimensionDrag(handle.key, handle.axis, handle.cursor)}
+              position={handle.position}
+            />
+          </group>
+        ))}
       {open && (
         <>
           {moveArrows.map((a) => (

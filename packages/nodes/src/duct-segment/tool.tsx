@@ -52,17 +52,17 @@ import {
   type ScenePort,
 } from '../shared/ports'
 import { ductSegmentDefinition } from './definition'
-import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
+import { ductPortDiameterIn, rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
 
 /**
- * One-segment-at-a-time placement tool for round duct segments.
+ * Continuous placement tool for duct segments.
  *
  * Mouse-driven model:
  *   - **First click** anchors the segment start (port snap joins onto an
  *     existing run / fitting collar).
- *   - **Second click** commits a two-point duct immediately and re-arms
- *     the tool — no polyline accumulation, no finish gesture. Chain runs
- *     by clicking again near the end you just placed (port snap).
+ *   - **Second click** commits a two-point duct immediately and keeps the
+ *     segment end anchored, so the next click continues the run like wall
+ *     drafting. No polyline accumulation, no finish gesture.
  *   - **Auto-elbow**: when either end snapped onto another RUN's open
  *     port at an angle (15–90°, vertical turns included), an elbow
  *     fitting is minted at the joint and the duct pulls back to its
@@ -179,6 +179,14 @@ function continuityRollFrom(port: ScenePort | null, newDir: Vector3): number | n
   const cross = new Vector3().crossVectors(srcDir, newDir)
   if (cross.lengthSq() < 1e-8) return srcRoll
   return rollToContinueAcrossElbow(srcDir, srcRoll, srcDir, newDir)
+}
+
+function continuityRollForRun(
+  startPort: ScenePort | null,
+  endPort: ScenePort | null,
+  dir: Vector3,
+): number {
+  return continuityRollFrom(startPort, dir) ?? continuityRollFrom(endPort, dir) ?? 0
 }
 
 /**
@@ -408,7 +416,7 @@ function planDuctDraw(
   let roll = 0
   if (profile.shape !== 'round') {
     const newDir = new Vector3(...dir)
-    roll = continuityRollFrom(startPort, newDir) ?? continuityRollFrom(endPort, newDir) ?? 0
+    roll = continuityRollForRun(startPort, endPort, newDir)
   }
 
   const defaults = ductSegmentDefinition.defaults()
@@ -456,6 +464,28 @@ function planDuctDraw(
   ]
 
   return { fittings, ducts, tails, updates }
+}
+
+function ductEndPort(duct: DuctSegmentNode, id: 'start' | 'end'): ScenePort | null {
+  if (duct.path.length < 2) return null
+  const index = id === 'start' ? 0 : duct.path.length - 1
+  const neighborIndex = id === 'start' ? 1 : duct.path.length - 2
+  const position = duct.path[index]!
+  const neighbor = duct.path[neighborIndex]!
+  const dx = position[0] - neighbor[0]
+  const dy = position[1] - neighbor[1]
+  const dz = position[2] - neighbor[2]
+  const len = Math.hypot(dx, dy, dz)
+  const direction: [number, number, number] =
+    len < 1e-9 ? [1, 0, 0] : [dx / len, dy / len, dz / len]
+  return {
+    id,
+    nodeId: duct.id,
+    position,
+    direction,
+    diameter: ductPortDiameterIn(duct),
+    system: duct.system,
+  }
 }
 
 const DuctSegmentTool = () => {
@@ -528,10 +558,9 @@ const DuctSegmentTool = () => {
   useEffect(() => {
     if (!activeLevelId) return
 
-    // One segment per gesture: first click anchors the start, second
-    // click commits a two-point duct immediately. No selection switch —
-    // the tool stays armed so the next click starts the next segment
-    // (port snap joins it onto the end just committed).
+    // Continuous chain: first click anchors the start, each following
+    // click commits one two-point duct and uses that duct's far end as
+    // the next anchor. No selection switch or finish gesture.
     //
     // All the auto-fitting decisions (elbow / tee / cross) live in the
     // shared `planDuctDraw` so the live ghost previews exactly what this
@@ -562,11 +591,15 @@ const DuctSegmentTool = () => {
         ],
         update: plan.updates,
       })
+      const nextDuct = plan.ducts.at(-1)
+      const nextStart = nextDuct ? nextDuct.path[nextDuct.path.length - 1]! : end
+      const nextPort = nextDuct ? ductEndPort(nextDuct, 'end') : endPort
       triggerSFX('sfx:item-place')
-      setDraftPoints([])
+      setDraftPoints([nextStart])
       setSnapTarget(null)
-      startPortRef.current = null
-      startBodyRef.current = null
+      setEndSnap({ port: null, body: null })
+      startPortRef.current = nextPort
+      startBodyRef.current = nextPort ? null : endBody
       altAnchorRef.current = null
       setAltActive(false)
     }
@@ -1013,6 +1046,7 @@ const DuctSegmentTool = () => {
         <PreviewSegment
           a={seg.a}
           b={seg.b}
+          endPort={endSnap.port}
           key={`seg-${i}`}
           profile={profile}
           startPort={startPortRef.current}
@@ -1111,11 +1145,13 @@ function PreviewSegment({
   b,
   profile,
   startPort,
+  endPort,
 }: {
   a: [number, number, number]
   b: [number, number, number]
   profile: DraftProfile
   startPort: ScenePort | null
+  endPort: ScenePort | null
 }) {
   const start = new Vector3(...a)
   const end = new Vector3(...b)
@@ -1137,7 +1173,7 @@ function PreviewSegment({
           if (!m) return
           // Same basis AND roll as the commit will use, so the ghost
           // shows the orientation that actually lands.
-          const roll = continuityRollFrom(startPort, dir) ?? 0
+          const roll = continuityRollForRun(startPort, endPort, dir)
           const { width: x, height: z } = rectSectionAxes(dir, roll)
           m.quaternion.setFromRotationMatrix(new Matrix4().makeBasis(x, dir, z))
         }}

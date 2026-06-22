@@ -4,6 +4,7 @@ import {
   type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
+  analyzePortConnectivity,
   DuctSegmentNode,
   emitter,
   type GridEvent,
@@ -28,7 +29,13 @@ import {
   collectGhostAlignmentCandidates,
   resolveGhostAlignment,
 } from '../shared/ghost-alignment'
+import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
+import { collectScenePorts, DUCT_PORT_SYSTEMS } from '../shared/ports'
 import { type RunMoveConnectivity, startRunMoveConnectivity } from '../shared/run-move-connectivity'
+import {
+  planRunTranslationOffsets,
+  type RunTranslationOffsetPlan,
+} from '../shared/run-translation-offset'
 import { rectSectionAxes } from './geometry'
 
 type Vec3 = [number, number, number]
@@ -108,6 +115,7 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     (node.metadata as Record<string, unknown>).isNew === true
 
   const [previewPath, setPreviewPath] = useState<Vec3[]>(originalPathRef.current)
+  const [translationGhost, setTranslationGhost] = useState<RunTranslationOffsetPlan | null>(null)
   const previewPathRef = useRef<Vec3[]>(originalPathRef.current)
   const hasMovedRef = useRef(false)
   const activatedAtRef = useRef<number>(Date.now())
@@ -145,6 +153,20 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     const connectivity: RunMoveConnectivity | null = existedAtStart
       ? startRunMoveConnectivity(node)
       : null
+    const portConnectivity = existedAtStart
+      ? analyzePortConnectivity(node, useScene.getState().nodes)
+      : null
+    const scenePorts = existedAtStart
+      ? collectScenePorts({ excludeNodeId: nodeId, systems: DUCT_PORT_SYSTEMS })
+      : []
+    const nodesById = useScene.getState().nodes
+    const profile = {
+      shape: duct.shape,
+      diameter: duct.diameter,
+      width: duct.width,
+      height: duct.height,
+    }
+    let lastTranslationPlan: RunTranslationOffsetPlan | null = null
 
     const setPreview = (path: Vec3[]) => {
       previewPathRef.current = path
@@ -187,7 +209,20 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       hasMovedRef.current = true
       const nextPath = originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3)
       setPreview(nextPath)
-      connectivity?.preview({ path: nextPath })
+      lastTranslationPlan =
+        existedAtStart && portConnectivity
+          ? planRunTranslationOffsets({
+              duct,
+              translatedPath: nextPath,
+              profile,
+              connections: portConnectivity.connections,
+              scenePorts,
+              nodesById,
+            })
+          : null
+      if (lastTranslationPlan) connectivity?.clear()
+      else connectivity?.preview({ path: nextPath })
+      setTranslationGhost(lastTranslationPlan)
     }
 
     const commit = (event: GridEvent, fromDragRelease = false) => {
@@ -218,15 +253,38 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         useScene.getState().createNode(created as AnyNode, node.parentId as AnyNodeId)
         selectId = created.id as AnyNodeId
       } else {
-        // Fold connected-fitting / sibling-run follow-updates into the SAME
-        // batch as the moved run so the whole joint is one undo step.
-        const followUpdates = connectivity?.commitUpdates({ path: finalPath }) ?? []
-        useScene
-          .getState()
-          .updateNodes([
-            { id: nodeId, data: { path: finalPath } as Partial<AnyNode> },
-            ...followUpdates,
-          ])
+        const translationPlan =
+          portConnectivity &&
+          planRunTranslationOffsets({
+            duct,
+            translatedPath: finalPath,
+            profile,
+            connections: portConnectivity.connections,
+            scenePorts,
+            nodesById,
+          })
+        if (translationPlan) {
+          useScene.getState().applyNodeChanges({
+            create: [...translationPlan.fittings, ...translationPlan.connectors].map((created) => ({
+              node: created as AnyNode,
+              parentId: node.parentId as AnyNodeId,
+            })),
+            update: [
+              { id: nodeId, data: { path: translationPlan.ductPath } as Partial<AnyNode> },
+              ...translationPlan.updates,
+            ],
+          })
+        } else {
+          // Fold connected-fitting / sibling-run follow-updates into the SAME
+          // batch as the moved run so the whole joint is one undo step.
+          const followUpdates = connectivity?.commitUpdates({ path: finalPath }) ?? []
+          useScene
+            .getState()
+            .updateNodes([
+              { id: nodeId, data: { path: finalPath } as Partial<AnyNode> },
+              ...followUpdates,
+            ])
+        }
         useScene.getState().markDirty(nodeId)
       }
       useScene.temporal.getState().pause()
@@ -245,6 +303,7 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
 
     const onCancel = () => {
       connectivity?.clear()
+      setTranslationGhost(null)
       if (existedAtStart) {
         setMeshHidden(false)
         useViewer.getState().setSelection({ selectedIds: [nodeId] })
@@ -286,6 +345,7 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
       connectivity?.clear()
+      setTranslationGhost(null)
       useAlignmentGuides.getState().clear()
       if (existedAtStart) setMeshHidden(false)
       useScene.temporal.getState().resume()
@@ -307,6 +367,16 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     <group>
       {segments.map((seg, i) => (
         <GhostSegment a={seg.a} b={seg.b} duct={duct} key={`ghost-${i}`} />
+      ))}
+      {translationGhost?.fittings.map((fitting) => (
+        <FittingGhost fitting={fitting} key={`translation-fitting-${fitting.id}`} tint="valid" />
+      ))}
+      {translationGhost?.connectors.map((connector) => (
+        <DuctSegmentGhost
+          duct={connector}
+          key={`translation-connector-${connector.id}`}
+          tint="valid"
+        />
       ))}
       <DragBoundingBox
         centerY={0}

@@ -158,6 +158,7 @@ const MoveDormerTool = ({ node }: { node: DormerNode }) => {
         <DormerPlacementGuides
           center={hitLocal}
           depth={previewNode.depth}
+          movingId={node.id}
           rotation={ghostRotation}
           segment={hitSegment}
           width={previewNode.width}

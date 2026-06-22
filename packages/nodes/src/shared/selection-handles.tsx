@@ -1,13 +1,20 @@
 'use client'
 
 import type { Cursor } from '@pascal-app/core'
-import { ARROW_SCALE, HandleArrow } from '@pascal-app/editor'
+import { ARROW_SCALE, HandleArrow, swallowNextClick } from '@pascal-app/editor'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useThree } from '@react-three/fiber'
 import { useState } from 'react'
 import { OrthographicCamera } from 'three'
 
 type Point = [number, number, number]
+
+function consumeHandlePress(event: ThreeEvent<PointerEvent>) {
+  event.stopPropagation()
+  event.nativeEvent.stopPropagation()
+  event.nativeEvent.stopImmediatePropagation()
+  swallowNextClick()
+}
 
 /**
  * Small persistent cube the user CLICKS to latch a directional handle cluster
@@ -22,13 +29,17 @@ export function HandleCube({
   position,
   active,
   onClick,
+  onPointerDown,
   rotationY = 0,
+  cursor = 'grab',
 }: {
   position: Point
   active: boolean
-  onClick: () => void
+  onClick?: () => void
+  onPointerDown?: (e: ThreeEvent<PointerEvent>) => void
   /** Yaw (radians) so the cube can align with the run it sits on. */
   rotationY?: number
+  cursor?: Cursor
 }) {
   const [hovered, setHovered] = useState(false)
   const { camera } = useThree()
@@ -36,13 +47,14 @@ export function HandleCube({
   const baseScale = zoom
   return (
     <HandleArrow
-      cursor="grab"
+      cursor={cursor}
       hover={hovered || active}
       hoverScale={1.15}
       onHoverChange={setHovered}
       onPointerDown={(e) => {
-        e.stopPropagation()
-        onClick()
+        consumeHandlePress(e)
+        if (onPointerDown) onPointerDown(e)
+        else onClick?.()
       }}
       placement={{ position, rotation: [0, rotationY, 0], baseScale }}
       shape="tracker"
@@ -87,7 +99,10 @@ export function MoveChevron({
       hover={hovered}
       indicatorRotation={indicatorRotation}
       onHoverChange={setHovered}
-      onPointerDown={onPointerDown}
+      onPointerDown={(event) => {
+        consumeHandlePress(event)
+        onPointerDown(event)
+      }}
       placement={{ position, rotation: [0, rotationY, 0], baseScale }}
       shape="chevron"
       thin
@@ -122,7 +137,10 @@ export function RotateArc({
       cursor={cursor}
       hover={hovered}
       onHoverChange={setHovered}
-      onPointerDown={onPointerDown}
+      onPointerDown={(event) => {
+        consumeHandlePress(event)
+        onPointerDown(event)
+      }}
       placement={{ position, rotation, baseScale }}
       shape="curved-arrow"
     />

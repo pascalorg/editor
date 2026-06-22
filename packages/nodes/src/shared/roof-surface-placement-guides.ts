@@ -1,8 +1,10 @@
 import {
+  type AnyNode,
   type AnyNodeId,
   type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
+  useScene,
 } from '@pascal-app/core'
 import { type OpeningGuide3D, useOpeningGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -20,6 +22,7 @@ import { buildTurbineVentGeometry } from '../turbine-vent/geometry'
 import { getRoofSurfaceFaceBoundsAt } from './roof-surface'
 
 const MIN_DIMENSION_M = 0.02
+const ALIGNMENT_THRESHOLD_M = 0.08
 
 const tmp = new THREE.Vector3()
 const tmpA = new THREE.Vector3()
@@ -31,6 +34,22 @@ export type RoofSurfaceGuideFootprint = {
   width: number
   depth: number
   rotation?: number
+}
+
+type RoofGuideBounds = {
+  centerX: number
+  centerZ: number
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+}
+
+type RoofGuideSide = 'left' | 'right' | 'bottom' | 'top'
+
+type RoofSiblingSpacingResult<T> = {
+  guides: T[]
+  blockedSides: Record<RoofGuideSide, boolean>
 }
 
 export function roofSurfaceFootprintFromNode(
@@ -156,6 +175,14 @@ function geometryFootprintForNode(
       if (geometry.boundingBox) bounds.union(geometry.boundingBox)
     }
     if (bounds.isEmpty()) return null
+    if (
+      !Number.isFinite(bounds.min.x) ||
+      !Number.isFinite(bounds.max.x) ||
+      !Number.isFinite(bounds.min.z) ||
+      !Number.isFinite(bounds.max.z)
+    ) {
+      return null
+    }
     return {
       width: Math.max(0, bounds.max.x - bounds.min.x),
       depth: Math.max(0, bounds.max.z - bounds.min.z),
@@ -183,20 +210,19 @@ export function publishRoofSurfacePlacementGuides(args: {
   center: readonly [number, number, number]
   footprint: RoofSurfaceGuideFootprint
   mode?: RoofSurfaceGuideMode
+  movingId?: string
 }): void {
-  const { segment, center, footprint, mode = 'side-center' } = args
+  const { segment, center, footprint, mode = 'side-center', movingId } = args
   const segObj = sceneRegistry.nodes.get(segment.id as AnyNodeId)
   if (!segObj) return
 
+  const bounds = roofGuideBounds(center, footprint)
   const halfW = Math.max(0, footprint.width) / 2
-  const halfD = Math.max(0, footprint.depth) / 2
-  const rot = footprint.rotation ?? 0
-  const cos = Math.cos(rot)
-  const sin = Math.sin(rot)
-  const halfX = Math.abs(cos) * halfW + Math.abs(sin) * halfD
-  const halfZ = Math.abs(sin) * halfW + Math.abs(cos) * halfD
+  const cos = Math.cos(footprint.rotation ?? 0)
+  const sin = Math.sin(footprint.rotation ?? 0)
 
   const faceBounds = getRoofSurfaceFaceBoundsAt(segment, center[0], center[2])
+  const faceKey = roofFaceKey(faceBounds.polygon)
 
   const toBuilding = (x: number, z: number): [number, number, number] => {
     const y = faceBounds.surfaceYAt(x, z) + 0.035
@@ -227,6 +253,16 @@ export function publishRoofSurfacePlacementGuides(args: {
   }
 
   const guides: OpeningGuide3D[] = []
+  const siblingSpacing =
+    mode === 'linear-edge'
+      ? null
+      : roofSiblingSpacing({
+          segment,
+          movingId,
+          movingBounds: bounds,
+          faceKey,
+          dimension,
+        })
 
   if (mode === 'linear-edge') {
     const useX = Math.abs(cos) >= Math.abs(sin)
@@ -234,8 +270,8 @@ export function publishRoofSurfacePlacementGuides(args: {
       const interval = faceBounds.xIntervalAtZ(center[2])
       if (interval) {
         const [faceMinX, faceMaxX] = interval
-        const startX = clamp(center[0] - halfW, faceMinX, faceMaxX)
-        const endX = clamp(center[0] + halfW, faceMinX, faceMaxX)
+        const startX = clamp(bounds.centerX - halfW, faceMinX, faceMaxX)
+        const endX = clamp(bounds.centerX + halfW, faceMinX, faceMaxX)
         const left = dimension('roof-gap:left', [faceMinX, center[2]], [startX, center[2]])
         const right = dimension('roof-gap:right', [endX, center[2]], [faceMaxX, center[2]])
         if (left) guides.push(left)
@@ -245,8 +281,8 @@ export function publishRoofSurfacePlacementGuides(args: {
       const interval = faceBounds.zIntervalAtX(center[0])
       if (interval) {
         const [faceMinZ, faceMaxZ] = interval
-        const startZ = clamp(center[2] - halfW, faceMinZ, faceMaxZ)
-        const endZ = clamp(center[2] + halfW, faceMinZ, faceMaxZ)
+        const startZ = clamp(bounds.centerZ - halfW, faceMinZ, faceMaxZ)
+        const endZ = clamp(bounds.centerZ + halfW, faceMinZ, faceMaxZ)
         const bottom = dimension('roof-gap:bottom', [center[0], faceMinZ], [center[0], startZ])
         const top = dimension('roof-gap:top', [center[0], endZ], [center[0], faceMaxZ])
         if (bottom) guides.push(bottom)
@@ -258,23 +294,33 @@ export function publishRoofSurfacePlacementGuides(args: {
     const zInterval = faceBounds.zIntervalAtX(center[0])
     if (xInterval) {
       const [faceMinX, faceMaxX] = xInterval
-      const itemMinX = clamp(center[0] - halfX, faceMinX, faceMaxX)
-      const itemMaxX = clamp(center[0] + halfX, faceMinX, faceMaxX)
-      const left = dimension('roof-gap:left', [faceMinX, center[2]], [itemMinX, center[2]])
-      const right = dimension('roof-gap:right', [itemMaxX, center[2]], [faceMaxX, center[2]])
-      if (left) guides.push(left)
-      if (right) guides.push(right)
+      const itemMinX = clamp(bounds.minX, faceMinX, faceMaxX)
+      const itemMaxX = clamp(bounds.maxX, faceMinX, faceMaxX)
+      if (!siblingSpacing?.blockedSides.left) {
+        const left = dimension('roof-gap:left', [faceMinX, center[2]], [itemMinX, center[2]])
+        if (left) guides.push(left)
+      }
+      if (!siblingSpacing?.blockedSides.right) {
+        const right = dimension('roof-gap:right', [itemMaxX, center[2]], [faceMaxX, center[2]])
+        if (right) guides.push(right)
+      }
     }
     if (zInterval) {
       const [faceMinZ, faceMaxZ] = zInterval
-      const itemMinZ = clamp(center[2] - halfZ, faceMinZ, faceMaxZ)
-      const itemMaxZ = clamp(center[2] + halfZ, faceMinZ, faceMaxZ)
-      const bottom = dimension('roof-gap:bottom', [center[0], faceMinZ], [center[0], itemMinZ])
-      const top = dimension('roof-gap:top', [center[0], itemMaxZ], [center[0], faceMaxZ])
-      if (bottom) guides.push(bottom)
-      if (top) guides.push(top)
+      const itemMinZ = clamp(bounds.minZ, faceMinZ, faceMaxZ)
+      const itemMaxZ = clamp(bounds.maxZ, faceMinZ, faceMaxZ)
+      if (!siblingSpacing?.blockedSides.bottom) {
+        const bottom = dimension('roof-gap:bottom', [center[0], faceMinZ], [center[0], itemMinZ])
+        if (bottom) guides.push(bottom)
+      }
+      if (!siblingSpacing?.blockedSides.top) {
+        const top = dimension('roof-gap:top', [center[0], itemMaxZ], [center[0], faceMaxZ])
+        if (top) guides.push(top)
+      }
     }
   }
+
+  if (siblingSpacing) guides.push(...siblingSpacing.guides)
 
   useOpeningGuides.getState().set(guides)
 }
@@ -285,6 +331,166 @@ export function clearRoofSurfacePlacementGuides(): void {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
+}
+
+export function roofGuideBounds(
+  center: readonly [number, number, number],
+  footprint: RoofSurfaceGuideFootprint,
+): RoofGuideBounds {
+  const halfW = Math.max(0, footprint.width) / 2
+  const halfD = Math.max(0, footprint.depth) / 2
+  const rot = footprint.rotation ?? 0
+  const cos = Math.cos(rot)
+  const sin = Math.sin(rot)
+  const halfX = Math.abs(cos) * halfW + Math.abs(sin) * halfD
+  const halfZ = Math.abs(sin) * halfW + Math.abs(cos) * halfD
+  return {
+    centerX: center[0],
+    centerZ: center[2],
+    minX: center[0] - halfX,
+    maxX: center[0] + halfX,
+    minZ: center[2] - halfZ,
+    maxZ: center[2] + halfZ,
+  }
+}
+
+export function roofSiblingSpacingGuides<T>(args: {
+  segment: RoofSegmentNode
+  movingId?: string
+  movingBounds: RoofGuideBounds
+  faceKey: string
+  dimension: (id: string, from: [number, number], to: [number, number]) => T | null
+}): T[] {
+  return roofSiblingSpacing(args).guides
+}
+
+export function roofSiblingSpacing<T>(args: {
+  segment: RoofSegmentNode
+  movingId?: string
+  movingBounds: RoofGuideBounds
+  faceKey: string
+  dimension: (id: string, from: [number, number], to: [number, number]) => T | null
+}): RoofSiblingSpacingResult<T> {
+  const out: T[] = []
+  const nodes = useScene.getState().nodes
+  let left: { bounds: RoofGuideBounds; gap: number } | null = null
+  let right: { bounds: RoofGuideBounds; gap: number } | null = null
+  let bottom: { bounds: RoofGuideBounds; gap: number } | null = null
+  let top: { bounds: RoofGuideBounds; gap: number } | null = null
+
+  for (const childId of args.segment.children ?? []) {
+    if (childId === args.movingId) continue
+    const sibling = nodes[childId as AnyNodeId]
+    if (!isRoofGuideSibling(sibling)) continue
+    const position = sibling.position
+    if (!Array.isArray(position)) continue
+    const siblingFace = getRoofSurfaceFaceBoundsAt(args.segment, position[0] ?? 0, position[2] ?? 0)
+    if (roofFaceKey(siblingFace.polygon) !== args.faceKey) continue
+
+    const footprint = roofSurfaceFootprintFromNode(sibling, { segment: args.segment })
+    const bounds = roofGuideBounds(position as [number, number, number], footprint)
+
+    if (sameGuideLane(args.movingBounds, bounds, 'x')) {
+      const gapToLeft = args.movingBounds.minX - bounds.maxX
+      if (gapToLeft > MIN_DIMENSION_M && (!left || gapToLeft < left.gap)) {
+        left = { bounds, gap: gapToLeft }
+      }
+      const gapToRight = bounds.minX - args.movingBounds.maxX
+      if (gapToRight > MIN_DIMENSION_M && (!right || gapToRight < right.gap)) {
+        right = { bounds, gap: gapToRight }
+      }
+    }
+
+    if (sameGuideLane(args.movingBounds, bounds, 'z')) {
+      const gapToBottom = args.movingBounds.minZ - bounds.maxZ
+      if (gapToBottom > MIN_DIMENSION_M && (!bottom || gapToBottom < bottom.gap)) {
+        bottom = { bounds, gap: gapToBottom }
+      }
+      const gapToTop = bounds.minZ - args.movingBounds.maxZ
+      if (gapToTop > MIN_DIMENSION_M && (!top || gapToTop < top.gap)) {
+        top = { bounds, gap: gapToTop }
+      }
+    }
+  }
+
+  if (left) {
+    const guide = args.dimension(
+      'roof-sibling:left',
+      [left.bounds.maxX, args.movingBounds.centerZ],
+      [args.movingBounds.minX, args.movingBounds.centerZ],
+    )
+    if (guide) out.push(guide)
+  }
+  if (right) {
+    const guide = args.dimension(
+      'roof-sibling:right',
+      [args.movingBounds.maxX, args.movingBounds.centerZ],
+      [right.bounds.minX, args.movingBounds.centerZ],
+    )
+    if (guide) out.push(guide)
+  }
+  if (bottom) {
+    const guide = args.dimension(
+      'roof-sibling:bottom',
+      [args.movingBounds.centerX, bottom.bounds.maxZ],
+      [args.movingBounds.centerX, args.movingBounds.minZ],
+    )
+    if (guide) out.push(guide)
+  }
+  if (top) {
+    const guide = args.dimension(
+      'roof-sibling:top',
+      [args.movingBounds.centerX, args.movingBounds.maxZ],
+      [args.movingBounds.centerX, top.bounds.minZ],
+    )
+    if (guide) out.push(guide)
+  }
+
+  return {
+    guides: out,
+    blockedSides: {
+      left: !!left,
+      right: !!right,
+      bottom: !!bottom,
+      top: !!top,
+    },
+  }
+}
+
+function sameGuideLane(a: RoofGuideBounds, b: RoofGuideBounds, axis: 'x' | 'z'): boolean {
+  if (axis === 'x') {
+    return Math.abs(a.centerZ - b.centerZ) <= ALIGNMENT_THRESHOLD_M
+  }
+  return Math.abs(a.centerX - b.centerX) <= ALIGNMENT_THRESHOLD_M
+}
+
+function isRoofGuideSibling(node: AnyNode | undefined): node is AnyNode & {
+  position: readonly [number, number, number]
+} {
+  if (!node || !Array.isArray((node as { position?: unknown }).position)) return false
+  switch (node.type) {
+    case 'box-vent':
+    case 'turbine-vent':
+    case 'eyebrow-vent':
+    case 'solar-panel':
+    case 'skylight':
+    case 'cupola':
+    case 'chimney':
+    case 'ridge-vent':
+    case 'gutter':
+    case 'dormer':
+      return true
+    default:
+      return false
+  }
+}
+
+export function roofFaceKey(polygon: readonly (readonly [number, number])[]): string {
+  return polygon.map(([x, z]) => `${roundKey(x)}:${roundKey(z)}`).join('|')
+}
+
+function roundKey(value: number): string {
+  return value.toFixed(4)
 }
 
 function numberField(value: unknown, fallback: number): number {

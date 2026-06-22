@@ -29,16 +29,7 @@ const WindowPreview = ({
     const m = buildWindowPreviewMesh(node)
     m.layers.set(EDITOR_LAYER)
     return m
-  }, [
-    node.width,
-    node.height,
-    node.frameDepth,
-    node.openingShape,
-    node.windowType,
-    node.sill,
-    node.sillDepth,
-    node.sillThickness,
-  ])
+  }, [node])
 
   // Ghost treatment (clone + tint + raycast-off) re-applies if the tint flips;
   // its cleanup only disposes the clones it made.
