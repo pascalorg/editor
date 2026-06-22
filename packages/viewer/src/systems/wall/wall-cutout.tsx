@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 import type { Material } from 'three'
 import { type Mesh, Vector3 } from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
-import { getMaterialsForWall } from './wall-materials'
+import { getMaterialsForWall, getSelectionHighlightMaterials } from './wall-materials'
 
 const tmpVec = new Vector3()
 const u = new Vector3()
@@ -117,13 +117,13 @@ export const WallCutout = () => {
           ;(wallMesh as Mesh).material = isDeleteHighlighted
             ? materials.deleteInvisible
             : isSelectionHighlighted
-              ? materials.highlightedInvisible
+              ? getSelectionHighlightMaterials(materials.invisible)
               : materials.invisible
         } else {
           ;(wallMesh as Mesh).material = isDeleteHighlighted
             ? materials.deleteVisible
             : isSelectionHighlighted
-              ? materials.highlightedVisible
+              ? getSelectionHighlightMaterials(materials.visible)
               : materials.visible
         }
       })
@@ -156,9 +156,9 @@ export const WallCutout = () => {
         )
         const current = wallMesh.material as Material | Material[]
         snapshot.set(wallMesh, current)
-        if (current === mats.highlightedVisible || current === mats.deleteVisible) {
+        if (current === mats.deleteVisible) {
           wallMesh.material = mats.visible
-        } else if (current === mats.highlightedInvisible || current === mats.deleteInvisible) {
+        } else if (current === mats.deleteInvisible) {
           wallMesh.material = mats.invisible
         }
       })
