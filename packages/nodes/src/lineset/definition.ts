@@ -120,7 +120,7 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
     label: 'Lineset',
     description:
       'Refrigerant lineset — copper suction + liquid pair joining a condenser to the indoor coil.',
-    icon: { kind: 'url', src: '/icons/lineset.png' },
+    icon: { kind: 'url', src: '/icons/lineset.webp' },
     paletteSection: 'structure',
     paletteOrder: 93,
   },

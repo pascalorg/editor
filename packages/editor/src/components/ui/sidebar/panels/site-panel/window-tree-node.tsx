@@ -57,7 +57,7 @@ export const WindowTreeNode = memo(function WindowTreeNode({
       hasChildren={false}
       icon={
         <SnapTargetIcon target={snapTarget}>
-          <Image alt="" className="object-contain" height={14} src="/icons/window.png" width={14} />
+          <Image alt="" className="object-contain" height={14} src="/icons/window.webp" width={14} />
         </SnapTargetIcon>
       }
       isHovered={isHovered}

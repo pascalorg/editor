@@ -10316,14 +10316,14 @@ export function FloorplanPanel({
           (compassHost ? (
             createPortal(
               <FloorplanCompassButton
-                northRotationDeg={-floorplanUserRotationDeg}
+                northRotationDeg={floorplanUserRotationDeg}
                 onAlignNorth={alignFloorplanViewToNorth}
               />,
               compassHost,
             )
           ) : (
             <FloorplanCompassButton
-              northRotationDeg={-floorplanUserRotationDeg}
+              northRotationDeg={floorplanUserRotationDeg}
               onAlignNorth={alignFloorplanViewToNorth}
             />
           ))}

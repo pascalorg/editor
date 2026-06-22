@@ -313,7 +313,7 @@ export default function ColumnPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/column.png"
+      icon="/icons/column.webp"
       onClose={handleClose}
       title={node.name || 'Column'}
       width={300}

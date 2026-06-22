@@ -126,7 +126,7 @@ export const turbineVentDefinition: NodeDefinition<typeof TurbineVentNode> = {
   presentation: {
     label: 'Turbine Vent',
     description: 'Wind-driven spinning whirlybird exhaust vent for a roof slope.',
-    icon: { kind: 'url', src: '/icons/roof.png' },
+    icon: { kind: 'url', src: '/icons/roof.webp' },
     paletteSection: 'structure',
     paletteOrder: 121,
   },

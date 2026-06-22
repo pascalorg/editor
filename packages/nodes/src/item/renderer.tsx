@@ -3,17 +3,21 @@
 import {
   type AnimationEffect,
   type AnyNodeId,
+  deriveSlotId,
   getScaledDimensions,
   type Interactive,
   type ItemNode,
+  isSlotMaterialName,
+  LIBRARY_MATERIAL_REF_PREFIX,
   type LightEffect,
+  SCENE_MATERIAL_REF_PREFIX,
+  toLibraryMaterialRef,
   useInteractive,
   useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
 import {
-  baseMaterial,
   type ColorPreset,
   createDefaultMaterial,
   createSurfaceRoleMaterial,
@@ -22,6 +26,7 @@ import {
   NodeRenderer,
   type RenderShading,
   resolveCdnUrl,
+  resolveMaterialRef,
   useItemLightPool,
   useNodeEvents,
   useViewer,
@@ -30,7 +35,7 @@ import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
 import { useGLTF } from '@react-three/drei/core/Gltf'
 import { useFrame } from '@react-three/fiber'
-import { Suspense, useEffect, useMemo, useRef } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { AnimationAction, Group, Material, Mesh } from 'three'
 import { MathUtils } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
@@ -44,17 +49,132 @@ type MutableMaterial = Material & {
   wireframe?: boolean
 }
 
-const getMaterialForOriginal = (
-  original: Material,
-  shading: RenderShading,
-  textures: boolean,
-  colorPreset: ColorPreset,
-): Material => {
-  if (original.name.toLowerCase() === 'glass') {
-    return glassMaterial
+type CapturedSingleItemMaterialData = {
+  captured: true
+  authoredMaterials: Material
+  curatedRefs: string | undefined
+  slotIds: string | null
+}
+
+type CapturedMultiItemMaterialData = {
+  captured: true
+  authoredMaterials: Material[]
+  curatedRefs: (string | undefined)[]
+  slotIds: (string | null)[]
+}
+
+type CapturedItemMaterialData = CapturedSingleItemMaterialData | CapturedMultiItemMaterialData
+
+type ItemMeshUserData = Mesh['userData'] & {
+  pascalItemMaterialCapture?: CapturedItemMaterialData
+  slotId?: string | null | (string | null)[]
+}
+
+type SceneMaterials = ReturnType<typeof useScene.getState>['materials']
+
+const getAuthoredSlotId = (material: Material): string | null =>
+  isSlotMaterialName(material.name) ? deriveSlotId(material.name) : null
+
+function curatedRefFromMaterial(material: Material): string | undefined {
+  const raw = (material.userData as { pascal_material?: unknown }).pascal_material
+  if (typeof raw !== 'string' || raw.length === 0) return undefined
+  if (raw.startsWith(LIBRARY_MATERIAL_REF_PREFIX) || raw.startsWith(SCENE_MATERIAL_REF_PREFIX)) {
+    return raw
   }
+  return toLibraryMaterialRef(raw)
+}
+
+const captureItemMeshMaterials = (mesh: Mesh): CapturedItemMaterialData => {
+  const userData = mesh.userData as ItemMeshUserData
+  const captured = userData.pascalItemMaterialCapture
+  if (captured?.captured) {
+    userData.slotId = captured.slotIds
+    return captured
+  }
+
+  if (Array.isArray(mesh.material)) {
+    const authoredMaterials = mesh.material.slice()
+    const slotIds = authoredMaterials.map(getAuthoredSlotId)
+    const curatedRefs = authoredMaterials.map(curatedRefFromMaterial)
+    const next: CapturedItemMaterialData = {
+      captured: true,
+      authoredMaterials,
+      curatedRefs,
+      slotIds,
+    }
+    userData.pascalItemMaterialCapture = next
+    userData.slotId = slotIds
+    return next
+  }
+
+  const slotId = getAuthoredSlotId(mesh.material)
+  const curatedRef = curatedRefFromMaterial(mesh.material)
+  const next: CapturedItemMaterialData = {
+    captured: true,
+    authoredMaterials: mesh.material,
+    curatedRefs: curatedRef,
+    slotIds: slotId,
+  }
+  userData.pascalItemMaterialCapture = next
+  userData.slotId = slotId
+  return next
+}
+
+const isCapturedMaterialArray = (
+  captured: CapturedItemMaterialData,
+): captured is CapturedMultiItemMaterialData => Array.isArray(captured.authoredMaterials)
+
+const isGlassMaterial = (material: Material): boolean =>
+  material === glassMaterial || material.name.toLowerCase() === 'glass'
+
+const clampGeometryGroups = (mesh: Mesh, matCount: number): void => {
+  if (mesh.geometry.groups.length === 0) return
+
+  const needsClamp = mesh.geometry.groups.some(
+    (group) => group.materialIndex !== undefined && group.materialIndex >= matCount,
+  )
+  if (!needsClamp) return
+
+  mesh.geometry = mesh.geometry.clone()
+  for (const group of mesh.geometry.groups) {
+    if (group.materialIndex !== undefined && group.materialIndex >= matCount) {
+      group.materialIndex = 0
+    }
+  }
+}
+
+const resolveItemMaterial = (
+  authoredMaterial: Material,
+  slotId: string | null,
+  curatedRef: string | undefined,
+  {
+    colorPreset,
+    nodeSlots,
+    sceneMaterials,
+    shading,
+    textures,
+  }: {
+    colorPreset: ColorPreset
+    nodeSlots: ItemNode['slots']
+    sceneMaterials: SceneMaterials
+    shading: RenderShading
+    textures: boolean
+  },
+): Material => {
+  // Monochrome (textures off): collapse to the themed furnishing clay colour.
   if (!textures) return createSurfaceRoleMaterial('furnishing', colorPreset)
-  return baseMaterial(shading)
+  if (authoredMaterial.name.toLowerCase() === 'glass') return glassMaterial
+  if (slotId != null) {
+    const override = resolveMaterialRef(nodeSlots?.[slotId], sceneMaterials, shading)
+    if (override) return override
+    const curated = resolveMaterialRef(curatedRef, sceneMaterials, shading)
+    if (curated) return curated
+    return authoredMaterial
+  }
+  // Colored (textures on): show the item's real authored material — its
+  // textures, vertex colours, and default colours — for every item, not just
+  // slot-authored ones (no more strip-to-clay default).
+  return authoredMaterial
 }
 
 const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
@@ -182,6 +302,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
+  const sceneMaterials = useScene((s) => s.materials)
   // Freeze the interactive definition at mount — asset schemas don't change at runtime
   const interactiveRef = useRef(node.asset.interactive)
 
@@ -203,44 +324,62 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
     return () => useInteractive.getState().removeItem(node.id)
   }, [node.id])
 
-  useMemo(() => {
-    scene.traverse((child) => {
-      if ((child as Mesh).isMesh) {
-        const mesh = child as Mesh
-        if (mesh.name === 'cutout') {
-          child.visible = false
-          return
-        }
+  useLayoutEffect(() => {
+    const root = ref.current
+    if (!root) return
 
-        let hasGlass = false
+    const meshEntries: { mesh: Mesh; captured: CapturedItemMaterialData }[] = []
 
-        // Handle both single material and material array cases
-        if (Array.isArray(mesh.material)) {
-          mesh.material = mesh.material.map((mat) =>
-            getMaterialForOriginal(mat, shading, textures, colorPreset),
-          )
-          hasGlass = mesh.material.some((mat) => mat.name === 'glass')
+    root.traverse((child) => {
+      if (!(child as Mesh).isMesh) return
 
-          // Fix geometry groups that reference materialIndex beyond the material
-          // array length — this causes three-mesh-bvh to crash with
-          // "Cannot read properties of undefined (reading 'side')"
-          const matCount = mesh.material.length
-          if (mesh.geometry.groups.length > 0) {
-            for (const group of mesh.geometry.groups) {
-              if (group.materialIndex !== undefined && group.materialIndex >= matCount) {
-                group.materialIndex = 0
-              }
-            }
-          }
-        } else {
-          mesh.material = getMaterialForOriginal(mesh.material, shading, textures, colorPreset)
-          hasGlass = mesh.material.name === 'glass'
-        }
-        mesh.castShadow = !hasGlass
-        mesh.receiveShadow = !hasGlass
+      const mesh = child as Mesh
+      if (mesh.name === 'cutout') {
+        child.visible = false
       }
+
+      const captured = captureItemMeshMaterials(mesh)
+      if (mesh.name !== 'cutout') meshEntries.push({ mesh, captured })
     })
-  }, [scene, shading, textures, colorPreset])
+
+    const materialOptions = {
+      colorPreset,
+      nodeSlots: node.slots,
+      sceneMaterials,
+      shading,
+      textures,
+    }
+
+    for (const { mesh, captured } of meshEntries) {
+      let hasGlass = false
+
+      if (isCapturedMaterialArray(captured)) {
+        const nextMaterials = captured.authoredMaterials.map((authoredMaterial, index) =>
+          resolveItemMaterial(
+            authoredMaterial,
+            captured.slotIds[index] ?? null,
+            captured.curatedRefs[index],
+            materialOptions,
+          ),
+        )
+        mesh.material = nextMaterials
+        hasGlass = nextMaterials.some(isGlassMaterial)
+        clampGeometryGroups(mesh, nextMaterials.length)
+      } else {
+        const nextMaterial = resolveItemMaterial(
+          captured.authoredMaterials,
+          captured.slotIds,
+          captured.curatedRefs,
+          materialOptions,
+        )
+        mesh.material = nextMaterial
+        hasGlass = isGlassMaterial(nextMaterial)
+      }
+
+      mesh.castShadow = !hasGlass
+      mesh.receiveShadow = !hasGlass
+    }
+  }, [ref, scene, shading, textures, colorPreset, node.slots, sceneMaterials])
 
   const interactive = interactiveRef.current
   const animEffect =

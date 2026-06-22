@@ -109,7 +109,7 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
     },
     canCommit() {
       const live = useScene.getState().nodes[shelfId] as ShelfNode | undefined
-      if (!live || live.type !== 'shelf') return false
+      if (live?.type !== 'shelf') return false
       return !(lastPosition[0] === originalPosition[0] && lastPosition[2] === originalPosition[2])
     },
   }

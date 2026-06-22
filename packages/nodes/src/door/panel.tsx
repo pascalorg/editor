@@ -516,7 +516,7 @@ export default function DoorPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/door.png"
+      icon="/icons/door.webp"
       onClose={handleClose}
       title={node.name || 'Door'}
       width={320}

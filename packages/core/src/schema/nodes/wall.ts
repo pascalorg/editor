@@ -20,6 +20,13 @@ export const WallNode = BaseNode.extend({
   interiorMaterialPreset: z.string().optional(),
   exteriorMaterial: MaterialSchema.optional(),
   exteriorMaterialPreset: z.string().optional(),
+  // Per-slot material overrides on the unified slot model, mirroring
+  // `SlabNode.slots`. Key = slot id (`interior` / `exterior`), value = a
+  // `MaterialRef` (`library:<id>` / `scene:<id>`). Absent = the declared slot
+  // default (`WALL_SLOT_DEFAULT`). The legacy `*Material*` fields above are
+  // read only by the load migration that moves them into `slots`; delete them
+  // in a follow-up once migrated scenes are the norm.
+  slots: z.record(z.string(), z.string()).optional(),
   thickness: z.number().optional(),
   height: z.number().optional(),
   curveOffset: z.number().optional(),
@@ -45,6 +52,16 @@ export const WallNode = BaseNode.extend({
 export type WallNode = z.infer<typeof WallNode>
 
 export type WallSurfaceSide = 'interior' | 'exterior'
+
+// Declared default appearance for an unpainted wall face in colored mode —
+// visual parity with the retired DEFAULT_WALL_MATERIAL. Lives in core so the
+// slot declaration (nodes) and the material resolver (viewer) share one value.
+// May be a `#rrggbb` colour or a `library:<id>` ref. Textures-off still
+// collapses to the themed wall role (the escape hatch).
+export const WALL_SLOT_DEFAULT: Record<WallSurfaceSide, string> = {
+  interior: 'library:concrete-drywall',
+  exterior: 'library:concrete-drywall',
+}
 
 export type WallSurfaceMaterialSpec = {
   material?: z.infer<typeof MaterialSchema>

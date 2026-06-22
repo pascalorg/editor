@@ -12,8 +12,10 @@ import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { buildWindowFloorplan } from './floorplan'
 import { windowWidthAffordance } from './floorplan-affordances'
 import { windowFloorplanMoveTarget } from './floorplan-move'
+import { windowPaint } from './paint'
 import { windowParametrics } from './parametrics'
 import { WindowNode } from './schema'
+import { windowSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24
@@ -187,6 +189,10 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
     // `wallId` / `roofSegmentId` are re-derived from the surface under
     // the cursor at preset placement time — see door for the pattern.
     hostRefFields: ['wallId', 'roofSegmentId', 'roofFace'],
+    // Frame / glass slots painted through the registry. The window system tags
+    // each mesh with its `userData.slotId`; paint writes `node.slots`.
+    slots: () => windowSlots(),
+    paint: windowPaint,
   },
 
   parametrics: windowParametrics,
@@ -229,7 +235,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   presentation: {
     label: 'Window',
     description: 'A window cut into a wall. Animated open/close for opening windows.',
-    icon: { kind: 'url', src: '/icons/window.png' },
+    icon: { kind: 'url', src: '/icons/window.webp' },
     paletteSection: 'structure',
     paletteOrder: 60,
   },

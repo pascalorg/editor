@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 import type { Material } from 'three'
 import { type Mesh, Vector3 } from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
-import { getMaterialsForWall } from './wall-materials'
+import { getMaterialsForWall, getSelectionHighlightMaterials } from './wall-materials'
 
 const tmpVec = new Vector3()
 const u = new Vector3()
@@ -104,19 +104,26 @@ export const WallCutout = () => {
         const hideWall = getWallHideState(wallNode, wallMesh as Mesh, wallMode, u)
         const isDeleteHighlighted = deleteHoveredWallId === wallId
         const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
-        const materials = getMaterialsForWall(wallNode, shading, textures, colorPreset, sceneTheme)
+        const materials = getMaterialsForWall(
+          wallNode,
+          shading,
+          textures,
+          colorPreset,
+          sceneTheme,
+          useScene.getState().materials,
+        )
 
         if (hideWall) {
           ;(wallMesh as Mesh).material = isDeleteHighlighted
             ? materials.deleteInvisible
             : isSelectionHighlighted
-              ? materials.highlightedInvisible
+              ? getSelectionHighlightMaterials(materials.invisible)
               : materials.invisible
         } else {
           ;(wallMesh as Mesh).material = isDeleteHighlighted
             ? materials.deleteVisible
             : isSelectionHighlighted
-              ? materials.highlightedVisible
+              ? getSelectionHighlightMaterials(materials.visible)
               : materials.visible
         }
       })
@@ -145,12 +152,13 @@ export const WallCutout = () => {
           useViewer.getState().textures,
           useViewer.getState().colorPreset,
           useViewer.getState().sceneTheme,
+          useScene.getState().materials,
         )
         const current = wallMesh.material as Material | Material[]
         snapshot.set(wallMesh, current)
-        if (current === mats.highlightedVisible || current === mats.deleteVisible) {
+        if (current === mats.deleteVisible) {
           wallMesh.material = mats.visible
-        } else if (current === mats.highlightedInvisible || current === mats.deleteInvisible) {
+        } else if (current === mats.deleteInvisible) {
           wallMesh.material = mats.invisible
         }
       })

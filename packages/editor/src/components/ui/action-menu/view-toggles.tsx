@@ -226,7 +226,7 @@ function GuidesControl() {
             <img
               alt="Guides"
               className="h-[28px] w-[28px] object-contain"
-              src="/icons/floorplan.png"
+              src="/icons/floorplan.webp"
             />
             <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-white/20 px-[3px] text-center font-medium text-[9px] text-white/70 leading-[14px]">
               {guides.length}
@@ -265,7 +265,7 @@ function GuidesControl() {
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-background/80">
-              <img alt="" className="h-4 w-4 object-contain" src="/icons/floorplan.png" />
+              <img alt="" className="h-4 w-4 object-contain" src="/icons/floorplan.webp" />
             </span>
             <div className="min-w-0 flex-1">
               <p className="font-medium text-foreground text-sm">Guide images</p>
@@ -305,7 +305,7 @@ function GuidesControl() {
                       <img
                         alt=""
                         className="h-3.5 w-3.5 shrink-0 object-contain opacity-70"
-                        src="/icons/floorplan.png"
+                        src="/icons/floorplan.webp"
                       />
                       <p className="truncate font-medium text-foreground text-sm">
                         {guide.name || `Guide image ${index + 1}`}
@@ -466,7 +466,7 @@ function ScansControl() {
           variant="ghost"
         >
           <div className="relative">
-            <img alt="Scans" className="h-[28px] w-[28px] object-contain" src="/icons/mesh.png" />
+            <img alt="Scans" className="h-[28px] w-[28px] object-contain" src="/icons/mesh.webp" />
             <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-white/20 px-[3px] text-center font-medium text-[9px] text-white/70 leading-[14px]">
               {scans.length}
             </span>
@@ -504,7 +504,7 @@ function ScansControl() {
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-background/80">
-              <img alt="" className="h-4 w-4 object-contain" src="/icons/mesh.png" />
+              <img alt="" className="h-4 w-4 object-contain" src="/icons/mesh.webp" />
             </span>
             <div className="min-w-0 flex-1">
               <p className="font-medium text-foreground text-sm">Scans</p>
@@ -544,7 +544,7 @@ function ScansControl() {
                       <img
                         alt=""
                         className="h-3.5 w-3.5 shrink-0 object-contain opacity-70"
-                        src="/icons/mesh.png"
+                        src="/icons/mesh.webp"
                       />
                       <p className="truncate font-medium text-foreground text-sm">
                         {scan.name || `Scan ${index + 1}`}
@@ -765,7 +765,7 @@ function ReferencesControl() {
             <img
               alt="References"
               className="h-[28px] w-[28px] object-contain"
-              src="/icons/floorplan.png"
+              src="/icons/floorplan.webp"
             />
             <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-white/20 px-[3px] text-center font-medium text-[9px] text-white/70 leading-[14px]">
               {total}
@@ -808,7 +808,7 @@ function ReferencesControl() {
           )}
           <ReferenceListSection
             emptyText={REFERENCES_EMPTY_TEXT}
-            iconSrc="/icons/mesh.png"
+            iconSrc="/icons/mesh.webp"
             nodes={scans}
             noun="scan"
             onError={setUploadError}
@@ -819,7 +819,7 @@ function ReferencesControl() {
           <div className="h-px bg-border/45" />
           <ReferenceListSection
             emptyText={REFERENCES_EMPTY_TEXT}
-            iconSrc="/icons/floorplan.png"
+            iconSrc="/icons/floorplan.webp"
             nodes={guides}
             noun="guide image"
             onError={setUploadError}

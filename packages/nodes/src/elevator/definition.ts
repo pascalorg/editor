@@ -12,8 +12,10 @@ import {
 } from '@pascal-app/core'
 import { buildElevatorFloorplan } from './floorplan'
 import { elevatorResizeAffordance, elevatorRotateAffordance } from './floorplan-affordances'
+import { elevatorPaint } from './paint'
 import { elevatorParametrics } from './parametrics'
 import { ElevatorNode } from './schema'
+import { elevatorSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.22
 const HEIGHT_HANDLE_OFFSET = 0.3
@@ -223,6 +225,8 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
     },
     duplicable: true,
     deletable: true,
+    slots: (node) => elevatorSlots(node as ElevatorNodeType),
+    paint: elevatorPaint,
   },
 
   parametrics: elevatorParametrics,
@@ -256,7 +260,7 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
   presentation: {
     label: 'Elevator',
     description: 'A multi-level elevator shaft with configurable openings per level.',
-    icon: { kind: 'url', src: '/icons/wallcut.png' },
+    icon: { kind: 'url', src: '/icons/wallcut.webp' },
     paletteSection: 'structure',
     paletteOrder: 80,
   },

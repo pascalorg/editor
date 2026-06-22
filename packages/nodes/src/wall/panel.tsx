@@ -137,7 +137,7 @@ export default function WallPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/wall.png"
+      icon="/icons/wall.webp"
       onClose={handleClose}
       title={node.name || 'Wall'}
       width={280}

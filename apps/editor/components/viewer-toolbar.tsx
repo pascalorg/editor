@@ -86,7 +86,7 @@ const VIEW_MODES: { id: ViewMode; label: string; icon: React.ReactNode }[] = [
         alt=""
         className="h-3.5 w-3.5 object-contain"
         height={14}
-        src="/icons/building.png"
+        src="/icons/building.webp"
         width={14}
       />
     ),
@@ -99,7 +99,7 @@ const VIEW_MODES: { id: ViewMode; label: string; icon: React.ReactNode }[] = [
         alt=""
         className="h-3.5 w-3.5 object-contain"
         height={14}
-        src="/icons/blueprint.png"
+        src="/icons/blueprint.webp"
         width={14}
       />
     ),
@@ -121,9 +121,9 @@ const levelModeLabels: Record<string, string> = {
 
 const wallModeOrder = ['cutaway', 'up', 'down'] as const
 const wallModeConfig: Record<string, { icon: string; label: string }> = {
-  up: { icon: '/icons/room.png', label: 'Full height' },
-  cutaway: { icon: '/icons/wallcut.png', label: 'Cutaway' },
-  down: { icon: '/icons/walllow.png', label: 'Low' },
+  up: { icon: '/icons/room.webp', label: 'Full height' },
+  cutaway: { icon: '/icons/wallcut.webp', label: 'Cutaway' },
+  down: { icon: '/icons/walllow.webp', label: 'Low' },
 }
 
 const SHADING_OPTIONS = [

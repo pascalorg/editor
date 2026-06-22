@@ -68,38 +68,38 @@ type MepItem = {
 
 // Same icons + ordering as the community Build sidebar, minus presets.
 const BUILD_TYPES: BuildType[] = [
-  { id: 'wall', label: 'Wall', iconSrc: '/icons/wall.png', kind: 'wall' },
-  { id: 'fence', label: 'Fence', iconSrc: '/icons/fence.png', kind: 'fence' },
-  { id: 'slab', label: 'Slab', iconSrc: '/icons/floor.png', kind: 'slab' },
-  { id: 'ceiling', label: 'Ceiling', iconSrc: '/icons/ceiling.png', kind: 'ceiling' },
-  { id: 'roof', label: 'Roof', iconSrc: '/icons/roof.png', kind: 'roof' },
-  { id: 'stair', label: 'Stairs', iconSrc: '/icons/stairs.png', kind: 'stair' },
-  { id: 'elevator', label: 'Elevator', iconSrc: '/icons/elevator.png', kind: 'elevator' },
-  { id: 'door', label: 'Door', iconSrc: '/icons/door.png', kind: 'door' },
-  { id: 'window', label: 'Window', iconSrc: '/icons/window.png', kind: 'window' },
-  { id: 'column', label: 'Column', iconSrc: '/icons/column.png', kind: 'column' },
-  { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.png', kind: 'shelf' },
-  { id: 'spawn', label: 'Spawn Point', iconSrc: '/icons/spawn-point.png', kind: 'spawn' },
+  { id: 'wall', label: 'Wall', iconSrc: '/icons/wall.webp', kind: 'wall' },
+  { id: 'fence', label: 'Fence', iconSrc: '/icons/fence.webp', kind: 'fence' },
+  { id: 'slab', label: 'Slab', iconSrc: '/icons/floor.webp', kind: 'slab' },
+  { id: 'ceiling', label: 'Ceiling', iconSrc: '/icons/ceiling.webp', kind: 'ceiling' },
+  { id: 'roof', label: 'Roof', iconSrc: '/icons/roof.webp', kind: 'roof' },
+  { id: 'stair', label: 'Stairs', iconSrc: '/icons/stairs.webp', kind: 'stair' },
+  { id: 'elevator', label: 'Elevator', iconSrc: '/icons/elevator.webp', kind: 'elevator' },
+  { id: 'door', label: 'Door', iconSrc: '/icons/door.webp', kind: 'door' },
+  { id: 'window', label: 'Window', iconSrc: '/icons/window.webp', kind: 'window' },
+  { id: 'column', label: 'Column', iconSrc: '/icons/column.webp', kind: 'column' },
+  { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.webp', kind: 'shelf' },
+  { id: 'spawn', label: 'Spawn Point', iconSrc: '/icons/spawn-point.webp', kind: 'spawn' },
   // Group tile — no tool of its own; opens the MEP sub-grid below (like Roof).
-  { id: 'mep', label: 'MEP', iconSrc: '/icons/HVAC.png' },
-  { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.png', mode: 'material-paint' },
+  { id: 'mep', label: 'MEP', iconSrc: '/icons/HVAC.webp' },
+  { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.webp', mode: 'material-paint' },
 ]
 
 // MEP sub-grid surfaced under the "MEP" tile — same icons + ordering the MEP
 // tools had in the community Build sidebar.
 const MEP_ITEMS: MepItem[] = [
-  { id: 'duct-segment', label: 'Duct', iconSrc: '/icons/duct.png', kind: 'duct-segment' },
+  { id: 'duct-segment', label: 'Duct', iconSrc: '/icons/duct.webp', kind: 'duct-segment' },
   {
     id: 'duct-terminal',
     label: 'Register',
-    iconSrc: '/icons/registers.png',
+    iconSrc: '/icons/registers.webp',
     kind: 'duct-terminal',
   },
-  { id: 'hvac-equipment', label: 'HVAC Unit', iconSrc: '/icons/HVAC.png', kind: 'hvac-equipment' },
-  { id: 'lineset', label: 'Lineset', iconSrc: '/icons/lineset.png', kind: 'lineset' },
-  { id: 'liquid-line', label: 'Liquid Line', iconSrc: '/icons/lineset.png', kind: 'liquid-line' },
-  { id: 'pipe-segment', label: 'DWV Pipe', iconSrc: '/icons/dwv-pipes.png', kind: 'pipe-segment' },
-  { id: 'pipe-trap', label: 'Trap', iconSrc: '/icons/dwv-pipes.png', kind: 'pipe-trap' },
+  { id: 'hvac-equipment', label: 'HVAC Unit', iconSrc: '/icons/HVAC.webp', kind: 'hvac-equipment' },
+  { id: 'lineset', label: 'Lineset', iconSrc: '/icons/lineset.webp', kind: 'lineset' },
+  { id: 'liquid-line', label: 'Liquid Line', iconSrc: '/icons/lineset.webp', kind: 'liquid-line' },
+  { id: 'pipe-segment', label: 'DWV Pipe', iconSrc: '/icons/dwv-pipes.webp', kind: 'pipe-segment' },
+  { id: 'pipe-trap', label: 'Trap', iconSrc: '/icons/dwv-pipes.webp', kind: 'pipe-trap' },
 ]
 
 /**
@@ -126,7 +126,7 @@ function activatePaintMode(): void {
 
 type RoofFeature = { kind: string; label: string; iconSrc: string }
 
-const ROOF_FEATURE_FALLBACK_ICON = '/icons/roof.png'
+const ROOF_FEATURE_FALLBACK_ICON = '/icons/roof.webp'
 
 /**
  * Roof accessories surfaced under the Roof tile (a "Features" group). Unlike
@@ -386,7 +386,7 @@ export function BuildTab() {
                   aria-hidden
                   className="size-4 object-contain"
                   height={16}
-                  src="/icons/duct-fitting.png"
+                  src="/icons/duct-fitting.webp"
                   width={16}
                 />
                 Add Fitting
@@ -416,7 +416,7 @@ export function BuildTab() {
                   aria-hidden
                   className="size-4 object-contain"
                   height={16}
-                  src="/icons/duct-fitting.png"
+                  src="/icons/duct-fitting.webp"
                   width={16}
                 />
                 Add Fitting

@@ -568,10 +568,12 @@ const HIGHLIGHT_PROFILES = {
     emissiveIntensity: 0.46,
   },
   selection: {
+    // Keep the real material/texture readable: no albedo tint, just a gentle
+    // indigo emissive glow so it reads as selected.
     color: new Color('#818cf8'),
-    blend: 0.32,
-    emissiveBlend: 0.7,
-    emissiveIntensity: 0.42,
+    blend: 0,
+    emissiveBlend: 0.4,
+    emissiveIntensity: 0.12,
   },
 } as const
 
@@ -596,8 +598,30 @@ function isHighlightableMesh(object: Object3D): object is Mesh {
   )
 }
 
+const TEXTURE_MAP_KEYS = [
+  'map',
+  'normalMap',
+  'roughnessMap',
+  'metalnessMap',
+  'aoMap',
+  'emissiveMap',
+  'bumpMap',
+  'displacementMap',
+  'alphaMap',
+  'lightMap',
+] as const
+
 function createHighlightedMaterial(material: Material, kind: HighlightKind): Material {
   const highlightedMaterial = material.clone() as HighlightableMaterial
+  // `NodeMaterial.clone()` on the WebGPU backend drops the texture-map node
+  // assignments, so the clone renders flat. Re-attach the maps from the source
+  // material (they're shared by reference — same texture object) so the
+  // selected object keeps its texture under the highlight.
+  const src = material as unknown as Record<string, unknown>
+  const dst = highlightedMaterial as unknown as Record<string, unknown>
+  for (const key of TEXTURE_MAP_KEYS) {
+    if (src[key]) dst[key] = src[key]
+  }
   const profile = HIGHLIGHT_PROFILES[kind]
 
   if (highlightedMaterial.color instanceof Color) {
@@ -906,6 +930,8 @@ export const SelectionManager = () => {
           normal: event.normal,
           localPosition: event.localPosition as readonly [number, number, number] | undefined,
           hitObjectName: event.nativeEvent.object?.name,
+          hitObject: getEventObject(event),
+          ray: event.nativeEvent.ray,
         })
         const compatible = role !== null && paintEnabled
         return {
@@ -915,15 +941,22 @@ export const SelectionManager = () => {
           apply:
             compatible && role
               ? () => {
-                  useScene.getState().updateNode(
-                    node.id as AnyNodeId,
-                    paintCap.buildPatch({
-                      node,
-                      role,
-                      material: paintSpec.material,
-                      materialPreset: paintSpec.materialPreset,
-                    }) as Partial<AnyNode>,
-                  )
+                  const args = {
+                    node,
+                    role,
+                    material: paintSpec.material,
+                    materialPreset: paintSpec.materialPreset,
+                  }
+                  if (paintCap.commit) {
+                    paintCap.commit(args)
+                  } else {
+                    useScene
+                      .getState()
+                      .updateNode(
+                        node.id as AnyNodeId,
+                        paintCap.buildPatch(args) as Partial<AnyNode>,
+                      )
+                  }
                 }
               : null,
           preview:
@@ -1051,13 +1084,7 @@ export const SelectionManager = () => {
       // before any of the legacy roof / stair / single-surface arms
       // below run.
 
-      if (
-        node.type === 'fence' ||
-        node.type === 'column' ||
-        node.type === 'slab' ||
-        node.type === 'ceiling' ||
-        node.type === 'shelf'
-      ) {
+      if (node.type === 'fence' || node.type === 'column' || node.type === 'shelf') {
         const compatible = paintEnabled
 
         return {
@@ -1086,7 +1113,7 @@ export const SelectionManager = () => {
         }
       }
 
-      const disabledNodeTypes = ['item', 'window', 'door', 'zone']
+      const disabledNodeTypes = ['zone']
       if (disabledNodeTypes.includes(node.type)) {
         return {
           key: `${node.type}:${node.id}:unsupported`,
@@ -1154,6 +1181,7 @@ export const SelectionManager = () => {
       }
 
       interaction.apply()
+      sfxEmitter.emit('sfx:paint-apply')
       if (activePreview?.key === interaction.key) {
         activePreview = null
       } else {
@@ -1187,6 +1215,11 @@ export const SelectionManager = () => {
 
     for (const type of subscribedKinds) {
       emitter.on(`${type}:enter` as any, onEnter as any)
+      // Re-evaluate on move so the hover preview tracks the cursor across a
+      // kind's sub-parts (door/window panel↔frame↔glass↔hardware, wall
+      // interior↔exterior) — not just on the initial enter. onEnter is
+      // idempotent (no-ops when the resolved part is unchanged).
+      emitter.on(`${type}:move` as any, onEnter as any)
       emitter.on(`${type}:leave` as any, onLeave as any)
       emitter.on(`${type}:click` as any, onClick as any)
     }
@@ -1194,6 +1227,7 @@ export const SelectionManager = () => {
     return () => {
       for (const type of subscribedKinds) {
         emitter.off(`${type}:enter` as any, onEnter as any)
+        emitter.off(`${type}:move` as any, onEnter as any)
         emitter.off(`${type}:leave` as any, onLeave as any)
         emitter.off(`${type}:click` as any, onClick as any)
       }
@@ -1553,6 +1587,8 @@ export const SelectionManager = () => {
               normal: event.normal,
               localPosition: event.localPosition as readonly [number, number, number] | undefined,
               hitObjectName: event.nativeEvent.object?.name,
+              hitObject: getEventObject(event),
+              ray: event.nativeEvent.ray,
             })
             if (role) {
               setSelectedMaterialTargetForNode(nodeToSelect, role as MaterialTargetRole)
@@ -1940,7 +1976,8 @@ const SelectionStateSync = () => {
     const selectedNode = useScene.getState().nodes[singleSelectedId as AnyNodeId]
     if (
       !selectedNode ||
-      (selectedNode.type !== 'wall' &&
+      (!nodeRegistry.get(selectedNode.type)?.capabilities?.paint &&
+        selectedNode.type !== 'wall' &&
         selectedNode.type !== 'fence' &&
         selectedNode.type !== 'slab' &&
         selectedNode.type !== 'ceiling' &&

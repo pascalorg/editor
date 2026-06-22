@@ -668,6 +668,11 @@ function LinearArrow({
               ? 1
               : -1
 
+      // Last value an emitted resize tick fired at — a new tick fires only
+      // when the (snapped + clamped) value actually changes, so the cue
+      // tracks real size steps instead of every sub-pixel pointer jitter.
+      let lastTickValue = initialValue
+
       return {
         overrideId,
         onBegin: () => {
@@ -695,6 +700,10 @@ function LinearArrow({
               ? snapScalar(rawNext, gridSnapStep)
               : rawNext
           const next = Math.min(maxBound, Math.max(minBound, snappedNext))
+          if (next !== lastTickValue) {
+            lastTickValue = next
+            sfxEmitter.emit('sfx:resize')
+          }
           const patch = descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>
           // Let the kind publish live guides for the edge being resized.
           onDrag?.({ ...(initialNode as object), ...patch } as AnyNode, sceneApi)
