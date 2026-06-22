@@ -175,7 +175,8 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
   // tees / crosses split a trunk into two separate nodes, which can't be
   // re-joined by moving an endpoint.
   onDelete: (fitting, nodes) => {
-    if (fitting.fittingType !== 'elbow') return []
+    const invalidations = autoOffsetInvalidationUpdates(nodes, fitting.id)
+    if (fitting.fittingType !== 'elbow') return invalidations
     const junction = new Vector3(...fitting.position)
     const updates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }> = []
     for (const mate of matedDucts(fitting, nodes).values()) {
@@ -196,7 +197,7 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
       if (metadata) data.metadata = metadata as DuctSegmentNode['metadata']
       updates.push({ id: mate.duct.id, data })
     }
-    return updates
+    return [...updates, ...invalidations]
   },
   groups: [
     {

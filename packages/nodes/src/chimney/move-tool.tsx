@@ -123,6 +123,16 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
       roofSegmentId: original.roofSegmentId,
     })
 
+    const resolveSnappedTarget = (event: RoofEvent): RelativeRoofDragTarget | null => {
+      const rawTarget = roofDrag.resolve(event)
+      if (!rawTarget) return null
+      return snapRoofSurfaceNodeTarget({
+        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+        node,
+        bypass: event.nativeEvent?.shiftKey === true,
+      })
+    }
+
     const clearTarget = () => {
       lastTarget = null
       setSegmentXform(null)
@@ -132,16 +142,8 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
     }
 
     const updatePreview = (event: RoofEvent) => {
-      const rawTarget = roofDrag.resolve(event)
-      if (!rawTarget) {
-        clearTarget()
-        return
-      }
-      const target = snapRoofSurfaceNodeTarget({
-        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
-        node,
-        bypass: event.nativeEvent?.shiftKey === true,
-      })
+      const target = resolveSnappedTarget(event)
+      if (!target) return clearTarget()
       lastTarget = target
 
       const sx = Math.round(target.localX * 20) / 20
@@ -168,7 +170,7 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
 
     const onClick = (event: RoofEvent) => {
       if (committed) return
-      const target = lastTarget ?? roofDrag.resolve(event)
+      const target = lastTarget ?? resolveSnappedTarget(event)
       if (!target) return
       committed = true
       const state = useScene.getState()
@@ -184,6 +186,9 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
       // no `isNew` flag) → update host + position in place. Either way
       // every other field from the clone is preserved.
       if (isNew || !node.id) {
+        if (node.id) {
+          state.deleteNode(node.id as AnyNodeId)
+        }
         useScene.temporal.getState().resume()
         const committed = ChimneyNodeSchema.parse({
           ...node,
@@ -229,7 +234,7 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
         state.dirtyNodes.add(node.id as AnyNodeId)
         setSelection({ selectedIds: [node.id] })
       }
-      const obj = node.id ? sceneRegistry.nodes.get(node.id) : null
+      const obj = node.id && !isNew ? sceneRegistry.nodes.get(node.id) : null
       if (obj) obj.visible = true
       clearRoofSurfacePlacementGuides()
       setMovingNode(null)

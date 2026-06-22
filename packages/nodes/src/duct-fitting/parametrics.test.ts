@@ -167,6 +167,30 @@ describe('ductFittingParametrics', () => {
     expect((inletUpdate?.data as Partial<DuctSegmentNode>).path?.[0]).toEqual([...fitting.position])
   })
 
+  test('deleting a generated elbow clears the owner duct auto-offset tag', () => {
+    const fitting = rectElbow()
+    const outlet = getDuctFittingPorts(fitting).find((p) => p.id === 'outlet')!
+    const duct = verticalRectRunFrom([...outlet.position] as Point, 0)
+    const taggedDuct = DuctSegmentNode.parse({
+      ...duct,
+      metadata: withAutoOffsetTag(duct.metadata, {
+        group: 'aoff_deleted_elbow',
+        dy: 1,
+        minted: [fitting.id],
+        base: [{ id: duct.id, data: { path: duct.path } }],
+      }),
+    })
+    const nodes: Record<AnyNodeId, AnyNode> = {
+      [fitting.id]: fitting as AnyNode,
+      [taggedDuct.id]: taggedDuct as AnyNode,
+    }
+
+    const updates = ductFittingParametrics.onDelete?.(fitting, nodes) ?? []
+    const finalDuctUpdate = updates.filter((u) => u.id === taggedDuct.id).at(-1)
+
+    expect(readAutoOffsetTag({ metadata: finalDuctUpdate?.data.metadata })).toBeNull()
+  })
+
   test('deleting a tee leaves mated runs untouched', () => {
     const tee = DuctFittingNode.parse({ ...rectElbow(), fittingType: 'tee' })
     const outlet = getDuctFittingPorts(tee).find((p) => p.id === 'outlet')!
