@@ -36,12 +36,16 @@ import { useFrame } from '@react-three/fiber'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
-import { holeEditScope } from '../../lib/interaction/scope'
+import { curveReshapeScope, holeEditScope } from '../../lib/interaction/scope'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import useEditor from '../../store/use-editor'
-import useInteractionScope, { useActiveHandleDrag } from '../../store/use-interaction-scope'
+import useInteractionScope, {
+  useActiveHandleDrag,
+  useEndpointReshape,
+  useIsCurveReshape,
+} from '../../store/use-interaction-scope'
 import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
 
@@ -211,12 +215,9 @@ export function FloatingActionMenu() {
   const updateNode = useScene((s) => s.updateNode)
   const mode = useEditor((s) => s.mode)
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
-  const movingWallEndpoint = useEditor((s) => s.movingWallEndpoint)
-  const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
-  const curvingFence = useEditor((s) => s.curvingFence)
+  const endpointReshape = useEndpointReshape()
+  const isCurveReshape = useIsCurveReshape()
   const setMovingNode = useEditor((s) => s.setMovingNode)
-  const setCurvingWall = useEditor((s) => s.setCurvingWall)
-  const setCurvingFence = useEditor((s) => s.setCurvingFence)
   const setSelection = useViewer((s) => s.setSelection)
   const unit = useViewer((s) => s.unit)
   // Drives the height-drag dimension pill below the menu. `activeHandleDrag`
@@ -400,15 +401,15 @@ export function FloatingActionMenu() {
       sfxEmitter.emit('sfx:item-pick')
       if (node.type === 'wall') {
         if (!canCurveSelectedWall) return
-        setCurvingWall(node)
+        useInteractionScope.getState().begin(curveReshapeScope(node.id))
       } else if (node.type === 'fence') {
-        setCurvingFence(node)
+        useInteractionScope.getState().begin(curveReshapeScope(node.id))
       } else {
         return
       }
       setSelection({ selectedIds: [] })
     },
-    [canCurveSelectedWall, node, setCurvingFence, setCurvingWall, setSelection],
+    [canCurveSelectedWall, node, setSelection],
   )
   const handleMove = useCallback(
     (e: React.MouseEvent) => {
@@ -656,9 +657,8 @@ export function FloatingActionMenu() {
 
   if (
     !(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete') ||
-    movingWallEndpoint ||
-    movingFenceEndpoint ||
-    curvingFence ||
+    endpointReshape ||
+    isCurveReshape ||
     menuStepBack
   )
     return null

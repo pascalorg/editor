@@ -35,8 +35,15 @@ export type InteractionScope =
   | { kind: 'handle-drag'; nodeId: string; handle: string }
   // Click-to-click drafting of a polyline/polygon kind (wall/fence/slab/…).
   | { kind: 'drafting'; tool: string }
-  // Reshaping a selected node's geometry (see ReshapeKind).
-  | { kind: 'reshaping'; nodeId: string; reshape: ReshapeKind; holeIndex?: number }
+  // Reshaping a selected node's geometry (see ReshapeKind). `holeIndex` is set
+  // only for `reshape: 'hole'`; `endpoint` only for `reshape: 'endpoint'`.
+  | {
+      kind: 'reshaping'
+      nodeId: string
+      reshape: ReshapeKind
+      holeIndex?: number
+      endpoint?: 'start' | 'end'
+    }
   // Marquee selection drag.
   | { kind: 'box-select' }
   // Material paint application.
@@ -110,4 +117,40 @@ export function holeEditScope(target: {
     reshape: 'hole',
     holeIndex: target.holeIndex,
   }
+}
+
+// True while the selected node's geometry is being curved (legacy
+// `curvingWall` / `curvingFence` — now one scope; the wall-vs-fence kind is
+// recovered from the reshaped node's type, looked up from the scene by nodeId).
+export function isCurveReshape(scope: InteractionScope): boolean {
+  return scope.kind === 'reshaping' && scope.reshape === 'curve'
+}
+
+// The legacy `movingWallEndpoint` / `movingFenceEndpoint` flags minus the node
+// itself (consumers fetch the node from the scene by `nodeId`; it is stable for
+// the duration of the drag).
+export function endpointReshapeInfo(
+  scope: InteractionScope,
+): { nodeId: string; endpoint: 'start' | 'end' } | null {
+  return scope.kind === 'reshaping' && scope.reshape === 'endpoint' && scope.endpoint !== undefined
+    ? { nodeId: scope.nodeId, endpoint: scope.endpoint }
+    : null
+}
+
+// The id of the node being reshaped (any reshape kind), for the scene lookup
+// that recovers the full node payload a few consumers still need.
+export function reshapingNodeId(scope: InteractionScope): string | null {
+  return scope.kind === 'reshaping' ? scope.nodeId : null
+}
+
+// Builders so producers don't re-spell the discriminator at every call site.
+export function curveReshapeScope(nodeId: string): ActiveInteractionScope {
+  return { kind: 'reshaping', nodeId, reshape: 'curve' }
+}
+
+export function endpointReshapeScope(
+  nodeId: string,
+  endpoint: 'start' | 'end',
+): ActiveInteractionScope {
+  return { kind: 'reshaping', nodeId, reshape: 'endpoint', endpoint }
 }

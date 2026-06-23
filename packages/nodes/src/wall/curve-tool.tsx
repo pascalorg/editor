@@ -19,7 +19,7 @@ import {
   snapBuildingLocalToWorldGrid,
   snapScalarToGrid,
   triggerSFX,
-  useEditor,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -47,7 +47,9 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
   ])
 
   const exitCurveMode = useCallback(() => {
-    useEditor.getState().setCurvingWall(null)
+    useInteractionScope
+      .getState()
+      .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'curve')
   }, [])
 
   useEffect(() => {

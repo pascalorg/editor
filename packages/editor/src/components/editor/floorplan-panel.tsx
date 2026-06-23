@@ -94,7 +94,12 @@ import useEditor, {
   isMagneticSnapActive,
   selectSiteFloorplanContext,
 } from '../../store/use-editor'
-import useInteractionScope, { useActiveHandleDrag } from '../../store/use-interaction-scope'
+import useInteractionScope, {
+  useActiveHandleDrag,
+  useEndpointReshape,
+  useIsCurveReshape,
+  useReshapingNode,
+} from '../../store/use-interaction-scope'
 import usePlacementPreview from '../../store/use-placement-preview'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
@@ -4548,16 +4553,14 @@ export function FloorplanPanel({
   const setSelectedReferenceId = useEditor((state) => state.setSelectedReferenceId)
   const setMode = useEditor((state) => state.setMode)
   const movingNode = useEditor((state) => state.movingNode)
-  const curvingWall = useEditor((state) => state.curvingWall)
-  const curvingFence = useEditor((state) => state.curvingFence)
+  const isCurveReshape = useIsCurveReshape()
+  const endpointReshape = useEndpointReshape()
+  const reshapingNode = useReshapingNode()
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const activeHandleDrag = useActiveHandleDrag()
   const setPhase = useEditor((state) => state.setPhase)
-  const setMovingFenceEndpoint = useEditor((state) => state.setMovingFenceEndpoint)
   const setMovingNode = useEditor((state) => state.setMovingNode)
-  const setCurvingWall = useEditor((state) => state.setCurvingWall)
-  const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
   const structureLayer = useEditor((state) => state.structureLayer)
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setTool = useEditor((state) => state.setTool)
@@ -5354,9 +5357,9 @@ export function FloorplanPanel({
   const isWallMoveActive = movingNode?.type === 'wall'
   const isSpawnMoveActive = movingNode?.type === 'spawn'
   const isElevatorMoveActive = movingNode?.type === 'elevator'
-  const isWallCurveActive = curvingWall?.type === 'wall'
-  const isFenceCurveActive = curvingFence?.type === 'fence'
-  const isFenceEndpointMoveActive = movingFenceEndpoint !== null
+  const isWallCurveActive = isCurveReshape && reshapingNode?.type === 'wall'
+  const isFenceCurveActive = isCurveReshape && reshapingNode?.type === 'fence'
+  const isFenceEndpointMoveActive = endpointReshape !== null && reshapingNode?.type === 'fence'
   const isItemPlacementPreviewActive =
     (mode === 'build' && tool === 'item') || movingNode?.type === 'item'
   const isFloorItemBuildActive = mode === 'build' && tool === 'item' && !selectedItem?.attachTo
@@ -5539,14 +5542,14 @@ export function FloorplanPanel({
     mode === 'select' &&
     floorplanSelectionTool === 'marquee' &&
     !movingNode &&
-    !movingFenceEndpoint &&
+    !isFenceEndpointMoveActive &&
     structureLayer !== 'zones'
   const isScreenSelectionToolActive =
     mode === 'select' &&
     floorplanSelectionTool === 'click' &&
     (phase === 'structure' || phase === 'furnish') &&
     !movingNode &&
-    !movingFenceEndpoint &&
+    !isFenceEndpointMoveActive &&
     !referenceScaleDraft &&
     !pendingReferenceScale
   const isDeleteMode = mode === 'delete' && !movingNode
@@ -5554,7 +5557,7 @@ export function FloorplanPanel({
     mode === 'select' &&
     floorplanSelectionTool === 'click' &&
     !movingNode &&
-    !movingFenceEndpoint &&
+    !isFenceEndpointMoveActive &&
     structureLayer !== 'zones'
   const canInteractElementFloorplanGeometry = isDeleteMode || canSelectElementFloorplanGeometry
   const canInteractFloorplanSlabs = isDeleteMode || canSelectElementFloorplanGeometry
@@ -5567,7 +5570,7 @@ export function FloorplanPanel({
     mode === 'select' &&
     floorplanSelectionTool === 'click' &&
     !movingNode &&
-    !movingFenceEndpoint &&
+    !isFenceEndpointMoveActive &&
     structureLayer === 'zones'
   const canInteractFloorplanZones = isDeleteMode || canSelectFloorplanZones
   const isFloorplanStructureContextActive = phase === 'structure' && structureLayer !== 'zones'
@@ -5578,7 +5581,7 @@ export function FloorplanPanel({
     (mode === 'select' &&
       floorplanSelectionTool === 'click' &&
       !movingNode &&
-      !movingFenceEndpoint &&
+      !isFenceEndpointMoveActive &&
       isFloorplanStructureContextActive) ||
     isDeleteMode
   const canSelectFloorplanElevators = canSelectFloorplanStairs
@@ -5587,21 +5590,21 @@ export function FloorplanPanel({
     (mode === 'select' &&
       floorplanSelectionTool === 'click' &&
       !movingNode &&
-      !movingFenceEndpoint &&
+      !isFenceEndpointMoveActive &&
       isFloorplanItemContextActive) ||
     isDeleteMode
   const canFocusFloorplanStairs =
     mode === 'select' &&
     floorplanSelectionTool === 'click' &&
     !movingNode &&
-    !movingFenceEndpoint &&
+    !isFenceEndpointMoveActive &&
     isFloorplanStructureContextActive
   const canFocusFloorplanSpawns = canFocusFloorplanStairs
   const canFocusFloorplanItems =
     mode === 'select' &&
     floorplanSelectionTool === 'click' &&
     !movingNode &&
-    !movingFenceEndpoint &&
+    !isFenceEndpointMoveActive &&
     isFloorplanItemContextActive
   const visibleSitePolygon = displaySitePolygon
   const canUseSiteBoundaryVertexHandles =
@@ -6280,9 +6283,8 @@ export function FloorplanPanel({
     const transientFloorplanFit =
       cursorPoint != null ||
       movingNode != null ||
-      movingFenceEndpoint != null ||
-      curvingWall != null ||
-      curvingFence != null ||
+      endpointReshape != null ||
+      isCurveReshape ||
       siteVertexDragState != null ||
       isPolygonDraftBuildActive
 
@@ -6292,13 +6294,12 @@ export function FloorplanPanel({
       )
     }
   }, [
-    curvingFence,
-    curvingWall,
     cursorPoint,
+    endpointReshape,
     fittedViewport,
+    isCurveReshape,
     isPolygonDraftBuildActive,
     levelId,
-    movingFenceEndpoint,
     movingNode,
     siteVertexDragState,
     stopFloorplanViewAnimation,

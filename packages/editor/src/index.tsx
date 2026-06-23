@@ -245,7 +245,7 @@ export {
   getFloorplanWallThickness,
 } from './lib/floorplan'
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
-export { holeEditScope } from './lib/interaction/scope'
+export { curveReshapeScope, endpointReshapeScope, holeEditScope } from './lib/interaction/scope'
 export {
   buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
@@ -320,8 +320,6 @@ export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type {
   FloorplanSelectionTool,
-  MovingFenceEndpoint,
-  MovingWallEndpoint,
   SplitOrientation,
   Tool,
   ToolDefaults,
@@ -332,8 +330,12 @@ export { default as useEditor, isAngleSnapActive, isMagneticSnapActive } from '.
 export {
   default as useInteractionScope,
   getEditingHole,
+  getIsCurveReshape,
   useActiveHandleDrag,
   useEditingHole,
+  useEndpointReshape,
+  useIsCurveReshape,
+  useReshapingNode,
 } from './store/use-interaction-scope'
 export {
   default as useOpeningGuides,

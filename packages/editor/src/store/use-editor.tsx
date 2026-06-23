@@ -168,16 +168,6 @@ export type Tool = SiteTool | StructureTool | FurnishTool
  */
 export type ToolDefaults = Record<string, unknown>
 
-export type MovingWallEndpoint = {
-  wall: WallNode
-  endpoint: 'start' | 'end'
-}
-
-export type MovingFenceEndpoint = {
-  fence: FenceNode
-  endpoint: 'start' | 'end'
-}
-
 export type MaterialTargetRole =
   | WallSurfaceSide
   | StairSurfaceMaterialRole
@@ -293,10 +283,6 @@ type EditorState = {
    */
   movingNodeOrigin: '2d' | '3d' | null
   setMovingNodeOrigin: (origin: '2d' | '3d' | null) => void
-  movingWallEndpoint: MovingWallEndpoint | null
-  setMovingWallEndpoint: (value: MovingWallEndpoint | null) => void
-  movingFenceEndpoint: MovingFenceEndpoint | null
-  setMovingFenceEndpoint: (value: MovingFenceEndpoint | null) => void
   /**
    * World axis the R/T keyboard rotation turns around, for kinds with
    * full 3D orientation (duct fittings). Alt cycles it Y → X → Z; the
@@ -305,10 +291,6 @@ type EditorState = {
    */
   rotationAxis: 'x' | 'y' | 'z'
   cycleRotationAxis: () => 'x' | 'y' | 'z'
-  curvingWall: WallNode | null
-  setCurvingWall: (wall: WallNode | null) => void
-  curvingFence: FenceNode | null
-  setCurvingFence: (fence: FenceNode | null) => void
   selectedMaterialTarget: SelectedMaterialTarget | null
   setSelectedMaterialTarget: (target: SelectedMaterialTarget | null) => void
   activePaintMaterial: ActivePaintMaterial | null
@@ -852,66 +834,12 @@ const useEditor = create<EditorState>()(
       },
       movingNodeOrigin: null as '2d' | '3d' | null,
       setMovingNodeOrigin: (origin) => set({ movingNodeOrigin: origin }),
-      movingWallEndpoint: null,
-      setMovingWallEndpoint: (value) => {
-        const scope = useInteractionScope.getState()
-        if (value) scope.begin({ kind: 'reshaping', nodeId: value.wall.id, reshape: 'endpoint' })
-        else {
-          const prev = get().movingWallEndpoint
-          if (prev)
-            scope.endIf(
-              (s) =>
-                s.kind === 'reshaping' && s.reshape === 'endpoint' && s.nodeId === prev.wall.id,
-            )
-        }
-        set({ movingWallEndpoint: value })
-      },
-      movingFenceEndpoint: null,
-      setMovingFenceEndpoint: (value) => {
-        const scope = useInteractionScope.getState()
-        if (value) scope.begin({ kind: 'reshaping', nodeId: value.fence.id, reshape: 'endpoint' })
-        else {
-          const prev = get().movingFenceEndpoint
-          if (prev)
-            scope.endIf(
-              (s) =>
-                s.kind === 'reshaping' && s.reshape === 'endpoint' && s.nodeId === prev.fence.id,
-            )
-        }
-        set({ movingFenceEndpoint: value })
-      },
       rotationAxis: 'y',
       cycleRotationAxis: () => {
         const order = ['y', 'x', 'z'] as const
         const next = order[(order.indexOf(get().rotationAxis as 'y' | 'x' | 'z') + 1) % 3]!
         set({ rotationAxis: next })
         return next
-      },
-      curvingWall: null,
-      setCurvingWall: (wall) => {
-        const scope = useInteractionScope.getState()
-        if (wall) scope.begin({ kind: 'reshaping', nodeId: wall.id, reshape: 'curve' })
-        else {
-          const prev = get().curvingWall
-          if (prev)
-            scope.endIf(
-              (s) => s.kind === 'reshaping' && s.reshape === 'curve' && s.nodeId === prev.id,
-            )
-        }
-        set({ curvingWall: wall })
-      },
-      curvingFence: null,
-      setCurvingFence: (fence) => {
-        const scope = useInteractionScope.getState()
-        if (fence) scope.begin({ kind: 'reshaping', nodeId: fence.id, reshape: 'curve' })
-        else {
-          const prev = get().curvingFence
-          if (prev)
-            scope.endIf(
-              (s) => s.kind === 'reshaping' && s.reshape === 'curve' && s.nodeId === prev.id,
-            )
-        }
-        set({ curvingFence: fence })
       },
       selectedMaterialTarget: null,
       setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),

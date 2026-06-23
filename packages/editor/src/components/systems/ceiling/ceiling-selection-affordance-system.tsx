@@ -19,7 +19,7 @@ import {
 } from '../../../lib/ceiling-plan-snap'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
-import useInteractionScope from '../../../store/use-interaction-scope'
+import useInteractionScope, { useIsCurveReshape } from '../../../store/use-interaction-scope'
 import { snapToHalf } from '../../tools/item/placement-math'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 
@@ -97,7 +97,7 @@ export const CeilingSelectionAffordanceSystem = () => {
   const mode = useEditor((state) => state.mode)
   const structureLayer = useEditor((state) => state.structureLayer)
   const movingNode = useEditor((state) => state.movingNode)
-  const curvingWall = useEditor((state) => state.curvingWall)
+  const isCurveReshape = useIsCurveReshape()
   const currentLevelId = useViewer((state) => state.selection.levelId)
 
   const ceilings = useScene(
@@ -118,7 +118,7 @@ export const CeilingSelectionAffordanceSystem = () => {
     mode === 'select' &&
     structureLayer === 'elements' &&
     !movingNode &&
-    !curvingWall &&
+    !isCurveReshape &&
     currentLevelId !== null
 
   if (!shouldRender) return null
@@ -197,8 +197,10 @@ const CeilingSelectionAffordance = ({
   const selectCeilingForEdit = useCallback(() => {
     const editor = useEditor.getState()
     editor.setMovingNode(null)
-    editor.setMovingWallEndpoint(null)
-    editor.setCurvingWall(null)
+    useInteractionScope
+      .getState()
+      .endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'endpoint')
+    useInteractionScope.getState().endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'curve')
     useInteractionScope.getState().endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
     editor.setMode('select')
     useViewer.getState().setSelection({ selectedIds: [effectiveCeiling.id] })
@@ -484,8 +486,10 @@ const CornerBracket = ({
     e.stopPropagation()
 
     useEditor.getState().setMovingNode(null)
-    useEditor.getState().setMovingWallEndpoint(null)
-    useEditor.getState().setCurvingWall(null)
+    useInteractionScope
+      .getState()
+      .endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'endpoint')
+    useInteractionScope.getState().endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'curve')
     useInteractionScope.getState().endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
     useEditor.getState().setMode('select')
 

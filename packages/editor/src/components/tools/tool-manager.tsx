@@ -2,14 +2,21 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  type FenceNode,
   nodeRegistry,
   type SlabNode,
   useScene,
+  type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { type ComponentType, lazy, Suspense } from 'react'
+import { type ComponentType, lazy, Suspense, useMemo } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
-import { useEditingHole } from '../../store/use-interaction-scope'
+import {
+  useEditingHole,
+  useEndpointReshape,
+  useIsCurveReshape,
+  useReshapingNode,
+} from '../../store/use-interaction-scope'
 import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
 import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
@@ -58,10 +65,20 @@ export const ToolManager: React.FC = () => {
   const tool = useEditor((state) => state.tool)
   const movingNode = useEditor((state) => state.movingNode)
   const movingNodeOrigin = useEditor((state) => state.movingNodeOrigin)
-  const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
-  const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
-  const curvingWall = useEditor((state) => state.curvingWall)
-  const curvingFence = useEditor((state) => state.curvingFence)
+  const endpointReshape = useEndpointReshape()
+  const isCurveReshape = useIsCurveReshape()
+  const reshapingNode = useReshapingNode()
+  // The endpoint affordance tool's `target` is kind-specific
+  // (`{ wall | fence, endpoint }`); rebuild it from the (frozen) reshaped node +
+  // the scope's endpoint. Memoised so it stays referentially stable across the
+  // scene-write re-renders during the drag — otherwise a fresh object each frame
+  // re-fires the tool's setup effect (endpoint drag would loop / freeze).
+  const endpointTarget = useMemo(() => {
+    if (!(endpointReshape && reshapingNode)) return null
+    return reshapingNode.type === 'fence'
+      ? { fence: reshapingNode as FenceNode, endpoint: endpointReshape.endpoint }
+      : { wall: reshapingNode as WallNode, endpoint: endpointReshape.endpoint }
+  }, [endpointReshape, reshapingNode])
   const editingHole = useEditingHole()
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
@@ -229,45 +246,26 @@ export const ToolManager: React.FC = () => {
               </Suspense>
             ) : null
           })()}
-        {movingWallEndpoint &&
+        {endpointTarget &&
+          reshapingNode &&
           (() => {
             const RegistryAffordance = getRegistryAffordanceTool(
-              movingWallEndpoint.wall.type,
+              reshapingNode.type,
               'move-endpoint',
             )
             return RegistryAffordance ? (
               <Suspense fallback={null}>
-                <RegistryAffordance target={movingWallEndpoint} />
+                <RegistryAffordance target={endpointTarget} />
               </Suspense>
             ) : null
           })()}
-        {movingFenceEndpoint &&
+        {isCurveReshape &&
+          reshapingNode &&
           (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(
-              movingFenceEndpoint.fence.type,
-              'move-endpoint',
-            )
+            const RegistryAffordance = getRegistryAffordanceTool(reshapingNode.type, 'curve')
             return RegistryAffordance ? (
               <Suspense fallback={null}>
-                <RegistryAffordance target={movingFenceEndpoint} />
-              </Suspense>
-            ) : null
-          })()}
-        {curvingWall &&
-          (() => {
-            const Registry = getRegistryAffordanceTool(curvingWall.type, 'curve')
-            return Registry ? (
-              <Suspense fallback={null}>
-                <Registry node={curvingWall} />
-              </Suspense>
-            ) : null
-          })()}
-        {curvingFence &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(curvingFence.type, 'curve')
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance node={curvingFence} />
+                <RegistryAffordance node={reshapingNode} />
               </Suspense>
             ) : null
           })()}

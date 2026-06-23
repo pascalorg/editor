@@ -1,13 +1,18 @@
 'use client'
 
+import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
+import { useRef } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import {
   type ActiveInteractionScope,
   editingHoleInfo,
+  endpointReshapeInfo,
   handleDragInfo,
   IDLE_SCOPE,
   type InteractionScope,
+  isCurveReshape,
+  reshapingNodeId,
 } from '../lib/interaction/scope'
 
 // The authoritative interaction state machine. A single owner holds exactly one
@@ -68,5 +73,40 @@ export const useEditingHole = (): { nodeId: string; holeIndex: number } | null =
 // Imperative (non-React) reads for event handlers / effects.
 export const getEditingHole = (): { nodeId: string; holeIndex: number } | null =>
   editingHoleInfo(useInteractionScope.getState().scope)
+
+export const getIsCurveReshape = (): boolean => isCurveReshape(useInteractionScope.getState().scope)
+
+// Replaces the legacy `curvingWall` / `curvingFence` existence flags. The
+// wall-vs-fence distinction (both now map to one `reshaping/'curve'` scope) is
+// recovered by reading the reshaped node's type from `useReshapingNode`.
+export const useIsCurveReshape = (): boolean => useInteractionScope((s) => isCurveReshape(s.scope))
+
+// Replaces the legacy `movingWallEndpoint` / `movingFenceEndpoint` payloads,
+// minus the node (fetch it from `useReshapingNode`).
+export const useEndpointReshape = (): { nodeId: string; endpoint: 'start' | 'end' } | null =>
+  useInteractionScope(useShallow((s) => endpointReshapeInfo(s.scope)))
+
+// The node currently being reshaped (curve / endpoint / hole), looked up live
+// from the scene by the scope's `nodeId`. During a reshape the scene node holds
+// the same data the legacy `curvingWall` / `movingWallEndpoint.wall` carried, so
+// consumers that need the full node (affordance-tool mounts, wall-vs-fence type
+// checks) read it here instead of from a parallel flag.
+export const useReshapingNode = (): AnyNode | null => {
+  const nodeId = useInteractionScope((s) => reshapingNodeId(s.scope))
+  // Snapshot the node ONCE when the reshape begins (keyed on nodeId), like the
+  // legacy `curvingWall` / `movingWallEndpoint.wall` flags did. The affordance
+  // tools write the node live during the drag; subscribing to the live scene
+  // node would feed those writes straight back into the tool — the curve resets
+  // on pointer-stop, the endpoint drag loops and freezes. nodeId is stable for
+  // the whole gesture, so a ref snapshot stays frozen until the next reshape.
+  const snapshot = useRef<{ id: string | null; node: AnyNode | null }>({ id: null, node: null })
+  if (snapshot.current.id !== nodeId) {
+    snapshot.current = {
+      id: nodeId,
+      node: nodeId ? (useScene.getState().nodes[nodeId as AnyNodeId] ?? null) : null,
+    }
+  }
+  return snapshot.current.node
+}
 
 export default useInteractionScope

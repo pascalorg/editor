@@ -70,7 +70,10 @@ import {
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor, { type MaterialTargetRole } from './../../store/use-editor'
-import useInteractionScope, { getEditingHole } from '../../store/use-interaction-scope'
+import useInteractionScope, {
+  getEditingHole,
+  useIsCurveReshape,
+} from '../../store/use-interaction-scope'
 import { boxSelectHandled, suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { swallowNextClick } from './node-arrow-handles'
 
@@ -857,8 +860,7 @@ export const SelectionManager = () => {
   const clickHandledRef = useRef(false)
 
   const movingNode = useEditor((s) => s.movingNode)
-  const curvingWall = useEditor((s) => s.curvingWall)
-  const curvingFence = useEditor((s) => s.curvingFence)
+  const isCurveReshape = useIsCurveReshape()
 
   useEffect(() => {
     const nextHoverMode: HoverHighlightMode = mode === 'delete' ? 'delete' : 'default'
@@ -871,7 +873,7 @@ export const SelectionManager = () => {
 
   useEffect(() => {
     if (mode !== 'material-paint') return
-    if (movingNode || curvingWall) return
+    if (movingNode || isCurveReshape) return
 
     let activePreview: { key: string; restore: PaintPreviewCleanup } | null = null
 
@@ -1236,7 +1238,7 @@ export const SelectionManager = () => {
       useViewer.setState({ hoveredId: null })
       setHoverHighlightMode('default')
     }
-  }, [curvingWall, mode, movingNode, setHoverHighlightMode])
+  }, [isCurveReshape, mode, movingNode, setHoverHighlightMode])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1270,7 +1272,7 @@ export const SelectionManager = () => {
 
   useEffect(() => {
     if (mode !== 'select') return
-    if (movingNode || curvingWall || curvingFence) return
+    if (movingNode || isCurveReshape) return
 
     const onPointerDown = (event: NodeEvent) => {
       const pointer = pointerEventFromNodeEvent(event)
@@ -1375,11 +1377,11 @@ export const SelectionManager = () => {
         emitter.off(`${type}:pointerdown` as any, onPointerDown as any)
       }
     }
-  }, [curvingFence, curvingWall, mode, movingNode])
+  }, [isCurveReshape, mode, movingNode])
 
   useEffect(() => {
     if (mode !== 'select') return
-    if (movingNode || curvingWall || curvingFence) return
+    if (movingNode || isCurveReshape) return
 
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 2 || !isCommandModifier(event)) return
@@ -1482,11 +1484,11 @@ export const SelectionManager = () => {
     return () => {
       window.removeEventListener('pointerdown', onPointerDown, true)
     }
-  }, [curvingFence, curvingWall, mode, movingNode])
+  }, [isCurveReshape, mode, movingNode])
 
   useEffect(() => {
     if (mode !== 'select') return
-    if (movingNode || curvingWall || curvingFence) return
+    if (movingNode || isCurveReshape) return
 
     const onClick = (event: NodeEvent) => {
       // Skip if box-select just completed (drag ended over a node)
@@ -1700,12 +1702,12 @@ export const SelectionManager = () => {
       })
       emitter.off('grid:click', onGridClick)
     }
-  }, [curvingFence, curvingWall, mode, movingNode])
+  }, [isCurveReshape, mode, movingNode])
 
   // Global double-click handler for auto-switching phases and cross-phase hover
   useEffect(() => {
     if (mode !== 'select') return
-    if (movingNode || curvingWall || curvingFence) return
+    if (movingNode || isCurveReshape) return
 
     const onEnter = (event: NodeEvent) => {
       // A host-driven drag (handle resize/rotate, box-select) sets
@@ -1846,7 +1848,7 @@ export const SelectionManager = () => {
         emitter.off(`${type}:double-click` as any, onDoubleClick as any)
       })
     }
-  }, [curvingFence, curvingWall, mode, movingNode])
+  }, [isCurveReshape, mode, movingNode])
 
   // Delete mode: click-to-delete (sledgehammer tool)
   useEffect(() => {

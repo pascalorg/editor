@@ -32,9 +32,13 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { endpointReshapeScope } from '../../lib/interaction/scope'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
-import useInteractionScope from '../../store/use-interaction-scope'
+import useInteractionScope, {
+  useEndpointReshape,
+  useIsCurveReshape,
+} from '../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import {
   createArrowHitAreaGeometry,
@@ -120,10 +124,8 @@ export function WallMoveSideHandles() {
   const mode = useEditor((state) => state.mode)
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
   const movingNode = useEditor((state) => state.movingNode)
-  const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
-  const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
-  const curvingWall = useEditor((state) => state.curvingWall)
-  const curvingFence = useEditor((state) => state.curvingFence)
+  const endpointReshape = useEndpointReshape()
+  const isCurveReshape = useIsCurveReshape()
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   // Fence side-move / height / corner-pickers now flow through the
@@ -141,10 +143,8 @@ export function WallMoveSideHandles() {
     !isFloorplanHovered &&
     mode !== 'delete' &&
     !movingNode &&
-    !movingWallEndpoint &&
-    !movingFenceEndpoint &&
-    !curvingWall &&
-    !curvingFence
+    !endpointReshape &&
+    !isCurveReshape
 
   if (!shouldRender || !selectedNode) return null
 
@@ -334,7 +334,7 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
     suppressBoxSelectForPointer(event)
     sfxEmitter.emit('sfx:item-pick')
     document.body.style.cursor = 'grabbing'
-    useEditor.getState().setMovingWallEndpoint({ wall, endpoint })
+    useInteractionScope.getState().begin(endpointReshapeScope(wall.id, endpoint))
   }
 
   return (
@@ -612,10 +612,8 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
 
     sfxEmitter.emit('sfx:item-pick')
     useEditor.getState().setMovingNode(wall)
-    useEditor.getState().setMovingWallEndpoint(null)
-    useEditor.getState().setMovingFenceEndpoint(null)
-    useEditor.getState().setCurvingWall(null)
-    useEditor.getState().setCurvingFence(null)
+    useInteractionScope.getState().endIf((s) => s.kind === 'reshaping' && s.reshape === 'endpoint')
+    useInteractionScope.getState().endIf((s) => s.kind === 'reshaping' && s.reshape === 'curve')
     // Keep the wall selected so it stays the active item once the move
     // commits; the `!movingNode` guard on the handles hides them mid-drag.
   }
@@ -703,10 +701,8 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
 
     sfxEmitter.emit('sfx:item-pick')
     useEditor.getState().setMovingNode(fence)
-    useEditor.getState().setMovingWallEndpoint(null)
-    useEditor.getState().setMovingFenceEndpoint(null)
-    useEditor.getState().setCurvingWall(null)
-    useEditor.getState().setCurvingFence(null)
+    useInteractionScope.getState().endIf((s) => s.kind === 'reshaping' && s.reshape === 'endpoint')
+    useInteractionScope.getState().endIf((s) => s.kind === 'reshaping' && s.reshape === 'curve')
     // Keep the fence selected so it stays active once the move commits.
   }
 

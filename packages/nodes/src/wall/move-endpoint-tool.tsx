@@ -22,12 +22,11 @@ import {
   isMagneticSnapActive,
   isSegmentLongEnough,
   MeasurementPill,
-  type MovingWallEndpoint,
   markToolCancelConsumed,
   snapWallDraftPointDetailed,
   triggerSFX,
   useAlignmentGuides,
-  useEditor,
+  useInteractionScope,
   useWallSnapIndicator,
   type WallPlanPoint,
 } from '@pascal-app/editor'
@@ -44,9 +43,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * dismisses without committing.
  *
  * Mounted via `def.affordanceTools['move-endpoint']` from
- * `wall/definition.ts`. Editor state trigger is
- * `useEditor.movingWallEndpoint`.
+ * `wall/definition.ts`. Triggered by an `endpoint` reshape scope; ToolManager
+ * reconstructs this `target` from the reshaped node + the scope's endpoint.
  */
+export type MovingWallEndpoint = {
+  wall: WallNode
+  endpoint: 'start' | 'end'
+}
+
 /** Figma-style alignment-snap threshold (meters), matching the item move /
  *  placement tools. 8 cm gives a magnetic pull without fighting grid snap. */
 const ALIGNMENT_THRESHOLD_M = 0.08
@@ -202,7 +206,9 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
   const unit = useViewer((s) => s.unit)
 
   const exitMoveMode = useCallback(() => {
-    useEditor.getState().setMovingWallEndpoint(null)
+    useInteractionScope
+      .getState()
+      .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'endpoint')
   }, [])
 
   useEffect(() => {

@@ -43,6 +43,7 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
 import useEditor from '../../../store/use-editor'
+import { useEndpointReshape } from '../../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
@@ -256,7 +257,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const editorTool = useEditor((s) => s.tool)
   const structureLayer = useEditor((s) => s.structureLayer)
   const floorplanSelectionTool = useEditor((s) => s.floorplanSelectionTool)
-  const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
+  const endpointReshape = useEndpointReshape()
   const isOpeningPlacementActive =
     (editorPhase === 'structure' &&
       editorMode === 'build' &&
@@ -267,7 +268,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     floorplanSelectionTool === 'marquee' &&
     structureLayer !== 'zones' &&
     !movingNode &&
-    !movingFenceEndpoint
+    !endpointReshape
   // While the floor plan is not on screen (pure 3D view) it must not react to
   // the per-pointer drag publishes below — re-rendering this layer + its
   // hundreds of geometry children every move is what tanks 3D-drag framerate

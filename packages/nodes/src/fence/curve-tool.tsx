@@ -20,7 +20,7 @@ import {
   markToolCancelConsumed,
   snapScalarToGrid,
   triggerSFX,
-  useEditor,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -51,7 +51,9 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
   ])
 
   const exitCurveMode = useCallback(() => {
-    useEditor.getState().setCurvingFence(null)
+    useInteractionScope
+      .getState()
+      .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'curve')
   }, [])
 
   useEffect(() => {

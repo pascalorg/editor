@@ -48,7 +48,10 @@ import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor from '../../store/use-editor'
-import useInteractionScope from '../../store/use-interaction-scope'
+import useInteractionScope, {
+  useEndpointReshape,
+  useIsCurveReshape,
+} from '../../store/use-interaction-scope'
 import useOpeningGuides from '../../store/use-opening-guides'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { formatAngleRadians } from '../tools/shared/segment-angle'
@@ -183,10 +186,8 @@ export function NodeArrowHandles() {
   // resize arrows for the duration so they don't clutter (or get blocked
   // by) the drag's own cursor + dimension overlays. Mirrors the same guard
   // on the legacy wall handles (`WallMoveSideHandles`).
-  const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
-  const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
-  const curvingWall = useEditor((state) => state.curvingWall)
-  const curvingFence = useEditor((state) => state.curvingFence)
+  const endpointReshape = useEndpointReshape()
+  const isCurveReshape = useIsCurveReshape()
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : activeRotateNodeId
   const rawNode = useScene((state) =>
@@ -221,10 +222,8 @@ export function NodeArrowHandles() {
     // draw stray selection rays. The active handle-drag scope (resize/rotate)
     // sets `activeHandleDrag`, not `movingNode`, so those are unaffected.
     !movingNode &&
-    !movingWallEndpoint &&
-    !movingFenceEndpoint &&
-    !curvingWall &&
-    !curvingFence
+    !endpointReshape &&
+    !isCurveReshape
 
   if (!shouldRender || !node || !descriptors) return null
   // Key by the selected node id so switching selection REMOUNTS the rig.
