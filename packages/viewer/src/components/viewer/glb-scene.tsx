@@ -13,6 +13,7 @@ import useViewer from '../../store/use-viewer'
 
 /** Vertical gap added per floor in `exploded` level mode (matches LevelSystem). */
 const EXPLODED_GAP = 5
+const LOD_FALLBACK_RADIUS = 10
 
 /** A building floor discovered in the baked GLB, ordered bottom-to-top. */
 export type GlbLevel = { id: `level_${string}`; label: string }
@@ -48,6 +49,10 @@ type PascalExtras = {
 /** The resolved drill target for a raycast hit, given the current selection. */
 type Target = { object: THREE.Object3D; id: string; kind: string; label: string }
 type HitCandidate = { object: THREE.Object3D; point?: THREE.Vector3 }
+type GlbLoadResult = {
+  scene: THREE.Group
+  animations: THREE.AnimationClip[]
+}
 
 function findIdentityAncestor(object: THREE.Object3D): THREE.Object3D | null {
   let current: THREE.Object3D | null = object
@@ -228,19 +233,49 @@ function createZoneWallGeometry(polygon: [number, number][]): THREE.BufferGeomet
  */
 export function GlbScene({
   url,
+  lodUrls,
   onLevelsChange,
   onIdentityChange,
   onHoverChange,
 }: {
   url: string
+  lodUrls?: string[]
   onLevelsChange?: (levels: GlbLevel[]) => void
   onIdentityChange?: (identity: GlbIdentity) => void
   onHoverChange?: (hover: GlbHover) => void
 }) {
-  const gltf = useGLTFKTX2(url) as unknown as {
-    scene: THREE.Group
-    animations: THREE.AnimationClip[]
-  }
+  const urls = useMemo(() => (lodUrls && lodUrls.length > 1 ? lodUrls : [url]), [lodUrls, url])
+  const loadedGltfs = useGLTFKTX2(urls) as unknown as GlbLoadResult | GlbLoadResult[]
+  const gltfs = Array.isArray(loadedGltfs) ? loadedGltfs : [loadedGltfs]
+  const gltf = gltfs[0]!
+  const lodScenes = useMemo(() => gltfs.map((g) => g.scene), [gltfs])
+  // Distance-based LOD. We toggle scene visibility by camera distance to the
+  // building's world-space CENTER — `THREE.LOD` measures distance to its own
+  // origin (0,0,0), which mis-selects levels when the baked scene is offset
+  // from the origin. Interaction stays bound to lod0 only; the simpler levels
+  // are visual-only and appear when the camera pulls well past the building
+  // (so normal + building-view distances keep the interactive lod0).
+  const lodInfo = useMemo(() => {
+    if (lodScenes.length <= 1) return null
+    const box = new THREE.Box3().setFromObject(lodScenes[0]!)
+    const center = box.getCenter(new THREE.Vector3())
+    const radius = box.getBoundingSphere(new THREE.Sphere()).radius
+    const r = Number.isFinite(radius) && radius > 0 ? radius : LOD_FALLBACK_RADIUS
+    return { center, dist1: r * 2.5, dist2: r * 8, maxLevel: lodScenes.length - 1 }
+  }, [lodScenes])
+  useEffect(() => {
+    lodScenes.forEach((scene, i) => {
+      scene.visible = i === 0
+    })
+  }, [lodScenes])
+  useFrame(({ camera }) => {
+    if (!lodInfo) return
+    const d = camera.position.distanceTo(lodInfo.center)
+    const level = Math.min(d >= lodInfo.dist2 ? 2 : d >= lodInfo.dist1 ? 1 : 0, lodInfo.maxLevel)
+    for (let i = 0; i < lodScenes.length; i++) {
+      lodScenes[i]!.visible = i === level
+    }
+  })
   const rootRef = useRef<THREE.Group>(null!)
   const { actions } = useAnimations(gltf.animations, rootRef)
   const camera = useThree((state) => state.camera)
@@ -345,7 +380,10 @@ export function GlbScene({
     const built: ZoneFill[] = []
     for (const entry of zoneEntries) {
       const shape = new THREE.Shape()
-      entry.polygon.forEach(([x, z], i) => (i === 0 ? shape.moveTo(x, -z) : shape.lineTo(x, -z)))
+      entry.polygon.forEach(([x, z], i) => {
+        if (i === 0) shape.moveTo(x, -z)
+        else shape.lineTo(x, -z)
+      })
       shape.closePath()
 
       const floorMaterial = createZoneFloorMaterial(entry.color)
@@ -668,6 +706,7 @@ export function GlbScene({
 
   return (
     <group ref={rootRef}>
+      {/* lod0: the interactive level (identity/selection/zones all bind here). */}
       <primitive
         object={gltf.scene}
         onClick={handleClick}
@@ -675,6 +714,11 @@ export function GlbScene({
         onPointerMove={handlePointerMove}
         onPointerOut={handlePointerOut}
       />
+      {/* Simpler LODs are visual-only; the useFrame above toggles their
+          visibility by camera distance. They carry no interaction handlers. */}
+      {gltfs.slice(1).map((g, i) => (
+        <primitive key={lodScenes[i + 1]?.uuid ?? i} object={g.scene} />
+      ))}
       {/* Floating room labels. Each group's matrix is synced to its zone node
           every frame (above) so the label rides level stacking; the div fades
           with the room fill via a CSS transition. */}
