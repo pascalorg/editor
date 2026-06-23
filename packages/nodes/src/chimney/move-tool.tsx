@@ -326,7 +326,7 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
 
   return (
     <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
-      <group position={hitLocal}>
+      <group position={[hitLocal[0], 0, hitLocal[2]]}>
         <ChimneyPreview node={previewNode} segment={previewSegment} />
       </group>
     </group>

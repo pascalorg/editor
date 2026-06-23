@@ -7,11 +7,6 @@ import {
 } from '@pascal-app/core'
 import { Vector3 } from 'three'
 import {
-  ductPortDiameterIn,
-  equivalentDiameterIn,
-  ovalEquivalentDiameterIn,
-} from '../duct-segment/geometry'
-import {
   autoOffsetInvalidationUpdates,
   readAutoOffsetTag,
   withAutoOffsetTag,
@@ -23,8 +18,28 @@ import type { DuctFittingNode } from './schema'
 /** Schema bounds for `diameter` / `diameter2`. */
 const clampDiameter = (d: number) => Math.min(48, Math.max(2, d))
 
+const equivalentDiameterIn = (widthIn: number, heightIn: number): number =>
+  2 * Math.sqrt((widthIn * heightIn) / Math.PI)
+
+const ovalEquivalentDiameterIn = (widthIn: number, heightIn: number): number => {
+  const minor = Math.min(widthIn, heightIn)
+  const major = Math.max(widthIn, heightIn)
+  const area = (major - minor) * minor + Math.PI * (minor / 2) ** 2
+  return 2 * Math.sqrt(area / Math.PI)
+}
+
+const ductPortDiameterIn = (node: DuctSegmentNode): number => {
+  if (node.shape === 'rect' && node.width && node.height) {
+    return equivalentDiameterIn(node.width, node.height)
+  }
+  if (node.shape === 'oval' && node.width && node.height) {
+    return ovalEquivalentDiameterIn(node.width, node.height)
+  }
+  return node.diameter
+}
+
 /** A duct endpoint sitting this close to a collar counts as mated. */
-const MATE_TOL_M = 0.03
+const MATE_TOL_M = 0.05
 
 type Point = [number, number, number]
 

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -6,12 +6,16 @@ import {
   DuctSegmentNode,
   useScene,
 } from '@pascal-app/core'
-import { equivalentDiameterIn } from '../duct-segment/geometry'
 import { readAutoOffsetTag, withAutoOffsetTag } from '../shared/auto-offset-tag'
-import { ductFittingParametrics } from './parametrics'
 import { getDuctFittingPorts } from './ports'
 
+let ductFittingParametrics: typeof import('./parametrics')['ductFittingParametrics']
+
 type Point = [number, number, number]
+
+function equivalentDiameterIn(widthIn: number, heightIn: number): number {
+  return 2 * Math.sqrt((widthIn * heightIn) / Math.PI)
+}
 
 function rectElbow() {
   return DuctFittingNode.parse({
@@ -56,6 +60,13 @@ function verticalRectRunFrom(point: Point, roll: number) {
 }
 
 describe('ductFittingParametrics', () => {
+  beforeAll(async () => {
+    mock.module('@pascal-app/editor', () => ({
+      ActionButton: () => null,
+    }))
+    ;({ ductFittingParametrics } = await import('./parametrics'))
+  })
+
   beforeEach(() => {
     useScene.setState({
       nodes: {},
@@ -165,6 +176,27 @@ describe('ductFittingParametrics', () => {
       ...fitting.position,
     ])
     expect((inletUpdate?.data as Partial<DuctSegmentNode>).path?.[0]).toEqual([...fitting.position])
+  })
+
+  test('delete repair matches the 5 cm live connectivity mate tolerance', () => {
+    const fitting = rectElbow()
+    const outlet = getDuctFittingPorts(fitting).find((p) => p.id === 'outlet')!
+    const nearOutlet: Point = [outlet.position[0], outlet.position[1], outlet.position[2] + 0.04]
+    const outletRun = DuctSegmentNode.parse({
+      ...verticalRectRunFrom(nearOutlet, 0),
+      id: 'duct-segment_outlet_gap' as AnyNodeId,
+    })
+    const nodes: Record<AnyNodeId, AnyNode> = {
+      [fitting.id]: fitting as AnyNode,
+      [outletRun.id]: outletRun as AnyNode,
+    }
+
+    const updates = ductFittingParametrics.onDelete?.(fitting, nodes) ?? []
+    const outletUpdate = updates.find((u) => u.id === outletRun.id)
+
+    expect((outletUpdate?.data as Partial<DuctSegmentNode>).path?.[0]).toEqual([
+      ...fitting.position,
+    ])
   })
 
   test('deleting a generated elbow clears the owner duct auto-offset tag', () => {
