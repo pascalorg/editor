@@ -186,10 +186,6 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
       // no `isNew` flag) → update host + position in place. Either way
       // every other field from the clone is preserved.
       if (isNew || !node.id) {
-        useScene.temporal.getState().resume()
-        if (node.id) {
-          state.deleteNode(node.id as AnyNodeId)
-        }
         const committed = ChimneyNodeSchema.parse({
           ...node,
           id: undefined as never,
@@ -199,7 +195,11 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
           visible: true,
           metadata: cleanedMeta,
         })
-        state.createNode(committed, targetSegmentId)
+        useScene.temporal.getState().resume()
+        state.applyNodeChanges({
+          delete: node.id ? [node.id as AnyNodeId] : [],
+          create: [{ node: committed, parentId: targetSegmentId }],
+        })
         state.dirtyNodes.add(targetSegmentId)
         setSelection({ selectedIds: [committed.id] })
         useScene.temporal.getState().pause()

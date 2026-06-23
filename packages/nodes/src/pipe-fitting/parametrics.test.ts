@@ -72,6 +72,23 @@ describe('pipeFittingParametrics', () => {
     ])
   })
 
+  test('delete repair matches the 5 cm live connectivity mate tolerance', () => {
+    const fitting = pipeElbow()
+    const inlet = getPipeFittingPorts(fitting).find((p) => p.id === 'inlet')!
+    const inletRun = pipe('pipe-segment_inlet', [
+      add(inlet.position, inlet.direction, 3),
+      add(inlet.position, [0, 0, 1], 0.04),
+    ])
+    const nodes: Record<AnyNodeId, AnyNode> = {
+      [fitting.id]: fitting as AnyNode,
+      [inletRun.id]: inletRun as AnyNode,
+    }
+
+    const updates = pipeFittingParametrics.onDelete?.(fitting, nodes) ?? []
+
+    expect((updates[0]?.data as Partial<PipeSegmentNode>).path?.[1]).toEqual([...fitting.position])
+  })
+
   test('deleting a branch fitting leaves mated pipe ends untouched', () => {
     const wye = PipeFittingNode.parse({ ...pipeElbow(), fittingType: 'wye' })
     const inlet = getPipeFittingPorts(wye).find((p) => p.id === 'inlet')!

@@ -268,9 +268,15 @@ function propagationEqual(a: Point, b: Point): boolean {
   return lenSq(sub(a, b)) <= PROPAGATION_EPS_M * PROPAGATION_EPS_M
 }
 
-function rigidDelta(deltas: Point[]): Point {
-  const first = deltas[0]!
-  return deltas.every((delta) => nearlyEqual(delta, first)) ? average(deltas) : first
+function effectivePortDeltas(
+  constraints: Record<string, Record<string, Point>>,
+): Record<string, Point> {
+  return Object.fromEntries(
+    Object.entries(constraints).map(([portId, bySource]) => [
+      portId,
+      average(Object.values(bySource)),
+    ]),
+  )
 }
 
 /** Unit direction of the run's segment adjacent to its `start` / `end` tip. */
@@ -356,9 +362,9 @@ export function resolveConnectivityUpdates(
 
   // Each queue item drives a node's port by a delta ("this collar / endpoint
   // must move by this much").
-  const queue: Array<{ nodeId: AnyNodeId; portId: string; delta: Point }> = []
+  const queue: Array<{ nodeId: AnyNodeId; portId: string; delta: Point; sourceKey: string }> = []
   const results: Record<string, { id: AnyNodeId; data: Partial<AnyNode> }> = {}
-  const constrainedPorts: Record<string, Record<string, Point>> = {}
+  const constrainedPorts: Record<string, Record<string, Record<string, Point>>> = {}
   const propagatedPorts: Record<string, Record<string, Point>> = {}
 
   const enqueueMates = (nodeId: string, portId: string, delta: Point) => {
@@ -370,18 +376,30 @@ export function resolveConnectivityUpdates(
 
     for (const mate of adjacency[nodeId]?.[portId] ?? []) {
       if (mate.nodeId === movedNodeId) continue
-      queue.push({ nodeId: mate.nodeId, portId: mate.portId, delta })
+      queue.push({
+        nodeId: mate.nodeId,
+        portId: mate.portId,
+        delta,
+        sourceKey: `${nodeId}:${portId}`,
+      })
     }
   }
 
-  const acceptPortDelta = (nodeId: AnyNodeId, portId: string, delta: Point): boolean => {
+  const acceptPortDelta = (
+    nodeId: AnyNodeId,
+    portId: string,
+    sourceKey: string,
+    delta: Point,
+  ): boolean => {
     const byPort = constrainedPorts[nodeId] ?? {}
     constrainedPorts[nodeId] = byPort
-    const existing = byPort[portId]
+    const bySource = byPort[portId] ?? {}
+    byPort[portId] = bySource
+    const existing = bySource[sourceKey]
     if (existing && propagationEqual(existing, delta)) {
       return false
     }
-    byPort[portId] = delta
+    bySource[sourceKey] = delta
     return true
   }
 
@@ -395,15 +413,15 @@ export function resolveConnectivityUpdates(
   }
 
   while (queue.length > 0) {
-    const { nodeId, portId, delta } = queue.shift()!
+    const { nodeId, portId, delta, sourceKey } = queue.shift()!
     const node = graph[nodeId]
     if (!node) continue
-    if (!acceptPortDelta(nodeId, portId, delta)) continue
-    const portDeltas = constrainedPorts[nodeId]!
+    if (!acceptPortDelta(nodeId, portId, sourceKey, delta)) continue
+    const portDeltas = effectivePortDeltas(constrainedPorts[nodeId]!)
 
     if (node.role === 'fitting') {
       const start = node.startPosition!
-      const effectiveDelta = rigidDelta(Object.values(portDeltas))
+      const effectiveDelta = average(Object.values(portDeltas))
       results[nodeId] = {
         id: nodeId,
         data: { position: add(start, effectiveDelta) } as Partial<AnyNode>,

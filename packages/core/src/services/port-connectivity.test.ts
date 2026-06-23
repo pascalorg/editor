@@ -306,7 +306,7 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
     expectPointClose(path[1]!, [3, 0, 1.200025])
   })
 
-  test('a fitting reached from incompatible collars keeps a satisfiable rigid delta', () => {
+  test('a fitting reached from incompatible collars merges constraints deterministically', () => {
     const moved = makeNode('duct-segment', {
       path: [
         [-0.2, 0, 0],
@@ -329,7 +329,7 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
 
     expectPointClose(
       (updates.find((u) => u.id === fitting.id)!.data as { position: Point }).position,
-      [0, 0, 1],
+      [0, 0, 0],
     )
   })
 

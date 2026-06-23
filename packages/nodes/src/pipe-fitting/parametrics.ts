@@ -3,7 +3,7 @@ import { getPipeFittingPorts } from './ports'
 import type { PipeFittingNode } from './schema'
 
 /** A pipe endpoint sitting this close to a fitting hub counts as mated. */
-const MATE_TOL_M = 0.03
+const MATE_TOL_M = 0.05
 
 type Point = [number, number, number]
 type PipeMate = { pipe: PipeSegmentNode; endIndex: number }
