@@ -1,7 +1,15 @@
 'use client'
 
 import { emitter, type GridEvent, type LevelNode, useScene } from '@pascal-app/core'
-import { CursorSphere, EDITOR_LAYER, markToolCancelConsumed, triggerSFX } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  clearCeilingSnapFeedback,
+  EDITOR_LAYER,
+  markToolCancelConsumed,
+  resolveCeilingPlanPointSnap,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
@@ -46,7 +54,10 @@ function commitCeilingDrawing(levelId: LevelNode['id'], points: Array<[number, n
   const { createNode, nodes } = useScene.getState()
   const ceilingCount = Object.values(nodes).filter((n) => n.type === 'ceiling').length
   const name = `Ceiling ${ceilingCount + 1}`
-  const ceiling = CeilingNode.parse({ name, polygon: points })
+  // A placed ceiling preset seeds `toolDefaults.ceiling` (thickness, height,
+  // material, …) before the tool activates; the drawn polygon always wins.
+  const defaults = useEditor.getState().toolDefaults.ceiling ?? {}
+  const ceiling = CeilingNode.parse({ ...defaults, name, polygon: points })
   createNode(ceiling, levelId)
   triggerSFX('sfx:structure-build')
   return ceiling.id
@@ -70,6 +81,12 @@ export const CeilingTool: React.FC = () => {
   const previousSnappedPointRef = useRef<[number, number] | null>(null)
   const shiftPressed = useRef(false)
 
+  // Clear preset-seeded defaults on deactivation so a later manual ceiling
+  // draw isn't built with a stale preset's parameters. Unmount-only.
+  useEffect(() => () => useEditor.getState().setToolDefaults('ceiling', null), [])
+
+  useEffect(() => () => clearCeilingSnapFeedback(), [])
+
   const verticalGeo = useMemo(
     () =>
       new BufferGeometry().setFromPoints([
@@ -89,18 +106,25 @@ export const CeilingTool: React.FC = () => {
 
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && gridCursorRef.current)) return
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
+      const gridX = Math.round(rawPoint[0] * 2) / 2
+      const gridZ = Math.round(rawPoint[1] * 2) / 2
       const gridPosition: [number, number] = [gridX, gridZ]
       setCursorPosition(gridPosition)
       setLevelY(event.localPosition[1])
       const ceilingY = event.localPosition[1] + CEILING_HEIGHT
       const gridY = event.localPosition[1] + GRID_OFFSET
       const lastPoint = points[points.length - 1]
-      const displayPoint =
+      const orthoPoint =
         shiftPressed.current || !lastPoint
           ? gridPosition
           : calculateSnapPoint(lastPoint, gridPosition)
+      const displayPoint = resolveCeilingPlanPointSnap({
+        rawPoint,
+        fallbackPoint: orthoPoint,
+        levelId: currentLevelId,
+        altKey: event.nativeEvent?.altKey === true,
+      }).point
       setSnappedCursorPosition(displayPoint)
       if (
         points.length > 0 &&
@@ -131,7 +155,11 @@ export const CeilingTool: React.FC = () => {
         const ceilingId = commitCeilingDrawing(currentLevelId, points)
         setSelection({ selectedIds: [ceilingId] })
         setPoints([])
+        clearCeilingSnapFeedback()
       } else {
+        // Every non-closing vertex is a "start" tick; the closing click above
+        // fires the structure-build (end) cue.
+        triggerSFX('sfx:structure-build-start')
         setPoints([...points, clickPoint])
       }
     }
@@ -142,12 +170,14 @@ export const CeilingTool: React.FC = () => {
         const ceilingId = commitCeilingDrawing(currentLevelId, points)
         setSelection({ selectedIds: [ceilingId] })
         setPoints([])
+        clearCeilingSnapFeedback()
       }
     }
 
     const onCancel = () => {
       if (points.length > 0) markToolCancelConsumed()
       setPoints([])
+      clearCeilingSnapFeedback()
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -179,8 +209,8 @@ export const CeilingTool: React.FC = () => {
     if (points.length === 0) {
       mainLineRef.current.visible = false
       closingLineRef.current.visible = false
-      groundMainLineRef.current && (groundMainLineRef.current.visible = false)
-      groundClosingLineRef.current && (groundClosingLineRef.current.visible = false)
+      if (groundMainLineRef.current) groundMainLineRef.current.visible = false
+      if (groundClosingLineRef.current) groundClosingLineRef.current.visible = false
       return
     }
     const ceilingY = levelY + CEILING_HEIGHT

@@ -2,10 +2,12 @@
 
 import {
   type AnyNodeId,
+  collectAlignmentAnchors,
   emitter,
   type FenceNode,
   type GridEvent,
   type LevelNode,
+  polygonAnchors,
   type SlabNode,
   sceneRegistry,
   useLiveTransforms,
@@ -14,9 +16,13 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  getSegmentGridStep,
   markToolCancelConsumed,
+  resolveAlignmentForActiveBuilding,
+  snapBuildingLocalToWorldGrid,
   snapFenceDraftPoint,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -40,6 +46,9 @@ import type * as THREE from 'three'
  * nothing for zundo to record. The single `scene.update` on commit
  * becomes the single undo step naturally.
  */
+/** Figma-style alignment-snap threshold (meters), matching the other tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
+
 function translatePolygon(
   polygon: Array<[number, number]>,
   deltaX: number,
@@ -125,6 +134,10 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
       .filter((child): child is FenceNode => child?.type === 'fence')
 
+    // Alignment candidates — every other alignable object's anchors,
+    // gathered once (the scene graph is stable during the drag).
+    const alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, slabId)
+
     let wasCommitted = false
 
     const applyPreview = (deltaX: number, deltaZ: number) => {
@@ -153,10 +166,12 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
 
     const onGridMove = (event: GridEvent) => {
       if (isFloorplanSourcedEvent(event)) return
+      const gridStep = getSegmentGridStep()
       const [localX, localZ] = snapFenceDraftPoint({
         point: [event.localPosition[0], event.localPosition[2]],
         walls: levelWalls,
         fences: levelFences,
+        gridSnap: (p) => snapBuildingLocalToWorldGrid(p, gridStep),
       })
 
       if (
@@ -170,7 +185,29 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       const anchor = dragAnchorRef.current ?? [localX, localZ]
       dragAnchorRef.current = anchor
 
-      applyPreview(localX - anchor[0], localZ - anchor[1])
+      let deltaX = localX - anchor[0]
+      let deltaZ = localZ - anchor[1]
+
+      // Figma-style alignment snap: align the slab's translated polygon
+      // vertices to other objects' anchors; fold the snap into the delta and
+      // publish a guide. Alt bypasses.
+      const bypass = event.nativeEvent?.altKey === true
+      if (!bypass && alignmentCandidates.length > 0) {
+        const result = resolveAlignmentForActiveBuilding({
+          moving: polygonAnchors(slabId, translatePolygon(originalPolygon, deltaX, deltaZ)),
+          candidates: alignmentCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (result.snap) {
+          deltaX += result.snap.dx
+          deltaZ += result.snap.dz
+        }
+        useAlignmentGuides.getState().set(result.guides)
+      } else {
+        useAlignmentGuides.getState().clear()
+      }
+
+      applyPreview(deltaX, deltaZ)
     }
 
     const onGridClick = (event: GridEvent) => {
@@ -197,6 +234,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       // GeometrySystem rebuild zeros it on the next frame, by which
       // point the new geometry is in place — visual stays smooth.
       useLiveTransforms.getState().clear(slabId)
+      useAlignmentGuides.getState().clear()
 
       triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [slabId] })
@@ -208,6 +246,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       // No scene state to roll back — we never wrote anything. Just
       // restore the mesh visual.
       clearPreview()
+      useAlignmentGuides.getState().clear()
       useViewer.getState().setSelection({ selectedIds: [slabId] })
       markToolCancelConsumed()
       exitMoveMode()
@@ -218,6 +257,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
     emitter.on('tool:cancel', onCancel)
 
     return () => {
+      useAlignmentGuides.getState().clear()
       if (!wasCommitted) {
         clearPreview()
       } else {

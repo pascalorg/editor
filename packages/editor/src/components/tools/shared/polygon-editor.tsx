@@ -1,17 +1,31 @@
 import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
-import { createPortal } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { SCENE_LAYER, useViewer } from '@pascal-app/viewer'
+import { createPortal, type ThreeEvent } from '@react-three/fiber'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  BoxGeometry,
   BufferGeometry,
+  Color,
+  CylinderGeometry,
+  DoubleSide,
   ExtrudeGeometry,
   Float32BufferAttribute,
   type Line,
   type Object3D,
   Shape,
 } from 'three'
+import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import {
+  createMoveCrossHandleGeometry,
+  ARROW_COLOR as EDGE_ARROW_COLOR,
+  ARROW_HOVER_COLOR as EDGE_ARROW_HOVER_COLOR,
+  ARROW_SCALE as EDGE_ARROW_SCALE,
+  useInvisibleHitAreaMaterial,
+} from '../../editor/node-arrow-handles'
 import { snapToHalf } from '../item/placement-math'
+import { suppressBoxSelectForPointer } from '../select/box-select-state'
 
 const Y_OFFSET = 0.02
 // Per-side resize arrows: indigo chevrons that match the registry arrow
@@ -19,10 +33,13 @@ const Y_OFFSET = 0.02
 // midpoint, pointing along the edge's outward normal — dragging an arrow
 // translates that edge only (its two vertices), leaving the opposite side
 // fixed. Reuses the existing 'edge' drag mode in PolygonEditor.
-const EDGE_ARROW_COLOR = '#8381ed'
-const EDGE_ARROW_HOVER_COLOR = '#a5b4fc'
-const EDGE_ARROW_SCALE = 0.65
 const EDGE_ARROW_OFFSET = 0.34
+
+// Disables R3F pointer-picking on a mesh. Used on the visual-only meshes —
+// the edge bar and the border line — so they render without stealing pointer
+// events that belong to the vertex/midpoint handles overlapping them. Mirrors
+// the `NO_RAYCAST` sentinel in node-arrow-handles.tsx.
+const NO_RAYCAST = () => null
 
 function createEdgeArrowGeometry() {
   const shape = new Shape()
@@ -35,16 +52,16 @@ function createEdgeArrowGeometry() {
   shape.lineTo(-0.04, -0.12)
   shape.lineTo(0.22, 0)
   const geometry = new ExtrudeGeometry(shape, {
-    depth: 0.08,
+    depth: 0.045,
     bevelEnabled: true,
-    bevelThickness: 0.035,
-    bevelSize: 0.03,
+    bevelThickness: 0.018,
+    bevelSize: 0.02,
     bevelOffset: 0,
-    bevelSegments: 10,
+    bevelSegments: 8,
     curveSegments: 16,
     steps: 1,
   })
-  geometry.translate(0, 0, -0.04)
+  geometry.translate(0, 0, -0.0225)
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
   geometry.computeBoundingSphere()
@@ -60,6 +77,17 @@ type DragState = {
   initialPosition: [number, number]
   initialPolygon: Array<[number, number]>
   pointerId: number
+}
+
+export type PolygonEditorPlanPointSnapContext = {
+  rawPoint: [number, number]
+  gridPoint: [number, number]
+  mode: DragState['mode']
+  vertexIndex: number | null
+  edgeIndex?: number
+  initialPosition: [number, number]
+  initialPolygon: Array<[number, number]>
+  nativeEvent?: GridEvent['nativeEvent']
 }
 
 export interface PolygonEditorProps {
@@ -83,6 +111,32 @@ export interface PolygonEditorProps {
   allowPolygonMove?: boolean
   /** Whether polygon edges can be dragged along their perpendicular normal. */
   allowEdgeMove?: boolean
+  /** Called just before a vertex drag session starts. */
+  onBeforeVertexDrag?: (vertexIndex: number, position: [number, number]) => void
+  /** Called when a vertex handle enters or leaves hover. */
+  onVertexHoverChange?: (vertexIndex: number | null) => void
+  /** Called when a midpoint add-vertex handle enters or leaves hover. */
+  onMidpointHoverChange?: (edgeIndex: number | null) => void
+  /** Called when an edge move handle enters or leaves hover. */
+  onEdgeHoverChange?: (edgeIndex: number | null) => void
+  /** Called when any polygon drag starts or ends. */
+  onDragStateChange?: (isDragging: boolean) => void
+  /** Called once when a polygon drag starts. */
+  onDragStart?: () => void
+  /** Called once when a polygon drag commits on pointer release. */
+  onDragCommit?: () => void
+  /** Whether to render the editor-owned polygon outline. */
+  showBorderLine?: boolean
+  /** Whether midpoint handles can add new vertices. */
+  showMidpointHandles?: boolean
+  /** Whether hovering a handle should also tint its connected edges and endpoint handles. */
+  highlightConnectedHandles?: boolean
+  /** Optional host-owned point snapper. Defaults to the existing half-grid snap. */
+  resolvePlanPoint?: (context: PolygonEditorPlanPointSnapContext) => [number, number]
+  /** Optional vertex handle renderer for host-specific affordances. */
+  renderVertexHandle?: PolygonVertexHandleRenderer
+  /** Optional midpoint handle renderer for host-specific add-vertex affordances. */
+  renderMidpointHandle?: PolygonMidpointHandleRenderer
 }
 
 /**
@@ -92,6 +146,7 @@ export interface PolygonEditorProps {
 const MIN_HANDLE_HEIGHT = 0.15
 const EDGE_HANDLE_HEIGHT = 0.06
 const EDGE_HANDLE_THICKNESS = 0.12
+const EDGE_HANDLE_GEOMETRY = new BoxGeometry(1, 1, 1)
 
 function getEdgeNormal(start: [number, number], end: [number, number]): [number, number] | null {
   const dx = end[0] - start[0]
@@ -100,6 +155,239 @@ function getEdgeNormal(start: [number, number], end: [number, number]): [number,
   if (length < 1e-6) return null
 
   return [-dz / length, dx / length]
+}
+
+function stopHandlePointerDown(event: ThreeEvent<PointerEvent>) {
+  event.stopPropagation()
+  suppressBoxSelectForPointer(event, { markHandled: false })
+}
+
+type HandleClickHandler = (event: ThreeEvent<MouseEvent>) => void
+type HandlePointerHandler = (event: ThreeEvent<PointerEvent>) => void
+
+export type PolygonHandleHandlers = {
+  onClick?: HandleClickHandler
+  onDoubleClick?: HandleClickHandler
+  onPointerDown?: HandlePointerHandler
+  onPointerEnter?: HandlePointerHandler
+  onPointerLeave?: HandlePointerHandler
+}
+
+export type PolygonVertexHandleRenderProps = {
+  canDelete: boolean
+  handleProps: PolygonHandleHandlers
+  height: number
+  index: number
+  isDragging: boolean
+  isHovered: boolean
+  point: [number, number]
+  position: [number, number, number]
+  radius: number
+}
+
+export type PolygonVertexHandleRenderer = (props: PolygonVertexHandleRenderProps) => React.ReactNode
+
+export type PolygonMidpointHandleRenderProps = {
+  handleProps: PolygonHandleHandlers
+  height: number
+  index: number
+  isHovered: boolean
+  point: [number, number]
+  position: [number, number, number]
+  radius: number
+}
+
+export type PolygonMidpointHandleRenderer = (
+  props: PolygonMidpointHandleRenderProps,
+) => React.ReactNode
+
+function usePolygonNodeMaterial(color: string, opacity = 1): MeshBasicNodeMaterial {
+  const material = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color('#ffffff'),
+        depthTest: true,
+        depthWrite: true,
+        opacity: 1,
+        transparent: true,
+      }),
+    [],
+  )
+
+  useEffect(() => {
+    material.color.set(color)
+    material.opacity = opacity
+  }, [color, material, opacity])
+  useEffect(() => () => material.dispose(), [material])
+
+  return material
+}
+
+function usePolygonArrowMaterial(): MeshBasicNodeMaterial {
+  return useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(EDGE_ARROW_COLOR),
+        depthTest: true,
+        depthWrite: true,
+        opacity: 1,
+        side: DoubleSide,
+        transparent: true,
+      }),
+    [],
+  )
+}
+
+// One mesh per handle: lives on SCENE_LAYER with a node material so the
+// post-processing ink-edge pass outlines it. The visual material still
+// depth-tests, so walls/items in front can occlude it.
+function OutlinedCylinderHandle({
+  radius,
+  height,
+  color,
+  opacity = 1,
+  position,
+  ...handlers
+}: {
+  radius: number
+  height: number
+  color: string
+  opacity?: number
+  position: [number, number, number]
+} & PolygonHandleHandlers) {
+  const geometry = useMemo(() => new CylinderGeometry(radius, radius, height, 16), [height, radius])
+  const material = usePolygonNodeMaterial(color, opacity)
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  return (
+    <mesh
+      frustumCulled={false}
+      geometry={geometry}
+      layers={SCENE_LAYER}
+      material={material}
+      position={position}
+      renderOrder={1010}
+      {...handlers}
+    />
+  )
+}
+
+// Whole-polygon move grip — the generic 4-way cross-arrow (matching the node
+// move handles) with an invisible cylinder hit area, replacing the old sphere.
+// The cross sits on SCENE_LAYER (so the ink pass outlines it) while the
+// cylinder hit mesh is on EDITOR_LAYER (grabbable, out of the MRT scene pass).
+function OutlinedCrossHandle({
+  color,
+  position,
+  ...handlers
+}: {
+  color: string
+  position: [number, number, number]
+} & PolygonHandleHandlers) {
+  const geometry = useMemo(() => createMoveCrossHandleGeometry(), [])
+  const material = usePolygonNodeMaterial(color)
+  const hitGeometry = useMemo(() => new CylinderGeometry(0.24, 0.24, 0.18, 24), [])
+  const hitMaterial = useInvisibleHitAreaMaterial()
+  useEffect(() => () => geometry.dispose(), [geometry])
+  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
+
+  return (
+    <group position={position}>
+      <mesh
+        frustumCulled={false}
+        geometry={geometry}
+        layers={SCENE_LAYER}
+        material={material}
+        raycast={NO_RAYCAST}
+        renderOrder={1010}
+        scale={EDGE_ARROW_SCALE}
+      />
+      <mesh
+        frustumCulled={false}
+        geometry={hitGeometry}
+        layers={EDITOR_LAYER}
+        material={hitMaterial}
+        renderOrder={1011}
+        {...handlers}
+      />
+    </group>
+  )
+}
+
+function OutlinedEdgeArrowHandle({
+  geometry,
+  color,
+  position,
+  rotationY,
+  scale,
+  ...handlers
+}: {
+  geometry: BufferGeometry
+  color: string
+  position: [number, number, number]
+  rotationY: number
+  scale: number
+} & PolygonHandleHandlers) {
+  const material = usePolygonArrowMaterial()
+  useEffect(() => {
+    material.color.set(color)
+  }, [color, material])
+  useEffect(() => () => material.dispose(), [material])
+
+  return (
+    <mesh
+      frustumCulled={false}
+      geometry={geometry}
+      layers={SCENE_LAYER}
+      material={material}
+      position={position}
+      renderOrder={1010}
+      rotation={[0, rotationY, 0]}
+      scale={scale}
+      {...handlers}
+    />
+  )
+}
+
+function HighlightedEdgeSegment({
+  end,
+  start,
+  y,
+}: {
+  end: [number, number]
+  start: [number, number]
+  y: number
+}) {
+  const geometry = useMemo(() => {
+    const nextGeometry = new BufferGeometry()
+    nextGeometry.setAttribute(
+      'position',
+      new Float32BufferAttribute([start[0], y, start[1], end[0], y, end[1]], 3),
+    )
+    return nextGeometry
+  }, [end, start, y])
+
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  return (
+    <line
+      // @ts-expect-error R3F <line> element conflicts with SVG <line> type
+      frustumCulled={false}
+      geometry={geometry}
+      layers={EDITOR_LAYER}
+      raycast={NO_RAYCAST}
+      renderOrder={12}
+    >
+      <lineBasicNodeMaterial
+        color={EDGE_ARROW_HOVER_COLOR}
+        depthTest
+        depthWrite={false}
+        linewidth={4}
+        opacity={0.95}
+        transparent
+      />
+    </line>
+  )
 }
 
 export const PolygonEditor: React.FC<PolygonEditorProps> = ({
@@ -112,6 +400,19 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   surfaceHeight = 0,
   allowPolygonMove = false,
   allowEdgeMove = false,
+  onBeforeVertexDrag,
+  onVertexHoverChange,
+  onMidpointHoverChange,
+  onEdgeHoverChange,
+  onDragStateChange,
+  onDragStart,
+  onDragCommit,
+  showBorderLine = true,
+  showMidpointHandles = true,
+  highlightConnectedHandles = false,
+  resolvePlanPoint,
+  renderMidpointHandle,
+  renderVertexHandle,
 }) => {
   const [levelNode, setLevelNode] = useState<Object3D | null>(() =>
     levelId ? (sceneRegistry.nodes.get(levelId) ?? null) : null,
@@ -156,6 +457,22 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const [dragState, setDragState] = useState<DragState | null>(null)
   const [previewPolygon, setPreviewPolygon] = useState<Array<[number, number]> | null>(null)
   const previewPolygonRef = useRef<Array<[number, number]> | null>(null)
+  const previousInputDraggingRef = useRef(false)
+
+  const onDragStateChangeRef = useRef(onDragStateChange)
+  useEffect(() => {
+    onDragStateChangeRef.current = onDragStateChange
+  }, [onDragStateChange])
+
+  const onDragStartRef = useRef(onDragStart)
+  useEffect(() => {
+    onDragStartRef.current = onDragStart
+  }, [onDragStart])
+
+  const onDragCommitRef = useRef(onDragCommit)
+  useEffect(() => {
+    onDragCommitRef.current = onDragCommit
+  }, [onDragCommit])
 
   const onPolygonPreviewRef = useRef(onPolygonPreview)
   useEffect(() => {
@@ -182,17 +499,82 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const [hoveredEdge, setHoveredEdge] = useState<number | null>(null)
   const [cursorPosition, setCursorPosition] = useState<[number, number]>([0, 0])
 
+  useEffect(() => {
+    onVertexHoverChange?.(hoveredVertex)
+  }, [hoveredVertex, onVertexHoverChange])
+
+  useEffect(() => () => onVertexHoverChange?.(null), [onVertexHoverChange])
+
+  useEffect(() => {
+    onMidpointHoverChange?.(hoveredMidpoint)
+  }, [hoveredMidpoint, onMidpointHoverChange])
+
+  useEffect(() => () => onMidpointHoverChange?.(null), [onMidpointHoverChange])
+
+  useEffect(() => {
+    onEdgeHoverChange?.(hoveredEdge)
+  }, [hoveredEdge, onEdgeHoverChange])
+
+  useEffect(() => () => onEdgeHoverChange?.(null), [onEdgeHoverChange])
+
   const lineRef = useRef<Line>(null!)
   const previousPositionRef = useRef<[number, number] | null>(null)
 
-  // Track the last polygon prop to detect external changes (undo/redo)
+  useEffect(() => {
+    onDragStateChangeRef.current?.(dragState?.isDragging ?? false)
+  }, [dragState?.isDragging])
+
+  useEffect(() => () => onDragStateChangeRef.current?.(false), [])
+
+  const startDrag = useCallback((nextDragState: DragState) => {
+    previousInputDraggingRef.current = useViewer.getState().inputDragging
+    useViewer.getState().setInputDragging(true)
+    setDragState(nextDragState)
+    onDragStartRef.current?.()
+  }, [])
+
+  useEffect(() => {
+    if (!dragState?.isDragging) return
+
+    return () => {
+      useViewer.getState().setInputDragging(previousInputDraggingRef.current)
+    }
+  }, [dragState?.isDragging])
+
+  // Track the last polygon prop to detect external changes (undo/redo) or
+  // our own post-commit prop update arriving while a preview is still in
+  // flight. Either way, drop the stale preview/drag.
+  //
+  // This block runs during render, so it may only touch THIS component's
+  // own state (setPreviewPolygon / setDragState — React re-renders in
+  // place, which is the sanctioned "adjust state on prop change" pattern).
+  // The host `onPolygonPreview(null)` notification clears
+  // `useLiveNodeOverrides` — a store OTHER components subscribe to (e.g.
+  // NodeArrowHandles) — so calling it here throws "Cannot update a
+  // component while rendering a different component". Defer it to the
+  // effect below.
   const lastPolygonRef = useRef(polygon)
+  const pendingPreviewClearRef = useRef(false)
   if (polygon !== lastPolygonRef.current) {
     lastPolygonRef.current = polygon
-    // External change (e.g. undo/redo) — clear any stale preview/drag state
-    if (previewPolygon) updatePreviewPolygon(null)
+    // `previewPolygonRef` is the synchronously-updated source of truth for
+    // an in-flight preview (state can lag it by a render).
+    if (previewPolygonRef.current !== null || previewPolygon !== null) {
+      previewPolygonRef.current = null
+      setPreviewPolygon(null)
+      pendingPreviewClearRef.current = true
+    }
     if (dragState) setDragState(null)
   }
+
+  // Flush the deferred host preview-clear (see note above) after the
+  // commit, where writing to other stores is allowed.
+  useEffect(() => {
+    if (pendingPreviewClearRef.current) {
+      pendingPreviewClearRef.current = false
+      onPolygonPreviewRef.current?.(null)
+    }
+  })
 
   // The polygon to display (preview during drag, or actual polygon)
   const displayPolygon = previewPolygon ?? polygon
@@ -262,6 +644,47 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     })
   }, [displayPolygon])
 
+  const activeVertexIndex = dragState?.mode === 'vertex' ? dragState.vertexIndex : hoveredVertex
+  const activeEdgeIndex = dragState?.mode === 'edge' ? dragState.edgeIndex : hoveredEdge
+
+  const highlightedEdgeIndices = useMemo(() => {
+    const next = new Set<number>()
+    const edgeCount = displayPolygon.length
+    if (!highlightConnectedHandles || edgeCount < 2) return next
+
+    if (activeVertexIndex !== null && activeVertexIndex !== undefined) {
+      next.add(activeVertexIndex)
+      next.add((activeVertexIndex - 1 + edgeCount) % edgeCount)
+    }
+    if (hoveredMidpoint !== null) {
+      next.add(hoveredMidpoint)
+    }
+    if (activeEdgeIndex !== null && activeEdgeIndex !== undefined) {
+      next.add(activeEdgeIndex)
+    }
+
+    return next
+  }, [
+    activeEdgeIndex,
+    activeVertexIndex,
+    displayPolygon.length,
+    highlightConnectedHandles,
+    hoveredMidpoint,
+  ])
+
+  const isVertexLinkedHighlighted = useCallback(
+    (index: number) => {
+      if (!highlightConnectedHandles || highlightedEdgeIndices.size === 0) return false
+      const edgeCount = displayPolygon.length
+      if (edgeCount < 2) return false
+      return (
+        highlightedEdgeIndices.has(index) ||
+        highlightedEdgeIndices.has((index - 1 + edgeCount) % edgeCount)
+      )
+    },
+    [displayPolygon.length, highlightConnectedHandles, highlightedEdgeIndices],
+  )
+
   const arrowGeometry = useMemo(() => createEdgeArrowGeometry(), [])
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
 
@@ -281,6 +704,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     if (previewPolygonRef.current) {
       onPolygonChange(previewPolygonRef.current)
     }
+    onDragCommitRef.current?.()
     updatePreviewPolygon(null)
     setDragState(null)
   }, [onPolygonChange, updatePreviewPolygon])
@@ -320,9 +744,22 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   // Listen to grid:move events to track cursor position
   useEffect(() => {
     const onGridMove = (event: GridEvent) => {
-      const gridX = snapToHalf(event.localPosition[0])
-      const gridZ = snapToHalf(event.localPosition[2])
-      const newPosition: [number, number] = [gridX, gridZ]
+      const point = levelNode ? event.localPosition : event.position
+      const rawPoint: [number, number] = [point[0], point[2]]
+      const gridPoint: [number, number] = [snapToHalf(rawPoint[0]), snapToHalf(rawPoint[1])]
+      const newPosition =
+        dragState?.isDragging && resolvePlanPoint
+          ? resolvePlanPoint({
+              rawPoint,
+              gridPoint,
+              mode: dragState.mode,
+              vertexIndex: dragState.vertexIndex,
+              edgeIndex: dragState.edgeIndex,
+              initialPosition: dragState.initialPosition,
+              initialPolygon: dragState.initialPolygon,
+              nativeEvent: event.nativeEvent,
+            })
+          : gridPoint
 
       // Play snap sound when cursor moves to a new grid cell during drag
       if (
@@ -377,7 +814,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     return () => {
       emitter.off('grid:move', onGridMove)
     }
-  }, [dragState, handleVertexDrag, updatePreviewPolygon])
+  }, [dragState, handleVertexDrag, levelNode, resolvePlanPoint, updatePreviewPolygon])
 
   // Set up pointer up listener for ending drag
   useEffect(() => {
@@ -422,7 +859,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
   // Update line geometry when polygon changes
   useEffect(() => {
-    if (!lineRef.current || displayPolygon.length < 2) return
+    if (!showBorderLine || !lineRef.current || displayPolygon.length < 2) return
 
     const positions: number[] = []
     for (const [x, z] of displayPolygon) {
@@ -437,7 +874,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
     lineRef.current.geometry.dispose()
     lineRef.current.geometry = geometry
-  }, [displayPolygon, editY])
+  }, [displayPolygon, editY, showBorderLine])
 
   if (displayPolygon.length < minVertices) return null
 
@@ -445,95 +882,140 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const handleHeight = Math.max(MIN_HANDLE_HEIGHT, surfaceHeight + 0.02)
   const edgeHandleY = editY + handleHeight - EDGE_HANDLE_HEIGHT / 2
 
+  // Interactive handles are SCENE_LAYER node-material meshes so the ink-edge
+  // pass outlines them while normal scene depth can hide them. The edge BAR and
+  // border line stay on EDITOR_LAYER, visual-only
+  // (raycast disabled) so they never steal clicks from the vertex/midpoint
+  // handles overlapping them — edge dragging starts from the chevron arrow
+  // outside the polygon edge.
   const editorContent = (
     <group>
       {/* Border line */}
-      <line
-        frustumCulled={false}
-        layers={EDITOR_LAYER}
-        raycast={() => {}}
-        // @ts-expect-error R3F <line> element conflicts with SVG <line> type
-        ref={lineRef}
-        renderOrder={10}
-      >
-        <bufferGeometry />
-        <lineBasicNodeMaterial
-          color={color}
-          depthTest={false}
-          depthWrite={false}
-          linewidth={2}
-          opacity={0.8}
-          transparent
-        />
-      </line>
+      {showBorderLine && (
+        <line
+          frustumCulled={false}
+          layers={EDITOR_LAYER}
+          raycast={NO_RAYCAST}
+          // @ts-expect-error R3F <line> element conflicts with SVG <line> type
+          ref={lineRef}
+          renderOrder={10}
+        >
+          <bufferGeometry />
+          <lineBasicNodeMaterial
+            color={color}
+            depthTest={false}
+            depthWrite={false}
+            linewidth={2}
+            opacity={0.8}
+            transparent
+          />
+        </line>
+      )}
+
+      {highlightConnectedHandles &&
+        highlightedEdgeIndices.size > 0 &&
+        Array.from(highlightedEdgeIndices).map((edgeIndex) => {
+          const start = displayPolygon[edgeIndex]
+          const end = displayPolygon[(edgeIndex + 1) % displayPolygon.length]
+          if (!(start && end)) return null
+          return (
+            <HighlightedEdgeSegment
+              end={end}
+              key={`highlight-edge-${edgeIndex}`}
+              start={start}
+              y={edgeHandleY}
+            />
+          )
+        })}
 
       {/* Vertex handles - blue cylinders that match surface height */}
       {displayPolygon.map(([x, z], index) => {
         const isHovered = hoveredVertex === index
         const isDragging = dragState?.mode === 'vertex' && dragState.vertexIndex === index
+        const isLinkedHighlighted = isVertexLinkedHighlighted(index)
+        const isHighlighted = isDragging || isHovered || isLinkedHighlighted
         const radius = 0.1
         const height = handleHeight
+        const point: [number, number] = [x!, z!]
+        const position: [number, number, number] = [x!, editY + height / 2, z!]
+        const handleProps: PolygonHandleHandlers = {
+          onClick: (e) => {
+            if (e.button !== 0) return
+            e.stopPropagation()
+          },
+          onDoubleClick: (e) => {
+            if (e.button !== 0) return
+            e.stopPropagation()
+            if (canDelete) {
+              handleDeleteVertex(index)
+            }
+          },
+          onPointerDown: (e) => {
+            if (e.button !== 0) return
+            stopHandlePointerDown(e)
+            setHoveredEdge(null)
+            onBeforeVertexDrag?.(index, point)
+            startDrag({
+              isDragging: true,
+              mode: 'vertex',
+              vertexIndex: index,
+              initialPosition: [x!, z!],
+              initialPolygon: displayPolygon.map(([px, pz]) => [px, pz] as [number, number]),
+              pointerId: e.pointerId,
+            })
+          },
+          onPointerEnter: (e) => {
+            e.stopPropagation()
+            setHoveredVertex(index)
+          },
+          onPointerLeave: (e) => {
+            e.stopPropagation()
+            setHoveredVertex(null)
+          },
+        }
+
+        if (renderVertexHandle) {
+          return (
+            <Fragment key={`vertex-${index}`}>
+              {renderVertexHandle({
+                canDelete,
+                handleProps,
+                height,
+                index,
+                isDragging,
+                isHovered,
+                point,
+                position,
+                radius,
+              })}
+            </Fragment>
+          )
+        }
 
         return (
-          <mesh
-            castShadow
+          <OutlinedCylinderHandle
+            color={isHighlighted ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
+            height={height}
             key={`vertex-${index}`}
-            layers={EDITOR_LAYER}
-            onClick={(e) => {
-              if (e.button !== 0) return
-              e.stopPropagation()
-            }}
-            onDoubleClick={(e) => {
-              if (e.button !== 0) return
-              e.stopPropagation()
-              if (canDelete) {
-                handleDeleteVertex(index)
-              }
-            }}
-            onPointerDown={(e) => {
-              if (e.button !== 0) return
-              e.stopPropagation()
-              setHoveredEdge(null)
-              setDragState({
-                isDragging: true,
-                mode: 'vertex',
-                vertexIndex: index,
-                initialPosition: [x!, z!],
-                initialPolygon: displayPolygon.map(([px, pz]) => [px, pz] as [number, number]),
-                pointerId: e.pointerId,
-              })
-            }}
-            onPointerEnter={(e) => {
-              e.stopPropagation()
-              setHoveredVertex(index)
-            }}
-            onPointerLeave={(e) => {
-              e.stopPropagation()
-              setHoveredVertex(null)
-            }}
-            position={[x!, editY + height / 2, z!]}
-          >
-            <cylinderGeometry args={[radius, radius, height, 16]} />
-            <meshBasicMaterial
-              color={isDragging ? '#22c55e' : isHovered ? '#60a5fa' : '#3b82f6'}
-            />
-          </mesh>
+            {...handleProps}
+            position={position}
+            radius={radius}
+          />
         )
       })}
 
       {allowPolygonMove && (
-        <mesh
-          castShadow
-          layers={EDITOR_LAYER}
+        <OutlinedCrossHandle
+          color={dragState?.mode === 'polygon' ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
           onClick={(e) => {
             if (e.button !== 0) return
             e.stopPropagation()
           }}
           onPointerDown={(e) => {
             if (e.button !== 0) return
-            e.stopPropagation()
+            stopHandlePointerDown(e)
             setHoveredEdge(null)
-            setDragState({
+            startDrag({
               isDragging: true,
               mode: 'polygon',
               vertexIndex: null,
@@ -543,16 +1025,15 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             })
           }}
           position={[polygonCenter[0], editY + handleHeight + 0.08, polygonCenter[1]]}
-        >
-          <sphereGeometry args={[0.09, 20, 20]} />
-          <meshBasicMaterial color={dragState?.mode === 'polygon' ? '#22c55e' : '#f59e0b'} />
-        </mesh>
+        />
       )}
 
       {allowEdgeMove &&
         edgeHandles.map(({ index, length, midpoint, rotationY, outwardNormal, outwardAngle }) => {
           const isHovered = hoveredEdge === index
           const isDragging = dragState?.mode === 'edge' && dragState.edgeIndex === index
+          const isLinkedHighlighted = highlightedEdgeIndices.has(index)
+          const isHighlighted = isDragging || isHovered || isLinkedHighlighted
           const arrowX = midpoint[0] + outwardNormal[0] * EDGE_ARROW_OFFSET
           const arrowZ = midpoint[1] + outwardNormal[1] * EDGE_ARROW_OFFSET
 
@@ -565,7 +1046,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             if (!edgeNormal) return
 
             setHoveredEdge(null)
-            setDragState({
+            startDrag({
               isDragging: true,
               mode: 'edge',
               vertexIndex: null,
@@ -579,49 +1060,39 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
           return (
             <group key={`edge-${index}`}>
+              {/* Edge bar — VISUAL ONLY (raycast disabled). It runs the full
+                  length of the edge and overlaps the vertex/midpoint handles at
+                  its ends + centre, so making it pickable let edges steal those
+                  clicks. Edge dragging runs through the chevron arrow below,
+                  which sits outside the polygon and never overlaps a
+                  vertex/midpoint handle. */}
               <mesh
+                geometry={EDGE_HANDLE_GEOMETRY}
                 layers={EDITOR_LAYER}
-                onClick={(e) => {
-                  if (e.button !== 0) return
-                  e.stopPropagation()
-                }}
-                onPointerDown={(e) => {
-                  if (e.button !== 0) return
-                  e.stopPropagation()
-                  beginEdgeDrag(e)
-                }}
-                onPointerEnter={(e) => {
-                  e.stopPropagation()
-                  setHoveredEdge(index)
-                }}
-                onPointerLeave={(e) => {
-                  e.stopPropagation()
-                  setHoveredEdge(null)
-                }}
                 position={[midpoint[0], edgeHandleY, midpoint[1]]}
+                raycast={NO_RAYCAST}
                 rotation={[0, rotationY, 0]}
+                scale={[length, EDGE_HANDLE_HEIGHT, EDGE_HANDLE_THICKNESS]}
               >
-                <boxGeometry args={[length, EDGE_HANDLE_HEIGHT, EDGE_HANDLE_THICKNESS]} />
                 <meshBasicMaterial
-                  color={isDragging ? '#22c55e' : '#60a5fa'}
-                  opacity={isDragging ? 0.5 : isHovered ? 0.38 : 0.14}
+                  color={isHighlighted ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
+                  opacity={isDragging ? 0.5 : isHighlighted ? 0.38 : 0.14}
                   transparent
                 />
               </mesh>
-              {/* Per-side resize arrow — points outward from the edge.
-                  Dragging it pulls (or pushes) only this edge's two
-                  vertices along the outward normal; the opposite side
-                  of the polygon stays put. */}
-              <mesh
+              {/* Per-side resize arrow — the interactive edge-drag handle.
+                  Points outward from the edge; dragging it translates only this
+                  edge's two vertices along the outward normal. */}
+              <OutlinedEdgeArrowHandle
+                color={isHighlighted ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
                 geometry={arrowGeometry}
-                layers={EDITOR_LAYER}
                 onClick={(e) => {
                   if (e.button !== 0) return
                   e.stopPropagation()
                 }}
                 onPointerDown={(e) => {
                   if (e.button !== 0) return
-                  e.stopPropagation()
+                  stopHandlePointerDown(e)
                   beginEdgeDrag(e)
                 }}
                 onPointerEnter={(e) => {
@@ -633,70 +1104,82 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                   setHoveredEdge(null)
                 }}
                 position={[arrowX, edgeHandleY, arrowZ]}
-                rotation={[0, outwardAngle, 0]}
+                rotationY={outwardAngle}
                 scale={EDGE_ARROW_SCALE}
-              >
-                <meshBasicMaterial
-                  color={
-                    isDragging ? '#22c55e' : isHovered ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR
-                  }
-                  depthTest={false}
-                  depthWrite={false}
-                  transparent
-                />
-              </mesh>
+              />
             </group>
           )
         })}
 
       {/* Midpoint handles - smaller green cylinders for adding vertices (hidden while dragging) */}
-      {!dragState &&
+      {showMidpointHandles &&
+        !dragState &&
         midpoints.map(([x, z], index) => {
           const isHovered = hoveredMidpoint === index
+          const isLinkedHighlighted = highlightedEdgeIndices.has(index)
+          const isHighlighted = isHovered || isLinkedHighlighted
           const radius = 0.06
           const height = handleHeight
+          const point: [number, number] = [x!, z!]
+          const position: [number, number, number] = [x!, editY + height / 2, z!]
+          const handleProps: PolygonHandleHandlers = {
+            onClick: (e) => {
+              if (e.button !== 0) return
+              e.stopPropagation()
+            },
+            onPointerDown: (e) => {
+              if (e.button !== 0) return
+              stopHandlePointerDown(e)
+              onBeforeVertexDrag?.(index + 1, point)
+              const insertedVertex = handleAddVertex(index, point)
+              if (insertedVertex.vertexIndex >= 0) {
+                startDrag({
+                  isDragging: true,
+                  mode: 'vertex',
+                  vertexIndex: insertedVertex.vertexIndex,
+                  initialPosition: point,
+                  initialPolygon: insertedVertex.polygon,
+                  pointerId: e.pointerId,
+                })
+                setHoveredMidpoint(null)
+              }
+            },
+            onPointerEnter: (e) => {
+              e.stopPropagation()
+              setHoveredMidpoint(index)
+            },
+            onPointerLeave: (e) => {
+              e.stopPropagation()
+              setHoveredMidpoint(null)
+            },
+          }
+
+          if (renderMidpointHandle) {
+            return (
+              <Fragment key={`midpoint-${index}`}>
+                {renderMidpointHandle({
+                  handleProps,
+                  height,
+                  index,
+                  isHovered,
+                  point,
+                  position,
+                  radius,
+                })}
+              </Fragment>
+            )
+          }
 
           return (
-            <mesh
+            <OutlinedCylinderHandle
+              color={isHighlighted ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
+              height={height}
               key={`midpoint-${index}`}
-              layers={EDITOR_LAYER}
-              onClick={(e) => {
-                if (e.button !== 0) return
-                e.stopPropagation()
-              }}
-              onPointerDown={(e) => {
-                if (e.button !== 0) return
-                e.stopPropagation()
-                const insertedVertex = handleAddVertex(index, [x!, z!])
-                if (insertedVertex.vertexIndex >= 0) {
-                  setDragState({
-                    isDragging: true,
-                    mode: 'vertex',
-                    vertexIndex: insertedVertex.vertexIndex,
-                    initialPosition: [x!, z!],
-                    initialPolygon: insertedVertex.polygon,
-                    pointerId: e.pointerId,
-                  })
-                  setHoveredMidpoint(null)
-                }
-              }}
-              onPointerEnter={(e) => {
-                e.stopPropagation()
-                setHoveredMidpoint(index)
-              }}
-              onPointerLeave={(e) => {
-                e.stopPropagation()
-                setHoveredMidpoint(null)
-              }}
-              position={[x!, editY + height / 2, z!]}
-            >
-              <cylinderGeometry args={[radius, radius, height, 16]} />
-              <meshBasicMaterial
-                color={isHovered ? '#4ade80' : '#22c55e'}
-                opacity={isHovered ? 1 : 0.7}
-                transparent
-              />
-            </mesh>
+              {...handleProps}
+              opacity={isHighlighted ? 1 : 0.7}
+              position={position}
+              radius={radius}
+            />
           )
         })}
     </group>

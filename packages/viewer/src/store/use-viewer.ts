@@ -7,6 +7,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { EdgeMode } from '../lib/edge-style'
 import type { ColorPreset, RenderShading } from '../lib/materials'
+import { SCENE_THEME_IDS } from '../lib/scene-themes'
 
 export type RenderContext = 'editor' | 'viewer'
 
@@ -46,6 +47,9 @@ type ViewerState = {
 
   textures: boolean
   setTextures: (textures: boolean) => void
+
+  preserveItemModelMaterials: boolean
+  setPreserveItemModelMaterials: (preserve: boolean) => void
 
   colorPreset: ColorPreset
   setColorPreset: (preset: ColorPreset) => void
@@ -114,6 +118,90 @@ type ViewerState = {
   setInputDragging: (dragging: boolean) => void
 }
 
+type PersistedViewerState = Partial<
+  Pick<
+    ViewerState,
+    | 'cameraMode'
+    | 'sceneTheme'
+    | 'shadingByContext'
+    | 'textures'
+    | 'preserveItemModelMaterials'
+    | 'colorPreset'
+    | 'edges'
+    | 'shadows'
+    | 'unit'
+    | 'levelMode'
+    | 'wallMode'
+    | 'projectPreferences'
+  >
+>
+
+const CAMERA_MODES = ['perspective', 'orthographic'] as const
+const RENDER_SHADINGS = ['solid', 'rendered'] as const
+const COLOR_PRESETS = ['clay', 'white', 'mono', 'blueprint'] as const
+const EDGE_MODES = ['off', 'soft', 'strong'] as const
+const UNITS = ['metric', 'imperial'] as const
+const LEVEL_MODES = ['stacked', 'exploded', 'solo', 'manual'] as const
+const WALL_MODES = ['up', 'cutaway', 'down'] as const
+
+function pickString<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return typeof value === 'string' && allowed.includes(value as T) ? (value as T) : fallback
+}
+
+function normalizeShadingByContext(value: unknown): ViewerState['shadingByContext'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+
+  const next: ViewerState['shadingByContext'] = {}
+  for (const [context, shading] of Object.entries(value)) {
+    if (context !== 'editor' && context !== 'viewer') continue
+    next[context] = pickString<RenderShading>(shading, RENDER_SHADINGS, 'rendered')
+  }
+  return next
+}
+
+function normalizeProjectPreferences(value: unknown): ViewerState['projectPreferences'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+
+  const next: ViewerState['projectPreferences'] = {}
+  for (const [projectId, preferences] of Object.entries(value)) {
+    if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) continue
+    const record = preferences as Record<string, unknown>
+    next[projectId] = {
+      ...(typeof record.showScans === 'boolean' ? { showScans: record.showScans } : {}),
+      ...(typeof record.showGuides === 'boolean' ? { showGuides: record.showGuides } : {}),
+      ...(typeof record.showGrid === 'boolean' ? { showGrid: record.showGrid } : {}),
+    }
+  }
+  return next
+}
+
+function normalizePersistedViewerState(value: unknown): PersistedViewerState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const state = value as Record<string, unknown>
+
+  return {
+    cameraMode: pickString<ViewerState['cameraMode']>(
+      state.cameraMode,
+      CAMERA_MODES,
+      'perspective',
+    ),
+    sceneTheme: pickString(state.sceneTheme, SCENE_THEME_IDS, 'studio'),
+    shadingByContext: normalizeShadingByContext(state.shadingByContext),
+    textures: typeof state.textures === 'boolean' ? state.textures : true,
+    preserveItemModelMaterials:
+      typeof state.preserveItemModelMaterials === 'boolean'
+        ? state.preserveItemModelMaterials
+        : false,
+    colorPreset: pickString<ColorPreset>(state.colorPreset, COLOR_PRESETS, 'clay'),
+    edges: pickString<EdgeMode>(state.edges, EDGE_MODES, 'soft'),
+    shadows: typeof state.shadows === 'boolean' ? state.shadows : true,
+    unit: pickString<ViewerState['unit']>(state.unit, UNITS, 'metric'),
+    levelMode: pickString<ViewerState['levelMode']>(state.levelMode, LEVEL_MODES, 'stacked'),
+    wallMode: pickString<ViewerState['wallMode']>(state.wallMode, WALL_MODES, 'up'),
+    projectPreferences: normalizeProjectPreferences(state.projectPreferences),
+  }
+}
+
 const useViewer = create<ViewerState>()(
   persist(
     (set) => ({
@@ -145,6 +233,10 @@ const useViewer = create<ViewerState>()(
 
       textures: true,
       setTextures: (textures) => set({ textures }),
+
+      preserveItemModelMaterials: false,
+      setPreserveItemModelMaterials: (preserveItemModelMaterials) =>
+        set({ preserveItemModelMaterials }),
 
       colorPreset: 'clay',
       setColorPreset: (preset) => set({ colorPreset: preset }),
@@ -267,11 +359,16 @@ const useViewer = create<ViewerState>()(
     }),
     {
       name: 'viewer-preferences',
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...normalizePersistedViewerState(persistedState),
+      }),
       partialize: (state) => ({
         cameraMode: state.cameraMode,
         sceneTheme: state.sceneTheme,
         shadingByContext: state.shadingByContext,
         textures: state.textures,
+        preserveItemModelMaterials: state.preserveItemModelMaterials,
         colorPreset: state.colorPreset,
         edges: state.edges,
         shadows: state.shadows,

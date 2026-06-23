@@ -1,6 +1,6 @@
 'use client'
 
-import { resolveLevelId, sceneRegistry, useScene } from '@pascal-app/core'
+import { nodeRegistry, resolveLevelId, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor, {
   hasCustomPersistedEditorUiState,
@@ -220,7 +220,11 @@ function getValidatedSelectionForScene(
 
     const selectedIds = selection.selectedIds.filter((id) => {
       const node = sceneNodes[id]
-      return Boolean(node) && resolveLevelId(node, sceneNodes) === levelId
+      if (!node) return false
+      if (resolveLevelId(node, sceneNodes) === levelId) return true
+
+      const def = nodeRegistry.get(node.type)
+      return def?.floorplanScope === 'building' && node.parentId === buildingId
     })
 
     return {
@@ -355,6 +359,7 @@ function resetEditorInteractionState() {
     selectedReferenceId: null,
     spaces: {},
     editingHole: null,
+    hoveredHole: null,
     isPreviewMode: false,
   })
 }

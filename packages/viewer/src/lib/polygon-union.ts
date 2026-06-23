@@ -53,6 +53,18 @@ function pointOnSegment(point: Point2D, start: Point2D, end: Point2D) {
   return dot <= EPSILON
 }
 
+function pointInPolygonOrOnBoundary(point: Point2D, polygon: Point2D[]) {
+  if (
+    polygon.some((start, index) =>
+      pointOnSegment(point, start, polygon[(index + 1) % polygon.length]!),
+    )
+  ) {
+    return true
+  }
+
+  return pointInPolygon(point, polygon)
+}
+
 function pointInPolygon(point: Point2D, polygon: Point2D[]) {
   let inside = false
 
@@ -291,4 +303,66 @@ export function unionPolygons(polygons: Point2D[][]): Point2D[][] {
   const rings = assembleRings(segments)
 
   return rings.length > 0 ? rings : validPolygons
+}
+
+function buildDifferenceBoundarySegments(edges: Edge[], polygons: Point2D[][]) {
+  const subject = polygons[0]
+  const cutters = polygons.slice(1)
+  if (!subject) return []
+
+  const segments: Segment[] = []
+
+  for (const edge of edges) {
+    const splits = [...edge.splits].sort((a, b) => a - b)
+
+    for (let i = 0; i < splits.length - 1; i++) {
+      const startT = splits[i]!
+      const endT = splits[i + 1]!
+      if (endT - startT <= EPSILON) continue
+
+      const start = interpolate(edge.start, edge.end, startT)
+      const end = interpolate(edge.start, edge.end, endT)
+      const mid = interpolate(edge.start, edge.end, (startT + endT) / 2)
+
+      if (edge.polygonIndex === 0) {
+        const insideCutter = cutters.some((cutter) => pointInPolygonOrOnBoundary(mid, cutter))
+        if (!insideCutter) {
+          segments.push({ start, end, used: false })
+        }
+        continue
+      }
+
+      const insideSubject = pointInPolygon(mid, subject)
+      const insideAnotherCutter = cutters.some(
+        (cutter, cutterIndex) =>
+          cutterIndex !== edge.polygonIndex - 1 && pointInPolygonOrOnBoundary(mid, cutter),
+      )
+
+      if (insideSubject && !insideAnotherCutter) {
+        segments.push({ start: end, end: start, used: false })
+      }
+    }
+  }
+
+  return removeDuplicateInteriorSegments(segments)
+}
+
+export function subtractPolygonsFromPolygon(subject: Point2D[], cutters: Point2D[][]): Point2D[][] {
+  const validSubject = normalizeRing(subject)
+  if (validSubject.length < 3) return []
+
+  const validCutters = cutters.map(normalizeRing).filter((polygon) => polygon.length >= 3)
+  if (validCutters.length === 0) return [validSubject]
+
+  const polygons = [validSubject, ...validCutters]
+  const edges = buildEdges(polygons)
+  const segments = buildDifferenceBoundarySegments(edges, polygons)
+  const rings = assembleRings(segments)
+
+  if (rings.length > 0) return rings
+
+  const fullyCovered = validSubject.every((point) =>
+    validCutters.some((cutter) => pointInPolygonOrOnBoundary(point, cutter)),
+  )
+  return fullyCovered ? [] : [validSubject]
 }

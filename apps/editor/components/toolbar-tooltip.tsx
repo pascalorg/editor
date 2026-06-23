@@ -5,7 +5,8 @@ import type * as React from 'react'
 import { cn } from '@/lib/utils'
 
 function TooltipProvider({
-  delayDuration = 0,
+  // Style follow-up: MeasureNavi tooltips appear after a short 300-500ms delay.
+  delayDuration = 400,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return <TooltipPrimitive.Provider delayDuration={delayDuration} {...props} />
@@ -33,14 +34,15 @@ function TooltipContent({
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
         className={cn(
-          'fade-in-0 zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit origin-(--radix-tooltip-content-transform-origin) animate-in rounded-md bg-foreground px-3 py-1.5 text-background text-xs data-[state=closed]:animate-out',
+          // Style follow-up: toolbar tooltips use the MeasureNavi light floating surface.
+          'fade-in-0 zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit origin-(--radix-tooltip-content-transform-origin) animate-in rounded-md border border-border bg-popover px-3 py-1.5 text-popover-foreground text-xs shadow-md data-[state=closed]:animate-out',
           className,
         )}
         sideOffset={sideOffset}
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
+        <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-popover fill-popover" />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   )

@@ -64,7 +64,7 @@ import {
   type FirstPersonColliderWorld,
   type FirstPersonSpawn,
 } from './first-person/build-collider-world'
-import type { BVHEcctrlApi } from './first-person/bvh-ecctrl'
+import type { BVHEcctrlApi, MovementInput } from './first-person/bvh-ecctrl'
 import BVHEcctrl from './first-person/bvh-ecctrl'
 
 const CAMERA_EYE_OFFSET = 0.45
@@ -78,7 +78,11 @@ const ELEVATOR_COLLIDER_FLOOR_THICKNESS = 0.08
 const ELEVATOR_COLLIDER_DOOR_DEPTH = 0.12
 const ELEVATOR_ENTRY_DOOR_OPEN_THRESHOLD = 0.72
 const DEFAULT_ELEVATOR_LEVEL_HEIGHT = 2.5
-const keyboardMap = [
+const VOID_FALL_RESPAWN_DEPTH = 12
+
+type MovementKeyName = Exclude<keyof MovementInput, 'joystick'>
+
+const movementKeyboardBindings: Array<{ name: MovementKeyName; keys: string[] }> = [
   { name: 'forward', keys: ['ArrowUp', 'KeyW'] },
   { name: 'backward', keys: ['ArrowDown', 'KeyS'] },
   { name: 'leftward', keys: ['ArrowLeft', 'KeyA'] },
@@ -86,6 +90,36 @@ const keyboardMap = [
   { name: 'jump', keys: ['Space'] },
   { name: 'run', keys: ['ShiftLeft', 'ShiftRight'] },
 ]
+const keyboardMap = movementKeyboardBindings
+const movementKeyToName = new Map<string, MovementKeyName>(
+  movementKeyboardBindings.flatMap(({ name, keys }) => keys.map((key) => [key, name] as const)),
+)
+
+const inactiveMovementInput: MovementInput = {
+  backward: false,
+  forward: false,
+  jump: false,
+  leftward: false,
+  rightward: false,
+  run: false,
+}
+
+function getMovementInputForKey(code: string, active: boolean): MovementInput | null {
+  const name = movementKeyToName.get(code)
+  return name ? ({ [name]: active } as MovementInput) : null
+}
+
+function focusFirstPersonCanvas(canvas: HTMLCanvasElement) {
+  const activeElement = document.activeElement
+  if (activeElement instanceof HTMLElement && !canvas.contains(activeElement)) {
+    activeElement.blur()
+  }
+
+  if (!canvas.hasAttribute('tabindex')) {
+    canvas.tabIndex = -1
+  }
+  canvas.focus({ preventScroll: true })
+}
 
 const cameraOffset = new Vector3(0, CAMERA_EYE_OFFSET, 0)
 const cameraEuler = new Euler(0, 0, 0, 'YXZ')
@@ -535,6 +569,8 @@ export const FirstPersonControls = () => {
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const placedSpawnNode = useScene((state) => resolvePlacedSpawnNode(state.nodes, selectedLevelId))
   const controllerRef = useRef<BVHEcctrlApi | null>(null)
+  const movementInputRef = useRef<MovementInput>({ ...inactiveMovementInput })
+  const hadPointerLockRef = useRef(false)
   const yawRef = useRef(0)
   const pitchRef = useRef(0)
   const interactableTargetRef = useRef<FirstPersonInteractableTarget | null>(null)
@@ -575,6 +611,13 @@ export const FirstPersonControls = () => {
     if (rideLockedRef.current === locked) return
     rideLockedRef.current = locked
     setIsElevatorRideLocked(locked)
+  }, [])
+
+  const setControllerApi = useCallback((api: BVHEcctrlApi | null) => {
+    controllerRef.current = api
+    if (api) {
+      api.setMovement(movementInputRef.current)
+    }
   }, [])
 
   const resolveInteractableDoorId = useCallback((): AnyNodeId | null => {
@@ -917,6 +960,14 @@ export const FirstPersonControls = () => {
 
   useEffect(() => {
     const canvas = gl.domElement
+    focusFirstPersonCanvas(canvas)
+
+    const frame = window.requestAnimationFrame(() => focusFirstPersonCanvas(canvas))
+    return () => window.cancelAnimationFrame(frame)
+  }, [gl])
+
+  useEffect(() => {
+    const canvas = gl.domElement
     const handleMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return
 
@@ -945,14 +996,29 @@ export const FirstPersonControls = () => {
       toggleInteractableTarget()
     }
 
+    const handlePointerLockChange = () => {
+      const isLocked = document.pointerLockElement === canvas
+      if (isLocked) {
+        hadPointerLockRef.current = true
+        return
+      }
+
+      if (hadPointerLockRef.current && useEditor.getState().isFirstPersonMode) {
+        useEditor.getState().setFirstPersonMode(false)
+      }
+    }
+
+    handlePointerLockChange()
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('click', handleClick)
     document.addEventListener('mousedown', handleMouseDown, true)
+    document.addEventListener('pointerlockchange', handlePointerLockChange)
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('click', handleClick)
       document.removeEventListener('mousedown', handleMouseDown, true)
+      document.removeEventListener('pointerlockchange', handlePointerLockChange)
       if (document.pointerLockElement === canvas) {
         document.exitPointerLock()
       }
@@ -962,7 +1028,24 @@ export const FirstPersonControls = () => {
   useEffect(() => {
     const canvas = gl.domElement
 
+    const applyMovementKey = (event: KeyboardEvent, active: boolean) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return false
+      }
+
+      const movement = getMovementInputForKey(event.code, active)
+      if (!movement) return false
+
+      event.preventDefault()
+      Object.assign(movementInputRef.current, movement)
+      controllerRef.current?.setMovement(movement)
+      return true
+    }
+
     const handleKeyDown = (event: KeyboardEvent) => {
+      const handledMovement = applyMovementKey(event, true)
+      if (handledMovement) return
+
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return
       }
@@ -985,9 +1068,15 @@ export const FirstPersonControls = () => {
       }
     }
 
+    const handleKeyUp = (event: KeyboardEvent) => {
+      applyMovementKey(event, false)
+    }
+
     document.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('keyup', handleKeyUp, true)
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('keyup', handleKeyUp, true)
     }
   }, [closeInteractableTarget, gl, toggleInteractableTarget])
 
@@ -1217,6 +1306,29 @@ export const FirstPersonControls = () => {
     if (!controllerRef.current?.group) return
 
     const group = controllerRef.current.group
+
+    // The site ground collider is effectively unbounded, but scenes without a
+    // site node only have finite fallback floors — if the controller still ends
+    // up below every collider it can never land, so put it back at the spawn.
+    // Prefer the live spawn node over the mount-time start position so a spawn
+    // moved mid-walkthrough doesn't respawn the player at stale coordinates.
+    const worldBounds = worldRef.current?.bounds
+    if (worldBounds && group.position.y < worldBounds.min.y - VOID_FALL_RESPAWN_DEPTH) {
+      const respawnPosition = placedSpawn
+        ? [
+            placedSpawn.position[0],
+            placedSpawn.position[1] - CONTROLLER_CENTER_FROM_EYE,
+            placedSpawn.position[2],
+          ]
+        : controllerStart?.position
+      if (respawnPosition) {
+        group.position.set(respawnPosition[0]!, respawnPosition[1]!, respawnPosition[2]!)
+        controllerRef.current.resetLinVel()
+        ridingElevatorRef.current = null
+        setElevatorRideLocked(false)
+      }
+    }
+
     group.rotation.y = 0
     camera.position.copy(group.position).add(cameraOffset)
     cameraEuler.set(pitchRef.current, yawRef.current, 0, 'YXZ')
@@ -1284,7 +1396,7 @@ export const FirstPersonControls = () => {
             maxWalkSpeed={4}
             paused={isElevatorRideLocked}
             position={controllerStart.position}
-            ref={controllerRef}
+            ref={setControllerApi}
           />
         </KeyboardControls>
       )}

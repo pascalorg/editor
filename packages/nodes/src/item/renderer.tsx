@@ -3,10 +3,12 @@
 import {
   type AnimationEffect,
   type AnyNodeId,
+  getScaledDimensions,
   type Interactive,
   type ItemNode,
   type LightEffect,
   useInteractive,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -32,6 +34,7 @@ import { Suspense, useEffect, useMemo, useRef } from 'react'
 import type { AnimationAction, Group, Material, Mesh } from 'three'
 import { MathUtils } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
+import { RoofFaceHostFrame } from '../shared/roof-face-host'
 
 type MutableMaterial = Material & {
   depthTest?: boolean
@@ -39,6 +42,12 @@ type MutableMaterial = Material & {
   opacityNode?: unknown
   transparent?: boolean
   wireframe?: boolean
+}
+
+type ItemMesh = Mesh & {
+  userData: Mesh['userData'] & {
+    __pascalOriginalItemMaterial?: Material | Material[]
+  }
 }
 
 const getMaterialForOriginal = (
@@ -52,6 +61,50 @@ const getMaterialForOriginal = (
   }
   if (!textures) return createSurfaceRoleMaterial('furnishing', colorPreset)
   return baseMaterial(shading)
+}
+
+function isGlassMaterial(material: Material | Material[]): boolean {
+  const materials = Array.isArray(material) ? material : [material]
+  return materials.some((mat) => mat.name.toLowerCase() === 'glass')
+}
+
+function getOriginalItemMaterial(mesh: ItemMesh): Material | Material[] {
+  if (!mesh.userData.__pascalOriginalItemMaterial) {
+    // Preserve original GLTF materials so the settings toggle can restore model textures.
+    mesh.userData.__pascalOriginalItemMaterial = mesh.material
+  }
+  return mesh.userData.__pascalOriginalItemMaterial
+}
+
+function applyItemMaterialMode(
+  mesh: ItemMesh,
+  shading: RenderShading,
+  textures: boolean,
+  colorPreset: ColorPreset,
+  preserveItemModelMaterials: boolean,
+): boolean {
+  const original = getOriginalItemMaterial(mesh)
+
+  if (preserveItemModelMaterials) {
+    mesh.material = original
+  } else if (Array.isArray(original)) {
+    mesh.material = original.map((mat) =>
+      getMaterialForOriginal(mat, shading, textures, colorPreset),
+    )
+  } else {
+    mesh.material = getMaterialForOriginal(original, shading, textures, colorPreset)
+  }
+
+  if (Array.isArray(mesh.material) && mesh.geometry.groups.length > 0) {
+    const matCount = mesh.material.length
+    for (const group of mesh.geometry.groups) {
+      if (group.materialIndex !== undefined && group.materialIndex >= matCount) {
+        group.materialIndex = 0
+      }
+    }
+  }
+
+  return isGlassMaterial(mesh.material)
 }
 
 const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
@@ -75,22 +128,48 @@ const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
   )
 }
 
-export const ItemRenderer = ({ node }: { node: ItemNode }) => {
+export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
   const ref = useRef<Group>(null!)
 
-  useRegistry(node.id, node.type, ref)
+  useRegistry(storeNode.id, storeNode.type, ref)
 
-  return (
+  // Merge live drag overrides so the mesh transforms in real time during a
+  // drag (e.g. the in-world rotate gizmo). The handle writes the in-flight
+  // rotation to `useLiveNodeOverrides` on every pointer move and commits to
+  // the store only on release — without this merge the item would stay put
+  // until commit.
+  const liveOverrides = useLiveNodeOverrides((state) => state.get(storeNode.id as AnyNodeId))
+  const node = useMemo(
+    () => (liveOverrides ? ({ ...storeNode, ...liveOverrides } as ItemNode) : storeNode),
+    [storeNode, liveOverrides],
+  )
+  const roomClearPreview =
+    (node as ItemNode & { roomClearPreview?: unknown }).roomClearPreview === true
+
+  const content = (
     <group position={node.position} ref={ref} rotation={node.rotation} visible={node.visible}>
-      <ErrorBoundary fallback={<BrokenItemFallback node={node} />}>
-        <Suspense fallback={<PreviewModel node={node} />}>
-          <ModelRenderer node={node} />
-        </Suspense>
-      </ErrorBoundary>
-      {node.children?.map((childId) => (
-        <NodeRenderer key={childId} nodeId={childId} />
-      ))}
+      {roomClearPreview ? (
+        <ClearPreviewModel node={node} />
+      ) : (
+        <>
+          <ErrorBoundary fallback={<BrokenItemFallback node={node} />}>
+            <Suspense fallback={<PreviewModel node={node} />}>
+              <ModelRenderer node={node} />
+            </Suspense>
+          </ErrorBoundary>
+          {node.children?.map((childId) => (
+            <NodeRenderer key={childId} nodeId={childId} />
+          ))}
+        </>
+      )}
     </group>
+  )
+
+  if (!node.roofSegmentId) return content
+  return (
+    <RoofFaceHostFrame roofFace={node.roofFace} roofSegmentId={node.roofSegmentId}>
+      {content}
+    </RoofFaceHostFrame>
   )
 }
 
@@ -121,6 +200,26 @@ const PreviewModel = ({ node }: { node: ItemNode }) => {
   )
 }
 
+const ClearPreviewModel = ({ node }: { node: ItemNode }) => {
+  const shading = useViewer((s) => s.shading)
+  const [w, h, d] = getScaledDimensions(node)
+  const material = useMemo(() => {
+    const next = createDefaultMaterial('#ef4444', 1, shading) as MutableMaterial
+    next.depthTest = false
+    next.opacity = 0.35
+    next.transparent = true
+    next.wireframe = true
+    next.needsUpdate = true
+    return next
+  }, [shading])
+
+  return (
+    <mesh material={material} position-y={h / 2}>
+      <boxGeometry args={[w, h, d]} />
+    </mesh>
+  )
+}
+
 const multiplyScales = (
   a: [number, number, number],
   b: [number, number, number],
@@ -133,7 +232,8 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
-  // Freeze the interactive definition at mount — asset schemas don't change at runtime
+  const preserveItemModelMaterials = useViewer((s) => s.preserveItemModelMaterials)
+  // Freeze the interactive definition at mount; asset schemas do not change at runtime.
   const interactiveRef = useRef(node.asset.interactive)
 
   if (nodes.cutout) {
@@ -144,7 +244,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
 
   useEffect(() => {
     if (!node.parentId) return
-    useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
+    useScene.getState().markDirty(node.parentId as AnyNodeId)
   }, [node.parentId])
 
   useEffect(() => {
@@ -157,41 +257,25 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   useMemo(() => {
     scene.traverse((child) => {
       if ((child as Mesh).isMesh) {
-        const mesh = child as Mesh
+        const mesh = child as ItemMesh
         if (mesh.name === 'cutout') {
           child.visible = false
           return
         }
 
-        let hasGlass = false
+        const hasGlass = applyItemMaterialMode(
+          mesh,
+          shading,
+          textures,
+          colorPreset,
+          preserveItemModelMaterials,
+        )
 
-        // Handle both single material and material array cases
-        if (Array.isArray(mesh.material)) {
-          mesh.material = mesh.material.map((mat) =>
-            getMaterialForOriginal(mat, shading, textures, colorPreset),
-          )
-          hasGlass = mesh.material.some((mat) => mat.name === 'glass')
-
-          // Fix geometry groups that reference materialIndex beyond the material
-          // array length — this causes three-mesh-bvh to crash with
-          // "Cannot read properties of undefined (reading 'side')"
-          const matCount = mesh.material.length
-          if (mesh.geometry.groups.length > 0) {
-            for (const group of mesh.geometry.groups) {
-              if (group.materialIndex !== undefined && group.materialIndex >= matCount) {
-                group.materialIndex = 0
-              }
-            }
-          }
-        } else {
-          mesh.material = getMaterialForOriginal(mesh.material, shading, textures, colorPreset)
-          hasGlass = mesh.material.name === 'glass'
-        }
         mesh.castShadow = !hasGlass
         mesh.receiveShadow = !hasGlass
       }
     })
-  }, [scene, shading, textures, colorPreset])
+  }, [scene, shading, textures, colorPreset, preserveItemModelMaterials])
 
   const interactive = interactiveRef.current
   const animEffect =

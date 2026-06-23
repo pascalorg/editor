@@ -181,6 +181,7 @@ export function useFloorplanSceneData({
 
   return {
     buildingPosition,
+    committedBuildingPosition,
     buildingRotationY,
     currentBuildingId,
     ceilings,

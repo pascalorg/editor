@@ -9,7 +9,7 @@ const AUTOSAVE_DEBOUNCE_MS = 1000
 export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'paused' | 'error'
 
 interface UseAutoSaveOptions {
-  onSave?: (scene: SceneGraph) => Promise<void>
+  onSave?: (scene: SceneGraph, options?: { keepalive?: boolean }) => Promise<void>
   onDirty?: () => void
   onSaveStatusChange?: (status: SaveStatus) => void
   isVersionPreviewMode?: boolean
@@ -148,23 +148,30 @@ export function useAutoSave({
       }, AUTOSAVE_DEBOUNCE_MS)
     })
 
+    // Flush any unsaved change while the page is going away. The network
+    // save MUST set `keepalive` — a normal fetch is cancelled by the browser
+    // the moment the page unloads, so a quick refresh right after an edit
+    // would otherwise drop the change entirely. `pagehide` fires in cases
+    // (mobile Safari, bfcache) where `beforeunload` does not.
     function flushOnExit() {
       if (!hasDirtyChangesRef.current) return
+      hasDirtyChangesRef.current = false
       const { nodes, rootNodeIds } = useScene.getState()
       const sceneGraph = { nodes, rootNodeIds } as SceneGraph
       if (onSaveRef.current) {
-        onSaveRef.current(sceneGraph).catch(() => {})
+        onSaveRef.current(sceneGraph, { keepalive: true }).catch(() => {})
       } else {
         saveSceneToLocalStorage(sceneGraph)
       }
-      hasDirtyChangesRef.current = false
     }
 
     window.addEventListener('beforeunload', flushOnExit)
+    window.addEventListener('pagehide', flushOnExit)
 
     return () => {
       executeSaveRef.current = null
       window.removeEventListener('beforeunload', flushOnExit)
+      window.removeEventListener('pagehide', flushOnExit)
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
       flushOnExit()
       unsubscribe()

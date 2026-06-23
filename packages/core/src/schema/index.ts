@@ -50,6 +50,7 @@ export {
   ColumnStyle,
   ColumnSupportStyle,
 } from './nodes/column'
+export { CupolaNode } from './nodes/cupola'
 export { DoorNode, DoorSegment } from './nodes/door'
 export {
   DormerNode,
@@ -57,14 +58,17 @@ export {
   type DormerSurfaceMaterialSpec,
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
+export { DownspoutNode } from './nodes/downspout'
 export {
   ElevatorDoorPanelStyle,
   ElevatorDoorStyle,
   ElevatorNode,
   ElevatorShaftStyle,
 } from './nodes/elevator'
+export { EyebrowVentNode } from './nodes/eyebrow-vent'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
+export { GutterNode, GutterOutlet } from './nodes/gutter'
 export type {
   AnimationEffect,
   Asset,
@@ -97,12 +101,24 @@ export {
   getActiveRoofHeight,
   getEffectiveSegmentSurfaceMaterial,
   getPitchFromActiveRoofHeight,
+  getRoofSegmentSurfaceY,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
   ROOF_SHAPE_DEFAULTS,
   RoofSegmentNode,
   RoofType,
 } from './nodes/roof-segment'
+export type { RoofSegmentWallFace, RoofWallFaceId } from './nodes/roof-segment-walls'
+export {
+  clampRectToRoofWallFace,
+  getMaxRoofRectHeightFromAnchor,
+  getMaxRoofRectWidthFromAnchor,
+  getRoofSegmentWallFace,
+  getRoofSegmentWallFaces,
+  getRoofWallFaceFrame,
+  roofFacePointToSegment,
+  segmentPointToRoofWallFace,
+} from './nodes/roof-segment-walls'
 export { ScanNode } from './nodes/scan'
 export { ShelfNode } from './nodes/shelf'
 export { SiteNode } from './nodes/site'
@@ -133,6 +149,7 @@ export {
 } from './nodes/stair'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
+export { TurbineVentNode } from './nodes/turbine-vent'
 export type { WallSurfaceMaterialSpec, WallSurfaceSide } from './nodes/wall'
 export {
   getEffectiveWallSurfaceMaterial,

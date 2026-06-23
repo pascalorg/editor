@@ -6,6 +6,7 @@ import {
   type AnyNodeId,
   type BuildingNode,
   emitter,
+  getLevelDisplayName,
   type LevelNode,
   useScene,
   type ZoneNode,
@@ -30,7 +31,6 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useShallow } from 'zustand/react/shallow'
-import { getLevelDisplayName } from '../lib/level-name'
 import { cn } from '../lib/utils'
 import { ActionButton } from './ui/action-menu/action-button'
 import {
@@ -436,7 +436,8 @@ export const ViewerOverlay = ({
 
       {/* Controls Panel - Bottom Center */}
       <div className="dark absolute bottom-6 left-1/2 z-20 -translate-x-1/2 text-foreground">
-        <TooltipProvider delayDuration={0}>
+        {/* Style follow-up: MeasureNavi tooltips use a 300-500ms delay. */}
+        <TooltipProvider delayDuration={400}>
           <div className="pointer-events-auto flex h-14 flex-row items-center justify-center gap-1.5 rounded-2xl border border-border/40 bg-background/95 p-1.5 shadow-lg backdrop-blur-xl transition-colors duration-200 ease-out">
             {/* Scans and Guides Visibility */}
             {canShowScans && (

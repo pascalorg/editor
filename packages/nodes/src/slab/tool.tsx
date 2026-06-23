@@ -1,7 +1,15 @@
 'use client'
 
 import { emitter, type GridEvent, type LevelNode, useScene } from '@pascal-app/core'
-import { CursorSphere, EDITOR_LAYER, markToolCancelConsumed, triggerSFX } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  clearSlabSnapFeedback,
+  EDITOR_LAYER,
+  markToolCancelConsumed,
+  resolveSlabPlanPointSnap,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
@@ -47,7 +55,10 @@ function commitSlabDrawing(levelId: LevelNode['id'], points: Array<[number, numb
   const { createNode, nodes } = useScene.getState()
   const slabCount = Object.values(nodes).filter((n) => n.type === 'slab').length
   const name = `Slab ${slabCount + 1}`
-  const slab = SlabNode.parse({ name, polygon: points })
+  // A placed slab preset seeds `toolDefaults.slab` (thickness, material, …)
+  // before the tool activates; the drawn polygon always wins.
+  const defaults = useEditor.getState().toolDefaults.slab ?? {}
+  const slab = SlabNode.parse({ ...defaults, name, polygon: points })
   createNode(slab, levelId)
   triggerSFX('sfx:structure-build')
   return slab.id
@@ -67,21 +78,34 @@ export const SlabTool: React.FC = () => {
   const previousSnappedPointRef = useRef<[number, number] | null>(null)
   const shiftPressed = useRef(false)
 
+  // Clear preset-seeded defaults on deactivation so a later manual slab draw
+  // isn't built with a stale preset's parameters. Unmount-only.
+  useEffect(() => () => useEditor.getState().setToolDefaults('slab', null), [])
+
+  useEffect(() => () => clearSlabSnapFeedback(), [])
+
   useEffect(() => {
     if (!currentLevelId) return
 
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
+      const gridX = Math.round(rawPoint[0] * 2) / 2
+      const gridZ = Math.round(rawPoint[1] * 2) / 2
       const gridPosition: [number, number] = [gridX, gridZ]
       setCursorPosition(gridPosition)
       setLevelY(event.localPosition[1])
       const lastPoint = points[points.length - 1]
-      const displayPoint =
+      const orthoPoint =
         shiftPressed.current || !lastPoint
           ? gridPosition
           : calculateSnapPoint(lastPoint, gridPosition)
+      const displayPoint = resolveSlabPlanPointSnap({
+        rawPoint,
+        fallbackPoint: orthoPoint,
+        levelId: currentLevelId,
+        altKey: event.nativeEvent?.altKey === true,
+      }).point
       setSnappedCursorPosition(displayPoint)
       if (
         points.length > 0 &&
@@ -108,7 +132,11 @@ export const SlabTool: React.FC = () => {
         const slabId = commitSlabDrawing(currentLevelId, points)
         setSelection({ selectedIds: [slabId] })
         setPoints([])
+        clearSlabSnapFeedback()
       } else {
+        // Every non-closing vertex is a "start" tick; the closing click above
+        // fires the structure-build (end) cue.
+        triggerSFX('sfx:structure-build-start')
         setPoints([...points, clickPoint])
       }
     }
@@ -119,12 +147,14 @@ export const SlabTool: React.FC = () => {
         const slabId = commitSlabDrawing(currentLevelId, points)
         setSelection({ selectedIds: [slabId] })
         setPoints([])
+        clearSlabSnapFeedback()
       }
     }
 
     const onCancel = () => {
       if (points.length > 0) markToolCancelConsumed()
       setPoints([])
+      clearSlabSnapFeedback()
     }
 
     const onKeyDown = (e: KeyboardEvent) => {

@@ -1,5 +1,10 @@
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { pauseSceneHistory, resumeSceneHistory } from '../store/history-control'
+import {
+  type CloneNodesIntoOptions,
+  collectSubtree,
+  cloneNodesInto as runCloneNodesInto,
+} from './subtree'
 import type { SceneApi } from './types'
 
 /**
@@ -14,6 +19,7 @@ export type SceneStoreLike = {
     rootNodeIds: AnyNodeId[]
     dirtyNodes: Set<AnyNodeId>
     createNode: (node: AnyNode, parentId?: AnyNodeId) => void
+    createNodes?: (ops: { node: AnyNode; parentId?: AnyNodeId }[]) => void
     updateNode: (id: AnyNodeId, data: Partial<AnyNode>) => void
     deleteNode: (id: AnyNodeId) => void
     markDirty: (id: AnyNodeId) => void
@@ -103,6 +109,33 @@ export function createSceneApi(store: SceneStoreLike): SceneApi {
     resumeHistory() {
       resumeSceneHistory(store)
       snapshot = null
+    },
+
+    getSubtree(rootId) {
+      return collectSubtree(store.getState().nodes, rootId)
+    },
+
+    cloneNodesInto(nodes, opts: CloneNodesIntoOptions) {
+      const { rootId, nodes: cloned } = runCloneNodesInto(nodes, opts)
+      const root = cloned[0]
+      if (!root) return null
+      const state = store.getState()
+      const ops: { node: AnyNode; parentId?: AnyNodeId }[] = []
+      for (let i = 0; i < cloned.length; i += 1) {
+        const node = cloned[i]!
+        if (i === 0) {
+          ops.push(opts.parentId ? { node, parentId: opts.parentId } : { node })
+        } else {
+          ops.push({ node })
+        }
+      }
+      const batch = state.createNodes
+      if (batch) {
+        batch(ops)
+      } else {
+        for (const op of ops) state.createNode(op.node, op.parentId)
+      }
+      return rootId
     },
   }
 }

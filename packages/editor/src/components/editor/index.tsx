@@ -8,18 +8,9 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { type HoverStyles, InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
-import {
-  memo,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react'
+import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
-import { type PresetsAdapter, PresetsProvider } from '../../contexts/presets-context'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import {
@@ -61,23 +52,27 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
-import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
+import { GroupMoveHandle } from './group-move-handle'
+import { GroupRotateHandle } from './group-rotate-handle'
 import { NodeArrowHandles } from './node-arrow-handles'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
+import { SlabHoleHighlights } from './slab-hole-highlights'
 import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
 import { WallMeasurementLabel } from './wall-measurement-label'
 import { WallMoveSideHandles } from './wall-move-side-handles'
+import { WallOpeningHighlights } from './wall-opening-highlights'
 
 const CAMERA_CONTROLS_HINT_DISMISSED_STORAGE_KEY = 'editor-camera-controls-hint-dismissed:v1'
 const DELETE_CURSOR_BADGE_COLOR = '#ef4444'
 const DELETE_CURSOR_BADGE_OFFSET_X = 14
 const DELETE_CURSOR_BADGE_OFFSET_Y = 14
-const PAINT_CURSOR_BADGE_COLOR = '#f59e0b'
+const PAINT_CURSOR_BADGE_COLOR = '#818cf8'
 const PAINT_CURSOR_BADGE_DISABLED_COLOR = '#94a3b8'
 const PAINT_CURSOR_BADGE_OFFSET_X = 14
 const PAINT_CURSOR_BADGE_OFFSET_Y = 14
+const SCENE_READY_FALLBACK_MS = 8000
 const EDITOR_HOVER_STYLES: HoverStyles = {
   default: { visibleColor: 0x00_aa_ff, hiddenColor: 0xf3_ff_47, strength: 5, pulse: true },
   delete: { visibleColor: 0xef_44_44, hiddenColor: 0x99_1b_1b, strength: 6, pulse: false },
@@ -127,12 +122,18 @@ export interface EditorProps {
   sidebarTabs?: (SidebarTab & { component: React.ComponentType })[]
   viewerToolbarLeft?: ReactNode
   viewerToolbarRight?: ReactNode
+  /**
+   * Docked below the node inspector (v2). Hosts mount the "save as preset"
+   * affordance here so it reads as part of the inspector surface and shows
+   * only while a node is selected.
+   */
+  inspectorFooter?: ReactNode
 
   projectId?: string | null
 
   // Persistence — defaults to localStorage when omitted
   onLoad?: () => Promise<SceneGraph | null>
-  onSave?: (scene: SceneGraph) => Promise<void>
+  onSave?: (scene: SceneGraph, options?: { keepalive?: boolean }) => Promise<void>
   onDirty?: () => void
   onSaveStatusChange?: (status: SaveStatus) => void
 
@@ -154,9 +155,6 @@ export interface EditorProps {
   settingsPanelProps?: SettingsPanelProps
   sitePanelProps?: SitePanelProps
   extraSidebarPanels?: ExtraPanel[]
-
-  // Presets storage backend (defaults to localStorage)
-  presetsAdapter?: PresetsAdapter
 
   // Command palette fallback when no commands match
   commandPaletteEmptyAction?: CommandPaletteEmptyAction
@@ -336,6 +334,7 @@ const EDITOR_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   {
     action: 'Pan',
     keys: [{ value: 'Space' }, { value: 'Left click' }],
+    alternativeKeys: [{ value: 'Middle click' }],
   },
   { action: 'Rotate', keys: [{ value: 'Right click' }] },
   { action: 'Zoom', keys: [{ value: 'Scroll' }] },
@@ -530,43 +529,46 @@ function DeleteCursorBadge({ position }: { position: { x: number; y: number } })
 
 function PaintCursorBadge({
   position,
-  label,
   disabled,
-  icon,
 }: {
   position: { x: number; y: number }
-  label: string
   disabled: boolean
-  icon: string
 }) {
   const accentColor = disabled ? PAINT_CURSOR_BADGE_DISABLED_COLOR : PAINT_CURSOR_BADGE_COLOR
+  const lineHeight = 18
 
   return (
     <div
       aria-hidden="true"
       className="pointer-events-none absolute z-40"
       style={{
-        left: position.x + PAINT_CURSOR_BADGE_OFFSET_X,
-        top: position.y + PAINT_CURSOR_BADGE_OFFSET_Y,
+        left: position.x,
+        top: position.y,
       }}
     >
       <div
-        className="flex items-center gap-2 rounded-xl border border-white/5 bg-zinc-900/95 px-3 py-2 shadow-[0_8px_16px_-4px_rgba(0,0,0,0.3),0_4px_8px_-4px_rgba(0,0,0,0.2)]"
+        className="-translate-x-1/2 -translate-y-full absolute top-0 left-1/2"
+        style={{
+          backgroundColor: accentColor,
+          boxShadow: `0 0 12px ${accentColor}cc`,
+          height: lineHeight,
+          width: 2,
+        }}
+      />
+      <div
+        className="absolute top-0 left-1/2 flex h-8 w-8 items-center justify-center rounded-xl border border-white/5 bg-zinc-900/95 shadow-[0_8px_16px_-4px_rgba(0,0,0,0.3),0_4px_8px_-4px_rgba(0,0,0,0.2)]"
         style={{
           boxShadow: `0 8px 16px -4px rgba(0,0,0,0.3), 0 4px 8px -4px rgba(0,0,0,0.2), 0 0 18px ${accentColor}22`,
+          transform: `translate(-50%, calc(-100% - ${lineHeight}px))`,
         }}
       >
-        <Icon
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          alt=""
           aria-hidden="true"
-          className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-          color={accentColor}
-          height={16}
-          icon={icon}
-          width={16}
+          className="h-5 w-5 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
+          src="/icons/paint.png"
         />
-        <span className="font-medium text-[11px]" style={{ color: accentColor }}>
-          {label}
-        </span>
       </div>
     </div>
   )
@@ -577,9 +579,7 @@ function PaintCursorBadge({
 // grid lines when the user picks a finer snap (0.25 / 0.1 / 0.05).
 function SnapAwareGrid() {
   const gridSnapStep = useEditor((s) => s.gridSnapStep)
-  return (
-    <Grid cellColor="#aaa" cellSize={gridSnapStep} fadeDistance={500} sectionColor="#ccc" />
-  )
+  return <Grid cellColor="#aaa" cellSize={gridSnapStep} fadeDistance={500} sectionColor="#ccc" />
 }
 
 // ── Viewer scene content: memoized so <Viewer> doesn't re-render on mode/viewMode changes ──
@@ -588,21 +588,30 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isVersionPreviewMode,
   isLoading,
   isFirstPersonMode,
+  isStudioMode,
   onThumbnailCapture,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
   isFirstPersonMode: boolean
+  isStudioMode: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }) {
+  // Studio mode is a clean render/snapshot surface — no selection or editing
+  // affordances. It mirrors version-preview's chrome gating on the canvas.
+  const noEditing = isVersionPreviewMode || isFirstPersonMode || isStudioMode
   return (
     <>
-      {!isFirstPersonMode && <SelectionManager />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <BoxSelectTool />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <NodeArrowHandles />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <WallMoveSideHandles />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingActionMenu />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingBuildingActionMenu />}
+      {!(isFirstPersonMode || isStudioMode) && <SelectionManager />}
+      {!noEditing && <BoxSelectTool />}
+      {!noEditing && <NodeArrowHandles />}
+      {!noEditing && <GroupRotateHandle />}
+      {!noEditing && <GroupMoveHandle />}
+      {!noEditing && <WallOpeningHighlights />}
+      {!noEditing && <SlabHoleHighlights />}
+      {!noEditing && <WallMoveSideHandles />}
+      {!noEditing && <FloatingActionMenu />}
+      {!noEditing && <FloatingBuildingActionMenu />}
       {!isFirstPersonMode && <WallMeasurementLabel />}
       <ExportManager />
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
@@ -611,11 +620,10 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <RoofEditSystem />
       <StairEditSystem />
       {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
-      {!(isLoading || isVersionPreviewMode || isFirstPersonMode) && <ToolManager />}
+      {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
-      <PresetThumbnailGenerator />
       {!isFirstPersonMode && <SiteEdgeLabels />}
       <InteractiveSystem />
     </>
@@ -690,7 +698,7 @@ function DeleteCursorLayer({
 
   return (
     <div
-      className="pointer-events-none"
+      className="pointer-events-none z-40"
       ref={badgeRef}
       style={{ display: 'none', position: 'absolute', left: 0, top: 0 }}
     >
@@ -708,15 +716,12 @@ function PaintCursorLayer({
 }) {
   const mode = useEditor((s) => s.mode)
   const activePaintMaterial = useEditor((s) => s.activePaintMaterial)
-  const activePaintTarget = useEditor((s) => s.activePaintTarget)
-  const badgeRef = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
   const active = mode === 'material-paint' && !isVersionPreviewMode
 
   useEffect(() => {
     if (!active) {
-      if (badgeRef.current) {
-        badgeRef.current.style.display = 'none'
-      }
+      setPosition(null)
       return
     }
     const el = containerRef.current
@@ -724,20 +729,16 @@ function PaintCursorLayer({
     let frame = 0
     let nextX = 0
     let nextY = 0
-    const badge = badgeRef.current
 
     const flushPosition = () => {
       frame = 0
-      if (!badge) return
-      badge.style.display = 'block'
-      badge.style.transform = `translate(${nextX + PAINT_CURSOR_BADGE_OFFSET_X}px, ${nextY + PAINT_CURSOR_BADGE_OFFSET_Y}px)`
+      setPosition({ x: nextX, y: nextY })
     }
 
-    const onMove = (e: PointerEvent) => {
+    const updateFromEvent = (e: PointerEvent) => {
       const rect = el.getBoundingClientRect()
       nextX = e.clientX - rect.left
       nextY = e.clientY - rect.top
-
       if (frame === 0) {
         frame = window.requestAnimationFrame(flushPosition)
       }
@@ -747,17 +748,19 @@ function PaintCursorLayer({
         window.cancelAnimationFrame(frame)
         frame = 0
       }
-      if (badge) {
-        badge.style.display = 'none'
-      }
+      setPosition(null)
     }
-    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointermove', updateFromEvent)
+    el.addEventListener('pointerenter', updateFromEvent)
+    el.addEventListener('pointerdown', updateFromEvent)
     el.addEventListener('pointerleave', onLeave)
     return () => {
       if (frame !== 0) {
         window.cancelAnimationFrame(frame)
       }
-      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointermove', updateFromEvent)
+      el.removeEventListener('pointerenter', updateFromEvent)
+      el.removeEventListener('pointerdown', updateFromEvent)
       el.removeEventListener('pointerleave', onLeave)
     }
   }, [active, containerRef])
@@ -767,29 +770,15 @@ function PaintCursorLayer({
       (activePaintMaterial.material !== undefined ||
         activePaintMaterial.materialPreset !== undefined),
   )
-  const label = hasMaterial ? `Paint ${activePaintTarget}` : 'Choose material'
-  const icon = 'mdi:format-color-fill'
 
-  useLayoutEffect(() => {
-    if (!active && badgeRef.current) {
-      badgeRef.current.style.display = 'none'
-    }
-  }, [active])
-
-  if (!active) return null
+  if (!active || !position) return null
 
   return (
     <div
-      className="pointer-events-none"
-      ref={badgeRef}
-      style={{ display: 'none', position: 'absolute', left: 0, top: 0 }}
+      className="pointer-events-none absolute z-40"
+      style={{ left: 0, top: 0, transform: `translate(${position.x}px, ${position.y}px)` }}
     >
-      <PaintCursorBadge
-        disabled={!hasMaterial}
-        icon={icon}
-        label={label}
-        position={{ x: 0, y: 0 }}
-      />
+      <PaintCursorBadge disabled={!hasMaterial} position={{ x: 0, y: 0 }} />
     </div>
   )
 }
@@ -801,15 +790,21 @@ const ViewerCanvas = memo(function ViewerCanvas({
   isVersionPreviewMode,
   isLoading,
   isFirstPersonMode,
+  isStudioMode,
   hasLoadedInitialScene,
   showLoader,
+  sceneReadyKey,
+  onSceneReadyChange,
   onThumbnailCapture,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
   isFirstPersonMode: boolean
+  isStudioMode: boolean
   hasLoadedInitialScene: boolean
   showLoader: boolean
+  sceneReadyKey: number
+  onSceneReadyChange: (ready: boolean) => void
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }) {
   const viewMode = useEditor((s) => s.viewMode)
@@ -822,6 +817,13 @@ const ViewerCanvas = memo(function ViewerCanvas({
   )
 
   const viewerAreaRef = useRef<HTMLDivElement>(null)
+  // State mirror of `viewerAreaRef` so the floorplan compass portal re-renders
+  // once the container exists (a plain ref mutation wouldn't trigger it).
+  const [viewerAreaEl, setViewerAreaEl] = useState<HTMLDivElement | null>(null)
+  const setViewerAreaNode = useCallback((el: HTMLDivElement | null) => {
+    viewerAreaRef.current = el
+    setViewerAreaEl(el)
+  }, [])
   const viewer3dRef = useRef<HTMLDivElement>(null)
   const isResizingFloorplan = useRef(false)
 
@@ -867,7 +869,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
 
   return (
     <ErrorBoundary fallback={<EditorSceneCrashFallback />}>
-      <div className="flex h-full" ref={viewerAreaRef}>
+      {/* `relative` so the floorplan compass (portaled here to stay visible in
+          2d / 3d / split alike) can anchor to this container's bottom-left. */}
+      <div className="relative flex h-full" ref={setViewerAreaNode}>
         {/* 2D floorplan — always mounted once shown, hidden via CSS to preserve state */}
         <div
           className="relative h-full flex-shrink-0"
@@ -878,7 +882,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           }}
         >
           <div className="h-full w-full overflow-hidden">
-            <FloorplanPanel />
+            <FloorplanPanel compassHost={viewerAreaEl} />
           </div>
           {viewMode === 'split' && (
             <div
@@ -893,6 +897,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
         {/* 3D viewer — always mounted, hidden via CSS to avoid destroying the WebGL context */}
         <div
           className="relative min-w-0 flex-1 overflow-hidden"
+          data-pascal-viewer-3d
           ref={viewer3dRef}
           style={{ display: show3d ? undefined : 'none' }}
         >
@@ -914,19 +919,22 @@ const ViewerCanvas = memo(function ViewerCanvas({
           <Viewer
             defaultRender={EDITOR_DEFAULT_RENDER}
             hoverStyles={EDITOR_HOVER_STYLES}
+            onSceneReadyChange={onSceneReadyChange}
             renderContext="editor"
+            sceneReadyKey={sceneReadyKey}
             selectionManager={isFirstPersonMode ? 'default' : 'custom'}
           >
             <ViewerSceneContent
               isFirstPersonMode={isFirstPersonMode}
-              isLoading={isLoading}
+              isLoading={showLoader}
+              isStudioMode={isStudioMode}
               isVersionPreviewMode={isVersionPreviewMode}
               onThumbnailCapture={onThumbnailCapture}
             />
           </Viewer>
         </div>
       </div>
-      {!(isLoading || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
+      {!(showLoader || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
     </ErrorBoundary>
   )
 })
@@ -939,6 +947,7 @@ export default function Editor({
   sidebarTabs,
   viewerToolbarLeft,
   viewerToolbarRight,
+  inspectorFooter,
   projectId,
   onLoad,
   onSave,
@@ -953,12 +962,12 @@ export default function Editor({
   settingsPanelProps,
   sitePanelProps,
   extraSidebarPanels,
-  presetsAdapter,
   commandPaletteEmptyAction,
 }: EditorProps) {
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
+  const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
 
-  useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode })
+  useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
 
   const { isLoadingSceneRef } = useAutoSave({
     onSave,
@@ -969,6 +978,8 @@ export default function Editor({
 
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
+  const [sceneReadyKey, setSceneReadyKey] = useState(0)
+  const [isViewerSceneReady, setIsViewerSceneReady] = useState(false)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
 
@@ -995,15 +1006,24 @@ export default function Editor({
     async function load() {
       isLoadingSceneRef.current = true
       setHasLoadedInitialScene(false)
+      setIsViewerSceneReady(false)
       setIsSceneLoading(true)
+      useScene.getState().unloadScene()
+      useViewer.getState().resetSelection()
 
       try {
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
         if (!cancelled) {
           applySceneGraphToEditor(sceneGraph)
+          setIsViewerSceneReady(false)
+          setSceneReadyKey((key) => key + 1)
         }
       } catch {
-        if (!cancelled) applySceneGraphToEditor(null)
+        if (!cancelled) {
+          applySceneGraphToEditor(null)
+          setIsViewerSceneReady(false)
+          setSceneReadyKey((key) => key + 1)
+        }
       } finally {
         if (!cancelled) {
           setIsSceneLoading(false)
@@ -1047,7 +1067,24 @@ export default function Editor({
     }
   }, [])
 
-  const showLoader = isLoading || isSceneLoading
+  const handleSceneReadyChange = useCallback((ready: boolean) => {
+    setIsViewerSceneReady(ready)
+  }, [])
+
+  useEffect(() => {
+    if (isLoading || isSceneLoading || !hasLoadedInitialScene || isViewerSceneReady) return
+
+    const timer = window.setTimeout(() => {
+      console.warn('[editor] viewer scene readiness timed out; showing editor shell anyway', {
+        sceneReadyKey,
+      })
+      setIsViewerSceneReady(true)
+    }, SCENE_READY_FALLBACK_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
+
+  const showLoader = isLoading || isSceneLoading || !hasLoadedInitialScene || !isViewerSceneReady
 
   const firstPersonPreviousLevelRef = useRef(useViewer.getState().selection.levelId)
   const wasFirstPersonModeRef = useRef(isFirstPersonMode)
@@ -1099,7 +1136,6 @@ export default function Editor({
       <StairEditSystem />
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
-      <PresetThumbnailGenerator />
       <InteractiveSystem />
     </Viewer>
   )
@@ -1109,8 +1145,11 @@ export default function Editor({
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
+      isStudioMode={isStudioMode}
       isVersionPreviewMode={isVersionPreviewMode}
+      onSceneReadyChange={handleSceneReadyChange}
       onThumbnailCapture={onThumbnailCapture}
+      sceneReadyKey={sceneReadyKey}
       showLoader={showLoader}
     />
   )
@@ -1135,18 +1174,19 @@ export default function Editor({
     }
 
     const tabBarTabs =
-      sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon }) => ({
+      sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon, icon }) => ({
         id,
         label,
         mobileDefaultSnap,
         mobileIcon,
+        icon,
       })) ?? []
 
     return (
-      <PresetsProvider adapter={presetsAdapter}>
+      <>
         {showLoader && (
           <div className="fixed inset-0 z-60">
-            <SceneLoader />
+            <SceneLoader className="bg-background" />
           </div>
         )}
 
@@ -1162,14 +1202,14 @@ export default function Editor({
               overlays={
                 <>
                   {!isCaptureMode && <FloatingLevelSelector />}
-                  {!(isVersionPreviewMode || isCaptureMode) && (
+                  {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
                     <div className="pointer-events-auto">
                       <ActionMenu />
                     </div>
                   )}
-                  {!(isVersionPreviewMode || isCaptureMode) && (
+                  {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
                     <div className="pointer-events-auto">
-                      <PanelManager />
+                      <PanelManager inspectorFooter={inspectorFooter} />
                     </div>
                   )}
                   {!isCaptureMode && (
@@ -1197,7 +1237,7 @@ export default function Editor({
             <CommandPalette emptyAction={commandPaletteEmptyAction} />
           </>
         )}
-      </PresetsProvider>
+      </>
     )
   }
 
@@ -1208,54 +1248,52 @@ export default function Editor({
   const overlayLeft = LAYOUT_PADDING + (isSidebarCollapsed ? 8 : sidebarWidth) + LAYOUT_GAP
 
   return (
-    <PresetsProvider adapter={presetsAdapter}>
-      <div className="dark flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
-        {showLoader && (
-          <div className="fixed inset-0 z-60">
-            <SceneLoader />
-          </div>
-        )}
+    <div className="dark flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
+      {showLoader && (
+        <div className="fixed inset-0 z-60">
+          <SceneLoader className="bg-background" />
+        </div>
+      )}
 
-        {!isLoading && isPreviewMode ? (
-          <>
-            <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
-            <div className="h-full w-full">{previewViewerContent}</div>
-          </>
-        ) : (
-          <>
-            {/* Sidebar */}
-            <SidebarSlot>
-              <AppSidebar
-                appMenuButton={appMenuButton}
-                commandPaletteEmptyAction={commandPaletteEmptyAction}
-                extraPanels={extraSidebarPanels}
-                settingsPanelProps={settingsPanelProps}
-                sidebarTop={sidebarTop}
-                sitePanelProps={sitePanelProps}
-              />
-            </SidebarSlot>
+      {!isLoading && isPreviewMode ? (
+        <>
+          <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
+          <div className="h-full w-full">{previewViewerContent}</div>
+        </>
+      ) : (
+        <>
+          {/* Sidebar */}
+          <SidebarSlot>
+            <AppSidebar
+              appMenuButton={appMenuButton}
+              commandPaletteEmptyAction={commandPaletteEmptyAction}
+              extraPanels={extraSidebarPanels}
+              settingsPanelProps={settingsPanelProps}
+              sidebarTop={sidebarTop}
+              sitePanelProps={sitePanelProps}
+            />
+          </SidebarSlot>
 
-            {/* Viewer area */}
-            <div className="relative flex-1 overflow-hidden rounded-xl">{viewerCanvas}</div>
+          {/* Viewer area */}
+          <div className="relative flex-1 overflow-hidden rounded-xl">{viewerCanvas}</div>
 
-            {/* Fixed UI overlays scoped to the viewer area */}
-            <ViewerOverlays left={overlayLeft}>
-              <div className="pointer-events-auto">
-                <ActionMenu />
-              </div>
-              <div className="pointer-events-auto">
-                <PanelManager />
-              </div>
-              <div className="pointer-events-auto">
-                <HelperManager />
-              </div>
-              {isFirstPersonMode && (
-                <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
-              )}
-            </ViewerOverlays>
-          </>
-        )}
-      </div>
-    </PresetsProvider>
+          {/* Fixed UI overlays scoped to the viewer area */}
+          <ViewerOverlays left={overlayLeft}>
+            <div className="pointer-events-auto">
+              <ActionMenu />
+            </div>
+            <div className="pointer-events-auto">
+              <PanelManager />
+            </div>
+            <div className="pointer-events-auto">
+              <HelperManager />
+            </div>
+            {isFirstPersonMode && (
+              <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
+            )}
+          </ViewerOverlays>
+        </>
+      )}
+    </div>
   )
 }

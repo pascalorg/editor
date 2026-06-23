@@ -1,11 +1,6 @@
 'use client'
 
-import {
-  type CeilingNode,
-  resolveLevelId,
-  useLiveNodeOverrides,
-  useScene,
-} from '@pascal-app/core'
+import { type CeilingNode, resolveLevelId, useLiveNodeOverrides, useScene } from '@pascal-app/core'
 import { PolygonEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect } from 'react'

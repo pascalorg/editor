@@ -1,13 +1,14 @@
 'use client'
 
 import type { AssetInput } from '@pascal-app/core'
-import { resolveAssetUrl, resolveCdnUrl } from '@pascal-app/viewer'
+import { resolveAssetUrl, resolveCdnUrl, useViewer } from '@pascal-app/viewer'
 import { useEffect, useState } from 'react'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from './../../../components/ui/primitives/tooltip'
+import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
 import useEditor, { type CatalogCategory } from './../../../store/use-editor'
 import { getAllCatalogItems } from './catalog-items'
@@ -127,10 +128,16 @@ export function ItemCatalog({
             )}
             key={item.id}
             onClick={() => {
+              triggerSFX('sfx:menu-click')
+              // Drop the current selection before arming placement — keeping
+              // it would route shortcuts (rotate & co) to both the ghost and
+              // the selected node.
+              useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
               setSelectedItem(item)
               setTool('item')
               setMode('build')
             }}
+            onMouseEnter={() => triggerSFX('sfx:menu-hover')}
             type="button"
           >
             <div className="relative aspect-square w-full overflow-hidden rounded-lg">

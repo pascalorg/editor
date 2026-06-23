@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="MeasureNavi 编辑器浅色主题设计规范，供设计师、开发者与 AI 读取。">
+  <title>MeasureNavi 编辑器 · 浅色系设计规范</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ============================================================
+       MEASURENAVI EDITOR / LIGHT THEME / DESIGN TOKENS
+       Source: MeasureNavi_编辑器界面.html
+       AI RULE: 新组件优先引用本区 token，不直接写十六进制颜色。
+       ============================================================ */
+    :root {
+      /* Brand */
+      --mn-primary: #14b8a6;
+      --mn-primary-strong: #0d9488;
+      --mn-primary-soft: rgba(20, 184, 166, .10);
+      --mn-primary-border: rgba(20, 184, 166, .48);
+      --mn-primary-gradient: linear-gradient(135deg, #0d9488, #14b8a6);
+
+      /* Editor surfaces */
+      --mn-shell: #ffffff;
+      --mn-panel: #f8faf9;
+      --mn-panel-raised: #ffffff;
+      --mn-panel-muted: #f0f5f3;
+      --mn-control: #eef3f1;
+      --mn-control-hover: #e5ece9;
+      --mn-control-active: #e5e8eb;
+      --mn-rail: #f4f7f6;
+      --mn-canvas: #f3f6f5;
+      --mn-scrim: rgba(15, 23, 42, .44);
+
+      /* Text */
+      --mn-text: #17211f;
+      --mn-text-secondary: #475569;
+      --mn-text-muted: #82908d;
+      --mn-text-subtle: #9caaa7;
+      --mn-placeholder: #71807d;
+      --mn-on-primary: #ffffff;
+
+      /* Lines */
+      --mn-line: rgba(15, 23, 42, .08);
+      --mn-line-strong: rgba(15, 23, 42, .14);
+      --mn-focus-ring: 0 0 0 3px rgba(20, 184, 166, .11);
+
+      /* Semantic */
+      --mn-success: #10b981;
+      --mn-success-soft: #ecfdf5;
+      --mn-warning: #f59e0b;
+      --mn-warning-soft: #fffbeb;
+      --mn-danger: #e11d48;
+      --mn-danger-soft: #fff1f2;
+      --mn-info: #3b82f6;
+      --mn-info-soft: #eff6ff;
+
+      /* Type */
+      --mn-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mn-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+      --mn-text-2xs: 9px;
+      --mn-text-xs: 10px;
+      --mn-text-sm: 11px;
+      --mn-text-base: 12px;
+      --mn-text-md: 13px;
+      --mn-text-lg: 16px;
+      --mn-text-xl: 24px;
+
+      /* Space / radius */
+      --mn-space-1: 4px;
+      --mn-space-2: 8px;
+      --mn-space-3: 12px;
+      --mn-space-4: 16px;
+      --mn-space-5: 20px;
+      --mn-space-6: 24px;
+      --mn-space-8: 32px;
+      --mn-radius-xs: 5px;
+      --mn-radius-sm: 8px;
+      --mn-radius-md: 10px;
+      --mn-radius-lg: 12px;
+      --mn-radius-xl: 16px;
+      --mn-radius-doc: 20px;
+      --mn-radius-pill: 999px;
+
+      /* Elevation */
+      --mn-shadow-panel: 12px 0 30px rgba(30, 50, 44, .04);
+      --mn-shadow-floating: 0 12px 32px rgba(46, 67, 61, .14);
+      --mn-shadow-menu: 0 12px 30px rgba(30, 50, 44, .16);
+      --mn-shadow-modal: 0 24px 64px rgba(23, 33, 31, .22);
+      --mn-shadow-toast: 0 15px 35px rgba(19, 42, 36, .18);
+
+      /* Motion / layers */
+      --mn-ease: cubic-bezier(.2, .8, .2, 1);
+      --mn-fast: 150ms;
+      --mn-base: 220ms;
+      --mn-z-panel: 10;
+      --mn-z-floating: 20;
+      --mn-z-menu: 40;
+      --mn-z-modal: 60;
+      --mn-z-toast: 80;
+      --mn-z-tooltip: 100;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--mn-font);
+      color: var(--mn-text);
+      background: #eaf1ef;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { color: inherit; }
+    code { font-family: var(--mn-mono); }
+    a { color: inherit; }
+    :focus-visible { outline: 2px solid var(--mn-primary); outline-offset: 2px; }
+    ::selection { color: var(--mn-text); background: rgba(20, 184, 166, .2); }
+
+    .spec {
+      width: min(1040px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 40px 0 80px;
+    }
+    .cover {
+      position: relative;
+      overflow: hidden;
+      min-height: 310px;
+      padding: 48px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      color: white;
+      border-radius: 24px;
+      background:
+        radial-gradient(circle at 82% 18%, rgba(255,255,255,.2), transparent 28%),
+        linear-gradient(135deg, #0b8077 0%, #14b8a6 58%, #38d6c5 100%);
+      box-shadow: 0 24px 60px rgba(13, 148, 136, .22);
+    }
+    .cover::after {
+      content: "";
+      position: absolute;
+      right: -60px;
+      top: -80px;
+      width: 360px;
+      height: 360px;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 50%;
+      box-shadow: 0 0 0 48px rgba(255,255,255,.045), 0 0 0 96px rgba(255,255,255,.025);
+    }
+    .cover > * { position: relative; z-index: 1; }
+    .cover-badge {
+      align-self: flex-start;
+      margin-bottom: 18px;
+      padding: 5px 12px;
+      border: 1px solid rgba(255,255,255,.28);
+      border-radius: var(--mn-radius-pill);
+      background: rgba(255,255,255,.12);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .cover h1 { margin: 0; font-size: 36px; line-height: 1.15; letter-spacing: -.035em; }
+    .cover p { max-width: 650px; margin: 14px 0 0; font-size: 13px; opacity: .85; }
+    .cover-meta { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 28px; font-size: 11px; opacity: .72; }
+
+    .toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 28px 0; }
+    .toc a {
+      padding: 6px 14px;
+      border: 1px solid var(--mn-line);
+      border-radius: var(--mn-radius-pill);
+      background: white;
+      color: var(--mn-text-secondary);
+      box-shadow: 0 6px 20px rgba(30, 50, 44, .04);
+      font-size: 11px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: var(--mn-fast) ease;
+    }
+    .toc a:hover { color: var(--mn-primary-strong); border-color: rgba(20,184,166,.35); background: #f0fdfa; }
+
+    .section {
+      margin-bottom: 28px;
+      padding: 32px;
+      border: 1px solid var(--mn-line);
+      border-radius: var(--mn-radius-doc);
+      background: white;
+      box-shadow: 0 10px 30px rgba(30, 50, 44, .045);
+    }
+    .eyebrow { color: var(--mn-primary-strong); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .section h2 { margin: 4px 0 3px; font-size: 20px; line-height: 1.3; letter-spacing: -.02em; }
+    .section-intro { margin: 0 0 24px; color: var(--mn-text-muted); font-size: 12px; }
+    .subhead { margin: 22px 0 10px; font-size: 13px; font-weight: 700; }
+    .divider { height: 1px; margin: 24px 0; background: var(--mn-line); }
+    .note {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-left: 3px solid var(--mn-primary);
+      border-radius: 0 var(--mn-radius-sm) var(--mn-radius-sm) 0;
+      color: var(--mn-text-secondary);
+      background: #f0fdfa;
+      font-size: 11px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: var(--mn-radius-pill);
+      color: var(--mn-primary-strong);
+      background: var(--mn-primary-soft);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+    .tag.added { color: #1d4ed8; background: var(--mn-info-soft); }
+
+    .code {
+      margin-top: 12px;
+      padding: 17px 19px;
+      overflow: auto;
+      border-radius: var(--mn-radius-lg);
+      color: #dbe7e4;
+      background: #17211f;
+      font: 11px/1.75 var(--mn-mono);
+      white-space: pre;
+    }
+    .inline { padding: 1px 5px; border-radius: 4px; color: var(--mn-primary-strong); background: #edf5f3; font: 10px var(--mn-mono); }
+    .comment { color: #82908d; }
+    .token { color: #67e8d4; }
+
+    .rules { border-top: 1px solid var(--mn-line); }
+    .rule {
+      display: grid;
+      grid-template-columns: 190px 1fr;
+      gap: 16px;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--mn-line);
+      font-size: 11px;
+    }
+    .rule-name { color: var(--mn-text-secondary); font-weight: 600; }
+    .rule-value { color: var(--mn-text); }
+
+    .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+    .swatch { overflow: hidden; border: 1px solid var(--mn-line); border-radius: var(--mn-radius-lg); background: white; }
+    .swatch-color { height: 62px; border-bottom: 1px solid var(--mn-line); }
+    .swatch-copy { padding: 9px 10px; }
+    .swatch-name { font-size: 10px; font-weight: 700; }
+    .swatch-value { margin-top: 2px; color: var(--mn-text-muted); font: 9px var(--mn-mono); }
+
+    .type-row { padding: 13px 0; border-bottom: 1px solid var(--mn-line); }
+    .type-meta { margin-bottom: 4px; color: var(--mn-text-muted); font: 9px var(--mn-mono); }
+
+    .preview-surface {
+      padding: 24px;
+      overflow: auto;
+      border: 1px solid var(--mn-line);
+      border-radius: var(--mn-radius-xl);
+      background:
+        linear-gradient(rgba(76,94,89,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(76,94,89,.06) 1px, transparent 1px),
+        var(--mn-canvas);
+      background-size: 16px 16px;
+    }
+    .component-title { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 13px; font-weight: 700; }
+    .component-desc { margin: -5px 0 14px; color: var(--mn-text-muted); font-size: 10px; }
+    .component-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .component-card { padding: 18px; border: 1px solid var(--mn-line); border-radius: var(--mn-radius-xl); background: var(--mn-panel); }
+    .row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+    .btn {
+      height: 32px;
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      border: 1px solid transparent;
+      border-radius: var(--mn-radius-md);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      transition: var(--mn-fast) ease;
+    }
+    .btn-primary { color: white; background: var(--mn-primary-gradient); box-shadow: 0 5px 16px rgba(20,184,166,.2); }
+    .btn-primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+    .btn-secondary { color: var(--mn-text-secondary); border-color: var(--mn-line); background: var(--mn-control); }
+    .btn-secondary:hover { color: var(--mn-text); background: var(--mn-control-hover); }
+    .btn-ghost { color: var(--mn-text-muted); background: transparent; }
+    .btn-ghost:hover { color: var(--mn-text); background: var(--mn-control); }
+    .btn-danger { color: var(--mn-danger); background: var(--mn-danger-soft); }
+    .btn:disabled { opacity: .42; cursor: not-allowed; transform: none; }
+    .icon-btn { width: 32px; padding: 0; font-size: 15px; }
+
+    .field { display: grid; gap: 6px; min-width: 190px; }
+    .label { color: var(--mn-text-secondary); font-size: 10px; font-weight: 600; }
+    .input, .select, .textarea {
+      width: 100%;
+      border: 1px solid var(--mn-line);
+      border-radius: var(--mn-radius-md);
+      color: var(--mn-text);
+      background: var(--mn-control);
+      outline: none;
+      font-size: 11px;
+      transition: var(--mn-fast) ease;
+    }
+    .input, .select { height: 34px; padding: 0 10px; }
+    .textarea { min-height: 72px; padding: 9px 10px; resize: vertical; }
+    .input:focus, .select:focus, .textarea:focus { border-color: var(--mn-primary); background: white; box-shadow: var(--mn-focus-ring); }
+    .input::placeholder, .textarea::placeholder { color: var(--mn-placeholder); }
+    .help { color: var(--mn-text-muted); font-size: 9px; }
+    .error { color: var(--mn-danger); }
+
+    .segmented { display: inline-flex; padding: 3px; border: 1px solid var(--mn-line); border-radius: var(--mn-radius-pill); background: #edf2f0; }
+    .segment { min-width: 64px; height: 30px; border: 0; border-radius: var(--mn-radius-pill); color: var(--mn-text-muted); background: transparent; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .segment.active { color: var(--mn-text); background: white; box-shadow: 0 2px 8px rgba(15,23,42,.08), inset 0 0 0 1px var(--mn-line); }
+
+    .switch { position: relative; width: 36px; height: 20px; border: 0; border-radius: var(--mn-radius-pill); background: #cbd5d2; cursor: pointer; transition: var(--mn-fast) ease; }
+    .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: white; box-shadow: 0 1px 4px rgba(0,0,0,.2); transition: var(--mn-fast) ease; }
+    .switch.on { background: var(--mn-primary); }
+    .switch.on::after { transform: translateX(16px); }
+    .check { width: 16px; height: 16px; accent-color: var(--mn-primary); }
+
+    .tabs { display: flex; gap: 17px; border-bottom: 1px solid var(--mn-line); }
+    .tab { position: relative; padding: 3px 0 9px; border: 0; color: var(--mn-text-muted); background: transparent; font-size: 10px; cursor: pointer; }
+    .tab.active { color: var(--mn-text); font-weight: 700; }
+    .tab.active::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--mn-primary); }
+
+    .menu-wrap { position: relative; display: inline-block; }
+    .menu {
+      width: 220px;
+      padding: 6px;
+      border: 1px solid var(--mn-line);
+      border-radius: var(--mn-radius-lg);
+      background: white;
+      box-shadow: var(--mn-shadow-menu);
+    }
+    .menu-item {
+      width: 100%;
+      min-height: 34px;
+      padding: 7px 9px;
+      display: grid;
+      grid-template-columns: 20px 1fr auto;
+      align-items: center;
+      gap: 7px;
+      border: 0;
+      border-radius: var(--mn-radius-sm);
+      color: var(--mn-text-secondary);
+      background: transparent;
+      text-align: left;
+      font-size: 10px;
+      cursor: pointer;
+    }
+    .menu-item:hover, .menu-item.selected { color: var(--mn-text); background: var(--mn-control); }
+    .menu-item.danger { color: var(--mn-danger); }
+    .menu-separator { height: 1px; margin: 5px; background: var(--mn-line); }
+    .shortcut-key { color: var(--mn-text-muted); font: 8px var(--mn-mono); }
+
+    .tooltip-demo { display: inline-flex; padding: 6px 8px; border: 1px solid var(--mn-line); border-radius: 7px; color: #33413e; background: rgba(255,255,255,.96); box-shadow: 0 8px 22px rgba(30,50,44,.14); font-size: 10px; }
+    .popover { width: 250px; padding: 14px; border: 1px solid var(--mn-line); border-radius: 14px; background: white; box-shadow: var(--mn-shadow-menu); }
+    .popover h4 { margin: 0 0 5px; font-size: 11px; }
+    .popover p { margin: 0; color: var(--mn-text-muted); font-size: 10px; }
+
+    .modal-stage { padding: 36px 18px; display: grid; place-items: center; border-radius: var(--mn-radius-xl); background: var(--mn-scrim); }
+    .modal {
+      width: min(440px, 100%);
+      overflow: hidden;
+      border: 1px solid var(--mn-line);
+      border-radius: var(--mn-radius-xl);
+      background: white;
+      box-shadow: var(--mn-shadow-modal);
+    }
+    .modal-head { padding: 16px 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--mn-line); }
+    .modal-title { font-size: 13px; font-weight: 700; }
+    .modal-sub { margin-top: 3px; color: var(--mn-text-muted); font-size: 10px; }
+    .modal-body { padding: 18px; }
+    .modal-actions { padding: 12px 18px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--mn-line); background: var(--mn-panel); }
+
+    .toast { max-width: 330px; padding: 11px 14px; display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 9px; border: 1px solid #dfe8e6; border-left: 4px solid var(--mn-primary); border-radius: var(--mn-radius-md); color: #33413e; background: white; box-shadow: var(--mn-shadow-toast); font-size: 10px; }
+    .toast.success { border-left-color: var(--mn-success); }
+    .toast.warning { border-left-color: var(--mn-warning); }
+    .toast.danger { border-left-color: var(--mn-danger); }
+
+    .progress { height: 6px; overflow: hidden; border-radius: var(--mn-radius-pill); background: #dfe8e5; }
+    .progress > span { display: block; width: 64%; height: 100%; border-radius: inherit; background: var(--mn-primary-gradient); }
+    .spinner { width: 20px; height: 20px; border: 2px solid rgba(20,184,166,.2); border-top-color: var(--mn-primary); border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .skeleton { height: 10px; border-radius: 5px; background: linear-gradient(90deg, #e5ece9 25%, #f4f7f6 50%, #e5ece9 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    .editor-map {
+      min-width: 720px;
+      height: 330px;
+      display: grid;
+      grid-template-rows: 52px 1fr;
+      overflow: hidden;
+      border: 1px solid var(--mn-line);
+      border-radius: var(--mn-radius-xl);
+      background: white;
+      box-shadow: var(--mn-shadow-floating);
+    }
+    .map-top { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid var(--mn-line); }
+    .map-brand { display: flex; align-items: center; gap: 9px; font-size: 11px; font-weight: 700; }
+    .map-main { display: grid; grid-template-columns: 58px 190px 1fr 170px; min-height: 0; }
+    .map-rail { padding: 9px; display: grid; align-content: start; gap: 6px; border-right: 1px solid var(--mn-line); background: var(--mn-rail); }
+    .map-rail span { height: 34px; border-radius: 10px; background: var(--mn-control); }
+    .map-rail span:first-child { background: var(--mn-primary-soft); box-shadow: inset 3px 0 var(--mn-primary); }
+    .map-panel { padding: 14px; border-right: 1px solid var(--mn-line); background: var(--mn-panel); }
+    .map-canvas { position: relative; background: linear-gradient(rgba(76,94,89,.08) 1px, transparent 1px), linear-gradient(90deg,rgba(76,94,89,.08) 1px,transparent 1px), var(--mn-canvas); background-size: 16px 16px; }
+    .map-dock { position: absolute; left: 50%; bottom: 16px; width: 200px; height: 48px; transform: translateX(-50%); border: 1px solid var(--mn-line); border-radius: 14px; background: rgba(255,255,255,.92); box-shadow: var(--mn-shadow-floating); }
+    .map-inspector { padding: 14px; background: var(--mn-panel); }
+    .map-line { height: 9px; margin-bottom: 9px; border-radius: 5px; background: var(--mn-control); }
+
+    .state-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .state-table th, .state-table td { padding: 9px 10px; border: 1px solid var(--mn-line); text-align: left; vertical-align: top; }
+    .state-table th { color: var(--mn-text-secondary); background: var(--mn-panel); }
+
+    footer { padding: 20px; color: var(--mn-text-muted); text-align: center; font-size: 10px; }
+    @media (max-width: 720px) {
+      .spec { width: min(100% - 20px, 1040px); padding-top: 10px; }
+      .cover { min-height: 280px; padding: 28px; border-radius: 18px; }
+      .cover h1 { font-size: 29px; }
+      .section { padding: 22px; }
+      .component-grid { grid-template-columns: 1fr; }
+      .rule { grid-template-columns: 1fr; gap: 3px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <!--
+    MACHINE-READABLE SUMMARY
+    theme=light
+    product=MeasureNavi Editor
+    source=MeasureNavi_编辑器界面.html
+    status=canonical-light-theme-spec
+    component_origin values: extracted | added
+  -->
+  <script type="application/json" id="measurenavi-design-spec">
+  {
+    "schemaVersion": "1.0",
+    "product": "MeasureNavi Editor",
+    "theme": "light",
+    "sourceFile": "MeasureNavi_编辑器界面.html",
+    "generatedOn": "2026-06-22",
+    "baseUnit": 4,
+    "fontFamily": "Inter, system-ui, -apple-system, sans-serif",
+    "layout": {"topbar": 52, "rail": 58, "library": 280, "inspector": 290, "minimumViewportWidth": 1024},
+    "components": {
+      "extracted": ["topbar","mode-switch","icon-button","primary-button","rail","library","search","tabs","asset-card","canvas-controls","tool-dock","property-panel","tooltip","toast"],
+      "added": ["dropdown-menu","context-menu","select","textarea","checkbox","radio","switch","modal","confirm-dialog","popover","progress","spinner","skeleton","empty-state"]
+    },
+    "rules": {
+      "focus": "3px teal translucent ring plus teal border",
+      "motion": "150ms micro interaction, 220ms panel transition",
+      "dangerousAction": "must require confirmation",
+      "menuDismiss": "outside click or Escape",
+      "modalDismiss": "close button, cancel button or Escape; destructive progress cannot be dismissed"
+    }
+  }
+  </script>
+
+  <main class="spec">
+    <header class="cover">
+      <div class="cover-badge">Design Specification · Light Theme · v1.0</div>
+      <h1>MeasureNavi Editor<br>浅色系设计规范</h1>
+      <p>从编辑器现有浅色主题中提取，并按同一视觉语言补齐弹窗、下拉菜单、上下文菜单、表单控件、加载与反馈组件。文档同时面向设计师、开发者和 AI。</p>
+      <div class="cover-meta">
+        <span>来源：MeasureNavi_编辑器界面.html</span>
+        <span>主题：Light / 浅色</span>
+        <span>基准字体：Inter</span>
+        <span>更新：2026/06/22</span>
+      </div>
+    </header>
+
+    <nav class="toc" aria-label="目录">
+      <a href="#principles">设计原则</a>
+      <a href="#tokens">Tokens</a>
+      <a href="#colors">颜色</a>
+      <a href="#type">字体</a>
+      <a href="#layout">布局</a>
+      <a href="#components">现有组件</a>
+      <a href="#extended">补充组件</a>
+      <a href="#states">交互状态</a>
+      <a href="#accessibility">可访问性</a>
+      <a href="#ai">AI 使用约束</a>
+    </nav>
+
+    <section class="section" id="principles">
+      <div class="eyebrow">Section 01</div>
+      <h2>设计原则</h2>
+      <p class="section-intro">浅色编辑器不是普通后台页面：内容密度高、画布优先、工具常驻，因此视觉应克制、层级清晰、反馈快速。</p>
+      <div class="rules">
+        <div class="rule"><div class="rule-name">画布优先 Canvas First</div><div class="rule-value">画布使用最浅的冷灰绿色，工具面板通过边框、轻阴影和表面色区分，不使用大面积高饱和色。</div></div>
+        <div class="rule"><div class="rule-name">Teal 只表达意图</div><div class="rule-value">品牌青绿色用于选中、焦点、主操作和进度；普通信息与未选中图标保持中性灰。</div></div>
+        <div class="rule"><div class="rule-name">紧凑但不拥挤</div><div class="rule-value">基础字号 12px，常用控件高 32–34px；通过 8 / 12 / 16px 间距建立节奏。</div></div>
+        <div class="rule"><div class="rule-name">浮层统一</div><div class="rule-value">画布工具条、菜单、Popover、Modal 均使用白色表面、低对比边框和带绿色倾向的柔和阴影。</div></div>
+        <div class="rule"><div class="rule-name">状态不能只靠颜色</div><div class="rule-value">选中状态同时使用背景、边框或指示条；错误和成功状态同时提供图标与文本。</div></div>
+      </div>
+    </section>
+
+    <section class="section" id="tokens">
+      <div class="eyebrow">Section 02</div>
+      <h2>设计 Tokens（可直接复制）</h2>
+      <p class="section-intro">本页顶部 <code class="inline">:root</code> 是完整规范。下面是实现编辑器界面时最关键的一组。</p>
+      <div class="code"><span class="comment">/* Light editor core */</span>
+<span class="token">--mn-primary</span>: #14b8a6;
+<span class="token">--mn-primary-strong</span>: #0d9488;
+<span class="token">--mn-shell</span>: #ffffff;
+<span class="token">--mn-panel</span>: #f8faf9;
+<span class="token">--mn-control</span>: #eef3f1;
+<span class="token">--mn-control-hover</span>: #e5ece9;
+<span class="token">--mn-rail</span>: #f4f7f6;
+<span class="token">--mn-canvas</span>: #f3f6f5;
+<span class="token">--mn-text</span>: #17211f;
+<span class="token">--mn-text-secondary</span>: #475569;
+<span class="token">--mn-text-muted</span>: #82908d;
+<span class="token">--mn-line</span>: rgba(15, 23, 42, .08);
+<span class="token">--mn-line-strong</span>: rgba(15, 23, 42, .14);
+<span class="token">--mn-focus-ring</span>: 0 0 0 3px rgba(20, 184, 166, .11);
+<span class="token">--mn-radius-md</span>: 10px;
+<span class="token">--mn-shadow-floating</span>: 0 12px 32px rgba(46, 67, 61, .14);</div>
+      <div class="note">命名约定：<code class="inline">shell</code> 是应用最外层，<code class="inline">panel</code> 是侧栏/属性区，<code class="inline">control</code> 是输入框与可点击块，<code class="inline">canvas</code> 是工作画布。</div>
+    </section>
+
+    <section class="section" id="colors">
+      <div class="eyebrow">Section 03</div>
+      <h2>颜色系统</h2>
+      <p class="section-intro">颜色取自编辑器浅色主题。中性颜色略带绿灰倾向，与品牌 teal 保持一致。</p>
+      <div class="swatches">
+        <div class="swatch"><div class="swatch-color" style="background:#14b8a6"></div><div class="swatch-copy"><div class="swatch-name">Primary</div><div class="swatch-value">#14B8A6</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#0d9488"></div><div class="swatch-copy"><div class="swatch-name">Primary Strong</div><div class="swatch-value">#0D9488</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#ffffff"></div><div class="swatch-copy"><div class="swatch-name">Shell / Raised</div><div class="swatch-value">#FFFFFF</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#f8faf9"></div><div class="swatch-copy"><div class="swatch-name">Panel</div><div class="swatch-value">#F8FAF9</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#eef3f1"></div><div class="swatch-copy"><div class="swatch-name">Control</div><div class="swatch-value">#EEF3F1</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#e5ece9"></div><div class="swatch-copy"><div class="swatch-name">Control Hover</div><div class="swatch-value">#E5ECE9</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#f4f7f6"></div><div class="swatch-copy"><div class="swatch-name">Rail</div><div class="swatch-value">#F4F7F6</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#f3f6f5"></div><div class="swatch-copy"><div class="swatch-name">Canvas</div><div class="swatch-value">#F3F6F5</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#17211f"></div><div class="swatch-copy"><div class="swatch-name">Text Primary</div><div class="swatch-value">#17211F</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#82908d"></div><div class="swatch-copy"><div class="swatch-name">Text Muted</div><div class="swatch-value">#82908D</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#10b981"></div><div class="swatch-copy"><div class="swatch-name">Success</div><div class="swatch-value">#10B981</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#e11d48"></div><div class="swatch-copy"><div class="swatch-name">Danger</div><div class="swatch-value">#E11D48</div></div></div>
+      </div>
+      <div class="note">禁止把纯黑 <code class="inline">#000</code> 用作正文，也不要用 teal 填满大面积侧栏。浅色主题的层次主要依靠表面色差、边框和阴影。</div>
+    </section>
+
+    <section class="section" id="type">
+      <div class="eyebrow">Section 04</div>
+      <h2>字体与信息层级</h2>
+      <p class="section-intro">编辑器使用 Inter。界面文字比营销页面更紧凑，所有数值输入应使用等宽数字特性。</p>
+      <div class="type-row"><div class="type-meta">24px / 700 / -0.02em · 文档或空状态大标题</div><div style="font-size:24px;font-weight:700;letter-spacing:-.02em">Bathroom with walk-in shower</div></div>
+      <div class="type-row"><div class="type-meta">13px / 700 · 面板标题、项目标题、Modal 标题</div><div style="font-size:13px;font-weight:700">Wall properties</div></div>
+      <div class="type-row"><div class="type-meta">11px / 600 · 按钮、字段值、主要操作文本</div><div style="font-size:11px;font-weight:600">Preview · Latest (v3) · Ground floor</div></div>
+      <div class="type-row"><div class="type-meta">10px / 400–700 · 标签、辅助说明、Tab、快捷键</div><div style="font-size:10px;color:#82908d">All changes saved · 12.4 m²</div></div>
+      <div class="type-row"><div class="type-meta">9px / 600 · 素材卡名称、角标、密集型数据</div><div style="font-size:9px;font-weight:600;color:#82908d">THICK WALL 30CM</div></div>
+      <div class="rules" style="margin-top:16px">
+        <div class="rule"><div class="rule-name">行高</div><div class="rule-value">控件单行 1；正文与说明 1.5–1.65；两行以上的帮助文本不低于 1.5。</div></div>
+        <div class="rule"><div class="rule-name">截断</div><div class="rule-value">项目名、素材名使用单行省略号；Tooltip 可显示完整名称。</div></div>
+        <div class="rule"><div class="rule-name">数字</div><div class="rule-value">尺寸、角度、坐标使用 <code class="inline">font-variant-numeric: tabular-nums</code>，单位与数字间留 4px。</div></div>
+      </div>
+    </section>
+
+    <section class="section" id="layout">
+      <div class="eyebrow">Section 05</div>
+      <h2>编辑器布局结构</h2>
+      <p class="section-intro">桌面端采用固定工具区域 + 弹性画布。最小宽度 1024px；小于此宽度应提示使用桌面端，不压缩到不可操作。</p>
+      <div class="preview-surface">
+        <div class="editor-map" aria-label="编辑器布局示意">
+          <div class="map-top"><div class="map-brand"><span style="color:var(--mn-primary);font-size:18px">◇</span> Bathroom with walk-in shower</div><div class="row"><span class="tag">Edit</span><span class="btn btn-primary">▶ Preview</span></div></div>
+          <div class="map-main">
+            <div class="map-rail"><span></span><span></span><span></span><span></span><span></span></div>
+            <div class="map-panel"><div class="map-line" style="width:55%"></div><div class="map-line"></div><div class="map-line"></div><div class="map-line" style="width:72%"></div></div>
+            <div class="map-canvas"><div class="map-dock"></div></div>
+            <div class="map-inspector"><div class="map-line" style="width:70%"></div><div class="map-line"></div><div class="map-line"></div><div class="map-line"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="rules" style="margin-top:18px">
+        <div class="rule"><div class="rule-name">Topbar</div><div class="rule-value">52px 高；项目区建议 310px；模式切换居中偏左；操作区靠右。</div></div>
+        <div class="rule"><div class="rule-name">Tool Rail</div><div class="rule-value">58px 宽；按钮 42×42px；图标 16–20px；选中项带 teal 背景与左侧 3px 指示条。</div></div>
+        <div class="rule"><div class="rule-name">Library</div><div class="rule-value">默认 280px，紧凑断点 230px；内部 padding 14–16px；内容独立滚动。</div></div>
+        <div class="rule"><div class="rule-name">Canvas</div><div class="rule-value">占据全部剩余空间；主网格 80px，辅网格 16px；浮动工具距边缘 14–20px。</div></div>
+        <div class="rule"><div class="rule-name">Inspector</div><div class="rule-value">展开宽 290px，关闭宽 0；220ms 过渡；属性组 12px 圆角、14px padding。</div></div>
+      </div>
+    </section>
+
+    <section class="section" id="components">
+      <div class="eyebrow">Section 06</div>
+      <h2>页面已有组件</h2>
+      <p class="section-intro"><span class="tag">EXTRACTED</span> 以下组件直接继承当前编辑器页面的视觉规则。</p>
+      <div class="component-grid">
+        <div class="component-card">
+          <div class="component-title">6.1 按钮</div>
+          <div class="component-desc">高度 32px；默认圆角 10px；主按钮只用于 Preview、Save、Confirm 等关键动作。</div>
+          <div class="row">
+            <button class="btn btn-primary">▶ Preview</button>
+            <button class="btn btn-secondary">◷ Latest (v3)⌄</button>
+            <button class="btn btn-ghost icon-btn" aria-label="设置">⚙</button>
+            <button class="btn btn-danger">删除</button>
+            <button class="btn btn-secondary" disabled>Disabled</button>
+          </div>
+        </div>
+        <div class="component-card">
+          <div class="component-title">6.2 模式切换</div>
+          <div class="component-desc">用于互斥视图，不等同于普通 Tab。容器为 pill，激活项白底。</div>
+          <div class="segmented"><button class="segment active">Edit</button><button class="segment">Studio</button></div>
+        </div>
+        <div class="component-card">
+          <div class="component-title">6.3 搜索与属性输入</div>
+          <div class="component-desc">默认 control 背景；Focus 后白底、teal 边框与 3px focus ring。</div>
+          <div class="field"><label class="label" for="demo-search">Search building elements</label><input class="input" id="demo-search" placeholder="Search building elements"></div>
+        </div>
+        <div class="component-card">
+          <div class="component-title">6.4 Library Tabs</div>
+          <div class="component-desc">文字 10px；活动项使用 2px teal 下划线。</div>
+          <div class="tabs"><button class="tab active">All</button><button class="tab">Pascal</button><button class="tab">Mine</button><button class="tab">Community</button></div>
+        </div>
+        <div class="component-card">
+          <div class="component-title">6.5 Tooltip</div>
+          <div class="component-desc">延迟 300–500ms 显示；紧随图标按钮；不放可交互内容。</div>
+          <span class="tooltip-demo">参考图设置</span>
+        </div>
+        <div class="component-card">
+          <div class="component-title">6.6 Toast</div>
+          <div class="component-desc">右下角 18px；默认 2.2–3s 消失；最多同时显示 3 条。</div>
+          <div class="toast success"><span style="color:var(--mn-success)">●</span><span>Preview is ready</span><span>×</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="extended">
+      <div class="eyebrow">Section 07</div>
+      <h2>补充的编辑器常用组件</h2>
+      <p class="section-intro"><span class="tag added">ADDED</span> 原页面未完整展示，以下按现有浅色主题延伸，可直接作为后续实现标准。</p>
+
+      <div class="component-title">7.1 Dropdown / Context Menu</div>
+      <div class="component-desc">Dropdown 由按钮触发；Context Menu 在指针位置出现。二者视觉一致，宽度 180–260px，菜单项不低于 34px。</div>
+      <div class="preview-surface">
+        <div class="row" style="align-items:flex-start;gap:24px">
+          <div class="menu">
+            <button class="menu-item selected"><span>✓</span><span>Latest version</span><span class="shortcut-key">V3</span></button>
+            <button class="menu-item"><span>↺</span><span>Version history</span><span class="shortcut-key">⌘H</span></button>
+            <button class="menu-item"><span>⧉</span><span>Duplicate project</span><span></span></button>
+            <div class="menu-separator"></div>
+            <button class="menu-item danger"><span>⌫</span><span>Delete project</span><span></span></button>
+          </div>
+          <div class="popover">
+            <h4>菜单行为</h4>
+            <p>点击触发器打开；点击外部或按 Esc 关闭；方向空间不足时自动翻转；当前选项使用 ✓ 或选中背景，不只改变文字颜色。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="component-title">7.2 完整表单控件</div>
+      <div class="component-desc">属性面板内字段高度 30px；Modal 与设置页字段高度 34px。标签始终位于字段上方或固定左列。</div>
+      <div class="component-grid">
+        <div class="component-card">
+          <div class="field"><label class="label">Material</label><select class="select"><option>Painted wall</option><option>Concrete</option><option>Wood</option></select><span class="help">应用于当前选中的墙体。</span></div>
+        </div>
+        <div class="component-card">
+          <div class="field"><label class="label">Description</label><textarea class="textarea" placeholder="Add a note for collaborators"></textarea><span class="help error">最多 200 个字符。</span></div>
+        </div>
+        <div class="component-card">
+          <div class="row"><input class="check" type="checkbox" checked id="snap"><label class="label" for="snap">Snap to grid</label><button class="switch on" aria-label="开关示例"></button><span class="label">Visible</span></div>
+        </div>
+        <div class="component-card">
+          <div class="row"><label class="label"><input class="check" type="radio" name="unit" checked> Metric</label><label class="label"><input class="check" type="radio" name="unit"> Imperial</label></div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="component-title">7.3 Modal / Confirm Dialog</div>
+      <div class="component-desc">普通 Modal 420–560px；复杂设置可到 720px。危险操作必须显示对象名称、后果与明确的危险按钮。</div>
+      <div class="modal-stage">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div class="modal-head">
+            <div><div class="modal-title" id="modal-title">导入参考平面图</div><div class="modal-sub">支持 PNG、JPG 或 PDF，单个文件不超过 20MB。</div></div>
+            <button class="btn btn-ghost icon-btn" aria-label="关闭">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="field"><label class="label">Reference file</label><input class="input" value="bathroom-floorplan.pdf"><span class="help">导入后可设置比例、透明度与锁定状态。</span></div>
+          </div>
+          <div class="modal-actions"><button class="btn btn-secondary">取消</button><button class="btn btn-primary">导入文件</button></div>
+        </div>
+      </div>
+      <div class="note">Modal 遮罩为 <code class="inline">rgba(15,23,42,.44)</code>。打开时锁定页面滚动并将焦点移入；关闭后焦点返回原触发器。</div>
+
+      <div class="divider"></div>
+      <div class="component-title">7.4 Popover / 帮助卡</div>
+      <div class="component-desc">用于参数解释、颜色选择、快捷操作。与 Tooltip 不同，Popover 可包含按钮和输入控件。</div>
+      <div class="popover">
+        <h4>Grid snapping</h4>
+        <p style="margin-bottom:12px">对象移动时吸附到 0.50m 网格。按住 Alt 可临时忽略吸附。</p>
+        <div class="row"><button class="btn btn-secondary">0.10m</button><button class="btn btn-primary">0.50m</button><button class="btn btn-secondary">1.00m</button></div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="component-title">7.5 Loading / Progress / Skeleton</div>
+      <div class="component-grid">
+        <div class="component-card"><div class="row"><div class="spinner"></div><span style="font-size:10px">Generating preview…</span></div></div>
+        <div class="component-card"><div class="label" style="margin-bottom:8px">Uploading reference · 64%</div><div class="progress"><span></span></div></div>
+        <div class="component-card"><div class="skeleton" style="width:45%;margin-bottom:10px"></div><div class="skeleton" style="margin-bottom:8px"></div><div class="skeleton" style="width:72%"></div></div>
+        <div class="component-card" style="text-align:center"><div style="font-size:22px;color:var(--mn-text-muted)">□</div><div style="font-size:11px;font-weight:700;margin-top:5px">No materials found</div><div class="help">Try another keyword or clear filters.</div></div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="component-title">7.6 通知状态</div>
+      <div class="row" style="align-items:stretch">
+        <div class="toast success"><span style="color:var(--mn-success)">●</span><span>Changes saved</span><span>×</span></div>
+        <div class="toast warning"><span style="color:var(--mn-warning)">▲</span><span>Connection is unstable</span><span>×</span></div>
+        <div class="toast danger"><span style="color:var(--mn-danger)">●</span><span>Upload failed</span><span>×</span></div>
+      </div>
+    </section>
+
+    <section class="section" id="states">
+      <div class="eyebrow">Section 08</div>
+      <h2>交互状态与动效</h2>
+      <p class="section-intro">每个交互组件至少实现 Default、Hover、Focus、Active/Selected、Disabled；异步组件增加 Loading 与 Error。</p>
+      <div style="overflow:auto">
+        <table class="state-table">
+          <thead><tr><th>状态</th><th>视觉规则</th><th>行为规则</th></tr></thead>
+          <tbody>
+            <tr><td>Hover</td><td>中性控件背景由 #EEF3F1 → #E5ECE9；图标/文字加深。</td><td>150ms；仅鼠标设备使用，不作为唯一提示。</td></tr>
+            <tr><td>Focus</td><td>teal 边框 + 3px 半透明 ring。</td><td>键盘焦点必须可见；Tab 顺序与视觉顺序一致。</td></tr>
+            <tr><td>Selected</td><td>teal soft 背景 + teal 边框/指示条；文字加深。</td><td>提供 <code class="inline">aria-selected</code>、<code class="inline">aria-pressed</code> 或 checked 状态。</td></tr>
+            <tr><td>Disabled</td><td>整体透明度 42%，不使用 hover。</td><td>禁止点击，并说明不可用原因（必要时 Tooltip）。</td></tr>
+            <tr><td>Loading</td><td>按钮保留原宽度，文字可替换为 spinner + 动作中。</td><td>防止重复提交；超过 10s 提供取消或状态说明。</td></tr>
+            <tr><td>Error</td><td>danger 边框/文本 + 图标，错误说明紧邻字段。</td><td>焦点移动到首个错误；保留用户输入。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="rules" style="margin-top:18px">
+        <div class="rule"><div class="rule-name">微交互</div><div class="rule-value">150ms ease：按钮、Tab、图标、输入框、Tooltip。</div></div>
+        <div class="rule"><div class="rule-name">面板开合</div><div class="rule-value">220ms <code class="inline">cubic-bezier(.2,.8,.2,1)</code>：Library、Inspector、Popover。</div></div>
+        <div class="rule"><div class="rule-name">Modal</div><div class="rule-value">遮罩淡入 180ms；容器从 translateY(8px) + scale(.98) 进入，220ms。</div></div>
+        <div class="rule"><div class="rule-name">减少动态</div><div class="rule-value">遵循 <code class="inline">prefers-reduced-motion</code>，关闭位移、缩放和循环动画。</div></div>
+      </div>
+    </section>
+
+    <section class="section" id="accessibility">
+      <div class="eyebrow">Section 09</div>
+      <h2>可访问性与键盘规范</h2>
+      <p class="section-intro">编辑器高度依赖图标和快捷键，因此语义、焦点与可点击面积必须在实现阶段同时处理。</p>
+      <div class="rules">
+        <div class="rule"><div class="rule-name">可点击尺寸</div><div class="rule-value">桌面高密度工具最小 32×32px，主 Rail 为 42×42px；触控场景扩展到至少 44×44px。</div></div>
+        <div class="rule"><div class="rule-name">图标按钮</div><div class="rule-value">必须有 <code class="inline">aria-label</code>；Tooltip 文本与 aria-label 保持一致。</div></div>
+        <div class="rule"><div class="rule-name">键盘</div><div class="rule-value">Esc 取消当前工具/关闭浮层；Enter/Space 激活按钮；方向键浏览菜单、Tabs 与单选组。</div></div>
+        <div class="rule"><div class="rule-name">焦点管理</div><div class="rule-value">Modal 使用焦点陷阱；菜单打开后焦点进入首项；关闭后返回触发器。</div></div>
+        <div class="rule"><div class="rule-name">对比度</div><div class="rule-value">正文至少 4.5:1；大字和非文本关键图形至少 3:1；Muted 文本不承载关键操作。</div></div>
+        <div class="rule"><div class="rule-name">快捷键冲突</div><div class="rule-value">输入框聚焦时，不触发 V / Z / X 等全局工具快捷键；Mac 与 Windows 文案分别显示 ⌘ / Ctrl。</div></div>
+      </div>
+    </section>
+
+    <section class="section" id="ai">
+      <div class="eyebrow">Section 10</div>
+      <h2>AI 生成与开发实现约束</h2>
+      <p class="section-intro">以下约束用于让 AI 生成的新页面或组件继续保持 MeasureNavi 编辑器浅色主题的一致性。</p>
+      <div class="code"><span class="comment">AI_IMPLEMENTATION_CONTRACT</span>
+theme = "light"
+font = "Inter"
+base_spacing_unit = 4px
+default_control_height = 32px | 34px
+default_radius = 10px
+panel_radius = 12px
+floating_radius = 12px | 16px
+primary_action = teal_gradient
+selected_state = teal_soft_background + teal_indicator
+neutral_control = #EEF3F1
+neutral_control_hover = #E5ECE9
+focus = teal_border + 3px_translucent_ring
+dangerous_action = confirmation_required
+icon_only_button = aria-label_required
+menu_close = outside_click | Escape
+modal_focus = trapped_and_restored
+hardcoded_color = avoid_when_token_exists
+dark_theme_token = do_not_mix_into_light_theme</div>
+      <div class="subhead">组件来源标记</div>
+      <div class="rules">
+        <div class="rule"><div class="rule-name"><span class="tag">EXTRACTED</span></div><div class="rule-value">来自原编辑器页面，可视为当前产品真实样式。</div></div>
+        <div class="rule"><div class="rule-name"><span class="tag added">ADDED</span></div><div class="rule-value">原页面未展示，按现有 token、尺寸、圆角、阴影和交互逻辑补齐；后续实现应优先采用。</div></div>
+      </div>
+      <div class="note">本规范只定义浅色系。未来制作深色系时应保持组件结构、尺寸与行为一致，只替换主题颜色、边框与阴影 token。</div>
+    </section>
+
+    <footer>MeasureNavi Editor Light Theme Design Specification v1.0 · Based on MeasureNavi_编辑器界面.html · 2026/06/22</footer>
+  </main>
+</body>
+</html>

@@ -111,13 +111,13 @@ export function isValidWallSideFace(normal: [number, number, number] | undefined
   return Math.abs(normal[2]) > 0.7
 }
 
-/**
- * Strip the `isTransient` flag from node metadata before committing.
- */
+/** Strip placement-only metadata flags before committing a draft. */
 export function stripTransient(meta: any): any {
   if (!isObject(meta)) return meta
-  const { isTransient, ...rest } = meta as Record<string, any>
-  return rest
+  const nextMeta = { ...(meta as Record<string, any>) }
+  delete nextMeta.isNew
+  delete nextMeta.isTransient
+  return nextMeta
 }
 
 const _up = new Vector3(0, 1, 0)

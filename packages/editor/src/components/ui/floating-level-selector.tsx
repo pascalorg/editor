@@ -41,7 +41,7 @@ import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
 } from '../../lib/level-duplication'
-import { getDefaultLevelName, getLevelDisplayName } from '../../lib/level-name'
+import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import {
   getEditorClipboardSnapshot,
@@ -60,6 +60,10 @@ import {
   DialogTitle,
 } from './primitives/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from './primitives/popover'
+
+// Style follow-up: floating level selector follows MeasureNavi toolbar/menu type tokens.
+const LEVEL_SELECTOR_TEXT = 'mn-toolbar-text font-medium'
+const LEVEL_SELECTOR_MENU_TEXT = 'mn-menu-meta-text'
 
 // ── Inline rename input for a level row ─────────────────────────────────────
 
@@ -99,7 +103,10 @@ function LevelInlineRename({
 
   return (
     <input
-      className="m-0 h-full w-full min-w-0 rounded-lg bg-transparent px-2.5 py-1.5 font-medium text-foreground text-xs outline-none ring-1 ring-primary/50"
+      className={cn(
+        'm-0 h-full w-full min-w-0 rounded-lg bg-transparent px-2.5 py-1.5 text-foreground outline-none ring-1 ring-primary/50',
+        LEVEL_SELECTOR_TEXT,
+      )}
       onBlur={handleSave}
       onChange={(e) => setValue(e.target.value)}
       onClick={(e) => e.stopPropagation()}
@@ -183,7 +190,10 @@ function LevelRow({
           </button>
 
           <button
-            className="flex min-w-0 flex-1 items-center justify-start py-1.5 pr-2 pl-1 font-medium text-xs"
+            className={cn(
+              'flex min-w-0 flex-1 items-center justify-start py-1.5 pr-2 pl-1',
+              LEVEL_SELECTOR_TEXT,
+            )}
             onClick={onSelect}
             onDoubleClick={(e) => {
               e.stopPropagation()
@@ -206,9 +216,17 @@ function LevelRow({
                 <MoreVertical className="h-3 w-3" />
               </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-44 p-1" side="right" sideOffset={8}>
+            <PopoverContent
+              align="start"
+              className="w-44 border-border/45 bg-popover/95 p-1 shadow-xl backdrop-blur-xl"
+              side="right"
+              sideOffset={8}
+            >
               <button
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground"
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+                  LEVEL_SELECTOR_MENU_TEXT,
+                )}
                 onClick={(e) => {
                   e.stopPropagation()
                   onDuplicate()
@@ -219,7 +237,10 @@ function LevelRow({
                 Duplicate level
               </button>
               <button
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground"
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+                  LEVEL_SELECTOR_MENU_TEXT,
+                )}
                 onClick={(e) => {
                   e.stopPropagation()
                   setDuplicateDialogOpen(true)
@@ -231,7 +252,10 @@ function LevelRow({
               </button>
               {onPaste && (
                 <button
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground"
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+                    LEVEL_SELECTOR_MENU_TEXT,
+                  )}
                   onClick={(e) => {
                     e.stopPropagation()
                     onPaste()
@@ -243,7 +267,10 @@ function LevelRow({
                 </button>
               )}
               <button
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-red-400"
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground',
+                  LEVEL_SELECTOR_MENU_TEXT,
+                )}
                 onClick={(e) => {
                   e.stopPropagation()
                   onRequestDelete()
@@ -506,11 +533,11 @@ export function FloatingLevelSelector() {
   const sortableLevelIds = reversedLevels.map((level) => level.id)
 
   const addButtonClass =
-    'absolute left-1/2 z-10 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-border/80 bg-neutral-800 text-muted-foreground/60 shadow-md transition-colors hover:bg-neutral-700 hover:text-foreground'
+    'absolute left-1/2 z-10 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-border/80 bg-background text-muted-foreground shadow-md transition-colors hover:bg-accent hover:text-foreground'
 
   return (
     <>
-      <div className="pointer-events-auto absolute top-14 left-3 z-20">
+      <div className="pointer-events-auto absolute top-14 left-3 z-20" data-pascal-level-selector>
         <div className="relative">
           {/* Floating + at top edge */}
           {!draggingLevelId && (
@@ -602,14 +629,20 @@ export function FloatingLevelSelector() {
           </DialogHeader>
           <DialogFooter>
             <button
-              className="rounded-full border border-border px-4 py-2 text-sm transition-colors hover:bg-accent"
+              className={cn(
+                'rounded-full border border-border px-4 py-2 transition-colors hover:bg-accent',
+                LEVEL_SELECTOR_TEXT,
+              )}
               onClick={() => setDeletingLevel(null)}
               type="button"
             >
               Cancel
             </button>
             <button
-              className="rounded-full bg-red-600 px-4 py-2 text-sm text-white transition-colors hover:bg-red-700"
+              className={cn(
+                'rounded-full bg-destructive px-4 py-2 text-destructive-foreground transition-colors hover:bg-destructive/90',
+                LEVEL_SELECTOR_TEXT,
+              )}
               onClick={handleConfirmDelete}
               type="button"
             >

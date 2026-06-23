@@ -3,7 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  emitter,
   useInteractive,
   useScene,
   WindowNode,
@@ -14,16 +13,14 @@ import {
   cn,
   PanelSection,
   PanelWrapper,
-  PresetsPopover,
   SegmentedControl,
   SliderControl,
   ToggleControl,
   triggerSFX,
   useEditor,
-  usePresetsAdapter,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { BookMarked, Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
+import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useRef } from 'react'
 
 function isSameWindowValue(current: unknown, next: unknown): boolean {
@@ -103,8 +100,6 @@ export default function WindowPanel() {
     key: keyof WindowNode
     value: unknown
   } | null>(null)
-
-  const adapter = usePresetsAdapter()
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as WindowNode | undefined) : undefined,
@@ -220,6 +215,8 @@ export default function WindowPanel() {
       rotation: [...node.rotation] as [number, number, number],
       side: node.side,
       wallId: node.wallId,
+      roofSegmentId: node.roofSegmentId,
+      roofFace: node.roofFace,
       parentId: node.parentId,
       width: node.width,
       height: node.height,
@@ -250,62 +247,6 @@ export default function WindowPanel() {
     setMovingNode(duplicate)
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
-
-  const getWindowPresetData = useCallback(() => {
-    if (!node) return null
-    return {
-      width: node.width,
-      height: node.height,
-      windowType: node.windowType,
-      operationState: node.operationState,
-      awningDirection: node.awningDirection,
-      casementStyle: node.casementStyle,
-      hingesSide: node.hingesSide,
-      frameThickness: node.frameThickness,
-      frameDepth: node.frameDepth,
-      openingKind: node.openingKind,
-      openingShape: node.openingShape,
-      openingRadiusMode: node.openingRadiusMode ?? 'all',
-      openingCornerRadii: node.openingCornerRadii ?? [0.15, 0.15, 0.15, 0.15],
-      cornerRadius: node.cornerRadius,
-      archHeight: node.archHeight,
-      openingRevealRadius: node.openingRevealRadius,
-      columnRatios: node.columnRatios,
-      rowRatios: node.rowRatios,
-      columnDividerThickness: node.columnDividerThickness,
-      rowDividerThickness: node.rowDividerThickness,
-      sill: node.sill,
-      sillDepth: node.sillDepth,
-      sillThickness: node.sillThickness,
-    }
-  }, [node])
-
-  const handleSavePreset = useCallback(
-    async (name: string) => {
-      const data = getWindowPresetData()
-      if (!(data && selectedId)) return
-      const presetId = await adapter.savePreset('window', name, data)
-      if (presetId) emitter.emit('preset:generate-thumbnail', { presetId, nodeId: selectedId })
-    },
-    [getWindowPresetData, selectedId, adapter],
-  )
-
-  const handleOverwritePreset = useCallback(
-    async (id: string) => {
-      const data = getWindowPresetData()
-      if (!(data && selectedId)) return
-      await adapter.overwritePreset('window', id, data)
-      emitter.emit('preset:generate-thumbnail', { presetId: id, nodeId: selectedId })
-    },
-    [getWindowPresetData, selectedId, adapter],
-  )
-
-  const handleApplyPreset = useCallback(
-    (data: Record<string, unknown>) => {
-      handleUpdate(data as Partial<WindowNode>)
-    },
-    [handleUpdate],
-  )
 
   if (!(node && node.type === 'window' && selectedId)) return null
 
@@ -447,27 +388,6 @@ export default function WindowPanel() {
       title={node.name || 'Window'}
       width={320}
     >
-      {/* Presets strip */}
-      <div className="border-border/30 border-b px-3 pt-2.5 pb-1.5">
-        <PresetsPopover
-          isAuthenticated={adapter.isAuthenticated}
-          onApply={handleApplyPreset}
-          onDelete={(id) => adapter.deletePreset(id)}
-          onFetchPresets={(tab) => adapter.fetchPresets('window', tab)}
-          onOverwrite={handleOverwritePreset}
-          onRename={(id, name) => adapter.renamePreset(id, name)}
-          onSave={handleSavePreset}
-          onToggleCommunity={adapter.togglePresetCommunity}
-          tabs={adapter.tabs}
-          type="window"
-        >
-          <button className="flex w-full items-center gap-2 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 font-medium text-muted-foreground text-xs transition-colors hover:bg-[#3e3e3e] hover:text-foreground">
-            <BookMarked className="h-3.5 w-3.5 shrink-0" />
-            <span>Presets</span>
-          </button>
-        </PresetsPopover>
-      </div>
-
       <PanelSection title="Type">
         <SegmentedControl
           onChange={(value) =>

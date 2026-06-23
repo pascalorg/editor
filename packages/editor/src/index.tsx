@@ -1,5 +1,18 @@
+// Re-exports of the scene / viewer hooks so consumers composing their
+// own shells on top of `@pascal-app/editor` (community-app, embedders)
+// don't have to learn three separate package imports. The canonical
+// definitions still live in `@pascal-app/core` / `@pascal-app/viewer`.
+export { useScene } from '@pascal-app/core'
+export { useViewer } from '@pascal-app/viewer'
 export type { EditorProps } from './components/editor'
 export { default as Editor } from './components/editor'
+// Headless component aliases: the implementation files keep their
+// internal names (`ParametricInspector`, `FloatingActionMenu`) because
+// they're referenced throughout the editor's own internals; the public
+// surface uses the shorter, shell-friendly names from the unified
+// preset-system spec.
+export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
+export { formatMeasurement, MeasurementPill } from './components/editor/measurement-pill'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,
@@ -46,9 +59,13 @@ export {
   usePlacementCoordinator,
 } from './components/tools/item/use-placement-coordinator'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
+export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
+export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'
+export { useFreshPlacementVisibility } from './components/tools/shared/fresh-placement-visibility'
 // Phase 5 Stage D — PolygonEditor for slab/ceiling boundary + hole editors.
 export {
   PolygonEditor,
+  type PolygonEditorPlanPointSnapContext,
   type PolygonEditorProps,
 } from './components/tools/shared/polygon-editor'
 export {
@@ -86,13 +103,30 @@ export {
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
+  snapWallDraftPointDetailed,
   WALL_FINE_GRID_STEP,
+  WALL_GRID_STEP,
+  type WallDraftSnapKind,
+  type WallDraftSnapResult,
   type WallPlanPoint,
+  type WallSnapRadii,
 } from './components/tools/wall/wall-drafting'
-export { CameraActions as ViewerToolbarRight } from './components/ui/action-menu/camera-actions'
-export { ViewToggles as ViewerToolbarLeft } from './components/ui/action-menu/view-toggles'
+// `ToolbarLeft` / `ToolbarRight` are the headless-spec aliases for the
+// existing `ViewerToolbarLeft` / `ViewerToolbarRight` exports — the
+// underlying components are the same; the alias just matches the names
+// used in `pascalorg/private-editor:plans/community-preset-system.md`
+// so consumer code stays close to the spec vocabulary.
+export {
+  CameraActions as ToolbarRight,
+  CameraActions as ViewerToolbarRight,
+} from './components/ui/action-menu/camera-actions'
+export {
+  ViewToggles as ToolbarLeft,
+  ViewToggles as ViewerToolbarLeft,
+} from './components/ui/action-menu/view-toggles'
 export { useCommandPalette } from './components/ui/command-palette'
 export { ActionButton, ActionGroup } from './components/ui/controls/action-button'
+export { MaterialPaintPanel } from './components/ui/controls/material-paint-panel'
 export { MaterialPicker } from './components/ui/controls/material-picker'
 export { MetricControl } from './components/ui/controls/metric-control'
 export { PanelSection } from './components/ui/controls/panel-section'
@@ -107,14 +141,16 @@ export { CollectionsPopover } from './components/ui/panels/collections/collectio
 // ceiling height presets, etc.) use `parametrics.customPanel` to mount
 // a kind-owned panel and need PanelWrapper for the chrome.
 export { PanelWrapper } from './components/ui/panels/panel-wrapper'
-// Presets popover — used by kind-owned door / window panels for their
-// hardware / type / opening presets.
-export { PresetsPopover } from './components/ui/panels/presets/presets-popover'
+export { ParametricInspector as Inspector } from './components/ui/panels/parametric-inspector'
 export { PALETTE_COLORS } from './components/ui/primitives/color-dot'
 export {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from './components/ui/primitives/dropdown-menu'
 export { useSidebarStore } from './components/ui/primitives/sidebar'
@@ -122,6 +158,7 @@ export { Slider } from './components/ui/primitives/slider'
 export { SceneLoader } from './components/ui/scene-loader'
 export type { ExtraPanel } from './components/ui/sidebar/icon-rail'
 export { ItemsPanel } from './components/ui/sidebar/panels/items-panel'
+export type { FunctionTreeNode } from './components/ui/sidebar/panels/items-panel/function-tree-panel'
 export {
   type ProjectVisibility,
   SettingsPanel,
@@ -129,8 +166,6 @@ export {
 } from './components/ui/sidebar/panels/settings-panel'
 export type { SitePanelProps } from './components/ui/sidebar/panels/site-panel'
 export type { SidebarTab } from './components/ui/sidebar/tab-bar'
-export type { PresetsAdapter, PresetsTab } from './contexts/presets-context'
-export { PresetsProvider, usePresetsAdapter } from './contexts/presets-context'
 export type { SaveStatus } from './hooks/use-auto-save'
 // useDragAction is the React-side glue for the registry's DragAction
 // primitive. Public so registry-driven kinds (Phase 5+ Stage D ports)
@@ -138,6 +173,14 @@ export type { SaveStatus } from './hooks/use-auto-save'
 export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
 export { markToolCancelConsumed } from './hooks/use-keyboard'
+export { type Selection, useSelection } from './hooks/use-selection'
+export {
+  CEILING_ALIGNMENT_THRESHOLD_M,
+  type CeilingPlanSnapInput,
+  type CeilingPlanSnapResult,
+  clearCeilingSnapFeedback,
+  resolveCeilingPlanPointSnap,
+} from './lib/ceiling-plan-snap'
 export { EDITOR_LAYER } from './lib/constants'
 // Helper libs used by the kind-owned roof / stair / elevator panels.
 export {
@@ -155,13 +198,20 @@ export {
 // their own polygon in isolation — the stair (parent) owns the
 // computation and emits the whole stack as one registry entry.
 export {
+  alignFloorplanDraftPoint,
+  applyFloorplanAlignment,
   buildFloorplanStairEntry,
+  FLOORPLAN_ALIGNMENT_THRESHOLD_M,
+  FLOORPLAN_DRAFT_ALIGN_ID,
+  type FloorplanAlignmentResult,
   type FloorplanStairArrowEntry,
   type FloorplanStairEntry,
   type FloorplanStairSegmentEntry,
   getFloorplanWallThickness,
 } from './lib/floorplan'
+export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
 export {
+  buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
@@ -169,15 +219,67 @@ export {
   getActivePaintMaterialLabel,
   hasActivePaintMaterial,
 } from './lib/material-paint'
-export { duplicateRoofSubtree } from './lib/roof-duplication'
+export {
+  formatLinearMeasurement,
+  getLinearUnitLabel,
+  type LinearUnit,
+  linearControlValueToMeters,
+  linearUnitToMeters,
+  metersToLinearUnit,
+} from './lib/measurements'
+export {
+  addFreshPlacementMetadata,
+  getPlacementMetadataRecord,
+  isFreshPlacementMetadata,
+  stripPlacementMetadataFlags,
+} from './lib/placement-metadata'
+export {
+  type PlanarCursorPlacementMode,
+  type PlanarPoint,
+  resolvePlanarCursorPosition,
+} from './lib/planar-cursor-placement'
+export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
+// Roof wall-face hit resolution + overlap guard — shared by the
+// kind-owned door / window tools in `@pascal-app/nodes` and the item
+// placement coordinator's roof-wall strategy.
+export { hasRoofFaceChildOverlap, type RoofWallHit, resolveRoofWallHit } from './lib/roof-wall-hit'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { triggerSFX } from './lib/sfx-bus'
+export {
+  clearSlabSnapFeedback,
+  resolveSlabPlanPointSnap,
+  SLAB_ALIGNMENT_THRESHOLD_M,
+  type SlabPlanSnapInput,
+  type SlabPlanSnapResult,
+} from './lib/slab-plan-snap'
 export { duplicateStairSubtree } from './lib/stair-duplication'
+export {
+  getBuildingLevelsForLevel,
+  getStairLevelOptions,
+  resolveStairDestinationLevel,
+  resolveStairFromLevelId,
+  resolveStairPlacementLevelId,
+  resolveStairToLevelId,
+} from './lib/stair-levels'
+export {
+  clearSurfacePlanSnapFeedback,
+  resolveSurfacePlanPointSnap,
+  SURFACE_ALIGNMENT_THRESHOLD_M,
+  type SurfacePlanSnapInput,
+  type SurfacePlanSnapResult,
+} from './lib/surface-plan-snap'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
 export { cn } from './lib/utils'
+export {
+  getActiveBuildingPose,
+  resolveAlignmentForActiveBuilding,
+  snapBuildingLocalToWorldGrid,
+  snapWorldXZForActiveBuilding,
+} from './lib/world-grid-snap'
+export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type {
@@ -185,7 +287,10 @@ export type {
   MovingFenceEndpoint,
   MovingWallEndpoint,
   SplitOrientation,
+  Tool,
+  ToolDefaults,
   ViewMode,
+  WorkspaceMode,
 } from './store/use-editor'
 export { default as useEditor } from './store/use-editor'
 export {
@@ -193,6 +298,12 @@ export {
   type PaletteViewProps,
   usePaletteViewRegistry,
 } from './store/use-palette-view-registry'
+export { default as usePlacementPreview } from './store/use-placement-preview'
 export { useUploadStore } from './store/use-upload'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
 export { AddCatalogPanel } from './components/ui/sidebar/panels/add-catalog-panel'
+export {
+  default as useWallSnapIndicator,
+  type WallSnapKind,
+  type WallSnapPoint,
+} from './store/use-wall-snap-indicator'

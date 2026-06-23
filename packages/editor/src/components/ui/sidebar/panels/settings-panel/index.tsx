@@ -384,6 +384,8 @@ export function SettingsPanel({
   const exportScene = useViewer((state) => state.exportScene)
   const showGrid = useViewer((state) => state.showGrid)
   const shadows = useViewer((state) => state.shadows)
+  const preserveItemModelMaterials = useViewer((state) => state.preserveItemModelMaterials)
+  const setPreserveItemModelMaterials = useViewer((state) => state.setPreserveItemModelMaterials)
   const setPhase = useEditor((state) => state.setPhase)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
@@ -603,6 +605,21 @@ export function SettingsPanel({
           </div>
         </div>
       )}
+
+      {/* Rendering Section */}
+      <div className="space-y-3">
+        <label className="font-medium text-muted-foreground text-xs uppercase">Rendering</label>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="font-medium text-sm">Preserve 3D model materials</div>
+            <div className="text-muted-foreground text-xs">Use original catalog model textures</div>
+          </div>
+          <Switch
+            checked={preserveItemModelMaterials}
+            onCheckedChange={setPreserveItemModelMaterials}
+          />
+        </div>
+      </div>
 
       {/* Export Section */}
       <div className="space-y-2">

@@ -4,23 +4,23 @@ import {
   type CeilingNode,
   getMaterialPresetByRef,
   resolveMaterial,
+  useLiveTransforms,
   useRegistry,
+  useScene,
 } from '@pascal-app/core'
 import {
   createSurfaceRoleMaterial,
   NodeRenderer,
-  useNodeEvents,
+  resolveSurfaceColor,
   useViewer,
 } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef } from 'react'
-import { BufferGeometry, Float32BufferAttribute } from 'three'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { float, mix, positionWorld, smoothstep } from 'three/tsl'
 import { BackSide, FrontSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
+import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 
 function createEmptyGeometry() {
-  const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new Float32BufferAttribute([], 3))
-  return geometry
+  return createPlaceholderGeometry()
 }
 
 const gridScale = 5
@@ -68,10 +68,25 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const gridPlaceholderGeometry = useMemo(createEmptyGeometry, [])
 
   useRegistry(node.id, 'ceiling', ref)
-  const handlers = useNodeEvents(node, 'ceiling')
+  // Build the real geometry on mount instead of relying on a child item to
+  // mark us dirty (CeilingSystem only rebuilds dirty ceilings). Ceiling-hosted
+  // items are async GLB loads, so without this the ceiling holds its
+  // placeholder geometry until the first child finishes downloading — and a
+  // childless ceiling would never build at all. Mirrors WallRenderer /
+  // RoofRenderer.
+  useLayoutEffect(() => {
+    useScene.getState().markDirty(node.id)
+  }, [node.id])
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const liveTransform = useLiveTransforms((s) => s.get(node.id))
+  const ceilingY = (node.height ?? 2.5) - 0.01 + (liveTransform?.position[1] ?? 0)
+  const position: [number, number, number] = [
+    liveTransform?.position[0] ?? 0,
+    ceilingY,
+    liveTransform?.position[2] ?? 0,
+  ]
 
   useEffect(
     () => () => {
@@ -86,8 +101,17 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
     // 'ceiling' role colour; only an explicit preset/material keeps a texture.
     const hasExplicit = Boolean(node.materialPreset || node.material)
     if (!textures || !hasExplicit) {
+      // Bottom (seen from inside the room, looking up) stays opaque so the
+      // ceiling reads as a solid surface. Top uses the transparent
+      // grid-pattern material so the ceiling stays see-through whenever
+      // the editor reveals the `ceiling-grid` overlay (placing a
+      // ceiling-hosted item, or selecting one of its children — e.g.
+      // after committing a placement). Without this the top mesh shipped
+      // an opaque surface-role material, so a top-down camera lost view
+      // of everything under the ceiling once the overlay turned on.
+      const ceilingColor = resolveSurfaceColor('ceiling', colorPreset, sceneTheme)
       return {
-        topMaterial: createSurfaceRoleMaterial('ceiling', colorPreset, FrontSide, sceneTheme),
+        topMaterial: getCeilingMaterials(ceilingColor).topMaterial,
         bottomMaterial: createSurfaceRoleMaterial('ceiling', colorPreset, BackSide, sceneTheme),
       }
     }
@@ -108,16 +132,20 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   ])
 
   return (
-    <mesh geometry={placeholderGeometry} material={materials.bottomMaterial} ref={ref}>
+    <mesh
+      geometry={placeholderGeometry}
+      material={materials.bottomMaterial}
+      position={position}
+      ref={ref}
+    >
       <mesh
         geometry={gridPlaceholderGeometry}
         material={materials.topMaterial}
         name="ceiling-grid"
-        {...handlers}
         scale={0}
         visible={false}
       />
-      {node.children.map((childId) => (
+      {(node.children ?? []).map((childId) => (
         <NodeRenderer key={childId} nodeId={childId} />
       ))}
     </mesh>

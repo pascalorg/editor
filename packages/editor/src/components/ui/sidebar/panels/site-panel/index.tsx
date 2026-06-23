@@ -36,7 +36,7 @@ import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
 } from './../../../../../lib/level-duplication'
-import { getDefaultLevelName } from './../../../../../lib/level-name'
+import { getDefaultLevelName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
 import { cn } from './../../../../../lib/utils'
@@ -971,14 +971,15 @@ const LayerToggle = memo(function LayerToggle() {
           ? 'zones'
           : 'none'
 
+  // Style follow-up: MeasureNavi layer toggle uses light neutral control surfaces.
   return (
-    <div className="relative flex items-center gap-1 border-border/50 border-b bg-[#2C2C2E] p-1">
+    <div className="relative flex items-center gap-1 border-border/50 border-b bg-secondary p-1">
       <button
         className={cn(
           'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
           activeTab === 'structure'
             ? 'text-foreground'
-            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
         )}
         onClick={() => {
           setPhase('structure')
@@ -987,7 +988,7 @@ const LayerToggle = memo(function LayerToggle() {
       >
         {activeTab === 'structure' && (
           <motion.div
-            className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
+            className="absolute inset-0 rounded-md bg-background shadow-sm ring-1 ring-border/50"
             layoutId="layerToggleActiveBg"
             transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
           />
@@ -1015,7 +1016,7 @@ const LayerToggle = memo(function LayerToggle() {
           'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
           activeTab === 'furnish'
             ? 'text-foreground'
-            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
         )}
         onClick={() => {
           setPhase('furnish')
@@ -1023,7 +1024,7 @@ const LayerToggle = memo(function LayerToggle() {
       >
         {activeTab === 'furnish' && (
           <motion.div
-            className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
+            className="absolute inset-0 rounded-md bg-background shadow-sm ring-1 ring-border/50"
             layoutId="layerToggleActiveBg"
             transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
           />
@@ -1051,7 +1052,7 @@ const LayerToggle = memo(function LayerToggle() {
           'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
           activeTab === 'zones'
             ? 'text-foreground'
-            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
         )}
         onClick={() => {
           setPhase('structure')
@@ -1060,7 +1061,7 @@ const LayerToggle = memo(function LayerToggle() {
       >
         {activeTab === 'zones' && (
           <motion.div
-            className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
+            className="absolute inset-0 rounded-md bg-background shadow-sm ring-1 ring-border/50"
             layoutId="layerToggleActiveBg"
             transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
           />
@@ -1569,7 +1570,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                   'h-5 w-5 object-contain transition-all',
                   phase !== 'site' && 'opacity-60 grayscale',
                 )}
-                src="/icons/site.png"
+                src="/icons/site-flag.png"
               />
               <span className="font-medium text-sm">{siteNode.name || 'Site'}</span>
             </div>

@@ -6,12 +6,16 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
+import { DoorNode as DoorNodeSchema } from '../schema/nodes/door'
+import { ElevatorNode as ElevatorNodeSchema } from '../schema/nodes/elevator'
 import { LevelNode } from '../schema/nodes/level'
 import {
   getPitchFromActiveRoofHeight,
   type RoofSegmentNode,
   type RoofType,
 } from '../schema/nodes/roof-segment'
+import { segmentPointToRoofWallFace } from '../schema/nodes/roof-segment-walls'
+import { ShelfNode as ShelfNodeSchema } from '../schema/nodes/shelf'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
@@ -21,6 +25,11 @@ import { resetSceneHistoryPauseDepth } from './history-control'
 
 function getFiniteNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function getFiniteNumberInRange(value: unknown, fallback: number, min: number, max: number) {
+  const finite = getFiniteNumber(value, fallback)
+  return Math.min(Math.max(finite, min), max)
 }
 
 function getBoolean(value: unknown, fallback: boolean) {
@@ -36,7 +45,7 @@ function getEnumValue<T extends readonly string[]>(
 }
 
 function getNullableString(value: unknown) {
-  return typeof value === 'string' ? value : null
+  return typeof value === 'string' && value.length > 0 ? value : null
 }
 
 function getStringArray(value: unknown) {
@@ -104,6 +113,120 @@ function normalizeStairSegmentNode(node: Record<string, unknown>) {
 
   const parsed = StairSegmentNodeSchema.safeParse(sanitized)
   return parsed.success ? parsed.data : null
+}
+
+function normalizeDoorNode(node: Record<string, unknown>) {
+  const parsed = DoorNodeSchema.safeParse(node)
+  return parsed.success ? { ...node, ...parsed.data } : null
+}
+
+function normalizeShelfNode(node: Record<string, unknown>) {
+  const sanitized = {
+    ...node,
+    children: getStringArray(node.children),
+    position: getVector3(node.position, [0, 0, 0]),
+    rotation: getVector3(node.rotation, [0, 0, 0]),
+    width: getFiniteNumberInRange(node.width, 1.2, 0.3, 3.0),
+    depth: getFiniteNumberInRange(node.depth, 0.3, 0.1, 1.0),
+    thickness: getFiniteNumberInRange(node.thickness, 0.04, 0.01, 0.1),
+    height: getFiniteNumberInRange(node.height, 0.9, 0.05, 2.5),
+    rows: Math.round(getFiniteNumberInRange(node.rows, 1, 1, 8)),
+    columns: Math.round(getFiniteNumberInRange(node.columns, 1, 1, 6)),
+    style: getEnumValue(
+      node.style,
+      ['wall-shelf', 'bookshelf', 'open-rack', 'cubby'] as const,
+      'wall-shelf',
+    ),
+    withBack: getBoolean(node.withBack, false),
+    withSides: getBoolean(node.withSides, true),
+    withBottom: getBoolean(node.withBottom, false),
+    bracketStyle: getEnumValue(
+      node.bracketStyle,
+      ['minimal', 'industrial', 'hidden'] as const,
+      'minimal',
+    ),
+  }
+
+  const parsed = ShelfNodeSchema.safeParse(sanitized)
+  return parsed.success ? parsed.data : null
+}
+
+function normalizeElevatorNode(node: Record<string, unknown>) {
+  const sanitized = {
+    ...node,
+    position: getVector3(node.position, [0, 0, 0]),
+    rotation: getFiniteNumber(node.rotation, 0),
+    width: getFiniteNumber(node.width, 1.84),
+    depth: getFiniteNumber(node.depth, 1.84),
+    shaftWidth: node.shaftWidth === undefined ? undefined : getFiniteNumber(node.shaftWidth, 1.84),
+    shaftDepth: node.shaftDepth === undefined ? undefined : getFiniteNumber(node.shaftDepth, 1.84),
+    shaftWallThickness: getFiniteNumber(node.shaftWallThickness, 0.09),
+    cabHeight: getFiniteNumber(node.cabHeight, 2.35),
+    doorWidth: getFiniteNumber(node.doorWidth, 0.95),
+    doorHeight: getFiniteNumber(node.doorHeight, 2.1),
+    fromLevelId: getNullableString(node.fromLevelId),
+    toLevelId: getNullableString(node.toLevelId),
+    servedLevelIds:
+      node.servedLevelIds === undefined ? undefined : getStringArray(node.servedLevelIds),
+    disabledLevelIds: getStringArray(node.disabledLevelIds),
+    serviceOnlyLevelIds: getStringArray(node.serviceOnlyLevelIds),
+    defaultLevelId: getNullableString(node.defaultLevelId),
+    speed: getFiniteNumber(node.speed, 2.2),
+    doorDurationMs: getFiniteNumber(node.doorDurationMs, 900),
+    dwellMs: getFiniteNumber(node.dwellMs, 1400),
+  }
+
+  const parsed = ElevatorNodeSchema.safeParse(sanitized)
+  return parsed.success ? parsed.data : null
+}
+
+function findBuildingIdForLevel(levelId: string, nodes: Record<string, any>): string | null {
+  const level = nodes[levelId]
+  const directBuildingId = typeof level?.parentId === 'string' ? level.parentId : null
+  if (directBuildingId && nodes[directBuildingId]?.type === 'building') {
+    return directBuildingId
+  }
+
+  for (const [candidateId, candidate] of Object.entries(nodes)) {
+    if (candidate?.type !== 'building') continue
+    if (getStringArray(candidate.children).includes(levelId)) {
+      return candidateId
+    }
+  }
+
+  return null
+}
+
+function migrateElevatorParent(
+  id: string,
+  node: Record<string, unknown>,
+  nodes: Record<string, any>,
+) {
+  const parentId = typeof node.parentId === 'string' ? node.parentId : null
+  if (!parentId) return node
+  const parent = parentId ? nodes[parentId] : null
+  if (parent?.type !== 'level') return node
+
+  const buildingId = findBuildingIdForLevel(parentId, nodes)
+  if (!buildingId) return node
+  const building = buildingId ? nodes[buildingId] : null
+  if (building?.type !== 'building') return node
+
+  nodes[parentId] = {
+    ...parent,
+    children: getStringArray(parent.children).filter((childId) => childId !== id),
+  }
+
+  const buildingChildren = getStringArray(building.children)
+  nodes[buildingId] = {
+    ...building,
+    children: buildingChildren.includes(id) ? buildingChildren : [...buildingChildren, id],
+  }
+
+  return {
+    ...node,
+    parentId: buildingId,
+  }
 }
 
 function migrateWallSurfaceMaterials(node: Record<string, any>) {
@@ -365,6 +488,13 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       }
     }
 
+    if (node.type === 'door') {
+      const normalized = normalizeDoorNode(node)
+      if (normalized) {
+        patchedNodes[id] = normalized
+      }
+    }
+
     if (node.type === 'stair') {
       const normalized = normalizeStairNode(migrateStairSurfaceMaterials(node))
       if (normalized) {
@@ -383,14 +513,19 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id])
     }
 
-    // Shelf v2: hosting was added in this migration cycle. Older shelves
-    // (saved before the schema gained `children`) need the field
-    // initialised so `createNode(item, shelfId)` finds an array to
-    // append the child id to — without this the host item ends up
-    // orphaned (parented in scene state but not in the shelf's
-    // children list, so the renderer doesn't mount it).
-    if (node.type === 'shelf' && !Array.isArray(node.children)) {
-      patchedNodes[id] = { ...node, children: [] }
+    if (node.type === 'shelf') {
+      const normalized = normalizeShelfNode(node)
+      if (normalized) {
+        patchedNodes[id] = normalized
+      }
+    }
+
+    if (node.type === 'elevator') {
+      const parentMigrated = migrateElevatorParent(id, node, patchedNodes)
+      const normalized = normalizeElevatorNode(parentMigrated)
+      if (normalized) {
+        patchedNodes[id] = normalized
+      }
     }
 
     // Roof-segment hosting was added in this migration cycle (the same
@@ -403,6 +538,55 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
     // `<NodeRenderer>` mount never sees it).
     if (node.type === 'roof-segment' && !Array.isArray((node as { children?: unknown }).children)) {
       patchedNodes[id] = { ...node, children: [] } as AnyNode
+    }
+
+    // Roof-hosted wall children (door / window / item) originally stored
+    // SEGMENT-LOCAL positions with the face yaw in rotation[1]; the
+    // format moved to explicit `roofFace` + FACE-LOCAL coords so the
+    // renderer's face frame can track segment edits live. Convert in
+    // place: face from the old cardinal yaw, u/v from the outer-plane
+    // projection, z re-based from the outer plane to the wall mid-plane.
+    if (
+      (node.type === 'door' || node.type === 'window' || node.type === 'item') &&
+      typeof (node as { roofSegmentId?: unknown }).roofSegmentId === 'string' &&
+      (node as { roofFace?: unknown }).roofFace === undefined
+    ) {
+      const current = patchedNodes[id] as AnyNode & {
+        roofSegmentId: string
+        position: [number, number, number]
+        rotation: [number, number, number]
+      }
+      const segment = patchedNodes[current.roofSegmentId] as
+        | (AnyNode & { wallThickness?: number })
+        | undefined
+      if (segment?.type === 'roof-segment') {
+        const tau = Math.PI * 2
+        const yaw = (((current.rotation?.[1] ?? 0) % tau) + tau) % tau
+        const eps = 1e-3
+        const face =
+          yaw < eps || tau - yaw < eps
+            ? ('front' as const)
+            : Math.abs(yaw - Math.PI) < eps
+              ? ('back' as const)
+              : Math.abs(yaw - Math.PI / 2) < eps
+                ? ('right' as const)
+                : Math.abs(yaw - (3 * Math.PI) / 2) < eps
+                  ? ('left' as const)
+                  : null
+        if (face) {
+          const { u, v, dist } = segmentPointToRoofWallFace(
+            segment as never,
+            face,
+            current.position,
+          )
+          patchedNodes[id] = {
+            ...current,
+            roofFace: face,
+            position: [u, v, dist + (segment.wallThickness ?? 0.1) / 2],
+            rotation: [0, 0, 0],
+          } as AnyNode
+        }
+      }
     }
 
     if (node.type === 'roof') {

@@ -4,8 +4,11 @@ import {
   type FloorplanMoveTarget,
   type RoofNode,
   type RoofSegmentNode,
+  snapScalar,
   useScene,
 } from '@pascal-app/core'
+import { getSegmentGridStep } from '@pascal-app/editor'
+import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 
 const MIN_ROOF_DIM = 1
 
@@ -56,7 +59,7 @@ function resolveSegmentFrame(
  * the math survives any parent-roof rotation.
  */
 export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> = {
-  start({ node, payload, nodes, initialPlanPoint }) {
+  start({ node, payload, nodes, initialPlanPoint, gridSnapStep }) {
     const { axis, side } = payload as RoofSegmentResizePayload
     const segmentId = node.id as AnyNodeId
     const initialValue = axis === 'x' ? node.width : node.depth
@@ -79,7 +82,9 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
       apply({ planPoint }) {
         const currentLocal = projectLocalAxis(planPoint[0], planPoint[1])
         const delta = (currentLocal - initialLocal) * side
-        const newValue = Math.max(MIN_ROOF_DIM, initialValue + 2 * delta)
+        const rawValue = initialValue + 2 * delta
+        const snappedValue = gridSnapStep > 0 ? snapScalar(rawValue, gridSnapStep) : rawValue
+        const newValue = Math.max(MIN_ROOF_DIM, snappedValue)
         lastValue = newValue
         useScene
           .getState()
@@ -145,35 +150,31 @@ export const roofSegmentRotateAffordance: FloorplanAffordance<RoofSegmentNode> =
 export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ node, nodes }) => {
   const segmentId = node.id as AnyNodeId
   const initialY = node.position[1]
-  const { roofRot, cosRoof, sinRoof } = resolveSegmentFrame(node, nodes)
+  const { cx, cz, roofRot, cosRoof, sinRoof } = resolveSegmentFrame(node, nodes)
   const roofId = (node as unknown as { parentId?: AnyNodeId | null }).parentId
   const roof = roofId ? (nodes[roofId] as RoofNode | undefined) : undefined
   const roofPosX = roof?.position[0] ?? 0
   const roofPosZ = roof?.position[2] ?? 0
+  const resolveCursor = createFloorplanCursorResolver({
+    original: [cx, cz],
+    metadata: node.metadata,
+  })
   // Inverse of the forward transform `[cosRoof, -sinRoof; sinRoof, cosRoof]`
   // is `[cosRoof, sinRoof; -sinRoof, cosRoof]`. Used to project world cursor
   // back into roof-local coords.
   void roofRot
-  let lastLocal: [number, number, number] = [
-    node.position[0],
-    node.position[1],
-    node.position[2],
-  ]
+  let lastLocal: [number, number, number] = [node.position[0], node.position[1], node.position[2]]
 
   return {
     affectedIds: [segmentId],
     apply({ planPoint, modifiers }) {
-      const dx = planPoint[0] - roofPosX
-      const dz = planPoint[1] - roofPosZ
+      const step = getSegmentGridStep()
+      const snap = (value: number) => (modifiers.shiftKey ? value : snapScalar(value, step))
+      const worldPoint = resolveCursor(planPoint, { snap })
+      const dx = worldPoint[0] - roofPosX
+      const dz = worldPoint[1] - roofPosZ
       let localX = dx * cosRoof + dz * sinRoof
       let localZ = -dx * sinRoof + dz * cosRoof
-      // 0.5m grid snap (alt held disables). Mirrors the generic Path 2
-      // fallback's `snapPointToGrid` step so floor-plan moves feel
-      // consistent across kinds.
-      if (!modifiers.altKey) {
-        localX = Math.round(localX * 2) / 2
-        localZ = Math.round(localZ * 2) / 2
-      }
       lastLocal = [localX, initialY, localZ]
       useScene.getState().updateNode(segmentId, { position: lastLocal })
     },

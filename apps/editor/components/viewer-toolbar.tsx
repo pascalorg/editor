@@ -5,6 +5,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   useEditor,
   useSidebarStore,
@@ -28,12 +32,16 @@ import {
   EyeOff,
   Footprints,
   Grid2X2,
+  Magnet,
   PenLine,
+  SlidersHorizontal,
   Sparkles,
   SwatchBook,
 } from 'lucide-react'
 import Image from 'next/image'
-import { type ReactNode, useCallback, useState } from 'react'
+import Link from 'next/link'
+import { type ReactNode, useCallback } from 'react'
+import { flushSync } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from './toolbar-tooltip'
 
@@ -42,6 +50,28 @@ const TOOLBAR_CONTAINER =
 
 const TOOLBAR_BTN =
   'flex w-8 items-center justify-center text-muted-foreground/80 transition-colors hover:bg-white/8 hover:text-foreground/90'
+
+// Style follow-up: toolbar text follows the MeasureNavi 11px button type token.
+const TOOLBAR_TEXT = 'mn-toolbar-text font-medium'
+const MENU_META_TEXT = 'mn-menu-meta-text'
+
+function requestWalkthroughPointerLock() {
+  const canvas = document.querySelector<HTMLCanvasElement>('[data-pascal-viewer-3d] canvas')
+  if (!canvas) return
+
+  if (!canvas.hasAttribute('tabindex')) {
+    canvas.tabIndex = -1
+  }
+  canvas.focus({ preventScroll: true })
+
+  if (document.pointerLockElement === canvas) return
+
+  try {
+    canvas.requestPointerLock?.()
+  } catch {
+    return
+  }
+}
 
 function ToolbarTooltip({ children, label }: { children: ReactNode; label: string }) {
   return (
@@ -120,7 +150,8 @@ function ViewModeControl() {
               aria-label={mode.label}
               aria-pressed={isActive}
               className={cn(
-                'flex items-center justify-center gap-1.5 px-2.5 font-medium text-xs transition-colors',
+                'flex items-center justify-center gap-1.5 px-2.5 transition-colors',
+                TOOLBAR_TEXT,
                 isActive
                   ? 'bg-white/10 text-foreground'
                   : 'text-muted-foreground/70 hover:bg-white/8 hover:text-muted-foreground',
@@ -202,7 +233,7 @@ function LevelModeToggle() {
         ) : (
           <IconifyIcon height={14} icon="charm:stack-push" width={14} />
         )}
-        <span className="font-medium text-xs">{levelModeLabels[levelMode] ?? 'Stack'}</span>
+        <span className={TOOLBAR_TEXT}>{levelModeLabels[levelMode] ?? 'Stack'}</span>
       </button>
     </ToolbarTooltip>
   )
@@ -233,100 +264,14 @@ function WallModeToggle() {
         type="button"
       >
         <Image alt="" className="h-4 w-4 object-contain" height={16} src={config.icon} width={16} />
-        <span className="font-medium text-xs">{config.label}</span>
+        <span className={TOOLBAR_TEXT}>{config.label}</span>
       </button>
     </ToolbarTooltip>
   )
 }
 
-function RenderModeMenu() {
-  const shading = useViewer((state) => state.shading)
-  const setShading = useViewer((state) => state.setShading)
-  const active = SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
-  const ActiveIcon = active.icon
-
-  return (
-    <DropdownMenu>
-      <ToolbarTooltip label={`Render: ${active.name}`}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-label={`Render: ${active.name}`}
-            className={cn(
-              TOOLBAR_BTN,
-              'w-auto gap-1.5 px-2.5',
-              shading === 'rendered' && 'bg-white/10 text-foreground/90',
-            )}
-            type="button"
-          >
-            <ActiveIcon className="h-3.5 w-3.5" />
-            <span className="font-medium text-xs">{active.name}</span>
-          </button>
-        </DropdownMenuTrigger>
-      </ToolbarTooltip>
-      <DropdownMenuContent align="center" className="min-w-56" side="bottom">
-        {SHADING_OPTIONS.map((option) => {
-          const OptionIcon = option.icon
-          return (
-            <DropdownMenuItem key={option.id} onSelect={() => setShading(option.id)}>
-              <OptionIcon className="h-4 w-4" />
-              <div className="flex flex-col">
-                <span className="text-foreground">{option.name}</span>
-                <span className="text-muted-foreground text-xs">{option.detail}</span>
-              </div>
-              {shading === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
-            </DropdownMenuItem>
-          )
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
-function SceneThemeMenu() {
-  const sceneTheme = useViewer((state) => state.sceneTheme)
-  const setSceneTheme = useViewer((state) => state.setSceneTheme)
-  const active = getSceneTheme(sceneTheme)
-
-  return (
-    <DropdownMenu>
-      <ToolbarTooltip label={`Scene theme: ${active.name}`}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-label={`Scene theme: ${active.name}`}
-            className={cn(TOOLBAR_BTN, 'w-28 gap-1.5 px-2.5 text-foreground/90')}
-            type="button"
-          >
-            <SwatchBook className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate font-medium text-xs">{active.name}</span>
-          </button>
-        </DropdownMenuTrigger>
-      </ToolbarTooltip>
-      <DropdownMenuContent align="center" className="min-w-48" side="bottom">
-        {SCENE_THEMES.map((theme) => {
-          const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
-            (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
-          )
-          return (
-            <DropdownMenuItem key={theme.id} onSelect={() => setSceneTheme(theme.id)}>
-              <span
-                className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
-                style={{ backgroundColor: theme.background }}
-              >
-                {swatches.map((color, index) => (
-                  <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
-                ))}
-              </span>
-              <span className="text-foreground">{theme.name}</span>
-              {sceneTheme === theme.id ? (
-                <Check className="ml-auto h-4 w-4 text-foreground" />
-              ) : null}
-            </DropdownMenuItem>
-          )
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
+// One dropdown that gathers every "how the scene looks" control: grid, shadows,
+// camera projection, units, render mode, edges and scene theme.
 
 const EDGE_OPTIONS = [
   { id: 'off', name: 'Off', detail: 'No edge lines' },
@@ -334,133 +279,212 @@ const EDGE_OPTIONS = [
   { id: 'strong', name: 'Strong', detail: 'Crisp, opaque edge lines' },
 ] as const satisfies readonly { id: EdgeMode; name: string; detail: string }[]
 
-function EdgesMenu() {
+const SUBMENU_CONTENT_CLASS = 'min-w-56 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl'
+
+function DisplayMenu() {
+  const showGrid = useViewer((state) => state.showGrid)
+  const setShowGrid = useViewer((state) => state.setShowGrid)
+  const unit = useViewer((state) => state.unit)
+  const setUnit = useViewer((state) => state.setUnit)
+  const cameraMode = useViewer((state) => state.cameraMode)
+  const setCameraMode = useViewer((state) => state.setCameraMode)
+  const shading = useViewer((state) => state.shading)
+  const setShading = useViewer((state) => state.setShading)
+  const sceneTheme = useViewer((state) => state.sceneTheme)
+  const setSceneTheme = useViewer((state) => state.setSceneTheme)
   const edges = useViewer((state) => state.edges)
   const setEdges = useViewer((state) => state.setEdges)
-  const active = EDGE_OPTIONS.find((option) => option.id === edges) ?? EDGE_OPTIONS[0]
+  const shadows = useViewer((state) => state.shadows)
+  const setShadows = useViewer((state) => state.setShadows)
+  const magneticSnap = useEditor((state) => state.magneticSnap)
+  const setMagneticSnap = useEditor((state) => state.setMagneticSnap)
+
+  const activeShading =
+    SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
+  const activeEdges = EDGE_OPTIONS.find((option) => option.id === edges) ?? EDGE_OPTIONS[0]
+  const activeTheme = getSceneTheme(sceneTheme)
+
+  // Keep the menu open when flipping a toggle.
+  const keepOpen = (event: Event, fn: () => void) => {
+    event.preventDefault()
+    fn()
+  }
 
   return (
     <DropdownMenu>
-      <ToolbarTooltip label={`Edges: ${active.name}`}>
+      <ToolbarTooltip label="Display settings">
         <DropdownMenuTrigger asChild>
           <button
-            aria-label={`Edges: ${active.name}`}
-            className={cn(TOOLBAR_BTN, edges !== 'off' && 'bg-white/10 text-foreground/90')}
+            aria-label="Display settings"
+            className={cn(TOOLBAR_BTN, 'w-auto gap-1.5 px-2.5 text-foreground/90')}
             type="button"
           >
-            <PenLine className="h-4 w-4" />
+            <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+            <span className={TOOLBAR_TEXT}>Display</span>
           </button>
         </DropdownMenuTrigger>
       </ToolbarTooltip>
-      <DropdownMenuContent align="center" className="min-w-56" side="bottom">
-        {EDGE_OPTIONS.map((option) => (
-          <DropdownMenuItem key={option.id} onSelect={() => setEdges(option.id)}>
-            <div className="flex flex-col">
-              <span className="text-foreground">{option.name}</span>
-              <span className="text-muted-foreground text-xs">{option.detail}</span>
-            </div>
-            {edges === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
-          </DropdownMenuItem>
-        ))}
+      <DropdownMenuContent
+        align="end"
+        className="w-60 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl"
+        side="bottom"
+        sideOffset={8}
+      >
+        <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShowGrid(!showGrid))}>
+          <Grid2X2 className="h-4 w-4" />
+          <span>Grid</span>
+          {showGrid ? (
+            <Eye className="ml-auto h-4 w-4 text-foreground" />
+          ) : (
+            <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setMagneticSnap(!magneticSnap))}>
+          <Magnet className="h-4 w-4" />
+          <span>Magnetic snap</span>
+          <span className={cn('ml-auto text-muted-foreground', MENU_META_TEXT)}>
+            {magneticSnap ? 'On' : 'Off'}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShadows(!shadows))}>
+          <Contrast className="h-4 w-4" />
+          <span>Shadows</span>
+          <span className={cn('ml-auto text-muted-foreground', MENU_META_TEXT)}>
+            {shadows ? 'On' : 'Off'}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(e) =>
+            keepOpen(e, () =>
+              setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective'),
+            )
+          }
+        >
+          <IconifyIcon
+            height={16}
+            icon={cameraMode === 'perspective' ? 'icon-park-outline:perspective' : 'vaadin:grid'}
+            width={16}
+          />
+          <span>Camera</span>
+          <span className={cn('ml-auto text-muted-foreground', MENU_META_TEXT)}>
+            {cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(e) => keepOpen(e, () => setUnit(unit === 'metric' ? 'imperial' : 'metric'))}
+        >
+          <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+            {unit === 'metric' ? 'm' : 'ft'}
+          </span>
+          <span>Units</span>
+          <span className={cn('ml-auto text-muted-foreground', MENU_META_TEXT)}>
+            {unit === 'metric' ? 'Metric' : 'Imperial'}
+          </span>
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <activeShading.icon className="h-4 w-4" />
+            <span>Render</span>
+            <span className={cn('ml-auto text-muted-foreground', MENU_META_TEXT)}>
+              {activeShading.name}
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+            {SHADING_OPTIONS.map((option) => {
+              const OptionIcon = option.icon
+              return (
+                <DropdownMenuItem key={option.id} onSelect={() => setShading(option.id)}>
+                  <OptionIcon className="h-4 w-4" />
+                  <div className="flex flex-col">
+                    <span className="text-foreground">{option.name}</span>
+                    <span className={cn('text-muted-foreground', MENU_META_TEXT)}>
+                      {option.detail}
+                    </span>
+                  </div>
+                  {shading === option.id ? (
+                    <Check className="ml-auto h-4 w-4 text-foreground" />
+                  ) : null}
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <PenLine className="h-4 w-4" />
+            <span>Edges</span>
+            <span className={cn('ml-auto text-muted-foreground', MENU_META_TEXT)}>
+              {activeEdges.name}
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+            {EDGE_OPTIONS.map((option) => (
+              <DropdownMenuItem key={option.id} onSelect={() => setEdges(option.id)}>
+                <div className="flex flex-col">
+                  <span className="text-foreground">{option.name}</span>
+                  <span className={cn('text-muted-foreground', MENU_META_TEXT)}>
+                    {option.detail}
+                  </span>
+                </div>
+                {edges === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <SwatchBook className="h-4 w-4" />
+            <span>Theme</span>
+            <span className={cn('ml-auto truncate text-muted-foreground', MENU_META_TEXT)}>
+              {activeTheme.name}
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="min-w-48 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl">
+            {SCENE_THEMES.map((theme) => {
+              const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
+                (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
+              )
+              return (
+                <DropdownMenuItem key={theme.id} onSelect={() => setSceneTheme(theme.id)}>
+                  <span
+                    className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
+                    style={{ backgroundColor: theme.background }}
+                  >
+                    {swatches.map((color, index) => (
+                      <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
+                    ))}
+                  </span>
+                  <span className="text-foreground">{theme.name}</span>
+                  {sceneTheme === theme.id ? (
+                    <Check className="ml-auto h-4 w-4 text-foreground" />
+                  ) : null}
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
-}
-
-function GridVisibilityToggle() {
-  const showGrid = useViewer((state) => state.showGrid)
-  const setShowGrid = useViewer((state) => state.setShowGrid)
-
-  return (
-    <ToolbarTooltip label={`Grid: ${showGrid ? 'Visible' : 'Hidden'}`}>
-      <button
-        aria-label={`Grid: ${showGrid ? 'Visible' : 'Hidden'}`}
-        aria-pressed={showGrid}
-        className={cn(
-          TOOLBAR_BTN,
-          'w-auto gap-1.5 px-2.5',
-          showGrid
-            ? 'bg-white/10 text-foreground/90'
-            : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0',
-        )}
-        onClick={() => setShowGrid(!showGrid)}
-        type="button"
-      >
-        <Grid2X2 className="h-3.5 w-3.5" />
-        {showGrid ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-      </button>
-    </ToolbarTooltip>
-  )
-}
-
-function ShadowsToggle() {
-  const shadows = useViewer((state) => state.shadows)
-  const setShadows = useViewer((state) => state.setShadows)
-
-  return (
-    <ToolbarTooltip label={`Shadows: ${shadows ? 'On' : 'Off'}`}>
-      <button
-        aria-label={`Shadows: ${shadows ? 'On' : 'Off'}`}
-        aria-pressed={shadows}
-        className={cn(
-          TOOLBAR_BTN,
-          shadows
-            ? 'bg-white/10 text-foreground/90'
-            : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0',
-        )}
-        onClick={() => setShadows(!shadows)}
-        type="button"
-      >
-        <Contrast className="h-3.5 w-3.5" />
-      </button>
-    </ToolbarTooltip>
-  )
-}
-
-function UnitToggle() {
-  const unit = useViewer((state) => state.unit)
-  const setUnit = useViewer((state) => state.setUnit)
-
-  return (
-    <ToolbarTooltip label={unit === 'metric' ? 'Metric (m)' : 'Imperial (ft)'}>
-      <button
-        className={TOOLBAR_BTN}
-        onClick={() => setUnit(unit === 'metric' ? 'imperial' : 'metric')}
-        type="button"
-      >
-        <span className="font-semibold text-[10px]">{unit === 'metric' ? 'm' : 'ft'}</span>
-      </button>
-    </ToolbarTooltip>
-  )
-}
-
-function CameraModeToggle() {
-  const cameraMode = useViewer((state) => state.cameraMode)
-  const setCameraMode = useViewer((state) => state.setCameraMode)
-
-  return (
-    <ToolbarTooltip label={cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}>
-      <button
-        className={cn(
-          TOOLBAR_BTN,
-          cameraMode === 'orthographic' && 'bg-white/10 text-foreground/90',
-        )}
-        onClick={() => setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective')}
-        type="button"
-      >
-        {cameraMode === 'perspective' ? (
-          <IconifyIcon height={16} icon="icon-park-outline:perspective" width={16} />
-        ) : (
-          <IconifyIcon height={16} icon="vaadin:grid" width={16} />
-        )}
-      </button>
-    </ToolbarTooltip>
   )
 }
 
 function WalkthroughButton() {
   const isFirstPersonMode = useEditor((state) => state.isFirstPersonMode)
   const setFirstPersonMode = useEditor((state) => state.setFirstPersonMode)
+  const handleClick = useCallback(() => {
+    if (isFirstPersonMode) {
+      setFirstPersonMode(false)
+      return
+    }
+
+    flushSync(() => setFirstPersonMode(true))
+    requestWalkthroughPointerLock()
+  }, [isFirstPersonMode, setFirstPersonMode])
 
   return (
     <ToolbarTooltip label="Walkthrough">
@@ -469,7 +493,7 @@ function WalkthroughButton() {
           TOOLBAR_BTN,
           isFirstPersonMode && 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20',
         )}
-        onClick={() => setFirstPersonMode(!isFirstPersonMode)}
+        onClick={handleClick}
         type="button"
       >
         <Footprints className="h-4 w-4" />
@@ -482,13 +506,32 @@ function PreviewButton() {
   return (
     <ToolbarTooltip label="Preview mode">
       <button
-        className="flex items-center gap-1.5 px-2.5 font-medium text-muted-foreground/80 text-xs transition-colors hover:bg-white/8 hover:text-foreground/90"
+        className={cn(
+          'flex items-center gap-1.5 px-2.5 text-muted-foreground/80 transition-colors hover:bg-white/8 hover:text-foreground/90',
+          TOOLBAR_TEXT,
+        )}
         onClick={() => useEditor.getState().setPreviewMode(true)}
         type="button"
       >
         <Eye className="h-3.5 w-3.5 shrink-0" />
         <span>Preview</span>
       </button>
+    </ToolbarTooltip>
+  )
+}
+
+function AllScenesButton() {
+  return (
+    <ToolbarTooltip label="All scenes">
+      <Link
+        className={cn(
+          'flex items-center px-2.5 text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground/90',
+          TOOLBAR_TEXT,
+        )}
+        href="/scenes"
+      >
+        All scenes
+      </Link>
     </ToolbarTooltip>
   )
 }
@@ -508,17 +551,12 @@ export function CommunityViewerToolbarRight() {
     <div className={TOOLBAR_CONTAINER}>
       <LevelModeToggle />
       <WallModeToggle />
-      <RenderModeMenu />
-      <SceneThemeMenu />
-      <EdgesMenu />
-      <GridVisibilityToggle />
-      <ShadowsToggle />
       <div className="my-1.5 w-px bg-border/50" />
-      <UnitToggle />
-      <CameraModeToggle />
+      <DisplayMenu />
       <div className="my-1.5 w-px bg-border/50" />
       <WalkthroughButton />
       <PreviewButton />
+      <AllScenesButton />
     </div>
   )
 }

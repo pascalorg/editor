@@ -14,7 +14,8 @@ export function ToggleControl({ label, checked, onChange, className }: ToggleCon
   return (
     <div
       className={cn(
-        'group flex h-10 w-full cursor-pointer items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm transition-colors hover:bg-[#3e3e3e]',
+        // Style follow-up: MeasureNavi toggle rows use neutral light controls.
+        'group flex h-10 w-full cursor-pointer items-center justify-between rounded-lg border border-border/50 bg-secondary px-3 text-sm transition-colors hover:bg-accent',
         className,
       )}
       onClick={() => onChange(!checked)}
@@ -28,7 +29,7 @@ export function ToggleControl({ label, checked, onChange, className }: ToggleCon
           'flex h-5 w-5 items-center justify-center rounded-[4px] border transition-all duration-200',
           checked
             ? 'border-primary bg-primary text-primary-foreground'
-            : 'border-border bg-black/20 text-transparent group-hover:border-muted-foreground',
+            : 'border-border bg-background text-transparent group-hover:border-muted-foreground',
         )}
       >
         <Check className="h-3.5 w-3.5" strokeWidth={3} />

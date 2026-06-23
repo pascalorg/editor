@@ -5,6 +5,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from './../../../components/ui/primitives/tooltip'
+import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
 
 interface ActionButtonProps extends React.ComponentProps<typeof Button> {
@@ -17,7 +18,18 @@ interface ActionButtonProps extends React.ComponentProps<typeof Button> {
 
 export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
   (
-    { className, children, label, shortcut, isActive, tooltipContent, tooltipSide, ...props },
+    {
+      className,
+      children,
+      label,
+      shortcut,
+      isActive,
+      tooltipContent,
+      tooltipSide,
+      onClick,
+      onMouseEnter,
+      ...props
+    },
     ref,
   ) => {
     return (
@@ -25,6 +37,14 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
         <TooltipTrigger asChild>
           <Button
             className={cn('relative h-11 w-11 transition-all', className)}
+            onClick={(event) => {
+              triggerSFX('sfx:menu-click')
+              onClick?.(event)
+            }}
+            onMouseEnter={(event) => {
+              triggerSFX('sfx:menu-hover')
+              onMouseEnter?.(event)
+            }}
             ref={ref}
             {...props}
           >

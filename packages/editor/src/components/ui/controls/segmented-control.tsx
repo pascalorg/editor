@@ -18,7 +18,8 @@ export function SegmentedControl<T extends string>({
   return (
     <div
       className={cn(
-        'flex h-9 w-full items-center rounded-lg border border-border/50 bg-[#2C2C2E] p-[3px]',
+        // Style follow-up: MeasureNavi segmented controls use light neutral control surfaces.
+        'flex h-9 w-full items-center rounded-full border border-border/50 bg-secondary p-[3px]',
         className,
       )}
     >
@@ -29,8 +30,8 @@ export function SegmentedControl<T extends string>({
             className={cn(
               'relative flex h-full flex-1 items-center justify-center rounded-md font-medium text-xs transition-all duration-200',
               isSelected
-                ? 'bg-[#3e3e3e] text-foreground shadow-sm ring-1 ring-border/50'
-                : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                ? 'rounded-full bg-background text-foreground shadow-sm ring-1 ring-border/50'
+                : 'rounded-full text-muted-foreground hover:bg-accent hover:text-foreground',
             )}
             key={option.value}
             onClick={() => onChange(option.value)}

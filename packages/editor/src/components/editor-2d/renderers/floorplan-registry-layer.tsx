@@ -7,6 +7,7 @@ import {
   type FloorplanAffordanceSession,
   type FloorplanGeometry,
   type FloorplanPalette,
+  type FloorplanPoint,
   type GeometryContext,
   kindsWithFloorplanScope,
   nodeRegistry,
@@ -29,7 +30,9 @@ import {
   useState,
 } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useEditor from '../../../store/use-editor'
+import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 
@@ -85,6 +88,26 @@ type ActiveDrag = {
   session: FloorplanAffordanceSession
   snapshots: NodeSnapshot[]
   historyPaused: boolean
+  /**
+   * Set only for rotate-arrow drags (handles that carry a `pivot`). Drives
+   * the live angle wedge + degree readout — the 2D twin of the 3D rotate
+   * gizmo's readout. The bearing sweep is measured the same way every
+   * rotate affordance measures it: `atan2(pointer − pivot)`.
+   */
+  rotation?: { pivot: FloorplanPoint; initialAngle: number; radius: number }
+}
+
+/**
+ * Transient live-rotation readout state. Rebuilt each pointer-move while a
+ * rotate-arrow is dragged and cleared on release. World-plan coords.
+ */
+type RotationOverlayState = {
+  pivot: FloorplanPoint
+  startAngle: number
+  endAngle: number
+  radius: number
+  /** Swept magnitude in radians, for the degree chip. */
+  sweep: number
 }
 
 function snapshotNode(node: AnyNode): NodeSnapshot {
@@ -165,12 +188,20 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const editorPhase = useEditor((s) => s.phase)
   const editorMode = useEditor((s) => s.mode)
   const editorTool = useEditor((s) => s.tool)
+  const structureLayer = useEditor((s) => s.structureLayer)
+  const floorplanSelectionTool = useEditor((s) => s.floorplanSelectionTool)
+  const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
   const isOpeningPlacementActive =
     (editorPhase === 'structure' &&
       editorMode === 'build' &&
       (editorTool === 'door' || editorTool === 'window')) ||
-    (movingNode != null &&
-      !!nodeRegistry.get(movingNode.type)?.capabilities?.wallOpeningPlacement)
+    (movingNode != null && !!nodeRegistry.get(movingNode.type)?.capabilities?.wallOpeningPlacement)
+  const isMarqueeSelectionActive =
+    editorMode === 'select' &&
+    floorplanSelectionTool === 'marquee' &&
+    structureLayer !== 'zones' &&
+    !movingNode &&
+    !movingFenceEndpoint
   // Subscribe to the live-transforms map ref so the layer re-renders
   // whenever a 3D mover publishes a per-frame position (see
   // `usePlacementCoordinator`). Without this the 2D floor plan only
@@ -194,6 +225,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const dragRef = useRef<ActiveDrag | null>(null)
   const [hoveredHandleId, setHoveredHandleId] = useState<string | null>(null)
   const [activeDragId, setActiveDragId] = useState<string | null>(null)
+  const [rotationOverlay, setRotationOverlay] = useState<RotationOverlayState | null>(null)
 
   const handleSelect = useCallback(
     (id: AnyNodeId, event: React.PointerEvent<SVGGElement>) => {
@@ -238,6 +270,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // tree the builder returns. Builders don't need to know about the
   // partition.
   const entries = useMemo(() => {
+    // Some builders read elevator runtime state imperatively; this keeps the memo subscribed.
+    void interactiveElevators
+
     if (!levelId) return []
     const out: {
       id: AnyNodeId
@@ -251,6 +286,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     const visit = (id: AnyNodeId) => {
       const node = nodes[id]
       if (!node) return
+      if ((node as { visible?: boolean }).visible === false) return
       const def = nodeRegistry.get(node.type)
       const builder = def?.floorplan
       if (builder) {
@@ -265,31 +301,17 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         //
         // The live-transform contract varies per kind (see
         // wiki/architecture/tools.md "useLiveTransforms contract is
-        // per-kind, not generic"); we narrow per kind here:
-        //   - item: world-plan position frame. Override `position` +
-        //     `rotation` and force `parentId: null` so the resolver
-        //     treats them as world coords directly.
-        //   - slab / ceiling: position is a translation **delta**
-        //     (`[Δx, 0, Δz]`). Translate the polygon + holes by the
-        //     delta — the floor-plan builder draws the polygon at its
-        //     new location, mirroring the 3D `<group position={delta}>`
-        //     visual without forcing per-tick CSG scene writes.
+        // per-kind, not generic"); position-carrying floor-placed kinds
+        // publish canonical X/Z, while slab / ceiling publish a polygon
+        // translation delta.
         const live = liveTransforms.get(id)
         let effectiveNode: AnyNode = node
         if (live) {
-          if (node.type === 'item' || node.type === 'shelf') {
-            // World-plan position kinds: the live transform carries the
-            // node's intended position/rotation in level-local coords.
-            // Override both and force `parentId: null` so the floor-plan
-            // resolver treats `position` as world plan coords directly
-            // (skipping the parent-chain transform composition).
-            effectiveNode = {
-              ...node,
-              position: live.position,
-              rotation: [0, live.rotation, 0] as [number, number, number],
-              parentId: null,
-            } as AnyNode
-          } else if (node.type === 'slab' || node.type === 'ceiling') {
+          const floorPlaced = def?.capabilities?.floorPlaced
+          const hasPosition = Array.isArray((node as { position?: unknown }).position)
+          if (floorPlaced && hasPosition) {
+            effectiveNode = applyPositionLiveTransform(node, live)
+          } else if (node.type === 'slab' || node.type === 'ceiling' || node.type === 'zone') {
             const dx = live.position[0]
             const dz = live.position[2]
             if (dx !== 0 || dz !== 0) {
@@ -365,6 +387,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const buildingScopedKindSet = new Set(buildingScopedKinds)
       for (const [id, node] of Object.entries(nodes)) {
         if (!node || !buildingScopedKindSet.has(node.type)) continue
+        if ((node as { visible?: boolean }).visible === false) continue
         const parentId = (node as { parentId?: AnyNodeId | null }).parentId
         if (parentId !== activeBuildingId) continue
         const cid = id as AnyNodeId
@@ -375,9 +398,22 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         const highlighted = highlightedIdSet.has(cid)
         const hovered = hoveredId === cid
         const moving = movingNode?.id === cid
+        const live = liveTransforms.get(cid)
+        const hasPosition = Array.isArray((node as { position?: unknown }).position)
+        let effectiveNode: AnyNode =
+          live && hasPosition ? applyPositionLiveTransform(node, live) : node
+        const contextNodes = def?.floorplanSiblingOverrides
+          ? def.floorplanSiblingOverrides({ nodeId: cid, nodes, liveOverrides })
+          : nodes
+        if (contextNodes !== nodes) {
+          const merged = contextNodes[cid]
+          if (merged) {
+            effectiveNode = live && hasPosition ? applyPositionLiveTransform(merged, live) : merged
+          }
+        }
         const ctx: GeometryContext = {
           resolve: <N = AnyNode>(rid: AnyNodeId): N | undefined =>
-            nodes[rid] as N | undefined,
+            contextNodes[rid] as N | undefined,
           children: [],
           siblings: [],
           parent: activeLevelNode,
@@ -391,12 +427,13 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
               }
             : undefined,
         }
-        const geometry = (
-          builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null
-        )(node, ctx)
+        const geometry = (builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null)(
+          effectiveNode,
+          ctx,
+        )
         if (geometry) {
           const { base, overlay } = splitFloorplanOverlay(geometry)
-          out.push({ id: cid, node, base, overlay, selected, highlighted })
+          out.push({ id: cid, node: effectiveNode, base, overlay, selected, highlighted })
         }
       }
     }
@@ -437,6 +474,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       affordance: string,
       payload: unknown,
       event: ReactPointerEvent<SVGGElement>,
+      // Present only for rotate-arrow handles — the pivot the node turns
+      // around, used to drive the live angle wedge + degree readout.
+      rotationPivot?: FloorplanPoint,
     ) => {
       if (event.button !== 0) return
       if (movingNode) return
@@ -454,12 +494,14 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
       event.preventDefault()
       event.stopPropagation()
+      suppressBoxSelectForPointer(event)
 
       const session = handler.start({
         node,
         payload,
         nodes: sceneNodes,
         initialPlanPoint,
+        gridSnapStep: useEditor.getState().gridSnapStep,
       })
 
       const snapshots: NodeSnapshot[] = []
@@ -470,12 +512,28 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
       pauseSceneHistory(useScene)
 
+      // Rotation readout setup. The wedge radius tracks the grab distance
+      // from the pivot (≈ the handle's orbit), nudged inward so the swept
+      // fill reads as the handle swinging round rather than overlapping it,
+      // and floored so a tight footprint still shows a legible wedge.
+      let rotation: ActiveDrag['rotation']
+      if (rotationPivot) {
+        const dx = initialPlanPoint[0] - rotationPivot[0]
+        const dz = initialPlanPoint[1] - rotationPivot[1]
+        rotation = {
+          pivot: rotationPivot,
+          initialAngle: Math.atan2(dz, dx),
+          radius: Math.max(Math.hypot(dx, dz) * 0.72, 0.25),
+        }
+      }
+
       dragRef.current = {
         pointerId: event.pointerId,
         handleId,
         session,
         snapshots,
         historyPaused: true,
+        rotation,
       }
       setActiveDragId(handleId)
       setSelection({ selectedIds: [nodeId] })
@@ -501,6 +559,30 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           metaKey: event.metaKey,
         },
       })
+
+      // Live rotation readout. Sweep from the bearing at grab to the
+      // current pointer bearing around the pivot — the same measurement
+      // every rotate affordance applies — and surface it as a wedge +
+      // degree chip. Suppressed below ~0.5° so a fresh grab doesn't flash
+      // a zero-width sliver.
+      const rot = drag.rotation
+      if (rot) {
+        const current = Math.atan2(planPoint[1] - rot.pivot[1], planPoint[0] - rot.pivot[0])
+        let delta = current - rot.initialAngle
+        while (delta > Math.PI) delta -= 2 * Math.PI
+        while (delta < -Math.PI) delta += 2 * Math.PI
+        if (Math.abs(delta) < 0.0087) {
+          setRotationOverlay(null)
+        } else {
+          setRotationOverlay({
+            pivot: rot.pivot,
+            startAngle: rot.initialAngle,
+            endAngle: rot.initialAngle + delta,
+            radius: rot.radius,
+            sweep: Math.abs(delta),
+          })
+        }
+      }
     }
 
     const onPointerUp = (event: PointerEvent) => {
@@ -523,8 +605,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         }
         drag.session.commit()
         sfxEmitter.emit('sfx:structure-build')
+        clearSurfacePlanSnapFeedback()
         dragRef.current = null
         setActiveDragId(null)
+        setRotationOverlay(null)
         return
       }
 
@@ -573,8 +657,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         for (const id of drag.session.affectedIds) overrides.clear(id)
       }
 
+      clearSurfacePlanSnapFeedback()
       dragRef.current = null
       setActiveDragId(null)
+      setRotationOverlay(null)
     }
 
     const onPointerCancel = (event: PointerEvent) => {
@@ -587,6 +673,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         resumeSceneHistory(useScene)
         drag.historyPaused = false
       }
+      // Affordances that publish Figma alignment guides during `apply`
+      // (fence endpoint) leave them in the store on cancel — `canCommit`
+      // (the pointer-up clear) never runs on a cancel.
+      clearSurfacePlanSnapFeedback()
       // Drop any live overrides the session may have published. No-op
       // for affordances whose `apply()` writes straight to scene; the
       // override-routed sessions (wall endpoint, wall curve) rely on
@@ -596,6 +686,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
       dragRef.current = null
       setActiveDragId(null)
+      setRotationOverlay(null)
     }
 
     window.addEventListener('pointermove', onPointerMove)
@@ -619,6 +710,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         for (const id of drag.session.affectedIds) overrides.clear(id)
         dragRef.current = null
       }
+      // Clear any alignment guide a session left behind on mid-drag unmount.
+      clearSurfacePlanSnapFeedback()
     }
   }, [])
 
@@ -632,8 +725,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       className="floorplan-registry-entry"
       data-node-id={id}
       key={key}
-      onClick={isOpeningPlacementActive ? undefined : handleClickStop}
-      onPointerDown={isOpeningPlacementActive ? undefined : (e) => handleSelect(id, e)}
+      onClick={isOpeningPlacementActive || isMarqueeSelectionActive ? undefined : handleClickStop}
+      onPointerDown={
+        isOpeningPlacementActive || isMarqueeSelectionActive
+          ? undefined
+          : (e) => handleSelect(id, e)
+      }
       // Mirror the sidebar tree nodes' hover wiring — `useViewer.
       // hoveredId` drives the highlight halo in 3D as well as the
       // wall / fence floor-plan hover stroke. Setting it on
@@ -655,10 +752,18 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         geometry={geometry}
         hatchPatternId={renderCtx?.hatchPatternId}
         hoveredHandleId={hoveredHandleId}
+        isMarqueeSelectionActive={isMarqueeSelectionActive}
         nodeId={id}
         onHandleHoverChange={setHoveredHandleId}
-        onHandlePointerDown={(affordance, payload, event) =>
-          startAffordanceDrag(id, makeHandleId(id, payload), affordance, payload, event)
+        onHandlePointerDown={(affordance, payload, event, rotationPivot) =>
+          startAffordanceDrag(
+            id,
+            makeHandleId(id, payload),
+            affordance,
+            payload,
+            event,
+            rotationPivot,
+          )
         }
         onMoveHandlePointerDown={(event) => {
           if (event.button !== 0) return
@@ -666,6 +771,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           if (!node) return
           event.preventDefault()
           event.stopPropagation()
+          suppressBoxSelectForPointer(event)
           sfxEmitter.emit('sfx:item-pick')
           setMovingNode(node as never)
         }}
@@ -716,6 +822,16 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           overlay ? renderEntry(id, overlay, `overlay-${id}`) : null,
         )}
       </g>
+      {/* Transient live-rotation readout — drawn last so the wedge + degree
+          chip sit above all handle chrome while a rotate-arrow is dragged. */}
+      {rotationOverlay && palette ? (
+        <RotationAngleOverlay
+          overlay={rotationOverlay}
+          palette={palette}
+          sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
+          unitsPerPixel={unitsPerPixel}
+        />
+      ) : null}
     </g>
   )
 })
@@ -729,6 +845,7 @@ function InteractiveGeometry({
   hatchPatternId,
   hoveredHandleId,
   activeDragId,
+  isMarqueeSelectionActive,
   nodeId,
   sceneRotationDeg,
   onHandleHoverChange,
@@ -741,6 +858,7 @@ function InteractiveGeometry({
   hatchPatternId: string | undefined
   hoveredHandleId: string | null
   activeDragId: string | null
+  isMarqueeSelectionActive: boolean
   nodeId: AnyNodeId
   sceneRotationDeg: number
   onHandleHoverChange: (id: string | null) => void
@@ -748,6 +866,9 @@ function InteractiveGeometry({
     affordance: string,
     payload: unknown,
     event: ReactPointerEvent<SVGGElement>,
+    // Forwarded only by rotate-arrow handles — the pivot the drag turns
+    // the node around, used to drive the live angle wedge + degree chip.
+    rotationPivot?: FloorplanPoint,
   ) => void
   onMoveHandlePointerDown: (event: ReactPointerEvent<SVGGElement>) => void
 }): React.ReactElement {
@@ -779,7 +900,7 @@ function InteractiveGeometry({
         return (
           <line
             key={keyHint}
-            pointerEvents={g.pointerEvents ?? 'stroke'}
+            pointerEvents={isMarqueeSelectionActive ? 'none' : (g.pointerEvents ?? 'stroke')}
             stroke="transparent"
             strokeLinecap="round"
             strokeWidth={g.strokeWidthPx * unitsPerPixel}
@@ -1011,6 +1132,7 @@ function InteractiveGeometry({
         const angleDeg = (g.angle * 180) / Math.PI
         const affordance = g.affordance
         const payload = g.payload
+        const pivot = g.pivot
         return (
           <g
             key={keyHint}
@@ -1035,7 +1157,12 @@ function InteractiveGeometry({
               d={arcPath}
               fill="none"
               onPointerDown={(e) =>
-                onHandlePointerDown(affordance, payload, e as ReactPointerEvent<SVGPathElement>)
+                onHandlePointerDown(
+                  affordance,
+                  payload,
+                  e as ReactPointerEvent<SVGPathElement>,
+                  pivot,
+                )
               }
               onPointerEnter={() => onHandleHoverChange(handleId)}
               onPointerLeave={() => onHandleHoverChange(null)}
@@ -1048,7 +1175,12 @@ function InteractiveGeometry({
               d={`${head1} ${head2}`}
               fill="transparent"
               onPointerDown={(e) =>
-                onHandlePointerDown(affordance, payload, e as ReactPointerEvent<SVGPathElement>)
+                onHandlePointerDown(
+                  affordance,
+                  payload,
+                  e as ReactPointerEvent<SVGPathElement>,
+                  pivot,
+                )
               }
               onPointerEnter={() => onHandleHoverChange(handleId)}
               onPointerLeave={() => onHandleHoverChange(null)}
@@ -1101,11 +1233,7 @@ function InteractiveGeometry({
               fill="transparent"
               onPointerDown={(e) => {
                 if (affordance) {
-                  onHandlePointerDown(
-                    affordance,
-                    payload,
-                    e as ReactPointerEvent<SVGGElement>,
-                  )
+                  onHandlePointerDown(affordance, payload, e as ReactPointerEvent<SVGGElement>)
                 } else {
                   onMoveHandlePointerDown(e as ReactPointerEvent<SVGGElement>)
                 }
@@ -1375,9 +1503,17 @@ function InteractiveGeometry({
         const gapStart: [number, number] = [midX - dirX * gapHalf, midY - dirY * gapHalf]
         const gapEnd: [number, number] = [midX + dirX * gapHalf, midY + dirY * gapHalf]
 
+        // Keep the label parallel to the dimension line, but decide the
+        // 180° flip from the on-SCREEN angle, not the local one. The parent
+        // `<g>` is rotated by `sceneRotationDeg` (default 90° in the floor
+        // plan), so a label kept upright in local coords still renders
+        // upside down for half of the wall orientations. Same fix as the
+        // `dimension-label` case above.
         let labelDeg = (Math.atan2(dy, dx) * 180) / Math.PI
-        if (labelDeg > 90) labelDeg -= 180
-        else if (labelDeg <= -90) labelDeg += 180
+        let screenDeg = labelDeg + sceneRotationDeg
+        screenDeg = ((((screenDeg + 180) % 360) + 360) % 360) - 180
+        if (screenDeg > 90) labelDeg -= 180
+        else if (screenDeg <= -90) labelDeg += 180
 
         return (
           <g key={keyHint} pointerEvents="none">
@@ -1465,13 +1601,70 @@ function InteractiveGeometry({
           </g>
         )
       }
+      case 'text': {
+        if (!g.upright) return <FloorplanGeometryRenderer geometry={g} key={keyHint} />
+        // Counter-rotate by the scene rotation so the label reads
+        // horizontally on screen even when the floor-plan view is
+        // rotated (default `sceneRotationDeg` is 90°).
+        return (
+          <g key={keyHint} transform={`translate(${g.x} ${g.y}) rotate(${-sceneRotationDeg})`}>
+            <text
+              dominantBaseline={g.dominantBaseline ?? 'middle'}
+              fill={g.fill ?? '#171717'}
+              fontFamily={g.fontFamily}
+              fontSize={g.fontSize}
+              fontWeight={g.fontWeight}
+              opacity={g.opacity}
+              paintOrder={g.paintOrder}
+              stroke={g.stroke}
+              strokeLinecap={g.stroke ? 'round' : undefined}
+              strokeLinejoin={g.stroke ? 'round' : undefined}
+              strokeWidth={g.strokeWidth}
+              textAnchor={g.textAnchor ?? 'start'}
+              x={0}
+              y={0}
+            >
+              {g.text}
+            </text>
+          </g>
+        )
+      }
       default:
-        return <FloorplanGeometryRenderer geometry={g} key={keyHint} />
+        return (
+          <FloorplanGeometryRenderer
+            geometry={g}
+            key={keyHint}
+            pointerEventsOverride={isMarqueeSelectionActive ? 'none' : undefined}
+          />
+        )
     }
   }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
+
+function applyPositionLiveTransform(
+  node: AnyNode,
+  live: { position: [number, number, number]; rotation: number },
+): AnyNode {
+  const currentRotation = (node as { rotation?: unknown }).rotation
+  const rotation = Array.isArray(currentRotation)
+    ? ([
+        (currentRotation[0] as number) ?? 0,
+        live.rotation,
+        (currentRotation[2] as number) ?? 0,
+      ] as [number, number, number])
+    : typeof currentRotation === 'number'
+      ? live.rotation
+      : currentRotation
+
+  return {
+    ...node,
+    position: live.position,
+    ...(rotation !== undefined ? { rotation } : {}),
+    parentId: null,
+  } as AnyNode
+}
 
 function buildContext(
   node: AnyNode,
@@ -1654,6 +1847,95 @@ function deepEqual(a: unknown, b: unknown): boolean {
     return true
   }
   return false
+}
+
+const ROTATION_WEDGE_COLOR = '#8381ed'
+const ROTATION_WEDGE_SEGMENTS = 48
+
+/**
+ * Live rotation readout for the floor plan — the 2D twin of the 3D rotate
+ * gizmo's wedge. Draws a filled sector + outline swept from the pointer's
+ * bearing at grab (`startAngle`) to its current bearing (`endAngle`) around
+ * the pivot, plus an upright degree chip at the wedge midpoint. All geometry
+ * is in plan coords; the chip counter-rotates `sceneRotationDeg` so it reads
+ * horizontally regardless of the building's on-screen orientation.
+ */
+function RotationAngleOverlay({
+  overlay,
+  palette,
+  unitsPerPixel,
+  sceneRotationDeg,
+}: {
+  overlay: RotationOverlayState
+  palette: FloorplanPalette
+  unitsPerPixel: number
+  sceneRotationDeg: number
+}): React.ReactElement {
+  const { pivot, startAngle, endAngle, radius, sweep } = overlay
+  const span = endAngle - startAngle
+  const count = Math.max(8, Math.ceil((Math.abs(span) / Math.PI) * ROTATION_WEDGE_SEGMENTS))
+  let d = `M ${pivot[0]} ${pivot[1]}`
+  for (let i = 0; i <= count; i++) {
+    const a = startAngle + (span * i) / count
+    d += ` L ${pivot[0] + Math.cos(a) * radius} ${pivot[1] + Math.sin(a) * radius}`
+  }
+  d += ' Z'
+
+  const midAngle = startAngle + span / 2
+  const labelDist = radius + unitsPerPixel * 14
+  const lx = pivot[0] + Math.cos(midAngle) * labelDist
+  const ly = pivot[1] + Math.sin(midAngle) * labelDist
+
+  const text = `${Math.round((sweep * 180) / Math.PI)}°`
+  const padX = unitsPerPixel * 6
+  const padY = unitsPerPixel * 3
+  const fontSize = Math.max(unitsPerPixel * 10, 0.08)
+  const textWidth = text.length * unitsPerPixel * 6.2
+  const plateW = textWidth + padX * 2
+  const plateH = fontSize + padY * 2
+
+  return (
+    <g className="floorplan-rotation-readout" pointerEvents="none">
+      <path d={d} fill={ROTATION_WEDGE_COLOR} fillOpacity={0.18} stroke="none" />
+      <path
+        d={d}
+        fill="none"
+        stroke={ROTATION_WEDGE_COLOR}
+        strokeLinejoin="round"
+        strokeOpacity={0.95}
+        strokeWidth={1.8}
+        vectorEffect="non-scaling-stroke"
+      />
+      {/* Counter-rotate the scene transform so the chip stays horizontal. */}
+      <g transform={`translate(${lx} ${ly}) rotate(${-sceneRotationDeg})`}>
+        <rect
+          fill={palette.measurementLabelBackground}
+          height={plateH}
+          opacity={0.92}
+          rx={unitsPerPixel * 3}
+          ry={unitsPerPixel * 3}
+          stroke={palette.measurementStroke}
+          strokeWidth={unitsPerPixel * 0.5}
+          vectorEffect="non-scaling-stroke"
+          width={plateW}
+          x={-plateW / 2}
+          y={-plateH / 2}
+        />
+        <text
+          dominantBaseline="middle"
+          fill={palette.measurementLabelText}
+          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+          fontSize={fontSize}
+          fontWeight={600}
+          textAnchor="middle"
+          x={0}
+          y={0}
+        >
+          {text}
+        </text>
+      </g>
+    </g>
+  )
 }
 
 function formatGroupTransform(t?: {

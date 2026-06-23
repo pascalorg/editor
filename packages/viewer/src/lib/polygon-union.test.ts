@@ -1,7 +1,7 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
-import { type Point2D, unionPolygons } from './polygon-union'
+import { type Point2D, subtractPolygonsFromPolygon, unionPolygons } from './polygon-union'
 
 function polygonArea(points: Point2D[]) {
   let area = 0
@@ -73,5 +73,49 @@ describe('unionPolygons', () => {
 
     expect(result).toHaveLength(2)
     expect(result.map(polygonArea)).toEqual([1, 1])
+  })
+})
+
+describe('subtractPolygonsFromPolygon', () => {
+  test('turns a boundary-overlapping cutter into an indentation', () => {
+    const slab: Point2D[] = [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ]
+    const cutout: Point2D[] = [
+      [1, -0.5],
+      [3, -0.5],
+      [3, 1],
+      [1, 1],
+    ]
+
+    const result = subtractPolygonsFromPolygon(slab, [cutout])
+
+    expect(result).toHaveLength(1)
+    expect(result[0]).toContainEqual([1, 1])
+    expect(result[0]).toContainEqual([3, 1])
+    expect(polygonArea(result[0]!)).toBeCloseTo(10)
+  })
+
+  test('returns separate contours when a cutter splits the subject', () => {
+    const slab: Point2D[] = [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ]
+    const cutout: Point2D[] = [
+      [1.5, -1],
+      [2.5, -1],
+      [2.5, 4],
+      [1.5, 4],
+    ]
+
+    const result = subtractPolygonsFromPolygon(slab, [cutout])
+
+    expect(result).toHaveLength(2)
+    expect(result.map(polygonArea).sort((a, b) => a - b)).toEqual([4.5, 4.5])
   })
 })

@@ -3,13 +3,22 @@
 import {
   type AnyNodeId,
   type CeilingNode,
+  collectAlignmentAnchors,
   emitter,
   type GridEvent,
+  polygonAnchors,
+  resolveAlignment,
   sceneRegistry,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { CursorSphere, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  markToolCancelConsumed,
+  triggerSFX,
+  useAlignmentGuides,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
@@ -31,6 +40,9 @@ import { BufferGeometry, DoubleSide, Path, Shape, ShapeGeometry, Vector3 } from 
 function snap(value: number) {
   return Math.round(value * 2) / 2
 }
+
+/** Figma-style alignment-snap threshold (meters), matching the other tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
 
 function translatePolygon(
   polygon: Array<[number, number]>,
@@ -104,15 +116,18 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     const height = heightRef.current
     const ceilingId = node.id
 
+    // Alignment candidates — every other alignable object's anchors,
+    // gathered once (the scene graph is stable during the drag).
+    const alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, ceilingId)
+
     let wasCommitted = false
 
     const applyPreview = (deltaX: number, deltaZ: number) => {
       deltaRef.current = [deltaX, deltaZ]
       setMeshOffset(ceilingId as AnyNodeId, deltaX, deltaZ, height)
       // Aligned with slab/fence: the delta matches the direct mesh
-      // mutation. CeilingRenderer doesn't bind position via React, so
-      // this entry isn't consumed for rendering, but kept consistent
-      // in case other systems read it.
+      // mutation. CeilingRenderer also consumes this store so external
+      // movers can preview ceilings without rebuilding the polygon.
       useLiveTransforms.getState().set(ceilingId, {
         position: [deltaX, 0, deltaZ],
         rotation: 0,
@@ -146,7 +161,29 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       const anchor = dragAnchorRef.current ?? [localX, localZ]
       dragAnchorRef.current = anchor
 
-      applyPreview(localX - anchor[0], localZ - anchor[1])
+      let deltaX = localX - anchor[0]
+      let deltaZ = localZ - anchor[1]
+
+      // Figma-style alignment snap: align the ceiling's translated polygon
+      // vertices to other objects' anchors; fold the snap into the delta and
+      // publish a guide. Alt bypasses.
+      const bypass = event.nativeEvent?.altKey === true
+      if (!bypass && alignmentCandidates.length > 0) {
+        const result = resolveAlignment({
+          moving: polygonAnchors(ceilingId, translatePolygon(originalPolygon, deltaX, deltaZ)),
+          candidates: alignmentCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (result.snap) {
+          deltaX += result.snap.dx
+          deltaZ += result.snap.dz
+        }
+        useAlignmentGuides.getState().set(result.guides)
+      } else {
+        useAlignmentGuides.getState().clear()
+      }
+
+      applyPreview(deltaX, deltaZ)
     }
 
     const onGridClick = (event: GridEvent) => {
@@ -167,6 +204,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
         useScene.getState().markDirty(ceilingId as AnyNodeId)
       }
       useLiveTransforms.getState().clear(ceilingId)
+      useAlignmentGuides.getState().clear()
 
       triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [ceilingId] })
@@ -176,6 +214,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
 
     const onCancel = () => {
       clearPreview()
+      useAlignmentGuides.getState().clear()
       useViewer.getState().setSelection({ selectedIds: [ceilingId] })
       markToolCancelConsumed()
       exitMoveMode()
@@ -186,6 +225,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     emitter.on('tool:cancel', onCancel)
 
     return () => {
+      useAlignmentGuides.getState().clear()
       if (!wasCommitted) {
         clearPreview()
       } else {

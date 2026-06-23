@@ -22,7 +22,7 @@
 //   - endpoint-move  : wall / fence endpoint drag (snapping is bespoke,
 //                      so it delegates to a kind-supplied callback)
 
-import type { AnyNode } from '../schema/types'
+import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { SceneApi } from './types'
 
 /**
@@ -44,6 +44,12 @@ export type EditorApi = {
    * or curving state so the move starts from a clean slate.
    */
   engageMove: (node: AnyNode) => void
+  /**
+   * Like {@link engageMove}, but for a press-drag gizmo: the move commits on
+   * pointer-release instead of waiting for a click, so the on-canvas move cross
+   * behaves as press-drag-release while still showing the placement preview.
+   */
+  engageMoveDrag: (node: AnyNode) => void
   /**
    * Engage endpoint drag for kinds that own start / end anchors (walls,
    * fences). No-ops for kinds without endpoints.
@@ -110,9 +116,32 @@ export type LinearResizeHandle<N> = {
   anchor: HandleAnchor
   currentValue: (node: N) => number
   apply: (node: N, newValue: number, sceneApi: SceneApi) => Partial<N>
+  /**
+   * Cross-node redirect. By default the drag's live override + the
+   * committed write both land on the SELECTED node. When this returns
+   * another node's id, the editor publishes the override to / commits on
+   * THAT node instead (and `apply` should return that node's patch).
+   * Used when a node's handle edits a value owned by a sibling — e.g. a
+   * downspout's side-move arrows slide its outlet, which lives on the
+   * host gutter (`gutter.outlets[].offset`). The selected node is still
+   * what `currentValue` / `apply` receive, so the descriptor can read
+   * the downspout to find its gutter + outlet.
+   */
+  overrideTarget?: (node: N, sceneApi: SceneApi) => AnyNodeId | undefined
   min?: number | ((node: N, sceneApi: SceneApi) => number)
   max?: number | ((node: N, sceneApi: SceneApi) => number)
+  /** Snap the resized scalar to the editor's active grid step before apply. */
+  gridSnap?: boolean
   placement: HandlePlacement<N>
+  /**
+   * Dimension this handle steers (e.g. `'height'`). When set, the editor
+   * publishes it to `activeHandleDrag.label` for the duration of the drag
+   * so out-of-band overlays (the floating dimension pill) can react, and
+   * the handle's own in-world value chip is suppressed to avoid showing
+   * the same number twice. Leave unset for handles that keep their inline
+   * chip and don't drive any external overlay.
+   */
+  measureLabel?: string
   /**
    * Defaults to 'self' (arrow lives in the selected node's own mesh).
    * 'parent' uses the parent mesh — used by doors/windows whose handles
@@ -122,6 +151,29 @@ export type LinearResizeHandle<N> = {
   cursor?: Cursor
   /** Optional visual guide shown while the arrow is hovered or dragging. */
   decoration?: HandleDecoration<N>
+  /**
+   * Visual override. Defaults to the standard chevron arrow.
+   *
+   * `'tracker'` swaps the chevron for a dashed vertical leader + a small
+   * cube at `placement.position`. The leader runs from the floor (local
+   * y=0) up to the cube; the cube is the drag target and reuses the same
+   * linear-resize drag pipeline as the chevron. Intended for vertical
+   * height handles where the dashed leader makes the "this is the wall
+   * top" relationship readable at a glance — mirrors the `corner-picker`
+   * shape on `tap-action` handles but with a draggable cube instead of a
+   * one-tap hex disc. Use with `axis: 'y'`; horizontal axes will render
+   * the leader vertically and look wrong.
+   */
+  shape?: 'arrow' | 'tracker'
+  /**
+   * Optional override for the bottom Y of the tracker leader. Defaults
+   * to 0 (floor of the rideObject's local frame). Use when the value
+   * being tracked spans a region that doesn't start at the floor — e.g.
+   * a chimney's body height runs from the roof deck up to the body top,
+   * so the leader should start at the deck plane and not climb through
+   * the roof shell below it. Only consulted when `shape === 'tracker'`.
+   */
+  trackerBaseY?: (node: N, sceneApi: SceneApi) => number
 }
 
 /**
@@ -176,6 +228,28 @@ export type ArcResizeHandle<N = any> = {
    * arrow icon, intended for whole-node rotation handles.
    */
   shape?: 'chevron' | 'rotate'
+  /**
+   * Plane the angular drag is measured in:
+   *   - 'horizontal' (default): cursor bearing around +Y — whole-node yaw
+   *     (floor items, elevator, stair, roof-segment).
+   *   - 'node-normal': cursor bearing around the node's local +Z axis, in
+   *     the plane perpendicular to it — spins a wall-mounted item flat
+   *     against its wall. The descriptor's `apply` writes the roll
+   *     component (rotation[2]). The gizmo icon stands up into that plane.
+   */
+  rotationPlane?: 'horizontal' | 'node-normal'
+  /**
+   * Pivot point for the angular drag, in the rideObject's local space.
+   * The renderer measures cursor angle (atan2 on the drag plane) around
+   * this point — descriptors that write `rotation` should anchor it to
+   * the node's visual center. Defaults to the rideObject's own origin,
+   * which is correct for nodes whose mesh origin coincides with the
+   * field they're rotating (roof-segment, elevator). Use this when the
+   * node's pose is baked into its geometry (chimney) so the mesh origin
+   * sits at the parent frame's origin rather than the rotating shape's
+   * center.
+   */
+  rotationCenter?: (node: N, sceneApi: SceneApi) => readonly [number, number, number]
 }
 
 /**
@@ -189,11 +263,7 @@ export type EndpointMoveHandle<N> = {
   endpoint: 'start' | 'end'
   placement: HandlePlacement<N>
   /** Called with the world-space hit on the ground plane. */
-  apply: (
-    node: N,
-    worldPoint: readonly [number, number, number],
-    sceneApi: SceneApi,
-  ) => Partial<N>
+  apply: (node: N, worldPoint: readonly [number, number, number], sceneApi: SceneApi) => Partial<N>
   portal?: HandlePortal
 }
 
@@ -219,16 +289,72 @@ export type TapActionHandle<N = any> = {
    * trigger the desired action.
    */
   onActivate: (node: N, scene: SceneApi, editor: EditorApi) => void
-  /** Visual override; defaults to the standard chevron arrow. */
-  shape?: 'arrow' | 'corner-picker'
+  /**
+   * Visual override; defaults to the standard chevron arrow. `'move-cross'`
+   * reuses the 4-way move cross — a tap-to-engage grip that hands the node to
+   * its move tool (via `onActivate`) instead of running the generic translate
+   * drag, so the move tool's own preview / ticker feedback shows up.
+   */
+  shape?: 'arrow' | 'corner-picker' | 'move-cross'
   /**
    * Required when `shape: 'corner-picker'` — controls the dashed leader's
    * vertical extent. Pure callback so the descriptor doesn't need to
    * import 3D libs.
    */
   nodeHeight?: (node: N) => number
+  /**
+   * `shape: 'move-cross'` only — tilts the flat cross to lie in the right
+   * plane. `'horizontal'` (default) leaves it flat on the floor; `'node-normal'`
+   * stands it up against the node's facing plane (a wall face).
+   */
+  plane?: 'horizontal' | 'node-normal'
   portal?: HandlePortal
   cursor?: Cursor
+}
+
+/**
+ * Free ground-plane move. Drag the handle and the node slides across the
+ * horizontal plane at its base — the renderer raycasts that plane, converts
+ * the hit into the node's parent-local frame, and reports the new local XZ
+ * (optionally grid-snapped via `snapExtents`) to `apply`. Press-drag-release
+ * with the same live-override → commit-on-release flow as the resize / rotate
+ * handles. Rendered as a 4-way cross of double-headed arrows. Pure translation
+ * does not require geometry dirtying; renderers consume the live position
+ * override directly.
+ */
+export type TranslateHandle<N = any> = {
+  kind: 'translate'
+  placement: HandlePlacement<N>
+  /**
+   * Plane the drag is constrained to (through the node origin):
+   *   - 'horizontal' (default): the ground plane (world-up normal) — slide
+   *     across the floor. The free axes are parent-local X / Z.
+   *   - 'node-normal': the plane perpendicular to the node's local +Z axis
+   *     (its facing direction) — slide across a wall face. The free axes are
+   *     parent-local X / Y; depth (Z) stays pinned to the surface.
+   */
+  plane?: 'horizontal' | 'node-normal'
+  /**
+   * `localPos` is the dragged-to position in the node's PARENT-local frame,
+   * with the two in-plane axes already grid-snapped (if `snapExtents` is set)
+   * and the off-plane axis pinned to its drag-start value. Return the patch
+   * that writes it to the node's position field.
+   */
+  apply: (
+    initialNode: N,
+    localPos: readonly [number, number, number],
+    sceneApi: SceneApi,
+  ) => Partial<N>
+  /**
+   * Optional grid-snap footprint for the two in-plane axes, in order
+   * `[alongX, alongOther]` — `alongOther` is Z for the 'horizontal' plane and
+   * Y for 'node-normal'. Used to align the node's edges to the grid (rotation-
+   * aware: swap the pair at 90°). Omit / return null for free movement.
+   * `sceneApi` is supplied for composite nodes whose footprint depends on
+   * children, such as straight stairs.
+   */
+  snapExtents?: (node: N, sceneApi: SceneApi) => readonly [number, number] | null
+  portal?: HandlePortal
 }
 
 export type HandleDescriptor<N = any> =
@@ -237,6 +363,7 @@ export type HandleDescriptor<N = any> =
   | ArcResizeHandle<N>
   | EndpointMoveHandle<N>
   | TapActionHandle<N>
+  | TranslateHandle<N>
 
 /**
  * Static array, or a function for shape-dependent cases (column

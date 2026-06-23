@@ -4,6 +4,7 @@ import type { ZodObject, z } from 'zod'
 import type { MaterialSchema } from '../schema/material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { HandleList } from './handles'
+import type { CloneNodesIntoOptions, Subtree } from './subtree'
 
 // ─── GeometryContext ─────────────────────────────────────────────────
 //
@@ -240,6 +241,12 @@ export type FloorplanGeometry =
       stroke?: string
       strokeWidth?: number
       paintOrder?: 'stroke' | 'fill' | 'normal'
+      /**
+       * When true, the registry layer counter-rotates the label by
+       * `sceneRotationDeg` so it reads horizontally on screen regardless
+       * of the floor-plan's scene rotation (default 90°).
+       */
+      upright?: boolean
     }
   /**
    * Bitmap overlay — captured top-down asset thumbnail, AI-generated
@@ -409,6 +416,14 @@ export type FloorplanGeometry =
       angle: number
       affordance: string
       payload?: unknown
+      /**
+       * Rotation pivot (plan coords) this handle turns the node around.
+       * When present, the floor-plan layer draws a live angle wedge + degree
+       * readout swept from grab to the current pointer bearing during the
+       * drag — the 2D twin of the 3D rotate gizmo's readout. Emitters that
+       * already compute the pivot to place the handle should pass it through.
+       */
+      pivot?: FloorplanPoint
     }
   /**
    * Centered length / distance label. Renders as a small rounded
@@ -532,6 +547,8 @@ export type FloorplanAffordance<N> = {
     nodes: Record<AnyNodeId, AnyNode>
     /** Initial pointer position in plan coordinates. */
     initialPlanPoint: FloorplanAffordancePoint
+    /** Active editor grid step in meters. */
+    gridSnapStep: number
   }): FloorplanAffordanceSession
 }
 
@@ -666,6 +683,20 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * work (animations, named-mesh material poking).
    */
   geometry?: (node: z.infer<S>, ctx: GeometryContext) => Object3D
+  /**
+   * Optional cache key over the geometry-relevant inputs of `node`. When
+   * set, `<GeometrySystem>` skips the rebuild (dispose + re-create the
+   * group's children) if the key is unchanged since the last build for
+   * this node — even though the node was marked dirty. Use for kinds whose
+   * geometry depends *only* on their own fields (not on `children`,
+   * `position`, neighbours, or `ctx`): a hosted child reparenting onto a
+   * shelf, say, dirties the shelf but doesn't change its boards, so without
+   * this the boards needlessly remount and any pointer hover churns
+   * (enter/leave) as the meshes are swapped. Must NOT be set for kinds with
+   * neighbour-dependent geometry (e.g. wall/fence miters via `ctx`), whose
+   * inputs aren't captured by the node alone.
+   */
+  geometryKey?: (node: z.infer<S>) => string
   /**
    * Level-batch precompute hook. Called by `<GeometrySystem>` once per
    * level per frame, **before** the per-node `def.geometry` calls in
@@ -948,7 +979,37 @@ export type Capabilities = {
   selectable?: SelectableConfig
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
+  /**
+   * Plan footprint this kind exposes to the alignment-anchor pool when it
+   * isn't `floorPlaced` and isn't a structural primitive the bridge handles
+   * directly (wall, slab). Lets a kind self-describe where it sits in plan
+   * instead of the core anchor bridge hardcoding it per type. See
+   * `AlignmentFootprintConfig`.
+   */
+  alignmentFootprint?: AlignmentFootprintConfig
+  /**
+   * Bounds drawn by the 3D drag bounding box during a move. Opt-in: when
+   * omitted, the box auto-measures the rendered mesh, which is correct for
+   * most kinds. Set this when the rendered mesh tree contains extras the
+   * user wouldn't think of as "the thing being dragged" — e.g. an elevator
+   * whose mesh includes per-level landing assemblies, and the user expects
+   * the box to wrap just the shaft they're moving.
+   *
+   * `size`: `[width, height, depth]` in the node's local frame.
+   * `centerY`: optional Y center; defaults to `size[1] / 2` (box sits on
+   * the ground plane). Override when the local origin isn't at the base.
+   */
+  dragBounds?: (
+    node: AnyNode,
+    nodes?: Readonly<Record<string, AnyNode>>,
+  ) => { size: [number, number, number]; centerY?: number }
   roofAccessory?: RoofAccessoryConfig
+  /**
+   * Kind cuts a hole in the ceiling surface it is attached to (e.g. recessed
+   * downlights). The viewer's `CeilingSystem` calls this for each child of a
+   * ceiling to collect extra holes before triangulating. See `CeilingCutCapability`.
+   */
+  ceilingCut?: CeilingCutCapability
   paint?: PaintCapability
   /**
    * Kind is placed by clicking on a wall (door, window). When set, the
@@ -970,6 +1031,57 @@ export type Capabilities = {
    * declaring the same flag.
    */
   floorplanLevelContainer?: boolean
+  /**
+   * Names of schema fields on this kind that are *host references* —
+   * values derived from where the node is placed (rather than declared
+   * by the user as part of the kind's parametric configuration). Read
+   * by host apps at preset-save time to strip these from the stored
+   * payload so a placed instance gets fresh host links at the new
+   * placement site (e.g. a door snapshot loses `wallId`/`wallT`; at
+   * placement the auto-attach UX re-derives them from the wall under
+   * the cursor).
+   *
+   * Kinds with no host refs omit this field (default `[]`).
+   *
+   * Examples:
+   *   - door: `['wallId', 'wallT']` (door hosted on a wall)
+   *   - window: `['wallId', 'wallT']`
+   *   - item with `attachTo`: depends on the asset; the kind's
+   *     `defaults()` or the dragging logic populates it dynamically.
+   */
+  hostRefFields?: string[]
+  /**
+   * Whether instances of this kind can be saved as a reusable preset
+   * (unified `items` catalog, `kind='preset'`). The editor itself does
+   * not act on this flag — host apps read it to gate "save as preset"
+   * UI on the selected node. Default resolution (callers should use the
+   * `isPresettable(def)` helper rather than reading this directly):
+   *
+   *   - explicit `true`  → presettable
+   *   - explicit `false` → not presettable
+   *   - undefined        → presettable when `def.parametrics` exists
+   *
+   * Structural / utility kinds (level, building, site, zone, spawn,
+   * guide, scan, item) opt out explicitly because saving them as a
+   * standalone preset has no meaning — items already have their own
+   * catalog, scans/guides carry user-uploaded imagery, and the rest
+   * are non-leaf scene containers.
+   */
+  presettable?: boolean
+  /**
+   * Instances of this kind are created by operating a build tool and
+   * drawing on the grid (clicking points), rather than dropping a
+   * finished instance. The tool id equals the node `type`. Host apps may
+   * seed the tool's starting parameters via
+   * `useEditor.setToolDefaults(type, params)` before activating it — the
+   * tool's create path merges those defaults when minting the node and
+   * clears its own entry on deactivation. Used so placing a saved preset
+   * of a drawn kind contributes its build parameters (a fence's
+   * height / style / post spacing) while the user draws the fresh span,
+   * and so a future "small / medium / large" picker can prime the same
+   * tool. Read via the `isDrawnViaTool(def)` helper. Default `false`.
+   */
+  drawTool?: boolean
 }
 
 /**
@@ -1093,6 +1205,39 @@ export type PaintEffectiveMaterialArgs = {
  */
 export type RoofAccessoryConfig = {
   buildCut?: (node: AnyNode, hostSegment: AnyNode) => BufferGeometry | null
+  /**
+   * Which segment brushes `buildCut` subtracts from. Wall-face openings
+   * (door / window) cut only the wall brush — subtracting the same box
+   * from the shin / deck slabs is pointless work and creates tangential
+   * / coplanar CSG cases near the gable and shed slopes. Defaults to
+   * all three (skylight / dormer genuinely poke through the deck).
+   */
+  cutScope?: 'all' | 'wall'
+  /**
+   * The kind's own dirty-driven geometry system consumes its dirty
+   * marks (door / window via DoorSystem / WindowSystem, which already
+   * cascade to the host segment through `parentId`). The roof-merge
+   * loop must then leave those marks alone — consuming them would
+   * starve that system whenever it defers a rebuild (mesh not mounted
+   * yet, per-frame rebuild budget exhausted).
+   */
+  dirtyHandledByOwnSystem?: boolean
+}
+
+/**
+ * Capability for kinds that cut a hole in their host ceiling when the node is
+ * attached to a ceiling surface (e.g. recessed downlights). The viewer's
+ * `CeilingSystem` queries children of a ceiling for this capability and merges
+ * the returned polygons as extra holes before triangulating, keeping the viewer
+ * free of per-kind branching.
+ *
+ * Returns a rotated-rectangle footprint in ceiling-local [x, z] plan space —
+ * the same coordinate space as `CeilingNode.polygon` and `.holes`. Return
+ * `null` when this particular instance should not cut a hole (e.g. a
+ * non-recessed variant of the same kind).
+ */
+export type CeilingCutCapability = {
+  buildCeilingHole: (node: AnyNode) => Array<[number, number]> | null
 }
 
 export type CapabilityCtx = { node: AnyNode }
@@ -1153,22 +1298,70 @@ export type SelectableConfig = {
   override?: (ctx: CapabilityCtx) => SelectableConfig | null
 }
 
+export type FloorPlacedFootprint = {
+  dimensions: [number, number, number]
+  rotation: [number, number, number]
+  position?: [number, number, number]
+}
+
+export type FloorPlacedFootprintContext = {
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>
+}
+
+export type FloorPlacedFootprintResolver = (
+  node: AnyNode,
+  ctx?: FloorPlacedFootprintContext,
+) => FloorPlacedFootprint
+
+export type FloorPlacedFootprintsResolver = (
+  node: AnyNode,
+  ctx?: FloorPlacedFootprintContext,
+) => readonly FloorPlacedFootprint[]
+
 /**
  * Floor-placed kinds rest directly on a level and need their Y lifted by
  * any slab the footprint overlaps. The generic `<FloorElevationSystem>`
  * computes `slabElevation + node.position[1]` and writes it onto the
- * registered mesh on every dirty mark. `footprint` returns the world-space
- * footprint the spatial-grid manager uses to find overlapping slabs;
+ * registered mesh on every dirty mark. `footprint` returns the default
+ * world-space footprint the spatial-grid manager uses to find overlapping
+ * slabs; `footprints` lets composite kinds expose multiple footprint
+ * segments, with the canonical resolver taking the max slab elevation;
  * `applies` is an optional predicate to skip nodes that share a kind but
  * are mounted off-floor (items attached to a wall / ceiling).
  */
 export type FloorPlacedConfig = {
-  footprint: (node: AnyNode) => {
-    dimensions: [number, number, number]
-    rotation: [number, number, number]
-  }
+  footprint?: FloorPlacedFootprintResolver
+  footprints?: FloorPlacedFootprintsResolver
   applies?: (node: AnyNode) => boolean
 }
+
+/**
+ * Plan footprint a kind contributes to the alignment-anchor pool when it is
+ * neither `floorPlaced` (columns / items, whose footprint the bridge already
+ * reads) nor a primitive the bridge knows structurally (walls → segments,
+ * slabs → polygons). Two shapes:
+ *
+ *   - `box`  — a rotatable rectangle centred on the node's `position`. Use
+ *     when the kind also moves by its footprint edges (elevator): the anchor
+ *     bridge relocates the box to the proposed drag point, so one descriptor
+ *     serves both the static candidate and the moving node.
+ *   - `aabb` — an already-resolved XZ bounding box, for kinds whose plan
+ *     shape isn't a centred rectangle (stair: a segment chain or annular
+ *     sector). The moving-anchor bridge can relocate these by patching the
+ *     proposed plan position and resolving the AABB again.
+ *
+ * `nodes` is supplied only when a kind needs siblings / children to resolve
+ * its footprint (a straight stair walks its `stair-segment` children); box
+ * kinds derive everything from `node` alone.
+ */
+export type AlignmentFootprint =
+  | { shape: 'box'; dimensions: [number, number, number]; rotation: [number, number, number] }
+  | { shape: 'aabb'; minX: number; minZ: number; maxX: number; maxZ: number }
+
+export type AlignmentFootprintConfig = (
+  node: AnyNode,
+  nodes?: Readonly<Record<string, AnyNode>>,
+) => AlignmentFootprint | null
 
 // ─── Relations ───────────────────────────────────────────────────────
 
@@ -1186,6 +1379,31 @@ export type ParametricDescriptor<N> = {
   invariants?: ReadonlyArray<(n: N) => Issue[]>
   derive?: (n: N) => Partial<N>
   customPanel?: () => Promise<{ default: ComponentType<{ node: N }> }>
+  /**
+   * Extra buttons rendered in the inspector's Actions section
+   * (below Move/Delete). Lets a kind declare "do this thing to the
+   * current node" affordances without escaping to a full custom
+   * panel. Buttons whose `enabledIf` returns false stay disabled.
+   */
+  actions?: ParamAction<N>[]
+  /**
+   * Lazy-loaded React subsection rendered AFTER the auto-derived
+   * groups and BEFORE the Actions section. Used by kinds that want
+   * to list their child nodes inline — e.g. the gutter's downspout
+   * list with an "Add Downspout" button at the bottom, same shape as
+   * the roof panel's gutter / vent lists. Kind owns the layout; the
+   * inspector just slots it in.
+   */
+  trailingSection?: () => Promise<{ default: ComponentType<{ node: N }> }>
+}
+
+export type ParamAction<N> = {
+  label: string
+  /** Optional asset URL for a leading icon — same shape as palette icons. */
+  iconSrc?: string
+  enabledIf?: (n: N) => boolean
+  /** Click handler. Receives the current node value at click time. */
+  onClick: (n: N) => void
 }
 
 export type ParamGroup<N> = {
@@ -1282,6 +1500,25 @@ export type SceneApi = {
   markDirty: (id: AnyNodeId) => void
   pauseHistory: () => void
   resumeHistory: () => void
+  /**
+   * Collect the subtree of live nodes rooted at `rootId` — `root` plus
+   * every descendant reachable via `children[]` in BFS order. Returns
+   * live node references (no clones); the caller decides whether to
+   * persist by value or pass them straight into {@link cloneNodesInto}.
+   * Returns `null` if `rootId` is missing.
+   */
+  getSubtree: (rootId: AnyNodeId) => Subtree | null
+  /**
+   * Clone a flat array of nodes into the live scene with fresh IDs and
+   * rewired parent / children references. Intentionally generic — see
+   * {@link cloneNodesInto} for the transformations applied. Does NOT
+   * strip or re-derive host references (e.g. `wallId` on a door); the
+   * caller is responsible for that policy (read {@link Capabilities.hostRefFields}
+   * on the relevant definition).
+   *
+   * Returns the new root id, or `null` if insertion failed.
+   */
+  cloneNodesInto: (nodes: ReadonlyArray<AnyNode>, opts: CloneNodesIntoOptions) => AnyNodeId | null
 }
 
 // ─── Registry surface ────────────────────────────────────────────────

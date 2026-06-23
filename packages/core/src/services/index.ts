@@ -1,4 +1,30 @@
 export {
+  type AlignmentAnchor,
+  type AlignmentGuide,
+  type AlignmentGuideAxis,
+  type AnchorKind,
+  type BuildingPose,
+  bboxAnchors,
+  bboxCornerAnchors,
+  type ResolveAlignmentInBuildingResult,
+  type ResolveAlignmentInput,
+  type ResolveAlignmentResult,
+  resolveAlignment,
+  resolveAlignmentInBuildingWorld,
+} from './alignment'
+export {
+  collectAlignmentAnchors,
+  type FootprintAABB,
+  footprintAABB,
+  footprintAABBAt,
+  footprintAABBFrom,
+  movingAlignmentAnchors,
+  movingFootprintAnchors,
+  nodeAlignmentAnchors,
+  polygonAnchors,
+  wallSegmentAnchors,
+} from './alignment-anchors'
+export {
   createDragSession,
   type DragSession,
   type DragSessionInput,
@@ -33,4 +59,5 @@ export {
   snapScalar,
   snapServices,
   snapVec3ToGrid,
+  snapWorldXZToBuildingLocal,
 } from './snap'

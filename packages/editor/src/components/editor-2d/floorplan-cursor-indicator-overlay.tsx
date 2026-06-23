@@ -76,6 +76,10 @@ export const FloorplanCursorIndicatorOverlay = memo(function FloorplanCursorIndi
       return { kind: 'icon', icon: 'mdi:trash-can-outline' }
     }
 
+    if (mode === 'material-paint') {
+      return { kind: 'asset', iconSrc: '/icons/paint.png' }
+    }
+
     return null
   }, [activeFloorplanToolConfig, floorplanSelectionTool, mode, structureLayer])
 

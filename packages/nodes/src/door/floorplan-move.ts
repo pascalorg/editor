@@ -4,9 +4,19 @@ import {
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
   useScene,
+  type WallNode,
 } from '@pascal-app/core'
 import { snapToHalf } from '@pascal-app/editor'
-import { findClosestWallInPlan } from '../shared/wall-attach-target'
+import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
+import {
+  getRoofHostedOpeningLevelId,
+  getRoofHostedOpeningPlanPoint,
+} from '../shared/roof-opening-host'
+import {
+  findClosestWallInPlan,
+  projectWallLocalPointToPlan,
+  snapLocalXToNeighbors,
+} from '../shared/wall-attach-target'
 import { clampToWall, hasWallChildOverlap } from './door-math'
 
 /**
@@ -29,13 +39,25 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
   // Snapshot of the door's "valid" state at move-start — used by
   // canCommit to decide whether the current snapped position is OK.
   const startLevelId = (() => {
-    // Walk up via parentId until we hit a node whose type isn't 'wall'
-    // — that's the level (or null). The door is wall-hosted, so the
-    // wall's parent is the level. Cached at start because the parent
-    // chain doesn't change during a move.
-    const wall = useScene.getState().nodes[node.parentId as AnyNodeId]
+    // Wall-hosted: the wall's parent is the level. Roof-hosted: walk
+    // segment → roof → level. Cached at start because the parent chain
+    // doesn't change during a move.
+    const nodes = useScene.getState().nodes
+    const roofLevelId = getRoofHostedOpeningLevelId(node, nodes)
+    if (roofLevelId) return roofLevelId
+    const wall = nodes[node.parentId as AnyNodeId]
     return wall ? (wall.parentId as AnyNodeId | null) : null
   })()
+  const originalWall = node.parentId
+    ? (useScene.getState().nodes[node.parentId as AnyNodeId] as WallNode | undefined)
+    : undefined
+  const resolveCursor = createFloorplanCursorResolver({
+    original:
+      originalWall?.type === 'wall'
+        ? projectWallLocalPointToPlan(originalWall, node.position[0])
+        : (getRoofHostedOpeningPlanPoint(node, useScene.getState().nodes) ?? [node.position[0], 0]),
+    metadata: node.metadata,
+  })
 
   // Track the last successful placement so `commit()` can write it
   // atomically — see the comment on `commit` below for why we don't
@@ -46,17 +68,32 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
     side: DoorNode['side']
     parentId: string
     wallId: string
+    roofSegmentId: undefined
+    roofFace: undefined
   } | null = null
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: [node.id as AnyNodeId],
     apply({ planPoint, modifiers }) {
       const nodes = useScene.getState().nodes
-      const hit = findClosestWallInPlan(planPoint, nodes, startLevelId)
+      const resolvedPlanPoint = resolveCursor(planPoint)
+      const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)
       if (!hit) return // pointer off any wall — keep door at last valid position
 
-      // Snap the wall-local X to 0.5m grid (Shift bypasses).
-      const snappedLocalX = modifiers.shiftKey ? hit.localX : snapToHalf(hit.localX)
+      // Figma-style along-wall alignment first (edge-to-edge with other
+      // openings / wall ends); it competes with — and wins over — the 0.5m
+      // grid snap. Falls back to the grid snap when nothing aligns. Alt
+      // bypasses; Shift drops the grid snap for fine positioning.
+      const neighborX = modifiers.altKey
+        ? null
+        : snapLocalXToNeighbors({
+            wall: hit.wall,
+            localX: hit.localX,
+            width: node.width,
+            selfId: node.id as AnyNodeId,
+            nodes,
+          })
+      const snappedLocalX = neighborX ?? (modifiers.shiftKey ? hit.localX : snapToHalf(hit.localX))
       const { clampedX, clampedY } = clampToWall(hit.wall, snappedLocalX, node.width, node.height)
 
       lastValid = {
@@ -65,6 +102,10 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
         side: hit.side,
         parentId: hit.wall.id,
         wallId: hit.wall.id,
+        // Re-anchoring to a wall ends any roof-segment hosting; the
+        // overlay's snapshot restores it if the move is reverted.
+        roofSegmentId: undefined,
+        roofFace: undefined,
       }
 
       // Build the updates atomically — position + rotation + side +

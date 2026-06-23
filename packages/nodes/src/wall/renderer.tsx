@@ -3,7 +3,8 @@
 import { useRegistry, useScene, type WallNode } from '@pascal-app/core'
 import { getVisibleWallMaterials, NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { BufferGeometry, Float32BufferAttribute, type Mesh } from 'three'
+import type { Mesh } from 'three'
+import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 
 /**
  * Thin wall renderer.
@@ -24,23 +25,11 @@ import { BufferGeometry, Float32BufferAttribute, type Mesh } from 'three'
  * That decision lands in a later milestone; for now the system retains
  * ownership of the rebuild loop.
  */
-function createEmptyWallGeometry(): BufferGeometry {
-  const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new Float32BufferAttribute([], 3))
-  geometry.addGroup(0, 0, 0)
-  geometry.addGroup(0, 0, 1)
-  geometry.addGroup(0, 0, 2)
-  return geometry
-}
-
 const WallRenderer = ({ node }: { node: WallNode }) => {
   const ref = useRef<Mesh>(null!)
-  const placeholderGeometry = useMemo(createEmptyWallGeometry, [])
-  const collisionPlaceholderGeometry = useMemo(() => {
-    const geometry = new BufferGeometry()
-    geometry.setAttribute('position', new Float32BufferAttribute([], 3))
-    return geometry
-  }, [])
+  // 3 groups map 1:1 to the wall's 3-material array (see getVisibleWallMaterials).
+  const placeholderGeometry = useMemo(() => createPlaceholderGeometry(3), [])
+  const collisionPlaceholderGeometry = useMemo(() => createPlaceholderGeometry(), [])
 
   useRegistry(node.id, 'wall', ref)
 
@@ -78,7 +67,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
         {...handlers}
       />
 
-      {node.children.map((childId) => (
+      {(node.children ?? []).map((childId) => (
         <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
       ))}
     </mesh>

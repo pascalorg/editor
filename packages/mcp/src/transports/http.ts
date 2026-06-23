@@ -1,10 +1,10 @@
-import { randomUUID, timingSafeEqual } from 'node:crypto'
+import { timingSafeEqual } from 'node:crypto'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 
 const DEFAULT_HOST = '127.0.0.1'
-const DEFAULT_RATE_LIMIT_PER_MINUTE = 120
+const DEFAULT_RATE_LIMIT_PER_MINUTE = 0
 const WINDOW_MS = 60_000
 const ALLOWED_METHODS = 'GET, POST, DELETE, OPTIONS'
 const ALLOWED_HEADERS =
@@ -33,6 +33,8 @@ export type HttpTransportOptions = {
   rateLimitPerMinute?: number
 }
 
+type McpServerFactory = () => McpServer
+
 /**
  * Attach an `McpServer` to a Streamable HTTP transport bound to a local port.
  *
@@ -46,7 +48,7 @@ export type HttpTransportOptions = {
  * configure an auth token.
  */
 export async function connectHttp(
-  server: McpServer,
+  serverOrFactory: McpServer | McpServerFactory,
   port: number,
   options: HttpTransportOptions = {},
 ): Promise<HttpTransportHandle> {
@@ -63,16 +65,36 @@ export async function connectHttp(
     rateLimitPerMinute: options.rateLimitPerMinute ?? DEFAULT_RATE_LIMIT_PER_MINUTE,
   })
 
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
-  })
-  await server.connect(transport)
+  const createMcpServer =
+    typeof serverOrFactory === 'function' ? serverOrFactory : () => serverOrFactory
 
-  const httpServer = createServer((req, res) => {
-    if (!guard(req, res)) return
-    transport.handleRequest(req, res).catch((err) => {
+  const httpServer = createServer(async (req, res) => {
+    const startedAt = Date.now()
+    const requestUrl = req.url ?? ''
+    const remoteAddress = req.socket.remoteAddress ?? 'unknown'
+    console.error(`[pascal-mcp] request start ${req.method} ${requestUrl} from ${remoteAddress}`)
+
+    res.on('finish', () => {
+      console.error(
+        `[pascal-mcp] request finish ${req.method} ${requestUrl} status=${res.statusCode} durationMs=${Date.now() - startedAt}`,
+      )
+    })
+
+    try {
+      if (!guard(req, res)) return
+      const server = createMcpServer()
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+      })
+      res.on('close', () => {
+        void transport.close()
+        void server.close()
+      })
+      await server.connect(transport)
+      await transport.handleRequest(req, res)
+    } catch (err) {
       // Log to stderr; never touch stdout (stdio transport uses it).
-      console.error('[pascal-mcp] http transport error', err)
+      console.error('[pascal-mcp] http request error', err)
       if (!res.writableEnded) {
         try {
           res.writeHead(500).end()
@@ -80,7 +102,7 @@ export async function connectHttp(
           // Response may already be partially sent; nothing more we can do.
         }
       }
-    })
+    }
   })
 
   await new Promise<void>((resolve, reject) => {
@@ -110,7 +132,6 @@ export async function connectHttp(
           else resolve()
         })
       })
-      await transport.close()
     },
   }
 }

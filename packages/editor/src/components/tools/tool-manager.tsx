@@ -9,7 +9,8 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
-import { ColumnTool } from './column/column-tool'
+import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
+import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
 import { RoofTool } from './roof/roof-tool'
@@ -78,25 +79,34 @@ export const ToolManager: React.FC = () => {
   const selectedSlabId = selectedIds.find((id) => nodes[id as AnyNodeId]?.type === 'slab') as
     | SlabNode['id']
     | undefined
+  const selectedSlab = selectedSlabId ? (nodes[selectedSlabId as AnyNodeId] as SlabNode) : null
+  const editingSlabHoleIsManual =
+    selectedSlabId !== undefined &&
+    editingHole?.nodeId === selectedSlabId &&
+    selectedSlab?.holeMetadata?.[editingHole.holeIndex]?.source === 'manual'
 
   // Check if a ceiling is selected
   const selectedCeilingId = selectedIds.find((id) => nodes[id as AnyNodeId]?.type === 'ceiling') as
     | CeilingNode['id']
     | undefined
 
-  // Show site boundary editor when in site phase (toggle controls entry/exit)
-  const showSiteBoundaryEditor = phase === 'site'
+  // Keep the site vertex flags available in select mode; the editor component
+  // switches to full polygon editing only after a flag activates site mode.
+  const showSiteBoundaryEditor = phase === 'site' || mode === 'select'
 
   // Show slab boundary editor when in structure/select mode with a slab selected (but not editing a hole)
   const showSlabBoundaryEditor =
     phase === 'structure' &&
     mode === 'select' &&
     selectedSlabId !== undefined &&
-    (!editingHole || editingHole.nodeId !== selectedSlabId)
+    !editingSlabHoleIsManual
 
   // Show slab hole editor when editing a hole on the selected slab
   const showSlabHoleEditor =
-    selectedSlabId !== undefined && editingHole !== null && editingHole.nodeId === selectedSlabId
+    selectedSlabId !== undefined &&
+    editingHole !== null &&
+    editingHole.nodeId === selectedSlabId &&
+    editingSlabHoleIsManual
 
   // Show ceiling boundary editor when in structure/select mode with a ceiling selected (but not editing a hole)
   const showCeilingBoundaryEditor =
@@ -136,7 +146,16 @@ export const ToolManager: React.FC = () => {
     nodeId: AnyNodeId,
     elevatorBuildingId: BuildingNode['id'],
   ) => {
-    setSelection({ buildingId: elevatorBuildingId, selectedIds: [nodeId] })
+    // Preserve the active level. `setSelection`'s hierarchy guard nulls
+    // `levelId` whenever `buildingId` is passed without an explicit
+    // `levelId` — which deselected the current floor plan the moment an
+    // elevator was placed. Pass the current level through so the floor
+    // plan stays selected.
+    setSelection({
+      buildingId: elevatorBuildingId,
+      levelId: activeLevelId ?? null,
+      selectedIds: [nodeId],
+    })
   }
 
   return (
@@ -252,9 +271,6 @@ export const ToolManager: React.FC = () => {
             <RegistryToolComponent />
           </Suspense>
         )}
-        {!movingNode && !useRegistryTool && showBuildTool && tool === 'column' && (
-          <ColumnTool currentLevelId={activeLevelId ?? null} onPlaced={handlePlacedNodeSelected} />
-        )}
         {!movingNode && !useRegistryTool && showBuildTool && tool === 'elevator' && (
           <ElevatorTool
             buildingId={buildingId as BuildingNode['id'] | null}
@@ -262,9 +278,13 @@ export const ToolManager: React.FC = () => {
             onPlaced={handlePlacedElevatorSelected}
           />
         )}
-        {!movingNode && BuildToolComponent && tool !== 'column' && tool !== 'elevator' ? (
-          <BuildToolComponent />
-        ) : null}
+        {!movingNode && BuildToolComponent && tool !== 'elevator' ? <BuildToolComponent /> : null}
+        {/* Figma-style alignment guides published by the move / placement
+            tools above. Lives inside the building-local group so the
+            building-local guide coords render at the right world position. */}
+        <Alignment3DGuideLayer />
+        {/* "Magnetic" beacon at the active wall-draft snap point. */}
+        <WallSnapBeaconLayer />
       </group>
     </>
   )

@@ -41,6 +41,10 @@ type DetectedRoom = {
   bbox: ReturnType<typeof bboxOf>
 }
 
+type DetectedCeilingRoom = DetectedRoom & {
+  ceilingHeight: number
+}
+
 export type AutoSlabSyncPlan = {
   create: SlabNodeType[]
   update: Array<{ id: SlabNodeType['id']; data: Partial<SlabNodeType> }>
@@ -55,9 +59,16 @@ export type AutoCeilingSyncPlan = {
 
 const DEFAULT_AUTO_SLAB_ELEVATION = 0.05
 const DEFAULT_AUTO_CEILING_HEIGHT = 2.5
+const CEILING_HEIGHT_EPSILON = 1e-6
 const ROOM_CURVE_TOLERANCE = 0.04
 const MAX_CURVE_SUBDIVISION_DEPTH = 6
 const AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE = 0.08
+const WALL_ROOM_BOUNDARY_TOLERANCE = 0.08
+
+export type AutoCeilingPlanningContext = {
+  walls?: WallNode[]
+  slabs?: SlabNodeType[]
+}
 
 function pointFromTuple(point: [number, number]): Point2D {
   return { x: point[0], y: point[1] }
@@ -184,6 +195,100 @@ function bboxOverlapArea(a: ReturnType<typeof bboxOf>, b: ReturnType<typeof bbox
   const ix = Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX))
   const iy = Math.max(0, Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY))
   return ix * iy
+}
+
+function pointDistanceToPolygonBoundary(point: Point2D, polygon: Point2D[]) {
+  let minDistance = Number.POSITIVE_INFINITY
+  for (let index = 0; index < polygon.length; index += 1) {
+    const start = polygon[index]
+    const end = polygon[(index + 1) % polygon.length]
+    if (!(start && end)) continue
+    minDistance = Math.min(
+      minDistance,
+      distanceToSegment(pointToTuple(point), pointToTuple(start), pointToTuple(end)),
+    )
+  }
+  return minDistance
+}
+
+function wallBoundsRoom(wall: WallNode, roomPolygon: Point2D[]) {
+  const sampled = sampleWallPointsForRoomDetection(wall)
+  if (sampled.length === 0) return false
+
+  const candidates =
+    sampled.length === 2
+      ? [
+          sampled[0]!,
+          {
+            x: (sampled[0]!.x + sampled[1]!.x) / 2,
+            y: (sampled[0]!.y + sampled[1]!.y) / 2,
+          },
+          sampled[1]!,
+        ]
+      : sampled
+
+  const matchingPoints = candidates.filter(
+    (point) => pointDistanceToPolygonBoundary(point, roomPolygon) <= WALL_ROOM_BOUNDARY_TOLERANCE,
+  )
+
+  return matchingPoints.length >= 2
+}
+
+function pointIsOnSlab(point: Point2D, slab: SlabNodeType) {
+  if (slab.polygon.length < 3) return false
+  const slabPolygon = slab.polygon.map(pointFromTuple)
+  if (!pointInPolygon(point, slabPolygon)) return false
+
+  for (const hole of slab.holes ?? []) {
+    if (hole.length >= 3 && pointInPolygon(point, hole.map(pointFromTuple))) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function slabSupportsRoom(roomPolygon: Point2D[], slab: SlabNodeType) {
+  if (slab.polygon.length < 3) return false
+  if (polygonSignature(slab.polygon.map(pointFromTuple)) === polygonSignature(roomPolygon)) {
+    return true
+  }
+  return pointIsOnSlab(polygonCentroid(roomPolygon), slab)
+}
+
+function resolveRoomSlabElevation(roomPolygon: Point2D[], slabs: SlabNodeType[] = []) {
+  let maxElevation = 0
+
+  for (const slab of slabs) {
+    if (!slabSupportsRoom(roomPolygon, slab)) continue
+    maxElevation = Math.max(maxElevation, slab.elevation ?? DEFAULT_AUTO_SLAB_ELEVATION)
+  }
+
+  return maxElevation
+}
+
+function resolveRoomWallHeight(roomPolygon: Point2D[], walls: WallNode[] = []) {
+  let maxHeight = 0
+
+  for (const wall of walls) {
+    if (!wallBoundsRoom(wall, roomPolygon)) continue
+    const height = wall.height ?? DEFAULT_AUTO_CEILING_HEIGHT
+    if (Number.isFinite(height)) {
+      maxHeight = Math.max(maxHeight, height)
+    }
+  }
+
+  return maxHeight > 0 ? maxHeight : DEFAULT_AUTO_CEILING_HEIGHT
+}
+
+function resolveAutoCeilingHeight(
+  roomPolygon: Point2D[],
+  context: AutoCeilingPlanningContext = {},
+) {
+  return (
+    resolveRoomSlabElevation(roomPolygon, context.slabs) +
+    resolveRoomWallHeight(roomPolygon, context.walls)
+  )
 }
 
 function getWallDirection(wall: Pick<WallNode, 'start' | 'end'>) {
@@ -481,12 +586,55 @@ function wallGeometrySignature(wall: WallNode) {
     wall.end[0].toFixed(4),
     wall.end[1].toFixed(4),
     (wall.thickness ?? 0.2).toFixed(4),
+    (wall.height ?? DEFAULT_AUTO_CEILING_HEIGHT).toFixed(4),
     getClampedWallCurveOffset(wall).toFixed(4),
   ].join('|')
 }
 
 function levelWallSnapshot(walls: WallNode[]) {
   return walls.map(wallGeometrySignature).sort().join('||')
+}
+
+function slabGeometrySignature(slab: SlabNodeType) {
+  const polygon = slab.polygon
+    .map((point) => `${point[0].toFixed(4)},${point[1].toFixed(4)}`)
+    .join(';')
+  const holes = (slab.holes ?? [])
+    .map((hole) => hole.map((point) => `${point[0].toFixed(4)},${point[1].toFixed(4)}`).join(';'))
+    .join('/')
+
+  return [slab.id, (slab.elevation ?? DEFAULT_AUTO_SLAB_ELEVATION).toFixed(4), polygon, holes].join(
+    '|',
+  )
+}
+
+function levelSlabSnapshot(slabs: SlabNodeType[]) {
+  return slabs.map(slabGeometrySignature).sort().join('||')
+}
+
+function levelStructureSnapshots(nodes: Record<string, any>) {
+  const byLevel = new Map<string, { walls: WallNode[]; slabs: SlabNodeType[] }>()
+  const getEntry = (levelId: string) => {
+    const entry = byLevel.get(levelId) ?? { walls: [], slabs: [] }
+    byLevel.set(levelId, entry)
+    return entry
+  }
+
+  for (const node of Object.values(nodes)) {
+    if (!(node && typeof node === 'object' && 'parentId' in node && node.parentId)) continue
+    if ((node as any).type === 'wall') {
+      getEntry((node as any).parentId).walls.push(node as WallNode)
+    } else if ((node as any).type === 'slab') {
+      getEntry((node as any).parentId).slabs.push(SlabNode.parse(node))
+    }
+  }
+
+  const snapshots = new Map<string, string>()
+  for (const [levelId, entry] of byLevel.entries()) {
+    snapshots.set(levelId, `${levelWallSnapshot(entry.walls)}##${levelSlabSnapshot(entry.slabs)}`)
+  }
+
+  return snapshots
 }
 
 function buildSpace(levelId: string, polygon: Point2D[]): Space {
@@ -654,18 +802,44 @@ function syncAutoSlabsForLevel(
   if (plan.create.length > 0) {
     sceneStore.getState().createNodes(plan.create.map((node) => ({ node, parentId: levelId })))
   }
+
+  return plan
+}
+
+export function projectAutoSlabsForPlan(
+  existingSlabs: SlabNodeType[],
+  plan: AutoSlabSyncPlan,
+): SlabNodeType[] {
+  const slabsById = new Map(existingSlabs.map((slab) => [slab.id, slab]))
+
+  for (const id of plan.delete) {
+    slabsById.delete(id)
+  }
+
+  for (const update of plan.update) {
+    const slab = slabsById.get(update.id)
+    if (!slab) continue
+    slabsById.set(update.id, SlabNode.parse({ ...slab, ...update.data }))
+  }
+
+  for (const slab of plan.create) {
+    slabsById.set(slab.id, slab)
+  }
+
+  return [...slabsById.values()]
 }
 
 export function planAutoCeilingsForLevel(
   roomPolygons: Point2D[][],
   existingCeilings: CeilingNodeType[],
+  context: AutoCeilingPlanningContext = {},
 ): AutoCeilingSyncPlan {
   const manualCeilings = existingCeilings.filter((ceiling) => !ceiling.autoFromWalls)
   const manualSignatures = new Set(
     manualCeilings.map((ceiling) => polygonSignature(ceiling.polygon.map(pointFromTuple))),
   )
 
-  const detected: DetectedRoom[] = roomPolygons
+  const detected: DetectedCeilingRoom[] = roomPolygons
     .map((poly) => ({
       poly: simplifyClosedPolygon(poly.map(pointToTuple), AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE).map(
         pointFromTuple,
@@ -681,6 +855,7 @@ export function planAutoCeilingsForLevel(
       centroid: polygonCentroid(room.poly),
       area: Math.abs(polygonArea(room.poly)),
       bbox: bboxOf(room.poly),
+      ceilingHeight: resolveAutoCeilingHeight(room.poly, context),
     }))
     .filter(({ sig }) => !manualSignatures.has(sig))
 
@@ -698,7 +873,7 @@ export function planAutoCeilingsForLevel(
 
   const matchedCeilingIds = new Set<string>()
   const matchedDetectedIdx = new Set<number>()
-  const updatesById = new Map<string, [number, number][]>()
+  const updatesById = new Map<string, { polygon: [number, number][]; height: number }>()
 
   const autoBySignature = new Map<string, (typeof existingAutoMeta)[number]>()
   for (const entry of existingAutoMeta) {
@@ -711,7 +886,10 @@ export function planAutoCeilingsForLevel(
 
     matchedDetectedIdx.add(index)
     matchedCeilingIds.add(existing.ceiling.id)
-    updatesById.set(existing.ceiling.id, room.poly.map(pointToTuple))
+    updatesById.set(existing.ceiling.id, {
+      polygon: room.poly.map(pointToTuple),
+      height: room.ceilingHeight,
+    })
   })
 
   const remainingDetected = detected
@@ -746,7 +924,10 @@ export function planAutoCeilingsForLevel(
 
     matchedDetectedIdx.add(index)
     matchedCeilingIds.add(bestMatch.entry.ceiling.id)
-    updatesById.set(bestMatch.entry.ceiling.id, room.poly.map(pointToTuple))
+    updatesById.set(bestMatch.entry.ceiling.id, {
+      polygon: room.poly.map(pointToTuple),
+      height: room.ceilingHeight,
+    })
   }
 
   const ceilingsToDelete = existingAuto
@@ -756,12 +937,21 @@ export function planAutoCeilingsForLevel(
   const ceilingsToUpdate = existingAuto
     .filter((ceiling) => updatesById.has(ceiling.id))
     .flatMap((ceiling) => {
-      const polygon = updatesById.get(ceiling.id)
-      if (!polygon) return []
+      const update = updatesById.get(ceiling.id)
+      if (!update) return []
 
-      return sameTuplePolygon(ceiling.polygon, polygon)
-        ? []
-        : [{ id: ceiling.id, data: { polygon } }]
+      const data: Partial<CeilingNodeType> = {}
+      if (!sameTuplePolygon(ceiling.polygon, update.polygon)) {
+        data.polygon = update.polygon
+      }
+      if (
+        Math.abs((ceiling.height ?? DEFAULT_AUTO_CEILING_HEIGHT) - update.height) >
+        CEILING_HEIGHT_EPSILON
+      ) {
+        data.height = update.height
+      }
+
+      return Object.keys(data).length === 0 ? [] : [{ id: ceiling.id, data }]
     })
 
   const plannedCeilingsForNaming: Array<{ name?: string }> = [...existingCeilings]
@@ -780,7 +970,7 @@ export function planAutoCeilingsForLevel(
         name,
         polygon: room.poly.map(pointToTuple),
         holes: [],
-        height: DEFAULT_AUTO_CEILING_HEIGHT,
+        height: room.ceilingHeight,
         autoFromWalls: true,
       }),
     )
@@ -798,8 +988,9 @@ function syncAutoCeilingsForLevel(
   roomPolygons: Point2D[][],
   existingCeilings: CeilingNodeType[],
   sceneStore: any,
+  context: AutoCeilingPlanningContext = {},
 ) {
-  const plan = planAutoCeilingsForLevel(roomPolygons, existingCeilings)
+  const plan = planAutoCeilingsForLevel(roomPolygons, existingCeilings, context)
 
   if (plan.delete.length > 0) {
     sceneStore.getState().deleteNodes(plan.delete)
@@ -882,17 +1073,15 @@ function runSpaceDetection(
       )
     }
 
-    syncAutoSlabsForLevel(
-      levelId,
-      roomPolygons,
-      slabs.map((slab: any) => SlabNode.parse(slab)),
-      sceneStore,
-    )
+    const parsedSlabs = slabs.map((slab: any) => SlabNode.parse(slab))
+    const slabPlan = syncAutoSlabsForLevel(levelId, roomPolygons, parsedSlabs, sceneStore)
+    const projectedSlabs = projectAutoSlabsForPlan(parsedSlabs, slabPlan)
     syncAutoCeilingsForLevel(
       levelId,
       roomPolygons,
       ceilings.map((ceiling: any) => CeilingNode.parse(ceiling)),
       sceneStore,
+      { walls, slabs: projectedSlabs },
     )
 
     for (const space of spaces) {
@@ -935,21 +1124,7 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
     if (getSceneHistoryPauseDepth() > 0) return
 
     const nodes = state.nodes
-    const wallsByLevel = new Map<string, WallNode[]>()
-
-    for (const node of Object.values(nodes)) {
-      if (node && (node as any).type === 'wall' && (node as any).parentId) {
-        const levelId = (node as any).parentId as string
-        const levelWalls = wallsByLevel.get(levelId) ?? []
-        levelWalls.push(node as WallNode)
-        wallsByLevel.set(levelId, levelWalls)
-      }
-    }
-
-    const currentSnapshots = new Map<string, string>()
-    for (const [levelId, walls] of wallsByLevel.entries()) {
-      currentSnapshots.set(levelId, levelWallSnapshot(walls))
-    }
+    const currentSnapshots = levelStructureSnapshots(nodes)
 
     // Paused: roll the snapshot forward so we don't backfill (and re-duplicate)
     // every paused change once detection resumes. Whatever the AI built while
@@ -984,7 +1159,8 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
     } finally {
       resumeSceneHistory(sceneStore)
       previousSnapshots.clear()
-      for (const [levelId, snapshot] of currentSnapshots.entries()) {
+      const postRunSnapshots = levelStructureSnapshots(sceneStore.getState().nodes)
+      for (const [levelId, snapshot] of postRunSnapshots.entries()) {
         previousSnapshots.set(levelId, snapshot)
       }
       isProcessing = false

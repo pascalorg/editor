@@ -1,10 +1,13 @@
-import {
-  type AnyNodeId,
-  type HandleDescriptor,
-  type NodeDefinition,
-  type WallNode,
-  type WindowNode as WindowNodeType,
+import type {
+  AnyNodeId,
+  HandleDescriptor,
+  NodeDefinition,
+  RoofSegmentNode,
+  WallNode,
+  WindowNode as WindowNodeType,
 } from '@pascal-app/core'
+import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
+import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { buildWindowFloorplan } from './floorplan'
 import { windowWidthAffordance } from './floorplan-affordances'
 import { windowFloorplanMoveTarget } from './floorplan-move'
@@ -36,7 +39,13 @@ function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeT
     axis: 'x',
     anchor: side === 'right' ? 'min' : 'max',
     min: MIN_WINDOW_WIDTH,
-    max: (n, scene) => readWallLength(n, scene),
+    max: (n, scene) => {
+      // Roof-hosted windows clamp against the face profile (the
+      // wall-based limits read Infinity when wallId is unset).
+      const roofMax = readRoofFaceWidthMax(n, scene, sign)
+      if (roofMax !== null) return Math.max(MIN_WINDOW_WIDTH, roofMax)
+      return readWallLength(n, scene)
+    },
     currentValue: (n) => n.width,
     apply: (initial, newWidth) => {
       const rotY = initial.rotation[1]
@@ -73,12 +82,13 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
     anchor: edge === 'top' ? 'min' : 'max',
     min: MIN_WINDOW_HEIGHT,
     max: (n, scene) => {
+      const roofMax = readRoofFaceHeightMax(n, scene, sign)
+      if (roofMax !== null) return Math.max(MIN_WINDOW_HEIGHT, roofMax)
       // Maximum: distance from the anchored edge to the wall's allowed Y
       // bounds. Top arrow caps at wall.height - bottom; bottom arrow caps
       // at top (positive Y room above the floor).
       const wallH = readWallHeight(n, scene)
-      const anchored =
-        edge === 'top' ? n.position[1] - n.height / 2 : n.position[1] + n.height / 2
+      const anchored = edge === 'top' ? n.position[1] - n.height / 2 : n.position[1] + n.height / 2
       return edge === 'top'
         ? Math.max(MIN_WINDOW_HEIGHT, wallH - anchored)
         : Math.max(MIN_WINDOW_HEIGHT, anchored)
@@ -140,6 +150,18 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
     duplicable: true,
     deletable: true,
     wallOpeningPlacement: true,
+    // Windows also host on roof-segment wall faces (base walls under the
+    // roof, gable ends) — same wiring as door; see the door capability
+    // for why `dirtyHandledByOwnSystem` is required.
+    roofAccessory: {
+      buildCut: (node, hostSegment) =>
+        buildRoofWallOpeningCut(node as WindowNodeType, hostSegment as RoofSegmentNode),
+      cutScope: 'wall',
+      dirtyHandledByOwnSystem: true,
+    },
+    // `wallId` / `roofSegmentId` are re-derived from the surface under
+    // the cursor at preset placement time — see door for the pattern.
+    hostRefFields: ['wallId', 'roofSegmentId', 'roofFace'],
   },
 
   parametrics: windowParametrics,

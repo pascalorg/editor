@@ -5,21 +5,24 @@ import {
   type AnyNodeId,
   type IconRef,
   nodeRegistry,
+  type ParamAction,
   type ParamField,
   useScene,
+  type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Icon } from '@iconify/react'
 import { Move, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { collectZoneContentIds } from '../../../lib/zone-content'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { ToggleControl } from '../controls/toggle-control'
-import { PanelWrapper } from './panel-wrapper'
+import { InspectorFooterContext, PanelWrapper } from './panel-wrapper'
 
 /**
  * Auto-derived right-panel inspector for any registry-backed node.
@@ -37,8 +40,15 @@ import { PanelWrapper } from './panel-wrapper'
  * `parametrics.customPanel?` escape hatch for kinds whose parametric editor
  * can't be auto-generated (topology editors etc.).
  */
-export function ParametricInspector() {
-  const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
+export function ParametricInspector({
+  footer,
+  nodeId,
+  onClose,
+}: { footer?: React.ReactNode; nodeId?: AnyNodeId; onClose?: () => void } = {}) {
+  const selectedIdFromSelection = useViewer((s) => s.selection.selectedIds[0]) as
+    | AnyNodeId
+    | undefined
+  const selectedId = nodeId ?? selectedIdFromSelection
   const setSelection = useViewer((s) => s.setSelection)
   // Subscribe only to the *type* — a string primitive that doesn't change
   // when slider values change. Without this, every updateNode tick during
@@ -57,9 +67,13 @@ export function ParametricInspector() {
     [selectedId],
   )
 
-  const handleClose = useCallback(() => {
+  const clearSelection = useCallback(() => {
+    if (onClose) {
+      onClose()
+      return
+    }
     setSelection({ selectedIds: [] })
-  }, [setSelection])
+  }, [onClose, setSelection])
 
   const handleMove = useCallback(() => {
     if (!selectedId) return
@@ -67,15 +81,27 @@ export function ParametricInspector() {
     if (!node) return
     sfxEmitter.emit('sfx:item-pick')
     useEditor.getState().setMovingNode(node as any)
-    setSelection({ selectedIds: [] })
-  }, [selectedId, setSelection])
+    clearSelection()
+  }, [selectedId, clearSelection])
 
-  const handleDelete = useCallback(() => {
-    if (!selectedId) return
-    sfxEmitter.emit('sfx:structure-delete')
-    useScene.getState().deleteNode(selectedId)
-    setSelection({ selectedIds: [] })
-  }, [selectedId, setSelection])
+  const handleDelete = useCallback(
+    (withZoneContent = false) => {
+      if (!selectedId) return
+      const scene = useScene.getState()
+      const node = scene.nodes[selectedId]
+      if (!node) return
+
+      const ids =
+        withZoneContent && node.type === 'zone'
+          ? [selectedId, ...collectZoneContentIds(scene.nodes, node as ZoneNode)]
+          : [selectedId]
+
+      sfxEmitter.emit('sfx:structure-delete')
+      scene.deleteNodes(Array.from(new Set(ids)))
+      clearSelection()
+    },
+    [selectedId, clearSelection],
+  )
 
   if (!selectedId || !def || !parametrics) return null
 
@@ -87,10 +113,14 @@ export function ParametricInspector() {
   // panel to cover them.
   if (parametrics.customPanel) {
     const CustomPanel = resolveCustomPanel(parametrics.customPanel)
+    // Custom panels render their own `<PanelWrapper>` and don't thread a
+    // `footer` prop, so hand the host footer down via context.
     return (
-      <Suspense fallback={null}>
-        <CustomPanel />
-      </Suspense>
+      <InspectorFooterContext.Provider value={footer}>
+        <Suspense fallback={null}>
+          <CustomPanel />
+        </Suspense>
+      </InspectorFooterContext.Provider>
     )
   }
 
@@ -99,9 +129,20 @@ export function ParametricInspector() {
   const iconNode = renderIcon(presentation?.icon)
   const canMove = !!def.capabilities.movable
   const canDelete = def.capabilities.deletable !== false
+  const isZone = nodeType === 'zone'
+
+  const TrailingSection = parametrics.trailingSection
+    ? resolveCustomPanel(parametrics.trailingSection)
+    : null
 
   return (
-    <PanelWrapper icon={iconNode} onClose={handleClose} title={title} width={320}>
+    <PanelWrapper
+      footer={footer}
+      icon={iconNode}
+      onClose={clearSelection}
+      title={title}
+      width={320}
+    >
       {parametrics.groups.map((group, gi) => (
         <PanelSection key={`group-${gi}`} title={group.label}>
           {group.fields.map((field, fi) => (
@@ -114,24 +155,76 @@ export function ParametricInspector() {
           ))}
         </PanelSection>
       ))}
-      {(canMove || canDelete) && (
+      {TrailingSection && (
+        <Suspense fallback={null}>
+          <TrailingSection />
+        </Suspense>
+      )}
+      {(canMove || canDelete || (parametrics.actions && parametrics.actions.length > 0)) && (
         <PanelSection title="Actions">
-          <ActionGroup>
+          <ActionGroup className={isZone ? 'flex-col' : undefined}>
             {canMove && (
               <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
             )}
-            {canDelete && (
-              <ActionButton
-                className="border-red-500/40 text-red-200 hover:bg-red-500/15"
-                icon={<Trash2 className="h-4 w-4" />}
-                label="Delete"
-                onClick={handleDelete}
-              />
-            )}
+            {parametrics.actions?.map((action, i) => (
+              <ParamActionButton action={action} key={`paramaction-${i}`} nodeId={selectedId} />
+            ))}
+            {canDelete &&
+              (isZone ? (
+                <>
+                  <ActionButton
+                    className="w-full flex-none"
+                    icon={<Trash2 className="h-4 w-4 text-red-400" />}
+                    label="Delete"
+                    onClick={() => handleDelete(false)}
+                  />
+                  <ActionButton
+                    className="w-full flex-none"
+                    icon={<Trash2 className="h-4 w-4 text-red-400" />}
+                    label="Delete with contents"
+                    onClick={() => handleDelete(true)}
+                  />
+                </>
+              ) : (
+                <ActionButton
+                  className="border-red-500/40 text-red-200 hover:bg-red-500/15"
+                  icon={<Trash2 className="h-4 w-4" />}
+                  label="Delete"
+                  onClick={() => handleDelete()}
+                />
+              ))}
           </ActionGroup>
         </PanelSection>
       )}
     </PanelWrapper>
+  )
+}
+
+// One inspector action button. Subscribes to `enabledIf`'s boolean result
+// (same pattern as FieldRenderer's `visible`) so the disabled state stays
+// live as the scene mutates — `===` on the boolean keeps unrelated ticks
+// from re-rendering it. The click handler re-reads the live node so the
+// handler always acts on current state.
+function ParamActionButton({ action, nodeId }: { action: ParamAction<AnyNode>; nodeId: AnyNodeId }) {
+  const disabled = useScene((s) => {
+    if (!action.enabledIf) return false
+    const n = s.nodes[nodeId]
+    return n ? !action.enabledIf(n as AnyNode) : false
+  })
+  return (
+    <ActionButton
+      className={disabled ? 'opacity-40 pointer-events-none' : ''}
+      icon={
+        action.iconSrc ? (
+          <img alt="" className="h-4 w-4 shrink-0 object-contain" src={action.iconSrc} />
+        ) : undefined
+      }
+      label={action.label}
+      onClick={() => {
+        const live = useScene.getState().nodes[nodeId]
+        if (live) action.onClick(live as AnyNode)
+      }}
+    />
   )
 }
 

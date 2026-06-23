@@ -1,15 +1,4 @@
-'use client'
-
-import NextImage from 'next/image'
-import { useContextualTools } from '../../../hooks/use-contextual-tools'
-
-import { cn } from '../../../lib/utils'
-import useEditor, {
-  type CatalogCategory,
-  type StructureTool,
-  type Tool,
-} from '../../../store/use-editor'
-import { ActionButton } from './action-button'
+import type { CatalogCategory, StructureTool } from '../../../store/use-editor'
 
 export type ToolConfig = {
   id: StructureTool
@@ -18,6 +7,10 @@ export type ToolConfig = {
   catalogCategory?: CatalogCategory
 }
 
+// Shared structure-tool metadata (icons + labels). The build palette now lives
+// in the community Build sidebar; this list survives only as the lookup table
+// for cursor/floorplan indicators. Roof-mounted accessories are intentionally
+// absent — they're placed from the roof inspector's "Add element" section.
 export const tools: ToolConfig[] = [
   { id: 'wall', iconSrc: '/icons/wall.png', label: 'Wall' },
   { id: 'door', iconSrc: '/icons/door.png', label: 'Door' },
@@ -27,85 +20,9 @@ export const tools: ToolConfig[] = [
   { id: 'fence', iconSrc: '/icons/fence.png', label: 'Fence' },
   { id: 'column', iconSrc: '/icons/column.png', label: 'Column' },
   { id: 'elevator', iconSrc: '/icons/elevator.png', label: 'Elevator' },
-  // { id: 'room', iconSrc: '/icons/room.png', label: 'Room' },
-  // { id: 'custom-room', iconSrc: '/icons/custom-room.png', label: 'Custom Room' },
   { id: 'slab', iconSrc: '/icons/floor.png', label: 'Slab' },
   { id: 'ceiling', iconSrc: '/icons/ceiling.png', label: 'Ceiling' },
   { id: 'zone', iconSrc: '/icons/zone.png', label: 'Zone' },
-  { id: 'spawn', iconSrc: '/icons/site.png', label: 'Spawn Point' },
+  { id: 'spawn', iconSrc: '/icons/spawn-point.png', label: 'Spawn Point' },
   { id: 'shelf', iconSrc: '/icons/shelf.png', label: 'Shelf' },
-  // Roof-mounted accessories (box-vent / ridge-vent / chimney /
-  // solar-panel / skylight / dormer) are intentionally NOT in the top
-  // palette — they only make sense in the context of a selected roof.
-  // The roof inspector's "Add element" section is the entry point
-  // (`packages/nodes/src/roof/panel.tsx`), which activates the same
-  // registry-driven placement tools via `setTool(kind)`.
 ]
-
-export function StructureTools() {
-  const activeTool = useEditor((state) => state.tool)
-  const catalogCategory = useEditor((state) => state.catalogCategory)
-  const structureLayer = useEditor((state) => state.structureLayer)
-  const setTool = useEditor((state) => state.setTool)
-  const setCatalogCategory = useEditor((state) => state.setCatalogCategory)
-
-  const contextualTools = useContextualTools()
-
-  // Filter tools based on structureLayer
-  const visibleTools =
-    structureLayer === 'zones'
-      ? tools.filter((t) => t.id === 'zone')
-      : tools.filter((t) => t.id !== 'zone')
-
-  const hasActiveTool = visibleTools.some(
-    (t) =>
-      activeTool === t.id && (t.catalogCategory ? catalogCategory === t.catalogCategory : true),
-  )
-
-  return (
-    <div className="flex items-center gap-1.5 px-1">
-      {visibleTools.map((tool, index) => {
-        // For item tools with catalog category, check both tool and category match
-        const isActive =
-          activeTool === tool.id &&
-          (tool.catalogCategory ? catalogCategory === tool.catalogCategory : true)
-
-        const isContextual = contextualTools.includes(tool.id)
-
-        return (
-          <ActionButton
-            className={cn(
-              'rounded-lg duration-300',
-              isActive
-                ? 'z-10 scale-110 bg-black/40 hover:bg-black/40'
-                : 'scale-95 bg-transparent opacity-60 grayscale hover:bg-black/20 hover:opacity-100 hover:grayscale-0',
-            )}
-            key={`${tool.id}-${tool.catalogCategory ?? index}`}
-            label={tool.label}
-            onClick={() => {
-              if (!isActive) {
-                setTool(tool.id)
-                setCatalogCategory(tool.catalogCategory ?? null)
-
-                // Automatically switch to build mode if we select a tool
-                if (useEditor.getState().mode !== 'build') {
-                  useEditor.getState().setMode('build')
-                }
-              }
-            }}
-            size="icon"
-            variant="ghost"
-          >
-            <NextImage
-              alt={tool.label}
-              className="size-full object-contain"
-              height={28}
-              src={tool.iconSrc}
-              width={28}
-            />
-          </ActionButton>
-        )
-      })}
-    </div>
-  )
-}

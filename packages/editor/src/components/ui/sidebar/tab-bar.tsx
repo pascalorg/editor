@@ -3,13 +3,17 @@
 import { MoreHorizontal } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../primitives/tooltip'
 
 export type SidebarTab = {
   id: string
   label: string
   mobileDefaultSnap?: number
   mobileIcon?: ReactNode
+  /** Desktop icon shown in the vertical rail (v2 layout). */
+  icon?: ReactNode
 }
 
 interface TabBarProps {
@@ -21,6 +25,8 @@ interface TabBarProps {
 const FALLBACK_MORE_BUTTON_WIDTH = 78
 const FALLBACK_TAB_WIDTH = 56
 const TAB_GAP = 2
+// Style follow-up: left panel tabs follow the MeasureNavi 10px Library Tabs rule.
+const SIDEBAR_TAB_TEXT = 'mn-sidebar-tab-text font-medium'
 
 export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
   const [isOverflowOpen, setIsOverflowOpen] = useState(false)
@@ -85,6 +91,7 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
   const isOverflowActive = overflowTabs.some((tab) => tab.id === activeTab)
 
   const selectTab = (id: string) => {
+    triggerSFX('sfx:menu-click')
     onTabChange(id)
     setIsOverflowOpen(false)
   }
@@ -100,7 +107,7 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
       >
         {tabs.map((tab) => (
           <span
-            className="relative inline-flex h-7 items-center rounded-md px-2 font-medium text-sm"
+            className={cn('relative inline-flex h-7 items-center rounded-md px-2', SIDEBAR_TAB_TEXT)}
             key={tab.id}
             ref={(element) => {
               measureRefs.current[tab.id] = element
@@ -110,7 +117,7 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
           </span>
         ))}
         <span
-          className="relative inline-flex h-7 items-center gap-1 rounded-md px-2 font-medium text-sm"
+          className={cn('relative inline-flex h-7 items-center gap-1 rounded-md px-2', SIDEBAR_TAB_TEXT)}
           ref={moreMeasureRef}
         >
           <MoreHorizontal className="h-4 w-4" aria-hidden />
@@ -122,13 +129,15 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
         return (
           <button
             className={cn(
-              'relative h-7 min-w-0 rounded-md px-2 font-medium text-sm transition-colors',
+              'relative h-7 min-w-0 rounded-md px-2 transition-colors',
+              SIDEBAR_TAB_TEXT,
               isActive
                 ? 'bg-accent text-foreground'
                 : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
             )}
             key={tab.id}
             onClick={() => selectTab(tab.id)}
+            onMouseEnter={() => triggerSFX('sfx:menu-hover')}
             type="button"
           >
             <span className="block truncate">{tab.label}</span>
@@ -140,7 +149,8 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
           <button
             aria-expanded={isOverflowOpen}
             className={cn(
-              'relative flex h-7 items-center gap-1 rounded-md px-2 font-medium text-sm transition-colors',
+              'relative flex h-7 items-center gap-1 rounded-md px-2 transition-colors',
+              SIDEBAR_TAB_TEXT,
               isOverflowActive
                 ? 'bg-accent text-foreground'
                 : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
@@ -158,7 +168,8 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
                 return (
                   <button
                     className={cn(
-                      'flex h-8 w-full items-center rounded-sm px-2 text-left font-medium text-sm transition-colors',
+                      'flex h-8 w-full items-center rounded-sm px-2 text-left transition-colors',
+                      SIDEBAR_TAB_TEXT,
                       isActive
                         ? 'bg-accent text-foreground'
                         : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
@@ -176,5 +187,62 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
         </div>
       ) : null}
     </div>
+  )
+}
+
+interface IconRailProps {
+  tabs: SidebarTab[]
+  /** Highlighted tab. Stays highlighted while the panel is collapsed. */
+  activeTab: string
+  /** True when the panel beside the rail is collapsed. */
+  collapsed: boolean
+  /** Clicking a rail icon: switch tab, or toggle the panel (see layout). */
+  onIconClick: (id: string) => void
+}
+
+/**
+ * Vertical icon rail for the v2 left column. Always visible (even when the
+ * panel is collapsed) so the user can reopen the panel by clicking an icon.
+ * The label renders as a hover tooltip on the right.
+ */
+export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailProps) {
+  return (
+    <TooltipProvider delayDuration={400} disableHoverableContent>
+      {/* Style follow-up: MeasureNavi rail is 58px wide with 42px icon buttons. */}
+      <div className="flex h-full w-[58px] shrink-0 flex-col items-center gap-1 border-border/50 border-r py-2">
+        {tabs.map((tab) => {
+          // Only show the active highlight while the panel is open. When
+          // collapsed nothing is "open", so every icon reads as unselected.
+          const showActive = activeTab === tab.id && !collapsed
+          return (
+            <Tooltip key={tab.id}>
+              <TooltipTrigger asChild>
+                <button
+                  className={cn(
+                    'group relative flex h-[42px] w-[42px] items-center justify-center rounded-xl transition-all duration-200 [&_img]:transition-[opacity,filter] [&_img]:duration-200',
+                    showActive
+                      ? 'bg-accent text-foreground shadow-sm [&_img]:opacity-100 [&_img]:grayscale-0'
+                      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground [&_img]:opacity-60 [&_img]:grayscale hover:[&_img]:opacity-100 hover:[&_img]:grayscale-0',
+                  )}
+                  onClick={() => {
+                    triggerSFX('sfx:menu-click')
+                    onIconClick(tab.id)
+                  }}
+                  onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                  type="button"
+                >
+                  {showActive && (
+                    // Style follow-up: selected rail item uses the MeasureNavi 3px teal indicator.
+                    <span className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r-full bg-primary" />
+                  )}
+                  {tab.icon ?? <span className="mn-rail-fallback-text">{tab.label.charAt(0)}</span>}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">{tab.label}</TooltipContent>
+            </Tooltip>
+          )
+        })}
+      </div>
+    </TooltipProvider>
   )
 }

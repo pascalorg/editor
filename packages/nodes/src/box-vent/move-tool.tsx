@@ -5,17 +5,19 @@ import {
   type BoxVentNode,
   emitter,
   type RoofEvent,
-  type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
+import {
+  createRelativeRoofDrag,
+  type RelativeRoofDragTarget,
+  roofSegmentLocalToBuildingLocal,
+} from '../shared/relative-roof-drag'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import BoxVentPreview from './preview'
 
 /**
@@ -55,48 +57,39 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
     const ventObj = sceneRegistry.nodes.get(node.id)
     if (ventObj) ventObj.visible = false
 
-    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
-      const buildingId = useViewer.getState().selection.buildingId
-      const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
-      if (!buildingObj) return [wx, wy, wz]
-      const v = new THREE.Vector3(wx, wy, wz)
-      buildingObj.worldToLocal(v)
-      return [v.x, v.y, v.z]
-    }
-
     let lastSnap: [number, number] | null = null
+    let lastTarget: RelativeRoofDragTarget | null = null
+    const roofDrag = createRelativeRoofDrag(original)
 
     const updatePreview = (event: RoofEvent) => {
-      const wx = event.position[0]
-      const wy = event.position[1]
-      const wz = event.position[2]
+      const target = roofDrag.resolve(event)
+      if (!target) return
+      lastTarget = target
 
-      const sx = Math.round(wx * 20) / 20
-      const sz = Math.round(wz * 20) / 20
+      const sx = Math.round(target.localX * 20) / 20
+      const sz = Math.round(target.localZ * 20) / 20
       if (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz) {
         triggerSFX('sfx:grid-snap')
         lastSnap = [sx, sz]
       }
 
-      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
-      if (!hit) return
-
-      const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
+      const normal = getAnalyticalNormal(target.localX, target.localZ, target.segment)
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
-      setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
-      setPreviewPos(worldToBuildingLocal(wx, wy, wz))
+      setPreviewYaw((event.node.rotation ?? 0) + (target.segment.rotation ?? 0))
+      setPreviewPos(
+        roofSegmentLocalToBuildingLocal(target.segment.id, [
+          target.localX,
+          target.localY,
+          target.localZ,
+        ]),
+      )
       event.stopPropagation()
     }
 
     const onRoofClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
-      if (!hit) return
-      const targetSegmentId = hit.segment.id as AnyNodeId
+      const target = lastTarget ?? roofDrag.resolve(event)
+      if (!target) return
+      const targetSegmentId = target.segment.id as AnyNodeId
       const st = useScene.getState()
 
       // Reparent if the cursor landed on a different segment than the
@@ -124,7 +117,7 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
       st.updateNode(node.id as AnyNodeId, {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
-        position: [hit.localX, hit.localY, hit.localZ],
+        position: [target.localX, target.localY, target.localZ],
         rotation: original.rotation,
         visible: true,
         metadata: {},

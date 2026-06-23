@@ -26,6 +26,7 @@ export const siteDefinition: NodeDefinition<typeof SiteNode> = {
     // override their selection). Same reasoning as `level`.
     duplicable: false,
     deletable: false,
+    presettable: false,
   },
 
   parametrics: siteParametrics,
@@ -38,7 +39,7 @@ export const siteDefinition: NodeDefinition<typeof SiteNode> = {
   presentation: {
     label: 'Site',
     description: 'The top-level container holding buildings, zones, and the property boundary.',
-    icon: { kind: 'url', src: '/icons/site.png' },
+    icon: { kind: 'url', src: '/icons/site-flag.png' },
     paletteSection: 'site',
     paletteOrder: 5,
   },
