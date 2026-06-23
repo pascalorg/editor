@@ -205,10 +205,16 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
         useScene.temporal.getState().pause()
       } else {
         const prevSegmentId = original.roofSegmentId as AnyNodeId | undefined
-        if (prevSegmentId && prevSegmentId !== targetSegmentId) {
-          const oldSeg = state.nodes[prevSegmentId] as RoofSegmentNode | undefined
+        const reparenting = Boolean(prevSegmentId && prevSegmentId !== targetSegmentId)
+        // Resume BEFORE any scene edits so the reparent (both segments'
+        // children arrays + the chimney's own host/position update) lands as
+        // one tracked transaction. Otherwise undo reverts the chimney but
+        // leaves the children arrays inconsistent with its parentId.
+        useScene.temporal.getState().resume()
+        if (reparenting) {
+          const oldSeg = state.nodes[prevSegmentId!] as RoofSegmentNode | undefined
           if (oldSeg) {
-            state.updateNode(prevSegmentId, {
+            state.updateNode(prevSegmentId!, {
               children: (oldSeg.children ?? []).filter((id) => id !== node.id),
             })
           }
@@ -218,9 +224,8 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
               children: [...(newSeg.children ?? []), node.id],
             })
           }
-          state.dirtyNodes.add(prevSegmentId)
+          state.dirtyNodes.add(prevSegmentId!)
         }
-        useScene.temporal.getState().resume()
         state.updateNode(node.id as AnyNodeId, {
           roofSegmentId: target.segment.id,
           parentId: target.segment.id,

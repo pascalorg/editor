@@ -179,16 +179,20 @@ describe('planTeeAtRunBody', () => {
     expect(plan!.fitting.diameter2).toBe(6)
   })
 
-  test('45° drawn branch leaves square (projected perpendicular)', () => {
+  test('45° drawn branch builds a 45° lateral that follows the drawn run', () => {
     const run = trunk([
       [0, 0, 0],
       [6, 0, 0],
     ])
     const d = Math.SQRT1_2
+    // Drawn 45° downstream off the +X trunk. The tee becomes a lateral whose
+    // branch points along the drawn direction, so the new duct continues
+    // straight out of the collar instead of kinking square.
     const plan = planTeeAtRunBody(run, bodyHit(run, 0, [3, 0, 0]), [d, 0, d], ROUND_6)
     expect(plan).not.toBeNull()
+    expect(plan!.fitting.branchAngle).toBeCloseTo(45, 6)
     const branch = getDuctFittingPorts(plan!.fitting).find((p) => p.id === 'branch')!
-    expect(dot(branch.direction, [0, 0, 1])).toBeCloseTo(1, 6)
+    expect(dot(branch.direction, [d, 0, d])).toBeCloseTo(1, 6)
   })
 
   test('tap too close to a run end → null (use the end port instead)', () => {

@@ -202,9 +202,10 @@ export type TeeTapPlan = {
  * upstream half (trimmed one leg short), a new duct-segment node carries
  * the downstream half (starting one leg after), and the tee's run legs
  * bridge the gap with its junction exactly on the centerline hit. The
- * branch collar points along `awayDir` projected perpendicular to the
- * trunk axis — a tee's branch is square to its run, so a 45° drawn
- * branch leaves square and the drawn duct continues from the collar.
+ * branch collar follows `awayDir`: the tee becomes a lateral whose
+ * `branchAngle` (clamped to the buildable 45–135° range) matches the turn
+ * the drawn run makes off the trunk, so the new duct continues straight
+ * out of the collar instead of kinking square.
  *
  * Returns null when the tap can't be built: too close to the segment's
  * ends (no room for the run legs — join the end port instead), or the

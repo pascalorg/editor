@@ -34,7 +34,6 @@ import {
 } from 'three'
 import {
   type AutoOffsetBasePatch,
-  type AutoOffsetTag,
   newAutoOffsetGroupId,
   readAutoOffsetTag,
   translateAutoOffsetBase,
@@ -65,10 +64,6 @@ const CORNER_ARROW_MIN_OFFSET = 0.24
 const ROLL_STEP_RAD = Math.PI / 4
 
 const UP = new Vector3(0, 1, 0)
-
-function verticalRewindTagDisabled(_tag: AutoOffsetTag | null): AutoOffsetTag | null {
-  return null
-}
 
 function collectPortsFromNodes(
   nodes: Record<string, AnyNode>,
@@ -575,7 +570,21 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       resumeSceneHistory(useScene)
       const moved = drag.current.some((v, axis) => v !== drag.initialPath[drag.index]![axis])
       if (moved && finalBatch) {
-        useScene.getState().updateNodes(finalBatch)
+        // A manual corner edit invalidates any stored auto-offset base (the
+        // tag's snapshot no longer matches the geometry), so strip the tag on
+        // commit. The duct becomes plain independent geometry.
+        const finalWithTagStrip = finalBatch.map((u) =>
+          u.id === (duct.id as AnyNodeId) && readAutoOffsetTag(duct)
+            ? {
+                ...u,
+                data: {
+                  ...u.data,
+                  metadata: withoutAutoOffsetTag(duct.metadata),
+                } as Partial<AnyNode>,
+              }
+            : u,
+        )
+        useScene.getState().updateNodes(finalWithTagStrip)
       }
     }
 
@@ -672,10 +681,21 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       document.body.style.cursor = ''
       setRolling(false)
       // Single-undo dance: revert to the pre-drag roll while paused, resume,
-      // then re-apply the final roll as one tracked change.
+      // then re-apply the final roll as one tracked change. A roll edit also
+      // invalidates any stored auto-offset base, so strip the tag on commit.
       useScene.getState().updateNode(duct.id, { roll: startRoll })
       resumeSceneHistory(useScene)
-      if (current !== startRoll) useScene.getState().updateNode(duct.id, { roll: current })
+      if (current !== startRoll) {
+        useScene.getState().updateNode(
+          duct.id,
+          {
+            roll: current,
+            ...(readAutoOffsetTag(duct)
+              ? { metadata: withoutAutoOffsetTag(duct.metadata) }
+              : {}),
+          } as Partial<AnyNode>,
+        )
+      }
     }
 
     window.addEventListener('pointermove', onMove)
@@ -704,14 +724,17 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       height: duct.height,
     }
 
-    // Auto-generated offsets become normal independent geometry after creation:
-    // vertical center drags plan against the CURRENT fittings/runs, not the old
-    // logical-L tag. The tag is still read so vertical commits can strip stale
-    // metadata and horizontal moves can translate a stored base if one remains.
+    // Auto-routed offsets carry an auto-offset tag recording the minted
+    // elbows/risers + the pre-offset base. A re-drag must REWIND that tag
+    // (delete the prior minted nodes, restore the base) before planning the
+    // fresh offset — otherwise each re-drag strands the previous elbows/riser
+    // in place. Read the tag on vertical drags so the rewind/delete plumbing
+    // (keyed on `mintedIds` below) runs; horizontal moves translate a stored
+    // base if one remains.
     const isVertical = kind.axis === 'y'
     const preRewindNodes = useScene.getState().nodes
     const existingTag = readAutoOffsetTag(duct)
-    const tag = isVertical ? verticalRewindTagDisabled(existingTag) : null
+    const tag = isVertical ? existingTag : null
     const runBase = tag?.base.find((b) => b.id === (duct.id as AnyNodeId))
     const logicalPath = ((runBase?.data as { path?: Point[] } | undefined)?.path?.map(
       (p) => [...p] as Point,
