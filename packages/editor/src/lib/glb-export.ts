@@ -7,7 +7,7 @@ import {
   type WindowNode,
   type ZoneNode,
 } from '@pascal-app/core'
-import { poseWindowMovingParts, SCENE_LAYER } from '@pascal-app/viewer'
+import { poseWindowMovingParts, SCENE_LAYER, snapLevelsToTruePositions } from '@pascal-app/viewer'
 import type { Object3D } from 'three'
 import * as THREE from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
@@ -36,10 +36,16 @@ export async function exportSceneToGlb(
   nodes: Record<string, AnyNode>,
 ): Promise<ArrayBuffer> {
   emitter.emit('thumbnail:before-capture', undefined)
+  // Snap levels to their true stacked positions (like thumbnail capture) so the
+  // export always reflects the clean stacked building, regardless of the live
+  // levelMode (exploded/solo) or an unsettled level lerp that could otherwise
+  // bake a level at a stray offset.
+  const restoreLevels = snapLevelsToTruePositions()
   let prepared: ReturnType<typeof prepareSceneForExport>
   try {
     prepared = prepareSceneForExport(sceneGroup, nodes)
   } finally {
+    restoreLevels()
     emitter.emit('thumbnail:after-capture', undefined)
   }
   const { scene: exportScene, animations } = prepared
