@@ -4,11 +4,9 @@ import { emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import * as WebGPUTextureUtils from 'three/examples/jsm/utils/WebGPUTextureUtils.js'
-import { prepareSceneForExport } from '../../lib/glb-export'
+import { exportSceneToGlb, prepareSceneForExport } from '../../lib/glb-export'
 
 export function ExportManager() {
   const scene = useThree((state) => state.scene)
@@ -24,6 +22,14 @@ export function ExportManager() {
       }
 
       const date = new Date().toISOString().split('T')[0]
+
+      if (format === 'glb') {
+        const buffer = await exportSceneToGlb(sceneGroup, useScene.getState().nodes)
+        const blob = new Blob([buffer], { type: 'model/gltf-binary' })
+        downloadBlob(blob, `model_${date}.glb`)
+        return
+      }
+
       // Hide editor affordances that live on the scene layer (selection handles,
       // ceiling/site brackets) and let wall-cutout reveal all walls — the same
       // synchronous capture path thumbnails use. We clone the scene inside the
@@ -52,30 +58,6 @@ export function ExportManager() {
         downloadBlob(blob, `model_${date}.obj`)
         return
       }
-
-      // Default: GLB export with baked identity + door/window animation clips.
-      const exporter = new GLTFExporter()
-      // Painted finishes use KTX2 (GPU-compressed) maps; GLTFExporter can't read
-      // those directly. WebGPUTextureUtils blits each one to RGBA on its own
-      // offscreen renderer (passing the live renderer would resize/draw over the
-      // editor canvas), letting the exporter embed standard textures.
-      exporter.setTextureUtils(WebGPUTextureUtils)
-
-      return new Promise<void>((resolve, reject) => {
-        exporter.parse(
-          exportScene,
-          (gltf) => {
-            const blob = new Blob([gltf as ArrayBuffer], { type: 'model/gltf-binary' })
-            downloadBlob(blob, `model_${date}.glb`)
-            resolve()
-          },
-          (error) => {
-            console.error('Export error:', error)
-            reject(error)
-          },
-          { binary: true, animations },
-        )
-      })
     }
 
     setExportScene(exportFn)

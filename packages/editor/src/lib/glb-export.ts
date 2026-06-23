@@ -1,5 +1,6 @@
 import {
   type AnyNode,
+  emitter,
   getLevelDisplayName,
   type LevelNode,
   sceneRegistry,
@@ -7,7 +8,10 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { poseWindowMovingParts, SCENE_LAYER } from '@pascal-app/viewer'
+import type { Object3D } from 'three'
 import * as THREE from 'three'
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
+import * as WebGPUTextureUtils from 'three/examples/jsm/utils/WebGPUTextureUtils.js'
 
 /**
  * Two TRS samples (closed vs open) differing by less than this are treated as
@@ -25,6 +29,40 @@ type SwingLeafMarker = { axis: 'y'; openRotationY: number }
 export type GlbExport = {
   scene: THREE.Object3D
   animations: THREE.AnimationClip[]
+}
+
+export async function exportSceneToGlb(
+  sceneGroup: Object3D,
+  nodes: Record<string, AnyNode>,
+): Promise<ArrayBuffer> {
+  emitter.emit('thumbnail:before-capture', undefined)
+  let prepared: ReturnType<typeof prepareSceneForExport>
+  try {
+    prepared = prepareSceneForExport(sceneGroup, nodes)
+  } finally {
+    emitter.emit('thumbnail:after-capture', undefined)
+  }
+  const { scene: exportScene, animations } = prepared
+
+  const exporter = new GLTFExporter()
+  // Painted finishes use KTX2 (GPU-compressed) maps; GLTFExporter can't read
+  // those directly. WebGPUTextureUtils blits each one to RGBA on its own
+  // offscreen renderer (passing the live renderer would resize/draw over the
+  // editor canvas), letting the exporter embed standard textures.
+  exporter.setTextureUtils(WebGPUTextureUtils)
+
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    exporter.parse(
+      exportScene,
+      (gltf) => {
+        resolve(gltf as ArrayBuffer)
+      },
+      (error) => {
+        reject(error)
+      },
+      { binary: true, animations },
+    )
+  })
 }
 
 /**
