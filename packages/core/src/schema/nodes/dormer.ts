@@ -91,7 +91,7 @@ export const DormerNode = BaseNode.extend({
   windowCornerRadii: z
     .tuple([z.number(), z.number(), z.number(), z.number()])
     .default(DEFAULT_CORNER_RADII),
-  windowSill: z.boolean().default(true),
+  windowSill: z.boolean().default(false),
   windowSillDepth: z.number().default(DORMER_DEFAULTS.WINDOW_SILL_DEPTH),
   windowSillThickness: z.number().default(DORMER_DEFAULTS.WINDOW_SILL_THICKNESS),
 }).describe(

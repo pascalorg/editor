@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { RoofSegmentNode } from '@pascal-app/core'
-import { getDownSlopeYaw } from './roof-surface'
+import { getDownSlopeYaw, getRoofSurfaceFaceBoundsAt, getSurfaceY } from './roof-surface'
 
 const fixtureSegment = (overrides?: Partial<RoofSegmentNode>): RoofSegmentNode =>
   ({
@@ -39,5 +39,28 @@ describe('getDownSlopeYaw', () => {
   })
   test('flat segment has no down-slope direction (yaw 0)', () => {
     expect(getDownSlopeYaw(0, 0, fixtureSegment({ roofType: 'flat' }))).toBe(0)
+  })
+})
+
+describe('getRoofSurfaceFaceBoundsAt', () => {
+  test('gable face bounds use the visible shingle face, not the wall footprint', () => {
+    const segment = fixtureSegment()
+    const bounds = getRoofSurfaceFaceBoundsAt(segment, 0, 1)
+    const xInterval = bounds.xIntervalAtZ(1)
+    const zInterval = bounds.zIntervalAtX(0)
+
+    expect(xInterval?.[0]).toBeLessThan(-segment.width / 2)
+    expect(xInterval?.[1]).toBeGreaterThan(segment.width / 2)
+    expect(zInterval?.[0]).toBeCloseTo(0)
+    expect(zInterval?.[1]).toBeGreaterThan(segment.depth / 2)
+    expect(bounds.surfaceYAt(0, 1)).toBeGreaterThan(getSurfaceY(0, 1, segment))
+  })
+
+  test('hip face bounds shrink guide endpoints to the active triangular face edge', () => {
+    const bounds = getRoofSurfaceFaceBoundsAt(fixtureSegment({ roofType: 'hip' }), 0, 1)
+    const ridgeInterval = bounds.xIntervalAtZ(0)
+
+    expect(ridgeInterval?.[0]).toBeGreaterThan(-2)
+    expect(ridgeInterval?.[1]).toBeLessThan(2)
   })
 })

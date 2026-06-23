@@ -54,7 +54,7 @@ const ARROW_HOVER_COLOR = '#a5b4fc'
 // Match the door arrows: scale the rendered chevron down to ~two-thirds
 // so the in-world handles read as a single UI family.
 const ARROW_SCALE = 0.65
-const CORNER_HEX_RADIUS = 0.16
+const CORNER_HEX_RADIUS = 0.11
 const CORNER_DASH_SIZE = 0.1
 const CORNER_GAP_SIZE = 0.07
 const CORNER_DASH_THICKNESS = 0.006

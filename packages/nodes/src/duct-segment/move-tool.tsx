@@ -4,6 +4,7 @@ import {
   type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
+  analyzePortConnectivity,
   DuctSegmentNode,
   emitter,
   type GridEvent,
@@ -11,6 +12,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  consumePlacementDragRelease,
   DragBoundingBox,
   EDITOR_LAYER,
   markToolCancelConsumed,
@@ -27,6 +29,13 @@ import {
   collectGhostAlignmentCandidates,
   resolveGhostAlignment,
 } from '../shared/ghost-alignment'
+import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
+import { collectScenePorts, DUCT_PORT_SYSTEMS } from '../shared/ports'
+import { type RunMoveConnectivity, startRunMoveConnectivity } from '../shared/run-move-connectivity'
+import {
+  planRunTranslationOffsets,
+  type RunTranslationOffsetPlan,
+} from '../shared/run-translation-offset'
 import { rectSectionAxes } from './geometry'
 
 type Vec3 = [number, number, number]
@@ -106,6 +115,7 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     (node.metadata as Record<string, unknown>).isNew === true
 
   const [previewPath, setPreviewPath] = useState<Vec3[]>(originalPathRef.current)
+  const [translationGhost, setTranslationGhost] = useState<RunTranslationOffsetPlan | null>(null)
   const previewPathRef = useRef<Vec3[]>(originalPathRef.current)
   const hasMovedRef = useRef(false)
   const activatedAtRef = useRef<number>(Date.now())
@@ -137,6 +147,26 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       if (obj) obj.visible = !hidden
     }
     if (existedAtStart) setMeshHidden(true)
+
+    // Carry connected fittings (+ their other runs) as the whole run slides.
+    // Snapshot once at drag start; only existing runs are mated to anything.
+    const connectivity: RunMoveConnectivity | null = existedAtStart
+      ? startRunMoveConnectivity(node)
+      : null
+    const portConnectivity = existedAtStart
+      ? analyzePortConnectivity(node, useScene.getState().nodes)
+      : null
+    const scenePorts = existedAtStart
+      ? collectScenePorts({ excludeNodeId: nodeId, systems: DUCT_PORT_SYSTEMS })
+      : []
+    const nodesById = useScene.getState().nodes
+    const profile = {
+      shape: duct.shape,
+      diameter: duct.diameter,
+      width: duct.width,
+      height: duct.height,
+    }
+    let lastTranslationPlan: RunTranslationOffsetPlan | null = null
 
     const setPreview = (path: Vec3[]) => {
       previewPathRef.current = path
@@ -177,12 +207,30 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       }
       prevSnapRef.current = cur
       hasMovedRef.current = true
-      setPreview(originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3))
+      const nextPath = originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3)
+      setPreview(nextPath)
+      lastTranslationPlan =
+        existedAtStart && portConnectivity
+          ? planRunTranslationOffsets({
+              duct,
+              translatedPath: nextPath,
+              profile,
+              connections: portConnectivity.connections,
+              scenePorts,
+              nodesById,
+            })
+          : null
+      if (lastTranslationPlan) connectivity?.clear()
+      else connectivity?.preview({ path: nextPath })
+      setTranslationGhost(lastTranslationPlan)
     }
 
-    const commit = (event: GridEvent) => {
+    const commit = (event: GridEvent, fromDragRelease = false) => {
       if (committed) return
-      if (Date.now() - activatedAtRef.current < 150) {
+      // The 150ms debounce only guards click-to-place against the arming click
+      // double-firing; a press-drag release is a distinct pointerup gesture, so
+      // it skips the guard (a quick drag-flick still commits).
+      if (!fromDragRelease && Date.now() - activatedAtRef.current < 150) {
         event.nativeEvent?.stopPropagation?.()
         return
       }
@@ -205,10 +253,44 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         useScene.getState().createNode(created as AnyNode, node.parentId as AnyNodeId)
         selectId = created.id as AnyNodeId
       } else {
-        useScene.getState().updateNode(nodeId, { path: finalPath } as Partial<AnyNode>)
+        const translationPlan =
+          portConnectivity &&
+          planRunTranslationOffsets({
+            duct,
+            translatedPath: finalPath,
+            profile,
+            connections: portConnectivity.connections,
+            scenePorts,
+            nodesById,
+          })
+        if (translationPlan) {
+          useScene.getState().applyNodeChanges({
+            create: [...translationPlan.fittings, ...translationPlan.connectors].map((created) => ({
+              node: created as AnyNode,
+              parentId: node.parentId as AnyNodeId,
+            })),
+            update: [
+              { id: nodeId, data: { path: translationPlan.ductPath } as Partial<AnyNode> },
+              ...translationPlan.updates,
+            ],
+          })
+        } else {
+          // Fold connected-fitting / sibling-run follow-updates into the SAME
+          // batch as the moved run so the whole joint is one undo step.
+          const followUpdates = connectivity?.commitUpdates({ path: finalPath }) ?? []
+          useScene
+            .getState()
+            .updateNodes([
+              { id: nodeId, data: { path: finalPath } as Partial<AnyNode> },
+              ...followUpdates,
+            ])
+        }
         useScene.getState().markDirty(nodeId)
       }
       useScene.temporal.getState().pause()
+      // Followers are committed to the store — drop their live overrides so
+      // renderers read the canonical path/position.
+      connectivity?.clear()
       setMeshHidden(false)
 
       useAlignmentGuides.getState().clear()
@@ -220,6 +302,8 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     }
 
     const onCancel = () => {
+      connectivity?.clear()
+      setTranslationGhost(null)
       if (existedAtStart) {
         setMeshHidden(false)
         useViewer.getState().setSelection({ selectedIds: [nodeId] })
@@ -231,14 +315,37 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       useEditor.getState().setMovingNode(null)
     }
 
+    // Press-drag-release: when the move was engaged by the drag gesture (the
+    // selection rig's move cross), `placementDragMode` is set, so commit on
+    // pointer-up at the last previewed path instead of waiting for a second
+    // click — same contract as the fitting move tool.
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      if (!hasMovedRef.current) {
+        onCancel()
+        return
+      }
+      commit(
+        {
+          nativeEvent: event,
+          stopPropagation: () => event.stopPropagation(),
+        } as unknown as GridEvent,
+        true,
+      )
+    }
+
     emitter.on('grid:move', onMove)
     emitter.on('grid:click', commit)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', commit)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
+      connectivity?.clear()
+      setTranslationGhost(null)
       useAlignmentGuides.getState().clear()
       if (existedAtStart) setMeshHidden(false)
       useScene.temporal.getState().resume()
@@ -260,6 +367,16 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     <group>
       {segments.map((seg, i) => (
         <GhostSegment a={seg.a} b={seg.b} duct={duct} key={`ghost-${i}`} />
+      ))}
+      {translationGhost?.fittings.map((fitting) => (
+        <FittingGhost fitting={fitting} key={`translation-fitting-${fitting.id}`} tint="valid" />
+      ))}
+      {translationGhost?.connectors.map((connector) => (
+        <DuctSegmentGhost
+          duct={connector}
+          key={`translation-connector-${connector.id}`}
+          tint="valid"
+        />
       ))}
       <DragBoundingBox
         centerY={0}

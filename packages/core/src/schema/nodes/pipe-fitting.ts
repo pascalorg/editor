@@ -24,8 +24,10 @@ export const PipeFittingNode = BaseNode.extend({
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   fittingType: z.enum(['elbow', 'wye', 'sanitary-tee', 'cross']).default('elbow'),
   // Elbow turn in degrees — DWV bends ship as 22.5 / 45 / 90 ("long
-  // sweep" for drains); adjustable range matches the duct elbow.
-  angle: z.number().min(15).max(90).default(90),
+  // sweep" for drains); adjustable range matches the duct elbow. 0° is a
+  // straight coupling — what an elbow flattens to when its run is dragged
+  // into line with the fixed collar.
+  angle: z.number().min(0).max(90).default(90),
   // Run nominal size in inches.
   diameter: z.number().min(1.25).max(8).default(2),
   // Branch collar size (wye / sanitary-tee).

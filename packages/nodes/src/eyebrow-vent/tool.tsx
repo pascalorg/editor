@@ -16,6 +16,11 @@ import * as THREE from 'three'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
 import { getAnalyticalNormal, getDownSlopeYaw, surfaceQuatFromNormal } from '../shared/roof-surface'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfacePlacementGuides,
+  roofSurfaceFootprintFromNode,
+} from '../shared/roof-surface-placement-guides'
 import { eyebrowVentDefinition } from './definition'
 import EyebrowVentPreview from './preview'
 
@@ -80,6 +85,15 @@ const EyebrowVentTool = () => {
       setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
       setPreviewRotation(getDownSlopeYaw(hit.localX, hit.localZ, hit.segment))
       setPreviewPos(worldToBuildingLocal(wx, wy, wz))
+      publishRoofSurfacePlacementGuides({
+        roof: event.node as RoofNode,
+        segment: hit.segment,
+        center: [hit.localX, hit.localY, hit.localZ],
+        footprint: roofSurfaceFootprintFromNode({
+          ...previewNode,
+          rotation: getDownSlopeYaw(hit.localX, hit.localZ, hit.segment),
+        }),
+      })
       event.stopPropagation()
     }
 
@@ -104,6 +118,7 @@ const EyebrowVentTool = () => {
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
       setSelection({ selectedIds: [vent.id] })
       triggerSFX('sfx:item-place')
+      clearRoofSurfacePlacementGuides()
       event.stopPropagation()
     }
 
@@ -115,8 +130,9 @@ const EyebrowVentTool = () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
+      clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection])
+  }, [activeBuildingId, setSelection, previewNode])
 
   return (
     <>
@@ -126,6 +142,7 @@ const EyebrowVentTool = () => {
         onInvalidTarget={() => {
           setPreviewPos(null)
           setPreviewSurfaceQuat(null)
+          clearRoofSurfacePlacementGuides()
         }}
       />
       {activeBuildingId && previewPos && previewSurfaceQuat && (

@@ -33,6 +33,9 @@ const MAX_SKIRT = 6
 const WINDOW_SIDE_HANDLE_OFFSET = 0.15
 const WINDOW_HEIGHT_HANDLE_OFFSET = 0.15
 const WINDOW_FACE_Z_OFFSET = 0.05
+// The four window-edge arrows latch behind a cube at the window center;
+// they stay hidden until the user clicks that cube to open the group.
+const WINDOW_LATCH_GROUP = 'dormer-window'
 // Lower clamp for window dims matches the geometry's internal clamp
 // in `getDormerSkirtWindowDims` (0.1m). Upper clamps depend on the
 // dormer dimensions and are resolved per-handle via the function form
@@ -109,21 +112,43 @@ function dormerWidthHandle(side: 'left' | 'right'): HandleDescriptor<DormerNodeT
   }
 }
 
-// Depth arrow on the +Z side. Symmetric (anchor 'center') to match
-// chimney's known-working handle count — splitting depth into asymmetric
-// front + back chevrons puts the dormer over the per-node MRT/TSL
-// budget that chimney already documents (see `chimneyHandles` factory).
-// Re-evaluate the split once that pipeline issue is pinned down.
-function dormerDepthHandle(): HandleDescriptor<DormerNodeType> {
+// Depth arrow on the +Z (front) or -Z (back) side. Asymmetric resize:
+// dragging one arrow grows the dormer outward from its own edge while
+// the opposite edge stays world-fixed in segment frame — same pattern
+// as `dormerWidthHandle`, just on the Z axis. `apply` recomputes
+// `position` so the anchored edge stays at the same segment-local point
+// even when the dormer is Y-rotated: project the dormer's local +Z onto
+// segment frame via (sin r, cos r), find the anchored edge's segment-
+// local XZ from the pre-drag node, then place the new center half a new-
+// depth away from that anchor in the same direction.
+function dormerDepthHandle(side: 'front' | 'back'): HandleDescriptor<DormerNodeType> {
+  const sign = side === 'front' ? 1 : -1
   return {
     kind: 'linear-resize',
     axis: 'z',
-    anchor: 'center',
+    // 'min' = -Z edge anchored (front arrow grows the +Z edge outward).
+    // 'max' = +Z edge anchored (back arrow grows the -Z edge outward).
+    anchor: side === 'front' ? 'min' : 'max',
     min: MIN_DIM,
     currentValue: (n) => n.depth,
-    apply: (_n, newValue) => ({ depth: newValue }),
+    apply: (initial, newDepth) => {
+      const rotY = initial.rotation ?? 0
+      const armX = Math.sin(rotY)
+      const armZ = Math.cos(rotY)
+      const anchorX = initial.position[0] - sign * (initial.depth / 2) * armX
+      const anchorZ = initial.position[2] - sign * (initial.depth / 2) * armZ
+      const newCenterX = anchorX + sign * (newDepth / 2) * armX
+      const newCenterZ = anchorZ + sign * (newDepth / 2) * armZ
+      return {
+        depth: newDepth,
+        position: [newCenterX, initial.position[1], newCenterZ],
+      }
+    },
     placement: {
-      position: (n) => [0, getBodyMidY(n), n.depth / 2 + SIDE_HANDLE_OFFSET],
+      position: (n) => [0, getBodyMidY(n), sign * (n.depth / 2 + SIDE_HANDLE_OFFSET)],
+      // The renderer auto-yaws axis-'z' chevrons by -π/2 so the default
+      // points +Z (front). Flip the back chevron 180° to point -Z.
+      rotationY: () => (side === 'front' ? 0 : Math.PI),
     },
   }
 }
@@ -273,6 +298,11 @@ function dormerWindowWidthHandle(side: 'left' | 'right'): HandleDescriptor<Dorme
   return {
     kind: 'linear-resize',
     axis: 'x',
+    // Stand the blade up into the gable face so it reads flat-on like the
+    // top/bottom window-height arrows instead of edge-on.
+    faceNormal: true,
+    // Hidden until the user clicks the window-center latch cube.
+    latchGroup: WINDOW_LATCH_GROUP,
     anchor: side === 'right' ? 'min' : 'max',
     min: MIN_WINDOW_DIM,
     // Cap at the dormer's window field — keep a 0.1m gap on each side
@@ -317,6 +347,8 @@ function dormerWindowHeightHandle(side: 'top' | 'bottom'): HandleDescriptor<Dorm
   return {
     kind: 'linear-resize',
     axis: 'y',
+    // Hidden until the user clicks the window-center latch cube.
+    latchGroup: WINDOW_LATCH_GROUP,
     // 'min' = bottom edge anchored (top arrow grows the top edge up).
     // 'max' = top edge anchored (bottom arrow drops the bottom edge).
     anchor: side === 'top' ? 'min' : 'max',
@@ -350,12 +382,37 @@ function dormerWindowHeightHandle(side: 'top' | 'bottom'): HandleDescriptor<Dorm
   }
 }
 
+// Window-center latch cube. Sits at the window center on the exposed
+// gable face; clicking it reveals / hides the four window edge arrows
+// (width L/R + height top/bottom) tagged with `WINDOW_LATCH_GROUP`.
+// Mirrors the duct-fitting selection cube but driven by the shared
+// latch descriptor so the dense window cluster stays collapsed behind
+// one grip until the user opts in.
+function dormerWindowLatchHandle(): HandleDescriptor<DormerNodeType> {
+  return {
+    kind: 'latch',
+    group: WINDOW_LATCH_GROUP,
+    placement: {
+      position: (n, sceneApi) => {
+        const faceSign = getExposedFaceZSign(n, sceneApi)
+        return [
+          n.windowOffsetX,
+          getWindowCenterY(n),
+          faceSign * (n.depth / 2 + WINDOW_FACE_Z_OFFSET),
+        ]
+      },
+    },
+  }
+}
+
 const dormerHandles: HandleDescriptor<DormerNodeType>[] = [
   dormerWidthHandle('right'),
   dormerWidthHandle('left'),
-  dormerDepthHandle(),
+  dormerDepthHandle('front'),
+  dormerDepthHandle('back'),
   dormerWallHeightHandle(),
   dormerRotateHandle(),
+  dormerWindowLatchHandle(),
   dormerWindowWidthHandle('right'),
   dormerWindowWidthHandle('left'),
   dormerWindowHeightHandle('top'),

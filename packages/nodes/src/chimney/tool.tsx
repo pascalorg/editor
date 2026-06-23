@@ -16,6 +16,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfacePlacementGuides,
+  roofSurfaceFootprintFromNode,
+} from '../shared/roof-surface-placement-guides'
 import { chimneyDefinition } from './definition'
 import ChimneyPreview from './preview'
 
@@ -102,6 +107,12 @@ const ChimneyTool = () => {
       setSegmentXform(xform)
       setHitLocal([hit.localX, hit.localY, hit.localZ])
       setPreviewSegment(hit.segment)
+      publishRoofSurfacePlacementGuides({
+        roof: event.node as RoofNode,
+        segment: hit.segment,
+        center: [hit.localX, hit.localY, hit.localZ],
+        footprint: roofSurfaceFootprintFromNode(previewNode, { segment: hit.segment }),
+      })
       event.stopPropagation()
     }
 
@@ -126,6 +137,7 @@ const ChimneyTool = () => {
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
       setSelection({ selectedIds: [chimney.id] })
       triggerSFX('sfx:item-place')
+      clearRoofSurfacePlacementGuides()
       event.stopPropagation()
     }
 
@@ -137,8 +149,9 @@ const ChimneyTool = () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
+      clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection])
+  }, [activeBuildingId, setSelection, previewNode])
 
   return (
     <>
@@ -149,6 +162,7 @@ const ChimneyTool = () => {
           setSegmentXform(null)
           setHitLocal(null)
           setPreviewSegment(null)
+          clearRoofSurfacePlacementGuides()
         }}
       />
       {activeBuildingId && segmentXform && hitLocal && previewSegment && (

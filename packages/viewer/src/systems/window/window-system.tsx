@@ -85,6 +85,7 @@ export const WindowSystem = () => {
   // (window meshes are built by this system, not <GeometrySystem>, so its
   // scene-material re-dirty doesn't cover them).
   useEffect(() => {
+    void sceneMaterials
     const nodes = useScene.getState().nodes
     for (const node of Object.values(nodes)) {
       if (node?.type !== 'window') continue
