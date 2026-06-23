@@ -48,6 +48,9 @@ type ViewerState = {
   textures: boolean
   setTextures: (textures: boolean) => void
 
+  preserveItemModelMaterials: boolean
+  setPreserveItemModelMaterials: (preserve: boolean) => void
+
   colorPreset: ColorPreset
   setColorPreset: (preset: ColorPreset) => void
 
@@ -122,6 +125,7 @@ type PersistedViewerState = Partial<
     | 'sceneTheme'
     | 'shadingByContext'
     | 'textures'
+    | 'preserveItemModelMaterials'
     | 'colorPreset'
     | 'edges'
     | 'shadows'
@@ -184,6 +188,10 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
     sceneTheme: pickString(state.sceneTheme, SCENE_THEME_IDS, 'studio'),
     shadingByContext: normalizeShadingByContext(state.shadingByContext),
     textures: typeof state.textures === 'boolean' ? state.textures : true,
+    preserveItemModelMaterials:
+      typeof state.preserveItemModelMaterials === 'boolean'
+        ? state.preserveItemModelMaterials
+        : false,
     colorPreset: pickString<ColorPreset>(state.colorPreset, COLOR_PRESETS, 'clay'),
     edges: pickString<EdgeMode>(state.edges, EDGE_MODES, 'soft'),
     shadows: typeof state.shadows === 'boolean' ? state.shadows : true,
@@ -225,6 +233,10 @@ const useViewer = create<ViewerState>()(
 
       textures: true,
       setTextures: (textures) => set({ textures }),
+
+      preserveItemModelMaterials: false,
+      setPreserveItemModelMaterials: (preserveItemModelMaterials) =>
+        set({ preserveItemModelMaterials }),
 
       colorPreset: 'clay',
       setColorPreset: (preset) => set({ colorPreset: preset }),
@@ -356,6 +368,7 @@ const useViewer = create<ViewerState>()(
         sceneTheme: state.sceneTheme,
         shadingByContext: state.shadingByContext,
         textures: state.textures,
+        preserveItemModelMaterials: state.preserveItemModelMaterials,
         colorPreset: state.colorPreset,
         edges: state.edges,
         shadows: state.shadows,

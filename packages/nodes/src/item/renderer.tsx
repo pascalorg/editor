@@ -44,6 +44,12 @@ type MutableMaterial = Material & {
   wireframe?: boolean
 }
 
+type ItemMesh = Mesh & {
+  userData: Mesh['userData'] & {
+    __pascalOriginalItemMaterial?: Material | Material[]
+  }
+}
+
 const getMaterialForOriginal = (
   original: Material,
   shading: RenderShading,
@@ -55,6 +61,50 @@ const getMaterialForOriginal = (
   }
   if (!textures) return createSurfaceRoleMaterial('furnishing', colorPreset)
   return baseMaterial(shading)
+}
+
+function isGlassMaterial(material: Material | Material[]): boolean {
+  const materials = Array.isArray(material) ? material : [material]
+  return materials.some((mat) => mat.name.toLowerCase() === 'glass')
+}
+
+function getOriginalItemMaterial(mesh: ItemMesh): Material | Material[] {
+  if (!mesh.userData.__pascalOriginalItemMaterial) {
+    // Preserve original GLTF materials so the settings toggle can restore model textures.
+    mesh.userData.__pascalOriginalItemMaterial = mesh.material
+  }
+  return mesh.userData.__pascalOriginalItemMaterial
+}
+
+function applyItemMaterialMode(
+  mesh: ItemMesh,
+  shading: RenderShading,
+  textures: boolean,
+  colorPreset: ColorPreset,
+  preserveItemModelMaterials: boolean,
+): boolean {
+  const original = getOriginalItemMaterial(mesh)
+
+  if (preserveItemModelMaterials) {
+    mesh.material = original
+  } else if (Array.isArray(original)) {
+    mesh.material = original.map((mat) =>
+      getMaterialForOriginal(mat, shading, textures, colorPreset),
+    )
+  } else {
+    mesh.material = getMaterialForOriginal(original, shading, textures, colorPreset)
+  }
+
+  if (Array.isArray(mesh.material) && mesh.geometry.groups.length > 0) {
+    const matCount = mesh.material.length
+    for (const group of mesh.geometry.groups) {
+      if (group.materialIndex !== undefined && group.materialIndex >= matCount) {
+        group.materialIndex = 0
+      }
+    }
+  }
+
+  return isGlassMaterial(mesh.material)
 }
 
 const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
@@ -182,7 +232,8 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
-  // Freeze the interactive definition at mount — asset schemas don't change at runtime
+  const preserveItemModelMaterials = useViewer((s) => s.preserveItemModelMaterials)
+  // Freeze the interactive definition at mount; asset schemas do not change at runtime.
   const interactiveRef = useRef(node.asset.interactive)
 
   if (nodes.cutout) {
@@ -206,41 +257,25 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   useMemo(() => {
     scene.traverse((child) => {
       if ((child as Mesh).isMesh) {
-        const mesh = child as Mesh
+        const mesh = child as ItemMesh
         if (mesh.name === 'cutout') {
           child.visible = false
           return
         }
 
-        let hasGlass = false
+        const hasGlass = applyItemMaterialMode(
+          mesh,
+          shading,
+          textures,
+          colorPreset,
+          preserveItemModelMaterials,
+        )
 
-        // Handle both single material and material array cases
-        if (Array.isArray(mesh.material)) {
-          mesh.material = mesh.material.map((mat) =>
-            getMaterialForOriginal(mat, shading, textures, colorPreset),
-          )
-          hasGlass = mesh.material.some((mat) => mat.name === 'glass')
-
-          // Fix geometry groups that reference materialIndex beyond the material
-          // array length — this causes three-mesh-bvh to crash with
-          // "Cannot read properties of undefined (reading 'side')"
-          const matCount = mesh.material.length
-          if (mesh.geometry.groups.length > 0) {
-            for (const group of mesh.geometry.groups) {
-              if (group.materialIndex !== undefined && group.materialIndex >= matCount) {
-                group.materialIndex = 0
-              }
-            }
-          }
-        } else {
-          mesh.material = getMaterialForOriginal(mesh.material, shading, textures, colorPreset)
-          hasGlass = mesh.material.name === 'glass'
-        }
         mesh.castShadow = !hasGlass
         mesh.receiveShadow = !hasGlass
       }
     })
-  }, [scene, shading, textures, colorPreset])
+  }, [scene, shading, textures, colorPreset, preserveItemModelMaterials])
 
   const interactive = interactiveRef.current
   const animEffect =
