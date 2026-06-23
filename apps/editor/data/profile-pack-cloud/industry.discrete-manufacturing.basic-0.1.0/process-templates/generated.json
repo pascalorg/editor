@@ -26,12 +26,16 @@
       "vision_inspection_station",
       "packaging_station",
       "agv_tugger",
-      "line_control_cabinet"
+      "line_control_cabinet",
+      "fixture_table",
+      "test_bench",
+      "material_cart",
+      "palletizing_workcell"
     ],
     "defaultLayoutStyle": "parallel_bays",
     "defaultDimensions": {
-      "length": 56,
-      "width": 28
+      "length": 62,
+      "width": 30
     },
     "safetyTags": [
       "machine_guarding",
@@ -205,6 +209,55 @@
           "utility",
           "compressed_air"
         ]
+      },
+      {
+        "id": "fixture_table",
+        "label": "Fixture table",
+        "displayLabel": "工装台",
+        "role": "fixture_table",
+        "equipmentHint": "discrete_manufacturing.fixture_table robust fixture table with T-slot surface, clamp blocks, locator pins, support legs, and tool rail",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "fixture",
+          "manual_work"
+        ]
+      },
+      {
+        "id": "test_bench",
+        "label": "Functional test bench",
+        "displayLabel": "功能测试台",
+        "role": "test_bench",
+        "equipmentHint": "discrete_manufacturing.test_bench industrial test bench with work surface, instrument display, control panel, cable tray, and indicator light",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "test",
+          "quality"
+        ]
+      },
+      {
+        "id": "material_cart",
+        "label": "Material cart",
+        "displayLabel": "物料车",
+        "role": "material_cart",
+        "equipmentHint": "discrete_manufacturing.material_cart low wheeled material cart with platform deck, handle, four wheels, and material bins",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "logistics",
+          "material"
+        ]
+      },
+      {
+        "id": "palletizing_workcell",
+        "label": "Palletizing workcell",
+        "displayLabel": "码垛工作站",
+        "role": "palletizing_workcell",
+        "equipmentHint": "discrete_manufacturing.palletizing_workcell palletizing robot workcell with robot arm, pallet table, safety fence, conveyor infeed, and stack zone",
+        "footprintHint": "large",
+        "safetyTags": [
+          "robot",
+          "palletizing",
+          "guarding"
+        ]
       }
     ],
     "connections": [
@@ -303,6 +356,54 @@
         "visualKind": "cable_tray",
         "fromPortId": "control_out",
         "toPortId": "drive_control"
+      },
+      {
+        "fromStationId": "storage_rack",
+        "toStationId": "fixture_table",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "material_out",
+        "toPortId": "fixture_in"
+      },
+      {
+        "fromStationId": "fixture_table",
+        "toStationId": "cnc_machining_center",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "fixture_out",
+        "toPortId": "machine_load_door"
+      },
+      {
+        "fromStationId": "vision_inspection_station",
+        "toStationId": "test_bench",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "inspection_out",
+        "toPortId": "test_in"
+      },
+      {
+        "fromStationId": "test_bench",
+        "toStationId": "packaging_station",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "tested_out",
+        "toPortId": "packaging_in"
+      },
+      {
+        "fromStationId": "packaging_station",
+        "toStationId": "palletizing_workcell",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "packed_out",
+        "toPortId": "palletizing_in"
+      },
+      {
+        "fromStationId": "palletizing_workcell",
+        "toStationId": "material_cart",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "pallet_out",
+        "toPortId": "cart_deck"
       }
     ]
   }

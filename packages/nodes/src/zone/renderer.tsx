@@ -217,8 +217,9 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
           <div
             style={{
               width: 'max-content',
-              color: 'white',
-              textShadow: `-1px -1px 0 ${node.color}, 1px -1px 0 ${node.color}, -1px 1px 0 ${node.color}, 1px 1px 0 ${node.color}`,
+              color: 'rgba(255, 255, 255, 0.72)',
+              fontWeight: 400,
+              textShadow: `0 1px 3px ${node.color}66, 0 1px 2px rgba(0, 0, 0, 0.35)`,
               textAlign: 'center',
             }}
           >

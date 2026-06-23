@@ -5,6 +5,7 @@ import {
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
+  ensureWebGPUCompatibleGeometry,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -39,7 +40,10 @@ export const ConeRenderer = ({ node }: { node: ConeNode }) => {
   ])
 
   const geometry = useMemo(
-    () => new THREE.ConeGeometry(node.radius ?? 0.5, node.height ?? 1, node.radialSegments ?? 32),
+    () =>
+      ensureWebGPUCompatibleGeometry(
+        new THREE.ConeGeometry(node.radius ?? 0.5, node.height ?? 1, node.radialSegments ?? 32),
+      ),
     [node.radius, node.height, node.radialSegments],
   )
 

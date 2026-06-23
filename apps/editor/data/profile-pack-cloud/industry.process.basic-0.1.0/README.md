@@ -1,6 +1,6 @@
 # 流程行业基础包
 
-流程行业基础资源包，面向化工、环保、食品、制药等流程型工厂的通用几何搭建，覆盖储罐、泵组、搅拌、反应、换热、过滤、离心、干燥、包装、管廊和控制柜。
+流程行业基础包 ：覆盖搅拌、换热、过滤、离心、干燥、包装、储罐、管廊、阀组、粉体料仓、鼓风机和空压机撬等通用流程设备。
 
 ## Devices
 
@@ -16,6 +16,10 @@
 - Process packaging station (process.packaging_station)
 - Process pipe corridor (process.pipe_corridor)
 - Process control cabinet (process.control_cabinet)
+- Bulk material silo (process.bulk_material_silo)
+- Valve manifold station (process.valve_station)
+- Utility blower (process.utility_blower)
+- Air compressor skid (process.air_compressor_skid)
 
 ## Pack Type
 
@@ -47,3 +51,4 @@ Run:
 ```bash
 bun apps/editor/scripts/profile-pack-qa.ts industry.process.basic@0.1.0 --validate-only
 ```
+

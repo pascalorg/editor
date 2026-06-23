@@ -30,14 +30,23 @@
   {
     "id": "quality.cement.grate_cooler",
     "requiredRoles": [
+      "cooler_outer_casing",
+      "cooler_support_base",
       "cooler_grate_bed",
-      "cooler_housing",
-      "support_base"
+      "grate_plate_rows",
+      "hot_clinker_inlet_transition",
+      "cooler_air_inlet_plenum"
     ],
     "shapeCount": {
-      "min": 8,
-      "max": 60
-    }
+      "min": 12,
+      "max": 78
+    },
+    "forbiddenRoles": [
+      "belt_surface",
+      "conveyor_frame",
+      "vehicle_tire",
+      "vehicle_cabin"
+    ]
   },
   {
     "id": "quality.cement.preheater_tower",
@@ -73,12 +82,22 @@
     "requiredRoles": [
       "mill_base",
       "mill_body",
-      "grinding_head"
+      "grinding_table_housing",
+      "dynamic_separator",
+      "raw_feed_chute",
+      "hot_gas_inlet",
+      "mill_drive_unit"
     ],
     "shapeCount": {
-      "min": 8,
-      "max": 70
-    }
+      "min": 10,
+      "max": 78
+    },
+    "forbiddenRoles": [
+      "belt_surface",
+      "conveyor_frame",
+      "vehicle_tire",
+      "vehicle_cabin"
+    ]
   },
   {
     "id": "quality.cement.cement_mill",
@@ -137,10 +156,15 @@
     "id": "quality.cement.bucket_elevator",
     "requiredRoles": [
       "elevator_leg_casing",
-      "boot_section"
+      "boot_section",
+      "head_casing",
+      "inlet_boot_hopper",
+      "discharge_spout",
+      "head_drive_unit",
+      "head_service_platform"
     ],
     "shapeCount": {
-      "min": 7,
+      "min": 12,
       "max": 60
     }
   },
@@ -250,16 +274,24 @@
     "id": "quality.cement.kiln_burner",
     "requiredRoles": [
       "burner_lance",
-      "primary_air_pipe",
-      "fuel_pipe",
+      "primary_air_channel",
+      "coal_fuel_pipe",
+      "burner_mounting_flange",
+      "multi_channel_nozzle_tip",
       "burner_carriage",
-      "flame_out",
-      "fuel_in"
+      "fuel_in",
+      "primary_air_in"
     ],
     "shapeCount": {
-      "min": 6,
-      "max": 80
-    }
+      "min": 10,
+      "max": 86
+    },
+    "forbiddenRoles": [
+      "belt_surface",
+      "conveyor_frame",
+      "vehicle_tire",
+      "vehicle_cabin"
+    ]
   },
   {
     "id": "quality.cement.kiln_hood",
@@ -268,12 +300,20 @@
       "kiln_hood_shell",
       "kiln_head_in",
       "burner_opening",
-      "hot_clinker_out"
+      "hot_clinker_drop_chute",
+      "hot_clinker_out",
+      "secondary_air_return_duct"
     ],
     "shapeCount": {
-      "min": 6,
-      "max": 80
-    }
+      "min": 10,
+      "max": 90
+    },
+    "forbiddenRoles": [
+      "belt_surface",
+      "conveyor_frame",
+      "vehicle_tire",
+      "vehicle_cabin"
+    ]
   },
   {
     "id": "quality.cement.tertiary_air_duct",
@@ -340,6 +380,65 @@
     "shapeCount": {
       "min": 6,
       "max": 80
+    }
+  },
+  {
+    "id": "quality.cement.raw_coal_silo",
+    "requiredRoles": [
+      "silo_shell",
+      "silo_support_base",
+      "bottom_discharge_hopper"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 48
+    }
+  },
+  {
+    "id": "quality.cement.coal_powder_bin",
+    "requiredRoles": [
+      "powder_bin_shell",
+      "silo_support_base",
+      "cone_discharge_hopper"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 40
+    }
+  },
+  {
+    "id": "quality.cement.gypsum_hopper",
+    "requiredRoles": [
+      "hopper_shell",
+      "silo_support_base"
+    ],
+    "shapeCount": {
+      "min": 4,
+      "max": 36
+    }
+  },
+  {
+    "id": "quality.cement.additive_silo",
+    "requiredRoles": [
+      "silo_shell",
+      "silo_support_base",
+      "additive_discharge_hopper"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 48
+    }
+  },
+  {
+    "id": "quality.cement.cement_separator",
+    "requiredRoles": [
+      "separator_body",
+      "separator_support_base",
+      "coarse_reject_cone"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 48
     }
   }
 ]

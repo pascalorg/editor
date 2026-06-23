@@ -1,12 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { AnyNode } from '@pascal-app/core/schema'
-import type { FactoryMissingAsset, FactoryScenePatch } from './factory-runner'
 import type { FactoryPlan } from './factory-planner'
+import type { FactoryMissingAsset, FactoryScenePatch } from './factory-runner'
 import {
-  routeSegmentIntersectsClearanceBox,
   type ProcessRouteObstacle,
   type ProcessRoutePoint,
+  routeSegmentIntersectsClearanceBox,
 } from './process-line-routing'
 import type { ProcessConnectionPlan, ProcessStationPlan } from './process-line-types'
 
@@ -145,12 +145,15 @@ function routeExistsForConnection(patches: FactoryScenePatch[], connection: Proc
     const node = createNode(patch)
     if (!node) return false
     const metadata = nodeMetadata(node)
-    return (
+    if (
       metadata.role === 'process-line-connection' &&
       metadata.fromStationId === connection.fromStationId &&
       metadata.toStationId === connection.toStationId &&
       metadata.visualKind === connection.visualKind
-    )
+    ) {
+      return true
+    }
+    return routeConnectionLegs(metadata).some((leg) => connectionMatchesLeg(connection, leg))
   })
 }
 
@@ -166,13 +169,32 @@ function connectionHasPortAlignment(
     const node = createNode(patch)
     if (!node) return false
     const metadata = nodeMetadata(node)
-    return (
+    if (
       metadata.role === 'process-line-connection' &&
       metadata.fromStationId === connection.fromStationId &&
       metadata.toStationId === connection.toStationId &&
       metadata[metadataKey] === expected
+    ) {
+      return true
+    }
+    return routeConnectionLegs(metadata).some(
+      (leg) => connectionMatchesLeg(connection, leg) && leg[metadataKey] === expected,
     )
   })
+}
+
+function routeConnectionLegs(metadata: Record<string, unknown>) {
+  return Array.isArray(metadata.routeConnectionLegs)
+    ? metadata.routeConnectionLegs.filter(isRecord)
+    : []
+}
+
+function connectionMatchesLeg(connection: ProcessConnectionPlan, leg: Record<string, unknown>) {
+  return (
+    leg.fromStationId === connection.fromStationId &&
+    leg.toStationId === connection.toStationId &&
+    leg.visualKind === connection.visualKind
+  )
 }
 
 function summarizeScore(score: number, errors: number, warnings: number) {

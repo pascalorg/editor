@@ -1,9 +1,7 @@
 'use client'
 
 import { emitter } from '@pascal-app/core'
-// Node registry bootstrap is loaded once at the root via
-// `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
-// import here.
+import '@/lib/bootstrap'
 import {
   AiChatPanel,
   applySceneGraphToEditor,

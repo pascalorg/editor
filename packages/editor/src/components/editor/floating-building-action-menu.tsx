@@ -17,16 +17,34 @@ export function FloatingBuildingActionMenu() {
   const setSelection = useViewer((s) => s.setSelection)
 
   const groupRef = useRef<THREE.Group>(null)
+  const boxRef = useRef(new THREE.Box3())
+  const centerRef = useRef(new THREE.Vector3())
+  const lastPlacementRef = useRef<{
+    id: string | null
+    matrixWorld: number[]
+  }>({ id: null, matrixWorld: [] })
 
   useFrame(() => {
     if (!(buildingId && !levelId && groupRef.current)) return
 
     const obj = sceneRegistry.nodes.get(buildingId)
     if (obj) {
-      const box = new THREE.Box3().setFromObject(obj)
+      const lastPlacement = lastPlacementRef.current
+      obj.updateWorldMatrix(true, false)
+      const matrixElements = obj.matrixWorld.elements
+      const matrixChanged =
+        lastPlacement.matrixWorld.length !== matrixElements.length ||
+        matrixElements.some((value, index) => value !== lastPlacement.matrixWorld[index])
+      if (buildingId === lastPlacement.id && !matrixChanged) return
+
+      const box = boxRef.current.setFromObject(obj)
       if (!box.isEmpty()) {
-        const center = box.getCenter(new THREE.Vector3())
+        const center = box.getCenter(centerRef.current)
         groupRef.current.position.set(center.x, 1.5, center.z)
+      }
+      lastPlacementRef.current = {
+        id: buildingId,
+        matrixWorld: Array.from(matrixElements),
       }
     }
   })

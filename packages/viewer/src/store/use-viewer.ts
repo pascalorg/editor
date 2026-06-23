@@ -74,6 +74,9 @@ type ViewerState = {
   showGuides: boolean
   setShowGuides: (show: boolean) => void
 
+  showZoneLabels: boolean
+  setShowZoneLabels: (show: boolean) => void
+
   showGrid: boolean
   setShowGrid: (show: boolean) => void
 
@@ -87,7 +90,7 @@ type ViewerState = {
   setProjectId: (id: string | null) => void
   projectPreferences: Record<
     string,
-    { showScans?: boolean; showGuides?: boolean; showGrid?: boolean }
+    { showScans?: boolean; showGuides?: boolean; showGrid?: boolean; showZoneLabels?: boolean }
   >
 
   // Smart selection update
@@ -108,6 +111,8 @@ type ViewerState = {
 
   cameraDragging: boolean
   setCameraDragging: (dragging: boolean) => void
+  spacePanning: boolean
+  setSpacePanning: (panning: boolean) => void
 
   /**
    * True while a host-driven drag is in progress (editor handles —
@@ -173,6 +178,9 @@ function normalizeProjectPreferences(value: unknown): ViewerState['projectPrefer
       ...(typeof record.showScans === 'boolean' ? { showScans: record.showScans } : {}),
       ...(typeof record.showGuides === 'boolean' ? { showGuides: record.showGuides } : {}),
       ...(typeof record.showGrid === 'boolean' ? { showGrid: record.showGrid } : {}),
+      ...(typeof record.showZoneLabels === 'boolean'
+        ? { showZoneLabels: record.showZoneLabels }
+        : {}),
     }
   }
   return next
@@ -286,6 +294,19 @@ const useViewer = create<ViewerState>()(
           return { showGuides: show, projectPreferences }
         }),
 
+      showZoneLabels: false,
+      setShowZoneLabels: (show) =>
+        set((state) => {
+          const projectPreferences = { ...(state.projectPreferences || {}) }
+          if (state.projectId) {
+            projectPreferences[state.projectId] = {
+              ...(projectPreferences[state.projectId] || {}),
+              showZoneLabels: show,
+            }
+          }
+          return { showZoneLabels: show, projectPreferences }
+        }),
+
       showGrid: true,
       setShowGrid: (show) =>
         set((state) => {
@@ -315,6 +336,7 @@ const useViewer = create<ViewerState>()(
             showScans: prefs.showScans ?? true,
             showGuides: prefs.showGuides ?? true,
             showGrid: prefs.showGrid ?? true,
+            showZoneLabels: prefs.showZoneLabels ?? false,
           }
         }),
       projectPreferences: {},
@@ -364,6 +386,8 @@ const useViewer = create<ViewerState>()(
 
       cameraDragging: false,
       setCameraDragging: (dragging) => set({ cameraDragging: dragging }),
+      spacePanning: false,
+      setSpacePanning: (panning) => set({ spacePanning: panning }),
       inputDragging: false,
       setInputDragging: (dragging) => set({ inputDragging: dragging }),
     }),
@@ -389,5 +413,20 @@ const useViewer = create<ViewerState>()(
     },
   ),
 )
+
+export function isViewerSpatialInputSuppressed() {
+  const state = useViewer.getState()
+  return state.cameraDragging || state.spacePanning
+}
+
+export function isViewerSelectionInputSuppressed() {
+  const state = useViewer.getState()
+  return state.cameraDragging || state.inputDragging || state.spacePanning
+}
+
+export function shouldLatchViewerPointerSuppression() {
+  const state = useViewer.getState()
+  return state.inputDragging || state.spacePanning
+}
 
 export default useViewer

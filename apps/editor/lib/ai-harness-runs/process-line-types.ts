@@ -95,6 +95,7 @@ export type ProcessLinePlan = {
     moduleIds?: string[]
     keyFocusStationIds?: string[]
     zoneDisplay?: 'subtle' | 'debug'
+    omitPerimeterWalls?: boolean
   }
   sourcePack?: {
     id: string

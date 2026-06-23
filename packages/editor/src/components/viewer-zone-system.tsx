@@ -9,6 +9,7 @@ import useEditor from '../store/use-editor'
 export const ViewerZoneSystem = () => {
   useFrame(() => {
     const { levelId, zoneId } = useViewer.getState().selection
+    const showZoneLabels = useViewer.getState().showZoneLabels
     const structureLayer = useEditor.getState().structureLayer
     const nodes = useScene.getState().nodes
 
@@ -34,8 +35,8 @@ export const ViewerZoneSystem = () => {
         }
       })
 
-      // Labels: always visible on the current level (regardless of mode or zone selection)
-      const showLabel = !!levelId && isOnSelectedLevel
+      // Labels follow the explicit display-menu toggle on the current level.
+      const showLabel = showZoneLabels && !!levelId && isOnSelectedLevel
       const targetOpacity = showLabel ? '1' : '0'
       const labelEl = document.getElementById(`${id}-label`)
       if (labelEl && labelEl.style.opacity !== targetOpacity) {

@@ -6,8 +6,8 @@
     "processId": "discrete_manufacturing_flexible_workshop",
     "layoutStyle": "parallel_bays",
     "defaultDimensions": {
-      "length": 56,
-      "width": 28
+      "length": 62,
+      "width": 30
     },
     "scopes": [
       {
@@ -16,7 +16,9 @@
         "includeModules": [
           "machining",
           "inspection",
-          "line_control"
+          "line_control",
+          "fixture_preparation",
+          "testing"
         ]
       },
       {
@@ -25,7 +27,10 @@
         "includeModules": [
           "robotics",
           "assembly",
-          "line_control"
+          "line_control",
+          "fixture_preparation",
+          "testing",
+          "palletizing"
         ]
       },
       {
@@ -40,7 +45,11 @@
           "packaging",
           "intralogistics",
           "line_control",
-          "utilities"
+          "utilities",
+          "fixture_preparation",
+          "testing",
+          "palletizing",
+          "material_handling"
         ]
       }
     ],
@@ -122,6 +131,39 @@
           "compressor_skid",
           "pipe_corridor"
         ]
+      },
+      {
+        "id": "fixture_preparation",
+        "displayLabel": "Fixture preparation",
+        "order": 15,
+        "stationIds": [
+          "fixture_table"
+        ]
+      },
+      {
+        "id": "testing",
+        "displayLabel": "Functional test",
+        "order": 55,
+        "stationIds": [
+          "test_bench"
+        ]
+      },
+      {
+        "id": "palletizing",
+        "displayLabel": "Palletizing and staging",
+        "order": 65,
+        "stationIds": [
+          "palletizing_workcell"
+        ]
+      },
+      {
+        "id": "material_handling",
+        "displayLabel": "Material handling carts",
+        "order": 75,
+        "stationIds": [
+          "material_cart",
+          "agv_tugger"
+        ]
       }
     ],
     "layoutHints": {
@@ -133,7 +175,8 @@
       "sideBranchStationIds": [
         "line_control_cabinet",
         "compressor_skid",
-        "storage_rack"
+        "storage_rack",
+        "material_cart"
       ],
       "scale": "conceptual",
       "notes": [

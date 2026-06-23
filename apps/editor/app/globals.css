@@ -1,7 +1,12 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 @import "tw-animate-css";
 @import "../../../styles/elevation.css";
+@source ".";
+@source "../components";
+@source "../lib";
 @source "../../../packages/editor/src";
+@source "../../../packages/nodes/src";
+@source "../../../packages/viewer/src";
 
 @custom-variant dark (&:is(.dark *));
 

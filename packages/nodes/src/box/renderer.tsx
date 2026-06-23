@@ -8,6 +8,7 @@ import {
   createMaterialFromPresetRef,
   csgEvaluator,
   csgGeometry,
+  ensureWebGPUCompatibleGeometry,
   ensureRenderableGeometryAttributes,
   prepareBrushForCSG,
   SUBTRACTION,
@@ -149,7 +150,7 @@ export const BoxRenderer = ({ node }: { node: BoxNode }) => {
             radius,
           )
 
-    return applyBoxCutouts(baseGeometry, node)
+    return ensureWebGPUCompatibleGeometry(applyBoxCutouts(baseGeometry, node))
   }, [node])
 
   const instances = primitivePatternInstances(node.metadata)

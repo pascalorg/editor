@@ -51,6 +51,8 @@ extend(THREE as any)
 // concurrent configure() calls await the same init instead of creating two
 // renderers in parallel and only caching the second.
 const WEBGPU_RENDERER_CACHE = new WeakMap<HTMLCanvasElement, Promise<THREE.WebGPURenderer>>()
+const ENABLE_NATIVE_WEBGPU =
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_VIEWER_WEBGPU === '1'
 const SCENE_READY_SETTLED_FRAMES = 2
 const SCENE_READY_MAX_WAIT_FRAMES = 180
 const DIRTY_BUILD_KINDS = new Set([
@@ -159,16 +161,6 @@ function ShadowMapSync() {
   return null
 }
 
-function WebGPUSceneGeometryGuard() {
-  const scene = useThree((state) => state.scene)
-
-  useFrame(() => {
-    ensureObjectWebGPUCompatibleGeometry(scene)
-  }, -100)
-
-  return null
-}
-
 function hasPendingSceneBuildWork() {
   const { dirtyNodes, nodes } = useScene.getState()
 
@@ -232,6 +224,24 @@ function SceneReadyTracker({
     readyRef.current = true
     onSceneReadyChangeRef.current(true)
   }, 10)
+
+  return null
+}
+
+function SceneGeometryWarmup({ sceneReadyKey }: { sceneReadyKey?: string | number | null }) {
+  const scene = useThree((state) => state.scene)
+  const warmedKeyRef = useRef<{ done: boolean; key?: string | number | null }>({ done: false })
+
+  useEffect(() => {
+    warmedKeyRef.current = { done: false, key: sceneReadyKey }
+  }, [sceneReadyKey])
+
+  useFrame(() => {
+    if (warmedKeyRef.current.done && warmedKeyRef.current.key === sceneReadyKey) return
+    if (!hasCommittedSceneRoot() || hasPendingSceneBuildWork()) return
+    ensureObjectWebGPUCompatibleGeometry(scene)
+    warmedKeyRef.current = { done: true, key: sceneReadyKey }
+  }, 9)
 
   return null
 }
@@ -384,7 +394,11 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           if (cached) return cached
           const promise = (async () => {
             try {
-              const renderer = new THREE.WebGPURenderer({ ...(props as any), alpha: true })
+              const renderer = new THREE.WebGPURenderer({
+                ...(props as any),
+                alpha: true,
+                forceWebGL: !ENABLE_NATIVE_WEBGPU,
+              })
               renderer.toneMapping = THREE.ACESFilmicToneMapping
               renderer.toneMappingExposure = getSceneTheme(
                 useViewer.getState().sceneTheme,
@@ -416,9 +430,9 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
       <FrameLimiter fps={50} />
       <ViewerCamera />
       <GPUDeviceWatcher />
-      <WebGPUSceneGeometryGuard />
       <ToneMappingExposure />
       <ShadowMapSync />
+      <SceneGeometryWarmup sceneReadyKey={sceneReadyKey} />
       <SceneReadyTracker onSceneReadyChange={onSceneReadyChange} sceneReadyKey={sceneReadyKey} />
 
       <ErrorBoundary fallback={null} scope="viewer-scene">

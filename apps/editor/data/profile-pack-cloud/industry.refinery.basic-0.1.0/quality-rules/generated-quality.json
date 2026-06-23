@@ -57,33 +57,47 @@
     "requiredRoles": [
       "distillation_column_shell",
       "tray_band",
-      "preheat_exchanger",
+      "heat_exchanger_shell",
       "fired_heater",
       "side_draw_manifold",
       "service_platform",
       "crude_feed_inlet",
-      "overhead_product_outlet"
+      "overhead_product_outlet",
+      "atmospheric_residue_out"
     ],
     "shapeCount": {
-      "min": 6,
-      "max": 64
-    }
+      "min": 10,
+      "max": 86
+    },
+    "forbiddenRoles": [
+      "flare_stack_as_process_unit",
+      "belt_surface",
+      "vehicle_cabin",
+      "vehicle_tire"
+    ]
   },
   {
     "id": "quality.refinery.vacuum_distillation_unit",
     "requiredRoles": [
       "vacuum_column_shell",
-      "condenser_exchanger",
+      "heat_exchanger_shell",
       "vacuum_heater",
       "vacuum_line",
       "service_platform",
       "atmospheric_residue_inlet",
-      "vacuum_gas_oil_outlet"
+      "vacuum_gas_oil_outlet",
+      "vacuum_residue_outlet"
     ],
     "shapeCount": {
-      "min": 5,
-      "max": 56
-    }
+      "min": 10,
+      "max": 86
+    },
+    "forbiddenRoles": [
+      "flare_stack_as_process_unit",
+      "belt_surface",
+      "vehicle_cabin",
+      "vehicle_tire"
+    ]
   },
   {
     "id": "quality.refinery.fluid_catalytic_cracking_unit",
@@ -92,52 +106,73 @@
       "catalyst_regenerator",
       "main_fractionator",
       "riser_pipe",
+      "spent_catalyst_standpipe",
+      "regenerated_catalyst_standpipe",
       "cyclone_separator",
       "flue_gas_stack",
-      "service_platform",
-      "vacuum_gas_oil_inlet",
+      "rich_gas_outlet",
       "cracked_product_outlet"
     ],
     "shapeCount": {
-      "min": 6,
-      "max": 72
-    }
+      "min": 12,
+      "max": 80
+    },
+    "forbiddenRoles": [
+      "flare_stack_as_process_unit",
+      "belt_surface",
+      "vehicle_cabin",
+      "vehicle_tire"
+    ]
   },
   {
     "id": "quality.refinery.hydrotreating_unit",
     "requiredRoles": [
       "hydrotreater_reactor",
-      "feed_effluent_exchanger",
+      "heat_exchanger_shell",
       "high_pressure_separator",
       "hydrogen_header",
       "hydrogen_inlet",
+      "acid_gas_outlet",
       "treated_product_outlet"
     ],
     "shapeCount": {
-      "min": 4,
-      "max": 48
-    }
+      "min": 8,
+      "max": 76
+    },
+    "forbiddenRoles": [
+      "flare_stack_as_process_unit",
+      "belt_surface",
+      "vehicle_cabin",
+      "vehicle_tire"
+    ]
   },
   {
     "id": "quality.refinery.catalytic_reformer_unit",
     "requiredRoles": [
       "reformer_reactor_train",
       "reformer_fired_heater",
-      "reformer_exchanger",
+      "heat_exchanger_shell",
       "reformer_separator",
+      "hydrogen_rich_gas_header",
       "naphtha_inlet",
       "reformate_outlet"
     ],
     "shapeCount": {
-      "min": 4,
-      "max": 48
-    }
+      "min": 8,
+      "max": 76
+    },
+    "forbiddenRoles": [
+      "flare_stack_as_process_unit",
+      "belt_surface",
+      "vehicle_cabin",
+      "vehicle_tire"
+    ]
   },
   {
     "id": "quality.refinery.sulfur_recovery_unit",
     "requiredRoles": [
       "claus_reactor",
-      "sulfur_condenser",
+      "heat_exchanger_shell",
       "tail_gas_stack",
       "acid_gas_inlet",
       "sulfur_outlet"
@@ -193,6 +228,52 @@
     "shapeCount": {
       "min": 1,
       "max": 24
+    }
+  },
+  {
+    "id": "quality.refinery.gas_fractionation_unit",
+    "requiredRoles": [
+      "deethanizer_column",
+      "debutanizer_column",
+      "lpg_surge_drum",
+      "heat_exchanger_shell",
+      "rich_gas_header",
+      "fcc_rich_gas_inlet",
+      "dry_gas_outlet",
+      "lpg_product_outlet"
+    ],
+    "forbiddenRoles": [
+      "flare_stack",
+      "belt_surface",
+      "vehicle_cabin",
+      "vehicle_tire"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 70
+    }
+  },
+  {
+    "id": "quality.refinery.delayed_coker_unit",
+    "requiredRoles": [
+      "coke_drum_pair",
+      "coker_fractionator",
+      "coker_fired_heater",
+      "overhead_vapor_line",
+      "coke_handling_base",
+      "coker_drum_platform",
+      "vacuum_residue_inlet",
+      "coker_distillate_outlet"
+    ],
+    "forbiddenRoles": [
+      "flare_stack",
+      "belt_surface",
+      "vehicle_cabin",
+      "vehicle_tire"
+    ],
+    "shapeCount": {
+      "min": 10,
+      "max": 82
     }
   }
 ]

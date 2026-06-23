@@ -675,33 +675,35 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isVersionPreviewMode,
   isLoading,
   isFirstPersonMode,
+  isPreviewMode,
   onThumbnailCapture,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
   isFirstPersonMode: boolean
+  isPreviewMode: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }) {
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
-  const noEditing = isVersionPreviewMode || isFirstPersonMode || isCaptureMode
+  const noEditing = isVersionPreviewMode || isFirstPersonMode || isCaptureMode || isPreviewMode
 
   return (
     <>
-      {!(isFirstPersonMode || isCaptureMode) && <SelectionManager />}
+      {isPreviewMode ? null : !(isFirstPersonMode || isCaptureMode) && <SelectionManager />}
       {!noEditing && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
       {!noEditing && <WallMoveSideHandles />}
       {!noEditing && <FloatingActionMenu />}
       {!noEditing && <FloatingBuildingActionMenu />}
       <ExportManager />
-      {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
+      {isPreviewMode || isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
       <CeilingSystem />
-      <CeilingSelectionAffordanceSystem />
+      {!isPreviewMode && <CeilingSelectionAffordanceSystem />}
       <RoofEditSystem />
       <StairEditSystem />
       <LiveDataBindingRuntime />
-      {!isFirstPersonMode && <SiteEdgeLabels />}
-      {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
+      {!(isPreviewMode || isFirstPersonMode) && <SiteEdgeLabels />}
+      {!(isLoading || isFirstPersonMode || isPreviewMode) && <SnapAwareGrid />}
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
@@ -1002,11 +1004,12 @@ const ViewerCanvas = memo(function ViewerCanvas({
           <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
           <Viewer
             hoverStyles={EDITOR_HOVER_STYLES}
-            selectionManager={isFirstPersonMode ? 'default' : 'custom'}
+            selectionManager={isFirstPersonMode || isPreviewMode ? 'default' : 'custom'}
           >
             <ViewerSceneContent
               isFirstPersonMode={isFirstPersonMode}
               isLoading={isLoading}
+              isPreviewMode={isPreviewMode}
               isVersionPreviewMode={isVersionPreviewMode}
               onThumbnailCapture={onThumbnailCapture}
             />
@@ -1203,21 +1206,6 @@ export default function Editor({
     }
   }, [isFirstPersonMode])
 
-  const previewViewerContent = (
-    <Viewer hoverStyles={EDITOR_HOVER_STYLES} selectionManager="default">
-      <ExportManager />
-      <ViewerZoneSystem />
-      <CeilingSystem />
-      <RoofEditSystem />
-      <StairEditSystem />
-      <LiveDataBindingRuntime />
-      <CustomCameraControls />
-      <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
-      <PresetThumbnailGenerator />
-      <InteractiveSystem />
-    </Viewer>
-  )
-
   const viewerCanvas = (
     <ViewerCanvas
       hasLoadedInitialScene={hasLoadedInitialScene}
@@ -1269,53 +1257,47 @@ export default function Editor({
           </div>
         )}
 
-        {!isLoading && isPreviewMode ? (
-          <div className="dark flex h-full w-full flex-col bg-neutral-100 text-foreground">
-            <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
-            <div className="h-full w-full">{previewViewerContent}</div>
-          </div>
-        ) : (
-          <>
-            <EditorLayoutV2
-              navbarSlot={navbarSlot}
-              overlays={
-                <>
-                  {!isCaptureMode && <FloatingLevelSelector />}
-                  {!(isVersionPreviewMode || isCaptureMode) && (
-                    <div className="pointer-events-auto">
-                      <ActionMenu />
-                    </div>
-                  )}
-                  {!(isVersionPreviewMode || isCaptureMode) && (
-                    <div className="pointer-events-auto">
-                      <PanelManager />
-                    </div>
-                  )}
-                  {!isCaptureMode && (
-                    <div className="pointer-events-auto">
-                      <HelperManager />
-                    </div>
-                  )}
-                  {isFirstPersonMode && (
-                    <FirstPersonOverlay
-                      onExit={() => useEditor.getState().setFirstPersonMode(false)}
-                    />
-                  )}
-                  {viewerBanner}
-                  {projectId ? <SnapshotCaptureOverlay projectId={projectId} /> : null}
-                </>
-              }
-              renderTabContent={renderTabContent}
-              sidebarOverlay={sidebarOverlay}
-              sidebarTabs={tabBarTabs}
-              viewerContent={viewerCanvas}
-              viewerToolbarLeft={viewerToolbarLeft}
-              viewerToolbarRight={viewerToolbarRight}
-            />
-            <EditorCommands />
-            <CommandPalette emptyAction={commandPaletteEmptyAction} />
-          </>
-        )}
+        <EditorLayoutV2
+          navbarSlot={isPreviewMode ? null : navbarSlot}
+          overlays={
+            <>
+              {!isLoading && isPreviewMode ? (
+                <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
+              ) : null}
+              {!(isPreviewMode || isCaptureMode) && <FloatingLevelSelector />}
+              {!(isPreviewMode || isVersionPreviewMode || isCaptureMode) && (
+                <div className="pointer-events-auto">
+                  <ActionMenu />
+                </div>
+              )}
+              {!(isPreviewMode || isVersionPreviewMode || isCaptureMode) && (
+                <div className="pointer-events-auto">
+                  <PanelManager />
+                </div>
+              )}
+              {!(isPreviewMode || isCaptureMode) && (
+                <div className="pointer-events-auto">
+                  <HelperManager />
+                </div>
+              )}
+              {isFirstPersonMode && !isPreviewMode && (
+                <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
+              )}
+              {!isPreviewMode && viewerBanner}
+              {!isPreviewMode && projectId ? (
+                <SnapshotCaptureOverlay projectId={projectId} />
+              ) : null}
+            </>
+          }
+          renderTabContent={renderTabContent}
+          sidebarOverlay={isPreviewMode ? null : sidebarOverlay}
+          sidebarTabs={isPreviewMode ? [] : tabBarTabs}
+          viewerContent={viewerCanvas}
+          viewerToolbarLeft={isPreviewMode ? null : viewerToolbarLeft}
+          viewerToolbarRight={isPreviewMode ? null : viewerToolbarRight}
+        />
+        {!isPreviewMode && <EditorCommands />}
+        {!isPreviewMode && <CommandPalette emptyAction={commandPaletteEmptyAction} />}
       </PresetsProvider>
     )
   }
@@ -1326,9 +1308,15 @@ export default function Editor({
   const LAYOUT_GAP = 12
   const overlayLeft = LAYOUT_PADDING + (isSidebarCollapsed ? 8 : sidebarWidth) + LAYOUT_GAP
 
+  const isActivePreviewMode = !isLoading && isPreviewMode
+
   return (
     <PresetsProvider adapter={presetsAdapter}>
-      <div className="dark flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
+      <div
+        className={`dark flex h-full w-full bg-neutral-100 text-foreground ${
+          isActivePreviewMode ? '' : 'gap-3 p-3'
+        }`}
+      >
         <DeleteSelectionConfirmDialog
           onCancel={handleCancelDeleteSelection}
           onConfirm={handleConfirmDeleteSelection}
@@ -1340,44 +1328,43 @@ export default function Editor({
           </div>
         )}
 
-        {!isLoading && isPreviewMode ? (
-          <>
+        <div className={isActivePreviewMode ? 'hidden' : 'contents'}>
+          <SidebarSlot>
+            <AppSidebar
+              appMenuButton={appMenuButton}
+              commandPaletteEmptyAction={commandPaletteEmptyAction}
+              extraPanels={extraSidebarPanels}
+              settingsPanelProps={settingsPanelProps}
+              sidebarTop={sidebarTop}
+              sitePanelProps={sitePanelProps}
+            />
+          </SidebarSlot>
+        </div>
+
+        <div
+          className={`relative flex-1 overflow-hidden ${isActivePreviewMode ? '' : 'rounded-xl'}`}
+        >
+          {isActivePreviewMode && (
             <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
-            <div className="h-full w-full">{previewViewerContent}</div>
-          </>
-        ) : (
-          <>
-            {/* Sidebar */}
-            <SidebarSlot>
-              <AppSidebar
-                appMenuButton={appMenuButton}
-                commandPaletteEmptyAction={commandPaletteEmptyAction}
-                extraPanels={extraSidebarPanels}
-                settingsPanelProps={settingsPanelProps}
-                sidebarTop={sidebarTop}
-                sitePanelProps={sitePanelProps}
-              />
-            </SidebarSlot>
+          )}
+          {viewerCanvas}
+        </div>
 
-            {/* Viewer area */}
-            <div className="relative flex-1 overflow-hidden rounded-xl">{viewerCanvas}</div>
-
-            {/* Fixed UI overlays scoped to the viewer area */}
-            <ViewerOverlays left={overlayLeft}>
-              <div className="pointer-events-auto">
-                <ActionMenu />
-              </div>
-              <div className="pointer-events-auto">
-                <PanelManager />
-              </div>
-              <div className="pointer-events-auto">
-                <HelperManager />
-              </div>
-              {isFirstPersonMode && (
-                <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
-              )}
-            </ViewerOverlays>
-          </>
+        {!isActivePreviewMode && (
+          <ViewerOverlays left={overlayLeft}>
+            <div className="pointer-events-auto">
+              <ActionMenu />
+            </div>
+            <div className="pointer-events-auto">
+              <PanelManager />
+            </div>
+            <div className="pointer-events-auto">
+              <HelperManager />
+            </div>
+            {isFirstPersonMode && (
+              <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
+            )}
+          </ViewerOverlays>
         )}
       </div>
     </PresetsProvider>

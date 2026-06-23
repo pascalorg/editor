@@ -53,6 +53,7 @@
     "highestStationId": "preheater_tower",
     "longAxisStationId": "rotary_kiln",
     "sideBranchStationIds": ["bag_filter"],
+    "omitPerimeterWalls": true,
     "scale": "conceptual",
     "notes": [
       "Keep the preheater tower upstream of the rotary kiln tail.",

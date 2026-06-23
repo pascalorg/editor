@@ -16,6 +16,7 @@ export const ZoneSystem = () => {
     const selectedLevelId = useViewer.getState().selection.levelId
     const selectedZoneId = useViewer.getState().selection.zoneId
     const hoveredId = useViewer.getState().hoveredId
+    const showZoneLabels = useViewer.getState().showZoneLabels
     const isCaptureMode = useEditor.getState().isCaptureMode
 
     const zoneGeometryVisible = structureLayer === 'zones'
@@ -80,7 +81,7 @@ export const ZoneSystem = () => {
         obj.userData.__raycastDisabled = true
       }
 
-      const showLabel = !isCaptureMode && !!selectedLevelId && isOnSelectedLevel
+      const showLabel = showZoneLabels && !isCaptureMode && !!selectedLevelId && isOnSelectedLevel
       const labelOpacity = showLabel ? '1' : '0'
       const labelEl = document.getElementById(`${zoneId}-label`)
       if (labelEl && labelEl.style.opacity !== labelOpacity) {

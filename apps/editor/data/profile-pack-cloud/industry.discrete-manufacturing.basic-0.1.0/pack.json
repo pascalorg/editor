@@ -13,7 +13,7 @@
   "capabilities": [
     "factory_creation"
   ],
-  "description": "Basic factory-capable pack for discrete manufacturing workshops, covering machining, robotic workcells, assembly, inspection, packaging, AGV logistics, warehousing, utilities, and line control.",
+  "description": "离散制造基础包 ：覆盖 CNC 加工中心、装配工位、AGV 牵引车、工装台、测试台、物料车和码垛工作站等典型离散制造设备。",
   "profiles": [
     "profiles/generated.json"
   ],

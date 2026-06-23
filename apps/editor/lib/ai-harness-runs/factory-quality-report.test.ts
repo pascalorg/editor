@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { ItemNode, PipeNode, ZoneNode } from '@pascal-app/core/schema'
-import { evaluateFactoryQuality } from './factory-quality-report'
 import type { FactoryPlan } from './factory-planner'
+import { evaluateFactoryQuality } from './factory-quality-report'
 import type { FactoryScenePatch } from './factory-runner'
 
 function itemPatch(src: string): FactoryScenePatch {
@@ -240,6 +240,44 @@ describe('evaluateFactoryQuality', () => {
 
     expect(report.passed).toBe(true)
     expect(report.checks.stationEquipmentCount).toBe(2)
+    expect(report.checks.routedConnectionCount).toBe(1)
+    expect(report.issues).toEqual([])
+  })
+
+  test('counts bundled route-equipment legs as process connections', () => {
+    const plan = processPlan()
+    const report = evaluateFactoryQuality({
+      plan,
+      patches: [
+        equipmentItemPatch('item_feed', 'feed'),
+        equipmentItemPatch('item_reactor', 'reactor'),
+        {
+          op: 'create',
+          node: PipeNode.parse({
+            id: 'pipe_bundled_process_route',
+            name: 'bundled process route',
+            start: [0, 0],
+            end: [4, 0],
+            medium: 'water',
+            metadata: {
+              role: 'process-line-route-equipment',
+              routeConnectionLegs: [
+                {
+                  fromStationId: 'feed',
+                  toStationId: 'reactor',
+                  visualKind: 'pipe',
+                  fromPortId: 'outlet',
+                  toPortId: 'inlet',
+                },
+              ],
+            },
+          }),
+        },
+      ],
+      missingAssets: [],
+    })
+
+    expect(report.passed).toBe(true)
     expect(report.checks.routedConnectionCount).toBe(1)
     expect(report.issues).toEqual([])
   })

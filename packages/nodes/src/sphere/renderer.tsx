@@ -5,6 +5,7 @@ import {
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
+  ensureWebGPUCompatibleGeometry,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -48,7 +49,7 @@ export const SphereRenderer = ({ node }: { node: SphereNode }) => {
     if (sx !== 1 || sy !== 1 || sz !== 1) {
       geo.scale(sx, sy, sz)
     }
-    return geo
+    return ensureWebGPUCompatibleGeometry(geo)
   }, [
     node.radius,
     node.widthSegments,

@@ -70,6 +70,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       try {
         if ((gl as any).init) await (gl as any).init()
         if (!mounted) return
+        if ((gl as any).backend?.isWebGPUBackend !== true) return
 
         // pass() handles MRT internally for all material types, including custom
         // shaders — unlike renderer.setMRT() which crashes on non-NodeMaterials.

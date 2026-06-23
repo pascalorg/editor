@@ -23,6 +23,11 @@ const cementClinkerPlan: ProcessLinePlan = {
   processId: 'cement_clinker_production_line',
   processLabel: 'Cement clinker production line',
   domain: 'chemical',
+  sourcePack: {
+    id: 'industry.cement.basic',
+    version: '0.1.0',
+    industry: 'cement',
+  },
 }
 
 const cementPlantPlan: ProcessLinePlan = {
@@ -30,6 +35,11 @@ const cementPlantPlan: ProcessLinePlan = {
   processId: 'cement_plant_full',
   processLabel: 'Full cement plant',
   domain: 'chemical',
+  sourcePack: {
+    id: 'industry.cement.basic',
+    version: '0.1.0',
+    industry: 'cement',
+  },
 }
 
 const electrolyticAluminumPlan: ProcessLinePlan = {
@@ -273,6 +283,73 @@ describe('process equipment resolver', () => {
       expect.arrayContaining(['vessel_shell', 'kiln_support_base', 'kiln_drive_unit']),
     )
     expect(result.primitiveRequest?.prompt).toContain('Equipment family: thermal_equipment.')
+  })
+
+  test('keeps raw meal feed elevator on the bucket elevator contract', () => {
+    const station: ProcessStationPlan = {
+      id: 'raw_meal_feed',
+      label: 'Raw meal feed elevator',
+      role: 'raw_meal_feed',
+      equipmentHint: 'cement bucket elevator and raw meal feed chute feeding the preheater tower',
+      footprintHint: 'tall',
+    }
+    const rawMealFeedPlan: ProcessLinePlan = {
+      ...cementClinkerPlan,
+      connections: [
+        {
+          fromStationId: 'raw_meal_feed',
+          toStationId: 'preheater_tower',
+          medium: 'material',
+          visualKind: 'material_conveyor',
+          fromPortId: 'raw_meal_out',
+          toPortId: 'raw_meal_in',
+        },
+      ],
+    }
+    const result = resolveProcessStationEquipment({
+      plan: rawMealFeedPlan,
+      station,
+      stationPlacement: {
+        ...placement,
+        stationId: station.id,
+        role: station.role,
+        label: station.label,
+        footprint: { length: 1.2, width: 0.9 },
+      },
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+      metadata: {
+        generatedBy: 'factory-agent',
+        processId: rawMealFeedPlan.processId,
+        stationId: station.id,
+        stationRole: station.role,
+      },
+    })
+
+    expect(result.resolver).toBe('profile-parts')
+    expect(result.primitiveRequest).toBeNull()
+    expect(result.patches.length).toBeGreaterThan(1)
+    const rootContract = result.patches[0]?.node.metadata?.equipmentContract
+    expect(rootContract).toMatchObject({
+      profileId: 'cement.bucket_elevator',
+      equipmentFamily: 'material_handling',
+      preferredResolver: 'profile-parts',
+      envelope: { length: 1.2, width: 0.9, height: 6 },
+    })
+    expect(rootContract?.ports.map((port) => port.id)).toEqual(['raw_meal_in', 'raw_meal_out'])
+    const generatedRoles = result.patches
+      .map((patch) => patch.node.metadata?.generatedShape?.selector?.semanticRole)
+      .filter(Boolean)
+    expect(generatedRoles).toEqual(
+      expect.arrayContaining([
+        'elevator_leg_casing',
+        'boot_section',
+        'head_casing',
+        'inlet_boot_hopper',
+        'discharge_spout',
+        'head_drive_unit',
+        'head_service_platform',
+      ]),
+    )
   })
 
   test('attaches full cement plant primitive contracts for newly added industry equipment', () => {

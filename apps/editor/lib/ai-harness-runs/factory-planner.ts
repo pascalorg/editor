@@ -502,7 +502,7 @@ export async function planFactoryRequest(input: {
           },
           { role: 'user', content: buildFactoryPlannerPrompt(input.prompt) },
         ],
-        max_tokens: 1200,
+        max_tokens: 2500,
       },
       input.signal,
     )

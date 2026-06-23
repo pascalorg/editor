@@ -414,15 +414,13 @@ const PostProcessingPasses = ({
     hasPipelineErrorRef.current = false
 
     // WebGPU availability check: SSGI, denoise, and RenderPipeline are all
-    // WebGPU-only APIs. When the browser falls back to WebGL2 (no
-    // `navigator.gpu`, or the device couldn't be created), building the
-    // pipeline either throws silently or produces a broken output where
-    // the scene renders for a few frames and then goes black as the retry
-    // loop fights the direct-render fallback path. Short-circuit here so
-    // `useFrame` uses the direct `renderer.render(scene, camera)` path
-    // exclusively and never attempts the TSL pipeline.
-    const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator
-    if (!hasWebGPU) {
+    // WebGPU-only APIs in this pipeline. When the renderer is running on the
+    // WebGL2 backend, building the pipeline either throws silently or produces
+    // a broken output where the scene renders for a few frames and then goes
+    // black as the retry loop fights the direct-render fallback path.
+    // Short-circuit here so `useFrame` uses the direct render path exclusively.
+    const hasWebGPUBackend = (renderer as any).backend?.isWebGPUBackend === true
+    if (!hasWebGPUBackend) {
       hasPipelineErrorRef.current = true
       renderPipelineRef.current = null
       return

@@ -236,13 +236,15 @@ export function EditorLayoutV2({
 
       {/* Main content: left column + right column */}
       <div className="flex min-h-0 flex-1">
-        {!isCaptureMode && sidebarTabs.length > 0 && (
-          <LeftColumn
-            renderTabContent={renderTabContent}
-            sidebarOverlay={sidebarOverlay}
-            tabs={sidebarTabs}
-          />
-        )}
+        <div className={!isCaptureMode && sidebarTabs.length > 0 ? 'contents' : 'hidden'}>
+          {!isCaptureMode && sidebarTabs.length > 0 && (
+            <LeftColumn
+              renderTabContent={renderTabContent}
+              sidebarOverlay={sidebarOverlay}
+              tabs={sidebarTabs}
+            />
+          )}
+        </div>
         <RightColumn
           overlays={overlays}
           toolbarLeft={isCaptureMode ? undefined : viewerToolbarLeft}

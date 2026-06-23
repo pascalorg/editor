@@ -2,8 +2,8 @@
   "industry": "discrete-manufacturing",
   "id": "industry.discrete-manufacturing.basic",
   "name": "离散制造基础包",
-  "version": "0.2.0",
-  "description": "????????? v0.2??? CNC?????????????????AGV ??????????????????????????????????????????????",
+  "version": "0.1.0",
+  "description": "离散制造基础包 ：覆盖 CNC 加工中心、装配工位、AGV 牵引车、工装台、测试台、物料车和码垛工作站等典型离散制造设备。",
   "capabilities": [
     "factory_creation"
   ],
@@ -412,7 +412,7 @@
         {
           "id": "fixture_table",
           "label": "Fixture table",
-          "displayLabel": "?????",
+          "displayLabel": "工装台",
           "role": "fixture_table",
           "equipmentHint": "discrete_manufacturing.fixture_table robust fixture table with T-slot surface, clamp blocks, locator pins, support legs, and tool rail",
           "footprintHint": "medium",
@@ -424,7 +424,7 @@
         {
           "id": "test_bench",
           "label": "Functional test bench",
-          "displayLabel": "?????",
+          "displayLabel": "功能测试台",
           "role": "test_bench",
           "equipmentHint": "discrete_manufacturing.test_bench industrial test bench with work surface, instrument display, control panel, cable tray, and indicator light",
           "footprintHint": "medium",
@@ -436,7 +436,7 @@
         {
           "id": "material_cart",
           "label": "Material cart",
-          "displayLabel": "????",
+          "displayLabel": "物料车",
           "role": "material_cart",
           "equipmentHint": "discrete_manufacturing.material_cart low wheeled material cart with platform deck, handle, four wheels, and material bins",
           "footprintHint": "medium",
@@ -448,7 +448,7 @@
         {
           "id": "palletizing_workcell",
           "label": "Palletizing workcell",
-          "displayLabel": "?????",
+          "displayLabel": "码垛工作站",
           "role": "palletizing_workcell",
           "equipmentHint": "discrete_manufacturing.palletizing_workcell palletizing robot workcell with robot arm, pallet table, safety fence, conveyor infeed, and stack zone",
           "footprintHint": "large",
@@ -1546,9 +1546,9 @@
       "id": "fixture_table",
       "name": "Fixture table",
       "aliases": [
-        "?????",
-        "???",
-        "?????",
+        "工装台",
+        "夹具台",
+        "治具台",
         "fixture table",
         "jig table"
       ],
@@ -1622,9 +1622,9 @@
       "id": "test_bench",
       "name": "Functional test bench",
       "aliases": [
-        "?????",
-        "???",
-        "???",
+        "功能测试台",
+        "测试台",
+        "检测台",
         "functional test bench",
         "test bench"
       ],
@@ -1692,9 +1692,9 @@
       "id": "material_cart",
       "name": "Material cart",
       "aliases": [
-        "????",
-        "???",
-        "??",
+        "物料车",
+        "转运车",
+        "料车",
         "material cart",
         "trolley cart"
       ],
@@ -1760,9 +1760,9 @@
       "id": "palletizing_workcell",
       "name": "Palletizing workcell",
       "aliases": [
-        "?????",
-        "????",
-        "?????",
+        "码垛工作站",
+        "码垛单元",
+        "机器人码垛工作站",
         "palletizing workcell",
         "robot palletizing cell"
       ],

@@ -373,6 +373,8 @@ function WallModeToggle() {
 function DisplayMenu() {
   const showGrid = useViewer((state) => state.showGrid)
   const setShowGrid = useViewer((state) => state.setShowGrid)
+  const showZoneLabels = useViewer((state) => state.showZoneLabels)
+  const setShowZoneLabels = useViewer((state) => state.setShowZoneLabels)
   const cameraMode = useViewer((state) => state.cameraMode)
   const setCameraMode = useViewer((state) => state.setCameraMode)
   const shading = useViewer((state) => state.shading)
@@ -422,6 +424,15 @@ function DisplayMenu() {
           <span>{t('toolbar.gridLabel', 'Grid')}</span>
           <span className="ml-auto text-muted-foreground text-xs">
             {showGrid ? t('common.on', 'On') : t('common.off', 'Off')}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(e) => keepOpen(e, () => setShowZoneLabels(!showZoneLabels))}
+        >
+          <IconifyIcon height={16} icon="mdi:tag-text-outline" width={16} />
+          <span>{t('toolbar.zoneNames', '区名')}</span>
+          <span className="ml-auto text-muted-foreground text-xs">
+            {showZoneLabels ? t('common.on', 'On') : t('common.off', 'Off')}
           </span>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setMagneticSnap(!magneticSnap))}>

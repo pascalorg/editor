@@ -36,7 +36,7 @@ describe('factory planner', () => {
   })
 
   test('routes water electrolysis workshop to a process line', () => {
-    const plan = fallbackFactoryPlan('创建一条化工厂水裂解车间')
+    const plan = fallbackFactoryPlan('create a hydrogen electrolysis workshop')
 
     expect(plan).toMatchObject({
       kind: 'process_line',
@@ -136,7 +136,7 @@ describe('factory planner', () => {
         processLabel: 'Full cement plant',
         processDisplayLabel: '\u6c34\u6ce5\u5de5\u5382',
         layoutStyle: 'parallel_bays',
-        dimensions: { length: 66, width: 28 },
+        dimensions: { length: 80, width: 32 },
       },
     })
     if (plan.kind === 'process_line') {
@@ -146,6 +146,7 @@ describe('factory planner', () => {
           'pre_homogenization',
           'raw_mill',
           'raw_meal_silo',
+          'raw_meal_feed',
           'coal_mill',
           'preheater_tower',
           'rotary_kiln',
@@ -156,7 +157,8 @@ describe('factory planner', () => {
           'cement_mill',
           'cement_silo',
           'cement_packer',
-          'whr_boiler',
+          'sp_boiler',
+          'aqc_boiler',
           'mcc_control',
         ]),
       )
@@ -184,15 +186,143 @@ describe('factory planner', () => {
     }
   })
 
+  test('routes clinker system wording through the modular architecture with AQC boiler', () => {
+    const plan = fallbackFactoryPlan('cement clinker system')
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'cement_plant_full',
+        architecture: {
+          scopeId: 'clinker_system',
+        },
+      },
+    })
+    if (plan.kind === 'process_line') {
+      expect(plan.process.stations.map((station) => station.id)).toEqual(
+        expect.arrayContaining(['grate_cooler', 'sp_boiler', 'aqc_boiler', 'clinker_silo']),
+      )
+      expect(plan.process.connections).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            fromStationId: 'grate_cooler',
+            toStationId: 'aqc_boiler',
+            visualKind: 'hot_gas_duct',
+          }),
+        ]),
+      )
+    }
+  })
+
+  test('routes refinery requests through corrected refinery process topology', () => {
+    const plan = fallbackFactoryPlan('oil refinery')
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'refinery_basic_complex',
+        layoutStyle: 'parallel_bays',
+      },
+    })
+    if (plan.kind === 'process_line') {
+      expect(plan.process.stations.map((station) => station.id)).toEqual(
+        expect.arrayContaining([
+          'atmospheric_distillation_unit',
+          'vacuum_distillation_unit',
+          'delayed_coker_unit',
+          'fluid_catalytic_cracking_unit',
+          'gas_fractionation_unit',
+          'hydrotreating_unit',
+          'catalytic_reformer_unit',
+          'flare_system',
+        ]),
+      )
+      expect(plan.process.connections).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            fromStationId: 'vacuum_distillation_unit',
+            toStationId: 'delayed_coker_unit',
+          }),
+          expect.objectContaining({
+            fromStationId: 'fluid_catalytic_cracking_unit',
+            toStationId: 'gas_fractionation_unit',
+          }),
+          expect.objectContaining({
+            fromStationId: 'catalytic_reformer_unit',
+            toStationId: 'hydrotreating_unit',
+            medium: 'hydrogen',
+          }),
+          expect.objectContaining({
+            fromStationId: 'pipe_rack',
+            toStationId: 'flare_system',
+          }),
+        ]),
+      )
+      expect(plan.process.connections).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            fromStationId: 'fluid_catalytic_cracking_unit',
+            toStationId: 'flare_system',
+          }),
+        ]),
+      )
+    }
+  })
+
+  test('uses refinery architecture scopes for CDU-only and conversion-only requests', () => {
+    const cduPlan = fallbackFactoryPlan('crude distillation only refinery plant')
+    const conversionPlan = fallbackFactoryPlan(
+      'refinery plant conversion area FCC hydrotreating reformer',
+    )
+
+    expect(cduPlan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'refinery_basic_complex',
+        architecture: { scopeId: 'cdu_only' },
+      },
+    })
+    if (cduPlan.kind === 'process_line') {
+      expect(cduPlan.process.stations.map((station) => station.id)).toEqual([
+        'crude_storage_tank',
+        'desalter',
+        'atmospheric_distillation_unit',
+        'vacuum_distillation_unit',
+        'intermediate_storage_tank',
+        'product_storage_tank',
+        'pipe_rack',
+      ])
+    }
+
+    expect(conversionPlan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'refinery_basic_complex',
+        architecture: { scopeId: 'conversion_only' },
+      },
+    })
+    if (conversionPlan.kind === 'process_line') {
+      expect(conversionPlan.process.stations.map((station) => station.id)).toEqual(
+        expect.arrayContaining([
+          'delayed_coker_unit',
+          'fluid_catalytic_cracking_unit',
+          'gas_fractionation_unit',
+          'hydrotreating_unit',
+          'catalytic_reformer_unit',
+        ]),
+      )
+    }
+  })
+
   test('routes discrete manufacturing workshop through the industry pack process template', () => {
-    const plan = fallbackFactoryPlan('生成一个离散制造柔性车间')
+    const plan = fallbackFactoryPlan('discrete manufacturing workshop')
 
     expect(plan).toMatchObject({
       kind: 'process_line',
       process: {
         processId: 'discrete_manufacturing_flexible_workshop',
         processLabel: 'Discrete manufacturing flexible workshop',
-        processDisplayLabel: '离散制造柔性车间',
+        processDisplayLabel: '\u79bb\u6563\u5236\u9020\u67d4\u6027\u8f66\u95f4',
         layoutStyle: 'parallel_bays',
       },
     })
@@ -216,7 +346,7 @@ describe('factory planner', () => {
       )
       expect(plan.process.sourcePack).toMatchObject({
         id: 'industry.discrete-manufacturing.basic',
-        version: '0.2.0',
+        version: '0.1.0',
       })
     }
   })
@@ -253,7 +383,7 @@ describe('factory planner', () => {
       )
       expect(plan.process.sourcePack).toMatchObject({
         id: 'industry.process.basic',
-        version: '0.2.0',
+        version: '0.1.0',
       })
     }
   })
@@ -334,7 +464,7 @@ describe('factory planner', () => {
       expect(plan.process.architecture).toMatchObject({
         id: 'cement.plant.modular_outdoor',
       })
-      expect(plan.process.dimensions).toEqual({ length: 66, width: 28 })
+      expect(plan.process.dimensions).toEqual({ length: 80, width: 32 })
     }
   })
 
@@ -454,13 +584,19 @@ describe('factory planner', () => {
       process: {
         processId: 'cement_plant_full',
         layoutStyle: 'parallel_bays',
-        dimensions: { length: 66, width: 28 },
+        dimensions: { length: 80, width: 32 },
       },
     })
     if (plan?.kind === 'process_line') {
-      expect(plan.process.stations).toHaveLength(21)
+      expect(plan.process.stations).toHaveLength(28)
       expect(plan.process.stations.map((station) => station.id)).toEqual(
-        expect.arrayContaining(['limestone_crusher', 'kiln_hood', 'cement_packer', 'mcc_control']),
+        expect.arrayContaining([
+          'limestone_crusher',
+          'raw_meal_feed',
+          'kiln_hood',
+          'cement_packer',
+          'mcc_control',
+        ]),
       )
       expect(plan.process.stations.map((station) => station.id)).not.toContain('S1')
     }
@@ -574,7 +710,7 @@ describe('factory planner', () => {
       process: { processId: 'cement_plant_full' },
     })
     if (planned.plan.kind === 'process_line') {
-      expect(planned.plan.process.stations).toHaveLength(21)
+      expect(planned.plan.process.stations).toHaveLength(28)
     }
   })
 })

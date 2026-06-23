@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { apiGraphSchema, diagnoseApiGraph } from '@/lib/graph-schema'
 import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight } from '@/lib/scene-api-security'
 import { getSceneOperations } from '@/lib/scene-store-server'
+import { resolveExistingSceneThumbnailUrls } from '@/lib/scene-thumbnail-file'
 import { sceneThumbnailUrlSchema } from '@/lib/scene-thumbnail-url'
 
 export const dynamic = 'force-dynamic'
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
     projectId: parsed.data.projectId,
     limit: parsed.data.limit,
   })
-  return sceneApiJson(request, { scenes })
+  return sceneApiJson(request, { scenes: await resolveExistingSceneThumbnailUrls(scenes) })
 }
 
 export async function POST(request: NextRequest) {

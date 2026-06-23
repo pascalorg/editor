@@ -13,7 +13,7 @@
   "capabilities": [
     "factory_creation"
   ],
-  "description": "流程行业基础资源包，面向化工、环保、食品、制药等流程型工厂的通用几何搭建，覆盖储罐、泵组、搅拌、反应、换热、过滤、离心、干燥、包装、管廊和控制柜。",
+  "description": "流程行业基础包 ：覆盖搅拌、换热、过滤、离心、干燥、包装、储罐、管廊、阀组、粉体料仓、鼓风机和空压机撬等通用流程设备。",
   "profiles": [
     "profiles/generated.json"
   ],

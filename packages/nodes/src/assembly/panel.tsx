@@ -1,19 +1,51 @@
 ﻿'use client'
 
-import { type AnyNode, type AnyNodeId, type AssemblyNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type AssemblyNode,
+  sceneRegistry,
+  useLiveTransforms,
+  useScene,
+} from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
   PanelSection,
   PanelWrapper,
+  SliderControl,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { LogOut, Move, Pencil, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
-import { DataBindingSection } from '../shared/data-binding-section'
 import { TransformPanelSection } from '../shared/transform-panel-section'
+
+type Vector3 = [number, number, number]
+
+function rounded(value: number, precision = 2) {
+  const scale = 10 ** precision
+  return Math.round(value * scale) / scale
+}
+
+function normalizeScale(scale: Vector3 | undefined): Vector3 {
+  return scale ?? [1, 1, 1]
+}
+
+function signedMagnitude(value: number, magnitude: number) {
+  return (value < 0 ? -1 : 1) * magnitude
+}
+
+function syncAssemblyObject(nodeId: AnyNodeId | undefined, updates: Partial<AssemblyNode>) {
+  if (!nodeId) return
+  useLiveTransforms.getState().clear(nodeId)
+  const object = sceneRegistry.nodes.get(nodeId)
+  if (!object) return
+  if (updates.position) object.position.set(...updates.position)
+  if (updates.rotation) object.rotation.set(...updates.rotation)
+  if (updates.scale) object.scale.set(...updates.scale)
+}
 
 export default function AssemblyPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -40,9 +72,26 @@ export default function AssemblyPanel() {
   const handleUpdate = useCallback(
     (updates: Partial<AssemblyNode>) => {
       if (!selectedId) return
+      syncAssemblyObject(selectedId as AnyNodeId, updates)
       updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId, updateNode],
+  )
+
+  const updateScale = useCallback(
+    (value: number) => {
+      if (!node) return
+      const magnitude = Math.max(0.01, rounded(value))
+      const scale = normalizeScale(node.scale)
+      handleUpdate({
+        scale: [
+          signedMagnitude(scale[0], magnitude),
+          signedMagnitude(scale[1], magnitude),
+          signedMagnitude(scale[2], magnitude),
+        ],
+      })
+    },
+    [handleUpdate, node],
   )
 
   const handleClose = useCallback(() => {
@@ -79,6 +128,8 @@ export default function AssemblyPanel() {
 
   if (!(node && node.type === 'assembly' && selectedId && selectedCount === 1)) return null
   const isEditingParts = editingAssemblyId === node.id
+  const scale = normalizeScale(node.scale)
+  const uniformScale = Math.max(Math.abs(scale[0]), Math.abs(scale[1]), Math.abs(scale[2]))
 
   return (
     <PanelWrapper
@@ -110,14 +161,27 @@ export default function AssemblyPanel() {
           />
         </ActionGroup>
       </PanelSection>
+      <PanelSection title={'缩放'}>
+        <div className="space-y-2">
+          <SliderControl
+            label={'等比缩放'}
+            max={10}
+            min={0.01}
+            onChange={updateScale}
+            precision={2}
+            step={0.05}
+            value={rounded(uniformScale)}
+          />
+          <div className="rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-muted-foreground text-xs leading-5">
+            {'缩放写在组合根节点上，子物件保持局部坐标，等比放大缩小不会改散部件位置。'}
+          </div>
+        </div>
+      </PanelSection>
       <TransformPanelSection
         node={node}
         nodeId={selectedId as AnyNode['id']}
         onUpdate={handleUpdate}
-        rotationAxes={[1]}
-        title={'\u6574\u4f53\u53d8\u6362'}
       />
-      <DataBindingSection node={node} onUpdate={handleUpdate} />
 
       <PanelSection title={'\u64cd\u4f5c'}>
         <ActionGroup>

@@ -71,7 +71,12 @@ export {
   type SceneTheme,
 } from './lib/scene-themes'
 export { useItemLightPool } from './store/use-item-light-pool'
-export { default as useViewer } from './store/use-viewer'
+export {
+  default as useViewer,
+  isViewerSelectionInputSuppressed,
+  isViewerSpatialInputSuppressed,
+  shouldLatchViewerPointerSuppression,
+} from './store/use-viewer'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
 export {
   createColumnBoxGeometry,

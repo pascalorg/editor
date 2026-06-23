@@ -26,7 +26,6 @@ import {
   type WallNode,
   type WallSurfaceSide,
 } from '@pascal-app/core'
-
 import {
   applyMaterialPresetToMaterials,
   createMaterial,
@@ -36,10 +35,20 @@ import {
   getStairBodyMaterials,
   getStairRailingMaterial,
   getVisibleWallMaterials,
+  isViewerSelectionInputSuppressed,
   useViewer,
 } from '@pascal-app/viewer'
-import { useCallback, useEffect, useRef } from 'react'
-import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } from 'three'
+import { useThree } from '@react-three/fiber'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  type BufferGeometry,
+  Color,
+  type Material,
+  type Mesh,
+  type Object3D,
+  Raycaster,
+  Vector2,
+} from 'three'
 import { floorItemDragSuppressClickRef } from '../../lib/floor-item-drag'
 import {
   type ActivePaintMaterial,
@@ -71,6 +80,23 @@ const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   if (!currentLevelId) return true // No level selected, allow all
   const nodeLevelId = resolveLevelId(node, useScene.getState().nodes)
   return nodeLevelId === currentLevelId
+}
+
+function useNodeRegistryVersion() {
+  const [registryVersion, setRegistryVersion] = useState(() => nodeRegistry.size)
+
+  useEffect(() => {
+    let previousSize = nodeRegistry.size
+    const interval = window.setInterval(() => {
+      const nextSize = nodeRegistry.size
+      if (nextSize === previousSize) return
+      previousSize = nextSize
+      setRegistryVersion(nextSize)
+    }, 250)
+    return () => window.clearInterval(interval)
+  }, [])
+
+  return registryVersion
 }
 
 type SelectableNodeType =
@@ -105,6 +131,13 @@ type PaintInteraction = {
   hoverMode: HoverHighlightMode
   hoveredId: AnyNodeId
   preview: (() => PaintPreviewCleanup | null) | null
+}
+
+function getEditorSelectableKinds(baseTypes: readonly string[], registryVersion: number): string[] {
+  void registryVersion
+  const kinds = new Set<string>(baseTypes)
+  for (const kind of getSelectableKinds()) kinds.add(kind)
+  return [...kinds]
 }
 
 interface SelectionStrategy {
@@ -211,6 +244,56 @@ function resolveRoofMaterialTarget(
 function getEventObject(event: NodeEvent): Object3D {
   const eventWithObject = event as NodeEvent & { object?: Object3D }
   return eventWithObject.object ?? event.nativeEvent.object
+}
+
+function findRegisteredNodeForObject(object: Object3D | null | undefined): AnyNode | null {
+  let current: Object3D | null | undefined = object
+  const nodes = useScene.getState().nodes
+
+  while (current) {
+    for (const [id, registered] of sceneRegistry.nodes) {
+      if (registered !== current) continue
+      return nodes[id as AnyNodeId] ?? null
+    }
+    current = current.parent
+  }
+
+  return null
+}
+
+function resolveEventHitNode(event: NodeEvent): AnyNode {
+  const native = event.nativeEvent as unknown as {
+    object?: Object3D
+    eventObject?: Object3D
+    intersections?: Array<{ object?: Object3D }>
+  }
+  const hitObjects = [
+    ...(native.intersections?.map((intersection) => intersection.object) ?? []),
+    native.object,
+    getEventObject(event),
+    native.eventObject,
+  ]
+  const candidates: AnyNode[] = []
+
+  for (const object of hitObjects) {
+    const node = findRegisteredNodeForObject(object)
+    if (node && !candidates.some((candidate) => candidate.id === node.id)) {
+      candidates.push(node)
+    }
+  }
+
+  return candidates.find((node) => findContainingAssemblyNode(node)) ?? candidates[0] ?? event.node
+}
+
+function resolveHitNodeFromObjects(objects: Array<Object3D | null | undefined>): AnyNode | null {
+  const candidates: AnyNode[] = []
+  for (const object of objects) {
+    const node = findRegisteredNodeForObject(object)
+    if (node && !candidates.some((candidate) => candidate.id === node.id)) {
+      candidates.push(node)
+    }
+  }
+  return candidates.find((node) => findContainingAssemblyNode(node)) ?? candidates[0] ?? null
 }
 
 function getIntersectionMaterialIndex(
@@ -609,6 +692,10 @@ const computeNextIds = (
   return [node.id]
 }
 
+function isCameraNavigationGestureActive() {
+  return isViewerSelectionInputSuppressed()
+}
+
 function findContainingAssemblyNode(node: AnyNode): AnyNode | null {
   const nodes = useScene.getState().nodes
   let parentId = node.parentId as AnyNodeId | null
@@ -812,7 +899,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       // future furniture kinds): selectable in furnish phase if their
       // definition declares the `selectable` capability. Without this
       // branch, shelf clicks routed to furnish phase via getSelectionTarget
-      // would be rejected here — single-click selection broken.
+      // would be rejected here 鈥?single-click selection broken.
       const def = nodeRegistry.get(node.type)
       if (def && def.category === 'furnish' && def.capabilities.selectable) return true
       return false
@@ -893,7 +980,7 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
 
   // Registry-driven kinds (Phase 5+): route by `def.category`. Built-ins
   // above match before this fallback. Furnish-category kinds (shelf,
-  // item — already handled above) land on the furnish phase; structure-
+  // item 鈥?already handled above) land on the furnish phase; structure-
   // category kinds (everything else) on structure/elements.
   const def = nodeRegistry.get(node.type)
   if (def) {
@@ -907,14 +994,24 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
 }
 
 export const SelectionManager = () => {
+  const { camera, gl } = useThree()
   const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
   const setHoverHighlightMode = useViewer((s) => s.setHoverHighlightMode)
+  const registryVersion = useNodeRegistryVersion()
+  const raycasterRef = useRef(new Raycaster())
+  const pointerNdcRef = useRef(new Vector2())
   const modifierKeysRef = useRef<ModifierKeys>({
     meta: false,
     ctrl: false,
   })
   const clickHandledRef = useRef(false)
+  const lastAssemblyPartClickRef = useRef<{
+    nodeId: AnyNodeId
+    time: number
+    x: number
+    y: number
+  } | null>(null)
 
   const movingNode = useEditor((s) => s.movingNode)
   const curvingWall = useEditor((s) => s.curvingWall)
@@ -1150,6 +1247,7 @@ export const SelectionManager = () => {
     }
 
     const onClick = (event: NodeEvent) => {
+      if (isCameraNavigationGestureActive()) return
       if (boxSelectHandled) return
 
       const interaction = getPaintInteraction(event)
@@ -1187,12 +1285,7 @@ export const SelectionManager = () => {
       'zone',
     ] as const
 
-    // Registry-driven kinds get the same subscriptions as the hardcoded list,
-    // so future built-in nodes don't need to edit allTypes per migration.
-    const registryKinds = getSelectableKinds().filter(
-      (k) => !(allTypes as readonly string[]).includes(k),
-    )
-    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+    const subscribedKinds = getEditorSelectableKinds(allTypes as readonly string[], registryVersion)
 
     for (const type of subscribedKinds) {
       emitter.on(`${type}:enter` as any, onEnter as any)
@@ -1210,7 +1303,7 @@ export const SelectionManager = () => {
       useViewer.setState({ hoveredId: null })
       setHoverHighlightMode('default')
     }
-  }, [curvingWall, mode, movingNode, setHoverHighlightMode])
+  }, [curvingWall, mode, movingNode, registryVersion, setHoverHighlightMode])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1249,6 +1342,84 @@ export const SelectionManager = () => {
     if (mode !== 'select') return
     if (movingNode || curvingWall || curvingFence) return
 
+    const onCanvasPointerDown = (event: PointerEvent) => {
+      if (event.button !== 0) return
+      if (isCameraNavigationGestureActive()) {
+        lastAssemblyPartClickRef.current = null
+        pendingPlanDragRef.current = null
+        return
+      }
+      if (event.shiftKey || event.metaKey || event.ctrlKey) return
+
+      const rect = gl.domElement.getBoundingClientRect()
+      if (
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom
+      ) {
+        return
+      }
+
+      const pointer = pointerNdcRef.current
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+
+      const raycaster = raycasterRef.current
+      raycaster.setFromCamera(pointer, camera)
+      const roots = Array.from(sceneRegistry.nodes.values()).filter((object) => object.visible)
+      const intersections = raycaster.intersectObjects(roots, true)
+      const hitNode = resolveHitNodeFromObjects(
+        intersections.map((intersection) => intersection.object),
+      )
+      if (!hitNode) return
+
+      const containingAssembly = findContainingAssemblyNode(hitNode)
+      if (!containingAssembly) return
+
+      const now = performance.now()
+      const lastClick = lastAssemblyPartClickRef.current
+      const dx = lastClick ? event.clientX - lastClick.x : Infinity
+      const dy = lastClick ? event.clientY - lastClick.y : Infinity
+      const elapsed = lastClick ? now - lastClick.time : Infinity
+      const editingAssemblyId = useEditor.getState().editingAssemblyId
+      const isEditingThisAssembly = editingAssemblyId === (containingAssembly.id as AnyNodeId)
+      const isRepeatedAssemblyPartClick =
+        lastClick &&
+        lastClick.nodeId === (hitNode.id as AnyNodeId) &&
+        elapsed <= 800 &&
+        Math.hypot(dx, dy) <= 6
+
+      if (!(isEditingThisAssembly || isRepeatedAssemblyPartClick)) {
+        lastAssemblyPartClickRef.current = {
+          nodeId: hitNode.id as AnyNodeId,
+          time: now,
+          x: event.clientX,
+          y: event.clientY,
+        }
+        return
+      }
+
+      event.stopPropagation()
+      pendingPlanDragRef.current = null
+      useEditor.getState().setPhase('structure')
+      useEditor.getState().setStructureLayer('elements')
+      useEditor.getState().setEditingAssemblyId(containingAssembly.id as AnyNodeId)
+      useEditor.getState().setSelectedMaterialTarget(null)
+      useViewer.getState().setSelection({ selectedIds: [hitNode.id as AnyNodeId] })
+      lastAssemblyPartClickRef.current = null
+    }
+
+    gl.domElement.addEventListener('pointerdown', onCanvasPointerDown, { capture: true })
+    return () => {
+      gl.domElement.removeEventListener('pointerdown', onCanvasPointerDown, { capture: true })
+    }
+  }, [camera, curvingFence, curvingWall, gl.domElement, mode, movingNode])
+
+  useEffect(() => {
+    if (mode !== 'select') return
+    if (movingNode || curvingWall || curvingFence) return
+
     const startPlanDrag = (nodeId: AnyNodeId) => {
       const liveNode = useScene.getState().nodes[nodeId]
       if (!liveNode || !isPlanDragMovableNode(liveNode)) return
@@ -1259,7 +1430,70 @@ export const SelectionManager = () => {
     }
 
     const onPointerDown = (event: NodeEvent) => {
-      const node = resolveAssemblySelectionNode(event.node, event.nativeEvent)
+      if (isCameraNavigationGestureActive()) {
+        lastAssemblyPartClickRef.current = null
+        pendingPlanDragRef.current = null
+        return
+      }
+      const hitNode = resolveEventHitNode(event)
+      const containingHitAssembly = findContainingAssemblyNode(hitNode)
+      const now = performance.now()
+      const lastClick = lastAssemblyPartClickRef.current
+      const dx = lastClick ? event.nativeEvent.clientX - lastClick.x : Infinity
+      const dy = lastClick ? event.nativeEvent.clientY - lastClick.y : Infinity
+      const elapsed = lastClick ? now - lastClick.time : Infinity
+      const isRepeatedAssemblyPartClick =
+        lastClick &&
+        lastClick.nodeId === (hitNode.id as AnyNodeId) &&
+        elapsed <= 800 &&
+        (elapsed >= 120 || event.nativeEvent.detail >= 2) &&
+        Math.hypot(dx, dy) <= 6
+      const selectAssemblyPart = (partNode: AnyNode, assemblyId: AnyNodeId) => {
+        event.stopPropagation()
+        pendingPlanDragRef.current = null
+        useEditor.getState().setPhase('structure')
+        useEditor.getState().setStructureLayer('elements')
+        useEditor.getState().setEditingAssemblyId(assemblyId)
+        useEditor.getState().setSelectedMaterialTarget(null)
+        useViewer.getState().setSelection({ selectedIds: [partNode.id as AnyNodeId] })
+        lastAssemblyPartClickRef.current = null
+      }
+
+      if (!containingHitAssembly && hitNode.type === 'assembly' && lastClick) {
+        const rememberedPart = useScene.getState().nodes[lastClick.nodeId]
+        const rememberedAssembly = rememberedPart
+          ? findContainingAssemblyNode(rememberedPart)
+          : null
+        const isRepeatedContainerClick =
+          rememberedPart &&
+          rememberedAssembly?.id === hitNode.id &&
+          elapsed <= 800 &&
+          (elapsed >= 120 || event.nativeEvent.detail >= 2) &&
+          Math.hypot(dx, dy) <= 6
+
+        if (isRepeatedContainerClick) {
+          selectAssemblyPart(rememberedPart, hitNode.id as AnyNodeId)
+          return
+        }
+      }
+
+      if (containingHitAssembly) {
+        if (isRepeatedAssemblyPartClick) {
+          selectAssemblyPart(hitNode, containingHitAssembly.id as AnyNodeId)
+          return
+        }
+
+        lastAssemblyPartClickRef.current = {
+          nodeId: hitNode.id as AnyNodeId,
+          time: now,
+          x: event.nativeEvent.clientX,
+          y: event.nativeEvent.clientY,
+        }
+      } else {
+        lastAssemblyPartClickRef.current = null
+      }
+
+      const node = resolveAssemblySelectionNode(hitNode, event.nativeEvent)
       if (!isPlanDragMovableNode(node)) return
       if (event.nativeEvent.shiftKey || event.nativeEvent.metaKey || event.nativeEvent.ctrlKey) {
         return
@@ -1285,7 +1519,7 @@ export const SelectionManager = () => {
 
     const onNodeMove = (event: NodeEvent) => {
       if (!pendingPlanDragRef.current) return
-      const node = resolveAssemblySelectionNode(event.node, event.nativeEvent)
+      const node = resolveAssemblySelectionNode(resolveEventHitNode(event), event.nativeEvent)
       if (node.id !== pendingPlanDragRef.current.nodeId) return
       tryStartDragFromPointer(event.nativeEvent.clientX, event.nativeEvent.clientY)
     }
@@ -1298,7 +1532,7 @@ export const SelectionManager = () => {
       pendingPlanDragRef.current = null
     }
 
-    const planDragKinds = getPlanDrag3DKinds()
+    const planDragKinds = [...new Set([...getPlanDrag3DKinds(), 'assembly'])]
     for (const kind of planDragKinds) {
       emitter.on(`${kind}:pointerdown` as never, onPointerDown as never)
       emitter.on(`${kind}:move` as never, onNodeMove as never)
@@ -1324,14 +1558,15 @@ export const SelectionManager = () => {
     if (movingNode || curvingWall || curvingFence) return
 
     const onClick = (event: NodeEvent) => {
+      if (isCameraNavigationGestureActive()) return
       // Skip if box-select just completed (drag ended over a node)
       if (boxSelectHandled) return
       if (floorItemDragSuppressClickRef.current) {
         floorItemDragSuppressClickRef.current = false
         return
       }
-
-      const node = resolveSelectionNode(event.node, event.nativeEvent)
+      const hitNode = resolveEventHitNode(event)
+      const node = resolveSelectionNode(hitNode, event.nativeEvent)
       const activeEditingAssemblyId = useEditor.getState().editingAssemblyId
       let currentPhase = useEditor.getState().phase
       let currentStructureLayer = useEditor.getState().structureLayer
@@ -1441,16 +1676,14 @@ export const SelectionManager = () => {
     ]
     // Registry-driven kinds get the same subscriptions as the hardcoded list,
     // so future built-in nodes don't need to edit allTypes per migration.
-    const registryKinds = getSelectableKinds().filter(
-      (k) => !(allTypes as readonly string[]).includes(k),
-    )
-    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+    const subscribedKinds = getEditorSelectableKinds(allTypes as readonly string[], registryVersion)
 
     subscribedKinds.forEach((type) => {
       emitter.on(`${type}:click` as any, onClick as any)
     })
 
     const onGridClick = () => {
+      if (isCameraNavigationGestureActive()) return
       if (clickHandledRef.current) return
       if (boxSelectHandled) return
       const { phase, structureLayer } = useEditor.getState()
@@ -1473,7 +1706,7 @@ export const SelectionManager = () => {
       })
       emitter.off('grid:click', onGridClick)
     }
-  }, [curvingFence, curvingWall, mode, movingNode])
+  }, [curvingFence, curvingWall, mode, movingNode, registryVersion])
 
   // Global double-click handler for auto-switching phases and cross-phase hover
   useEffect(() => {
@@ -1517,7 +1750,8 @@ export const SelectionManager = () => {
     }
 
     const onDoubleClick = (event: NodeEvent) => {
-      const rawNode = event.node
+      if (isCameraNavigationGestureActive()) return
+      const rawNode = resolveEventHitNode(event)
       const containingAssembly = findContainingAssemblyNode(rawNode)
       const currentPhase = useEditor.getState().phase
 
@@ -1645,10 +1879,7 @@ export const SelectionManager = () => {
       'zone',
       'site',
     ]
-    const registryKinds = getSelectableKinds().filter(
-      (k) => !(allTypes as readonly string[]).includes(k),
-    )
-    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+    const subscribedKinds = getEditorSelectableKinds(allTypes as readonly string[], registryVersion)
 
     subscribedKinds.forEach((type) => {
       emitter.on(`${type}:enter` as any, onEnter as any)
@@ -1663,13 +1894,14 @@ export const SelectionManager = () => {
         emitter.off(`${type}:double-click` as any, onDoubleClick as any)
       })
     }
-  }, [curvingFence, curvingWall, mode, movingNode])
+  }, [curvingFence, curvingWall, mode, movingNode, registryVersion])
 
   // Delete mode: click-to-delete (sledgehammer tool)
   useEffect(() => {
     if (mode !== 'delete') return
 
     const onClick = (event: NodeEvent) => {
+      if (isCameraNavigationGestureActive()) return
       const node = resolveSelectionNode(event.node, event.nativeEvent)
       if (!isNodeInCurrentLevel(node)) return
 
@@ -1725,10 +1957,7 @@ export const SelectionManager = () => {
       'zone',
     ] as const
 
-    const registryKinds = getSelectableKinds().filter(
-      (k) => !(allTypes as readonly string[]).includes(k),
-    )
-    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+    const subscribedKinds = getEditorSelectableKinds(allTypes as readonly string[], registryVersion)
 
     for (const type of subscribedKinds) {
       emitter.on(`${type}:click` as any, onClick as any)
@@ -1744,7 +1973,7 @@ export const SelectionManager = () => {
       }
       useViewer.setState({ hoveredId: null })
     }
-  }, [mode])
+  }, [mode, registryVersion])
 
   return (
     <>

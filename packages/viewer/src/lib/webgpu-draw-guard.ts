@@ -4,6 +4,7 @@ import { ensureWebGPUCompatibleGeometry } from './safe-geometry'
 
 const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakSet<object>()
 const warnedRepairedDraw = process.env.NODE_ENV === 'production' ? null : new WeakSet<object>()
+const validatedDrawGeometries = new WeakSet<object>()
 
 /**
  * Renderer-level safety net against the empty-vertex-buffer crash.
@@ -44,6 +45,21 @@ export function installEmptyDrawGuard(renderer: WebGPURenderer) {
         return
       }
 
+      if (geometry && validatedDrawGeometries.has(geometry)) {
+        ;(renderer as any).renderObject(
+          object,
+          scene,
+          camera,
+          geometry,
+          material,
+          group,
+          lightsNode,
+          clippingContext,
+          passId,
+        )
+        return
+      }
+
       const needsAttributeRepair = hasMissingWebGPUAttributes(geometry)
       const attributeSummary = needsAttributeRepair ? getGeometryAttributeSummary(geometry) : null
       const safeGeometry = ensureWebGPUCompatibleGeometry(geometry)
@@ -58,6 +74,9 @@ export function installEmptyDrawGuard(renderer: WebGPURenderer) {
           material: material?.name || material?.type,
           attributes: attributeSummary,
         })
+      }
+      if (safeGeometry) {
+        validatedDrawGeometries.add(safeGeometry)
       }
 
       ;(renderer as any).renderObject(

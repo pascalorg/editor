@@ -6,8 +6,8 @@
     "processId": "process_industry_basic_plant",
     "layoutStyle": "parallel_bays",
     "defaultDimensions": {
-      "length": 52,
-      "width": 24
+      "length": 58,
+      "width": 26
     },
     "scopes": [
       {
@@ -19,7 +19,10 @@
           "thermal_exchange",
           "separation",
           "product_storage",
-          "utilities_control"
+          "utilities_control",
+          "bulk_handling",
+          "valve_manifold",
+          "utility_air"
         ]
       },
       {
@@ -32,7 +35,10 @@
           "separation",
           "drying_packaging",
           "product_storage",
-          "utilities_control"
+          "utilities_control",
+          "bulk_handling",
+          "valve_manifold",
+          "utility_air"
         ]
       }
     ],
@@ -97,6 +103,31 @@
           "pipe_corridor",
           "control_cabinet"
         ]
+      },
+      {
+        "id": "bulk_handling",
+        "displayLabel": "粉体储运模块",
+        "order": 15,
+        "stationIds": [
+          "bulk_material_silo"
+        ]
+      },
+      {
+        "id": "utility_air",
+        "displayLabel": "公用空气系统",
+        "order": 72,
+        "stationIds": [
+          "utility_blower",
+          "air_compressor_skid"
+        ]
+      },
+      {
+        "id": "valve_manifold",
+        "displayLabel": "阀组模块",
+        "order": 45,
+        "stationIds": [
+          "valve_station"
+        ]
       }
     ],
     "layoutHints": {
@@ -108,7 +139,9 @@
       "sideBranchStationIds": [
         "metering_pump_skid",
         "pipe_corridor",
-        "control_cabinet"
+        "control_cabinet",
+        "utility_blower",
+        "air_compressor_skid"
       ],
       "scale": "conceptual",
       "notes": [

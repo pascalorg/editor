@@ -32,6 +32,11 @@ export const cylinderDefinition: NodeDefinition<typeof CylinderNode> = {
     module: () => import('./renderer'),
   },
 
+  system: {
+    module: () => import('./batch-system'),
+    priority: 7,
+  },
+
   presentation: {
     label: 'Cylinder',
     description: 'A configurable cylindrical primitive. Set wall thickness for a hollow tube.',

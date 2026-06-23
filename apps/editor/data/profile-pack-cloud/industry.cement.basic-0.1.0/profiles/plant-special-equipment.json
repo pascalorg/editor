@@ -250,7 +250,8 @@
           0,
           4,
           0
-        ]
+        ],
+        "axis": "y"
       },
       {
         "kind": "skid_base",
@@ -322,7 +323,23 @@
     "detailBudget": {
       "detailLevel": "low",
       "maxShapes": 56
-    }
+    },
+    "processPorts": [
+      {
+        "id": "top_feed_inlet",
+        "medium": "material",
+        "side": "top",
+        "height": 8.0,
+        "offset": 0
+      },
+      {
+        "id": "raw_meal_out",
+        "medium": "material",
+        "side": "right",
+        "height": 0.85,
+        "offset": 0
+      }
+    ]
   },
   {
     "id": "cement.coal_mill",
@@ -437,9 +454,9 @@
     "layoutFamily": "linear_transport_layout",
     "archetypeFamily": "thermal_equipment",
     "defaultDimensions": {
-      "length": 3.8,
-      "width": 0.9,
-      "height": 1.2
+      "length": 4.2,
+      "width": 1.0,
+      "height": 1.25
     },
     "primarySemanticRole": "burner_lance",
     "parts": [
@@ -448,79 +465,160 @@
         "semanticRole": "burner_lance",
         "required": true,
         "axis": "x",
-        "length": 3.5,
-        "radius": 0.11,
+        "length": 3.9,
+        "radius": 0.105,
         "position": [
           0,
-          0.8,
+          0.86,
           0
-        ]
+        ],
+        "metalColor": "#475569"
       },
       {
         "kind": "pipe_run",
-        "semanticRole": "primary_air_pipe",
+        "semanticRole": "primary_air_channel",
         "required": true,
         "axis": "x",
-        "length": 3.2,
-        "radius": 0.07,
+        "length": 3.55,
+        "radius": 0.072,
         "position": [
           0,
-          0.95,
-          0.18
-        ]
+          0.99,
+          0.16
+        ],
+        "metalColor": "#64748b"
       },
       {
         "kind": "pipe_run",
-        "semanticRole": "fuel_pipe",
+        "semanticRole": "coal_fuel_pipe",
         "required": true,
         "axis": "x",
-        "length": 3.2,
-        "radius": 0.045,
+        "length": 3.55,
+        "radius": 0.046,
         "position": [
           0,
-          1.04,
+          0.99,
           -0.16
-        ]
+        ],
+        "metalColor": "#334155"
       },
       {
-        "kind": "skid_base",
-        "semanticRole": "burner_carriage",
-        "required": true,
-        "length": 1.7,
-        "width": 0.75,
-        "height": 0.18,
+        "kind": "pipe_run",
+        "semanticRole": "gas_oil_lance",
+        "axis": "x",
+        "length": 3.25,
+        "radius": 0.032,
         "position": [
-          -0.75,
-          0.18,
+          0.08,
+          1.1,
           0
-        ]
+        ],
+        "metalColor": "#9ca3af"
+      },
+      {
+        "kind": "flange_ring",
+        "semanticRole": "burner_mounting_flange",
+        "required": true,
+        "axis": "x",
+        "radius": 0.18,
+        "tubeRadius": 0.018,
+        "includeBolts": false,
+        "position": [
+          1.78,
+          0.86,
+          0
+        ],
+        "metalColor": "#6b7280"
       },
       {
         "kind": "outlet_port",
-        "semanticRole": "flame_out",
+        "semanticRole": "multi_channel_nozzle_tip",
         "required": true,
+        "axis": "x",
+        "radius": 0.13,
+        "length": 0.28,
         "position": [
-          1.95,
-          0.8,
+          2.08,
+          0.86,
           0
-        ]
+        ],
+        "metalColor": "#f97316"
       },
       {
         "kind": "inlet_port",
         "semanticRole": "fuel_in",
         "required": true,
+        "axis": "x",
+        "radius": 0.08,
+        "length": 0.3,
         "position": [
-          -1.95,
-          0.92,
+          -2.08,
+          0.96,
+          -0.16
+        ],
+        "metalColor": "#9ca3af"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "primary_air_in",
+        "required": true,
+        "axis": "x",
+        "radius": 0.1,
+        "length": 0.3,
+        "position": [
+          -2.08,
+          0.99,
+          0.16
+        ],
+        "metalColor": "#9ca3af"
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "burner_carriage",
+        "required": true,
+        "length": 1.85,
+        "width": 0.78,
+        "height": 0.16,
+        "position": [
+          -0.75,
+          0.18,
           0
-        ]
+        ],
+        "metalColor": "#111827"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "carriage_rail_pair",
+        "length": 2.2,
+        "height": 0.08,
+        "thickness": 0.05,
+        "position": [
+          -0.75,
+          0.08,
+          0.34
+        ],
+        "color": "#111827"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "carriage_rail_pair",
+        "length": 2.2,
+        "height": 0.08,
+        "thickness": 0.05,
+        "position": [
+          -0.75,
+          0.08,
+          -0.34
+        ],
+        "color": "#111827"
       }
     ],
     "visualCues": [
-      "long burner lance",
-      "parallel air and fuel pipes",
-      "small carriage base",
-      "front flame outlet"
+      "long multi-channel burner lance aligned with rotary kiln axis and inserted through kiln hood burner port",
+      "coaxial/parallel primary air, coal/fuel, and gas-oil lance pipes, not a conveyor or simple duct",
+      "orange or refractory-colored nozzle tip at the kiln-facing end",
+      "mounting flange at hood wall and retractable carriage/rails under the lance",
+      "fuel and primary air inlets at the rear service end"
     ],
     "status": "stable",
     "source": "imported_pack",
@@ -529,8 +627,87 @@
     "editableSchemaRef": "rotary_equipment.common",
     "detailBudget": {
       "detailLevel": "low",
-      "maxShapes": 90
-    }
+      "maxShapes": 82,
+      "parts": {
+        "burner_mounting_flange": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        },
+        "carriage_rail_pair": {
+          "detailLevel": "low"
+        }
+      }
+    },
+    "processPorts": [
+      {
+        "id": "fuel_in",
+        "medium": "material",
+        "side": "left",
+        "height": 0.96,
+        "offset": -0.16
+      },
+      {
+        "id": "primary_air_in",
+        "medium": "gas",
+        "side": "left",
+        "height": 0.99,
+        "offset": 0.16
+      },
+      {
+        "id": "flame_out",
+        "medium": "gas",
+        "side": "right",
+        "height": 0.86,
+        "offset": 0
+      }
+    ],
+    "roleAliases": {
+      "burner_lance": [
+        "main_burner_pipe",
+        "burner_pipe",
+        "pipe_run"
+      ],
+      "primary_air_channel": [
+        "primary_air_pipe",
+        "axial_air_channel",
+        "pipe_run"
+      ],
+      "coal_fuel_pipe": [
+        "fuel_pipe",
+        "pulverized_coal_pipe",
+        "pipe_run"
+      ],
+      "gas_oil_lance": [
+        "central_lance",
+        "oil_gas_lance",
+        "pipe_run"
+      ],
+      "multi_channel_nozzle_tip": [
+        "flame_out",
+        "burner_tip",
+        "outlet_port"
+      ],
+      "burner_mounting_flange": [
+        "hood_mounting_flange",
+        "flange_ring"
+      ],
+      "burner_carriage": [
+        "retraction_carriage",
+        "skid_base"
+      ],
+      "carriage_rail_pair": [
+        "burner_rails",
+        "guide_rails",
+        "generic_panel"
+      ]
+    },
+    "forbiddenRoles": [
+      "belt_surface",
+      "conveyor_frame",
+      "vehicle_tire",
+      "vehicle_cabin"
+    ]
   },
   {
     "id": "cement.kiln_hood",
@@ -545,9 +722,9 @@
     "layoutFamily": "generic_industrial_layout",
     "archetypeFamily": "thermal_equipment",
     "defaultDimensions": {
-      "length": 3.2,
-      "width": 2.4,
-      "height": 2.4
+      "length": 3.4,
+      "width": 2.55,
+      "height": 2.65
     },
     "primarySemanticRole": "kiln_hood_shell",
     "parts": [
@@ -555,67 +732,174 @@
         "kind": "generic_base",
         "semanticRole": "hood_base",
         "required": true,
-        "length": 3.2,
-        "width": 2.4,
-        "height": 0.22
+        "length": 3.25,
+        "width": 2.45,
+        "height": 0.24,
+        "position": [
+          0,
+          0.12,
+          0
+        ],
+        "metalColor": "#4b5563"
       },
       {
         "kind": "generic_body",
         "semanticRole": "kiln_hood_shell",
         "required": true,
-        "length": 2.6,
-        "width": 2,
-        "height": 1.7,
+        "length": 2.85,
+        "width": 2.15,
+        "height": 1.85,
         "position": [
           0,
-          1.1,
+          1.18,
           0
-        ]
+        ],
+        "primaryColor": "#475569",
+        "metalColor": "#374151"
       },
       {
-        "kind": "inlet_port",
+        "kind": "generic_panel",
+        "semanticRole": "refractory_front_wall",
+        "required": true,
+        "length": 2.2,
+        "height": 1.55,
+        "thickness": 0.08,
+        "position": [
+          -1.48,
+          1.22,
+          0
+        ],
+        "rotation": [
+          0,
+          1.5707963267948966,
+          0
+        ],
+        "color": "#334155"
+      },
+      {
+        "kind": "flange_ring",
         "semanticRole": "kiln_head_in",
         "required": true,
+        "axis": "x",
+        "radius": 0.43,
+        "tubeRadius": 0.035,
+        "includeBolts": false,
         "position": [
-          -1.45,
-          1.1,
+          -1.58,
+          1.2,
           0
-        ]
+        ],
+        "metalColor": "#9ca3af"
       },
       {
-        "kind": "inlet_port",
+        "kind": "flange_ring",
         "semanticRole": "burner_opening",
         "required": true,
+        "axis": "x",
+        "radius": 0.19,
+        "tubeRadius": 0.02,
+        "includeBolts": false,
         "position": [
-          -1.45,
-          1.35,
+          -1.62,
+          1.22,
           -0.42
-        ]
+        ],
+        "metalColor": "#facc15"
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "hot_clinker_drop_chute",
+        "required": true,
+        "length": 0.9,
+        "width": 0.78,
+        "height": 0.68,
+        "topLengthScale": 1.45,
+        "topWidthScale": 1.25,
+        "position": [
+          1.18,
+          0.58,
+          0
+        ],
+        "primaryColor": "#78716c",
+        "darkColor": "#44403c"
       },
       {
         "kind": "outlet_port",
         "semanticRole": "hot_clinker_out",
         "required": true,
+        "axis": "x",
+        "radius": 0.18,
+        "length": 0.34,
         "position": [
-          1.45,
-          0.72,
+          1.72,
+          0.52,
           0
-        ]
+        ],
+        "metalColor": "#9ca3af"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "secondary_air_return_duct",
+        "required": true,
+        "axis": "z",
+        "length": 1.15,
+        "radius": 0.16,
+        "position": [
+          0.55,
+          2.18,
+          0.86
+        ],
+        "metalColor": "#b45309"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "tertiary_air_takeoff",
+        "axis": "x",
+        "length": 1.25,
+        "radius": 0.14,
+        "position": [
+          0.8,
+          2.0,
+          -0.96
+        ],
+        "metalColor": "#b45309"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "inspection_door",
+        "length": 0.42,
+        "height": 0.58,
+        "thickness": 0.045,
+        "position": [
+          0.12,
+          1.02,
+          1.1
+        ],
+        "color": "#94a3b8"
       },
       {
         "kind": "service_platform",
         "semanticRole": "hood_service_platform",
+        "length": 2.35,
+        "width": 0.34,
+        "height": 0.28,
+        "overallHeight": 0.18,
         "position": [
-          0.2,
-          2.1,
-          0.95
-        ]
+          0.15,
+          2.18,
+          1.18
+        ],
+        "metalColor": "#64748b",
+        "color": "#facc15"
       }
     ],
     "visualCues": [
-      "large hood around kiln discharge",
-      "burner opening",
-      "transition outlet to cooler"
+      "refractory-lined kiln head hood enclosing the rotary kiln discharge end, not a simple black box",
+      "large circular kiln shell opening on the kiln side with seal/flange ring",
+      "smaller burner opening beside or below kiln centerline for the burner lance to enter the hood",
+      "bottom or low-side hot clinker drop chute leading directly to the grate cooler inlet",
+      "secondary air return / tertiary air takeoff ducting on upper hood area",
+      "inspection door and maintenance platform around the hood"
     ],
     "status": "stable",
     "source": "imported_pack",
@@ -624,8 +908,107 @@
     "editableSchemaRef": "rotary_equipment.common",
     "detailBudget": {
       "detailLevel": "low",
-      "maxShapes": 90
-    }
+      "maxShapes": 86,
+      "parts": {
+        "kiln_head_in": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        },
+        "burner_opening": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        },
+        "hood_service_platform": {
+          "detailLevel": "low"
+        }
+      }
+    },
+    "processPorts": [
+      {
+        "id": "kiln_head_in",
+        "medium": "material",
+        "side": "left",
+        "height": 1.2,
+        "offset": 0
+      },
+      {
+        "id": "burner_opening",
+        "medium": "gas",
+        "side": "left",
+        "height": 1.22,
+        "offset": -0.42
+      },
+      {
+        "id": "hot_clinker_out",
+        "medium": "material",
+        "side": "right",
+        "height": 0.52,
+        "offset": 0
+      },
+      {
+        "id": "secondary_air_in",
+        "medium": "gas",
+        "side": "back",
+        "height": 2.18,
+        "offset": 0.86
+      },
+      {
+        "id": "tertiary_air_out",
+        "medium": "gas",
+        "side": "front",
+        "height": 2.0,
+        "offset": -0.96
+      }
+    ],
+    "roleAliases": {
+      "kiln_hood_shell": [
+        "hood_body",
+        "refractory_hood",
+        "generic_body"
+      ],
+      "kiln_head_in": [
+        "kiln_outlet_opening",
+        "kiln_seal_ring",
+        "flange_ring"
+      ],
+      "burner_opening": [
+        "burner_port",
+        "burner_lance_opening",
+        "flange_ring"
+      ],
+      "hot_clinker_drop_chute": [
+        "clinker_drop_chute",
+        "cooler_inlet_chute",
+        "hopper_body"
+      ],
+      "hot_clinker_out": [
+        "clinker_outlet",
+        "cooler_feed_outlet",
+        "outlet_port"
+      ],
+      "secondary_air_return_duct": [
+        "cooler_air_return",
+        "secondary_air_duct",
+        "pipe_run"
+      ],
+      "tertiary_air_takeoff": [
+        "tertiary_air_duct_connection",
+        "hot_air_takeoff",
+        "pipe_run"
+      ],
+      "hood_service_platform": [
+        "maintenance_platform",
+        "service_platform"
+      ]
+    },
+    "forbiddenRoles": [
+      "belt_surface",
+      "conveyor_frame",
+      "vehicle_tire",
+      "vehicle_cabin"
+    ]
   },
   {
     "id": "cement.tertiary_air_duct",

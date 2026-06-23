@@ -3,6 +3,7 @@
 import { X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { t } from '@/i18n'
 
 export function DeleteSceneButton({
@@ -62,40 +63,42 @@ export function DeleteSceneButton({
       >
         <X className="h-4 w-4" />
       </button>
-      {isConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-5 shadow-2xl">
-            <h2 className="font-semibold text-base text-foreground">
-              {t('scenes.deleteScene', 'Delete scene')}
-            </h2>
-            <p className="mt-2 text-muted-foreground text-sm leading-5">
-              {t('scenes.confirmDelete', {
-                fallback: 'Delete scene "{name}"? This cannot be undone.',
-                params: { name: sceneName },
-              })}
-            </p>
-            {error && <p className="mt-3 text-destructive text-xs">{error}</p>}
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                className="rounded-md border border-border bg-background px-3 py-2 font-medium text-sm hover:bg-accent/40 disabled:opacity-50"
-                disabled={isDeleting}
-                onClick={() => setIsConfirmOpen(false)}
-                type="button"
-              >
-                {t('common.cancel', 'Cancel')}
-              </button>
-              <button
-                className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 font-medium text-destructive text-sm hover:bg-destructive/15 disabled:opacity-50"
-                disabled={isDeleting}
-                onClick={handleDelete}
-                type="button"
-              >
-                {isDeleting ? t('common.deleting', 'Deleting...') : t('common.delete', 'Delete')}
-              </button>
+      {isConfirmOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-5 shadow-2xl">
+              <h2 className="font-semibold text-base text-foreground">
+                {t('scenes.deleteScene', 'Delete scene')}
+              </h2>
+              <p className="mt-2 text-muted-foreground text-sm leading-5">
+                {t('scenes.confirmDelete', {
+                  fallback: 'Delete scene "{name}"? This cannot be undone.',
+                  params: { name: sceneName },
+                })}
+              </p>
+              {error && <p className="mt-3 text-destructive text-xs">{error}</p>}
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  className="rounded-md border border-border bg-background px-3 py-2 font-medium text-sm hover:bg-accent/40 disabled:opacity-50"
+                  disabled={isDeleting}
+                  onClick={() => setIsConfirmOpen(false)}
+                  type="button"
+                >
+                  {t('common.cancel', 'Cancel')}
+                </button>
+                <button
+                  className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 font-medium text-destructive text-sm hover:bg-destructive/15 disabled:opacity-50"
+                  disabled={isDeleting}
+                  onClick={handleDelete}
+                  type="button"
+                >
+                  {isDeleting ? t('common.deleting', 'Deleting...') : t('common.delete', 'Delete')}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   )
 }

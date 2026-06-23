@@ -498,10 +498,27 @@ function industryPackRefFromContext(context: Record<string, unknown>): IndustryP
   return { id, version, ...(industry ? { industry } : {}) }
 }
 
-function extraDeviceProfilePackDirsFromContext(context: Record<string, unknown>) {
-  const ref = industryPackRefFromContext(context)
-  const dir = ref ? resolveIndustryPackDir(ref) : undefined
-  return dir ? [dir] : []
+function inferredIndustryPackRefsFromPrompt(prompt: string): IndustryPackRef[] {
+  if (
+    /(\u56de\u8f6c\u7a91|\u6c34\u6ce5\u56de\u8f6c\u7a91|\u6c34\u6ce5\u7a91|rotary[_\s-]?kiln|cement[_\s-]?kiln)/i.test(
+      prompt,
+    )
+  ) {
+    return [{ id: 'industry.cement.basic', version: '0.1.0', industry: 'cement' }]
+  }
+  return []
+}
+
+function uniqueDeviceProfilePackDirs(refs: readonly IndustryPackRef[]) {
+  const dirs: string[] = []
+  const seen = new Set<string>()
+  for (const ref of refs) {
+    const dir = resolveIndustryPackDir(ref)
+    if (!dir || seen.has(dir)) continue
+    seen.add(dir)
+    dirs.push(dir)
+  }
+  return dirs
 }
 
 function latestArtifactFromContext(context: Record<string, unknown>, key = 'latestArtifact') {
@@ -1185,7 +1202,11 @@ async function runPrimitiveRun(runId: string) {
             contextDecision,
           })
         : (stringFromContext(context, 'analysisContext') ?? harnessContext)
-    const extraPackDirs = extraDeviceProfilePackDirsFromContext(context)
+    const contextPackRef = industryPackRefFromContext(context)
+    const extraPackDirs = uniqueDeviceProfilePackDirs([
+      ...(contextPackRef ? [contextPackRef] : []),
+      ...inferredIndustryPackRefsFromPrompt(userPrompt),
+    ])
     const loadedDeviceProfiles = await loadDeviceProfiles({ extraPackDirs })
 
     await appendRunEvent(runId, {

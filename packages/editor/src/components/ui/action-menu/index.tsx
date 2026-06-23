@@ -146,6 +146,7 @@ export function ActionMenu({ className }: { className?: string }) {
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const catalogCategory = useEditor((state) => state.catalogCategory)
+  const structureLayer = useEditor((state) => state.structureLayer)
   const isMobile = useIsMobile()
   const hasSelectionOnMobile = useViewer((s) => isMobile && s.selection.selectedIds.length > 0)
   const hasReferenceOnMobile = useEditor((s) => isMobile && Boolean(s.selectedReferenceId))
@@ -186,7 +187,7 @@ export function ActionMenu({ className }: { className?: string }) {
       >
         {/* Structure Tools Row - Animated */}
         <AnimatePresence>
-          {phase === 'structure' && mode === 'build' && (
+          {phase === 'structure' && mode === 'build' && structureLayer !== 'zones' && (
             <motion.div
               animate={{
                 opacity: 1,

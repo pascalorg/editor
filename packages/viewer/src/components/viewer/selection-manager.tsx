@@ -17,7 +17,7 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { useThree } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Vector3 } from 'three'
 import useViewer from '../../store/use-viewer'
 
@@ -89,6 +89,23 @@ interface SelectionStrategy {
   handleClick: (node: AnyNode, nativeEvent?: MouseEvent) => void
   handleDeselect: () => void
   isValid: (node: AnyNode) => boolean
+}
+
+function useNodeRegistryVersion() {
+  const [registryVersion, setRegistryVersion] = useState(() => getSelectableKinds().length)
+
+  useEffect(() => {
+    let previousCount = getSelectableKinds().length
+    const interval = window.setInterval(() => {
+      const nextCount = getSelectableKinds().length
+      if (nextCount === previousCount) return
+      previousCount = nextCount
+      setRegistryVersion(nextCount)
+    }, 250)
+    return () => window.clearInterval(interval)
+  }, [])
+
+  return registryVersion
 }
 
 // Check if a node belongs to the selected level (directly or via wall parent)
@@ -299,6 +316,7 @@ const getStrategy = (): SelectionStrategy | null => {
 export const SelectionManager = () => {
   const selection = useViewer((s) => s.selection)
   const clickHandledRef = useRef(false)
+  const registryVersion = useNodeRegistryVersion()
 
   useEffect(() => {
     const onEnter = (event: NodeEvent) => {
@@ -378,7 +396,7 @@ export const SelectionManager = () => {
         emitter.off(`${type}:click` as any, onClick as any)
       }
     }
-  }, [])
+  }, [registryVersion])
 
   return (
     <>

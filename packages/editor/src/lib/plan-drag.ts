@@ -7,6 +7,7 @@ import {
 } from '@pascal-app/core'
 
 const BESPOKE_PLAN_DRAG_3D_KINDS = [
+  'assembly',
   'item',
   'stair',
   'stair-segment',

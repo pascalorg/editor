@@ -1,4 +1,5 @@
 import {
+  BoxNode,
   CableTrayNode,
   PipeFittingNode,
   PipeNode,
@@ -71,6 +72,14 @@ const MEDIUM_COLOR: Record<ProcessConnectionMedium, string> = {
   molten_metal: '#dc2626',
 }
 
+function isCementProcessLine(plan: ProcessLinePlan) {
+  return plan.sourcePack?.industry === 'cement' || plan.processId?.startsWith('cement_') === true
+}
+
+function processLineOmitPerimeterWalls(plan: ProcessLinePlan) {
+  return plan.architecture?.omitPerimeterWalls ?? (isCementProcessLine(plan) ? true : undefined)
+}
+
 type ConnectionRenderSpec = {
   nodeKind: 'pipe' | 'cable_tray'
   label: string
@@ -88,6 +97,10 @@ type ConnectionRenderSpec = {
     showRungs: boolean
   }
 }
+
+const ROUTE_SUPPORT_MIN_ELEVATION = 1.2
+const ROUTE_SUPPORT_MAX_SPACING = 5
+const ROUTE_SUPPORT_SECTION = 0.08
 
 function connectionRenderSpec(
   visualKind: ProcessConnectionVisualKind,
@@ -395,6 +408,93 @@ function createConnectionPatch(input: {
   return parentPatch(node, input.placement)
 }
 
+function segmentLength(segment: ProcessRouteSegment) {
+  return Math.hypot(segment.end[0] - segment.start[0], segment.end[1] - segment.start[1])
+}
+
+function interpolatedSegmentPoint(segment: ProcessRouteSegment, t: number): [number, number] {
+  return [
+    segment.start[0] + (segment.end[0] - segment.start[0]) * t,
+    segment.start[1] + (segment.end[1] - segment.start[1]) * t,
+  ]
+}
+
+function createRouteSupportPatch(input: {
+  name: string
+  position: [number, number, number]
+  height: number
+  metadata: Record<string, unknown>
+  placement: GeneratedGeometryPlacementSpec
+}) {
+  const node = BoxNode.parse({
+    name: input.name,
+    position: input.position,
+    rotation: [0, 0, 0],
+    length: ROUTE_SUPPORT_SECTION,
+    width: ROUTE_SUPPORT_SECTION,
+    height: input.height,
+    material: {
+      preset: 'metal',
+      properties: {
+        color: '#475569',
+        roughness: 0.46,
+        metalness: 0.55,
+      },
+    },
+    metadata: input.metadata,
+  })
+  return parentPatch(node, input.placement)
+}
+
+function createConnectionSupportPatches(input: {
+  plan: ProcessLinePlan
+  connection: ProcessConnectionPlan
+  connectionIndex: number
+  route: ProcessConnectionRoute
+  sourcePrompt: string
+  placement: GeneratedGeometryPlacementSpec
+}) {
+  const spec = connectionRenderSpec(input.connection.visualKind, input.connection.medium)
+  const elevation = input.route.elevation ?? spec.elevation
+  if (elevation < ROUTE_SUPPORT_MIN_ELEVATION) return []
+
+  const patches: GeneratedGeometryCreatePatch[] = []
+  input.route.segments.forEach((segment, segmentIndex) => {
+    const length = segmentLength(segment)
+    if (length < 0.35) return
+    const supportCount = Math.max(1, Math.floor(length / ROUTE_SUPPORT_MAX_SPACING))
+    for (let supportIndex = 1; supportIndex <= supportCount; supportIndex += 1) {
+      const [x, z] = interpolatedSegmentPoint(segment, supportIndex / (supportCount + 1))
+      const supportHeight = Math.max(0.05, elevation - ROUTE_SUPPORT_SECTION / 2)
+      patches.push(
+        createRouteSupportPatch({
+          name: `${connectionSegmentName({
+            connection: input.connection,
+            connectionIndex: input.connectionIndex,
+            segmentIndex,
+            segmentCount: input.route.segments.length,
+          })} support ${supportIndex}`,
+          position: [x, supportHeight / 2, z],
+          height: supportHeight,
+          metadata: {
+            ...connectionMetadata({
+              ...input,
+              segmentIndex,
+              segmentCount: input.route.segments.length,
+            }),
+            role: 'process-line-connection-support',
+            supportIndex,
+            supportElevation: elevation,
+            resolver: 'native-route-support',
+          },
+          placement: input.placement,
+        }),
+      )
+    }
+  })
+  return patches
+}
+
 function createConnectionPatches(input: {
   plan: ProcessLinePlan
   connection: ProcessConnectionPlan
@@ -404,7 +504,7 @@ function createConnectionPatches(input: {
   placement: GeneratedGeometryPlacementSpec
 }) {
   const segmentCount = input.route.segments.length
-  return input.route.segments.map((segment, segmentIndex) =>
+  const segments = input.route.segments.map((segment, segmentIndex) =>
     createConnectionPatch({
       ...input,
       segment,
@@ -412,6 +512,7 @@ function createConnectionPatches(input: {
       segmentCount,
     }),
   )
+  return [...segments, ...createConnectionSupportPatches(input)]
 }
 
 function createRouteElbowFittings(input: {
@@ -609,6 +710,22 @@ function createCementTertiaryAirDuctPatch(input: {
       fromStationId: 'grate_cooler',
       toStationId: 'preheater_tower',
       viaStationId: 'tertiary_air_duct',
+      routeConnectionLegs: [
+        {
+          fromStationId: coolerConnection.fromStationId,
+          toStationId: coolerConnection.toStationId,
+          visualKind: coolerConnection.visualKind,
+          ...(coolerConnection.fromPortId ? { fromPortId: coolerConnection.fromPortId } : {}),
+          ...(coolerConnection.toPortId ? { toPortId: coolerConnection.toPortId } : {}),
+        },
+        {
+          fromStationId: preheaterConnection.fromStationId,
+          toStationId: preheaterConnection.toStationId,
+          visualKind: preheaterConnection.visualKind,
+          ...(preheaterConnection.fromPortId ? { fromPortId: preheaterConnection.fromPortId } : {}),
+          ...(preheaterConnection.toPortId ? { toPortId: preheaterConnection.toPortId } : {}),
+        },
+      ],
       fromPortId: route?.fromPort?.portId ?? coolerConnection.fromPortId,
       toPortId: route?.toPort?.portId ?? preheaterConnection.toPortId,
       fromPortMedium: route?.fromPort?.medium ?? 'gas',
@@ -623,7 +740,39 @@ function createCementTertiaryAirDuctPatch(input: {
       },
     },
   })
-  return [parentPatch(node, input.placement)]
+  const supports = path
+    .map((point, supportIndex) => {
+      const supportHeight = Math.max(0.05, point[1] - ROUTE_SUPPORT_SECTION / 2)
+      if (supportHeight < ROUTE_SUPPORT_MIN_ELEVATION) return undefined
+      return createRouteSupportPatch({
+        name: `\u4e09\u6b21\u98ce\u7ba1\u652f\u6491 ${supportIndex + 1}`,
+        position: [point[0], supportHeight / 2, point[2]],
+        height: supportHeight,
+        metadata: {
+          ...processMetadata({
+            plan: input.plan,
+            sourcePrompt: input.sourcePrompt,
+            placement: input.placement,
+          }),
+          role: 'process-line-connection-support',
+          stationId: 'tertiary_air_duct',
+          stationRole: 'tertiary_air_duct',
+          stationLabel: 'Tertiary air duct',
+          stationDisplayLabel: '\u4e09\u6b21\u98ce\u7ba1',
+          connectionRole: 'gas',
+          visualKind: 'hot_gas_duct',
+          fromStationId: 'grate_cooler',
+          toStationId: 'preheater_tower',
+          viaStationId: 'tertiary_air_duct',
+          supportIndex: supportIndex + 1,
+          supportElevation: point[1],
+          resolver: 'native-route-support',
+        },
+        placement: input.placement,
+      })
+    })
+    .filter((patch): patch is GeneratedGeometryCreatePatch => Boolean(patch))
+  return [parentPatch(node, input.placement), ...supports]
 }
 
 const CEMENT_KEY_PROCESS_STATIONS = [
@@ -713,6 +862,7 @@ export function composeProcessLine(input: {
     plan,
     boundary: layoutBoundary,
   })
+  const omitPerimeterWalls = processLineOmitPerimeterWalls(plan)
   const { layoutDiagnostics, layoutStrategy, stationPlacements } = resolvedLayout
   const focusBounds = focusBoundsFromPlacements({ plan, stationPlacements })
   const shellPlacement = {
@@ -734,7 +884,12 @@ export function composeProcessLine(input: {
           suggestedOperations: ['create_room', 'place_item', 'apply_patch'],
         },
         placement: shellPlacement,
-        params: { ...input.params, length, width },
+        params: {
+          ...input.params,
+          length,
+          width,
+          ...(omitPerimeterWalls != null ? { omitPerimeterWalls } : {}),
+        },
       })
     : { patches: [], nodeIds: [], created: [], missingAssets: [] }
   const placementByStation = new Map(

@@ -2,8 +2,8 @@
   "industry": "process",
   "id": "industry.process.basic",
   "name": "流程行业基础包",
-  "version": "0.2.0",
-  "description": "????????? v0.2??????????????????????????????????????????????????????????????????????????????????????",
+  "version": "0.1.0",
+  "description": "流程行业基础包 ：覆盖搅拌、换热、过滤、离心、干燥、包装、储罐、管廊、阀组、粉体料仓、鼓风机和空压机撬等通用流程设备。",
   "capabilities": [
     "factory_creation"
   ],
@@ -115,7 +115,7 @@
         },
         {
           "id": "bulk_handling",
-          "displayLabel": "???????",
+          "displayLabel": "粉体储运模块",
           "order": 15,
           "stationIds": [
             "bulk_material_silo"
@@ -123,7 +123,7 @@
         },
         {
           "id": "utility_air",
-          "displayLabel": "???????",
+          "displayLabel": "公用空气系统",
           "order": 72,
           "stationIds": [
             "utility_blower",
@@ -132,7 +132,7 @@
         },
         {
           "id": "valve_manifold",
-          "displayLabel": "????",
+          "displayLabel": "阀组模块",
           "order": 45,
           "stationIds": [
             "valve_station"
@@ -359,7 +359,7 @@
         {
           "id": "bulk_material_silo",
           "label": "Bulk material silo",
-          "displayLabel": "????",
+          "displayLabel": "粉体料仓",
           "role": "bulk_material_silo",
           "equipmentHint": "process.bulk_material_silo vertical bulk material silo with cylindrical bin, conical hopper bottom, support frame, outlet spout, and level indicator",
           "footprintHint": "tall",
@@ -371,7 +371,7 @@
         {
           "id": "valve_station",
           "label": "Valve manifold station",
-          "displayLabel": "???",
+          "displayLabel": "阀组站",
           "role": "valve_station",
           "equipmentHint": "process.valve_station process valve manifold station with parallel pipes, valve bodies, handwheels, flanges, and compact support skid",
           "footprintHint": "medium",
@@ -383,7 +383,7 @@
         {
           "id": "utility_blower",
           "label": "Utility blower",
-          "displayLabel": "????",
+          "displayLabel": "公用鼓风机",
           "role": "utility_blower",
           "equipmentHint": "process.utility_blower industrial utility blower with volute casing, impeller, drive motor, inlet outlet ports, and skid base",
           "footprintHint": "medium",
@@ -395,7 +395,7 @@
         {
           "id": "air_compressor_skid",
           "label": "Air compressor skid",
-          "displayLabel": "????",
+          "displayLabel": "空压机撬",
           "role": "air_compressor_skid",
           "equipmentHint": "process.air_compressor_skid compressed air compressor skid with rounded compressor body, ribbed drive motor, receiver pipe ports, and local control box",
           "footprintHint": "medium",
@@ -1420,9 +1420,9 @@
       "id": "bulk_material_silo",
       "name": "Bulk material silo",
       "aliases": [
-        "????",
-        "??",
-        "???",
+        "粉体料仓",
+        "料仓",
+        "粉仓",
         "bulk material silo",
         "powder silo"
       ],
@@ -1494,9 +1494,9 @@
       "id": "valve_station",
       "name": "Valve manifold station",
       "aliases": [
-        "???",
-        "??",
-        "???",
+        "阀组站",
+        "阀组",
+        "阀门站",
         "valve manifold",
         "valve station"
       ],
@@ -1568,9 +1568,9 @@
       "id": "utility_blower",
       "name": "Utility blower",
       "aliases": [
-        "????",
-        "???",
-        "????",
+        "公用鼓风机",
+        "鼓风机",
+        "工业鼓风机",
         "utility blower",
         "industrial blower"
       ],
@@ -1648,9 +1648,9 @@
       "id": "air_compressor_skid",
       "name": "Air compressor skid",
       "aliases": [
-        "????",
-        "????",
-        "?????",
+        "空压机撬",
+        "压缩空气撬",
+        "空气压缩机撬",
         "air compressor skid",
         "compressed air skid"
       ],

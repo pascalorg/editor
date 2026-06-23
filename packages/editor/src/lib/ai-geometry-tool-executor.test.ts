@@ -2837,6 +2837,344 @@ describe('AI geometry tool executor', () => {
     expect(colorByRole('roller_array')).toEqual(new Set(['#cbd5e1']))
   })
 
+  test('recolors oversized revision artifacts without treating existing shapes as new complexity', () => {
+    const initial = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        shapes: [
+          {
+            kind: 'box',
+            name: 'seed',
+            position: [0, 0.05, 0],
+            length: 0.1,
+            width: 0.1,
+            height: 0.1,
+          },
+        ],
+      },
+      { prompt: 'seed artifact' },
+    )
+    const shapes = Array.from({ length: 173 }, (_, index) => {
+      const isFrame = index < 120
+      return {
+        kind: 'box',
+        name: isFrame ? `preheater tower frame ${index}` : `cyclone vessel ${index}`,
+        semanticRole: isFrame ? 'tower_frame_member' : 'cyclone_body',
+        semanticGroup: isFrame ? 'structural_tower_frame' : 'preheater_vessel',
+        sourcePartKind: isFrame ? 'structural_tower_frame' : 'cyclone_vessel',
+        sourcePartId: `preheater_part_${index}`,
+        position: [(index % 12) * 0.12, 0.05 + Math.floor(index / 12) * 0.12, 0] as [
+          number,
+          number,
+          number,
+        ],
+        rotation: [0, 0, 0] as [number, number, number],
+        length: 0.08,
+        width: 0.08,
+        height: 0.08,
+        material: { properties: { color: isFrame ? '#111827' : '#6b7280' } },
+      }
+    })
+    const target = {
+      ...initial.artifact!,
+      title: 'cement preheater tower',
+      shapes,
+      transforms: [],
+    }
+
+    const revised = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: target.id,
+        feedback: '预热器架子颜色改成银色',
+        operations: [
+          {
+            type: 'setMaterial',
+            selector: { semanticGroup: 'structural_tower_frame' },
+            material: { metalColor: '银色' },
+          },
+        ],
+      },
+      {
+        prompt: '预热器架子颜色改成银色',
+        revisionOf: target.id,
+        revisionVersion: target.version,
+        revisionTarget: target,
+      },
+    )
+
+    const frameColors = new Set(
+      revised.artifact?.shapes
+        .filter((shape) => shape.semanticGroup === 'structural_tower_frame')
+        .map((shape) => shape.material?.properties?.color),
+    )
+    const vesselColors = new Set(
+      revised.artifact?.shapes
+        .filter((shape) => shape.semanticGroup === 'preheater_vessel')
+        .map((shape) => shape.material?.properties?.color),
+    )
+
+    expect(revised.content).not.toContain('Geometry is too complex')
+    expect(revised.artifact?.sourceTool).toBe('revise_geometry')
+    expect(revised.artifact?.shapes).toHaveLength(173)
+    expect(frameColors).toEqual(new Set(['#C0C0C0']))
+    expect(vesselColors).toEqual(new Set(['#6b7280']))
+    expect(revised.artifact?.editHistory?.at(-1)?.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          op: 'setMaterial',
+          selector: { semanticGroup: 'structural_tower_frame' },
+          color: '#C0C0C0',
+        }),
+      ]),
+    )
+  })
+
+  test('refines frame recolor selectors when LLM points at vessel internals', () => {
+    const initial = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        shapes: [
+          {
+            kind: 'box',
+            name: 'seed',
+            position: [0, 0.05, 0],
+            length: 0.1,
+            width: 0.1,
+            height: 0.1,
+          },
+        ],
+      },
+      { prompt: 'seed artifact' },
+    )
+    const target = {
+      ...initial.artifact!,
+      title: 'cement preheater tower',
+      shapes: [
+        ...Array.from({ length: 12 }, (_, index) => ({
+          kind: 'box',
+          name: `tower structural beam ${index}`,
+          semanticRole:
+            index < 4 ? 'tower_column' : index < 8 ? 'tower_beam' : 'tower_diagonal_brace',
+          semanticGroup: 'structural_tower_frame-1',
+          sourcePartKind: 'structural_tower_frame',
+          sourcePartId: `frame_${index}`,
+          position: [(index % 4) * 0.2, 0.05 + Math.floor(index / 4) * 0.2, 0] as [
+            number,
+            number,
+            number,
+          ],
+          rotation: [0, 0, 0] as [number, number, number],
+          length: 0.08,
+          width: 0.08,
+          height: 0.08,
+          material: { properties: { color: '#111827' } },
+        })),
+        ...Array.from({ length: 6 }, (_, index) => ({
+          kind: 'cylinder',
+          name: `preheater cyclone vessel ${index}`,
+          semanticRole: 'preheater_cyclone',
+          semanticGroup: `cyclone_separator_unit-${index}`,
+          sourcePartKind: 'cyclone_separator_unit',
+          sourcePartId: `cyclone_${index}`,
+          position: [(index % 2) * 0.4, 0.5 + Math.floor(index / 2) * 0.4, 0] as [
+            number,
+            number,
+            number,
+          ],
+          rotation: [0, 0, 0] as [number, number, number],
+          radius: 0.12,
+          height: 0.35,
+          material: { properties: { color: '#9ca3af' } },
+        })),
+      ],
+      transforms: [],
+    }
+
+    const revised = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: target.id,
+        feedback: '预热器的框架改成红色',
+        operations: [
+          {
+            type: 'setMaterial',
+            selector: { semanticRole: 'preheater_cyclone' },
+            material: { metalColor: '红色' },
+          },
+        ],
+      },
+      {
+        prompt: '预热器的框架改成红色',
+        revisionOf: target.id,
+        revisionVersion: target.version,
+        revisionTarget: target,
+      },
+    )
+
+    const frameColors = new Set(
+      revised.artifact?.shapes
+        .filter((shape) => shape.sourcePartKind === 'structural_tower_frame')
+        .map((shape) => shape.material?.properties?.color),
+    )
+    const cycloneColors = new Set(
+      revised.artifact?.shapes
+        .filter((shape) => shape.sourcePartKind === 'cyclone_separator_unit')
+        .map((shape) => shape.material?.properties?.color),
+    )
+
+    expect(revised.artifact?.sourceTool).toBe('revise_geometry')
+    expect(frameColors).toEqual(new Set(['#ff0000']))
+    expect(cycloneColors).toEqual(new Set(['#9ca3af']))
+    expect(revised.artifact?.editHistory?.at(-1)?.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          op: 'setMaterial',
+          selector: { sourcePartKind: 'structural_tower_frame' },
+          color: '#ff0000',
+        }),
+      ]),
+    )
+  })
+
+  test('keeps shape-increasing oversized revisions behind the generated shape budget', () => {
+    const initial = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        shapes: [
+          {
+            kind: 'box',
+            name: 'seed',
+            position: [0, 0.05, 0],
+            length: 0.1,
+            width: 0.1,
+            height: 0.1,
+          },
+        ],
+      },
+      { prompt: 'seed artifact' },
+    )
+    const target = {
+      ...initial.artifact!,
+      title: 'oversized preheater tower',
+      shapes: Array.from({ length: 173 }, (_, index) => ({
+        kind: 'box',
+        name: `preheater tower frame ${index}`,
+        semanticRole: 'tower_frame_member',
+        semanticGroup: 'structural_tower_frame',
+        sourcePartKind: 'structural_tower_frame',
+        sourcePartId: `preheater_part_${index}`,
+        position: [(index % 12) * 0.12, 0.05 + Math.floor(index / 12) * 0.12, 0] as [
+          number,
+          number,
+          number,
+        ],
+        rotation: [0, 0, 0] as [number, number, number],
+        length: 0.08,
+        width: 0.08,
+        height: 0.08,
+        material: { properties: { color: '#111827' } },
+      })),
+      transforms: [],
+    }
+
+    const revised = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: target.id,
+        feedback: 'add one more brace to the tower frame',
+        operations: [
+          {
+            op: 'add',
+            shapes: [
+              {
+                kind: 'box',
+                name: 'extra preheater brace',
+                semanticGroup: 'structural_tower_frame',
+                sourcePartKind: 'structural_tower_frame',
+                position: [0, 0.05, 0],
+                length: 0.08,
+                width: 0.08,
+                height: 0.08,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        prompt: 'add one more brace to the tower frame',
+        revisionOf: target.id,
+        revisionVersion: target.version,
+        revisionTarget: target,
+      },
+    )
+
+    expect(revised.artifact).toBeUndefined()
+    expect(revised.content).toContain('Geometry is too complex')
+    expect(revised.content).toContain('Generated 174 shapes')
+  })
+
+  test('keeps shape-reducing oversized revisions behind the generated shape budget', () => {
+    const initial = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        shapes: [
+          {
+            kind: 'box',
+            name: 'seed',
+            position: [0, 0.05, 0],
+            length: 0.1,
+            width: 0.1,
+            height: 0.1,
+          },
+        ],
+      },
+      { prompt: 'seed artifact' },
+    )
+    const target = {
+      ...initial.artifact!,
+      title: 'oversized preheater tower',
+      shapes: Array.from({ length: 173 }, (_, index) => ({
+        kind: 'box',
+        name: `preheater tower frame ${index}`,
+        semanticRole: 'tower_frame_member',
+        semanticGroup: 'structural_tower_frame',
+        sourcePartKind: 'structural_tower_frame',
+        sourcePartId: `preheater_part_${index}`,
+        position: [(index % 12) * 0.12, 0.05 + Math.floor(index / 12) * 0.12, 0] as [
+          number,
+          number,
+          number,
+        ],
+        rotation: [0, 0, 0] as [number, number, number],
+        length: 0.08,
+        width: 0.08,
+        height: 0.08,
+        material: { properties: { color: '#111827' } },
+      })),
+      transforms: [],
+    }
+
+    const revised = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: target.id,
+        feedback: 'remove one tower frame member',
+        operations: [{ op: 'remove', selector: { index: 0 } }],
+      },
+      {
+        prompt: 'remove one tower frame member',
+        revisionOf: target.id,
+        revisionVersion: target.version,
+        revisionTarget: target,
+      },
+    )
+
+    expect(revised.artifact).toBeUndefined()
+    expect(revised.content).toContain('Geometry is too complex')
+    expect(revised.content).toContain('Generated 172 shapes')
+  })
+
   test('uses constraint-first assembly for six-axis FANUC-style industrial robot arms', () => {
     const result = executeGeometryToolCall(
       'compose_assembly',

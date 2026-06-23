@@ -9,6 +9,7 @@ export const AssemblyNode = BaseNode.extend({
     (val) => (typeof val === 'number' ? [0, val, 0] : val),
     z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   ),
+  scale: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]),
   children: z.array(z.string()).default([]),
 }).describe('Assembly node - transformable parent group for generated multi-part objects.')
 

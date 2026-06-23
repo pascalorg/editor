@@ -38,7 +38,9 @@ export const CustomCameraControls = () => {
     !isPreviewMode && allowUndergroundCamera ? DEBUG_MAX_POLAR_ANGLE : DEFAULT_MAX_POLAR_ANGLE
 
   const camera = useThree((state) => state.camera)
+  const gl = useThree((state) => state.gl)
   const raycaster = useThree((state) => state.raycaster)
+  const ignoreLeftSelectControlStartRef = useRef(false)
   useEffect(() => {
     camera.layers.enable(EDITOR_LAYER)
     camera.layers.enable(GRID_LAYER)
@@ -120,6 +122,26 @@ export const CustomCameraControls = () => {
     }
   }, [cameraMode, isPreviewMode])
 
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.button !== 0 || isPreviewMode || useViewer.getState().spacePanning) return
+      ignoreLeftSelectControlStartRef.current = true
+      window.addEventListener(
+        'pointerup',
+        () => {
+          ignoreLeftSelectControlStartRef.current = false
+        },
+        { once: true },
+      )
+    }
+
+    gl.domElement.addEventListener('pointerdown', onPointerDown, { capture: true })
+    return () => {
+      gl.domElement.removeEventListener('pointerdown', onPointerDown, { capture: true })
+      ignoreLeftSelectControlStartRef.current = false
+    }
+  }, [gl.domElement, isPreviewMode])
+
   // Touch gestures (mobile / trackpad).
   // - One finger drag    → rotate by default (much easier on a phone), but
   //                        falls back to NONE while the user is actively
@@ -184,6 +206,12 @@ export const CustomCameraControls = () => {
       space: false,
     }
 
+    const setSpacePanning = (panning: boolean) => {
+      keyState.space = panning
+      useViewer.getState().setSpacePanning(panning)
+      document.body.style.cursor = panning ? 'grab' : ''
+    }
+
     const updateConfig = () => {
       if (!controls.current) return
 
@@ -210,8 +238,7 @@ export const CustomCameraControls = () => {
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.code === 'Space') {
-        keyState.space = true
-        document.body.style.cursor = 'grab'
+        setSpacePanning(true)
       }
       if (event.code === 'ShiftRight') {
         keyState.shiftRight = true
@@ -230,8 +257,7 @@ export const CustomCameraControls = () => {
 
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.code === 'Space') {
-        keyState.space = false
-        document.body.style.cursor = ''
+        setSpacePanning(false)
       }
       if (event.code === 'ShiftRight') {
         keyState.shiftRight = false
@@ -248,13 +274,21 @@ export const CustomCameraControls = () => {
       updateConfig()
     }
 
+    const onBlur = () => {
+      setSpacePanning(false)
+      updateConfig()
+    }
+
     document.addEventListener('keydown', onKeyDown)
     document.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
     updateConfig()
 
     return () => {
+      setSpacePanning(false)
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
     }
   }, [cameraMode, isPreviewMode])
 
@@ -449,6 +483,7 @@ export const CustomCameraControls = () => {
   }, [focusNode, isPreviewMode])
 
   const onTransitionStart = useCallback(() => {
+    if (ignoreLeftSelectControlStartRef.current) return
     useViewer.getState().setCameraDragging(true)
   }, [])
 
@@ -468,8 +503,12 @@ export const CustomCameraControls = () => {
       minDistance={0.5}
       minPolarAngle={0}
       mouseButtons={mouseButtons}
+      onControlEnd={onRest}
+      onControlStart={onTransitionStart}
+      onEnd={onRest}
       onRest={onRest}
       onSleep={onRest}
+      onStart={onTransitionStart}
       onTransitionStart={onTransitionStart}
       ref={controls}
       restThreshold={0.01}

@@ -6,7 +6,12 @@ import {
   type NodeEvent,
 } from '@pascal-app/core'
 import type { ThreeEvent } from '@react-three/fiber'
-import useViewer from '../store/use-viewer'
+import { useRef } from 'react'
+import {
+  isViewerSelectionInputSuppressed,
+  isViewerSpatialInputSuppressed,
+  shouldLatchViewerPointerSuppression,
+} from '../store/use-viewer'
 
 // Derive `{ node, event }` per kind directly from the `AnyNode`
 // discriminated union — no hand-maintained kind→type map. Adding a new
@@ -16,6 +21,10 @@ import useViewer from '../store/use-viewer'
 type NodeByKind<K extends AnyNodeType> = Extract<AnyNode, { type: K }>
 
 export function useNodeEvents<K extends AnyNodeType>(node: NodeByKind<K>, type: K) {
+  const lastClickRef = useRef<{ time: number; x: number; y: number } | null>(null)
+  const suppressedPointerRef = useRef(false)
+  const suppressNativeClickUntilRef = useRef(0)
+
   const emit = (suffix: EventSuffix, e: ThreeEvent<PointerEvent>) => {
     const eventKey = `${type}:${suffix}` as `${K}:${EventSuffix}`
     const localPoint = e.object.worldToLocal(e.point.clone())
@@ -36,48 +45,75 @@ export function useNodeEvents<K extends AnyNodeType>(node: NodeByKind<K>, type: 
     emitter.emit(eventKey, payload as never)
   }
 
-  const spatialSuppressed = () => useViewer.getState().cameraDragging
-  const selectionSuppressed = () => {
-    const state = useViewer.getState()
-    return state.cameraDragging || state.inputDragging
-  }
-
   return {
     onPointerDown: (e: ThreeEvent<PointerEvent>) => {
-      if (selectionSuppressed()) return
       if (e.button !== 0) return
+      if (isViewerSelectionInputSuppressed()) {
+        suppressedPointerRef.current = shouldLatchViewerPointerSuppression()
+        suppressNativeClickUntilRef.current = performance.now() + 1000
+        window.addEventListener(
+          'pointerup',
+          () => {
+            suppressedPointerRef.current = false
+          },
+          { once: true },
+        )
+        return
+      }
       emit('pointerdown', e)
     },
     onPointerUp: (e: ThreeEvent<PointerEvent>) => {
-      if (selectionSuppressed()) return
       if (e.button !== 0) return
+      if (suppressedPointerRef.current) {
+        suppressedPointerRef.current = false
+        return
+      }
+      if (isViewerSelectionInputSuppressed()) return
       emit('pointerup', e)
       // Synthesize a click event on pointer up to be more forgiving than R3F's default onClick
       // which often fails if the mouse moves even 1 pixel.
       emit('click', e)
+      const now = performance.now()
+      const lastClick = lastClickRef.current
+      const dx = lastClick ? e.nativeEvent.clientX - lastClick.x : Infinity
+      const dy = lastClick ? e.nativeEvent.clientY - lastClick.y : Infinity
+      if (
+        e.nativeEvent.detail >= 2 ||
+        (lastClick && now - lastClick.time <= 800 && Math.hypot(dx, dy) <= 6)
+      ) {
+        suppressNativeClickUntilRef.current = performance.now() + 1000
+        emit('double-click', e)
+        lastClickRef.current = null
+        return
+      }
+      lastClickRef.current = {
+        time: now,
+        x: e.nativeEvent.clientX,
+        y: e.nativeEvent.clientY,
+      }
     },
     onClick: (_e: ThreeEvent<PointerEvent>) => {
       // Disable default R3F click since we synthesize it on pointerup
       // This prevents double-clicks from firing twice.
     },
     onPointerEnter: (e: ThreeEvent<PointerEvent>) => {
-      if (spatialSuppressed()) return
+      if (isViewerSpatialInputSuppressed()) return
       emit('enter', e)
     },
     onPointerLeave: (e: ThreeEvent<PointerEvent>) => {
-      if (spatialSuppressed()) return
+      if (isViewerSpatialInputSuppressed()) return
       emit('leave', e)
     },
     onPointerMove: (e: ThreeEvent<PointerEvent>) => {
-      if (spatialSuppressed()) return
+      if (isViewerSpatialInputSuppressed()) return
       emit('move', e)
     },
     onDoubleClick: (e: ThreeEvent<PointerEvent>) => {
-      if (selectionSuppressed()) return
-      emit('double-click', e)
+      if (performance.now() < suppressNativeClickUntilRef.current) return
+      if (isViewerSelectionInputSuppressed()) return
     },
     onContextMenu: (e: ThreeEvent<PointerEvent>) => {
-      if (selectionSuppressed()) return
+      if (isViewerSelectionInputSuppressed()) return
       emit('context-menu', e)
     },
   }

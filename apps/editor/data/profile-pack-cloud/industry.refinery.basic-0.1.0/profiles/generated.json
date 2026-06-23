@@ -95,9 +95,9 @@
     "id": "refinery.intermediate_storage_tank",
     "name": "Intermediate storage tank",
     "aliases": [
-      "\u4e2d\u95f4\u6599\u50a8\u7f50",
-      "\u534a\u6210\u54c1\u7f50\u533a",
-      "\u4e2d\u95f4\u7f50\u533a",
+      "中间料储罐",
+      "半成品罐区",
+      "中间罐区",
       "intermediate storage tank",
       "semi finished tank farm",
       "intermediate tank farm"
@@ -116,7 +116,7 @@
         "kind": "cylindrical_tank",
         "semanticRole": "vessel_shell",
         "height": 3.6,
-        "radius": 2.0,
+        "radius": 2,
         "axis": "y",
         "primaryColor": "#d1d5db"
       },
@@ -280,13 +280,122 @@
       {
         "kind": "outlet_port",
         "semanticRole": "overhead_product_outlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "atmospheric_residue_out",
+        "axis": "x",
+        "radius": 0.12,
+        "length": 0.34,
+        "position": [
+          -1.7,
+          0.62,
+          0.72
+        ],
+        "metalColor": "#9ca3af"
       }
     ],
     "primarySemanticRole": "distillation_column_shell",
     "qualityRules": "quality.refinery.atmospheric_distillation_unit",
     "status": "stable",
     "source": "imported_pack",
-    "description": "原油初馏常压蒸馏装置，带加热炉、换热器和侧线。"
+    "description": "原油初馏常压蒸馏装置，带加热炉、换热器和侧线。",
+    "visualCues": [
+      "very tall atmospheric crude fractionation column with multiple tray bands and side draw nozzles",
+      "fired heater and preheat exchanger train placed near the column base",
+      "overhead product line from the top, kerosene/diesel/gas-oil side draws along the shell",
+      "bottom atmospheric residue outlet feeding the vacuum distillation unit",
+      "service platforms and ladders wrapping the tower at several elevations"
+    ],
+    "roleAliases": {
+      "distillation_column_shell": [
+        "crude_column",
+        "atmospheric_tower",
+        "fractionator_shell",
+        "cylindrical_tank"
+      ],
+      "tray_band": [
+        "tray_section",
+        "fractionation_tray_band",
+        "flange_ring"
+      ],
+      "preheat_exchanger": [
+        "crude_preheat_train",
+        "heat_exchanger"
+      ],
+      "fired_heater": [
+        "crude_heater",
+        "charge_heater",
+        "generic_body"
+      ],
+      "side_draw_manifold": [
+        "naphtha_kerosene_diesel_side_draws",
+        "side_draw_piping",
+        "pipe_manifold"
+      ],
+      "crude_feed_inlet": [
+        "desalted_crude_in",
+        "inlet_port"
+      ],
+      "overhead_product_outlet": [
+        "naphtha_overhead_out",
+        "outlet_port"
+      ],
+      "atmospheric_residue_out": [
+        "bottom_residue_out",
+        "outlet_port"
+      ]
+    },
+    "layoutHints": {
+      "axis": "y",
+      "mainColumnPosition": "upstream_tower",
+      "heaterSide": "right",
+      "sideDrawSide": "front"
+    },
+    "processPorts": [
+      {
+        "id": "desalted_crude_in",
+        "medium": "material",
+        "side": "left",
+        "height": 2.1,
+        "offset": 0
+      },
+      {
+        "id": "naphtha_distillate_out",
+        "medium": "material",
+        "side": "top",
+        "height": 10.9,
+        "offset": 0.2
+      },
+      {
+        "id": "middle_distillate_out",
+        "medium": "material",
+        "side": "right",
+        "height": 5.8,
+        "offset": 0.2
+      },
+      {
+        "id": "atmospheric_residue_out",
+        "medium": "material",
+        "side": "bottom",
+        "height": 0.7,
+        "offset": 0
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 76,
+      "parts": {
+        "tray_band": {
+          "detailLevel": "low",
+          "count": 8,
+          "boltCount": 6
+        },
+        "service_platform": {
+          "detailLevel": "low"
+        }
+      }
+    }
   },
   {
     "id": "refinery.vacuum_distillation_unit",
@@ -374,13 +483,108 @@
       {
         "kind": "outlet_port",
         "semanticRole": "vacuum_gas_oil_outlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "vacuum_residue_outlet",
+        "axis": "x",
+        "radius": 0.14,
+        "length": 0.34,
+        "position": [
+          -1.35,
+          0.55,
+          0.78
+        ],
+        "metalColor": "#9ca3af"
       }
     ],
     "primarySemanticRole": "vacuum_column_shell",
     "qualityRules": "quality.refinery.vacuum_distillation_unit",
     "status": "stable",
     "source": "imported_pack",
-    "description": "处理常压渣油的减压蒸馏装置。"
+    "description": "处理常压渣油的减压蒸馏装置。",
+    "visualCues": [
+      "wide tall vacuum tower handling atmospheric residue with a noticeably larger diameter than atmospheric column",
+      "vacuum heater and condenser/exchanger train near the base",
+      "large overhead vacuum line and ejector/condenser connection",
+      "side outlet for vacuum gas oil feed to FCC",
+      "bottom heavy vacuum residue outlet feeding delayed coker or residue conversion"
+    ],
+    "roleAliases": {
+      "vacuum_column_shell": [
+        "vacuum_tower",
+        "wide_vacuum_fractionator",
+        "cylindrical_tank"
+      ],
+      "condenser_exchanger": [
+        "overhead_condenser",
+        "heat_exchanger"
+      ],
+      "vacuum_heater": [
+        "vacuum_charge_heater",
+        "fired_heater",
+        "generic_body"
+      ],
+      "vacuum_line": [
+        "overhead_vacuum_line",
+        "ejector_line",
+        "pipe_run"
+      ],
+      "vacuum_gas_oil_outlet": [
+        "vgo_outlet",
+        "fcc_feed_out",
+        "outlet_port"
+      ],
+      "vacuum_residue_outlet": [
+        "bottom_residue_out",
+        "delayed_coker_feed_out",
+        "outlet_port"
+      ]
+    },
+    "layoutHints": {
+      "axis": "y",
+      "largerDiameterThan": "atmospheric_distillation_unit",
+      "residueOutlet": "bottom"
+    },
+    "processPorts": [
+      {
+        "id": "atmospheric_residue_in",
+        "medium": "material",
+        "side": "left",
+        "height": 1.4,
+        "offset": 0
+      },
+      {
+        "id": "vacuum_gas_oil_out",
+        "medium": "material",
+        "side": "right",
+        "height": 4.9,
+        "offset": 0.2
+      },
+      {
+        "id": "vacuum_residue_out",
+        "medium": "material",
+        "side": "bottom",
+        "height": 0.55,
+        "offset": 0
+      },
+      {
+        "id": "vacuum_overhead_out",
+        "medium": "gas",
+        "side": "top",
+        "height": 10.2,
+        "offset": 0
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 70,
+      "parts": {
+        "service_platform": {
+          "detailLevel": "low"
+        }
+      }
+    }
   },
   {
     "id": "refinery.fluid_catalytic_cracking_unit",
@@ -470,13 +674,154 @@
       {
         "kind": "outlet_port",
         "semanticRole": "cracked_product_outlet"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "spent_catalyst_standpipe",
+        "axis": "y",
+        "length": 2.4,
+        "radius": 0.07,
+        "position": [
+          -0.8,
+          2.2,
+          0.18
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "regenerated_catalyst_standpipe",
+        "axis": "y",
+        "length": 2.2,
+        "radius": 0.07,
+        "position": [
+          0.92,
+          2.1,
+          -0.12
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "rich_gas_outlet",
+        "axis": "y",
+        "radius": 0.11,
+        "length": 0.34,
+        "position": [
+          2.2,
+          6.25,
+          -0.35
+        ],
+        "metalColor": "#9ca3af"
       }
     ],
     "primarySemanticRole": "fcc_reactor",
     "qualityRules": "quality.refinery.fluid_catalytic_cracking_unit",
     "status": "stable",
     "source": "imported_pack",
-    "description": "催化裂化反应再生装置，表达反应器、再生器、提升管、旋风分离和烟囱。"
+    "description": "催化裂化反应再生装置，表达反应器、再生器、提升管、旋风分离和烟囱。",
+    "visualCues": [
+      "FCC complex is a reactor-regenerator pair plus main fractionator, not a single box",
+      "riser pipe climbs from the feed side into the reactor, with catalyst standpipe between reactor and regenerator",
+      "larger catalyst regenerator vessel has flue gas stack and cyclone separator details near the top",
+      "main fractionator tower sits beside the reactor-regenerator pair for cracked products",
+      "rich gas outlet goes to LPG recovery/gas fractionation during normal operation; do not route it directly to flare"
+    ],
+    "roleAliases": {
+      "fcc_reactor": [
+        "reactor_vessel",
+        "riser_reactor",
+        "cylindrical_tank"
+      ],
+      "catalyst_regenerator": [
+        "regenerator_vessel",
+        "catalyst_burner_regenerator",
+        "cylindrical_tank"
+      ],
+      "main_fractionator": [
+        "fcc_fractionator",
+        "product_fractionator",
+        "cylindrical_tank"
+      ],
+      "riser_pipe": [
+        "feed_riser",
+        "catalyst_riser",
+        "pipe_run"
+      ],
+      "spent_catalyst_standpipe": [
+        "catalyst_standpipe",
+        "pipe_run"
+      ],
+      "regenerated_catalyst_standpipe": [
+        "regenerated_catalyst_line",
+        "pipe_run"
+      ],
+      "cyclone_separator": [
+        "regenerator_cyclone",
+        "cyclone_separator_unit"
+      ],
+      "flue_gas_stack": [
+        "regenerator_stack",
+        "chimney_stack"
+      ],
+      "rich_gas_outlet": [
+        "fcc_rich_gas_out",
+        "lpg_gas_out",
+        "outlet_port"
+      ],
+      "cracked_product_outlet": [
+        "fcc_gasoline_lco_slurry_out",
+        "outlet_port"
+      ]
+    },
+    "layoutHints": {
+      "cluster": "reactor_regenerator_fractionator",
+      "reactorSide": "left",
+      "regeneratorSide": "center",
+      "fractionatorSide": "right"
+    },
+    "processPorts": [
+      {
+        "id": "vacuum_gas_oil_in",
+        "medium": "material",
+        "side": "left",
+        "height": 1.2,
+        "offset": -0.4
+      },
+      {
+        "id": "cracked_product_out",
+        "medium": "material",
+        "side": "right",
+        "height": 3.2,
+        "offset": 0
+      },
+      {
+        "id": "rich_gas_out",
+        "medium": "gas",
+        "side": "top",
+        "height": 6.4,
+        "offset": 0.25
+      },
+      {
+        "id": "flue_gas_out",
+        "medium": "gas",
+        "side": "top",
+        "height": 7,
+        "offset": -0.25
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 80,
+      "parts": {
+        "cyclone_separator": {
+          "detailLevel": "low"
+        },
+        "service_platform": {
+          "detailLevel": "low"
+        }
+      }
+    }
   },
   {
     "id": "refinery.hydrotreating_unit",
@@ -553,13 +898,99 @@
       {
         "kind": "outlet_port",
         "semanticRole": "treated_product_outlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "acid_gas_outlet",
+        "axis": "y",
+        "radius": 0.1,
+        "length": 0.3,
+        "position": [
+          -1.45,
+          4.45,
+          -0.35
+        ],
+        "metalColor": "#9ca3af"
       }
     ],
     "primarySemanticRole": "hydrotreater_reactor",
     "qualityRules": "quality.refinery.hydrotreating_unit",
     "status": "stable",
     "source": "imported_pack",
-    "description": "加氢精制反应器列，包含反应器、换热器、分离罐和氢气入口。"
+    "description": "加氢精制反应器列，包含反应器、换热器、分离罐和氢气入口。",
+    "visualCues": [
+      "high-pressure hydrotreater reactor train with vertical reactor and horizontal high-pressure separator",
+      "feed-effluent exchanger and heater/exchanger group ahead of the reactor",
+      "hydrogen header visibly entering the reactor train from the reformer/hydrogen system",
+      "acid gas outlet toward sulfur recovery and treated product outlet toward product tankage",
+      "compact pressure-vessel skid with dense piping, not an atmospheric storage tank"
+    ],
+    "roleAliases": {
+      "hydrotreater_reactor": [
+        "hydrotreating_reactor",
+        "hds_reactor",
+        "cylindrical_tank"
+      ],
+      "feed_effluent_exchanger": [
+        "feed_exchanger",
+        "heat_exchanger"
+      ],
+      "high_pressure_separator": [
+        "hp_separator",
+        "separator_drum",
+        "cylindrical_tank"
+      ],
+      "hydrogen_header": [
+        "hydrogen_makeup_header",
+        "pipe_manifold"
+      ],
+      "hydrogen_inlet": [
+        "makeup_hydrogen_in",
+        "inlet_port"
+      ],
+      "acid_gas_outlet": [
+        "h2s_acid_gas_out",
+        "outlet_port"
+      ],
+      "treated_product_outlet": [
+        "desulfurized_product_out",
+        "outlet_port"
+      ]
+    },
+    "processPorts": [
+      {
+        "id": "hydrotreater_feed_in",
+        "medium": "material",
+        "side": "left",
+        "height": 0.9,
+        "offset": 0
+      },
+      {
+        "id": "hydrogen_in",
+        "medium": "hydrogen",
+        "side": "back",
+        "height": 1.8,
+        "offset": 0.4
+      },
+      {
+        "id": "treated_product_out",
+        "medium": "material",
+        "side": "right",
+        "height": 1,
+        "offset": 0
+      },
+      {
+        "id": "acid_gas_out",
+        "medium": "gas",
+        "side": "top",
+        "height": 4.4,
+        "offset": 0
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 64
+    }
   },
   {
     "id": "refinery.catalytic_reformer_unit",
@@ -638,13 +1069,93 @@
       {
         "kind": "outlet_port",
         "semanticRole": "reformate_outlet"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "hydrogen_rich_gas_header",
+        "length": 3,
+        "radius": 0.065,
+        "position": [
+          1.2,
+          3.45,
+          0.88
+        ],
+        "metalColor": "#38bdf8"
       }
     ],
     "primarySemanticRole": "reformer_reactor_train",
     "qualityRules": "quality.refinery.catalytic_reformer_unit",
     "status": "stable",
     "source": "imported_pack",
-    "description": "石脑油重整反应器列，包含多段反应器、加热炉、换热器和气液分离。"
+    "description": "石脑油重整反应器列，包含多段反应器、加热炉、换热器和气液分离。",
+    "visualCues": [
+      "catalytic reformer has multiple vertical reactors in series with fired heaters between stages",
+      "reformer separator/hydrogen separator produces hydrogen-rich gas",
+      "naphtha feed enters after hydrotreating; reformate product exits to gasoline/product blending",
+      "hydrogen-rich gas header should be visible and available to hydrotreating units",
+      "reactor train and heaters are lower than distillation towers but more complex than a simple vessel"
+    ],
+    "roleAliases": {
+      "reformer_reactor_train": [
+        "reformer_reactors",
+        "platformer_reactors",
+        "cylindrical_tank"
+      ],
+      "reformer_fired_heater": [
+        "interheater",
+        "charge_heater",
+        "generic_body"
+      ],
+      "reformer_exchanger": [
+        "feed_effluent_exchanger",
+        "heat_exchanger"
+      ],
+      "reformer_separator": [
+        "hydrogen_separator",
+        "separator_drum",
+        "cylindrical_tank"
+      ],
+      "hydrogen_rich_gas_header": [
+        "reformer_hydrogen_out",
+        "hydrogen_header",
+        "pipe_manifold"
+      ],
+      "naphtha_inlet": [
+        "hydrotreated_naphtha_in",
+        "inlet_port"
+      ],
+      "reformate_outlet": [
+        "high_octane_reformate_out",
+        "outlet_port"
+      ]
+    },
+    "processPorts": [
+      {
+        "id": "naphtha_in",
+        "medium": "material",
+        "side": "left",
+        "height": 0.95,
+        "offset": 0
+      },
+      {
+        "id": "reformate_out",
+        "medium": "material",
+        "side": "right",
+        "height": 0.9,
+        "offset": 0
+      },
+      {
+        "id": "hydrogen_rich_gas_out",
+        "medium": "hydrogen",
+        "side": "top",
+        "height": 3.7,
+        "offset": 0.25
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 68
+    }
   },
   {
     "id": "refinery.sulfur_recovery_unit",
@@ -861,5 +1372,368 @@
     "status": "stable",
     "source": "imported_pack",
     "description": "炼油厂中控室和电气控制柜区域。"
+  },
+  {
+    "id": "refinery.gas_fractionation_unit",
+    "name": "Gas fractionation and LPG recovery unit",
+    "aliases": [
+      "气体分馏装置",
+      "气分装置",
+      "LPG回收",
+      "FCC气分",
+      "gas fractionation unit",
+      "LPG recovery unit",
+      "gas plant"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "distillation_column_layout",
+    "preferredResolver": "profile-parts",
+    "family": "distillation_column",
+    "defaultDimensions": {
+      "length": 6.8,
+      "width": 3.4,
+      "height": 6.8
+    },
+    "primarySemanticRole": "deethanizer_column",
+    "qualityRules": "quality.refinery.gas_fractionation_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "FCC rich gas/LPG recovery and gas fractionation section for dry gas, LPG/propylene/butane streams; normal downstream of FCC rich gas, not a flare.",
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "deethanizer_column",
+        "required": true,
+        "axis": "y",
+        "height": 5.8,
+        "radius": 0.42,
+        "position": [
+          -1.6,
+          2.95,
+          -0.4
+        ],
+        "primaryColor": "#d1d5db"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "debutanizer_column",
+        "required": true,
+        "axis": "y",
+        "height": 5.2,
+        "radius": 0.46,
+        "position": [
+          0.15,
+          2.65,
+          0.2
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "lpg_surge_drum",
+        "required": true,
+        "axis": "x",
+        "length": 2.1,
+        "radius": 0.32,
+        "position": [
+          1.6,
+          0.72,
+          -0.75
+        ],
+        "primaryColor": "#dbe3ee"
+      },
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "overhead_condenser",
+        "length": 2.2,
+        "radius": 0.28,
+        "axis": "x",
+        "position": [
+          1.55,
+          0.72,
+          0.75
+        ]
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "rich_gas_header",
+        "length": 3.4,
+        "radius": 0.06,
+        "position": [
+          -0.1,
+          1.5,
+          1.05
+        ]
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "fractionator_platform",
+        "attachToRole": "deethanizer_column",
+        "anchor": "service_side",
+        "offset": [
+          0,
+          1.4,
+          0
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "fcc_rich_gas_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "dry_gas_outlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "lpg_product_outlet"
+      }
+    ],
+    "visualCues": [
+      "two or more narrow fractionation columns near FCC",
+      "horizontal LPG surge drum and overhead condenser at grade",
+      "rich gas feed header from FCC, dry gas/LPG product outlets",
+      "dense small piping but no flare flame or tall emergency stack"
+    ],
+    "roleAliases": {
+      "deethanizer_column": [
+        "gas_fractionator_column",
+        "cylindrical_tank"
+      ],
+      "debutanizer_column": [
+        "lpg_splitter_column",
+        "cylindrical_tank"
+      ],
+      "lpg_surge_drum": [
+        "lpg_receiver",
+        "cylindrical_tank"
+      ],
+      "rich_gas_header": [
+        "fcc_rich_gas_feed",
+        "pipe_manifold"
+      ]
+    },
+    "processPorts": [
+      {
+        "id": "fcc_rich_gas_in",
+        "medium": "gas",
+        "side": "left",
+        "height": 1.5,
+        "offset": 0
+      },
+      {
+        "id": "dry_gas_out",
+        "medium": "gas",
+        "side": "top",
+        "height": 5.8,
+        "offset": -0.4
+      },
+      {
+        "id": "lpg_product_out",
+        "medium": "material",
+        "side": "right",
+        "height": 0.75,
+        "offset": -0.75
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 62
+    }
+  },
+  {
+    "id": "refinery.delayed_coker_unit",
+    "name": "Delayed coker unit",
+    "aliases": [
+      "延迟焦化装置",
+      "焦化装置",
+      "减压渣油焦化",
+      "delayed coker",
+      "coker unit",
+      "residue coker"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "generic_industrial_layout",
+    "preferredResolver": "profile-parts",
+    "family": "reactor",
+    "defaultDimensions": {
+      "length": 7.4,
+      "width": 4.4,
+      "height": 7.4
+    },
+    "primarySemanticRole": "coke_drum_pair",
+    "qualityRules": "quality.refinery.delayed_coker_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Delayed coker for vacuum residue conversion, with paired coke drums, coker fractionator, fired heater, overhead lines, and coke handling base.",
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "coke_drum_pair",
+        "required": true,
+        "axis": "y",
+        "height": 6.4,
+        "radius": 0.52,
+        "position": [
+          -1.15,
+          3.25,
+          -0.5
+        ],
+        "primaryColor": "#9ca3af"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "coke_drum_pair",
+        "required": true,
+        "axis": "y",
+        "height": 6.4,
+        "radius": 0.52,
+        "position": [
+          -0.05,
+          3.25,
+          -0.5
+        ],
+        "primaryColor": "#9ca3af"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "coker_fractionator",
+        "required": true,
+        "axis": "y",
+        "height": 5.6,
+        "radius": 0.5,
+        "position": [
+          1.65,
+          2.85,
+          0.2
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "coker_fired_heater",
+        "required": true,
+        "length": 1.7,
+        "width": 1.2,
+        "height": 2,
+        "position": [
+          -1,
+          1,
+          1.1
+        ],
+        "primaryColor": "#78716c"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "overhead_vapor_line",
+        "length": 3.8,
+        "radius": 0.07,
+        "position": [
+          0.35,
+          6.1,
+          -0.2
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "coke_handling_base",
+        "required": true,
+        "length": 3.2,
+        "width": 1.6,
+        "height": 0.22,
+        "position": [
+          -0.6,
+          0.11,
+          -0.5
+        ],
+        "metalColor": "#111827"
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "coker_drum_platform",
+        "length": 2.8,
+        "width": 0.36,
+        "height": 0.32,
+        "overallHeight": 0.18,
+        "position": [
+          -0.6,
+          5.6,
+          0.28
+        ],
+        "metalColor": "#64748b",
+        "color": "#facc15"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "vacuum_residue_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "coker_distillate_outlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "petroleum_coke_outlet"
+      }
+    ],
+    "visualCues": [
+      "two tall coke drums side by side are the signature feature",
+      "fractionator tower beside drums and fired heater near feed side",
+      "overhead vapor line from coke drums to fractionator",
+      "heavy base/coke handling area below drums",
+      "vacuum residue feed inlet and coker distillate outlet"
+    ],
+    "roleAliases": {
+      "coke_drum_pair": [
+        "coke_drum",
+        "paired_coke_drums",
+        "cylindrical_tank"
+      ],
+      "coker_fractionator": [
+        "fractionator",
+        "cylindrical_tank"
+      ],
+      "coker_fired_heater": [
+        "coker_heater",
+        "generic_body"
+      ],
+      "overhead_vapor_line": [
+        "drum_overhead_line",
+        "pipe_manifold"
+      ]
+    },
+    "processPorts": [
+      {
+        "id": "vacuum_residue_in",
+        "medium": "material",
+        "side": "left",
+        "height": 1,
+        "offset": 1.1
+      },
+      {
+        "id": "coker_distillate_out",
+        "medium": "material",
+        "side": "right",
+        "height": 2.8,
+        "offset": 0.2
+      },
+      {
+        "id": "coke_out",
+        "medium": "material",
+        "side": "bottom",
+        "height": 0.25,
+        "offset": -0.5
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 78,
+      "parts": {
+        "coker_drum_platform": {
+          "detailLevel": "low"
+        }
+      }
+    }
   }
 ]

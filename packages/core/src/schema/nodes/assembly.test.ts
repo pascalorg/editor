@@ -10,6 +10,7 @@ describe('AssemblyNode', () => {
     })
 
     expect(node.position).toEqual([1, 0, 2])
+    expect(node.scale).toEqual([1, 1, 1])
     expect(node.children).toEqual(['box_child'])
   })
 

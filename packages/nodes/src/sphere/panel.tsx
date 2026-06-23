@@ -14,7 +14,6 @@ import { useViewer } from '@pascal-app/viewer'
 import { Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { L, S } from '../i18n/panel-labels'
-import { DataBindingSection } from '../shared/data-binding-section'
 import { TransformPanelSection } from '../shared/transform-panel-section'
 
 export default function SpherePanel() {
@@ -73,12 +72,10 @@ export default function SpherePanel() {
 
       <NodeMaterialSection />
       <TransformPanelSection
-        includePlanarPosition
         node={node}
         nodeId={selectedId as AnyNode['id']}
         onUpdate={handleUpdate}
       />
-      <DataBindingSection node={node} onUpdate={handleUpdate} />
 
       <PanelSection title={S.actions()}>
         <ActionGroup>

@@ -3,13 +3,15 @@
 import { type AnyNodeId, sceneRegistry, useLiveTransforms } from '@pascal-app/core'
 import {
   ActionButton,
+  ActionGroup,
   MetricControl,
   PanelSection,
+  SegmentedControl,
   SliderControl,
   triggerSFX,
 } from '@pascal-app/editor'
-import { useCallback } from 'react'
-import { L, S } from '../i18n/panel-labels'
+import { useCallback, useState } from 'react'
+import { L } from '../i18n/panel-labels'
 
 type Vector3 = [number, number, number]
 
@@ -21,6 +23,7 @@ export type TransformPanelNode = {
 type TransformPatch = Partial<Pick<TransformPanelNode, 'position' | 'rotation'>>
 
 type Axis = 0 | 1 | 2
+type TransformTab = 'position' | 'elevation' | 'rotation' | 'invert'
 
 type TransformPanelSectionProps<TNode extends TransformPanelNode> = {
   node: TNode
@@ -36,7 +39,6 @@ type TransformPanelSectionProps<TNode extends TransformPanelNode> = {
 
 const POSITION_NUDGE = 0.1
 const ROTATION_NUDGE = Math.PI / 4
-const FLIP_NUDGE = Math.PI
 const RAD_TO_DEG = 180 / Math.PI
 const DEG_TO_RAD = Math.PI / 180
 
@@ -49,6 +51,12 @@ function axisLabel(axis: Axis) {
   if (axis === 0) return L.x()
   if (axis === 1) return L.y()
   return L.z()
+}
+
+function invertLabel(axis: Axis) {
+  if (axis === 0) return '\u524d\u540e\u5012\u8f6c'
+  if (axis === 2) return '\u5de6\u53f3\u5012\u8f6c'
+  return `${axisLabel(axis)} \u5012\u8f6c`
 }
 
 function syncSceneObject(nodeId: AnyNodeId | undefined, updates: TransformPatch) {
@@ -68,13 +76,17 @@ export function TransformPanelSection<TNode extends TransformPanelNode>({
   node,
   nodeId,
   onUpdate,
-  title = S.transform(),
+  title = '\u6574\u4f53\u53d8\u5f62',
   includePlanarPosition = false,
   includeElevation = true,
   includeRotation = true,
   includeFlip = true,
   rotationAxes = [0, 1, 2],
 }: TransformPanelSectionProps<TNode>) {
+  const [activeTab, setActiveTab] = useState<TransformTab>(() =>
+    includeElevation ? 'elevation' : includeRotation ? 'rotation' : 'invert',
+  )
+
   const commit = useCallback(
     (updates: TransformPatch) => {
       syncSceneObject(nodeId, updates)
@@ -117,10 +129,39 @@ export function TransformPanelSection<TNode extends TransformPanelNode>({
     [node.rotation, updateRotation],
   )
 
+  const rotationTabAxes =
+    includeRotation && rotationAxes.includes(1) ? ([1] as const) : rotationAxes
+  const invertAxes = includeRotation
+    ? rotationAxes.filter((axis): axis is 0 | 2 => axis === 0 || axis === 2)
+    : []
+  const tabs: Array<{ label: string; value: TransformTab }> = [
+    ...(includePlanarPosition ? [{ label: '\u5e73\u79fb', value: 'position' as const }] : []),
+    ...(includeElevation ? [{ label: '\u4e0a\u4e0b', value: 'elevation' as const }] : []),
+    ...(includeRotation && rotationTabAxes.length > 0
+      ? [{ label: '\u65cb\u8f6c', value: 'rotation' as const }]
+      : []),
+    ...(includeFlip && invertAxes.length > 0
+      ? [{ label: '\u5012\u8f6c', value: 'invert' as const }]
+      : []),
+  ]
+  const visibleActiveTab = tabs.some((tab) => tab.value === activeTab)
+    ? activeTab
+    : (tabs[0]?.value ?? 'elevation')
+
+  if (tabs.length === 0) return null
+
   return (
     <PanelSection title={title}>
-      {includePlanarPosition ? (
-        <>
+      {tabs.length > 1 ? (
+        <SegmentedControl<TransformTab>
+          onChange={setActiveTab}
+          options={tabs}
+          value={visibleActiveTab}
+        />
+      ) : null}
+
+      {includePlanarPosition && visibleActiveTab === 'position' ? (
+        <div className="space-y-2 pt-2">
           <div className="flex items-center gap-1.5">
             <ActionButton label={L.left()} onClick={() => nudgePosition(0, -POSITION_NUDGE)} />
             <SliderControl
@@ -149,11 +190,11 @@ export function TransformPanelSection<TNode extends TransformPanelNode>({
             />
             <ActionButton label={L.front()} onClick={() => nudgePosition(2, POSITION_NUDGE)} />
           </div>
-        </>
+        </div>
       ) : null}
 
-      {includeElevation ? (
-        <div className="flex items-center gap-1.5">
+      {includeElevation && visibleActiveTab === 'elevation' ? (
+        <div className="flex items-center gap-1.5 pt-2">
           <ActionButton label={L.down()} onClick={() => nudgePosition(1, -POSITION_NUDGE)} />
           <MetricControl
             label={L.height()}
@@ -169,15 +210,16 @@ export function TransformPanelSection<TNode extends TransformPanelNode>({
         </div>
       ) : null}
 
-      {includeRotation
-        ? rotationAxes.map((axis) => (
+      {includeRotation && visibleActiveTab === 'rotation' ? (
+        <div className="space-y-2 pt-2">
+          {rotationTabAxes.map((axis) => (
             <div className="flex items-center gap-1.5" key={axis}>
               <ActionButton
                 label={L.rotateMinus45()}
                 onClick={() => nudgeRotation(axis, -ROTATION_NUDGE)}
               />
               <SliderControl
-                label={axisLabel(axis)}
+                label={`${axisLabel(axis)} \u65cb\u8f6c`}
                 max={180}
                 min={-180}
                 onChange={(degrees) => updateRotation(axis, degrees * DEG_TO_RAD)}
@@ -191,22 +233,52 @@ export function TransformPanelSection<TNode extends TransformPanelNode>({
                 onClick={() => nudgeRotation(axis, ROTATION_NUDGE)}
               />
             </div>
-          ))
-        : null}
-
-      {includeRotation && includeFlip ? (
-        <div
-          className={
-            rotationAxes.length === 1 ? 'grid grid-cols-1 gap-1.5' : 'grid grid-cols-3 gap-1.5'
-          }
-        >
-          {rotationAxes.map((axis) => (
-            <ActionButton
-              key={axis}
-              label={`翻转 ${axisLabel(axis)}`}
-              onClick={() => nudgeRotation(axis, FLIP_NUDGE)}
-            />
           ))}
+          {rotationTabAxes.includes(1) ? (
+            <div className="grid grid-cols-4 gap-1.5">
+              <ActionButton label="0°" onClick={() => updateRotation(1, 0)} />
+              <ActionButton label="90°" onClick={() => updateRotation(1, Math.PI / 2)} />
+              <ActionButton label="180°" onClick={() => updateRotation(1, Math.PI)} />
+              <ActionButton label="270°" onClick={() => updateRotation(1, -Math.PI / 2)} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {includeRotation && includeFlip && visibleActiveTab === 'invert' ? (
+        <div className="space-y-2 pt-2">
+          {invertAxes.map((axis) => (
+            <div className="flex items-center gap-1.5" key={axis}>
+              <ActionButton
+                label={L.rotateMinus45()}
+                onClick={() => nudgeRotation(axis, -ROTATION_NUDGE)}
+              />
+              <SliderControl
+                label={invertLabel(axis)}
+                max={180}
+                min={-180}
+                onChange={(degrees) => updateRotation(axis, degrees * DEG_TO_RAD)}
+                precision={0}
+                step={1}
+                unit="°"
+                value={Math.round(node.rotation[axis] * RAD_TO_DEG)}
+              />
+              <ActionButton
+                label={L.rotatePlus45()}
+                onClick={() => nudgeRotation(axis, ROTATION_NUDGE)}
+              />
+            </div>
+          ))}
+          <ActionGroup>
+            <ActionButton
+              label="放平"
+              onClick={() => commit({ rotation: [0, node.rotation[1], 0] })}
+            />
+            <ActionButton
+              label="倒置"
+              onClick={() => commit({ rotation: [Math.PI, node.rotation[1], 0] })}
+            />
+          </ActionGroup>
         </div>
       ) : null}
     </PanelSection>

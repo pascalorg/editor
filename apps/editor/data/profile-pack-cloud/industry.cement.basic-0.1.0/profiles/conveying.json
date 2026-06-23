@@ -139,7 +139,10 @@
     "aliases": [
       "斗式提升机",
       "提升机",
-      "bucket elevator"
+      "bucket elevator",
+      "raw meal feed elevator",
+      "raw meal feed",
+      "raw_meal_feed"
     ],
     "industry": "cement",
     "family": "generic",
@@ -152,36 +155,146 @@
     },
     "primarySemanticRole": "elevator_leg_casing",
     "qualityRules": "quality.cement.bucket_elevator",
+    "preferredResolver": "profile-parts",
+    "processPorts": [
+      {
+        "id": "raw_meal_in",
+        "medium": "material",
+        "side": "left",
+        "height": 0.72,
+        "offset": 0
+      },
+      {
+        "id": "raw_meal_out",
+        "medium": "material",
+        "side": "right",
+        "height": 5.45,
+        "offset": 0
+      }
+    ],
+    "visualCues": [
+      "tall sealed rectangular elevator leg casing",
+      "wide boot casing and bottom inlet hopper",
+      "larger head casing with external motor gearbox",
+      "side discharge spout connected to the preheater feed",
+      "service platform with guard rails and access ladder"
+    ],
     "parts": [
       {
         "kind": "generic_body",
         "semanticRole": "elevator_leg_casing",
-        "required": true
+        "required": true,
+        "length": 0.62,
+        "width": 0.48,
+        "height": 5,
+        "position": [
+          0,
+          2.58,
+          0
+        ],
+        "cornerRadius": 0.025
       },
       {
         "kind": "generic_base",
         "semanticRole": "boot_section",
-        "required": true
+        "required": true,
+        "length": 0.95,
+        "width": 0.7,
+        "thickness": 0.42,
+        "position": [
+          0,
+          0.21,
+          0
+        ],
+        "cornerRadius": 0.035
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "head_casing",
+        "required": true,
+        "length": 0.9,
+        "width": 0.66,
+        "height": 0.82,
+        "position": [
+          0,
+          5.48,
+          0
+        ],
+        "cornerRadius": 0.03
       },
       {
         "kind": "generic_panel",
-        "semanticRole": "inspection_door"
+        "semanticRole": "inspection_door",
+        "length": 0.26,
+        "height": 0.62,
+        "thickness": 0.018,
+        "position": [
+          0,
+          2.1,
+          0.255
+        ],
+        "color": "#94a3b8"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "head_access_door",
+        "length": 0.28,
+        "height": 0.36,
+        "thickness": 0.018,
+        "position": [
+          0.12,
+          5.48,
+          0.345
+        ],
+        "color": "#94a3b8"
       },
       {
         "kind": "hopper_body",
-        "semanticRole": "inlet_boot_hopper"
+        "semanticRole": "inlet_boot_hopper",
+        "length": 0.55,
+        "width": 0.42,
+        "height": 0.42,
+        "position": [
+          -0.36,
+          0.72,
+          0.16
+        ]
       },
       {
         "kind": "generic_spout",
-        "semanticRole": "discharge_spout"
+        "semanticRole": "discharge_spout",
+        "radius": 0.08,
+        "length": 0.72,
+        "axis": "x",
+        "position": [
+          0.72,
+          5.45,
+          0
+        ]
       },
       {
         "kind": "motor_gearbox_unit",
-        "semanticRole": "head_drive_unit"
+        "semanticRole": "head_drive_unit",
+        "length": 0.54,
+        "width": 0.32,
+        "height": 0.34,
+        "position": [
+          -0.64,
+          5.5,
+          0
+        ]
       },
       {
         "kind": "service_platform",
-        "semanticRole": "head_service_platform"
+        "semanticRole": "head_service_platform",
+        "length": 1.35,
+        "width": 0.68,
+        "height": 0.72,
+        "position": [
+          0,
+          5.1,
+          0.58
+        ]
       }
     ],
     "status": "stable",
@@ -192,6 +305,14 @@
       "detailLevel": "low",
       "maxShapes": 52,
       "parts": {
+        "head_service_platform": {
+          "detailLevel": "low",
+          "rungCount": 4
+        },
+        "head_drive_unit": {
+          "detailLevel": "low",
+          "count": 1
+        },
         "inspection_door": {
           "detailLevel": "low"
         }

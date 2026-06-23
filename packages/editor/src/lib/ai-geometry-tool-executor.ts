@@ -190,6 +190,288 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+const REVISION_COLOR_ALIAS_ENTRIES: Array<[string, string]> = [
+  ['silver', '#C0C0C0'],
+  ['metallic silver', '#C0C0C0'],
+  ['light silver', '#D4D4D8'],
+  ['dark silver', '#A3A3A3'],
+  ['grey silver', '#BFC3C7'],
+  ['gray silver', '#BFC3C7'],
+  ['red', '#ff0000'],
+  ['bright red', '#ff0000'],
+  ['dark red', '#991b1b'],
+  ['银色', '#C0C0C0'],
+  ['银白色', '#D4D4D8'],
+  ['浅银色', '#D4D4D8'],
+  ['深银色', '#A3A3A3'],
+  ['红色', '#ff0000'],
+  ['大红色', '#ff0000'],
+  ['深红色', '#991b1b'],
+]
+
+const REVISION_COLOR_ALIASES = new Map(
+  REVISION_COLOR_ALIAS_ENTRIES.map(([name, color]) => [name.toLowerCase(), color]),
+)
+
+function normalizeRevisionColor(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  return REVISION_COLOR_ALIASES.get(trimmed.toLowerCase()) ?? trimmed
+}
+
+function normalizeRevisionOperationName(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim()
+  if (!normalized) return undefined
+  const compact = normalized.replace(/[\s_-]+/g, '').toLowerCase()
+  if (compact === 'setmaterial' || compact === 'recolor' || compact === 'colour') {
+    return 'setMaterial'
+  }
+  if (compact === 'materialfrom' || compact === 'copymaterial') return 'materialFrom'
+  if (compact === 'scalesemantic') return 'scaleSemantic'
+  return normalized
+}
+
+function normalizeRevisionText(value: unknown): string {
+  return typeof value === 'string'
+    ? value
+        .trim()
+        .replace(/[\s-]+/g, '_')
+        .toLowerCase()
+    : ''
+}
+
+function hasStructuralFrameText(value: string): boolean {
+  if (!value) return false
+  return (
+    /\b(frame|framework|steel_frame|structural_frame|tower_frame|rack|scaffold|truss)\b/i.test(
+      value,
+    ) || /框架|钢架|鋼架|架子|外框|结构架|結構架|支架/.test(value)
+  )
+}
+
+function structuralFrameScore(value: string): number {
+  if (!value) return 0
+  const tokenText = value.replace(/_/g, ' ')
+  let score = 0
+  if (/\b(structural|structure|steel)\b/.test(tokenText)) score += 4
+  if (/\b(frame|framework|scaffold|truss)\b/.test(tokenText) || value.includes('tower_frame')) {
+    score += 5
+  }
+  if (/\b(column|beam|brace|bracing|rail|platform|stair|ladder)\b/.test(tokenText)) score += 2
+  if (/\b(support|rack)\b/.test(tokenText)) score += 1
+  if (/框架|钢架|鋼架|结构架|結構架/.test(value)) score += 5
+  if (/架子|外框|支架/.test(value)) score += 3
+  if (
+    /\b(cyclone|separator|vessel|tank|hopper|duct|pipe|riser|outlet|inlet|cone|body)\b/.test(
+      tokenText,
+    )
+  ) {
+    score -= 4
+  }
+  return score
+}
+
+function selectorStructuralFrameScore(selector: unknown): number {
+  if (!isRecord(selector)) return 0
+  const selectorValues: unknown[] = [
+    selector.semanticRole,
+    selector.semanticGroup,
+    selector.sourcePartKind,
+    selector.sourcePartId,
+    selector.nameIncludes,
+  ]
+  return selectorValues.reduce<number>(
+    (score, value) => score + structuralFrameScore(normalizeRevisionText(value)),
+    0,
+  )
+}
+
+function structuralFrameUserText(args: Record<string, unknown>, prompt: string): string {
+  return [prompt, args.feedback, args.intent, args.userVisiblePlan]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ')
+}
+
+function resolveStructuralFrameSelector(
+  target: GeneratedGeometryArtifact | null | undefined,
+): Record<string, string> | undefined {
+  if (!target?.shapes.length) return undefined
+
+  type Candidate = {
+    key: string
+    selector: Record<string, string>
+    score: number
+    count: number
+  }
+  const candidates = new Map<string, Candidate>()
+
+  function addCandidate(key: string, selector: Record<string, string>, text: string) {
+    const score = structuralFrameScore(text)
+    if (score <= 0) return
+    const existing = candidates.get(key)
+    if (existing) {
+      existing.score += score
+      existing.count += 1
+      return
+    }
+    candidates.set(key, { key, selector, score, count: 1 })
+  }
+
+  for (const shape of target.shapes) {
+    const sourcePartKind = normalizeRevisionText(shape.sourcePartKind)
+    const semanticGroup = normalizeRevisionText(shape.semanticGroup)
+    const semanticRole = normalizeRevisionText(shape.semanticRole)
+    const name = normalizeRevisionText(shape.name)
+    const combined = [sourcePartKind, semanticGroup, semanticRole, name].join(' ')
+    if (shape.sourcePartKind) {
+      addCandidate(`source:${sourcePartKind}`, { sourcePartKind: shape.sourcePartKind }, combined)
+    }
+    if (shape.semanticGroup) {
+      addCandidate(`group:${semanticGroup}`, { semanticGroup: shape.semanticGroup }, combined)
+    }
+  }
+
+  const best = Array.from(candidates.values())
+    .filter((candidate) => candidate.count >= 2 && candidate.score >= 8)
+    .sort((left, right) => right.score - left.score || right.count - left.count)[0]
+  return best?.selector
+}
+
+function refineFrameRevisionSelector(
+  operation: Record<string, unknown>,
+  args: Record<string, unknown>,
+  prompt: string,
+  target: GeneratedGeometryArtifact | null | undefined,
+) {
+  const text = structuralFrameUserText(args, prompt)
+  if (!hasStructuralFrameText(text)) return
+  if (selectorStructuralFrameScore(operation.selector) >= 4) return
+  const selector = resolveStructuralFrameSelector(target)
+  if (!selector) return
+  operation.selector = selector
+}
+
+function normalizeRevisionMaterial(value: unknown): {
+  color?: string
+  material?: PrimitiveMaterialInput
+  materialPreset?: string
+} {
+  const stringColor = normalizeRevisionColor(value)
+  if (stringColor) return { color: stringColor }
+  if (!isRecord(value)) return {}
+
+  const directColor =
+    normalizeRevisionColor(value.color) ??
+    normalizeRevisionColor(value.materialColor) ??
+    normalizeRevisionColor(value.metalColor) ??
+    normalizeRevisionColor(value.baseColor)
+  if (directColor) return { color: directColor }
+
+  if (typeof value.preset === 'string' && value.preset.trim()) {
+    return { materialPreset: value.preset.trim() }
+  }
+
+  const properties = value.properties
+  if (isRecord(properties)) {
+    const propertyColor =
+      normalizeRevisionColor(properties.color) ??
+      normalizeRevisionColor(properties.materialColor) ??
+      normalizeRevisionColor(properties.metalColor) ??
+      normalizeRevisionColor(properties.baseColor)
+    if (propertyColor) {
+      return {
+        material: {
+          ...(value as PrimitiveMaterialInput),
+          properties: {
+            ...properties,
+            color: propertyColor,
+          },
+        } as PrimitiveMaterialInput,
+      }
+    }
+    return { material: value as PrimitiveMaterialInput }
+  }
+
+  return {}
+}
+
+function normalizePrimitiveRevisionOperations(
+  operations: unknown,
+  context?: {
+    args: Record<string, unknown>
+    prompt: string
+    target?: GeneratedGeometryArtifact | null
+  },
+): PrimitiveRevisionOperation[] | undefined {
+  if (!Array.isArray(operations)) return undefined
+
+  return operations.flatMap((operation): PrimitiveRevisionOperation[] => {
+    if (!isRecord(operation)) return []
+
+    const op = normalizeRevisionOperationName(operation.op ?? operation.type)
+    const normalized: Record<string, unknown> = { ...operation }
+    if (op) normalized.op = op
+    delete normalized.type
+
+    if (op === 'setMaterial') {
+      if (context) {
+        refineFrameRevisionSelector(normalized, context.args, context.prompt, context.target)
+      }
+      const directColor =
+        normalizeRevisionColor(operation.color) ??
+        normalizeRevisionColor(operation.materialColor) ??
+        normalizeRevisionColor(operation.metalColor)
+      const material = normalizeRevisionMaterial(operation.material)
+      const materialPreset =
+        typeof operation.materialPreset === 'string' && operation.materialPreset.trim()
+          ? operation.materialPreset.trim()
+          : material.materialPreset
+
+      if (directColor ?? material.color) {
+        normalized.color = directColor ?? material.color
+        delete normalized.material
+      } else if (material.material) {
+        normalized.material = material.material
+      }
+      if (materialPreset) normalized.materialPreset = materialPreset
+    }
+
+    return [normalized as PrimitiveRevisionOperation]
+  })
+}
+
+const SHAPE_COUNT_PRESERVING_REVISION_OPS = new Set([
+  'transform',
+  'resize',
+  'scaleSemantic',
+  'materialFrom',
+  'setMaterial',
+  'align',
+])
+
+function revisionOperationsPreserveShapeCount(operations: unknown): boolean {
+  if (!Array.isArray(operations) || operations.length === 0) return false
+  return operations.every((operation) => {
+    if (!isRecord(operation)) return false
+    return typeof operation.op === 'string' && SHAPE_COUNT_PRESERVING_REVISION_OPS.has(operation.op)
+  })
+}
+
+function shouldAllowRevisionOverShapeLimit(
+  name: string,
+  args: Record<string, unknown>,
+  context: GeometryToolExecutionContext,
+  rawShapeCount: number,
+  maxShapes: number,
+) {
+  if (name !== 'revise_geometry' || rawShapeCount <= maxShapes) return false
+  const targetShapeCount = context.revisionTarget?.shapes.length ?? 0
+  if (targetShapeCount === 0 || rawShapeCount !== targetShapeCount) return false
+  return revisionOperationsPreserveShapeCount(args.operations)
+}
+
 function readNestedNumber(source: Record<string, unknown>, key: string): number | undefined {
   const direct = source[key]
   if (typeof direct === 'number' && Number.isFinite(direct)) return direct
@@ -739,9 +1021,13 @@ function getRawShapes(
       args.__changedShapeCount = target.shapes.length + fallbackShapes.length
       return fallbackShapes
     }
-    const operations = Array.isArray(args.operations)
-      ? (args.operations as PrimitiveRevisionOperation[])
-      : []
+    const normalizedOperations = normalizePrimitiveRevisionOperations(args.operations, {
+      args,
+      prompt,
+      target,
+    })
+    if (normalizedOperations) args.operations = normalizedOperations
+    const operations = normalizedOperations ?? []
     if (operations.length === 0) {
       const inferredRevision = inferIndustrialRevisionFallback(args, prompt, target)
       if (inferredRevision?.shapes) return inferredRevision.shapes
@@ -4689,7 +4975,14 @@ export function executeGeometryToolCall(
   }
 
   const maxShapes = options.maxShapes ?? profileShapeLimit(args) ?? MAX_GENERATED_GEOMETRY_SHAPES
-  if (rawShapes.length > maxShapes) {
+  const allowRevisionOverShapeLimit = shouldAllowRevisionOverShapeLimit(
+    name,
+    args,
+    context,
+    rawShapes.length,
+    maxShapes,
+  )
+  if (!allowRevisionOverShapeLimit && rawShapes.length > maxShapes) {
     const aircraftFallbackShapes = compactAircraftFallbackShapes(args, context.prompt, context)
     if (aircraftFallbackShapes && aircraftFallbackShapes.length <= maxShapes) {
       rawShapes = expandPrimitiveShapeArrays(
@@ -4697,7 +4990,11 @@ export function executeGeometryToolCall(
       ) as RawShape[]
     }
   }
-  if (rawShapes.length > maxShapes && shouldAutoCompactShapeBudget(name, args)) {
+  if (
+    !allowRevisionOverShapeLimit &&
+    rawShapes.length > maxShapes &&
+    shouldAutoCompactShapeBudget(name, args)
+  ) {
     const beforeShapeCount = rawShapes.length
     const compactedShapes = compactRawShapesToBudget(rawShapes, maxShapes, args)
     if (compactedShapes.length <= maxShapes) {
@@ -4710,7 +5007,7 @@ export function executeGeometryToolCall(
       }
     }
   }
-  if (rawShapes.length > maxShapes) {
+  if (!allowRevisionOverShapeLimit && rawShapes.length > maxShapes) {
     return {
       content:
         options.messages?.tooComplex?.(rawShapes.length, maxShapes) ??

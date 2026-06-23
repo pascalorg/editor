@@ -23,6 +23,7 @@ type ProfilePackContract = EquipmentProfile & {
 }
 
 let cachedProfilePackContracts: ProfilePackContract[] | undefined
+let cachedProfilePackContractsSignature: string | undefined
 
 function stationText(station: ProcessStationPlan) {
   return [
@@ -282,17 +283,18 @@ const CEMENT_CLINKER_PROFILES: EquipmentProfile[] = [
     profileId: 'cement.grate_cooler',
     equipmentFamily: 'cement.grate_cooler',
     scaleClass: 'conceptual_industrial',
-    envelope: { length: 7, width: 2, height: 1.4, origin: 'station_profile', tolerance: 0.1 },
+    envelope: { length: 7, width: 2, height: 2.4, origin: 'station_profile', tolerance: 0.1 },
     aliases: [
       /grate[_\s-]?cooler|clinker[_\s-]?cooler|\u7be6\u51b7|\u7bf1\u51b7|\u51b7\u5374\u673a/i,
     ],
     preferredTool: 'compose_parts',
     preferredResolver: 'primitive',
-    requiredRoles: ['cooler_frame', 'cooler_grate_bed', 'grate_plate_rows'],
+    requiredRoles: ['cooler_outer_casing', 'cooler_support_base', 'cooler_grate_bed', 'hot_clinker_inlet_transition'],
     ports: [
-      { id: 'hot_clinker_in', medium: 'material', side: 'left', height: 0.95, offset: 0 },
+      { id: 'hot_clinker_in', medium: 'material', side: 'left', height: 1.65, offset: 0 },
       { id: 'cooled_clinker_out', medium: 'material', side: 'right', height: 0.45, offset: 0 },
-      { id: 'cooler_exhaust_out', medium: 'gas', side: 'top', height: 1.35, offset: 0.25 },
+      { id: 'cooler_exhaust_out', medium: 'gas', side: 'top', height: 2.28, offset: 0.25 },
+      { id: 'cooling_air_in', medium: 'gas', side: 'back', height: 0.6, offset: 0 },
     ],
   },
   {
@@ -563,15 +565,105 @@ const CEMENT_CLINKER_PROFILES: EquipmentProfile[] = [
     equipmentFamily: 'cement.whr_boiler',
     scaleClass: 'conceptual_industrial',
     envelope: { length: 3.8, width: 2.4, height: 5.2, origin: 'station_profile', tolerance: 0.1 },
-    aliases: [
-      /whr[_\s-]?boiler|waste[_\s-]?heat[_\s-]?recovery|aqc[_\s-]?boiler|sp[_\s-]?boiler|\u4f59\u70ed\u9505\u7089|\u4f59\u70ed\u53d1\u7535/i,
-    ],
+    aliases: [/sp[_\s-]?boiler|whr[_\s-]?boiler|waste[_\s-]?heat[_\s-]?recovery|\u7a91\u5c3e.*\u9505\u7089|SP.*\u9505\u7089/i],
     preferredTool: 'compose_parts',
     preferredResolver: 'primitive',
     requiredRoles: ['boiler_casing', 'tube_bank', 'hot_gas_in'],
     ports: [
       { id: 'hot_gas_in', medium: 'gas', side: 'left', height: 3.2, offset: 0 },
       { id: 'cooled_gas_out', medium: 'gas', side: 'right', height: 3.2, offset: 0 },
+    ],
+  },
+  {
+    profileId: 'cement.whr_boiler',
+    equipmentFamily: 'cement.aqc_boiler',
+    scaleClass: 'conceptual_industrial',
+    envelope: { length: 3.8, width: 2.4, height: 5.2, origin: 'station_profile', tolerance: 0.1 },
+    aliases: [/aqc[_\s-]?boiler|\u7a91\u5934.*\u9505\u7089|AQC.*\u9505\u7089|\u51b7\u5374\u673a.*\u9505\u7089/i],
+    preferredTool: 'compose_parts',
+    preferredResolver: 'primitive',
+    requiredRoles: ['boiler_casing', 'tube_bank', 'hot_gas_in'],
+    ports: [
+      { id: 'hot_gas_in', medium: 'gas', side: 'left', height: 3.2, offset: 0 },
+      { id: 'cooled_gas_out', medium: 'gas', side: 'right', height: 3.2, offset: 0 },
+    ],
+  },
+  {
+    profileId: 'cement.raw_coal_silo',
+    equipmentFamily: 'cement.raw_coal_silo',
+    scaleClass: 'conceptual_industrial',
+    envelope: { length: 3.6, width: 3.6, height: 6.5, origin: 'station_profile', tolerance: 0.1 },
+    aliases: [/raw[_\s-]?coal[_\s-]?silo|coal[_\s-]?bin|coal[_\s-]?storage|\u539f\u7164\u4ed3|\u7164\u4ed3/i],
+    preferredTool: 'compose_parts',
+    preferredResolver: 'primitive',
+    requiredRoles: ['silo_shell', 'silo_support_base', 'bottom_discharge_hopper'],
+    ports: [
+      { id: 'top_coal_inlet', medium: 'material', side: 'top', height: 6.18, offset: 0 },
+      { id: 'bottom_coal_outlet', medium: 'material', side: 'right', height: 0.62, offset: 0 },
+    ],
+  },
+  {
+    profileId: 'cement.coal_powder_bin',
+    equipmentFamily: 'cement.coal_powder_bin',
+    scaleClass: 'conceptual_industrial',
+    envelope: { length: 2.4, width: 2.4, height: 4.8, origin: 'station_profile', tolerance: 0.1 },
+    aliases: [
+      /coal[_\s-]?powder[_\s-]?bin|pulverized[_\s-]?fuel[_\s-]?bin|coal[_\s-]?powder[_\s-]?silo|\u7164\u7c89\u4ed3|\u7164\u7c89\u5e93/i,
+    ],
+    preferredTool: 'compose_parts',
+    preferredResolver: 'primitive',
+    requiredRoles: ['powder_bin_shell', 'silo_support_base', 'cone_discharge_hopper'],
+    ports: [
+      { id: 'powder_feed_inlet', medium: 'material', side: 'top', height: 4.55, offset: 0 },
+      { id: 'powder_to_kiln_burner', medium: 'material', side: 'right', height: 0.85, offset: 0.3 },
+      { id: 'powder_to_calciner', medium: 'material', side: 'left', height: 0.85, offset: -0.3 },
+    ],
+  },
+  {
+    profileId: 'cement.gypsum_hopper',
+    equipmentFamily: 'cement.gypsum_hopper',
+    scaleClass: 'conceptual_industrial',
+    envelope: { length: 3.0, width: 2.4, height: 3.5, origin: 'station_profile', tolerance: 0.1 },
+    aliases: [/gypsum[_\s-]?hopper|gypsum[_\s-]?silo|gypsum[_\s-]?storage|\u77f3\u818f\u4ed3|\u77f3\u818f/i],
+    preferredTool: 'compose_parts',
+    preferredResolver: 'primitive',
+    requiredRoles: ['hopper_shell', 'silo_support_base', 'gypsum_discharge_hopper'],
+    ports: [
+      { id: 'gypsum_feed_in', medium: 'material', side: 'top', height: 3.28, offset: 0 },
+      { id: 'gypsum_out', medium: 'material', side: 'right', height: 0.38, offset: 0 },
+    ],
+  },
+  {
+    profileId: 'cement.additive_silo',
+    equipmentFamily: 'cement.additive_silo',
+    scaleClass: 'conceptual_industrial',
+    envelope: { length: 3.2, width: 3.2, height: 6.0, origin: 'station_profile', tolerance: 0.1 },
+    aliases: [
+      /additive[_\s-]?silo|fly[_\s-]?ash[_\s-]?silo|slag[_\s-]?silo|\u6df7\u5408\u6750|\u7c89\u7164\u7078\u4ed3|\u77ff\u6e23\u4ed3/i,
+    ],
+    preferredTool: 'compose_parts',
+    preferredResolver: 'primitive',
+    requiredRoles: ['silo_shell', 'silo_support_base', 'additive_discharge_hopper'],
+    ports: [
+      { id: 'additive_feed_in', medium: 'material', side: 'top', height: 5.4, offset: 0 },
+      { id: 'additive_out', medium: 'material', side: 'right', height: 0.58, offset: 0 },
+    ],
+  },
+  {
+    profileId: 'cement.cement_separator',
+    equipmentFamily: 'cement.cement_separator',
+    scaleClass: 'conceptual_industrial',
+    envelope: { length: 2.4, width: 2.4, height: 4.8, origin: 'station_profile', tolerance: 0.1 },
+    aliases: [
+      /cement[_\s-]?separator|air[_\s-]?classifier|dynamic[_\s-]?separator|o[_\s-]?sepa|\u9009\u7c89\u673a|\u6c14\u6d41\u5206\u7ea7\u673a/i,
+    ],
+    preferredTool: 'compose_parts',
+    preferredResolver: 'primitive',
+    requiredRoles: ['separator_body', 'separator_support_base', 'coarse_reject_cone'],
+    ports: [
+      { id: 'coarse_feed_in', medium: 'material', side: 'left', height: 2.5, offset: 0 },
+      { id: 'fine_product_out', medium: 'material', side: 'top', height: 4.52, offset: 0 },
+      { id: 'coarse_reject_out', medium: 'material', side: 'right', height: 0.65, offset: 0 },
     ],
   },
   {
@@ -622,6 +714,14 @@ function profileMatches(profile: EquipmentProfile, station: ProcessStationPlan) 
         return /kiln[_\s-]?burner|\u7a91\u5934\u71c3\u70e7\u5668|\u71c3\u70e7\u5668/.test(identity)
       case 'cement.kiln_hood':
         return /kiln[_\s-]?hood|kiln[_\s-]?head[_\s-]?hood|\u7a91\u5934\u7f69/.test(identity)
+      case 'cement.whr_boiler':
+        // Distinguish SP boiler (kiln-tail) from AQC boiler (kiln-head) by equipmentFamily
+        if (profile.equipmentFamily === 'cement.aqc_boiler') {
+          return /aqc[_\s-]?boiler|\u7a91\u5934.*\u9505\u7089|aqc_boiler/.test(identity)
+        }
+        return /sp[_\s-]?boiler|whr[_\s-]?boiler|sp_boiler|\u7a91\u5c3e.*\u9505\u7089|\u4f59\u70ed\u9505\u7089/.test(
+          identity,
+        )
     }
   }
   const text = stationText(station)
@@ -983,10 +1083,14 @@ function loadProfilePackContractsFromDir(dir: string): ProfilePackContract[] {
 }
 
 function loadProfilePackContracts() {
-  if (cachedProfilePackContracts) return cachedProfilePackContracts
   const root = profilePackCloudRoot()
+  const signature = profilePackContractsSignature(root)
+  if (cachedProfilePackContracts && cachedProfilePackContractsSignature === signature) {
+    return cachedProfilePackContracts
+  }
   if (!fs.existsSync(root)) {
     cachedProfilePackContracts = []
+    cachedProfilePackContractsSignature = signature
     return cachedProfilePackContracts
   }
   cachedProfilePackContracts = fs
@@ -999,7 +1103,30 @@ function loadProfilePackContracts() {
         return []
       }
     })
+  cachedProfilePackContractsSignature = signature
   return cachedProfilePackContracts
+}
+
+function profilePackContractsSignature(root: string) {
+  if (!fs.existsSync(root)) return 'missing'
+  const entries: string[] = []
+  const visit = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const file = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        visit(file)
+      } else if (/\.json$/i.test(entry.name)) {
+        try {
+          const stat = fs.statSync(file)
+          entries.push(`${path.relative(root, file)}:${stat.mtimeMs}:${stat.size}`)
+        } catch {
+          entries.push(`${path.relative(root, file)}:missing`)
+        }
+      }
+    }
+  }
+  visit(root)
+  return entries.sort().join('|')
 }
 
 function resolveProfilePackContract(
@@ -1026,6 +1153,10 @@ function resolveProfilePackContract(
     )
   })
   if (exact) return exact
+  const identityAlias = profiles.find((profile) =>
+    profile.aliases.some((pattern) => pattern.test(identity)),
+  )
+  if (identityAlias) return identityAlias
   return profiles.find((profile) => profile.aliases.some((pattern) => pattern.test(text)))
 }
 

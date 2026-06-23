@@ -42,6 +42,7 @@ type RenderableNode = AnyNode & {
   id: AnyNodeId
   position?: [number, number, number]
   rotation?: [number, number, number] | number
+  scale?: [number, number, number]
   visible?: boolean
   children?: AnyNodeId[]
 }
@@ -49,9 +50,6 @@ type RenderableNode = AnyNode & {
 export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
   const ref = useRef<Group>(null!)
   const n = node as RenderableNode
-  // biome-ignore lint/suspicious/noExplicitAny: useNodeEvents is keyed by
-  // literal kind; the registry path passes a runtime kind union. Routing
-  // through the type cast is safer than widening the hook signature.
   const handlers = useNodeEvents(node as any, node.type as any)
   const liveTransform = useLiveTransforms((s) => s.get(node.id as AnyNodeId))
 
@@ -62,6 +60,7 @@ export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
   }, [node.id])
 
   const position = liveTransform?.position ?? n.position ?? [0, 0, 0]
+  const scale = n.scale ?? [1, 1, 1]
   const rotation: [number, number, number] =
     liveTransform?.rotation !== undefined
       ? [0, liveTransform.rotation, 0]
@@ -74,6 +73,7 @@ export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
       position={position}
       ref={ref}
       rotation={rotation}
+      scale={scale}
       visible={n.visible !== false}
       {...handlers}
     >

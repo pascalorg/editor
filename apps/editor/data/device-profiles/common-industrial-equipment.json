@@ -1,109 +1,200 @@
 [
   {
     "id": "grate_cooler",
-    "name": "Grate cooler",
+    "name": "Clinker grate cooler",
     "aliases": [
       "grate cooler",
       "cement grate cooler",
-      "clinker cooler"
+      "clinker cooler",
+      "push grate cooler",
+      "篦冷机",
+      "熟料篦冷机",
+      "水泥篦冷机"
     ],
-    "layoutFamily": "linear_transport_layout",
-    "archetypeFamily": "material_handling",
-    "family": "conveyor",
+    "layoutFamily": "generic_industrial_layout",
+    "archetypeFamily": "thermal_equipment",
+    "family": "generic",
     "defaultDimensions": {
-      "length": 8,
-      "width": 2.4,
-      "height": 2.2
+      "length": 7,
+      "width": 2,
+      "height": 2.4
     },
     "parts": [
       {
-        "kind": "conveyor_frame",
-        "semanticRole": "cooler_housing",
-        "required": true,
-        "length": 8,
-        "width": 2.4,
-        "height": 1.2
-      },
-      {
-        "kind": "belt_surface",
-        "semanticRole": "cooler_grate_bed",
-        "required": true,
-        "length": 7.4,
-        "width": 2,
-        "height": 0.12
-      },
-      {
-        "kind": "roller_array",
-        "semanticRole": "cooling_air_box",
-        "required": true,
-        "count": 7
-      },
-      {
-        "kind": "generic_spout",
-        "semanticRole": "inlet_port",
-        "length": 0.9,
-        "radius": 0.22
-      },
-      {
-        "kind": "generic_spout",
-        "semanticRole": "outlet_port",
-        "length": 0.9,
-        "radius": 0.22
-      },
-      {
-        "kind": "ribbed_motor_body",
-        "semanticRole": "drive_motor",
-        "length": 0.7,
-        "radius": 0.22
-      },
-      {
         "kind": "generic_body",
-        "semanticRole": "gearbox",
-        "length": 0.55,
-        "width": 0.42,
-        "height": 0.38
+        "semanticRole": "cooler_outer_casing",
+        "required": true,
+        "length": 6.6,
+        "width": 1.8,
+        "height": 2.1,
+        "position": [
+          0,
+          1.15,
+          0
+        ],
+        "primaryColor": "#94a3b8",
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "cooler_support_base",
+        "required": true,
+        "length": 6.6,
+        "width": 1.8,
+        "height": 0.18,
+        "position": [
+          0,
+          0.09,
+          0
+        ],
+        "metalColor": "#6b7280"
       },
       {
         "kind": "generic_panel",
-        "semanticRole": "access_panel",
-        "length": 0.75,
-        "height": 0.45
+        "semanticRole": "cooler_grate_bed",
+        "required": true,
+        "length": 5.8,
+        "height": 1.35,
+        "thickness": 0.045,
+        "position": [
+          0,
+          0.86,
+          0.04
+        ],
+        "rotation": [
+          -1.5707963267948966,
+          0,
+          0
+        ],
+        "color": "#475569"
       },
       {
-        "kind": "generic_foot_set",
-        "semanticRole": "support_base"
+        "kind": "generic_panel",
+        "semanticRole": "grate_plate_rows",
+        "required": true,
+        "length": 5.7,
+        "height": 0.18,
+        "thickness": 0.035,
+        "arrayAlong": "x",
+        "count": 8,
+        "position": [
+          0,
+          0.92,
+          0.05
+        ],
+        "rotation": [
+          -1.5707963267948966,
+          0,
+          0
+        ],
+        "color": "#334155"
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "hot_clinker_inlet_transition",
+        "required": true,
+        "length": 1.0,
+        "width": 0.85,
+        "height": 0.95,
+        "topLengthScale": 1.3,
+        "topWidthScale": 1.2,
+        "position": [
+          -3.1,
+          1.65,
+          0
+        ],
+        "primaryColor": "#78716c",
+        "darkColor": "#44403c"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "cooler_air_inlet_plenum",
+        "axis": "x",
+        "length": 5.2,
+        "radius": 0.055,
+        "position": [
+          0,
+          0.36,
+          -0.72
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "cooler_top_walkway",
+        "length": 5.0,
+        "width": 0.32,
+        "height": 0.28,
+        "overallHeight": 0.18,
+        "position": [
+          0.5,
+          2.28,
+          0.76
+        ],
+        "metalColor": "#64748b",
+        "color": "#facc15"
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "cooler_drive_unit",
+        "length": 0.65,
+        "height": 0.22,
+        "radius": 0.08,
+        "position": [
+          2.2,
+          0.38,
+          -0.72
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#475569"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "cooler_discharge_chute",
+        "radius": 0.16,
+        "length": 0.3,
+        "axis": "x",
+        "position": [
+          3.4,
+          0.42,
+          0
+        ],
+        "metalColor": "#9ca3af"
       }
     ],
-    "primarySemanticRole": "cooler_grate_bed",
-    "editableSchemaRef": "conveyor.common",
+    "primarySemanticRole": "cooler_outer_casing",
+    "editableSchemaRef": "generic_industrial.common",
     "detailBudget": {
       "detailLevel": "low",
-      "maxShapes": 52,
+      "maxShapes": 70,
       "parts": {
-        "cooling_air_box": {
-          "count": 5,
-          "detailLevel": "low"
-        },
         "cooler_grate_bed": {
           "detailLevel": "low"
         },
-        "access_panel": {
-          "count": 2
+        "grate_plate_rows": {
+          "detailLevel": "low",
+          "count": 8
+        },
+        "cooler_top_walkway": {
+          "detailLevel": "low"
         }
       }
     },
-    "qualityRules": {
-      "requiredRoles": [
-        "cooler_housing",
-        "cooler_grate_bed",
-        "cooling_air_box"
-      ],
-      "shapeCount": {
-        "min": 8,
-        "max": 52
-      }
-    },
-    "description": "Long cement-line grate cooler using linear transport layout with grate bed, housing, cooling air boxes, drive motor, and chutes."
+    "qualityRules": "quality.cement.grate_cooler",
+    "description": "Box-shaped cement clinker grate cooler with enclosed casing, internal grate plate bed, under-grate air plenum, inlet transition hopper, top walkway, side drive, and discharge chute; not a belt conveyor.",
+    "forbiddenRoles": [
+      "belt_surface",
+      "conveyor_frame",
+      "vehicle_tire",
+      "vehicle_cabin"
+    ],
+    "visualCues": [
+      "large enclosed rectangular box-shaped cooler casing, not a belt conveyor",
+      "internal grate plate rows across a flat clinker bed",
+      "hot clinker inlet hopper at kiln end and discharge chute at outlet end",
+      "under-grate cooling air plenum/fan ducting along the base",
+      "top maintenance walkway or guard rail on the cooler casing"
+    ]
   },
   {
     "id": "steam_turbine",

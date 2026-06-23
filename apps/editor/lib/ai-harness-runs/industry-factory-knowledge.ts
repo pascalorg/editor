@@ -46,6 +46,7 @@ let cachedArchitecturesSignature: string | undefined
 type FactoryArchitectureScope = {
   id: string
   label: string
+  aliases: string[]
   includeModules: string[]
 }
 
@@ -60,6 +61,7 @@ type FactoryArchitectureLayoutHints = {
   highestStationId?: string
   longAxisStationId?: string
   sideBranchStationIds?: string[]
+  omitPerimeterWalls?: boolean
 }
 
 export type IndustryFactoryArchitecture = {
@@ -95,6 +97,10 @@ function stringArray(value: unknown): string[] {
 
 function numberValue(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+function booleanValue(value: unknown) {
+  return typeof value === 'boolean' ? value : undefined
 }
 
 function semverParts(version: string | undefined) {
@@ -298,9 +304,10 @@ function normalizeArchitecture(raw: unknown, manifest: IndustryFactoryManifest) 
         .map((scope) => {
           const scopeId = stringValue(scope.id)
           const scopeLabel = stringValue(scope.label)
+          const aliases = stringArray(scope.aliases)
           const includeModules = stringArray(scope.includeModules)
           return scopeId && scopeLabel && includeModules.length
-            ? { id: scopeId, label: scopeLabel, includeModules }
+            ? { id: scopeId, label: scopeLabel, aliases, includeModules }
             : null
         })
         .filter((scope): scope is FactoryArchitectureScope => Boolean(scope))
@@ -345,6 +352,9 @@ function normalizeArchitecture(raw: unknown, manifest: IndustryFactoryManifest) 
         : {}),
       ...(stringArray(layoutHints.sideBranchStationIds).length
         ? { sideBranchStationIds: stringArray(layoutHints.sideBranchStationIds) }
+        : {}),
+      ...(booleanValue(layoutHints.omitPerimeterWalls) != null
+        ? { omitPerimeterWalls: booleanValue(layoutHints.omitPerimeterWalls) }
         : {}),
     },
     sourcePack: {
@@ -546,6 +556,14 @@ function stationMatchesPrompt(prompt: string, station: ProcessStationPlan) {
   )
 }
 
+function scopeMatchesPrompt(prompt: string, scope: FactoryArchitectureScope) {
+  return (
+    containsPromptToken(prompt, scope.id) ||
+    containsPromptToken(prompt, scope.label) ||
+    scope.aliases.some((alias) => containsPromptToken(prompt, alias))
+  )
+}
+
 function keyFocusStationIds(architecture: IndustryFactoryArchitecture, stationIds: Set<string>) {
   return [
     architecture.layoutHints.highestStationId,
@@ -580,11 +598,7 @@ export function applyFactoryArchitectureToPlan(input: {
   )
   const scopeMatch = stationMatch
     ? undefined
-    : architecture.scopes.find(
-        (scope) =>
-          containsPromptToken(input.prompt, scope.id) ||
-          containsPromptToken(input.prompt, scope.label),
-      )
+    : architecture.scopes.find((scope) => scopeMatchesPrompt(input.prompt, scope))
   const moduleIds = new Set(
     stationMatch
       ? architecture.modules
@@ -611,6 +625,9 @@ export function applyFactoryArchitectureToPlan(input: {
         label: architecture.label,
         keyFocusStationIds: keyFocusStationIds(architecture, allStationIds),
         zoneDisplay: 'subtle',
+        ...(architecture.layoutHints.omitPerimeterWalls != null
+          ? { omitPerimeterWalls: architecture.layoutHints.omitPerimeterWalls }
+          : {}),
       },
     }
   }
@@ -641,6 +658,9 @@ export function applyFactoryArchitectureToPlan(input: {
       moduleIds: [...moduleIds],
       keyFocusStationIds: keyFocusStationIds(architecture, stationIds),
       zoneDisplay: 'subtle',
+      ...(architecture.layoutHints.omitPerimeterWalls != null
+        ? { omitPerimeterWalls: architecture.layoutHints.omitPerimeterWalls }
+        : {}),
     },
   }
 }

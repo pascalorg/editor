@@ -2737,8 +2737,11 @@ type FactoryE2eBridge = {
   sceneNodes: () => Record<string, unknown>
   applyFactoryRun: (data: unknown) => string[]
   cameraView: (view: 'isometric' | 'top' | 'side') => void
+  clearSelection: () => void
   selectNode: (nodeId: string) => void
+  setSelectMode: () => void
   selectedIds: () => string[]
+  viewerFlags: () => { cameraDragging: boolean; inputDragging: boolean; spacePanning: boolean }
 }
 
 declare global {
@@ -2767,6 +2770,8 @@ export function AiChatPanel() {
     aiChatPanelState.conversationPurpose,
   )
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
+  const [factorySelectionCardOpen, setFactorySelectionCardOpen] = useState(false)
+  const [factoryProfilePackCardOpen, setFactoryProfilePackCardOpen] = useState(false)
   const [inputExpanded, setInputExpanded] = useState(aiChatPanelState.inputExpanded)
   const [imageAttachment, setImageAttachment] = useState<ChatImageAttachment | undefined>(
     aiChatPanelState.imageAttachment,
@@ -2972,7 +2977,31 @@ export function AiChatPanel() {
         if (!nodeId) return
         useViewer.getState().setSelection({ selectedIds: [nodeId as AnyNodeId] })
       },
+      clearSelection: () => {
+        useViewer.getState().setSelection({ selectedIds: [] })
+        useEditor.getState().setEditingAssemblyId(null)
+        useEditor.getState().setSelectedMaterialTarget(null)
+      },
+      setSelectMode: () => {
+        useEditor.setState({
+          phase: 'structure',
+          structureLayer: 'elements',
+          mode: 'select',
+          tool: null,
+          catalogCategory: null,
+          editingAssemblyId: null,
+        })
+        useEditor.getState().setFloorplanSelectionTool('click')
+      },
       selectedIds: () => useViewer.getState().selection.selectedIds.map(String),
+      viewerFlags: () => {
+        const viewer = useViewer.getState()
+        return {
+          cameraDragging: viewer.cameraDragging,
+          inputDragging: viewer.inputDragging,
+          spacePanning: viewer.spacePanning,
+        }
+      },
     }
 
     return () => {
@@ -5417,18 +5446,6 @@ export function AiChatPanel() {
         )}
         {isFactoryConversation && messages.length === 0 && (
           <div className="space-y-3 py-5">
-            <div className="rounded-2xl border border-[#a684ff]/30 bg-[#a684ff]/10 p-3">
-              <div className="flex items-center gap-2">
-                <Icon className="size-4 text-[#a684ff]" icon="mdi:factory" />
-                <span className="font-medium text-foreground text-sm">创建与修改工厂</span>
-              </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                这里将用于通过自然语言创建厂房、车间、房间和工厂布局，并连续修改当前 AI 目标。
-              </p>
-              <p className="mt-2 text-[10px] leading-relaxed text-amber-300/90">
-                当前已接入工厂创建/修改执行：会生成可编辑 scene patches（create/update），并默认应用到画布。
-              </p>
-            </div>
             <div className="grid gap-1.5 text-[11px] text-muted-foreground">
               {['创建一个 20m × 30m 的车间', '把刚才房间改成 4m × 4m', '加一个仓储区和设备区'].map((hint) => (
                 <button
@@ -5668,6 +5685,14 @@ export function AiChatPanel() {
         )}
       </div>
 
+      <input
+        accept=".zip,application/zip,application/x-zip-compressed"
+        className="hidden"
+        disabled={profilePackImporting}
+        onChange={handleProfilePackSelected}
+        ref={profilePackInputRef}
+        type="file"
+      />
       {isAssetConversation ? (
       <div className="border-border/50 border-t px-3 py-2">
         <div className="relative mb-2">
@@ -5763,60 +5788,6 @@ export function AiChatPanel() {
           ref={imageInputRef}
           type="file"
         />
-        <input
-          accept=".zip,application/zip,application/x-zip-compressed"
-          className="hidden"
-          disabled={profilePackImporting}
-          onChange={handleProfilePackSelected}
-          ref={profilePackInputRef}
-          type="file"
-        />
-        {generationMode === 'primitive' ? (
-          <div className="mb-1.5 rounded-lg border border-border/60 bg-accent/20 px-2 py-1.5">
-            <div className="flex items-center gap-2">
-              <Icon className="size-3.5 shrink-0 text-[#a684ff]" icon="mdi:package-variant" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[10px] text-muted-foreground">
-                  已启用 {enabledProfilePacks.length} 个资源包 / 包内 {enabledProfileCount} 个 profile / 总加载{' '}
-                  {loadedProfileCount} 个
-                </div>
-                <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] text-muted-foreground/80">
-                  {enabledPackNames ? <span>{enabledPackNames}</span> : <span>未安装行业包时使用内置 profile</span>}
-                  {profileConflictCount > 0 ? <span>覆盖冲突 {profileConflictCount}</span> : null}
-                  {profilePackWarningCount > 0 ? <span>警告 {profilePackWarningCount}</span> : null}
-                </div>
-                {profilePackStatus ? (
-                  <div className="mt-0.5 truncate text-[10px] text-muted-foreground/80">
-                    {profilePackStatus}
-                  </div>
-                ) : null}
-              </div>
-              <a
-                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff]"
-                href="/profile-packs"
-                rel="noreferrer"
-                target="_blank"
-                title="下载和管理行业资源包"
-              >
-                <Icon className="size-3.5" icon="mdi:cloud-download-outline" />
-                下载/管理
-              </a>
-              <button
-                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={profilePackImporting}
-                onClick={() => profilePackInputRef.current?.click()}
-                title="导入行业资源包 zip"
-                type="button"
-              >
-                <Icon
-                  className={cn('size-3.5', profilePackImporting && 'animate-spin')}
-                  icon={profilePackImporting ? 'mdi:loading' : 'mdi:archive-arrow-up-outline'}
-                />
-                导入
-              </button>
-            </div>
-          </div>
-        ) : null}
         <div className="relative">
           <textarea
             className={cn(
@@ -5872,40 +5843,105 @@ export function AiChatPanel() {
       </div>
       ) : isFactoryConversation ? (
         <div className="border-border/50 border-t px-3 py-2">
-          <div className="mb-2 rounded-xl border border-border/60 bg-accent/20 px-2.5 py-2">
-            <div className="flex items-center gap-1.5 text-[11px] text-foreground">
-              <Icon className="size-3.5 text-[#a684ff]" icon="mdi:factory" />
-              <span className="font-medium">创建与修改工厂</span>
-            </div>
-            <div className="mt-1 text-[9px] text-muted-foreground">
-              当前目标：生成/修改 factory scene patch plan · 默认应用到画布
-            </div>
-          </div>
-          <div className="mb-2 rounded-lg border border-[#a684ff]/25 bg-[#a684ff]/10 px-2.5 py-1.5">
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        {generationMode === 'primitive' ? (
+          <div className="mb-1.5 rounded-lg border border-border/60 bg-accent/20 px-2 py-1.5">
+            <button
+              aria-expanded={factoryProfilePackCardOpen}
+              className="flex w-full items-center gap-2 text-left"
+              onClick={() => setFactoryProfilePackCardOpen((open) => !open)}
+              type="button"
+            >
+              <Icon className="size-3.5 shrink-0 text-[#a684ff]" icon="mdi:package-variant" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[10px] text-muted-foreground">
+                  已启用 {enabledProfilePacks.length} 个资源包 / 共 {enabledProfileCount} 个 profile / 已加载{' '}
+                  {loadedProfileCount} 个
+                </div>
+              </div>
               <Icon
-                className="size-3.5 shrink-0 text-[#a684ff]"
-                icon="mdi:cursor-default-click-outline"
+                className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', factoryProfilePackCardOpen && 'rotate-180')}
+                icon="mdi:chevron-down"
               />
-              <span className="min-w-0 truncate">已选中：{factorySelectionLabel}</span>
-            </div>
-            <div className="mt-1 text-[9px] leading-snug text-muted-foreground/80">
-              单击选整机，双击内部零件进入部件编辑；Ctrl 点击可追加或取消多选。
-            </div>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {['make blue', 'move left 1m', 'rotate 90 degrees', 'delete this'].map((hint) => (
+            </button>
+            {factoryProfilePackCardOpen ? (
+              <div className="mt-1 flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] text-muted-foreground/80">
+                    {enabledPackNames ? <span>{enabledPackNames}</span> : <span>未安装行业包时使用内置 profile</span>}
+                    {profileConflictCount > 0 ? <span>覆盖冲突 {profileConflictCount}</span> : null}
+                    {profilePackWarningCount > 0 ? <span>警告 {profilePackWarningCount}</span> : null}
+                  </div>
+                  {profilePackStatus ? (
+                    <div className="mt-0.5 truncate text-[10px] text-muted-foreground/80">
+                      {profilePackStatus}
+                    </div>
+                  ) : null}
+                </div>
+                <a
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff]"
+                  href="/profile-packs"
+                  rel="noreferrer"
+                  target="_blank"
+                  title="下载/管理资源包"
+                >
+                  <Icon className="size-3.5" icon="mdi:cloud-download-outline" />
+                  下载/管理
+                </a>
                 <button
-                  className="rounded-md border border-border/50 px-1.5 py-0.5 text-[9px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff]"
-                  disabled={loading}
-                  key={hint}
-                  onClick={() => setInput(hint)}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={profilePackImporting}
+                  onClick={() => profilePackInputRef.current?.click()}
+                  title="导入行业资源包 zip"
                   type="button"
                 >
-                  {hint}
+                  <Icon
+                    className={cn('size-3.5', profilePackImporting && 'animate-spin')}
+                    icon={profilePackImporting ? 'mdi:loading' : 'mdi:archive-arrow-up-outline'}
+                  />
+                  导入
                 </button>
-              ))}
-            </div>
+              </div>
+            ) : null}
           </div>
+        ) : null}
+        <div className="mb-2 rounded-lg border border-[#a684ff]/25 bg-[#a684ff]/10 px-2.5 py-1.5">
+          <button
+            aria-expanded={factorySelectionCardOpen}
+            className="flex w-full items-center gap-1.5 text-left text-[10px] text-muted-foreground"
+            onClick={() => setFactorySelectionCardOpen((open) => !open)}
+            type="button"
+          >
+            <Icon
+              className="size-3.5 shrink-0 text-[#a684ff]"
+              icon="mdi:cursor-default-click-outline"
+            />
+            <span className="min-w-0 flex-1 truncate">已选中：{factorySelectionLabel}</span>
+            <Icon
+              className={cn('size-3.5 shrink-0 transition-transform', factorySelectionCardOpen && 'rotate-180')}
+              icon="mdi:chevron-down"
+            />
+          </button>
+          {factorySelectionCardOpen ? (
+            <>
+              <div className="mt-1 text-[9px] leading-snug text-muted-foreground/80">
+                单击选整机，按住 Ctrl 可叠加选多个对象。
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {['make blue', 'move left 1m', 'rotate 90 degrees', 'delete this'].map((hint) => (
+                  <button
+                    className="rounded-md border border-border/50 px-1.5 py-0.5 text-[9px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff]"
+                    disabled={loading}
+                    key={hint}
+                    onClick={() => setInput(hint)}
+                    type="button"
+                  >
+                    {hint}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
           <div className="relative">
             <textarea
               className={cn(

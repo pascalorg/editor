@@ -115,7 +115,7 @@
     ],
     "shapeCount": {
       "min": 4,
-      "max": 65
+      "max": 80
     }
   },
   {
@@ -187,11 +187,67 @@
       "compressed_air_pipe",
       "coolant_pipe",
       "utility_pipe_elbow",
-      "utility_valve"
+      "valve_body"
     ],
     "shapeCount": {
       "min": 4,
       "max": 50
+    }
+  },
+  {
+    "id": "quality.discrete_manufacturing.fixture_table",
+    "requiredRoles": [
+      "fixture_table",
+      "t_slot_surface",
+      "clamp_blocks",
+      "locator_pins",
+      "tool_rail"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 55
+    }
+  },
+  {
+    "id": "quality.discrete_manufacturing.test_bench",
+    "requiredRoles": [
+      "test_bench",
+      "instrument_display",
+      "test_control_panel",
+      "test_cable_tray",
+      "test_status_light"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 45
+    }
+  },
+  {
+    "id": "quality.discrete_manufacturing.material_cart",
+    "requiredRoles": [
+      "cart_platform",
+      "cart_wheels",
+      "push_handle",
+      "material_bins"
+    ],
+    "shapeCount": {
+      "min": 4,
+      "max": 45
+    }
+  },
+  {
+    "id": "quality.discrete_manufacturing.palletizing_workcell",
+    "requiredRoles": [
+      "robot_base",
+      "shoulder_joint",
+      "upper_arm",
+      "forearm",
+      "work_table",
+      "safety_barrier"
+    ],
+    "shapeCount": {
+      "min": 7,
+      "max": 75
     }
   }
 ]

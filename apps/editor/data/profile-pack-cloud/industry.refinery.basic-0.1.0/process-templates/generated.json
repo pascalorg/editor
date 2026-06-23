@@ -3,7 +3,7 @@
     "processId": "refinery_basic_complex",
     "processLabel": "Basic oil refinery complex",
     "processDisplayLabel": "基础炼油厂",
-    "domain": "refinery",
+    "domain": "chemical",
     "aliases": [
       "炼油厂",
       "原油炼油厂",
@@ -21,8 +21,10 @@
       "desalter",
       "atmospheric_distillation_unit",
       "vacuum_distillation_unit",
+      "delayed_coker_unit",
       "intermediate_storage_tank",
       "fluid_catalytic_cracking_unit",
+      "gas_fractionation_unit",
       "hydrotreating_unit",
       "catalytic_reformer_unit",
       "sulfur_recovery_unit",
@@ -47,9 +49,9 @@
       {
         "id": "crude_storage_tank",
         "label": "Crude storage tank farm",
-        "displayLabel": "原油储罐",
+        "displayLabel": "原油罐区",
         "role": "crude_storage_tank",
-        "equipmentHint": "refinery.crude_storage_tank catalog storage tank for crude oil tank farm with inlet outlet nozzles and containment area",
+        "equipmentHint": "refinery.crude_storage_tank large crude oil tank farm: several vertical cylindrical storage tanks with floating-roof impression, inlet/outlet nozzles, access ladders, containment/bund area, and crude transfer pipes feeding the desalter; offsite storage, not a process reactor.",
         "footprintHint": "large",
         "safetyTags": [
           "storage",
@@ -61,7 +63,7 @@
         "label": "Crude desalter",
         "displayLabel": "电脱盐器",
         "role": "desalter",
-        "equipmentHint": "refinery.desalter horizontal desalter vessel with inlet outlet water drain and transformer control box",
+        "equipmentHint": "refinery.desalter horizontal electrostatic crude desalter vessel on skid: long horizontal pressure vessel, crude inlet, desalted crude outlet, brine/water drain, transformer/control box, and short pipe manifold upstream of atmospheric distillation.",
         "footprintHint": "medium",
         "safetyTags": [
           "pressure_vessel",
@@ -73,7 +75,7 @@
         "label": "Atmospheric distillation unit",
         "displayLabel": "常压蒸馏塔",
         "role": "atmospheric_distillation_unit",
-        "equipmentHint": "refinery.atmospheric_distillation_unit tall crude atmospheric distillation column with fired heater heat exchanger pipe manifold service platforms and side draw nozzles",
+        "equipmentHint": "refinery.atmospheric_distillation_unit crude CDU: tall atmospheric fractionation column with tray bands and side draw manifolds, fired heater and preheat exchangers at base, overhead naphtha outlet, middle distillate side draws, and bottom atmospheric residue outlet to VDU.",
         "footprintHint": "tall",
         "safetyTags": [
           "distillation",
@@ -85,7 +87,7 @@
         "label": "Vacuum distillation unit",
         "displayLabel": "减压蒸馏塔",
         "role": "vacuum_distillation_unit",
-        "equipmentHint": "refinery.vacuum_distillation_unit tall vacuum tower with fired heater condenser exchanger vacuum line and service platform",
+        "equipmentHint": "refinery.vacuum_distillation_unit VDU: wide vacuum tower processing atmospheric residue with vacuum heater, overhead vacuum line/condenser, VGO side outlet to FCC, and bottom vacuum residue outlet to delayed coker/residue conversion.",
         "footprintHint": "tall",
         "safetyTags": [
           "distillation",
@@ -93,11 +95,23 @@
         ]
       },
       {
+        "id": "delayed_coker_unit",
+        "label": "Delayed coker unit",
+        "displayLabel": "延迟焦化装置",
+        "role": "delayed_coker_unit",
+        "equipmentHint": "refinery.delayed_coker_unit delayed coker for vacuum residue: paired tall coke drums, coker fractionator, fired heater, overhead vapor line, coke handling base, vacuum residue inlet from VDU bottom and coker distillate outlet back to treating/product handling.",
+        "footprintHint": "large",
+        "safetyTags": [
+          "residue_conversion",
+          "high_temperature"
+        ]
+      },
+      {
         "id": "intermediate_storage_tank",
         "label": "Intermediate storage tank farm",
-        "displayLabel": "\u4e2d\u95f4\u6599\u50a8\u7f50",
+        "displayLabel": "中间料罐区",
         "role": "intermediate_storage_tank",
-        "equipmentHint": "refinery.intermediate_storage_tank native storage tank farm for naphtha gas oil and intermediate blend components between distillation and conversion units",
+        "equipmentHint": "refinery.intermediate_storage_tank intermediate tankage for straight-run naphtha, kerosene/diesel, VGO and blend components; buffer tank farm between distillation, FCC, hydrotreating, reformer and product blending, not a vacuum residue disposal route.",
         "footprintHint": "large",
         "safetyTags": [
           "storage",
@@ -110,7 +124,7 @@
         "label": "Fluid catalytic cracking unit",
         "displayLabel": "催化裂化装置",
         "role": "fluid_catalytic_cracking_unit",
-        "equipmentHint": "refinery.fluid_catalytic_cracking_unit FCC reactor regenerator pair with riser cyclone separator catalyst standpipe and stack",
+        "equipmentHint": "refinery.fluid_catalytic_cracking_unit FCC complex: reactor-regenerator pair, riser, catalyst standpipes, regenerator cyclone/stack and main fractionator. VGO feed enters FCC; cracked gasoline/LCO/slurry go to product/intermediate handling; FCC rich gas goes to gas fractionation/LPG recovery, not to flare in normal operation.",
         "footprintHint": "large",
         "safetyTags": [
           "conversion",
@@ -118,11 +132,23 @@
         ]
       },
       {
+        "id": "gas_fractionation_unit",
+        "label": "Gas fractionation and LPG recovery",
+        "displayLabel": "气体分馏装置",
+        "role": "gas_fractionation_unit",
+        "equipmentHint": "refinery.gas_fractionation_unit LPG recovery/gas fractionation downstream of FCC rich gas: deethanizer/debutanizer columns, LPG surge drum, overhead condenser, rich gas feed header, dry gas outlet and LPG product outlet.",
+        "footprintHint": "large",
+        "safetyTags": [
+          "gas_processing",
+          "flammable"
+        ]
+      },
+      {
         "id": "hydrotreating_unit",
         "label": "Hydrotreating unit",
         "displayLabel": "加氢精制装置",
         "role": "hydrotreating_unit",
-        "equipmentHint": "refinery.hydrotreating_unit hydrotreater reactor train with heat exchanger separator hydrogen inlet and product outlet",
+        "equipmentHint": "refinery.hydrotreating_unit high-pressure hydrotreater/HDS reactor train: vertical reactor, feed-effluent exchanger, high-pressure separator, visible hydrogen makeup header from catalytic reformer hydrogen, treated product outlet, and acid gas outlet to sulfur recovery.",
         "footprintHint": "large",
         "safetyTags": [
           "hydrogen",
@@ -134,7 +160,7 @@
         "label": "Catalytic reformer",
         "displayLabel": "催化重整装置",
         "role": "catalytic_reformer_unit",
-        "equipmentHint": "refinery.catalytic_reformer_unit reformer reactor train with fired heater heat exchanger separator and gas outlet",
+        "equipmentHint": "refinery.catalytic_reformer_unit catalytic reformer/platformer: naphtha reactor train with fired heaters/interheaters, heat exchanger, separator, reformate product outlet to gasoline blending, and hydrogen-rich gas header supplying hydrotreating units.",
         "footprintHint": "large",
         "safetyTags": [
           "reformer",
@@ -146,7 +172,7 @@
         "label": "Sulfur recovery unit",
         "displayLabel": "硫回收装置",
         "role": "sulfur_recovery_unit",
-        "equipmentHint": "refinery.sulfur_recovery_unit Claus sulfur recovery unit with thermal reactor condenser vessel and tail gas stack",
+        "equipmentHint": "refinery.sulfur_recovery_unit Claus sulfur recovery: thermal reactor, sulfur condensers, acid gas inlet from hydrotreaters, sulfur outlet, and tail gas stack for sour gas treatment.",
         "footprintHint": "medium",
         "safetyTags": [
           "sour_gas",
@@ -158,7 +184,7 @@
         "label": "Flare system",
         "displayLabel": "火炬系统",
         "role": "flare_system",
-        "equipmentHint": "refinery.flare_system tall flare stack with knock-out drum inlet line and warning bands",
+        "equipmentHint": "refinery.flare_system emergency safety flare only: tall flare stack with knockout drum and relief gas header. It is for emergency/relief disposal, never the normal outlet for FCC rich gas or saleable LPG.",
         "footprintHint": "tall",
         "safetyTags": [
           "relief",
@@ -168,9 +194,9 @@
       {
         "id": "product_storage_tank",
         "label": "Product storage tank farm",
-        "displayLabel": "成品储罐",
+        "displayLabel": "成品罐区",
         "role": "product_storage_tank",
-        "equipmentHint": "refinery.product_storage_tank catalog storage tank for gasoline diesel product tank farm with loading outlet",
+        "equipmentHint": "refinery.product_storage_tank product tank farm for gasoline, diesel, LPG/reformate/blend components with vertical tanks, loading outlet manifold, access ladders, and containment area.",
         "footprintHint": "large",
         "safetyTags": [
           "storage",
@@ -182,7 +208,7 @@
         "label": "Main pipe rack",
         "displayLabel": "主管廊",
         "role": "pipe_rack",
-        "equipmentHint": "refinery.pipe_rack long elevated process pipe rack with multiple parallel pipe runs and support frames",
+        "equipmentHint": "refinery.pipe_rack long elevated refinery pipe rack with multiple parallel process pipes, support frames, cable tray, and branch takeoffs connecting major units without hiding equipment.",
         "footprintHint": "long",
         "safetyTags": [
           "process_pipe",
@@ -194,7 +220,7 @@
         "label": "Utility boiler",
         "displayLabel": "公用工程锅炉",
         "role": "utility_boiler",
-        "equipmentHint": "refinery.utility_boiler utility boiler and steam header with stack and control box",
+        "equipmentHint": "refinery.utility_boiler utility boiler and steam header with boiler body, stack, steam manifold and control box serving process units.",
         "footprintHint": "medium",
         "safetyTags": [
           "steam",
@@ -206,7 +232,7 @@
         "label": "Control room",
         "displayLabel": "中控室",
         "role": "control_room",
-        "equipmentHint": "refinery.control_room refinery control room and MCC cabinet area placed away from flare and high temperature units",
+        "equipmentHint": "refinery.control_room blast-separated control room and MCC cabinets placed away from flare/high temperature units, with cable tray connection to pipe rack.",
         "footprintHint": "medium",
         "safetyTags": [
           "control",
@@ -220,91 +246,152 @@
         "toStationId": "desalter",
         "medium": "material",
         "visualKind": "pipe",
-        "label": "原油进料"
+        "label": "原油进料",
+        "fromPortId": "product_outlet",
+        "toPortId": "crude_inlet"
       },
       {
         "fromStationId": "desalter",
         "toStationId": "atmospheric_distillation_unit",
         "medium": "material",
         "visualKind": "pipe",
-        "label": "脱盐原油"
+        "label": "脱盐原油",
+        "fromPortId": "desalted_crude_outlet",
+        "toPortId": "desalted_crude_in"
       },
       {
         "fromStationId": "atmospheric_distillation_unit",
         "toStationId": "vacuum_distillation_unit",
         "medium": "material",
         "visualKind": "pipe",
-        "label": "常压渣油"
-      },
-      {
-        "fromStationId": "vacuum_distillation_unit",
-        "toStationId": "intermediate_storage_tank",
-        "medium": "material",
-        "visualKind": "pipe",
-        "label": "蜡油中间料"
+        "label": "常压渣油",
+        "fromPortId": "atmospheric_residue_out",
+        "toPortId": "atmospheric_residue_in"
       },
       {
         "fromStationId": "atmospheric_distillation_unit",
         "toStationId": "intermediate_storage_tank",
         "medium": "material",
         "visualKind": "pipe",
-        "label": "石脑油和柴油馏分"
+        "label": "石脑油/柴油等直馏馏分",
+        "fromPortId": "naphtha_distillate_out",
+        "toPortId": "distillate_inlet"
       },
       {
-        "fromStationId": "intermediate_storage_tank",
+        "fromStationId": "vacuum_distillation_unit",
         "toStationId": "fluid_catalytic_cracking_unit",
         "medium": "material",
         "visualKind": "pipe",
-        "label": "催化裂化进料"
+        "label": "减压蜡油 VGO",
+        "fromPortId": "vacuum_gas_oil_out",
+        "toPortId": "vacuum_gas_oil_in"
+      },
+      {
+        "fromStationId": "vacuum_distillation_unit",
+        "toStationId": "delayed_coker_unit",
+        "medium": "material",
+        "visualKind": "pipe",
+        "label": "减压渣油 VR",
+        "fromPortId": "vacuum_residue_out",
+        "toPortId": "vacuum_residue_in"
+      },
+      {
+        "fromStationId": "delayed_coker_unit",
+        "toStationId": "hydrotreating_unit",
+        "medium": "material",
+        "visualKind": "pipe",
+        "label": "焦化汽柴油/馏分油加氢",
+        "fromPortId": "coker_distillate_out",
+        "toPortId": "hydrotreater_feed_in"
       },
       {
         "fromStationId": "intermediate_storage_tank",
         "toStationId": "hydrotreating_unit",
         "medium": "material",
         "visualKind": "pipe",
-        "label": "加氢进料"
+        "label": "直馏柴油/石脑油加氢进料",
+        "fromPortId": "conversion_feed_outlet",
+        "toPortId": "hydrotreater_feed_in"
       },
       {
         "fromStationId": "intermediate_storage_tank",
         "toStationId": "catalytic_reformer_unit",
         "medium": "material",
         "visualKind": "pipe",
-        "label": "重整进料"
+        "label": "加氢后石脑油/重整进料",
+        "fromPortId": "conversion_feed_outlet",
+        "toPortId": "naphtha_in"
+      },
+      {
+        "fromStationId": "fluid_catalytic_cracking_unit",
+        "toStationId": "gas_fractionation_unit",
+        "medium": "gas",
+        "visualKind": "pipe",
+        "label": "FCC富气至气分/LPG回收",
+        "fromPortId": "rich_gas_out",
+        "toPortId": "fcc_rich_gas_in"
       },
       {
         "fromStationId": "fluid_catalytic_cracking_unit",
         "toStationId": "product_storage_tank",
         "medium": "material",
         "visualKind": "pipe",
-        "label": "汽柴油组分"
+        "label": "FCC汽油/LCO/油浆组分",
+        "fromPortId": "cracked_product_out",
+        "toPortId": "feed_inlet"
+      },
+      {
+        "fromStationId": "gas_fractionation_unit",
+        "toStationId": "product_storage_tank",
+        "medium": "material",
+        "visualKind": "pipe",
+        "label": "LPG/丙烯/丁烷产品",
+        "fromPortId": "lpg_product_out",
+        "toPortId": "feed_inlet"
       },
       {
         "fromStationId": "hydrotreating_unit",
         "toStationId": "product_storage_tank",
         "medium": "material",
         "visualKind": "pipe",
-        "label": "加氢产品"
+        "label": "加氢产品",
+        "fromPortId": "treated_product_out",
+        "toPortId": "feed_inlet"
       },
       {
         "fromStationId": "catalytic_reformer_unit",
         "toStationId": "product_storage_tank",
         "medium": "material",
         "visualKind": "pipe",
-        "label": "重整油"
+        "label": "重整油",
+        "fromPortId": "reformate_out",
+        "toPortId": "feed_inlet"
+      },
+      {
+        "fromStationId": "catalytic_reformer_unit",
+        "toStationId": "hydrotreating_unit",
+        "medium": "hydrogen",
+        "visualKind": "pipe",
+        "label": "重整副产氢至加氢",
+        "fromPortId": "hydrogen_rich_gas_out",
+        "toPortId": "hydrogen_in"
       },
       {
         "fromStationId": "hydrotreating_unit",
         "toStationId": "sulfur_recovery_unit",
         "medium": "gas",
         "visualKind": "pipe",
-        "label": "酸性气"
+        "label": "酸性气至硫回收",
+        "fromPortId": "acid_gas_out",
+        "toPortId": "acid_gas_inlet"
       },
       {
-        "fromStationId": "fluid_catalytic_cracking_unit",
+        "fromStationId": "pipe_rack",
         "toStationId": "flare_system",
         "medium": "gas",
         "visualKind": "pipe",
-        "label": "放空气"
+        "label": "应急泄放总管（非正常工况）",
+        "toPortId": "relief_gas_inlet"
       },
       {
         "fromStationId": "pipe_rack",
@@ -334,16 +421,18 @@
         "atmospheric_distillation_unit",
         "vacuum_distillation_unit",
         "fluid_catalytic_cracking_unit",
+        "delayed_coker_unit",
+        "gas_fractionation_unit",
         "crude_storage_tank",
-        "intermediate_storage_tank",
         "product_storage_tank"
       ],
       "mainProcessStationIds": [
         "desalter",
         "atmospheric_distillation_unit",
         "vacuum_distillation_unit",
-        "intermediate_storage_tank",
+        "delayed_coker_unit",
         "fluid_catalytic_cracking_unit",
+        "gas_fractionation_unit",
         "hydrotreating_unit",
         "catalytic_reformer_unit"
       ],
@@ -353,6 +442,12 @@
         "product_storage_tank",
         "flare_system",
         "control_room"
+      ],
+      "notes": [
+        "FCC rich gas is a normal valuable stream to gas fractionation/LPG recovery, not to flare.",
+        "Vacuum residue leaves VDU bottom to delayed coker in this basic Chinese-refinery-oriented configuration.",
+        "Catalytic reformer hydrogen-rich gas supplies hydrotreating hydrogen demand.",
+        "Flare system represents emergency relief only."
       ]
     }
   }

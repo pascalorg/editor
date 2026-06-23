@@ -718,7 +718,7 @@
       },
       {
         "kind": "valve_body",
-        "semanticRole": "process_valve",
+        "semanticRole": "valve_body",
         "required": true,
         "attachToRole": "process_pipe",
         "anchor": "service_side"
@@ -796,6 +796,288 @@
       "HMI display",
       "cable tray",
       "warning label"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "process.bulk_material_silo",
+    "name": "Bulk material silo",
+    "aliases": [
+      "粉体料仓",
+      "料仓",
+      "粉仓",
+      "bulk material silo",
+      "powder silo"
+    ],
+    "industry": "process",
+    "layoutFamily": "vessel_layout",
+    "family": "tank",
+    "defaultDimensions": {
+      "length": 2.2,
+      "width": 2.2,
+      "height": 5
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "silo_shell",
+        "required": true,
+        "radius": 0.9,
+        "height": 3.2,
+        "color": "#cbd5e1"
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "conical_hopper_bottom",
+        "required": true,
+        "attachToRole": "silo_shell",
+        "anchor": "bottom",
+        "color": "#bfc7d5"
+      },
+      {
+        "kind": "structural_tower_frame",
+        "semanticRole": "silo_support_frame",
+        "required": true,
+        "attachToRole": "silo_shell",
+        "anchor": "bottom",
+        "height": 1.4,
+        "levelCount": 2
+      },
+      {
+        "kind": "generic_spout",
+        "semanticRole": "silo_discharge_spout",
+        "required": true,
+        "attachToRole": "conical_hopper_bottom",
+        "anchor": "bottom"
+      },
+      {
+        "kind": "generic_detail_accent",
+        "semanticRole": "level_indicator",
+        "attachToRole": "silo_shell",
+        "anchor": "service_side"
+      }
+    ],
+    "primarySemanticRole": "silo_shell",
+    "qualityRules": "quality.process.bulk_material_silo",
+    "visualCues": [
+      "tall silo",
+      "cylindrical bin",
+      "conical hopper bottom",
+      "support frame"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "process.valve_station",
+    "name": "Valve manifold station",
+    "aliases": [
+      "阀组站",
+      "阀组",
+      "阀门站",
+      "valve manifold",
+      "valve station"
+    ],
+    "industry": "process",
+    "layoutFamily": "pipe_valve_layout",
+    "family": "pipe_system",
+    "defaultDimensions": {
+      "length": 2.6,
+      "width": 1,
+      "height": 1.2
+    },
+    "parts": [
+      {
+        "kind": "skid_base",
+        "semanticRole": "valve_station_skid",
+        "required": true,
+        "length": 2.5,
+        "width": 0.9,
+        "height": 0.16
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "manifold_pipe",
+        "required": true,
+        "attachToRole": "valve_station_skid",
+        "anchor": "top",
+        "length": 2.4,
+        "radius": 0.055,
+        "axis": "x"
+      },
+      {
+        "kind": "valve_body",
+        "semanticRole": "valve_body",
+        "required": true,
+        "attachToRole": "manifold_pipe",
+        "anchor": "service_side"
+      },
+      {
+        "kind": "valve_body",
+        "semanticRole": "valve_body",
+        "required": true,
+        "attachToRole": "manifold_pipe",
+        "anchor": "right"
+      },
+      {
+        "kind": "flange_ring",
+        "semanticRole": "manifold_flange",
+        "attachToRole": "manifold_pipe",
+        "anchor": "left"
+      }
+    ],
+    "primarySemanticRole": "manifold_pipe",
+    "qualityRules": "quality.process.valve_station",
+    "visualCues": [
+      "pipe manifold",
+      "multiple valves",
+      "flanges",
+      "compact skid"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "process.utility_blower",
+    "name": "Utility blower",
+    "aliases": [
+      "公用鼓风机",
+      "鼓风机",
+      "工业鼓风机",
+      "utility blower",
+      "industrial blower"
+    ],
+    "industry": "process",
+    "layoutFamily": "rotating_machine_layout",
+    "family": "fan",
+    "defaultDimensions": {
+      "length": 2,
+      "width": 1.2,
+      "height": 1.4
+    },
+    "parts": [
+      {
+        "kind": "skid_base",
+        "semanticRole": "blower_skid_base",
+        "required": true,
+        "length": 2,
+        "width": 1,
+        "height": 0.18
+      },
+      {
+        "kind": "volute_casing",
+        "semanticRole": "blower_casing",
+        "required": true,
+        "attachToRole": "blower_skid_base",
+        "anchor": "top"
+      },
+      {
+        "kind": "impeller_blades",
+        "semanticRole": "blower_impeller",
+        "required": true,
+        "attachToRole": "blower_casing",
+        "anchor": "shell_center",
+        "bladeCount": 8
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "drive_motor",
+        "required": true,
+        "attachToRole": "blower_casing",
+        "anchor": "drive_side"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "air_inlet",
+        "attachToRole": "blower_casing",
+        "anchor": "front"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "air_outlet",
+        "required": true,
+        "attachToRole": "blower_casing",
+        "anchor": "top"
+      }
+    ],
+    "primarySemanticRole": "blower_casing",
+    "qualityRules": "quality.process.utility_blower",
+    "visualCues": [
+      "volute blower casing",
+      "impeller",
+      "drive motor",
+      "air outlet"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "process.air_compressor_skid",
+    "name": "Air compressor skid",
+    "aliases": [
+      "空压机撬",
+      "压缩空气撬",
+      "空气压缩机撬",
+      "air compressor skid",
+      "compressed air skid"
+    ],
+    "industry": "process",
+    "layoutFamily": "rotating_machine_layout",
+    "family": "compressor",
+    "defaultDimensions": {
+      "length": 2.8,
+      "width": 1.1,
+      "height": 1.3
+    },
+    "parts": [
+      {
+        "kind": "skid_base",
+        "semanticRole": "compressor_skid_base",
+        "required": true,
+        "length": 2.7,
+        "width": 1,
+        "height": 0.18
+      },
+      {
+        "kind": "rounded_machine_body",
+        "semanticRole": "compressor_body",
+        "required": true,
+        "attachToRole": "compressor_skid_base",
+        "anchor": "top",
+        "length": 1.2,
+        "width": 0.55,
+        "height": 0.65,
+        "color": "#d1d5db"
+      },
+      {
+        "kind": "ribbed_motor_body",
+        "semanticRole": "drive_motor",
+        "required": true,
+        "attachToRole": "compressor_body",
+        "anchor": "drive_side"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "air_pipe_manifold",
+        "required": true,
+        "attachToRole": "compressor_body",
+        "anchor": "front"
+      },
+      {
+        "kind": "control_box",
+        "semanticRole": "compressor_control_box",
+        "attachToRole": "compressor_skid_base",
+        "anchor": "service_side"
+      }
+    ],
+    "primarySemanticRole": "compressor_body",
+    "qualityRules": "quality.process.air_compressor_skid",
+    "visualCues": [
+      "compressor skid",
+      "rounded compressor body",
+      "ribbed motor",
+      "air pipe manifold"
     ],
     "status": "stable",
     "source": "imported_pack"

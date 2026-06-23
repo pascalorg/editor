@@ -6,20 +6,75 @@
     "processId": "refinery_basic_complex",
     "layoutStyle": "parallel_bays",
     "defaultDimensions": {
-      "length": 92,
-      "width": 42
+      "length": 104,
+      "width": 46
     },
     "scopes": [
       {
         "id": "basic_refinery",
         "label": "基础炼油厂",
+        "aliases": [
+          "炼油厂",
+          "完整炼油厂",
+          "basic refinery",
+          "oil refinery"
+        ],
         "includeModules": [
           "crude_tank_farm",
           "primary_distillation",
           "intermediate_tank_farm",
+          "residue_conversion",
           "conversion_treating",
           "product_offsites",
           "utilities_safety"
+        ]
+      },
+      {
+        "id": "cdu_only",
+        "label": "常减压装置",
+        "aliases": [
+          "常减压",
+          "常减压装置",
+          "CDU",
+          "CDU VDU",
+          "crude distillation only"
+        ],
+        "includeModules": [
+          "crude_tank_farm",
+          "primary_distillation",
+          "intermediate_tank_farm",
+          "product_offsites"
+        ]
+      },
+      {
+        "id": "conversion_only",
+        "label": "转化和加氢区",
+        "aliases": [
+          "转化区",
+          "FCC和加氢",
+          "conversion area",
+          "conversion units"
+        ],
+        "includeModules": [
+          "intermediate_tank_farm",
+          "residue_conversion",
+          "conversion_treating",
+          "product_offsites"
+        ]
+      },
+      {
+        "id": "tank_farm",
+        "label": "炼油罐区",
+        "aliases": [
+          "罐区",
+          "油罐区",
+          "tank farm",
+          "refinery tank farm"
+        ],
+        "includeModules": [
+          "crude_tank_farm",
+          "intermediate_tank_farm",
+          "product_offsites"
         ]
       }
     ],
@@ -44,10 +99,18 @@
       },
       {
         "id": "intermediate_tank_farm",
-        "displayLabel": "\u4e2d\u95f4\u6599\u7f50\u533a",
+        "displayLabel": "中间料罐区",
         "order": 25,
         "stationIds": [
           "intermediate_storage_tank"
+        ]
+      },
+      {
+        "id": "residue_conversion",
+        "displayLabel": "渣油转化",
+        "order": 28,
+        "stationIds": [
+          "delayed_coker_unit"
         ]
       },
       {
@@ -56,6 +119,7 @@
         "order": 30,
         "stationIds": [
           "fluid_catalytic_cracking_unit",
+          "gas_fractionation_unit",
           "hydrotreating_unit",
           "catalytic_reformer_unit"
         ]
@@ -98,11 +162,12 @@
       ],
       "scale": "conceptual",
       "notes": [
-        "罐区和外操区与主体工艺装置保持间隔，避免把储罐塞进高温高压设备区。",
-        "常减压位于流程前段，FCC、加氢和重整位于中后段，产品罐区位于下游。",
-        "火炬系统作为安全设施布置在侧后方，远离控制室和主体工艺线。",
-        "管廊沿主流程侧边贯穿，用于表达炼油厂大量管线但不覆盖核心设备。"
-      ]
+        "Keep crude/intermediate/product tank farms separated from hot process units.",
+        "Place CDU/VDU upstream, delayed coker near VDU bottom products, FCC/gas fractionation/hydrotreating/reformer in conversion area.",
+        "Flare is a safety system at a remote side/back location; do not use it as normal FCC rich-gas destination.",
+        "Pipe rack runs along the main process edge and carries process/utility/cable connections without hiding equipment."
+      ],
+      "omitPerimeterWalls": true
     }
   }
 ]

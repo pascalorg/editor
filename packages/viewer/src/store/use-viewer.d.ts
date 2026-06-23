@@ -29,6 +29,10 @@ type ViewerState = {
   setShowScans: (show: boolean) => void
   showGuides: boolean
   setShowGuides: (show: boolean) => void
+  showZoneLabels: boolean
+  setShowZoneLabels: (show: boolean) => void
+  showGrid: boolean
+  setShowGrid: (show: boolean) => void
   setSelection: (updates: Partial<SelectionPath>) => void
   resetSelection: () => void
   outliner: Outliner

@@ -165,6 +165,12 @@ export function FloatingActionMenu() {
   const groupRef = useRef<THREE.Group>(null)
   const startEndpointGroupRef = useRef<THREE.Group>(null)
   const endEndpointGroupRef = useRef<THREE.Group>(null)
+  const boxRef = useRef(new THREE.Box3())
+  const centerRef = useRef(new THREE.Vector3())
+  const lastPlacementRef = useRef<{
+    id: string | null
+    matrixWorld: number[]
+  }>({ id: null, matrixWorld: [] })
   const [altPressed, setAltPressed] = useState(false)
 
   // Only show for single selection of specific types
@@ -235,14 +241,27 @@ export function FloatingActionMenu() {
 
     const obj = sceneRegistry.nodes.get(selectedId)
     if (obj) {
-      // Calculate bounding box in world space
-      const box = new THREE.Box3().setFromObject(obj)
-      if (!box.isEmpty()) {
-        const center = box.getCenter(new THREE.Vector3())
-        // Position above the object, with extra offset for walls/slabs to avoid covering measurement labels
-        const isStructural = node && [...DELETE_ONLY_TYPES, ...HOLE_TYPES].includes(node.type)
-        const yOffset = isStructural ? 0.8 : 0.3
-        groupRef.current.position.set(center.x, box.max.y + yOffset, center.z)
+      const lastPlacement = lastPlacementRef.current
+      obj.updateWorldMatrix(true, false)
+      const matrixElements = obj.matrixWorld.elements
+      const matrixChanged =
+        lastPlacement.matrixWorld.length !== matrixElements.length ||
+        matrixElements.some((value, index) => value !== lastPlacement.matrixWorld[index])
+      const shouldMeasureBounds = selectedId !== lastPlacement.id || matrixChanged
+
+      if (shouldMeasureBounds) {
+        const box = boxRef.current.setFromObject(obj)
+        if (!box.isEmpty()) {
+          const center = box.getCenter(centerRef.current)
+          // Position above the object, with extra offset for walls/slabs to avoid covering measurement labels
+          const isStructural = node && [...DELETE_ONLY_TYPES, ...HOLE_TYPES].includes(node.type)
+          const yOffset = isStructural ? 0.8 : 0.3
+          groupRef.current.position.set(center.x, box.max.y + yOffset, center.z)
+        }
+        lastPlacementRef.current = {
+          id: selectedId,
+          matrixWorld: Array.from(matrixElements),
+        }
       }
 
       if (

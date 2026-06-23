@@ -5,6 +5,7 @@ import {
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
+  ensureWebGPUCompatibleGeometry,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -40,12 +41,14 @@ export const TorusRenderer = ({ node }: { node: TorusNode }) => {
 
   const geometry = useMemo(
     () =>
-      new THREE.TorusGeometry(
-        node.majorRadius ?? 0.5,
-        node.tubeRadius ?? 0.08,
-        node.radialSegments ?? 16,
-        node.tubularSegments ?? 48,
-        node.arc ?? Math.PI * 2,
+      ensureWebGPUCompatibleGeometry(
+        new THREE.TorusGeometry(
+          node.majorRadius ?? 0.5,
+          node.tubeRadius ?? 0.08,
+          node.radialSegments ?? 16,
+          node.tubularSegments ?? 48,
+          node.arc ?? Math.PI * 2,
+        ),
       ),
     [node.majorRadius, node.tubeRadius, node.radialSegments, node.tubularSegments, node.arc],
   )

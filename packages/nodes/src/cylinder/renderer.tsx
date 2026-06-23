@@ -6,6 +6,7 @@ import {
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
+  ensureWebGPUCompatibleGeometry,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -46,12 +47,14 @@ export const CylinderRenderer = ({ node }: { node: CylinderNode }) => {
 
   const geometry = useMemo(
     () =>
-      createCylinderGeometry({
-        radius: node.radius ?? 0.5,
-        height: node.height ?? 1.0,
-        radialSegments: node.radialSegments ?? 32,
-        wallThickness: node.wallThickness,
-      }),
+      ensureWebGPUCompatibleGeometry(
+        createCylinderGeometry({
+          radius: node.radius ?? 0.5,
+          height: node.height ?? 1.0,
+          radialSegments: node.radialSegments ?? 32,
+          wallThickness: node.wallThickness,
+        }),
+      ),
     [node.radius, node.height, node.radialSegments, node.wallThickness],
   )
   const instances = primitivePatternInstances(node.metadata)

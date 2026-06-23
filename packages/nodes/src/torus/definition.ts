@@ -32,6 +32,11 @@ export const torusDefinition: NodeDefinition<typeof TorusNode> = {
     module: () => import('./renderer'),
   },
 
+  system: {
+    module: () => import('./batch-system'),
+    priority: 7,
+  },
+
   presentation: {
     label: 'Torus',
     description:

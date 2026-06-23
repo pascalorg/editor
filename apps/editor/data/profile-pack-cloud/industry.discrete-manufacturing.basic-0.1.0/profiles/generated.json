@@ -529,7 +529,7 @@
         "length": 4,
         "width": 1.1,
         "height": 3,
-        "levelCount": 4
+        "levelCount": 3
       },
       {
         "kind": "pallet_table",
@@ -538,7 +538,7 @@
         "attachToRole": "rack_frame",
         "anchor": "front",
         "arrayAlong": "height",
-        "count": 3
+        "count": 2
       },
       {
         "kind": "warning_label",
@@ -893,7 +893,7 @@
       },
       {
         "kind": "valve_body",
-        "semanticRole": "utility_valve",
+        "semanticRole": "valve_body",
         "attachToRole": "compressed_air_pipe",
         "anchor": "service_side"
       }
@@ -905,6 +905,307 @@
       "parallel utility pipe",
       "cable tray",
       "valve"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.fixture_table",
+    "name": "Fixture table",
+    "aliases": [
+      "工装台",
+      "夹具台",
+      "治具台",
+      "fixture table",
+      "jig table"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "box_enclosure_layout",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 2.2,
+      "width": 1.2,
+      "height": 0.9
+    },
+    "parts": [
+      {
+        "kind": "pallet_table",
+        "semanticRole": "fixture_table",
+        "required": true,
+        "length": 2.1,
+        "width": 1.1,
+        "height": 0.8
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "t_slot_surface",
+        "required": true,
+        "attachToRole": "fixture_table",
+        "anchor": "top",
+        "color": "#9ca3af"
+      },
+      {
+        "kind": "generic_detail_accent",
+        "semanticRole": "clamp_blocks",
+        "required": true,
+        "attachToRole": "t_slot_surface",
+        "anchor": "top",
+        "arrayAlong": "length",
+        "count": 4
+      },
+      {
+        "kind": "vertical_pole",
+        "semanticRole": "locator_pins",
+        "attachToRole": "t_slot_surface",
+        "anchor": "top",
+        "count": 4,
+        "height": 0.18,
+        "radius": 0.025
+      },
+      {
+        "kind": "cable_tray",
+        "semanticRole": "tool_rail",
+        "attachToRole": "fixture_table",
+        "anchor": "back"
+      }
+    ],
+    "primarySemanticRole": "fixture_table",
+    "qualityRules": "quality.discrete_manufacturing.fixture_table",
+    "visualCues": [
+      "fixture table",
+      "T-slot surface",
+      "clamp blocks",
+      "locator pins"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.test_bench",
+    "name": "Functional test bench",
+    "aliases": [
+      "功能测试台",
+      "测试台",
+      "检测台",
+      "functional test bench",
+      "test bench"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "box_enclosure_layout",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 2.4,
+      "width": 1.2,
+      "height": 1.8
+    },
+    "parts": [
+      {
+        "kind": "pallet_table",
+        "semanticRole": "test_bench",
+        "required": true,
+        "length": 2.2,
+        "width": 1,
+        "height": 0.85
+      },
+      {
+        "kind": "generic_display",
+        "semanticRole": "instrument_display",
+        "required": true,
+        "attachToRole": "test_bench",
+        "anchor": "back"
+      },
+      {
+        "kind": "generic_control_panel",
+        "semanticRole": "test_control_panel",
+        "required": true,
+        "attachToRole": "test_bench",
+        "anchor": "service_side"
+      },
+      {
+        "kind": "cable_tray",
+        "semanticRole": "test_cable_tray",
+        "attachToRole": "test_bench",
+        "anchor": "top"
+      },
+      {
+        "kind": "status_light_strip",
+        "semanticRole": "test_status_light",
+        "attachToRole": "instrument_display",
+        "anchor": "top"
+      }
+    ],
+    "primarySemanticRole": "test_bench",
+    "qualityRules": "quality.discrete_manufacturing.test_bench",
+    "visualCues": [
+      "test bench",
+      "instrument display",
+      "control panel",
+      "cable tray"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.material_cart",
+    "name": "Material cart",
+    "aliases": [
+      "物料车",
+      "转运车",
+      "料车",
+      "material cart",
+      "trolley cart"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "vehicle_layout",
+    "family": "vehicle",
+    "defaultDimensions": {
+      "length": 1.8,
+      "width": 0.9,
+      "height": 1
+    },
+    "parts": [
+      {
+        "kind": "mobile_platform_chassis",
+        "semanticRole": "cart_platform",
+        "required": true,
+        "length": 1.7,
+        "width": 0.85,
+        "height": 0.22,
+        "color": "#64748b"
+      },
+      {
+        "kind": "wheel_set",
+        "semanticRole": "cart_wheels",
+        "required": true,
+        "attachToRole": "cart_platform",
+        "anchor": "bottom"
+      },
+      {
+        "kind": "generic_handle",
+        "semanticRole": "push_handle",
+        "required": true,
+        "attachToRole": "cart_platform",
+        "anchor": "back"
+      },
+      {
+        "kind": "generic_detail_accent",
+        "semanticRole": "material_bins",
+        "required": true,
+        "attachToRole": "cart_platform",
+        "anchor": "top",
+        "arrayAlong": "length",
+        "count": 3
+      }
+    ],
+    "primarySemanticRole": "cart_platform",
+    "qualityRules": "quality.discrete_manufacturing.material_cart",
+    "visualCues": [
+      "wheeled material cart",
+      "platform deck",
+      "push handle",
+      "material bins"
+    ],
+    "status": "stable",
+    "source": "imported_pack"
+  },
+  {
+    "id": "discrete_manufacturing.palletizing_workcell",
+    "name": "Palletizing workcell",
+    "aliases": [
+      "码垛工作站",
+      "码垛单元",
+      "机器人码垛工作站",
+      "palletizing workcell",
+      "robot palletizing cell"
+    ],
+    "industry": "discrete-manufacturing",
+    "layoutFamily": "robot_workcell_layout",
+    "family": "robot_arm",
+    "defaultDimensions": {
+      "length": 4.6,
+      "width": 3.6,
+      "height": 2.6
+    },
+    "parts": [
+      {
+        "kind": "circular_base",
+        "semanticRole": "robot_base",
+        "required": true,
+        "radius": 0.42,
+        "height": 0.18,
+        "color": "#f59e0b"
+      },
+      {
+        "kind": "vertical_pole",
+        "semanticRole": "shoulder_joint",
+        "required": true,
+        "attachToRole": "robot_base",
+        "anchor": "top",
+        "height": 0.9,
+        "radius": 0.16,
+        "color": "#f59e0b"
+      },
+      {
+        "kind": "support_bracket",
+        "semanticRole": "upper_arm",
+        "required": true,
+        "attachToRole": "shoulder_joint",
+        "anchor": "top",
+        "length": 1,
+        "color": "#f59e0b"
+      },
+      {
+        "kind": "support_bracket",
+        "semanticRole": "forearm",
+        "required": true,
+        "attachToRole": "upper_arm",
+        "anchor": "front",
+        "length": 0.9,
+        "color": "#f59e0b"
+      },
+      {
+        "kind": "pallet_table",
+        "semanticRole": "work_table",
+        "required": true,
+        "position": [
+          1,
+          0.35,
+          0.7
+        ]
+      },
+      {
+        "kind": "conveyor_frame",
+        "semanticRole": "infeed_conveyor",
+        "required": false,
+        "position": [
+          -1,
+          0.35,
+          0
+        ],
+        "length": 2.4,
+        "width": 0.8,
+        "height": 0.5
+      },
+      {
+        "kind": "guard_fence",
+        "semanticRole": "safety_barrier",
+        "required": true,
+        "position": [
+          0,
+          0.65,
+          0
+        ],
+        "length": 4.2,
+        "width": 3.4
+      }
+    ],
+    "primarySemanticRole": "robot_base",
+    "qualityRules": "quality.discrete_manufacturing.palletizing_workcell",
+    "visualCues": [
+      "palletizing robot",
+      "pallet stack zone",
+      "infeed conveyor",
+      "safety fence"
     ],
     "status": "stable",
     "source": "imported_pack"

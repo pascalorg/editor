@@ -5,6 +5,7 @@ import {
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
+  ensureWebGPUCompatibleGeometry,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -40,11 +41,13 @@ export const FrustumRenderer = ({ node }: { node: FrustumNode }) => {
 
   const geometry = useMemo(
     () =>
-      new THREE.CylinderGeometry(
-        node.radiusTop ?? 0.25,
-        node.radiusBottom ?? 0.5,
-        node.height ?? 1,
-        node.radialSegments ?? 32,
+      ensureWebGPUCompatibleGeometry(
+        new THREE.CylinderGeometry(
+          node.radiusTop ?? 0.25,
+          node.radiusBottom ?? 0.5,
+          node.height ?? 1,
+          node.radialSegments ?? 32,
+        ),
       ),
     [node.radiusTop, node.radiusBottom, node.height, node.radialSegments],
   )

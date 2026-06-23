@@ -1,6 +1,6 @@
 # 离散制造基础包
 
-Basic factory-capable pack for discrete manufacturing workshops, covering machining, robotic workcells, assembly, inspection, packaging, AGV logistics, warehousing, utilities, and line control.
+离散制造基础包 ：覆盖 CNC 加工中心、装配工位、AGV 牵引车、工装台、测试台、物料车和码垛工作站等典型离散制造设备。
 
 ## Devices
 
@@ -18,6 +18,10 @@ Basic factory-capable pack for discrete manufacturing workshops, covering machin
 - Chip conveyor (discrete_manufacturing.chip_conveyor)
 - Safety fence (discrete_manufacturing.safety_fence)
 - Utility pipe corridor (discrete_manufacturing.pipe_corridor)
+- Fixture table (discrete_manufacturing.fixture_table)
+- Functional test bench (discrete_manufacturing.test_bench)
+- Material cart (discrete_manufacturing.material_cart)
+- Palletizing workcell (discrete_manufacturing.palletizing_workcell)
 
 ## Pack Type
 
@@ -50,3 +54,4 @@ Run:
 ```bash
 bun apps/editor/scripts/profile-pack-qa.ts industry.discrete-manufacturing.basic@0.1.0 --validate-only
 ```
+

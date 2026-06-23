@@ -5,8 +5,8 @@
   "processId": "cement_plant_full",
   "layoutStyle": "parallel_bays",
   "defaultDimensions": {
-    "length": 66,
-    "width": 28
+    "length": 80,
+    "width": 32
   },
   "scopes": [
     {
@@ -15,6 +15,12 @@
       "includeModules": [
         "clinker_production",
         "gas_and_dedusting"
+      ],
+      "aliases": [
+        "pyro line",
+        "clinker burning line",
+        "烧成线",
+        "熟料烧成线"
       ]
     },
     {
@@ -27,6 +33,15 @@
         "clinker_production",
         "gas_and_dedusting",
         "clinker_storage"
+      ],
+      "aliases": [
+        "clinker system",
+        "complete clinker system",
+        "clinker production system",
+        "熟料系统",
+        "熟料生产系统",
+        "熟料烧成系统",
+        "完整熟料系统"
       ]
     },
     {
@@ -42,7 +57,8 @@
         "cement_grinding",
         "packing_and_dispatch",
         "utilities"
-      ]
+      ],
+      "aliases": []
     }
   ],
   "modules": [
@@ -61,7 +77,8 @@
       "order": 20,
       "stationIds": [
         "raw_mill",
-        "raw_meal_silo"
+        "raw_meal_silo",
+        "raw_meal_feed"
       ]
     },
     {
@@ -69,7 +86,9 @@
       "displayLabel": "燃料制备",
       "order": 30,
       "stationIds": [
+        "raw_coal_silo",
         "coal_mill",
+        "coal_powder_bin",
         "kiln_burner"
       ]
     },
@@ -91,7 +110,8 @@
       "stationIds": [
         "tertiary_air_duct",
         "kiln_tail_esp",
-        "whr_boiler",
+        "sp_boiler",
+        "aqc_boiler",
         "process_stack"
       ]
     },
@@ -110,7 +130,10 @@
       "displayLabel": "水泥粉磨",
       "order": 70,
       "stationIds": [
+        "gypsum_storage",
+        "additive_silo",
         "cement_mill",
+        "cement_separator",
         "cement_silo"
       ]
     },
@@ -141,9 +164,11 @@
       "coal_mill",
       "kiln_tail_esp",
       "process_stack",
-      "whr_boiler",
+      "sp_boiler",
+      "aqc_boiler",
       "mcc_control"
     ],
+    "omitPerimeterWalls": true,
     "scale": "conceptual",
     "notes": [
       "Treat scopes as selections from one factory architecture tree instead of separate hardcoded plants.",

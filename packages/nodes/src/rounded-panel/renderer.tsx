@@ -5,6 +5,7 @@ import {
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
+  ensureWebGPUCompatibleGeometry,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -77,12 +78,14 @@ export const RoundedPanelRenderer = ({ node }: { node: RoundedPanelNode }) => {
     const length = node.length ?? 1
     const width = node.width ?? 0.5
     const thickness = node.thickness ?? 0.04
-    return createRoundedPanelGeometry(
-      length,
-      width,
-      thickness,
-      node.cornerRadius ?? 0.04,
-      node.cornerSegments ?? 4,
+    return ensureWebGPUCompatibleGeometry(
+      createRoundedPanelGeometry(
+        length,
+        width,
+        thickness,
+        node.cornerRadius ?? 0.04,
+        node.cornerSegments ?? 4,
+      ),
     )
   }, [node.length, node.width, node.thickness, node.cornerRadius, node.cornerSegments])
 

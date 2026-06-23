@@ -170,7 +170,6 @@ export default function TankPanel() {
 
       <TransformPanelSection
         includeFlip={false}
-        includePlanarPosition
         includeRotation
         node={node}
         nodeId={selectedId as AnyNode['id']}

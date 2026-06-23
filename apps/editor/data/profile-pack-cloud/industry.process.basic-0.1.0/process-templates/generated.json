@@ -30,12 +30,16 @@
       "centrifuge",
       "product_storage_tank",
       "pipe_corridor",
-      "control_cabinet"
+      "control_cabinet",
+      "utility_blower",
+      "air_compressor_skid",
+      "bulk_material_silo",
+      "valve_station"
     ],
     "defaultLayoutStyle": "parallel_bays",
     "defaultDimensions": {
-      "length": 52,
-      "width": 24
+      "length": 58,
+      "width": 26
     },
     "safetyTags": [
       "process_pipe",
@@ -187,6 +191,54 @@
           "electrical",
           "control"
         ]
+      },
+      {
+        "id": "bulk_material_silo",
+        "label": "Bulk material silo",
+        "displayLabel": "粉体料仓",
+        "role": "bulk_material_silo",
+        "equipmentHint": "process.bulk_material_silo vertical bulk material silo with cylindrical bin, conical hopper bottom, support frame, outlet spout, and level indicator",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "storage",
+          "bulk_material"
+        ]
+      },
+      {
+        "id": "valve_station",
+        "label": "Valve manifold station",
+        "displayLabel": "阀组站",
+        "role": "valve_station",
+        "equipmentHint": "process.valve_station process valve manifold station with parallel pipes, valve bodies, handwheels, flanges, and compact support skid",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "pipe",
+          "valve"
+        ]
+      },
+      {
+        "id": "utility_blower",
+        "label": "Utility blower",
+        "displayLabel": "公用鼓风机",
+        "role": "utility_blower",
+        "equipmentHint": "process.utility_blower industrial utility blower with volute casing, impeller, drive motor, inlet outlet ports, and skid base",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "rotating_equipment",
+          "air"
+        ]
+      },
+      {
+        "id": "air_compressor_skid",
+        "label": "Air compressor skid",
+        "displayLabel": "空压机撬",
+        "role": "air_compressor_skid",
+        "equipmentHint": "process.air_compressor_skid compressed air compressor skid with rounded compressor body, ribbed drive motor, receiver pipe ports, and local control box",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "compressed_air",
+          "utility"
+        ]
       }
     ],
     "connections": [
@@ -293,6 +345,46 @@
         "visualKind": "cable_tray",
         "fromPortId": "mcc_out",
         "toPortId": "agitator_drive"
+      },
+      {
+        "fromStationId": "bulk_material_silo",
+        "toStationId": "mixing_tank",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "silo_discharge",
+        "toPortId": "mixing_solid_feed"
+      },
+      {
+        "fromStationId": "filter_vessel",
+        "toStationId": "valve_station",
+        "medium": "material",
+        "visualKind": "pipe",
+        "fromPortId": "filter_outlet",
+        "toPortId": "valve_inlet"
+      },
+      {
+        "fromStationId": "valve_station",
+        "toStationId": "centrifuge",
+        "medium": "material",
+        "visualKind": "pipe",
+        "fromPortId": "valve_outlet",
+        "toPortId": "centrifuge_feed"
+      },
+      {
+        "fromStationId": "utility_blower",
+        "toStationId": "pipe_corridor",
+        "medium": "gas",
+        "visualKind": "air_duct",
+        "fromPortId": "blower_discharge",
+        "toPortId": "air_header"
+      },
+      {
+        "fromStationId": "air_compressor_skid",
+        "toStationId": "pipe_corridor",
+        "medium": "gas",
+        "visualKind": "pipe",
+        "fromPortId": "compressed_air_out",
+        "toPortId": "air_header"
       }
     ]
   }

@@ -45,6 +45,10 @@ function firstNumber(...values: unknown[]) {
   return undefined
 }
 
+function booleanParam(value: unknown) {
+  return typeof value === 'boolean' ? value : undefined
+}
+
 function numbersFromText(text: string) {
   return [...text.matchAll(/(\d+(?:\.\d+)?)\s*(?:m|\u7c73|meter|meters)?/gi)]
     .map((match) => Number(match[1]))
@@ -306,6 +310,7 @@ export function buildFactoryLayoutCreatePatches(input: {
     metadata: baseMetadata,
   })
   const roomName = labels.roomName
+  const omitPerimeterWalls = booleanParam(input.params?.omitPerimeterWalls) ?? false
 
   const zone = ZoneNode.parse({
     name: roomName,
@@ -379,9 +384,13 @@ export function buildFactoryLayoutCreatePatches(input: {
     parentPatch(zone, parentId),
     parentPatch(slab, parentId),
     parentPatch(ceiling, parentId),
-    ...walls.map((wall) => parentPatch(wall, parentId)),
-    parentPatch(door, firstWall.id),
-    ...windows.map((windowNode) => parentPatch(windowNode, windowNode.wallId)),
+    ...(omitPerimeterWalls
+      ? []
+      : [
+          ...walls.map((wall) => parentPatch(wall, parentId)),
+          parentPatch(door, firstWall.id),
+          ...windows.map((windowNode) => parentPatch(windowNode, windowNode.wallId)),
+        ]),
   ]
   return {
     patches,

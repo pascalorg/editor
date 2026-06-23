@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { inferDeviceProfileDefinition } from '@pascal-app/core/lib/device-profile-registry'
 import { loadDeviceProfiles } from './device-profiles'
 import { findRepoRoot } from './generated-assets/manifest'
 
@@ -84,13 +85,13 @@ describe('device profile source loader', () => {
         { kind: 'generic_body', semanticRole: 'main_body', required: true },
       ],
     })
-  })
+  }, 30_000)
 
   afterAll(async () => {
     await removeIfExists(workspaceFile)
     await removeIfExists(generatedFile)
     await fs.rm(extraPackDir, { recursive: true, force: true }).catch(() => {})
-  })
+  }, 30_000)
 
   test('loads JSON profiles and applies source priority', async () => {
     const loaded = await loadDeviceProfiles()
@@ -115,6 +116,40 @@ describe('device profile source loader', () => {
         id: 'codex.extra-pack-loader-test',
         version: '0.0.1',
         industry: 'test',
+      },
+    })
+  })
+
+  test('matches cement rotary kiln from a loaded industry pack before freeform generation', async () => {
+    const root = await findRepoRoot()
+    const loaded = await loadDeviceProfiles({
+      extraPackDirs: [
+        path.join(
+          root,
+          'apps',
+          'editor',
+          'data',
+          'profile-pack-cloud',
+          'industry.cement.basic-0.1.0',
+        ),
+      ],
+    })
+    const profile = inferDeviceProfileDefinition(
+      {
+        prompt: '创建一个回转窑',
+        name: '创建一个回转窑',
+        object: '创建一个回转窑',
+      },
+      loaded.profiles,
+    )
+
+    expect(profile).toMatchObject({
+      id: 'cement.rotary_kiln',
+      source: 'imported_pack',
+      sourcePack: {
+        id: 'industry.cement.basic',
+        version: '0.1.0',
+        industry: 'cement',
       },
     })
   })

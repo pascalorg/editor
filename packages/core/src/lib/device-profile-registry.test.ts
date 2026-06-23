@@ -383,6 +383,39 @@ describe('device profile registry', () => {
     expect(quality.issues).toHaveLength(0)
   })
 
+  test('evaluates horizontal cylindrical equipment dimensions using the shape axis', () => {
+    const profile = normalizeDeviceProfileInput({
+      id: 'test_rotary_kiln',
+      name: 'Test rotary kiln',
+      aliases: ['rotary kiln'],
+      family: 'tank',
+      archetypeFamily: 'thermal_equipment',
+      parts: [{ kind: 'cylindrical_tank', semanticRole: 'vessel_shell', required: true }],
+      primarySemanticRole: 'vessel_shell',
+      qualityRules: {
+        dimensionExpectations: {
+          lengthToDiameterRatio: { min: 8, max: 18 },
+        },
+      },
+    })
+
+    const quality = evaluateDeviceProfileQuality(profile, [
+      {
+        kind: 'hollow-cylinder',
+        axis: 'x',
+        semanticRole: 'vessel_shell',
+        sourcePartKind: 'cylindrical_tank',
+        height: 6,
+        radius: 0.2,
+      },
+    ])
+
+    expect(quality.metrics.lengthToDiameterRatio).toBeCloseTo(15)
+    expect(quality.warnings).not.toContain(
+      'Length-to-diameter ratio 15.00 is outside profile expectation.',
+    )
+  })
+
   test('normalizes JSON detail budgets and uses them as shape budget quality contracts', () => {
     const profile = normalizeDeviceProfileInput({
       id: 'test_plate_stack',

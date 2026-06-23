@@ -32,6 +32,11 @@ export const boxDefinition: NodeDefinition<typeof BoxNode> = {
     module: () => import('./renderer'),
   },
 
+  system: {
+    module: () => import('./batch-system'),
+    priority: 7,
+  },
+
   presentation: {
     label: 'Box',
     description: 'A configurable cuboid primitive with optional rounded corners.',

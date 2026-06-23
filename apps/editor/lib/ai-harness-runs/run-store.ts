@@ -282,6 +282,10 @@ export async function loadConversation(conversationId: string) {
 }
 
 export async function saveConversation(conversation: AiConversation) {
+  if (!hasConversationHistory(conversation)) {
+    await deleteConversation(conversation.id)
+    return
+  }
   const filePath = await conversationPath(conversation.id)
   let saved: AiConversation | null = null
   await withFileLock(filePath, async () => {
@@ -346,10 +350,19 @@ function toConversationSummary(conversation: AiConversation): AiConversationSumm
   }
 }
 
+function hasConversationHistory(conversation: Pick<AiConversation, 'messages' | 'activeRunIds'>) {
+  return conversation.messages.length > 0 || conversation.activeRunIds.length > 0
+}
+
+function hasConversationSummaryHistory(summary: AiConversationSummary) {
+  return summary.messageCount > 0 || summary.activeRunCount > 0
+}
+
 function normalizeConversationSummaries(summaries: AiConversationSummary[]) {
   const byId = new Map<string, AiConversationSummary>()
   for (const summary of summaries) {
     if (!summary.id) continue
+    if (!hasConversationSummaryHistory(summary)) continue
     byId.set(summary.id, summary)
   }
   return Array.from(byId.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))

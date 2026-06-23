@@ -208,16 +208,21 @@ export interface DeviceProfileExecutionValidation extends DeviceProfileValidatio
 }
 
 export interface DeviceProfileQualityInputShape {
+  kind?: string
   name?: string
   semanticRole?: string
   sourcePartKind?: string
   semanticGroup?: string
   position?: readonly number[]
+  axis?: string
+  scale?: readonly number[]
   length?: number
   width?: number
   height?: number
   depth?: number
   radius?: number
+  majorRadius?: number
+  tubeRadius?: number
   radiusTop?: number
   radiusBottom?: number
   thickness?: number
@@ -1022,6 +1027,10 @@ function containsAliasToken(normalizedText: string, alias: string): boolean {
   return false
 }
 
+function containsExplicitProfileId(text: string, profileId: string): boolean {
+  return text.toLowerCase().includes(profileId.toLowerCase())
+}
+
 function requestedRobotAxisCount(input: Record<string, unknown>): number | undefined {
   const text = textOf([input.object, input.name, input.category, input.prompt, input.style])
   if (/(seven[_\s-]?axis|7[_\s-]?axis|\u4e03\u8f74)/i.test(text)) return 7
@@ -1162,14 +1171,17 @@ function inferDeviceProfileFromProfiles(
   const normalizedText = normalizeKey(text)
   const matches = profiles
     .flatMap((profile) =>
-      [profile.id, profile.name, ...profile.aliases].map((alias) => ({
+      [profile.id, profile.name, ...profile.aliases].map((alias, index) => ({
         profile,
         alias: normalizeKey(alias),
+        isExplicitProfileId: index === 0 && containsExplicitProfileId(text, profile.id),
       })),
     )
     .filter((candidate) => containsAliasToken(normalizedText, candidate.alias))
     .filter((candidate) => profileCompatibleWithPromptAxis(candidate.profile, input))
   matches.sort((left, right) => {
+    if (left.isExplicitProfileId !== right.isExplicitProfileId)
+      return left.isExplicitProfileId ? -1 : 1
     const priority = compareProfilePriority(left.profile, right.profile)
     return priority !== 0 ? priority : right.alias.length - left.alias.length
   })
@@ -1217,14 +1229,19 @@ export function inferDeviceProfileDefinition(
   const text = textOf([input.object, input.name, input.category, input.prompt, input.style])
   const normalizedText = normalizeKey(text)
   const matches = DEVICE_PROFILE_DEFINITIONS.flatMap((profile) =>
-    [profile.id, ...profile.aliases].map((alias) => ({
+    [profile.id, ...profile.aliases].map((alias, index) => ({
       profile,
       alias: normalizeKey(alias),
+      isExplicitProfileId: index === 0 && containsExplicitProfileId(text, profile.id),
     })),
   )
     .filter((candidate) => containsAliasToken(normalizedText, candidate.alias))
     .filter((candidate) => profileCompatibleWithPromptAxis(candidate.profile, input))
-  matches.sort((left, right) => right.alias.length - left.alias.length)
+  matches.sort((left, right) => {
+    if (left.isExplicitProfileId !== right.isExplicitProfileId)
+      return left.isExplicitProfileId ? -1 : 1
+    return right.alias.length - left.alias.length
+  })
   return matches[0]?.profile
 }
 
@@ -1641,7 +1658,15 @@ function positiveNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 }
 
+function scaleComponent(scale: readonly number[] | undefined, index: number): number {
+  const value = Array.isArray(scale) ? scale[index] : undefined
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 1
+}
+
 function shapeExtents(shape: DeviceProfileQualityInputShape): [number, number, number] {
+  const sx = scaleComponent(shape.scale, 0)
+  const sy = scaleComponent(shape.scale, 1)
+  const sz = scaleComponent(shape.scale, 2)
   const radius = positiveNumber(shape.radius) ?? positiveNumber(shape.radiusTop) ?? 0
   const diameter = radius > 0 ? radius * 2 : undefined
   const length = positiveNumber(shape.length) ?? diameter ?? positiveNumber(shape.thickness) ?? 0.05
@@ -1652,7 +1677,40 @@ function shapeExtents(shape: DeviceProfileQualityInputShape): [number, number, n
     positiveNumber(shape.thickness) ??
     0.05
   const height = positiveNumber(shape.height) ?? diameter ?? positiveNumber(shape.thickness) ?? 0.05
-  return [length, width, height]
+  const axis = shape.axis === 'x' || shape.axis === 'y' || shape.axis === 'z' ? shape.axis : 'y'
+  const kind = shape.kind
+  if (
+    kind === 'cylinder' ||
+    kind === 'hollow-cylinder' ||
+    kind === 'cone' ||
+    kind === 'frustum' ||
+    kind === 'capsule' ||
+    kind === 'half-cylinder'
+  ) {
+    const axialLength = height
+    const radialY = diameter ?? height
+    const radialZ = diameter ?? width
+    const radialX = diameter ?? length
+    if (axis === 'x') return [axialLength * sx, radialZ * sz, radialY * sy]
+    if (axis === 'z') return [radialX * sx, axialLength * sz, radialY * sy]
+    return [radialX * sx, radialZ * sz, axialLength * sy]
+  }
+  if (kind === 'torus') {
+    const ringDiameter =
+      (positiveNumber(shape.majorRadius) ??
+        positiveNumber(shape.radius) ??
+        positiveNumber(shape.radiusTop) ??
+        positiveNumber(shape.length) ??
+        0.5) *
+        2 +
+      (positiveNumber(shape.tubeRadius) ?? positiveNumber(shape.thickness) ?? 0.08) * 2
+    const tubeDiameter =
+      (positiveNumber(shape.tubeRadius) ?? positiveNumber(shape.thickness) ?? 0.08) * 2
+    if (axis === 'x') return [tubeDiameter * sx, ringDiameter * sz, ringDiameter * sy]
+    if (axis === 'z') return [ringDiameter * sx, tubeDiameter * sz, ringDiameter * sy]
+    return [ringDiameter * sx, ringDiameter * sz, tubeDiameter * sy]
+  }
+  return [length * sx, width * sz, height * sy]
 }
 
 function profileShapeBounds(shapes: readonly DeviceProfileQualityInputShape[]) {
