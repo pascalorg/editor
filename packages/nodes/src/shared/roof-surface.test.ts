@@ -63,4 +63,17 @@ describe('getRoofSurfaceFaceBoundsAt', () => {
     expect(ridgeInterval?.[0]).toBeGreaterThan(-2)
     expect(ridgeInterval?.[1]).toBeLessThan(2)
   })
+
+  test('mansard top surface rises to a center ridge instead of staying flat', () => {
+    const segment = fixtureSegment({
+      roofType: 'mansard',
+      mansardSteepWidthRatio: 0.15,
+      mansardSteepHeightRatio: 0.7,
+    })
+
+    const center = getRoofSurfaceFaceBoundsAt(segment, 0, 0).surfaceYAt(0, 0)
+    const offRidge = getRoofSurfaceFaceBoundsAt(segment, 0, 0.5).surfaceYAt(0, 0.5)
+
+    expect(center).toBeGreaterThan(offRidge)
+  })
 })

@@ -17,6 +17,10 @@ export function getSurfaceY(lx: number, lz: number, seg: RoofSegmentNode): numbe
   return getRoofSegmentSurfaceY(seg, lx, lz)
 }
 
+export function getRoofTopSurfaceY(lx: number, lz: number, seg: RoofSegmentNode): number {
+  return getRoofSurfaceFaceBoundsAt(seg, lx, lz).surfaceYAt(lx, lz)
+}
+
 export type RoofSurfacePoint2D = [number, number]
 
 export type RoofSurfaceFaceBounds = {
@@ -285,32 +289,22 @@ function getRoofModuleFaces(
     const m2 = v(w / 2 - i, mh, d / 2 - i)
     const m3 = v(w / 2 - i, mh, -d / 2 + i)
     const m4 = v(-w / 2 + i, mh, -d / 2 + i)
-    const t1 = v(-w / 2 + i * 2, h, d / 2 - i * 2)
-    const t2 = v(w / 2 - i * 2, h, d / 2 - i * 2)
-    const t3 = v(w / 2 - i * 2, h, -d / 2 + i * 2)
-    const t4 = v(-w / 2 + i * 2, h, -d / 2 + i * 2)
-    if (w - i * 4 <= 0.01 || d - i * 4 <= 0.01) {
-      if (w >= d) {
-        const r1 = v(-w / 2 + d / 2, h, 0)
-        const r2 = v(w / 2 - d / 2, h, 0)
-        faces.push([e4, e1, r1], [e2, e3, r2], [e1, e2, r2, r1], [e3, e4, r1, r2])
-      } else {
-        const r1 = v(0, h, d / 2 - w / 2)
-        const r2 = v(0, h, -d / 2 + w / 2)
-        faces.push([e1, e2, r1], [e3, e4, r2], [e2, e3, r2, r1], [e4, e1, r1, r2])
-      }
+    const topW = w - i * 2
+    const topD = d - i * 2
+
+    faces.push([e1, e2, m2, m1], [e2, e3, m3, m2], [e3, e4, m4, m3], [e4, e1, m1, m4])
+
+    if (Math.abs(topW - topD) < 0.01) {
+      const r = v(0, h, 0)
+      faces.push([m4, m1, r], [m1, m2, r], [m2, m3, r], [m3, m4, r])
+    } else if (topW >= topD) {
+      const r1 = v(-topW / 2 + topD / 2, h, 0)
+      const r2 = v(topW / 2 - topD / 2, h, 0)
+      faces.push([m4, m1, r1], [m2, m3, r2], [m1, m2, r2, r1], [m3, m4, r1, r2])
     } else {
-      faces.push(
-        [t1, t2, t3, t4],
-        [e1, e2, m2, m1],
-        [e2, e3, m3, m2],
-        [e3, e4, m4, m3],
-        [e4, e1, m1, m4],
-        [m1, m2, t2, t1],
-        [m2, m3, t3, t2],
-        [m3, m4, t4, t3],
-        [m4, m1, t1, t4],
-      )
+      const r1 = v(0, h, topD / 2 - topW / 2)
+      const r2 = v(0, h, -topD / 2 + topW / 2)
+      faces.push([m1, m2, r1], [m3, m4, r2], [m2, m3, r2, r1], [m4, m1, r1, r2])
     }
   } else if (type === 'dutch') {
     const i =

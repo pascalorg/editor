@@ -2,15 +2,28 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
+import {
+  getRoofSegmentVisibleTopBounds,
+  ROOF_SHAPE_DEFAULTS,
+  type RoofSegmentNode,
+} from './roof-segment'
+
+const MIN_DEFAULT_RIDGE_VENT_LENGTH_M = 0.4
+const DEFAULT_RIDGE_VENT_GENERATOR = 'default-ridge-vent'
+
+type RidgeVentLine = {
+  name: string
+  start: [number, number]
+  end: [number, number]
+}
 
 export const RidgeVentNode = BaseNode.extend({
   id: objectId('rvent'),
   type: nodeType('ridge-vent'),
 
   material: MaterialSchema.optional(),
-  // See note on box-vent: default to white so the paint inspector
-  // reflects the current visual state instead of "no material".
-  materialPreset: z.string().default('preset-white'),
+  // Unpainted ridge vents inherit the roof top material in the renderer.
+  materialPreset: z.string().optional(),
 
   roofSegmentId: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
@@ -37,3 +50,181 @@ export const RidgeVentNode = BaseNode.extend({
 )
 
 export type RidgeVentNode = z.infer<typeof RidgeVentNode>
+
+function getDefaultRidgeVentLines(segment: RoofSegmentNode): RidgeVentLine[] {
+  const bounds = getRoofSegmentVisibleTopBounds(segment)
+  const { width, depth, minX, maxX, minZ, maxZ } = bounds
+  if (segment.roofType === 'flat' || segment.roofType === 'shed') return []
+
+  const halfW = width / 2
+  const halfD = depth / 2
+  const ridgeZVisible = minZ <= 0 && maxZ >= 0
+  const ridgeXVisible = minX <= 0 && maxX >= 0
+
+  if (segment.roofType === 'mansard') {
+    const inset = Math.min(
+      Math.min(width, depth) *
+        (segment.mansardSteepWidthRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepWidthRatio),
+      Math.max(0, Math.min(width, depth) / 2 - 0.01),
+    )
+    const shoulderMinX = minX + inset
+    const shoulderMaxX = maxX - inset
+    const shoulderMinZ = minZ + inset
+    const shoulderMaxZ = maxZ - inset
+    const topW = Math.max(0, shoulderMaxX - shoulderMinX)
+    const topD = Math.max(0, shoulderMaxZ - shoulderMinZ)
+
+    if (topW >= topD) {
+      const leftRidge: [number, number] = [shoulderMinX + topD / 2, 0]
+      const rightRidge: [number, number] = [shoulderMaxX - topD / 2, 0]
+      return [
+        ...(ridgeZVisible ? [{ name: 'Ridge Vent', start: leftRidge, end: rightRidge }] : []),
+        { name: 'Hip Ridge Vent', start: [shoulderMinX, shoulderMaxZ], end: leftRidge },
+        { name: 'Hip Ridge Vent', start: [shoulderMinX, shoulderMinZ], end: leftRidge },
+        { name: 'Hip Ridge Vent', start: [shoulderMaxX, shoulderMaxZ], end: rightRidge },
+        { name: 'Hip Ridge Vent', start: [shoulderMaxX, shoulderMinZ], end: rightRidge },
+      ]
+    }
+
+    const frontRidge: [number, number] = [0, shoulderMaxZ - topW / 2]
+    const backRidge: [number, number] = [0, shoulderMinZ + topW / 2]
+    return [
+      ...(ridgeXVisible ? [{ name: 'Ridge Vent', start: frontRidge, end: backRidge }] : []),
+      { name: 'Hip Ridge Vent', start: [shoulderMinX, shoulderMaxZ], end: frontRidge },
+      { name: 'Hip Ridge Vent', start: [shoulderMaxX, shoulderMaxZ], end: frontRidge },
+      { name: 'Hip Ridge Vent', start: [shoulderMinX, shoulderMinZ], end: backRidge },
+      { name: 'Hip Ridge Vent', start: [shoulderMaxX, shoulderMinZ], end: backRidge },
+    ]
+  }
+
+  if (segment.roofType === 'dutch') {
+    const inset = Math.min(
+      Math.min(width, depth) *
+        (segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio),
+      Math.max(0, Math.min(width, depth) / 2 - 0.01),
+    )
+
+    const frontLeft: [number, number] = [minX, maxZ]
+    const frontRight: [number, number] = [maxX, maxZ]
+    const backRight: [number, number] = [maxX, minZ]
+    const backLeft: [number, number] = [minX, minZ]
+    const shoulderFrontLeft: [number, number] = [minX + inset, maxZ - inset]
+    const shoulderFrontRight: [number, number] = [maxX - inset, maxZ - inset]
+    const shoulderBackRight: [number, number] = [maxX - inset, minZ + inset]
+    const shoulderBackLeft: [number, number] = [minX + inset, minZ + inset]
+
+    if (width >= depth) {
+      return [
+        ...(ridgeZVisible
+          ? [
+              {
+                name: 'Ridge Vent',
+                start: [minX + inset, 0] as [number, number],
+                end: [maxX - inset, 0] as [number, number],
+              },
+            ]
+          : []),
+        { name: 'Hip Ridge Vent', start: frontLeft, end: shoulderFrontLeft },
+        { name: 'Hip Ridge Vent', start: frontRight, end: shoulderFrontRight },
+        { name: 'Hip Ridge Vent', start: backRight, end: shoulderBackRight },
+        { name: 'Hip Ridge Vent', start: backLeft, end: shoulderBackLeft },
+      ]
+    }
+
+    return [
+      ...(ridgeXVisible
+        ? [
+            {
+              name: 'Ridge Vent',
+              start: [0, maxZ - inset] as [number, number],
+              end: [0, minZ + inset] as [number, number],
+            },
+          ]
+        : []),
+      { name: 'Hip Ridge Vent', start: frontLeft, end: shoulderFrontLeft },
+      { name: 'Hip Ridge Vent', start: frontRight, end: shoulderFrontRight },
+      { name: 'Hip Ridge Vent', start: backRight, end: shoulderBackRight },
+      { name: 'Hip Ridge Vent', start: backLeft, end: shoulderBackLeft },
+    ]
+  }
+
+  if (segment.roofType !== 'hip') {
+    if (!ridgeZVisible) return []
+    return [
+      {
+        name: 'Ridge Vent',
+        start: [minX, 0],
+        end: [maxX, 0],
+      },
+    ]
+  }
+
+  if (width >= depth) {
+    const leftRidge: [number, number] = [minX + halfD, 0]
+    const rightRidge: [number, number] = [maxX - halfD, 0]
+    return [
+      ...(ridgeZVisible ? [{ name: 'Ridge Vent', start: leftRidge, end: rightRidge }] : []),
+      { name: 'Hip Ridge Vent', start: [minX, maxZ], end: leftRidge },
+      { name: 'Hip Ridge Vent', start: [minX, minZ], end: leftRidge },
+      { name: 'Hip Ridge Vent', start: [maxX, maxZ], end: rightRidge },
+      { name: 'Hip Ridge Vent', start: [maxX, minZ], end: rightRidge },
+    ]
+  }
+
+  const frontRidge: [number, number] = [0, maxZ - halfW]
+  const backRidge: [number, number] = [0, minZ + halfW]
+  return [
+    ...(ridgeXVisible ? [{ name: 'Ridge Vent', start: frontRidge, end: backRidge }] : []),
+    { name: 'Hip Ridge Vent', start: [minX, maxZ], end: frontRidge },
+    { name: 'Hip Ridge Vent', start: [maxX, maxZ], end: frontRidge },
+    { name: 'Hip Ridge Vent', start: [minX, minZ], end: backRidge },
+    { name: 'Hip Ridge Vent', start: [maxX, minZ], end: backRidge },
+  ]
+}
+
+function getLineYaw(start: [number, number], end: [number, number]): number {
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  return Math.atan2(-dz, dx)
+}
+
+export function createDefaultRidgeVentsForSegment(segment: RoofSegmentNode): RidgeVentNode[] {
+  return getDefaultRidgeVentLines(segment)
+    .map((line) => {
+      const length = Math.hypot(line.end[0] - line.start[0], line.end[1] - line.start[1])
+      if (length < MIN_DEFAULT_RIDGE_VENT_LENGTH_M) return null
+
+      return RidgeVentNode.parse({
+        name: line.name,
+        roofSegmentId: segment.id,
+        position: [(line.start[0] + line.end[0]) / 2, 0, (line.start[1] + line.end[1]) / 2],
+        rotation: getLineYaw(line.start, line.end),
+        length,
+        style: 'shingled',
+        metadata: { generatedBy: DEFAULT_RIDGE_VENT_GENERATOR },
+      })
+    })
+    .filter((vent): vent is RidgeVentNode => vent !== null)
+}
+
+export function isDefaultRidgeVentNode(
+  node: unknown,
+  roofSegmentId?: RoofSegmentNode['id'],
+): node is RidgeVentNode {
+  const parsed = RidgeVentNode.safeParse(node)
+  if (!parsed.success) return false
+  const vent = parsed.data
+  if (roofSegmentId && vent.roofSegmentId !== roofSegmentId) return false
+  const metadata = vent.metadata
+  if (
+    typeof metadata === 'object' &&
+    metadata !== null &&
+    (metadata as Record<string, unknown>).generatedBy === DEFAULT_RIDGE_VENT_GENERATOR
+  ) {
+    return true
+  }
+
+  const hasCustomMaterial = vent.material !== undefined || vent.materialPreset !== undefined
+  const hasDefaultName = vent.name === 'Ridge Vent' || vent.name === 'Hip Ridge Vent'
+  return hasDefaultName && vent.style === 'shingled' && !hasCustomMaterial
+}

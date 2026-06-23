@@ -1,8 +1,17 @@
-import type { RidgeVentNode } from '@pascal-app/core'
+import {
+  getRoofSegmentVisibleTopBounds,
+  type RidgeVentNode,
+  type RoofSegmentNode,
+} from '@pascal-app/core'
 import * as THREE from 'three'
+import { getRoofTopSurfaceY } from '../shared/roof-surface'
 
 const ARC_SEGS = 16
 const SHINGLED_TAB_SIZE = 0.3
+const DEFAULT_RIDGE_VENT_LENGTH = 2
+const DEFAULT_RIDGE_VENT_WIDTH = 0.3
+const DEFAULT_RIDGE_VENT_HEIGHT = 0.1
+type ProfilePoint = [z: number, capY: number]
 
 /**
  * Pure builder for the ridge vent mesh. Each style is a peaked **band** of
@@ -22,13 +31,34 @@ const SHINGLED_TAB_SIZE = 0.3
  *
  * `endCaps` closes both ends. Pure: no React, no scene access, no mutation.
  */
-export function buildRidgeVentGeometry(node: RidgeVentNode): THREE.BufferGeometry {
-  const halfLen = node.length / 2
-  const halfW = node.width / 2
-  const h = node.height
+export function buildRidgeVentGeometry(
+  node: RidgeVentNode,
+  segment?: RoofSegmentNode,
+): THREE.BufferGeometry {
+  const length = finitePositive(node.length, DEFAULT_RIDGE_VENT_LENGTH)
+  const width = finitePositive(node.width, DEFAULT_RIDGE_VENT_WIDTH)
+  const h = finitePositive(node.height, DEFAULT_RIDGE_VENT_HEIGHT)
+  const halfLen = length / 2
+  const halfW = width / 2
   // Band thickness. Generous enough to read as a solid cap; the eave faces
   // are `t` tall, which is the depth the user actually sees from the side.
   const t = Math.max(0.02, h * 0.4)
+
+  const centerX = finiteNumber(node.position?.[0], 0)
+  const centerZ = finiteNumber(node.position?.[2], 0)
+  const rotationY = finiteNumber(node.rotation, 0)
+  const sinR = Math.sin(rotationY)
+  const cosR = Math.cos(rotationY)
+  const clipRange = getVisibleLengthRange(node, segment, halfLen, cosR, sinR)
+  if (!clipRange) return buildBufferGeometry([], [], [])
+  const [startX, endX] = clipRange
+
+  const surfaceYAt = (x: number, z: number) => {
+    if (!segment) return 0
+    return getRoofTopSurfaceY(centerX + x * cosR + z * sinR, centerZ - x * sinR + z * cosR, segment)
+  }
+  const ridgeY = surfaceYAt(0, 0)
+  const seatYAt = (x: number, z: number) => (segment ? surfaceYAt(x, z) - ridgeY : 0)
 
   const top =
     node.style === 'metal'
@@ -41,13 +71,55 @@ export function buildRidgeVentGeometry(node: RidgeVentNode): THREE.BufferGeometr
   const normals: number[] = []
   const uvs: number[] = []
 
-  buildBand(positions, normals, uvs, top, t, halfLen, node.endCaps)
+  buildBand(positions, normals, uvs, top, seatYAt, startX, endX, node.endCaps)
 
   if (node.style === 'shingled') {
-    addShingledTabs(positions, normals, uvs, halfLen, top, h)
+    addShingledTabs(positions, normals, uvs, startX, endX, top, h, seatYAt)
   }
 
   return buildBufferGeometry(positions, normals, uvs)
+}
+
+function finiteNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function finitePositive(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function getVisibleLengthRange(
+  node: RidgeVentNode,
+  segment: RoofSegmentNode | undefined,
+  halfLen: number,
+  cosR: number,
+  sinR: number,
+): [number, number] | null {
+  if (!segment) return [-halfLen, halfLen]
+
+  const bounds = getRoofSegmentVisibleTopBounds(segment)
+  let start = -halfLen
+  let end = halfLen
+  const centerX = finiteNumber(node.position?.[0], 0)
+  const centerZ = finiteNumber(node.position?.[2], 0)
+  const dirX = cosR
+  const dirZ = -sinR
+
+  const clipAxis = (center: number, dir: number, min: number, max: number): boolean => {
+    if (Math.abs(dir) < 1e-6) return center >= min && center <= max
+
+    const a = (min - center) / dir
+    const b = (max - center) / dir
+    const low = Math.min(a, b)
+    const high = Math.max(a, b)
+    start = Math.max(start, low)
+    end = Math.min(end, high)
+    return end - start > 0.01
+  }
+
+  if (!clipAxis(centerX, dirX, bounds.minX, bounds.maxX)) return null
+  if (!clipAxis(centerZ, dirZ, bounds.minZ, bounds.maxZ)) return null
+  return end - start > 0.01 ? [start, end] : null
 }
 
 // ─── Top profiles (open polylines eave → peak → eave, in [z, y]) ─────────
@@ -55,8 +127,8 @@ export function buildRidgeVentGeometry(node: RidgeVentNode): THREE.BufferGeometr
 // eaves, seating the cap on the roof while leaving a peaked void beneath.
 
 // Smooth rounded arch.
-function standardTop(halfW: number, h: number, t: number): [number, number][] {
-  const pts: [number, number][] = []
+function standardTop(halfW: number, h: number, t: number): ProfilePoint[] {
+  const pts: ProfilePoint[] = []
   for (let i = 0; i <= ARC_SEGS; i++) {
     const frac = i / ARC_SEGS
     const z = -halfW + frac * 2 * halfW
@@ -67,7 +139,7 @@ function standardTop(halfW: number, h: number, t: number): [number, number][] {
 }
 
 // Angular peak with a narrow flat ridge at the top.
-function shingledTop(halfW: number, h: number, t: number): [number, number][] {
+function shingledTop(halfW: number, h: number, t: number): ProfilePoint[] {
   const peakHalf = halfW * 0.12
   return [
     [-halfW, t],
@@ -78,7 +150,7 @@ function shingledTop(halfW: number, h: number, t: number): [number, number][] {
 }
 
 // Bent-metal cap: steep folds up to a wide flat standing seam.
-function metalTop(halfW: number, h: number, t: number): [number, number][] {
+function metalTop(halfW: number, h: number, t: number): ProfilePoint[] {
   const seamHalf = halfW * 0.5
   const shoulderY = t + (h - t) * 0.5
   return [
@@ -97,78 +169,76 @@ function buildBand(
   positions: number[],
   normals: number[],
   uvs: number[],
-  top: [number, number][],
-  t: number,
-  halfLen: number,
+  top: ProfilePoint[],
+  seatYAt: (x: number, z: number) => number,
+  startX: number,
+  endX: number,
   withCaps: boolean,
 ): void {
   const n = top.length
-  // Underside: the same profile dropped straight down by `t` (eaves → y 0).
-  const inner: [number, number][] = top.map(([z, y]) => [z, y - t])
+  const seatAt = (x: number, z: number): number => seatYAt(x, z)
+  const topAt = (x: number, z: number, capY: number): number => seatAt(x, z) + capY
 
   // Top surface + underside, swept along the ridge length.
   for (let i = 0; i < n - 1; i++) {
-    const [z0, y0] = top[i]!
-    const [z1, y1] = top[i + 1]!
+    const [z0, capY0] = top[i]!
+    const [z1, capY1] = top[i + 1]!
     pushQuad(
       positions,
       normals,
       uvs,
-      [-halfLen, y0, z0],
-      [halfLen, y0, z0],
-      [halfLen, y1, z1],
-      [-halfLen, y1, z1],
+      [startX, topAt(startX, z0, capY0), z0],
+      [endX, topAt(endX, z0, capY0), z0],
+      [endX, topAt(endX, z1, capY1), z1],
+      [startX, topAt(startX, z1, capY1), z1],
       [0, 1, 0],
     )
-    const [iz0, iy0] = inner[i]!
-    const [iz1, iy1] = inner[i + 1]!
     pushQuad(
       positions,
       normals,
       uvs,
-      [-halfLen, iy0, iz0],
-      [halfLen, iy0, iz0],
-      [halfLen, iy1, iz1],
-      [-halfLen, iy1, iz1],
+      [startX, seatAt(startX, z0), z0],
+      [endX, seatAt(endX, z0), z0],
+      [endX, seatAt(endX, z1), z1],
+      [startX, seatAt(startX, z1), z1],
       [0, -1, 0],
     )
   }
 
   // Eave thickness faces (the visible depth along each long edge).
   for (const idx of [0, n - 1]) {
-    const [z, yTop] = top[idx]!
-    const [, yInner] = inner[idx]!
+    const [z, capY] = top[idx]!
     const hint: [number, number, number] = [0, 0, z < 0 ? -1 : 1]
     pushQuad(
       positions,
       normals,
       uvs,
-      [-halfLen, yInner, z],
-      [halfLen, yInner, z],
-      [halfLen, yTop, z],
-      [-halfLen, yTop, z],
+      [startX, seatAt(startX, z), z],
+      [endX, seatAt(endX, z), z],
+      [endX, topAt(endX, z, capY), z],
+      [startX, topAt(startX, z, capY), z],
       hint,
     )
   }
 
   // End caps: the band's cross-section ring at each end.
   if (withCaps) {
-    for (const sign of [-1, 1] as const) {
-      const x = sign * halfLen
+    for (const [x, sign] of [
+      [startX, -1],
+      [endX, 1],
+    ] as const) {
       const hint: [number, number, number] = [sign, 0, 0]
       for (let i = 0; i < n - 1; i++) {
-        const [z0, y0] = top[i]!
-        const [z1, y1] = top[i + 1]!
-        const [iz0, iy0] = inner[i]!
-        const [iz1, iy1] = inner[i + 1]!
+        const [z0, capY0] = top[i]!
+        const [z1, capY1] = top[i + 1]!
         pushQuad(
           positions,
           normals,
           uvs,
-          [x, y0, z0],
-          [x, y1, z1],
-          [x, iy1, iz1],
-          [x, iy0, iz0],
+          [x, topAt(x, z0, capY0), z0],
+          [x, topAt(x, z1, capY1), z1],
+          [x, seatAt(x, z1), z1],
+          [x, seatAt(x, z0), z0],
           hint,
         )
       }
@@ -184,21 +254,25 @@ function addShingledTabs(
   positions: number[],
   normals: number[],
   uvs: number[],
-  halfLen: number,
-  top: [number, number][],
+  startX: number,
+  endX: number,
+  top: ProfilePoint[],
   h: number,
+  seatYAt: (x: number, z: number) => number,
 ): void {
-  const totalLen = halfLen * 2
+  const totalLen = endX - startX
   const numTabs = Math.max(2, Math.round(totalLen / SHINGLED_TAB_SIZE))
   const tabLen = totalLen / numTabs
   const ridgeH = h * 0.06
   const ridgeD = Math.min(0.01, tabLen * 0.15)
 
   for (let tab = 1; tab < numTabs; tab++) {
-    const x = -halfLen + tab * tabLen
+    const x = startX + tab * tabLen
     for (let i = 0; i < top.length - 1; i++) {
-      const [z0, y0] = top[i]!
-      const [z1, y1] = top[i + 1]!
+      const [z0, capY0] = top[i]!
+      const [z1, capY1] = top[i + 1]!
+      const y0 = seatYAt(x, z0) + capY0
+      const y1 = seatYAt(x, z1) + capY1
       const dz = z1 - z0
       const dy = y1 - y0
       const len = Math.sqrt(dz * dz + dy * dy) || 1
@@ -208,6 +282,11 @@ function addShingledTabs(
       const r0z = z0 + nz * ridgeH
       const r1y = y1 + ny * ridgeH
       const r1z = z1 + nz * ridgeH
+      const backX = x - ridgeD
+      const by0 = seatYAt(backX, z0) + capY0
+      const by1 = seatYAt(backX, z1) + capY1
+      const br0y = by0 + ny * ridgeH
+      const br1y = by1 + ny * ridgeH
       pushQuad(
         positions,
         normals,
@@ -222,10 +301,10 @@ function addShingledTabs(
         positions,
         normals,
         uvs,
-        [x - ridgeD, r0y, r0z],
-        [x - ridgeD, r1y, r1z],
-        [x - ridgeD, y1, z1],
-        [x - ridgeD, y0, z0],
+        [backX, br0y, r0z],
+        [backX, br1y, r1z],
+        [backX, by1, z1],
+        [backX, by0, z0],
         [-1, 0, 0],
       )
     }
@@ -240,6 +319,13 @@ function buildBufferGeometry(
   uvs: number[],
 ): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry()
+  if (positions.length === 0) {
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(6), 2))
+    geo.computeBoundingSphere()
+    return geo
+  }
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))

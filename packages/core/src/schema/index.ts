@@ -98,12 +98,17 @@ export { PipeFittingNode } from './nodes/pipe-fitting'
 export { PipeSegmentNode } from './nodes/pipe-segment'
 export { PipeTrapNode } from './nodes/pipe-trap'
 // Nodes
-export { RidgeVentNode } from './nodes/ridge-vent'
+export {
+  createDefaultRidgeVentsForSegment,
+  isDefaultRidgeVentNode,
+  RidgeVentNode,
+} from './nodes/ridge-vent'
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export type {
   RoofSegmentSurfaceMaterialRole,
   RoofSegmentSurfaceMaterialSpec,
+  RoofSegmentVisibleTopBounds,
   SegmentSlopeFrame,
 } from './nodes/roof-segment'
 export {
@@ -111,10 +116,14 @@ export {
   getEffectiveSegmentSurfaceMaterial,
   getPitchFromActiveRoofHeight,
   getRoofSegmentSurfaceY,
+  getRoofSegmentVisibleTopBounds,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
+  MIN_ROOF_SEGMENT_TRIM_SPAN,
+  normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,
   RoofSegmentNode,
+  RoofSegmentTrim,
   RoofType,
 } from './nodes/roof-segment'
 export type { RoofSegmentWallFace, RoofWallFaceId } from './nodes/roof-segment-walls'

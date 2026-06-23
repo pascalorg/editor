@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   type BoxVentNode,
   type ChimneyNode,
+  createDefaultRidgeVentsForSegment,
   type DormerNode,
   type GutterNode,
   type RidgeVentNode,
@@ -37,7 +38,7 @@ export default function RoofPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
-  const createNode = useScene((s) => s.createNode)
+  const createNodes = useScene((s) => s.createNodes)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const node = useScene((s) =>
@@ -176,8 +177,15 @@ export default function RoofPanel() {
       roofType: 'gable',
       position: [2, 0, 2],
     })
-    createNode(segment, node.id as AnyNodeId)
-  }, [node, createNode])
+    const ridgeVents = createDefaultRidgeVentsForSegment(segment)
+    createNodes([
+      { node: segment, parentId: node.id as AnyNodeId },
+      ...ridgeVents.map((ridgeVent) => ({
+        node: ridgeVent,
+        parentId: segment.id as AnyNodeId,
+      })),
+    ])
+  }, [node, createNodes])
 
   const handleSelectSegment = useCallback(
     (segmentId: string) => {

@@ -2,7 +2,10 @@
 
 import {
   type AnyNodeId,
+  getEffectiveRoofSurfaceMaterial,
+  getEffectiveSegmentSurfaceMaterial,
   type RidgeVentNode,
+  type RoofNode,
   type RoofSegmentNode,
   useLiveNodeOverrides,
   useRegistry,
@@ -13,25 +16,15 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  getRoofMaterialArray,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { RIDGE_LIFT, resolveRidgeSnap } from '../shared/ridge-snap'
-import { getSurfaceY } from '../shared/roof-surface'
+import { resolveRidgeSnap } from '../shared/ridge-snap'
+import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import { buildRidgeVentGeometry } from './geometry'
-
-// Single white fallback for every style. Paint customisation comes from
-// `node.material` / `node.materialPreset` (default: `preset-white`); the
-// fallback only fires for legacy nodes that pre-date the schema default
-// and shouldn't punish them with style-specific grey/metal that diverges
-// from the "default white" the inspector advertises.
-const defaultMaterial = new THREE.MeshStandardMaterial({
-  color: 0xff_ff_ff,
-  roughness: 0.85,
-  metalness: 0.1,
-})
 
 /**
  * Ridge vent renderer. Sits along the ridge of a roof-segment — no
@@ -66,6 +59,7 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
   const node: RidgeVentNode = overrides
     ? ({ ...storeNode, ...overrides } as RidgeVentNode)
     : storeNode
+  const nodePosition = node.position ?? [0, 0, 0]
 
   const segmentStore = useScene((state) =>
     node.roofSegmentId
@@ -87,11 +81,26 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
       ? ({ ...segmentStore, ...segmentOverrides } as RoofSegmentNode)
       : segmentStore
     : undefined
+  const parentRoof = useScene((state) =>
+    segmentStore?.parentId
+      ? (state.nodes[segmentStore.parentId as AnyNodeId] as RoofNode | undefined)
+      : undefined,
+  )
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
-    () => buildRidgeVentGeometry(node),
-    [node.length, node.width, node.height, node.style, node.endCaps],
+    () => buildRidgeVentGeometry(node, segment),
+    [
+      node.length,
+      node.width,
+      node.height,
+      node.style,
+      node.endCaps,
+      node.rotation,
+      nodePosition[0],
+      nodePosition[2],
+      segment,
+    ],
   )
 
   useEffect(() => () => geometry.dispose(), [geometry])
@@ -104,13 +113,44 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
   // closed solid in `geometry.ts` is the right fix if the underside-view
   // becomes noticeable.
   const material = useMemo(() => {
-    if (!textures || (!node.material && !node.materialPreset)) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const createDefaultTopMaterial = () => {
+      const parentSpec = parentRoof ? getEffectiveRoofSurfaceMaterial(parentRoof, 'top') : undefined
+      const spec = segment ? getEffectiveSegmentSurfaceMaterial(segment, 'top', parentSpec) : null
+
+      if (typeof spec?.materialPreset === 'string') {
+        const resolved = createMaterialFromPresetRef(spec.materialPreset, shading)
+        if (resolved) return resolved
+      }
+      if (spec?.material !== undefined) {
+        return createMaterial(spec.material, shading)
+      }
+
+      const roofMaterials = parentRoof
+        ? getRoofMaterialArray(parentRoof, shading, textures, colorPreset, sceneTheme)
+        : null
+      return (
+        roofMaterials?.[3] ??
+        createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+      )
     }
-    return node.material
-      ? createMaterial(node.material, shading)
-      : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
-  }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
+
+    if (node.material) {
+      return createMaterial(node.material, shading)
+    }
+    if (node.materialPreset) {
+      return createMaterialFromPresetRef(node.materialPreset, shading) ?? createDefaultTopMaterial()
+    }
+    return createDefaultTopMaterial()
+  }, [
+    textures,
+    colorPreset,
+    sceneTheme,
+    shading,
+    node.material,
+    node.materialPreset,
+    segment,
+    parentRoof,
+  ])
 
   if (!segment) return null
 
@@ -126,28 +166,29 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
   const segPos = segment.position ?? [0, 0, 0]
   const segRotY = segment.rotation ?? 0
 
-  // Lock the BASE position to the ridge so the vent always starts on the
-  // slope top; treat `position[1]` and `position[2]` as user-tunable OFFSETS
-  // off that base (Y above ridge lift, Z away from ridge centerline). So
+  // Lock the BASE position to the rendered roof skin so the vent always starts
+  // on the roof structure; treat `position[1]` and `position[2]` as user-tunable OFFSETS
+  // off that base (Y above the surface, Z away from ridge centerline). So
   // after placement the inspector's Y / Z sliders nudge the vent off the
   // locked ridge without losing the slope-tracking base. X is the position
   // along the ridge — the snap re-clamps it to the segment's ridge span.
-  const snap = resolveRidgeSnap(segment, node.position[0] ?? 0, 0)
-  const ridgeX = snap ? snap.localX : (node.position[0] ?? 0)
-  const baseZ = snap ? snap.localZ : 0
-  const baseY = getSurfaceY(ridgeX, baseZ, segment) + RIDGE_LIFT
+  const rotationY = node.rotation ?? 0
+  const snap =
+    Math.abs(rotationY) < 1e-5 ? resolveRidgeSnap(segment, nodePosition[0] ?? 0, 0) : null
+  const ridgeX = snap ? snap.localX : (nodePosition[0] ?? 0)
+  const ridgeZ = snap ? snap.localZ + (nodePosition[2] ?? 0) : (nodePosition[2] ?? 0)
+  const baseY = getRoofTopSurfaceY(ridgeX, ridgeZ, segment)
   // Clamp legacy stored Y (absolute peak height from earlier versions) so the
   // vent doesn't fly off when the field was an absolute Y instead of offset.
-  const yOffset = Math.max(-2, Math.min(2, node.position[1] ?? 0))
+  const yOffset = Math.max(-2, Math.min(2, nodePosition[1] ?? 0))
   const ridgeY = baseY + yOffset
-  const ridgeZ = baseZ + (node.position[2] ?? 0)
 
   return (
     <group position={segPos} rotation-y={segRotY}>
       <group
         position={[ridgeX, ridgeY, ridgeZ]}
         ref={ref}
-        rotation-y={node.rotation ?? 0}
+        rotation-y={rotationY}
         visible={node.visible}
       >
         <mesh

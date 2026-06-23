@@ -3,6 +3,8 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  createDefaultRidgeVentsForSegment,
+  isDefaultRidgeVentNode,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
   type RoofType,
@@ -15,6 +17,7 @@ import {
   PanelWrapper,
   SegmentedControl,
   SliderControl,
+  ToggleControl,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -44,6 +47,17 @@ const PITCH_PRESETS: { label: string; deg: number }[] = [
   { label: '12/12', deg: 45 },
 ]
 
+function shouldShowTrimPlanes(metadata: unknown): boolean {
+  return metadataRecord(metadata).showTrimPlanes !== false
+}
+
+function metadataRecord(metadata: unknown): Record<string, unknown> {
+  if (typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)) {
+    return metadata as Record<string, unknown>
+  }
+  return {}
+}
+
 export default function RoofSegmentPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
@@ -60,6 +74,29 @@ export default function RoofSegmentPanel() {
       updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId, updateNode],
+  )
+
+  const handleRoofTypeChange = useCallback(
+    (roofType: RoofType) => {
+      if (!(selectedId && node) || roofType === node.roofType) return
+
+      const nextSegment = RoofSegmentNodeSchema.parse({ ...node, roofType })
+      const nodes = useScene.getState().nodes
+      const defaultRidgeVentIds = (node.children ?? []).filter((childId) =>
+        isDefaultRidgeVentNode(nodes[childId as AnyNodeId], node.id),
+      ) as AnyNodeId[]
+      const ridgeVents = createDefaultRidgeVentsForSegment(nextSegment)
+
+      useScene.getState().applyNodeChanges({
+        update: [{ id: selectedId as AnyNodeId, data: { roofType } as Partial<AnyNode> }],
+        delete: defaultRidgeVentIds,
+        create: ridgeVents.map((ridgeVent) => ({
+          node: ridgeVent,
+          parentId: node.id as AnyNodeId,
+        })),
+      })
+    },
+    [selectedId, node],
   )
 
   const handleClose = useCallback(() => {
@@ -119,6 +156,8 @@ export default function RoofSegmentPanel() {
 
   if (!(node && node.type === 'roof-segment' && selectedId)) return null
 
+  const showTrimPlanes = shouldShowTrimPlanes(node.metadata)
+
   return (
     <PanelWrapper
       icon="/icons/roof.webp"
@@ -129,14 +168,26 @@ export default function RoofSegmentPanel() {
     >
       <PanelSection title="Roof Type">
         <SegmentedControl
-          onChange={(v) => handleUpdate({ roofType: v })}
+          onChange={handleRoofTypeChange}
           options={ROOF_TYPE_OPTIONS}
           value={node.roofType}
         />
         <SegmentedControl
-          onChange={(v) => handleUpdate({ roofType: v })}
+          onChange={handleRoofTypeChange}
           options={ROOF_TYPE_OPTIONS_2}
           value={node.roofType}
+        />
+      </PanelSection>
+
+      <PanelSection title="Trim">
+        <ToggleControl
+          checked={showTrimPlanes}
+          label="Show trim planes"
+          onChange={(checked) =>
+            handleUpdate({
+              metadata: { ...metadataRecord(node.metadata), showTrimPlanes: checked },
+            })
+          }
         />
       </PanelSection>
 

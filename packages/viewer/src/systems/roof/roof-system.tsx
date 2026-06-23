@@ -5,6 +5,7 @@ import {
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
   nodeRegistry,
+  normalizeRoofSegmentTrim,
   type RoofNode,
   type RoofSegmentNode,
   type RoofType,
@@ -319,7 +320,7 @@ function updateRoofSegmentGeometry(
  * Registry-driven so the viewer never names a kind.
  */
 function subtractAccessoryCuts(
-  brushes: { deckSlab: Brush; shinSlab: Brush; wallBrush: Brush; innerBrush: Brush },
+  brushes: RoofSegmentBrushSet,
   segment: RoofSegmentNode,
   nodes: Record<string, AnyNode>,
 ) {
@@ -599,6 +600,13 @@ const dummyMats = roofCsgDummyMats
 
 export const ROOF_MATERIAL_SLOT_COUNT = 4
 
+type RoofSegmentBrushSet = {
+  deckSlab: Brush
+  shinSlab: Brush
+  wallBrush: Brush
+  innerBrush: Brush
+}
+
 export function mapRoofGroupMaterialIndex(
   groupMaterialIndex: number | undefined,
   csgMaterials: THREE.Material[],
@@ -638,14 +646,231 @@ function normalizeRoofMaterialIndex(materialIndex: number | undefined): number {
 const SHINGLE_SURFACE_EPSILON = 0.02
 const RAKE_FACE_NORMAL_EPSILON = 0.3
 const RAKE_FACE_ALIGNMENT_EPSILON = 0.35
+const TRIM_CUT_EPSILON = 0.002
+
+function hasSegmentTrim(node: RoofSegmentNode): boolean {
+  const trim = normalizeRoofSegmentTrim(node)
+  return (
+    trim.left > 0 ||
+    trim.right > 0 ||
+    trim.front > 0 ||
+    trim.back > 0 ||
+    trim.frontLeft > 0 ||
+    trim.frontRight > 0 ||
+    trim.backLeft > 0 ||
+    trim.backRight > 0 ||
+    trim.frontLeftX > 0 ||
+    trim.frontLeftZ > 0 ||
+    trim.frontRightX > 0 ||
+    trim.frontRightZ > 0 ||
+    trim.backLeftX > 0 ||
+    trim.backLeftZ > 0 ||
+    trim.backRightX > 0 ||
+    trim.backRightZ > 0
+  )
+}
+
+function buildTrimCutBrush(
+  minX: number,
+  maxX: number,
+  minZ: number,
+  maxZ: number,
+  minY: number,
+  maxY: number,
+): Brush | null {
+  const width = maxX - minX
+  const height = maxY - minY
+  const depth = maxZ - minZ
+  if (!(width > 0 && height > 0 && depth > 0)) return null
+
+  const geometry = new THREE.BoxGeometry(width, height, depth)
+  geometry.translate((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2)
+  ensureRenderableGeometryAttributes(geometry)
+  computeGeometryBoundsTree(geometry)
+
+  const cut = new Brush(geometry, dummyMats)
+  cut.updateMatrixWorld()
+  return cut
+}
+
+function buildDiagonalTrimCutBrush(
+  points: readonly [[number, number], [number, number], [number, number]],
+  minY: number,
+  maxY: number,
+): Brush | null {
+  const [a, b, c] = points
+  const height = maxY - minY
+  if (!(height > 0)) return null
+
+  const positions = new Float32Array([
+    a[0],
+    minY,
+    a[1],
+    b[0],
+    minY,
+    b[1],
+    c[0],
+    minY,
+    c[1],
+    a[0],
+    maxY,
+    a[1],
+    b[0],
+    maxY,
+    b[1],
+    c[0],
+    maxY,
+    c[1],
+  ])
+  const indices = [0, 2, 1, 3, 4, 5, 0, 1, 4, 0, 4, 3, 1, 2, 5, 1, 5, 4, 2, 0, 3, 2, 3, 5]
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.setIndex(indices)
+  geometry.addGroup(0, indices.length, 0)
+  geometry.computeVertexNormals()
+  ensureRenderableGeometryAttributes(geometry)
+  computeGeometryBoundsTree(geometry)
+
+  const cut = new Brush(geometry, dummyMats)
+  cut.updateMatrixWorld()
+  return cut
+}
+
+function subtractCutFromSegmentBrushes(brushes: RoofSegmentBrushSet, cut: Brush) {
+  for (const key of ['shinSlab', 'deckSlab', 'wallBrush', 'innerBrush'] as const) {
+    const next = csgEvaluator.evaluate(brushes[key], cut, SUBTRACTION) as Brush
+    brushes[key].geometry.dispose()
+    prepareBrushForCSG(next)
+    brushes[key] = next
+  }
+}
+
+function subtractSegmentTrimCuts(brushes: RoofSegmentBrushSet, segment: RoofSegmentNode) {
+  const trim = normalizeRoofSegmentTrim(segment)
+  if (
+    trim.left === 0 &&
+    trim.right === 0 &&
+    trim.front === 0 &&
+    trim.back === 0 &&
+    trim.frontLeft === 0 &&
+    trim.frontRight === 0 &&
+    trim.backLeft === 0 &&
+    trim.backRight === 0 &&
+    trim.frontLeftX === 0 &&
+    trim.frontLeftZ === 0 &&
+    trim.frontRightX === 0 &&
+    trim.frontRightZ === 0 &&
+    trim.backLeftX === 0 &&
+    trim.backLeftZ === 0 &&
+    trim.backRightX === 0 &&
+    trim.backRightZ === 0
+  ) {
+    return
+  }
+
+  const { activeRh } = getSegmentSlopeFrame(segment)
+  const extra =
+    segment.wallThickness + segment.overhang + segment.deckThickness + segment.shingleThickness + 2
+  const minX = -segment.width / 2 - extra
+  const maxX = segment.width / 2 + extra
+  const minZ = -segment.depth / 2 - extra
+  const maxZ = segment.depth / 2 + extra
+  const minY = -2
+  const maxY = segment.wallHeight + activeRh + segment.deckThickness + segment.shingleThickness + 2
+
+  const cuts: Brush[] = []
+
+  if (trim.left > 0) {
+    const planeX = -segment.width / 2 + trim.left
+    const cut = buildTrimCutBrush(minX, planeX + TRIM_CUT_EPSILON, minZ, maxZ, minY, maxY)
+    if (cut) cuts.push(cut)
+  }
+  if (trim.right > 0) {
+    const planeX = segment.width / 2 - trim.right
+    const cut = buildTrimCutBrush(planeX - TRIM_CUT_EPSILON, maxX, minZ, maxZ, minY, maxY)
+    if (cut) cuts.push(cut)
+  }
+  if (trim.front > 0) {
+    const planeZ = segment.depth / 2 - trim.front
+    const cut = buildTrimCutBrush(minX, maxX, planeZ - TRIM_CUT_EPSILON, maxZ, minY, maxY)
+    if (cut) cuts.push(cut)
+  }
+  if (trim.back > 0) {
+    const planeZ = -segment.depth / 2 + trim.back
+    const cut = buildTrimCutBrush(minX, maxX, minZ, planeZ + TRIM_CUT_EPSILON, minY, maxY)
+    if (cut) cuts.push(cut)
+  }
+
+  const leftX = -segment.width / 2 + trim.left
+  const rightX = segment.width / 2 - trim.right
+  const frontZ = segment.depth / 2 - trim.front
+  const backZ = -segment.depth / 2 + trim.back
+
+  if (trim.frontLeftX > 0 && trim.frontLeftZ > 0) {
+    const cut = buildDiagonalTrimCutBrush(
+      [
+        [leftX - extra, frontZ + extra],
+        [leftX + trim.frontLeftX + TRIM_CUT_EPSILON, frontZ],
+        [leftX, frontZ - trim.frontLeftZ - TRIM_CUT_EPSILON],
+      ],
+      minY,
+      maxY,
+    )
+    if (cut) cuts.push(cut)
+  }
+  if (trim.frontRightX > 0 && trim.frontRightZ > 0) {
+    const cut = buildDiagonalTrimCutBrush(
+      [
+        [rightX + extra, frontZ + extra],
+        [rightX, frontZ - trim.frontRightZ - TRIM_CUT_EPSILON],
+        [rightX - trim.frontRightX - TRIM_CUT_EPSILON, frontZ],
+      ],
+      minY,
+      maxY,
+    )
+    if (cut) cuts.push(cut)
+  }
+  if (trim.backLeftX > 0 && trim.backLeftZ > 0) {
+    const cut = buildDiagonalTrimCutBrush(
+      [
+        [leftX - extra, backZ - extra],
+        [leftX, backZ + trim.backLeftZ + TRIM_CUT_EPSILON],
+        [leftX + trim.backLeftX + TRIM_CUT_EPSILON, backZ],
+      ],
+      minY,
+      maxY,
+    )
+    if (cut) cuts.push(cut)
+  }
+  if (trim.backRightX > 0 && trim.backRightZ > 0) {
+    const cut = buildDiagonalTrimCutBrush(
+      [
+        [rightX + extra, backZ - extra],
+        [rightX - trim.backRightX - TRIM_CUT_EPSILON, backZ],
+        [rightX, backZ + trim.backRightZ + TRIM_CUT_EPSILON],
+      ],
+      minY,
+      maxY,
+    )
+    if (cut) cuts.push(cut)
+  }
+
+  for (const cut of cuts) {
+    try {
+      subtractCutFromSegmentBrushes(brushes, cut)
+    } catch (e) {
+      console.error('Roof trim CSG failed:', e)
+    } finally {
+      cut.geometry.dispose()
+    }
+  }
+}
 
 /**
  * Generate complete hollow-shell geometry for a roof segment.
  * Ports the prototype's CSG approach using three-bvh-csg.
  */
-export function getRoofSegmentBrushes(
-  node: RoofSegmentNode,
-): { deckSlab: Brush; shinSlab: Brush; wallBrush: Brush; innerBrush: Brush } | null {
+export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSet | null {
   const {
     roofType,
     width,
@@ -893,7 +1118,12 @@ export function getRoofSegmentBrushes(
       shinTopBrush.geometry.dispose()
       shinBotBrush.geometry.dispose()
 
-      return { deckSlab, shinSlab, wallBrush, innerBrush }
+      const brushes = { deckSlab, shinSlab, wallBrush, innerBrush }
+      if (hasSegmentTrim(node)) {
+        subtractSegmentTrimCuts(brushes, node)
+      }
+
+      return brushes
     } catch (e) {
       console.error('CSG prep failed:', e)
     }
@@ -1206,32 +1436,22 @@ function getModuleFaces(
     const m2 = v(w / 2 - i, mh, d / 2 - i)
     const m3 = v(w / 2 - i, mh, -d / 2 + i)
     const m4 = v(-w / 2 + i, mh, -d / 2 + i)
-    const t1 = v(-w / 2 + i * 2, h, d / 2 - i * 2)
-    const t2 = v(w / 2 - i * 2, h, d / 2 - i * 2)
-    const t3 = v(w / 2 - i * 2, h, -d / 2 + i * 2)
-    const t4 = v(-w / 2 + i * 2, h, -d / 2 + i * 2)
-    if (w - i * 4 <= 0.01 || d - i * 4 <= 0.01) {
-      if (w >= d) {
-        const r1 = v(-w / 2 + d / 2, h, 0)
-        const r2 = v(w / 2 - d / 2, h, 0)
-        faces.push([e4, e1, r1], [e2, e3, r2], [e1, e2, r2, r1], [e3, e4, r1, r2])
-      } else {
-        const r1 = v(0, h, d / 2 - w / 2)
-        const r2 = v(0, h, -d / 2 + w / 2)
-        faces.push([e1, e2, r1], [e3, e4, r2], [e2, e3, r2, r1], [e4, e1, r1, r2])
-      }
+    const topW = w - i * 2
+    const topD = d - i * 2
+
+    faces.push([e1, e2, m2, m1], [e2, e3, m3, m2], [e3, e4, m4, m3], [e4, e1, m1, m4])
+
+    if (Math.abs(topW - topD) < 0.01) {
+      const r = v(0, h, 0)
+      faces.push([m4, m1, r], [m1, m2, r], [m2, m3, r], [m3, m4, r])
+    } else if (topW >= topD) {
+      const r1 = v(-topW / 2 + topD / 2, h, 0)
+      const r2 = v(topW / 2 - topD / 2, h, 0)
+      faces.push([m4, m1, r1], [m2, m3, r2], [m1, m2, r2, r1], [m3, m4, r1, r2])
     } else {
-      faces.push(
-        [t1, t2, t3, t4],
-        [e1, e2, m2, m1],
-        [e2, e3, m3, m2],
-        [e3, e4, m4, m3],
-        [e4, e1, m1, m4],
-        [m1, m2, t2, t1],
-        [m2, m3, t3, t2],
-        [m3, m4, t4, t3],
-        [m4, m1, t1, t4],
-      )
+      const r1 = v(0, h, topD / 2 - topW / 2)
+      const r2 = v(0, h, -topD / 2 + topW / 2)
+      faces.push([m1, m2, r1], [m3, m4, r2], [m2, m3, r2, r1], [m4, m1, r1, r2])
     }
   } else if (type === 'dutch') {
     const i =

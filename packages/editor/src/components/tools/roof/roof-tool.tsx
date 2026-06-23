@@ -2,8 +2,10 @@ import {
   type AnyNode,
   type AnyNodeId,
   collectAlignmentAnchors,
+  createDefaultRidgeVentsForSegment,
   emitter,
   type GridEvent,
+  getActiveRoofHeight,
   type LevelNode,
   RoofNode,
   RoofSegmentNode,
@@ -31,9 +33,183 @@ const DEFAULT_PITCH_DEG = 40
 const GRID_OFFSET = 0.02
 /** Figma-style alignment-snap threshold (meters), matching the move tools. */
 const ALIGNMENT_THRESHOLD_M = 0.08
+const ROOF_GHOST_COLOR = '#818cf8'
 
 function snapToActiveGrid(value: number): number {
   return snapScalar(value, useEditor.getState().gridSnapStep)
+}
+
+type RoofDraftGeometry = {
+  solid: BufferGeometry
+  lines: BufferGeometry
+}
+
+function createRoofDraftGeometry(node: RoofSegmentNode): RoofDraftGeometry {
+  const faces = getRoofDraftFaces(node)
+  const positions: number[] = []
+  const indices: number[] = []
+  const linePoints: Vector3[] = []
+  let vertexIndex = 0
+
+  for (const face of faces) {
+    if (face.length < 3) continue
+
+    const faceStart = vertexIndex
+    for (const point of face) {
+      positions.push(point.x, point.y, point.z)
+      vertexIndex++
+    }
+
+    for (let i = 1; i < face.length - 1; i++) {
+      indices.push(faceStart, faceStart + i, faceStart + i + 1)
+    }
+
+    for (let i = 0; i < face.length; i++) {
+      linePoints.push(face[i]!, face[(i + 1) % face.length]!)
+    }
+  }
+
+  const solid = new BufferGeometry()
+  solid.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  solid.setIndex(indices)
+  solid.computeVertexNormals()
+
+  const lines = new BufferGeometry().setFromPoints(linePoints)
+  return { solid, lines }
+}
+
+function getRoofDraftFaces(node: RoofSegmentNode): Vector3[][] {
+  const width = Math.max(0.01, node.width)
+  const depth = Math.max(0.01, node.depth)
+  const halfWidth = width / 2
+  const halfDepth = depth / 2
+  const wallHeight = Math.max(0.01, node.wallHeight)
+  const peakY = wallHeight + getActiveRoofHeight(node)
+  const v = (x: number, y: number, z: number) => new Vector3(x, y, z)
+
+  const b1 = v(-halfWidth, 0, halfDepth)
+  const b2 = v(halfWidth, 0, halfDepth)
+  const b3 = v(halfWidth, 0, -halfDepth)
+  const b4 = v(-halfWidth, 0, -halfDepth)
+  const e1 = v(-halfWidth, wallHeight, halfDepth)
+  const e2 = v(halfWidth, wallHeight, halfDepth)
+  const e3 = v(halfWidth, wallHeight, -halfDepth)
+  const e4 = v(-halfWidth, wallHeight, -halfDepth)
+
+  const faces: Vector3[][] = [
+    [b1, b2, e2, e1],
+    [b2, b3, e3, e2],
+    [b3, b4, e4, e3],
+    [b4, b1, e1, e4],
+  ]
+
+  const pushHip = () => {
+    if (Math.abs(width - depth) < 0.01) {
+      const peak = v(0, peakY, 0)
+      faces.push([e4, e1, peak], [e1, e2, peak], [e2, e3, peak], [e3, e4, peak])
+    } else if (width >= depth) {
+      const r1 = v(-halfWidth + halfDepth, peakY, 0)
+      const r2 = v(halfWidth - halfDepth, peakY, 0)
+      faces.push([e4, e1, r1], [e2, e3, r2], [e1, e2, r2, r1], [e3, e4, r1, r2])
+    } else {
+      const r1 = v(0, peakY, halfDepth - halfWidth)
+      const r2 = v(0, peakY, -halfDepth + halfWidth)
+      faces.push([e1, e2, r1], [e3, e4, r2], [e2, e3, r2, r1], [e4, e1, r1, r2])
+    }
+  }
+
+  if (node.roofType === 'flat' || peakY <= wallHeight) {
+    faces.push([e1, e2, e3, e4])
+    return faces
+  }
+
+  switch (node.roofType) {
+    case 'gable': {
+      const r1 = v(-halfWidth, peakY, 0)
+      const r2 = v(halfWidth, peakY, 0)
+      faces.push([e4, e1, r1], [e2, e3, r2], [e1, e2, r2, r1], [e3, e4, r1, r2])
+      break
+    }
+    case 'shed': {
+      const t1 = v(-halfWidth, peakY, -halfDepth)
+      const t2 = v(halfWidth, peakY, -halfDepth)
+      faces.push([e1, e2, t2, t1], [e2, e3, t2], [e3, e4, t1, t2], [e4, e1, t1])
+      break
+    }
+    case 'hip':
+      pushHip()
+      break
+    case 'gambrel': {
+      const midZ = halfDepth * node.gambrelLowerWidthRatio
+      const midY = wallHeight + (peakY - wallHeight) * node.gambrelLowerHeightRatio
+      const m1 = v(-halfWidth, midY, midZ)
+      const m2 = v(halfWidth, midY, midZ)
+      const m3 = v(halfWidth, midY, -midZ)
+      const m4 = v(-halfWidth, midY, -midZ)
+      const r1 = v(-halfWidth, peakY, 0)
+      const r2 = v(halfWidth, peakY, 0)
+      faces.push(
+        [e4, e1, m1, r1, m4],
+        [e2, e3, m3, r2, m2],
+        [e1, e2, m2, m1],
+        [m1, m2, r2, r1],
+        [e3, e4, m4, m3],
+        [m3, m4, r1, r2],
+      )
+      break
+    }
+    case 'mansard': {
+      const inset = Math.min(width, depth) * node.mansardSteepWidthRatio
+      if (halfWidth - inset <= 0.02 || halfDepth - inset <= 0.02) {
+        pushHip()
+        break
+      }
+      const midY = wallHeight + (peakY - wallHeight) * node.mansardSteepHeightRatio
+      const w1 = v(-halfWidth + inset, midY, halfDepth - inset)
+      const w2 = v(halfWidth - inset, midY, halfDepth - inset)
+      const w3 = v(halfWidth - inset, midY, -halfDepth + inset)
+      const w4 = v(-halfWidth + inset, midY, -halfDepth + inset)
+      faces.push([e1, e2, w2, w1], [e2, e3, w3, w2], [e3, e4, w4, w3], [e4, e1, w1, w4])
+      if (width >= depth) {
+        const r1 = v(-halfWidth + halfDepth, peakY, 0)
+        const r2 = v(halfWidth - halfDepth, peakY, 0)
+        faces.push([w4, w1, r1], [w2, w3, r2], [w1, w2, r2, r1], [w3, w4, r1, r2])
+      } else {
+        const r1 = v(0, peakY, halfDepth - halfWidth)
+        const r2 = v(0, peakY, -halfDepth + halfWidth)
+        faces.push([w1, w2, r1], [w3, w4, r2], [w2, w3, r2, r1], [w4, w1, r1, r2])
+      }
+      break
+    }
+    case 'dutch': {
+      const inset = Math.min(width, depth) * node.dutchHipWidthRatio
+      if (halfWidth - inset <= 0.02 || halfDepth - inset <= 0.02) {
+        pushHip()
+        break
+      }
+      const midY = wallHeight + (peakY - wallHeight) * node.dutchHipHeightRatio
+      const w1 = v(-halfWidth + inset, midY, halfDepth - inset)
+      const w2 = v(halfWidth - inset, midY, halfDepth - inset)
+      const w3 = v(halfWidth - inset, midY, -halfDepth + inset)
+      const w4 = v(-halfWidth + inset, midY, -halfDepth + inset)
+      faces.push([e1, e2, w2, w1], [e2, e3, w3, w2], [e3, e4, w4, w3], [e4, e1, w1, w4])
+      if (width >= depth) {
+        const r1 = v(-halfWidth + inset, peakY, 0)
+        const r2 = v(halfWidth - inset, peakY, 0)
+        faces.push([w4, w1, r1], [w2, w3, r2], [w1, w2, r2, r1], [w3, w4, r1, r2])
+      } else {
+        const r1 = v(0, peakY, halfDepth - inset)
+        const r2 = v(0, peakY, -halfDepth + inset)
+        faces.push([w1, w2, r1], [w3, w4, r2], [w2, w3, r2, r1], [w4, w1, r1, r2])
+      }
+      break
+    }
+    default:
+      pushHip()
+      break
+  }
+
+  return faces
 }
 
 /**
@@ -45,7 +221,7 @@ const commitRoofPlacement = (
   corner2: [number, number, number],
   selectedIds: string[],
 ): AnyNode['id'] => {
-  const { createNode, createNodes, nodes } = useScene.getState()
+  const { createNodes, nodes } = useScene.getState()
 
   // A placed roof preset seeds `toolDefaults.roof` with the flattened
   // subtree params (roofType, pitch, wallHeight, overhang, materials, …)
@@ -102,8 +278,15 @@ const commitRoofPlacement = (
       depth,
       position: [localX, 0, localZ],
     })
+    const ridgeVents = createDefaultRidgeVentsForSegment(segment)
 
-    createNode(segment, targetRoofId as AnyNode['id'])
+    createNodes([
+      { node: segment, parentId: targetRoofId as AnyNode['id'] },
+      ...ridgeVents.map((ridgeVent) => ({
+        node: ridgeVent,
+        parentId: segment.id as AnyNode['id'],
+      })),
+    ])
     sfxEmitter.emit('sfx:structure-build')
     return segment.id // Returns segment ID so it can be selected immediately
   }
@@ -122,6 +305,7 @@ const commitRoofPlacement = (
     depth,
     position: [0, 0, 0],
   })
+  const ridgeVents = createDefaultRidgeVentsForSegment(segment)
 
   // Create the roof container. Segment-shaped params (roofType, pitch, …) are
   // dropped by the RoofNode schema; surface materials in `defaults` carry over.
@@ -136,6 +320,10 @@ const commitRoofPlacement = (
   createNodes([
     { node: roof, parentId: levelId },
     { node: segment, parentId: roof.id },
+    ...ridgeVents.map((ridgeVent) => ({
+      node: ridgeVent,
+      parentId: segment.id as AnyNode['id'],
+    })),
   ])
 
   sfxEmitter.emit('sfx:structure-build')
@@ -156,6 +344,7 @@ export const RoofTool: React.FC = () => {
   const setSelection = useViewer((state) => state.setSelection)
   const setTool = useEditor((state) => state.setTool)
   const setMode = useEditor((state) => state.setMode)
+  const roofDefaults = useEditor((state) => state.toolDefaults.roof)
 
   const selectedIdsRef = useRef(selectedIds)
   useEffect(() => {
@@ -367,6 +556,31 @@ export const RoofTool: React.FC = () => {
     return { length, width, centerX, centerZ }
   }, [corner1, cursorPosition])
 
+  const previewGeometry = useMemo(() => {
+    if (!(previewDimensions && previewDimensions.length > 0.1 && previewDimensions.width > 0.1)) {
+      return null
+    }
+
+    const segment = RoofSegmentNode.parse({
+      wallHeight: DEFAULT_WALL_HEIGHT,
+      pitch: DEFAULT_PITCH_DEG,
+      roofType: 'gable',
+      ...roofDefaults,
+      width: previewDimensions.length,
+      depth: previewDimensions.width,
+      position: [0, 0, 0],
+    })
+
+    return createRoofDraftGeometry(segment)
+  }, [previewDimensions, roofDefaults])
+
+  useEffect(() => {
+    return () => {
+      previewGeometry?.solid.dispose()
+      previewGeometry?.lines.dispose()
+    }
+  }, [previewGeometry])
+
   return (
     <group>
       <CursorSphere ref={cursorRef} />
@@ -399,22 +613,41 @@ export const RoofTool: React.FC = () => {
         />
       )}
 
-      {previewDimensions && previewDimensions.length > 0.1 && previewDimensions.width > 0.1 && (
-        <mesh
-          layers={EDITOR_LAYER}
+      {previewDimensions && previewGeometry && (
+        <group
           position={[previewDimensions.centerX, levelY + GRID_OFFSET, previewDimensions.centerZ]}
-          rotation={[-Math.PI / 2, 0, 0]}
         >
-          <planeGeometry args={[previewDimensions.length, previewDimensions.width]} />
-          <meshBasicMaterial
-            color="#818cf8"
-            depthTest={false}
-            depthWrite={false}
-            opacity={0.1}
-            side={DoubleSide}
-            transparent
-          />
-        </mesh>
+          <mesh
+            geometry={previewGeometry.solid}
+            layers={EDITOR_LAYER}
+            raycast={() => {}}
+            renderOrder={2}
+          >
+            <meshBasicMaterial
+              color={ROOF_GHOST_COLOR}
+              depthTest={false}
+              depthWrite={false}
+              opacity={0.15}
+              side={DoubleSide}
+              transparent
+            />
+          </mesh>
+          <lineSegments
+            frustumCulled={false}
+            geometry={previewGeometry.lines}
+            layers={EDITOR_LAYER}
+            raycast={() => {}}
+            renderOrder={3}
+          >
+            <lineBasicNodeMaterial
+              color={ROOF_GHOST_COLOR}
+              depthTest={false}
+              depthWrite={false}
+              opacity={0.5}
+              transparent
+            />
+          </lineSegments>
+        </group>
       )}
     </group>
   )
