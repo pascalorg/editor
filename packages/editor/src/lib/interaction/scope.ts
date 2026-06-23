@@ -77,3 +77,37 @@ export function scopeNodeId(scope: InteractionScope): string | null {
 export function selectionEnabled(scope: InteractionScope): boolean {
   return scope.kind === 'idle'
 }
+
+// Derived views of the scope that mirror the legacy `useEditor` flags they
+// replaced. Each returns null unless that exact interaction is active, so a
+// stale payload is unrepresentable: the value is a pure function of the single
+// authoritative scope, not an independent flag that can drift out of sync.
+
+// The legacy `activeHandleDrag` flag. `label` keeps the legacy field name so
+// downstream `=== ROTATE_HANDLE_DRAG_LABEL` / `=== 'height'` checks are unchanged.
+export function handleDragInfo(scope: InteractionScope): { nodeId: string; label: string } | null {
+  return scope.kind === 'handle-drag' ? { nodeId: scope.nodeId, label: scope.handle } : null
+}
+
+// The legacy `editingHole` flag (`SurfaceHoleTarget`).
+export function editingHoleInfo(
+  scope: InteractionScope,
+): { nodeId: string; holeIndex: number } | null {
+  return scope.kind === 'reshaping' && scope.reshape === 'hole' && scope.holeIndex !== undefined
+    ? { nodeId: scope.nodeId, holeIndex: scope.holeIndex }
+    : null
+}
+
+// Build the scope payload for a hole reshape, so producers don't re-spell the
+// discriminator at every call site.
+export function holeEditScope(target: {
+  nodeId: string
+  holeIndex: number
+}): ActiveInteractionScope {
+  return {
+    kind: 'reshaping',
+    nodeId: target.nodeId,
+    reshape: 'hole',
+    holeIndex: target.holeIndex,
+  }
+}

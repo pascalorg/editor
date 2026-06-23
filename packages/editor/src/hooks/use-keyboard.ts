@@ -10,6 +10,7 @@ import {
 import { emitDeleteSFX, sfxEmitter } from '../lib/sfx-bus'
 import { toggleWindowOpenState } from '../lib/window-interaction'
 import useEditor from '../store/use-editor'
+import useInteractionScope from '../store/use-interaction-scope'
 
 // Tools call this in their onCancel handler when they have an active mid-action to cancel,
 // so that the global Escape handler knows not to also switch to select mode.
@@ -101,7 +102,9 @@ export const useKeyboard = ({
           const currentPhase = useEditor.getState().phase
           const currentStructureLayer = useEditor.getState().structureLayer
 
-          useEditor.getState().setEditingHole(null)
+          useInteractionScope
+            .getState()
+            .endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
 
           // From zone mode, return to structure select
           if (currentPhase === 'structure' && currentStructureLayer === 'zones') {

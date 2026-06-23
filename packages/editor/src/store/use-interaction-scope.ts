@@ -1,8 +1,11 @@
 'use client'
 
 import { create } from 'zustand'
+import { useShallow } from 'zustand/react/shallow'
 import {
   type ActiveInteractionScope,
+  editingHoleInfo,
+  handleDragInfo,
   IDLE_SCOPE,
   type InteractionScope,
 } from '../lib/interaction/scope'
@@ -51,5 +54,19 @@ const useInteractionScope = create<InteractionScopeState>((set, get) => ({
     if (match(scope)) set({ scope: IDLE_SCOPE })
   },
 }))
+
+// Derived, reference-stable views of the active scope, replacing the legacy
+// `useEditor.activeHandleDrag` / `useEditor.editingHole` flags. `useShallow`
+// keeps the result reference-stable across unrelated scope changes, so hot-path
+// subscribers (camera controls, floating menu) don't re-render on every update.
+export const useActiveHandleDrag = (): { nodeId: string; label: string } | null =>
+  useInteractionScope(useShallow((s) => handleDragInfo(s.scope)))
+
+export const useEditingHole = (): { nodeId: string; holeIndex: number } | null =>
+  useInteractionScope(useShallow((s) => editingHoleInfo(s.scope)))
+
+// Imperative (non-React) reads for event handlers / effects.
+export const getEditingHole = (): { nodeId: string; holeIndex: number } | null =>
+  editingHoleInfo(useInteractionScope.getState().scope)
 
 export default useInteractionScope

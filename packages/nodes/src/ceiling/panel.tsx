@@ -4,11 +4,14 @@ import { type AnyNode, type CeilingNode, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  holeEditScope,
   PanelSection,
   PanelWrapper,
   SliderControl,
   triggerSFX,
+  useEditingHole,
   useEditor,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
@@ -25,8 +28,7 @@ import { useCallback, useEffect, useRef } from 'react'
 export function CeilingPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const editingHole = useEditor((s) => s.editingHole)
-  const setEditingHole = useEditor((s) => s.setEditingHole)
+  const editingHole = useEditingHole()
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const node = useScene((s) =>
@@ -48,20 +50,26 @@ export function CeilingPanel() {
 
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
-    setEditingHole(null)
-  }, [setSelection, setEditingHole])
+    useInteractionScope
+      .getState()
+      .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'hole')
+  }, [setSelection])
 
   useEffect(() => {
     if (!node) {
-      setEditingHole(null)
+      useInteractionScope
+        .getState()
+        .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'hole')
     }
-  }, [node, setEditingHole])
+  }, [node])
 
   useEffect(() => {
     return () => {
-      setEditingHole(null)
+      useInteractionScope
+        .getState()
+        .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'hole')
     }
-  }, [setEditingHole])
+  }, [])
 
   const handleAddHole = useCallback(() => {
     if (!(node && selectedId)) return
@@ -91,15 +99,17 @@ export function CeilingPanel() {
       holes: [...currentHoles, newHole],
       holeMetadata: [...currentMetadata, { source: 'manual' }],
     })
-    setEditingHole({ nodeId: selectedId, holeIndex: currentHoles.length })
-  }, [node, selectedId, handleUpdate, setEditingHole])
+    useInteractionScope
+      .getState()
+      .begin(holeEditScope({ nodeId: selectedId, holeIndex: currentHoles.length }))
+  }, [node, selectedId, handleUpdate])
 
   const handleEditHole = useCallback(
     (index: number) => {
       if (!selectedId) return
-      setEditingHole({ nodeId: selectedId, holeIndex: index })
+      useInteractionScope.getState().begin(holeEditScope({ nodeId: selectedId, holeIndex: index }))
     },
-    [selectedId, setEditingHole],
+    [selectedId],
   )
 
   const handleDeleteHole = useCallback(
@@ -114,10 +124,12 @@ export function CeilingPanel() {
       const newMetadata = currentMetadata.filter((_, i) => i !== index)
       handleUpdate({ holes: newHoles, holeMetadata: newMetadata })
       if (editingHole?.nodeId === selectedId && editingHole?.holeIndex === index) {
-        setEditingHole(null)
+        useInteractionScope
+          .getState()
+          .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'hole')
       }
     },
-    [selectedId, node?.holes, node?.holeMetadata, handleUpdate, editingHole, setEditingHole],
+    [selectedId, node?.holes, node?.holeMetadata, handleUpdate, editingHole],
   )
 
   const handleMove = useCallback(() => {
@@ -213,7 +225,13 @@ export function CeilingPanel() {
                       <ActionButton
                         className="h-7 bg-primary text-primary-foreground hover:bg-primary/90"
                         label="Done"
-                        onClick={() => setEditingHole(null)}
+                        onClick={() =>
+                          useInteractionScope
+                            .getState()
+                            .endIf(
+                              (scope) => scope.kind === 'reshaping' && scope.reshape === 'hole',
+                            )
+                        }
                       />
                     ) : isAutoHole ? (
                       <div className="rounded-md bg-[#2C2C2E] px-2 py-1 text-[10px] text-muted-foreground">

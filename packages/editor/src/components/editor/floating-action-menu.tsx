@@ -36,11 +36,12 @@ import { useFrame } from '@react-three/fiber'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
+import { holeEditScope } from '../../lib/interaction/scope'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import useEditor from '../../store/use-editor'
-import useInteractionScope from '../../store/use-interaction-scope'
+import useInteractionScope, { useActiveHandleDrag } from '../../store/use-interaction-scope'
 import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
 
@@ -217,12 +218,11 @@ export function FloatingActionMenu() {
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
   const setCurvingFence = useEditor((s) => s.setCurvingFence)
   const setSelection = useViewer((s) => s.setSelection)
-  const setEditingHole = useEditor((s) => s.setEditingHole)
   const unit = useViewer((s) => s.unit)
   // Drives the height-drag dimension pill below the menu. `activeHandleDrag`
   // flips only at drag start / end, so subscribing here is cheap — the live
   // height value is written imperatively in the useFrame below.
-  const activeHandleDrag = useEditor((s) => s.activeHandleDrag)
+  const activeHandleDrag = useActiveHandleDrag()
   // R/T rotation axis for kinds with full 3D orientation (duct fittings).
   const rotationAxis = useEditor((s) => s.rotationAxis)
   // The floating action menu is an action-conflicting control: hard-hidden
@@ -634,11 +634,13 @@ export function FloatingActionMenu() {
         holes: [...currentHoles, newHole],
         holeMetadata: [...currentMetadata, { source: 'manual' }],
       })
-      setEditingHole({ nodeId: selectedId, holeIndex: currentHoles.length })
+      useInteractionScope
+        .getState()
+        .begin(holeEditScope({ nodeId: selectedId, holeIndex: currentHoles.length }))
       // Re-assert selection so the node stays selected
       setSelection({ selectedIds: [selectedId] })
     },
-    [node, selectedId, updateNode, setEditingHole, setSelection],
+    [node, selectedId, updateNode, setSelection],
   )
 
   const handleDelete = useCallback(

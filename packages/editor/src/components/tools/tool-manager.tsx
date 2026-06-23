@@ -9,6 +9,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
+import { useEditingHole } from '../../store/use-interaction-scope'
 import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
 import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
@@ -61,7 +62,7 @@ export const ToolManager: React.FC = () => {
   const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
   const curvingWall = useEditor((state) => state.curvingWall)
   const curvingFence = useEditor((state) => state.curvingFence)
-  const editingHole = useEditor((state) => state.editingHole)
+  const editingHole = useEditingHole()
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const buildingId = useViewer((state) => state.selection.buildingId)

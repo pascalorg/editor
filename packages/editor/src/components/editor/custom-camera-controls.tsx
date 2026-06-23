@@ -22,6 +22,7 @@ import {
 } from 'three'
 import { EDITOR_LAYER } from '../../lib/constants'
 import useEditor from '../../store/use-editor'
+import { useActiveHandleDrag } from '../../store/use-interaction-scope'
 
 const currentTarget = new Vector3()
 const tempBox = new Box3()
@@ -614,7 +615,7 @@ export const CustomCameraControls = () => {
   const movingNode = useEditor((s) => s.movingNode)
   const movingWallEndpoint = useEditor((s) => s.movingWallEndpoint)
   const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
-  const activeHandleDrag = useEditor((s) => s.activeHandleDrag)
+  const activeHandleDrag = useActiveHandleDrag()
   const isBoxSelectActive = mode === 'select' && selectionTool === 'marquee'
   const isInteracting = Boolean(
     tool ||

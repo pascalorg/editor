@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { isActive, isIdle, scopeNodeId, selectionEnabled } from '../lib/interaction/scope'
+import {
+  type ActiveInteractionScope,
+  editingHoleInfo,
+  handleDragInfo,
+  isActive,
+  isIdle,
+  scopeNodeId,
+  selectionEnabled,
+} from '../lib/interaction/scope'
 import useInteractionScope from './use-interaction-scope'
 
 function reset() {
@@ -75,5 +83,61 @@ describe('use-interaction-scope state machine', () => {
     s.end()
     s.end()
     expect(useInteractionScope.getState().scope.kind).toBe('idle')
+  })
+})
+
+describe('derived flag views are leak-free (no parallel flags)', () => {
+  const scope = () => useInteractionScope.getState().scope
+
+  test('handleDragInfo mirrors handle-drag and clears on end', () => {
+    const s = useInteractionScope.getState()
+    s.begin({ kind: 'handle-drag', nodeId: 'wall_1', handle: 'height' })
+    expect(handleDragInfo(scope())).toEqual({ nodeId: 'wall_1', label: 'height' })
+    s.end()
+    // After end the derived view is null — a stale activeHandleDrag is
+    // unrepresentable because it is a pure function of the single scope.
+    expect(handleDragInfo(scope())).toBeNull()
+  })
+
+  test('editingHoleInfo mirrors a hole reshape and clears on end', () => {
+    const s = useInteractionScope.getState()
+    s.begin({ kind: 'reshaping', nodeId: 'slab_1', reshape: 'hole', holeIndex: 2 })
+    expect(editingHoleInfo(scope())).toEqual({ nodeId: 'slab_1', holeIndex: 2 })
+    s.end()
+    expect(editingHoleInfo(scope())).toBeNull()
+  })
+
+  test('a non-hole reshape never reads as an editing hole', () => {
+    const s = useInteractionScope.getState()
+    s.begin({ kind: 'reshaping', nodeId: 'wall_1', reshape: 'curve' })
+    expect(editingHoleInfo(scope())).toBeNull()
+  })
+
+  test('switching interactions never leaks the prior derived view', () => {
+    const s = useInteractionScope.getState()
+    s.begin({ kind: 'handle-drag', nodeId: 'wall_1', handle: 'height' })
+    // Single-owner replacement: the handle-drag view must vanish the instant a
+    // different interaction begins — the two cannot be simultaneously active.
+    s.begin({ kind: 'reshaping', nodeId: 'slab_1', reshape: 'hole', holeIndex: 0 })
+    expect(handleDragInfo(scope())).toBeNull()
+    expect(editingHoleInfo(scope())).toEqual({ nodeId: 'slab_1', holeIndex: 0 })
+  })
+
+  test('every active scope kind leaves at most the views it owns', () => {
+    const s = useInteractionScope.getState()
+    const kinds: ActiveInteractionScope[] = [
+      { kind: 'placing', nodeId: 'i', nodeType: 'item', view: '3d', pressDrag: false },
+      { kind: 'moving', nodeId: 'i', nodeType: 'item', view: '3d' },
+      { kind: 'drafting', tool: 'wall' },
+      { kind: 'box-select' },
+      { kind: 'painting' },
+    ]
+    for (const k of kinds) {
+      s.begin(k)
+      // None of these own a handle-drag or hole view.
+      expect(handleDragInfo(scope())).toBeNull()
+      expect(editingHoleInfo(scope())).toBeNull()
+    }
+    s.end()
   })
 })

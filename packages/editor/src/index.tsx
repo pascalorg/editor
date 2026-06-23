@@ -245,6 +245,7 @@ export {
   getFloorplanWallThickness,
 } from './lib/floorplan'
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
+export { holeEditScope } from './lib/interaction/scope'
 export {
   buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
@@ -328,6 +329,12 @@ export type {
   WorkspaceMode,
 } from './store/use-editor'
 export { default as useEditor, isAngleSnapActive, isMagneticSnapActive } from './store/use-editor'
+export {
+  default as useInteractionScope,
+  getEditingHole,
+  useActiveHandleDrag,
+  useEditingHole,
+} from './store/use-interaction-scope'
 export {
   default as useOpeningGuides,
   type OpeningGuide3D,

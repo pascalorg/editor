@@ -70,6 +70,7 @@ import {
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor, { type MaterialTargetRole } from './../../store/use-editor'
+import useInteractionScope, { getEditingHole } from '../../store/use-interaction-scope'
 import { boxSelectHandled, suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { swallowNextClick } from './node-arrow-handles'
 
@@ -1557,8 +1558,10 @@ export const SelectionManager = () => {
         // Clicking any node (e.g. the slab surface outside a hole) exits slab
         // hole-edit mode. The hole handles + hit mesh stopPropagation, so a
         // click reaching here means the user clicked outside the hole.
-        if (useEditor.getState().editingHole) {
-          useEditor.getState().setEditingHole(null)
+        if (getEditingHole()) {
+          useInteractionScope
+            .getState()
+            .endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
         }
 
         activeStrategy.handleSelect(

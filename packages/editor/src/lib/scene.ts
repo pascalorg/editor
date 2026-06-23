@@ -362,7 +362,6 @@ function resetEditorInteractionState() {
     movingNode: null,
     selectedReferenceId: null,
     spaces: {},
-    editingHole: null,
     hoveredHole: null,
     isPreviewMode: false,
   })

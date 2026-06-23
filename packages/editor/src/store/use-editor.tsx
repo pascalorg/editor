@@ -298,18 +298,6 @@ type EditorState = {
   movingFenceEndpoint: MovingFenceEndpoint | null
   setMovingFenceEndpoint: (value: MovingFenceEndpoint | null) => void
   /**
-   * Generic per-kind handle drag state. Set by a node's resize handle
-   * (height arrow, width arrow, rise / sweep / inner-radius for curved
-   * stairs, …) at drag-start and cleared on drag-end. `label`
-   * identifies which dimension the handle controls — measurement
-   * overlays read it to render the right caption; the camera controls
-   * use the truthy value to suppress one-finger pan-rotate. Replaces
-   * the previous per-kind `resizing*` fields so adding a new resize
-   * handle doesn't require a new store field.
-   */
-  activeHandleDrag: { nodeId: AnyNodeId; label: string } | null
-  setActiveHandleDrag: (drag: { nodeId: AnyNodeId; label: string } | null) => void
-  /**
    * World axis the R/T keyboard rotation turns around, for kinds with
    * full 3D orientation (duct fittings). Alt cycles it Y → X → Z; the
    * kind's tool / keyboard actions read it, and the floating action
@@ -343,9 +331,6 @@ type EditorState = {
   // Space detection for cutaway mode
   spaces: Record<string, Space>
   setSpaces: (spaces: Record<string, Space>) => void
-  // Generic hole editing (works for slabs, ceilings, and any future polygon nodes)
-  editingHole: SurfaceHoleTarget | null
-  setEditingHole: (hole: SurfaceHoleTarget | null) => void
   hoveredHole: SurfaceHoleTarget | null
   setHoveredHole: (hole: SurfaceHoleTarget | null) => void
   // Preview mode (viewer-like experience inside the editor)
@@ -895,13 +880,6 @@ const useEditor = create<EditorState>()(
         }
         set({ movingFenceEndpoint: value })
       },
-      activeHandleDrag: null,
-      setActiveHandleDrag: (drag) => {
-        const scope = useInteractionScope.getState()
-        if (drag) scope.begin({ kind: 'handle-drag', nodeId: drag.nodeId, handle: drag.label })
-        else scope.endIf((s) => s.kind === 'handle-drag')
-        set({ activeHandleDrag: drag })
-      },
       rotationAxis: 'y',
       cycleRotationAxis: () => {
         const order = ['y', 'x', 'z'] as const
@@ -1015,25 +993,6 @@ const useEditor = create<EditorState>()(
         }),
       spaces: {},
       setSpaces: (spaces) => set({ spaces }),
-      editingHole: null,
-      setEditingHole: (hole) => {
-        const scope = useInteractionScope.getState()
-        if (hole)
-          scope.begin({
-            kind: 'reshaping',
-            nodeId: hole.nodeId,
-            reshape: 'hole',
-            holeIndex: hole.holeIndex,
-          })
-        else {
-          const prev = get().editingHole
-          if (prev)
-            scope.endIf(
-              (s) => s.kind === 'reshaping' && s.reshape === 'hole' && s.nodeId === prev.nodeId,
-            )
-        }
-        set({ editingHole: hole })
-      },
       hoveredHole: null,
       setHoveredHole: (hole) =>
         set((state) =>

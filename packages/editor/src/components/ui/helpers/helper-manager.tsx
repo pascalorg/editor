@@ -17,6 +17,7 @@ import {
 } from '../../../lib/contextual-help'
 import { canDirectMoveNode, canDirectRotateNode } from '../../../lib/direct-manipulation'
 import useEditor from '../../../store/use-editor'
+import { useActiveHandleDrag } from '../../../store/use-interaction-scope'
 import { BuildingHelper } from './building-helper'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 import { ItemHelper } from './item-helper'
@@ -66,7 +67,7 @@ export function HelperManager() {
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
   const movingNode = useEditor((state) => state.movingNode)
-  const activeHandleDrag = useEditor((state) => state.activeHandleDrag)
+  const activeHandleDrag = useActiveHandleDrag()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const isMobile = useIsMobile()
   const modifiers = useActiveModifierKeys()

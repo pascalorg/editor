@@ -94,6 +94,7 @@ import useEditor, {
   isMagneticSnapActive,
   selectSiteFloorplanContext,
 } from '../../store/use-editor'
+import useInteractionScope, { useActiveHandleDrag } from '../../store/use-interaction-scope'
 import usePlacementPreview from '../../store/use-placement-preview'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
@@ -4551,7 +4552,7 @@ export function FloorplanPanel({
   const curvingFence = useEditor((state) => state.curvingFence)
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
-  const activeHandleDrag = useEditor((state) => state.activeHandleDrag)
+  const activeHandleDrag = useActiveHandleDrag()
   const setPhase = useEditor((state) => state.setPhase)
   const setMovingFenceEndpoint = useEditor((state) => state.setMovingFenceEndpoint)
   const setMovingNode = useEditor((state) => state.setMovingNode)
@@ -4561,8 +4562,6 @@ export function FloorplanPanel({
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setTool = useEditor((state) => state.setTool)
   const tool = useEditor((state) => state.tool)
-  const editingHole = useEditor((state) => state.editingHole)
-  const setEditingHole = useEditor((state) => state.setEditingHole)
   const deleteNode = useScene((state) => state.deleteNode)
   const updateNode = useScene((state) => state.updateNode)
   const {
@@ -7215,12 +7214,14 @@ export function FloorplanPanel({
     const draft = siteBoundaryDraftRef.current
     if (draft) {
       clearSiteBoundaryLivePreview(draft.siteId)
-      const editor = useEditor.getState()
+      const scope = useInteractionScope.getState().scope
+      const activeHandleDrag =
+        scope.kind === 'handle-drag' ? { nodeId: scope.nodeId, label: scope.handle } : null
       if (
-        editor.activeHandleDrag?.nodeId === draft.siteId &&
-        editor.activeHandleDrag.label === SITE_BOUNDARY_DRAG_LABEL
+        activeHandleDrag?.nodeId === draft.siteId &&
+        activeHandleDrag.label === SITE_BOUNDARY_DRAG_LABEL
       ) {
-        editor.setActiveHandleDrag(null)
+        useInteractionScope.getState().endIf((sc) => sc.kind === 'handle-drag')
       }
     }
 
@@ -9718,7 +9719,9 @@ export function FloorplanPanel({
       siteBoundaryDraftRef.current = nextDraft
       setSiteBoundaryDraft(nextDraft)
       setSiteBoundaryLivePreview(siteId, nextDraft.polygon)
-      useEditor.getState().setActiveHandleDrag({ nodeId: siteId, label: SITE_BOUNDARY_DRAG_LABEL })
+      useInteractionScope
+        .getState()
+        .begin({ kind: 'handle-drag', nodeId: siteId, handle: SITE_BOUNDARY_DRAG_LABEL })
       setSiteVertexDragState({
         pointerId: event.pointerId,
         siteId,
@@ -9800,7 +9803,9 @@ export function FloorplanPanel({
       siteBoundaryDraftRef.current = nextDraft
       setSiteBoundaryDraft(nextDraft)
       setSiteBoundaryLivePreview(siteId, nextPolygon)
-      useEditor.getState().setActiveHandleDrag({ nodeId: siteId, label: SITE_BOUNDARY_DRAG_LABEL })
+      useInteractionScope
+        .getState()
+        .begin({ kind: 'handle-drag', nodeId: siteId, handle: SITE_BOUNDARY_DRAG_LABEL })
       setSiteVertexDragState({
         pointerId: event.pointerId,
         siteId,

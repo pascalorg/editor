@@ -34,6 +34,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import useInteractionScope from '../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import {
   createArrowHitAreaGeometry,
@@ -468,7 +469,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
 
     document.body.style.cursor = 'ns-resize'
     sfxEmitter.emit('sfx:item-pick')
-    useEditor.getState().setActiveHandleDrag({ nodeId: wallId, label: 'height' })
+    useInteractionScope.getState().begin({ kind: 'handle-drag', nodeId: wallId, handle: 'height' })
     // Suppress R3F node pointer events until pointerup completes so the
     // synthesized click doesn't reroute selection to whatever mesh sits
     // under the cursor at release.
@@ -498,7 +499,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
         document.body.style.cursor = ''
       }
       useScene.temporal.getState().resume()
-      useEditor.getState().setActiveHandleDrag(null)
+      useInteractionScope.getState().endIf((sc) => sc.kind === 'handle-drag')
       useViewer.getState().setInputDragging(false)
       dragCleanupRef.current = null
     }

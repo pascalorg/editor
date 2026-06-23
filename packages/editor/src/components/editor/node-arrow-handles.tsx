@@ -48,6 +48,7 @@ import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor from '../../store/use-editor'
+import useInteractionScope from '../../store/use-interaction-scope'
 import useOpeningGuides from '../../store/use-opening-guides'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { formatAngleRadians } from '../tools/shared/segment-angle'
@@ -681,12 +682,14 @@ function LinearArrow({
         overrideId,
         onBegin: () => {
           if (measureLabel) {
-            useEditor.getState().setActiveHandleDrag({ nodeId, label: measureLabel })
+            useInteractionScope
+              .getState()
+              .begin({ kind: 'handle-drag', nodeId, handle: measureLabel })
           }
         },
         onEnd: () => {
           if (measureLabel) {
-            useEditor.getState().setActiveHandleDrag(null)
+            useInteractionScope.getState().endIf((sc) => sc.kind === 'handle-drag')
           }
           if (onDrag) useOpeningGuides.getState().clear()
         },
@@ -1149,15 +1152,17 @@ function ArcArrow({
       // handles route a measurement label here; rotate gets a sentinel label so
       // the HUD shows the rotate hint, not a dimension pill.
       if (isRotateShape) {
-        useEditor
+        useInteractionScope
           .getState()
-          .setActiveHandleDrag({ nodeId: node.id, label: ROTATE_HANDLE_DRAG_LABEL })
+          .begin({ kind: 'handle-drag', nodeId: node.id, handle: ROTATE_HANDLE_DRAG_LABEL })
       }
 
       return {
         onEnd: () => {
           setRotationDelta(null)
-          if (isRotateShape) useEditor.getState().setActiveHandleDrag(null)
+          if (isRotateShape) {
+            useInteractionScope.getState().endIf((sc) => sc.kind === 'handle-drag')
+          }
         },
         move: ({ event: moveEvent, intersectPlane: intersectMovePlane }) => {
           const hit = new Vector3()
