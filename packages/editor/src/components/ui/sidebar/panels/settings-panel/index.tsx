@@ -1,6 +1,6 @@
 import { emitter, type AnyNode, type AnyNodeId, useScene, validateBuildJson } from '@pascal-app/core'
 import { exportSceneToDxf } from '@pascal-app/core/exporters/dxf'
-import { exportSceneToIfc } from '@pascal-app/core/exporters/ifc'
+import { exportSceneToIfcWithItemMeshes } from './../../../../../lib/export-ifc'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
 import { Camera, Download, FlipHorizontal2, Move, Save, Trash2, Upload } from 'lucide-react'
@@ -420,8 +420,10 @@ export function SettingsPanel({
     URL.revokeObjectURL(url)
   }
 
-  const handleExportIfc = () => {
-    const ifcContent = exportSceneToIfc(nodes as Parameters<typeof exportSceneToIfc>[0])
+  const handleExportIfc = async () => {
+    const ifcContent = await exportSceneToIfcWithItemMeshes(
+      nodes as Parameters<typeof exportSceneToIfcWithItemMeshes>[0],
+    )
     const blob = new Blob([ifcContent], { type: 'application/x-step' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')

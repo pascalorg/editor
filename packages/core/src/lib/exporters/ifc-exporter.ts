@@ -76,6 +76,16 @@ interface LevelLike {
 
 type ItemLike = Pick<ItemNode, 'id' | 'name' | 'parentId' | 'position' | 'rotation' | 'scale' | 'asset' | 'wallId' | 'wallT'>
 
+/** Triangle mesh for an item, in placement-local IFC coordinates (X/Z plan, Y up). */
+export type IfcItemMesh = {
+  positions: number[]
+  indices: number[]
+}
+
+export type IfcExportOptions = {
+  itemMeshes?: Record<string, IfcItemMesh>
+}
+
 function fmt(n: number): string {
   if (!Number.isFinite(n)) return '0.'
   const s = n.toFixed(6).replace(/\.?0+$/, '')
@@ -286,6 +296,29 @@ class IfcStepWriter {
     const nameArg = name === '$' ? '$' : esc(name)
     return this.ref('IFCARBITRARYCLOSEDPROFILEDEF', `.AREA.,${nameArg},#${polylineId}`)
   }
+
+  triangulatedFaceSetSolid(positions: number[], indices: number[], context: number): number | null {
+    const pointCount = Math.floor(positions.length / 3)
+    if (pointCount < 3 || indices.length < 3) return null
+
+    const pointTuples: string[] = []
+    for (let i = 0; i < pointCount; i++) {
+      pointTuples.push(
+        `(${fmt(positions[i * 3]!)},${fmt(positions[i * 3 + 1]!)},${fmt(positions[i * 3 + 2]!)})`,
+      )
+    }
+
+    const coordList = this.ref('IFCCARTESIANPOINTLIST3D', `(${pointTuples.join(',')})`)
+
+    const triangles: string[] = []
+    for (let i = 0; i + 2 < indices.length; i += 3) {
+      triangles.push(`(${indices[i]! + 1},${indices[i + 1]! + 1},${indices[i + 2]! + 1})`)
+    }
+    if (triangles.length === 0) return null
+
+    const faceSet = this.ref('IFCTRIANGULATEDFACESET', `#${coordList},$,$,(${triangles.join(',')}),$`)
+    return this.ref('IFCSHAPEREPRESENTATION', `#${context},'Body','Tessellation',(#${faceSet})`)
+  }
 }
 
 function wallLength(wall: WallLike): number {
@@ -488,7 +521,11 @@ function floorsForLevel(
   return [...specs, ...zoneGapSpecs]
 }
 
-export function exportSceneToIfc(nodes: Record<AnyNodeId, AnyNode>): string {
+export function exportSceneToIfc(
+  nodes: Record<AnyNodeId, AnyNode>,
+  options: IfcExportOptions = {},
+): string {
+  const itemMeshes = options.itemMeshes ?? {}
   const walls: WallLike[] = []
   const slabs: SlabLike[] = []
   const doors: DoorLike[] = []
@@ -763,9 +800,6 @@ export function exportSceneToIfc(nodes: Record<AnyNodeId, AnyNode>): string {
     const pose = resolveItemWorldPose(parsedItem, wallById, elevation)
     if (!pose) continue
 
-    const [width, height, depth] = getScaledDimensions(parsedItem)
-    if (width < 1e-4 || height < 1e-4 || depth < 1e-4) continue
-
     const objectPlacement = productIfcPlacement(
       writer,
       pose.position[0],
@@ -774,7 +808,20 @@ export function exportSceneToIfc(nodes: Record<AnyNodeId, AnyNode>): string {
       pose.yaw,
       levelId ? (storeyPlacements.get(levelId) ?? null) : buildingPlacement,
     )
-    const shape = writer.extrudedBoxSolid(width, depth, height, bodyContext)
+
+    const mesh = itemMeshes[parsedItem.id]
+    const meshShape =
+      mesh && mesh.indices.length >= 3
+        ? writer.triangulatedFaceSetSolid(mesh.positions, mesh.indices, bodyContext)
+        : null
+
+    let shape = meshShape
+    if (shape == null) {
+      const [width, height, depth] = getScaledDimensions(parsedItem)
+      if (width < 1e-4 || height < 1e-4 || depth < 1e-4) continue
+      shape = writer.extrudedBoxSolid(width, depth, height, bodyContext)
+    }
+
     const shapeRep = writer.productDefinitionShape(shape)
     const label = parsedItem.name || parsedItem.asset.name || 'Furniture'
     const product = writer.ref(

@@ -3,7 +3,7 @@
 import type { AnyNodeId } from '@pascal-app/core'
 import { LevelNode, useScene } from '@pascal-app/core'
 import { exportSceneToDxf } from '@pascal-app/core/exporters/dxf'
-import { exportSceneToIfc } from '@pascal-app/core/exporters/ifc'
+import { exportSceneToIfcWithItemMeshes } from '../../../lib/export-ifc'
 import { useViewer } from '@pascal-app/viewer'
 import {
   AppWindow,
@@ -399,9 +399,9 @@ export function EditorCommands() {
         icon: <Building2 className="h-4 w-4" />,
         keywords: ['export', 'ifc', 'bim', 'revit', 'archicad', 'building', 'download'],
         execute: () =>
-          run(() => {
+          run(async () => {
             const { nodes } = useScene.getState()
-            const ifc = exportSceneToIfc(nodes)
+            const ifc = await exportSceneToIfcWithItemMeshes(nodes)
             const blob = new Blob([ifc], { type: 'application/x-step' })
             const url = URL.createObjectURL(blob)
             Object.assign(document.createElement('a'), {
