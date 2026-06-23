@@ -2,11 +2,16 @@
 // Generates an IFC4 STEP string from a Pascal scene graph.
 
 import type { AnyNode, AnyNodeId } from '../../schema/types'
-import { getScaledDimensions, type ItemNode } from '../../schema/nodes/item'
-import type { SlabNode } from '../../schema/nodes/slab'
+import { getScaledDimensions, ItemNode } from '../../schema/nodes/item'
+import { SlabNode } from '../../schema/nodes/slab'
 import type { WallNode } from '../../schema/nodes/wall'
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
-import { detectSpacesForLevel, planAutoSlabsForLevel } from '../../lib/space-detection'
+import { pointInPolygon } from '../../lib/polygon-relations'
+import {
+  detectSpacesForLevel,
+  planAutoSlabsForLevel,
+  projectAutoSlabsForPlan,
+} from '../../lib/space-detection'
 import { DEFAULT_WALL_HEIGHT } from '../../systems/wall/wall-footprint'
 
 const DEFAULT_STOREY_HEIGHT = 3.0
@@ -270,6 +275,17 @@ class IfcStepWriter {
   productDefinitionShape(shape: number): number {
     return this.ref('IFCPRODUCTDEFINITIONSHAPE', `$,$,(#${shape})`)
   }
+
+  closedPolyline(pointIds: number[]): number {
+    if (pointIds.length === 0) return this.ref('IFCPOLYLINE', '()')
+    const closed = [...pointIds, pointIds[0]!]
+    return this.ref('IFCPOLYLINE', `(${closed.map((id) => `#${id}`).join(',')})`)
+  }
+
+  arbitraryClosedProfile(polylineId: number, name = '$'): number {
+    const nameArg = name === '$' ? '$' : esc(name)
+    return this.ref('IFCARBITRARYCLOSEDPROFILEDEF', `.AREA.,${nameArg},#${polylineId}`)
+  }
 }
 
 function wallLength(wall: WallLike): number {
@@ -356,7 +372,6 @@ function exportFloorSlabProduct(
   owner: number,
   bodyContext: number,
   polygon: Vec2[],
-  floorElevation: number,
   thickness: number,
   name: string,
   parentPlacement: number | null,
@@ -370,15 +385,12 @@ function exportFloorSlabProduct(
     minZ = Math.min(minZ, z)
   }
 
-  const profilePoints = polygon
-    .map(([x, z]) => {
-      const [ifcX, ifcY] = pascalToIfcXY(x, z)
-      return writer.point2(ifcX - minX, ifcY - minZ)
-    })
-    .join(',')
-
-  const profilePlacement = writer.axis2Placement2D(writer.point2(0, 0))
-  const profile = writer.ref('IFCARBITRARYCLOSEDPROFILEDEF', `.AREA.,$,#${profilePlacement},(${profilePoints})`)
+  const profilePointIds = polygon.map(([x, z]) => {
+    const [ifcX, ifcY] = pascalToIfcXY(x, z)
+    return writer.point2(ifcX - minX, ifcY - minZ)
+  })
+  const polyline = writer.closedPolyline(profilePointIds)
+  const profile = writer.arbitraryClosedProfile(polyline, name)
   const solidPlacement = writer.axis2Placement3D(writer.point3(0, 0, 0))
   const extrudeAxis = writer.direction3(0, 0, 1)
   const solid = writer.ref(
@@ -388,10 +400,10 @@ function exportFloorSlabProduct(
   const shape = writer.ref('IFCSHAPEREPRESENTATION', `#${bodyContext},'Body','SweptSolid',(#${solid})`)
   const shapeRep = writer.productDefinitionShape(shape)
 
-  const [ifcX, ifcY, ifcZ] = pascalToIfcPoint(minX, floorElevation, minZ)
+  const [ifcX, ifcY] = pascalToIfcXY(minX, minZ)
   const objectPlacement = writer.localPlacement(
     parentPlacement,
-    writer.axis2Placement3D(writer.point3(ifcX, ifcY, ifcZ)),
+    writer.axis2Placement3D(writer.point3(ifcX, ifcY, 0)),
   )
 
   return writer.ref(
@@ -406,25 +418,74 @@ type FloorExportSpec = {
   thickness: number
 }
 
-function floorsForLevel(levelId: string, levelWalls: WallLike[], levelSlabs: SlabLike[]): FloorExportSpec[] {
-  if (levelSlabs.length > 0) {
-    return levelSlabs.map((slab) => ({
-      name: slab.name || 'Floor',
-      polygon: getRenderableSlabPolygon(slab as SlabNode),
-      thickness: slab.elevation ?? DEFAULT_FLOOR_THICKNESS,
-    }))
+function slabToFloorSpec(slab: SlabNode): FloorExportSpec | null {
+  const polygon = getRenderableSlabPolygon(slab)
+  if (polygon.length < 3) return null
+  return {
+    name: slab.name || 'Floor',
+    polygon,
+    thickness: slab.elevation ?? DEFAULT_FLOOR_THICKNESS,
+  }
+}
+
+function zoneToFloorSpec(zone: ZoneLike): FloorExportSpec | null {
+  if (zone.polygon.length < 3) return null
+  const polygon = getRenderableSlabPolygon(
+    SlabNode.parse({ polygon: zone.polygon, autoFromWalls: false }),
+  )
+  if (polygon.length < 3) return null
+  return {
+    name: zone.name || 'Floor',
+    polygon,
+    thickness: DEFAULT_FLOOR_THICKNESS,
+  }
+}
+
+function polygonCentroid(polygon: Vec2[]): Vec2 {
+  let x = 0
+  let z = 0
+  for (const [px, pz] of polygon) {
+    x += px
+    z += pz
+  }
+  return [x / polygon.length, z / polygon.length]
+}
+
+function isZoneCoveredByFloors(zone: ZoneLike, specs: FloorExportSpec[]): boolean {
+  if (zone.polygon.length < 3 || specs.length === 0) return false
+  const centroid = polygonCentroid(zone.polygon)
+  return specs.some((spec) => pointInPolygon(centroid, spec.polygon))
+}
+
+function floorsForLevel(
+  levelId: string,
+  levelWalls: WallLike[],
+  levelSlabs: SlabLike[],
+  levelZones: ZoneLike[],
+): FloorExportSpec[] {
+  const parsedSlabs = levelSlabs.map((slab) => SlabNode.parse(slab))
+  let exportSlabs = parsedSlabs
+
+  if (levelWalls.length >= 3) {
+    const { roomPolygons } = detectSpacesForLevel(levelId, levelWalls as WallNode[])
+    const plan = planAutoSlabsForLevel(roomPolygons, parsedSlabs)
+    exportSlabs = projectAutoSlabsForPlan(parsedSlabs, plan)
   }
 
-  if (levelWalls.length < 3) return []
+  const specs = exportSlabs
+    .map((slab) => slabToFloorSpec(slab))
+    .filter((spec): spec is FloorExportSpec => spec !== null)
 
-  const { roomPolygons } = detectSpacesForLevel(levelId, levelWalls as WallNode[])
-  const plan = planAutoSlabsForLevel(roomPolygons, [])
+  const zoneGapSpecs: FloorExportSpec[] = []
+  if (levelWalls.length > 0 && levelZones.length > 0) {
+    for (const zone of levelZones) {
+      if (isZoneCoveredByFloors(zone, specs)) continue
+      const zoneSpec = zoneToFloorSpec(zone)
+      if (zoneSpec) zoneGapSpecs.push(zoneSpec)
+    }
+  }
 
-  return plan.create.map((slab) => ({
-    name: slab.name || 'Floor',
-    polygon: getRenderableSlabPolygon(slab),
-    thickness: slab.elevation ?? DEFAULT_FLOOR_THICKNESS,
-  }))
+  return [...specs, ...zoneGapSpecs]
 }
 
 export function exportSceneToIfc(nodes: Record<AnyNodeId, AnyNode>): string {
@@ -527,6 +588,7 @@ export function exportSceneToIfc(nodes: Record<AnyNodeId, AnyNode>): string {
   const wallById = new Map(walls.map((wall) => [wall.id, wall]))
   const slabsByLevel = new Map<string, SlabLike[]>()
   const wallsByLevel = new Map<string, WallLike[]>()
+  const zonesByLevel = new Map<string, ZoneLike[]>()
   for (const wall of walls) {
     const levelId = findLevelId(wall as AnyNode, nodes)
     if (!levelId) continue
@@ -540,6 +602,13 @@ export function exportSceneToIfc(nodes: Record<AnyNodeId, AnyNode>): string {
     const list = slabsByLevel.get(levelId) ?? []
     list.push(slab)
     slabsByLevel.set(levelId, list)
+  }
+  for (const zone of zones) {
+    const levelId = findLevelId(zone as AnyNode, nodes)
+    if (!levelId) continue
+    const list = zonesByLevel.get(levelId) ?? []
+    list.push(zone)
+    zonesByLevel.set(levelId, list)
   }
   const exportedProducts: number[] = []
   const storeyChildren = new Map<number, number[]>()
@@ -587,11 +656,11 @@ export function exportSceneToIfc(nodes: Record<AnyNodeId, AnyNode>): string {
 
   const exportLevelFloors = (levelId: string | null, storeyTarget: number) => {
     if (!levelId) return
-    const floorElevation = levelElevation.get(levelId) ?? 0
     const parentPlacement = storeyPlacements.get(levelId) ?? buildingPlacement
     const levelWalls = wallsByLevel.get(levelId) ?? []
     const levelSlabs = slabsByLevel.get(levelId) ?? []
-    const floors = floorsForLevel(levelId, levelWalls, levelSlabs)
+    const levelZones = zonesByLevel.get(levelId) ?? []
+    const floors = floorsForLevel(levelId, levelWalls, levelSlabs, levelZones)
 
     for (const floor of floors) {
       const product = exportFloorSlabProduct(
@@ -599,7 +668,6 @@ export function exportSceneToIfc(nodes: Record<AnyNodeId, AnyNode>): string {
         owner,
         bodyContext,
         floor.polygon,
-        floorElevation,
         floor.thickness,
         floor.name,
         parentPlacement,
@@ -689,12 +757,13 @@ export function exportSceneToIfc(nodes: Record<AnyNodeId, AnyNode>): string {
   }
 
   for (const item of items) {
-    const levelId = findLevelId(item as AnyNode, nodes)
+    const parsedItem = ItemNode.parse(item)
+    const levelId = findLevelId(parsedItem as AnyNode, nodes)
     const elevation = levelId ? (levelElevation.get(levelId) ?? 0) : 0
-    const pose = resolveItemWorldPose(item, wallById, elevation)
+    const pose = resolveItemWorldPose(parsedItem, wallById, elevation)
     if (!pose) continue
 
-    const [width, height, depth] = getScaledDimensions(item as ItemNode)
+    const [width, height, depth] = getScaledDimensions(parsedItem)
     if (width < 1e-4 || height < 1e-4 || depth < 1e-4) continue
 
     const objectPlacement = productIfcPlacement(
@@ -707,12 +776,12 @@ export function exportSceneToIfc(nodes: Record<AnyNodeId, AnyNode>): string {
     )
     const shape = writer.extrudedBoxSolid(width, depth, height, bodyContext)
     const shapeRep = writer.productDefinitionShape(shape)
-    const label = item.name || item.asset.name || 'Furniture'
+    const label = parsedItem.name || parsedItem.asset.name || 'Furniture'
     const product = writer.ref(
       'IFCFURNISHINGELEMENT',
-      `${esc(newGlobalId())},#${owner},${esc(label)},$,${esc(item.asset.category)},#${objectPlacement},#${shapeRep},$,.NOTDEFINED.`,
+      `${esc(newGlobalId())},#${owner},${esc(label)},$,${esc(parsedItem.asset.category)},#${objectPlacement},#${shapeRep},$,.NOTDEFINED.`,
     )
-    addToStorey(resolveStoreyForNode(item), product)
+    addToStorey(resolveStoreyForNode(parsedItem), product)
   }
 
   writer.ref(
