@@ -4,6 +4,25 @@ export type ContextualShortcutHint = {
   active?: boolean
 }
 
+// `activeHandleDrag.label` value a rotate gizmo sets while dragging, so the
+// contextual HUD can surface the Shift = free-rotation toggle for the duration
+// (mirrors how wall drafting advertises Shift). Distinct from resize handles,
+// which route their own measurement label here.
+export const ROTATE_HANDLE_DRAG_LABEL = 'rotate-handle'
+
+// Hints shown while a rotate gizmo is mid-drag: Shift bypasses the angle step
+// (free rotation), the same toggle wall drafting exposes. `active` lights the
+// pill while Shift is held.
+export function resolveRotateHandleHelpHints(shiftPressed: boolean): ContextualShortcutHint[] {
+  return [
+    {
+      keys: [SHIFT_KEY],
+      label: shiftPressed ? 'Rotating freely (no angle step)' : 'Hold to rotate freely',
+      active: shiftPressed,
+    },
+  ]
+}
+
 export type SelectModeHelpContext = {
   selectedCount: number
   hasMovableSelection: boolean
@@ -79,11 +98,16 @@ export function resolveSelectModeHelpHints({
     }
   }
 
-  hints.push({
-    keys: [SHIFT_KEY],
-    label: shiftPressed ? 'Guided constraints bypassed' : 'Hold to bypass snaps and angle steps',
-    active: shiftPressed,
-  })
+  // The Shift bypass only applies to an in-progress direct move/rotate
+  // (the Cmd/Ctrl-drag gesture), so only surface it while that modifier is
+  // engaged — not on an idle selection, where Shift means multi-select.
+  if (commandPressed && (hasMovableSelection || hasRotatableSelection)) {
+    hints.push({
+      keys: [SHIFT_KEY],
+      label: shiftPressed ? 'Guided constraints bypassed' : 'Hold to bypass snaps and angle steps',
+      active: shiftPressed,
+    })
+  }
 
   if (!commandPressed) {
     hints.push({

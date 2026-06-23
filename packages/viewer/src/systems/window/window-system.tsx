@@ -1,12 +1,15 @@
 import {
   type AnyNodeId,
+  DEFAULT_WALL_THICKNESS,
   getEffectiveNode,
+  getWallThickness,
   type SceneMaterial,
   type SceneMaterialId,
   sceneRegistry,
   useInteractive,
   useLiveNodeOverrides,
   useScene,
+  type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
@@ -22,6 +25,7 @@ import {
   resolveMaterialRef,
 } from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
+import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
@@ -161,6 +165,21 @@ export const WindowSystem = () => {
 function tagWindowSlot(mesh: THREE.Mesh): THREE.Mesh {
   mesh.userData.slotId = currentWindowSlot
   return mesh
+}
+
+const NO_RAYCAST = () => {}
+
+// An open casement sash swings perpendicular to the wall, so in a top-down view
+// its flat panel blankets the room interior and wins the selection raycast over
+// the slab/items beneath it. Drop the swung sash out of the raycast so a floor
+// click falls through; the window stays selectable via its proud invisible
+// cutout proxy at the opening (see syncWindowCutout). Skipped while closed so
+// paint-by-slot still resolves on the sash.
+function disableSubtreeRaycastIfSwung(object: THREE.Object3D, rotationY: number) {
+  if (Math.abs(rotationY) <= 1e-3) return
+  object.traverse((child) => {
+    ;(child as unknown as { raycast: () => void }).raycast = NO_RAYCAST
+  })
 }
 
 function nodeReferencesSceneMaterial(node: { slots?: Record<string, string> }): boolean {
@@ -1020,6 +1039,8 @@ function addRectCasementSash(
   )
   currentWindowSlot = 'glass'
   addBox(sash, glassMaterial, glassW, glassH, glassDepth, sashCenterX, 0, sashDepth * 0.08)
+
+  disableSubtreeRaycastIfSwung(sash, rotationY)
 }
 
 function addFrenchCasementHingeMarkers(
@@ -1244,6 +1265,7 @@ function addShapedFrenchCasementSash(
         sashDepth * 0.08,
       )
     }
+    disableSubtreeRaycastIfSwung(sash, rotationY)
     return
   }
 
@@ -1271,6 +1293,7 @@ function addShapedFrenchCasementSash(
       sashDepth * 0.08,
     )
   }
+  disableSubtreeRaycastIfSwung(sash, rotationY)
 }
 
 function addFrenchCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
@@ -1534,6 +1557,8 @@ function addShapedCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
       }
     }
 
+    disableSubtreeRaycastIfSwung(sash, sash.rotation.y)
+
     currentWindowSlot = 'frame'
     addBox(
       mesh,
@@ -1695,6 +1720,8 @@ function addCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     )
     currentWindowSlot = 'glass'
     addBox(sash, glassMaterial, glassW, glassH, glassDepth, sashCenterX, 0, sashDepth * 0.08)
+
+    disableSubtreeRaycastIfSwung(sash, sash.rotation.y)
 
     // Small hinge markers make the pivot side legible when the sash is closed.
     currentWindowSlot = 'frame'
@@ -3597,20 +3624,23 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
 }
 
 function syncWindowCutout(node: WindowNode, mesh: THREE.Mesh) {
-  // ── Cutout (for wall CSG) — always full window dimensions, 1m deep ──
+  // ── Cutout: invisible raycast hit target for the whole opening ──
   let cutout = mesh.getObjectByName('cutout') as THREE.Mesh | undefined
   if (!cutout) {
     cutout = new THREE.Mesh()
     cutout.name = 'cutout'
-    // The cutout (a 1m-deep CSG helper, invisible) is proud of the wall, so it
-    // wins the scene raycast over the wall in front of the recessed window —
-    // making it the selection AND paint hit target for the whole opening. The
-    // paint capability then re-raycasts the window's parts to find the slot.
+    // The cutout (invisible) is proud of the wall on both faces, so it wins the
+    // scene raycast over the wall in front of the recessed window — making it
+    // the selection AND paint hit target for the whole opening. The paint
+    // capability then re-raycasts the window's parts to find the slot. Its depth
+    // is snug to the wall (not 1m) so it no longer blankets the room floor in a
+    // top-down view; the wall CSG ignores this depth (see getOpeningCutoutProxyDepth).
     mesh.add(cutout)
   }
   cutout.geometry.dispose()
+  const depth = resolveOpeningCutoutProxyDepth(node)
   if (isRectangleOnlyWindowType(node)) {
-    cutout.geometry = new THREE.BoxGeometry(node.width, node.height, 1.0)
+    cutout.geometry = new THREE.BoxGeometry(node.width, node.height, depth)
   } else if (node.openingShape === 'arch') {
     cutout.geometry = new THREE.ExtrudeGeometry(
       createArchShape(
@@ -3621,12 +3651,12 @@ function syncWindowCutout(node: WindowNode, mesh: THREE.Mesh) {
         getClampedArchHeight(node.width, node.height, node.archHeight),
       ),
       {
-        depth: 1,
+        depth,
         bevelEnabled: false,
         curveSegments: 24,
       },
     )
-    cutout.geometry.translate(0, 0, -0.5)
+    cutout.geometry.translate(0, 0, -depth / 2)
   } else if (node.openingShape === 'rounded') {
     cutout.geometry = new THREE.ExtrudeGeometry(
       createRoundedShape(
@@ -3637,16 +3667,28 @@ function syncWindowCutout(node: WindowNode, mesh: THREE.Mesh) {
         getWindowRoundedRadii(node, node.width, node.height),
       ),
       {
-        depth: 1,
+        depth,
         bevelEnabled: false,
         curveSegments: 24,
       },
     )
-    cutout.geometry.translate(0, 0, -0.5)
+    cutout.geometry.translate(0, 0, -depth / 2)
   } else {
-    cutout.geometry = new THREE.BoxGeometry(node.width, node.height, 1.0)
+    cutout.geometry = new THREE.BoxGeometry(node.width, node.height, depth)
   }
   cutout.visible = false
+}
+
+// Resolve the cutout proxy depth from the opening's parent wall thickness so
+// the proxy stays proud of both wall faces (front/back selection) without the
+// old 1m depth that blanketed the floor. Falls back to the default thickness
+// when the parent wall isn't a resolvable wall node.
+function resolveOpeningCutoutProxyDepth(node: WindowNode): number {
+  const parentId = node.parentId
+  const parent = parentId ? useScene.getState().nodes[parentId as AnyNodeId] : undefined
+  const wallThickness =
+    parent?.type === 'wall' ? getWallThickness(parent as WallNode) : DEFAULT_WALL_THICKNESS
+  return getOpeningCutoutProxyDepth(wallThickness)
 }
 
 /**

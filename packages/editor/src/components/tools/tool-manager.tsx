@@ -56,6 +56,7 @@ export const ToolManager: React.FC = () => {
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const movingNode = useEditor((state) => state.movingNode)
+  const movingNodeOrigin = useEditor((state) => state.movingNodeOrigin)
   const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
   const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
   const curvingWall = useEditor((state) => state.curvingWall)
@@ -134,6 +135,16 @@ export const ToolManager: React.FC = () => {
   // Show build tools when in build mode
   const showBuildTool = mode === 'build' && tool !== null
 
+  // A move initiated from the 2D floor-plan (orange move-dot) is owned end-to-
+  // end by `FloorplanRegistryMoveOverlay`, which marks the origin `'2d'` at
+  // dot-down. Mounting the 3D affordance mover alongside it would adopt the
+  // same node and, on its unmount, restore the adopt-time position — snapping
+  // the committed 2D move back to its start. Gate the 3D mover off for 2D moves
+  // (the scene writes the overlay makes still mirror into the 3D view). A
+  // 3D-initiated move leaves the origin null until its own commit, so this only
+  // suppresses the 3D tool for genuinely 2D-owned moves.
+  const showMover = movingNode != null && movingNodeOrigin !== '2d'
+
   // Registry-first: if the active tool's kind has a NodeDefinition with a
   // tool contribution, the registry-driven tool takes over.
   const RegistryToolComponent = showBuildTool ? getRegistryTool(tool) : null
@@ -163,7 +174,7 @@ export const ToolManager: React.FC = () => {
     <>
       {/* World-space tools: site boundary and building movement operate in world coordinates */}
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
-      {movingNode?.type === 'building' && (
+      {showMover && movingNode?.type === 'building' && (
         <MoveTool onNodeMoved={handlePlacedNodeSelected} onSpawnMoved={handlePlacedNodeSelected} />
       )}
 
@@ -259,7 +270,7 @@ export const ToolManager: React.FC = () => {
               </Suspense>
             ) : null
           })()}
-        {movingNode && movingNode.type !== 'building' && (
+        {showMover && movingNode.type !== 'building' && (
           <MoveTool
             onNodeMoved={handlePlacedNodeSelected}
             onSpawnMoved={handlePlacedNodeSelected}

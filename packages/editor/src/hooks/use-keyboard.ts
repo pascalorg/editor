@@ -40,9 +40,53 @@ export const useKeyboard = ({
       return ed.mode === 'build' && (ed.tool === 'door' || ed.tool === 'window')
     }
 
+    // Shift cycles the snapping mode while a snapping-mode-governed draft is
+    // armed: wall / fence build, item placement (build + item tool), and any
+    // active node move (`movingNode` — covers item 3D moves plus the generic
+    // registry move for shelf / spawn / column / stair). For items, free place
+    // moved to Alt, so Shift is free to cycle here too. Elsewhere Shift keeps
+    // its existing meaning — multi-select in plain select mode (no movingNode),
+    // free-place bypass during opening / zone placement — so this predicate
+    // must NOT fire for those. Door / window moves still use Shift for free
+    // place (out of this overhaul's scope), so they're excluded.
+    const isSnappingCycleContext = () => {
+      const ed = useEditor.getState()
+      const moving = ed.movingNode
+      if (moving != null) return moving.type !== 'door' && moving.type !== 'window'
+      return (
+        ed.mode === 'build' && (ed.tool === 'wall' || ed.tool === 'fence' || ed.tool === 'item')
+      )
+    }
+
+    // A "clean tap" of Ctrl/Meta (pressed and released with NO other key in
+    // between) cycles the grid step — same context as the Shift snapping-mode
+    // cycle. `ctrlTapClean` starts true the moment Ctrl/Meta goes down alone
+    // and is cleared the instant any other key fires, so chords like Ctrl+Z /
+    // Ctrl+C never cycle.
+    let ctrlTapClean = false
+
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Control' || e.key === 'Meta') {
+        // Only a fresh, modifier-free press starts a clean-tap candidate;
+        // ignore key-repeat and presses already part of a combo.
+        ctrlTapClean = !e.repeat && !e.shiftKey && !e.altKey
+      } else {
+        // Any non-modifier key (or a modifier combined with Ctrl/Meta) breaks
+        // the clean tap.
+        ctrlTapClean = false
+      }
+
       // Don't handle shortcuts if user is typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      if (e.key === 'Shift' && !e.repeat && isSnappingCycleContext()) {
+        // Cycle the global snapping mode (grid → lines → angles → off).
+        // `'off'` is the snap bypass now, so Shift no longer holds-to-bypass.
+        e.preventDefault()
+        useEditor.getState().cycleSnappingMode()
+        sfxEmitter.emit('sfx:grid-snap')
         return
       }
 
@@ -91,6 +135,9 @@ export const useKeyboard = ({
         e.preventDefault()
         useEditor.getState().setPhase('furnish')
         useEditor.getState().setMode('build')
+        // Set the item tool explicitly so the active tool never inherits a
+        // stale tool from a prior build session.
+        useEditor.getState().setTool('item')
         useEditor.getState().setActiveSidebarPanel('items')
       } else if (e.key === 'z' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
@@ -98,6 +145,8 @@ export const useKeyboard = ({
         useEditor.getState().setPhase('structure')
         useEditor.getState().setStructureLayer('zones')
         useEditor.getState().setMode('build')
+        // Set the zone tool explicitly so it never inherits a stale tool.
+        useEditor.getState().setTool('zone')
       }
       if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
@@ -109,6 +158,9 @@ export const useKeyboard = ({
         useEditor.getState().setPhase('structure')
         useEditor.getState().setStructureLayer('elements')
         useEditor.getState().setMode('build')
+        // Set the wall tool explicitly so B never inherits a stale tool
+        // (e.g. fence) left over from a prior build session.
+        useEditor.getState().setTool('wall')
       } else if (e.key === 'x' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
@@ -346,8 +398,28 @@ export const useKeyboard = ({
         }
       }
     }
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key !== 'Control' && e.key !== 'Meta') return
+      const wasClean = ctrlTapClean
+      ctrlTapClean = false
+      if (!wasClean) return
+      // Same scope as the Shift snapping-mode cycle: wall / fence build only,
+      // and never while typing in an input.
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+      if (!isSnappingCycleContext()) return
+      // Cycle the grid / measurement step (0.5 → 0.25 → 0.1 → 0.05).
+      useEditor.getState().cycleGridSnapStep()
+      sfxEmitter.emit('sfx:grid-snap')
+    }
+
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
   }, [disabled, isVersionPreviewMode])
 
   return null

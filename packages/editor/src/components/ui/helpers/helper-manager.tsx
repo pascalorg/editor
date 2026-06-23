@@ -10,7 +10,11 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useIsMobile } from '../../../hooks/use-mobile'
-import { resolveSelectModeHelpHints } from '../../../lib/contextual-help'
+import {
+  ROTATE_HANDLE_DRAG_LABEL,
+  resolveRotateHandleHelpHints,
+  resolveSelectModeHelpHints,
+} from '../../../lib/contextual-help'
 import { canDirectMoveNode, canDirectRotateNode } from '../../../lib/direct-manipulation'
 import useEditor from '../../../store/use-editor'
 import { BuildingHelper } from './building-helper'
@@ -62,6 +66,7 @@ export function HelperManager() {
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
   const movingNode = useEditor((state) => state.movingNode)
+  const activeHandleDrag = useEditor((state) => state.activeHandleDrag)
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const isMobile = useIsMobile()
   const modifiers = useActiveModifierKeys()
@@ -87,9 +92,16 @@ export function HelperManager() {
   // Helpers are keyboard-driven hints (Esc, R, etc.) — irrelevant on touch.
   if (isMobile) return null
 
+  // Rotating a node via its in-world gizmo: advertise Shift = free rotation,
+  // the same angle-step bypass wall drafting exposes. Takes priority over the
+  // idle select-mode hints since a handle drag is the active interaction.
+  if (activeHandleDrag?.label === ROTATE_HANDLE_DRAG_LABEL) {
+    return <ContextualHelperPanel hints={resolveRotateHandleHelpHints(modifiers.shift)} />
+  }
+
   if (movingNode) {
     if (movingNode.type === 'building') return <BuildingHelper showRotate />
-    return <ItemHelper shiftPressed={modifiers.shift} showEsc />
+    return <ItemHelper showEsc />
   }
 
   if (mode === 'material-paint') {

@@ -5,6 +5,7 @@ import type { AnyNodeDefinition, Capabilities, SceneApi } from '../registry/type
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
   canAttach,
+  canHostOnTop,
   clampYToHostTop,
   getSurface,
   getTopSurfaceHeight,
@@ -13,6 +14,16 @@ import {
 } from './hosting'
 
 const id = (s: string) => s as AnyNodeId
+
+function makeItem(idStr: string, attachTo?: 'wall' | 'wall-side' | 'ceiling'): AnyNode {
+  return {
+    id: id(idStr),
+    type: 'item',
+    parentId: null,
+    visible: true,
+    asset: attachTo ? { attachTo } : {},
+  } as unknown as AnyNode
+}
 
 function makeDef(
   kind: string,
@@ -232,5 +243,31 @@ describe('pickHost', () => {
       hitTest: (host) => host.id === id('s2'),
     })
     expect(picked?.id).toBe(id('s2'))
+  })
+
+  test('excludes ceiling-mounted hosts (ceiling fan cannot be a top surface)', () => {
+    registerNode(makeDef('item', { hostable: { parents: ['*'] } }))
+    const candidates = [makeItem('fan', 'ceiling'), makeItem('table')]
+    const picked = pickHost({ point: [0, 0, 0], candidates, placedKind: 'item' })
+    expect(picked?.id).toBe(id('table'))
+  })
+
+  test('keeps wall-mounted hosts (wall shelf still hosts)', () => {
+    registerNode(makeDef('item', { hostable: { parents: ['*'] } }))
+    const candidates = [makeItem('shelf', 'wall')]
+    const picked = pickHost({ point: [0, 0, 0], candidates, placedKind: 'item' })
+    expect(picked?.id).toBe(id('shelf'))
+  })
+})
+
+describe('canHostOnTop', () => {
+  test('rejects ceiling-attachTo hosts', () => {
+    expect(canHostOnTop(makeItem('fan', 'ceiling'))).toBe(false)
+  })
+
+  test('accepts wall / wall-side / floor (undefined) hosts', () => {
+    expect(canHostOnTop(makeItem('shelf', 'wall'))).toBe(true)
+    expect(canHostOnTop(makeItem('sconce', 'wall-side'))).toBe(true)
+    expect(canHostOnTop(makeItem('table'))).toBe(true)
   })
 })

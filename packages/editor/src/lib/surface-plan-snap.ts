@@ -19,7 +19,7 @@ import {
   type WallSnapRadii,
 } from '../components/tools/wall/wall-drafting'
 import useAlignmentGuides from '../store/use-alignment-guides'
-import useEditor from '../store/use-editor'
+import { isMagneticSnapActive } from '../store/use-editor'
 import useWallSnapIndicator from '../store/use-wall-snap-indicator'
 
 const SURFACE_SNAP_MOVING_ID = '__surface_snap__'
@@ -181,7 +181,7 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
   const nodes = input.nodes ?? useScene.getState().nodes
   const walls = getLevelWalls(nodes, input.levelId, input.walls)
   const fallbackPoint = input.fallbackPoint
-  const magnetic = input.magnetic ?? useEditor.getState().magneticSnap
+  const magnetic = input.magnetic ?? isMagneticSnapActive()
 
   const wallSnap = snapWallDraftPointDetailed({
     point: input.rawPoint,

@@ -209,6 +209,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   // Stage C: floor-plan polygon. ctx.parent gives the wall for direction
   // + thickness — same shape as door.
   floorplan: buildWindowFloorplan,
+  floorplanDependsOnSiblings: true,
   // Stage D — placement + move-on-wall. Same recipe as door. See
   // `nodes/src/window/{tool,move-tool,window-math}.ts`.
   tool: () => import('./tool'),

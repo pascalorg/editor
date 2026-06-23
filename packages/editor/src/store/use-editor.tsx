@@ -40,6 +40,14 @@ import {
   resolvePaintTargetFromSelection,
   type SingleSurfaceMaterialRole,
 } from '../lib/material-paint'
+import {
+  DEFAULT_SNAPPING_MODE,
+  nextSnappingMode,
+  resolveSnapFlags,
+  SNAPPING_MODES,
+  type SnappingMode,
+} from '../lib/snapping-mode'
+import useInteractionScope from './use-interaction-scope'
 
 const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'ai'
 const DEFAULT_FLOORPLAN_PANE_RATIO = 0.5
@@ -374,11 +382,20 @@ type EditorState = {
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
   gridSnapStep: GridSnapStep
   setGridSnapStep: (step: GridSnapStep) => void
+  // Cycles the grid step through GRID_SNAP_STEPS (0.5 → 0.25 → 0.1 → 0.05 →
+  // 0.5) and returns the new value. Bound to the measurement-step shortcut.
+  cycleGridSnapStep: () => GridSnapStep
   // Magnetic snapping while drafting — snaps wall endpoints onto existing
   // wall corners / wall bodies (the "magnetic" beacon). Independent of grid
   // snap. On by default; toggled from the Display menu.
   magneticSnap: boolean
   setMagneticSnap: (enabled: boolean) => void
+  // Global, user-cyclable snapping mode. Maps onto `gridSnapStep` (grid) and
+  // `magneticSnap` via `resolveSnapFlags`. Default `'grid'` reproduces the
+  // historical behaviour (grid + magnetic on).
+  snappingMode: SnappingMode
+  setSnappingMode: (mode: SnappingMode) => void
+  cycleSnappingMode: () => SnappingMode
   showReferenceFloor: boolean
   toggleReferenceFloor: () => void
   setShowReferenceFloor: (show: boolean) => void
@@ -427,6 +444,7 @@ type PersistedEditorLayoutState = Pick<
   | 'floorplanSelectionTool'
   | 'gridSnapStep'
   | 'magneticSnap'
+  | 'snappingMode'
   | 'showReferenceFloor'
   | 'referenceFloorOffset'
   | 'referenceFloorOpacity'
@@ -450,6 +468,7 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   floorplanSelectionTool: 'click',
   gridSnapStep: 0.5,
   magneticSnap: true,
+  snappingMode: DEFAULT_SNAPPING_MODE,
   showReferenceFloor: false,
   referenceFloorOffset: 1,
   referenceFloorOpacity: 0.35,
@@ -568,6 +587,9 @@ function normalizePersistedEditorLayoutState(
       : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
     // Default on: only an explicit persisted `false` disables it.
     magneticSnap: state?.magneticSnap !== false,
+    snappingMode: SNAPPING_MODES.includes(state?.snappingMode as SnappingMode)
+      ? (state?.snappingMode as SnappingMode)
+      : DEFAULT_SNAPPING_MODE,
     showReferenceFloor: state?.showReferenceFloor === true,
     referenceFloorOffset:
       typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
@@ -760,6 +782,10 @@ const useEditor = create<EditorState>()(
         else if (tool) {
           set({ tool: null })
         }
+
+        const scope = useInteractionScope.getState()
+        if (mode === 'material-paint') scope.begin({ kind: 'painting' })
+        else scope.endIf((s) => s.kind === 'painting')
       },
       tool: DEFAULT_PERSISTED_EDITOR_UI_STATE.tool,
       setTool: (tool) => set({ tool }),
@@ -814,25 +840,68 @@ const useEditor = create<EditorState>()(
         | null,
       placementDragMode: false,
       setPlacementDragMode: (dragMode) => set({ placementDragMode: dragMode }),
-      setMovingNode: (node) =>
-        set(
-          node === null
-            ? // Preserve `movingNodeOrigin` across the clear so the
-              // non-owning side's effect cleanup — which fires after
-              // `setMovingNode(null)` propagates — can still read who
-              // finalised. The next non-null `setMovingNode` resets it.
-              // Always clear the press-drag flag when a move ends.
-              { movingNode: null, placementDragMode: false }
-            : { movingNode: node, movingNodeOrigin: null },
-        ),
+      setMovingNode: (node) => {
+        const scope = useInteractionScope.getState()
+        if (node === null) {
+          scope.endIf((s) => s.kind === 'placing' || s.kind === 'moving')
+          // Preserve `movingNodeOrigin` across the clear so the non-owning
+          // side's effect cleanup — which fires after `setMovingNode(null)`
+          // propagates — can still read who finalised. The next non-null
+          // `setMovingNode` resets it. Always clear the press-drag flag.
+          set({ movingNode: null, placementDragMode: false })
+          return
+        }
+        const isNew = Boolean((node as { metadata?: { isNew?: boolean } }).metadata?.isNew)
+        if (isNew) {
+          scope.begin({
+            kind: 'placing',
+            nodeId: node.id,
+            nodeType: node.type,
+            view: '3d',
+            pressDrag: get().placementDragMode,
+          })
+        } else {
+          scope.begin({ kind: 'moving', nodeId: node.id, nodeType: node.type, view: '3d' })
+        }
+        set({ movingNode: node, movingNodeOrigin: null })
+      },
       movingNodeOrigin: null as '2d' | '3d' | null,
       setMovingNodeOrigin: (origin) => set({ movingNodeOrigin: origin }),
       movingWallEndpoint: null,
-      setMovingWallEndpoint: (value) => set({ movingWallEndpoint: value }),
+      setMovingWallEndpoint: (value) => {
+        const scope = useInteractionScope.getState()
+        if (value) scope.begin({ kind: 'reshaping', nodeId: value.wall.id, reshape: 'endpoint' })
+        else {
+          const prev = get().movingWallEndpoint
+          if (prev)
+            scope.endIf(
+              (s) =>
+                s.kind === 'reshaping' && s.reshape === 'endpoint' && s.nodeId === prev.wall.id,
+            )
+        }
+        set({ movingWallEndpoint: value })
+      },
       movingFenceEndpoint: null,
-      setMovingFenceEndpoint: (value) => set({ movingFenceEndpoint: value }),
+      setMovingFenceEndpoint: (value) => {
+        const scope = useInteractionScope.getState()
+        if (value) scope.begin({ kind: 'reshaping', nodeId: value.fence.id, reshape: 'endpoint' })
+        else {
+          const prev = get().movingFenceEndpoint
+          if (prev)
+            scope.endIf(
+              (s) =>
+                s.kind === 'reshaping' && s.reshape === 'endpoint' && s.nodeId === prev.fence.id,
+            )
+        }
+        set({ movingFenceEndpoint: value })
+      },
       activeHandleDrag: null,
-      setActiveHandleDrag: (drag) => set({ activeHandleDrag: drag }),
+      setActiveHandleDrag: (drag) => {
+        const scope = useInteractionScope.getState()
+        if (drag) scope.begin({ kind: 'handle-drag', nodeId: drag.nodeId, handle: drag.label })
+        else scope.endIf((s) => s.kind === 'handle-drag')
+        set({ activeHandleDrag: drag })
+      },
       rotationAxis: 'y',
       cycleRotationAxis: () => {
         const order = ['y', 'x', 'z'] as const
@@ -841,9 +910,31 @@ const useEditor = create<EditorState>()(
         return next
       },
       curvingWall: null,
-      setCurvingWall: (wall) => set({ curvingWall: wall }),
+      setCurvingWall: (wall) => {
+        const scope = useInteractionScope.getState()
+        if (wall) scope.begin({ kind: 'reshaping', nodeId: wall.id, reshape: 'curve' })
+        else {
+          const prev = get().curvingWall
+          if (prev)
+            scope.endIf(
+              (s) => s.kind === 'reshaping' && s.reshape === 'curve' && s.nodeId === prev.id,
+            )
+        }
+        set({ curvingWall: wall })
+      },
       curvingFence: null,
-      setCurvingFence: (fence) => set({ curvingFence: fence }),
+      setCurvingFence: (fence) => {
+        const scope = useInteractionScope.getState()
+        if (fence) scope.begin({ kind: 'reshaping', nodeId: fence.id, reshape: 'curve' })
+        else {
+          const prev = get().curvingFence
+          if (prev)
+            scope.endIf(
+              (s) => s.kind === 'reshaping' && s.reshape === 'curve' && s.nodeId === prev.id,
+            )
+        }
+        set({ curvingFence: fence })
+      },
       selectedMaterialTarget: null,
       setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
       activePaintMaterial: null,
@@ -925,7 +1016,24 @@ const useEditor = create<EditorState>()(
       spaces: {},
       setSpaces: (spaces) => set({ spaces }),
       editingHole: null,
-      setEditingHole: (hole) => set({ editingHole: hole }),
+      setEditingHole: (hole) => {
+        const scope = useInteractionScope.getState()
+        if (hole)
+          scope.begin({
+            kind: 'reshaping',
+            nodeId: hole.nodeId,
+            reshape: 'hole',
+            holeIndex: hole.holeIndex,
+          })
+        else {
+          const prev = get().editingHole
+          if (prev)
+            scope.endIf(
+              (s) => s.kind === 'reshaping' && s.reshape === 'hole' && s.nodeId === prev.nodeId,
+            )
+        }
+        set({ editingHole: hole })
+      },
       hoveredHole: null,
       setHoveredHole: (hole) =>
         set((state) =>
@@ -1007,8 +1115,22 @@ const useEditor = create<EditorState>()(
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
       gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
       setGridSnapStep: (step) => set({ gridSnapStep: step }),
+      cycleGridSnapStep: () => {
+        const current = get().gridSnapStep
+        const index = GRID_SNAP_STEPS.indexOf(current)
+        const next = GRID_SNAP_STEPS[(index + 1) % GRID_SNAP_STEPS.length] ?? GRID_SNAP_STEPS[0]!
+        set({ gridSnapStep: next })
+        return next
+      },
       magneticSnap: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.magneticSnap,
       setMagneticSnap: (enabled) => set({ magneticSnap: enabled }),
+      snappingMode: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.snappingMode,
+      setSnappingMode: (mode) => set({ snappingMode: mode }),
+      cycleSnappingMode: () => {
+        const next = nextSnappingMode(get().snappingMode)
+        set({ snappingMode: next })
+        return next
+      },
       showReferenceFloor: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showReferenceFloor,
       toggleReferenceFloor: () =>
         set((state) => ({ showReferenceFloor: !state.showReferenceFloor })),
@@ -1101,6 +1223,7 @@ const useEditor = create<EditorState>()(
         floorplanSelectionTool: state.floorplanSelectionTool,
         gridSnapStep: state.gridSnapStep,
         magneticSnap: state.magneticSnap,
+        snappingMode: state.snappingMode,
         showReferenceFloor: state.showReferenceFloor,
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,
@@ -1108,5 +1231,29 @@ const useEditor = create<EditorState>()(
     },
   ),
 )
+
+/**
+ * Effective magnetic-snap state: the legacy `magneticSnap` flag AND the
+ * snapping mode's magnetic component. Default mode `'grid'` resolves magnetic
+ * to `true`, so with the default-on `magneticSnap` this returns `true` exactly
+ * as before; only `'off'` (or an explicitly-disabled `magneticSnap`) turns it
+ * off. Read from the smallest magnetic choke points so the mode is honoured
+ * without retuning any snap math.
+ */
+export function isMagneticSnapActive(): boolean {
+  const state = useEditor.getState()
+  return state.magneticSnap && resolveSnapFlags(state.snappingMode).magnetic
+}
+
+/**
+ * Effective angle-lock state: the snapping mode's angle component. Default mode
+ * `'grid'` resolves angles to `true`, so the 15° draft lock behaves exactly as
+ * before; `'lines'` and `'off'` suppress it. Read from the smallest angle-lock
+ * choke points (wall / fence draft call sites) so the mode is honoured without
+ * retuning any snap math.
+ */
+export function isAngleSnapActive(): boolean {
+  return resolveSnapFlags(useEditor.getState().snappingMode).angles
+}
 
 export default useEditor

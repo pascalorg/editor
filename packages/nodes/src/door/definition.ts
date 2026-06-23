@@ -223,6 +223,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // Stage C: floor-plan polygon. Needs ctx.parent (the wall) to compute
   // direction + perpendicular for the cutout footprint.
   floorplan: buildDoorFloorplan,
+  floorplanDependsOnSiblings: true,
   // Stage D — placement (`def.tool`) + move-on-wall (`def.
   // affordanceTools.move`). Both ports of the legacy tools at
   // `editor/components/tools/door/`, relocated into the kind folder and

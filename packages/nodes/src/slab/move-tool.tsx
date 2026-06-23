@@ -18,6 +18,7 @@ import {
   CursorSphere,
   consumePlacementDragRelease,
   getSegmentGridStep,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   resolveAlignmentForActiveBuilding,
   snapBuildingLocalToWorldGrid,
@@ -174,6 +175,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
         walls: levelWalls,
         fences: levelFences,
         bypassSnap,
+        magnetic: !bypassSnap && isMagneticSnapActive(),
         gridSnap: (p) => snapBuildingLocalToWorldGrid(p, gridStep),
       })
 

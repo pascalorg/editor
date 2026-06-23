@@ -13,6 +13,7 @@ import {
 import {
   alignFloorplanDraftPoint,
   getSegmentGridStep,
+  isMagneticSnapActive,
   isSegmentLongEnough,
   snapBuildingLocalToWorldGrid,
   snapScalarToGrid,
@@ -193,7 +194,7 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           walls,
           ignoreWallIds: [node.id],
           bypassSnap: modifiers.shiftKey,
-          magnetic: !modifiers.shiftKey,
+          magnetic: !modifiers.shiftKey && isMagneticSnapActive(),
           gridSnap: (p) => snapBuildingLocalToWorldGrid(p, WALL_GRID_STEP),
         })
         // Figma-style alignment on the dragged corner — snaps it onto another

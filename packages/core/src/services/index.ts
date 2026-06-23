@@ -34,6 +34,7 @@ export {
   type AttachError,
   type AttachResult,
   canAttach,
+  canHostOnTop,
   clampYToHostTop,
   getSurface,
   getTopSurfaceHeight,

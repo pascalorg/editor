@@ -15,9 +15,8 @@ import type { CloneNodesIntoOptions, Subtree } from './subtree'
 // door cutouts read parent wall — use `ctx` to resolve those references
 // without importing `useScene`. Builders stay pure and unit-testable.
 //
-// Future extension: `levelData?: { miters?: ... }` for level-scoped batch
-// data (wall mitering across an entire level). Decided alongside the wall
-// migration off its dedicated system (Phase 3+).
+// `levelData` carries level-scoped batch data (wall mitering across an
+// entire level) from registry dispatchers into pure builders.
 
 export type GeometryContext = {
   /** Look up any node by ID. Returns undefined if the node doesn't exist. */
@@ -30,18 +29,16 @@ export type GeometryContext = {
   parent: AnyNode | null
   /**
    * Pre-computed level-batch data, populated by the dispatcher when the
-   * kind declares `def.computeLevelData`. Shared across every
-   * `def.geometry(node, ctx)` call in the same level batch within a
-   * single frame, so kinds whose geometry depends on cross-sibling
-   * data (wall mitering, gradient sky uniforms across a zone, etc.)
-   * don't pay an O(N²) recomputation cost.
+   * kind declares `def.computeLevelData` (3D) or
+   * `def.computeFloorplanLevelData` (2D). Shared across every builder call
+   * in the same level batch within a single frame/render pass, so kinds
+   * whose geometry depends on cross-sibling data (wall mitering, gradient
+   * sky uniforms across a zone, etc.) don't pay an O(N²) recomputation cost.
    *
    * Typed as `unknown` at the framework boundary — kinds cast to their
-   * own `LevelData` shape inside `def.geometry` (the same kind owns
-   * both the `computeLevelData` return shape and the `geometry`
-   * consumer, so the cast is internal). Only populated for `def.
-   * geometry` calls today; not used by `def.floorplan` (which already
-   * has cheap access to siblings through `ctx.siblings`).
+   * own `LevelData` shape inside `def.geometry` / `def.floorplan` (the
+   * same kind owns both the compute hook's return shape and the builder
+   * consumer, so the cast is internal).
    */
   levelData?: unknown
   /**
@@ -821,6 +818,21 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   computeLevelData?: (siblings: ReadonlyArray<z.infer<S>>) => unknown
   /**
+   * Floor-plan level-batch precompute hook. The floor-plan layer calls this
+   * once per level per render pass, de-duplicated by kind, before the
+   * per-node `def.floorplan` calls. The result lands in `ctx.levelData` for
+   * every node of this kind in the level.
+   *
+   * Used to hoist cross-sibling floor-plan work that would otherwise be
+   * O(N²) when rebuilding every node in a kind — e.g. wall mitering. `nodes`
+   * is the live-merged scene snapshot; `siblings` is every node of this kind
+   * in the level, also live-merged.
+   */
+  computeFloorplanLevelData?: (args: {
+    siblings: ReadonlyArray<z.infer<S>>
+    nodes: Record<string, AnyNode>
+  }) => unknown
+  /**
    * Pure 2D builder for floor-plan rendering. Mirrors `geometry` but emits
    * plain `FloorplanGeometry` data (SVG-renderable) rather than three.js
    * Object3D. Coordinates are level-local meters — the floor-plan panel
@@ -877,6 +889,12 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * unset and rely on the generic overlay path.
    */
   floorplanMoveTarget?: FloorplanMoveTarget<z.infer<S>>
+  /**
+   * Geometry reads sibling/parent/child nodes (e.g. wall miters, opening
+   * dimensions); the floor-plan layer must rebuild it whenever a
+   * sibling-affecting node is being dragged live.
+   */
+  floorplanDependsOnSiblings?: boolean
   /**
    * Optional hook letting a kind project the `useLiveNodeOverrides` map
    * into a fresh `nodes` snapshot before its `def.floorplan` builder

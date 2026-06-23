@@ -19,6 +19,7 @@ import {
   formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  isMagneticSnapActive,
   isSegmentLongEnough,
   MeasurementPill,
   type MovingWallEndpoint,
@@ -295,7 +296,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         walls: levelWalls,
         ignoreWallIds: [nodeId],
         bypassSnap,
-        magnetic: !bypassSnap && useEditor.getState().magneticSnap,
+        magnetic: !bypassSnap && isMagneticSnapActive(),
       })
       const snappedPoint = snapResult.point
 

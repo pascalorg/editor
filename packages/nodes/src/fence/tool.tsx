@@ -24,6 +24,8 @@ import {
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  isAngleSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   type SegmentAngleReference,
   snapFenceDraftPoint,
@@ -445,7 +447,6 @@ export const FenceTool: React.FC = () => {
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const buildingState = useRef(0)
-  const shiftPressed = useRef(false)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
@@ -466,10 +467,13 @@ export const FenceTool: React.FC = () => {
     }
 
     // Align the drafted point onto another object's nearest real anchor and
-    // publish the guide. Alt bypasses alignment; Shift bypasses all guided
-    // snapping. Returns the possibly snapped point.
+    // publish the guide. Alt bypasses alignment. Returns the possibly snapped
+    // point.
     const alignPoint = (point: FencePlanPoint, bypass: boolean): FencePlanPoint => {
-      if (bypass || alignmentCandidates.length === 0) {
+      // Figma alignment pulls the endpoint onto existing corners / edges, so it
+      // is a line snap — suppress it whenever magnetic snap is off (`'off'` /
+      // `'angles'`), matching the fence-geometry snap.
+      if (bypass || !isMagneticSnapActive() || alignmentCandidates.length === 0) {
         useAlignmentGuides.getState().clear()
         return point
       }
@@ -494,13 +498,13 @@ export const FenceTool: React.FC = () => {
       if (!(cursorRef.current && previewRef.current)) return
       const { walls, fences } = getCurrentLevelElements()
       const localPoint: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
-      // While drafting, the segment locks to 15° rays from its start
-      // unless Shift is held. Shift also bypasses grid and magnetic snap.
-      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
-      const bypassAlign = event.nativeEvent?.altKey === true || bypassSnap
+      // While drafting, the segment locks to 15° rays from its start.
+      // Snapping is governed by the snapping mode (`'off'` is the bypass);
+      // there is no Shift hold-to-bypass. Alt still bypasses alignment guides.
+      const bypassAlign = event.nativeEvent?.altKey === true
 
       if (buildingState.current === 1) {
-        const angleLocked = !bypassSnap
+        const angleLocked = isAngleSnapActive()
         const snappedLocal = alignPoint(
           snapFenceDraftPoint({
             point: localPoint,
@@ -508,7 +512,7 @@ export const FenceTool: React.FC = () => {
             fences,
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
-            bypassSnap,
+            magnetic: isMagneticSnapActive(),
           }),
           bypassAlign || angleLocked,
         )
@@ -516,7 +520,6 @@ export const FenceTool: React.FC = () => {
         cursorRef.current.position.copy(endingPoint.current)
         const currentFenceEnd: FencePlanPoint = [snappedLocal[0], snappedLocal[1]]
         if (
-          !bypassSnap &&
           previousFenceEnd &&
           (currentFenceEnd[0] !== previousFenceEnd[0] || currentFenceEnd[1] !== previousFenceEnd[1])
         ) {
@@ -543,7 +546,12 @@ export const FenceTool: React.FC = () => {
         )
       } else {
         const snappedPoint = alignPoint(
-          snapFenceDraftPoint({ point: localPoint, walls, fences, bypassSnap }),
+          snapFenceDraftPoint({
+            point: localPoint,
+            walls,
+            fences,
+            magnetic: isMagneticSnapActive(),
+          }),
           bypassAlign,
         )
         cursorRef.current.position.set(snappedPoint[0], event.localPosition[1], snappedPoint[1])
@@ -559,12 +567,16 @@ export const FenceTool: React.FC = () => {
 
       const { walls, fences } = getCurrentLevelElements()
       const localClick: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
-      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
-      const bypassAlign = event.nativeEvent?.altKey === true || bypassSnap
+      const bypassAlign = event.nativeEvent?.altKey === true
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
-          snapFenceDraftPoint({ point: localClick, walls, fences, bypassSnap }),
+          snapFenceDraftPoint({
+            point: localClick,
+            walls,
+            fences,
+            magnetic: isMagneticSnapActive(),
+          }),
           bypassAlign,
         )
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
@@ -574,7 +586,7 @@ export const FenceTool: React.FC = () => {
         previewRef.current.visible = true
         setDraftMeasurement(null)
       } else {
-        const angleLocked = !bypassSnap
+        const angleLocked = isAngleSnapActive()
         const snappedEnd = alignPoint(
           snapFenceDraftPoint({
             point: localClick,
@@ -582,7 +594,7 @@ export const FenceTool: React.FC = () => {
             fences,
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
-            bypassSnap,
+            magnetic: isMagneticSnapActive(),
           }),
           bypassAlign || angleLocked,
         )
@@ -614,20 +626,6 @@ export const FenceTool: React.FC = () => {
       }
     }
 
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = true
-    }
-
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = false
-    }
-
-    // Cmd-tabbing away mid-draft never delivers the keyup — reset so the
-    // angle lock isn't stuck off when focus returns.
-    const onBlur = () => {
-      shiftPressed.current = false
-    }
-
     const onCancel = () => {
       if (buildingState.current === 1) {
         markToolCancelConsumed()
@@ -638,17 +636,11 @@ export const FenceTool: React.FC = () => {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
-    window.addEventListener('blur', onBlur)
 
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener('blur', onBlur)
       useSegmentDraftChain.getState().clear('fence')
       useAlignmentGuides.getState().clear()
     }

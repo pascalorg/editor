@@ -30,7 +30,8 @@ import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement
 import { stripPlacementMetadataFlags } from '../../../lib/placement-metadata'
 import { resolvePlanarCursorPosition } from '../../../lib/planar-cursor-placement'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
+import { resolveSnapFlags } from '../../../lib/snapping-mode'
+import useEditor, { isMagneticSnapActive } from '../../../store/use-editor'
 import { swallowNextClick } from '../../editor/node-arrow-handles'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { DragBoundingBox } from '../shared/drag-bounding-box'
@@ -41,7 +42,9 @@ import { PlacementBox } from '../shared/placement-box'
 /** Snap a world-plan coordinate to the editor's active grid step (0.5 / 0.25
  *  / 0.1 / 0.05), read live so changing the step mid-drag takes effect. */
 const snapToGridStep = (value: number) => {
-  const step = useEditor.getState().gridSnapStep
+  const state = useEditor.getState()
+  if (!resolveSnapFlags(state.snappingMode).grid) return value
+  const step = state.gridSnapStep
   return Math.round(value / step) * step
 }
 
@@ -244,10 +247,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // a register collar drops onto a duct run end. Reads `def.ports` through
   // the core registry, so it stays layer-clean (no @pascal-app/nodes import).
   const portSnapConfig = nodeRegistry.get(node.type)?.capabilities?.movable?.portSnap ?? null
-  // Mirrors of `valid` / Shift for the event handlers inside the effect, which
+  // Mirrors of `valid` / Alt for the event handlers inside the effect, which
   // can't read React state without stale closures.
   const validRef = useRef(true)
-  const shiftRef = useRef(false)
+  const altRef = useRef(false)
 
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
@@ -259,7 +262,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     dragAnchorRef.current = null
     hasMovedRef.current = false
     rotationRef.current = originalRotationY
-    shiftRef.current = false
+    altRef.current = false
     validRef.current = true
     // Re-sync the box transform to the (possibly new) node. `node` changes
     // without this component remounting whenever a positioned preset re-arms a
@@ -335,12 +338,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     setCursorPosition(getVisualPosition(originalPosition, originalRotationY))
 
     // Re-run the floor-collision check at the live cursor + rotation and push
-    // the result to the box colour. Shift forces a valid (green) override so
-    // the user can drop on top of an existing item on purpose. Only shelves
-    // show the box, so this no-ops for every other movable kind.
+    // the result to the box colour. Alt (free place) forces a valid (green)
+    // override so the user can drop on top of an existing item on purpose. Only
+    // shelves show the box, so this no-ops for every other movable kind.
     const recomputeValidity = () => {
       if (!boxDimensions) return
-      if (shiftRef.current) {
+      if (altRef.current) {
         validRef.current = true
         setValid(true)
         return
@@ -417,7 +420,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         original: [originalPosition[0], originalPosition[2]],
         anchor: dragAnchorRef.current,
         mode: useAbsoluteCursorPlacement || cursorAttached ? 'absolute' : 'relative',
-        snap: event.nativeEvent?.shiftKey === true ? (value) => value : snapToGridStep,
+        snap: event.nativeEvent?.altKey === true ? (value) => value : snapToGridStep,
       })
       dragAnchorRef.current = resolved.anchor
       let [x, z] = resolved.point
@@ -426,8 +429,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // moving item's edge lines up (on X or Z) with another item's edge,
       // snap and publish a guide. The guide connects to the nearest real
       // corner of the candidate (resolver tie-break), so the dot always sits
-      // on an actual point. Alt bypasses alignment; Shift bypasses all snap.
-      const bypass = event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true
+      // on an actual point. Alt (free place) bypasses all snap; the active
+      // snapping mode governs whether magnetic alignment runs at all.
+      const freePlace = event.nativeEvent?.altKey === true
+      const bypass = freePlace || !isMagneticSnapActive()
       if (!bypass && alignmentCandidates.length > 0) {
         const result = resolveAlignment({
           moving: movingFootprintAnchors(node, x, z, rotationRef.current),
@@ -488,7 +493,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       previewConnectivity(position, rotationRef.current)
 
       const prev = previousSnapRef.current
-      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== x || prev[1] !== z)) {
+      if (!freePlace && (!prev || prev[0] !== x || prev[1] !== z)) {
         sfxEmitter.emit('sfx:grid-snap')
         previousSnapRef.current = [x, z]
       }
@@ -524,9 +529,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // deliberate drop. Prevents preset re-arm from double-placing.
       if (!hasMovedRef.current) return
       // Refuse a drop on an invalid (red) footprint, matching the GLB item
-      // tool — unless Shift is held to force placement. Other kinds carry no
-      // validity box (`validRef` stays true), so they're never blocked.
-      if (!validRef.current && !shiftRef.current) return
+      // tool — unless Alt (free place) is held to force placement. Other kinds
+      // carry no validity box (`validRef` stays true), so they're never blocked.
+      if (!validRef.current && !altRef.current) return
       const position: [number, number, number] = [...lastCursorRef.current]
 
       const rotation = toCommitRotation(rotationRef.current)
@@ -624,10 +629,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     // item placement keys (and the "Rotate" hints the move HUD shows). Applied
     // imperatively + mirrored to the live transform; committed on drop.
     const onKeyDown = (e: KeyboardEvent) => {
-      // Hold Shift to force placement on an invalid (red) footprint, matching
-      // the GLB item tool. Recolour the box to green while held.
-      if (e.key === 'Shift') {
-        shiftRef.current = true
+      // Hold Alt (free place) to force placement on an invalid (red) footprint,
+      // matching the GLB item tool. Recolour the box to green while held.
+      if (e.key === 'Alt') {
+        altRef.current = true
         recomputeValidity()
         return
       }
@@ -659,8 +664,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       recomputeValidity()
     }
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') {
-        shiftRef.current = false
+      if (e.key === 'Alt') {
+        altRef.current = false
         recomputeValidity()
       }
     }

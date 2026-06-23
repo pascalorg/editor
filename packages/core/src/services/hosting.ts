@@ -113,6 +113,18 @@ export function getTopSurfaceHeight(host: AnyNode): number | null {
 }
 
 /**
+ * Whether `host` can receive a surface-resting (top-stacked) child. A
+ * ceiling-mounted item hangs from the ceiling, so its visible "top" is not a
+ * usable resting surface — nothing should stack on a ceiling fan. The check
+ * reads the instance-level `asset.attachTo` (not the host KIND, which is shared
+ * across all items) so a single gate covers every interaction path.
+ */
+export function canHostOnTop(host: AnyNode): boolean {
+  const attachTo = (host as { asset?: { attachTo?: string } }).asset?.attachTo
+  return attachTo !== 'ceiling'
+}
+
+/**
  * Pure host-discovery helper. Given a list of candidate hosts (already
  * narrowed by spatial query) and a point, returns the first whose
  * `capabilities.hostable` lists `placedKind` AND whose surface contains the
@@ -129,10 +141,7 @@ export function pickHost(args: {
     const def = nodeRegistry.get(host.type)
     const hostable = def?.capabilities.hostable
     if (!hostable) continue
-    if (hostable.parents.length > 0 && !hostable.parents.includes('*')) {
-      // capability declares specific parents; verify the placed kind's own def
-      // also permits this host kind.
-    }
+    if (!canHostOnTop(host)) continue
     if (args.hitTest && !args.hitTest(host, args.point)) continue
     return host
   }

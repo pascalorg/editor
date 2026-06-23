@@ -6,10 +6,11 @@ import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
+import { isAngleSnapActive, isMagneticSnapActive } from '../../store/use-editor'
 import usePlacementPreview from '../../store/use-placement-preview'
 import useSegmentDraftChain from '../../store/use-segment-draft-chain'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
-import { WALL_GRID_STEP, type WallPlanPoint } from '../tools/wall/wall-drafting'
+import { getSegmentGridStep, type WallPlanPoint } from '../tools/wall/wall-drafting'
 
 type UseFloorplanBackgroundPlacementArgs = {
   activePolygonDraftPoints: WallPlanPoint[]
@@ -212,8 +213,8 @@ export function useFloorplanBackgroundPlacement({
         // start unless Shift is held; Shift bypasses grid, magnetic,
         // angle, and alignment snap. `gridSnap` keeps the regular snap
         // on the world XZ grid even when the building is rotated.
-        const fenceStep = WALL_GRID_STEP
-        const fenceAngleSnap = fenceDraftStart !== null && !bypassSnap
+        const fenceStep = getSegmentGridStep()
+        const fenceAngleSnap = fenceDraftStart !== null && !bypassSnap && isAngleSnapActive()
         const fenceSnapped = snapFenceDraftPoint({
           point: planPoint,
           walls,
@@ -221,6 +222,7 @@ export function useFloorplanBackgroundPlacement({
           start: fenceDraftStart ?? undefined,
           angleSnap: fenceAngleSnap,
           bypassSnap,
+          magnetic: !bypassSnap && isMagneticSnapActive(),
           gridSnap: (p) => worldGridSnap(p, fenceStep),
         })
         const fenceGridBase = bypassSnap ? planPoint : worldGridSnap(planPoint, fenceStep)
@@ -230,7 +232,9 @@ export function useFloorplanBackgroundPlacement({
         const snappedPoint =
           fenceLocked || fenceAngleSnap
             ? fenceSnapped
-            : alignFloorplanDraftPoint(fenceSnapped, { bypass: event.altKey || bypassSnap })
+            : alignFloorplanDraftPoint(fenceSnapped, {
+                bypass: event.altKey || bypassSnap || !isMagneticSnapActive(),
+              })
 
         emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
@@ -321,8 +325,8 @@ export function useFloorplanBackgroundPlacement({
         // start unless Shift is held; Shift bypasses grid, magnetic,
         // angle, and alignment snap. `gridSnap` keeps the regular snap
         // on the world XZ grid even when the building is rotated.
-        const wallStep = WALL_GRID_STEP
-        const wallAngleSnap = draftStart !== null && !bypassSnap
+        const wallStep = getSegmentGridStep()
+        const wallAngleSnap = draftStart !== null && !bypassSnap && isAngleSnapActive()
         const wallSnapped = snapWallDraftPoint({
           point: planPoint,
           walls,
@@ -340,7 +344,10 @@ export function useFloorplanBackgroundPlacement({
         } else {
           snappedPoint = alignFloorplanDraftPoint(wallSnapped, {
             applySnap: !wallAngleSnap,
-            bypass: event.altKey || bypassSnap,
+            // Figma alignment pulls the endpoint onto existing wall corners /
+            // edges, so it is a line snap — suppress it whenever magnetic snap
+            // is off (`'off'` / `'angles'`), matching the wall-geometry snap.
+            bypass: event.altKey || bypassSnap || !isMagneticSnapActive(),
           })
         }
 

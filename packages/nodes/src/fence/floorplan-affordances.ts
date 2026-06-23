@@ -15,6 +15,7 @@ import {
   alignFloorplanDraftPoint,
   type FencePlanPoint,
   getSegmentGridStep,
+  isMagneticSnapActive,
   isSegmentLongEnough,
   snapBuildingLocalToWorldGrid,
   snapFenceDraftPoint,
@@ -165,7 +166,7 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
           fences: nextFences,
           ignoreFenceIds: [node.id],
           bypassSnap: modifiers.shiftKey,
-          magnetic: !modifiers.shiftKey,
+          magnetic: !modifiers.shiftKey && isMagneticSnapActive(),
           gridSnap: (p) => snapBuildingLocalToWorldGrid(p, WALL_GRID_STEP) as FencePlanPoint,
         })
         // Figma-style alignment on the dragged endpoint — snaps it onto

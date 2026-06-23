@@ -23,6 +23,7 @@ import {
   consumePlacementDragRelease,
   DragBoundingBox,
   getFloorStackPreviewPosition,
+  isMagneticSnapActive,
   resolvePlanarCursorPosition,
   snapFenceDraftPoint,
   stripPlacementMetadataFlags,
@@ -290,11 +291,13 @@ export const MoveRoofTool: React.FC<{
 
       const y = event.position[1]
 
+      const roofBypassSnap = event.nativeEvent?.shiftKey === true
       const snappedLocal = snapFenceDraftPoint({
         point: [event.localPosition[0], event.localPosition[2]],
         walls: levelWalls,
         fences: levelFences,
-        bypassSnap: event.nativeEvent?.shiftKey === true,
+        bypassSnap: roofBypassSnap,
+        magnetic: !roofBypassSnap && isMagneticSnapActive(),
       })
       const [rawGridX, , rawGridZ] = localToWorldPoint(snappedLocal, y)
       const [rawLocalX, rawLocalZ] = computeLocal(

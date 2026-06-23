@@ -48,6 +48,7 @@ export function FloorplanRegistryActionMenu() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
   const movingNode = useEditor((s) => s.movingNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
   // Gate on floorplan hover so this 2D menu never coexists with the 3D
   // FloatingActionMenu in split view — that menu hides while the floorplan
   // is hovered, so this one must only show then. Mirrors the legacy
@@ -141,6 +142,11 @@ export function FloorplanRegistryActionMenu() {
   const handleMove = () => {
     sfxEmitter.emit('sfx:item-pick')
     setMovingNode(node as never)
+    // 2D-owned move: `FloorplanRegistryMoveOverlay` runs the whole gesture.
+    // Mark the origin (after `setMovingNode`, which resets it to null) so
+    // `ToolManager` keeps the 3D affordance mover from also adopting the node
+    // and reverting it on unmount. Mirrors the orange move-dot path.
+    setMovingNodeOrigin('2d')
     // Match the legacy 3D `floating-action-menu`: clear selection so
     // selection-gated affordances unmount during the drag. Specifically
     // the slab / ceiling boundary editor (`ToolManager` shows it when

@@ -44,7 +44,7 @@ import { EDITOR_LAYER } from '../../../lib/constants'
 import { formatLinearMeasurement } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveAlignmentForActiveBuilding } from '../../../lib/world-grid-snap'
-import useEditor from '../../../store/use-editor'
+import useEditor, { isMagneticSnapActive } from '../../../store/use-editor'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
   createLineGeometry,
@@ -221,7 +221,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       shelfId: null,
     },
   )
-  const shiftFreeRef = useRef(false)
+  const altFreeRef = useRef(false)
   const previewBoundsSignatureRef = useRef<string | null>(null)
   // Goes true the first time a 3D pointer event drives this coordinator.
   // The per-frame mesh-position lerp below is only useful for that path;
@@ -441,7 +441,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     })
 
     const getActiveValidators = () =>
-      shiftFreeRef.current
+      altFreeRef.current
         ? {
             canPlaceOnFloor: () => ({ valid: true }),
             canPlaceOnWall: () => ({ valid: true }),
@@ -450,7 +450,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         : validators
 
     const revalidate = (): boolean => {
-      const placeable = shiftFreeRef.current || checkCanPlace(getContext(), validators)
+      const placeable = altFreeRef.current || checkCanPlace(getContext(), validators)
       const color = placeable ? 0x22_c5_5e : 0xef_44_44 // green-500 : red-500
       edgeMaterial.color.setHex(color)
       basePlaneMaterial.color.setHex(color)
@@ -610,8 +610,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // Floor grab-offset: the item tracks the grabbed point instead of snapping
     // its origin under the cursor. `floorStrategy.move` snaps on the WORLD grid
     // (`event.position`) on its default path and only reads `event.localPosition`
-    // under Shift, so both frames must carry the offset; the world point is
-    // derived from the corrected local one so the two stay consistent.
+    // under Alt (free place), so both frames must carry the offset; the world
+    // point is derived from the corrected local one so the two stay consistent.
     const applyFloorGrabOffset = (event: GridEvent): GridEvent => {
       if (relativeFloorStart === null) return event
       const rawX = event.localPosition[0]
@@ -773,12 +773,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // item's edge, snap and publish a guide. The guide connects to the
       // nearest real corner of the candidate (resolver tie-break), so the dot
       // always sits on an actual point. The delta is applied to BOTH the grid
-      // and cursor positions below. Alt bypasses alignment; Shift bypasses all snap.
+      // and cursor positions below. Alt (free place) bypasses all snap; the
+      // active snapping mode governs whether alignment runs at all ('off' /
+      // 'angles' disable magnetic alignment, matching the wall/fence flow).
       const draft = draftNode.current
       let alignX = 0
       let alignZ = 0
-      const bypassSnap = floorEvent.nativeEvent?.shiftKey === true
-      const bypassAlign = floorEvent.nativeEvent?.altKey === true || bypassSnap
+      const freePlace = floorEvent.nativeEvent?.altKey === true
+      const bypassAlign = freePlace || !isMagneticSnapActive()
       if (!bypassAlign && draft) {
         alignmentCandidates ??= collectAlignmentAnchors(
           useScene.getState().nodes,
@@ -812,7 +814,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       // Play snap sound when grid position changes
       if (
-        !bypassSnap &&
+        !freePlace &&
         previousGridPos &&
         (gridPos[0] !== previousGridPos[0] || gridPos[2] !== previousGridPos[2])
       ) {
@@ -997,7 +999,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.z !== result.gridPosition[2]
 
       // Play snap sound when grid position changes
-      if (event.nativeEvent?.shiftKey !== true && posChanged) {
+      if (event.nativeEvent?.altKey !== true && posChanged) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
@@ -1121,7 +1123,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // re-enters whenever the strategy reports a segment change.
 
     const enterRoofWall = (event: RoofEvent): boolean => {
-      const result = roofWallStrategy.enter(getContext(), event, shiftFreeRef.current)
+      const result = roofWallStrategy.enter(getContext(), event, altFreeRef.current)
       if (!result) return false
 
       event.stopPropagation()
@@ -1152,7 +1154,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         return
       }
 
-      const result = roofWallStrategy.move(ctx, event, shiftFreeRef.current)
+      const result = roofWallStrategy.move(ctx, event, altFreeRef.current)
       if (!result) {
         // Different segment under the pointer (or no placeable face) —
         // try a fresh enter; a null resolve leaves the draft where it is.
@@ -1167,7 +1169,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.y !== result.gridPosition[1] ||
         gridPosition.current.z !== result.gridPosition[2]
 
-      if (!shiftFreeRef.current && posChanged) {
+      if (!altFreeRef.current && posChanged) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
@@ -1210,7 +1212,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onRoofWallClick = (event: RoofEvent) => {
-      const result = roofWallStrategy.click(getContext(), event, shiftFreeRef.current)
+      const result = roofWallStrategy.click(getContext(), event, altFreeRef.current)
       if (!result) return
 
       event.stopPropagation()
@@ -1220,7 +1222,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       draftNode.commit(result.nodeUpdate)
 
       if (configRef.current.onCommitted()) {
-        const enterResult = roofWallStrategy.enter(getContext(), event, shiftFreeRef.current)
+        const enterResult = roofWallStrategy.enter(getContext(), event, altFreeRef.current)
         if (enterResult) {
           applyTransition(enterResult)
         } else {
@@ -1261,7 +1263,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         event.position[1],
         event.position[2],
       )
-      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const bypassSnap = event.nativeEvent?.altKey === true
       const wx = bypassSnap ? buildingLocalPoint.x : Math.round(buildingLocalPoint.x * 2) / 2
       const wz = bypassSnap ? buildingLocalPoint.z : Math.round(buildingLocalPoint.z * 2) / 2
       const floorPos: [number, number, number] = [wx, 0, wz]
@@ -1598,7 +1600,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.y !== result.gridPosition[1] ||
         gridPosition.current.z !== result.gridPosition[2]
 
-      if (event.nativeEvent?.shiftKey !== true && posChanged) {
+      if (event.nativeEvent?.altKey !== true && posChanged) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
@@ -1793,8 +1795,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // items (use-keyboard.ts) so the ghost/duplicate rotates the same way.
     const ROTATION_STEP = Math.PI / 4
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') {
-        shiftFreeRef.current = true
+      if (event.key === 'Alt') {
+        altFreeRef.current = true
         revalidate()
         return
       }
@@ -1908,8 +1910,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') {
-        shiftFreeRef.current = false
+      if (event.key === 'Alt') {
+        altFreeRef.current = false
         revalidate()
       }
     }
@@ -1997,6 +1999,25 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('shelf:move', onShelfMove)
     emitter.on('shelf:click', onShelfClick)
     emitter.on('shelf:leave', onShelfLeave)
+
+    // A floor placement commits at the tracked floor cursor (`gridPosition`),
+    // which keeps following the floor even when the click ray lands on a wall
+    // (grid:move uses a separate ground-plane raycast). Without this, a commit
+    // click whose ray hits a wall fires only `wall:click` — whose handler
+    // declines for a floor item — and the click is silently eaten (the user
+    // has to click again until the ray happens to clear the wall). Route every
+    // surface click to the floor commit too; `floorStrategy.click` guards on
+    // `surface === 'floor'` (and a non-attach draft), so it no-ops while the
+    // draft is actually resting on that surface.
+    const commitFloorOnSurfaceClick = (event: { stopPropagation: () => void }) => {
+      if (placementState.current.surface !== 'floor') return
+      onGridClick(event as unknown as GridEvent)
+    }
+    emitter.on('wall:click', commitFloorOnSurfaceClick as never)
+    emitter.on('item:click', commitFloorOnSurfaceClick as never)
+    emitter.on('ceiling:click', commitFloorOnSurfaceClick as never)
+    emitter.on('roof:click', commitFloorOnSurfaceClick as never)
+    emitter.on('shelf:click', commitFloorOnSurfaceClick as never)
     if (dragMode) window.addEventListener('pointerup', onReleaseCommit)
 
     return () => {
@@ -2032,6 +2053,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('shelf:move', onShelfMove)
       emitter.off('shelf:click', onShelfClick)
       emitter.off('shelf:leave', onShelfLeave)
+      emitter.off('wall:click', commitFloorOnSurfaceClick as never)
+      emitter.off('item:click', commitFloorOnSurfaceClick as never)
+      emitter.off('ceiling:click', commitFloorOnSurfaceClick as never)
+      emitter.off('roof:click', commitFloorOnSurfaceClick as never)
+      emitter.off('shelf:click', commitFloorOnSurfaceClick as never)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
@@ -2114,7 +2140,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   // Restore the draft mesh's raycast when the coordinator unmounts (tool change).
   useEffect(() => () => reconcileDraftRaycast(null), [reconcileDraftRaycast])
 
-  useFrame((_, delta) => {
+  useFrame(() => {
     if (!asset) {
       reconcileDraftRaycast(null)
       return
@@ -2145,12 +2171,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     mesh.visible = true
 
     if (placementState.current.surface === 'floor') {
-      const distance = mesh.position.distanceToSquared(gridPosition.current)
-      if (distance > 1) {
-        mesh.position.copy(gridPosition.current)
-      } else {
-        mesh.position.lerp(gridPosition.current, delta * 20)
-      }
+      // Track the cursor 1:1. An earlier per-frame lerp (delta*20) made an
+      // active move visibly trail the cursor and — combined with React
+      // re-renders momentarily pulling the mesh back toward its committed
+      // position — read as a laggy snap-back on every move. Copying each frame
+      // locks placement/move to the cursor and overrides any stray reset
+      // within a single frame, so it feels precise instead of dragging.
+      mesh.position.copy(gridPosition.current)
 
       // Adjust Y for slab elevation (floor items on top of slabs)
       if (!asset.attachTo) {

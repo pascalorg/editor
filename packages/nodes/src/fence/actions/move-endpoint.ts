@@ -11,6 +11,7 @@ import {
 } from '@pascal-app/core'
 import {
   type FencePlanPoint,
+  isMagneticSnapActive,
   isSegmentLongEnough,
   snapFenceDraftPoint,
   useAlignmentGuides,
@@ -171,6 +172,7 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         fences: ctx.levelFences,
         ignoreFenceIds: [ctx.fenceId as string],
         bypassSnap: modifiers.shift,
+        magnetic: !modifiers.shift && isMagneticSnapActive(),
       })
 
       // Figma-style alignment: nudge the dragged endpoint onto another wall /

@@ -75,9 +75,11 @@ import {
   buildFloorplanItemEntry,
   buildFloorplanStairEntry as buildSharedFloorplanStairEntry,
   collectLevelDescendants,
+  floorplanLocalToWorldPoint,
   getFloorplanWall as getSharedFloorplanWall,
   rotatePlanVector as rotateSharedPlanVector,
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
+  worldToFloorplanLocalPoint,
 } from '../../lib/floorplan'
 import { guideEmitter } from '../../lib/guide-events'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
@@ -87,7 +89,11 @@ import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import { cn } from '../../lib/utils'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
-import useEditor, { selectSiteFloorplanContext } from '../../store/use-editor'
+import useEditor, {
+  isAngleSnapActive,
+  isMagneticSnapActive,
+  selectSiteFloorplanContext,
+} from '../../store/use-editor'
 import usePlacementPreview from '../../store/use-placement-preview'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
@@ -1791,39 +1797,6 @@ function floorplanRotationFromCameraAzimuth(azimuth: number, reference: number) 
 
 function cameraAzimuthFromFloorplanRotation(rotationDeg: number) {
   return degreesToRadians(rotationDeg + FLOORPLAN_VIEW_ROTATION_DEG)
-}
-
-function floorplanLocalToWorldPoint(
-  point: SvgPoint | WallPlanPoint,
-  buildingPosition: readonly [number, number, number],
-  buildingRotationY: number,
-): { x: number; z: number } {
-  const localX = Array.isArray(point) ? point[0] : point.x
-  const localY = Array.isArray(point) ? point[1] : point.y
-  const cos = Math.cos(buildingRotationY)
-  const sin = Math.sin(buildingRotationY)
-
-  return {
-    x: buildingPosition[0] + localX * cos + localY * sin,
-    z: buildingPosition[2] - localX * sin + localY * cos,
-  }
-}
-
-function worldToFloorplanLocalPoint(
-  worldX: number,
-  worldZ: number,
-  buildingPosition: readonly [number, number, number],
-  buildingRotationY: number,
-): SvgPoint {
-  const dx = worldX - buildingPosition[0]
-  const dz = worldZ - buildingPosition[2]
-  const cos = Math.cos(buildingRotationY)
-  const sin = Math.sin(buildingRotationY)
-
-  return {
-    x: dx * cos - dz * sin,
-    y: dx * sin + dz * cos,
-  }
 }
 
 function projectSvgPointToSurface(
@@ -7678,7 +7651,7 @@ export function FloorplanPanel({
           walls,
           ignoreWallIds: [dragState.wallId],
           bypassSnap,
-          magnetic: !bypassSnap && useEditor.getState().magneticSnap,
+          magnetic: !bypassSnap && isMagneticSnapActive(),
         })
         const snappedPoint = snapResult.point
         // Magnetic beacon at the endpoint when it locked onto existing geometry.
@@ -8537,30 +8510,30 @@ export function FloorplanPanel({
       }
 
       if (isFenceBuildActive) {
-        const bypassSnap = shiftPressed || event.shiftKey
         // Fence draft: grid snap (+ existing-wall/fence endpoint snap), then
         // Figma alignment — same endpoint-wins precedence as the wall branch.
-        // While a draft is open the segment locks to 15° rays from its start
-        // unless Shift is held; Shift bypasses grid, magnetic, angle, and
-        // alignment snap.
-        const fenceAngleSnap = fenceDraftStart !== null && !bypassSnap
+        // While a draft is open the segment locks to 15° rays from its start.
+        // Snapping is governed by the snapping mode (`'off'` is the bypass);
+        // there is no Shift hold-to-bypass. Alt still bypasses Figma alignment.
+        const fenceAngleSnap = fenceDraftStart !== null && isAngleSnapActive()
         const fenceSnapped = snapFenceDraftPoint({
           point: planPoint,
           walls,
           fences,
           start: fenceDraftStart ?? undefined,
           angleSnap: fenceAngleSnap,
-          bypassSnap,
+          magnetic: isMagneticSnapActive(),
         })
-        const fenceGridBase = bypassSnap ? planPoint : snapWallPointToGrid(planPoint)
+        const fenceGridBase = snapWallPointToGrid(planPoint)
         const fenceLocked =
-          !bypassSnap &&
-          (fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1])
+          fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
         let snappedPoint = fenceSnapped
         if (fenceLocked || fenceAngleSnap) useAlignmentGuides.getState().clear()
         else
           snappedPoint = alignFloorplanDraftPoint(fenceSnapped, {
-            bypass: event.altKey || bypassSnap,
+            // Alignment is a line snap (pulls onto existing corners/edges) —
+            // suppress it whenever magnetic snap is off (`'off'` / `'angles'`).
+            bypass: event.altKey || !isMagneticSnapActive(),
           })
 
         emitFloorplanGridEvent('move', snappedPoint, event)
@@ -8738,18 +8711,16 @@ export function FloorplanPanel({
       }
 
       // Wall draft: grid + magnetic snap, then Figma-style alignment.
-      // While a draft is open the segment locks to 15° rays from its
-      // start unless Shift is held. Shift bypasses grid, magnetic, angle,
-      // and alignment snap.
-      const bypassSnap = shiftPressed || event.shiftKey
-      const wallAngleSnap = draftStart !== null && !bypassSnap
+      // While a draft is open the segment locks to 15° rays from its start.
+      // Snapping is governed by the snapping mode (`'off'` is the bypass);
+      // there is no Shift hold-to-bypass. Alt still bypasses Figma alignment.
+      const wallAngleSnap = draftStart !== null && isAngleSnapActive()
       const wallSnap = snapWallDraftPointDetailed({
         point: planPoint,
         walls,
         start: draftStart ?? undefined,
         angleSnap: wallAngleSnap,
-        bypassSnap,
-        magnetic: !bypassSnap && useEditor.getState().magneticSnap,
+        magnetic: isMagneticSnapActive(),
       })
       const wallSnapped = wallSnap.point
       // Locked onto existing geometry (corner / midpoint / crossing / edge) →
@@ -8761,7 +8732,9 @@ export function FloorplanPanel({
       } else {
         snappedPoint = alignFloorplanDraftPoint(wallSnapped, {
           applySnap: !wallAngleSnap,
-          bypass: event.altKey || bypassSnap,
+          // Alignment is a line snap (pulls onto existing corners/edges) —
+          // suppress it whenever magnetic snap is off (`'off'` / `'angles'`).
+          bypass: event.altKey || !isMagneticSnapActive(),
         })
       }
       useWallSnapIndicator
@@ -8780,8 +8753,9 @@ export function FloorplanPanel({
 
       setDraftEnd((previousEnd) => {
         if (
-          !bypassSnap &&
-          (!previousEnd || previousEnd[0] !== snappedPoint[0] || previousEnd[1] !== snappedPoint[1])
+          !previousEnd ||
+          previousEnd[0] !== snappedPoint[0] ||
+          previousEnd[1] !== snappedPoint[1]
         ) {
           sfxEmitter.emit('sfx:grid-snap')
         }
@@ -9044,7 +9018,7 @@ export function FloorplanPanel({
       angleSnap?: boolean
       bypassSnap?: boolean
       step?: number
-    }) => snapWallDraftPoint({ ...args, magnetic: useEditor.getState().magneticSnap }),
+    }) => snapWallDraftPoint({ ...args, magnetic: isMagneticSnapActive() }),
     [],
   )
   const { handleBackgroundPlacementClick } = useFloorplanBackgroundPlacement({

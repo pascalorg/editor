@@ -12,6 +12,8 @@ Tools are React components that capture user input (pointer, keyboard) and trans
 
 See `apps/editor/components/tools/tool-manager.tsx`.
 
+> **What the user is doing right now** is owned by the interaction state machine, not by tool-local flags. A tool that starts a placement / move / handle / reshape / box-select / paint interaction enters it through `useInteractionScope.begin(...)` and leaves through `end()` — see [interaction-scope](interaction-scope.md). Do not add a new `useEditor` flag for a new interaction.
+
 ## Tool Categories by Phase
 
 **Site**

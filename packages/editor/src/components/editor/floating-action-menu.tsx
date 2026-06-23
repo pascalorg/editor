@@ -35,10 +35,12 @@ import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import useEditor from '../../store/use-editor'
+import useInteractionScope from '../../store/use-interaction-scope'
 import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
 
@@ -137,6 +139,11 @@ function getAttributeVersion(
     : 0
 }
 
+// Pooled scratch for the per-frame anchor recompute (see useFrame below) so a
+// dragged node doesn't allocate a fresh Box3 + Vector3 every frame.
+const _anchorBox = new THREE.Box3()
+const _anchorCenter = new THREE.Vector3()
+
 function getObjectGeometryKey(object: THREE.Object3D): string {
   const parts: string[] = []
   object.traverse((child) => {
@@ -218,6 +225,10 @@ export function FloatingActionMenu() {
   const activeHandleDrag = useEditor((s) => s.activeHandleDrag)
   // R/T rotation axis for kinds with full 3D orientation (duct fittings).
   const rotationAxis = useEditor((s) => s.rotationAxis)
+  // The floating action menu is an action-conflicting control: hard-hidden
+  // during any active interaction so it never competes with the live action.
+  const scope = useInteractionScope((s) => s.scope)
+  const menuStepBack = resolveOverlayPolicy(scope).conflictingControls === 'hidden'
 
   const groupRef = useRef<THREE.Group>(null)
   const menuScaleRef = useRef<HTMLDivElement>(null)
@@ -329,23 +340,44 @@ export function FloatingActionMenu() {
       // mid-resize). A spinning child changes the head's matrix, not the
       // registered group's, so it never triggers a recompute → the menu
       // holds still.
+      // Cheapest guards first: a selection swap, the object's own world
+      // transform changing (true every frame during a drag), a live override,
+      // or an active handle drag all force a recompute on their own — so skip
+      // the geometry traversal (`getObjectGeometryKey` walks the whole subtree
+      // reading attribute versions) until none of them fired and a
+      // geometry-only change is the only thing left that could move the anchor.
       const overrideActive = useLiveNodeOverrides.getState().overrides.get(selectedId) != null
       const dragActive = activeHandleDrag?.nodeId === selectedId
-      const effectiveNode = getEffectiveNode(node)
-      const geometryKey = getObjectGeometryKey(obj)
       const selectionChanged =
         lastAnchorKeyRef.current.id !== selectedId || lastAnchorKeyRef.current.node !== node
       const matrixChanged = !lastMatrixRef.current.equals(obj.matrixWorld)
-      const geometryChanged = lastAnchorKeyRef.current.geometryKey !== geometryKey
 
-      if (selectionChanged || matrixChanged || geometryChanged || overrideActive || dragActive) {
+      let geometryKey = lastAnchorKeyRef.current.geometryKey
+      let needsRecompute = selectionChanged || matrixChanged || overrideActive || dragActive
+      // Only when nothing cheaper fired do we pay for the subtree traversal —
+      // a geometry-only change is the lone remaining trigger. When a cheaper
+      // guard already forced a recompute the stored key is reused; the matrix
+      // (or override/drag) keeps recomputing the anchor every frame, so a
+      // geometry edit mid-drag is absorbed, and the next idle frame refreshes
+      // the key against the live geometry.
+      if (!needsRecompute) {
+        geometryKey = getObjectGeometryKey(obj)
+        if (geometryKey !== lastAnchorKeyRef.current.geometryKey) needsRecompute = true
+      }
+
+      if (needsRecompute) {
+        const effectiveNode = getEffectiveNode(node)
         if (!setNodeDerivedMenuAnchor(effectiveNode, obj, anchorRef.current)) {
-          const box = new THREE.Box3().setFromObject(obj)
-          if (!box.isEmpty()) {
-            const center = box.getCenter(new THREE.Vector3())
+          _anchorBox.setFromObject(obj)
+          if (!_anchorBox.isEmpty()) {
+            _anchorBox.getCenter(_anchorCenter)
             // Position above the object. Per-type offsets clear each kind's
             // in-world chrome (height-resize arrows, measurement labels).
-            anchorRef.current.set(center.x, box.max.y + getMenuYOffset(effectiveNode), center.z)
+            anchorRef.current.set(
+              _anchorCenter.x,
+              _anchorBox.max.y + getMenuYOffset(effectiveNode),
+              _anchorCenter.z,
+            )
             hasAnchorRef.current = true
           }
         } else {
@@ -624,7 +656,8 @@ export function FloatingActionMenu() {
     !(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete') ||
     movingWallEndpoint ||
     movingFenceEndpoint ||
-    curvingFence
+    curvingFence ||
+    menuStepBack
   )
     return null
 

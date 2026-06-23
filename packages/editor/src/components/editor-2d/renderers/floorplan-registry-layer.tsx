@@ -12,6 +12,8 @@ import {
   type GeometryContext,
   isRegistryMovable,
   kindsWithFloorplanScope,
+  type LiveNodeOverrides,
+  type LiveTransform,
   nodeRegistry,
   pauseSceneHistory,
   resolveBuildingForLevel,
@@ -122,6 +124,46 @@ type RotationOverlayState = {
   sweep: number
 }
 
+type FloorplanEntry = {
+  id: AnyNodeId
+  node: AnyNode
+  base: FloorplanGeometry | null
+  overlay: FloorplanGeometry | null
+  selected: boolean
+  highlighted: boolean
+}
+
+type NodeDeps = {
+  node: AnyNode
+  live: LiveTransform | undefined
+  selected: boolean
+  highlighted: boolean
+  hovered: boolean
+  moving: boolean
+  palette: FloorplanPalette | undefined
+  siblingEpoch: number
+  committedNodes: Record<string, AnyNode> | null
+  interactiveElevators: unknown
+}
+
+type CacheEntry = {
+  deps: NodeDeps
+  base: FloorplanGeometry | null
+  overlay: FloorplanGeometry | null
+  node: AnyNode
+}
+
+type FloorplanContextOverrides = {
+  children: AnyNode[]
+  siblings: AnyNode[]
+  parent: AnyNode | null
+}
+
+type FloorplanLevelDataHook = (args: {
+  siblings: ReadonlyArray<AnyNode>
+  nodes: Record<string, AnyNode>
+}) => unknown
+
 function snapshotNode(node: AnyNode): NodeSnapshot {
   // Shallow-clone every non-id, non-type field. Arrays / vec tuples are
   // deep-cloned to detach from the live store reference.
@@ -136,6 +178,16 @@ function snapshotNode(node: AnyNode): NodeSnapshot {
 function snapshotsToUpdates(snapshots: NodeSnapshot[]) {
   return snapshots.map((s) => ({ id: s.id, data: s.data }))
 }
+
+// Stable empty sentinels. While the floor plan is hidden (3D-only view) the
+// live-* selectors return these instead of the real maps, so the per-pointer
+// drag publishes (usePlacementCoordinator → useLiveTransforms / the rotate
+// gizmo → useLiveNodeOverrides) no longer re-render this layer and its hundreds
+// of geometry children. The same reference each call keeps zustand from
+// detecting a change; committed scene edits still flow through `useScene`, so
+// the plan is current the instant the view is shown again.
+const EMPTY_LIVE_TRANSFORMS: Map<string, LiveTransform> = new Map()
+const EMPTY_LIVE_OVERRIDES: Map<string, LiveNodeOverrides> = new Map()
 
 export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const selectedLevelId = useViewer((s) => s.selection.levelId)
@@ -191,6 +243,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const renderCtx = useFloorplanRender()
   const movingNode = useEditor((s) => s.movingNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
   // Door / window placement (both build and move) needs the SVG's
   // background click handler to run — it finds the closest wall via
   // `findClosestWallPoint` and emits `wall:click` for the door / window
@@ -215,17 +268,28 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     structureLayer !== 'zones' &&
     !movingNode &&
     !movingFenceEndpoint
+  // While the floor plan is not on screen (pure 3D view) it must not react to
+  // the per-pointer drag publishes below — re-rendering this layer + its
+  // hundreds of geometry children every move is what tanks 3D-drag framerate
+  // even though nothing 2D is visible. Gating the live-* subscriptions freezes
+  // them to a stable empty map while hidden; committed edits still arrive via
+  // `useScene`, so the plan is current the moment the view is shown.
+  const floorplanVisible = useEditor((s) => s.viewMode !== '3d')
   // Subscribe to the live-transforms map ref so the layer re-renders
   // whenever a 3D mover publishes a per-frame position (see
   // `usePlacementCoordinator`). Without this the 2D floor plan only
   // updates after 3D commit — the 3D drag would look frozen in 2D.
-  const liveTransforms = useLiveTransforms((s) => s.transforms)
+  const liveTransforms = useLiveTransforms((s) =>
+    floorplanVisible ? s.transforms : EMPTY_LIVE_TRANSFORMS,
+  )
   // Same reactivity hook for elevator runtime state — `useInteractive`
   // tracks the current / fallback level + cab travel, `useLiveNode
   // Overrides` carries live-edit overrides from the inspector. Builders
   // read both via `getState()` inside `def.floorplan`; subscribing here
   // is what forces the layer to re-render when they change.
-  const liveOverrides = useLiveNodeOverrides((s) => s.overrides)
+  const liveOverrides = useLiveNodeOverrides((s) =>
+    floorplanVisible ? s.overrides : EMPTY_LIVE_OVERRIDES,
+  )
   const interactiveElevators = useInteractive((s) => s.elevators)
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds])
@@ -239,6 +303,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const [hoveredHandleId, setHoveredHandleId] = useState<string | null>(null)
   const [activeDragId, setActiveDragId] = useState<string | null>(null)
   const [rotationOverlay, setRotationOverlay] = useState<RotationOverlayState | null>(null)
+  const geometryCacheRef = useRef<Map<string, CacheEntry>>(new Map())
+  const siblingEpochInputsRef = useRef<unknown[]>([])
+  const siblingEpochRef = useRef(0)
 
   const applyEntrySelection = useCallback(
     (id: AnyNodeId, shouldToggle: boolean) => {
@@ -467,117 +534,223 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // tree the builder returns. Builders don't need to know about the
   // partition.
   const entries = useMemo(() => {
-    // Some builders read elevator runtime state imperatively; this keeps the memo subscribed.
-    void interactiveElevators
+    const previousCache = geometryCacheRef.current
+    const nextCache = new Map<string, CacheEntry>()
+    if (!levelId) {
+      geometryCacheRef.current = nextCache
+      return []
+    }
 
-    if (!levelId) return []
-    const out: {
-      id: AnyNodeId
-      node: AnyNode
-      base: FloorplanGeometry | null
-      overlay: FloorplanGeometry | null
-      selected: boolean
-      highlighted: boolean
-    }[] = []
+    // The sibling epoch bumps whenever a sibling-affecting node's LIVE state
+    // changes (a wall/door/window/gutter being dragged or live-edited). Only
+    // flagged kinds feed it, so dragging or rotating a plain item — which also
+    // publishes to liveTransforms / liveOverrides — leaves it stable and the
+    // hundreds of wall/door geometries stay cached. Committed structural edits
+    // are covered separately by keying flagged kinds on the `nodes` ref.
+    const siblingEpochInputs: unknown[] = []
+    for (const [id, live] of liveTransforms) {
+      const node = nodes[id as AnyNodeId]
+      if (node && nodeRegistry.get(node.type)?.floorplanDependsOnSiblings) {
+        siblingEpochInputs.push(live)
+      }
+    }
+    for (const [id, override] of liveOverrides) {
+      const node = nodes[id as AnyNodeId]
+      if (node && nodeRegistry.get(node.type)?.floorplanDependsOnSiblings) {
+        siblingEpochInputs.push(override)
+      }
+    }
+    if (!depsValueEqual(siblingEpochInputsRef.current, siblingEpochInputs)) {
+      siblingEpochRef.current += 1
+      siblingEpochInputsRef.current = siblingEpochInputs
+    }
+    const siblingEpoch = siblingEpochRef.current
+    const out: FloorplanEntry[] = []
+    const levelDataByType = new Map<string, unknown>()
+    const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
+
+    const collectLevelDataKind = (id: AnyNodeId) => {
+      const node = nodes[id]
+      if (!node) return
+      const def = nodeRegistry.get(node.type)
+      if (def?.computeFloorplanLevelData) {
+        const ids = levelNodeIdsByType.get(node.type)
+        if (ids) ids.push(id)
+        else levelNodeIdsByType.set(node.type, [id])
+      }
+      const childIds = (node as unknown as { children?: AnyNodeId[] }).children
+      if (Array.isArray(childIds)) {
+        for (const cid of childIds) collectLevelDataKind(cid)
+      }
+    }
+
+    collectLevelDataKind(levelId as AnyNodeId)
+
+    for (const [type, ids] of levelNodeIdsByType) {
+      const def = nodeRegistry.get(type)
+      if (!def?.computeFloorplanLevelData) continue
+      const computeLevelData = def.computeFloorplanLevelData as FloorplanLevelDataHook
+      const sampleId = ids[0]
+      if (!sampleId) continue
+      const contextNodes = def.floorplanSiblingOverrides
+        ? def.floorplanSiblingOverrides({ nodeId: sampleId, nodes, liveOverrides })
+        : nodes
+      const siblings: AnyNode[] = []
+      for (const id of ids) {
+        const sibling = contextNodes[id]
+        if (sibling?.type === type) siblings.push(sibling)
+      }
+      levelDataByType.set(type, computeLevelData({ siblings, nodes: contextNodes }))
+    }
+
+    const buildEntry = (id: AnyNodeId, node: AnyNode, ctxOverrides?: FloorplanContextOverrides) => {
+      const def = nodeRegistry.get(node.type)
+      const builder = def?.floorplan
+      if (!builder) return
+      const selected = selectedIdSet.has(id)
+      const highlighted = highlightedIdSet.has(id)
+      const hovered = hoveredId === id
+      const moving = movingNode?.id === id
+      const live = liveTransforms.get(id)
+      const dependsOnSiblingInputs = !!(
+        def.floorplanDependsOnSiblings || def.floorplanSiblingOverrides
+      )
+      const deps: NodeDeps = {
+        node,
+        live,
+        selected,
+        highlighted,
+        hovered,
+        moving,
+        palette: renderCtx?.palette,
+        siblingEpoch: dependsOnSiblingInputs ? siblingEpoch : 0,
+        // Sibling-dependent kinds (wall miters, opening cuts) read other nodes'
+        // COMMITTED state via `ctx`, so a committed edit to a sibling/child that
+        // doesn't change this node's own ref must still invalidate it. The
+        // `nodes` ref is stable during a live drag (only commits replace it), so
+        // this preserves the live-drag cache win while matching the old
+        // rebuild-on-every-commit correctness. Self-contained kinds key on their
+        // own `node` ref only.
+        committedNodes: dependsOnSiblingInputs ? nodes : null,
+        // Elevator builders read runtime state imperatively, so every kind's
+        // cache key includes the rare-changing ref conservatively.
+        interactiveElevators,
+      }
+      const cached = previousCache.get(id)
+      if (cached && nodeDepsEqual(cached.deps, deps)) {
+        nextCache.set(id, cached)
+        if (cached.base || cached.overlay) {
+          out.push({
+            id,
+            node: cached.node,
+            base: cached.base,
+            overlay: cached.overlay,
+            selected,
+            highlighted,
+          })
+        }
+        return
+      }
+
+      const applyLiveTransform = (sourceNode: AnyNode): AnyNode => {
+        if (!live) return sourceNode
+        const hasPosition = Array.isArray((sourceNode as { position?: unknown }).position)
+        if (sourceNode.type === 'door' || sourceNode.type === 'window') {
+          // Door / window movers publish WALL-LOCAL live transforms
+          // ([along-wall x, sill y, 0], wall-local Y rotation) — see
+          // wiki/architecture/tools.md. The mover only writes
+          // `useScene.updateNode` on a wall CHANGE, so a same-wall slide
+          // updates the 3D mesh imperatively but never the scene node —
+          // without applying the live transform here the 2D symbol stays
+          // frozen while the cursor slides. Merge the wall-local position +
+          // rotation onto the node but KEEP `parentId` (the wall) so
+          // `buildDoorFloorplan` still resolves `ctx.parent` and draws the
+          // real swing-arc / pane symbol at the live spot.
+          const r = (sourceNode as { rotation?: unknown }).rotation
+          return {
+            ...sourceNode,
+            position: live.position,
+            rotation: Array.isArray(r)
+              ? [(r[0] as number) ?? 0, live.rotation, (r[2] as number) ?? 0]
+              : r,
+          } as AnyNode
+        }
+        if ((def.capabilities?.floorPlaced || def.floorplanScope === 'building') && hasPosition) {
+          return applyPositionLiveTransform(sourceNode, live)
+        }
+        if (
+          sourceNode.type === 'slab' ||
+          sourceNode.type === 'ceiling' ||
+          sourceNode.type === 'zone'
+        ) {
+          const dx = live.position[0]
+          const dz = live.position[2]
+          if (dx === 0 && dz === 0) return sourceNode
+          const surface = sourceNode as {
+            polygon: Array<[number, number]>
+            holes?: Array<Array<[number, number]>>
+          }
+          return {
+            ...sourceNode,
+            polygon: surface.polygon.map(([x, z]) => [x + dx, z + dz] as [number, number]),
+            holes: (surface.holes ?? []).map((h) =>
+              h.map(([x, z]) => [x + dx, z + dz] as [number, number]),
+            ),
+          } as AnyNode
+        }
+        return sourceNode
+      }
+
+      const contextNodes = def.floorplanSiblingOverrides
+        ? def.floorplanSiblingOverrides({ nodeId: id, nodes, liveOverrides })
+        : nodes
+      const sourceNode = contextNodes !== nodes ? (contextNodes[id] ?? node) : node
+      const effectiveNode = applyLiveTransform(sourceNode)
+      const viewState = {
+        selected,
+        highlighted,
+        hovered,
+        moving,
+        palette: renderCtx?.palette,
+      }
+      const ctx: GeometryContext = ctxOverrides
+        ? {
+            resolve: <N = AnyNode>(rid: AnyNodeId): N | undefined =>
+              contextNodes[rid] as N | undefined,
+            children: ctxOverrides.children,
+            siblings: ctxOverrides.siblings,
+            parent: ctxOverrides.parent,
+            levelData: levelDataByType.get(node.type),
+            viewState: renderCtx?.palette
+              ? {
+                  selected,
+                  highlighted,
+                  hovered,
+                  moving,
+                  palette: renderCtx.palette,
+                }
+              : undefined,
+          }
+        : buildContext(effectiveNode, contextNodes, viewState, levelDataByType.get(node.type))
+      const geometry = (builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null)(
+        effectiveNode,
+        ctx,
+      )
+      const { base, overlay } = geometry
+        ? splitFloorplanOverlay(geometry)
+        : { base: null, overlay: null }
+      const entry: CacheEntry = { deps, base, overlay, node: effectiveNode }
+      nextCache.set(id, entry)
+      if (base || overlay) {
+        out.push({ id, node: effectiveNode, base, overlay, selected, highlighted })
+      }
+    }
 
     const visit = (id: AnyNodeId) => {
       const node = nodes[id]
       if (!node) return
       if ((node as { visible?: boolean }).visible === false) return
-      const def = nodeRegistry.get(node.type)
-      const builder = def?.floorplan
-      if (builder) {
-        const selected = selectedIdSet.has(id)
-        const highlighted = highlightedIdSet.has(id)
-        const hovered = hoveredId === id
-        const moving = movingNode?.id === id
-        // Live-transform override — when a mover is publishing per-frame
-        // position/rotation, render that here instead of the committed
-        // scene state. Without this the 2D floor plan would only update
-        // after commit, making the drag look frozen.
-        //
-        // The live-transform contract varies per kind (see
-        // wiki/architecture/tools.md "useLiveTransforms contract is
-        // per-kind, not generic"); position-carrying floor-placed kinds
-        // publish canonical X/Z, while slab / ceiling publish a polygon
-        // translation delta.
-        const live = liveTransforms.get(id)
-        let effectiveNode: AnyNode = node
-        if (live) {
-          const floorPlaced = def?.capabilities?.floorPlaced
-          const hasPosition = Array.isArray((node as { position?: unknown }).position)
-          if (node.type === 'door' || node.type === 'window') {
-            // Door / window movers publish WALL-LOCAL live transforms
-            // ([along-wall x, sill y, 0], wall-local Y rotation) — see
-            // wiki/architecture/tools.md. The mover only writes
-            // `useScene.updateNode` on a wall CHANGE, so a same-wall slide
-            // updates the 3D mesh imperatively but never the scene node —
-            // without applying the live transform here the 2D symbol stays
-            // frozen while the cursor slides. Merge the wall-local position +
-            // rotation onto the node but KEEP `parentId` (the wall) so
-            // `buildDoorFloorplan` still resolves `ctx.parent` and draws the
-            // real swing-arc / pane symbol at the live spot.
-            const r = (node as { rotation?: unknown }).rotation
-            effectiveNode = {
-              ...node,
-              position: live.position,
-              rotation: Array.isArray(r)
-                ? [(r[0] as number) ?? 0, live.rotation, (r[2] as number) ?? 0]
-                : r,
-            } as AnyNode
-          } else if (floorPlaced && hasPosition) {
-            effectiveNode = applyPositionLiveTransform(node, live)
-          } else if (node.type === 'slab' || node.type === 'ceiling' || node.type === 'zone') {
-            const dx = live.position[0]
-            const dz = live.position[2]
-            if (dx !== 0 || dz !== 0) {
-              const surface = node as {
-                polygon: Array<[number, number]>
-                holes?: Array<Array<[number, number]>>
-              }
-              effectiveNode = {
-                ...node,
-                polygon: surface.polygon.map(([x, z]) => [x + dx, z + dz] as [number, number]),
-                holes: (surface.holes ?? []).map((h) =>
-                  h.map(([x, z]) => [x + dx, z + dz] as [number, number]),
-                ),
-              } as AnyNode
-            }
-          }
-        }
-        // Live-edit overrides: kinds whose `def.floorplan` builder
-        // reads cross-sibling data (wall miters, …) declare a
-        // `def.floorplanSiblingOverrides` hook that projects the
-        // override map into a merged `nodes` snapshot. The merged
-        // copy feeds `buildContext` so `ctx.siblings` reflects the
-        // live cursor positions, and replaces `effectiveNode` so the
-        // kind's own override lands too (covers the case where the
-        // node being rendered is itself the dragged one). Kinds
-        // without the hook hand the raw `nodes` through — most
-        // previews are self-contained.
-        const contextNodes = def?.floorplanSiblingOverrides
-          ? def.floorplanSiblingOverrides({ nodeId: id, nodes, liveOverrides })
-          : nodes
-        if (contextNodes !== nodes) {
-          const merged = contextNodes[id]
-          if (merged) effectiveNode = merged
-        }
-        const ctx = buildContext(effectiveNode, contextNodes, {
-          selected,
-          highlighted,
-          hovered,
-          moving,
-          palette: renderCtx?.palette,
-        })
-        const geometry = (builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null)(
-          effectiveNode,
-          ctx,
-        )
-        if (geometry) {
-          const { base, overlay } = splitFloorplanOverlay(geometry)
-          out.push({ id, node: effectiveNode, base, overlay, selected, highlighted })
-        }
-      }
+      buildEntry(id, node)
       const childIds = (node as unknown as { children?: AnyNodeId[] }).children
       if (Array.isArray(childIds)) {
         for (const cid of childIds) visit(cid)
@@ -607,50 +780,11 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         const parentId = (node as { parentId?: AnyNodeId | null }).parentId
         if (parentId !== activeBuildingId) continue
         const cid = id as AnyNodeId
-        const def = nodeRegistry.get(node.type)
-        const builder = def?.floorplan
-        if (!builder) continue
-        const selected = selectedIdSet.has(cid)
-        const highlighted = highlightedIdSet.has(cid)
-        const hovered = hoveredId === cid
-        const moving = movingNode?.id === cid
-        const live = liveTransforms.get(cid)
-        const hasPosition = Array.isArray((node as { position?: unknown }).position)
-        let effectiveNode: AnyNode =
-          live && hasPosition ? applyPositionLiveTransform(node, live) : node
-        const contextNodes = def?.floorplanSiblingOverrides
-          ? def.floorplanSiblingOverrides({ nodeId: cid, nodes, liveOverrides })
-          : nodes
-        if (contextNodes !== nodes) {
-          const merged = contextNodes[cid]
-          if (merged) {
-            effectiveNode = live && hasPosition ? applyPositionLiveTransform(merged, live) : merged
-          }
-        }
-        const ctx: GeometryContext = {
-          resolve: <N = AnyNode>(rid: AnyNodeId): N | undefined =>
-            contextNodes[rid] as N | undefined,
+        buildEntry(cid, node, {
           children: [],
           siblings: [],
           parent: activeLevelNode,
-          viewState: renderCtx?.palette
-            ? {
-                selected,
-                highlighted,
-                hovered,
-                moving,
-                palette: renderCtx.palette,
-              }
-            : undefined,
-        }
-        const geometry = (builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null)(
-          effectiveNode,
-          ctx,
-        )
-        if (geometry) {
-          const { base, overlay } = splitFloorplanOverlay(geometry)
-          out.push({ id: cid, node: effectiveNode, base, overlay, selected, highlighted })
-        }
+        })
       }
     }
 
@@ -662,6 +796,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     // DFS visit order (stable sort) so siblings keep their relative
     // priority.
     out.sort((a, b) => floorplanLayerRank(a.node.type) - floorplanLayerRank(b.node.type))
+    geometryCacheRef.current = nextCache
     return out
   }, [
     levelId,
@@ -991,6 +1126,13 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           suppressBoxSelectForPointer(event)
           sfxEmitter.emit('sfx:item-pick')
           setMovingNode(node as never)
+          // Claim 2D ownership of this move at the source. `setMovingNode`
+          // resets the origin to null, so this must follow it. It gates the
+          // 3D affordance mover (`ToolManager`) off entirely: without it the
+          // 3D `MoveItemTool` would also mount, `adopt()` the same node, and
+          // restore its adopt-time (original) position from its unmount
+          // `destroy()` — snapping a committed 2D move back to its start.
+          setMovingNodeOrigin('2d')
         }}
         palette={palette}
         sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
@@ -1947,6 +2089,7 @@ function buildContext(
     moving: boolean
     palette: FloorplanPalette | undefined
   },
+  levelData?: unknown,
 ): GeometryContext {
   const resolve = <N = AnyNode>(id: AnyNodeId): N | undefined => nodes[id] as N | undefined
 
@@ -1979,6 +2122,7 @@ function buildContext(
     children,
     siblings,
     parent,
+    levelData,
     viewState: viewState.palette
       ? {
           selected: viewState.selected,
@@ -2069,6 +2213,37 @@ function splitFloorplanOverlay(g: FloorplanGeometry): {
     return { base, overlay }
   }
   return { base: g, overlay: null }
+}
+
+function nodeDepsEqual(a: NodeDeps, b: NodeDeps): boolean {
+  const keys: Array<keyof NodeDeps> = [
+    'node',
+    'live',
+    'selected',
+    'highlighted',
+    'hovered',
+    'moving',
+    'palette',
+    'siblingEpoch',
+    'committedNodes',
+    'interactiveElevators',
+  ]
+  for (const key of keys) {
+    if (!depsValueEqual(a[key], b[key])) return false
+  }
+  return true
+}
+
+function depsValueEqual(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b)) return false
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (!Object.is(a[i], b[i])) return false
+    }
+    return true
+  }
+  return Object.is(a, b)
 }
 
 /**

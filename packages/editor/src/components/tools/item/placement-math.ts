@@ -1,9 +1,16 @@
 import { type AssetInput, isObject } from '@pascal-app/core'
 import { Euler, Matrix3, type Matrix4, Quaternion, Vector3 } from 'three'
+import { resolveSnapFlags } from '../../../lib/snapping-mode'
 import useEditor from '../../../store/use-editor'
 
+// Sentinel returned when the active snapping mode disables grid snapping.
+// The snap helpers below treat any `step <= 0` as "no grid snap" and pass the
+// raw value through. When grid snapping is enabled (the default `'grid'` mode)
+// this returns the user's `gridSnapStep` exactly as before — so the default
+// path is byte-identical to the pre-mode behaviour.
 function getGridSnapStep(): number {
-  return useEditor.getState().gridSnapStep
+  const state = useEditor.getState()
+  return resolveSnapFlags(state.snappingMode).grid ? state.gridSnapStep : 0
 }
 
 function positiveModulo(value: number, divisor: number): number {
@@ -14,6 +21,7 @@ function positiveModulo(value: number, divisor: number): number {
  * Snaps a position to the active grid step, aligning item edges to grid lines.
  */
 export function snapToGrid(position: number, dimension: number, step = getGridSnapStep()): number {
+  if (step <= 0) return position
   const halfDim = dimension / 2
   const offset = positiveModulo(halfDim, step)
   return Math.round((position - offset) / step) * step + offset
@@ -23,6 +31,7 @@ export function snapToGrid(position: number, dimension: number, step = getGridSn
  * Snap a value to the active grid step (used for wall-local positions).
  */
 export function snapToHalf(value: number, step = getGridSnapStep()): number {
+  if (step <= 0) return value
   return Math.round(value / step) * step
 }
 
@@ -30,6 +39,7 @@ export function snapToHalf(value: number, step = getGridSnapStep()): number {
  * Round a value up to the next multiple of `step`, with a minimum of `step`.
  */
 export function snapUpToGridStep(value: number, step = getGridSnapStep()): number {
+  if (step <= 0) return value
   return Math.max(step, Math.ceil(value / step) * step)
 }
 

@@ -315,7 +315,8 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     { key: 'Left click', label: 'Place item' },
     { key: 'R', label: 'Rotate counterclockwise' },
     { key: 'T', label: 'Rotate clockwise' },
-    { key: 'Shift', label: 'Free place' },
+    { key: 'Shift', label: 'Cycle snapping mode' },
+    { key: 'Alt', label: 'Free place (no snap)' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

@@ -327,7 +327,7 @@ export type {
   ViewMode,
   WorkspaceMode,
 } from './store/use-editor'
-export { default as useEditor } from './store/use-editor'
+export { default as useEditor, isAngleSnapActive, isMagneticSnapActive } from './store/use-editor'
 export {
   default as useOpeningGuides,
   type OpeningGuide3D,
