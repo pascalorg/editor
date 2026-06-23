@@ -65,6 +65,11 @@
       "types": "./dist/lib/exporters/dxf-exporter.d.ts",
       "import": "./dist/lib/exporters/dxf-exporter.js",
       "default": "./dist/lib/exporters/dxf-exporter.js"
+    },
+    "./exporters/ifc": {
+      "types": "./dist/lib/exporters/ifc-exporter.d.ts",
+      "import": "./dist/lib/exporters/ifc-exporter.js",
+      "default": "./dist/lib/exporters/ifc-exporter.js"
     }
   },
   "files": [

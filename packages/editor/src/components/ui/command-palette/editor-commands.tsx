@@ -3,6 +3,7 @@
 import type { AnyNodeId } from '@pascal-app/core'
 import { LevelNode, useScene } from '@pascal-app/core'
 import { exportSceneToDxf } from '@pascal-app/core/exporters/dxf'
+import { exportSceneToIfc } from '@pascal-app/core/exporters/ifc'
 import { useViewer } from '@pascal-app/viewer'
 import {
   AppWindow,
@@ -387,6 +388,25 @@ export function EditorCommands() {
             Object.assign(document.createElement('a'), {
               href: url,
               download: `floorplan_${new Date().toISOString().split('T')[0]}.dxf`,
+            }).click()
+            URL.revokeObjectURL(url)
+          }),
+      },
+      {
+        id: 'editor.export.ifc',
+        label: 'Export BIM (IFC)',
+        group: 'Export & Share',
+        icon: <Building2 className="h-4 w-4" />,
+        keywords: ['export', 'ifc', 'bim', 'revit', 'archicad', 'building', 'download'],
+        execute: () =>
+          run(() => {
+            const { nodes } = useScene.getState()
+            const ifc = exportSceneToIfc(nodes)
+            const blob = new Blob([ifc], { type: 'application/x-step' })
+            const url = URL.createObjectURL(blob)
+            Object.assign(document.createElement('a'), {
+              href: url,
+              download: `model_${new Date().toISOString().split('T')[0]}.ifc`,
             }).click()
             URL.revokeObjectURL(url)
           }),

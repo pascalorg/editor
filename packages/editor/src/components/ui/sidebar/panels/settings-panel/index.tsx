@@ -1,5 +1,6 @@
 import { emitter, type AnyNode, type AnyNodeId, useScene, validateBuildJson } from '@pascal-app/core'
 import { exportSceneToDxf } from '@pascal-app/core/exporters/dxf'
+import { exportSceneToIfc } from '@pascal-app/core/exporters/ifc'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
 import { Camera, Download, FlipHorizontal2, Move, Save, Trash2, Upload } from 'lucide-react'
@@ -419,6 +420,18 @@ export function SettingsPanel({
     URL.revokeObjectURL(url)
   }
 
+  const handleExportIfc = () => {
+    const ifcContent = exportSceneToIfc(nodes as Parameters<typeof exportSceneToIfc>[0])
+    const blob = new Blob([ifcContent], { type: 'application/x-step' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const date = new Date().toISOString().split('T')[0]
+    link.download = `model_${date}.ifc`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const handleSaveBuild = () => {
     const sceneData = { nodes, rootNodeIds }
     const json = JSON.stringify(sceneData, null, 2)
@@ -655,6 +668,14 @@ export function SettingsPanel({
         >
           <Download className="size-4" />
           Export DXF
+        </Button>
+        <Button
+          className="w-full justify-start gap-2"
+          onClick={handleExportIfc}
+          variant="outline"
+        >
+          <Download className="size-4" />
+          Export IFC (BIM)
         </Button>
       </div>
 
