@@ -144,7 +144,6 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
     const updatePreview = (event: RoofEvent) => {
       const target = resolveSnappedTarget(event)
       if (!target) return clearTarget()
-      lastTarget = target
 
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
@@ -155,7 +154,8 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
       }
 
       const xform = computeSegmentXform(target.segment.id)
-      if (!xform) return
+      if (!xform) return clearTarget()
+      lastTarget = target
       setSegmentXform(xform)
       setHitLocal([target.localX, target.localY, target.localZ])
       setPreviewSegment(target.segment)
@@ -186,10 +186,10 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
       // no `isNew` flag) → update host + position in place. Either way
       // every other field from the clone is preserved.
       if (isNew || !node.id) {
+        useScene.temporal.getState().resume()
         if (node.id) {
           state.deleteNode(node.id as AnyNodeId)
         }
-        useScene.temporal.getState().resume()
         const committed = ChimneyNodeSchema.parse({
           ...node,
           id: undefined as never,
@@ -326,7 +326,7 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
 
   return (
     <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
-      <group position={[hitLocal[0], 0, hitLocal[2]]}>
+      <group position={hitLocal}>
         <ChimneyPreview node={previewNode} segment={previewSegment} />
       </group>
     </group>

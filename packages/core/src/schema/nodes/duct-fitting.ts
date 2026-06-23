@@ -74,6 +74,7 @@ export const DuctFittingNode = BaseNode.extend({
   diameter2: z.number().min(2).max(48).default(6),
   ductMaterial: z.enum(['sheet-metal', 'flex', 'duct-board']).default('sheet-metal'),
   system: z.enum(['supply', 'return']).default('supply'),
+  slots: z.record(z.string(), z.string()).optional(),
 }).describe(
   dedent`
   Duct fitting - elbow, tee, cross, reducer, or square-to-round transition between duct runs.

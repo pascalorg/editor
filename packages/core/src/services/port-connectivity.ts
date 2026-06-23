@@ -48,6 +48,7 @@ const COINCIDENT_EPS_M = 0.05
 /** Below this (meters) a propagated delta is treated as zero — stops the
  *  walk from chasing sub-millimeter perpendicular residue. */
 const DELTA_EPS_M = 1e-4
+const PROPAGATION_EPS_M = 1e-9
 
 /** A node carried by the edit, plus the snapshot needed to revert it. Kept
  *  deliberately small: the move tools read only `kind` + `nodeId` and the
@@ -259,6 +260,19 @@ function average(deltas: Point[]): Point {
   return scale(sum, 1 / deltas.length)
 }
 
+function nearlyEqual(a: Point, b: Point): boolean {
+  return lenSq(sub(a, b)) <= DELTA_EPS_M * DELTA_EPS_M
+}
+
+function propagationEqual(a: Point, b: Point): boolean {
+  return lenSq(sub(a, b)) <= PROPAGATION_EPS_M * PROPAGATION_EPS_M
+}
+
+function rigidDelta(deltas: Point[]): Point {
+  const first = deltas[0]!
+  return deltas.every((delta) => nearlyEqual(delta, first)) ? average(deltas) : first
+}
+
 /** Unit direction of the run's segment adjacent to its `start` / `end` tip. */
 function endpointAxis(path: Point[], portId: string): Point {
   const n = path.length
@@ -270,6 +284,26 @@ function endpointAxis(path: Point[], portId: string): Point {
   return [dir[0] / l, dir[1] / l, dir[2] / l]
 }
 
+function runPathFromSinglePortDelta(
+  startPath: Point[],
+  portId: 'start' | 'end',
+  delta: Point,
+): Point[] {
+  const nearIdx = portId === 'start' ? 0 : startPath.length - 1
+  const axis = endpointAxis(startPath, portId)
+  const { parallel, perp } = decompose(delta, axis)
+  const path = startPath.map((p) => add(p, perp))
+  path[nearIdx] = add(path[nearIdx]!, parallel)
+  return path
+}
+
+function runEndpointDeltas(startPath: Point[], path: Point[]): Record<string, Point> {
+  return {
+    start: sub(path[0]!, startPath[0]!),
+    end: sub(path[path.length - 1]!, startPath[startPath.length - 1]!),
+  }
+}
+
 function runPathFromPortDeltas(startPath: Point[], portDeltas: Record<string, Point>): Point[] {
   const startDelta = portDeltas.start
   const endDelta = portDeltas.end
@@ -277,36 +311,25 @@ function runPathFromPortDeltas(startPath: Point[], portDeltas: Record<string, Po
     if (startPath.length === 2) {
       return [add(startPath[0]!, startDelta), add(startPath[1]!, endDelta)]
     }
-    const distances: number[] = [0]
-    let total = 0
-    for (let i = 1; i < startPath.length; i++) {
-      const prev = startPath[i - 1]!
-      const next = startPath[i]!
-      total += Math.sqrt(lenSq(sub(next, prev)))
-      distances.push(total)
-    }
-    if (total <= 1e-12) {
+
+    if (nearlyEqual(startDelta, endDelta)) {
       return startPath.map((p) => add(p, startDelta))
     }
-    return startPath.map((point, i) => {
-      const t = distances[i]! / total
-      const blended: Point = [
-        startDelta[0] * (1 - t) + endDelta[0] * t,
-        startDelta[1] * (1 - t) + endDelta[1] * t,
-        startDelta[2] * (1 - t) + endDelta[2] * t,
-      ]
-      return add(point, blended)
-    })
+
+    const startParts = decompose(startDelta, endpointAxis(startPath, 'start'))
+    const endParts = decompose(endDelta, endpointAxis(startPath, 'end'))
+    const commonPerp = average([startParts.perp, endParts.perp])
+    const path = startPath.map((p) => add(p, commonPerp))
+    path[0] = add(path[0]!, startParts.parallel)
+    path[path.length - 1] = add(path[path.length - 1]!, endParts.parallel)
+    return path
   }
 
-  const portId = startDelta ? 'start' : 'end'
-  const delta = (startDelta ?? endDelta)!
-  const nearIdx = portId === 'start' ? 0 : startPath.length - 1
-  const axis = endpointAxis(startPath, portId)
-  const { parallel, perp } = decompose(delta, axis)
-  const path = startPath.map((p) => add(p, perp))
-  path[nearIdx] = add(path[nearIdx]!, parallel)
-  return path
+  return runPathFromSinglePortDelta(
+    startPath,
+    startDelta ? 'start' : 'end',
+    (startDelta ?? endDelta)!,
+  )
 }
 
 /**
@@ -316,8 +339,8 @@ function runPathFromPortDeltas(startPath: Point[], portDeltas: Record<string, Po
  *
  * Walks the snapshotted graph, propagating each port delta outward: fittings
  * translate rigidly, runs stretch along their axis and translate across it
- * (never skew when driven from one end), and the perpendicular part of a run's
- * slide carries on to its far joint. Port-level guards bound cycles while still
+ * (never skew when driven from one end), and effective port movement carries on
+ * to neighbouring joints. Port-level output guards bound cycles while still
  * allowing a looped/shared run to accept constraints at both endpoints.
  */
 export function resolveConnectivityUpdates(
@@ -336,8 +359,15 @@ export function resolveConnectivityUpdates(
   const queue: Array<{ nodeId: AnyNodeId; portId: string; delta: Point }> = []
   const results: Record<string, { id: AnyNodeId; data: Partial<AnyNode> }> = {}
   const constrainedPorts: Record<string, Record<string, Point>> = {}
+  const propagatedPorts: Record<string, Record<string, Point>> = {}
 
   const enqueueMates = (nodeId: string, portId: string, delta: Point) => {
+    const byPort = propagatedPorts[nodeId] ?? {}
+    propagatedPorts[nodeId] = byPort
+    const previous = byPort[portId]
+    if (previous && propagationEqual(previous, delta)) return
+    byPort[portId] = delta
+
     for (const mate of adjacency[nodeId]?.[portId] ?? []) {
       if (mate.nodeId === movedNodeId) continue
       queue.push({ nodeId: mate.nodeId, portId: mate.portId, delta })
@@ -348,7 +378,7 @@ export function resolveConnectivityUpdates(
     const byPort = constrainedPorts[nodeId] ?? {}
     constrainedPorts[nodeId] = byPort
     const existing = byPort[portId]
-    if (existing) {
+    if (existing && propagationEqual(existing, delta)) {
       return false
     }
     byPort[portId] = delta
@@ -373,28 +403,22 @@ export function resolveConnectivityUpdates(
 
     if (node.role === 'fitting') {
       const start = node.startPosition!
-      const effectiveDelta = average(Object.values(portDeltas))
+      const effectiveDelta = rigidDelta(Object.values(portDeltas))
       results[nodeId] = {
         id: nodeId,
         data: { position: add(start, effectiveDelta) } as Partial<AnyNode>,
       }
-      // Rigid: every other collar carries the same delta onward.
+      // Rigid: every collar carries the effective body translation onward.
       for (const p of node.ports) {
-        if (p.id === portId) continue
         enqueueMates(nodeId, p.id, effectiveDelta)
       }
     } else {
       const startPath = node.startPath!
-      const farPortId = portId === 'start' ? 'end' : 'start'
       const path = runPathFromPortDeltas(startPath, portDeltas)
       results[nodeId] = { id: nodeId, data: { path } as Partial<AnyNode> }
-      // The far endpoint moved by just the perpendicular part — carry it on
-      // so the joint downstream stays welded.
-      if (!portDeltas[farPortId]) {
-        const axis = endpointAxis(startPath, portId)
-        const { perp } = decompose(delta, axis)
-        if (lenSq(perp) <= DELTA_EPS_M * DELTA_EPS_M) continue
-        enqueueMates(nodeId, farPortId, perp)
+      for (const [nextPortId, nextDelta] of Object.entries(runEndpointDeltas(startPath, path))) {
+        if (lenSq(nextDelta) <= DELTA_EPS_M * DELTA_EPS_M) continue
+        enqueueMates(nodeId, nextPortId, nextDelta)
       }
     }
   }

@@ -1,4 +1,5 @@
 import { type AnyNode, type NodeDefinition, useScene } from '@pascal-app/core'
+import { ductBodyPaint, ductBodySlots } from '../shared/duct-body-paint'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
 import { createSegmentMoveAffordance } from '../shared/path-segment-affordance'
 import { buildDuctSegmentFloorplan } from './floorplan'
@@ -72,6 +73,8 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    slots: () => ductBodySlots(),
+    paint: ductBodyPaint,
   },
 
   parametrics: ductSegmentParametrics,
@@ -104,6 +107,7 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
       n.insulated,
       n.insulationR,
       n.system,
+      n.slots,
     ]),
 
   // Open run ends as typed ports — directions point outward along the

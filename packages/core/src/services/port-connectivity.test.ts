@@ -55,6 +55,33 @@ stubDef('duct-fitting', 'fitting', (node) => {
     },
   ]
 })
+stubDef('duct-tee', 'fitting', (node) => {
+  const position = (node as unknown as { position: Point }).position
+  const system = (node as unknown as { system: string }).system
+  return [
+    {
+      id: 'inlet',
+      position: [position[0] - 0.2, position[1], position[2]],
+      direction: [-1, 0, 0],
+      diameter: 6,
+      system,
+    },
+    {
+      id: 'outlet',
+      position: [position[0] + 0.2, position[1], position[2]],
+      direction: [1, 0, 0],
+      diameter: 6,
+      system,
+    },
+    {
+      id: 'branch',
+      position: [position[0], position[1], position[2] + 0.2],
+      direction: [0, 0, 1],
+      diameter: 6,
+      system,
+    },
+  ]
+})
 
 let nextId = 0
 function makeNode(type: string, fields: Record<string, unknown>): AnyNode {
@@ -64,6 +91,12 @@ function makeNode(type: string, fields: Record<string, unknown>): AnyNode {
 
 function sceneOf(...nodes: AnyNode[]): Record<AnyNodeId, AnyNode> {
   return Object.fromEntries(nodes.map((n) => [n.id, n])) as Record<AnyNodeId, AnyNode>
+}
+
+function expectPointClose(actual: Point, expected: Point) {
+  expect(actual[0]).toBeCloseTo(expected[0], 6)
+  expect(actual[1]).toBeCloseTo(expected[1], 6)
+  expect(actual[2]).toBeCloseTo(expected[2], 6)
 }
 
 describe('port connectivity — joint follow (stretch vs translate)', () => {
@@ -196,6 +229,108 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
     const path = (updates.find((u) => u.id === follower.id)!.data as { path: Point[] }).path
     expect(path[0]).toEqual([0, 0, 1])
     expect(path[1]).toEqual([3, 0, 2])
+  })
+
+  test('a polyline run reached from both ends preserves interior bend shape', () => {
+    const moved = makeNode('duct-segment', {
+      path: [
+        [0, 0, 0],
+        [3, 0, 3],
+      ],
+      system: 'supply',
+    })
+    const follower = makeNode('duct-segment', {
+      path: [
+        [0, 0, 0],
+        [1, 0, 0],
+        [1, 0, 3],
+        [3, 0, 3],
+      ],
+      system: 'supply',
+    })
+    const nodes = sceneOf(moved, follower)
+    const connectivity = analyzePortConnectivity(moved, nodes)
+    const preview = {
+      ...(moved as Record<string, unknown>),
+      path: [
+        [-0.5, 0, 0],
+        [3.5, 0, 3],
+      ],
+    } as AnyNode
+
+    const updates = resolveConnectivityUpdates(connectivity, preview)
+
+    const path = (updates.find((u) => u.id === follower.id)!.data as { path: Point[] }).path
+    expect(path).toEqual([
+      [-0.5, 0, 0],
+      [1, 0, 0],
+      [1, 0, 3],
+      [3.5, 0, 3],
+    ])
+  })
+
+  test('a fitting reached from both collars rebroadcasts its final compatible rigid delta', () => {
+    const moved = makeNode('duct-segment', {
+      path: [
+        [-0.2, 0, 0],
+        [0.2, 0, 0],
+      ],
+      system: 'supply',
+    })
+    const fitting = makeNode('duct-tee', { position: [0, 0, 0], system: 'supply' })
+    const downstream = makeNode('duct-segment', {
+      path: [
+        [0, 0, 0.2],
+        [3, 0, 0.2],
+      ],
+      system: 'supply',
+    })
+    const nodes = sceneOf(moved, fitting, downstream)
+    const connectivity = analyzePortConnectivity(moved, nodes)
+    const preview = {
+      ...(moved as Record<string, unknown>),
+      path: [
+        [-0.2, 0, 1],
+        [0.2, 0, 1.00005],
+      ],
+    } as AnyNode
+
+    const updates = resolveConnectivityUpdates(connectivity, preview)
+
+    expectPointClose(
+      (updates.find((u) => u.id === fitting.id)!.data as { position: Point }).position,
+      [0, 0, 1.000025],
+    )
+    const path = (updates.find((u) => u.id === downstream.id)!.data as { path: Point[] }).path
+    expectPointClose(path[0]!, [0, 0, 1.200025])
+    expectPointClose(path[1]!, [3, 0, 1.200025])
+  })
+
+  test('a fitting reached from incompatible collars keeps a satisfiable rigid delta', () => {
+    const moved = makeNode('duct-segment', {
+      path: [
+        [-0.2, 0, 0],
+        [0.2, 0, 0],
+      ],
+      system: 'supply',
+    })
+    const fitting = makeNode('duct-fitting', { position: [0, 0, 0], system: 'supply' })
+    const nodes = sceneOf(moved, fitting)
+    const connectivity = analyzePortConnectivity(moved, nodes)
+    const preview = {
+      ...(moved as Record<string, unknown>),
+      path: [
+        [-0.2, 0, 1],
+        [0.2, 0, -1],
+      ],
+    } as AnyNode
+
+    const updates = resolveConnectivityUpdates(connectivity, preview)
+
+    expectPointClose(
+      (updates.find((u) => u.id === fitting.id)!.data as { position: Point }).position,
+      [0, 0, 1],
+    )
   })
 
   test('an unrelated run not on the fitting is left alone', () => {

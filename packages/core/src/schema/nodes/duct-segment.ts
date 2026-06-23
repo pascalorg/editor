@@ -58,6 +58,7 @@ export const DuctSegmentNode = BaseNode.extend({
   // Which side of the air loop this segment belongs to. Drives visual tint
   // and (in later slices) System graph membership.
   system: z.enum(['supply', 'return']).default('supply'),
+  slots: z.record(z.string(), z.string()).optional(),
 }).describe(
   dedent`
   Duct segment - polyline of 3D points connected by duct sections.

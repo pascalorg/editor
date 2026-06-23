@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { ductBodyPaint, ductBodySlots } from '../shared/duct-body-paint'
 import { rotateFittingNode } from '../shared/fitting-rotation'
 import { buildDuctFittingFloorplan } from './floorplan'
 import { buildDuctFittingGeometry } from './geometry'
@@ -51,6 +52,8 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
     movable: { axes: ['x', 'y', 'z'], gridSnap: true, cursorAttached: true },
     duplicable: true,
     deletable: true,
+    slots: () => ductBodySlots(),
+    paint: ductBodyPaint,
   },
 
   parametrics: ductFittingParametrics,
@@ -75,6 +78,7 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
       n.diameter2,
       n.ductMaterial,
       n.system,
+      n.slots,
     ]),
 
   ports: getDuctFittingPorts,

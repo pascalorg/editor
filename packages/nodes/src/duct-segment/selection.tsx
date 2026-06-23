@@ -686,15 +686,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       useScene.getState().updateNode(duct.id, { roll: startRoll })
       resumeSceneHistory(useScene)
       if (current !== startRoll) {
-        useScene.getState().updateNode(
-          duct.id,
-          {
-            roll: current,
-            ...(readAutoOffsetTag(duct)
-              ? { metadata: withoutAutoOffsetTag(duct.metadata) }
-              : {}),
-          } as Partial<AnyNode>,
-        )
+        useScene.getState().updateNode(duct.id, {
+          roll: current,
+          ...(readAutoOffsetTag(duct) ? { metadata: withoutAutoOffsetTag(duct.metadata) } : {}),
+        } as Partial<AnyNode>)
       }
     }
 

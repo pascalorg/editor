@@ -45,7 +45,7 @@ function previewStairSlot(args: PaintPreviewArgs): (() => void) | null {
     }
 
     if (!Array.isArray(userData.slotIds)) return
-    const materialIndex = userData.slotIds.findIndex((slotId) => slotId === role)
+    const materialIndex = userData.slotIds.indexOf(role)
     if (materialIndex < 0) return
     if (!Array.isArray(mesh.material)) return
 

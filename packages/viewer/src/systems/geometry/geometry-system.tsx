@@ -93,6 +93,7 @@ export const GeometrySystem = () => {
   // then mark it dirty. Scoped to nodes carrying a `scene:` ref so an
   // unrelated material edit doesn't churn the whole scene.
   useEffect(() => {
+    void sceneMaterials
     const nodes = useScene.getState().nodes
     for (const node of Object.values(nodes)) {
       const def = nodeRegistry.get(node.type)
