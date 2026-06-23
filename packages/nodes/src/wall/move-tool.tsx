@@ -213,17 +213,32 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     pauseSceneHistory(useScene)
     let shouldRestoreOnCleanup = true
 
+    // Wall ids that currently carry a live position override. Cleared on commit
+    // (after the final store write lands) and on cancel / external unmount.
+    const touchedWallIds = new Set<AnyNodeId>()
+
     const applyNodePreview = (
       updates: Array<{ id: WallNode['id']; start: [number, number]; end: [number, number] }>,
     ) => {
-      useScene.getState().updateNodes(
-        updates.map((entry) => ({
-          id: entry.id as AnyNodeId,
-          data: { start: entry.start, end: entry.end },
-        })),
+      // Publish the preview to `useLiveNodeOverrides` rather than writing the
+      // scene store. The 3D wall system (`getEffectiveWall`) and the 2D floor
+      // plan (`wallFloorplanSiblingOverrides`) both merge these overrides, so
+      // the mesh + miters track the cursor with NO `useScene` churn during the
+      // drag. A store write would hand a fresh `nodes` reference to every
+      // `useScene(s => s.nodes)` subscriber each frame (catalog tiles, panels,
+      // selection) and rebuild them all. Mirrors the wall's own 2D drag pattern;
+      // the final plan is written once, atomically, on commit.
+      const overrides = useLiveNodeOverrides.getState()
+      const sceneState = useScene.getState()
+      overrides.setMany(
+        updates.map(
+          (entry) =>
+            [entry.id, { start: entry.start, end: entry.end }] as [string, Record<string, unknown>],
+        ),
       )
       for (const entry of updates) {
-        useScene.getState().markDirty(entry.id as AnyNodeId)
+        touchedWallIds.add(entry.id as AnyNodeId)
+        sceneState.markDirty(entry.id as AnyNodeId)
       }
     }
 
@@ -353,6 +368,19 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       latestSurfacePlans = null
     }
 
+    // Drop the wall position overrides and mark the walls dirty so they rebuild
+    // from the now-authoritative store value (after commit) or the unchanged
+    // pre-drag value (after cancel).
+    const clearWallOverrides = () => {
+      const overrides = useLiveNodeOverrides.getState()
+      const sceneState = useScene.getState()
+      for (const id of touchedWallIds) {
+        overrides.clear(id)
+        sceneState.markDirty(id)
+      }
+      touchedWallIds.clear()
+    }
+
     const buildWallFromCenter = (center: [number, number]) => {
       const rotatedHalf = rotateVector(originalHalfVector, pendingRotationRef.current)
       const nextStart: [number, number] = [center[0] - rotatedHalf[0], center[1] - rotatedHalf[1]]
@@ -426,13 +454,10 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
     const restoreOriginal = () => {
       setGhostWallPreviews([])
-      applyNodePreview([
-        { id: nodeId, start: originalStart, end: originalEnd },
-        ...linkedOriginalsRef.current,
-      ])
-      // No scene rollback for surfaces — nothing was written. Just
-      // clear the live overrides so the renderer falls back to the
-      // (pre-drag, unchanged) store state.
+      // Nothing was written to the scene store during the drag — the preview
+      // was override-driven — so dropping the wall + surface overrides reveals
+      // the unchanged pre-drag state.
+      clearWallOverrides()
       clearSurfaceOverrides()
     }
 
@@ -512,15 +537,11 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
       shouldRestoreOnCleanup = false
 
-      // Restore original baseline while paused so the next resume+update
-      // registers as a single tracked change (undo reverts to original).
-      // Surfaces stayed in the store the whole drag (override-driven
-      // mesh preview), so there's nothing to restore for them.
+      // The store was never touched during the drag (the preview was
+      // override-driven for both walls and surfaces), so there is no baseline to
+      // restore before the tracked commit — just resume history and write the
+      // final plan as one undoable change.
       setGhostWallPreviews([])
-      applyNodePreview([
-        { id: nodeId, start: originalStart, end: originalEnd },
-        ...linkedOriginalsRef.current,
-      ])
 
       resumeSceneHistory(useScene)
       const commitPlan = getMovePlan(preview.start, preview.end)
@@ -577,9 +598,10 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // updates, deletes) into the store while history is still
       // resumed, so the surface delta joins the wall change as one
       // undoable step. Then drop the live overrides — the renderer
-      // now reads the committed polygons directly.
+      // now reads the committed walls + polygons directly.
       commitSurfacesToStore()
       clearSurfaceOverrides()
+      clearWallOverrides()
 
       pauseSceneHistory(useScene)
 

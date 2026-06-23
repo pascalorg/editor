@@ -305,8 +305,15 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const [activeDragId, setActiveDragId] = useState<string | null>(null)
   const [rotationOverlay, setRotationOverlay] = useState<RotationOverlayState | null>(null)
   const geometryCacheRef = useRef<Map<string, CacheEntry>>(new Map())
-  const siblingEpochInputsRef = useRef<unknown[]>([])
-  const siblingEpochRef = useRef(0)
+  // Per-node sibling epoch (replaces a single global epoch). Bumped only for the
+  // nodes affected by this frame's live drags, so an unaffected wall/opening
+  // keeps its epoch and stays cached. `prevLiveFlaggedIdsRef` remembers which
+  // sibling-dependent nodes were live last frame, so a node that just STOPPED
+  // being dragged (override cleared, no commit) still gets one final rebuild to
+  // revert — its dependents (host wall, junction neighbours) don't carry its
+  // override in their own deps.
+  const nodeSiblingEpochRef = useRef<Map<AnyNodeId, number>>(new Map())
+  const prevLiveFlaggedIdsRef = useRef<AnyNodeId[]>([])
 
   const applyEntrySelection = useCallback(
     (id: AnyNodeId, shouldToggle: boolean) => {
@@ -542,30 +549,38 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       return []
     }
 
-    // The sibling epoch bumps whenever a sibling-affecting node's LIVE state
-    // changes (a wall/door/window/gutter being dragged or live-edited). Only
-    // flagged kinds feed it, so dragging or rotating a plain item — which also
-    // publishes to liveTransforms / liveOverrides — leaves it stable and the
-    // hundreds of wall/door geometries stay cached. Committed structural edits
-    // are covered separately by keying flagged kinds on the `nodes` ref.
-    const siblingEpochInputs: unknown[] = []
-    for (const [id, live] of liveTransforms) {
+    // Granular sibling invalidation. A sibling-dependent node (wall miters,
+    // door/window cuts, gutter joins) must rebuild when a node it actually
+    // DEPENDS ON has a live drag in flight — not when ANY flagged node anywhere
+    // does. The old single global epoch took the latter route: dragging one wall
+    // or opening rebuilt every wall + opening on the level (the floor-plan FPS
+    // cliff). Instead, collect the flagged nodes with a live transform/override,
+    // expand to the set that depends on them (junction neighbours, host walls,
+    // gutter peers — see `computeAffectedSiblingIds`), and bump a PER-NODE epoch
+    // only for that set. `committedNodes` (kept in the deps) still catches
+    // committed structural edits, so this only narrows the LIVE-drag case.
+    const liveFlaggedIds: AnyNodeId[] = []
+    for (const [id] of liveTransforms) {
       const node = nodes[id as AnyNodeId]
       if (node && nodeRegistry.get(node.type)?.floorplanDependsOnSiblings) {
-        siblingEpochInputs.push(live)
+        liveFlaggedIds.push(id as AnyNodeId)
       }
     }
-    for (const [id, override] of liveOverrides) {
+    for (const [id] of liveOverrides) {
       const node = nodes[id as AnyNodeId]
       if (node && nodeRegistry.get(node.type)?.floorplanDependsOnSiblings) {
-        siblingEpochInputs.push(override)
+        liveFlaggedIds.push(id as AnyNodeId)
       }
     }
-    if (!depsValueEqual(siblingEpochInputsRef.current, siblingEpochInputs)) {
-      siblingEpochRef.current += 1
-      siblingEpochInputsRef.current = siblingEpochInputs
+    // Union with last frame's live set so a node that just stopped being dragged
+    // (and its dependents) rebuilds one final time to drop the now-cleared override.
+    const expandFrom = Array.from(new Set([...liveFlaggedIds, ...prevLiveFlaggedIdsRef.current]))
+    const affectedSiblingIds = computeAffectedSiblingIds(expandFrom, nodes, liveOverrides)
+    const nodeSiblingEpochs = nodeSiblingEpochRef.current
+    for (const id of affectedSiblingIds) {
+      nodeSiblingEpochs.set(id, (nodeSiblingEpochs.get(id) ?? 0) + 1)
     }
-    const siblingEpoch = siblingEpochRef.current
+    prevLiveFlaggedIdsRef.current = liveFlaggedIds
     const out: FloorplanEntry[] = []
     const levelDataByType = new Map<string, unknown>()
     const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
@@ -624,7 +639,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         hovered,
         moving,
         palette: renderCtx?.palette,
-        siblingEpoch: dependsOnSiblingInputs ? siblingEpoch : 0,
+        siblingEpoch: dependsOnSiblingInputs ? (nodeSiblingEpochs.get(id) ?? 0) : 0,
         // Sibling-dependent kinds (wall miters, opening cuts) read other nodes'
         // COMMITTED state via `ctx`, so a committed edit to a sibling/child that
         // doesn't change this node's own ref must still invalidate it. The
@@ -2214,6 +2229,95 @@ function splitFloorplanOverlay(g: FloorplanGeometry): {
     return { base, overlay }
   }
   return { base: g, overlay: null }
+}
+
+// Stable string key for a wall endpoint, rounded to 1 mm so floating-point
+// drift collapses while distinct corners stay distinct.
+function endpointKey(x: number, y: number): string {
+  return `${Math.round(x * 1000)},${Math.round(y * 1000)}`
+}
+
+// Given the sibling-dependent nodes with a live drag in flight, the set of
+// floor-plan geometries that must rebuild this frame. A node's geometry depends
+// on more than its own data:
+//   - a wall's miters depend on the walls meeting at each of its endpoints, so a
+//     dragged wall invalidates the walls at its old AND new junctions, plus its
+//     own door/window children (their cuts are drawn into it);
+//   - a door/window cut is drawn into its host wall, so it invalidates that wall;
+//   - a gutter join depends on sibling gutters under the same roof.
+// Everything else stays cached, so dragging one wall/opening rebuilds a handful
+// of geometries rather than every wall + opening on the level.
+function computeAffectedSiblingIds(
+  liveFlaggedIds: readonly AnyNodeId[],
+  nodes: Record<string, AnyNode>,
+  liveOverrides: Map<string, Record<string, unknown>>,
+): Set<AnyNodeId> {
+  const affected = new Set<AnyNodeId>()
+  if (liveFlaggedIds.length === 0) return affected
+
+  // Junction map (committed wall endpoint → wall ids), built lazily on first use.
+  let junctions: Map<string, AnyNodeId[]> | null = null
+  const wallsAtPoint = (x: number, y: number): AnyNodeId[] => {
+    if (!junctions) {
+      junctions = new Map()
+      for (const id in nodes) {
+        const n = nodes[id]
+        if (n?.type !== 'wall') continue
+        const w = n as unknown as { start: [number, number]; end: [number, number] }
+        for (const [px, py] of [w.start, w.end]) {
+          const key = endpointKey(px, py)
+          const arr = junctions.get(key)
+          if (arr) arr.push(id as AnyNodeId)
+          else junctions.set(key, [id as AnyNodeId])
+        }
+      }
+    }
+    return junctions.get(endpointKey(x, y)) ?? []
+  }
+
+  for (const id of liveFlaggedIds) {
+    const node = nodes[id]
+    if (!node) continue
+    affected.add(id)
+    if (node.type === 'wall') {
+      const w = node as unknown as {
+        start: [number, number]
+        end: [number, number]
+        children?: AnyNodeId[]
+      }
+      // Use the live (override-merged) endpoints as well as the committed ones,
+      // so walls at both the wall's old and new junctions get fresh miters.
+      const ov = liveOverrides.get(id) as
+        | { start?: [number, number]; end?: [number, number] }
+        | undefined
+      const points: [number, number][] = [w.start, w.end]
+      if (ov?.start) points.push(ov.start)
+      if (ov?.end) points.push(ov.end)
+      for (const [px, py] of points) {
+        for (const wid of wallsAtPoint(px, py)) affected.add(wid)
+      }
+      if (Array.isArray(w.children)) {
+        for (const cid of w.children) {
+          const child = nodes[cid]
+          if (child?.type === 'door' || child?.type === 'window') affected.add(cid)
+        }
+      }
+    } else if (node.type === 'door' || node.type === 'window') {
+      const hostId = (node as { parentId?: string }).parentId
+      if (hostId) affected.add(hostId as AnyNodeId)
+    } else if (node.type === 'gutter') {
+      const roofId = (node as { parentId?: string }).parentId
+      if (roofId) {
+        for (const sid in nodes) {
+          const s = nodes[sid]
+          if (s?.type === 'gutter' && (s as { parentId?: string }).parentId === roofId) {
+            affected.add(sid as AnyNodeId)
+          }
+        }
+      }
+    }
+  }
+  return affected
 }
 
 function nodeDepsEqual(a: NodeDeps, b: NodeDeps): boolean {
