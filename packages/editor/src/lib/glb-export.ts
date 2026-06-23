@@ -1,4 +1,11 @@
-import { type AnyNode, sceneRegistry, type WindowNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  getLevelDisplayName,
+  type LevelNode,
+  sceneRegistry,
+  type WindowNode,
+  type ZoneNode,
+} from '@pascal-app/core'
 import { poseWindowMovingParts, SCENE_LAYER } from '@pascal-app/viewer'
 import * as THREE from 'three'
 
@@ -45,7 +52,17 @@ export function prepareSceneForExport(
   const scene = source.clone(true)
   const cloneByOriginal = pairClones(source, scene)
 
-  pruneNonRenderableMeshes(scene)
+  // Object3Ds that carry node identity — never strip these even when they sit on
+  // a non-scene layer. Some are metadata-only: a zone's visible fill/wall meshes
+  // are stripped, but its identity node stays to carry the polygon that /viewer
+  // reconstructs the room from.
+  const identityNodes = new Set<THREE.Object3D>()
+  for (const original of sceneRegistry.nodes.values()) {
+    const clone = cloneByOriginal.get(original)
+    if (clone) identityNodes.add(clone)
+  }
+
+  pruneNonRenderableMeshes(scene, identityNodes)
   convertMaterials(scene)
 
   const { clips, clipNamesByNode } = bakeAnimationClips(cloneByOriginal, nodes)
@@ -95,13 +112,16 @@ const EMPTY_GEOMETRY = new THREE.BufferGeometry()
  *    With children (it parents the visible frame + leaf) it keeps its node but
  *    loses its geometry; childless ones are removed outright.
  */
-function pruneNonRenderableMeshes(root: THREE.Object3D) {
+function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE.Object3D>) {
   const toRemove: THREE.Object3D[] = []
   root.traverse((object) => {
     // Editor-only overlays (gizmos, selection handles, ground grid, zone fills)
-    // live off the scene layer; the editor camera renders them via extra layers
-    // but a thumbnail/bake only wants layer 0. Drop the whole overlay subtree.
+    // live off the scene layer; the editor camera shows them via extra layers
+    // but a thumbnail/bake only wants layer 0. Drop the whole overlay subtree —
+    // except identity nodes, which we keep (their off-layer mesh children are
+    // still pruned as the traversal continues).
     if (!object.layers.isEnabled(SCENE_LAYER)) {
+      if (identityNodes.has(object)) return
       toRemove.push(object)
       return
     }
@@ -148,10 +168,60 @@ function convertMaterials(root: THREE.Object3D) {
     const mesh = object as THREE.Mesh
     if (!mesh.isMesh) return
     const material = mesh.material
-    mesh.material = Array.isArray(material)
-      ? material.map((m) => convertMaterial(m, cache))
-      : convertMaterial(material, cache)
+    if (Array.isArray(material)) {
+      mesh.material = material.map((m) => convertMaterial(m, cache))
+      return
+    }
+    // glTF has no BackSide — GLTFExporter renders the *front* face for any
+    // non-DoubleSide material, which inverts a BackSide surface (e.g. the
+    // ceiling underside, meant to be seen from the room). Flip the mesh winding
+    // so the intended face shows with the FrontSide material convertMaterial
+    // produces. Per-mesh geometry clone keeps shared geometry untouched.
+    if (
+      (material as { isNodeMaterial?: boolean }).isNodeMaterial &&
+      material.side === THREE.BackSide
+    ) {
+      mesh.geometry = flipGeometryWinding(mesh.geometry)
+    }
+    mesh.material = convertMaterial(material, cache)
   })
+}
+
+/**
+ * Reverse triangle winding and negate normals so a surface authored for
+ * `BackSide` reads correctly once exported as `FrontSide` (glTF can't express
+ * back-face-only rendering).
+ */
+function flipGeometryWinding(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  const flipped = geometry.clone()
+  const index = flipped.getIndex()
+  if (index) {
+    const a = index.array
+    for (let i = 0; i < a.length; i += 3) {
+      const tmp = a[i]!
+      a[i] = a[i + 2]!
+      a[i + 2] = tmp
+    }
+    index.needsUpdate = true
+  } else {
+    for (const attribute of Object.values(flipped.attributes)) {
+      const { array, itemSize } = attribute
+      for (let i = 0; i < array.length; i += itemSize * 3) {
+        for (let k = 0; k < itemSize; k++) {
+          const tmp = array[i + k]!
+          array[i + k] = array[i + 2 * itemSize + k]!
+          array[i + 2 * itemSize + k] = tmp
+        }
+      }
+      attribute.needsUpdate = true
+    }
+  }
+  const normal = flipped.getAttribute('normal')
+  if (normal) {
+    for (let i = 0; i < normal.array.length; i++) normal.array[i] = -normal.array[i]!
+    normal.needsUpdate = true
+  }
+  return flipped
 }
 
 /**
@@ -180,9 +250,15 @@ function convertMaterial(
   // rough, non-metallic surface is the faithful lit fallback.
   target.roughness = typeof src.roughness === 'number' ? src.roughness : 1
   target.metalness = typeof src.metalness === 'number' ? src.metalness : 0
-  target.transparent = material.transparent
+  // Only genuinely see-through surfaces stay transparent. Several viewer
+  // materials set `transparent: true` while fully opaque (opacity 1); exporting
+  // those as alphaMode=BLEND makes them render see-through with no depth write
+  // (e.g. the ceiling looked semi-transparent). Glass (opacity < 1) is kept.
+  target.transparent = material.transparent && material.opacity < 1
   target.opacity = material.opacity
-  target.side = material.side
+  // BackSide is flipped to FrontSide (with the mesh winding reversed in
+  // convertMaterials) because glTF has no back-face-only mode.
+  target.side = material.side === THREE.BackSide ? THREE.FrontSide : material.side
   target.alphaTest = material.alphaTest
   target.depthWrite = material.depthWrite
   target.depthTest = material.depthTest
@@ -368,10 +444,28 @@ function stampIdentity(
     target.name = id
     const extras: Record<string, unknown> = { pascalId: id, kind: node.type }
     if (node.name) extras.label = node.name
+    // Levels carry no stored name; stamp the editor's display name ("Level 1")
+    // so the baked viewer's level/breadcrumb UI reads the same labels. Force the
+    // node visible: the bake must capture every floor regardless of the editor's
+    // current level mode (solo/hidden floors would otherwise be dropped by
+    // GLTFExporter's `onlyVisible`).
+    if (node.type === 'level') {
+      extras.label = getLevelDisplayName(node as LevelNode)
+      target.visible = true
+    }
     if (node.type === 'door' || node.type === 'window') {
       extras.openable = true
       const clipNames = clipNamesByNode.get(id)
       if (clipNames) extras.clips = clipNames
+    }
+    if (node.type === 'zone') {
+      // Zone fills are stripped from the bake; /viewer rebuilds the room from
+      // this polygon. Force the identity node visible so GLTFExporter's
+      // `onlyVisible` keeps it even when the editor had zones hidden at export.
+      const zone = node as ZoneNode
+      extras.polygon = zone.polygon
+      extras.color = zone.color
+      target.visible = true
     }
     target.userData = extras
   }

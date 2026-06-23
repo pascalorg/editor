@@ -146,6 +146,54 @@ describe('prepareSceneForExport', () => {
     expect(leafMarkerSurvived).toBe(false)
   })
 
+  test('keeps the zone identity node with its polygon and strips the fill mesh', () => {
+    const root = new THREE.Group()
+    const zoneGroup = new THREE.Group()
+    const fill = meshWithNodeMaterial(nodeMaterial())
+    fill.layers.set(2) // ZONE_LAYER
+    zoneGroup.add(fill)
+    zoneGroup.visible = false // the editor often hides zones at export time
+    root.add(zoneGroup)
+
+    const zoneId = 'zone_living'
+    const polygon: [number, number][] = [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+    ]
+    sceneRegistry.nodes.set(zoneId, zoneGroup)
+    const nodes: Record<string, AnyNode> = {
+      [zoneId]: {
+        object: 'node',
+        id: zoneId,
+        type: 'zone',
+        name: 'Living Room',
+        polygon,
+        color: '#ff0000',
+      } as unknown as AnyNode,
+    }
+
+    const { scene } = prepareSceneForExport(root, nodes)
+
+    const exported = scene.getObjectByProperty('name', zoneId)
+    expect(exported).toBeDefined()
+    // Forced visible so GLTFExporter's onlyVisible keeps the metadata node.
+    expect(exported?.visible).toBe(true)
+    expect(exported?.userData).toEqual({
+      pascalId: zoneId,
+      kind: 'zone',
+      label: 'Living Room',
+      polygon,
+      color: '#ff0000',
+    })
+    // The ZONE_LAYER fill mesh must not survive (rebuilt in /viewer instead).
+    let hasMesh = false
+    exported?.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) hasMesh = true
+    })
+    expect(hasMesh).toBe(false)
+  })
+
   test('bakes a swing door into an open quaternion clip', () => {
     const root = new THREE.Group()
     const doorGroup = new THREE.Group()

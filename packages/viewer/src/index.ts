@@ -13,6 +13,12 @@ export { ErrorBoundary } from './components/error-boundary'
 // — no per-kind re-exports needed.
 export { NodeRenderer } from './components/renderers/node-renderer'
 export { default as Viewer, type ViewerHandle } from './components/viewer'
+export {
+  GlbScene,
+  type GlbHover,
+  type GlbIdentity,
+  type GlbLevel,
+} from './components/viewer/glb-scene'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
 export {
   DEFAULT_HOVER_STYLES,
