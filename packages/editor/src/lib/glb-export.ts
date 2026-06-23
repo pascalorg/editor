@@ -497,10 +497,15 @@ function stampIdentity(
       extras.label = getLevelDisplayName(node as LevelNode)
       target.visible = true
     }
+    // Only doors/windows that actually baked an open clip are openable. A cased
+    // opening (no leaf) or a fixed window (no operable sash) produces no clip, so
+    // it stays unflagged — the file never claims a part opens when nothing moves.
     if (node.type === 'door' || node.type === 'window') {
-      extras.openable = true
       const clipNames = clipNamesByNode.get(id)
-      if (clipNames) extras.clips = clipNames
+      if (clipNames?.length) {
+        extras.openable = true
+        extras.clips = clipNames
+      }
     }
     if (node.type === 'zone') {
       // Zone fills are stripped from the bake; /viewer rebuilds the room from

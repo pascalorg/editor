@@ -146,6 +146,38 @@ describe('prepareSceneForExport', () => {
     expect(leafMarkerSurvived).toBe(false)
   })
 
+  test('does not flag a door/window openable when no open clip bakes', () => {
+    // A cased opening (no swing leaf) / fixed window (no operable sash) builds
+    // no movable part, so no clip bakes and the node must not claim openable.
+    const root = new THREE.Group()
+    const openingGroup = new THREE.Group()
+    openingGroup.add(meshWithNodeMaterial(nodeMaterial()))
+    root.add(openingGroup)
+
+    const openingId = 'door_opening'
+    sceneRegistry.nodes.set(openingId, openingGroup)
+    const nodes: Record<string, AnyNode> = {
+      [openingId]: {
+        object: 'node',
+        id: openingId,
+        type: 'door',
+        name: 'Cased opening',
+      } as unknown as AnyNode,
+    }
+
+    const { scene, animations } = prepareSceneForExport(root, nodes)
+
+    expect(animations).toHaveLength(0)
+    const exported = scene.getObjectByProperty('name', openingId)
+    expect(exported?.userData).toEqual({
+      pascalId: openingId,
+      kind: 'door',
+      label: 'Cased opening',
+    })
+    expect(exported?.userData.openable).toBeUndefined()
+    expect(exported?.userData.clips).toBeUndefined()
+  })
+
   test('keeps the zone identity node with its polygon and strips the fill mesh', () => {
     const root = new THREE.Group()
     const zoneGroup = new THREE.Group()

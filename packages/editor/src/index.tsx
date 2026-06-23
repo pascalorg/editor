@@ -218,7 +218,6 @@ export {
   resolveCeilingPlanPointSnap,
 } from './lib/ceiling-plan-snap'
 export { EDITOR_LAYER } from './lib/constants'
-export { exportSceneToGlb } from './lib/glb-export'
 // Helper libs used by the kind-owned roof / stair / elevator panels.
 export {
   resolveCurrentBuildingId,
@@ -247,6 +246,7 @@ export {
   getFloorplanWallThickness,
 } from './lib/floorplan'
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
+export { exportSceneToGlb } from './lib/glb-export'
 export {
   buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
