@@ -85,7 +85,7 @@ export const createStairBetweenLevelsInput = {
   createSourceCeilingOpening: z.boolean().default(true),
   openingWidth: z.number().positive().optional(),
   openingLength: z.number().positive().optional(),
-  openingOffset: z.number().min(0).default(0.15),
+  openingOffset: z.number().min(0).default(0),
   openingCenter: Vec2Schema.optional(),
   openingRotation: z.number().optional(),
   materialPreset: z.string().optional(),

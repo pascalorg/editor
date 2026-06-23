@@ -1369,7 +1369,7 @@ function TapActionArrow({
       onHoverChange={setIsHovered}
       onPointerDown={onActivate}
       placement={{ position, rotation, baseScale }}
-      shape={shape === 'move-cross' ? 'move-cross' : 'chevron'}
+      shape={shape === 'move-cross' ? 'move-cross' : 'arrow'}
       thin
     />
   )

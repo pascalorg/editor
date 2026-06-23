@@ -40,6 +40,7 @@ function fenceSideMoveHandle(side: 'front' | 'back'): HandleDescriptor<FenceNode
   const sign = side === 'front' ? 1 : -1
   return {
     kind: 'tap-action',
+    shape: 'arrow',
     onActivate: (node, _scene, editor) => editor.engageMove(node),
     placement: {
       position: (n) => {

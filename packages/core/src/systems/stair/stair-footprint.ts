@@ -149,6 +149,19 @@ function straightStairAABB(
 
 const ARC_SAMPLES = 48
 
+function getSpiralLandingSweep(stair: StairNode, sweepAngle: number) {
+  if ((stair.topLandingMode ?? 'none') !== 'integrated') return 0
+
+  const innerRadius = Math.max(0.05, stair.innerRadius ?? 0.9)
+  const width = Math.max(stair.width ?? 1, 0.4)
+  const landingDepth = Math.max(0.3, stair.topLandingDepth ?? Math.max(width * 0.9, 0.8))
+
+  return (
+    Math.min(Math.PI * 0.75, landingDepth / Math.max(innerRadius + width / 2, 0.1)) *
+    Math.sign(sweepAngle || 1)
+  )
+}
+
 /** Bounding box of a curved / spiral stair's annular sector (plus the
  *  integrated spiral top landing when present). */
 function arcStairAABB(stair: StairNode): StairFootprintAABB | null {
@@ -158,7 +171,8 @@ function arcStairAABB(stair: StairNode): StairFootprintAABB | null {
   const width = Math.max(stair.width ?? 1, 0.4)
   const outerRadius = innerRadius + width
 
-  let sweep = stair.sweepAngle ?? (isSpiral ? Math.PI * 2 : Math.PI / 2)
+  const rawSweep = stair.sweepAngle ?? (isSpiral ? Math.PI * 2 : Math.PI / 2)
+  let sweep = rawSweep
   // A full revolution would make the arc degenerate; clamp just under 2π the
   // same way the floor-plan emitter does so the sampled box stays correct.
   if (Math.abs(sweep) >= Math.PI * 2) sweep = Math.sign(sweep || 1) * (Math.PI * 2 - 0.001)
@@ -175,17 +189,17 @@ function arcStairAABB(stair: StairNode): StairFootprintAABB | null {
     extendByLocal(box, stair, cos * outerRadius, sin * outerRadius)
   }
 
-  // Integrated spiral top landing — a rectangle hung off the outer rim.
+  // Integrated spiral top landing renders as an angular extension of the
+  // annular stair body, not as a rectangular box outside the outer rim.
   if (isSpiral && stair.topLandingMode === 'integrated') {
-    const depth = Math.max(stair.topLandingDepth ?? 0.9, 0.1)
-    const halfWidth = width / 2
-    for (const [cornerX, cornerZ] of [
-      [outerRadius, -halfWidth],
-      [outerRadius + depth, -halfWidth],
-      [outerRadius + depth, halfWidth],
-      [outerRadius, halfWidth],
-    ] as const) {
-      extendByLocal(box, stair, cornerX, cornerZ)
+    const landingSweep = getSpiralLandingSweep(stair, rawSweep)
+    const landingSteps = Math.max(1, Math.ceil(Math.abs(landingSweep) / (Math.PI / 24)))
+    for (let step = 0; step <= landingSteps; step += 1) {
+      const angle = rawSweep / 2 + (landingSweep * step) / landingSteps
+      const cos = Math.cos(angle)
+      const sin = Math.sin(angle)
+      extendByLocal(box, stair, cos * innerRadius, sin * innerRadius)
+      extendByLocal(box, stair, cos * outerRadius, sin * outerRadius)
     }
   }
 
