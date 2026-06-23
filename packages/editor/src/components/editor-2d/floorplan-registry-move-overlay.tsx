@@ -24,6 +24,7 @@ import { resolvePlanarCursorPosition } from '../../lib/planar-cursor-placement'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor from '../../store/use-editor'
+import { useMovingNode } from '../../store/use-interaction-scope'
 import { useWallMoveGhosts } from '../../store/use-wall-move-ghosts'
 
 // Figma-style alignment snap threshold. Meters in world space; 8cm gives
@@ -53,7 +54,7 @@ const ALIGNMENT_THRESHOLD_M = 0.08
  * cursor → meters accounts for pan / zoom / building rotation.
  */
 export function FloorplanRegistryMoveOverlay() {
-  const movingNode = useEditor((s) => s.movingNode)
+  const movingNode = useMovingNode()
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
 

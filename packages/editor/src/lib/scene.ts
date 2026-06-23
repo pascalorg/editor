@@ -359,7 +359,6 @@ function resetEditorInteractionState() {
     structureLayer: 'elements',
     catalogCategory: null,
     selectedItem: null,
-    movingNode: null,
     selectedReferenceId: null,
     spaces: {},
     hoveredHole: null,

@@ -2,7 +2,11 @@
 
 import { memo, type MouseEvent as ReactMouseEvent } from 'react'
 import useEditor from '../../store/use-editor'
-import { useEndpointReshape, useIsCurveReshape } from '../../store/use-interaction-scope'
+import {
+  useEndpointReshape,
+  useIsCurveReshape,
+  useMovingNode,
+} from '../../store/use-interaction-scope'
 import { NodeActionMenu } from '../editor/node-action-menu'
 
 type SvgPoint = {
@@ -49,7 +53,7 @@ export const FloorplanActionMenuLayer = memo(function FloorplanActionMenuLayer({
   offsetY = 10,
 }: FloorplanActionMenuLayerProps) {
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
-  const movingNode = useEditor((state) => state.movingNode)
+  const movingNode = useMovingNode()
   const endpointReshape = useEndpointReshape()
   const isCurveReshape = useIsCurveReshape()
 

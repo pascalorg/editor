@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import type { AnyNode } from '@pascal-app/core'
 import {
   type AttachClass,
   attachClassOf,
@@ -6,6 +7,8 @@ import {
   isCandidateInHotSet,
   isPickableForAttach,
 } from './hot-set'
+
+const mockNode = (id: string, type: string): AnyNode => ({ id, type }) as unknown as AnyNode
 
 const floor: HotSetCandidate = {
   type: 'level',
@@ -101,6 +104,7 @@ describe('isCandidateInHotSet — by scope', () => {
   test('placing a surface item: derives from attach class', () => {
     const scope = {
       kind: 'placing' as const,
+      node: mockNode('i1', 'item'),
       nodeId: 'i1',
       nodeType: 'item',
       view: '3d' as const,
@@ -112,6 +116,7 @@ describe('isCandidateInHotSet — by scope', () => {
   test('moving a wall-mounted item: only walls', () => {
     const scope = {
       kind: 'moving' as const,
+      node: mockNode('w1', 'window'),
       nodeId: 'w1',
       nodeType: 'window',
       view: '2d' as const,

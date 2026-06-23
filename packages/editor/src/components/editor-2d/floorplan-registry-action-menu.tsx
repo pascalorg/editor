@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { useMovingNode } from '../../store/use-interaction-scope'
 import { NodeActionMenu } from '../editor/node-action-menu'
 
 /**
@@ -46,7 +47,7 @@ import { NodeActionMenu } from '../editor/node-action-menu'
  */
 export function FloorplanRegistryActionMenu() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
-  const movingNode = useEditor((s) => s.movingNode)
+  const movingNode = useMovingNode()
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
   // Gate on floorplan hover so this 2D menu never coexists with the 3D

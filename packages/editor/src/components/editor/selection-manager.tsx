@@ -72,7 +72,9 @@ import useDirectManipulationFeedback from '../../store/use-direct-manipulation-f
 import useEditor, { type MaterialTargetRole } from './../../store/use-editor'
 import useInteractionScope, {
   getEditingHole,
+  getMovingNode,
   useIsCurveReshape,
+  useMovingNode,
 } from '../../store/use-interaction-scope'
 import { boxSelectHandled, suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { swallowNextClick } from './node-arrow-handles'
@@ -859,7 +861,7 @@ export const SelectionManager = () => {
   })
   const clickHandledRef = useRef(false)
 
-  const movingNode = useEditor((s) => s.movingNode)
+  const movingNode = useMovingNode()
   const isCurveReshape = useIsCurveReshape()
 
   useEffect(() => {
@@ -1309,7 +1311,7 @@ export const SelectionManager = () => {
         swallowNextClick()
         createEditorApi().engageMoveDrag(node)
         requestAnimationFrame(() => {
-          if (useEditor.getState().movingNode?.id !== node.id) return
+          if (getMovingNode()?.id !== node.id) return
           pointerTarget?.dispatchEvent(
             new PointerEvent('pointermove', {
               altKey: moveEvent.altKey,
@@ -1333,7 +1335,7 @@ export const SelectionManager = () => {
         if (engaged) {
           requestAnimationFrame(() => {
             const editor = useEditor.getState()
-            if (editor.movingNode?.id !== node.id || !editor.placementDragMode) return
+            if (getMovingNode()?.id !== node.id || !editor.placementDragMode) return
             editor.setMovingNode(null)
           })
         }

@@ -98,6 +98,7 @@ import useInteractionScope, {
   useActiveHandleDrag,
   useEndpointReshape,
   useIsCurveReshape,
+  useMovingNode,
   useReshapingNode,
 } from '../../store/use-interaction-scope'
 import usePlacementPreview from '../../store/use-placement-preview'
@@ -4552,7 +4553,7 @@ export function FloorplanPanel({
   const selectedReferenceId = useEditor((state) => state.selectedReferenceId)
   const setSelectedReferenceId = useEditor((state) => state.setSelectedReferenceId)
   const setMode = useEditor((state) => state.setMode)
-  const movingNode = useEditor((state) => state.movingNode)
+  const movingNode = useMovingNode()
   const isCurveReshape = useIsCurveReshape()
   const endpointReshape = useEndpointReshape()
   const reshapingNode = useReshapingNode()
@@ -4596,12 +4597,9 @@ export function FloorplanPanel({
   // `movingNode` carries the building's id even if the explicit
   // selection has been cleared as part of the move handoff.
   const movingBuildingId =
-    useEditor((state) => {
-      const moving = state.movingNode
-      if (!moving) return null
-      const def = nodeRegistry.get(moving.type)
-      return def?.capabilities?.floorplanLevelContainer ? moving.id : null
-    }) ?? null
+    movingNode && nodeRegistry.get(movingNode.type)?.capabilities?.floorplanLevelContainer
+      ? movingNode.id
+      : null
   const ambientBuildingId = currentBuildingId ?? movingBuildingId
   const hasAmbientBuildingLevel = useScene((state) => {
     if (levelId || !ambientBuildingId) return false

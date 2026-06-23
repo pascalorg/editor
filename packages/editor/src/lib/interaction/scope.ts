@@ -10,6 +10,8 @@
 // combinations unrepresentable: a scope is exactly one interaction at a time,
 // and `idle` carries no interaction payload at all.
 
+import type { AnyNode } from '@pascal-app/core'
+
 export type InteractionView = '2d' | '3d'
 
 // Endpoint/curve/hole/boundary edits are all "reshape the selected node" — one
@@ -24,13 +26,17 @@ export type InteractionScope =
   // gizmo press-drag flavour (commit on release) vs click-to-place.
   | {
       kind: 'placing'
+      // The node being placed, carried inline: a fresh-placement / duplicate
+      // draft is not in the scene yet, so it cannot be recovered by id. Set once
+      // at `begin` and never mutated, so it is a stable reference for the gesture.
+      node: AnyNode
       nodeId: string
       nodeType: string
       view: InteractionView
       pressDrag: boolean
     }
   // Moving an existing node.
-  | { kind: 'moving'; nodeId: string; nodeType: string; view: InteractionView }
+  | { kind: 'moving'; node: AnyNode; nodeId: string; nodeType: string; view: InteractionView }
   // Dragging a resize/translate/rotate handle of a selected node.
   | { kind: 'handle-drag'; nodeId: string; handle: string }
   // Click-to-click drafting of a polyline/polygon kind (wall/fence/slab/…).
@@ -75,6 +81,14 @@ export function scopeNodeId(scope: InteractionScope): string | null {
     default:
       return null
   }
+}
+
+// The node a placing/moving scope is acting on, carried inline (see the
+// `placing` variant comment). Null for every other scope. Replaces the legacy
+// `useEditor.movingNode` flag: the node lives inside the discriminated union, so
+// it cannot survive past the interaction's `end()`.
+export function movingNodeOf(scope: InteractionScope): AnyNode | null {
+  return scope.kind === 'placing' || scope.kind === 'moving' ? scope.node : null
 }
 
 // Selection/hover picking is only meaningful while idle. During any active

@@ -217,25 +217,6 @@ type EditorState = {
   setCatalogCategory: (category: CatalogCategory | null) => void
   selectedItem: AssetInput | null
   setSelectedItem: (item: AssetInput) => void
-  movingNode:
-    | ItemNode
-    | WindowNode
-    | DoorNode
-    | ElevatorNode
-    | CeilingNode
-    | ChimneyNode
-    | ColumnNode
-    | DormerNode
-    | SlabNode
-    | WallNode
-    | FenceNode
-    | RoofNode
-    | RoofSegmentNode
-    | SpawnNode
-    | StairNode
-    | StairSegmentNode
-    | BuildingNode
-    | null
   /**
    * True while a move was engaged by a press-drag gizmo (the on-canvas move
    * cross) rather than a click-to-place flow. The placement coordinator reads
@@ -788,25 +769,13 @@ const useEditor = create<EditorState>()(
       setCatalogCategory: (category) => set({ catalogCategory: category }),
       selectedItem: null,
       setSelectedItem: (item) => set({ selectedItem: item }),
-      movingNode: null as
-        | ItemNode
-        | WindowNode
-        | DoorNode
-        | ElevatorNode
-        | CeilingNode
-        | ColumnNode
-        | SlabNode
-        | WallNode
-        | FenceNode
-        | RoofNode
-        | RoofSegmentNode
-        | SpawnNode
-        | StairNode
-        | StairSegmentNode
-        | BuildingNode
-        | null,
       placementDragMode: false,
       setPlacementDragMode: (dragMode) => set({ placementDragMode: dragMode }),
+      // The node being placed/moved now lives inside the interaction scope
+      // (`useMovingNode` / `getMovingNode`), not a `useEditor` flag. This setter
+      // remains the single entry point: it drives the scope and still touches
+      // `movingNodeOrigin` / `placementDragMode` so cross-store subscribers that
+      // watch this store (community placement) keep firing on move start/end.
       setMovingNode: (node) => {
         const scope = useInteractionScope.getState()
         if (node === null) {
@@ -815,22 +784,23 @@ const useEditor = create<EditorState>()(
           // side's effect cleanup — which fires after `setMovingNode(null)`
           // propagates — can still read who finalised. The next non-null
           // `setMovingNode` resets it. Always clear the press-drag flag.
-          set({ movingNode: null, placementDragMode: false })
+          set({ placementDragMode: false })
           return
         }
         const isNew = Boolean((node as { metadata?: { isNew?: boolean } }).metadata?.isNew)
         if (isNew) {
           scope.begin({
             kind: 'placing',
+            node,
             nodeId: node.id,
             nodeType: node.type,
             view: '3d',
             pressDrag: get().placementDragMode,
           })
         } else {
-          scope.begin({ kind: 'moving', nodeId: node.id, nodeType: node.type, view: '3d' })
+          scope.begin({ kind: 'moving', node, nodeId: node.id, nodeType: node.type, view: '3d' })
         }
-        set({ movingNode: node, movingNodeOrigin: null })
+        set({ movingNodeOrigin: null })
       },
       movingNodeOrigin: null as '2d' | '3d' | null,
       setMovingNodeOrigin: (origin) => set({ movingNodeOrigin: origin }),

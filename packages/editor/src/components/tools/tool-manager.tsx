@@ -15,6 +15,7 @@ import {
   useEditingHole,
   useEndpointReshape,
   useIsCurveReshape,
+  useMovingNode,
   useReshapingNode,
 } from '../../store/use-interaction-scope'
 import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
@@ -63,7 +64,7 @@ export const ToolManager: React.FC = () => {
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
-  const movingNode = useEditor((state) => state.movingNode)
+  const movingNode = useMovingNode()
   const movingNodeOrigin = useEditor((state) => state.movingNodeOrigin)
   const endpointReshape = useEndpointReshape()
   const isCurveReshape = useIsCurveReshape()

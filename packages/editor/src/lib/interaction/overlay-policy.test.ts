@@ -1,10 +1,20 @@
 import { describe, expect, test } from 'bun:test'
+import type { AnyNode } from '@pascal-app/core'
 import { resolveOverlayPolicy } from './overlay-policy'
 import type { ActiveInteractionScope } from './scope'
 
+const mockNode = (id: string, type: string): AnyNode => ({ id, type }) as unknown as AnyNode
+
 const ACTIVE_SCOPES: ActiveInteractionScope[] = [
-  { kind: 'placing', nodeId: 'i1', nodeType: 'item', view: '3d', pressDrag: false },
-  { kind: 'moving', nodeId: 'i1', nodeType: 'item', view: '2d' },
+  {
+    kind: 'placing',
+    node: mockNode('i1', 'item'),
+    nodeId: 'i1',
+    nodeType: 'item',
+    view: '3d',
+    pressDrag: false,
+  },
+  { kind: 'moving', node: mockNode('i1', 'item'), nodeId: 'i1', nodeType: 'item', view: '2d' },
   { kind: 'handle-drag', nodeId: 'w1', handle: 'height' },
   { kind: 'drafting', tool: 'wall' },
   { kind: 'reshaping', nodeId: 's1', reshape: 'hole', holeIndex: 0 },

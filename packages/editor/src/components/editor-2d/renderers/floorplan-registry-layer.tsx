@@ -43,7 +43,7 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
 import useEditor from '../../../store/use-editor'
-import { useEndpointReshape } from '../../../store/use-interaction-scope'
+import { useEndpointReshape, useMovingNode } from '../../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
@@ -200,16 +200,15 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const setHoveredId = useViewer((s) => s.setHoveredId)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
+  const movingNode = useMovingNode()
   // When a building is being moved, its explicit selection may be
   // cleared as part of the move handoff. Fall back to the
   // mid-drag building id so the dimmed floor keeps rendering
   // throughout the gesture.
-  const movingBuildingId = useEditor((state) => {
-    const moving = state.movingNode
-    if (!moving) return null
-    const def = nodeRegistry.get(moving.type)
-    return def?.capabilities?.floorplanLevelContainer ? moving.id : null
-  })
+  const movingBuildingId =
+    movingNode && nodeRegistry.get(movingNode.type)?.capabilities?.floorplanLevelContainer
+      ? movingNode.id
+      : null
   const ambientBuildingSourceId = selectedBuildingId ?? movingBuildingId
 
   // When only a building is in scope (no specific level), fall back to
@@ -242,7 +241,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const levelId = selectedLevelId ?? ambientLevelId
   const isAmbient = !selectedLevelId && !!ambientLevelId
   const renderCtx = useFloorplanRender()
-  const movingNode = useEditor((s) => s.movingNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
   // Door / window placement (both build and move) needs the SVG's

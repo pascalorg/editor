@@ -12,6 +12,7 @@ import {
   IDLE_SCOPE,
   type InteractionScope,
   isCurveReshape,
+  movingNodeOf,
   reshapingNodeId,
 } from '../lib/interaction/scope'
 
@@ -108,5 +109,16 @@ export const useReshapingNode = (): AnyNode | null => {
   }
   return snapshot.current.node
 }
+
+// The node currently being placed or moved. Replaces the legacy
+// `useEditor.movingNode` flag. Unlike `useReshapingNode`, no `useRef` snapshot is
+// needed: the node is carried inline in the scope and set once at `begin`, so it
+// is already a stable reference for the whole gesture (nothing calls `begin` mid
+// drag). Returns null whenever no placing/moving interaction is active.
+export const useMovingNode = (): AnyNode | null => useInteractionScope((s) => movingNodeOf(s.scope))
+
+// Imperative (non-React) read for event handlers / effects.
+export const getMovingNode = (): AnyNode | null =>
+  movingNodeOf(useInteractionScope.getState().scope)
 
 export default useInteractionScope

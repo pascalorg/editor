@@ -10,7 +10,7 @@ import {
 import { emitDeleteSFX, sfxEmitter } from '../lib/sfx-bus'
 import { toggleWindowOpenState } from '../lib/window-interaction'
 import useEditor from '../store/use-editor'
-import useInteractionScope from '../store/use-interaction-scope'
+import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
 
 // Tools call this in their onCancel handler when they have an active mid-action to cancel,
 // so that the global Escape handler knows not to also switch to select mode.
@@ -37,7 +37,8 @@ export const useKeyboard = ({
     // global selection-based R/T handler must stand down to avoid double-firing.
     const isPlacingOpening = () => {
       const ed = useEditor.getState()
-      if (ed.movingNode?.type === 'door' || ed.movingNode?.type === 'window') return true
+      const moving = getMovingNode()
+      if (moving?.type === 'door' || moving?.type === 'window') return true
       return ed.mode === 'build' && (ed.tool === 'door' || ed.tool === 'window')
     }
 
@@ -52,7 +53,7 @@ export const useKeyboard = ({
     // place (out of this overhaul's scope), so they're excluded.
     const isSnappingCycleContext = () => {
       const ed = useEditor.getState()
-      const moving = ed.movingNode
+      const moving = getMovingNode()
       if (moving != null) return moving.type !== 'door' && moving.type !== 'window'
       return (
         ed.mode === 'build' && (ed.tool === 'wall' || ed.tool === 'fence' || ed.tool === 'item')

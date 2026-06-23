@@ -245,7 +245,12 @@ export {
   getFloorplanWallThickness,
 } from './lib/floorplan'
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
-export { curveReshapeScope, endpointReshapeScope, holeEditScope } from './lib/interaction/scope'
+export {
+  curveReshapeScope,
+  endpointReshapeScope,
+  holeEditScope,
+  movingNodeOf,
+} from './lib/interaction/scope'
 export {
   buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
@@ -331,10 +336,12 @@ export {
   default as useInteractionScope,
   getEditingHole,
   getIsCurveReshape,
+  getMovingNode,
   useActiveHandleDrag,
   useEditingHole,
   useEndpointReshape,
   useIsCurveReshape,
+  useMovingNode,
   useReshapingNode,
 } from './store/use-interaction-scope'
 export {

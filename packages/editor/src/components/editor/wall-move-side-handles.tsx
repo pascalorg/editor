@@ -38,6 +38,7 @@ import useEditor from '../../store/use-editor'
 import useInteractionScope, {
   useEndpointReshape,
   useIsCurveReshape,
+  useMovingNode,
 } from '../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import {
@@ -123,7 +124,7 @@ export function WallMoveSideHandles() {
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const mode = useEditor((state) => state.mode)
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
-  const movingNode = useEditor((state) => state.movingNode)
+  const movingNode = useMovingNode()
   const endpointReshape = useEndpointReshape()
   const isCurveReshape = useIsCurveReshape()
 

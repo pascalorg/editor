@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import type { AnyNode } from '@pascal-app/core'
 import {
   type ActiveInteractionScope,
   editingHoleInfo,
@@ -9,6 +10,10 @@ import {
   selectionEnabled,
 } from '../lib/interaction/scope'
 import useInteractionScope from './use-interaction-scope'
+
+// A placing/moving scope carries the node inline. Tests only assert on id/type,
+// so a structural stand-in is enough.
+const mockNode = (id: string, type: string): AnyNode => ({ id, type }) as unknown as AnyNode
 
 function reset() {
   useInteractionScope.getState().end()
@@ -23,9 +28,16 @@ describe('use-interaction-scope state machine', () => {
 
   test('begin enters an interaction; end returns to idle atomically', () => {
     const s = useInteractionScope.getState()
-    s.begin({ kind: 'moving', nodeId: 'item_1', nodeType: 'item', view: '3d' })
+    s.begin({
+      kind: 'moving',
+      node: mockNode('item_1', 'item'),
+      nodeId: 'item_1',
+      nodeType: 'item',
+      view: '3d',
+    })
     expect(useInteractionScope.getState().scope).toEqual({
       kind: 'moving',
+      node: mockNode('item_1', 'item'),
       nodeId: 'item_1',
       nodeType: 'item',
       view: '3d',
@@ -50,23 +62,47 @@ describe('use-interaction-scope state machine', () => {
 
   test('update patches the live payload of the active scope', () => {
     const s = useInteractionScope.getState()
-    s.begin({ kind: 'placing', nodeId: 'i1', nodeType: 'item', view: '3d', pressDrag: false })
+    s.begin({
+      kind: 'placing',
+      node: mockNode('i1', 'item'),
+      nodeId: 'i1',
+      nodeType: 'item',
+      view: '3d',
+      pressDrag: false,
+    })
     s.update({ pressDrag: true })
     const scope = useInteractionScope.getState().scope
     expect(scope.kind === 'placing' && scope.pressDrag).toBe(true)
   })
 
   test('update is a no-op when idle', () => {
-    useInteractionScope
-      .getState()
-      .update({ kind: 'moving', nodeId: 'x', nodeType: 'item', view: '3d' })
+    useInteractionScope.getState().update({
+      kind: 'moving',
+      node: mockNode('x', 'item'),
+      nodeId: 'x',
+      nodeType: 'item',
+      view: '3d',
+    })
     expect(useInteractionScope.getState().scope.kind).toBe('idle')
   })
 
   test('update cannot change which interaction is running', () => {
     const s = useInteractionScope.getState()
-    s.begin({ kind: 'moving', nodeId: 'i1', nodeType: 'item', view: '3d' })
-    s.update({ kind: 'placing', nodeId: 'i1', nodeType: 'item', view: '3d', pressDrag: true })
+    s.begin({
+      kind: 'moving',
+      node: mockNode('i1', 'item'),
+      nodeId: 'i1',
+      nodeType: 'item',
+      view: '3d',
+    })
+    s.update({
+      kind: 'placing',
+      node: mockNode('i1', 'item'),
+      nodeId: 'i1',
+      nodeType: 'item',
+      view: '3d',
+      pressDrag: true,
+    })
     expect(useInteractionScope.getState().scope.kind).toBe('moving')
   })
 
@@ -126,8 +162,15 @@ describe('derived flag views are leak-free (no parallel flags)', () => {
   test('every active scope kind leaves at most the views it owns', () => {
     const s = useInteractionScope.getState()
     const kinds: ActiveInteractionScope[] = [
-      { kind: 'placing', nodeId: 'i', nodeType: 'item', view: '3d', pressDrag: false },
-      { kind: 'moving', nodeId: 'i', nodeType: 'item', view: '3d' },
+      {
+        kind: 'placing',
+        node: mockNode('i', 'item'),
+        nodeId: 'i',
+        nodeType: 'item',
+        view: '3d',
+        pressDrag: false,
+      },
+      { kind: 'moving', node: mockNode('i', 'item'), nodeId: 'i', nodeType: 'item', view: '3d' },
       { kind: 'drafting', tool: 'wall' },
       { kind: 'box-select' },
       { kind: 'painting' },

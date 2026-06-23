@@ -51,6 +51,7 @@ import useEditor from '../../store/use-editor'
 import useInteractionScope, {
   useEndpointReshape,
   useIsCurveReshape,
+  useMovingNode,
 } from '../../store/use-interaction-scope'
 import useOpeningGuides from '../../store/use-opening-guides'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
@@ -181,7 +182,7 @@ export function NodeArrowHandles() {
   const activeRotateNodeId = useDirectManipulationFeedback((state) => state.activeRotateNodeId)
   const mode = useEditor((state) => state.mode)
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
-  const movingNode = useEditor((state) => state.movingNode)
+  const movingNode = useMovingNode()
   // Endpoint / curve drags reshape the selected wall or fence; hide its
   // resize arrows for the duration so they don't clutter (or get blocked
   // by) the drag's own cursor + dimension overlays. Mirrors the same guard

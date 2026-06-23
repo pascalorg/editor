@@ -19,7 +19,10 @@ import {
 } from '../../../lib/ceiling-plan-snap'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
-import useInteractionScope, { useIsCurveReshape } from '../../../store/use-interaction-scope'
+import useInteractionScope, {
+  useIsCurveReshape,
+  useMovingNode,
+} from '../../../store/use-interaction-scope'
 import { snapToHalf } from '../../tools/item/placement-math'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 
@@ -96,7 +99,7 @@ export const CeilingSelectionAffordanceSystem = () => {
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const structureLayer = useEditor((state) => state.structureLayer)
-  const movingNode = useEditor((state) => state.movingNode)
+  const movingNode = useMovingNode()
   const isCurveReshape = useIsCurveReshape()
   const currentLevelId = useViewer((state) => state.selection.levelId)
 
