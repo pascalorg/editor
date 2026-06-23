@@ -31,8 +31,12 @@ function buildRun(
 
 /**
  * Pure geometry builder for a standalone liquid line: a single thin bare-copper
- * cylinder following the node path centerline, with joint spheres capping
- * interior corners so turns read as continuous pipe.
+ * cylinder following the node path centerline.
+ *
+ * Each line is a standalone two-point node (no fitting system), so a sphere caps
+ * BOTH endpoints. On a free end it rounds the cap; where two segments share a
+ * coordinate the coincident spheres fill the miter gap, so the turn reads as
+ * continuous pipe.
  *
  * Children are level-local meters; `<ParametricNodeRenderer>` owns the node
  * transform (identity today — the path is absolute within the level).
@@ -55,7 +59,10 @@ export function buildLiquidLineGeometry(node: LiquidLineNode): Group {
     if (run) group.add(run)
   }
 
-  for (let i = 1; i < points.length - 1; i++) {
+  // Spherical caps at every point: interior corners read as continuous pipe,
+  // and endpoint caps round the open ends so two separate segments sharing a
+  // coordinate fill the miter and look welded.
+  for (let i = 0; i < points.length; i++) {
     const joint = new Mesh(new SphereGeometry(radius, RADIAL_SEGMENTS, 10), copperMat)
     joint.name = `liquid-line-joint-${i}`
     joint.position.copy(points[i] as Vector3)

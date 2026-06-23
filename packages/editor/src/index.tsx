@@ -39,7 +39,27 @@ export {
   formatMeasurement,
   MeasurementPill,
 } from './components/editor/measurement-pill'
-export { NodeArrowHandles } from './components/editor/node-arrow-handles'
+// In-world arrow handle primitives (chevron geometry, invisible hit area,
+// shared material, palette + scale constants). Re-exported so kind-owned
+// 3D selection affordances in `@pascal-app/nodes` (duct side-move / height /
+// extend arrows) reuse the same UI family as the wall / fence side handles.
+export {
+  ARROW_COLOR,
+  ARROW_HOVER_COLOR,
+  ARROW_SCALE,
+  createArrowHandleGeometry,
+  createArrowHitAreaGeometry,
+  HandleArrow,
+  type HandleArrowInputShape,
+  type HandleArrowPlacement,
+  type HandleArrowProps,
+  InvisibleHandleHitArea,
+  NO_RAYCAST,
+  NodeArrowHandles,
+  swallowNextClick,
+  useArrowMaterial,
+  useInvisibleHitAreaMaterial,
+} from './components/editor/node-arrow-handles'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,

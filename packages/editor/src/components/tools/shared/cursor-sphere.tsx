@@ -12,12 +12,28 @@ interface CursorSphereProps extends Omit<ThreeElements['group'], 'ref'> {
   depthWrite?: boolean
   showTooltip?: boolean
   height?: number
+  /**
+   * Put the bright marker dot at the TIP of the vertical line (y = height)
+   * instead of on the ground ring. Used when the point being placed hangs
+   * above the floor (e.g. duct drawn against the ceiling): the dot rides at
+   * the cursor / placement point while the line drops to a floor ring that
+   * keeps the plan position readable.
+   */
+  dotAtTip?: boolean
   /** Custom tooltip content — overrides the auto-detected build tool icon */
   tooltipContent?: React.ReactNode
 }
 
 export const CursorSphere = forwardRef<Group, CursorSphereProps>(function CursorSphere(
-  { color = '#818cf8', showTooltip = true, height = 2.5, visible = true, tooltipContent, ...props },
+  {
+    color = '#818cf8',
+    showTooltip = true,
+    height = 2.5,
+    dotAtTip = false,
+    visible = true,
+    tooltipContent,
+    ...props
+  },
   ref,
 ) {
   const tool = useEditor((s) => s.tool)
@@ -39,19 +55,23 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
 
   return (
     <group ref={ref} {...props} visible={isVisible}>
-      {/* Flat marker on the ground */}
+      {/* Flat marker on the ground. The bright center dot moves to the tip
+          of the line in `dotAtTip` mode (the placement point hangs above the
+          floor), leaving a faint ring here so the plan position stays read. */}
       <group rotation={[-Math.PI / 2, 0, 0]}>
-        {/* Center dot */}
-        <mesh layers={EDITOR_LAYER} renderOrder={2}>
-          <circleGeometry args={[0.06, 32]} />
-          <meshBasicMaterial
-            color={color}
-            depthTest={false}
-            depthWrite={false}
-            opacity={0.9}
-            transparent
-          />
-        </mesh>
+        {/* Center dot — at the ground unless the placement point is elevated */}
+        {!dotAtTip && (
+          <mesh layers={EDITOR_LAYER} renderOrder={2}>
+            <circleGeometry args={[0.06, 32]} />
+            <meshBasicMaterial
+              color={color}
+              depthTest={false}
+              depthWrite={false}
+              opacity={0.9}
+              transparent
+            />
+          </mesh>
+        )}
 
         {/* Outer ring / glow */}
         <mesh layers={EDITOR_LAYER} renderOrder={2}>
@@ -60,7 +80,7 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
             color={color}
             depthTest={false}
             depthWrite={false}
-            opacity={0.25}
+            opacity={dotAtTip ? 0.2 : 0.25}
             transparent
           />
         </mesh>
@@ -77,6 +97,15 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
             opacity={0.7}
             transparent
           />
+        </mesh>
+      )}
+
+      {/* Bright marker dot at the tip of the line — the actual placement
+          point, riding at the cursor while the line drops to the floor. */}
+      {dotAtTip && height > 0 && (
+        <mesh layers={EDITOR_LAYER} position={[0, height, 0]} renderOrder={2}>
+          <sphereGeometry args={[0.08, 20, 14]} />
+          <meshBasicMaterial color={color} depthTest={false} depthWrite={false} />
         </mesh>
       )}
 

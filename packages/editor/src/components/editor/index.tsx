@@ -1147,6 +1147,7 @@ export default function Editor({
       <CeilingSystem />
       <RoofEditSystem />
       <StairEditSystem />
+      {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <InteractiveSystem />
@@ -1205,8 +1206,14 @@ export default function Editor({
 
         {!isLoading && isPreviewMode ? (
           <div className="dark flex h-full w-full flex-col bg-neutral-100 text-foreground">
-            <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
-            <div className="h-full w-full">{previewViewerContent}</div>
+            {isFirstPersonMode ? (
+              <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
+            ) : (
+              <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
+            )}
+            <div className="h-full w-full" data-pascal-viewer-3d>
+              {previewViewerContent}
+            </div>
           </div>
         ) : (
           <>
@@ -1270,8 +1277,14 @@ export default function Editor({
 
       {!isLoading && isPreviewMode ? (
         <>
-          <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
-          <div className="h-full w-full">{previewViewerContent}</div>
+          {isFirstPersonMode ? (
+            <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
+          ) : (
+            <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
+          )}
+          <div className="h-full w-full" data-pascal-viewer-3d>
+            {previewViewerContent}
+          </div>
         </>
       ) : (
         <>

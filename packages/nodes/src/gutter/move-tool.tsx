@@ -17,7 +17,11 @@ import {
   useEditor,
 } from '@pascal-app/editor'
 import { useCallback, useEffect, useState } from 'react'
-import { createRelativeRoofDrag } from '../shared/relative-roof-drag'
+import { createRelativeRoofDrag, snapRelativeRoofDragTarget } from '../shared/relative-roof-drag'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfaceNodePlacementGuides,
+} from '../shared/roof-surface-placement-guides'
 import { type EaveSnap, resolveEaveSnap } from './eave-snap'
 import GutterPreview from './preview'
 
@@ -83,11 +87,13 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
       lastTarget = null
       lastSnap = null
       setTarget(null)
+      clearRoofSurfacePlacementGuides()
     }
 
     const resolveTarget = (event: RoofEvent): GutterDragTarget | null => {
-      const target = roofDrag.resolve(event)
-      if (!target) return null
+      const rawTarget = roofDrag.resolve(event)
+      if (!rawTarget) return null
+      const target = snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true)
       return {
         segment: target.segment,
         snap: resolveEaveSnap(target.segment, target.localX, target.localZ),
@@ -130,6 +136,13 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
           rotation: target.segment.rotation ?? 0,
         },
         snap,
+      })
+      publishRoofSurfaceNodePlacementGuides({
+        roof,
+        segment: target.segment,
+        center: [snap.eaveX, snap.eaveY, snap.eaveZ],
+        node: { ...node, rotation: snap.rotation },
+        mode: 'linear-edge',
       })
       event.stopPropagation()
     }
@@ -178,6 +191,7 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
       if (obj) obj.visible = true
 
       triggerSFX('sfx:item-place')
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
       event.stopPropagation()
     }
@@ -196,6 +210,7 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
         useScene.getState().deleteNode(node.id as AnyNodeId)
         useScene.temporal.getState().resume()
         markToolCancelConsumed()
+        clearRoofSurfacePlacementGuides()
         exitMoveMode()
         return
       }
@@ -215,6 +230,7 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
 
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
     }
 
@@ -244,6 +260,7 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
 
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
+      clearRoofSurfacePlacementGuides()
       useScene.temporal.getState().resume()
     }
   }, [exitMoveMode, node])
