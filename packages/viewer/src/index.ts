@@ -19,6 +19,11 @@ export {
   type MovementInput,
 } from './components/viewer/bvh-ecctrl'
 export {
+  buildGlbInteractiveItems,
+  GlbInteractive,
+  type GlbInteractiveItem,
+} from './components/viewer/glb-interactive'
+export {
   type GlbHover,
   type GlbIdentity,
   type GlbLevel,

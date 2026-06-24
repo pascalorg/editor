@@ -12,6 +12,7 @@ import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { ZONE_LAYER } from '../../lib/layers'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
+import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
 
 /** Vertical gap added per floor in `exploded` level mode (matches LevelSystem). */
 const EXPLODED_GAP = 5
@@ -279,12 +280,16 @@ function createZoneWallGeometry(polygon: [number, number][]): THREE.BufferGeomet
  */
 export function GlbScene({
   url,
+  interactiveItems,
   onLevelsChange,
   onIdentityChange,
   onHoverChange,
   onWalkthroughChange,
 }: {
   url: string
+  /** Light / animation effects + controls recovered from the DB scene graph,
+   *  joined to the baked nodes by `pascalId` to re-light + re-animate the GLB. */
+  interactiveItems?: GlbInteractiveItem[]
   onLevelsChange?: (levels: GlbLevel[]) => void
   onIdentityChange?: (identity: GlbIdentity) => void
   onHoverChange?: (hover: GlbHover) => void
@@ -972,6 +977,11 @@ export function GlbScene({
         onPointerMove={handlePointerMove}
         onPointerOut={handlePointerOut}
       />
+      {/* Re-light + re-animate the baked artifact from the DB scene graph,
+          joined to the baked nodes by pascalId. */}
+      {interactiveItems?.length ? (
+        <GlbInteractive identity={identity} items={interactiveItems} zones={zoneEntries} />
+      ) : null}
       {/* Floating room labels. Each group's matrix is synced to its zone node
           every frame (above) so the label rides level stacking; the div fades
           with the room fill via a CSS transition. */}
