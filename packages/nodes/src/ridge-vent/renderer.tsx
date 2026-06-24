@@ -26,6 +26,44 @@ import { resolveRidgeSnap } from '../shared/ridge-snap'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import { buildRidgeVentGeometry } from './geometry'
 
+function ridgeVentSegmentGeometryKey(segment: RoofSegmentNode | undefined): string {
+  if (!segment) return 'none'
+  const trim = segment.trim
+  return [
+    segment.roofType,
+    segment.width,
+    segment.depth,
+    segment.wallHeight,
+    segment.pitch,
+    segment.wallThickness,
+    segment.deckThickness,
+    segment.overhang,
+    segment.shingleThickness,
+    segment.gambrelLowerWidthRatio,
+    segment.gambrelLowerHeightRatio,
+    segment.mansardSteepWidthRatio,
+    segment.mansardSteepHeightRatio,
+    segment.dutchHipWidthRatio,
+    segment.dutchHipHeightRatio,
+    trim.left,
+    trim.right,
+    trim.front,
+    trim.back,
+    trim.frontLeft,
+    trim.frontRight,
+    trim.backLeft,
+    trim.backRight,
+    trim.frontLeftX,
+    trim.frontLeftZ,
+    trim.frontRightX,
+    trim.frontRightZ,
+    trim.backLeftX,
+    trim.backLeftZ,
+    trim.backRightX,
+    trim.backRightZ,
+  ].join('|')
+}
+
 /**
  * Ridge vent renderer. Sits along the ridge of a roof-segment — no
  * slope tilt is needed (the ridge IS the high line of the segment), so
@@ -86,8 +124,9 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
       ? (state.nodes[segmentStore.parentId as AnyNodeId] as RoofNode | undefined)
       : undefined,
   )
+  const segmentGeometryKey = ridgeVentSegmentGeometryKey(segment)
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `segmentGeometryKey` captures the segment fields that affect the generated mesh; depending on the whole segment would rebuild on unrelated node changes.
   const geometry = useMemo(
     () => buildRidgeVentGeometry(node, segment),
     [
@@ -99,7 +138,7 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
       node.rotation,
       nodePosition[0],
       nodePosition[2],
-      segment,
+      segmentGeometryKey,
     ],
   )
 

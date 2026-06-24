@@ -1,5 +1,4 @@
 import {
-  getDutchRidgeAxis,
   getRoofSegmentSurfaceY,
   getSegmentSlopeFrame,
   ROOF_SHAPE_DEFAULTS,
@@ -75,14 +74,52 @@ type FaceShapeRatios = {
   gambrelLowerWidthRatio: number
   mansardSteepWidthRatio: number
   dutchHipWidthRatio: number
-  dutchGableOverhang: number
-  dutchRidgeAxis: 'x' | 'z'
 }
 
 const SHINGLE_SURFACE_EPSILON = 0.02
 const FACE_TOLERANCE = 1e-6
+const ROOF_SURFACE_FACE_CACHE_MAX = 128
+const roofSurfaceFaceCache = new Map<string, RoofSurfaceFace[]>()
+const _downSlopeYawNormal = new THREE.Vector3()
+const _surfaceQuatRight = new THREE.Vector3()
+const _surfaceQuatForward = new THREE.Vector3()
+const _surfaceQuatMatrix = new THREE.Matrix4()
 
 function getRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
+  const key = roofSurfaceFaceCacheKey(segment)
+  const cached = roofSurfaceFaceCache.get(key)
+  if (cached) return cached
+
+  const faces = buildRoofSurfaceFaces(segment)
+  roofSurfaceFaceCache.set(key, faces)
+  if (roofSurfaceFaceCache.size > ROOF_SURFACE_FACE_CACHE_MAX) {
+    const oldestKey = roofSurfaceFaceCache.keys().next().value
+    if (oldestKey) roofSurfaceFaceCache.delete(oldestKey)
+  }
+  return faces
+}
+
+function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
+  return [
+    segment.roofType,
+    segment.width,
+    segment.depth,
+    segment.wallHeight,
+    segment.wallThickness,
+    segment.deckThickness,
+    segment.overhang,
+    segment.shingleThickness,
+    segment.pitch,
+    segment.gambrelLowerWidthRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerWidthRatio,
+    segment.gambrelLowerHeightRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerHeightRatio,
+    segment.mansardSteepWidthRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepWidthRatio,
+    segment.mansardSteepHeightRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepHeightRatio,
+    segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
+    segment.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
+  ].join('|')
+}
+
+function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
   const { roofType, width, depth, wallHeight, wallThickness, deckThickness, overhang } = segment
   const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(segment)
 
@@ -138,7 +175,6 @@ function getRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
     shinTopD,
     tanTheta,
     shingleThickness,
-    segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
   )
   const shapeRatios = {
     gambrelLowerWidthRatio:
@@ -146,8 +182,6 @@ function getRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
     mansardSteepWidthRatio:
       segment.mansardSteepWidthRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepWidthRatio,
     dutchHipWidthRatio: segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
-    dutchGableOverhang: segment.dutchGableOverhang ?? ROOF_SHAPE_DEFAULTS.dutchGableOverhang,
-    dutchRidgeAxis: getDutchRidgeAxis(segment),
   }
 
   return getRoofModuleFaces(
@@ -204,7 +238,6 @@ function getRoofFaceInsets(
   brushD: number,
   tanTheta: number,
   shingleThickness: number,
-  dutchHipWidthRatio: number,
 ): FaceInsets {
   let inset = (wh - baseY) * tanTheta
   const maxSafeInset = Math.min(brushW, brushD) / 2 - 0.005
@@ -226,7 +259,7 @@ function getRoofFaceInsets(
     iF = inset
   }
 
-  let dutchI = Math.min(width, depth) * dutchHipWidthRatio
+  let dutchI = Math.min(width, depth) * 0.25
   if (isVoid) dutchI += shingleThickness
   return { iF, iB, iL, iR, dutchI }
 }
@@ -336,60 +369,43 @@ function getRoofModuleFaces(
         ? insets.dutchI
         : Math.min(baseW, baseD) * shapeRatios.dutchHipWidthRatio
     const mh = wh + i * (tanTheta || 0)
-    const gableOverhang = Math.max(0, shapeRatios.dutchGableOverhang ?? 0)
-    const s1 = v(-w / 2 + i, mh, d / 2 - i)
-    const s2 = v(w / 2 - i, mh, d / 2 - i)
-    const s3 = v(w / 2 - i, mh, -d / 2 + i)
-    const s4 = v(-w / 2 + i, mh, -d / 2 + i)
 
-    if (shapeRatios.dutchRidgeAxis === 'x') {
+    if (w >= d) {
+      const m1 = v(-w / 2 + i, mh, d / 2 - i)
+      const m2 = v(w / 2 - i, mh, d / 2 - i)
+      const m3 = v(w / 2 - i, mh, -d / 2 + i)
+      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
       const r1 = v(-w / 2 + i, h, 0)
       const r2 = v(w / 2 - i, h, 0)
 
-      faces.push([e1, e2, s2, s1], [e2, e3, s3, s2], [e3, e4, s4, s3], [e4, e1, s1, s4])
-      faces.push([s4, s1, r1], [s2, s3, r2], [s1, s2, r2, r1], [s3, s4, r1, r2])
-      if (gableOverhang > 0) {
-        const m1 = v(-w / 2 + i - gableOverhang, mh, d / 2 - i)
-        const m2 = v(w / 2 - i + gableOverhang, mh, d / 2 - i)
-        const m3 = v(w / 2 - i + gableOverhang, mh, -d / 2 + i)
-        const m4 = v(-w / 2 + i - gableOverhang, mh, -d / 2 + i)
-        const q1 = v(-w / 2 + i - gableOverhang, h, 0)
-        const q2 = v(w / 2 - i + gableOverhang, h, 0)
-        faces.push(
-          [s4, s1, m1, m4],
-          [m1, s1, r1, q1],
-          [s4, m4, q1, r1],
-          [m4, m1, q1],
-          [s2, s3, m3, m2],
-          [s2, m2, q2, r2],
-          [m3, s3, r2, q2],
-          [m2, m3, q2],
-        )
-      }
+      faces.push(
+        [e1, e2, m2, m1],
+        [e2, e3, m3, m2],
+        [e3, e4, m4, m3],
+        [e4, e1, m1, m4],
+        [m4, m1, r1],
+        [m2, m3, r2],
+        [m1, m2, r2, r1],
+        [m3, m4, r1, r2],
+      )
     } else {
+      const m1 = v(-w / 2 + i, mh, d / 2 - i)
+      const m2 = v(w / 2 - i, mh, d / 2 - i)
+      const m3 = v(w / 2 - i, mh, -d / 2 + i)
+      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
       const r1 = v(0, h, d / 2 - i)
       const r2 = v(0, h, -d / 2 + i)
 
-      faces.push([e1, e2, s2, s1], [e2, e3, s3, s2], [e3, e4, s4, s3], [e4, e1, s1, s4])
-      faces.push([s1, s2, r1], [s3, s4, r2], [s2, s3, r2, r1], [s4, s1, r1, r2])
-      if (gableOverhang > 0) {
-        const m1 = v(-w / 2 + i, mh, d / 2 - i + gableOverhang)
-        const m2 = v(w / 2 - i, mh, d / 2 - i + gableOverhang)
-        const m3 = v(w / 2 - i, mh, -d / 2 + i - gableOverhang)
-        const m4 = v(-w / 2 + i, mh, -d / 2 + i - gableOverhang)
-        const q1 = v(0, h, d / 2 - i + gableOverhang)
-        const q2 = v(0, h, -d / 2 + i - gableOverhang)
-        faces.push(
-          [s1, s2, m2, m1],
-          [s1, m1, q1, r1],
-          [m2, s2, r1, q1],
-          [m1, m2, q1],
-          [s3, s4, m4, m3],
-          [m4, s4, r2, q2],
-          [s3, m3, q2, r2],
-          [m3, m4, q2],
-        )
-      }
+      faces.push(
+        [e1, e2, m2, m1],
+        [e2, e3, m3, m2],
+        [e3, e4, m4, m3],
+        [e4, e1, m1, m4],
+        [m1, m2, r1],
+        [m3, m4, r2],
+        [m2, m3, r2, r1],
+        [m4, m1, r1, r2],
+      )
     }
   }
 
@@ -562,15 +578,20 @@ function lineInterval(
 // down-slope direction (cos θ horizontal + −sin θ vertical). Crossing
 // them gives the outward normal ∝ (sin θ · dx, cos θ, sin θ · dz),
 // equivalently (dx · tan θ, 1, dz · tan θ) un-normalised.
-function buildSlopeNormal(dx: number, dz: number, tan: number): THREE.Vector3 {
-  return new THREE.Vector3(dx * tan, 1, dz * tan).normalize()
+function buildSlopeNormal(dx: number, dz: number, tan: number, out: THREE.Vector3): THREE.Vector3 {
+  return out.set(dx * tan, 1, dz * tan).normalize()
 }
 
-export function getAnalyticalNormal(lx: number, lz: number, seg: RoofSegmentNode): THREE.Vector3 {
+export function getAnalyticalNormal(
+  lx: number,
+  lz: number,
+  seg: RoofSegmentNode,
+  out = new THREE.Vector3(),
+): THREE.Vector3 {
   const { roofType, depth, width } = seg
   const slope = getSegmentSlopeFrame(seg)
   if (slope.activeRh === 0 || slope.tanTheta === 0) {
-    return new THREE.Vector3(0, 1, 0)
+    return out.set(0, 1, 0)
   }
   const primaryTan = slope.tanTheta
   const halfW = width / 2
@@ -592,15 +613,15 @@ export function getAnalyticalNormal(lx: number, lz: number, seg: RoofSegmentNode
         const upperRise = slope.activeRh * (1 - lowerHeightRatio)
         const upperRun = mz
         const upperTan = upperRun > 0 ? upperRise / upperRun : 0
-        return buildSlopeNormal(0, lz >= 0 ? 1 : -1, upperTan)
+        return buildSlopeNormal(0, lz >= 0 ? 1 : -1, upperTan, out)
       }
     }
-    return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan)
+    return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan, out)
   }
 
   // Single slope falling toward +Z (ridge at -Z, eave at +Z).
   if (roofType === 'shed') {
-    return buildSlopeNormal(0, 1, primaryTan)
+    return buildSlopeNormal(0, 1, primaryTan, out)
   }
 
   // 4-sided slopes: the dominant axis chooses which face the point sits
@@ -611,8 +632,8 @@ export function getAnalyticalNormal(lx: number, lz: number, seg: RoofSegmentNode
   if (roofType === 'hip') {
     const fx = halfW > 0 ? Math.abs(lx) / halfW : 0
     const fz = halfD > 0 ? Math.abs(lz) / halfD : 0
-    if (fz >= fx) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan)
-    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, primaryTan)
+    if (fz >= fx) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan, out)
+    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, primaryTan, out)
   }
 
   if (roofType === 'mansard') {
@@ -632,21 +653,18 @@ export function getAnalyticalNormal(lx: number, lz: number, seg: RoofSegmentNode
       const topRun = Math.max(0, Math.min(halfW, halfD) - inset)
       tan = topRun > 0 ? topRise / topRun : 0
     }
-    if (onZ) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, tan)
-    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, tan)
+    if (onZ) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, tan, out)
+    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, tan, out)
   }
 
   if (roofType === 'dutch') {
-    // Hip on the short-axis ends, gable on the long-axis sides. Both
-    // share the primary pitch on their primary (eave-band) face, so the
-    // approximation collapses to "pick the dominant axis."
     const fx = halfW > 0 ? Math.abs(lx) / halfW : 0
     const fz = halfD > 0 ? Math.abs(lz) / halfD : 0
-    if (fz >= fx) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan)
-    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, primaryTan)
+    if (fz >= fx) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan, out)
+    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, primaryTan, out)
   }
 
-  return new THREE.Vector3(0, 1, 0)
+  return out.set(0, 1, 0)
 }
 
 // ─── Quaternion helper ───────────────────────────────────────────────
@@ -663,8 +681,7 @@ export function surfaceQuatFromNormal(normal: THREE.Vector3, out: THREE.Quaterni
   // depending on which slope they sit on, and registry chevrons end up
   // anchored to the wrong edge. Projecting +X keeps the basis stable
   // across slope-flips that share the same X axis.
-  const wx = new THREE.Vector3(1, 0, 0)
-  const right = wx.sub(normal.clone().multiplyScalar(new THREE.Vector3(1, 0, 0).dot(normal)))
+  const right = _surfaceQuatRight.set(1, 0, 0).addScaledVector(normal, -normal.x)
   if (right.lengthSq() < 1e-6) {
     // Degenerate: normal is parallel to ±X. Fall back to +Z so the basis
     // is still well-defined; this is the wall-like edge case (vertical
@@ -673,9 +690,9 @@ export function surfaceQuatFromNormal(normal: THREE.Vector3, out: THREE.Quaterni
   } else {
     right.normalize()
   }
-  const forward = new THREE.Vector3().crossVectors(right, normal).normalize()
-  const m = new THREE.Matrix4().makeBasis(right, normal, forward)
-  return out.setFromRotationMatrix(m)
+  _surfaceQuatForward.crossVectors(right, normal).normalize()
+  _surfaceQuatMatrix.makeBasis(right, normal, _surfaceQuatForward)
+  return out.setFromRotationMatrix(_surfaceQuatMatrix)
 }
 
 // Yaw (about the surface normal, composed AFTER `surfaceQuatFromNormal`)
@@ -685,7 +702,7 @@ export function surfaceQuatFromNormal(normal: THREE.Vector3, out: THREE.Quaterni
 // → 0, −Z → π, +X → +π/2, −X → −π/2. Kept next to `surfaceQuatFromNormal`
 // so the two stay in lockstep — the formula is only valid for its basis.
 export function getDownSlopeYaw(lx: number, lz: number, seg: RoofSegmentNode): number {
-  const n = getAnalyticalNormal(lx, lz, seg)
+  const n = getAnalyticalNormal(lx, lz, seg, _downSlopeYawNormal)
   if (n.x === 0 && n.z === 0) return 0
   return Math.atan2(n.x * n.y, n.z)
 }

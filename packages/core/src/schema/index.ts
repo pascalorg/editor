@@ -108,7 +108,6 @@ export {
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export type {
-  DutchRidgeAxis,
   RoofSegmentSurfaceMaterialRole,
   RoofSegmentSurfaceMaterialSpec,
   RoofSegmentVisibleTopBounds,
@@ -116,7 +115,6 @@ export type {
 } from './nodes/roof-segment'
 export {
   getActiveRoofHeight,
-  getDutchRidgeAxis,
   getEffectiveSegmentSurfaceMaterial,
   getPitchFromActiveRoofHeight,
   getRoofSegmentSurfaceY,

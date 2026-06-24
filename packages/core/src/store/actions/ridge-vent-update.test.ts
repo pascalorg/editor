@@ -32,10 +32,9 @@ describe('roof segment default ridge vents', () => {
     const segment = RoofSegmentNode.parse({
       id: 'rseg_test' as never,
       parentId: roof.id,
-      roofType: 'dutch',
+      roofType: 'gable',
       width: 8,
       depth: 6,
-      dutchRidgeAxis: 'x',
     })
     const defaults = createDefaultRidgeVentsForSegment(segment)
     const custom = RidgeVentNode.parse({
@@ -90,5 +89,53 @@ describe('roof segment default ridge vents', () => {
         return node?.type === 'ridge-vent' && node.length > (defaults[0]?.length ?? 0)
       }),
     ).toBe(true)
+  })
+
+  test('does not regenerate default ridge vents when only trim changes', () => {
+    const roof = RoofNode.parse({ id: 'roof_test' as never, children: [] })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_test' as never,
+      parentId: roof.id,
+      roofType: 'gable',
+      width: 8,
+      depth: 6,
+    })
+    const defaults = createDefaultRidgeVentsForSegment(segment)
+
+    useScene.getState().setScene(
+      {
+        [roof.id]: { ...roof, children: [segment.id] } as AnyNode,
+        [segment.id]: {
+          ...segment,
+          children: defaults.map((vent) => vent.id),
+        } as AnyNode,
+        ...Object.fromEntries(
+          defaults.map((vent) => [
+            vent.id,
+            { ...vent, parentId: segment.id, roofSegmentId: segment.id } as AnyNode,
+          ]),
+        ),
+      } as Record<AnyNodeId, AnyNode>,
+      [roof.id as AnyNodeId],
+    )
+
+    const originalDefaultId = defaults[0]?.id as AnyNodeId
+    useScene.getState().updateNode(
+      segment.id as AnyNodeId,
+      {
+        trim: { ...segment.trim, left: 2, frontLeftX: 2, frontLeftZ: 3 },
+      } as Partial<AnyNode>,
+    )
+
+    const nextSegment = useScene.getState().nodes[segment.id as AnyNodeId] as
+      | RoofSegmentNode
+      | undefined
+
+    expect(nextSegment?.children).toEqual(defaults.map((vent) => vent.id))
+    expect(useScene.getState().nodes[originalDefaultId]).toMatchObject({
+      id: originalDefaultId,
+      length: defaults[0]?.length,
+      position: defaults[0]?.position,
+    })
   })
 })

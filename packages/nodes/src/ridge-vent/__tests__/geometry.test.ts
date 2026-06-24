@@ -127,6 +127,35 @@ describe('buildRidgeVentGeometry', () => {
     expect(maxX).toBeCloseTo(3)
   })
 
+  test('clips rendered ridge vents against diagonal trim planes', () => {
+    const segment = RoofSegmentNode.parse({
+      roofType: 'gable',
+      width: 8,
+      depth: 6,
+      wallHeight: 0.5,
+      pitch: 45,
+      overhang: 0,
+      wallThickness: 0,
+      shingleThickness: 0,
+      trim: { frontLeftX: 2, frontLeftZ: 4 },
+    })
+    const vent = RidgeVentNode.parse({
+      length: 8,
+      width: 0.3,
+      position: [0, 0, 0],
+      rotation: 0,
+      endCaps: false,
+    })
+
+    const geo = buildRidgeVentGeometry(vent, segment)
+    const { minX, maxX } = xBounds(geo)
+
+    expect(vent.length).toBe(8)
+    expect(vent.position[0]).toBe(0)
+    expect(minX).toBeCloseTo(-3.575, 3)
+    expect(maxX).toBeCloseTo(4)
+  })
+
   test('seats the underside onto rendered roof top faces when a segment is provided', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'gable',

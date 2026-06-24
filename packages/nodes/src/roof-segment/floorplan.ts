@@ -5,7 +5,6 @@ import type {
   RoofNode,
   RoofSegmentNode,
 } from '@pascal-app/core'
-import { getDutchRidgeAxis } from '@pascal-app/core'
 
 /**
  * Stage C floor-plan builder for roof segment. Renders the segment as a
@@ -296,7 +295,7 @@ export function getRoofSegmentPlanLinework(node: RoofSegmentNode): {
         const w4: PlanPt = [-hw + i, -hd + i]
         hips.push([e1, w1], [e2, w2], [e3, w3], [e4, w4])
         breaks.push([w1, w2], [w2, w3], [w3, w4], [w4, w1])
-        if (getDutchRidgeAxis(node) === 'x') {
+        if (node.width >= node.depth) {
           const r1: PlanPt = [-hw + i, 0]
           const r2: PlanPt = [hw - i, 0]
           ridges.push([r1, r2])

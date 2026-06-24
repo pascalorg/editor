@@ -1,7 +1,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  getDutchRidgeAxis,
   getEffectiveNode,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
@@ -158,25 +157,19 @@ export const RoofSystem = () => {
       const node = nodes[id]
       if (!node) return
 
-      // Roof accessories (chimney, skylight, solar-panel, dormer,
-      // ridge-vent, box-vent — anything declaring
-      // `capabilities.roofAccessory` on its NodeDefinition) cascade
-      // their dirty mark to the host segment's parent roof so the
-      // merged shell re-CSGs with the new cut. Without this, moving /
-      // resizing an accessory leaves the merged roof showing the
-      // previous cut shape (stale CSG) once the user exits segment
-      // edit mode. Registry-driven so the viewer stays kind-agnostic.
+      // Cutting roof accessories cascade their dirty mark to the host
+      // segment's parent roof so the merged shell re-CSGs with the new
+      // cut. Non-cutting accessories (vents, panels, gutters, etc.) sit on
+      // top of the shell and should not force a full roof merge.
       const def = nodeRegistry.get(node.type)
       // Kinds with `dirtyHandledByOwnSystem` (door / window) reach the roof
       // through their own geometry system's parentId cascade instead —
       // their dirty marks belong to that system, not to this loop.
-      if (
-        def?.capabilities?.roofAccessory &&
-        !def.capabilities.roofAccessory.dirtyHandledByOwnSystem
-      ) {
+      const roofAccessory = def?.capabilities?.roofAccessory
+      if (roofAccessory && !roofAccessory.dirtyHandledByOwnSystem) {
         const segId = (node as { roofSegmentId?: string }).roofSegmentId
         const seg = segId ? (nodes[segId as AnyNodeId] as RoofSegmentNode | undefined) : undefined
-        if (seg?.parentId) {
+        if (roofAccessory.buildCut && seg?.parentId) {
           pendingRoofUpdates.add(seg.parentId as AnyNodeId)
         }
         clearDirty(id as AnyNodeId)
@@ -712,41 +705,52 @@ function buildTrimCutBrush(
   return cut
 }
 
-function buildDiagonalTrimCutBrush(
-  points: readonly [[number, number], [number, number], [number, number]],
-  minY: number,
-  maxY: number,
-): Brush | null {
-  const [a, b, c] = points
-  const height = maxY - minY
-  if (!(height > 0)) return null
+type TrimPlanPoint = readonly [number, number]
 
-  const positions = new Float32Array([
-    a[0],
-    minY,
-    a[1],
-    b[0],
-    minY,
-    b[1],
-    c[0],
-    minY,
-    c[1],
-    a[0],
-    maxY,
-    a[1],
-    b[0],
-    maxY,
-    b[1],
-    c[0],
-    maxY,
-    c[1],
-  ])
-  const indices = [0, 2, 1, 3, 4, 5, 0, 1, 4, 0, 4, 3, 1, 2, 5, 1, 5, 4, 2, 0, 3, 2, 3, 5]
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  geometry.setIndex(indices)
-  geometry.addGroup(0, indices.length, 0)
-  geometry.computeVertexNormals()
+function buildDiagonalTrimCutBrush(
+  bounds: {
+    minX: number
+    maxX: number
+    minZ: number
+    maxZ: number
+    minY: number
+    maxY: number
+  },
+  lineA: TrimPlanPoint,
+  lineB: TrimPlanPoint,
+  outsidePoint: TrimPlanPoint,
+): Brush | null {
+  const dx = lineB[0] - lineA[0]
+  const dz = lineB[1] - lineA[1]
+  const lineLength = Math.hypot(dx, dz)
+  const height = bounds.maxY - bounds.minY
+  if (!(lineLength > 0 && height > 0)) return null
+
+  const ux = dx / lineLength
+  const uz = dz / lineLength
+  let nx = -uz
+  let nz = ux
+  const midX = (lineA[0] + lineB[0]) / 2
+  const midZ = (lineA[1] + lineB[1]) / 2
+  const toOutsideX = outsidePoint[0] - midX
+  const toOutsideZ = outsidePoint[1] - midZ
+  let normalFlipped = false
+  if (nx * toOutsideX + nz * toOutsideZ < 0) {
+    nx *= -1
+    nz *= -1
+    normalFlipped = true
+  }
+
+  const boundsDiagonal = Math.hypot(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ)
+  const cutterLength = Math.max(lineLength, boundsDiagonal) * 2
+  const cutterDepth = boundsDiagonal * 2
+  const centerX = midX + nx * (cutterDepth / 2 - TRIM_CUT_EPSILON)
+  const centerZ = midZ + nz * (cutterDepth / 2 - TRIM_CUT_EPSILON)
+  const yaw = Math.atan2(-uz, ux) + (normalFlipped ? Math.PI : 0)
+
+  const geometry = new THREE.BoxGeometry(cutterLength, height, cutterDepth)
+  geometry.rotateY(yaw)
+  geometry.translate(centerX, (bounds.minY + bounds.maxY) / 2, centerZ)
   ensureRenderableGeometryAttributes(geometry)
   computeGeometryBoundsTree(geometry)
 
@@ -827,49 +831,37 @@ function subtractSegmentTrimCuts(brushes: RoofSegmentBrushSet, segment: RoofSegm
 
   if (trim.frontLeftX > 0 && trim.frontLeftZ > 0) {
     const cut = buildDiagonalTrimCutBrush(
-      [
-        [leftX - extra, frontZ + extra],
-        [leftX + trim.frontLeftX + TRIM_CUT_EPSILON, frontZ],
-        [leftX, frontZ - trim.frontLeftZ - TRIM_CUT_EPSILON],
-      ],
-      minY,
-      maxY,
+      { minX, maxX, minZ, maxZ, minY, maxY },
+      [leftX + trim.frontLeftX + TRIM_CUT_EPSILON, frontZ],
+      [leftX, frontZ - trim.frontLeftZ - TRIM_CUT_EPSILON],
+      [minX, maxZ],
     )
     if (cut) cuts.push(cut)
   }
   if (trim.frontRightX > 0 && trim.frontRightZ > 0) {
     const cut = buildDiagonalTrimCutBrush(
-      [
-        [rightX + extra, frontZ + extra],
-        [rightX, frontZ - trim.frontRightZ - TRIM_CUT_EPSILON],
-        [rightX - trim.frontRightX - TRIM_CUT_EPSILON, frontZ],
-      ],
-      minY,
-      maxY,
+      { minX, maxX, minZ, maxZ, minY, maxY },
+      [rightX, frontZ - trim.frontRightZ - TRIM_CUT_EPSILON],
+      [rightX - trim.frontRightX - TRIM_CUT_EPSILON, frontZ],
+      [maxX, maxZ],
     )
     if (cut) cuts.push(cut)
   }
   if (trim.backLeftX > 0 && trim.backLeftZ > 0) {
     const cut = buildDiagonalTrimCutBrush(
-      [
-        [leftX - extra, backZ - extra],
-        [leftX, backZ + trim.backLeftZ + TRIM_CUT_EPSILON],
-        [leftX + trim.backLeftX + TRIM_CUT_EPSILON, backZ],
-      ],
-      minY,
-      maxY,
+      { minX, maxX, minZ, maxZ, minY, maxY },
+      [leftX, backZ + trim.backLeftZ + TRIM_CUT_EPSILON],
+      [leftX + trim.backLeftX + TRIM_CUT_EPSILON, backZ],
+      [minX, minZ],
     )
     if (cut) cuts.push(cut)
   }
   if (trim.backRightX > 0 && trim.backRightZ > 0) {
     const cut = buildDiagonalTrimCutBrush(
-      [
-        [rightX + extra, backZ - extra],
-        [rightX - trim.backRightX - TRIM_CUT_EPSILON, backZ],
-        [rightX, backZ + trim.backRightZ + TRIM_CUT_EPSILON],
-      ],
-      minY,
-      maxY,
+      { minX, maxX, minZ, maxZ, minY, maxY },
+      [rightX - trim.backRightX - TRIM_CUT_EPSILON, backZ],
+      [rightX, backZ + trim.backRightZ + TRIM_CUT_EPSILON],
+      [maxX, minZ],
     )
     if (cut) cuts.push(cut)
   }
@@ -906,12 +898,10 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     gambrelLowerWidthRatio: node.gambrelLowerWidthRatio,
     mansardSteepWidthRatio: node.mansardSteepWidthRatio,
     dutchHipWidthRatio: node.dutchHipWidthRatio,
-    dutchGableOverhang: 0,
-    dutchRidgeAxis: getDutchRidgeAxis(node),
   }
 
   const verticalRt = activeRh > 0 ? deckThickness / cosTheta : deckThickness
-  const baseI = Math.min(width, depth) * node.dutchHipWidthRatio
+  const baseI = Math.min(width, depth) * 0.25
 
   const getVol = (
     wExt: number,
@@ -919,7 +909,6 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     baseY: number,
     matIndex: number,
     isVoid: boolean,
-    dutchGableOverhang = 0,
   ) => {
     const wV = Math.max(0.01, width + 2 * wExt)
     const dV = Math.max(0.01, depth + 2 * wExt)
@@ -951,7 +940,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
       width,
       depth,
       tanTheta,
-      { ...shapeRatios, dutchGableOverhang },
+      shapeRatios,
     )
     return createGeometryFromFaces(faces, matIndex)
   }
@@ -962,8 +951,8 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
   const horizontalOverhang = overhang * cosTheta
   const deckExt = wallThickness / 2 + horizontalOverhang
 
-  const deckTopGeo = getVol(deckExt, verticalRt, 0, 1, false, node.dutchGableOverhang ?? 0)
-  const deckBotGeo = getVol(deckExt, 0, -5, 0, true, node.dutchGableOverhang ?? 0)
+  const deckTopGeo = getVol(deckExt, verticalRt, 0, 1, false)
+  const deckBotGeo = getVol(deckExt, 0, -5, 0, true)
 
   const stSin = shingleThickness * sinTheta
   const stCos = shingleThickness * cosTheta
@@ -1041,11 +1030,6 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
 
   const insetsBot = getInsets(shinBotWh, botBaseY, true, shinBotW, shinBotD)
   const insetsTop = getInsets(shinTopWh, topBaseY, false, shinTopW, shinTopD)
-  const topShapeRatios: ShapeWidthRatios = {
-    ...shapeRatios,
-    dutchGableOverhang: node.dutchGableOverhang ?? 0,
-  }
-
   const botFaces = getModuleFaces(
     roofType,
     shinBotW,
@@ -1057,7 +1041,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     width,
     depth,
     tanTheta,
-    topShapeRatios,
+    shapeRatios,
   )
   const topFaces = getModuleFaces(
     roofType,
@@ -1070,7 +1054,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     width,
     depth,
     tanTheta,
-    topShapeRatios,
+    shapeRatios,
   )
 
   const shinBotGeo = createGeometryFromFaces(botFaces, 1)
@@ -1145,7 +1129,12 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
       shinTopBrush.geometry.dispose()
       shinBotBrush.geometry.dispose()
 
-      const brushes = { deckSlab, shinSlab, wallBrush, innerBrush }
+      const brushes = {
+        deckSlab,
+        shinSlab,
+        wallBrush,
+        innerBrush,
+      }
       if (hasSegmentTrim(node)) {
         subtractSegmentTrimCuts(brushes, node)
       }
@@ -1367,7 +1356,7 @@ function isRakeFace(
 
 function getRakeAxis(node: RoofSegmentNode): 'x' | 'z' | null {
   if (node.roofType === 'gable' || node.roofType === 'gambrel') return 'x'
-  if (node.roofType === 'dutch') return getDutchRidgeAxis(node)
+  if (node.roofType === 'dutch') return node.width >= node.depth ? 'x' : 'z'
   return null
 }
 
@@ -1375,8 +1364,6 @@ type ShapeWidthRatios = {
   gambrelLowerWidthRatio: number
   mansardSteepWidthRatio: number
   dutchHipWidthRatio: number
-  dutchGableOverhang: number
-  dutchRidgeAxis: 'x' | 'z'
 }
 
 /**
@@ -1492,60 +1479,43 @@ function getModuleFaces(
         ? insets.dutchI
         : Math.min(baseW, baseD) * shapeRatios.dutchHipWidthRatio
     const mh = wh + i * (tanTheta || 0)
-    const gableOverhang = Math.max(0, shapeRatios.dutchGableOverhang ?? 0)
-    const s1 = v(-w / 2 + i, mh, d / 2 - i)
-    const s2 = v(w / 2 - i, mh, d / 2 - i)
-    const s3 = v(w / 2 - i, mh, -d / 2 + i)
-    const s4 = v(-w / 2 + i, mh, -d / 2 + i)
 
-    if (shapeRatios.dutchRidgeAxis === 'x') {
+    if (w >= d) {
+      const m1 = v(-w / 2 + i, mh, d / 2 - i)
+      const m2 = v(w / 2 - i, mh, d / 2 - i)
+      const m3 = v(w / 2 - i, mh, -d / 2 + i)
+      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
       const r1 = v(-w / 2 + i, h, 0)
       const r2 = v(w / 2 - i, h, 0)
 
-      faces.push([e1, e2, s2, s1], [e2, e3, s3, s2], [e3, e4, s4, s3], [e4, e1, s1, s4])
-      faces.push([s4, s1, r1], [s2, s3, r2], [s1, s2, r2, r1], [s3, s4, r1, r2])
-      if (gableOverhang > 0) {
-        const m1 = v(-w / 2 + i - gableOverhang, mh, d / 2 - i)
-        const m2 = v(w / 2 - i + gableOverhang, mh, d / 2 - i)
-        const m3 = v(w / 2 - i + gableOverhang, mh, -d / 2 + i)
-        const m4 = v(-w / 2 + i - gableOverhang, mh, -d / 2 + i)
-        const q1 = v(-w / 2 + i - gableOverhang, h, 0)
-        const q2 = v(w / 2 - i + gableOverhang, h, 0)
-        faces.push(
-          [s4, s1, m1, m4],
-          [m1, s1, r1, q1],
-          [s4, m4, q1, r1],
-          [m4, m1, q1],
-          [s2, s3, m3, m2],
-          [s2, m2, q2, r2],
-          [m3, s3, r2, q2],
-          [m2, m3, q2],
-        )
-      }
+      faces.push(
+        [e1, e2, m2, m1],
+        [e2, e3, m3, m2],
+        [e3, e4, m4, m3],
+        [e4, e1, m1, m4],
+        [m4, m1, r1],
+        [m2, m3, r2],
+        [m1, m2, r2, r1],
+        [m3, m4, r1, r2],
+      )
     } else {
+      const m1 = v(-w / 2 + i, mh, d / 2 - i)
+      const m2 = v(w / 2 - i, mh, d / 2 - i)
+      const m3 = v(w / 2 - i, mh, -d / 2 + i)
+      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
       const r1 = v(0, h, d / 2 - i)
       const r2 = v(0, h, -d / 2 + i)
 
-      faces.push([e1, e2, s2, s1], [e2, e3, s3, s2], [e3, e4, s4, s3], [e4, e1, s1, s4])
-      faces.push([s1, s2, r1], [s3, s4, r2], [s2, s3, r2, r1], [s4, s1, r1, r2])
-      if (gableOverhang > 0) {
-        const m1 = v(-w / 2 + i, mh, d / 2 - i + gableOverhang)
-        const m2 = v(w / 2 - i, mh, d / 2 - i + gableOverhang)
-        const m3 = v(w / 2 - i, mh, -d / 2 + i - gableOverhang)
-        const m4 = v(-w / 2 + i, mh, -d / 2 + i - gableOverhang)
-        const q1 = v(0, h, d / 2 - i + gableOverhang)
-        const q2 = v(0, h, -d / 2 + i - gableOverhang)
-        faces.push(
-          [s1, s2, m2, m1],
-          [s1, m1, q1, r1],
-          [m2, s2, r1, q1],
-          [m1, m2, q1],
-          [s3, s4, m4, m3],
-          [m4, s4, r2, q2],
-          [s3, m3, q2, r2],
-          [m3, m4, q2],
-        )
-      }
+      faces.push(
+        [e1, e2, m2, m1],
+        [e2, e3, m3, m2],
+        [e3, e4, m4, m3],
+        [e4, e1, m1, m4],
+        [m1, m2, r1],
+        [m3, m4, r2],
+        [m2, m3, r2, r1],
+        [m4, m1, r1, r2],
+      )
     }
   }
 
@@ -1774,7 +1744,7 @@ export function getRoofOuterSurfaceFrameAtPoint(
 
   const topBaseY = 0
 
-  const baseI = Math.min(width, depth) * segment.dutchHipWidthRatio
+  const baseI = Math.min(width, depth) * 0.25
   const getInsets = (
     _wh: number,
     _baseY: number,
@@ -1818,8 +1788,6 @@ export function getRoofOuterSurfaceFrameAtPoint(
     gambrelLowerWidthRatio: segment.gambrelLowerWidthRatio,
     mansardSteepWidthRatio: segment.mansardSteepWidthRatio,
     dutchHipWidthRatio: segment.dutchHipWidthRatio,
-    dutchGableOverhang: segment.dutchGableOverhang ?? 0,
-    dutchRidgeAxis: getDutchRidgeAxis(segment),
   }
   const topFaces = getModuleFaces(
     roofType,

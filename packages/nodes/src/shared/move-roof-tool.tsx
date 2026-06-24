@@ -39,6 +39,22 @@ import * as THREE from 'three'
 /** Figma-style alignment-snap threshold (meters), matching the other tools. */
 const ALIGNMENT_THRESHOLD_M = 0.08
 
+function disableRaycastDuringDrag(root: THREE.Object3D | undefined): () => void {
+  if (!root) return () => {}
+
+  const originals: Array<[THREE.Object3D, THREE.Object3D['raycast']]> = []
+  root.traverse((child) => {
+    originals.push([child, child.raycast])
+    child.raycast = () => {}
+  })
+
+  return () => {
+    for (const [child, raycast] of originals) {
+      child.raycast = raycast
+    }
+  }
+}
+
 export const MoveRoofTool: React.FC<{
   node: RoofNode | RoofSegmentNode | StairNode | StairSegmentNode
 }> = ({ node: movingNode }) => {
@@ -123,6 +139,8 @@ export const MoveRoofTool: React.FC<{
       movingNode.position[1],
       movingNode.position[2],
     ]
+    const movingObject = sceneRegistry.nodes.get(movingNode.id)
+    const restoreRaycasts = disableRaycastDuringDrag(movingObject)
 
     // For roof-segment moves: the selection was cleared before entering move mode,
     // so isSelected=false on the parent roof, hiding individual segment meshes and
@@ -464,6 +482,8 @@ export const MoveRoofTool: React.FC<{
     window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
+      restoreRaycasts()
+
       // Restore segment wrapper visibility (React will re-sync on next render)
       if (segmentWrapperGroup) segmentWrapperGroup.visible = false
       if (mergedRoofMesh) mergedRoofMesh.visible = true

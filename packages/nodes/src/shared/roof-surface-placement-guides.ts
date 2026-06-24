@@ -29,6 +29,11 @@ const EQUAL_SPACING_THRESHOLD_M = 0.03
 const tmp = new THREE.Vector3()
 const tmpA = new THREE.Vector3()
 const tmpB = new THREE.Vector3()
+const ROOF_SURFACE_FOOTPRINT_CACHE_MAX = 160
+const roofSurfaceFootprintCache = new Map<
+  string,
+  Pick<RoofSurfaceGuideFootprint, 'width' | 'depth'> | null
+>()
 
 export type RoofSurfaceGuideMode = 'side-center' | 'linear-edge'
 
@@ -80,7 +85,7 @@ export function roofSurfaceFootprintFromNode(
   options?: { segment?: RoofSegmentNode },
 ): RoofSurfaceGuideFootprint {
   const n = node as Record<string, unknown>
-  const geometryBounds = geometryFootprintForNode(n, options?.segment)
+  const geometryBounds = cachedGeometryFootprintForNode(n, options?.segment)
   if (geometryBounds) {
     return {
       ...geometryBounds,
@@ -125,6 +130,43 @@ export function roofSurfaceFootprintFromNode(
     depth,
     rotation: numberField(n.rotation, 0),
   }
+}
+
+function cachedGeometryFootprintForNode(
+  node: Record<string, unknown>,
+  segment: RoofSegmentNode | undefined,
+): Pick<RoofSurfaceGuideFootprint, 'width' | 'depth'> | null {
+  const key = geometryFootprintCacheKey(node, segment)
+  if (roofSurfaceFootprintCache.has(key)) {
+    const cached = roofSurfaceFootprintCache.get(key)
+    return cached ? { ...cached } : null
+  }
+
+  const footprint = geometryFootprintForNode(node, segment)
+  roofSurfaceFootprintCache.set(key, footprint ? { ...footprint } : null)
+  if (roofSurfaceFootprintCache.size > ROOF_SURFACE_FOOTPRINT_CACHE_MAX) {
+    const oldestKey = roofSurfaceFootprintCache.keys().next().value
+    if (oldestKey) roofSurfaceFootprintCache.delete(oldestKey)
+  }
+  return footprint
+}
+
+function geometryFootprintCacheKey(
+  node: Record<string, unknown>,
+  segment: RoofSegmentNode | undefined,
+): string {
+  const type = typeof node.type === 'string' ? node.type : 'unknown'
+  const segmentKey = type === 'chimney' && segment ? `|segment:${stableCacheKey(segment)}` : ''
+  return `${type}|node:${stableCacheKey(node)}${segmentKey}`
+}
+
+function stableCacheKey(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map((item) => stableCacheKey(item)).join(',')}]`
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, entryValue]) => typeof entryValue !== 'function' && entryValue !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b))
+  return `{${entries.map(([key, entryValue]) => `${JSON.stringify(key)}:${stableCacheKey(entryValue)}`).join(',')}}`
 }
 
 function geometryFootprintForNode(

@@ -1,5 +1,5 @@
 import {
-  getRoofSegmentVisibleTopBounds,
+  normalizeRoofSegmentTrim,
   type RidgeVentNode,
   type RoofSegmentNode,
 } from '@pascal-app/core'
@@ -12,6 +12,19 @@ const DEFAULT_RIDGE_VENT_LENGTH = 2
 const DEFAULT_RIDGE_VENT_WIDTH = 0.3
 const DEFAULT_RIDGE_VENT_HEIGHT = 0.1
 type ProfilePoint = [z: number, capY: number]
+type RidgeVentGeometryVertex = {
+  x: number
+  y: number
+  z: number
+  nx: number
+  ny: number
+  nz: number
+  u: number
+  v: number
+}
+type SegmentTrimClipPlane = {
+  signedDistance: (segmentX: number, segmentZ: number) => number
+}
 
 /**
  * Pure builder for the ridge vent mesh. Each style is a peaked **band** of
@@ -49,10 +62,6 @@ export function buildRidgeVentGeometry(
   const rotationY = finiteNumber(node.rotation, 0)
   const sinR = Math.sin(rotationY)
   const cosR = Math.cos(rotationY)
-  const clipRange = getVisibleLengthRange(node, segment, halfLen, cosR, sinR)
-  if (!clipRange) return buildBufferGeometry([], [], [])
-  const [startX, endX] = clipRange
-
   const surfaceYAt = (x: number, z: number) => {
     if (!segment) return 0
     return getRoofTopSurfaceY(centerX + x * cosR + z * sinR, centerZ - x * sinR + z * cosR, segment)
@@ -71,13 +80,18 @@ export function buildRidgeVentGeometry(
   const normals: number[] = []
   const uvs: number[] = []
 
-  buildBand(positions, normals, uvs, top, seatYAt, startX, endX, node.endCaps)
+  buildBand(positions, normals, uvs, top, seatYAt, -halfLen, halfLen, node.endCaps)
 
   if (node.style === 'shingled') {
-    addShingledTabs(positions, normals, uvs, startX, endX, top, h, seatYAt)
+    addShingledTabs(positions, normals, uvs, -halfLen, halfLen, top, h, seatYAt)
   }
 
-  return buildBufferGeometry(positions, normals, uvs)
+  const geometry = buildBufferGeometry(positions, normals, uvs)
+  if (!segment) return geometry
+
+  const clipped = clipRidgeVentGeometryToSegmentTrim(geometry, node, segment)
+  if (clipped !== geometry) geometry.dispose()
+  return clipped
 }
 
 function finiteNumber(value: unknown, fallback: number): number {
@@ -86,40 +100,6 @@ function finiteNumber(value: unknown, fallback: number): number {
 
 function finitePositive(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
-}
-
-function getVisibleLengthRange(
-  node: RidgeVentNode,
-  segment: RoofSegmentNode | undefined,
-  halfLen: number,
-  cosR: number,
-  sinR: number,
-): [number, number] | null {
-  if (!segment) return [-halfLen, halfLen]
-
-  const bounds = getRoofSegmentVisibleTopBounds(segment)
-  let start = -halfLen
-  let end = halfLen
-  const centerX = finiteNumber(node.position?.[0], 0)
-  const centerZ = finiteNumber(node.position?.[2], 0)
-  const dirX = cosR
-  const dirZ = -sinR
-
-  const clipAxis = (center: number, dir: number, min: number, max: number): boolean => {
-    if (Math.abs(dir) < 1e-6) return center >= min && center <= max
-
-    const a = (min - center) / dir
-    const b = (max - center) / dir
-    const low = Math.min(a, b)
-    const high = Math.max(a, b)
-    start = Math.max(start, low)
-    end = Math.min(end, high)
-    return end - start > 0.01
-  }
-
-  if (!clipAxis(centerX, dirX, bounds.minX, bounds.maxX)) return null
-  if (!clipAxis(centerZ, dirZ, bounds.minZ, bounds.maxZ)) return null
-  return end - start > 0.01 ? [start, end] : null
 }
 
 // ─── Top profiles (open polylines eave → peak → eave, in [z, y]) ─────────
@@ -331,6 +311,218 @@ function buildBufferGeometry(
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
   geo.computeBoundingSphere()
   return geo
+}
+
+function clipRidgeVentGeometryToSegmentTrim(
+  geometry: THREE.BufferGeometry,
+  node: RidgeVentNode,
+  segment: RoofSegmentNode,
+): THREE.BufferGeometry {
+  const planes = getSegmentTrimClipPlanes(segment)
+  if (planes.length === 0) return geometry
+
+  const position = geometry.getAttribute('position')
+  const normal = geometry.getAttribute('normal')
+  const uv = geometry.getAttribute('uv')
+  if (!position || !normal || !uv) return geometry
+
+  const positions: number[] = []
+  const normals: number[] = []
+  const uvs: number[] = []
+
+  for (let i = 0; i < position.count; i += 3) {
+    let polygon: RidgeVentGeometryVertex[] = [
+      readGeometryVertex(position, normal, uv, i),
+      readGeometryVertex(position, normal, uv, i + 1),
+      readGeometryVertex(position, normal, uv, i + 2),
+    ]
+
+    for (const plane of planes) {
+      polygon = clipPolygonToSegmentTrimPlane(polygon, plane, node)
+      if (polygon.length < 3) break
+    }
+
+    if (polygon.length < 3) continue
+    for (let j = 1; j < polygon.length - 1; j += 1) {
+      pushGeometryVertex(positions, normals, uvs, polygon[0]!)
+      pushGeometryVertex(positions, normals, uvs, polygon[j]!)
+      pushGeometryVertex(positions, normals, uvs, polygon[j + 1]!)
+    }
+  }
+
+  return buildBufferGeometry(positions, normals, uvs)
+}
+
+function readGeometryVertex(
+  position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+  normal: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+  uv: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+  index: number,
+): RidgeVentGeometryVertex {
+  return {
+    x: position.getX(index),
+    y: position.getY(index),
+    z: position.getZ(index),
+    nx: normal.getX(index),
+    ny: normal.getY(index),
+    nz: normal.getZ(index),
+    u: uv.getX(index),
+    v: uv.getY(index),
+  }
+}
+
+function pushGeometryVertex(
+  positions: number[],
+  normals: number[],
+  uvs: number[],
+  vertex: RidgeVentGeometryVertex,
+) {
+  positions.push(vertex.x, vertex.y, vertex.z)
+  normals.push(vertex.nx, vertex.ny, vertex.nz)
+  uvs.push(vertex.u, vertex.v)
+}
+
+function clipPolygonToSegmentTrimPlane(
+  polygon: RidgeVentGeometryVertex[],
+  plane: SegmentTrimClipPlane,
+  node: RidgeVentNode,
+): RidgeVentGeometryVertex[] {
+  const next: RidgeVentGeometryVertex[] = []
+  let previous = polygon[polygon.length - 1]!
+  let previousDistance = getTrimClipDistance(previous, plane, node)
+  let previousInside = previousDistance <= 1e-6
+
+  for (const current of polygon) {
+    const currentDistance = getTrimClipDistance(current, plane, node)
+    const currentInside = currentDistance <= 1e-6
+
+    if (currentInside) {
+      if (!previousInside) {
+        next.push(interpolateGeometryVertex(previous, current, previousDistance, currentDistance))
+      }
+      next.push(current)
+    } else if (previousInside) {
+      next.push(interpolateGeometryVertex(previous, current, previousDistance, currentDistance))
+    }
+
+    previous = current
+    previousDistance = currentDistance
+    previousInside = currentInside
+  }
+
+  return next
+}
+
+function getTrimClipDistance(
+  vertex: RidgeVentGeometryVertex,
+  plane: SegmentTrimClipPlane,
+  node: RidgeVentNode,
+): number {
+  const centerX = finiteNumber(node.position?.[0], 0)
+  const centerZ = finiteNumber(node.position?.[2], 0)
+  const rotationY = finiteNumber(node.rotation, 0)
+  const segmentX = centerX + vertex.x * Math.cos(rotationY) + vertex.z * Math.sin(rotationY)
+  const segmentZ = centerZ - vertex.x * Math.sin(rotationY) + vertex.z * Math.cos(rotationY)
+  return plane.signedDistance(segmentX, segmentZ)
+}
+
+function interpolateGeometryVertex(
+  a: RidgeVentGeometryVertex,
+  b: RidgeVentGeometryVertex,
+  distanceA: number,
+  distanceB: number,
+): RidgeVentGeometryVertex {
+  const t = distanceA / (distanceA - distanceB || 1)
+  return {
+    x: lerp(a.x, b.x, t),
+    y: lerp(a.y, b.y, t),
+    z: lerp(a.z, b.z, t),
+    nx: lerp(a.nx, b.nx, t),
+    ny: lerp(a.ny, b.ny, t),
+    nz: lerp(a.nz, b.nz, t),
+    u: lerp(a.u, b.u, t),
+    v: lerp(a.v, b.v, t),
+  }
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t
+}
+
+function getSegmentTrimClipPlanes(segment: RoofSegmentNode): SegmentTrimClipPlane[] {
+  const trim = normalizeRoofSegmentTrim(segment)
+  const planes: SegmentTrimClipPlane[] = []
+  const leftX = -segment.width / 2 + trim.left
+  const rightX = segment.width / 2 - trim.right
+  const frontZ = segment.depth / 2 - trim.front
+  const backZ = -segment.depth / 2 + trim.back
+
+  if (trim.left > 0) planes.push({ signedDistance: (x) => leftX - x })
+  if (trim.right > 0) planes.push({ signedDistance: (x) => x - rightX })
+  if (trim.front > 0) planes.push({ signedDistance: (_x, z) => z - frontZ })
+  if (trim.back > 0) planes.push({ signedDistance: (_x, z) => backZ - z })
+
+  const diagonalPlane = (
+    lineA: readonly [number, number],
+    lineB: readonly [number, number],
+    outsidePoint: readonly [number, number],
+  ): SegmentTrimClipPlane | null => {
+    const dx = lineB[0] - lineA[0]
+    const dz = lineB[1] - lineA[1]
+    const length = Math.hypot(dx, dz)
+    if (!(length > 0)) return null
+    let nx = -dz / length
+    let nz = dx / length
+    const midX = (lineA[0] + lineB[0]) / 2
+    const midZ = (lineA[1] + lineB[1]) / 2
+    if (nx * (outsidePoint[0] - midX) + nz * (outsidePoint[1] - midZ) < 0) {
+      nx *= -1
+      nz *= -1
+    }
+    return {
+      signedDistance: (x, z) => nx * (x - midX) + nz * (z - midZ),
+    }
+  }
+
+  const pushDiagonalPlane = (
+    lineA: readonly [number, number],
+    lineB: readonly [number, number],
+    outsidePoint: readonly [number, number],
+  ) => {
+    const plane = diagonalPlane(lineA, lineB, outsidePoint)
+    if (plane) planes.push(plane)
+  }
+
+  if (trim.frontLeftX > 0 && trim.frontLeftZ > 0) {
+    pushDiagonalPlane(
+      [leftX + trim.frontLeftX, frontZ],
+      [leftX, frontZ - trim.frontLeftZ],
+      [leftX - 1, frontZ + 1],
+    )
+  }
+  if (trim.frontRightX > 0 && trim.frontRightZ > 0) {
+    pushDiagonalPlane(
+      [rightX, frontZ - trim.frontRightZ],
+      [rightX - trim.frontRightX, frontZ],
+      [rightX + 1, frontZ + 1],
+    )
+  }
+  if (trim.backLeftX > 0 && trim.backLeftZ > 0) {
+    pushDiagonalPlane(
+      [leftX, backZ + trim.backLeftZ],
+      [leftX + trim.backLeftX, backZ],
+      [leftX - 1, backZ - 1],
+    )
+  }
+  if (trim.backRightX > 0 && trim.backRightZ > 0) {
+    pushDiagonalPlane(
+      [rightX - trim.backRightX, backZ],
+      [rightX, backZ + trim.backRightZ],
+      [rightX + 1, backZ - 1],
+    )
+  }
+
+  return planes
 }
 
 // Winding-safe quad: triangulates (a,b,c,d) and orients both triangles so

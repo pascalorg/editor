@@ -3,14 +3,32 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 import {
-  getDutchRidgeAxis,
   getRoofSegmentVisibleTopBounds,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
+  type RoofSegmentTrim,
 } from './roof-segment'
 
 const MIN_DEFAULT_RIDGE_VENT_LENGTH_M = 0.4
 const DEFAULT_RIDGE_VENT_GENERATOR = 'default-ridge-vent'
+const UNTRIMMED_RIDGE_VENT_BOUNDS_TRIM: RoofSegmentTrim = {
+  left: 0,
+  right: 0,
+  front: 0,
+  back: 0,
+  frontLeft: 0,
+  frontRight: 0,
+  backLeft: 0,
+  backRight: 0,
+  frontLeftX: 0,
+  frontLeftZ: 0,
+  frontRightX: 0,
+  frontRightZ: 0,
+  backLeftX: 0,
+  backLeftZ: 0,
+  backRightX: 0,
+  backRightZ: 0,
+}
 
 export type RidgeVentLine = {
   name: string
@@ -53,7 +71,10 @@ export const RidgeVentNode = BaseNode.extend({
 export type RidgeVentNode = z.infer<typeof RidgeVentNode>
 
 export function getRidgeVentLinesForSegment(segment: RoofSegmentNode): RidgeVentLine[] {
-  const bounds = getRoofSegmentVisibleTopBounds(segment)
+  const bounds = getRoofSegmentVisibleTopBounds({
+    ...segment,
+    trim: UNTRIMMED_RIDGE_VENT_BOUNDS_TRIM,
+  })
   const { width, depth, minX, maxX, minZ, maxZ } = bounds
   if (segment.roofType === 'flat' || segment.roofType === 'shed') return []
 
@@ -123,54 +144,7 @@ export function getRidgeVentLinesForSegment(segment: RoofSegmentNode): RidgeVent
   }
 
   if (segment.roofType === 'dutch') {
-    const inset = Math.min(
-      Math.min(width, depth) *
-        (segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio),
-      Math.max(0, Math.min(width, depth) / 2 - 0.01),
-    )
-
-    const frontLeft: [number, number] = [minX, maxZ]
-    const frontRight: [number, number] = [maxX, maxZ]
-    const backRight: [number, number] = [maxX, minZ]
-    const backLeft: [number, number] = [minX, minZ]
-    const shoulderFrontLeft: [number, number] = [minX + inset, maxZ - inset]
-    const shoulderFrontRight: [number, number] = [maxX - inset, maxZ - inset]
-    const shoulderBackRight: [number, number] = [maxX - inset, minZ + inset]
-    const shoulderBackLeft: [number, number] = [minX + inset, minZ + inset]
-
-    if (getDutchRidgeAxis(segment) === 'x') {
-      return [
-        ...(ridgeZVisible
-          ? [
-              {
-                name: 'Ridge Vent',
-                start: [minX + inset, 0] as [number, number],
-                end: [maxX - inset, 0] as [number, number],
-              },
-            ]
-          : []),
-        { name: 'Hip Ridge Vent', start: frontLeft, end: shoulderFrontLeft },
-        { name: 'Hip Ridge Vent', start: frontRight, end: shoulderFrontRight },
-        { name: 'Hip Ridge Vent', start: backRight, end: shoulderBackRight },
-        { name: 'Hip Ridge Vent', start: backLeft, end: shoulderBackLeft },
-      ]
-    }
-
-    return [
-      ...(ridgeXVisible
-        ? [
-            {
-              name: 'Ridge Vent',
-              start: [0, maxZ - inset] as [number, number],
-              end: [0, minZ + inset] as [number, number],
-            },
-          ]
-        : []),
-      { name: 'Hip Ridge Vent', start: frontLeft, end: shoulderFrontLeft },
-      { name: 'Hip Ridge Vent', start: frontRight, end: shoulderFrontRight },
-      { name: 'Hip Ridge Vent', start: backRight, end: shoulderBackRight },
-      { name: 'Hip Ridge Vent', start: backLeft, end: shoulderBackLeft },
-    ]
+    return []
   }
 
   if (segment.roofType !== 'hip') {

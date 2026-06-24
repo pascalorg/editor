@@ -3,7 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type DutchRidgeAxis,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
   type RoofType,
@@ -37,11 +36,6 @@ const ROOF_TYPE_OPTIONS_2: { label: string; value: RoofType }[] = [
   { label: 'Mansard', value: 'mansard' },
 ]
 
-const DUTCH_RIDGE_AXIS_OPTIONS: { label: string; value: DutchRidgeAxis }[] = [
-  { label: 'Width', value: 'x' },
-  { label: 'Depth', value: 'z' },
-]
-
 // Carpenter / roofer convention: rise over a 12" run, converted to degrees.
 // atan(3/12) ≈ 14.04°, atan(6/12) ≈ 26.57°, atan(9/12) ≈ 36.87°, atan(12/12) = 45°.
 const PITCH_PRESETS: { label: string; deg: number }[] = [
@@ -52,7 +46,7 @@ const PITCH_PRESETS: { label: string; deg: number }[] = [
 ]
 
 function shouldShowTrimPlanes(metadata: unknown): boolean {
-  return metadataRecord(metadata).showTrimPlanes !== false
+  return metadataRecord(metadata).showTrimPlanes === true
 }
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
@@ -78,25 +72,6 @@ export default function RoofSegmentPanel() {
       updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId, updateNode],
-  )
-
-  const handleRoofTypeChange = useCallback(
-    (roofType: RoofType) => {
-      if (!(selectedId && node) || roofType === node.roofType) return
-
-      const data: Partial<RoofSegmentNode> = {
-        roofType,
-        ...(roofType === 'dutch' && node.roofType !== 'dutch'
-          ? { dutchRidgeAxis: node.width >= node.depth ? 'x' : 'z' }
-          : {}),
-      }
-      const nextSegment = RoofSegmentNodeSchema.parse({ ...node, ...data })
-      updateNode(selectedId as AnyNode['id'], {
-        roofType: nextSegment.roofType,
-        dutchRidgeAxis: nextSegment.dutchRidgeAxis,
-      })
-    },
-    [selectedId, node, updateNode],
   )
 
   const handleClose = useCallback(() => {
@@ -168,12 +143,12 @@ export default function RoofSegmentPanel() {
     >
       <PanelSection title="Roof Type">
         <SegmentedControl
-          onChange={handleRoofTypeChange}
+          onChange={(v) => handleUpdate({ roofType: v })}
           options={ROOF_TYPE_OPTIONS}
           value={node.roofType}
         />
         <SegmentedControl
-          onChange={handleRoofTypeChange}
+          onChange={(v) => handleUpdate({ roofType: v })}
           options={ROOF_TYPE_OPTIONS_2}
           value={node.roofType}
         />
@@ -301,13 +276,8 @@ export default function RoofSegmentPanel() {
 
       {node.roofType === 'dutch' && (
         <PanelSection title="Shape">
-          <SegmentedControl
-            onChange={(v) => handleUpdate({ dutchRidgeAxis: v })}
-            options={DUTCH_RIDGE_AXIS_OPTIONS}
-            value={node.dutchRidgeAxis}
-          />
           <SliderControl
-            label="Hip Run"
+            label="Hip Width"
             max={0.45}
             min={0.05}
             onChange={(v) => handleUpdate({ dutchHipWidthRatio: v })}
@@ -317,24 +287,14 @@ export default function RoofSegmentPanel() {
             value={Math.round(node.dutchHipWidthRatio * 100) / 100}
           />
           <SliderControl
-            label="Gable Drop"
+            label="Hip Height"
             max={0.9}
             min={0.1}
-            onChange={(v) => handleUpdate({ dutchHipHeightRatio: 1 - v })}
+            onChange={(v) => handleUpdate({ dutchHipHeightRatio: v })}
             precision={2}
             step={0.01}
             unit=""
-            value={Math.round((1 - node.dutchHipHeightRatio) * 100) / 100}
-          />
-          <SliderControl
-            label="Gable Overhang"
-            max={1}
-            min={0}
-            onChange={(v) => handleUpdate({ dutchGableOverhang: v })}
-            precision={2}
-            step={0.05}
-            unit="m"
-            value={Math.round(node.dutchGableOverhang * 100) / 100}
+            value={Math.round(node.dutchHipHeightRatio * 100) / 100}
           />
         </PanelSection>
       )}

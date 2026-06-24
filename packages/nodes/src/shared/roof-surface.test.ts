@@ -40,6 +40,19 @@ describe('getDownSlopeYaw', () => {
   test('flat segment has no down-slope direction (yaw 0)', () => {
     expect(getDownSlopeYaw(0, 0, fixtureSegment({ roofType: 'flat' }))).toBe(0)
   })
+  test('dutch x-ridge lower hip end yaws toward the side eave', () => {
+    expect(getDownSlopeYaw(3.8, 0, fixtureSegment({ roofType: 'dutch' }))).toBeCloseTo(
+      Math.PI / 2,
+    )
+  })
+  test('dutch x-ridge upper gable yaws toward the front eave', () => {
+    expect(getDownSlopeYaw(0, 1, fixtureSegment({ roofType: 'dutch' }))).toBeCloseTo(0)
+  })
+  test('dutch z-ridge upper gable yaws toward the side eave', () => {
+    expect(
+      getDownSlopeYaw(1, 0, fixtureSegment({ roofType: 'dutch', width: 6, depth: 8 })),
+    ).toBeCloseTo(Math.PI / 2)
+  })
 })
 
 describe('getRoofSurfaceFaceBoundsAt', () => {
@@ -75,27 +88,5 @@ describe('getRoofSurfaceFaceBoundsAt', () => {
     const offRidge = getRoofSurfaceFaceBoundsAt(segment, 0, 0.5).surfaceYAt(0, 0.5)
 
     expect(center).toBeGreaterThan(offRidge)
-  })
-
-  test('dutch gable overhang projects a rake cap without widening the slope side', () => {
-    const segment = fixtureSegment({
-      roofType: 'dutch',
-      width: 8,
-      depth: 6,
-      wallThickness: 0,
-      deckThickness: 0,
-      overhang: 0,
-      shingleThickness: 0,
-      dutchHipWidthRatio: 0.25,
-      dutchGableOverhang: 1,
-      dutchRidgeAxis: 'x',
-    })
-
-    const bounds = getRoofSurfaceFaceBoundsAt(segment, -3, 0.75)
-
-    expect(bounds.minX).toBeCloseTo(-3.5)
-    expect(bounds.maxX).toBeCloseTo(-2.5)
-    expect(bounds.minZ).toBeCloseTo(0)
-    expect(bounds.maxZ).toBeCloseTo(1.5)
   })
 })

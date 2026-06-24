@@ -335,7 +335,6 @@ export function generateDormerGeometry(
     // Dormers don't expose multi-slope shape tuning; bake the schema
     // defaults so the virtualSegment renders the canonical kink positions.
     ...ROOF_SHAPE_DEFAULTS,
-    dutchRidgeAxis: 'x',
     wallThickness: 0.05,
     deckThickness: 0.04,
     overhang: 0.08,

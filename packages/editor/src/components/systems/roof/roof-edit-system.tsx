@@ -1,7 +1,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type Cursor,
   getActiveRoofHeight,
   getEffectiveNode,
   getRoofSegmentVisibleTopBounds,
@@ -18,10 +17,9 @@ import { useViewer } from '@pascal-app/viewer'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
+import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import useEditor from '../../../store/use-editor'
-import { ARROW_SCALE, HandleArrow } from '../../editor/handles/handle-arrow'
 import { swallowNextClick } from '../../editor/handles/use-handle-drag'
 
 // Empty placeholder geometry used when we reveal segments-wrapper for
@@ -81,19 +79,25 @@ type DiagonalTrimAxisKey = DiagonalTrimAxisSide
 
 const TRIM_PLANE_COLOR = '#93c5fd'
 const TRIM_PLANE_OPACITY = 0.18
-const TRIM_PLANE_HOVER_OPACITY = 0.34
-const TRIM_BORDER_COLOR = '#2563eb'
-const TRIM_EDGE_OFFSET = 0.012
+const TRIM_PLANE_HOVER_OPACITY = 0.32
+const TRIM_RAIL_COLOR = '#2563eb'
+const TRIM_RAIL_HOVER_COLOR = '#4f46e5'
+const TRIM_CAP_COLOR = TRIM_RAIL_COLOR
+const TRIM_CAP_HOVER_COLOR = TRIM_RAIL_HOVER_COLOR
+const TRIM_ADD_COLOR = TRIM_RAIL_COLOR
+const TRIM_ADD_HOVER_COLOR = TRIM_RAIL_HOVER_COLOR
 const TRIM_PLANE_RENDER_ORDER = 1001
-const TRIM_EDGE_RENDER_ORDER = 1002
+const TRIM_RAIL_RENDER_ORDER = 1003
+const TRIM_HANDLE_BASE_SCALE = 0.65
+const TRIM_RAIL_SURFACE_OFFSET = 0
+const TRIM_RAIL_HIT_HEIGHT = 0.18
+const TRIM_RAIL_HIT_DEPTH = 0.16
+const TRIM_CAP_HIT_SIZE = 0.22
 
 const TRIM_UNIT_PLANE_GEOMETRY = new THREE.PlaneGeometry(1, 1)
-const TRIM_UNIT_EDGE_GEOMETRY = new THREE.BufferGeometry()
-TRIM_UNIT_EDGE_GEOMETRY.setAttribute(
-  'position',
-  new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0], 3),
-)
-TRIM_UNIT_EDGE_GEOMETRY.computeBoundingSphere()
+const TRIM_UNIT_RAIL_GEOMETRY = new THREE.BoxGeometry(1, 1, 1)
+const TRIM_UNIT_RAIL_CAP_GEOMETRY = new THREE.SphereGeometry(0.5, 16, 8)
+const TRIM_UNIT_ADD_GEOMETRY = new THREE.OctahedronGeometry(0.5, 0)
 
 const trimPlaneMaterial = new MeshBasicNodeMaterial({
   color: TRIM_PLANE_COLOR,
@@ -111,10 +115,46 @@ const trimPlaneHoverMaterial = new MeshBasicNodeMaterial({
   side: THREE.DoubleSide,
   transparent: true,
 })
-const trimBorderMaterial = new LineBasicNodeMaterial({
-  color: TRIM_BORDER_COLOR,
+const trimRailMaterial = new MeshBasicNodeMaterial({
+  color: TRIM_RAIL_COLOR,
   depthTest: false,
   depthWrite: false,
+})
+const trimRailHoverMaterial = new MeshBasicNodeMaterial({
+  color: TRIM_RAIL_HOVER_COLOR,
+  depthTest: false,
+  depthWrite: false,
+})
+const trimCapMaterial = new MeshBasicNodeMaterial({
+  color: TRIM_CAP_COLOR,
+  depthTest: false,
+  depthWrite: false,
+  opacity: 1,
+  transparent: false,
+})
+const trimCapHoverMaterial = new MeshBasicNodeMaterial({
+  color: TRIM_CAP_HOVER_COLOR,
+  depthTest: false,
+  depthWrite: false,
+  opacity: 1,
+  transparent: false,
+})
+const trimAddMaterial = new MeshBasicNodeMaterial({
+  color: TRIM_ADD_COLOR,
+  depthTest: false,
+  depthWrite: false,
+})
+const trimAddHoverMaterial = new MeshBasicNodeMaterial({
+  color: TRIM_ADD_HOVER_COLOR,
+  depthTest: false,
+  depthWrite: false,
+})
+const trimDiagonalPreviewRailMaterial = new MeshBasicNodeMaterial({
+  color: TRIM_RAIL_COLOR,
+  depthTest: false,
+  depthWrite: false,
+  opacity: 0.42,
+  transparent: true,
 })
 
 const _dragNdc = new THREE.Vector2()
@@ -122,6 +162,35 @@ const _dragRaycaster = new THREE.Raycaster()
 const _dragPlaneHit = new THREE.Vector3()
 const _dragLocalPoint = new THREE.Vector3()
 const _dragInverseMatrix = new THREE.Matrix4()
+const _trimHitInverseMatrix = new THREE.Matrix4()
+const _trimHitRay = new THREE.Ray()
+const _trimHitBox = new THREE.Box3()
+const _trimHitPoint = new THREE.Vector3()
+
+function makeExpandedTrimRaycast(
+  visualScale: readonly [number, number, number],
+  hitScale: readonly [number, number, number],
+) {
+  const halfX = Math.max(0.5, hitScale[0] / Math.max(visualScale[0], 1e-6) / 2)
+  const halfY = Math.max(0.5, hitScale[1] / Math.max(visualScale[1], 1e-6) / 2)
+  const halfZ = Math.max(0.5, hitScale[2] / Math.max(visualScale[2], 1e-6) / 2)
+  return function expandedTrimRaycast(
+    this: THREE.Mesh,
+    raycaster: THREE.Raycaster,
+    intersects: THREE.Intersection[],
+  ) {
+    _trimHitInverseMatrix.copy(this.matrixWorld).invert()
+    _trimHitRay.copy(raycaster.ray).applyMatrix4(_trimHitInverseMatrix)
+    _trimHitBox.min.set(-halfX, -halfY, -halfZ)
+    _trimHitBox.max.set(halfX, halfY, halfZ)
+    const localHit = _trimHitRay.intersectBox(_trimHitBox, _trimHitPoint)
+    if (!localHit) return
+    const point = localHit.clone().applyMatrix4(this.matrixWorld)
+    const distance = raycaster.ray.origin.distanceTo(point)
+    if (distance < raycaster.near || distance > raycaster.far) return
+    intersects.push({ distance, point, object: this })
+  }
+}
 
 function trimEquals(a: RoofSegmentTrim, b: RoofSegmentTrim): boolean {
   return (
@@ -165,6 +234,14 @@ function getDiagonalAxisKeys(side: DiagonalTrimSide): [DiagonalTrimAxisKey, Diag
     case 'backRight':
       return ['backRightX', 'backRightZ']
   }
+}
+
+function getDiagonalResetCorner(side: RoofTrimSide): DiagonalTrimSide | null {
+  if (isDiagonalTrimSide(side)) return side
+  if (side.endsWith('X') || side.endsWith('Z')) {
+    return getDiagonalAxisCorner(side as DiagonalTrimAxisSide)
+  }
+  return null
 }
 
 function getDiagonalAxisCorner(side: DiagonalTrimAxisSide): DiagonalTrimSide {
@@ -254,6 +331,33 @@ function patchTrimSide(
   }
 
   return normalizeRoofSegmentTrim({ width: segment.width, depth: segment.depth, trim: next })
+}
+
+function patchTrimSideByDelta(
+  segment: RoofSegmentNode,
+  baseTrim: RoofSegmentTrim,
+  side: RoofTrimSide,
+  delta: number,
+): RoofSegmentTrim {
+  if (isDiagonalTrimSide(side)) {
+    const [xAxis, zAxis] = getDiagonalAxisKeys(side)
+    const next = { ...baseTrim }
+    next[xAxis] = clamp(
+      baseTrim[xAxis] + delta,
+      0,
+      getMaxDiagonalAxisTrim(segment, baseTrim, xAxis),
+    )
+    next[zAxis] = clamp(
+      baseTrim[zAxis] + delta,
+      0,
+      getMaxDiagonalAxisTrim(segment, baseTrim, zAxis),
+    )
+    next[side] = Math.min(next[xAxis], next[zAxis])
+    return normalizeRoofSegmentTrim({ width: segment.width, depth: segment.depth, trim: next })
+  }
+
+  const baseValue = baseTrim[side]
+  return patchTrimSide(segment, baseTrim, side, baseValue + delta)
 }
 
 function getTrimValueFromLocalPoint(
@@ -367,36 +471,12 @@ function getTrimCursor(side: RoofTrimSide): string {
   }
 }
 
-function getTrimHandleCursor(side: RoofTrimSide): Cursor {
-  switch (side) {
-    case 'left':
-    case 'right':
-    case 'frontLeftX':
-    case 'frontRightX':
-    case 'backLeftX':
-    case 'backRightX':
-      return 'ew-resize'
-    case 'front':
-    case 'back':
-    case 'frontLeftZ':
-    case 'frontRightZ':
-    case 'backLeftZ':
-    case 'backRightZ':
-      return 'ns-resize'
-    case 'frontLeft':
-    case 'frontRight':
-    case 'backLeft':
-    case 'backRight':
-      return 'move'
-  }
-}
-
 function shouldShowTrimPlanes(metadata: unknown): boolean {
-  return !(
+  return (
     typeof metadata === 'object' &&
     metadata !== null &&
     !Array.isArray(metadata) &&
-    (metadata as Record<string, unknown>).showTrimPlanes === false
+    (metadata as Record<string, unknown>).showTrimPlanes === true
   )
 }
 
@@ -424,7 +504,7 @@ function RoofTrimHandles() {
   const dragCleanupRef = useRef<(() => void) | null>(null)
   const { camera, gl } = useThree()
   const zoom = camera instanceof THREE.OrthographicCamera ? 1 / camera.zoom : 1
-  const handleBaseScale = zoom * ARROW_SCALE
+  const handleBaseScale = zoom * TRIM_HANDLE_BASE_SCALE
 
   useEffect(() => () => dragCleanupRef.current?.(), [])
 
@@ -456,7 +536,24 @@ function RoofTrimHandles() {
   const rightX = liveSegment.width / 2 - trim.right
   const frontZ = liveSegment.depth / 2 - trim.front
   const backZ = -liveSegment.depth / 2 + trim.back
-  const visibleBounds = getRoofSegmentVisibleTopBounds(liveSegment)
+  const visibleBounds = getRoofSegmentVisibleTopBounds({
+    ...liveSegment,
+    trim: {
+      ...trim,
+      frontLeft: 0,
+      frontRight: 0,
+      backLeft: 0,
+      backRight: 0,
+      frontLeftX: 0,
+      frontLeftZ: 0,
+      frontRightX: 0,
+      frontRightZ: 0,
+      backLeftX: 0,
+      backLeftZ: 0,
+      backRightX: 0,
+      backRightZ: 0,
+    },
+  })
   const visibleCenterX = (visibleBounds.minX + visibleBounds.maxX) / 2
   const visibleCenterZ = (visibleBounds.minZ + visibleBounds.maxZ) / 2
   const visibleWidth = Math.max(0.01, visibleBounds.maxX - visibleBounds.minX)
@@ -466,7 +563,81 @@ function RoofTrimHandles() {
   const visualFrontZ = trim.front > 0 ? frontZ : visibleBounds.maxZ
   const visualBackZ = trim.back > 0 ? backZ : visibleBounds.minZ
   const maxDiagonalTrim = Math.max(0, Math.min(keptWidth, keptDepth) - MIN_ROOF_SEGMENT_TRIM_SPAN)
-  const starterDiagonalTrim = Math.min(maxDiagonalTrim, Math.max(0.75, maxDiagonalTrim * 0.2))
+
+  const pointOnTrimLineAtX = (
+    start: readonly [number, number],
+    end: readonly [number, number],
+    x: number,
+  ): [number, number] => {
+    const dx = end[0] - start[0]
+    if (Math.abs(dx) < 1e-6) return [x, start[1]]
+    const t = (x - start[0]) / dx
+    return [x, start[1] + (end[1] - start[1]) * t]
+  }
+
+  const pointOnTrimLineAtZ = (
+    start: readonly [number, number],
+    end: readonly [number, number],
+    z: number,
+  ): [number, number] => {
+    const dz = end[1] - start[1]
+    if (Math.abs(dz) < 1e-6) return [start[0], z]
+    const t = (z - start[1]) / dz
+    return [start[0] + (end[0] - start[0]) * t, z]
+  }
+
+  const getDiagonalRailLine = (
+    side: DiagonalTrimSide,
+    start: readonly [number, number],
+    end: readonly [number, number],
+  ): [[number, number], [number, number]] => {
+    switch (side) {
+      case 'frontLeft':
+        return [
+          pointOnTrimLineAtZ(start, end, visualFrontZ),
+          pointOnTrimLineAtX(start, end, visualLeftX),
+        ]
+      case 'frontRight':
+        return [
+          pointOnTrimLineAtX(start, end, visualRightX),
+          pointOnTrimLineAtZ(start, end, visualFrontZ),
+        ]
+      case 'backLeft':
+        return [
+          pointOnTrimLineAtX(start, end, visualLeftX),
+          pointOnTrimLineAtZ(start, end, visualBackZ),
+        ]
+      case 'backRight':
+        return [
+          pointOnTrimLineAtZ(start, end, visualBackZ),
+          pointOnTrimLineAtX(start, end, visualRightX),
+        ]
+    }
+  }
+
+  const resetDiagonalTrim = (side: RoofTrimSide, event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation()
+    const corner = getDiagonalResetCorner(side)
+    if (!corner) return
+
+    const baseSegment = getEffectiveNode(segment)
+    const baseTrim = normalizeRoofSegmentTrim(baseSegment)
+    const next = { ...baseTrim }
+    const [xAxis, zAxis] = getDiagonalAxisKeys(corner)
+    next[corner] = 0
+    next[xAxis] = 0
+    next[zAxis] = 0
+    const normalized = normalizeRoofSegmentTrim({
+      width: baseSegment.width,
+      depth: baseSegment.depth,
+      trim: next,
+    })
+    useLiveNodeOverrides.getState().clear(segment.id as AnyNodeId)
+    if (!trimEquals(normalized, baseTrim)) {
+      commitSegmentTrim(baseSegment, normalized)
+    }
+    useScene.getState().markDirty(segment.id as AnyNodeId)
+  }
 
   const startDrag = (side: RoofTrimSide, event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
@@ -476,11 +647,27 @@ function RoofTrimHandles() {
     source.updateWorldMatrix(true, false)
     const startMatrix = source.matrixWorld.clone()
     _dragInverseMatrix.copy(startMatrix).invert()
-    const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -event.point.y)
+    const dragPlanePoint = new THREE.Vector3(0, handleY, 0).applyMatrix4(startMatrix)
+    const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -dragPlanePoint.y)
     const baseSegment = getEffectiveNode(segment)
     const baseTrim = normalizeRoofSegmentTrim(baseSegment)
     const segmentId = segment.id as AnyNodeId
     let pendingTrim = baseTrim
+
+    const getPointerTrimValue = (clientX: number, clientY: number): number | null => {
+      const rect = gl.domElement.getBoundingClientRect()
+      _dragNdc.set(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -(((clientY - rect.top) / rect.height) * 2 - 1),
+      )
+      _dragRaycaster.setFromCamera(_dragNdc, camera)
+      if (!_dragRaycaster.ray.intersectPlane(dragPlane, _dragPlaneHit)) return null
+      _dragLocalPoint.copy(_dragPlaneHit).applyMatrix4(_dragInverseMatrix)
+      return getTrimValueFromLocalPoint(baseSegment, baseTrim, side, _dragLocalPoint)
+    }
+
+    const initialPointerValue = getPointerTrimValue(event.clientX, event.clientY)
+    if (initialPointerValue === null) return
 
     document.body.style.cursor = getTrimCursor(side)
     useEditor.getState().setActiveHandleDrag({ nodeId: segmentId, label: getTrimLabel(side) })
@@ -488,18 +675,15 @@ function RoofTrimHandles() {
     useScene.temporal.getState().pause()
 
     const updateFromPointer = (clientX: number, clientY: number) => {
-      const rect = gl.domElement.getBoundingClientRect()
-      _dragNdc.set(
-        ((clientX - rect.left) / rect.width) * 2 - 1,
-        -(((clientY - rect.top) / rect.height) * 2 - 1),
+      const pointerValue = getPointerTrimValue(clientX, clientY)
+      if (pointerValue === null) return
+      pendingTrim = patchTrimSideByDelta(
+        baseSegment,
+        baseTrim,
+        side,
+        pointerValue - initialPointerValue,
       )
-      _dragRaycaster.setFromCamera(_dragNdc, camera)
-      if (!_dragRaycaster.ray.intersectPlane(dragPlane, _dragPlaneHit)) return
-      _dragLocalPoint.copy(_dragPlaneHit).applyMatrix4(_dragInverseMatrix)
-      const rawValue = getTrimValueFromLocalPoint(baseSegment, baseTrim, side, _dragLocalPoint)
-      pendingTrim = patchTrimSide(baseSegment, baseTrim, side, rawValue)
       useLiveNodeOverrides.getState().set(segmentId, { trim: pendingTrim })
-      useScene.getState().markDirty(segmentId)
     }
 
     updateFromPointer(event.clientX, event.clientY)
@@ -512,7 +696,8 @@ function RoofTrimHandles() {
         document.body.style.cursor === 'ew-resize' ||
         document.body.style.cursor === 'ns-resize' ||
         document.body.style.cursor === 'nwse-resize' ||
-        document.body.style.cursor === 'nesw-resize'
+        document.body.style.cursor === 'nesw-resize' ||
+        document.body.style.cursor === 'move'
       ) {
         document.body.style.cursor = ''
       }
@@ -554,9 +739,67 @@ function RoofTrimHandles() {
     args: [number, number],
     rotation: [number, number, number] = [0, 0, 0],
     handles: readonly { side: RoofTrimSide; offsetX: number }[] = [{ side, offsetX: 0 }],
+    showPlane = true,
   ) => {
     const [planeWidth, planeHeight] = args
     const isHovered = handles.some((handle) => handle.side === hoveredSide)
+    const railY = planeHeight / 2
+    const railVisualHeight = Math.max(0.012, handleBaseScale * 0.022)
+    const railVisualDepth = Math.max(0.01, handleBaseScale * 0.018)
+    const railVisualLength = planeWidth + railVisualDepth * 2
+    const capSize = Math.max(0.045, handleBaseScale * 0.085)
+    const primaryHandle = handles[0] ?? { side, offsetX: 0 }
+    const endpointHandles = handles.slice(1)
+
+    const renderRailHitTarget = (
+      handle: { side: RoofTrimSide; offsetX: number },
+      scale: [number, number, number],
+      visual: 'rail' | 'cap',
+    ) => {
+      const hovered = hoveredSide === handle.side
+      const visualScale: [number, number, number] =
+        visual === 'rail' ? scale : [capSize, capSize, capSize]
+      const hitScale: [number, number, number] =
+        visual === 'rail'
+          ? [scale[0], TRIM_RAIL_HIT_HEIGHT, TRIM_RAIL_HIT_DEPTH]
+          : [TRIM_CAP_HIT_SIZE, TRIM_CAP_HIT_SIZE, TRIM_CAP_HIT_SIZE]
+      const resetCorner = getDiagonalResetCorner(handle.side)
+      return (
+        <group key={handle.side} position={[handle.offsetX, railY, TRIM_RAIL_SURFACE_OFFSET]}>
+          <mesh
+            geometry={visual === 'rail' ? TRIM_UNIT_RAIL_GEOMETRY : TRIM_UNIT_RAIL_CAP_GEOMETRY}
+            material={
+              visual === 'rail'
+                ? hovered
+                  ? trimRailHoverMaterial
+                  : trimRailMaterial
+                : hovered
+                  ? trimCapHoverMaterial
+                  : trimCapMaterial
+            }
+            raycast={makeExpandedTrimRaycast(visualScale, hitScale)}
+            onDoubleClick={
+              resetCorner ? (event) => resetDiagonalTrim(handle.side, event) : undefined
+            }
+            onPointerDown={(event) => startDrag(handle.side, event)}
+            onPointerEnter={(event) => {
+              event.stopPropagation()
+              setHoveredSide(handle.side)
+              document.body.style.cursor = getTrimCursor(handle.side)
+            }}
+            onPointerLeave={(event) => {
+              event.stopPropagation()
+              if (!dragCleanupRef.current) {
+                setHoveredSide((current) => (current === handle.side ? null : current))
+                document.body.style.cursor = ''
+              }
+            }}
+            renderOrder={TRIM_RAIL_RENDER_ORDER}
+            scale={visualScale}
+          />
+        </group>
+      )
+    }
 
     return (
       <group
@@ -564,52 +807,183 @@ function RoofTrimHandles() {
         layers={EDITOR_LAYER}
         position={position}
         rotation={rotation}
-        renderOrder={TRIM_PLANE_RENDER_ORDER}
+        renderOrder={TRIM_RAIL_RENDER_ORDER}
       >
-        <mesh
-          geometry={TRIM_UNIT_PLANE_GEOMETRY}
-          material={isHovered ? trimPlaneHoverMaterial : trimPlaneMaterial}
-          raycast={() => null}
-          renderOrder={TRIM_PLANE_RENDER_ORDER}
-          scale={[planeWidth, planeHeight, 1]}
-        />
-
-        <lineSegments
-          geometry={TRIM_UNIT_EDGE_GEOMETRY}
-          material={trimBorderMaterial}
-          position={[0, 0, TRIM_EDGE_OFFSET]}
-          raycast={() => null}
-          renderOrder={TRIM_EDGE_RENDER_ORDER}
-          scale={[planeWidth, planeHeight, 1]}
-        />
-
-        {handles.map((handle) => (
-          <HandleArrow
-            activeCursor={getTrimHandleCursor(handle.side)}
-            cursor={getTrimHandleCursor(handle.side)}
-            hover={hoveredSide === handle.side}
-            key={handle.side}
-            onHoverChange={(hovered) => {
-              setHoveredSide((current) => {
-                if (hovered) return handle.side
-                return current === handle.side ? null : current
-              })
-            }}
-            onPointerDown={(event) => startDrag(handle.side, event)}
-            onPointerEnter={(event) => {
-              event.stopPropagation()
-              document.body.style.cursor = getTrimCursor(handle.side)
-            }}
-            onPointerLeave={() => {
-              if (!dragCleanupRef.current) document.body.style.cursor = ''
-            }}
-            placement={{
-              position: [handle.offsetX, 0, 0],
-              baseScale: handleBaseScale,
-            }}
-            shape="tracker"
+        {showPlane ? (
+          <mesh
+            geometry={TRIM_UNIT_PLANE_GEOMETRY}
+            material={isHovered ? trimPlaneHoverMaterial : trimPlaneMaterial}
+            raycast={() => null}
+            renderOrder={TRIM_PLANE_RENDER_ORDER}
+            scale={[planeWidth, planeHeight, 1]}
           />
-        ))}
+        ) : null}
+
+        {renderRailHitTarget(
+          primaryHandle,
+          [railVisualLength, railVisualHeight, railVisualDepth],
+          'rail',
+        )}
+        {endpointHandles.map((handle) =>
+          renderRailHitTarget(handle, [capSize, capSize, capSize], 'cap'),
+        )}
+      </group>
+    )
+  }
+
+  const renderDiagonalAddHandle = (side: DiagonalTrimSide) => {
+    if (maxDiagonalTrim <= 0) return null
+
+    let position: [number, number, number]
+    let xDir = 1
+    let zDir = 1
+    switch (side) {
+      case 'frontLeft':
+        position = [leftX, handleY, frontZ]
+        xDir = 1
+        zDir = -1
+        break
+      case 'frontRight':
+        position = [rightX, handleY, frontZ]
+        xDir = -1
+        zDir = -1
+        break
+      case 'backLeft':
+        position = [leftX, handleY, backZ]
+        xDir = 1
+        zDir = 1
+        break
+      case 'backRight':
+        position = [rightX, handleY, backZ]
+        xDir = -1
+        zDir = 1
+        break
+      default:
+        return null
+    }
+
+    const hovered = hoveredSide === side
+    const addSize = Math.max(0.055, handleBaseScale * 0.1)
+    const addVisualScale: [number, number, number] = [addSize, addSize, addSize]
+    const addHitScale: [number, number, number] = [
+      TRIM_CAP_HIT_SIZE,
+      TRIM_CAP_HIT_SIZE,
+      TRIM_CAP_HIT_SIZE,
+    ]
+    const bracketLength = Math.min(0.55, Math.max(0.28, maxDiagonalTrim * 0.22))
+    const bracketHeight = Math.max(0.012, handleBaseScale * 0.022)
+    const bracketDepth = Math.max(0.01, handleBaseScale * 0.018)
+    const bracketArmLength = bracketLength + bracketDepth
+    const bracketVisualScale: [number, number, number] = [
+      bracketArmLength,
+      bracketHeight,
+      bracketDepth,
+    ]
+    const bracketHitScale: [number, number, number] = [
+      bracketArmLength,
+      TRIM_RAIL_HIT_HEIGHT,
+      TRIM_RAIL_HIT_DEPTH,
+    ]
+    const previewAmount = getStarterDiagonalTrim(liveSegment, trim)
+
+    let previewStart: [number, number]
+    let previewEnd: [number, number]
+    switch (side) {
+      case 'frontLeft':
+        previewStart = [leftX + previewAmount, frontZ]
+        previewEnd = [leftX, frontZ - previewAmount]
+        break
+      case 'frontRight':
+        previewStart = [rightX, frontZ - previewAmount]
+        previewEnd = [rightX - previewAmount, frontZ]
+        break
+      case 'backLeft':
+        previewStart = [leftX, backZ + previewAmount]
+        previewEnd = [leftX + previewAmount, backZ]
+        break
+      case 'backRight':
+        previewStart = [rightX - previewAmount, backZ]
+        previewEnd = [rightX, backZ + previewAmount]
+        break
+    }
+
+    const [previewRailStart, previewRailEnd] = getDiagonalRailLine(side, previewStart, previewEnd)
+    const previewDx = previewRailEnd[0] - previewRailStart[0]
+    const previewDz = previewRailEnd[1] - previewRailStart[1]
+    const previewWidth = Math.hypot(previewDx, previewDz)
+    const previewYaw = Math.atan2(-previewDz, previewDx)
+    const handlePointerEnter = (event: ThreeEvent<PointerEvent>) => {
+      event.stopPropagation()
+      setHoveredSide(side)
+      document.body.style.cursor = getTrimCursor(side)
+    }
+    const handlePointerLeave = (event: ThreeEvent<PointerEvent>) => {
+      event.stopPropagation()
+      if (!dragCleanupRef.current) {
+        setHoveredSide((current) => (current === side ? null : current))
+        document.body.style.cursor = ''
+      }
+    }
+
+    return (
+      <group key={`${side}-add`} layers={EDITOR_LAYER}>
+        {hovered && previewWidth > 0 ? (
+          <group
+            position={[
+              (previewRailStart[0] + previewRailEnd[0]) / 2,
+              handleY / 2,
+              (previewRailStart[1] + previewRailEnd[1]) / 2,
+            ]}
+            rotation={[0, previewYaw, 0]}
+          >
+            <mesh
+              geometry={TRIM_UNIT_RAIL_GEOMETRY}
+              material={trimDiagonalPreviewRailMaterial}
+              position={[0, handleY / 2, TRIM_RAIL_SURFACE_OFFSET]}
+              raycast={() => null}
+              renderOrder={TRIM_RAIL_RENDER_ORDER}
+              scale={[previewWidth + bracketDepth * 2, bracketHeight, bracketDepth]}
+            />
+          </group>
+        ) : null}
+
+        <mesh
+          geometry={TRIM_UNIT_RAIL_GEOMETRY}
+          material={hovered ? trimRailHoverMaterial : trimRailMaterial}
+          onDoubleClick={(event) => resetDiagonalTrim(side, event)}
+          onPointerDown={(event) => startDrag(side, event)}
+          onPointerEnter={handlePointerEnter}
+          onPointerLeave={handlePointerLeave}
+          position={[position[0] + (xDir * bracketArmLength) / 2, position[1], position[2]]}
+          raycast={makeExpandedTrimRaycast(bracketVisualScale, bracketHitScale)}
+          renderOrder={TRIM_RAIL_RENDER_ORDER}
+          scale={bracketVisualScale}
+        />
+        <mesh
+          geometry={TRIM_UNIT_RAIL_GEOMETRY}
+          material={hovered ? trimRailHoverMaterial : trimRailMaterial}
+          onDoubleClick={(event) => resetDiagonalTrim(side, event)}
+          onPointerDown={(event) => startDrag(side, event)}
+          onPointerEnter={handlePointerEnter}
+          onPointerLeave={handlePointerLeave}
+          position={[position[0], position[1], position[2] + (zDir * bracketArmLength) / 2]}
+          raycast={makeExpandedTrimRaycast(bracketVisualScale, bracketHitScale)}
+          renderOrder={TRIM_RAIL_RENDER_ORDER}
+          rotation={[0, zDir > 0 ? -Math.PI / 2 : Math.PI / 2, 0]}
+          scale={bracketVisualScale}
+        />
+        <mesh
+          geometry={TRIM_UNIT_ADD_GEOMETRY}
+          material={hovered ? trimAddHoverMaterial : trimAddMaterial}
+          onDoubleClick={(event) => resetDiagonalTrim(side, event)}
+          onPointerDown={(event) => startDrag(side, event)}
+          onPointerEnter={handlePointerEnter}
+          onPointerLeave={handlePointerLeave}
+          position={position}
+          raycast={makeExpandedTrimRaycast(addVisualScale, addHitScale)}
+          renderOrder={TRIM_RAIL_RENDER_ORDER}
+          scale={addVisualScale}
+        />
       </group>
     )
   }
@@ -619,8 +993,12 @@ function RoofTrimHandles() {
       return null
     }
 
-    const displayX = xAmount > 0 ? xAmount : starterDiagonalTrim
-    const displayZ = zAmount > 0 ? zAmount : starterDiagonalTrim
+    if (!(xAmount > 0 && zAmount > 0)) {
+      return renderDiagonalAddHandle(side)
+    }
+
+    const displayX = xAmount
+    const displayZ = zAmount
     if (!(displayX > 0 && displayZ > 0)) return null
 
     let start: [number, number]
@@ -630,26 +1008,26 @@ function RoofTrimHandles() {
     const [xSide, zSide] = getDiagonalAxisKeys(side)
     switch (side) {
       case 'frontLeft':
-        start = [visualLeftX + displayX, visualFrontZ]
-        end = [visualLeftX, visualFrontZ - displayZ]
+        start = [leftX + displayX, frontZ]
+        end = [leftX, frontZ - displayZ]
         xOffset = -1
         zOffset = 1
         break
       case 'frontRight':
-        start = [visualRightX, visualFrontZ - displayZ]
-        end = [visualRightX - displayX, visualFrontZ]
+        start = [rightX, frontZ - displayZ]
+        end = [rightX - displayX, frontZ]
         zOffset = -1
         xOffset = 1
         break
       case 'backLeft':
-        start = [visualLeftX, visualBackZ + displayZ]
-        end = [visualLeftX + displayX, visualBackZ]
+        start = [leftX, backZ + displayZ]
+        end = [leftX + displayX, backZ]
         zOffset = -1
         xOffset = 1
         break
       case 'backRight':
-        start = [visualRightX - displayX, visualBackZ]
-        end = [visualRightX, visualBackZ + displayZ]
+        start = [rightX - displayX, backZ]
+        end = [rightX, backZ + displayZ]
         xOffset = -1
         zOffset = 1
         break
@@ -657,13 +1035,14 @@ function RoofTrimHandles() {
         return null
     }
 
-    const dx = end[0] - start[0]
-    const dz = end[1] - start[1]
+    const [railStart, railEnd] = getDiagonalRailLine(side, start, end)
+    const dx = railEnd[0] - railStart[0]
+    const dz = railEnd[1] - railStart[1]
     const width = Math.hypot(dx, dz)
     const yaw = Math.atan2(-dz, dx)
     return renderTrimPlane(
       side,
-      [(start[0] + end[0]) / 2, handleY / 2, (start[1] + end[1]) / 2],
+      [(railStart[0] + railEnd[0]) / 2, handleY / 2, (railStart[1] + railEnd[1]) / 2],
       [width, handleY],
       [0, yaw, 0],
       [
@@ -671,6 +1050,7 @@ function RoofTrimHandles() {
         { side: xSide, offsetX: (width / 2) * xOffset },
         { side: zSide, offsetX: (width / 2) * zOffset },
       ],
+      false,
     )
   }
 

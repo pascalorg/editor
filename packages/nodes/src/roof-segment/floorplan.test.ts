@@ -27,15 +27,13 @@ function dutchSegment(overrides: Partial<RoofSegmentNode> = {}): RoofSegmentNode
     mansardSteepHeightRatio: 0.7,
     dutchHipWidthRatio: 0.25,
     dutchHipHeightRatio: 0.5,
-    dutchGableOverhang: 1,
-    dutchRidgeAxis: 'x',
     children: [],
     ...overrides,
   } as RoofSegmentNode
 }
 
 describe('getRoofSegmentPlanLinework', () => {
-  test('keeps dutch x-ridge gable triangle on the waist when gable overhang projects', () => {
+  test('keeps dutch width-axis gable triangle on the waist', () => {
     const linework = getRoofSegmentPlanLinework(dutchSegment())
 
     expect(linework.ridges).toEqual([
@@ -54,22 +52,22 @@ describe('getRoofSegmentPlanLinework', () => {
     ])
   })
 
-  test('keeps dutch z-ridge gable triangle on the waist when gable overhang projects', () => {
-    const linework = getRoofSegmentPlanLinework(dutchSegment({ dutchRidgeAxis: 'z' }))
+  test('keeps dutch depth-axis gable triangle on the waist when the depth exceeds the width', () => {
+    const linework = getRoofSegmentPlanLinework(dutchSegment({ width: 6, depth: 8 }))
 
     expect(linework.ridges).toEqual([
       [
-        [0, 1.5],
-        [0, -1.5],
+        [0, 2.5],
+        [0, -2.5],
       ],
     ])
     expect(linework.hips).toContainEqual([
-      [-2.5, 1.5],
-      [0, 1.5],
+      [-1.5, 2.5],
+      [0, 2.5],
     ])
     expect(linework.hips).toContainEqual([
-      [2.5, -1.5],
-      [0, -1.5],
+      [1.5, -2.5],
+      [0, -2.5],
     ])
   })
 })

@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { getRidgeVentLinesForSegment, RoofSegmentNode } from '@pascal-app/core'
+import { RoofSegmentNode } from '@pascal-app/core'
 import { resolveRidgeSnap } from './ridge-snap'
 
 describe('resolveRidgeSnap', () => {
-  test('clamps dutch top ridges to the hipped shoulder span', () => {
+  test('does not snap Dutch ridges until the Dutch ridge model is rebuilt', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'dutch',
       width: 8,
@@ -13,32 +13,24 @@ describe('resolveRidgeSnap', () => {
 
     const right = resolveRidgeSnap(segment, 3, 0)
     const left = resolveRidgeSnap(segment, -3, 0)
-    const topRidge = getRidgeVentLinesForSegment(segment).find((line) => line.name === 'Ridge Vent')
 
-    expect(right?.localX).toBeCloseTo(topRidge?.end[0] ?? 0)
-    expect(left?.localX).toBeCloseTo(topRidge?.start[0] ?? 0)
-    expect(right?.localZ).toBe(0)
-    expect(left?.localZ).toBe(0)
-    expect(right?.localX).toBeCloseTo(-(left?.localX ?? 0))
+    expect(right).toBeNull()
+    expect(left).toBeNull()
   })
 
-  test('snaps dutch depth-axis ridges without switching back to width', () => {
+  test('does not snap Dutch ridges when the depth exceeds the width', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'dutch',
-      width: 8,
-      depth: 6,
+      width: 6,
+      depth: 8,
       pitch: 40,
-      dutchRidgeAxis: 'z',
     })
 
     const front = resolveRidgeSnap(segment, 0, 2)
     const back = resolveRidgeSnap(segment, 0, -2)
 
-    expect(front?.localX).toBeCloseTo(0)
-    expect(back?.localX).toBeCloseTo(0)
-    expect(front?.localZ).toBeGreaterThan(0)
-    expect(back?.localZ).toBeLessThan(0)
-    expect(front?.rotation).toBeCloseTo(Math.PI / 2)
+    expect(front).toBeNull()
+    expect(back).toBeNull()
   })
 
   test('snaps mansard center clicks to the upper top ridge', () => {

@@ -31,15 +31,12 @@ const DEFAULT_RIDGE_VENT_REFRESH_FIELDS = new Set<string>([
   'roofType',
   'width',
   'depth',
-  'trim',
   'overhang',
   'wallThickness',
   'shingleThickness',
   'gambrelLowerWidthRatio',
   'mansardSteepWidthRatio',
   'dutchHipWidthRatio',
-  'dutchGableOverhang',
-  'dutchRidgeAxis',
 ])
 
 type ZodCheckLike = {
