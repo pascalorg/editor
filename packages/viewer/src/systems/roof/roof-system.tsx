@@ -503,14 +503,10 @@ function updateMergedRoofGeometry(
 
   if (totalShinSlab && totalDeckSlab && totalWall && totalInner) {
     try {
-      const finalShinTrimmed = csgEvaluator.evaluate(totalShinSlab, totalInner, SUBTRACTION)
-      prepareBrushForCSG(finalShinTrimmed)
-      const finalDeckTrimmed = csgEvaluator.evaluate(totalDeckSlab, totalInner, SUBTRACTION)
-      prepareBrushForCSG(finalDeckTrimmed)
       const finalWallTrimmed = csgEvaluator.evaluate(totalWall, totalInner, SUBTRACTION)
       prepareBrushForCSG(finalWallTrimmed)
 
-      const shinDeck = csgEvaluator.evaluate(finalShinTrimmed, finalDeckTrimmed, ADDITION)
+      const shinDeck = csgEvaluator.evaluate(totalShinSlab, totalDeckSlab, ADDITION)
       prepareBrushForCSG(shinDeck)
       const combined = csgEvaluator.evaluate(shinDeck, finalWallTrimmed, ADDITION)
       prepareBrushForCSG(combined)
@@ -525,8 +521,6 @@ function updateMergedRoofGeometry(
           warnedMergedRoofNaNIds.add(roofNode.id)
         }
         resultGeo.dispose()
-        finalShinTrimmed.geometry.dispose()
-        finalDeckTrimmed.geometry.dispose()
         finalWallTrimmed.geometry.dispose()
         shinDeck.geometry.dispose()
         totalShinSlab.geometry.dispose()
@@ -554,8 +548,6 @@ function updateMergedRoofGeometry(
       mergedMesh.geometry.dispose()
       mergedMesh.geometry = resultGeo
 
-      finalShinTrimmed.geometry.dispose()
-      finalDeckTrimmed.geometry.dispose()
       finalWallTrimmed.geometry.dispose()
       shinDeck.geometry.dispose()
     } catch (e) {
