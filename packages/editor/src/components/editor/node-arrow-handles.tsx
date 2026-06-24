@@ -43,7 +43,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
-import { ROTATE_HANDLE_DRAG_LABEL } from '../../lib/contextual-help'
+import { RESIZE_HANDLE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from '../../lib/contextual-help'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
@@ -681,16 +681,18 @@ function LinearArrow({
       return {
         overrideId,
         onBegin: () => {
-          if (measureLabel) {
-            useInteractionScope
-              .getState()
-              .begin({ kind: 'handle-drag', nodeId, handle: measureLabel })
-          }
+          // Always claim the handle-drag scope so the HUD knows a resize is the
+          // active interaction (keeps the idle select hints off-screen). The
+          // dimension-pill handles carry their `measureLabel`; plain resize
+          // arrows use the generic label.
+          useInteractionScope.getState().begin({
+            kind: 'handle-drag',
+            nodeId,
+            handle: measureLabel ?? RESIZE_HANDLE_DRAG_LABEL,
+          })
         },
         onEnd: () => {
-          if (measureLabel) {
-            useInteractionScope.getState().endIf((sc) => sc.kind === 'handle-drag')
-          }
+          useInteractionScope.getState().endIf((sc) => sc.kind === 'handle-drag')
           if (onDrag) useOpeningGuides.getState().clear()
         },
         move: ({ event: moveEvent, getPointerRay: getMovePointerRay }) => {

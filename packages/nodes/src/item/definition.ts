@@ -225,6 +225,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
         return { dimensions: getScaledDimensions(item), rotation: item.rotation }
       },
       applies: (node) => !(node as ItemNodeType).asset.attachTo,
+      collides: true,
     },
     // Recessed ceiling fixtures cut a hole in their host ceiling. The viewer's
     // CeilingSystem queries this capability on each child of a ceiling so it

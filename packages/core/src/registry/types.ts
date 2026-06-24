@@ -1575,6 +1575,15 @@ export type FloorPlacedConfig = {
   footprint?: FloorPlacedFootprintResolver
   footprints?: FloorPlacedFootprintsResolver
   applies?: (node: AnyNode) => boolean
+  /**
+   * Opt this kind into floor-placement collision: its footprint blocks other
+   * placements (it's an obstacle in `canPlaceOnFloor`) AND its own
+   * placement/move refuses to overlap another colliding footprint (red ghost,
+   * Alt to force). Solid furniture-like kinds (item / shelf / column) set this;
+   * markers and port-mated kinds (spawn / MEP / stair) leave it off so they
+   * neither block nor get blocked. Default off.
+   */
+  collides?: boolean
 }
 
 /**

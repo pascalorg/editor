@@ -220,18 +220,19 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // commit / cancel / unmount so a follow-on drag starts clean.
   const overriddenIdsRef = useRef<AnyNodeId[]>([])
 
-  // Shelf placement shows the same green/red footprint box GLB items use
-  // (instead of the vertical-arrow cursor) and refuses an invalid drop unless
-  // Shift forces it. The footprint comes from the kind's `floorPlaced`
-  // capability so this stays generic if we ever opt other kinds in.
-  const isShelf = node.type === 'shelf'
+  // Colliding floor kinds (item / shelf / column) show the same green/red
+  // footprint box GLB items use (instead of the vertical-arrow cursor) and
+  // refuse an invalid drop unless Alt forces it. The gate + footprint both come
+  // from the kind's declarative `floorPlaced` capability, so opting a new kind
+  // in is just `collides: true` — no change here.
+  const collides = nodeRegistry.get(node.type)?.capabilities?.floorPlaced?.collides === true
   const boxDimensions = useMemo(
     () =>
-      isShelf
+      collides
         ? (nodeRegistry.get(node.type)?.capabilities?.floorPlaced?.footprint?.(node)?.dimensions ??
           null)
         : null,
-    [isShelf, node],
+    [collides, node],
   )
   const [valid, setValid] = useState(true)
   const [cursorRotationY, setCursorRotationY] = useState(originalRotationY)

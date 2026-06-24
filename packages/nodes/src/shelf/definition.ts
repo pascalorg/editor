@@ -132,6 +132,7 @@ function shelfHandles(_node: ShelfNodeType): HandleDescriptor<ShelfNodeType>[] {
 
 export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   kind: 'shelf',
+  snapProfile: 'item',
   schemaVersion: 2,
   schema: ShelfNode,
   category: 'furnish',
@@ -197,6 +198,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
           rotation: shelf.rotation,
         }
       },
+      collides: true,
     },
   },
 

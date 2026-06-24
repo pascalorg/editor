@@ -10,6 +10,12 @@ export type ContextualShortcutHint = {
 // which route their own measurement label here.
 export const ROTATE_HANDLE_DRAG_LABEL = 'rotate-handle'
 
+// `activeHandleDrag.label` a plain resize / radial-resize arrow sets while
+// dragging (when it carries no dimension `measureLabel`). It exists only so the
+// interaction scope is non-idle during a resize, which keeps the idle
+// select-mode hints off-screen — a resize is its own action, not a selection.
+export const RESIZE_HANDLE_DRAG_LABEL = 'resize-handle'
+
 // Hints shown while a rotate gizmo is mid-drag: Shift bypasses the angle step
 // (free rotation), the same toggle wall drafting exposes. `active` lights the
 // pill while Shift is held.

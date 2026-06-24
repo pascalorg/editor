@@ -11,6 +11,8 @@ import {
 } from '@pascal-app/core'
 import {
   getFloorStackPreviewPosition,
+  isGridSnapActive,
+  isMagneticSnapActive,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
@@ -87,8 +89,8 @@ const ColumnTool = () => {
         rawZ: event.localPosition[2],
         gridStep: useEditor.getState().gridSnapStep,
         candidates: alignmentCandidates,
-        bypassAlignment: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
-        bypassGrid: event.nativeEvent?.shiftKey === true,
+        bypassAlignment: !isMagneticSnapActive(),
+        bypassGrid: !isGridSnapActive(),
       })
       useAlignmentGuides.getState().set(guides)
 
@@ -108,10 +110,7 @@ const ColumnTool = () => {
       usePlacementPreview.getState().set({ ...previewNode, position })
 
       const prev = previousSnapRef.current
-      if (
-        event.nativeEvent?.shiftKey !== true &&
-        (!prev || prev[0] !== position[0] || prev[1] !== position[2])
-      ) {
+      if (!prev || prev[0] !== position[0] || prev[1] !== position[2]) {
         triggerSFX('sfx:grid-snap')
         previousSnapRef.current = [position[0], position[2]]
       }
@@ -124,7 +123,7 @@ const ColumnTool = () => {
           activeLevelId,
           event,
           useEditor.getState().gridSnapStep,
-          event.nativeEvent?.shiftKey === true,
+          !isGridSnapActive(),
         )
 
       const column = createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, position)
