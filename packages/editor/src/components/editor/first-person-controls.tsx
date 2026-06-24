@@ -45,6 +45,7 @@ import {
 } from 'three'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import '../../three-types'
+import { BVHEcctrl, type BVHEcctrlApi, type MovementInput } from '@pascal-app/viewer'
 import {
   closeDoorOpenState,
   DOOR_SWING_OPEN_ANGLE,
@@ -64,8 +65,6 @@ import {
   type FirstPersonColliderWorld,
   type FirstPersonSpawn,
 } from './first-person/build-collider-world'
-import type { BVHEcctrlApi, MovementInput } from './first-person/bvh-ecctrl'
-import BVHEcctrl from './first-person/bvh-ecctrl'
 
 const CAMERA_EYE_OFFSET = 0.45
 const LOOK_SENSITIVITY = 0.002

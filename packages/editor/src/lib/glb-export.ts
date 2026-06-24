@@ -470,6 +470,39 @@ function bakeWindowClip(
  * (e.g. `pascalSwingLeaf`, cached-material flags) leaks into glTF extras — the
  * file describes itself with exactly the fields a consumer needs.
  */
+/**
+ * Human-readable label for a baked node, mirroring the viewer's `getNodeName`:
+ * an explicit name wins, items fall back to their catalog asset name, other
+ * kinds to a capitalized type. Levels override this with their display name.
+ */
+function nodeDisplayLabel(node: AnyNode): string {
+  if (node.name) return node.name
+  switch (node.type) {
+    case 'item':
+      return (node as { asset?: { name?: string } }).asset?.name || 'Item'
+    case 'wall':
+      return 'Wall'
+    case 'door':
+      return 'Door'
+    case 'window':
+      return 'Window'
+    case 'slab':
+      return 'Slab'
+    case 'ceiling':
+      return 'Ceiling'
+    case 'roof':
+      return 'Roof'
+    case 'fence':
+      return 'Fence'
+    case 'column':
+      return 'Column'
+    case 'stair':
+      return 'Stairs'
+    default:
+      return node.type
+  }
+}
+
 function stampIdentity(
   scene: THREE.Object3D,
   cloneByOriginal: Map<THREE.Object3D, THREE.Object3D>,
@@ -487,7 +520,12 @@ function stampIdentity(
 
     target.name = id
     const extras: Record<string, unknown> = { pascalId: id, kind: node.type }
-    if (node.name) extras.label = node.name
+    // Stamp a human label for every node (catalog name for items, a type label
+    // otherwise) so the viewer breadcrumb/hover read names, not raw pascalIds.
+    extras.label = nodeDisplayLabel(node)
+    // Camera bookmarks ride on the identity node (any kind can carry one) so the
+    // baked viewer flies to a saved pose on selection without a side file.
+    if (node.camera) extras.camera = node.camera
     // Levels carry no stored name; stamp the editor's display name ("Level 1")
     // so the baked viewer's level/breadcrumb UI reads the same labels. Force the
     // node visible: the bake must capture every floor regardless of the editor's
@@ -514,6 +552,14 @@ function stampIdentity(
       const zone = node as ZoneNode
       extras.polygon = zone.polygon
       extras.color = zone.color
+      target.visible = true
+    }
+    if (node.type === 'spawn') {
+      // The spawn marker's visible mesh lives on a non-scene overlay layer (and
+      // is pruned), so this identity node is an empty transform. Keep it + force
+      // visible so the baked walkthrough can read its world position/yaw and
+      // start the player there (`extras.rotation` mirrors the node's yaw).
+      extras.rotation = (node as { rotation?: number }).rotation ?? 0
       target.visible = true
     }
     target.userData = extras

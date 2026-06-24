@@ -14,11 +14,18 @@ export { ErrorBoundary } from './components/error-boundary'
 export { NodeRenderer } from './components/renderers/node-renderer'
 export { default as Viewer, type ViewerHandle } from './components/viewer'
 export {
+  type BVHEcctrlApi,
+  default as BVHEcctrl,
+  type MovementInput,
+} from './components/viewer/bvh-ecctrl'
+export {
   type GlbHover,
   type GlbIdentity,
   type GlbLevel,
   GlbScene,
+  type GlbWalkthrough,
 } from './components/viewer/glb-scene'
+export { GlbWalkthroughController } from './components/viewer/glb-walkthrough-controller'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
 export {
   DEFAULT_HOVER_STYLES,
