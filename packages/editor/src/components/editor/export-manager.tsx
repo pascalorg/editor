@@ -7,6 +7,7 @@ import type { Mesh, Object3D } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
+import * as WebGPUTextureUtils from 'three/examples/jsm/utils/WebGPUTextureUtils.js'
 
 export function ExportManager() {
   const scene = useThree((state) => state.scene)
@@ -42,6 +43,18 @@ export function ExportManager() {
 
       // Default: GLB export (existing behavior)
       const exporter = new GLTFExporter()
+
+      // Compressed (KTX2/basis) textures must be decompressed during export or
+      // three r184's GLTFExporter throws "setTextureUtils() must be called".
+      // The app renders with WebGPURenderer, so use the WebGPU texture utils.
+      // We intentionally do NOT pass the live renderer: decompress() resizes
+      // whatever renderer it's given (and never restores it), which would
+      // corrupt the visible canvas. Omitting it lets three spin up and dispose
+      // its own throwaway renderer for the blit instead.
+      exporter.setTextureUtils({
+        decompress: (texture, maxTextureSize) =>
+          WebGPUTextureUtils.decompress(texture, maxTextureSize),
+      })
 
       return new Promise<void>((resolve, reject) => {
         exporter.parse(
