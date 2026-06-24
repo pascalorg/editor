@@ -6,7 +6,9 @@ import {
   type IconRef,
   type ItemNode,
   nodeRegistry,
+  sceneRegistry,
   type ParamField,
+  useLiveTransforms,
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
@@ -63,6 +65,12 @@ export function ParametricInspector() {
   // a drag re-renders the entire panel + every field + every SliderControl.
   // Per-field subscriptions live on FieldRenderer below.
   const nodeType = useScene((s) => (selectedId ? (s.nodes[selectedId]?.type ?? null) : null))
+  const isAssemblyChild = useScene((s) => {
+    if (!selectedId) return false
+    const node = s.nodes[selectedId]
+    const parentId = node?.parentId as AnyNodeId | undefined
+    return !!(parentId && s.nodes[parentId]?.type === 'assembly' && hasTransformFields(node))
+  })
 
   const def = nodeType ? nodeRegistry.get(nodeType) : undefined
   const parametrics = def?.parametrics
@@ -134,6 +142,9 @@ export function ParametricInspector() {
         </PanelSection>
       ))}
       {nodeType === 'zone' && <ZonePropertiesSection nodeId={selectedId} />}
+      {isAssemblyChild && (
+        <AssemblyPartTransformSection nodeId={selectedId} onUpdate={handleUpdate} />
+      )}
       <NodeMaterialSection nodeId={selectedId} />
       <ArticraftModelSection nodeId={selectedId} />
       <ArticraftJointSection nodeId={selectedId} />
@@ -160,6 +171,93 @@ export function ParametricInspector() {
 
 type ZoneMetadataValue = string | boolean | number | null
 type ZoneMetadata = Record<string, ZoneMetadataValue>
+
+type TransformableNode = AnyNode & {
+  position: [number, number, number]
+  rotation: [number, number, number]
+}
+
+type TransformAxis = 0 | 1 | 2
+
+const TRANSFORM_ROTATION_NUDGE = Math.PI / 4
+const TRANSFORM_RAD_TO_DEG = 180 / Math.PI
+const TRANSFORM_DEG_TO_RAD = Math.PI / 180
+
+function hasTransformFields(node: AnyNode | undefined): node is TransformableNode {
+  return !!(
+    node &&
+    Array.isArray((node as { position?: unknown }).position) &&
+    (node as { position: unknown[] }).position.length >= 3 &&
+    Array.isArray((node as { rotation?: unknown }).rotation) &&
+    (node as { rotation: unknown[] }).rotation.length >= 3
+  )
+}
+
+function roundTransformValue(value: number, precision = 4) {
+  const scale = 10 ** precision
+  return Math.round(value * scale) / scale
+}
+
+function transformAxisLabel(axis: TransformAxis) {
+  return axis === 0 ? 'X' : axis === 1 ? 'Y' : 'Z'
+}
+
+function syncTransformObject(nodeId: AnyNodeId, rotation: [number, number, number]) {
+  useLiveTransforms.getState().clear(nodeId)
+  sceneRegistry.nodes.get(nodeId)?.rotation.set(rotation[0], rotation[1], rotation[2])
+}
+
+function AssemblyPartTransformSection({
+  nodeId,
+  onUpdate,
+}: {
+  nodeId: AnyNodeId
+  onUpdate: (patch: Partial<AnyNode>) => void
+}) {
+  const node = useScene((s) => s.nodes[nodeId])
+  if (!hasTransformFields(node)) return null
+
+  const updateRotation = (axis: TransformAxis, value: number) => {
+    const rotation = [...node.rotation] as [number, number, number]
+    rotation[axis] = roundTransformValue(value)
+    syncTransformObject(nodeId, rotation)
+    onUpdate({ rotation } as Partial<AnyNode>)
+  }
+
+  const nudgeRotation = (axis: TransformAxis, delta: number) => {
+    sfxEmitter.emit('sfx:item-rotate')
+    updateRotation(axis, node.rotation[axis] + delta)
+  }
+
+  return (
+    <PanelSection title="整体变形">
+      <div className="space-y-2 pt-1">
+        {([0, 1, 2] as const).map((axis) => (
+          <div className="flex items-center gap-1.5" key={axis}>
+            <ActionButton
+              label="-45°"
+              onClick={() => nudgeRotation(axis, -TRANSFORM_ROTATION_NUDGE)}
+            />
+            <SliderControl
+              label={`${transformAxisLabel(axis)} 旋转`}
+              max={180}
+              min={-180}
+              onChange={(degrees) => updateRotation(axis, degrees * TRANSFORM_DEG_TO_RAD)}
+              precision={0}
+              step={1}
+              unit="°"
+              value={Math.round(node.rotation[axis] * TRANSFORM_RAD_TO_DEG)}
+            />
+            <ActionButton
+              label="+45°"
+              onClick={() => nudgeRotation(axis, TRANSFORM_ROTATION_NUDGE)}
+            />
+          </div>
+        ))}
+      </div>
+    </PanelSection>
+  )
+}
 
 const ZONE_TYPE_OPTIONS = [
   { value: 'production', label: 'Production', color: '#2563eb' },

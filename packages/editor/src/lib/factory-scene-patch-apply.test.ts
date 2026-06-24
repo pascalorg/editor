@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { AssemblyNode, BoxNode, LevelNode } from '@pascal-app/core/schema'
+import {
+  AssemblyNode,
+  BoxNode,
+  BuildingNode,
+  LevelNode,
+  RoofNode,
+  RoofSegmentNode,
+} from '@pascal-app/core/schema'
 import {
   applyFactoryScenePatchesToGraph,
   buildFactoryScenePatchOperations,
@@ -82,13 +89,13 @@ describe('factory scene patch apply', () => {
     expect(operations.updateOps).toEqual([
       {
         id: level.id,
-          data: {
-            material: undefined,
-            shellMaterialPreset: undefined,
-            name: 'Factory level',
-          } as Record<string, unknown>,
-        },
-      ])
+        data: {
+          material: undefined,
+          shellMaterialPreset: undefined,
+          name: 'Factory level',
+        } as Record<string, unknown>,
+      },
+    ])
   })
 
   test('keeps updates that target nodes created earlier in the same run', () => {
@@ -109,5 +116,43 @@ describe('factory scene patch apply', () => {
         data: { name: 'Updated part' },
       },
     ])
+  })
+
+  test('applies generated levels and roof children created in the same patch batch', () => {
+    const ground = LevelNode.parse({ id: 'level_ground', level: 0 })
+    const building = BuildingNode.parse({ id: 'building_main', children: [ground.id] })
+    const upper = LevelNode.parse({ id: 'level_upper', level: 1, parentId: building.id })
+    const roofSegment = RoofSegmentNode.parse({ id: 'rseg_top', roofType: 'gable' })
+    const roof = RoofNode.parse({ id: 'roof_top', children: [roofSegment.id] })
+
+    const graph = applyFactoryScenePatchesToGraph(
+      {
+        nodes: {
+          [building.id]: building,
+          [ground.id]: { ...ground, parentId: building.id },
+        },
+        rootNodeIds: [building.id],
+      },
+      [
+        { op: 'create', parentId: building.id, node: upper },
+        { op: 'create', parentId: upper.id, node: roof },
+        { op: 'create', parentId: roof.id, node: roofSegment },
+      ],
+    )
+
+    expect(graph.nodes[building.id]).toMatchObject({
+      children: [ground.id, upper.id],
+    })
+    expect(graph.nodes[upper.id]).toMatchObject({
+      parentId: building.id,
+      children: [roof.id],
+    })
+    expect(graph.nodes[roof.id]).toMatchObject({
+      parentId: upper.id,
+      children: [roofSegment.id],
+    })
+    expect(graph.nodes[roofSegment.id]).toMatchObject({
+      parentId: roof.id,
+    })
   })
 })

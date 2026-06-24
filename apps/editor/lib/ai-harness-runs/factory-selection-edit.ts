@@ -1,4 +1,10 @@
 import type { MaterialSchema } from '@pascal-app/core/schema'
+import {
+  buildGeneratedGeometryCreatePatches,
+  type GeneratedGeometryCreatePatch,
+} from '../../../../packages/editor/src/lib/ai-generated-geometry-nodes'
+import { executeGeometryToolCall } from '../../../../packages/editor/src/lib/ai-geometry-tool-executor'
+import { precisionPartDeterministicRoute } from './primitive-runner'
 
 export type FactorySelectionNodeSnapshot = {
   id: string
@@ -41,7 +47,10 @@ export type FactorySceneDeletePatch = {
   id: string
 }
 
-export type FactorySceneEditPatch = FactorySceneUpdatePatch | FactorySceneDeletePatch
+export type FactorySceneEditPatch =
+  | GeneratedGeometryCreatePatch
+  | FactorySceneUpdatePatch
+  | FactorySceneDeletePatch
 
 export type FactorySelectionEditResult = {
   patches: FactorySceneEditPatch[]
@@ -417,7 +426,7 @@ const GENERATED_PRIMITIVE_NODE_TYPES = new Set([
 ])
 
 export function looksLikeSelectionGeometryEdit(prompt: string) {
-  return /(\u52a0\u957f|\u66f4\u957f|\u957f\u4e00\u70b9|\u53d8\u957f|\u653e\u5927|\u5927\u4e00\u70b9|\u53d8\u5927|\u7f29\u5c0f|\u5c0f\u4e00\u70b9|\u53d8\u5c0f|\u53d8\u5bbd|\u66f4\u5bbd|\u53d8\u9ad8|\u66f4\u9ad8|\u53d8\u539a|\u66f4\u539a|\u53d8\u8584|longer|shorter|larger|bigger|smaller|wider|narrower|taller|higher|thicker|thinner|scale|resize|enlarge|shrink)/i.test(
+  return /(\u52a0\u957f|\u66f4\u957f|\u957f\u4e00\u70b9|\u53d8\u957f|\u653e\u5927|\u5927\u4e00\u70b9|\u53d8\u5927|\u7f29\u5c0f|\u5c0f\u4e00\u70b9|\u53d8\u5c0f|\u53d8\u5bbd|\u66f4\u5bbd|\u53d8\u9ad8|\u66f4\u9ad8|\u53d8\u539a|\u66f4\u539a|\u53d8\u8584|\u5c42|\u5c42\u6570|level|levels|storey|story|stories|longer|shorter|larger|bigger|smaller|wider|narrower|taller|higher|thicker|thinner|scale|resize|enlarge|shrink)/i.test(
     prompt,
   )
 }
@@ -648,6 +657,205 @@ function rootOrNamedSubpartTargets(snapshot: FactorySelectionSnapshot, prompt: s
     return narrowed
   }
   return selectedRootNodes(snapshot)
+}
+
+const CHINESE_NUMBER: Record<string, number> = {
+  \u96f6: 0,
+  \u4e00: 1,
+  \u4e8c: 2,
+  \u4e24: 2,
+  \u4e09: 3,
+  \u56db: 4,
+  \u4e94: 5,
+  \u516d: 6,
+  \u4e03: 7,
+  \u516b: 8,
+  \u4e5d: 9,
+  \u5341: 10,
+}
+
+const ENGLISH_NUMBER: Record<string, number> = {
+  zero: 0,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+}
+
+function parsedLevelCountToken(value: string | undefined): number | undefined {
+  if (!value) return undefined
+  if (/^\d+$/.test(value)) return Number(value)
+  return CHINESE_NUMBER[value] ?? ENGLISH_NUMBER[value.toLowerCase()]
+}
+
+function requestedTowerLevelCount(prompt: string): number | undefined {
+  const targetPatterns = [
+    /(?:\u6539\u6210|\u53d8\u6210|\u8bbe\u6210|\u8c03\u6210|to|into|set\s+to)\s*(\d+|[\u96f6\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341]|one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:\u5c42|levels?|storeys?|stories?)/i,
+    /(\d+|[\u96f6\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341]|one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:\u5c42|levels?|storeys?|stories?)/i,
+  ]
+  for (const pattern of targetPatterns) {
+    const match = pattern.exec(prompt)
+    const count = parsedLevelCountToken(match?.[1])
+    if (count != null && count >= 2 && count <= 9) return count
+  }
+  return undefined
+}
+
+function looksLikeTowerCraneLevelEdit(prompt: string) {
+  return (
+    requestedTowerLevelCount(prompt) != null &&
+    /(\u5854\u540a|\u67b6\u5b50|\u4e0b\u65b9\u7684\u67b6\u5b50|tower[_\s-]?crane|crane|mast|frame|levels?|storeys?|stories?)/i.test(
+      prompt,
+    )
+  )
+}
+
+function nodeSearchText(node: FactorySelectionNodeSnapshot | undefined) {
+  if (!node) return ''
+  return [
+    node.id,
+    node.type,
+    node.name,
+    node.kind,
+    node.metadata?.semanticRole,
+    node.metadata?.semanticGroup,
+    node.metadata?.sourcePartKind,
+    node.metadata?.sourcePartId,
+    recordValue(node.metadata?.generatedShape)?.label,
+    recordValue(recordValue(node.metadata?.generatedShape)?.selector)?.semanticRole,
+    recordValue(recordValue(node.metadata?.generatedShape)?.selector)?.sourcePartKind,
+    recordValue(recordValue(node.metadata?.generatedShape)?.selector)?.sourcePartId,
+  ]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ')
+    .toLowerCase()
+}
+
+function descendantIds(snapshot: FactorySelectionSnapshot, rootId: string) {
+  const byId = new Map(snapshot.nodes.map((node) => [node.id, node]))
+  const ids: string[] = []
+  const visit = (id: string, visiting = new Set<string>()) => {
+    if (visiting.has(id)) return
+    const node = byId.get(id)
+    if (!node) return
+    const nextVisiting = new Set(visiting).add(id)
+    for (const childId of node.children ?? []) {
+      visit(childId, nextVisiting)
+      ids.push(childId)
+    }
+  }
+  visit(rootId)
+  return ids
+}
+
+function assemblyRootForSelection(snapshot: FactorySelectionSnapshot) {
+  const byId = new Map(snapshot.nodes.map((node) => [node.id, node]))
+  for (const selectedId of snapshot.selectedIds) {
+    let node = byId.get(selectedId)
+    const seen = new Set<string>()
+    while (node && !seen.has(node.id)) {
+      seen.add(node.id)
+      if (node.type === 'assembly') return node
+      node = typeof node.parentId === 'string' ? byId.get(node.parentId) : undefined
+    }
+  }
+  return selectedRootNodes(snapshot).find((node) => node.type === 'assembly')
+}
+
+function selectionLooksLikeTowerCrane(snapshot: FactorySelectionSnapshot) {
+  const text = snapshot.nodes.map(nodeSearchText).join(' ')
+  return (
+    /tower_crane|hammerhead|tower_mast|tower_column|tower_beam|structural_tower_frame|\btower\b/.test(
+      text,
+    ) && /main_jib|counter_jib|jib|wire_rope|hook_block|slewing/.test(text)
+  )
+}
+
+function towerRouteArgsWithLevelCount(levelCount: number) {
+  const route = precisionPartDeterministicRoute('generate a construction tower crane', null)
+  if (!route) return undefined
+  const args = structuredClone(route.args) as Record<string, unknown>
+  const parts = Array.isArray(args.parts) ? (args.parts as Array<Record<string, unknown>>) : []
+  const mast = parts.find((part) => part.id === 'tower_mast')
+  if (!mast) return undefined
+  mast.levelCount = levelCount
+  return args
+}
+
+export function composeSelectionTowerLevelEdit(input: {
+  prompt: string
+  context?: unknown
+}): FactorySelectionEditResult | null {
+  if (!looksLikeTowerCraneLevelEdit(input.prompt)) return null
+  const snapshot = selectionSnapshotFromContext(input.context)
+  if (!snapshot?.selectedIds.length) {
+    return {
+      patches: [],
+      nodeIds: [],
+      changed: [],
+      missingReason:
+        'No canvas object is selected. Select a generated tower crane assembly before changing its frame levels.',
+    }
+  }
+  if (!selectionLooksLikeTowerCrane(snapshot)) return null
+  const root = assemblyRootForSelection(snapshot)
+  if (!root) {
+    return {
+      patches: [],
+      nodeIds: [],
+      changed: [],
+      missingReason: 'The selected tower crane root assembly could not be found.',
+    }
+  }
+  const levelCount = requestedTowerLevelCount(input.prompt)
+  const args = levelCount == null ? undefined : towerRouteArgsWithLevelCount(levelCount)
+  if (!args || levelCount == null) {
+    return {
+      patches: [],
+      nodeIds: [],
+      changed: [],
+      missingReason: 'The requested tower crane level count could not be resolved.',
+    }
+  }
+
+  const geometry = executeGeometryToolCall('compose_parts', args, {
+    prompt: input.prompt,
+  })
+  if (!geometry.artifact) {
+    return {
+      patches: [],
+      nodeIds: [],
+      changed: [],
+      missingReason: geometry.content || 'Regenerating the tower crane did not produce geometry.',
+    }
+  }
+  const replacement = buildGeneratedGeometryCreatePatches(geometry.artifact, {
+    parentId: root.parentId,
+    position: root.position,
+    rotation: root.rotation,
+    generatedBy: 'factory-agent',
+    metadata: {
+      replacedNodeId: root.id,
+      editKind: 'tower_crane_level_count',
+      levelCount,
+    },
+  })
+  const deleteIds = [...descendantIds(snapshot, root.id), root.id]
+  const deletePatches = deleteIds.map((id) => ({ op: 'delete' as const, id }))
+  const patches: FactorySceneEditPatch[] = [...deletePatches, ...replacement.patches]
+
+  return {
+    patches,
+    nodeIds: [...deleteIds, ...replacement.nodeIds],
+    changed: [root.name ?? root.id],
+    summary: [`${nodeLabel(root, root.id)}: tower mast levels -> ${levelCount}`],
+  }
 }
 
 export function composeSelectionGeometryEdit(input: {
@@ -1053,6 +1261,7 @@ export function composeSelectionEdit(input: {
     composeSelectionRotateEdit(input) ??
     composeSelectionColorEdit(input) ??
     composeSelectionTankKindEdit(input) ??
+    composeSelectionTowerLevelEdit(input) ??
     composeSelectionGeometryEdit(input) ??
     composeSelectionReplaceEdit(input)
   )

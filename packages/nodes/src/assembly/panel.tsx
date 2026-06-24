@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import {
   type AnyNode,
@@ -93,7 +93,6 @@ export default function AssemblyPanel() {
     },
     [handleUpdate, node],
   )
-
   const handleClose = useCallback(() => {
     if (node && editingAssemblyId === node.id) {
       setEditingAssemblyId(null)
@@ -161,10 +160,10 @@ export default function AssemblyPanel() {
           />
         </ActionGroup>
       </PanelSection>
-      <PanelSection title={'缩放'}>
+      <PanelSection title={'\u7f29\u653e'}>
         <div className="space-y-2">
           <SliderControl
-            label={'等比缩放'}
+            label={'\u7b49\u6bd4\u7f29\u653e'}
             max={10}
             min={0.01}
             onChange={updateScale}
@@ -173,7 +172,9 @@ export default function AssemblyPanel() {
             value={rounded(uniformScale)}
           />
           <div className="rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-muted-foreground text-xs leading-5">
-            {'缩放写在组合根节点上，子物件保持局部坐标，等比放大缩小不会改散部件位置。'}
+            {
+              '\u7f29\u653e\u5199\u5728\u7ec4\u5408\u6839\u8282\u70b9\u4e0a\uff0c\u5b50\u7269\u4ef6\u4fdd\u6301\u5c40\u90e8\u5750\u6807\uff0c\u7b49\u6bd4\u653e\u5927\u7f29\u5c0f\u4e0d\u4f1a\u6539\u6563\u90e8\u4ef6\u4f4d\u7f6e\u3002'
+            }
           </div>
         </div>
       </PanelSection>

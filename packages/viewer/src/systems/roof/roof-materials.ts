@@ -68,8 +68,20 @@ export function getRoofMaterialArray(
   // Themed role colours: roof top/edge use the 'roof' role, the soffit/underside
   // uses 'ceiling'. These also fill any untextured slot so an untextured roof is
   // theme-coloured regardless of the textures toggle (no more white default).
-  const roofMaterial = createSurfaceRoleMaterial('roof', colorPreset, undefined, sceneTheme)
-  const ceilingMaterial = createSurfaceRoleMaterial('ceiling', colorPreset, undefined, sceneTheme)
+  const roofMaterial = createSurfaceRoleMaterial(
+    'roof',
+    colorPreset,
+    undefined,
+    sceneTheme,
+    shading,
+  )
+  const ceilingMaterial = createSurfaceRoleMaterial(
+    'ceiling',
+    colorPreset,
+    undefined,
+    sceneTheme,
+    shading,
+  )
   const roleArray: RoofMaterialArray = [
     roofMaterial,
     ceilingMaterial,

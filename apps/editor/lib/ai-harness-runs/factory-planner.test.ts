@@ -20,6 +20,21 @@ describe('factory planner', () => {
     }
   })
 
+  test('extracts multi-story house height and roof intent from Chinese layout prompts', () => {
+    const plan = fallbackFactoryPlan(
+      '生成5米*10，高2米5的屋子，然后屋子上面还有一层，也是5米*10，高2米5。带屋顶。',
+    )
+
+    expect(plan).toMatchObject({
+      kind: 'layout',
+      layoutType: 'house',
+      stories: 2,
+      storyHeight: 2.5,
+      hasRoof: true,
+      roofType: 'gable',
+    })
+  })
+
   test('routes known catalog items to catalog_item', () => {
     const plan = fallbackFactoryPlan('factory straight pipe')
 
@@ -33,6 +48,18 @@ describe('factory planner', () => {
     const plan = fallbackFactoryPlan('\u751f\u6210\u4e00\u53f0\u8f93\u9001\u673a')
 
     expect(plan.kind).toBe('geometry')
+  })
+
+  test('routes construction-site crane subjects to geometry, not building layout', () => {
+    const tower = fallbackFactoryPlan(
+      '\u751f\u6210\u4e00\u4e2a\u5efa\u7b51\u5de5\u5730\u5854\u540a',
+    )
+    const gantry = fallbackFactoryPlan(
+      '\u751f\u6210\u4e00\u4e2a\u5efa\u7b51\u5de5\u5730\u9f99\u95e8\u540a',
+    )
+
+    expect(tower).toMatchObject({ kind: 'geometry' })
+    expect(gantry).toMatchObject({ kind: 'geometry' })
   })
 
   test('routes water electrolysis workshop to a process line', () => {

@@ -34,6 +34,9 @@ function hasBrowserTextSelection() {
 }
 
 const ARROW_NUDGE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'])
+const NUDGE_STEP = 0.02
+const NUDGE_STEP_FINE = 0.005
+const NUDGE_STEP_COARSE = 0.1
 
 function getPlanNudgeDelta(key: string, step: number): [number, number, number] | null {
   if (key === 'ArrowLeft') return [-step, 0, 0]
@@ -76,6 +79,31 @@ function nudgeSelectedNodesOnPlan(key: string, step: number): boolean {
   const updates = selectedIds.flatMap((id) => {
     const node = scene.nodes[id]
     const data = node ? getPositionPatchForPlanNudge(node, delta) : null
+    return data ? [{ id, data }] : []
+  })
+
+  if (updates.length === 0) return false
+  scene.updateNodes(updates)
+  return true
+}
+
+function getPositionPatchForVerticalNudge(node: AnyNode, deltaY: number) {
+  const position = (node as { position?: unknown }).position
+  if (!Array.isArray(position) || position.length < 3) return null
+  const [x, y, z] = position
+  if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') return null
+  return { position: [x, y + deltaY, z] as [number, number, number] }
+}
+
+function nudgeSelectedNodesVertically(key: string, step: number): boolean {
+  if (key !== 'ArrowUp' && key !== 'ArrowDown') return false
+
+  const deltaY = key === 'ArrowUp' ? step : -step
+  const scene = useScene.getState()
+  const selectedIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
+  const updates = selectedIds.flatMap((id) => {
+    const node = scene.nodes[id]
+    const data = node ? getPositionPatchForVerticalNudge(node, deltaY) : null
     return data ? [{ id, data }] : []
   })
 
@@ -233,12 +261,16 @@ export const useKeyboard = ({
         !useEditor.getState().movingNode
       ) {
         if (isVersionPreviewMode) return
-        const step = e.altKey ? 0.01 : e.shiftKey ? 0.25 : 0.05
+        const step = e.altKey ? NUDGE_STEP_FINE : e.shiftKey ? NUDGE_STEP_COARSE : NUDGE_STEP
         if (nudgeSelectedNodesOnPlan(e.key, step)) {
           e.preventDefault()
         }
       } else if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
+        const step = e.altKey ? NUDGE_STEP_FINE : e.shiftKey ? NUDGE_STEP_COARSE : NUDGE_STEP
+        if (nudgeSelectedNodesVertically(e.key, step)) {
+          return
+        }
         const { buildingId, levelId } = useViewer.getState().selection
         if (buildingId) {
           const building = useScene.getState().nodes[buildingId]
@@ -260,6 +292,10 @@ export const useKeyboard = ({
         }
       } else if (e.key === 'ArrowDown' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
+        const step = e.altKey ? NUDGE_STEP_FINE : e.shiftKey ? NUDGE_STEP_COARSE : NUDGE_STEP
+        if (nudgeSelectedNodesVertically(e.key, step)) {
+          return
+        }
         const { buildingId, levelId } = useViewer.getState().selection
         if (buildingId) {
           const building = useScene.getState().nodes[buildingId]

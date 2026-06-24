@@ -9,6 +9,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function decodeJsonBody(bytes: ArrayBuffer) {
+  const decoders = [
+    new TextDecoder('utf-8', { fatal: true }),
+    new TextDecoder('gb18030', { fatal: true }),
+  ]
+
+  for (const decoder of decoders) {
+    try {
+      return decoder.decode(bytes)
+    } catch {
+      // Try the next likely JSON body encoding.
+    }
+  }
+
+  return new TextDecoder().decode(bytes)
+}
+
+export async function parseAiHarnessRunRequestBody(request: Request): Promise<unknown> {
+  return JSON.parse(decodeJsonBody(await request.arrayBuffer()))
+}
+
 async function ensureRunRunning(run: AiHarnessRun) {
   if (run.mode === 'articraft') {
     const { ensureArticraftRunRunning } = await import('@/lib/ai-harness-runs/articraft-runner')
@@ -28,7 +49,7 @@ async function ensureRunRunning(run: AiHarnessRun) {
 export async function POST(request: Request) {
   let body: unknown
   try {
-    body = await request.json()
+    body = await parseAiHarnessRunRequestBody(request)
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }

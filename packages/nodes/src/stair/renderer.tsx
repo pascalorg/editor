@@ -80,7 +80,9 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
   const colorPreset = useViewer((s) => s.colorPreset)
 
   const material = useMemo(() => {
-    if (!textures) return createSurfaceRoleMaterial('joinery', colorPreset)
+    if (!textures) {
+      return createSurfaceRoleMaterial('joinery', colorPreset, undefined, undefined, shading)
+    }
     const presetMaterial = createMaterialFromPresetRef(node.materialPreset, shading)
     if (presetMaterial) return presetMaterial
     const mat = node.material

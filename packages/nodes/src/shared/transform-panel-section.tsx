@@ -10,6 +10,7 @@ import {
   SliderControl,
   triggerSFX,
 } from '@pascal-app/editor'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { L } from '../i18n/panel-labels'
 
@@ -23,7 +24,7 @@ export type TransformPanelNode = {
 type TransformPatch = Partial<Pick<TransformPanelNode, 'position' | 'rotation'>>
 
 type Axis = 0 | 1 | 2
-type TransformTab = 'position' | 'elevation' | 'rotation' | 'invert'
+type TransformTab = 'position' | 'rotation' | 'invert'
 
 type TransformPanelSectionProps<TNode extends TransformPanelNode> = {
   node: TNode
@@ -84,7 +85,7 @@ export function TransformPanelSection<TNode extends TransformPanelNode>({
   rotationAxes = [0, 1, 2],
 }: TransformPanelSectionProps<TNode>) {
   const [activeTab, setActiveTab] = useState<TransformTab>(() =>
-    includeElevation ? 'elevation' : includeRotation ? 'rotation' : 'invert',
+    includePlanarPosition ? 'position' : includeRotation ? 'rotation' : 'invert',
   )
 
   const commit = useCallback(
@@ -136,7 +137,6 @@ export function TransformPanelSection<TNode extends TransformPanelNode>({
     : []
   const tabs: Array<{ label: string; value: TransformTab }> = [
     ...(includePlanarPosition ? [{ label: '\u5e73\u79fb', value: 'position' as const }] : []),
-    ...(includeElevation ? [{ label: '\u4e0a\u4e0b', value: 'elevation' as const }] : []),
     ...(includeRotation && rotationTabAxes.length > 0
       ? [{ label: '\u65cb\u8f6c', value: 'rotation' as const }]
       : []),
@@ -146,141 +146,168 @@ export function TransformPanelSection<TNode extends TransformPanelNode>({
   ]
   const visibleActiveTab = tabs.some((tab) => tab.value === activeTab)
     ? activeTab
-    : (tabs[0]?.value ?? 'elevation')
+    : (tabs[0]?.value ?? 'rotation')
 
-  if (tabs.length === 0) return null
+  if (!includeElevation && tabs.length === 0) return null
 
   return (
-    <PanelSection title={title}>
-      {tabs.length > 1 ? (
-        <SegmentedControl<TransformTab>
-          onChange={setActiveTab}
-          options={tabs}
-          value={visibleActiveTab}
-        />
-      ) : null}
-
-      {includePlanarPosition && visibleActiveTab === 'position' ? (
-        <div className="space-y-2 pt-2">
+    <>
+      {includeElevation ? (
+        <PanelSection title={'\u9ad8\u5ea6\u8c03\u6574'}>
           <div className="flex items-center gap-1.5">
-            <ActionButton label={L.left()} onClick={() => nudgePosition(0, -POSITION_NUDGE)} />
-            <SliderControl
-              label={L.x()}
+            <ActionButton
+              aria-label={L.down()}
+              className="h-8 w-8 flex-none px-0"
+              icon={<ArrowDown className="h-5 w-5" />}
+              label=""
+              onClick={() => nudgePosition(1, -POSITION_NUDGE)}
+              title={L.down()}
+            />
+            <MetricControl
+              className="text-xs"
+              label={'\u79bb\u5730\u9ad8\u5ea6'}
               max={50}
               min={-50}
-              onChange={(value) => updatePosition(0, value)}
+              onChange={(value) => updatePosition(1, value)}
               precision={2}
               step={0.05}
               unit="m"
-              value={rounded(node.position[0])}
+              value={rounded(node.position[1])}
             />
-            <ActionButton label={L.right()} onClick={() => nudgePosition(0, POSITION_NUDGE)} />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <ActionButton label="后" onClick={() => nudgePosition(2, -POSITION_NUDGE)} />
-            <SliderControl
-              label={L.z()}
-              max={50}
-              min={-50}
-              onChange={(value) => updatePosition(2, value)}
-              precision={2}
-              step={0.05}
-              unit="m"
-              value={rounded(node.position[2])}
+            <ActionButton
+              aria-label={L.up()}
+              className="h-8 w-8 flex-none px-0"
+              icon={<ArrowUp className="h-5 w-5" />}
+              label=""
+              onClick={() => nudgePosition(1, POSITION_NUDGE)}
+              title={L.up()}
             />
-            <ActionButton label={L.front()} onClick={() => nudgePosition(2, POSITION_NUDGE)} />
           </div>
-        </div>
+        </PanelSection>
       ) : null}
 
-      {includeElevation && visibleActiveTab === 'elevation' ? (
-        <div className="flex items-center gap-1.5 pt-2">
-          <ActionButton label={L.down()} onClick={() => nudgePosition(1, -POSITION_NUDGE)} />
-          <MetricControl
-            label={L.height()}
-            max={50}
-            min={-50}
-            onChange={(value) => updatePosition(1, value)}
-            precision={2}
-            step={0.05}
-            unit="m"
-            value={rounded(node.position[1])}
-          />
-          <ActionButton label={L.up()} onClick={() => nudgePosition(1, POSITION_NUDGE)} />
-        </div>
-      ) : null}
+      {tabs.length > 0 ? (
+        <PanelSection title={title}>
+          {tabs.length > 1 ? (
+            <SegmentedControl<TransformTab>
+              onChange={setActiveTab}
+              options={tabs}
+              value={visibleActiveTab}
+            />
+          ) : null}
 
-      {includeRotation && visibleActiveTab === 'rotation' ? (
-        <div className="space-y-2 pt-2">
-          {rotationTabAxes.map((axis) => (
-            <div className="flex items-center gap-1.5" key={axis}>
-              <ActionButton
-                label={L.rotateMinus45()}
-                onClick={() => nudgeRotation(axis, -ROTATION_NUDGE)}
-              />
-              <SliderControl
-                label={`${axisLabel(axis)} \u65cb\u8f6c`}
-                max={180}
-                min={-180}
-                onChange={(degrees) => updateRotation(axis, degrees * DEG_TO_RAD)}
-                precision={0}
-                step={1}
-                unit="°"
-                value={Math.round(node.rotation[axis] * RAD_TO_DEG)}
-              />
-              <ActionButton
-                label={L.rotatePlus45()}
-                onClick={() => nudgeRotation(axis, ROTATION_NUDGE)}
-              />
-            </div>
-          ))}
-          {rotationTabAxes.includes(1) ? (
-            <div className="grid grid-cols-4 gap-1.5">
-              <ActionButton label="0°" onClick={() => updateRotation(1, 0)} />
-              <ActionButton label="90°" onClick={() => updateRotation(1, Math.PI / 2)} />
-              <ActionButton label="180°" onClick={() => updateRotation(1, Math.PI)} />
-              <ActionButton label="270°" onClick={() => updateRotation(1, -Math.PI / 2)} />
+          {includePlanarPosition && visibleActiveTab === 'position' ? (
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center gap-1.5">
+                <ActionButton label={L.left()} onClick={() => nudgePosition(0, -POSITION_NUDGE)} />
+                <SliderControl
+                  label={L.x()}
+                  max={50}
+                  min={-50}
+                  onChange={(value) => updatePosition(0, value)}
+                  precision={2}
+                  step={0.05}
+                  unit="m"
+                  value={rounded(node.position[0])}
+                />
+                <ActionButton label={L.right()} onClick={() => nudgePosition(0, POSITION_NUDGE)} />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <ActionButton
+                  label={'\u540e\u4fa7'}
+                  onClick={() => nudgePosition(2, -POSITION_NUDGE)}
+                />
+                <SliderControl
+                  label={L.z()}
+                  max={50}
+                  min={-50}
+                  onChange={(value) => updatePosition(2, value)}
+                  precision={2}
+                  step={0.05}
+                  unit="m"
+                  value={rounded(node.position[2])}
+                />
+                <ActionButton label={L.front()} onClick={() => nudgePosition(2, POSITION_NUDGE)} />
+              </div>
             </div>
           ) : null}
-        </div>
-      ) : null}
 
-      {includeRotation && includeFlip && visibleActiveTab === 'invert' ? (
-        <div className="space-y-2 pt-2">
-          {invertAxes.map((axis) => (
-            <div className="flex items-center gap-1.5" key={axis}>
-              <ActionButton
-                label={L.rotateMinus45()}
-                onClick={() => nudgeRotation(axis, -ROTATION_NUDGE)}
-              />
-              <SliderControl
-                label={invertLabel(axis)}
-                max={180}
-                min={-180}
-                onChange={(degrees) => updateRotation(axis, degrees * DEG_TO_RAD)}
-                precision={0}
-                step={1}
-                unit="°"
-                value={Math.round(node.rotation[axis] * RAD_TO_DEG)}
-              />
-              <ActionButton
-                label={L.rotatePlus45()}
-                onClick={() => nudgeRotation(axis, ROTATION_NUDGE)}
-              />
+          {includeRotation && visibleActiveTab === 'rotation' ? (
+            <div className="space-y-2 pt-2">
+              {rotationTabAxes.map((axis) => (
+                <div className="flex items-center gap-1.5" key={axis}>
+                  <ActionButton
+                    label={L.rotateMinus45()}
+                    onClick={() => nudgeRotation(axis, -ROTATION_NUDGE)}
+                  />
+                  <SliderControl
+                    label={`${axisLabel(axis)} \u65cb\u8f6c`}
+                    max={180}
+                    min={-180}
+                    onChange={(degrees) => updateRotation(axis, degrees * DEG_TO_RAD)}
+                    precision={0}
+                    step={1}
+                    unit={'\u00b0'}
+                    value={Math.round(node.rotation[axis] * RAD_TO_DEG)}
+                  />
+                  <ActionButton
+                    label={L.rotatePlus45()}
+                    onClick={() => nudgeRotation(axis, ROTATION_NUDGE)}
+                  />
+                </div>
+              ))}
+              {rotationTabAxes.includes(1) ? (
+                <div className="grid grid-cols-4 gap-1.5">
+                  <ActionButton label={'0\u00b0'} onClick={() => updateRotation(1, 0)} />
+                  <ActionButton label={'90\u00b0'} onClick={() => updateRotation(1, Math.PI / 2)} />
+                  <ActionButton label={'180\u00b0'} onClick={() => updateRotation(1, Math.PI)} />
+                  <ActionButton
+                    label={'270\u00b0'}
+                    onClick={() => updateRotation(1, -Math.PI / 2)}
+                  />
+                </div>
+              ) : null}
             </div>
-          ))}
-          <ActionGroup>
-            <ActionButton
-              label="放平"
-              onClick={() => commit({ rotation: [0, node.rotation[1], 0] })}
-            />
-            <ActionButton
-              label="倒置"
-              onClick={() => commit({ rotation: [Math.PI, node.rotation[1], 0] })}
-            />
-          </ActionGroup>
-        </div>
+          ) : null}
+
+          {includeRotation && includeFlip && visibleActiveTab === 'invert' ? (
+            <div className="space-y-2 pt-2">
+              {invertAxes.map((axis) => (
+                <div className="flex items-center gap-1.5" key={axis}>
+                  <ActionButton
+                    label={L.rotateMinus45()}
+                    onClick={() => nudgeRotation(axis, -ROTATION_NUDGE)}
+                  />
+                  <SliderControl
+                    label={invertLabel(axis)}
+                    max={180}
+                    min={-180}
+                    onChange={(degrees) => updateRotation(axis, degrees * DEG_TO_RAD)}
+                    precision={0}
+                    step={1}
+                    unit={'\u00b0'}
+                    value={Math.round(node.rotation[axis] * RAD_TO_DEG)}
+                  />
+                  <ActionButton
+                    label={L.rotatePlus45()}
+                    onClick={() => nudgeRotation(axis, ROTATION_NUDGE)}
+                  />
+                </div>
+              ))}
+              <ActionGroup>
+                <ActionButton
+                  label="\u653e\u5e73"
+                  onClick={() => commit({ rotation: [0, node.rotation[1], 0] })}
+                />
+                <ActionButton
+                  label="\u5012\u7f6e"
+                  onClick={() => commit({ rotation: [Math.PI, node.rotation[1], 0] })}
+                />
+              </ActionGroup>
+            </div>
+          ) : null}
+        </PanelSection>
       ) : null}
-    </PanelSection>
+    </>
   )
 }

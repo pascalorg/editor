@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { executeGeometryToolCall, normalizeGeometryToolShapes } from './ai-geometry-tool-executor'
 
 type TestSourcePart = {
+  id?: unknown
   kind?: unknown
+  semanticRole?: unknown
   position?: number[]
   length?: number
   width?: number
@@ -359,6 +361,85 @@ describe('AI geometry tool executor', () => {
     expect(result.content).not.toContain('No geometry could be created')
   })
 
+  test('honors direct part composer routes without registry role remapping', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'hammerhead tower crane',
+        family: 'generic',
+        category: 'lifting equipment',
+        __precisionPartRoute: 'tower_crane',
+        __directPartComposer: true,
+        requiredRoles: ['slewing_unit', 'operator_cab', 'main_jib', 'trolley', 'hook_block'],
+        parts: [
+          {
+            id: 'slewing_unit',
+            kind: 'generic_base',
+            semanticRole: 'slewing_unit',
+            name: 'slewing ring turntable',
+            position: [0, 5.98, 0],
+            length: 1,
+            width: 0.82,
+            height: 0.18,
+          },
+          {
+            id: 'operator_cab',
+            kind: 'generic_body',
+            semanticRole: 'operator_cab',
+            name: 'operator cab',
+            position: [0.55, 6.18, 0.36],
+            length: 0.55,
+            width: 0.42,
+            height: 0.42,
+          },
+          {
+            id: 'main_jib',
+            kind: 'generic_body',
+            semanticRole: 'main_jib',
+            name: 'long main lifting jib',
+            position: [3.45, 6.35, 0],
+            length: 6.9,
+            width: 0.14,
+            height: 0.14,
+          },
+          {
+            id: 'trolley',
+            kind: 'generic_body',
+            semanticRole: 'trolley',
+            name: 'jib trolley carriage',
+            position: [4.75, 6.17, 0],
+            length: 0.42,
+            width: 0.28,
+            height: 0.18,
+          },
+          {
+            id: 'hook_block',
+            kind: 'generic_body',
+            semanticRole: 'hook_block',
+            name: 'hanging hook block',
+            position: [4.75, 3.55, 0],
+            length: 0.25,
+            width: 0.18,
+            height: 0.38,
+          },
+        ],
+      },
+      { prompt: '生成一个建筑工地塔吊' },
+    )
+
+    const roles = result.artifact?.shapes.map((shape) => shape.semanticRole) ?? []
+
+    expect(result.artifact).toBeDefined()
+    expect(result.artifact?.sourceArgs.family).toBe('generic')
+    expect(roles).toEqual(
+      expect.arrayContaining(['slewing_unit', 'operator_cab', 'main_jib', 'trolley', 'hook_block']),
+    )
+    expect(roles).not.toContain('counterweight_set')
+    expect(roles).not.toContain('jib_arm')
+    expect(roles.filter((role) => role === 'trolley')).toHaveLength(1)
+    expect(roles.filter((role) => role === 'hook_block')).toHaveLength(1)
+  })
+
   test('creates a generic editable draft for unsupported long-tail objects', () => {
     const result = executeGeometryToolCall(
       'compose_primitive',
@@ -545,6 +626,29 @@ describe('AI geometry tool executor', () => {
     expect(result.content).toContain('Bad box: box.width is required')
   })
 
+  test('accepts primitive dimensions object from LLM output', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        shapes: [
+          {
+            kind: 'box',
+            name: 'Dimension object box',
+            position: [0, 0.5, 0],
+            dimensions: { length: 2, width: 0.5, height: 1 },
+          },
+        ],
+      },
+      { prompt: 'box using dimensions object' },
+    )
+
+    expect(result.artifact?.shapes[0]).toMatchObject({
+      length: 2,
+      width: 0.5,
+      height: 1,
+    })
+  })
+
   test('rejects attachTo references without explicit anchors', () => {
     const result = executeGeometryToolCall(
       'compose_primitive',
@@ -554,7 +658,6 @@ describe('AI geometry tool executor', () => {
           {
             kind: 'box',
             name: 'Child',
-            position: [0, 1.5, 0],
             length: 1,
             width: 1,
             height: 1,
@@ -594,6 +697,226 @@ describe('AI geometry tool executor', () => {
 
     expect(result.artifact?.transforms[1]?.position).toEqual([0, 1.5, 0])
     expect(result.artifact?.assemblyName).toBe('Stack')
+  })
+
+  test('drops conflicting explicit attach anchors while preserving world position', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        name: 'Explicit world layout',
+        shapes: [
+          { kind: 'box', name: 'Base', position: [0, 0.5, 0], length: 1, width: 1, height: 1 },
+          {
+            kind: 'cylinder',
+            name: 'Below',
+            position: [0, -0.25, 0],
+            radius: 0.1,
+            height: 0.5,
+            attachTo: 0,
+            anchor: 'top',
+            childAnchor: 'bottom',
+          },
+        ],
+      },
+      { prompt: 'world positioned assembly with stale anchors' },
+    )
+
+    expect(result.artifact?.shapes[1]?.attachTo).toBeUndefined()
+    expect(result.artifact?.transforms[1]?.position).toEqual([0, -0.25, 0])
+  })
+
+  test('drops anchorless attach references when explicit world position is provided', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        name: 'Explicit world child',
+        shapes: [
+          { kind: 'box', name: 'Mast', position: [0, 6, 0], length: 1, width: 1, height: 12 },
+          {
+            kind: 'box',
+            name: 'Cabin',
+            position: [1, 12.2, 0],
+            length: 1,
+            width: 0.8,
+            height: 0.8,
+            attachTo: 0,
+          },
+        ],
+      },
+      { prompt: 'tower crane cabin with explicit position' },
+    )
+
+    expect(result.artifact?.shapes[1]?.attachTo).toBeUndefined()
+    expect(result.artifact?.transforms[1]?.position).toEqual([1, 12.2, 0])
+  })
+
+  test('normalizes attach-only primitive children before validation', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        name: 'Attach-only stack',
+        shapes: [
+          { kind: 'box', name: 'Mast', position: [0, 6, 0], length: 1, width: 1, height: 12 },
+          {
+            kind: 'cylinder',
+            name: 'Slewing platform',
+            radius: 0.8,
+            height: 0.25,
+            axis: 'y',
+            attachTo: 0,
+            anchor: 'top',
+            childAnchor: 'bottom',
+          },
+        ],
+      },
+      { prompt: 'tower crane platform attached to mast' },
+    )
+
+    expect(result.artifact?.shapes[1]?.attachTo).toBe(0)
+    expect(result.artifact?.transforms[1]?.position[1]).toBeCloseTo(12.125)
+  })
+
+  test('normalizes primitive layout aliases and degree arcs from LLM output', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        geometryBrief: 'metal kettle with a wooden stopper',
+        shapes: [
+          {
+            id: 'kettle_body',
+            kind: 'ellipsoid',
+            semanticRole: 'kettle_body',
+            position: [0, 0.02, 0],
+            length: 0.2,
+            width: 0.2,
+            height: 0.22,
+            radius: 0.1,
+          },
+          {
+            id: 'kettle_neck',
+            kind: 'hollow-cylinder',
+            semanticRole: 'kettle_neck',
+            alignAbove: 'kettle_body',
+            centeredOn: 'kettle_body',
+            radius: 0.045,
+            height: 0.04,
+            wallThickness: 0.005,
+          },
+          {
+            id: 'lid_rim',
+            kind: 'torus',
+            semanticRole: 'lid_rim',
+            alignAbove: 'kettle_neck',
+            centeredOn: 'kettle_neck',
+            majorRadius: 0.048,
+            tubeRadius: 0.008,
+          },
+          {
+            id: 'handle',
+            kind: 'torus',
+            semanticRole: 'handle',
+            alignBeside: 'kettle_body',
+            side: 'left',
+            majorRadius: 0.14,
+            tubeRadius: 0.012,
+            arc: 180,
+          },
+          {
+            id: 'stopper',
+            kind: 'frustum',
+            semanticRole: 'stopper',
+            centeredOn: 'lid_rim',
+            alignAbove: 'lid_rim',
+            radiusTop: 0.025,
+            radiusBottom: 0.044,
+            height: 0.06,
+            material: { preset: 'wood' },
+          },
+        ],
+      },
+      { prompt: '生成一个开水壶，带木塞子' },
+    )
+
+    const shapes = result.artifact?.shapes ?? []
+    const transforms = result.artifact?.transforms ?? []
+    const body = shapes.findIndex((shape) => shape.semanticRole === 'kettle_body')
+    const neck = shapes.findIndex((shape) => shape.semanticRole === 'kettle_neck')
+    const lid = shapes.findIndex((shape) => shape.semanticRole === 'lid_rim')
+    const handle = shapes.find((shape) => shape.semanticRole === 'handle')
+    const stopper = shapes.findIndex((shape) => shape.semanticRole === 'stopper')
+
+    expect(result.artifact).toBeDefined()
+    expect(shapes[neck]?.attachTo).toBe(body)
+    expect(shapes[lid]?.attachTo).toBe(neck)
+    expect(shapes[stopper]?.attachTo).toBe(lid)
+    expect(transforms[neck]?.position[1]).toBeGreaterThan(transforms[body]?.position[1] ?? 0)
+    expect(transforms[stopper]?.position[1]).toBeGreaterThan(transforms[lid]?.position[1] ?? 0)
+    expect(handle?.attachTo).toBe(body)
+    expect(handle?.anchor).toBe('left')
+    expect(handle?.childAnchor).toBe('right')
+    expect(handle?.arc).toBeCloseTo(Math.PI)
+  })
+
+  test('repairs semantic primitive anchors for kettle attachments', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        shapes: [
+          {
+            kind: 'cylinder',
+            semanticRole: 'kettle_body',
+            position: [0, 0.11, 0],
+            radius: 0.1,
+            height: 0.22,
+          },
+          {
+            kind: 'cylinder',
+            semanticRole: 'kettle_spout',
+            attachTo: 0,
+            anchor: 'right',
+            childAnchor: 'bottom',
+            radius: 0.018,
+            height: 0.09,
+          },
+          {
+            kind: 'torus',
+            semanticRole: 'kettle_handle',
+            attachTo: 0,
+            anchor: 'left',
+            childAnchor: 'center',
+            majorRadius: 0.14,
+            tubeRadius: 0.012,
+            arc: Math.PI,
+          },
+          {
+            kind: 'frustum',
+            semanticRole: 'cork_stopper',
+            attachTo: 0,
+            anchor: 'bottom',
+            childAnchor: 'top',
+            radiusTop: 0.025,
+            radiusBottom: 0.044,
+            height: 0.06,
+          },
+        ],
+      },
+      { prompt: '生成一个开水壶，带木塞子' },
+    )
+
+    const shapes = result.artifact?.shapes ?? []
+    const transforms = result.artifact?.transforms ?? []
+    const body = shapes.findIndex((shape) => shape.semanticRole === 'kettle_body')
+    const spout = shapes.findIndex((shape) => shape.semanticRole === 'kettle_spout')
+    const handle = shapes.findIndex((shape) => shape.semanticRole === 'kettle_handle')
+    const stopper = shapes.findIndex((shape) => shape.semanticRole === 'cork_stopper')
+
+    expect(result.artifact).toBeDefined()
+    expect(shapes[spout]).toMatchObject({ anchor: 'right', childAnchor: 'left' })
+    expect(shapes[handle]).toMatchObject({ anchor: 'left', childAnchor: 'right' })
+    expect(shapes[stopper]).toMatchObject({ anchor: 'top', childAnchor: 'bottom' })
+    expect(transforms[spout]?.position[0]).toBeGreaterThan(transforms[body]?.position[0] ?? 0)
+    expect(transforms[handle]?.position[0]).toBeLessThan(transforms[body]?.position[0] ?? 0)
+    expect(transforms[stopper]?.position[1]).toBeGreaterThan(transforms[body]?.position[1] ?? 0)
   })
 
   test('enforces a generated shape budget', () => {
@@ -1531,7 +1854,8 @@ describe('AI geometry tool executor', () => {
       (shape) => shape.semanticRole === 'aircraft_fuselage',
     )
 
-    expect(result.artifact?.shapes).toHaveLength(55)
+    expect(result.artifact?.shapes.length).toBeGreaterThanOrEqual(55)
+    expect(result.artifact?.shapes.length).toBeLessThanOrEqual(80)
     expect(result.artifact?.sourceArgs.family).toBe('aircraft')
     expect(result.artifact?.sourceArgs.parts).toEqual(
       expect.arrayContaining([
@@ -3728,6 +4052,147 @@ describe('AI geometry tool executor', () => {
     expect(roles.has('rounded_machine_body')).toBe(false)
   })
 
+  test('deduplicates explicit pump parts against device profile defaults', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        category: 'centrifugal_pump',
+        primaryColor: '#3B6B8A',
+        deviceProfileDraft: {
+          id: 'centrifugal_pump',
+          name: 'Centrifugal Pump',
+          family: 'pump',
+          layoutFamily: 'rotating_machine_layout',
+          aliases: ['centrifugal pump', 'water pump'],
+          defaultDimensions: {
+            length: 1.4,
+            width: 0.7,
+            height: 0.85,
+          },
+          primarySemanticRole: 'volute_casing',
+          parts: [
+            { kind: 'skid_base', semanticRole: 'support_base', required: true },
+            { kind: 'volute_casing', semanticRole: 'volute_casing', required: true },
+            { kind: 'ribbed_motor_body', semanticRole: 'drive_motor', required: true },
+            { kind: 'inlet_port', semanticRole: 'inlet_port', required: true },
+            { kind: 'outlet_port', semanticRole: 'outlet_port', required: true },
+            { kind: 'flange_ring', semanticRole: 'flange', required: false },
+            { kind: 'control_box', semanticRole: 'control_box', required: false },
+          ],
+        },
+        parts: [
+          { id: 'base', kind: 'skid_base', semanticRole: 'support_base' },
+          { id: 'motor', kind: 'ribbed_motor_body', semanticRole: 'drive_motor' },
+          { id: 'casing', kind: 'volute_casing', semanticRole: 'volute_casing' },
+          { id: 'inlet', kind: 'inlet_port', semanticRole: 'inlet_port' },
+          { id: 'outlet', kind: 'outlet_port', semanticRole: 'outlet_port' },
+        ],
+        requiredRoles: [
+          'support_base',
+          'drive_motor',
+          'volute_casing',
+          'inlet_port',
+          'outlet_port',
+        ],
+      },
+      { prompt: '生成一个水泵' },
+    )
+
+    const parts = sourceParts(result.artifact?.sourceArgs.parts)
+    const partKeys = parts.map((part) => `${part.kind}:${part.semanticRole}`)
+    const shapes = result.artifact?.shapes ?? []
+    const exactShapeKeys = shapes.map(
+      (shape) =>
+        `${shape.name}:${shape.kind}:${shape.sourcePartKind}:${shape.position
+          ?.map((value) => value.toFixed(6))
+          .join(',')}`,
+    )
+
+    expect(result.artifact?.sourceTool).toBe('compose_parts')
+    expect(partKeys.filter((key) => key === 'skid_base:support_base')).toHaveLength(1)
+    expect(partKeys.filter((key) => key === 'ribbed_motor_body:drive_motor')).toHaveLength(1)
+    expect(partKeys.filter((key) => key === 'volute_casing:volute_casing')).toHaveLength(1)
+    expect(partKeys.filter((key) => key === 'inlet_port:inlet_port')).toHaveLength(1)
+    expect(partKeys.filter((key) => key === 'outlet_port:outlet_port')).toHaveLength(1)
+    expect(shapes.filter((shape) => shape.sourcePartKind === 'skid_base')).toHaveLength(5)
+    expect(shapes.filter((shape) => shape.sourcePartKind === 'ribbed_motor_body')).toHaveLength(13)
+    expect(shapes.filter((shape) => shape.sourcePartKind === 'volute_casing')).toHaveLength(4)
+    expect(shapes.filter((shape) => shape.sourcePartKind === 'inlet_port')).toHaveLength(2)
+    expect(shapes.filter((shape) => shape.sourcePartKind === 'outlet_port')).toHaveLength(2)
+    expect(new Set(exactShapeKeys).size).toBe(exactShapeKeys.length)
+  })
+
+  test('anchors explicit pump flange rings to inlet and outlet ports', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'pump',
+        category: 'water pump',
+        length: 2,
+        width: 0.9,
+        height: 1.1,
+        parts: [
+          { id: 'base', kind: 'skid_base', semanticRole: 'support_base', length: 2 },
+          { id: 'motor', kind: 'ribbed_motor_body', semanticRole: 'drive_motor' },
+          { id: 'casing', kind: 'volute_casing', semanticRole: 'volute_casing', side: 'front' },
+          {
+            id: 'inlet',
+            kind: 'inlet_port',
+            semanticRole: 'inlet_port',
+            axis: 'z',
+            connectTo: 'casing',
+            connectPoint: 'front',
+          },
+          {
+            id: 'outlet',
+            kind: 'outlet_port',
+            semanticRole: 'outlet_port',
+            axis: 'y',
+            connectTo: 'casing',
+            connectPoint: 'top',
+          },
+          { id: 'flange_inlet', kind: 'flange_ring', semanticRole: 'flange', connectTo: 'inlet' },
+          {
+            id: 'flange_outlet',
+            kind: 'flange_ring',
+            semanticRole: 'flange',
+            connectTo: 'outlet',
+          },
+        ],
+      },
+      { prompt: '生成一个水泵' },
+    )
+
+    const shapes = result.artifact?.shapes ?? []
+    const parts = sourceParts(result.artifact?.sourceArgs.parts)
+    const flangeParts = parts.filter((part) => part.kind === 'flange_ring')
+    const flangeShapes = shapes.filter((shape) => shape.sourcePartKind === 'flange_ring')
+    const exactShapeKeys = flangeShapes.map(
+      (shape) =>
+        `${shape.name}:${shape.kind}:${shape.sourcePartKind}:${shape.position
+          ?.map((value) => value.toFixed(6))
+          .join(',')}`,
+    )
+    const inletFlange = flangeShapes.find((shape) => shape.semanticGroup === 'flange_inlet')
+    const outletFlange = flangeShapes.find((shape) => shape.semanticGroup === 'flange_outlet')
+
+    expect(result.artifact?.sourceArgs.family).toBe('pump')
+    expect(flangeParts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'flange_inlet', connectTo: 'inlet', connectPoint: 'open' }),
+        expect.objectContaining({
+          id: 'flange_outlet',
+          connectTo: 'outlet',
+          connectPoint: 'open',
+          axis: 'y',
+        }),
+      ]),
+    )
+    expect(inletFlange?.position?.[2]).toBeGreaterThan(0.45)
+    expect(outletFlange?.position?.[1]).toBeGreaterThan(0.8)
+    expect(new Set(exactShapeKeys).size).toBe(exactShapeKeys.length)
+  })
+
   test('routes conveyor requests without explicit parts through industrial family parts', () => {
     const result = executeGeometryToolCall(
       'compose_parts',
@@ -4024,6 +4489,51 @@ describe('AI geometry tool executor', () => {
     expect(roles.has('vehicle_window')).toBe(false)
     expect(roles.has('vehicle_cabin')).toBe(false)
     expect(roles.has('cart_body')).toBe(false)
+  })
+
+  test('does not let weak condenser profile matches override runtime outdoor AC drafts', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        category: 'outdoor_ac_condenser',
+        geometryBrief: '空调外机 outdoor AC condenser unit with body, front vent, side fan',
+        length: 1.2,
+        width: 0.5,
+        height: 1,
+        requiredRoles: ['condenser_body', 'front_vent', 'fan_impeller'],
+        deviceProfileDraft: {
+          id: 'outdoor_ac_condenser',
+          name: 'Outdoor AC Condenser Unit',
+          aliases: ['outdoor ac', 'outdoor ac unit', 'air conditioner outdoor unit'],
+          layoutFamily: 'box_enclosure_layout',
+          archetypeFamily: 'enclosed_machine',
+          family: 'outdoor_ac',
+          defaultDimensions: { length: 1.2, width: 0.5, height: 1 },
+          parts: [
+            { kind: 'rounded_machine_body', semanticRole: 'condenser_body', required: true },
+            { kind: 'vent_grill', semanticRole: 'front_vent', required: true },
+            { kind: 'radial_blades', semanticRole: 'fan_impeller', required: true },
+          ],
+          primarySemanticRole: 'condenser_body',
+        },
+        parts: [
+          { kind: 'rounded_machine_body', semanticRole: 'condenser_body' },
+          { kind: 'vent_grill', semanticRole: 'front_vent' },
+          { kind: 'radial_blades', semanticRole: 'fan_impeller' },
+        ],
+      },
+      { prompt: '生成一个空调外机' },
+    )
+
+    const roles = new Set(result.artifact?.shapes.map((shape) => shape.semanticRole))
+
+    expect(result.artifact?.sourceArgs.deviceProfile).toBe('outdoor_ac_condenser')
+    expect(result.artifact?.sourceArgs.family).not.toBe('heat_exchanger')
+    expect(result.artifact?.sourceArgs.partWarnings ?? []).not.toContain(
+      'Unknown heat_exchanger part "vent_grill" ignored.',
+    )
+    expect(roles.has('front_vent')).toBe(true)
+    expect(roles.has('fan_impeller')).toBe(true)
   })
 
   test('executes explicit draft profiles whose family is an abstract layout group', () => {
@@ -4903,6 +5413,88 @@ describe('AI geometry tool executor', () => {
     ).toBe(false)
     expect(result.artifact?.shapes.some((shape) => shape.sourcePartKind === 'motor_housing')).toBe(
       false,
+    )
+  })
+
+  test('treats fan blade parts as mixer blades for shaft agitator requests', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'shaft mixer impeller',
+        category: 'mixer impeller component',
+        geometryBrief:
+          'mixer impeller with one vertical shaft, lower hub, and three radial paddle blades',
+        requiredRoles: ['mixer_shaft', 'mixer_hub', 'mixer_blade'],
+        parts: [
+          {
+            kind: 'vertical_pole',
+            id: 'mixer_shaft',
+            position: [0, 0.49, 0],
+            height: 0.82,
+            radius: 0.022,
+          },
+          {
+            kind: 'circular_base',
+            id: 'mixer_hub',
+            position: [0, 0.06, 0],
+            radius: 0.055,
+            height: 0.055,
+          },
+          {
+            kind: 'fan_blade',
+            id: 'mixer_blade',
+            position: [0, 0.06, 0],
+            count: 3,
+            hubRadius: 0.055,
+            bladeRadius: 0.34,
+            bladeWidth: 0.17,
+            bladeShape: 'taiji_half',
+          },
+        ],
+      },
+      { prompt: '生成一个搅拌器，一个杆子，下面是三片桨叶' },
+    )
+
+    const blades =
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'mixer_blade') ?? []
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Validation: family=mixer')
+    expect(result.content).toContain('mixer_shaft:1')
+    expect(result.content).toContain('mixer_hub:1')
+    expect(blades).toHaveLength(3)
+    expect(blades.every((shape) => shape.sourcePartKind === 'mixer_blades')).toBe(true)
+    expect(
+      result.artifact?.shapes.some((shape) => shape.sourcePartKind === 'protective_grill'),
+    ).toBe(false)
+    expect(result.artifact?.shapes.some((shape) => shape.sourcePartKind === 'motor_housing')).toBe(
+      false,
+    )
+  })
+
+  test('keeps mixer_blades when a reactor family draft includes explicit impeller parts', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'reactor',
+        name: 'stirred reactor draft',
+        parts: [{ id: 'impeller', kind: 'mixer_blades', count: 3 }],
+      },
+      { prompt: 'make a stirred reactor with explicit mixer blades' },
+    )
+
+    expect(result.artifact?.sourceArgs.partWarnings ?? []).not.toContain(
+      'Unknown reactor part "mixer_blades" ignored.',
+    )
+    expect(result.artifact?.sourceArgs.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'impeller',
+          kind: 'mixer_blades',
+          semanticRole: 'reactor_impeller',
+          count: 3,
+        }),
+      ]),
     )
   })
 

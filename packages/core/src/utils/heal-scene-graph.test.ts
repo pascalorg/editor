@@ -28,6 +28,19 @@ describe('healSceneNodes', () => {
     expect((nodes.level_0 as { children: string[] }).children).toEqual(['wall_real'])
   })
 
+
+  test('restores missing child parentId links from parent children arrays', () => {
+    const { nodes, restoredParentLinks } = healSceneNodes({
+      building_a: { id: 'building_a', type: 'building', children: ['level_0'] },
+      level_0: { id: 'level_0', type: 'level', parentId: null, children: [] },
+      level_other: { id: 'level_other', type: 'level', parentId: 'building_other', children: [] },
+    })
+
+    expect(restoredParentLinks).toBe(1)
+    expect((nodes.level_0 as { parentId: string }).parentId).toBe('building_a')
+    expect((nodes.level_other as { parentId: string }).parentId).toBe('building_other')
+  })
+
   test('keeps a zero-length wall that still hosts a door/window', () => {
     const { nodes, droppedWallIds } = healSceneNodes({
       wall_z: { id: 'wall_z', type: 'wall', start: [1, 1], end: [1, 1], children: ['door_1'] },

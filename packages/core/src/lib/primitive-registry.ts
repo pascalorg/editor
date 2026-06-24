@@ -28,7 +28,18 @@ export interface PrimitiveDefinition {
 const canonicalPrimitiveDefinitions: PrimitiveDefinition[] = [
   {
     kind: 'box',
-    aliases: ['cuboid', 'cube', 'rectangular-prism', 'rectangular prism'],
+    aliases: [
+      'cuboid',
+      'cube',
+      'rectangular-prism',
+      'rectangular prism',
+      'truss-tower',
+      'truss tower',
+      'truss-beam',
+      'truss beam',
+      'lattice-tower',
+      'lattice tower',
+    ],
     description: 'Solid rectangular cuboid.',
     params: {
       length: { type: 'number', min: 0.001 },

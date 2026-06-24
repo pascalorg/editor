@@ -767,7 +767,13 @@ function precisionIndustrialPartFallbackShapes(
   const height = firstNumber(sourceArgs.height, expectedDimensions?.height)
   const explicitRadius = firstNumber(sourceArgs.radius)
   const explicitDiameter = firstNumber(sourceArgs.diameter, expectedDimensions?.diameter)
-  const hasConcreteProfileRoute = sourceArgs.deviceProfile != null
+  const profileDefinition = isRecord(sourceArgs.__deviceProfileDefinition)
+    ? (sourceArgs.__deviceProfileDefinition as unknown as DeviceProfileDefinition)
+    : undefined
+  const hasConcreteProfileRoute =
+    sourceArgs.deviceProfile != null &&
+    profileDefinition?.status !== 'runtime_draft' &&
+    profileDefinition?.source !== 'generated_candidate'
   const hasProfileRoute =
     sourceArgs.deviceProfile != null ||
     sourceArgs.deviceProfileDraft != null ||
@@ -929,6 +935,14 @@ function getRawShapes(
         for (const [key, value] of Object.entries(dimensionAwarePartArgs)) args[key] = value
         return fallbackShapes
       }
+    }
+    if (hasExplicitParts && dimensionAwarePartArgs.__directPartComposer === true) {
+      const directShapes = directPartComposerFallbackShapes(args, dimensionAwarePartArgs, prompt)
+      if (directShapes?.length) return directShapes
+    }
+    if (hasExplicitParts && isMixerPartComposerRequest(dimensionAwarePartArgs, prompt)) {
+      const mixerShapes = mixerPartComposerFallbackShapes(args, dimensionAwarePartArgs, prompt)
+      if (mixerShapes?.length) return mixerShapes
     }
     if (hasExplicitParts) {
       const registryShapes = registryPartFallbackShapes(
@@ -1846,7 +1860,9 @@ function executableFamilyForProfile(
 
 function explicitProfileParts(parts: unknown): PartComposePartInput[] {
   if (!Array.isArray(parts)) return []
-  const seen = new Set<string>()
+  const seenIds = new Set<string>()
+  const seenAnonymousKindRoles = new Set<string>()
+  const seenKindRoles = new Set<string>()
   const output: PartComposePartInput[] = []
   for (const part of parts) {
     if (!isRecord(part)) continue
@@ -1854,11 +1870,14 @@ function explicitProfileParts(parts: unknown): PartComposePartInput[] {
     if (!kind) continue
     const semanticRole = String(part.semanticRole ?? '').trim()
     const explicitId = String(part.id ?? '').trim()
-    const key = explicitId
-      ? `id::${explicitId.toLowerCase()}`
-      : `${kind.toLowerCase()}::${semanticRole.toLowerCase()}`
-    if (seen.has(key)) continue
-    seen.add(key)
+    const idKey = explicitId.toLowerCase()
+    const kindRoleKey = `${kind.toLowerCase()}::${semanticRole.toLowerCase()}`
+    if (idKey && seenIds.has(idKey)) continue
+    if (!idKey && seenKindRoles.has(kindRoleKey)) continue
+    if (idKey && seenAnonymousKindRoles.has(kindRoleKey)) continue
+    if (idKey) seenIds.add(idKey)
+    else seenAnonymousKindRoles.add(kindRoleKey)
+    seenKindRoles.add(kindRoleKey)
     output.push({
       ...(part as PartComposePartInput),
       kind,
@@ -1866,6 +1885,256 @@ function explicitProfileParts(parts: unknown): PartComposePartInput[] {
     })
   }
   return output
+}
+
+function dedupeProfileLayoutParts(parts: readonly PartComposePartInput[]): PartComposePartInput[] {
+  const seenIds = new Set<string>()
+  const seenAnonymousKindRoles = new Set<string>()
+  const seenKindRoles = new Set<string>()
+  const output: PartComposePartInput[] = []
+
+  for (const part of parts) {
+    const kind = String(part.kind ?? part.partType ?? part.type ?? '').trim()
+    if (!kind) continue
+    const semanticRole = String(part.semanticRole ?? '').trim()
+    const explicitId = String(part.id ?? '').trim()
+    const idKey = explicitId.toLowerCase()
+    const kindRoleKey = `${kind.toLowerCase()}::${semanticRole.toLowerCase()}`
+    if (idKey && seenIds.has(idKey)) continue
+    if (!idKey && seenKindRoles.has(kindRoleKey)) continue
+    if (idKey && seenAnonymousKindRoles.has(kindRoleKey)) continue
+    if (idKey) seenIds.add(idKey)
+    else seenAnonymousKindRoles.add(kindRoleKey)
+    seenKindRoles.add(kindRoleKey)
+    output.push(part)
+  }
+
+  return output
+}
+
+function canonicalizeRegistryLayoutPartRoles(
+  family: string,
+  parts: readonly PartComposePartInput[],
+): PartComposePartInput[] {
+  let changed = false
+  const category = registrySemanticCategory(family)
+  const partByReference = new Map<string, PartComposePartInput>()
+  for (const part of parts) {
+    const references = [
+      part.id,
+      part.sourcePartId,
+      part.name,
+      part.partName,
+      part.kind,
+      part.semanticRole,
+    ]
+    for (const reference of references) {
+      if (typeof reference === 'string' && reference.trim()) {
+        partByReference.set(reference.trim().toLowerCase(), part)
+      }
+    }
+  }
+  let flangeIndex = 0
+  const output = parts.map((part) => {
+    const kind = normalizeRequiredRoleToken(String(part.kind ?? part.partType ?? part.type ?? ''))
+    const semanticRole = normalizeRequiredRoleToken(String(part.semanticRole ?? ''))
+    const canonicalRole =
+      category === 'process_equipment' && kind === 'cylindrical_tank'
+        ? 'vessel_shell'
+        : kind === 'platform_ladder'
+          ? 'access_platform'
+          : undefined
+    let next = part
+    if (canonicalRole && semanticRole !== canonicalRole) {
+      changed = true
+      next = { ...next, semanticRole: canonicalRole }
+    }
+    if (kind === 'flange_ring') {
+      const attachedFlange = normalizeRegistryFlangeConnectorPlacement(
+        next,
+        parts,
+        partByReference,
+        flangeIndex,
+      )
+      flangeIndex += 1
+      if (attachedFlange !== next) {
+        changed = true
+        next = attachedFlange
+      }
+    }
+    return next
+  })
+  return changed ? output : [...parts]
+}
+
+function normalizeRegistryFlangeConnectorPlacement(
+  part: PartComposePartInput,
+  parts: readonly PartComposePartInput[],
+  partByReference: ReadonlyMap<string, PartComposePartInput>,
+  flangeIndex: number,
+): PartComposePartInput {
+  const text = [
+    part.id,
+    part.sourcePartId,
+    part.name,
+    part.partName,
+    part.semanticRole,
+    part.connectTo,
+    part.connectPoint,
+  ]
+    .filter(
+      (value): value is string | number => typeof value === 'string' || typeof value === 'number',
+    )
+    .join(' ')
+    .toLowerCase()
+  const explicitTarget =
+    typeof part.connectTo === 'string'
+      ? partByReference.get(part.connectTo.toLowerCase())
+      : undefined
+  const targetKind = explicitTarget ? registryPartKind(explicitTarget) : ''
+  const connectorPortKinds = new Set([
+    'inlet_port',
+    'outlet_port',
+    'pipe_port',
+    'flanged_nozzle',
+    'sanitary_nozzle',
+    'instrument_port',
+  ])
+  const inferredTargetKind = connectorPortKinds.has(targetKind)
+    ? targetKind
+    : /outlet|discharge/.test(text)
+      ? 'outlet_port'
+      : /inlet|suction/.test(text)
+        ? 'inlet_port'
+        : flangeIndex === 0
+          ? 'inlet_port'
+          : flangeIndex === 1
+            ? 'outlet_port'
+            : undefined
+  if (!inferredTargetKind) return part
+  const target =
+    targetKind === inferredTargetKind
+      ? explicitTarget
+      : parts.find((candidate) => registryPartKind(candidate) === inferredTargetKind)
+  if (!target) return part
+  const targetReference =
+    typeof target.id === 'string' && target.id.trim()
+      ? target.id.trim()
+      : typeof target.sourcePartId === 'string' && target.sourcePartId.trim()
+        ? target.sourcePartId.trim()
+        : inferredTargetKind
+  const targetAxis =
+    target.axis === 'x' || target.axis === 'y' || target.axis === 'z' ? target.axis : undefined
+  const {
+    position: _position,
+    side: _side,
+    ...rest
+  } = part as PartComposePartInput & {
+    position?: unknown
+    side?: unknown
+  }
+  return {
+    ...rest,
+    connectTo: targetReference,
+    connectPoint: 'open',
+    childPoint: part.childPoint ?? 'back',
+    axis: targetAxis ?? (inferredTargetKind === 'outlet_port' ? 'x' : 'z'),
+  }
+}
+
+function registryPartKind(part: PartComposePartInput): string {
+  return normalizeRequiredRoleToken(
+    String(part.kind ?? part.partType ?? part.type ?? part.semanticRole ?? ''),
+  )
+}
+
+function normalizeFlangeConnectorPlacement(
+  part: PartComposePartInput,
+  parts: readonly PartComposePartInput[],
+  partByReference: ReadonlyMap<string, PartComposePartInput>,
+  flangeIndex: number,
+): PartComposePartInput {
+  const text = [
+    part.id,
+    part.sourcePartId,
+    part.name,
+    part.partName,
+    part.semanticRole,
+    part.connectTo,
+    part.connectPoint,
+  ]
+    .filter(
+      (value): value is string | number => typeof value === 'string' || typeof value === 'number',
+    )
+    .join(' ')
+    .toLowerCase()
+  const explicitTarget =
+    typeof part.connectTo === 'string'
+      ? partByReference.get(part.connectTo.toLowerCase())
+      : undefined
+  const explicitTargetKind = explicitTarget
+    ? normalizeRequiredRoleToken(
+        String(
+          explicitTarget.kind ??
+            explicitTarget.partType ??
+            explicitTarget.type ??
+            explicitTarget.semanticRole ??
+            '',
+        ),
+      )
+    : ''
+  const targetKind =
+    explicitTargetKind === 'inlet_port' || explicitTargetKind === 'outlet_port'
+      ? explicitTargetKind
+      : /outlet|discharge|出口|排出/.test(text)
+        ? 'outlet_port'
+        : /inlet|suction|入口|进口|吸入/.test(text)
+          ? 'inlet_port'
+          : flangeIndex === 0
+            ? 'inlet_port'
+            : flangeIndex === 1
+              ? 'outlet_port'
+              : undefined
+  if (!targetKind) return part
+  const target =
+    explicitTargetKind === targetKind
+      ? explicitTarget
+      : parts.find((candidate) => {
+          const kind = normalizeRequiredRoleToken(
+            String(
+              candidate.kind ??
+                candidate.partType ??
+                candidate.type ??
+                candidate.semanticRole ??
+                '',
+            ),
+          )
+          return kind === targetKind
+        })
+  if (!target) return part
+  const targetReference =
+    typeof target.id === 'string' && target.id.trim()
+      ? target.id.trim()
+      : typeof target.sourcePartId === 'string' && target.sourcePartId.trim()
+        ? target.sourcePartId.trim()
+        : targetKind
+  const targetAxis =
+    target.axis === 'x' || target.axis === 'y' || target.axis === 'z' ? target.axis : undefined
+  const {
+    position: _position,
+    side: _side,
+    ...rest
+  } = part as PartComposePartInput & {
+    position?: unknown
+    side?: unknown
+  }
+  return {
+    ...rest,
+    connectTo: targetReference,
+    connectPoint: 'open',
+    childPoint: part.childPoint ?? 'back',
+    axis: targetAxis ?? (targetKind === 'outlet_port' ? 'x' : 'z'),
+  }
 }
 
 function stringRecordValue(value: unknown): Record<string, string> | undefined {
@@ -2008,6 +2277,51 @@ function shouldBuildRuntimeDraftProfile(args: Record<string, unknown>, prompt: s
   )
 }
 
+function normalizeProfileMatchText(value: unknown): string {
+  return typeof value === 'string'
+    ? value
+        .toLowerCase()
+        .replace(/[_-]+/g, ' ')
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    : ''
+}
+
+function isConfidentInferredProfileMatch(
+  profile: DeviceProfileDefinition,
+  sourceArgs: Record<string, unknown>,
+  prompt: string,
+): boolean {
+  const id = normalizeProfileMatchText(profile.id)
+  const name = normalizeProfileMatchText(profile.name)
+  const labels = [profile.id, profile.name, ...profile.aliases]
+    .map(normalizeProfileMatchText)
+    .filter(Boolean)
+  const explicitProfileLabels = [
+    sourceArgs.deviceProfile,
+    sourceArgs.profile,
+    sourceArgs.deviceType,
+  ].map(normalizeProfileMatchText)
+  if (
+    explicitProfileLabels.some(
+      (label) => label && (label === id || label === name || labels.includes(label)),
+    )
+  ) {
+    return true
+  }
+
+  const text = normalizeProfileMatchText(
+    [prompt, sourceArgs.name, sourceArgs.object, sourceArgs.category].join(' '),
+  )
+
+  return labels.some((label) => {
+    if (!text.includes(label)) return false
+    const tokenCount = label.split(/\s+/).filter(Boolean).length
+    return label === id || label === name || tokenCount >= 2
+  })
+}
+
 function registryPartFallbackShapes(
   targetArgs: Record<string, unknown>,
   sourceArgs: Record<string, unknown>,
@@ -2018,6 +2332,8 @@ function registryPartFallbackShapes(
   const explicitDraftProfile = explicitDraftProfileFromArgs(sourceArgs, prompt)
   const inferredFamilyDefinition = inferFamilyDefinition({ ...sourceArgs, prompt })
   const inferredProfile = inferDeviceProfileDefinition({ ...sourceArgs, prompt }, availableProfiles)
+  const inferredProfileIsConfident =
+    inferredProfile != null && isConfidentInferredProfileMatch(inferredProfile, sourceArgs, prompt)
   const draftFallbackAllowed =
     explicitDraftProfile != null ||
     (inferredProfile == null && shouldBuildRuntimeDraftProfile(sourceArgs, prompt))
@@ -2037,7 +2353,10 @@ function registryPartFallbackShapes(
   const draftProfile =
     (explicitDraftValidation?.ok ? explicitDraftProfile : undefined) ??
     (shouldUseFallbackDraft ? fallbackDraft : undefined)
-  const profile = inferredProfile ?? draftProfile
+  const profile =
+    inferredProfile && (explicitDraftProfile == null || inferredProfileIsConfident)
+      ? inferredProfile
+      : draftProfile
   if (explicitDraftValidation && !explicitDraftValidation.ok && inferredProfile == null) {
     targetArgs.deviceProfileValidation = explicitDraftValidation
     targetArgs.profileFallbackReason = 'profile_validation_failed'
@@ -2091,7 +2410,10 @@ function registryPartFallbackShapes(
         typeof profiledSourceArgs.diameter === 'number' ? profiledSourceArgs.diameter : undefined,
     },
   )
-  const layoutParts = layoutPlan.parts
+  const dedupedLayoutParts = profile ? dedupeProfileLayoutParts(layoutPlan.parts) : layoutPlan.parts
+  const layoutParts = canonicalizeRegistryLayoutPartRoles(normalizedPlan.family, dedupedLayoutParts)
+  const resolvedLayoutPlan =
+    layoutParts === layoutPlan.parts ? layoutPlan : { ...layoutPlan, parts: layoutParts }
 
   const partInput: PartComposeInput = {
     ...(profiledSourceArgs as PartComposeInput),
@@ -2128,7 +2450,7 @@ function registryPartFallbackShapes(
   targetArgs.family = normalizedPlan.family
   targetArgs.parts = layoutParts
   targetArgs.__registryPartPlan = true
-  targetArgs.layoutPlan = layoutPlan
+  targetArgs.layoutPlan = resolvedLayoutPlan
   if (profile) {
     targetArgs.deviceProfile = profile.id
     targetArgs.archetypeFamily = profile.archetypeFamily
@@ -3035,6 +3357,125 @@ function genericPartFallbackShapes(
   if (partInput.primaryColor) targetArgs.primaryColor = partInput.primaryColor
   if (normalizedPlan.warnings.length > 0) targetArgs.partWarnings = normalizedPlan.warnings
   return shapes
+}
+
+function isMixerPartComposerRequest(sourceArgs: Record<string, unknown>, prompt: string): boolean {
+  const parts = Array.isArray(sourceArgs.parts) ? sourceArgs.parts.filter(isRecord) : []
+  if (parts.length === 0) return false
+  const text =
+    `${prompt} ${sourceArgs.name ?? ''} ${sourceArgs.category ?? ''} ${sourceArgs.geometryBrief ?? ''} ${JSON.stringify(parts)}`.toLowerCase()
+  const mixerIntent =
+    /mixer|stirrer|agitator|impeller|paddle|\u6405\u62cc|\u6868\u53f6|\u53f6\u7247|\u53f6\u8f6e|鎼呮|悈鎷|妗ㄥ彾|鍙剁墖|鐗囨|〃鍙/.test(
+      text,
+    )
+  if (!mixerIntent) return false
+  const partText = parts
+    .map((part) =>
+      [part.kind, part.id, part.name, part.semanticRole, part.sourcePartKind]
+        .filter(Boolean)
+        .join(' '),
+    )
+    .join(' ')
+    .toLowerCase()
+  return (
+    /(vertical_pole|shaft|rod|pole|mixer_shaft|潌瀛|鏉)/.test(partText) &&
+    /(mixer_blades|propeller_blade_set|fan_blade|radial_blades|mixer_blade|agitator_blade)/.test(
+      partText,
+    )
+  )
+}
+
+function directPartComposerFallbackShapes(
+  targetArgs: Record<string, unknown>,
+  sourceArgs: Record<string, unknown>,
+  prompt: string,
+): RawShape[] | undefined {
+  const parts: PartComposePartInput[] = Array.isArray(sourceArgs.parts)
+    ? sourceArgs.parts.filter(isRecord).map((part) => part as PartComposePartInput)
+    : []
+  if (parts.length === 0) return undefined
+  const requiredRoles =
+    stringArray(sourceArgs.requiredRoles)?.map(normalizeRequiredRoleToken).filter(Boolean) ?? []
+  const sourceBrief = normalizeGeometryBrief(sourceArgs.geometryBrief)
+  const geometryBrief: PrimitiveGeometryBrief = {
+    ...(sourceBrief ?? {}),
+    category:
+      sourceBrief?.category ??
+      (typeof sourceArgs.category === 'string' ? sourceArgs.category : 'direct_part_composer'),
+    requiredRoles:
+      sourceBrief?.requiredRoles && sourceBrief.requiredRoles.length > 0
+        ? sourceBrief.requiredRoles
+        : requiredRoles,
+  }
+  const shapes = composePartPrimitives({
+    ...(sourceArgs as PartComposeInput),
+    name: typeof sourceArgs.name === 'string' ? sourceArgs.name : 'direct part assembly',
+    family: typeof sourceArgs.family === 'string' ? sourceArgs.family : 'generic',
+    registryPartPlan: true,
+    autoComplete: false,
+    enhanceVisualDetails: false,
+    geometryBrief,
+    parts,
+  }) as RawShape[]
+  if (shapes.length === 0) return undefined
+
+  targetArgs.__directPartComposer = true
+  targetArgs.__precisionPartRoute = sourceArgs.__precisionPartRoute
+  targetArgs.family = typeof sourceArgs.family === 'string' ? sourceArgs.family : 'generic'
+  targetArgs.category = sourceArgs.category
+  targetArgs.parts = parts
+  targetArgs.requiredRoles = requiredRoles
+  targetArgs.geometryBrief = geometryBrief
+  void prompt
+  return shapes
+}
+
+function mixerPartComposerFallbackShapes(
+  targetArgs: Record<string, unknown>,
+  sourceArgs: Record<string, unknown>,
+  prompt: string,
+): RawShape[] | undefined {
+  const parts: PartComposePartInput[] = Array.isArray(sourceArgs.parts)
+    ? sourceArgs.parts
+        .filter(isRecord)
+        .map((part) => normalizeMixerPartComposerPart(part) as PartComposePartInput)
+    : []
+  const geometryBrief: PrimitiveGeometryBrief = {
+    category: 'mixer',
+    requiredRoles: ['mixer_shaft', 'mixer_hub', 'mixer_blades'],
+  }
+  const shapes = composePartPrimitives({
+    ...(sourceArgs as PartComposeInput),
+    name: typeof sourceArgs.name === 'string' ? sourceArgs.name : 'mixer impeller',
+    geometryBrief,
+    detail: typeof sourceArgs.detail === 'string' ? sourceArgs.detail : 'high',
+    parts,
+  }) as RawShape[]
+  if (shapes.length === 0) return undefined
+
+  targetArgs.__precisionPartRoute = 'mixer_impeller'
+  targetArgs.__directPartComposer = true
+  targetArgs.family = 'generic'
+  targetArgs.category = sourceArgs.category ?? 'mixer impeller component'
+  targetArgs.parts = parts
+  targetArgs.requiredRoles = sourceArgs.requiredRoles ?? ['mixer_shaft', 'mixer_hub', 'mixer_blade']
+  targetArgs.geometryBrief = geometryBrief
+  void prompt
+  return shapes
+}
+
+function normalizeMixerPartComposerPart(part: Record<string, unknown>): Record<string, unknown> {
+  const kind = String(part.kind ?? part.partType ?? part.type ?? '').toLowerCase()
+  const id = String(part.id ?? part.name ?? part.semanticRole ?? '').toLowerCase()
+  if (/fan_blade|radial_blades|mixer_blades|mixer_blade|agitator_blade/.test(`${kind} ${id}`)) {
+    return {
+      ...part,
+      kind: 'propeller_blade_set',
+      id: typeof part.id === 'string' ? part.id : 'mixer_blades',
+      bladeShape: part.bladeShape ?? 'taiji_half',
+    }
+  }
+  return part
 }
 
 function isAircraftIntent(
@@ -4232,17 +4673,37 @@ function registryPartGeometryBrief(
   const requiredRoles = Array.from(
     new Set(
       parts
-        .map((part) =>
-          normalizeRequiredRoleToken(String(part.semanticRole ?? part.kind ?? '').trim()),
-        )
+        .map((part) => canonicalRegistryRequiredRole(family, part))
         .filter((role) => role.length > 0),
     ),
   )
   return {
     ...normalizeGeometryBrief(args.geometryBrief),
-    category: family,
+    category: registrySemanticCategory(family),
     requiredRoles,
   }
+}
+
+function registrySemanticCategory(family: string): string {
+  if (family === 'tank' || family === 'reactor' || family === 'heat_exchanger') {
+    return 'process_equipment'
+  }
+  if (family === 'pump' || family === 'compressor') return 'fluid_machine'
+  if (family === 'conveyor' || family === 'material_handling') return 'material_handling'
+  return family
+}
+
+function canonicalRegistryRequiredRole(family: string, part: Record<string, unknown>): string {
+  const kind = normalizeRequiredRoleToken(String(part.kind ?? part.partType ?? part.type ?? ''))
+  const role = normalizeRequiredRoleToken(String(part.semanticRole ?? ''))
+  if (kind === 'cylindrical_tank') return 'cylindrical_tank'
+  if (kind === 'platform_ladder') return 'access_platform'
+  const definition = getPartDefinitions(family).find((candidate) => {
+    const candidateKind = normalizeRequiredRoleToken(String(candidate.kind))
+    const candidateRole = normalizeRequiredRoleToken(String(candidate.semanticRole ?? ''))
+    return candidateKind === kind && (!role || candidateRole === role)
+  })
+  return normalizeRequiredRoleToken(String(definition?.semanticRole ?? (role || kind)))
 }
 
 function mergeBlueprintGeometryBrief(
@@ -4398,6 +4859,302 @@ function normalizeVec3Array(value: unknown): Vec3[] | undefined {
   return points.length > 0 ? points : undefined
 }
 
+function rawShapeRead(shape: RawShape, key: string): unknown {
+  const shapeRecord = shape as Record<string, unknown>
+  const params = isRecord(shapeRecord.params) ? shapeRecord.params : {}
+  const dimensions = isRecord(shapeRecord.dimensions)
+    ? shapeRecord.dimensions
+    : isRecord(params.dimensions)
+      ? params.dimensions
+      : {}
+  return shapeRecord[key] ?? params[key] ?? dimensions[key]
+}
+
+function primitiveReferenceKeys(shape: RawShape, index: number): string[] {
+  return [
+    rawShapeRead(shape, 'id'),
+    rawShapeRead(shape, 'name'),
+    rawShapeRead(shape, 'semanticRole'),
+    rawShapeRead(shape, 'sourcePartId'),
+    rawShapeRead(shape, 'sourcePartKind'),
+    `#${index}`,
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => value.trim())
+}
+
+function resolvePrimitiveShapeReference(
+  reference: unknown,
+  shapes: readonly RawShape[],
+  currentIndex: number,
+): number | undefined {
+  if (typeof reference === 'number' && Number.isInteger(reference) && reference >= 0) {
+    return reference < currentIndex ? reference : undefined
+  }
+  if (typeof reference !== 'string') return undefined
+  const normalized = reference.trim()
+  if (!normalized) return undefined
+  const numeric = normalized.match(/^#?(\d+)$/)
+  if (numeric?.[1]) {
+    const index = Number.parseInt(numeric[1], 10)
+    return index >= 0 && index < currentIndex ? index : undefined
+  }
+  for (let index = currentIndex - 1; index >= 0; index -= 1) {
+    if (primitiveReferenceKeys(shapes[index]!, index).includes(normalized)) return index
+  }
+  return undefined
+}
+
+function primitiveSideAnchors(side: unknown): { anchor: string; childAnchor: string } {
+  switch (side) {
+    case 'left':
+      return { anchor: 'left', childAnchor: 'right' }
+    case 'front':
+      return { anchor: 'front', childAnchor: 'back' }
+    case 'back':
+      return { anchor: 'back', childAnchor: 'front' }
+    default:
+      return { anchor: 'right', childAnchor: 'left' }
+  }
+}
+
+function primitiveShapeReferenceText(shape: RawShape): string {
+  return [
+    rawShapeRead(shape, 'id'),
+    rawShapeRead(shape, 'name'),
+    rawShapeRead(shape, 'semanticRole'),
+    rawShapeRead(shape, 'sourcePartId'),
+    rawShapeRead(shape, 'sourcePartKind'),
+  ]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ')
+    .toLowerCase()
+}
+
+function childAnchorForSide(anchor: unknown): string | undefined {
+  switch (anchor) {
+    case 'left':
+      return 'right'
+    case 'right':
+      return 'left'
+    case 'front':
+      return 'back'
+    case 'back':
+      return 'front'
+    default:
+      return undefined
+  }
+}
+
+function normalizeSemanticPrimitiveAnchors(
+  shape: RawShape,
+  anchor: string | undefined,
+  childAnchor: string | undefined,
+): { anchor?: string; childAnchor?: string } {
+  const text = primitiveShapeReferenceText(shape)
+  if (
+    /(?:^|[_\s-])(stopper|cork|plug|lid|cap|knob)(?:$|[_\s-])|木塞|瓶塞|壶盖|盖子/.test(text) &&
+    !/(?:^|[_\s-])bottom(?:$|[_\s-])/.test(text)
+  ) {
+    return { anchor: 'top', childAnchor: 'bottom' }
+  }
+  if (/(?:^|[_\s-])(handle|spout|nozzle|port)(?:$|[_\s-])|把手|壶嘴|喷嘴|接口/.test(text)) {
+    const sideChildAnchor = childAnchorForSide(anchor)
+    if (sideChildAnchor) return { anchor, childAnchor: sideChildAnchor }
+  }
+  return { anchor, childAnchor }
+}
+
+function normalizePrimitiveRelation(
+  shape: RawShape,
+  shapes: readonly RawShape[],
+  index: number,
+): {
+  attachTo?: number | string
+  anchor?: string
+  childAnchor?: string
+  fromLayoutField?: boolean
+} {
+  const explicitAttachTo = rawShapeRead(shape, 'attachTo')
+  const explicitAnchor = rawShapeRead(shape, 'anchor')
+  const explicitChildAnchor = rawShapeRead(shape, 'childAnchor')
+  const resolvedExplicitAttachTo = resolvePrimitiveShapeReference(explicitAttachTo, shapes, index)
+  if (resolvedExplicitAttachTo != null) {
+    const rawAnchor = typeof explicitAnchor === 'string' ? explicitAnchor : undefined
+    const rawChildAnchor = typeof explicitChildAnchor === 'string' ? explicitChildAnchor : undefined
+    const semanticAnchors = normalizeSemanticPrimitiveAnchors(shape, rawAnchor, rawChildAnchor)
+    return {
+      attachTo: resolvedExplicitAttachTo,
+      anchor: semanticAnchors.anchor,
+      childAnchor: semanticAnchors.childAnchor,
+      fromLayoutField:
+        semanticAnchors.anchor !== rawAnchor || semanticAnchors.childAnchor !== rawChildAnchor,
+    }
+  }
+  if (explicitAttachTo != null) {
+    const rawAnchor = typeof explicitAnchor === 'string' ? explicitAnchor : undefined
+    const rawChildAnchor = typeof explicitChildAnchor === 'string' ? explicitChildAnchor : undefined
+    const semanticAnchors = normalizeSemanticPrimitiveAnchors(shape, rawAnchor, rawChildAnchor)
+    return {
+      attachTo: explicitAttachTo as number | string,
+      anchor: semanticAnchors.anchor,
+      childAnchor: semanticAnchors.childAnchor,
+      fromLayoutField:
+        semanticAnchors.anchor !== rawAnchor || semanticAnchors.childAnchor !== rawChildAnchor,
+    }
+  }
+
+  const alignAbove = rawShapeRead(shape, 'alignAbove')
+  const aboveIndex = resolvePrimitiveShapeReference(alignAbove, shapes, index)
+  if (aboveIndex != null) {
+    return { attachTo: aboveIndex, anchor: 'top', childAnchor: 'bottom', fromLayoutField: true }
+  }
+
+  const alignBeside = rawShapeRead(shape, 'alignBeside')
+  const besideIndex = resolvePrimitiveShapeReference(alignBeside, shapes, index)
+  if (besideIndex != null) {
+    return {
+      attachTo: besideIndex,
+      ...primitiveSideAnchors(rawShapeRead(shape, 'side')),
+      fromLayoutField: true,
+    }
+  }
+
+  const centeredOn = rawShapeRead(shape, 'centeredOn')
+  const centeredIndex = resolvePrimitiveShapeReference(centeredOn, shapes, index)
+  if (centeredIndex != null) {
+    const side = rawShapeRead(shape, 'side')
+    return side
+      ? { attachTo: centeredIndex, ...primitiveSideAnchors(side), fromLayoutField: true }
+      : { attachTo: centeredIndex, anchor: 'center', childAnchor: 'center', fromLayoutField: true }
+  }
+
+  return {
+    anchor: typeof explicitAnchor === 'string' ? explicitAnchor : undefined,
+    childAnchor: typeof explicitChildAnchor === 'string' ? explicitChildAnchor : undefined,
+  }
+}
+
+function normalizePrimitiveArc(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  if (value > Math.PI * 2 && value <= 360) return (value / 180) * Math.PI
+  return value
+}
+
+function normalizePrimitiveLayoutPosition(
+  position: Vec3,
+  relation: {
+    attachTo?: number | string
+    anchor?: string
+    childAnchor?: string
+    fromLayoutField?: boolean
+  },
+  normalizedShapes: readonly ShapeSpec[],
+  childHalfExtent = 0,
+): Vec3 {
+  if (!relation.fromLayoutField || typeof relation.attachTo !== 'number') return position
+  if (!relation.anchor || !relation.childAnchor) return position
+  const expectedSide = getExpectedAttachmentSide(relation.anchor, relation.childAnchor)
+  if (!expectedSide) return position
+  const parent = normalizedShapes[relation.attachTo]
+  if (!parent) return position
+  const delta = position[expectedSide.axis] - parent.position[expectedSide.axis]
+  if (!Number.isFinite(delta) || delta * expectedSide.sign >= -0.02) return position
+  const next: Vec3 = [position[0], position[1], position[2]]
+  next[expectedSide.axis] =
+    parent.position[expectedSide.axis] +
+    expectedSide.sign * (primitiveHalfExtent(parent, expectedSide.axis) + childHalfExtent)
+  return next
+}
+
+function primitiveHalfExtent(shape: ShapeSpec, axis: 0 | 1 | 2): number {
+  return primitiveHalfExtentFromRawValues(axis, {
+    kind: shape.kind,
+    height: shape.height,
+    length: shape.length,
+    width: shape.width,
+    depth: shape.depth,
+    radius: shape.radius,
+    majorRadius: shape.majorRadius,
+    tubeRadius: shape.tubeRadius,
+    axis: shape.axis,
+  })
+}
+
+function primitiveHalfExtentFromRawValues(
+  axis: 0 | 1 | 2,
+  values: {
+    kind: string
+    height?: unknown
+    length?: unknown
+    width?: unknown
+    depth?: unknown
+    radius?: unknown
+    majorRadius?: unknown
+    tubeRadius?: unknown
+    axis?: unknown
+  },
+): number {
+  const positive = (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+  const height = positive(values.height)
+  const length = positive(values.length)
+  const width = positive(values.width)
+  const depth = positive(values.depth)
+  const radius = positive(values.radius)
+  const majorRadius = positive(values.majorRadius)
+  const tubeRadius = positive(values.tubeRadius)
+  const primitiveAxis = values.axis === 'x' || values.axis === 'z' ? values.axis : 'y'
+
+  if (axis === 0) {
+    if (length != null) return length / 2
+    if (primitiveAxis === 'x' && height != null) return height / 2
+    if (majorRadius != null || tubeRadius != null) return (majorRadius ?? 0) + (tubeRadius ?? 0)
+    return radius ?? 0
+  }
+  if (axis === 2) {
+    if (width != null) return width / 2
+    if (depth != null) return depth / 2
+    if (primitiveAxis === 'z' && height != null) return height / 2
+    if (majorRadius != null || tubeRadius != null) return (majorRadius ?? 0) + (tubeRadius ?? 0)
+    return radius ?? 0
+  }
+  if (height != null && primitiveAxis === 'y') return height / 2
+  if (height != null && !radius) return height / 2
+  if (majorRadius != null || tubeRadius != null) return (majorRadius ?? 0) + (tubeRadius ?? 0)
+  return radius ?? 0
+}
+
+function normalizePrimitiveExplicitPositionRelation(
+  position: Vec3 | undefined,
+  relation: {
+    attachTo?: number | string
+    anchor?: string
+    childAnchor?: string
+    fromLayoutField?: boolean
+  },
+  normalizedShapes: readonly ShapeSpec[],
+): {
+  attachTo?: number | string
+  anchor?: string
+  childAnchor?: string
+  fromLayoutField?: boolean
+} {
+  if (!position || relation.fromLayoutField || typeof relation.attachTo !== 'number') {
+    return relation
+  }
+  if (!relation.anchor || !relation.childAnchor) return {}
+  const expectedSide = getExpectedAttachmentSide(relation.anchor, relation.childAnchor)
+  if (!expectedSide) return relation
+  const parent = normalizedShapes[relation.attachTo]
+  if (!parent) return relation
+  const delta = position[expectedSide.axis] - parent.position[expectedSide.axis]
+  if (!Number.isFinite(delta) || Math.abs(delta) <= 0.02 || delta * expectedSide.sign >= -0.02) {
+    return relation
+  }
+  return {}
+}
+
 function defaultGroundedPosition(
   kind: string,
   values: {
@@ -4465,10 +5222,17 @@ export function normalizeGeometryToolShapes(
   const expandedShapes = expandPrimitiveShapeArrays(
     rawShapes as PrimitiveArrayExpandableShape[],
   ) as RawShape[]
-  return expandedShapes.map((shape) => {
+  const normalizedShapes: ShapeSpec[] = []
+  return expandedShapes.map((shape, index) => {
     const shapeRecord = shape as Record<string, unknown>
     const params = isRecord(shapeRecord.params) ? shapeRecord.params : {}
-    const read = (key: string) => shapeRecord[key] ?? params[key]
+    const dimensions = isRecord(shapeRecord.dimensions)
+      ? shapeRecord.dimensions
+      : isRecord(params.dimensions)
+        ? params.dimensions
+        : {}
+    const read = (key: string) => shapeRecord[key] ?? params[key] ?? dimensions[key]
+    const initialRelation = normalizePrimitiveRelation(shape, expandedShapes, index)
     const size = Array.isArray(read('size')) ? (read('size') as number[]) : undefined
     const color = Array.isArray(read('color')) ? (read('color') as number[]) : undefined
     const kind = normalizePrimitiveKind(
@@ -4522,8 +5286,14 @@ export function normalizeGeometryToolShapes(
     const majorRadius = read('majorRadius') as number | undefined
     const tubeRadius = read('tubeRadius') as number | undefined
     const axis = read('axis') as string | undefined
-    const position =
-      normalizeVec3Object(read('position')) ??
+    const explicitPosition = normalizeVec3Object(read('position'))
+    const relation = normalizePrimitiveExplicitPositionRelation(
+      explicitPosition,
+      initialRelation,
+      normalizedShapes,
+    )
+    const rawPosition =
+      explicitPosition ??
       defaultGroundedPosition(kind, {
         height: normalizedHeight,
         radius,
@@ -4534,6 +5304,37 @@ export function normalizeGeometryToolShapes(
         thickness: normalizedThickness,
         axis,
       })
+    const layoutRelation =
+      explicitPosition || relation.fromLayoutField
+        ? relation
+        : relation.attachTo != null
+          ? { ...relation, fromLayoutField: true }
+          : relation
+    const childHalfExtent =
+      typeof layoutRelation.attachTo === 'number' &&
+      layoutRelation.anchor &&
+      layoutRelation.childAnchor
+        ? primitiveHalfExtentFromRawValues(
+            getExpectedAttachmentSide(layoutRelation.anchor, layoutRelation.childAnchor)?.axis ?? 1,
+            {
+              kind,
+              height: normalizedHeight,
+              length: normalizedLength,
+              width: normalizedWidth,
+              depth: normalizedDepth,
+              radius,
+              majorRadius,
+              tubeRadius,
+              axis,
+            },
+          )
+        : 0
+    const position = normalizePrimitiveLayoutPosition(
+      rawPosition,
+      layoutRelation,
+      normalizedShapes,
+      childHalfExtent,
+    )
     const normalizedShape: ShapeSpec = {
       kind,
       position,
@@ -4584,7 +5385,7 @@ export function normalizeGeometryToolShapes(
       holes: normalizePoint2Holes(read('holes')),
       path: normalizeVec3Array(read('path')),
       segments: read('segments') as number | undefined,
-      arc: read('arc') as number | undefined,
+      arc: normalizePrimitiveArc(read('arc')),
       bevelSize: read('bevelSize') as number | undefined,
       bevelThickness: read('bevelThickness') as number | undefined,
       bevelSegments: read('bevelSegments') as number | undefined,
@@ -4592,11 +5393,13 @@ export function normalizeGeometryToolShapes(
       closed: read('closed') as boolean | undefined,
       material,
       materialPreset: materialPreset as string | undefined,
-      attachTo: read('attachTo') as number | string | undefined,
-      anchor: read('anchor') as string | undefined,
-      childAnchor: read('childAnchor') as string | undefined,
+      attachTo: relation.attachTo,
+      anchor: relation.anchor,
+      childAnchor: relation.childAnchor,
     }
-    return lowerDerivedPrimitiveShape(normalizedShape as PrimitiveShapeInput) as ShapeSpec
+    const lowered = lowerDerivedPrimitiveShape(normalizedShape as PrimitiveShapeInput) as ShapeSpec
+    normalizedShapes.push(lowered)
+    return lowered
   })
 }
 

@@ -44,7 +44,7 @@ function getSlabMaterial(
   // Slab side faces still render correctly because `generateSlabGeometry`
   // produces outward-facing normals on the top, bottom, and perimeter.
   if (!textures || (!node.materialPreset && !node.material)) {
-    return createSurfaceRoleMaterial('floor', colorPreset, FrontSide, sceneTheme)
+    return createSurfaceRoleMaterial('floor', colorPreset, FrontSide, sceneTheme, shading)
   }
 
   const cacheKey = JSON.stringify({

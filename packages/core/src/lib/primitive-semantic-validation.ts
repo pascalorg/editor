@@ -59,7 +59,7 @@ function detectFamily(
   // Use only intent-bearing text sources, not role/partKind keys — those cause false positives
   // (e.g. wheel_set gives semanticRole='vehicle_tire' which matches /vehicle/ on aircraft,
   //  propeller_blade_set normalizes to 'mixer_blades' which matches /mixer/ on aircraft).
-  const intentText = [
+  const rawIntentText = [
     options.geometryBrief?.category,
     options.prompt,
     sourceText(options.sourceArgs),
@@ -67,10 +67,12 @@ function detectFamily(
     .filter(Boolean)
     .join(' ')
     .toLowerCase()
-  const promptIntentText = [options.geometryBrief?.category, options.prompt]
+  const rawPromptIntentText = [options.geometryBrief?.category, options.prompt]
     .filter(Boolean)
     .join(' ')
     .toLowerCase()
+  const intentText = stripNegatedTargetClauses(rawIntentText)
+  const promptIntentText = stripNegatedTargetClauses(rawPromptIntentText)
   const declaredFamily = textOf(options.sourceArgs?.family).toLowerCase()
   const declaredLayoutFamily = textOf(options.sourceArgs?.layoutFamily).toLowerCase()
   const hasDeviceProfile = textOf(options.sourceArgs?.deviceProfile).length > 0
@@ -207,6 +209,15 @@ function detectFamily(
     return 'process_equipment'
   }
   return 'unknown'
+}
+
+function stripNegatedTargetClauses(text: string): string {
+  return text
+    .replace(
+      /\b(?:do\s+not|don't|dont|never|avoid|not)\s+(?:generate|create|make|build|model|use)?\s*([^.!?;\n]+)/gi,
+      ' ',
+    )
+    .replace(/(?:不要生成|不要|别生成|不是|避免生成|禁止生成)\s*([^。！？；\n]+)/g, ' ')
 }
 
 function factsBy(

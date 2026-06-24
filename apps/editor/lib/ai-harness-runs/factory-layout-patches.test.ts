@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   buildFactoryLayoutCreatePatches,
+  inferFactoryBuildingSpec,
   inferFactoryLayoutDimensions,
 } from './factory-layout-patches'
 
@@ -19,6 +20,22 @@ describe('factory layout patches', () => {
         plan: housePlan,
       }),
     ).toEqual({ length: 3, width: 3 })
+  })
+
+  test('infers multi-story house footprint height and roof from Chinese prompt', () => {
+    expect(
+      inferFactoryBuildingSpec({
+        prompt: '生成5米*10，高2米5的屋子，然后屋子上面还有一层，也是5米*10，高2米5。带屋顶。',
+        plan: housePlan,
+      }),
+    ).toMatchObject({
+      length: 5,
+      width: 10,
+      stories: 2,
+      storyHeight: 2.5,
+      hasRoof: true,
+      roofType: 'gable',
+    })
   })
 
   test('treats one explicit production-line size as line length', () => {
@@ -59,18 +76,140 @@ describe('factory layout patches', () => {
     })
 
     expect(plan.summary).toContain('3m x 3m')
-    expect(plan.patches).toHaveLength(10)
-    expect(plan.nodeIds).toHaveLength(10)
+    expect(plan.patches).toHaveLength(8)
+    expect(plan.nodeIds).toHaveLength(8)
     expect(plan.patches[0]).toMatchObject({
       op: 'create',
       parentId: 'level_factory',
       node: { type: 'zone' },
     })
+    expect(plan.patches.filter((patch) => patch.node.type === 'slab')).toHaveLength(0)
+    expect(plan.patches.filter((patch) => patch.node.type === 'ceiling')).toHaveLength(0)
     expect(plan.patches.filter((patch) => patch.node.type === 'wall')).toHaveLength(4)
     expect(plan.patches.filter((patch) => patch.node.type === 'door')).toHaveLength(1)
     expect(plan.patches.filter((patch) => patch.node.type === 'window')).toHaveLength(2)
     const doorPatch = plan.patches.find((patch) => patch.node.type === 'door')
     expect(doorPatch?.parentId).toMatch(/^wall_/)
+  })
+
+  test('creates real upper level and roof patches for multi-story houses', () => {
+    const plan = buildFactoryLayoutCreatePatches({
+      prompt: '生成5米*10，高2米5的屋子，然后屋子上面还有一层，也是5米*10，高2米5。带屋顶。',
+      plan: {
+        ...housePlan,
+        stories: 2,
+        storyHeight: 2.5,
+        hasRoof: true,
+        roofType: 'gable',
+      },
+      placement: {
+        parentId: 'level_ground',
+        generatedBy: 'factory-agent',
+        metadata: { buildingId: 'building_main' },
+      },
+    })
+
+    expect(plan.patches.filter((patch) => patch.node.type === 'level')).toHaveLength(1)
+    expect(plan.patches.filter((patch) => patch.node.type === 'slab')).toHaveLength(0)
+    expect(plan.patches.filter((patch) => patch.node.type === 'ceiling')).toHaveLength(0)
+    expect(plan.patches.filter((patch) => patch.node.type === 'wall')).toHaveLength(8)
+    expect(plan.patches.filter((patch) => patch.node.type === 'roof')).toHaveLength(1)
+    expect(plan.patches.filter((patch) => patch.node.type === 'roof-segment')).toHaveLength(1)
+
+    const upperLevelPatch = plan.patches.find((patch) => patch.node.type === 'level')
+    expect(upperLevelPatch).toMatchObject({
+      op: 'create',
+      parentId: 'building_main',
+      node: { type: 'level', level: 1 },
+    })
+    const upperLevelId = upperLevelPatch?.node.id
+    expect(
+      plan.patches.some(
+        (patch) =>
+          (patch.node.type === 'slab' || patch.node.type === 'ceiling') &&
+          patch.parentId === upperLevelId,
+      ),
+    ).toBe(false)
+    const roofPatch = plan.patches.find((patch) => patch.node.type === 'roof')
+    expect(roofPatch?.parentId).toBe(upperLevelId)
+    expect(roofPatch?.node).toMatchObject({ position: [0, 2.5, 0] })
+  })
+
+
+  test('creates a building and both story levels when no building context exists', () => {
+    const plan = buildFactoryLayoutCreatePatches({
+      prompt: '\u751f\u62105\u7c73*10\uff0c\u9ad82\u7c735\u7684\u5c4b\u5b50\uff0c\u7136\u540e\u5c4b\u5b50\u4e0a\u9762\u8fd8\u6709\u4e00\u5c42\uff0c\u4e5f\u662f5\u7c73*10\uff0c\u9ad82\u7c735\u3002\u5e26\u5c4b\u9876\u3002',
+      plan: {
+        ...housePlan,
+        stories: 2,
+        storyHeight: 2.5,
+        hasRoof: true,
+        roofType: 'gable',
+      },
+      placement: {
+        parentId: 'level_default',
+        generatedBy: 'factory-agent',
+      },
+    })
+
+    const buildingPatch = plan.patches.find((patch) => patch.node.type === 'building')
+    const levelPatches = plan.patches.filter((patch) => patch.node.type === 'level')
+
+    expect(buildingPatch).toMatchObject({ op: 'create', node: { type: 'building' } })
+    expect(levelPatches).toHaveLength(2)
+    expect(levelPatches.map((patch) => patch.parentId)).toEqual([
+      buildingPatch?.node.id,
+      buildingPatch?.node.id,
+    ])
+    expect(levelPatches.map((patch) => (patch.node as { level?: number }).level)).toEqual([0, 1])
+    expect(plan.patches.filter((patch) => patch.node.type === 'wall')).toHaveLength(8)
+    expect(plan.patches.filter((patch) => patch.node.type === 'slab')).toHaveLength(0)
+    expect(plan.patches.filter((patch) => patch.node.type === 'ceiling')).toHaveLength(0)
+    expect(plan.patches.find((patch) => patch.node.type === 'roof')?.parentId).toBe(
+      levelPatches[1]?.node.id,
+    )
+  })
+
+  test('does not treat upper-story wording as canvas-top placement', () => {
+    const plan = buildFactoryLayoutCreatePatches({
+      prompt: '\u751f\u62105\u7c73*10\uff0c\u9ad82\u7c735\u7684\u5c4b\u5b50\uff0c\u7136\u540e\u5c4b\u5b50\u4e0a\u9762\u8fd8\u6709\u4e00\u5c42\uff0c\u4e5f\u662f5\u7c73*10\uff0c\u9ad82\u7c735\u3002\u5e26\u5c4b\u9876\u3002',
+      plan: {
+        ...housePlan,
+        stories: 2,
+        storyHeight: 2.5,
+        hasRoof: true,
+        roofType: 'gable',
+      },
+      placement: {
+        parentId: 'level_ground',
+        generatedBy: 'factory-agent',
+        metadata: {
+          buildingId: 'building_main',
+          sceneBounds: {
+            min: [-5, -5],
+            max: [5, 5],
+            center: [0, 0],
+            size: [10, 10],
+          },
+        },
+      },
+    })
+
+    expect(plan.patches[1]?.node).toMatchObject({
+      type: 'zone',
+      polygon: [
+        [-2.5, -5],
+        [2.5, -5],
+        [2.5, 5],
+        [-2.5, 5],
+      ],
+      metadata: {
+        layoutPlacementIntent: 'default-origin',
+      },
+    })
+    expect(plan.patches.find((patch) => patch.node.type === 'roof')?.node).toMatchObject({
+      position: [0, 2.5, 0],
+    })
   })
 
   test('places requested top-left layout inside provided scene bounds', () => {

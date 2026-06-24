@@ -22,6 +22,10 @@ export type FactoryPlan =
       reason: string
       layoutType: 'house' | 'room' | 'factory' | 'production_line' | 'unknown'
       suggestedOperations: string[]
+      stories?: number
+      storyHeight?: number
+      hasRoof?: boolean
+      roofType?: FactoryRoofType
     }
   | {
       kind: 'process_line'
@@ -48,6 +52,17 @@ export type FactoryPlan =
     }
 
 type FactoryLayoutType = Extract<FactoryPlan, { kind: 'layout' }>['layoutType']
+type FactoryRoofType = 'hip' | 'gable' | 'shed' | 'gambrel' | 'dutch' | 'mansard' | 'flat'
+
+const ROOF_TYPES: FactoryRoofType[] = [
+  'hip',
+  'gable',
+  'shed',
+  'gambrel',
+  'dutch',
+  'mansard',
+  'flat',
+]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -95,6 +110,18 @@ function stringArray(value: unknown) {
 
 function numberValue(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+function integerValue(value: unknown, min = 1, max = 20) {
+  const parsed = numberValue(value)
+  if (parsed == null) return undefined
+  return Math.max(min, Math.min(max, Math.round(parsed)))
+}
+
+function roofTypeValue(value: unknown): FactoryRoofType | undefined {
+  return typeof value === 'string' && ROOF_TYPES.includes(value as FactoryRoofType)
+    ? (value as FactoryRoofType)
+    : undefined
 }
 
 function slugValue(value: string, fallback: string) {
@@ -268,16 +295,34 @@ function layoutType(value: unknown): FactoryLayoutType {
     : 'unknown'
 }
 
+function layoutStoryMetadata(source: Record<string, unknown>, fallbackPrompt: string) {
+  const inferred = inferLayoutStoryMetadata(fallbackPrompt)
+  return {
+    stories: integerValue(source.stories, 1, 20) ?? inferred.stories,
+    storyHeight:
+      numberValue(source.storyHeight) ?? numberValue(source.height) ?? inferred.storyHeight,
+    hasRoof:
+      typeof source.hasRoof === 'boolean'
+        ? source.hasRoof
+        : typeof source.roof === 'boolean'
+          ? source.roof
+          : inferred.hasRoof,
+    roofType: roofTypeValue(source.roofType) ?? inferred.roofType,
+  }
+}
+
 function normalizePlan(value: unknown, fallbackPrompt: string): FactoryPlan | null {
   if (!isRecord(value)) return null
   const kind = value.kind
   const reason = stringValue(value.reason) ?? 'Factory planner decision.'
   if (kind === 'layout') {
+    const storyMetadata = layoutStoryMetadata(value, fallbackPrompt)
     return {
       kind: 'layout',
       reason,
       layoutType: layoutType(value.layoutType),
       suggestedOperations: stringArray(value.suggestedOperations),
+      ...storyMetadata,
     }
   }
   if (kind === 'process_line') {
@@ -335,23 +380,75 @@ export function parseFactoryPlan(content: string, fallbackPrompt: string): Facto
 }
 
 const LAYOUT_PATTERNS = [
-  /\u623f\u5b50|\u623f\u95f4|\u5382\u623f|\u5de5\u5382|\u8f66\u95f4|\u4ed3\u5e93|\u5efa\u7b51|\u5899|\u95e8|\u7a97|\u697c\u677f|\u5730\u677f|\u5929\u82b1|\u533a\u57df|\u5e03\u5c40|\u52a8\u7ebf|\u4ea7\u7ebf|\u751f\u4ea7\u7ebf/,
+  /\u623f\u5b50|\u5c4b\u5b50|\u623f\u95f4|\u5382\u623f|\u5de5\u5382|\u8f66\u95f4|\u4ed3\u5e93|\u5efa\u7b51|\u5899|\u95e8|\u7a97|\u697c\u677f|\u5730\u677f|\u5929\u82b1|\u533a\u57df|\u5e03\u5c40|\u52a8\u7ebf|\u4ea7\u7ebf|\u751f\u4ea7\u7ebf/,
   /\b(house|room|factory shell|workshop|warehouse|building|wall|door|window|floor|zone|layout|production line|assembly line)\b/i,
 ]
 
 const GEOMETRY_PATTERNS = [
-  /\u8f93\u9001\u673a|\u4f20\u9001\u5e26|\u6cf5|\u98ce\u673a|\u98ce\u6247|\u7f50|\u53cd\u5e94\u91dc|\u53cd\u5e94\u5668|\u6405\u62cc\u7f50|\u7acb\u5f0f\u7f50|\u538b\u529b\u5bb9\u5668|\u538b\u7f29\u673a|\u6362\u70ed\u5668|\u673a\u5e8a|\u673a\u5668\u81c2|\u673a\u68b0\u81c2|\u63a7\u5236\u67dc|\u7535\u63a7\u67dc|\u7ba1\u9053|\u9600|\u88c5\u7f6e|\u8bbe\u5907/,
-  /\b(conveyor|pump|fan|tank|reactor|reactor vessel|stirred tank|pressure vessel|compressor|heat exchanger|machine tool|lathe|robot arm|cabinet|pipe|valve|labeling machine|palletizer|equipment|device)\b/i,
+  /\u8f93\u9001\u673a|\u4f20\u9001\u5e26|\u6cf5|\u98ce\u673a|\u98ce\u6247|\u7f50|\u53cd\u5e94\u91dc|\u53cd\u5e94\u5668|\u6405\u62cc\u7f50|\u7acb\u5f0f\u7f50|\u538b\u529b\u5bb9\u5668|\u538b\u7f29\u673a|\u6362\u70ed\u5668|\u673a\u5e8a|\u673a\u5668\u81c2|\u673a\u68b0\u81c2|\u63a7\u5236\u67dc|\u7535\u63a7\u67dc|\u7ba1\u9053|\u9600|\u88c5\u7f6e|\u8bbe\u5907|\u5854\u540a|\u8d77\u91cd\u673a|\u9f99\u95e8\u540a|\u5929\u8f66|\u884c\u8f66|\u540a\u8f66|\u6316\u6398\u673a|\u5347\u964d\u673a/,
+  /\b(conveyor|pump|fan|tank|reactor|reactor vessel|stirred tank|pressure vessel|compressor|heat exchanger|machine tool|lathe|robot arm|cabinet|pipe|valve|labeling machine|palletizer|equipment|device|crane|tower crane|gantry crane|overhead crane|bridge crane|excavator|lift|hoist)\b/i,
 ]
 
+function hasExplicitGeometrySubject(prompt: string) {
+  return GEOMETRY_PATTERNS.some((pattern) => pattern.test(prompt))
+}
+
 function inferLayoutType(prompt: string): FactoryLayoutType {
-  if (/\u623f\u5b50|\bhouse\b/i.test(prompt)) return 'house'
+  if (/\u623f\u5b50|\u5c4b\u5b50|\bhouse\b/i.test(prompt)) return 'house'
   if (/\u623f\u95f4|\broom\b/i.test(prompt)) return 'room'
   if (/\u4ea7\u7ebf|\u751f\u4ea7\u7ebf|\bproduction line\b|\bassembly line\b/i.test(prompt))
     return 'production_line'
   if (/\u5382\u623f|\u5de5\u5382|\u8f66\u95f4|\bfactory\b|\bworkshop\b/i.test(prompt))
     return 'factory'
   return 'unknown'
+}
+
+function chineseFloorCount(value: string) {
+  if (/\u4e24\u5c42|\u4e8c\u5c42|\u4e24\u5c42\u697c|\u4e8c\u5c42\u697c/.test(value)) return 2
+  if (/\u4e09\u5c42|\u4e09\u5c42\u697c/.test(value)) return 3
+  const numeric = value.match(/(\d+)\s*\u5c42/)
+  return numeric?.[1] ? Number(numeric[1]) : undefined
+}
+
+function heightFromText(value: string) {
+  const chineseHalf = value.match(
+    /(?:\u9ad8|\u5c42\u9ad8)\s*(\d+(?:\.\d+)?)\s*(?:m|\u7c73)\s*(\d)/i,
+  )
+  if (chineseHalf?.[1] && chineseHalf[2])
+    return Number(chineseHalf[1]) + Number(chineseHalf[2]) / 10
+  const explicit = value.match(
+    /(?:\u9ad8|\u5c42\u9ad8|height|story\s*height)\s*(\d+(?:\.\d+)?)\s*(?:m|\u7c73|meter|meters)?/i,
+  )
+  return explicit?.[1] ? Number(explicit[1]) : undefined
+}
+
+function inferLayoutStoryMetadata(
+  prompt: string,
+): Pick<
+  Extract<FactoryPlan, { kind: 'layout' }>,
+  'stories' | 'storyHeight' | 'hasRoof' | 'roofType'
+> {
+  const normalized = prompt.trim()
+  const inferredStories =
+    chineseFloorCount(normalized) ??
+    (/\u4e0a\u9762\u8fd8\u6709\u4e00\u5c42|\u518d\u52a0\u4e00\u5c42|\u7b2c\u4e8c\u5c42|second\s+floor|two[-\s]?stor(?:y|ey)|2\s*stor(?:y|ey)/i.test(
+      normalized,
+    )
+      ? 2
+      : undefined)
+  const storyHeight = heightFromText(normalized)
+  const hasRoof = /\u5c4b\u9876|\u9876\u68da|roof/i.test(normalized) ? true : undefined
+  const roofType = /\u5e73\u5c4b\u9876|flat\s+roof/i.test(normalized)
+    ? 'flat'
+    : hasRoof
+      ? 'gable'
+      : undefined
+  return {
+    ...(inferredStories ? { stories: Math.max(1, Math.min(20, Math.round(inferredStories))) } : {}),
+    ...(storyHeight ? { storyHeight } : {}),
+    ...(hasRoof !== undefined ? { hasRoof } : {}),
+    ...(roofType ? { roofType: roofType as FactoryRoofType } : {}),
+  }
 }
 
 export function fallbackFactoryPlan(prompt: string): FactoryPlan {
@@ -379,7 +476,7 @@ export function fallbackFactoryPlan(prompt: string): FactoryPlan {
     }
   }
 
-  if (!isProductionLine && GEOMETRY_PATTERNS.some((pattern) => pattern.test(normalized))) {
+  if (!isProductionLine && hasExplicitGeometrySubject(normalized)) {
     return {
       kind: 'geometry',
       reason:
@@ -389,6 +486,7 @@ export function fallbackFactoryPlan(prompt: string): FactoryPlan {
   }
 
   if (LAYOUT_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    const storyMetadata = inferLayoutStoryMetadata(normalized)
     return {
       kind: 'layout',
       reason:
@@ -398,6 +496,7 @@ export function fallbackFactoryPlan(prompt: string): FactoryPlan {
         type === 'house' || type === 'room'
           ? ['create_room', 'add_door', 'add_window', 'validate_scene']
           : ['create_story_shell', 'create_room', 'place_item/apply_patch', 'validate_scene'],
+      ...storyMetadata,
     }
   }
 
@@ -411,7 +510,7 @@ export function fallbackFactoryPlan(prompt: string): FactoryPlan {
     }
   }
 
-  if (GEOMETRY_PATTERNS.some((pattern) => pattern.test(normalized))) {
+  if (hasExplicitGeometrySubject(normalized)) {
     return {
       kind: 'geometry',
       reason:
@@ -465,6 +564,10 @@ export function buildFactoryPlannerPrompt(prompt: string) {
     '  "kind": "layout" | "process_line" | "catalog_item" | "geometry" | "missing",',
     '  "reason": "short reason",',
     '  "layoutType"?: "house" | "room" | "factory" | "production_line" | "unknown",',
+    '  "stories"?: number,',
+    '  "storyHeight"?: number,',
+    '  "hasRoof"?: boolean,',
+    '  "roofType"?: "hip" | "gable" | "shed" | "gambrel" | "dutch" | "mansard" | "flat",',
     '  "process"?: { "processId"?: string, "processLabel": string, "domain": "chemical|energy|food|assembly|logistics|metallurgy|generic", "layoutStyle": "linear|u_shape|cell|parallel_bays", "stations": [{ "id": string, "label": string, "role": string, "equipmentHint": string }], "connections": [{ "fromStationId": string, "toStationId": string, "medium"?: "water|hydrogen|oxygen|power|cooling|material|gas|molten_metal", "visualKind": "pipe|cable_tray|flow_arrow|material_conveyor|hot_material_chute|air_duct|hot_gas_duct" }] },',
     '  "suggestedOperations"?: ["create_room", "place_item", "apply_patch"],',
     '  "catalogItemId"?: "existing catalog id",',

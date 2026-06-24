@@ -66,6 +66,20 @@ const COMPLEX_TERMS = [
   'machine tool',
   'robot arm',
   'aircraft',
+  'crane',
+  'gantry',
+  'overhead crane',
+  'bridge crane',
+  'tower crane',
+  '\u8d77\u91cd',
+  '\u5854\u540a',
+  '\u540a\u5854',
+  '\u9f99\u95e8\u540a',
+  '\u5929\u8f66',
+  '\u884c\u8f66',
+  '\u6865\u5f0f\u8d77\u91cd\u673a',
+  '\u7a7a\u8c03',
+  '\u5916\u673a',
   '工厂',
   '设备',
   '汽车',
@@ -103,6 +117,20 @@ function extractShapeCount(failureResults: readonly string[]): number {
     if (match?.[1]) return parseInt(match[1], 10)
   }
   return Infinity
+}
+
+function extractStage3RequiredRoles(failureResults: readonly string[]): string[] {
+  const roles = new Set<string>()
+  for (const result of failureResults) {
+    for (const match of result.matchAll(/required role "([^"]+)"/gi)) {
+      if (match[1]) roles.add(match[1])
+    }
+  }
+  return [...roles]
+}
+
+function isStage3QualityFailure(failureResults: readonly string[]): boolean {
+  return failureResults.some((result) => /stage3 semantic quality gate failed/i.test(result))
 }
 
 function normalizeFailureText(value: string) {
@@ -199,11 +227,19 @@ export function buildPrimitiveRepairRetryMessages<T extends PrimitiveRepairRetry
 
   const tooComplex = isTooComplexFailure(failureResults)
   const shapeCount = extractShapeCount(failureResults)
+  const requiredRoles = extractStage3RequiredRoles(failureResults)
+  const stage3QualityFailure = isStage3QualityFailure(failureResults)
 
   const guidance = tooComplex
     ? [
         `The object has too many shapes (${shapeCount} generated, limit is 80). Reduce complexity:`,
+        requiredRoles.length
+          ? `- Preserve these required semantic roles exactly: ${requiredRoles.join(', ')}.`
+          : '- Preserve the semantic skeleton: main body/supports, spans/beams, openings/fans, trolley/hook/wheels, and other user-requested signature parts.',
         '- Merge repeated small details into a single array shape or remove them entirely.',
+        '- Reduce detail counts first: slats, braces, bolts, spokes, grille rings, labels, seams, fins, and decorative panels.',
+        '- Do not delete required structural/signature modules just to satisfy the shape limit.',
+        '- Prefer fewer coarse structural parts with correct spatial relationships over many detailed but misplaced parts.',
         '- Replace window strips with a single wide window panel instead of individual windows.',
         '- For aircraft, prefer compose_parts with parts:[{kind:"aircraft_fuselage"}] and let aircraft defaults add wings, engines, tail, windows, and landing gear.',
         '- Use 2-3 blades instead of 4+; use one aircraft_landing_gear part instead of separate wheel/strut assemblies.',
@@ -211,7 +247,18 @@ export function buildPrimitiveRepairRetryMessages<T extends PrimitiveRepairRetry
         '- Aim for 30-60 shapes total for a complex object like an aircraft.',
         'Return one simplified compose_parts call with fewer parts.',
       ].join('\n')
-    : 'Return one complete replacement geometry tool call. Do not repeat the same invalid call.'
+    : stage3QualityFailure
+      ? [
+          'The generated artifact failed semantic/spatial quality checks.',
+          requiredRoles.length
+            ? `- Preserve these required semantic roles exactly: ${requiredRoles.join(', ')}.`
+            : '- Preserve every required role listed in the failure.',
+          '- Do not mix absolute position with alignAbove/alignBeside/centeredOn/connectTo unless the position is intentionally absolute.',
+          '- Use relationship fields to express topology: supports below beams, hooks below trolleys, wheels/rails at the bottom, panels on faces.',
+          '- If the object is too detailed, simplify decorative repeats while keeping the semantic skeleton.',
+          'Return one complete replacement geometry tool call.',
+        ].join('\n')
+      : 'Return one complete replacement geometry tool call. Do not repeat the same invalid call.'
 
   return [
     ...baseMessages,

@@ -14,8 +14,11 @@ function getWallHideState(
   wallNode: WallNode,
   wallMesh: Mesh,
   wallMode: string,
+  levelMode: string,
   cameraDir: Vector3,
 ): boolean {
+  if (levelMode === 'solo') return false
+
   let hideWall = wallNode.frontSide === 'interior' && wallNode.backSide === 'interior'
 
   if (wallMode === 'up') {
@@ -41,6 +44,7 @@ export const WallCutout = () => {
   const lastCameraTarget = useRef(new Vector3())
   const lastUpdateTime = useRef(0)
   const lastWallMode = useRef<string>(useViewer.getState().wallMode)
+  const lastLevelMode = useRef<string>(useViewer.getState().levelMode)
   const lastNumberOfWalls = useRef(0)
   const lastHighlightKey = useRef('')
   const lastRenderSettingsKey = useRef('')
@@ -50,6 +54,7 @@ export const WallCutout = () => {
   useFrame(({ camera, clock }) => {
     const viewerState = useViewer.getState()
     const wallMode = viewerState.wallMode
+    const levelMode = viewerState.levelMode
     const selectedIds = viewerState.selection.selectedIds
     const previewSelectedIds = viewerState.previewSelectedIds
     const hoveredId = viewerState.hoveredId
@@ -93,6 +98,7 @@ export const WallCutout = () => {
     if (
       ((distanceMoved > 0.5 || directionChanged > 0.3) && timeSinceUpdate > 0.1) ||
       lastWallMode.current !== wallMode ||
+      lastLevelMode.current !== levelMode ||
       walls.size !== lastNumberOfWalls.current ||
       lastHighlightKey.current !== highlightKey ||
       lastRenderSettingsKey.current !== renderSettingsKey ||
@@ -117,7 +123,7 @@ export const WallCutout = () => {
         const wallNode = useScene.getState().nodes[wallId as WallNode['id']]
         if (!wallNode || wallNode.type !== 'wall') return
 
-        const hideWall = getWallHideState(wallNode, wallMesh as Mesh, wallMode, u)
+        const hideWall = getWallHideState(wallNode, wallMesh as Mesh, wallMode, levelMode, u)
         const isDeleteHighlighted = deleteHoveredWallId === wallId
         const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
         const materials = getMaterialsForWall(wallNode, renderSettings)
@@ -137,6 +143,7 @@ export const WallCutout = () => {
         }
       })
       lastWallMode.current = wallMode
+      lastLevelMode.current = levelMode
       lastNumberOfWalls.current = sceneRegistry.byType.wall!.size
       lastHighlightKey.current = highlightKey
       lastRenderSettingsKey.current = renderSettingsKey

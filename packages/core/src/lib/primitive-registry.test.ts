@@ -8,6 +8,8 @@ import {
 describe('primitive registry', () => {
   test('normalizes primitive aliases and advertises derived primitives', () => {
     expect(normalizePrimitiveKindFromRegistry('oval panel')).toBe('ellipse-panel')
+    expect(normalizePrimitiveKindFromRegistry('truss-tower')).toBe('box')
+    expect(normalizePrimitiveKindFromRegistry('truss beam')).toBe('box')
     expect(normalizePrimitiveKindFromRegistry('金字塔')).toBe('pyramid')
     expect(primitiveCapabilitySummary()).toContain('pyramid -> cone')
   })

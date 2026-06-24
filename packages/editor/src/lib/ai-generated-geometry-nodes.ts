@@ -593,6 +593,8 @@ function generatedRootMetadata(
   return {
     generatedBy: options.generatedBy ?? 'ai-chat',
     sourceTool: artifact.sourceTool,
+    sourceArgs: artifact.sourceArgs,
+    sourcePrompt: artifact.userPrompt,
     artifactId: artifact.id,
     partCount,
     ...options.metadata,

@@ -180,6 +180,7 @@ export function buildFactoryPlacementSpec(input: {
   const context = recordFromRunContext(input.context)
   const params = input.params ?? {}
   const parentId = stringValue(params.parentId) ?? stringValue(context.parentId)
+  const buildingId = stringValue(params.buildingId) ?? stringValue(context.buildingId)
   const lineId = stringValue(params.lineId) ?? stringValue(context.lineId)
   const lineRole = stringValue(params.lineRole) ?? stringValue(context.lineRole)
   const equipmentRole = stringValue(params.equipmentRole) ?? stringValue(context.equipmentRole)
@@ -193,6 +194,7 @@ export function buildFactoryPlacementSpec(input: {
       ...(lineId ? { lineId } : {}),
       ...(lineRole ? { lineRole } : {}),
       ...(equipmentRole ? { equipmentRole } : {}),
+      ...(buildingId ? { buildingId } : {}),
       ...(sceneBounds ? { sceneBounds } : {}),
     },
   }

@@ -185,6 +185,17 @@ describe('factory runner helpers', () => {
     })
   })
 
+  test('carries building id from context into layout placement metadata', () => {
+    const placement = buildFactoryPlacementSpec({
+      context: { parentId: 'level_context', buildingId: 'building_context' },
+    })
+
+    expect(placement).toMatchObject({
+      parentId: 'level_context',
+      metadata: { buildingId: 'building_context' },
+    })
+  })
+
   test('returns artifact patches without applying them', () => {
     const result = buildFactoryRunResultFromGeometryDraft({
       prompt: '生成一台输送机',

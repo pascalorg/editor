@@ -5,6 +5,7 @@ import path from 'node:path'
 import { findRepoRoot } from '@/lib/generated-assets/manifest'
 import type {
   AiConversation,
+  AiConversationPurpose,
   AiConversationSummary,
   AiHarnessRun,
   AiHarnessRunEvent,
@@ -189,7 +190,7 @@ export async function createRun(input: {
   }
   await writeJsonAtomic(await runPath(id), run)
   await appendRunEvent(id, { type: 'status', message: 'queued', data: { status: 'queued' } })
-  await addActiveRun(run.conversationId, id)
+  await addActiveRun(run.conversationId, id, run.mode)
   return run
 }
 
@@ -345,6 +346,7 @@ function toConversationSummary(conversation: AiConversation): AiConversationSumm
     title: resolveConversationTitle(conversation.title, conversation.messages),
     messageCount: conversation.messages.length,
     activeRunCount: conversation.activeRunIds.length,
+    conversationPurpose: conversation.conversationPurpose,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
   }
@@ -444,11 +446,16 @@ export async function deleteConversation(conversationId: string) {
   await removeConversationSummary(conversationId)
 }
 
-async function addActiveRun(conversationId: string, runId: string) {
+function conversationPurposeFromRunMode(mode: AiHarnessRunMode): AiConversationPurpose {
+  return mode === 'factory' ? 'factory' : 'asset'
+}
+
+async function addActiveRun(conversationId: string, runId: string, mode: AiHarnessRunMode) {
   const conversation = await loadConversation(conversationId)
   await saveConversation({
     ...conversation,
     activeRunIds: Array.from(new Set([...conversation.activeRunIds, runId])),
+    conversationPurpose: conversation.conversationPurpose ?? conversationPurposeFromRunMode(mode),
   })
 }
 

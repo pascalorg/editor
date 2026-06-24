@@ -528,6 +528,7 @@ export function createSurfaceRoleMaterial(
   preset: ColorPreset,
   side: THREE.Side = THREE.FrontSide,
   sceneThemeId?: string,
+  shading: RenderShading = 'rendered',
 ): THREE.Material {
   // DoubleSide on glazing trips the MRT back-face pipeline issue documented
   // on `glassMaterial` above — the validator rejects the back-face variant
@@ -539,23 +540,40 @@ export function createSurfaceRoleMaterial(
   // FrontSide faces the viewer.
   const resolvedSide =
     role === 'glazing' ? THREE.FrontSide : resolveNodeMaterialSide(side ?? THREE.FrontSide)
-  const cacheKey = `${role}-${preset}-${resolvedSide}-${sceneThemeId ?? 'base'}`
+  const cacheKey = `${role}-${preset}-${resolvedSide}-${sceneThemeId ?? 'base'}-${shading}`
   const cached = surfaceRoleMaterialCache.get(cacheKey)
   if (cached) return cached
 
+  const color = resolveSurfaceColor(role, preset, sceneThemeId)
+  const materialParams = {
+    color,
+    side: resolvedSide,
+  }
+
   const material =
     role === 'glazing'
-      ? new MeshLambertNodeMaterial({
-          color: resolveSurfaceColor(role, preset, sceneThemeId),
-          depthWrite: false,
-          opacity: 0.25,
-          side: resolvedSide,
-          transparent: true,
-        })
-      : new MeshLambertNodeMaterial({
-          color: resolveSurfaceColor(role, preset, sceneThemeId),
-          side: resolvedSide,
-        })
+      ? shading === 'solid'
+        ? new MeshLambertNodeMaterial({
+            ...materialParams,
+            depthWrite: false,
+            opacity: 0.25,
+            transparent: true,
+          })
+        : new MeshStandardNodeMaterial({
+            ...materialParams,
+            depthWrite: false,
+            metalness: 0,
+            opacity: 0.25,
+            roughness: 0.1,
+            transparent: true,
+          })
+      : shading === 'solid'
+        ? new MeshLambertNodeMaterial(materialParams)
+        : new MeshStandardNodeMaterial({
+            ...materialParams,
+            metalness: 0,
+            roughness: role === 'wall' ? 0.9 : 0.75,
+          })
 
   material.userData.__pascalCachedMaterial = true
   surfaceRoleMaterialCache.set(cacheKey, material)

@@ -15,6 +15,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function conversationPurpose(value: unknown) {
+  return value === 'factory' || value === 'asset' ? value : undefined
+}
+
 export async function GET(_request: Request, { params }: RouteParams) {
   const { id } = await params
   const conversation = await loadConversation(id)
@@ -40,6 +44,8 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     activeRunIds: Array.isArray(body.activeRunIds)
       ? body.activeRunIds.filter((value): value is string => typeof value === 'string')
       : conversation.activeRunIds,
+    conversationPurpose:
+      conversationPurpose(body.conversationPurpose) ?? conversation.conversationPurpose,
   })
   return NextResponse.json({ ok: true })
 }

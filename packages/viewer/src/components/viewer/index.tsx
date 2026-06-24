@@ -19,6 +19,7 @@ import { installEmptyDrawGuard } from '../../lib/webgpu-draw-guard'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
+import { LevelPresentationOverlay } from '../../systems/level/level-presentation-overlay'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import FrameLimiter from './frame-limiter'
@@ -51,8 +52,8 @@ extend(THREE as any)
 // concurrent configure() calls await the same init instead of creating two
 // renderers in parallel and only caching the second.
 const WEBGPU_RENDERER_CACHE = new WeakMap<HTMLCanvasElement, Promise<THREE.WebGPURenderer>>()
-const ENABLE_NATIVE_WEBGPU =
-  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_VIEWER_WEBGPU === '1'
+const FORCE_WEBGL =
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_VIEWER_FORCE_WEBGL === '1'
 const SCENE_READY_SETTLED_FRAMES = 2
 const SCENE_READY_MAX_WAIT_FRAMES = 180
 const DIRTY_BUILD_KINDS = new Set([
@@ -397,7 +398,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
               const renderer = new THREE.WebGPURenderer({
                 ...(props as any),
                 alpha: true,
-                forceWebGL: !ENABLE_NATIVE_WEBGPU,
+                forceWebGL: FORCE_WEBGL,
               })
               renderer.toneMapping = THREE.ACESFilmicToneMapping
               renderer.toneMappingExposure = getSceneTheme(
@@ -460,6 +461,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
         {/* Automated stair opening sync — updates slab/ceiling cutouts
             whenever stairs, slabs, or levels change. */}
         <StairOpeningSystem />
+        <LevelPresentationOverlay />
         {/* Mounts systems contributed by registry-backed kinds. Each
             kind's `def.system` is loaded via lazy() and rendered here,
             ordered by `system.priority`. */}

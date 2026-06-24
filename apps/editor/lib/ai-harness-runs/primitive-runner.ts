@@ -155,7 +155,7 @@ const PRIMITIVE_TOOLS: ComposeTool[] = [
   ),
   tool(
     'compose_parts',
-    'Create one editable object from the reusable building-block library. Prefer this when explicitly selecting parts or when compose_assembly does not support the requested family. Use generic kernels such as chimney_stack, aircraft_fuselage, wheel/wheel_set, window_panel/window_strip, body_shell, tube_frame, fork, light_pair, bar_pair, streamlined_body, lofted_panel, airfoil_blade, pyramid, pipe/flange/bolt parts, and assign semanticRole for context-specific meaning. For complete fans, prefer fan_blade with count:3-6 so each blade is independently editable; radial_blades is kept only as a compatibility composite. For a complete bicycle, use exactly wheel_set semanticRole:"bicycle_tire" count:2 + tube_frame semanticRole:"bicycle_frame" + fork semanticRole:"bicycle_fork" + handlebar + saddle + chain_loop; do not invent bicycle_crank/chainring/pedals part kinds. For complete aircraft/airplanes/airliners, use parts:[{kind:"aircraft_fuselage", id:"aircraft_fuselage"}] with top-level length/primaryColor and let defaults add wings, engines, T-tail, windows, and landing gear; do not hand-place generic airfoil_blade/streamlined_body/wheel_set parts for complete aircraft. For industrial chimneys/smokestacks, use parts:[{kind:"chimney_stack", semanticRole:"chimney_body", height, radius, warningStripes:true}] and do not use vertical_pole/circular_base/cylinder. Use pyramid for square/rectangular pyramids, Egyptian-style pyramids, pointed rooftops, and cone-like shapes with a square base; set truncated:true or topScale to make a flat-top truncated pyramid. Prefer relationship fields over raw coordinates: alignAbove, alignBeside with side, centeredOn, connectTo with connectPoint/childPoint, around with aroundCount/aroundRadius, and array:{count,axis,spacing} for repeated linear parts.',
+    'Create one editable object from the reusable building-block library. Prefer this when explicitly selecting parts or when compose_assembly does not support the requested family. Use generic kernels such as chimney_stack, aircraft_fuselage, wheel/wheel_set, window_panel/window_strip, body_shell, tube_frame, fork, light_pair, bar_pair, streamlined_body, lofted_panel, airfoil_blade, pyramid, pipe/flange/bolt parts, and assign semanticRole for context-specific meaning. generic_body is a rectangular box/enclosure, not an arbitrary round body; for bottles, flasks, thermoses, cups, cans, jars, tubes, handles, or any cylindrical/oval main body, use compose_primitive with cylinder, hollow-cylinder, capsule, torus, sphere/ellipsoid, lathe, or sweep shapes instead. For complete fans, prefer fan_blade with count:3-6 so each blade is independently editable; radial_blades is kept only as a compatibility composite. For a complete bicycle, use exactly wheel_set semanticRole:"bicycle_tire" count:2 + tube_frame semanticRole:"bicycle_frame" + fork semanticRole:"bicycle_fork" + handlebar + saddle + chain_loop; do not invent bicycle_crank/chainring/pedals part kinds. For complete aircraft/airplanes/airliners, use parts:[{kind:"aircraft_fuselage", id:"aircraft_fuselage"}] with top-level length/primaryColor and let defaults add wings, engines, T-tail, windows, and landing gear; do not hand-place generic airfoil_blade/streamlined_body/wheel_set parts for complete aircraft. For industrial chimneys/smokestacks, use parts:[{kind:"chimney_stack", semanticRole:"chimney_body", height, radius, warningStripes:true}] and do not use vertical_pole/circular_base/cylinder. Use pyramid for square/rectangular pyramids, Egyptian-style pyramids, pointed rooftops, and cone-like shapes with a square base; set truncated:true or topScale to make a flat-top truncated pyramid. Prefer relationship fields over raw coordinates: alignAbove, alignBeside with side, centeredOn, connectTo with connectPoint/childPoint, around with aroundCount/aroundRadius, and array:{count,axis,spacing} for repeated linear parts.',
   ),
   tool(
     'compose_robot_arm',
@@ -486,6 +486,27 @@ function stringFromContext(context: Record<string, unknown>, key: string) {
   return typeof value === 'string' ? value : undefined
 }
 
+export function ensurePromptInPrimitiveContext(userPrompt: string, contextText: string): string {
+  const prompt = userPrompt.trim()
+  const text = contextText.trim()
+  if (!prompt || !text) return text || prompt
+  if (text.toLowerCase().includes(prompt.toLowerCase())) return text
+  return [`User request: ${prompt}`, '', 'Additional context:', text].join('\n')
+}
+
+const NEGATED_TARGET_CLAUSE_PATTERNS = [
+  /\b(?:do\s+not|don't|dont|never|avoid|not)\s+(?:generate|create|make|build|model|use)?\s*([^.!?;\n]+)/gi,
+  /(?:不要生成|不要|别生成|不是|避免生成|禁止生成)\s*([^。！？；\n]+)/g,
+]
+
+export function stripNegatedTargetClauses(userPrompt: string): string {
+  let text = userPrompt
+  for (const pattern of NEGATED_TARGET_CLAUSE_PATTERNS) {
+    text = text.replace(pattern, ' ')
+  }
+  return text
+}
+
 function industryPackRefFromContext(context: Record<string, unknown>): IndustryPackRef | undefined {
   const value = context.industrySourcePack
   if (!isRecord(value)) return undefined
@@ -626,7 +647,7 @@ export function precisionPartDeterministicRoute(
     }
   | undefined {
   if (revisionTarget) return undefined
-  const text = userPrompt.toLowerCase()
+  const text = stripNegatedTargetClauses(userPrompt).toLowerCase()
   const robotArmIntent =
     /(\u673a\u5668\u81c2|\u673a\u68b0\u81c2|\u516d\u8f74|\u4e03\u8f74|\u56db\u8f74|robot[_\s-]?arm|industrial[_\s-]?robot|six[_\s-]?axis|6[_\s-]?axis|seven[_\s-]?axis|7[_\s-]?axis|four[_\s-]?axis|4[_\s-]?axis|fanuc|kuka|abb)/i.test(
       text,
@@ -647,10 +668,352 @@ export function precisionPartDeterministicRoute(
     }
   }
 
+  const pumpIntent =
+    /(\u6c34\u6cf5|\u79bb\u5fc3\u6cf5|pump|centrifugal[_\s-]?pump|water[_\s-]?pump)/i.test(text) &&
+    !/(\u53f6\u8f6e|impeller|blade|flange|port|inlet|outlet)/i.test(text)
+  if (pumpIntent) {
+    const primaryColor = machinePrimaryColorFromPrompt(text, '#64748b')
+    return {
+      label: 'centrifugal water pump',
+      family: 'pump',
+      args: {
+        name: 'centrifugal water pump',
+        family: 'pump',
+        category: 'industrial pump',
+        primaryColor,
+        metalColor: '#cbd5e1',
+        requiredRoles: [
+          'support_base',
+          'drive_motor',
+          'volute_casing',
+          'inlet_port',
+          'outlet_port',
+        ],
+        parts: [
+          {
+            id: 'base',
+            kind: 'skid_base',
+            semanticRole: 'support_base',
+          },
+          {
+            id: 'motor',
+            kind: 'ribbed_motor_body',
+            semanticRole: 'drive_motor',
+            position: [-0.28, 0.42, 0],
+            length: 0.55,
+            primaryColor,
+            metalColor: '#cbd5e1',
+          },
+          {
+            id: 'volute',
+            kind: 'volute_casing',
+            semanticRole: 'volute_casing',
+            position: [0.24, 0.42, 0.04],
+            radius: 0.22,
+            depth: 0.16,
+            primaryColor,
+            metalColor: '#cbd5e1',
+          },
+          {
+            id: 'inlet',
+            kind: 'inlet_port',
+            semanticRole: 'inlet_port',
+            position: [0.24, 0.42, 0.28],
+            axis: 'z',
+            radius: 0.07,
+            metalColor: '#cbd5e1',
+          },
+          {
+            id: 'outlet',
+            kind: 'outlet_port',
+            semanticRole: 'outlet_port',
+            position: [0.49, 0.5, 0.04],
+            axis: 'x',
+            radius: 0.06,
+            metalColor: '#cbd5e1',
+          },
+          {
+            id: 'flange_in',
+            kind: 'flange_ring',
+            semanticRole: 'inlet_flange',
+            connectTo: 'inlet',
+            connectPoint: 'open',
+            metalColor: '#cbd5e1',
+          },
+          {
+            id: 'flange_out',
+            kind: 'flange_ring',
+            semanticRole: 'outlet_flange',
+            connectTo: 'outlet',
+            connectPoint: 'open',
+            metalColor: '#cbd5e1',
+          },
+          {
+            id: 'control',
+            kind: 'control_box',
+            semanticRole: 'control_box',
+            position: [-0.28, 0.62, 0.2],
+          },
+        ],
+      },
+    }
+  }
+
+  const mixerImpellerIntent =
+    /(\u6405\u62cc|\u6df7\u5408|\u6868\u53f6|\u53f6\u7247|\u53f6\u8f6e|mixer|stirrer|agitator|impeller|paddle)/i.test(
+      text,
+    ) &&
+    /(\u6746|\u8f74|shaft|rod|pole)/i.test(text) &&
+    !/(\u98ce\u6247|\u7535\u98ce\u6247|\u843d\u5730\u6247|fan|pedestal[_\s-]?fan)/i.test(text)
+  if (mixerImpellerIntent) {
+    const bladeCount = mixerBladeCountFromPrompt(text)
+    const metalColor = machinePrimaryColorFromPrompt(text, '#c0c0c0')
+    return {
+      label: 'vertical shaft mixer impeller',
+      family: 'generic',
+      args: {
+        name: 'vertical shaft mixer impeller',
+        family: 'generic',
+        category: 'mixer impeller component',
+        geometryBrief:
+          'vertical mixer shaft with a bottom hub and pitched three-blade mixing impeller; not a fan, no pedestal, no motor housing, no protective grille',
+        requiredRoles: ['mixer_shaft', 'mixer_hub', 'mixer_blade'],
+        detail: 'high',
+        parts: [
+          {
+            id: 'mixer_hub',
+            kind: 'circular_base',
+            semanticRole: 'mixer_hub',
+            radius: 0.055,
+            height: 0.055,
+            primaryColor: metalColor,
+            position: [0, 0.06, 0],
+          },
+          {
+            id: 'mixer_shaft',
+            kind: 'vertical_pole',
+            semanticRole: 'mixer_shaft',
+            radius: 0.022,
+            height: 0.82,
+            metalColor,
+            position: [0, 0.49, 0],
+          },
+          {
+            id: 'mixer_blades',
+            kind: 'mixer_blades',
+            semanticRole: 'mixer_blade',
+            count: bladeCount,
+            length: 0.34,
+            width: 0.17,
+            depth: 0.018,
+            bladePitch: 0.22,
+            curvature: 0.08,
+            bladeShape: 'taiji_half',
+            hubRadius: 0.055,
+            primaryColor: metalColor,
+            position: [0, 0.06, 0],
+          },
+        ],
+      },
+    }
+  }
+
+  const towerCraneIntent =
+    /(\u5854\u540a|tower[_\s-]?crane|hammerhead[_\s-]?crane|construction[_\s-]?crane)/i.test(
+      text,
+    ) &&
+    !/(\u9f99\u95e8\u540a|\u5929\u8f66|\u884c\u8f66|gantry|overhead|bridge[_\s-]?crane)/i.test(text)
+  if (towerCraneIntent) {
+    const primaryColor = machinePrimaryColorFromPrompt(text, '#facc15')
+    const darkColor = '#111827'
+    const metalColor = '#475569'
+    return {
+      label: 'hammerhead tower crane',
+      family: 'generic',
+      args: {
+        name: 'hammerhead tower crane',
+        family: 'generic',
+        category: 'lifting equipment',
+        __precisionPartRoute: 'tower_crane',
+        __directPartComposer: true,
+        geometryBrief:
+          'construction-site hammerhead tower crane with lattice mast, slewing unit, operator cab, tower peak, long main jib, shorter counter jib, counterweight, trolley, vertical wire rope, hook block, and pendant cables',
+        requiredRoles: [
+          'tower_mast',
+          'slewing_unit',
+          'operator_cab',
+          'tower_peak',
+          'main_jib',
+          'counter_jib',
+          'counterweight',
+          'trolley',
+          'wire_rope',
+          'hook_block',
+          'pendant_cable',
+        ],
+        detail: 'high',
+        primaryColor,
+        metalColor,
+        darkColor,
+        parts: [
+          {
+            id: 'tower_mast',
+            kind: 'structural_tower_frame',
+            semanticRole: 'tower_mast',
+            name: 'lattice tower mast',
+            position: [0, 2.9, 0],
+            length: 0.72,
+            width: 0.72,
+            height: 5.8,
+            levelCount: 4,
+            bayCount: 1,
+            thickness: 0.045,
+            externalStairs: false,
+            includeDiagonalBraces: true,
+            primaryColor,
+            metalColor: primaryColor,
+            darkColor: primaryColor,
+            accentColor: primaryColor,
+          },
+          {
+            id: 'slewing_unit',
+            kind: 'generic_base',
+            semanticRole: 'slewing_unit',
+            name: 'slewing ring turntable',
+            position: [0, 5.98, 0],
+            length: 1.0,
+            width: 0.82,
+            height: 0.18,
+            primaryColor,
+            darkColor,
+          },
+          {
+            id: 'operator_cab',
+            kind: 'generic_body',
+            semanticRole: 'operator_cab',
+            name: 'operator cab',
+            position: [0.55, 6.18, 0.36],
+            length: 0.55,
+            width: 0.42,
+            height: 0.42,
+            primaryColor: '#fef3c7',
+            cornerRadius: 0.035,
+          },
+          {
+            id: 'tower_peak',
+            kind: 'pyramid',
+            semanticRole: 'tower_peak',
+            name: 'tower peak apex',
+            position: [0, 6.68, 0],
+            length: 0.42,
+            width: 0.42,
+            height: 0.85,
+            primaryColor,
+          },
+          {
+            id: 'main_jib',
+            kind: 'generic_body',
+            semanticRole: 'main_jib',
+            name: 'long main lifting jib',
+            position: [3.45, 6.35, 0],
+            length: 6.9,
+            width: 0.14,
+            height: 0.14,
+            primaryColor,
+          },
+          {
+            id: 'counter_jib',
+            kind: 'generic_body',
+            semanticRole: 'counter_jib',
+            name: 'short counter jib',
+            position: [-1.55, 6.35, 0],
+            length: 3.1,
+            width: 0.16,
+            height: 0.14,
+            primaryColor,
+          },
+          {
+            id: 'counterweight',
+            kind: 'generic_body',
+            semanticRole: 'counterweight',
+            name: 'counterweight block stack',
+            position: [-2.95, 6.22, 0],
+            length: 0.52,
+            width: 0.62,
+            height: 0.55,
+            primaryColor: '#6b7280',
+            cornerRadius: 0.025,
+          },
+          {
+            id: 'trolley',
+            kind: 'generic_body',
+            semanticRole: 'trolley',
+            name: 'jib trolley carriage',
+            position: [4.75, 6.17, 0],
+            length: 0.42,
+            width: 0.28,
+            height: 0.18,
+            primaryColor: darkColor,
+            cornerRadius: 0.02,
+          },
+          {
+            id: 'wire_rope',
+            kind: 'vertical_pole',
+            semanticRole: 'wire_rope',
+            name: 'vertical hoist wire rope',
+            position: [4.75, 4.88, 0],
+            radius: 0.014,
+            height: 2.42,
+            metalColor: darkColor,
+          },
+          {
+            id: 'hook_block',
+            kind: 'generic_body',
+            semanticRole: 'hook_block',
+            name: 'hanging hook block',
+            position: [4.75, 3.55, 0],
+            length: 0.25,
+            width: 0.18,
+            height: 0.38,
+            primaryColor: darkColor,
+            cornerRadius: 0.02,
+          },
+          {
+            id: 'main_pendant',
+            kind: 'generic_body',
+            semanticRole: 'pendant_cable',
+            name: 'main jib pendant cable',
+            position: [2.05, 6.62, 0],
+            rotation: [0, 0, -0.12],
+            length: 4.15,
+            width: 0.035,
+            height: 0.035,
+            primaryColor: darkColor,
+          },
+          {
+            id: 'counter_pendant',
+            kind: 'generic_body',
+            semanticRole: 'pendant_cable',
+            name: 'counter jib pendant cable',
+            position: [-0.95, 6.62, 0],
+            rotation: [0, 0, 0.32],
+            length: 1.95,
+            width: 0.035,
+            height: 0.035,
+            primaryColor: darkColor,
+          },
+        ],
+      },
+    }
+  }
+
   const fanIntent =
     /(\u5de5\u4e1a\u98ce\u6247|\u843d\u5730\u6247|\u7535\u98ce\u6247|\u98ce\u6247|industrial[_\s-]?(pedestal[_\s-]?)?fan|standing[_\s-]?fan|pedestal[_\s-]?fan)/i.test(
       text,
-    ) && !/(fanuc)/i.test(text)
+    ) &&
+    !/(fanuc|\u7a7a\u8c03|\u5916\u673a|\u5ba4\u5916\u673a|air[_\s-]?condition|ac[_\s-]?(outdoor|condenser)|outdoor[_\s-]?unit|condenser[_\s-]?unit)/i.test(
+      text,
+    )
   if (fanIntent) {
     const primaryColor = fanPrimaryColorFromPrompt(text)
     const bladeCount = fanBladeCountFromPrompt(text)
@@ -800,18 +1163,30 @@ function fanBladeCountFromPrompt(text: string): number {
   return 5
 }
 
-function fanPrimaryColorFromPrompt(text: string): string {
+function machinePrimaryColorFromPrompt(text: string, fallback: string): string {
   if (/(\u84dd|blue)/i.test(text)) return '#3b82f6'
   if (/(\u7ea2|red)/i.test(text)) return '#ef4444'
   if (/(\u9ed1|black)/i.test(text)) return '#111827'
   if (/(\u767d|white)/i.test(text)) return '#f8fafc'
   if (/(\u9ec4|yellow)/i.test(text)) return '#facc15'
-  return '#ef4444'
+  return fallback
+}
+
+function fanPrimaryColorFromPrompt(text: string): string {
+  return machinePrimaryColorFromPrompt(text, '#ef4444')
+}
+
+function mixerBladeCountFromPrompt(text: string): number {
+  if (/(\u516d\u7247|\u516d\u53f6|six|6)/i.test(text)) return 6
+  if (/(\u4e94\u7247|\u4e94\u53f6|five|5)/i.test(text)) return 5
+  if (/(\u56db\u7247|\u56db\u53f6|four|4)/i.test(text)) return 4
+  if (/(\u4e09\u7247|\u4e09\u53f6|three|3)/i.test(text)) return 3
+  return 3
 }
 
 type Stage3RepairPlan = {
   label: string
-  tool: 'compose_parts'
+  tool: 'compose_parts' | 'compose_primitive'
   args: Record<string, unknown>
 }
 
@@ -821,6 +1196,1309 @@ type Stage3QualityReview = {
   issues: string[]
   warnings: string[]
   repairPlan?: Stage3RepairPlan
+  requiresModelRepair?: boolean
+}
+
+function normalizeStage3Role(value: unknown): string {
+  return typeof value === 'string'
+    ? value
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_')
+    : ''
+}
+
+type Stage3LiftingKind = 'tower' | 'gantry' | 'overhead' | 'generic'
+
+const STAGE3_LIFTING_INTENT_PATTERN =
+  /crane|gantry|overhead|bridge_crane|tower_crane|jib|hook|trolley|hoist|\u9f99\u95e8\u540a|\u5854\u540a|\u5929\u8f66|\u884c\u8f66|\u8d77\u91cd|\u540a\u8f66/
+
+function inferStage3LiftingKind(text: string): Stage3LiftingKind | undefined {
+  if (!STAGE3_LIFTING_INTENT_PATTERN.test(text)) return undefined
+  if (/tower[_\s-]?crane|\u5854\u540a/.test(text)) return 'tower'
+  if (/gantry|portal[_\s-]?crane|\u9f99\u95e8\u540a/.test(text)) return 'gantry'
+  if (/overhead|bridge[_\s-]?crane|\u5929\u8f66|\u884c\u8f66/.test(text)) return 'overhead'
+  return 'generic'
+}
+
+function stage3LiftingRequiredRoles(kind: Stage3LiftingKind): string[] {
+  if (kind === 'tower') {
+    return [
+      'tower_mast',
+      'slewing_unit',
+      'operator_cab',
+      'tower_peak',
+      'main_jib',
+      'counter_jib',
+      'counterweight',
+      'trolley',
+      'wire_rope',
+      'hook_block',
+      'pendant_cable',
+    ]
+  }
+  if (kind === 'gantry') {
+    return ['support_leg', 'main_girder', 'trolley', 'wire_rope', 'hook_block', 'runway_rail']
+  }
+  if (kind === 'overhead') {
+    return ['runway_rail', 'main_girder', 'trolley', 'wire_rope', 'hook_block']
+  }
+  return ['support', 'main_girder', 'trolley', 'wire_rope', 'hook_block']
+}
+
+function stage3ShapeText(shape: Record<string, unknown>): string {
+  return [
+    shape.name,
+    shape.semanticRole,
+    shape.sourcePartKind,
+    shape.sourcePartId,
+    shape.semanticGroup,
+    shape.kind,
+  ]
+    .map(normalizeStage3Role)
+    .filter(Boolean)
+    .join(' ')
+}
+
+function stage3RequiredRoles(artifact: GeneratedGeometryArtifact): string[] {
+  const brief = artifact.geometryBrief as
+    | { requiredRoles?: unknown; semanticRoles?: unknown }
+    | undefined
+  const values = [
+    ...(Array.isArray(brief?.requiredRoles) ? brief.requiredRoles : []),
+    ...(Array.isArray(brief?.semanticRoles) ? brief.semanticRoles : []),
+  ]
+  return Array.from(new Set(values.map(normalizeStage3Role).filter(Boolean)))
+}
+
+function stage3RolePresent(
+  shapes: readonly Record<string, unknown>[],
+  requiredRole: string,
+): boolean {
+  return shapes.some((shape) => {
+    const text = stage3ShapeText(shape)
+    const semanticRole = normalizeStage3Role(shape.semanticRole)
+    return (
+      text.includes(requiredRole) ||
+      (semanticRole.length > 0 && requiredRole.includes(semanticRole))
+    )
+  })
+}
+
+function stage3RoleFamilyPattern(requiredRole: string): RegExp {
+  if (/tower.*mast|mast|support|support_leg/.test(requiredRole)) {
+    return /tower_mast|tower_body|tower_column|mast|support_column|support_leg|leg|column/
+  }
+  if (/slew|slewing|turntable/.test(requiredRole)) return /slew|slewing|turntable|rotating_platform/
+  if (/tower.*peak|apex|peak/.test(requiredRole)) return /tower_peak|apex|peak|tower_cap/
+  if (/pendant/.test(requiredRole)) return /pendant_cable|tie_rod|stay_cable|guy_cable/
+  if (/operator|cabin|(^|_)cab($|_)/.test(requiredRole)) {
+    return /operator_cab|driver_cab|cabin|(^|_)cab($|_)/
+  }
+  if (/counter.*jib|balance.*arm/.test(requiredRole)) return /counter_jib|counter_boom|balance_arm/
+  if (/main.*jib|jib|boom|girder|beam|arm/.test(requiredRole)) {
+    return /main_jib|jib_arm|jib_boom|boom|main_girder|bridge_girder|girder|beam/
+  }
+  if (/counter.*weight|ballast|weight/.test(requiredRole)) {
+    return /counterweight|counter_weight|ballast/
+  }
+  if (/trolley|carriage/.test(requiredRole)) return /trolley|carriage/
+  if (/wire.*rope|rope|cable/.test(requiredRole)) return /wire_rope|rope|hoist_cable|cable/
+  if (/hook/.test(requiredRole)) return /hook_block|hook|load_hook/
+  if (/rail|runway/.test(requiredRole)) return /runway_rail|rail|track/
+  return new RegExp(requiredRole.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+}
+
+function stage3RoleFamilyPresent(
+  shapes: readonly Record<string, unknown>[],
+  requiredRole: string,
+): boolean {
+  const pattern = stage3RoleFamilyPattern(requiredRole)
+  return shapes.some((shape) => pattern.test(stage3ShapeText(shape)))
+}
+
+function numberAt(value: unknown, index: 0 | 1 | 2): number | undefined {
+  if (Array.isArray(value) && typeof value[index] === 'number' && Number.isFinite(value[index])) {
+    return value[index]
+  }
+  if (typeof value === 'object' && value !== null) {
+    const key = index === 0 ? 'x' : index === 1 ? 'y' : 'z'
+    const next = (value as Record<string, unknown>)[key]
+    if (typeof next === 'number' && Number.isFinite(next)) return next
+  }
+  return undefined
+}
+
+function shapeCenterY(shape: Record<string, unknown>): number | undefined {
+  return numberAt(shape.position, 1)
+}
+
+function shapeSpan(shape: Record<string, unknown>, axis: 0 | 1 | 2): number {
+  const keys =
+    axis === 1
+      ? ['height', 'length']
+      : axis === 2
+        ? ['width', 'depth', 'radius']
+        : ['length', 'width', 'radius']
+  for (const key of keys) {
+    const value = shape[key]
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      return key === 'radius' ? value * 2 : value
+    }
+  }
+  return 0
+}
+
+function findStage3Shape(
+  shapes: readonly Record<string, unknown>[],
+  pattern: RegExp,
+): Record<string, unknown> | undefined {
+  return findStage3ShapeMatching(shapes, pattern)
+}
+
+function findStage3ShapeMatching(
+  shapes: readonly Record<string, unknown>[],
+  include: RegExp,
+  exclude?: RegExp,
+): Record<string, unknown> | undefined {
+  return shapes.find((shape) => {
+    const text = stage3ShapeText(shape)
+    return include.test(text) && !(exclude?.test(text) ?? false)
+  })
+}
+
+function addLiftingEquipmentSpatialIssues(
+  artifact: GeneratedGeometryArtifact,
+  text: string,
+  issues: string[],
+) {
+  const shapes = artifact.shapes as unknown as Record<string, unknown>[]
+  const combinedText = [
+    text,
+    artifact.geometryBrief?.category,
+    artifact.geometryBrief?.requiredRoles?.join(' '),
+    artifact.shapeDetails,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  const liftingKind = inferStage3LiftingKind(combinedText)
+  if (!liftingKind) return
+
+  const unrelatedAircraft = shapes.find((shape) =>
+    /aircraft|fuselage|(?:^|[\s_])wing(?:[\s_]|$)|wing_panel|stabilizer|nacelle|landing_gear|cockpit|cabin_window/.test(
+      stage3ShapeText(shape),
+    ),
+  )
+  if (unrelatedAircraft) {
+    issues.push('Stage3 lifting equipment contains unrelated aircraft geometry.')
+  }
+
+  const support = findStage3Shape(shapes, /leg|column|mast|tower_body|tower_column|support/)
+  const span = findStage3Shape(shapes, /girder|main_girder|bridge_girder|jib|counter_jib|boom/)
+  const trolley = findStage3ShapeMatching(shapes, /trolley|carriage/, /hook|load|suspended/)
+  const hook = findStage3Shape(shapes, /hook|suspended|load/)
+  const wheelOrRail = findStage3Shape(shapes, /wheel|rail|runway/)
+
+  for (const role of stage3LiftingRequiredRoles(liftingKind)) {
+    if (!stage3RoleFamilyPresent(shapes, role)) {
+      issues.push(`Stage3 lifting equipment missing structural role "${role}".`)
+    }
+  }
+
+  if (support && span) {
+    const supportY = shapeCenterY(support)
+    const spanY = shapeCenterY(span)
+    if (supportY != null && spanY != null && spanY <= supportY + 0.05) {
+      issues.push('Stage3 lifting structure span/beam must be above its support/mast.')
+    }
+    const supportWidth = Math.max(shapeSpan(support, 0), shapeSpan(support, 2), 0.001)
+    const spanLength = Math.max(shapeSpan(span, 0), shapeSpan(span, 2))
+    if (spanLength < supportWidth * 1.8) {
+      issues.push('Stage3 lifting structure span/beam is too short relative to its support.')
+    }
+  }
+
+  if (trolley && hook) {
+    const trolleyY = shapeCenterY(trolley)
+    const hookY = shapeCenterY(hook)
+    if (trolleyY != null && hookY != null && hookY >= trolleyY - 0.05) {
+      issues.push('Stage3 lifting hook must hang below the trolley/carriage.')
+    }
+  }
+
+  if (liftingKind === 'gantry' || liftingKind === 'overhead') {
+    if (!span) issues.push('Stage3 bridge/gantry crane requires a spanning beam/girder.')
+    if (!hook) issues.push('Stage3 bridge/gantry crane requires a hook or suspended load.')
+    if (!wheelOrRail)
+      issues.push('Stage3 bridge/gantry crane requires bottom wheels or runway rails.')
+  }
+}
+
+function addBoxEnclosureEquipmentIssues(
+  artifact: GeneratedGeometryArtifact,
+  text: string,
+  issues: string[],
+) {
+  const shapes = artifact.shapes as unknown as Record<string, unknown>[]
+  const combinedText = [
+    text,
+    artifact.geometryBrief?.category,
+    artifact.geometryBrief?.requiredRoles?.join(' '),
+    artifact.geometryBrief?.semanticRoles?.join(' '),
+    artifact.semanticSummary,
+    artifact.visualQualitySummary,
+    artifact.shapeDetails,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  const outdoorAcIntent =
+    /outdoor[_\s-]?ac|ac[_\s-]?outdoor|air[_\s-]?condition|condenser|hvac|\u7a7a\u8c03|\u5916\u673a/.test(
+      combinedText,
+    )
+  if (!outdoorAcIntent) return
+
+  const pedestalPart = shapes.find((shape) =>
+    /vertical_pole|circular_base|fan_base|fan_pole|pedestal|support_bracket|fan_yoke/.test(
+      stage3ShapeText(shape),
+    ),
+  )
+  if (pedestalPart) {
+    issues.push('Stage3 outdoor enclosure must not include pedestal fan stand parts.')
+  }
+
+  const bodyEntry = shapes
+    .map((shape, index) => ({ shape, index }))
+    .find(({ shape }) =>
+      /condenser_body|main_body|machine_body|body|housing|casing|enclosure|shell/.test(
+        stage3ShapeText(shape),
+      ),
+    )
+  const body = bodyEntry?.shape
+  const foot = findStage3Shape(shapes, /support_feet|support_foot|feet|foot|base_leg|leg/)
+  if (body && foot) {
+    const bodyY = shapeCenterY(body)
+    const footY = shapeCenterY(foot)
+    const bodyHeight = shapeSpan(body, 1)
+    if (bodyY != null && footY != null) {
+      const expectedBelow = bodyHeight > 0 ? bodyY - bodyHeight * 0.25 : bodyY - 0.05
+      if (footY >= expectedBelow) {
+        issues.push('Stage3 enclosure support feet must be below the main body.')
+      }
+    }
+  }
+  if (bodyEntry) {
+    const bodyTop = stage3ShapeTopY(artifact, bodyEntry.shape, bodyEntry.index)
+    const floatingFanPart = shapes.find((shape, index) => {
+      const shapeText = stage3ShapeText(shape)
+      if (!/motor_housing|protective_grill/.test(shapeText)) return false
+      if (/front_grille|fan_guard|fan_grill/.test(shapeText)) return false
+      return stage3ShapeBottomY(artifact, shape, index) > bodyTop + 0.05
+    })
+    if (floatingFanPart) {
+      issues.push(
+        'Stage3 outdoor enclosure must not include floating standalone fan parts above the body.',
+      )
+    }
+  }
+}
+
+type Stage3SemanticRepairResult = {
+  artifact: GeneratedGeometryArtifact
+  label: string
+}
+
+function stage3CombinedIntentText(userPrompt: string, artifact: GeneratedGeometryArtifact): string {
+  return [
+    userPrompt,
+    artifact.geometryBrief?.category,
+    artifact.geometryBrief?.requiredRoles?.join(' '),
+    artifact.geometryBrief?.semanticRoles?.join(' '),
+    artifact.semanticSummary,
+    artifact.visualQualitySummary,
+    artifact.shapeDetails,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+}
+
+function isStage3LiftingIntent(text: string): boolean {
+  return STAGE3_LIFTING_INTENT_PATTERN.test(text)
+}
+
+function isStage3OutdoorAcIntent(text: string): boolean {
+  return /outdoor[_\s-]?ac|ac[_\s-]?outdoor|air[_\s-]?condition|condenser|hvac|\u7a7a\u8c03|\u5916\u673a/.test(
+    text,
+  )
+}
+
+function stage3ShapePosition(
+  artifact: GeneratedGeometryArtifact,
+  shape: Record<string, unknown>,
+  index: number,
+): [number, number, number] {
+  const transformPosition = artifact.transforms[index]?.position
+  return [
+    numberAt(transformPosition, 0) ?? numberAt(shape.position, 0) ?? 0,
+    numberAt(transformPosition, 1) ?? numberAt(shape.position, 1) ?? 0,
+    numberAt(transformPosition, 2) ?? numberAt(shape.position, 2) ?? 0,
+  ]
+}
+
+function setStage3ShapePosition(
+  artifact: GeneratedGeometryArtifact,
+  shape: Record<string, unknown>,
+  index: number,
+  position: [number, number, number],
+) {
+  shape.position = position
+  const transform = artifact.transforms[index]
+  if (transform) {
+    artifact.transforms[index] = { ...transform, position }
+  }
+}
+
+function stage3ShapeHalfHeight(shape: Record<string, unknown>): number {
+  return Math.max(shapeSpan(shape, 1) / 2, 0.05)
+}
+
+function stage3ShapeTopY(
+  artifact: GeneratedGeometryArtifact,
+  shape: Record<string, unknown>,
+  index: number,
+): number {
+  return stage3ShapePosition(artifact, shape, index)[1] + stage3ShapeHalfHeight(shape)
+}
+
+function stage3ShapeBottomY(
+  artifact: GeneratedGeometryArtifact,
+  shape: Record<string, unknown>,
+  index: number,
+): number {
+  return stage3ShapePosition(artifact, shape, index)[1] - stage3ShapeHalfHeight(shape)
+}
+
+function stage3MoveAbove(
+  artifact: GeneratedGeometryArtifact,
+  child: Record<string, unknown>,
+  childIndex: number,
+  parent: Record<string, unknown>,
+  parentIndex: number,
+  clearance = 0.08,
+): boolean {
+  const childPosition = stage3ShapePosition(artifact, child, childIndex)
+  const parentPosition = stage3ShapePosition(artifact, parent, parentIndex)
+  const targetY =
+    parentPosition[1] + stage3ShapeHalfHeight(parent) + stage3ShapeHalfHeight(child) + clearance
+  if (childPosition[1] >= targetY - 0.01) return false
+  setStage3ShapePosition(artifact, child, childIndex, [childPosition[0], targetY, childPosition[2]])
+  return true
+}
+
+function stage3MoveBelow(
+  artifact: GeneratedGeometryArtifact,
+  child: Record<string, unknown>,
+  childIndex: number,
+  parent: Record<string, unknown>,
+  parentIndex: number,
+  clearance = 0.08,
+): boolean {
+  const childPosition = stage3ShapePosition(artifact, child, childIndex)
+  const parentPosition = stage3ShapePosition(artifact, parent, parentIndex)
+  const targetY =
+    parentPosition[1] - stage3ShapeHalfHeight(parent) - stage3ShapeHalfHeight(child) - clearance
+  if (childPosition[1] <= targetY + 0.01) return false
+  setStage3ShapePosition(artifact, child, childIndex, [childPosition[0], targetY, childPosition[2]])
+  return true
+}
+
+function findStage3ShapeWithIndex(
+  artifact: GeneratedGeometryArtifact,
+  include: RegExp,
+  exclude?: RegExp,
+): { shape: Record<string, unknown>; index: number } | undefined {
+  const shapes = artifact.shapes as unknown as Record<string, unknown>[]
+  for (const [index, shape] of shapes.entries()) {
+    const text = stage3ShapeText(shape)
+    if (include.test(text) && !(exclude?.test(text) ?? false)) return { shape, index }
+  }
+  return undefined
+}
+
+function compactStage3ArtifactDetails(artifact: GeneratedGeometryArtifact): string {
+  return artifact.shapes
+    .map((shape, index) => {
+      const position = artifact.transforms[index]?.position ?? shape.position
+      return `  - ${shape.name ?? shape.kind}: ${shape.kind} pos=[${(position as number[] | undefined)?.join(',') ?? '0,0,0'}] role=${shape.semanticRole ?? ''} source=${shape.sourcePartKind ?? ''}`
+    })
+    .join('\n')
+}
+
+function addStage3Shape(
+  artifact: GeneratedGeometryArtifact,
+  shape: Record<string, unknown>,
+  position: [number, number, number],
+) {
+  const nextShape = {
+    kind: 'box',
+    name: shape.semanticRole ?? shape.name ?? 'semantic scaffold',
+    position,
+    rotation: [0, 0, 0],
+    length: 1,
+    width: 1,
+    height: 1,
+    sourcePartKind: 'semantic_scaffold',
+    ...shape,
+  }
+  artifact.shapes.push(nextShape as GeneratedGeometryArtifact['shapes'][number])
+  artifact.transforms.push({ position, rotation: [0, 0, 0] })
+  artifact.createdNames.push(String(nextShape.name ?? nextShape.kind))
+  return { shape: nextShape, index: artifact.shapes.length - 1 }
+}
+
+function removeDuplicateStage3RoleFamilies(
+  artifact: GeneratedGeometryArtifact,
+  requiredRoles: readonly string[],
+): boolean {
+  const keep = new Set<number>()
+  const remove = new Set<number>()
+  const shapes = artifact.shapes as unknown as Record<string, unknown>[]
+  for (const role of requiredRoles) {
+    const pattern = stage3RoleFamilyPattern(role)
+    const matching = shapes
+      .map((shape, index) => ({ shape, index }))
+      .filter(({ shape }) => pattern.test(stage3ShapeText(shape)))
+    if (matching.length <= 1) continue
+    keep.add(matching[0]!.index)
+    for (const duplicate of matching.slice(1)) remove.add(duplicate.index)
+  }
+  if (remove.size === 0) return false
+  const entries = artifact.shapes
+    .map((shape, index) => ({ shape, transform: artifact.transforms[index], index }))
+    .filter(({ index }) => keep.has(index) || !remove.has(index))
+  artifact.shapes = entries.map(({ shape }) => shape)
+  artifact.transforms = entries.map(({ shape, transform }) => ({
+    position: transform?.position ?? shape.position ?? [0, 0, 0],
+    rotation: transform?.rotation ?? shape.rotation ?? [0, 0, 0],
+  }))
+  artifact.createdNames = entries.map(({ shape }) => shape.name ?? shape.kind)
+  return true
+}
+
+function stage3SupportTop(
+  artifact: GeneratedGeometryArtifact,
+  support: { shape: Record<string, unknown>; index: number } | undefined,
+): number {
+  if (!support) return 1
+  const position = stage3ShapePosition(artifact, support.shape, support.index)
+  return position[1] + stage3ShapeHalfHeight(support.shape)
+}
+
+function findStage3MainSpan(artifact: GeneratedGeometryArtifact) {
+  return (
+    findStage3ShapeWithIndex(artifact, /main_jib|jib_arm|jib_boom|boom/, /counter/) ??
+    findStage3ShapeWithIndex(artifact, /main_girder|bridge_girder|girder|beam/, /counter/)
+  )
+}
+
+function stage3LiftingAnchorFrame(artifact: GeneratedGeometryArtifact, kind: Stage3LiftingKind) {
+  const support = findStage3ShapeWithIndex(
+    artifact,
+    /tower_mast|tower_body|tower_column|mast|support_column|support_leg|support|leg|column/,
+    /guard|rail|stair/,
+  )
+  const mainSpan = findStage3MainSpan(artifact)
+  const counterSpan = findStage3ShapeWithIndex(artifact, /counter_jib|counter_boom|balance_arm/)
+  const supportPosition = support
+    ? stage3ShapePosition(artifact, support.shape, support.index)
+    : [0, 0, 0]
+  const supportTop = stage3SupportTop(artifact, support)
+  const mainPosition = mainSpan
+    ? stage3ShapePosition(artifact, mainSpan.shape, mainSpan.index)
+    : [supportPosition[0] + 2.8, supportTop + 0.75, supportPosition[2]]
+  const mainLength = mainSpan
+    ? Math.max(shapeSpan(mainSpan.shape, 0), shapeSpan(mainSpan.shape, 2), 1)
+    : 7.5
+  const direction = mainPosition[0] >= supportPosition[0] ? 1 : -1
+  const jibY = Math.max(mainPosition[1], supportTop + (kind === 'tower' ? 0.65 : 0.35))
+  const trolleyX = mainPosition[0] + direction * mainLength * 0.22
+  const trolleyZ = mainPosition[2]
+  return {
+    kind,
+    support,
+    mainSpan,
+    counterSpan,
+    supportPosition: supportPosition as [number, number, number],
+    supportTop,
+    mainPosition: mainPosition as [number, number, number],
+    mainLength,
+    direction,
+    jibY,
+    trolleyPosition: [trolleyX, jibY - 0.18, trolleyZ] as [number, number, number],
+  }
+}
+
+function setStage3ShapeHeight(shape: Record<string, unknown>, height: number) {
+  shape.height = Math.max(0.01, height)
+}
+
+function addLiftingRequiredRoleScaffold(
+  artifact: GeneratedGeometryArtifact,
+  requiredRole: string,
+  kind: Stage3LiftingKind = 'generic',
+): boolean {
+  const shapes = artifact.shapes as unknown as Record<string, unknown>[]
+  const roleAlreadyPresent = /pendant/.test(requiredRole)
+    ? stage3RoleFamilyPresent(shapes, requiredRole)
+    : stage3RolePresent(shapes, requiredRole) || stage3RoleFamilyPresent(shapes, requiredRole)
+  if (roleAlreadyPresent) {
+    return false
+  }
+  const frame = stage3LiftingAnchorFrame(artifact, kind)
+  const top = frame.supportTop
+  const spanY = frame.jibY
+  const [trolleyX, trolleyY, trolleyZ] = frame.trolleyPosition
+
+  if (/slew|slewing|platform|turntable/.test(requiredRole)) {
+    addStage3Shape(
+      artifact,
+      {
+        semanticRole: requiredRole,
+        length: 1.8,
+        width: 1.6,
+        height: 0.3,
+        color: '#d97706',
+      },
+      [frame.supportPosition[0], top + 0.2, frame.supportPosition[2]],
+    )
+    return true
+  }
+  if (/tower.*peak|apex|peak/.test(requiredRole)) {
+    addStage3Shape(
+      artifact,
+      {
+        semanticRole: requiredRole,
+        length: 0.28,
+        width: 0.28,
+        height: 0.9,
+        color: '#facc15',
+      },
+      [frame.supportPosition[0], spanY + 0.55, frame.supportPosition[2]],
+    )
+    return true
+  }
+  if (/cabin|cab|operator|driver/.test(requiredRole)) {
+    addStage3Shape(
+      artifact,
+      {
+        semanticRole: requiredRole,
+        length: 0.9,
+        width: 0.8,
+        height: 0.65,
+        color: '#facc15',
+      },
+      [frame.supportPosition[0] + 0.65, top + 0.55, frame.supportPosition[2] + 0.35],
+    )
+    return true
+  }
+  if (/counter.*(jib|arm)|balance.*(jib|arm)/.test(requiredRole)) {
+    addStage3Shape(
+      artifact,
+      {
+        semanticRole: requiredRole,
+        length: 3.2,
+        width: 0.28,
+        height: 0.28,
+        color: '#facc15',
+      },
+      [frame.supportPosition[0] - frame.direction * 1.9, top + 0.75, frame.supportPosition[2]],
+    )
+    return true
+  }
+  if (/counter.*weight|ballast|weight/.test(requiredRole)) {
+    addStage3Shape(
+      artifact,
+      {
+        semanticRole: requiredRole,
+        length: 0.9,
+        width: 0.9,
+        height: 0.7,
+        color: '#6b7280',
+      },
+      [frame.supportPosition[0] - frame.direction * 3.4, top + 0.45, frame.supportPosition[2]],
+    )
+    return true
+  }
+  if (/pendant/.test(requiredRole)) {
+    addStage3Shape(
+      artifact,
+      {
+        kind: 'cylinder',
+        axis: 'y',
+        semanticRole: requiredRole,
+        name: 'semantic tower crane pendant cable',
+        radius: 0.025,
+        height: Math.max(frame.mainLength * 0.55, 1.2),
+        rotation: [0, 0, -0.72 * frame.direction],
+        color: '#111827',
+      },
+      [
+        frame.supportPosition[0] + frame.direction * frame.mainLength * 0.28,
+        spanY + 0.28,
+        frame.supportPosition[2],
+      ],
+    )
+    return true
+  }
+  if (/jib|boom|girder|beam|arm/.test(requiredRole)) {
+    addStage3Shape(
+      artifact,
+      {
+        semanticRole: requiredRole,
+        length: 7.5,
+        width: 0.26,
+        height: 0.26,
+        color: '#facc15',
+      },
+      [frame.supportPosition[0] + frame.direction * 2.8, top + 0.75, frame.supportPosition[2]],
+    )
+    return true
+  }
+  if (/trolley|carriage/.test(requiredRole)) {
+    addStage3Shape(
+      artifact,
+      {
+        semanticRole: requiredRole,
+        length: 0.75,
+        width: 0.5,
+        height: 0.35,
+        color: '#374151',
+      },
+      [trolleyX, trolleyY, trolleyZ],
+    )
+    return true
+  }
+  if (/wire.*rope|rope|cable/.test(requiredRole)) {
+    addStage3Shape(
+      artifact,
+      {
+        kind: 'cylinder',
+        axis: 'y',
+        semanticRole: requiredRole,
+        name: 'semantic vertical wire rope',
+        radius: 0.025,
+        height: 1.05,
+        color: '#111827',
+      },
+      [trolleyX, trolleyY - 0.65, trolleyZ],
+    )
+    return true
+  }
+  if (/hook|load|suspended/.test(requiredRole)) {
+    addStage3Shape(
+      artifact,
+      {
+        semanticRole: requiredRole,
+        length: 0.3,
+        width: 0.18,
+        height: 0.45,
+        color: '#111827',
+      },
+      [trolleyX, trolleyY - 1.3, trolleyZ],
+    )
+    return true
+  }
+  return false
+}
+
+function normalizeStage3LiftingTopology(
+  artifact: GeneratedGeometryArtifact,
+  kind: Stage3LiftingKind,
+): boolean {
+  let changed = false
+  const frame = stage3LiftingAnchorFrame(artifact, kind)
+  const mainSpan = frame.mainSpan
+  if (mainSpan) {
+    const current = stage3ShapePosition(artifact, mainSpan.shape, mainSpan.index)
+    const targetY = Math.max(current[1], frame.supportTop + (kind === 'tower' ? 0.65 : 0.35))
+    if (Math.abs(current[1] - targetY) > 0.01) {
+      setStage3ShapePosition(artifact, mainSpan.shape, mainSpan.index, [
+        current[0],
+        targetY,
+        current[2],
+      ])
+      changed = true
+    }
+  }
+
+  const peak = findStage3ShapeWithIndex(artifact, /tower_peak|apex|peak|tower_cap/)
+  if (kind === 'tower' && peak) {
+    const target: [number, number, number] = [
+      frame.supportPosition[0],
+      frame.jibY + Math.max(stage3ShapeHalfHeight(peak.shape), 0.35) + 0.12,
+      frame.supportPosition[2],
+    ]
+    const current = stage3ShapePosition(artifact, peak.shape, peak.index)
+    if (
+      Math.abs(current[0] - target[0]) > 0.01 ||
+      Math.abs(current[1] - target[1]) > 0.01 ||
+      Math.abs(current[2] - target[2]) > 0.01
+    ) {
+      setStage3ShapePosition(artifact, peak.shape, peak.index, target)
+      changed = true
+    }
+  }
+
+  const trolley = findStage3ShapeWithIndex(artifact, /trolley|carriage/, /hook|load|suspended/)
+  if (trolley) {
+    const current = stage3ShapePosition(artifact, trolley.shape, trolley.index)
+    const target = frame.trolleyPosition
+    if (
+      Math.abs(current[0] - target[0]) > 0.01 ||
+      Math.abs(current[1] - target[1]) > 0.01 ||
+      Math.abs(current[2] - target[2]) > 0.01
+    ) {
+      setStage3ShapePosition(artifact, trolley.shape, trolley.index, target)
+      changed = true
+    }
+  }
+
+  const nextTrolley =
+    trolley ?? findStage3ShapeWithIndex(artifact, /trolley|carriage/, /hook|load|suspended/)
+  const rope = findStage3ShapeWithIndex(artifact, /wire_rope|rope|hoist_cable|cable/, /pendant/)
+  const hook = findStage3ShapeWithIndex(artifact, /hook_block|hook|suspended|load/)
+  const anchor = nextTrolley
+    ? stage3ShapePosition(artifact, nextTrolley.shape, nextTrolley.index)
+    : frame.trolleyPosition
+  if (hook) {
+    const hookHalf = stage3ShapeHalfHeight(hook.shape)
+    const target: [number, number, number] = [
+      anchor[0],
+      anchor[1] - Math.max(0.9, hookHalf + 0.55),
+      anchor[2],
+    ]
+    const current = stage3ShapePosition(artifact, hook.shape, hook.index)
+    if (
+      Math.abs(current[0] - target[0]) > 0.01 ||
+      Math.abs(current[1] - target[1]) > 0.01 ||
+      Math.abs(current[2] - target[2]) > 0.01
+    ) {
+      setStage3ShapePosition(artifact, hook.shape, hook.index, target)
+      changed = true
+    }
+  }
+  if (rope && hook) {
+    const hookPosition = stage3ShapePosition(artifact, hook.shape, hook.index)
+    const ropeHeight = Math.max(
+      anchor[1] - hookPosition[1] - stage3ShapeHalfHeight(hook.shape),
+      0.35,
+    )
+    setStage3ShapeHeight(rope.shape, ropeHeight)
+    setStage3ShapePosition(artifact, rope.shape, rope.index, [
+      anchor[0],
+      hookPosition[1] + stage3ShapeHalfHeight(hook.shape) + ropeHeight / 2,
+      anchor[2],
+    ])
+    changed = true
+  }
+
+  const counterweight = findStage3ShapeWithIndex(artifact, /counterweight|counter_weight|ballast/)
+  const counterSpan = frame.counterSpan
+  if (counterweight && counterSpan) {
+    const counterPosition = stage3ShapePosition(artifact, counterSpan.shape, counterSpan.index)
+    const counterLength = Math.max(
+      shapeSpan(counterSpan.shape, 0),
+      shapeSpan(counterSpan.shape, 2),
+      1,
+    )
+    const target: [number, number, number] = [
+      counterPosition[0] - frame.direction * counterLength * 0.38,
+      counterPosition[1] +
+        stage3ShapeHalfHeight(counterSpan.shape) +
+        stage3ShapeHalfHeight(counterweight.shape) +
+        0.06,
+      counterPosition[2],
+    ]
+    setStage3ShapePosition(artifact, counterweight.shape, counterweight.index, target)
+    changed = true
+  }
+  return changed
+}
+
+function ensureStage3TowerPendantCable(artifact: GeneratedGeometryArtifact): boolean {
+  if (
+    stage3RoleFamilyPresent(
+      artifact.shapes as unknown as Record<string, unknown>[],
+      'pendant_cable',
+    )
+  ) {
+    return false
+  }
+  const frame = stage3LiftingAnchorFrame(artifact, 'tower')
+  addStage3Shape(
+    artifact,
+    {
+      kind: 'cylinder',
+      axis: 'y',
+      semanticRole: 'pendant_cable',
+      name: 'semantic tower crane pendant cable',
+      radius: 0.025,
+      height: Math.max(frame.mainLength * 0.55, 1.2),
+      rotation: [0, 0, -0.72 * frame.direction],
+      color: '#111827',
+    },
+    [
+      frame.supportPosition[0] + frame.direction * frame.mainLength * 0.28,
+      frame.jibY + 0.28,
+      frame.supportPosition[2],
+    ],
+  )
+  return true
+}
+
+export function repairStage3SemanticArtifact(
+  userPrompt: string,
+  artifact: GeneratedGeometryArtifact,
+): Stage3SemanticRepairResult | undefined {
+  const intentText = stage3CombinedIntentText(userPrompt, artifact)
+  const liftingIntent = isStage3LiftingIntent(intentText)
+  const outdoorAcIntent = isStage3OutdoorAcIntent(intentText)
+  if (!liftingIntent && !outdoorAcIntent) return undefined
+
+  let changed = false
+  const unrelatedPattern = liftingIntent
+    ? /aircraft|fuselage|(?:^|[\s_])wing(?:[\s_]|$)|wing_panel|stabilizer|nacelle|landing_gear|cockpit|cabin_window/
+    : outdoorAcIntent
+      ? /vertical_pole|circular_base|fan_base|fan_pole|pedestal|support_bracket|fan_yoke/
+      : undefined
+  const acBody = outdoorAcIntent
+    ? findStage3ShapeWithIndex(
+        artifact,
+        /condenser_body|main_body|machine_body|body|housing|casing|enclosure|shell/,
+      )
+    : undefined
+  const acBodyTop = acBody ? stage3ShapeTopY(artifact, acBody.shape, acBody.index) : undefined
+  const isFloatingAcFanPart = (shape: Record<string, unknown>, index: number) => {
+    if (acBodyTop == null) return false
+    const shapeText = stage3ShapeText(shape)
+    if (!/motor_housing|protective_grill/.test(shapeText)) return false
+    if (/front_grille|fan_guard|fan_grill/.test(shapeText)) return false
+    return stage3ShapeBottomY(artifact, shape, index) > acBodyTop + 0.05
+  }
+  const keptShapeEntries = artifact.shapes
+    .map((shape, index) => ({ shape, transform: artifact.transforms[index], index }))
+    .filter(({ shape, index }) => {
+      const shapeText = stage3ShapeText(shape as unknown as Record<string, unknown>)
+      if (unrelatedPattern?.test(shapeText) ?? false) return false
+      return !isFloatingAcFanPart(shape as unknown as Record<string, unknown>, index)
+    })
+  if (keptShapeEntries.length !== artifact.shapes.length && keptShapeEntries.length >= 2) {
+    changed = true
+  }
+
+  const repaired: GeneratedGeometryArtifact = {
+    ...artifact,
+    shapes: keptShapeEntries.map(({ shape }) => ({ ...shape })),
+    transforms: keptShapeEntries.map(({ shape, transform }) => ({
+      position: transform?.position ?? shape.position,
+      rotation: transform?.rotation ?? shape.rotation ?? [0, 0, 0],
+    })),
+    createdNames: keptShapeEntries.map(({ shape }) => shape.name ?? shape.kind),
+  }
+
+  if (liftingIntent) {
+    const liftingKind = inferStage3LiftingKind(intentText) ?? 'generic'
+    const requiredRoles = Array.from(
+      new Set([...stage3RequiredRoles(repaired), ...stage3LiftingRequiredRoles(liftingKind)]),
+    )
+    changed = removeDuplicateStage3RoleFamilies(repaired, requiredRoles) || changed
+    for (const requiredRole of requiredRoles) {
+      changed = addLiftingRequiredRoleScaffold(repaired, requiredRole, liftingKind) || changed
+    }
+    changed = normalizeStage3LiftingTopology(repaired, liftingKind) || changed
+    if (liftingKind === 'tower') {
+      changed = ensureStage3TowerPendantCable(repaired) || changed
+    }
+  }
+
+  if (outdoorAcIntent) {
+    const body = findStage3ShapeWithIndex(
+      repaired,
+      /condenser_body|main_body|machine_body|body|housing|casing|enclosure|shell/,
+    )
+    const foot = findStage3ShapeWithIndex(
+      repaired,
+      /support_feet|support_foot|feet|foot|base_leg|leg/,
+    )
+    if (body && foot) {
+      changed =
+        stage3MoveBelow(repaired, foot.shape, foot.index, body.shape, body.index, 0.02) || changed
+    }
+  }
+
+  if (!changed) return undefined
+  repaired.shapeDetails = compactStage3ArtifactDetails(repaired)
+  repaired.visualQualitySummary = [
+    repaired.visualQualitySummary,
+    'Stage3 semantic repair normalized unrelated-family drift and vertical topology.',
+  ]
+    .filter(Boolean)
+    .join('\n')
+  return { artifact: repaired, label: 'generic semantic topology repair' }
+}
+
+function cloneStage3Artifact(artifact: GeneratedGeometryArtifact): GeneratedGeometryArtifact {
+  return {
+    ...artifact,
+    shapes: artifact.shapes.map((shape) => ({ ...shape })),
+    transforms: artifact.shapes.map((shape, index) => ({
+      position: artifact.transforms[index]?.position ?? shape.position ?? [0, 0, 0],
+      rotation: artifact.transforms[index]?.rotation ?? shape.rotation ?? [0, 0, 0],
+    })),
+    createdNames: [...artifact.createdNames],
+  }
+}
+
+function stage3ColorOf(shape: Record<string, unknown>, fallback: string): string {
+  const material = shape.material
+  if (typeof shape.color === 'string') return shape.color
+  if (typeof shape.primaryColor === 'string') return shape.primaryColor
+  if (typeof shape.metalColor === 'string') return shape.metalColor
+  if (
+    typeof material === 'object' &&
+    material !== null &&
+    'properties' in material &&
+    typeof (material as { properties?: unknown }).properties === 'object' &&
+    (material as { properties?: { color?: unknown } }).properties?.color
+  ) {
+    const color = (material as { properties?: { color?: unknown } }).properties?.color
+    if (typeof color === 'string') return color
+  }
+  return fallback
+}
+
+function markStage3ShapeTransparent(shape: Record<string, unknown>, opacity: number) {
+  const color = stage3ColorOf(shape, '#facc15')
+  shape.material = {
+    properties: {
+      color,
+      roughness: 0.62,
+      metalness: 0.08,
+      opacity,
+      transparent: true,
+    },
+  }
+}
+
+function hasStage3RoleLike(artifact: GeneratedGeometryArtifact, pattern: RegExp): boolean {
+  return (artifact.shapes as unknown as Record<string, unknown>[]).some((shape) =>
+    pattern.test(stage3ShapeText(shape)),
+  )
+}
+
+function addStage3TowerFramePolish(
+  artifact: GeneratedGeometryArtifact,
+  support: { shape: Record<string, unknown>; index: number },
+): boolean {
+  if (hasStage3RoleLike(artifact, /lattice_column|lattice_rung|tower_column/)) return false
+  const position = stage3ShapePosition(artifact, support.shape, support.index)
+  const height = Math.max(shapeSpan(support.shape, 1), 1)
+  const xSpan = Math.max(shapeSpan(support.shape, 0), 0.7)
+  const zSpan = Math.max(shapeSpan(support.shape, 2), 0.7)
+  if (height < Math.max(xSpan, zSpan) * 1.8) return false
+
+  markStage3ShapeTransparent(support.shape, 0.18)
+  const color = stage3ColorOf(support.shape, '#d4a017')
+  const columnSize = Math.min(Math.max(Math.min(xSpan, zSpan) * 0.08, 0.045), 0.12)
+  for (const xSign of [-1, 1]) {
+    for (const zSign of [-1, 1]) {
+      addStage3Shape(
+        artifact,
+        {
+          semanticRole: 'lattice_column',
+          name: 'semantic lattice tower column',
+          length: columnSize,
+          width: columnSize,
+          height,
+          color,
+        },
+        [position[0] + (xSign * xSpan) / 2, position[1], position[2] + (zSign * zSpan) / 2],
+      )
+    }
+  }
+
+  const levels = 4
+  for (let level = 1; level < levels; level += 1) {
+    const y = position[1] - height / 2 + (height * level) / levels
+    for (const zSign of [-1, 1]) {
+      addStage3Shape(
+        artifact,
+        {
+          semanticRole: 'lattice_rung',
+          name: 'semantic lattice horizontal rung',
+          length: xSpan,
+          width: columnSize * 0.65,
+          height: columnSize * 0.65,
+          color,
+        },
+        [position[0], y, position[2] + (zSign * zSpan) / 2],
+      )
+    }
+    for (const xSign of [-1, 1]) {
+      addStage3Shape(
+        artifact,
+        {
+          semanticRole: 'lattice_rung',
+          name: 'semantic lattice transverse rung',
+          length: columnSize * 0.65,
+          width: zSpan,
+          height: columnSize * 0.65,
+          color,
+        },
+        [position[0] + (xSign * xSpan) / 2, y, position[2]],
+      )
+    }
+  }
+  return true
+}
+
+function addStage3SpanTrussPolish(
+  artifact: GeneratedGeometryArtifact,
+  span: { shape: Record<string, unknown>; index: number },
+): boolean {
+  const text = stage3ShapeText(span.shape)
+  if (!/girder|main_girder|bridge_girder|jib|counter_jib|boom/.test(text)) return false
+  const position = stage3ShapePosition(artifact, span.shape, span.index)
+  const length = Math.max(shapeSpan(span.shape, 0), shapeSpan(span.shape, 2))
+  if (
+    length < 2.2 ||
+    hasStage3RoleLike(artifact, new RegExp(`${text.split(' ')[0]}.*truss_chord`))
+  ) {
+    return false
+  }
+
+  const color = stage3ColorOf(span.shape, '#facc15')
+  span.shape.height = Math.min(Math.max(shapeSpan(span.shape, 1) * 0.45, 0.08), 0.18)
+  span.shape.width = Math.min(Math.max(shapeSpan(span.shape, 2) * 0.55, 0.08), 0.22)
+  const chordRole = `${normalizeStage3Role(span.shape.semanticRole) || 'span'}_truss_chord`
+  const chordHeight = 0.055
+  const verticalGap = Math.max(shapeSpan(span.shape, 1), 0.24)
+  addStage3Shape(
+    artifact,
+    {
+      semanticRole: chordRole,
+      name: 'semantic truss upper chord',
+      length,
+      width: 0.06,
+      height: chordHeight,
+      color,
+    },
+    [position[0], position[1] + verticalGap / 2, position[2]],
+  )
+  addStage3Shape(
+    artifact,
+    {
+      semanticRole: chordRole,
+      name: 'semantic truss lower chord',
+      length,
+      width: 0.06,
+      height: chordHeight,
+      color,
+    },
+    [position[0], position[1] - verticalGap / 2, position[2]],
+  )
+  for (const offset of [-0.35, 0, 0.35]) {
+    addStage3Shape(
+      artifact,
+      {
+        semanticRole: `${normalizeStage3Role(span.shape.semanticRole) || 'span'}_truss_web`,
+        name: 'semantic truss web post',
+        length: 0.05,
+        width: 0.05,
+        height: verticalGap,
+        color,
+      },
+      [position[0] + offset * length, position[1], position[2]],
+    )
+  }
+  return true
+}
+
+function polishStage3LiftingArtifact(artifact: GeneratedGeometryArtifact): boolean {
+  if (artifact.shapes.length > 70) return false
+  let changed = false
+  const support = findStage3ShapeWithIndex(
+    artifact,
+    /tower_mast|tower_body|tower_column|mast|support_column|support|leg|column/,
+    /guard|rail|stair/,
+  )
+  if (support) changed = addStage3TowerFramePolish(artifact, support) || changed
+
+  const spanEntries = (artifact.shapes as unknown as Record<string, unknown>[])
+    .map((shape, index) => ({ shape, index }))
+    .filter(({ shape }) =>
+      /girder|main_girder|bridge_girder|jib|counter_jib|boom/.test(stage3ShapeText(shape)),
+    )
+    .slice(0, 3)
+  for (const span of spanEntries) {
+    changed = addStage3SpanTrussPolish(artifact, span) || changed
+  }
+
+  const trolley = findStage3ShapeWithIndex(artifact, /trolley|carriage/, /hook|load|suspended/)
+  const hook = findStage3ShapeWithIndex(artifact, /hook|suspended|load/)
+  const rope = findStage3ShapeWithIndex(artifact, /wire_rope|rope|cable/)
+  if ((trolley || hook) && hook && !rope) {
+    const parent = trolley ?? findStage3ShapeWithIndex(artifact, /girder|jib|boom|bridge_girder/)
+    if (parent) {
+      const parentPosition = stage3ShapePosition(artifact, parent.shape, parent.index)
+      const hookPosition = stage3ShapePosition(artifact, hook.shape, hook.index)
+      const ropeHeight = Math.max(
+        parentPosition[1] - hookPosition[1] - stage3ShapeHalfHeight(hook.shape),
+        0.4,
+      )
+      addStage3Shape(
+        artifact,
+        {
+          kind: 'cylinder',
+          axis: 'y',
+          semanticRole: 'wire_rope',
+          name: 'semantic vertical wire rope',
+          radius: 0.025,
+          height: ropeHeight,
+          color: '#111827',
+        },
+        [
+          hookPosition[0],
+          hookPosition[1] + ropeHeight / 2 + stage3ShapeHalfHeight(hook.shape),
+          hookPosition[2],
+        ],
+      )
+      changed = true
+    }
+  }
+  return changed
+}
+
+function polishStage3OutdoorEnclosureArtifact(artifact: GeneratedGeometryArtifact): boolean {
+  const body = findStage3ShapeWithIndex(
+    artifact,
+    /condenser_body|main_body|machine_body|body|housing|casing|enclosure|shell/,
+  )
+  if (!body) return false
+  let changed = false
+  const bodyPosition = stage3ShapePosition(artifact, body.shape, body.index)
+  const bodyHalfDepth = Math.max(shapeSpan(body.shape, 2) / 2, 0.16)
+  const bodyHalfLength = Math.max(shapeSpan(body.shape, 0) / 2, 0.24)
+  const bodyBottom = stage3ShapeBottomY(artifact, body.shape, body.index)
+  const entriesBeforeCull = artifact.shapes.map((shape, index) => ({
+    shape,
+    index,
+    text: stage3ShapeText(shape as unknown as Record<string, unknown>),
+  }))
+  const hasSpecificFaceFanOrVent = entriesBeforeCull.some(
+    ({ text }) =>
+      /front.*(grille|vent|fan)|fan_guard|fan_grill|fan_impeller|radial_blades|cooling_fan|front_vent/.test(
+        text,
+      ) && !/^protective_grill$/.test(normalizeStage3Role(text)),
+  )
+  if (hasSpecificFaceFanOrVent) {
+    const keptShapeEntries = entriesBeforeCull
+      .map(({ shape, index, text }) => ({ shape, transform: artifact.transforms[index], text }))
+      .filter(({ text }) => {
+        const genericProtectiveGrill =
+          /protective_grill/.test(text) &&
+          !/front.*(grille|fan)|fan_guard|fan_grill|fan_impeller|cooling_fan/.test(text)
+        return !genericProtectiveGrill
+      })
+    if (keptShapeEntries.length !== artifact.shapes.length) {
+      artifact.shapes = keptShapeEntries.map(({ shape }) => shape)
+      artifact.transforms = keptShapeEntries.map(
+        ({ transform, shape }) =>
+          transform ?? {
+            position: stage3ShapePosition(artifact, shape as unknown as Record<string, unknown>, 0),
+            rotation: [0, 0, 0],
+          },
+      )
+      changed = true
+    }
+  }
+  const entries = (artifact.shapes as unknown as Record<string, unknown>[]).map((shape, index) => ({
+    shape,
+    index,
+    text: stage3ShapeText(shape),
+  }))
+  const faceMountedEntries = entries.filter(({ text }) =>
+    /front.*(grille|vent|fan)|fan_guard|fan_grill|fan_impeller|radial_blades|protective_grill/.test(
+      text,
+    ),
+  )
+  if (faceMountedEntries.length > 0) {
+    const centers = faceMountedEntries.map(({ shape, index }) =>
+      stage3ShapePosition(artifact, shape, index),
+    )
+    const centerX = centers.reduce((sum, position) => sum + position[0], 0) / centers.length
+    const centerY = centers.reduce((sum, position) => sum + position[1], 0) / centers.length
+    for (const { shape, index } of faceMountedEntries) {
+      const current = stage3ShapePosition(artifact, shape, index)
+      const next: [number, number, number] = [
+        bodyPosition[0] + (current[0] - centerX),
+        bodyPosition[1] + (current[1] - centerY),
+        bodyPosition[2] + bodyHalfDepth + 0.04,
+      ]
+      setStage3ShapePosition(artifact, shape, index, next)
+      changed = true
+    }
+  }
+
+  for (const { shape, index, text } of entries) {
+    if (/side.*(vent|radiator|heat|louver|grille)/.test(text)) {
+      const current = stage3ShapePosition(artifact, shape, index)
+      const next: [number, number, number] = [
+        bodyPosition[0] - bodyHalfLength - 0.035,
+        current[1],
+        bodyPosition[2],
+      ]
+      setStage3ShapePosition(artifact, shape, index, next)
+      changed = true
+    } else if (/support_feet|support_foot|feet|foot|base_leg/.test(text)) {
+      const current = stage3ShapePosition(artifact, shape, index)
+      const next: [number, number, number] = [
+        current[0],
+        bodyBottom - stage3ShapeHalfHeight(shape) - 0.025,
+        current[2],
+      ]
+      setStage3ShapePosition(artifact, shape, index, next)
+      changed = true
+    }
+  }
+  return changed
+}
+
+export function polishStage3SemanticArtifact(
+  userPrompt: string,
+  artifact: GeneratedGeometryArtifact,
+): Stage3SemanticRepairResult | undefined {
+  const intentText = stage3CombinedIntentText(userPrompt, artifact)
+  const liftingIntent = isStage3LiftingIntent(intentText)
+  const outdoorAcIntent = isStage3OutdoorAcIntent(intentText)
+  if (!liftingIntent && !outdoorAcIntent) return undefined
+
+  const polished = cloneStage3Artifact(artifact)
+  let changed = false
+  if (liftingIntent) changed = polishStage3LiftingArtifact(polished) || changed
+  if (outdoorAcIntent) changed = polishStage3OutdoorEnclosureArtifact(polished) || changed
+  if (!changed) return undefined
+
+  polished.shapeDetails = compactStage3ArtifactDetails(polished)
+  polished.visualQualitySummary = [
+    polished.visualQualitySummary,
+    'Stage3 semantic polish added frame/truss or face-anchored visual structure.',
+  ]
+    .filter(Boolean)
+    .join('\n')
+  return { artifact: polished, label: 'generic semantic visual polish' }
 }
 
 export function stage3QualityReview(
@@ -833,6 +2511,7 @@ export function stage3QualityReview(
   const issues: string[] = []
   const warnings: string[] = []
   let repairPlan: Stage3RepairPlan | undefined
+  let requiresModelRepair = false
 
   const hasAllRoles = (requiredRoles: string[]) => {
     const missing = requiredRoles.filter((role) => !roles.has(role))
@@ -843,6 +2522,124 @@ export function stage3QualityReview(
     const found = forbiddenRoles.filter((role) => roles.has(role))
     for (const role of found) issues.push(`Stage3 found unrelated role "${role}".`)
     return found.length > 0
+  }
+
+  const explicitRequiredRoles = stage3RequiredRoles(artifact)
+  const missingExplicitRoles = explicitRequiredRoles.filter(
+    (role) => !stage3RolePresent(artifact.shapes as unknown as Record<string, unknown>[], role),
+  )
+  for (const role of missingExplicitRoles) {
+    issues.push(`Stage3 missing declared required role "${role}".`)
+  }
+  if (missingExplicitRoles.length > 0) requiresModelRepair = true
+
+  const promptAndArtifactText = [
+    text,
+    artifact.geometryBrief?.category,
+    artifact.geometryBrief?.semanticRoles?.join(' '),
+    artifact.geometryBrief?.requiredRoles?.join(' '),
+    artifact.semanticSummary,
+    artifact.visualQualitySummary,
+    artifact.shapeDetails,
+    artifact.shapes
+      .map((shape) => [shape.name, shape.semanticRole, shape.sourcePartKind, shape.kind].join(' '))
+      .join(' '),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  const roundContainerIntentText = [text, artifact.geometryBrief?.category]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  const roundContainerIntent =
+    /(\u6696\u6c34\u74f6|\u5f00\u6c34\u74f6|\u70ed\u6c34\u74f6|\u4fdd\u6e29\u74f6|\u74f6|\u5706\u7b52|\u676f\u5b50|\u6c34\u676f|\u676f|bottle|flask|thermos|vacuum[_\s-]?flask|hot[_\s-]?water[_\s-]?bottle|cup|mug|(?:tin|soda|beverage)[_\s-]?can|canister|jar|round[_\s-]?container)/i.test(
+      roundContainerIntentText,
+    ) &&
+    !/(\u50a8\u7f50|\u538b\u529b\u7f50|\u538b\u529b\u5bb9\u5668|storage[_\s-]?tank|pressure[_\s-]?(tank|vessel)|reactor|agitator|stirred)/i.test(
+      text,
+    ) &&
+    !/(\u9f99\u95e8\u540a|\u5854\u540a|\u8d77\u91cd|\u540a\u8f66|\u884c\u8f66|gantry[_\s-]?crane|tower[_\s-]?crane|portal[_\s-]?crane|overhead[_\s-]?crane|crane|hoist)/i.test(
+      text,
+    )
+  if (roundContainerIntent) {
+    const hasRoundMainBody = artifact.shapes.some(
+      (shape) =>
+        /body|shell|vessel|container|bottle|flask|cup|(?:tin|soda|beverage)[_\s-]?can|canister|jar|main/i.test(
+          `${shape.semanticRole ?? ''} ${shape.sourcePartKind ?? ''} ${shape.name ?? ''}`,
+        ) && /^(cylinder|hollow-cylinder|capsule|lathe|sphere|ellipsoid|sweep)$/.test(shape.kind),
+    )
+    const hasBoxMainBody = artifact.shapes.some(
+      (shape) =>
+        shape.kind === 'box' &&
+        /generic_body|body|shell|container|bottle|flask|cup|(?:tin|soda|beverage)[_\s-]?can|canister|jar|main/i.test(
+          `${shape.semanticRole ?? ''} ${shape.sourcePartKind ?? ''} ${shape.name ?? ''}`,
+        ),
+    )
+    if (!hasRoundMainBody || hasBoxMainBody) {
+      issues.push(
+        'Stage3 round container main body must use round primitive geometry, not generic_body box.',
+      )
+      repairPlan = {
+        label: 'canonical round container primitive',
+        tool: 'compose_primitive',
+        args: {
+          name: 'round container',
+          geometryBrief:
+            'round container with cylindrical body, neck/rim, cap, and optional side handle',
+          shapes: [
+            {
+              kind: 'cylinder',
+              name: 'round cylindrical body',
+              semanticRole: 'bottle_body',
+              position: [0, 0.15, 0],
+              axis: 'y',
+              radius: 0.065,
+              height: 0.26,
+              material: {
+                properties: { color: '#c0c0c0', roughness: 0.32, metalness: 0.7 },
+              },
+            },
+            {
+              kind: 'cylinder',
+              name: 'narrow neck',
+              semanticRole: 'neck_rim',
+              position: [0, 0.292, 0],
+              axis: 'y',
+              radius: 0.032,
+              height: 0.024,
+              material: {
+                properties: { color: '#d4d4d4', roughness: 0.28, metalness: 0.75 },
+              },
+            },
+            {
+              kind: 'cylinder',
+              name: 'top cap',
+              semanticRole: 'bottle_cap',
+              position: [0, 0.325, 0],
+              axis: 'y',
+              radius: 0.04,
+              height: 0.035,
+              material: {
+                properties: { color: '#ef4444', roughness: 0.55, metalness: 0.05 },
+              },
+            },
+            {
+              kind: 'capsule',
+              name: 'side handle',
+              semanticRole: 'side_handle',
+              position: [0.085, 0.18, 0],
+              axis: 'y',
+              radius: 0.012,
+              height: 0.16,
+              material: {
+                properties: { color: '#111827', roughness: 0.6, metalness: 0.1 },
+              },
+            },
+          ],
+        },
+      }
+    }
   }
 
   const tankIntent =
@@ -940,6 +2737,11 @@ export function stage3QualityReview(
     }
   }
 
+  const beforeSpatialIssueCount = issues.length
+  addLiftingEquipmentSpatialIssues(artifact, text, issues)
+  addBoxEnclosureEquipmentIssues(artifact, text, issues)
+  if (issues.length > beforeSpatialIssueCount) requiresModelRepair = true
+
   if (artifact.shapes.length > 70) {
     warnings.push(`Stage3 high shape count (${artifact.shapes.length}); prefer reusable parts.`)
   }
@@ -950,6 +2752,7 @@ export function stage3QualityReview(
     issues,
     warnings,
     repairPlan,
+    requiresModelRepair,
   }
 }
 
@@ -961,7 +2764,7 @@ async function applyStage3QualityGate(input: {
   loadedDeviceProfiles: Awaited<ReturnType<typeof loadDeviceProfiles>>
   routeMetrics: PrimitiveRouteMetrics
   signal: AbortSignal
-}): Promise<{ artifact: GeneratedGeometryArtifact; content?: string }> {
+}): Promise<{ artifact?: GeneratedGeometryArtifact; content?: string; accepted: boolean }> {
   const review = stage3QualityReview(input.userPrompt, input.artifact)
   input.routeMetrics.stage3QualityScore = review.score
   input.routeMetrics.stage3Passed = review.passed
@@ -973,7 +2776,73 @@ async function applyStage3QualityGate(input: {
     data: { stage: 'stage3-quality', review },
   })
 
-  if (review.passed || !review.repairPlan) return { artifact: input.artifact }
+  const acceptWithPolish = async (
+    candidate: GeneratedGeometryArtifact,
+    content?: string,
+  ): Promise<{ artifact: GeneratedGeometryArtifact; content?: string; accepted: true }> => {
+    const polish = polishStage3SemanticArtifact(input.userPrompt, candidate)
+    if (!polish) return { artifact: candidate, content, accepted: true }
+
+    const polishedReview = stage3QualityReview(input.userPrompt, polish.artifact)
+    await appendRunEvent(input.runId, {
+      type: 'message',
+      message: polishedReview.passed
+        ? 'Stage3 semantic polish passed'
+        : 'Stage3 semantic polish skipped',
+      data: {
+        stage: 'stage3-quality',
+        repairLabel: polish.label,
+        review: polishedReview,
+        artifact: polish.artifact,
+      },
+    })
+    if (!polishedReview.passed) return { artifact: candidate, content, accepted: true }
+
+    input.routeMetrics.stage3QualityScore = polishedReview.score
+    input.routeMetrics.stage3Passed = polishedReview.passed
+    input.routeMetrics.stage3Issues = polishedReview.issues
+    input.routeMetrics.stage3Warnings = polishedReview.warnings
+    return { artifact: polish.artifact, content, accepted: true }
+  }
+
+  if (review.passed) return acceptWithPolish(input.artifact)
+
+  const semanticRepair = repairStage3SemanticArtifact(input.userPrompt, input.artifact)
+  if (semanticRepair) {
+    const repairedReview = stage3QualityReview(input.userPrompt, semanticRepair.artifact)
+    input.routeMetrics.stage3RepairApplied = true
+    input.routeMetrics.stage3QualityScore = repairedReview.score
+    input.routeMetrics.stage3Passed = repairedReview.passed
+    input.routeMetrics.stage3Issues = repairedReview.issues
+    input.routeMetrics.stage3Warnings = repairedReview.warnings
+    await appendRunEvent(input.runId, {
+      type: 'message',
+      message: repairedReview.passed
+        ? 'Stage3 semantic repair passed'
+        : 'Stage3 semantic repair still has issues',
+      data: {
+        stage: 'stage3-quality',
+        repairLabel: semanticRepair.label,
+        review: repairedReview,
+        artifact: semanticRepair.artifact,
+      },
+    })
+    if (repairedReview.passed) {
+      return acceptWithPolish(semanticRepair.artifact)
+    }
+  }
+
+  if (!review.repairPlan) {
+    const content = [
+      'Stage3 semantic quality gate failed. Nothing was accepted yet.',
+      ...review.issues.map((issue) => `- ${issue}`),
+      ...review.warnings.map((warning) => `- Warning: ${warning}`),
+      review.requiresModelRepair
+        ? 'Call one replacement geometry tool. Preserve all declared required semantic roles and repair the listed spatial relationships.'
+        : 'Call one replacement geometry tool that satisfies the quality gate.',
+    ].join('\n')
+    return { content, accepted: false }
+  }
 
   input.routeMetrics.stage3RepairApplied = true
   await appendRunEvent(input.runId, {
@@ -1005,7 +2874,8 @@ async function applyStage3QualityGate(input: {
       repairLabel: review.repairPlan.label,
     },
   })
-  if (!repaired.artifact) return { artifact: input.artifact, content: repaired.content }
+  if (!repaired.artifact)
+    return { artifact: input.artifact, content: repaired.content, accepted: true }
 
   const repairedReview = stage3QualityReview(input.userPrompt, repaired.artifact)
   input.routeMetrics.stage3QualityScore = repairedReview.score
@@ -1019,12 +2889,16 @@ async function applyStage3QualityGate(input: {
       : 'Stage3 deterministic repair still has issues',
     data: { stage: 'stage3-quality', review: repairedReview },
   })
-  return {
-    artifact: repaired.artifact,
-    content: [`Stage3 repaired geometry using ${review.repairPlan.label}.`, repaired.content].join(
-      '\n',
-    ),
+  const content = [`Stage3 repaired geometry using ${review.repairPlan.label}.`, repaired.content]
+  if (!repairedReview.passed) {
+    content.push(
+      'Stage3 deterministic repair still failed; call one replacement geometry tool.',
+      ...repairedReview.issues.map((issue) => `- ${issue}`),
+      ...repairedReview.warnings.map((warning) => `- Warning: ${warning}`),
+    )
+    return { content: content.join('\n'), accepted: false }
   }
+  return acceptWithPolish(repaired.artifact, content.join('\n'))
 }
 
 function shouldUseDeterministicProfileRoute(input: {
@@ -1035,7 +2909,56 @@ function shouldUseDeterministicProfileRoute(input: {
   if (!input.profile) return false
   if (input.revisionTarget) return false
   if (isLikelyGeometryRevisionRequest(input.userPrompt, input.revisionTarget)) return false
+  if (!isSafeDeterministicProfileMatch(input.profile, input.userPrompt)) return false
   return input.profile.status === 'stable'
+}
+
+function normalizeProfileMatchText(value: unknown): string {
+  return typeof value === 'string'
+    ? value
+        .toLowerCase()
+        .replace(/[_-]+/g, ' ')
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    : ''
+}
+
+function profileMatchLabels(profile: DeviceProfileDefinition): string[] {
+  const labels = [profile.id, profile.name, ...profile.aliases]
+    .map(normalizeProfileMatchText)
+    .filter(Boolean)
+  return Array.from(new Set(labels))
+}
+
+function deniedProfileTargetSpans(userPrompt: string): string[] {
+  const spans: string[] = []
+  for (const pattern of NEGATED_TARGET_CLAUSE_PATTERNS) {
+    for (const match of userPrompt.matchAll(pattern)) {
+      const span = normalizeProfileMatchText(match[1])
+      if (span) spans.push(span)
+    }
+  }
+  return spans
+}
+
+export function isSafeDeterministicProfileMatch(
+  profile: DeviceProfileDefinition,
+  userPrompt: string,
+): boolean {
+  const prompt = normalizeProfileMatchText(userPrompt)
+  if (!prompt) return false
+  const labels = profileMatchLabels(profile)
+  const deniedSpans = deniedProfileTargetSpans(userPrompt)
+  if (labels.some((label) => deniedSpans.some((span) => span.includes(label)))) return false
+
+  const id = normalizeProfileMatchText(profile.id)
+  const name = normalizeProfileMatchText(profile.name)
+  return labels.some((label) => {
+    if (!prompt.includes(label)) return false
+    const tokenCount = label.split(/\s+/).filter(Boolean).length
+    return label === id || label === name || tokenCount >= 2
+  })
 }
 
 function buildProfileRouteArgs(
@@ -1192,7 +3115,10 @@ async function runPrimitiveRun(runId: string) {
             userRequest: userPrompt,
             contextDecision,
           })
-        : (stringFromContext(context, 'harnessContext') ?? run.prompt)
+        : ensurePromptInPrimitiveContext(
+            userPrompt,
+            stringFromContext(context, 'harnessContext') ?? run.prompt,
+          )
     const analysisContext =
       latestArtifactCandidate || recentMessages.length
         ? buildGeometryAnalysisContext({
@@ -1201,7 +3127,10 @@ async function runPrimitiveRun(runId: string) {
             userRequest: userPrompt,
             contextDecision,
           })
-        : (stringFromContext(context, 'analysisContext') ?? harnessContext)
+        : ensurePromptInPrimitiveContext(
+            userPrompt,
+            stringFromContext(context, 'analysisContext') ?? harnessContext,
+          )
     const contextPackRef = industryPackRefFromContext(context)
     const extraPackDirs = uniqueDeviceProfilePackDirs([
       ...(contextPackRef ? [contextPackRef] : []),
@@ -1405,9 +3334,25 @@ async function runPrimitiveRun(runId: string) {
       { prompt: userPrompt, name: userPrompt, object: userPrompt },
       loadedDeviceProfiles.profiles,
     )
+    const safeSelectedProfile =
+      selectedProfile && isSafeDeterministicProfileMatch(selectedProfile, userPrompt)
+        ? selectedProfile
+        : undefined
+    if (selectedProfile && !safeSelectedProfile) {
+      await appendRunEvent(runId, {
+        type: 'message',
+        message: `Skipped low-confidence device profile "${selectedProfile.id}"; falling back to LLM analysis.`,
+        data: {
+          stage: 'profile-router',
+          selectedProfile: selectedProfile.id,
+          profileSource: selectedProfile.source,
+          reason: 'profile alias was absent, weak, or only appeared in a negated target span',
+        },
+      })
+    }
     if (
       shouldUseDeterministicProfileRoute({
-        profile: selectedProfile,
+        profile: safeSelectedProfile,
         userPrompt,
         revisionTarget,
       })
@@ -2090,8 +4035,18 @@ async function runPrimitiveRun(runId: string) {
               routeMetrics,
               signal,
             })
-            artifact = stage3.artifact
             if (stage3.content) results.push(stage3.content)
+            if (stage3.accepted) {
+              artifact = stage3.artifact
+            } else {
+              toolResultMessages.push({
+                role: 'tool',
+                tool_call_id: call.id,
+                content:
+                  stage3.content ??
+                  'Stage3 semantic quality gate failed. Call one replacement geometry tool.',
+              })
+            }
           }
         }
       }
@@ -2102,10 +4057,7 @@ async function runPrimitiveRun(runId: string) {
         data: { stage: 'generate', results, artifact },
       })
 
-      if (
-        artifact ||
-        toolResultMessages.some((message) => String(message.content).startsWith('Created '))
-      ) {
+      if (artifact) {
         break
       }
 

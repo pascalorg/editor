@@ -53,7 +53,9 @@ const getMaterialForOriginal = (
   if (original.name.toLowerCase() === 'glass') {
     return glassMaterial
   }
-  if (!textures) return createSurfaceRoleMaterial('furnishing', colorPreset)
+  if (!textures) {
+    return createSurfaceRoleMaterial('furnishing', colorPreset, undefined, undefined, shading)
+  }
   return createDefaultMaterial('#f2f0ed', 0.5, shading)
 }
 
@@ -205,6 +207,12 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
 
         if (overrideMaterial) {
           mesh.material = overrideMaterial
+          mesh.castShadow = true
+          mesh.receiveShadow = true
+          return
+        }
+
+        if (importedGlb) {
           mesh.castShadow = true
           mesh.receiveShadow = true
           return

@@ -2,6 +2,8 @@ export type AiHarnessRunMode = 'articraft' | 'image-to-3d' | 'primitive' | 'fact
 
 export type AiHarnessRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
 
+export type AiConversationPurpose = 'factory' | 'asset'
+
 export type AiHarnessRunImage = {
   name: string
   type: string
@@ -48,6 +50,7 @@ export type AiConversation = {
   id: string
   messages: unknown[]
   activeRunIds: string[]
+  conversationPurpose?: AiConversationPurpose
   title?: string
   createdAt?: string
   updatedAt: string
@@ -58,6 +61,7 @@ export type AiConversationSummary = {
   title: string
   messageCount: number
   activeRunCount: number
+  conversationPurpose?: AiConversationPurpose
   createdAt?: string
   updatedAt: string
 }

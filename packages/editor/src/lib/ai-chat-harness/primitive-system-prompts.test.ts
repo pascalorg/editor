@@ -28,4 +28,14 @@ describe('primitive system prompts', () => {
     expect(PRIMITIVE_STAGE1_ANALYST_PROMPT).toContain('sourcePartKind')
     expect(PRIMITIVE_STAGE1_ANALYST_PROMPT).toContain('pyramid -> cone')
   })
+
+  test('treats mixer shaft and blade prompts as component-level requests', () => {
+    expect(PRIMITIVE_STAGE1_ANALYST_PROMPT).toContain(
+      'If the prompt only names shaft/rod/axis plus impeller/blades/paddles',
+    )
+    expect(PRIMITIVE_STAGE1_ANALYST_PROMPT).toContain('do not match stirred_reactor profiles')
+    expect(PRIMITIVE_STAGE1_ANALYST_PROMPT).toContain(
+      'do not match stirred_reactor profiles or add vessel shells',
+    )
+  })
 })

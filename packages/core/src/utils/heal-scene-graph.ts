@@ -20,6 +20,8 @@ export interface HealSceneResult {
   droppedWallIds: string[]
   /** Count of non-string (e.g. null) entries removed from `children` arrays. */
   strippedChildRefs: number
+  /** Count of missing child parentId links restored from parent children arrays. */
+  restoredParentLinks: number
 }
 
 function isWallLike(node: unknown): node is { start: [number, number]; end: [number, number] } {
@@ -79,5 +81,22 @@ export function healSceneNodes(input: Record<string, unknown>): HealSceneResult 
     nodes[id] = node
   }
 
-  return { nodes, droppedWallIds, strippedChildRefs }
+  let restoredParentLinks = 0
+  for (const [parentId, parent] of Object.entries(nodes)) {
+    const children = (parent as { children?: unknown })?.children
+    if (!Array.isArray(children)) continue
+
+    for (const childId of children) {
+      const child = nodes[childId]
+      if (!child || typeof child !== 'object') continue
+
+      const childRecord = child as Record<string, unknown>
+      if (childRecord.parentId != null) continue
+
+      nodes[childId] = { ...childRecord, parentId }
+      restoredParentLinks += 1
+    }
+  }
+
+  return { nodes, droppedWallIds, strippedChildRefs, restoredParentLinks }
 }

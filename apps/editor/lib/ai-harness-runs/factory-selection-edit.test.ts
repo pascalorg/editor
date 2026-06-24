@@ -247,6 +247,95 @@ describe('factory selection edit composer', () => {
     ])
   })
 
+  test('regenerates a selected deterministic tower crane when changing mast levels', () => {
+    const result = composeSelectionEdit({
+      prompt:
+        '\u8fd9\u4e2a\u5854\u540a\uff0c\u4e0b\u65b9\u7684\u67b6\u5b50\u662f\u56db\u5c42\uff0c\u6539\u6210\u4e94\u5c42',
+      context: {
+        selection: {
+          selectedIds: ['tower_assembly'],
+          nodes: [
+            {
+              id: 'tower_assembly',
+              type: 'assembly',
+              name: 'hammerhead tower crane',
+              parentId: 'level_factory',
+              position: [2, 0, 3],
+              rotation: [0, 0.5, 0],
+              children: ['tower_column_1', 'main_jib_1', 'hook_1'],
+              metadata: {
+                sourceTool: 'compose_parts',
+                sourceArgs: { __precisionPartRoute: 'tower_crane' },
+              },
+            },
+            {
+              id: 'tower_column_1',
+              type: 'box',
+              name: 'lattice tower mast corner column',
+              parentId: 'tower_assembly',
+              metadata: {
+                semanticRole: 'tower_column',
+                sourcePartKind: 'structural_tower_frame',
+                sourcePartId: 'tower_mast',
+                generatedShape: {
+                  selector: {
+                    semanticRole: 'tower_column',
+                    sourcePartKind: 'structural_tower_frame',
+                    sourcePartId: 'tower_mast',
+                  },
+                },
+              },
+            },
+            {
+              id: 'main_jib_1',
+              type: 'box',
+              name: 'long main lifting jib',
+              parentId: 'tower_assembly',
+              metadata: {
+                semanticRole: 'main_jib',
+                generatedShape: { selector: { semanticRole: 'main_jib' } },
+              },
+            },
+            {
+              id: 'hook_1',
+              type: 'box',
+              name: 'hanging hook block',
+              parentId: 'tower_assembly',
+              metadata: {
+                semanticRole: 'hook_block',
+                generatedShape: { selector: { semanticRole: 'hook_block' } },
+              },
+            },
+          ],
+        },
+      },
+    })
+
+    const createPatches = result?.patches.filter((patch) => patch.op === 'create') ?? []
+    const deletePatches = result?.patches.filter((patch) => patch.op === 'delete') ?? []
+    const replacementRoot = createPatches.find((patch) => patch.node.type === 'assembly')
+
+    expect(result?.missingReason).toBeUndefined()
+    expect(deletePatches.map((patch) => patch.id)).toEqual(
+      expect.arrayContaining(['tower_assembly', 'tower_column_1', 'main_jib_1', 'hook_1']),
+    )
+    expect(replacementRoot).toMatchObject({
+      parentId: 'level_factory',
+      node: {
+        type: 'assembly',
+        name: 'hammerhead tower crane',
+        position: [2, 0, 3],
+        rotation: [0, 0.5, 0],
+        metadata: expect.objectContaining({
+          editKind: 'tower_crane_level_count',
+          levelCount: 5,
+        }),
+      },
+    })
+    expect(createPatches.length).toBeGreaterThan(64)
+    expect(result?.summary).toEqual(['hammerhead tower crane: tower mast levels -> 5'])
+  })
+
   test('moves the selected assembly root instead of every child', () => {
     const result = composeSelectionMoveEdit({
       prompt: 'move left 1m',

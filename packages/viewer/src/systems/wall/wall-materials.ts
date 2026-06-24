@@ -81,13 +81,25 @@ function getSurfaceVisibleMaterial(
   options: WallMaterialRenderOptions,
 ): Material {
   if (!options.textures) {
-    return createSurfaceRoleMaterial('wall', options.colorPreset, undefined, options.sceneTheme)
+    return createSurfaceRoleMaterial(
+      'wall',
+      options.colorPreset,
+      undefined,
+      options.sceneTheme,
+      options.shading,
+    )
   }
 
   if (spec.materialPreset) {
     return (
       createMaterialFromPresetRef(spec.materialPreset, options.shading) ??
-      createSurfaceRoleMaterial('wall', options.colorPreset, undefined, options.sceneTheme)
+      createSurfaceRoleMaterial(
+        'wall',
+        options.colorPreset,
+        undefined,
+        options.sceneTheme,
+        options.shading,
+      )
     )
   }
 
@@ -95,7 +107,13 @@ function getSurfaceVisibleMaterial(
     return createMaterial(spec.material, options.shading)
   }
 
-  return createSurfaceRoleMaterial('wall', options.colorPreset, undefined, options.sceneTheme)
+  return createSurfaceRoleMaterial(
+    'wall',
+    options.colorPreset,
+    undefined,
+    options.sceneTheme,
+    options.shading,
+  )
 }
 
 function hasExplicitMaterial(spec: WallSurfaceMaterialSpec): boolean {
@@ -241,6 +259,7 @@ export function getMaterialsForWall(
     options.colorPreset,
     undefined,
     options.sceneTheme,
+    options.shading,
   )
 
   const visible: WallMaterialArray = [

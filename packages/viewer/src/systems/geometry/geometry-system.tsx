@@ -301,7 +301,7 @@ export const GeometrySystem = () => {
         ) => { children: unknown[] }
       )(effectiveNode, ctx, shading, textures, colorPreset, sceneTheme) as unknown as Group
       if (!textures && defExtras.surfaceRole) {
-        applyDefaultSurfaceRole(built, defExtras.surfaceRole, colorPreset, sceneTheme)
+        applyDefaultSurfaceRole(built, defExtras.surfaceRole, colorPreset, sceneTheme, shading)
       }
       ensureObjectWebGPUCompatibleGeometry(built)
 
@@ -458,6 +458,8 @@ function applyDefaultSurfaceRole(
   colorPreset: ColorPreset,
 
   sceneTheme?: string,
+
+  shading: RenderShading = 'rendered',
 ) {
   root.traverse((child) => {
     const mesh = child as Partial<Mesh> & {
@@ -480,6 +482,8 @@ function applyDefaultSurfaceRole(
       getMaterialSide(mesh.material),
 
       sceneTheme,
+
+      shading,
     )
   })
 }

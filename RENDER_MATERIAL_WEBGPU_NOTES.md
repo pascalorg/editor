@@ -64,12 +64,19 @@
 关键文件：
 
 - `packages/viewer/src/components/viewer/post-processing.tsx`
+- `packages/viewer/src/lib/materials.ts`
+- `packages/viewer/src/systems/wall/wall-materials.ts`
 
 正确方向：
 
 - `SSGI_PARAMS.enabled` 应保持 `true`，与源仓库一致。
 - `shading === 'rendered'` 时允许 SSGI / post-processing 参与。
+- 不要默认强制 `forceWebGL`。`NEXT_PUBLIC_VIEWER_FORCE_WEBGL=1` 只能作为排查 / 避开特定机器 WebGPU device lost 的安全模式；它会跳过 WebGPU-only SSGI/postFX，导致 `rendered` 接近 `solid`。
 - 切换 render / edges / shadows / scene 时，应重新尝试 post-processing pipeline，不要永久卡在降级 direct path。
+- `createSurfaceRoleMaterial()` 也必须把 `shading` 纳入材质类型和缓存 key：
+  - `solid`：`MeshLambertNodeMaterial`
+  - `rendered`：`MeshStandardNodeMaterial`
+- 墙体这类没有显式材质/填充的默认 role surface，如果继续固定 Lambert，会导致 `solid` / `rendered` 看起来几乎一样，即使 SSGI 是开启的。
 
 ## 3. 墙面填充颜色一闪后丢失 / 画布颜色变深
 
@@ -169,6 +176,7 @@
 4. 不要生成 `group.count === 0` 的 geometry group 给 WebGPU。
 5. 墙、屋顶、楼梯、道路、品件等通用材质入口应尽量走 `createMaterialFromPresetRef()` / `createMaterial()`，不要各自复制半套材质逻辑。
 6. 任何 wall material rebuild 都必须传入当前 viewer render settings。
+7. 默认 role material（wall/floor/roof/joinery/glazing/furnishing）不能绕过 `shading`；否则没有显式材质的墙、屋顶、楼板会变成“假 rendered”。
 
 ## 验证命令
 

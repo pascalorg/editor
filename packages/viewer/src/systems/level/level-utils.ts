@@ -7,6 +7,21 @@ import {
 } from '@pascal-app/core'
 
 export const DEFAULT_LEVEL_HEIGHT = 2.5
+export const EXPLODED_LEVEL_GAP = 3
+
+export type LevelDisplayMode = 'stacked' | 'exploded' | 'solo' | 'manual'
+
+export type LevelLayoutInput = {
+  levelId: string
+  index: number
+}
+
+export type LevelLayoutEntry = LevelLayoutInput & {
+  baseY: number
+  height: number
+  targetY: number
+  visible: boolean
+}
 
 // Cache: levelId → computed height. Invalidated when the nodes reference changes.
 // Zustand produces a new `nodes` object on every mutation, so reference equality
@@ -47,6 +62,36 @@ export function getLevelHeight(
   const height = maxTop > 0 ? maxTop : DEFAULT_LEVEL_HEIGHT
   heightCache.set(levelId, height)
   return height
+}
+
+export function getLevelLayoutEntries(input: {
+  entries: LevelLayoutInput[]
+  nodes: ReturnType<typeof useScene.getState>['nodes']
+  levelMode: LevelDisplayMode
+  selectedLevelId?: string | null
+}): LevelLayoutEntry[] {
+  const sorted = [...input.entries].sort((a, b) => a.index - b.index)
+  const selectedLevelId = input.selectedLevelId ?? null
+  let cumulativeY = 0
+
+  return sorted.map((entry) => {
+    const height = getLevelHeight(entry.levelId, input.nodes)
+    const baseY = cumulativeY
+    const isSolo = input.levelMode === 'solo'
+    const selected = entry.levelId === selectedLevelId
+    const visible = !isSolo || selected || !selectedLevelId
+    const targetY = isSolo && selectedLevelId ? (selected ? 0 : baseY) : baseY
+    const explodedExtra = input.levelMode === 'exploded' ? entry.index * EXPLODED_LEVEL_GAP : 0
+    cumulativeY += height
+
+    return {
+      ...entry,
+      baseY,
+      height,
+      targetY: targetY + (isSolo ? 0 : explodedExtra),
+      visible,
+    }
+  })
 }
 
 /**

@@ -417,10 +417,6 @@ const EDITOR_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   },
   { action: '旋转', keys: [{ value: 'Right click' }] },
   { action: '缩放', keys: [{ value: 'Scroll' }] },
-  {
-    action: '选中移动',
-    keys: [{ value: 'ArrowKeys' }],
-  },
 ]
 
 const PREVIEW_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
@@ -450,10 +446,6 @@ const CAMERA_SHORTCUT_KEY_META: Record<string, { icon?: string; label: string; t
     icon: 'lucide:space',
     label: '空格键',
     text: '空格',
-  },
-  ArrowKeys: {
-    icon: 'icon-park-outline:arrow-keys',
-    label: '方向键',
   },
 }
 

@@ -622,8 +622,8 @@ const useScene: UseSceneStore = create<SceneState>()(
         // Define all nodes flat
         const nodes: Record<AnyNodeId, AnyNode> = {
           [site.id]: site,
-          [building.id]: building,
-          [level0.id]: level0,
+          [building.id]: { ...building, parentId: site.id },
+          [level0.id]: { ...level0, parentId: building.id },
         }
 
         // Site is the root

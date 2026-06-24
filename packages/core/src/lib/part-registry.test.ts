@@ -681,6 +681,22 @@ describe('part registry', () => {
         expect.objectContaining({ kind: 'outlet_port', radius: 0.08 }),
       ]),
     )
+    expect(
+      normalizeReactorPartPlan({
+        name: 'stirred reactor',
+        parts: [{ id: 'impeller', kind: 'mixer_blades', count: 3 }],
+      }),
+    ).toMatchObject({
+      warnings: [],
+      parts: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'impeller',
+          kind: 'mixer_blades',
+          semanticRole: 'reactor_impeller',
+          count: 3,
+        }),
+      ]),
+    })
     expect(compressor.parts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'skid_base', semanticRole: 'machine_base' }),

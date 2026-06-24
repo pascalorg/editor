@@ -10,6 +10,8 @@ import { PanelSectionExpansionContext } from '../controls/panel-section'
 
 const INSPECTOR_SECTIONS_PINNED_KEY = 'pascal:inspector-sections-pinned'
 
+type InspectorTab = 'basic' | 'dynamic'
+
 interface PanelWrapperProps {
   title: string
   /** Either a URL path (legacy panels pass `/icons/floor.webp` etc.,
@@ -37,6 +39,7 @@ export function PanelWrapper({
 }: PanelWrapperProps) {
   const isMobile = useIsMobile()
   const [inspectorSectionsPinned, setInspectorSectionsPinned] = useState(false)
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('basic')
   const resetKey = useViewer(
     (s) =>
       (s.selection.selectedIds[0] ??
@@ -49,6 +52,10 @@ export function PanelWrapper({
   useEffect(() => {
     setInspectorSectionsPinned(localStorage.getItem(INSPECTOR_SECTIONS_PINNED_KEY) === 'true')
   }, [])
+
+  useEffect(() => {
+    setInspectorTab('basic')
+  }, [resetKey])
 
   const toggleInspectorSectionsPinned = () => {
     setInspectorSectionsPinned((current) => {
@@ -150,6 +157,36 @@ export function PanelWrapper({
           </div>
         </div>
       )}
+
+      <div className="bg-sidebar/70">
+        <div className="grid w-full grid-cols-2 bg-[#1F1F21]">
+          {[
+            { key: 'basic' as const, label: '基础' },
+            { key: 'dynamic' as const, label: '动态' },
+          ].map((tab) => {
+            const active = inspectorTab === tab.key
+            return (
+              <button
+                aria-pressed={active}
+                className={cn(
+                  'relative flex h-[26px] w-full items-center justify-center font-medium text-[11px] transition-all',
+                  active
+                    ? 'bg-[#3A3358] text-[#E8DEFF]'
+                    : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                )}
+                key={tab.key}
+                onClick={() => setInspectorTab(tab.key)}
+                type="button"
+              >
+                {tab.key === 'dynamic' ? (
+                  <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-[#a684ff] shadow-[0_0_8px_rgba(166,132,255,0.9)]" />
+                ) : null}
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
       {/* Content */}
       <PanelSectionExpansionContext.Provider

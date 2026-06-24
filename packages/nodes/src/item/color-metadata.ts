@@ -55,9 +55,12 @@ export const isImportedGlbAsset = (node: Pick<ItemNode, 'asset'>): boolean => {
   return (
     (tags.includes('imported') && tags.includes('glb')) ||
     (tags.includes('generated') && tags.includes('image-to-3d')) ||
+    (tags.includes('generated') && tags.includes('articraft')) ||
     node.asset.id.startsWith('imported-glb-') ||
     node.asset.id.startsWith('image-to-3d-') ||
+    node.asset.id.startsWith('articraft-') ||
     src.includes('/items/imported-glb-') ||
-    src.includes('/items/image-to-3d-')
+    src.includes('/items/image-to-3d-') ||
+    src.includes('/items/articraft-')
   )
 }

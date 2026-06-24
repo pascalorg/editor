@@ -1,21 +1,25 @@
 import { type ChildProcess, spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
-import type { ArticraftModelData, GenerateOptions } from './types'
+import type { ArticraftLink, ArticraftModelData, ArticraftVisual, GenerateOptions } from './types'
 
 const _dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const DEFAULT_REPO_ROOT = path.resolve(_dirname, '..', '..', '..', 'articraft')
 const BRIDGE_SCRIPT_RELATIVE_PATH = path.join('python', 'bridge.py')
+const MODERN_CLI_RELATIVE_PATH = path.join('cli', 'main.py')
 
 function bridgeScriptPath(repoRoot: string): string {
   return path.join(repoRoot, BRIDGE_SCRIPT_RELATIVE_PATH)
 }
 
 function isArticraftRepoRoot(repoRoot: string): boolean {
-  return existsSync(bridgeScriptPath(repoRoot))
+  return (
+    existsSync(bridgeScriptPath(repoRoot)) ||
+    existsSync(path.join(repoRoot, MODERN_CLI_RELATIVE_PATH))
+  )
 }
 
 function candidateRepoRoots(startDir: string): string[] {
@@ -37,7 +41,7 @@ export function resolveRepoRoot(repoRoot?: string): string {
     const resolved = path.resolve(configuredRoot)
     if (isArticraftRepoRoot(resolved)) return resolved
     throw new Error(
-      `Articraft repo root is invalid: ${resolved}. Expected ${BRIDGE_SCRIPT_RELATIVE_PATH}.`,
+      `Articraft repo root is invalid: ${resolved}. Expected ${BRIDGE_SCRIPT_RELATIVE_PATH} or ${MODERN_CLI_RELATIVE_PATH}.`,
     )
   }
 
@@ -46,8 +50,12 @@ export function resolveRepoRoot(repoRoot?: string): string {
   }
 
   throw new Error(
-    `Articraft repo root not found. Set ARTICRAFT_REPO_ROOT to a checkout containing ${BRIDGE_SCRIPT_RELATIVE_PATH}.`,
+    `Articraft repo root not found. Set ARTICRAFT_REPO_ROOT to a checkout containing ${BRIDGE_SCRIPT_RELATIVE_PATH} or ${MODERN_CLI_RELATIVE_PATH}.`,
   )
+}
+
+function hasLegacyBridge(repoRoot: string): boolean {
+  return existsSync(bridgeScriptPath(repoRoot))
 }
 
 function parseBridgeLine(line: string) {
@@ -71,6 +79,9 @@ function parseBridgeLine(line: string) {
  */
 export function generateModel(options: GenerateOptions): Promise<ArticraftModelData> {
   const repoRoot = resolveRepoRoot(options.repoRoot)
+  if (!hasLegacyBridge(repoRoot)) {
+    return generateModelWithModernCli(repoRoot, options)
+  }
   const bridgeScript = bridgeScriptPath(repoRoot)
   const { signal, onProgress } = options
 
@@ -85,6 +96,9 @@ export function generateModel(options: GenerateOptions): Promise<ArticraftModelD
     if (!env.ARTICRAFT_REPO_ROOT) {
       env.ARTICRAFT_REPO_ROOT = repoRoot
     }
+    env.ARTICRAFT_MODEL ||= env.AI_MODEL || env.NEXT_PUBLIC_AI_MODEL || ''
+    env.DEEPSEEK_API_KEY ||= env.AI_API_KEY || env.NEXT_PUBLIC_AI_API_KEY || ''
+    env.DEEPSEEK_BASE_URL ||= env.AI_BASE_URL || env.NEXT_PUBLIC_AI_BASE_URL || ''
     env.PYTHONUTF8 ??= '1'
     env.PYTHONIOENCODING ??= 'utf-8'
 
@@ -162,6 +176,425 @@ export function generateModel(options: GenerateOptions): Promise<ArticraftModelD
       }
     })
   })
+}
+
+function spawnAndCollect(
+  command: string,
+  args: string[],
+  options: {
+    cwd: string
+    env: NodeJS.ProcessEnv
+    signal?: AbortSignal
+    onProgress?: (message: string) => void
+  },
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    let proc: ChildProcess
+    try {
+      proc = spawn(command, args, {
+        cwd: options.cwd,
+        env: options.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      })
+    } catch (err) {
+      reject(
+        new Error(
+          `Failed to spawn ${command}: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      )
+      return
+    }
+
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+    const onChunk = (chunk: Buffer, stream: 'stdout' | 'stderr') => {
+      const text = chunk.toString()
+      if (stream === 'stdout') stdout += text
+      else stderr += text
+      for (const line of text.split(/\r?\n/)) {
+        const message = line.trim()
+        if (message) options.onProgress?.(message)
+      }
+    }
+
+    proc.stdout?.on('data', (chunk: Buffer) => onChunk(chunk, 'stdout'))
+    proc.stderr?.on('data', (chunk: Buffer) => onChunk(chunk, 'stderr'))
+
+    proc.on('close', (code) => {
+      if (settled) return
+      settled = true
+      if (code === 0) resolve({ stdout, stderr })
+      else reject(new Error(`${command} exited with code ${code}${stderr ? `: ${stderr}` : ''}`))
+    })
+    proc.on('error', (err) => {
+      if (settled) return
+      settled = true
+      reject(new Error(`${command} process error: ${err.message}`))
+    })
+    options.signal?.addEventListener('abort', () => {
+      if (settled) return
+      settled = true
+      proc.kill('SIGTERM')
+      reject(new DOMException('Generation cancelled', 'AbortError'))
+    })
+  })
+}
+
+function listRecordIds(repoRoot: string): Set<string> {
+  const recordsRoot = path.join(repoRoot, 'data', 'records')
+  try {
+    return new Set(
+      readdirSync(recordsRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name),
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+function extractRecordId(output: string): string | null {
+  const patterns = [
+    /\brecord_id=([A-Za-z0-9_.-]+)/,
+    /\brecord_id["':\s]+([A-Za-z0-9_.-]+)/,
+    /(?:data[\\/]+records[\\/]+)([A-Za-z0-9_.-]+)/,
+  ]
+  for (const pattern of patterns) {
+    const match = pattern.exec(output)
+    if (match?.[1]) return match[1]
+  }
+  return null
+}
+
+function newestCreatedRecordId(
+  repoRoot: string,
+  before: Set<string>,
+  startedAtMs: number,
+): string | null {
+  const recordsRoot = path.join(repoRoot, 'data', 'records')
+  try {
+    const candidates = readdirSync(recordsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !before.has(entry.name))
+      .map((entry) => {
+        const recordPath = path.join(recordsRoot, entry.name)
+        return { id: entry.name, mtimeMs: statSync(recordPath).mtimeMs }
+      })
+      .filter((entry) => entry.mtimeMs >= startedAtMs - 5000)
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)
+    return candidates[0]?.id ?? null
+  } catch {
+    return null
+  }
+}
+
+function jsonFile(pathname: string): unknown {
+  return JSON.parse(readFileSync(pathname, 'utf8'))
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function xmlDecode(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+}
+
+function attr(xml: string, name: string): string | undefined {
+  const match = new RegExp(`${name}\\s*=\\s*["']([^"']*)["']`).exec(xml)
+  return match?.[1] ? xmlDecode(match[1]) : undefined
+}
+
+function numbers(value: string | undefined, fallback: number[]): number[] {
+  if (!value) return fallback
+  const parsed = value
+    .trim()
+    .split(/\s+/)
+    .map((part) => Number(part))
+  return parsed.length
+    ? parsed.map((part, index) => (Number.isFinite(part) ? part : (fallback[index] ?? 0)))
+    : fallback
+}
+
+function vec3(value: string | undefined): [number, number, number] {
+  const parsed = numbers(value, [0, 0, 0])
+  return [parsed[0] ?? 0, parsed[1] ?? 0, parsed[2] ?? 0]
+}
+
+function origin(xml: string) {
+  const match = /<origin\b[^>]*\/?>/s.exec(xml)
+  const tag = match?.[0] ?? ''
+  return { xyz: vec3(attr(tag, 'xyz')), rpy: vec3(attr(tag, 'rpy')) }
+}
+
+function tagBlocks(xml: string, tag: string): string[] {
+  return [...xml.matchAll(new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>`, 'g'))].map(
+    (match) => match[0],
+  )
+}
+
+function parseUrdf(urdfPath: string): Pick<ArticraftModelData, 'links' | 'joints' | 'name'> {
+  const xml = readFileSync(urdfPath, 'utf8')
+  const robotTag = /<robot\b[^>]*>/s.exec(xml)?.[0] ?? ''
+  const links: ArticraftLink[] = tagBlocks(xml, 'link').map((linkXml) => {
+    const linkTag = /<link\b[^>]*>/s.exec(linkXml)?.[0] ?? ''
+    const name = attr(linkTag, 'name') ?? 'link'
+    return {
+      name,
+      visuals: tagBlocks(linkXml, 'visual').map((visualXml, index): ArticraftVisual => {
+        const geometryXml = tagBlocks(visualXml, 'geometry')[0] ?? ''
+        const boxTag = /<box\b[^>]*\/?>/s.exec(geometryXml)?.[0]
+        const cylinderTag = /<cylinder\b[^>]*\/?>/s.exec(geometryXml)?.[0]
+        const sphereTag = /<sphere\b[^>]*\/?>/s.exec(geometryXml)?.[0]
+        const meshTag = /<mesh\b[^>]*\/?>/s.exec(geometryXml)?.[0]
+        const materialTag = /<material\b[^>]*>/s.exec(visualXml)?.[0]
+        const colorTag = /<color\b[^>]*\/?>/s.exec(visualXml)?.[0]
+        const visualTag = /<visual\b[^>]*>/s.exec(visualXml)?.[0] ?? ''
+        const parsedOrigin = origin(visualXml)
+        if (boxTag) {
+          const size = numbers(attr(boxTag, 'size'), [1, 1, 1])
+          return {
+            name: attr(visualTag, 'name') ?? `${name}_visual_${index}`,
+            origin: parsedOrigin,
+            geometry: {
+              type: 'box' as const,
+              params: { length: size[0] ?? 1, width: size[1] ?? 1, height: size[2] ?? 1 },
+            },
+            material: materialTag
+              ? {
+                  name: attr(materialTag, 'name') ?? 'material',
+                  rgba: vec4(attr(colorTag ?? '', 'rgba')),
+                }
+              : undefined,
+          }
+        }
+        if (cylinderTag) {
+          return {
+            name: attr(visualTag, 'name') ?? `${name}_visual_${index}`,
+            origin: parsedOrigin,
+            geometry: {
+              type: 'cylinder' as const,
+              params: {
+                radius: Number(attr(cylinderTag, 'radius') ?? 0.5),
+                length: Number(attr(cylinderTag, 'length') ?? 1),
+              },
+            },
+            material: materialTag
+              ? {
+                  name: attr(materialTag, 'name') ?? 'material',
+                  rgba: vec4(attr(colorTag ?? '', 'rgba')),
+                }
+              : undefined,
+          }
+        }
+        if (sphereTag) {
+          return {
+            name: attr(visualTag, 'name') ?? `${name}_visual_${index}`,
+            origin: parsedOrigin,
+            geometry: {
+              type: 'sphere' as const,
+              params: { radius: Number(attr(sphereTag, 'radius') ?? 0.5) },
+            },
+            material: materialTag
+              ? {
+                  name: attr(materialTag, 'name') ?? 'material',
+                  rgba: vec4(attr(colorTag ?? '', 'rgba')),
+                }
+              : undefined,
+          }
+        }
+        return {
+          name: attr(visualTag, 'name') ?? `${name}_visual_${index}`,
+          origin: parsedOrigin,
+          geometry: {
+            type: 'mesh' as const,
+            params: {},
+            meshPath: attr(meshTag ?? '', 'filename'),
+          },
+          material: materialTag
+            ? {
+                name: attr(materialTag, 'name') ?? 'material',
+                rgba: vec4(attr(colorTag ?? '', 'rgba')),
+              }
+            : undefined,
+        }
+      }),
+    }
+  })
+  const joints = tagBlocks(xml, 'joint').map((jointXml) => {
+    const jointTag = /<joint\b[^>]*>/s.exec(jointXml)?.[0] ?? ''
+    const limitTag = /<limit\b[^>]*\/?>/s.exec(jointXml)?.[0]
+    const mimicTag = /<mimic\b[^>]*\/?>/s.exec(jointXml)?.[0]
+    return {
+      name: attr(jointTag, 'name') ?? 'joint',
+      type: (attr(jointTag, 'type') ?? 'fixed') as ArticraftModelData['joints'][number]['type'],
+      parent: attr(/<parent\b[^>]*\/?>/s.exec(jointXml)?.[0] ?? '', 'link') ?? '',
+      child: attr(/<child\b[^>]*\/?>/s.exec(jointXml)?.[0] ?? '', 'link') ?? '',
+      origin: origin(jointXml),
+      axis: vec3(attr(/<axis\b[^>]*\/?>/s.exec(jointXml)?.[0] ?? '', 'xyz') ?? '1 0 0'),
+      limits: limitTag
+        ? {
+            effort: Number(attr(limitTag, 'effort') ?? 0),
+            velocity: Number(attr(limitTag, 'velocity') ?? 0),
+            lower:
+              attr(limitTag, 'lower') === undefined ? undefined : Number(attr(limitTag, 'lower')),
+            upper:
+              attr(limitTag, 'upper') === undefined ? undefined : Number(attr(limitTag, 'upper')),
+          }
+        : undefined,
+      mimic: mimicTag
+        ? {
+            joint: attr(mimicTag, 'joint') ?? '',
+            multiplier: Number(attr(mimicTag, 'multiplier') ?? 1),
+            offset: Number(attr(mimicTag, 'offset') ?? 0),
+          }
+        : undefined,
+    }
+  })
+  return { name: attr(robotTag, 'name') ?? 'Articraft model', links, joints }
+}
+
+function vec4(value: string | undefined): [number, number, number, number] {
+  const parsed = numbers(value, [1, 1, 1, 1])
+  return [parsed[0] ?? 1, parsed[1] ?? 1, parsed[2] ?? 1, parsed[3] ?? 1]
+}
+
+function buildModelDataFromRecord(repoRoot: string, recordId: string): ArticraftModelData {
+  const recordPath = path.join(repoRoot, 'data', 'records', recordId)
+  const record = asRecord(jsonFile(path.join(recordPath, 'record.json')))
+  const revisionId = String(record.active_revision_id || 'rev_000001')
+  const modelPyPath = path.join(recordPath, 'revisions', revisionId, 'model.py')
+  const materializationPath = path.join(
+    repoRoot,
+    'data',
+    'cache',
+    'record_materialization',
+    recordId,
+  )
+  const urdfPath = path.join(materializationPath, 'model.urdf')
+  const compileReportPath = path.join(materializationPath, 'compile_report.json')
+  const parsed = parseUrdf(urdfPath)
+  const display = asRecord(record.display)
+  const compileReport = existsSync(compileReportPath) ? asRecord(jsonFile(compileReportPath)) : {}
+  const warnings = Array.isArray(compileReport.warnings)
+    ? compileReport.warnings.map((warning) => {
+        if (typeof warning === 'string') return warning
+        const record = asRecord(warning)
+        return String(record.message ?? JSON.stringify(warning))
+      })
+    : []
+  const meshesDir = path.join(materializationPath, 'assets', 'meshes')
+  const meshes = existsSync(meshesDir)
+    ? readdirSync(meshesDir, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.obj'))
+        .map((entry) => ({
+          name: path.basename(entry.name, path.extname(entry.name)),
+          objPath: path.join(
+            'data',
+            'cache',
+            'record_materialization',
+            recordId,
+            'assets',
+            'meshes',
+            entry.name,
+          ),
+        }))
+    : []
+  return {
+    recordId,
+    name: String(display.title ?? parsed.name ?? recordId),
+    links: parsed.links,
+    joints: parsed.joints,
+    meshes,
+    modelPyPath,
+    recordPath,
+    warnings,
+  }
+}
+
+async function generateModelWithModernCli(
+  repoRoot: string,
+  options: GenerateOptions,
+): Promise<ArticraftModelData> {
+  const env = { ...process.env }
+  env.ARTICRAFT_REPO_ROOT ??= repoRoot
+  env.ARTICRAFT_MODEL ||= env.AI_MODEL || env.NEXT_PUBLIC_AI_MODEL || ''
+  env.DEEPSEEK_API_KEY ||= env.AI_API_KEY || env.NEXT_PUBLIC_AI_API_KEY || ''
+  env.DEEPSEEK_BASE_URL ||= env.AI_BASE_URL || env.NEXT_PUBLIC_AI_BASE_URL || ''
+  env.PYTHONUTF8 ??= '1'
+  env.PYTHONIOENCODING ??= 'utf-8'
+
+  const before = listRecordIds(repoRoot)
+  const startedAtMs = Date.now()
+  const args = [
+    'run',
+    '--directory',
+    repoRoot,
+    'articraft',
+    'generate',
+    '--repo-root',
+    repoRoot,
+    options.prompt,
+  ]
+  if (options.model) args.push('--model', options.model)
+  if (options.provider) args.push('--provider', options.provider)
+  if (options.imagePath) args.push('--image', options.imagePath)
+
+  const output = await spawnAndCollect('uv', args, {
+    cwd: repoRoot,
+    env,
+    signal: options.signal,
+    onProgress: options.onProgress,
+  })
+  const combinedOutput = `${output.stdout}\n${output.stderr}`
+  const recordId =
+    extractRecordId(combinedOutput) ?? newestCreatedRecordId(repoRoot, before, startedAtMs)
+  if (!recordId) {
+    throw new Error(
+      `Articraft generation completed but no record id was found.\n\nOutput:\n${combinedOutput}`,
+    )
+  }
+
+  const urdfPath = path.join(
+    repoRoot,
+    'data',
+    'cache',
+    'record_materialization',
+    recordId,
+    'model.urdf',
+  )
+  if (!existsSync(urdfPath)) {
+    await spawnAndCollect(
+      'uv',
+      [
+        'run',
+        '--directory',
+        repoRoot,
+        'articraft',
+        'compile',
+        '--repo-root',
+        repoRoot,
+        recordId,
+        '--target',
+        'full',
+      ],
+      {
+        cwd: repoRoot,
+        env,
+        signal: options.signal,
+        onProgress: options.onProgress,
+      },
+    )
+  }
+  return buildModelDataFromRecord(repoRoot, recordId)
 }
 
 /**

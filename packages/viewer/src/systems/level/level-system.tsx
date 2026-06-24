@@ -1,12 +1,16 @@
 import { type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
+import { useEffect } from 'react'
 import { lerp } from 'three/src/math/MathUtils.js'
 import useViewer from '../../store/use-viewer'
-import { getLevelHeight } from './level-utils'
-
-const EXPLODED_GAP = 5
+import { applySoloLevelVisibility, clearSoloLevelVisibility } from './level-solo-visibility'
+import { getLevelLayoutEntries } from './level-utils'
 
 export const LevelSystem = () => {
+  const invalidate = useThree((state) => state.invalidate)
+
+  useEffect(() => clearSoloLevelVisibility, [])
+
   useFrame((_, delta) => {
     const nodes = useScene.getState().nodes
     const levelMode = useViewer.getState().levelMode
@@ -29,19 +33,34 @@ export const LevelSystem = () => {
     })
     entries.sort((a, b) => a.index - b.index)
 
-    // Walk sorted levels, accumulating base Y offsets
-    let cumulativeY = 0
-    for (const { levelId, index, obj } of entries) {
-      const level = nodes[levelId as LevelNode['id']]
-      const baseY = cumulativeY
-      const explodedExtra = levelMode === 'exploded' ? index * EXPLODED_GAP : 0
-      const targetY = baseY + explodedExtra
+    const layoutEntries = getLevelLayoutEntries({
+      entries,
+      nodes,
+      levelMode,
+      selectedLevelId: selectedLevel,
+    })
+    const layoutById = new Map(layoutEntries.map((entry) => [entry.levelId, entry]))
 
-      obj.position.y = lerp(obj.position.y, targetY, delta * 12) // Smoothly animate to new Y position
-      obj.visible = levelMode !== 'solo' || level?.id === selectedLevel || !selectedLevel
-
-      cumulativeY += getLevelHeight(levelId, nodes)
+    if (levelMode === 'solo') {
+      applySoloLevelVisibility(selectedLevel)
+    } else {
+      clearSoloLevelVisibility()
     }
+
+    let shouldContinueAnimation = false
+
+    for (const { levelId, obj } of entries) {
+      const layout = layoutById.get(levelId)
+      if (!layout) continue
+
+      const nextY =
+        levelMode === 'solo' ? layout.targetY : lerp(obj.position.y, layout.targetY, delta * 12)
+      obj.position.y = Math.abs(nextY - layout.targetY) < 0.001 ? layout.targetY : nextY
+      shouldContinueAnimation ||= Math.abs(obj.position.y - layout.targetY) > 0.001
+      obj.visible = true
+    }
+
+    if (shouldContinueAnimation) invalidate()
   }, 5) // Using a lower priority so it runs after transforms from other systems have settled
   return null
 }

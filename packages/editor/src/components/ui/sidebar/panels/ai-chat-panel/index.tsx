@@ -4,8 +4,12 @@ import {
   type AnyNode,
   type AssetInput,
   type AnyNodeId,
+  type BuildingNode,
   emitter,
   ItemNode,
+  pauseSpaceDetection,
+  resumeSpaceDetection,
+  type LevelNode,
   type Vec3,
   useScene,
 } from '@pascal-app/core'
@@ -1488,6 +1492,60 @@ function buildFactorySceneContext() {
   }
 }
 
+function resolveBuildingIdForLevel(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string | null | undefined,
+  preferredBuildingId?: string | null,
+) {
+  if (
+    preferredBuildingId &&
+    nodes[preferredBuildingId as AnyNodeId]?.type === 'building'
+  ) {
+    return preferredBuildingId
+  }
+  if (!levelId) return null
+
+  const level = nodes[levelId as AnyNodeId]
+  const parentId = typeof level?.parentId === 'string' ? level.parentId : null
+  if (parentId && nodes[parentId as AnyNodeId]?.type === 'building') {
+    return parentId
+  }
+
+  const owner = Object.values(nodes).find(
+    (node): node is BuildingNode =>
+      node?.type === 'building' &&
+      Array.isArray(node.children) &&
+      node.children.includes(levelId as LevelNode['id']),
+  )
+  return owner?.id ?? null
+}
+
+function buildFactoryPlacementContextSnapshot() {
+  const scene = useScene.getState()
+  const selection = useViewer.getState().selection
+  let parentId = selection.levelId
+  let buildingId = resolveBuildingIdForLevel(scene.nodes, parentId, selection.buildingId)
+
+  if (!parentId) {
+    const fallbackBuilding =
+      (buildingId ? scene.nodes[buildingId as AnyNodeId] : undefined) ??
+      Object.values(scene.nodes).find((node): node is BuildingNode => node?.type === 'building')
+    if (fallbackBuilding?.type === 'building') {
+      buildingId = fallbackBuilding.id
+      const fallbackLevelId = fallbackBuilding.children.find(
+        (childId): childId is LevelNode['id'] =>
+          scene.nodes[childId as AnyNodeId]?.type === 'level',
+      )
+      parentId = fallbackLevelId ?? null
+    }
+  }
+
+  return {
+    ...(parentId ? { parentId } : {}),
+    ...(buildingId ? { buildingId } : {}),
+  }
+}
+
 function applyFactoryRunPatchesToCanvas(data: unknown): string[] {
   const result = isRecord(data) ? data : {}
   if (result.applied === true) return []
@@ -1516,18 +1574,41 @@ function applyFactoryRunPatchesToCanvas(data: unknown): string[] {
       existingNodeIds: Object.keys(scene.nodes),
       fallbackParentId: selectedLevelId,
     })
+  const createdLevelNodes = createOps
+    .map(({ node }) => node)
+    .filter((node): node is LevelNode => node.type === 'level')
+    .sort((a, b) => a.level - b.level)
 
-  if (createOps.length > 0) {
-    scene.createNodes(createOps)
-  }
-  if (updateOps.length > 0) {
-    scene.updateNodes(updateOps)
-  }
-  if (deleteIds.length > 0) {
-    scene.deleteNodes(deleteIds)
+  pauseSpaceDetection()
+  try {
+    if (createOps.length > 0) {
+      scene.createNodes(createOps)
+    }
+    if (updateOps.length > 0) {
+      scene.updateNodes(updateOps)
+    }
+    if (deleteIds.length > 0) {
+      scene.deleteNodes(deleteIds)
+    }
+  } finally {
+    resumeSpaceDetection()
   }
 
-  if (createdIds.length > 0) {
+  if (createdLevelNodes.length > 0) {
+    const topLevel = createdLevelNodes[createdLevelNodes.length - 1]!
+    const nodes = useScene.getState().nodes
+    const buildingId = resolveBuildingIdForLevel(
+      nodes,
+      topLevel.id,
+      typeof topLevel.parentId === 'string' ? topLevel.parentId : null,
+    )
+    const viewer = useViewer.getState()
+    viewer.setLevelMode('stacked')
+    viewer.setSelection({
+      ...(buildingId ? { buildingId: buildingId as BuildingNode['id'] } : {}),
+      levelId: topLevel.id,
+    })
+  } else if (createdIds.length > 0) {
     useViewer.getState().setSelection({ selectedIds: [createdIds[0]!] })
   } else if (deleteIds.length > 0) {
     const deleted = new Set(deleteIds.map(String))
@@ -2704,7 +2785,19 @@ type AiConversationSummary = {
   title: string
   messageCount: number
   activeRunCount: number
+  conversationPurpose?: AiConversationPurpose
   updatedAt: string
+}
+
+function isAiConversationPurpose(value: unknown): value is AiConversationPurpose {
+  return value === 'factory' || value === 'asset'
+}
+
+function inferConversationPurposeFromMessages(
+  messages: readonly ChatMessage[],
+): AiConversationPurpose | undefined {
+  if (messages.some((message) => message.generationRun?.mode === 'factory')) return 'factory'
+  return messages.length > 0 ? 'asset' : undefined
 }
 
 function buildArticraftResultFromJobData(prompt: string, resultData: Record<string, unknown>) {
@@ -2892,6 +2985,7 @@ export function AiChatPanel() {
 
   useEffect(() => {
     if (!panelHydrated) return
+    if (messages.length === 0) return
     const controller = new AbortController()
     const timeoutId = window.setTimeout(() => {
       void fetch(`/api/ai-harness/conversations/${encodeURIComponent(conversationId)}`, {
@@ -2899,6 +2993,7 @@ export function AiChatPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages,
+          conversationPurpose,
           activeRunIds: messages
             .map((message) => message.generationRun)
             .filter(
@@ -2915,7 +3010,7 @@ export function AiChatPanel() {
       controller.abort()
       window.clearTimeout(timeoutId)
     }
-  }, [conversationId, messages, panelHydrated])
+  }, [conversationId, conversationPurpose, messages, panelHydrated])
 
   useEffect(() => {
     aiChatPanelState.input = input
@@ -4287,12 +4382,25 @@ export function AiChatPanel() {
         const conversationMessages = Array.isArray(data.conversation?.messages)
           ? (data.conversation.messages as ChatMessage[])
           : []
+        const persistedPurpose = isAiConversationPurpose(data.conversation?.conversationPurpose)
+          ? data.conversation.conversationPurpose
+          : undefined
+        const inferredPurpose = inferConversationPurposeFromMessages(conversationMessages)
+        const activeRuns: unknown[] = Array.isArray(data.activeRuns) ? data.activeRuns : []
+        const activeRunPurpose = activeRuns.some(
+          (activeRun) => isRecord(activeRun) && activeRun.mode === 'factory',
+        )
+          ? 'factory'
+          : activeRuns.length > 0
+            ? 'asset'
+            : undefined
+        const nextPurpose = persistedPurpose ?? inferredPurpose ?? activeRunPurpose
+        if (nextPurpose) setConversationPurpose(nextPurpose)
         if (conversationMessages.length > 0) {
           setMessages((current) =>
             current.length >= conversationMessages.length ? current : conversationMessages,
           )
         }
-        const activeRuns = Array.isArray(data.activeRuns) ? data.activeRuns : []
         for (const activeRun of activeRuns) {
           if (!isRecord(activeRun) || typeof activeRun.id !== 'string') continue
           if (activeRun.mode === 'articraft' && typeof activeRun.prompt === 'string') {
@@ -4401,7 +4509,8 @@ export function AiChatPanel() {
   }, [])
 
   const switchConversation = useCallback(
-    (nextConversationId: string) => {
+    (conversation: AiConversationSummary) => {
+      const nextConversationId = conversation.id
       if (!nextConversationId || nextConversationId === conversationId) {
         setConversationHistoryOpen(false)
         return
@@ -4411,7 +4520,7 @@ export function AiChatPanel() {
       setMessages([])
       setInput('')
       setImageAttachment(undefined)
-      setConversationPurpose(undefined)
+      setConversationPurpose(conversation.conversationPurpose)
       latestGeometryArtifactRef.current = null
       setConversationHistoryOpen(false)
     },
@@ -5105,6 +5214,7 @@ export function AiChatPanel() {
     try {
       const selection = buildFactorySelectionSnapshot()
       const sceneContext = buildFactorySceneContext()
+      const placementContext = buildFactoryPlacementContextSnapshot()
       const res = await fetch('/api/ai-harness/runs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5114,6 +5224,7 @@ export function AiChatPanel() {
           prompt: text,
           context: {
             recentMessages: messages,
+            ...placementContext,
             ...(selection ? { selection } : {}),
             ...(sceneContext ? { scene: sceneContext } : {}),
           },
@@ -5314,7 +5425,7 @@ export function AiChatPanel() {
                     >
                       <button
                         className="flex min-w-0 flex-1 items-start gap-2 text-left"
-                        onClick={() => switchConversation(conversation.id)}
+                        onClick={() => switchConversation(conversation)}
                         type="button"
                       >
                         <Icon

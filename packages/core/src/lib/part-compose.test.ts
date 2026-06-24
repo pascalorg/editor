@@ -17,10 +17,10 @@ function expectBladeRotationMatchesRadialPlacement(shape: {
   const actualY = shape.rotation?.[1] ?? 0
   const actualZ = shape.rotation?.[2] ?? 0
   const wrappedDelta = Math.atan2(
-    Math.sin(actualZ + expectedAngle),
-    Math.cos(actualZ + expectedAngle),
+    Math.sin(actualY + expectedAngle),
+    Math.cos(actualY + expectedAngle),
   )
-  expect(actualY).toBeCloseTo(0, 4)
+  expect(actualZ).toBeCloseTo(0, 4)
   expect(wrappedDelta).toBeCloseTo(0, 4)
 }
 
@@ -530,6 +530,37 @@ describe('composePartPrimitives', () => {
     expect(blades.every((shape) => shape.kind === 'extrude')).toBe(true)
   })
 
+  test('applies LLM-safe params to explicit part dimensions and materials', () => {
+    const shapes = composePartPrimitives({
+      autoComplete: false,
+      enhanceVisualDetails: false,
+      parts: [
+        {
+          kind: 'generic_body',
+          semanticRole: 'test_body',
+          params: {
+            length: 0.13,
+            width: 0.14,
+            height: 0.26,
+            primaryColor: '#123456',
+            cornerRadius: 0.02,
+          },
+        },
+      ],
+    })
+
+    const body = shapes.find((shape) => shape.semanticRole === 'test_body')
+
+    expect(body).toMatchObject({
+      kind: 'box',
+      length: 0.13,
+      width: 0.14,
+      height: 0.26,
+      cornerRadius: 0.02,
+    })
+    expect(body?.material?.properties?.color).toBe('#123456')
+  })
+
   test('composes independent editable fan blade arrays', () => {
     const shapes = composePartPrimitives({
       name: 'Industrial pedestal fan',
@@ -1009,6 +1040,32 @@ describe('composePartPrimitives', () => {
     expect(shapes.some((shape) => shape.name?.includes('inlet port'))).toBe(true)
     expect(shapes.some((shape) => shape.name?.includes('outlet port'))).toBe(true)
     expect(shapes.some((shape) => shape.name?.includes('flange ring'))).toBe(true)
+  })
+
+  test('keeps pump ports attached when callers provide connectTo without positions', () => {
+    const shapes = composePartPrimitives({
+      name: 'Connected pump',
+      autoComplete: false,
+      parts: [
+        { id: 'casing', kind: 'volute_casing', position: [0.24, 0.42, 0.04], radius: 0.22 },
+        { id: 'suction', kind: 'inlet_port', connectTo: 'casing', radius: 0.07 },
+        { id: 'discharge', kind: 'outlet_port', connectTo: 'casing', radius: 0.06 },
+      ],
+    })
+
+    const inlet = shapes.find(
+      (shape) => shape.sourcePartId === 'suction' && shape.kind === 'hollow-cylinder',
+    )
+    const outlet = shapes.find(
+      (shape) => shape.sourcePartId === 'discharge' && shape.kind === 'hollow-cylinder',
+    )
+
+    expect(inlet?.position?.[0]).toBeCloseTo(0.24)
+    expect(inlet?.position?.[2]).toBeGreaterThan(0.2)
+    expect(inlet?.axis).toBe('z')
+    expect(outlet?.position?.[0]).toBeGreaterThan(0.4)
+    expect(outlet?.position?.[1]).toBeGreaterThan(0.5)
+    expect(outlet?.axis).toBe('x')
   })
 
   test('composes common conveyor, tank, and valve equipment parts', () => {
@@ -1700,6 +1757,87 @@ describe('composePartPrimitives', () => {
     expect(sideModule?.position?.[2]).toBeCloseTo(0)
   })
 
+  test('prefers relationship placement over conflicting manual coordinates', () => {
+    const shapes = composePartPrimitives({
+      name: 'Relation conflict layout',
+      autoComplete: false,
+      parts: [
+        {
+          id: 'left_leg',
+          name: 'left leg',
+          kind: 'generic_body',
+          semanticRole: 'support_column',
+          length: 0.4,
+          width: 0.4,
+          height: 4,
+          position: [-2, 2, 0],
+        },
+        {
+          id: 'right_leg',
+          name: 'right leg',
+          kind: 'generic_body',
+          semanticRole: 'support_column',
+          length: 0.4,
+          width: 0.4,
+          height: 4,
+          alignBeside: 'left_leg',
+          side: 'right',
+          relationGap: 3.6,
+          position: [-2, 2, 0],
+        },
+        {
+          id: 'girder',
+          name: 'top girder',
+          kind: 'generic_body',
+          semanticRole: 'spanning_beam',
+          length: 4.8,
+          width: 0.5,
+          height: 0.4,
+          alignAbove: 'left_leg',
+          position: [0, 2, 0],
+        },
+      ],
+    })
+
+    const leftLeg = shapes.find((shape) => shape.sourcePartId === 'left_leg')
+    const rightLeg = shapes.find((shape) => shape.sourcePartId === 'right_leg')
+    const girder = shapes.find((shape) => shape.semanticRole === 'spanning_beam')
+    expect(rightLeg?.position?.[0]).toBeGreaterThan(leftLeg?.position?.[0] ?? 0)
+    expect(girder?.position?.[1]).toBeGreaterThan(leftLeg?.position?.[1] ?? 0)
+    expect(girder?.position?.[1]).toBeCloseTo(4.2)
+  })
+
+  test('treats alignAbove with bottom side as bottom attachment', () => {
+    const shapes = composePartPrimitives({
+      name: 'Bottom side relation layout',
+      autoComplete: false,
+      parts: [
+        {
+          id: 'body',
+          name: 'body',
+          kind: 'generic_body',
+          length: 1,
+          width: 0.6,
+          height: 0.8,
+          position: [0, 0.4, 0],
+        },
+        {
+          id: 'feet',
+          name: 'feet',
+          kind: 'generic_foot_set',
+          alignAbove: 'body',
+          side: 'bottom',
+          radius: 0.04,
+          height: 0.12,
+        },
+      ],
+    })
+
+    const body = shapes.find((shape) => shape.name?.includes('body generic body'))
+    const foot = shapes.find((shape) => shape.semanticRole === 'support_foot')
+    expect(foot?.position?.[1]).toBeLessThan(body?.position?.[1] ?? 0)
+  })
+
   test('expands around relationship into evenly distributed circular parts', () => {
     const shapes = composePartPrimitives({
       name: 'Around layout',
@@ -1864,6 +2002,33 @@ describe('composePartPrimitives', () => {
     expect(discharge?.position?.[0]).toBeCloseTo(0.4267)
   })
 
+  test('treats fan blade parts as mixer blades in shaft agitator context', () => {
+    const shapes = composePartPrimitives({
+      name: 'shaft mixer impeller',
+      autoComplete: false,
+      parts: [
+        { id: 'shaft', kind: 'vertical_pole', semanticRole: 'mixer_shaft', height: 0.8 },
+        { id: 'hub', kind: 'circular_base', semanticRole: 'mixer_hub', radius: 0.05 },
+        {
+          id: 'blades',
+          kind: 'fan_blade',
+          semanticRole: 'mixer_blade',
+          count: 3,
+          length: 0.32,
+          width: 0.16,
+        },
+      ],
+    })
+
+    const bladeShapes = shapes.filter((shape) => shape.sourcePartKind === 'mixer_blades')
+    const fanShapes = shapes.filter((shape) => shape.sourcePartKind === 'fan_blade')
+
+    expect(bladeShapes.filter((shape) => shape.semanticRole === 'mixer_blade')).toHaveLength(3)
+    expect(fanShapes).toHaveLength(0)
+    expect(shapes.some((shape) => shape.semanticRole === 'mixer_shaft')).toBe(true)
+    expect(shapes.some((shape) => shape.semanticRole === 'mixer_hub')).toBe(true)
+  })
+
   test('composes propeller blade sets as reusable taiji-half paddles', () => {
     const shapes = composePartPrimitives({
       name: 'Generic agitator',
@@ -1922,10 +2087,10 @@ describe('composePartPrimitives', () => {
       true,
     )
     expect(blades.every((shape) => (shape.profile?.length ?? 0) >= 20)).toBe(true)
-    expect(blades.every((shape) => Math.abs((shape.rotation?.[0] ?? 0) + Math.PI / 2) > 0.25)).toBe(
-      true,
-    )
-    blades.forEach(expectBladeRotationMatchesRadialPlacement)
+    expect(blades.every((shape) => shape.rotation?.[0] === -Math.PI / 2)).toBe(true)
+    expect(blades.every((shape) => shape.rotation?.[1] === 0)).toBe(true)
+    expect(blades.every((shape) => shape.rotation?.[2] === 0)).toBe(true)
+    expect(new Set(blades.map((shape) => JSON.stringify(shape.profile?.slice(0, 3)))).size).toBe(3)
     const profile = blades[0]?.profile ?? []
     const minX = Math.min(...profile.map(([x]) => x))
     const maxX = Math.max(...profile.map(([x]) => x))

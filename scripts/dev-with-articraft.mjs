@@ -1,4 +1,5 @@
 import { spawn, execSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -164,6 +165,26 @@ function keepAliveForReusedServices() {
   setInterval(() => {}, 2 ** 31 - 1)
 }
 
+function articraftViewerCommand() {
+  const venvPython = path.join(
+    articraftRoot,
+    '.venv',
+    process.platform === 'win32' ? 'Scripts' : 'bin',
+    process.platform === 'win32' ? 'python.exe' : 'python',
+  )
+  const cliEntry = path.join(articraftRoot, 'cli', 'main.py')
+  if (existsSync(venvPython) && existsSync(cliEntry)) {
+    return {
+      command: venvPython,
+      args: [cliEntry, 'viewer', '--host', articraftHost, '--port', articraftPort],
+    }
+  }
+  return {
+    command: 'uv',
+    args: ['run', '--frozen', 'articraft', 'viewer', '--host', articraftHost, '--port', articraftPort],
+  }
+}
+
 async function main() {
   const editorUrl = `http://${editorHost}:${editorPort}`
   const articraftUrl = `http://${articraftHost}:${articraftPort}/viewer`
@@ -198,10 +219,11 @@ async function main() {
     const result = await ensurePortReady('articraft', articraftHost, articraftPort, articraftUrl)
     if (result === 'start') {
       launched++
+      const viewer = articraftViewerCommand()
       startProcess(
         'articraft',
-        'uv',
-        ['run', '--frozen', 'articraft', 'viewer', '--host', articraftHost, '--port', articraftPort],
+        viewer.command,
+        viewer.args,
         articraftRoot,
       )
     }

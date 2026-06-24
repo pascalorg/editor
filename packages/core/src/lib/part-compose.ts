@@ -210,6 +210,7 @@ export interface PartComposePartInput {
   flangeThickness?: number
   bendRadius?: number
   dimensions?: Record<string, unknown>
+  params?: Record<string, unknown>
   height?: number
   width?: number
   depth?: number
@@ -647,7 +648,19 @@ function isMixerPartContext(input: PartComposeInput, parts: PartComposePartInput
   const hasMixerLanguage = /mixer|agitator|impeller|mud|slurry|paddle|搅拌|泥浆|桨叶|叶轮/.test(
     text,
   )
-  const hasPropellerSet = parts.some((part) => normalizedPartKind(part) === 'propeller_blade_set')
+  const hasPropellerSet = parts.some((part) => {
+    const kind = normalizedPartKind(part)
+    return kind === 'propeller_blade_set' || kind === 'mixer_blades'
+  })
+  const hasBladePart = parts.some((part) => {
+    const kind = normalizedPartKind(part)
+    return (
+      kind === 'propeller_blade_set' ||
+      kind === 'mixer_blades' ||
+      kind === 'fan_blade' ||
+      kind === 'radial_blades'
+    )
+  })
   const hasShaft = parts.some((part) => {
     const kind = normalizedPartKind(part)
     return kind === 'vertical_pole' || /shaft|rod|pole/.test(partIdentityText(part))
@@ -658,6 +671,7 @@ function isMixerPartContext(input: PartComposeInput, parts: PartComposePartInput
   })
   return (
     (hasMixerLanguage && hasPropellerSet && (hasShaft || hasHub)) ||
+    (hasMixerLanguage && hasBladePart && hasShaft) ||
     (hasPropellerSet && hasShaft && hasHub)
   )
 }
@@ -700,7 +714,12 @@ function applyMixerPartDefaults(
         sourcePartKind: part.sourcePartKind ?? 'mixer_hub',
       }
     }
-    if (kind === 'propeller_blade_set' || kind === 'mixer_blades') {
+    if (
+      kind === 'propeller_blade_set' ||
+      kind === 'mixer_blades' ||
+      kind === 'fan_blade' ||
+      kind === 'radial_blades'
+    ) {
       return {
         ...part,
         kind: 'mixer_blades',
@@ -1550,6 +1569,10 @@ const VEHICLE_STYLE_DEFAULTS: Record<
 function normalizePartInput(part: PartComposePartInput): PartComposePartInput {
   const kind = normalizedPartKind(part)
   const rawKind = `${part.kind ?? part.partType ?? part.type ?? ''}`.toLowerCase()
+  const rawParams =
+    typeof part.params === 'object' && part.params !== null && !Array.isArray(part.params)
+      ? part.params
+      : {}
   const rawDimensions =
     typeof part.dimensions === 'object' &&
     part.dimensions !== null &&
@@ -1566,9 +1589,25 @@ function normalizePartInput(part: PartComposePartInput): PartComposePartInput {
     'radius',
     'thickness',
   ] as const) {
-    const value = rawDimensions[key]
+    const value = rawDimensions[key] ?? rawParams[key]
     if (part[key] == null && typeof value === 'number' && Number.isFinite(value) && value > 0) {
       dimensionDefaults[key] = value
+    }
+  }
+  const styleDefaults: Partial<PartComposePartInput> = {}
+  for (const key of [
+    'primaryColor',
+    'metalColor',
+    'darkColor',
+    'accentColor',
+    'color',
+    'cornerRadius',
+    'cornerSegments',
+  ] as const) {
+    const value = rawParams[key]
+    if (part[key] == null && value != null) {
+      const typedStyleDefaults = styleDefaults as Record<string, unknown>
+      typedStyleDefaults[key] = value
     }
   }
   const semanticRole =
@@ -1585,6 +1624,7 @@ function normalizePartInput(part: PartComposePartInput): PartComposePartInput {
   return {
     ...part,
     ...dimensionDefaults,
+    ...styleDefaults,
     ...(kind ? { kind } : {}),
     ...(semanticRole ? { semanticRole } : {}),
     name: part.name ?? part.partName,
@@ -2042,6 +2082,16 @@ function hasExplicitPlacement(part: PartComposePartInput): boolean {
   )
 }
 
+function hasExplicitSpatialPlacement(part: PartComposePartInput): boolean {
+  return (
+    part.position != null ||
+    part.alignAbove != null ||
+    part.alignBeside != null ||
+    part.centeredOn != null ||
+    part.around != null
+  )
+}
+
 function partReference(part: PartComposePartInput, fallbackKind: PartComposeKind): string {
   return part.id ?? part.name ?? part.partName ?? fallbackKind
 }
@@ -2072,7 +2122,7 @@ function applyContextualPartDefaults(
       }
     }
 
-    if (kind === 'inlet_port' && volute && !hasExplicitPlacement(part)) {
+    if (kind === 'inlet_port' && volute && !hasExplicitSpatialPlacement(part)) {
       return {
         ...part,
         connectTo: partReference(volute, 'volute_casing'),
@@ -2082,7 +2132,7 @@ function applyContextualPartDefaults(
       }
     }
 
-    if (kind === 'outlet_port' && volute && !hasExplicitPlacement(part)) {
+    if (kind === 'outlet_port' && volute && !hasExplicitSpatialPlacement(part)) {
       return {
         ...part,
         connectTo: partReference(volute, 'volute_casing'),
@@ -3106,6 +3156,12 @@ function taijiHalfBladeProfile(
   return profile
 }
 
+function rotateBladeProfile(profile: [number, number][], angle: number): [number, number][] {
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+  return profile.map(([x, y]) => [x * cos - y * sin, x * sin + y * cos])
+}
+
 function composePropellerBladeSet(
   input: PartComposeInput,
   part: PartComposePartInput,
@@ -3150,18 +3206,20 @@ function composePropellerBladeSet(
           tipWidth,
           camber,
           sweep,
-          input.detail === 'low' ? 10 : 18,
+          input.detail === 'low' ? 12 : input.detail === 'high' ? 30 : 22,
         )
       : taijiHalfBladeProfile(
           bladeLength,
           rootWidth,
           Math.max(bladeWidth, tipWidth * 1.8),
           longitudinalCurve,
-          input.detail === 'low' ? 12 : 24,
+          input.detail === 'low' ? 14 : input.detail === 'high' ? 36 : 28,
         )
+  const planarMixerBlades = options?.sourcePartKind === 'mixer_blades'
 
   for (let i = 0; i < count; i += 1) {
     const angle = (i * Math.PI * 2) / count
+    const bladeProfile = planarMixerBlades ? rotateBladeProfile(profile, angle) : profile
     shapes.push({
       kind: 'extrude',
       name: `${part.name ?? input.name ?? 'object'} ${options?.namePrefix ?? bladeShape.replace('_', ' ')} propeller blade ${i + 1}`,
@@ -3173,13 +3231,15 @@ function composePropellerBladeSet(
         center[1],
         center[2] + Math.sin(angle) * (hubRadius + bladeLength * 0.5),
       ],
-      rotation: radialExtrudeRotationInHorizontalPlane(angle, pitch * 0.55),
-      profile,
+      rotation: planarMixerBlades
+        ? [-Math.PI / 2, 0, 0]
+        : radialExtrudeRotationInHorizontalPlane(angle, pitch * 0.55),
+      profile: bladeProfile,
       depth: bladeDepth,
       bevelSize: bladeDepth * 0.12,
       bevelThickness: bladeDepth * 0.16,
-      bevelSegments: 1,
-      curveSegments: 16,
+      bevelSegments: input.detail === 'high' ? 3 : 2,
+      curveSegments: input.detail === 'high' ? 24 : 18,
       material: mat,
     })
   }
@@ -10921,6 +10981,13 @@ function expandAroundDistributedParts(parts: PartComposePartInput[]): PartCompos
 
 function resolveConnectedParts(parts: PartComposePartInput[]): PartComposePartInput[] {
   const resolved: PartComposePartInput[] = []
+  const hasRelationPlacement = (part: PartComposePartInput) =>
+    part.connectTo != null ||
+    part.alignAbove != null ||
+    part.alignBeside != null ||
+    part.offsetFrom != null ||
+    part.centeredOn != null ||
+    part.around != null
   const findParent = (connectTo: string | number | undefined): PartComposePartInput | undefined => {
     if (typeof connectTo === 'number') return resolved[connectTo]
     if (typeof connectTo !== 'string') return undefined
@@ -10938,7 +11005,7 @@ function resolveConnectedParts(parts: PartComposePartInput[]): PartComposePartIn
 
   parts.forEach((part) => {
     const kind = normalizedPartKind(part)
-    if (part.position) {
+    if (part.position && !hasRelationPlacement(part)) {
       resolved.push({
         ...part,
         position: positionWithArrayOffset(part, part.position),
@@ -10967,11 +11034,19 @@ function resolveConnectedParts(parts: PartComposePartInput[]): PartComposePartIn
 
     const aboveParent = findParent(part.alignAbove)
     if (aboveParent) {
+      const side = partSide(part.side)
       resolved.push({
         ...part,
         position: positionWithArrayOffset(
           part,
-          alignAbovePosition(aboveParent, normalizedPartKind(aboveParent), part, kind),
+          side === 'bottom'
+            ? alignBesidePosition(
+                aboveParent,
+                normalizedPartKind(aboveParent),
+                { ...part, side },
+                kind,
+              )
+            : alignAbovePosition(aboveParent, normalizedPartKind(aboveParent), part, kind),
         ),
       })
       return

@@ -35,7 +35,7 @@ function createResolvedMaterial(
   colorPreset: ColorPreset,
 ): THREE.Material {
   if (!textures) {
-    return createSurfaceRoleMaterial('joinery', colorPreset)
+    return createSurfaceRoleMaterial('joinery', colorPreset, undefined, undefined, shading)
   }
 
   if (materialPreset) {
@@ -127,13 +127,18 @@ export function getStraightStairSegmentBodyMaterials(
   }
 
   if (!textures) {
-    const material = createSurfaceRoleMaterial('joinery', colorPreset)
+    const material = createSurfaceRoleMaterial(
+      'joinery',
+      colorPreset,
+      undefined,
+      undefined,
+      shading,
+    )
     return [material, material]
   }
 
   return [DEFAULT_STAIR_MATERIAL(shading), DEFAULT_STAIR_MATERIAL(shading)]
 }
-
 
 export function getStairMaterialCacheSize(): number {
   return stairBodyMaterialCache.size + stairRailingMaterialCache.size
@@ -149,7 +154,9 @@ export function clearStairMaterialCache(): void {
   for (const material of stairRailingMaterialCache.values()) {
     materials.add(material)
   }
-  materials.forEach((material) => material.dispose())
+  materials.forEach((material) => {
+    material.dispose()
+  })
   stairBodyMaterialCache.clear()
   stairRailingMaterialCache.clear()
 }

@@ -19,6 +19,42 @@ function validate(shapes: PrimitiveShapeInput[], prompt: string, category: strin
 }
 
 describe('validatePrimitiveSemantics', () => {
+  test('ignores negated mixer and tank targets when detecting semantic family', () => {
+    const shapes: PrimitiveShapeInput[] = [
+      {
+        kind: 'box',
+        name: 'tower mast',
+        semanticRole: 'mast_tower',
+        position: [0, 6, 0],
+        length: 1,
+        width: 1,
+        height: 12,
+      },
+      {
+        kind: 'box',
+        name: 'main jib',
+        semanticRole: 'main_jib',
+        position: [5, 12, 0],
+        length: 10,
+        width: 0.2,
+        height: 0.2,
+      },
+    ]
+
+    const result = validatePrimitiveSemantics(
+      shapes,
+      resolvePrimitiveWorldTransforms(shapes, { positionMode: 'world-center' }),
+      {
+        prompt:
+          'Generate a construction tower crane. Do not generate a mixer tank, storage tank, airplane, or bicycle.',
+        geometryBrief: { category: 'construction tower crane' },
+      },
+    )
+
+    expect(result.family).not.toBe('mixer')
+    expect(result.issues.join('\n')).not.toContain('mixer requires')
+  })
+
   test('accepts a bicycle wheel component without requiring a complete bicycle', () => {
     const shapes = composePartPrimitives({
       name: 'single bicycle wheel',

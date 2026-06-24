@@ -14,6 +14,12 @@ function makeArticraftCheckout(repoRoot: string) {
   writeFileSync(path.join(bridgeDir, 'bridge.py'), '', 'utf8')
 }
 
+function makeModernArticraftCheckout(repoRoot: string) {
+  const cliDir = path.join(repoRoot, 'articraft', 'cli')
+  mkdirSync(cliDir, { recursive: true })
+  writeFileSync(path.join(cliDir, 'main.py'), '', 'utf8')
+}
+
 afterEach(() => {
   process.chdir(originalCwd)
   if (originalArticraftRepoRoot === undefined) {
@@ -38,9 +44,17 @@ describe('resolveRepoRoot', () => {
     expect(resolveRepoRoot()).toBe(path.join(tempRoot, 'articraft'))
   })
 
-  test('rejects an explicit root without the bridge script', () => {
+  test('rejects an explicit root without the bridge script or modern CLI', () => {
     tempRoot = mkdtempSync(path.join(tmpdir(), 'pascal-articraft-invalid-'))
 
     expect(() => resolveRepoRoot(tempRoot)).toThrow('Expected python')
+  })
+
+  test('accepts a modern Articraft checkout with cli/main.py', () => {
+    tempRoot = mkdtempSync(path.join(tmpdir(), 'pascal-articraft-modern-'))
+    makeModernArticraftCheckout(tempRoot)
+
+    delete process.env.ARTICRAFT_REPO_ROOT
+    expect(resolveRepoRoot(path.join(tempRoot, 'articraft'))).toBe(path.join(tempRoot, 'articraft'))
   })
 })

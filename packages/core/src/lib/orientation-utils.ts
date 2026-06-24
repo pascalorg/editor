@@ -1,7 +1,7 @@
 import type { Vec3 } from './primitive-compose'
 
 export function radialExtrudeRotationInHorizontalPlane(angle: number, pitch = 0): Vec3 {
-  return [-Math.PI / 2 + pitch, 0, -angle]
+  return [-Math.PI / 2 + pitch, -angle, 0]
 }
 
 export function radialExtrudeRotationInLocalPlane(angle: number, pitch = 0): Vec3 {
