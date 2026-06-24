@@ -607,10 +607,18 @@ export function GlbScene({
   }, [zoneEntries])
 
   useEffect(() => {
-    for (const action of Object.values(actions)) {
+    for (const [name, action] of Object.entries(actions)) {
       if (!action) continue
-      action.loop = THREE.LoopOnce
-      action.clampWhenFinished = true
+      // Ambient item loops (a fan's spin, `<id>: loop`) repeat; door/window
+      // open clips play once and hold their end pose. GlbInteractive plays the
+      // loops, gated on the item's toggle.
+      if (name.endsWith(': loop')) {
+        action.loop = THREE.LoopRepeat
+        action.clampWhenFinished = false
+      } else {
+        action.loop = THREE.LoopOnce
+        action.clampWhenFinished = true
+      }
     }
   }, [actions])
 
@@ -980,7 +988,12 @@ export function GlbScene({
       {/* Re-light + re-animate the baked artifact from the DB scene graph,
           joined to the baked nodes by pascalId. */}
       {interactiveItems?.length ? (
-        <GlbInteractive identity={identity} items={interactiveItems} zones={zoneEntries} />
+        <GlbInteractive
+          actions={actions}
+          identity={identity}
+          items={interactiveItems}
+          zones={zoneEntries}
+        />
       ) : null}
       {/* Floating room labels. Each group's matrix is synced to its zone node
           every frame (above) so the label rides level stacking; the div fades

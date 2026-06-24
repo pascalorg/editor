@@ -14,7 +14,7 @@ import {
 import { Html } from '@react-three/drei'
 import { createPortal } from '@react-three/fiber'
 import { useEffect, useMemo, useState } from 'react'
-import { type Object3D, Vector3 } from 'three'
+import { type AnimationAction, LoopRepeat, type Object3D, Vector3 } from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
 import { useShallow } from 'zustand/react/shallow'
 import useViewer from '../../store/use-viewer'
@@ -102,10 +102,14 @@ export function GlbInteractive({
   items,
   identity,
   zones,
+  actions,
 }: {
   items: GlbInteractiveItem[]
   identity: Map<string, Object3D>
   zones: GlbZoneRef[]
+  /** Baked animation actions keyed by clip name — ambient item loops play from
+   *  `<pascalId>: loop`. */
+  actions: Record<string, AnimationAction | null>
 }) {
   // Seed control state for every interactive item. The viewer shows a baked
   // scene "lit": toggles default ON (the editor defaults them off) and sliders
@@ -130,6 +134,10 @@ export function GlbInteractive({
     () => items.filter((item) => item.interactive.effects.some((e) => e.kind === 'light')),
     [items],
   )
+  const animationItems = useMemo(
+    () => items.filter((item) => item.interactive.effects.some((e) => e.kind === 'animation')),
+    [items],
+  )
 
   // Controls overlay is scoped to the focused zone (matches the parametric
   // viewer). Project the zone's baked-local polygon into world space once so an
@@ -152,6 +160,9 @@ export function GlbInteractive({
         const object = identity.get(item.pascalId)
         return object ? <GlbItemLight item={item} key={item.pascalId} object={object} /> : null
       })}
+      {animationItems.map((item) => (
+        <GlbItemAnimation actions={actions} item={item} key={item.pascalId} />
+      ))}
       {items.map((item) => {
         const object = identity.get(item.pascalId)
         return object ? (
@@ -185,6 +196,36 @@ function GlbItemLight({ item, object }: { item: GlbInteractiveItem; object: Obje
     />,
     object,
   )
+}
+
+/** Plays an item's baked ambient loop (a fan's spin), gated on its toggle.
+ *  The clip and its targets are already in the GLB; we only start/stop it. */
+function GlbItemAnimation({
+  item,
+  actions,
+}: {
+  item: GlbInteractiveItem
+  actions: Record<string, AnimationAction | null>
+}) {
+  const values = useInteractive(useShallow((s) => s.items[item.pascalId]?.controlValues))
+  const toggleIndex = item.interactive.controls.findIndex((c) => c.kind === 'toggle')
+  const isOn = toggleIndex >= 0 ? Boolean(values?.[toggleIndex] ?? true) : true
+
+  useEffect(() => {
+    const action = actions[`${item.pascalId}: loop`]
+    if (!action) return
+    action.loop = LoopRepeat
+    action.clampWhenFinished = false
+    if (isOn) {
+      action.enabled = true
+      action.paused = false
+      if (!action.isRunning()) action.play()
+    } else {
+      action.stop()
+    }
+  }, [actions, item.pascalId, isOn])
+
+  return null
 }
 
 const FADE_MS = 300
