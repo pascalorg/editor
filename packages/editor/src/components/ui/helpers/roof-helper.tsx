@@ -1,18 +1,14 @@
+import type { SnapContext } from '../../../lib/snapping-mode'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 
-export function RoofHelper({ shiftPressed = false }: { shiftPressed?: boolean }) {
+export function RoofHelper({ snapContext }: { snapContext?: SnapContext | null }) {
   return (
     <ContextualHelperPanel
-      showSnapping
       hints={[
         { keys: ['Left click'], label: 'Set corner' },
-        {
-          keys: ['Shift'],
-          label: shiftPressed ? 'Guided constraints bypassed' : 'Free corner',
-          active: shiftPressed,
-        },
         { keys: ['Esc'], label: 'Cancel' },
       ]}
+      snapContext={snapContext}
     />
   )
 }

@@ -66,7 +66,7 @@ import {
  *    operation.
  *  - **`isNew` metadata strip** — first commit after a fresh wall
  *    placement clears the placement marker.
- *  - **Activation grace** (150ms) + Shift to bypass grid snap.
+ *  - **Activation grace** (150ms).
  *
  * Mounted via `def.affordanceTools.move` from `wall/definition.ts`.
  */
@@ -190,7 +190,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
   const nodeIdRef = useRef(node.id)
   const previewRef = useRef<{ start: [number, number]; end: [number, number] } | null>(null)
   const pendingRotationRef = useRef(0)
-  const shiftPressedRef = useRef(false)
 
   const [cursorLocalPos, setCursorLocalPos] = useState<[number, number, number]>(() => {
     const centerX = (node.start[0] + node.end[0]) / 2
@@ -462,7 +461,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const bypassSnap = shiftPressedRef.current || event.nativeEvent?.shiftKey === true
       const rawX = event.localPosition[0]
       const rawZ = event.localPosition[2]
       const snapStep = getSegmentGridStep()
@@ -493,13 +491,10 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       if (axis) {
         const originalProj = originalCenter[0] * axis[0] + originalCenter[1] * axis[1]
         const rawProj = originalProj + rawDeltaX * axis[0] + rawDeltaZ * axis[1]
-        const snappedProj = bypassSnap ? rawProj : snapScalarToGrid(rawProj, snapStep)
+        const snappedProj = snapScalarToGrid(rawProj, snapStep)
         const perpDelta = snappedProj - originalProj
         deltaX = axis[0] * perpDelta
         deltaZ = axis[1] * perpDelta
-      } else if (bypassSnap) {
-        deltaX = rawDeltaX
-        deltaZ = rawDeltaZ
       } else {
         // Snap the resulting wall center to the WORLD XZ grid (projected
         // back into building-local), then express the result as a delta
@@ -517,7 +512,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       const constrainedGridPos: [number, number] = [anchor[0] + deltaX, anchor[1] + deltaZ]
 
       if (
-        !bypassSnap &&
         previousGridPosRef.current &&
         (constrainedGridPos[0] !== previousGridPosRef.current[0] ||
           constrainedGridPos[1] !== previousGridPosRef.current[1])
@@ -633,11 +627,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         return
       }
 
-      if (event.key === 'Shift') {
-        shiftPressedRef.current = true
-        return
-      }
-
       const ROTATION_STEP = Math.PI / 4
       let rotationDelta = 0
       if (event.key === 'r' || event.key === 'R') rotationDelta = ROTATION_STEP
@@ -661,12 +650,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       applyPreview(nextWall.start, nextWall.end)
     }
 
-    const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') {
-        shiftPressedRef.current = false
-      }
-    }
-
     const onCancel = () => {
       shouldRestoreOnCleanup = false
       restoreOriginal()
@@ -683,7 +666,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
 
     return () => {
       if (shouldRestoreOnCleanup) {
@@ -698,13 +680,11 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
           restoreOriginal()
         }
       }
-      shiftPressedRef.current = false
       resumeSceneHistory(useScene)
       emitter.off('grid:move', onGridMove)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
     }
   }, [exitMoveMode, isNew, node.metadata, node.parentId])
 

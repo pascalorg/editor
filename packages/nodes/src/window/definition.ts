@@ -229,7 +229,6 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place window on wall' },
-    { key: 'Shift', label: 'Free place' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

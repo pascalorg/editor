@@ -221,6 +221,13 @@ export type ToolHint = {
   key: string
   /** Description of what the input does. Sentence case. */
   label: string
+  /**
+   * Only show this hint once the in-progress draft has at least this many
+   * vertices (reads `useEditor.draftVertexCount`). Lets a polygon tool's
+   * "Finish" hint appear only when finishing is actually possible (≥ 3 points),
+   * so the HUD reflects reality. Omit for always-shown hints.
+   */
+  minDraftVertices?: number
 }
 
 export type FloorplanGeometry =
@@ -710,6 +717,15 @@ export type SurfaceRole =
 /** Role a kind plays in a duct / pipe / lineset distribution system. */
 export type DistributionRole = 'run' | 'fitting' | 'terminal' | 'equipment'
 
+/**
+ * A kind's snapping profile (see `NodeDefinition.snapProfile`).
+ * - `'item'`       free object (furniture/fixtures): lines-default, no grid lattice, no angle.
+ * - `'structural'` walls / fences / slabs / ceilings / roofs / zones: grid-default, and an
+ *   angle lock while *setting direction* (drafting a run/polygon, dragging an endpoint or a
+ *   polygon vertex). A plain translate or a curve of a structural node has no angle.
+ */
+export type SnapProfile = 'item' | 'structural'
+
 export type NodeDefinition<S extends ZodObject<any>> = {
   kind: string
   schemaVersion: number
@@ -957,6 +973,18 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * its bespoke helper component instead.
    */
   toolHints?: ToolHint[]
+
+  /**
+   * Which snapping profile this kind uses, so the editor's contextual snapping
+   * HUD + snap math + force-place affordance are node-declared rather than
+   * switched on the kind name (`'item'` free object vs `'structural'` wall/slab/
+   * surface — see `SnapProfile`). The angle lock is derived from the *action*
+   * (setting direction), not declared here. Also gates the "force place" hint:
+   * structural kinds don't collision-reject, so they don't show it.
+   * Omit it for kinds whose placement/move tools haven't moved onto the unified
+   * snapping model yet — they get no snapping chip (no Shift-cycle) until they do.
+   */
+  snapProfile?: SnapProfile
 
   /**
    * Optional translucent preview of the node — used by the move tool to
@@ -1267,6 +1295,13 @@ export type SlotDeclaration = {
 }
 
 export type PaintCapability = {
+  /**
+   * Opt this kind into the painter's `room` application scope: a paint click
+   * spreads to every same-kind node bounding the clicked node's room (walls and
+   * slabs). The room geometry is resolved by the editor from `Space.polygon`;
+   * this flag only declares that the kind participates.
+   */
+  roomScope?: boolean
   /**
    * Resolve which logical surface the user clicked. Returns `null`
    * when the face shouldn't be painted (e.g. interior slot exposed

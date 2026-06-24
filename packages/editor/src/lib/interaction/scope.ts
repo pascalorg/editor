@@ -168,3 +168,9 @@ export function endpointReshapeScope(
 ): ActiveInteractionScope {
   return { kind: 'reshaping', nodeId, reshape: 'endpoint', endpoint }
 }
+
+// Dragging a polygon vertex/edge (slab / ceiling boundary). Drives the snapping
+// HUD (no-angle 'polygon' set) and keeps the idle select hints off-screen.
+export function boundaryReshapeScope(nodeId: string): ActiveInteractionScope {
+  return { kind: 'reshaping', nodeId, reshape: 'boundary' }
+}

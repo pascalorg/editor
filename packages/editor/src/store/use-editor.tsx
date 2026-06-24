@@ -16,6 +16,7 @@ import {
   type FenceNode,
   type ItemNode,
   type LevelNode,
+  nodeRegistry,
   type RoofNode,
   type RoofSegmentNode,
   type RoofSurfaceMaterialRole,
@@ -41,11 +42,18 @@ import {
   type SingleSurfaceMaterialRole,
 } from '../lib/material-paint'
 import {
-  DEFAULT_SNAPPING_MODE,
-  nextSnappingMode,
+  cyclePaintScope as cyclePaintScopeValue,
+  type PaintHoverInfo,
+  type PaintScope,
+} from '../lib/paint-scope'
+import {
+  cycleSnappingModeIn,
+  defaultSnappingModeFor,
   resolveSnapFlags,
-  SNAPPING_MODES,
+  type SnapContext,
   type SnappingMode,
+  snapContextOf,
+  snappingModesFor,
 } from '../lib/snapping-mode'
 import useInteractionScope from './use-interaction-scope'
 
@@ -278,13 +286,30 @@ type EditorState = {
   setActivePaintMaterial: (material: ActivePaintMaterial | null) => void
   activePaintTarget: PaintableMaterialTarget
   setActivePaintTarget: (target: PaintableMaterialTarget) => void
+  // Live vertex count of an in-progress polygon draft (slab / ceiling), so the
+  // contextual HUD can gate hints on it (e.g. "Finish" only once ≥ 3 points).
+  // 0 when not drafting. Not persisted.
+  draftVertexCount: number
+  setDraftVertexCount: (count: number) => void
+  // Painter application scope — how far one paint click spreads (this surface /
+  // whole item / all matching / room). One global mode, target-aware in the HUD
+  // (see `lib/paint-scope.ts`), defaulting to the narrowest `'single'`. Not
+  // persisted: a "paint everything" scope should reset each session.
+  paintScope: PaintScope
+  setPaintScope: (scope: PaintScope) => void
+  // Cycle the scope within the hovered node's available set and return the new
+  // value. Bound to Shift while in paint mode.
+  cyclePaintScope: () => PaintScope
   // When true, clicking a surface in paint mode clears it back to its
   // default material instead of applying `activePaintMaterial`.
   paintEraser: boolean
   setPaintEraser: (eraser: boolean) => void
   primeMaterialPaintFromSelection: () => MaterialPaintSelectionSnapshot
-  hoveredPaintTarget: PaintableMaterialTarget | null
-  setHoveredPaintTarget: (target: PaintableMaterialTarget | null) => void
+  // What the cursor is over in paint mode: the scopes it offers + labels for the
+  // HUD chip. `null` when not over a paintable surface (drives the "hover a
+  // surface" hint). Set by the selection-manager paint hover; not persisted.
+  paintHover: PaintHoverInfo | null
+  setPaintHover: (info: PaintHoverInfo | null) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
   guideUi: Record<string, GuideUiState>
@@ -338,11 +363,15 @@ type EditorState = {
   // snap. On by default; toggled from the Display menu.
   magneticSnap: boolean
   setMagneticSnap: (enabled: boolean) => void
-  // Global, user-cyclable snapping mode. Maps onto `gridSnapStep` (grid) and
-  // `magneticSnap` via `resolveSnapFlags`. Default `'grid'` reproduces the
-  // historical behaviour (grid + magnetic on).
-  snappingMode: SnappingMode
-  setSnappingMode: (mode: SnappingMode) => void
+  // Per-context, user-cyclable snapping mode (see `lib/snapping-mode.ts`). Each
+  // activity (wall / item / polygon) keeps its own mode + default, because they
+  // want different snapping — drawing a wall wants grid + angle, nudging an item
+  // wants free movement that only catches alignment lines. Resolved to the live
+  // context via `getActiveSnappingMode()`; maps onto `gridSnapStep`/`magneticSnap`
+  // via `resolveSnapFlags`. Persisted per context.
+  snappingModeByContext: Record<SnapContext, SnappingMode>
+  setSnappingMode: (context: SnapContext, mode: SnappingMode) => void
+  // Cycle the *active* context's mode within its own set; returns the new value.
   cycleSnappingMode: () => SnappingMode
   showReferenceFloor: boolean
   toggleReferenceFloor: () => void
@@ -392,7 +421,7 @@ type PersistedEditorLayoutState = Pick<
   | 'floorplanSelectionTool'
   | 'gridSnapStep'
   | 'magneticSnap'
-  | 'snappingMode'
+  | 'snappingModeByContext'
   | 'showReferenceFloor'
   | 'referenceFloorOffset'
   | 'referenceFloorOpacity'
@@ -416,7 +445,11 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   floorplanSelectionTool: 'click',
   gridSnapStep: 0.5,
   magneticSnap: true,
-  snappingMode: DEFAULT_SNAPPING_MODE,
+  snappingModeByContext: {
+    wall: defaultSnappingModeFor('wall'),
+    item: defaultSnappingModeFor('item'),
+    polygon: defaultSnappingModeFor('polygon'),
+  },
   showReferenceFloor: false,
   referenceFloorOffset: 1,
   referenceFloorOpacity: 0.35,
@@ -519,6 +552,14 @@ export function normalizePersistedEditorUiState(
   }
 }
 
+// Validate a persisted per-context mode against that context's allowed set
+// (so e.g. a stale `angles` for items resets), falling back to its default.
+function migrateSnappingMode(value: unknown, context: SnapContext): SnappingMode {
+  return snappingModesFor(context).includes(value as SnappingMode)
+    ? (value as SnappingMode)
+    : defaultSnappingModeFor(context)
+}
+
 function normalizePersistedEditorLayoutState(
   state: Partial<PersistedEditorLayoutState> | null | undefined,
 ): PersistedEditorLayoutState {
@@ -535,9 +576,11 @@ function normalizePersistedEditorLayoutState(
       : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
     // Default on: only an explicit persisted `false` disables it.
     magneticSnap: state?.magneticSnap !== false,
-    snappingMode: SNAPPING_MODES.includes(state?.snappingMode as SnappingMode)
-      ? (state?.snappingMode as SnappingMode)
-      : DEFAULT_SNAPPING_MODE,
+    snappingModeByContext: {
+      wall: migrateSnappingMode(state?.snappingModeByContext?.wall, 'wall'),
+      item: migrateSnappingMode(state?.snappingModeByContext?.item, 'item'),
+      polygon: migrateSnappingMode(state?.snappingModeByContext?.polygon, 'polygon'),
+    },
     showReferenceFloor: state?.showReferenceFloor === true,
     referenceFloorOffset:
       typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
@@ -823,6 +866,19 @@ const useEditor = create<EditorState>()(
         set((state) =>
           state.activePaintTarget === target ? state : { activePaintTarget: target },
         ),
+      draftVertexCount: 0,
+      setDraftVertexCount: (count) =>
+        set((state) => (state.draftVertexCount === count ? state : { draftVertexCount: count })),
+      paintScope: 'single',
+      setPaintScope: (scope) => set({ paintScope: scope }),
+      cyclePaintScope: () => {
+        // Cycle within the hovered node's available scopes (what the click will
+        // actually hit). With nothing paintable hovered there's only `single`.
+        const scopes = get().paintHover?.scopes ?? (['single'] as PaintScope[])
+        const next = cyclePaintScopeValue(get().paintScope, scopes)
+        set({ paintScope: next })
+        return next
+      },
       paintEraser: false,
       setPaintEraser: (eraser) => set({ paintEraser: eraser }),
       primeMaterialPaintFromSelection: () => {
@@ -852,11 +908,8 @@ const useEditor = create<EditorState>()(
           activePaintMaterial: activePaintMaterial ?? get().activePaintMaterial,
         }
       },
-      hoveredPaintTarget: null,
-      setHoveredPaintTarget: (target) =>
-        set((state) =>
-          state.hoveredPaintTarget === target ? state : { hoveredPaintTarget: target },
-        ),
+      paintHover: null,
+      setPaintHover: (info) => set({ paintHover: info }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
       guideUi: {},
@@ -981,11 +1034,18 @@ const useEditor = create<EditorState>()(
       },
       magneticSnap: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.magneticSnap,
       setMagneticSnap: (enabled) => set({ magneticSnap: enabled }),
-      snappingMode: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.snappingMode,
-      setSnappingMode: (mode) => set({ snappingMode: mode }),
+      snappingModeByContext: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.snappingModeByContext,
+      setSnappingMode: (context, mode) =>
+        set((state) => ({
+          snappingModeByContext: { ...state.snappingModeByContext, [context]: mode },
+        })),
       cycleSnappingMode: () => {
-        const next = nextSnappingMode(get().snappingMode)
-        set({ snappingMode: next })
+        const context = getActiveSnapContext() ?? 'item'
+        const current = get().snappingModeByContext[context]
+        const next = cycleSnappingModeIn(context, current)
+        set((state) => ({
+          snappingModeByContext: { ...state.snappingModeByContext, [context]: next },
+        }))
         return next
       },
       showReferenceFloor: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showReferenceFloor,
@@ -1080,7 +1140,7 @@ const useEditor = create<EditorState>()(
         floorplanSelectionTool: state.floorplanSelectionTool,
         gridSnapStep: state.gridSnapStep,
         magneticSnap: state.magneticSnap,
-        snappingMode: state.snappingMode,
+        snappingModeByContext: state.snappingModeByContext,
         showReferenceFloor: state.showReferenceFloor,
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,
@@ -1090,27 +1150,59 @@ const useEditor = create<EditorState>()(
 )
 
 /**
- * Effective magnetic-snap state: the legacy `magneticSnap` flag AND the
- * snapping mode's magnetic component. Default mode `'grid'` resolves magnetic
- * to `true`, so with the default-on `magneticSnap` this returns `true` exactly
- * as before; only `'off'` (or an explicitly-disabled `magneticSnap`) turns it
- * off. Read from the smallest magnetic choke points so the mode is honoured
- * without retuning any snap math.
+ * Effective magnetic-snap state: the legacy `magneticSnap` flag AND the active
+ * context's snapping mode. With exclusive modes, magnetic (alignment axes + wall
+ * corner-join) is on only in `'lines'`. Read from the smallest magnetic choke
+ * points so the mode is honoured without retuning any snap math.
  */
 export function isMagneticSnapActive(): boolean {
   const state = useEditor.getState()
-  return state.magneticSnap && resolveSnapFlags(state.snappingMode).magnetic
+  return state.magneticSnap && resolveSnapFlags(getActiveSnappingMode()).magnetic
 }
 
 /**
- * Effective angle-lock state: the snapping mode's angle component. Default mode
- * `'grid'` resolves angles to `true`, so the 15° draft lock behaves exactly as
- * before; `'lines'` and `'off'` suppress it. Read from the smallest angle-lock
- * choke points (wall / fence draft call sites) so the mode is honoured without
- * retuning any snap math.
+ * Effective angle-lock state: the active context's snapping mode. With exclusive
+ * modes the 15°/45° lock is on only in `'angles'`. Read from the smallest
+ * angle-lock choke points (wall / fence draft call sites).
  */
 export function isAngleSnapActive(): boolean {
-  return resolveSnapFlags(useEditor.getState().snappingMode).angles
+  return resolveSnapFlags(getActiveSnappingMode()).angles
+}
+
+/**
+ * Effective grid-lattice state: the active context's snapping mode. With
+ * exclusive modes the grid quantize is on only in `'grid'`.
+ */
+export function isGridSnapActive(): boolean {
+  return resolveSnapFlags(getActiveSnappingMode()).grid
+}
+
+/**
+ * The snapping context for what the user is currently doing (wall / item /
+ * polygon), or null when nothing snappable is active. Derived from the
+ * authoritative interaction scope, falling back to the armed build tool (the
+ * `drafting` scope isn't wired). The single source every snap reader + the HUD
+ * resolve their mode through.
+ */
+export function getActiveSnapContext(): SnapContext | null {
+  const editor = useEditor.getState()
+  return snapContextOf({
+    scope: useInteractionScope.getState().scope,
+    mode: editor.mode,
+    tool: editor.tool,
+    profileOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapProfile,
+  })
+}
+
+/**
+ * The effective snapping mode for the active context. Falls back to `item`'s
+ * default (free) when no snappable context is active, so a stray reader never
+ * grid-quantizes outside an interaction.
+ */
+export function getActiveSnappingMode(): SnappingMode {
+  const context = getActiveSnapContext()
+  if (!context) return defaultSnappingModeFor('item')
+  return useEditor.getState().snappingModeByContext[context]
 }
 
 export default useEditor

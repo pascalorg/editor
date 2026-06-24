@@ -56,7 +56,9 @@ import {
   getDetachedAttachmentPreviewLift,
   getGridAlignedDimensions,
   snapToGrid,
+  snapToHalf,
   snapUpToGridStep,
+  steppedRotation,
 } from './placement-math'
 import {
   ceilingStrategy,
@@ -779,8 +781,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const draft = draftNode.current
       let alignX = 0
       let alignZ = 0
-      const freePlace = floorEvent.nativeEvent?.altKey === true
-      const bypassAlign = freePlace || !isMagneticSnapActive()
+      // Alignment ("lines") follows the snapping mode only — Alt is force-place,
+      // it does NOT bypass snapping (Off mode is the no-snap bypass).
+      const bypassAlign = !isMagneticSnapActive()
       if (!bypassAlign && draft) {
         alignmentCandidates ??= collectAlignmentAnchors(
           useScene.getState().nodes,
@@ -814,7 +817,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       // Play snap sound when grid position changes
       if (
-        !freePlace &&
         previousGridPos &&
         (gridPos[0] !== previousGridPos[0] || gridPos[2] !== previousGridPos[2])
       ) {
@@ -999,7 +1001,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.z !== result.gridPosition[2]
 
       // Play snap sound when grid position changes
-      if (event.nativeEvent?.altKey !== true && posChanged) {
+      if (posChanged) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
@@ -1169,7 +1171,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.y !== result.gridPosition[1] ||
         gridPosition.current.z !== result.gridPosition[2]
 
-      if (!altFreeRef.current && posChanged) {
+      if (posChanged) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
@@ -1263,9 +1265,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         event.position[1],
         event.position[2],
       )
-      const bypassSnap = event.nativeEvent?.altKey === true
-      const wx = bypassSnap ? buildingLocalPoint.x : Math.round(buildingLocalPoint.x * 2) / 2
-      const wz = bypassSnap ? buildingLocalPoint.z : Math.round(buildingLocalPoint.z * 2) / 2
+      // Mode-aware snap (raw in Off / non-grid); Alt is force-place, not bypass.
+      const wx = snapToHalf(buildingLocalPoint.x)
+      const wz = snapToHalf(buildingLocalPoint.z)
       const floorPos: [number, number, number] = [wx, 0, wz]
 
       Object.assign(placementState.current, {
@@ -1600,7 +1602,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.y !== result.gridPosition[1] ||
         gridPosition.current.z !== result.gridPosition[2]
 
-      if (event.nativeEvent?.altKey !== true && posChanged) {
+      if (posChanged) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
@@ -1791,9 +1793,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Keyboard rotation ----
 
-    // 45° increments — matches the R-key rotation step for already-placed
-    // items (use-keyboard.ts) so the ghost/duplicate rotates the same way.
-    const ROTATION_STEP = Math.PI / 4
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Alt') {
         altFreeRef.current = true
@@ -1813,17 +1812,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // manual rotation would skew them off the wall plane.
       if (placementState.current.surface === 'roof-wall') return
 
-      let rotationDelta = 0
+      let rotationDir: 1 | -1 | 0 = 0
       if ((event.key === 'r' || event.key === 'R') && !event.metaKey && !event.ctrlKey)
-        rotationDelta = ROTATION_STEP
+        rotationDir = 1
       else if ((event.key === 't' || event.key === 'T') && !event.metaKey && !event.ctrlKey)
-        rotationDelta = -ROTATION_STEP
+        rotationDir = -1
 
-      if (rotationDelta !== 0) {
+      if (rotationDir !== 0) {
         event.preventDefault()
         sfxEmitter.emit('sfx:item-rotate')
         const currentRotation = draft.rotation
-        const newRotationY = (currentRotation[1] ?? 0) + rotationDelta
+        // Round to the nearest 45° then step, matching the placed-item R/T.
+        const newRotationY = steppedRotation(currentRotation[1] ?? 0, rotationDir)
         draft.rotation = [currentRotation[0], newRotationY, currentRotation[2]]
 
         // Ref + cursor mesh + item mesh — no store update during drag

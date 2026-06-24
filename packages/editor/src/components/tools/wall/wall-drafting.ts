@@ -14,7 +14,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
-import useEditor, { isMagneticSnapActive } from '../../../store/use-editor'
+import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
 import {
   distanceSquared,
   findWallSnapTarget,
@@ -52,12 +52,11 @@ type WallSplitIntersection = {
 }
 
 export function getSegmentGridStep(): number {
-  const state = useEditor.getState()
   // A 0 step means "no grid lattice" — every grid-snap consumer guards on
   // `step <= 0` and returns the raw value, so disabling grid here suppresses
   // the lattice for walls, fences, and every node move/affordance that reads
   // this choke point, without retuning their snap math.
-  return resolveSnapFlags(state.snappingMode).grid ? state.gridSnapStep : 0
+  return resolveSnapFlags(getActiveSnappingMode()).grid ? useEditor.getState().gridSnapStep : 0
 }
 
 export function snapScalarToGrid(value: number, step = WALL_GRID_STEP): number {

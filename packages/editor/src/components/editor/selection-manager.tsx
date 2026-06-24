@@ -2,15 +2,11 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
-  type CeilingNode,
-  type ColumnNode,
   createSceneApi,
   emitter,
-  type FenceNode,
   type GridEvent,
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
-  getMaterialPresetByRef,
   getRoofSegmentSurfaceY,
   getSelectableKinds,
   type ItemNode,
@@ -22,11 +18,7 @@ import {
   type RoofSegmentEvent,
   type RoofSegmentNode,
   resolveLevelId,
-  resolveMaterial,
-  type ShelfNode,
-  type SlabNode,
   type StairEvent,
-  type StairNode,
   type StairSegmentEvent,
   type StairSurfaceMaterialRole,
   sceneRegistry,
@@ -35,12 +27,9 @@ import {
 } from '@pascal-app/core'
 
 import {
-  applyMaterialPresetToMaterials,
   createMaterial,
   createMaterialFromPresetRef,
   getRoofMaterialArray,
-  getStairBodyMaterials,
-  getStairRailingMaterial,
   useViewer,
 } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef } from 'react'
@@ -56,11 +45,17 @@ import {
   type ActivePaintMaterial,
   buildRoofSegmentSurfaceMaterialPatch,
   buildRoofSurfaceMaterialPatch,
-  buildSingleSurfaceMaterialPatch,
-  buildStairSurfaceMaterialPatch,
   hasActivePaintMaterial,
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
+import {
+  availablePaintScopes,
+  commitPaintScopeFanout,
+  nodeSlotRoles,
+  type PaintHoverInfo,
+  resolvePaintScopeTargets,
+  slotDisplayLabel,
+} from '../../lib/paint-scope'
 import {
   resolveNodeSelectionTarget,
   resolveSelectedIdsForNodeClick,
@@ -114,6 +109,9 @@ type PaintInteraction = {
   hoverMode: HoverHighlightMode
   hoveredId: AnyNodeId
   preview: (() => PaintPreviewCleanup | null) | null
+  // What the paint HUD chip should show for this hover (scopes + labels), or
+  // null when the surface isn't paintable.
+  paintHover: PaintHoverInfo | null
 }
 
 interface SelectionStrategy {
@@ -240,6 +238,28 @@ function getRegisteredMesh(nodeId: string): Mesh | null {
   return object && (object as Mesh).isMesh ? (object as Mesh) : null
 }
 
+// Every distinct slot role on a node, read off the registered mesh subtree's
+// `userData.slotId` tags (a tag may be a single role or an array, one per
+// material group). The mesh-derived fallback behind `nodeSlotRoles` for kinds
+// whose slots come from a GLB (items) rather than a `capabilities.slots`
+// declaration; returns `[]` when the subtree isn't mounted.
+function meshSlotRoles(node: AnyNode): string[] {
+  const root = getRegisteredNodeObject(node.id)
+  if (!root) return []
+  const roles = new Set<string>()
+  root.traverse((object) => {
+    const mesh = object as Mesh
+    if (!mesh.isMesh) return
+    const tag = (mesh.userData as { slotId?: string | null | (string | null)[] }).slotId
+    if (Array.isArray(tag)) {
+      for (const entry of tag) if (typeof entry === 'string') roles.add(entry)
+    } else if (typeof tag === 'string') {
+      roles.add(tag)
+    }
+  })
+  return [...roles]
+}
+
 const roofSelectionWorldPoint = new Vector3()
 
 function resolveRoofSegmentSelectionTarget(event: NodeEvent): RoofSegmentNode | null {
@@ -309,20 +329,6 @@ function previewCursor(cursor: string): PaintPreviewCleanup {
   }
 }
 
-function getSingleSurfacePreviewMaterial(material: ActivePaintMaterial): Material | null {
-  const shading = useViewer.getState().shading
-
-  if (material.materialPreset) {
-    return createMaterialFromPresetRef(material.materialPreset, shading)
-  }
-
-  if (material.material) {
-    return createMaterial(material.material, shading)
-  }
-
-  return null
-}
-
 function applyRoofPaintPreview(
   node: RoofNode,
   role: 'top' | 'edge' | 'wall',
@@ -386,164 +392,6 @@ function applyRoofSegmentPaintPreview(
   const arr: Material[] = [edge ?? fb(0)!, wall ?? fb(1)!, wall ?? fb(2)!, top ?? fb(3)!]
   if (arr.some((m) => !m)) return null
   return previewMeshMaterial(mesh, arr)
-}
-
-function applyStairPaintPreview(
-  node: StairNode,
-  role: StairSurfaceMaterialRole,
-  material: ActivePaintMaterial,
-): PaintPreviewCleanup | null {
-  const root = getRegisteredNodeObject(node.id)
-  if (!root) return null
-
-  const previewNode = {
-    ...node,
-    ...buildStairSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
-  }
-  const shading = useViewer.getState().shading
-  const bodyMaterials = getStairBodyMaterials(previewNode, shading)
-  const railingMaterial = getStairRailingMaterial(previewNode, shading)
-  const restores: PaintPreviewCleanup[] = []
-
-  root.traverse((object) => {
-    if (!(object as Mesh).isMesh) return
-    const mesh = object as Mesh
-    if (mesh.name.startsWith('stair-railing')) {
-      restores.push(previewMeshMaterial(mesh, railingMaterial))
-      return
-    }
-    if (Array.isArray(mesh.material) && mesh.material.length === 2) {
-      restores.push(previewMeshMaterial(mesh, bodyMaterials))
-      return
-    }
-    if (mesh.name === 'merged-stair') {
-      restores.push(previewMeshMaterial(mesh, bodyMaterials))
-      return
-    }
-    if (mesh.name.startsWith('stair-side')) {
-      restores.push(previewMeshMaterial(mesh, bodyMaterials[1]))
-    }
-  })
-
-  if (restores.length === 0) return null
-
-  return () => {
-    for (let index = restores.length - 1; index >= 0; index -= 1) {
-      restores[index]?.()
-    }
-  }
-}
-
-function applySingleSurfacePaintPreview(
-  node: FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
-  material: ActivePaintMaterial,
-): PaintPreviewCleanup | null {
-  if (node.type === 'ceiling') {
-    const root = getRegisteredMesh(node.id)
-    const overlay = root?.getObjectByName('ceiling-grid') as Mesh | undefined
-    if (!(root && overlay)) return null
-
-    const previewColor =
-      getMaterialPresetByRef(material.materialPreset)?.mapProperties.color ??
-      resolveMaterial(material.material).color ??
-      '#999999'
-
-    const previousRootMaterial = root.material
-    const previousOverlayMaterial = overlay.material
-    const rootPreviewMaterial = Array.isArray(previousRootMaterial)
-      ? previousRootMaterial.map((entry) => entry.clone())
-      : previousRootMaterial.clone()
-    const overlayPreviewMaterial = Array.isArray(previousOverlayMaterial)
-      ? previousOverlayMaterial.map((entry) => entry.clone())
-      : previousOverlayMaterial.clone()
-
-    const applyColor = (input: Material | Material[]) => {
-      const materials = Array.isArray(input) ? input : [input]
-      for (const entry of materials) {
-        const materialWithColor = entry as Material & { color?: Color; needsUpdate?: boolean }
-        if (materialWithColor.color instanceof Color) {
-          materialWithColor.color = new Color(previewColor)
-        }
-        materialWithColor.needsUpdate = true
-      }
-    }
-
-    applyColor(rootPreviewMaterial)
-    applyColor(overlayPreviewMaterial)
-    root.material = rootPreviewMaterial
-    overlay.material = overlayPreviewMaterial
-
-    return () => {
-      root.material = previousRootMaterial
-      overlay.material = previousOverlayMaterial
-    }
-  }
-
-  const registeredObject = getRegisteredNodeObject(node.id)
-  const mesh =
-    registeredObject && (registeredObject as Mesh).isMesh ? (registeredObject as Mesh) : null
-
-  const previewMaterial = getSingleSurfacePreviewMaterial(material)
-  if (!previewMaterial) return null
-
-  if (node.type === 'column') {
-    if (!registeredObject) return null
-    const restores: PaintPreviewCleanup[] = []
-
-    registeredObject.traverse((object) => {
-      if (!(object as Mesh).isMesh) return
-      restores.push(previewMeshMaterial(object as Mesh, previewMaterial))
-    })
-
-    if (restores.length === 0) return null
-    return () => {
-      for (let index = restores.length - 1; index >= 0; index -= 1) {
-        restores[index]?.()
-      }
-    }
-  }
-
-  if (node.type === 'shelf') {
-    // Shelf registers a `<group>` (not a Mesh) with `useRegistry`, so we walk
-    // the subtree and preview-swap every child mesh — same approach `column`
-    // uses. (The roof vents previously shared this arm; they now route through
-    // their `capabilities.paint` dispatcher.)
-    if (!registeredObject) return null
-    const restores: PaintPreviewCleanup[] = []
-    registeredObject.traverse((object) => {
-      if (!(object as Mesh).isMesh) return
-      restores.push(previewMeshMaterial(object as Mesh, previewMaterial))
-    })
-    if (restores.length === 0) return null
-    return () => {
-      for (let index = restores.length - 1; index >= 0; index -= 1) {
-        restores[index]?.()
-      }
-    }
-  }
-
-  if (!mesh) return null
-
-  if (node.type === 'slab') {
-    const slabMaterial = previewMaterial.clone()
-    applyMaterialPresetToMaterials(slabMaterial, getMaterialPresetByRef(material.materialPreset))
-    const previewMeshMaterialInput = slabMaterial as Material & {
-      alphaMap?: unknown
-      depthWrite?: boolean
-      needsUpdate?: boolean
-      opacity?: number
-      side?: number
-      transparent?: boolean
-    }
-    previewMeshMaterialInput.transparent = false
-    previewMeshMaterialInput.opacity = 1
-    previewMeshMaterialInput.alphaMap = null
-    previewMeshMaterialInput.depthWrite = true
-    previewMeshMaterialInput.needsUpdate = true
-    return previewMeshMaterial(mesh, slabMaterial)
-  }
-
-  return previewMeshMaterial(mesh, previewMaterial)
 }
 
 // Chimney + dormer paint dispatch lives on their NodeDefinition's
@@ -878,6 +726,9 @@ export const SelectionManager = () => {
     if (movingNode || isCurveReshape) return
 
     let activePreview: { key: string; restore: PaintPreviewCleanup } | null = null
+    // The last hover event, replayed when the application scope cycles so the
+    // preview + chip update under a stationary cursor (Shift fires no pointer move).
+    let lastEnterEvent: NodeEvent | null = null
 
     const clearActivePreview = () => {
       activePreview?.restore()
@@ -939,13 +790,52 @@ export const SelectionManager = () => {
           ray: event.nativeEvent.ray,
         })
         const compatible = role !== null && paintEnabled
+        // Derive the node's slots (declared, else mesh tags) once — drives both
+        // the chip's available scopes and the whole-object fan-out.
+        const slotRoles = compatible && role ? nodeSlotRoles(node, meshSlotRoles) : []
+        // Resolve the application-scope fan-out once (this surface / whole object
+        // / all matching / room). The scope is part of the key so cycling it
+        // (Shift) re-keys the interaction → the preview re-applies for the new
+        // spread instead of being deduped to the single-surface preview.
+        const scope = useEditor.getState().paintScope
+        const scopeTargets =
+          compatible && role
+            ? resolvePaintScopeTargets({
+                node,
+                role,
+                scope,
+                nodes: useScene.getState().nodes,
+                spaces: useEditor.getState().spaces,
+                slotRolesOf: () => slotRoles,
+              })
+            : []
         return {
-          key: `${node.type}:${node.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
+          key: `${node.type}:${node.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}:${scope}`,
           hoveredId: node.id as AnyNodeId,
           hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
+          paintHover:
+            compatible && role
+              ? {
+                  scopes: availablePaintScopes({ node, slotRoles }),
+                  slotLabel: slotDisplayLabel(node, role),
+                  nodeNoun: node.type,
+                }
+              : null,
           apply:
             compatible && role
               ? () => {
+                  // Spread targets are all the same slot-model kind, so one
+                  // batched commit writes them in a single undo step; the
+                  // single-surface case keeps the kind's own commit (covers
+                  // non-slot kinds too).
+                  if (scopeTargets.length > 1) {
+                    commitPaintScopeFanout(
+                      scopeTargets,
+                      paintSpec.material,
+                      paintSpec.materialPreset,
+                    )
+                    return
+                  }
                   const args = {
                     node,
                     role,
@@ -967,15 +857,33 @@ export const SelectionManager = () => {
           preview:
             compatible && role
               ? () => {
-                  const root = getRegisteredNodeObject(node.id)
-                  if (!root) return null
-                  return paintCap.applyPreview({
-                    node,
-                    role,
-                    material: paintSpec.material,
-                    materialPreset: paintSpec.materialPreset,
-                    root,
-                  })
+                  // Preview every surface the click would paint, so room /
+                  // whole-item / all-matching show the full spread, not just the
+                  // hovered surface. Each target is the same kind, so its own
+                  // paint capability builds the preview; restores combine.
+                  const restores: PaintPreviewCleanup[] = []
+                  const sceneNodes = useScene.getState().nodes
+                  for (const target of scopeTargets) {
+                    const targetNode = sceneNodes[target.nodeId]
+                    const targetRoot = getRegisteredNodeObject(target.nodeId)
+                    const targetCap = targetNode
+                      ? nodeRegistry.get(targetNode.type)?.capabilities?.paint
+                      : null
+                    if (!(targetNode && targetRoot && targetCap)) continue
+                    const restore = targetCap.applyPreview({
+                      node: targetNode,
+                      role: target.role,
+                      material: paintSpec.material,
+                      materialPreset: paintSpec.materialPreset,
+                      root: targetRoot,
+                    })
+                    if (restore) restores.push(restore)
+                  }
+                  if (restores.length === 0) return null
+                  return () => {
+                    for (let index = restores.length - 1; index >= 0; index -= 1)
+                      restores[index]?.()
+                  }
                 }
               : () => previewCursor('not-allowed'),
         }
@@ -1004,6 +912,16 @@ export const SelectionManager = () => {
           }:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
           hoveredId: (segmentTarget ? segmentTarget.id : roofNode.id) as AnyNodeId,
           hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
+          // Roof isn't on the slot model (role-specific fields, custom commit),
+          // so it offers only the single surface — but still labels it.
+          paintHover:
+            compatible && role
+              ? {
+                  scopes: ['single'],
+                  slotLabel: slotDisplayLabel(roofNode, role),
+                  nodeNoun: 'roof',
+                }
+              : null,
           apply:
             compatible && role
               ? () => {
@@ -1046,77 +964,9 @@ export const SelectionManager = () => {
         }
       }
 
-      if (node.type === 'stair' || node.type === 'stair-segment') {
-        const stairNode =
-          node.type === 'stair'
-            ? node
-            : node.parentId
-              ? useScene.getState().nodes[node.parentId as AnyNodeId]
-              : null
-        if (!stairNode || stairNode.type !== 'stair') return null
-
-        const role = resolveStairMaterialTarget(event as StairEvent | StairSegmentEvent)
-        const compatible = role !== null && paintEnabled
-        return {
-          key: `stair:${stairNode.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
-          hoveredId: stairNode.id as AnyNodeId,
-          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
-          apply:
-            compatible && role
-              ? () => {
-                  useScene
-                    .getState()
-                    .updateNode(
-                      stairNode.id as AnyNodeId,
-                      buildStairSurfaceMaterialPatch(
-                        stairNode as StairNode,
-                        role,
-                        paintSpec.material,
-                        paintSpec.materialPreset,
-                      ),
-                    )
-                }
-              : null,
-          preview:
-            compatible && role
-              ? () => applyStairPaintPreview(stairNode as StairNode, role, paintSpec)
-              : () => previewCursor('not-allowed'),
-        }
-      }
-
-      // Registry-driven paint dispatch handled at the top of this
-      // function — kinds declaring `capabilities.paint` return there
-      // before any of the legacy roof / stair / single-surface arms
-      // below run.
-
-      if (node.type === 'fence' || node.type === 'column' || node.type === 'shelf') {
-        const compatible = paintEnabled
-
-        return {
-          key: `${node.type}:${node.id}:surface:${eraser ? 'erase' : 'paint'}`,
-          hoveredId: node.id as AnyNodeId,
-          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
-          apply: compatible
-            ? () => {
-                useScene
-                  .getState()
-                  .updateNode(
-                    node.id as AnyNodeId,
-                    buildSingleSurfaceMaterialPatch<
-                      FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode
-                    >(paintSpec.material, paintSpec.materialPreset),
-                  )
-              }
-            : null,
-          preview: compatible
-            ? () =>
-                applySingleSurfacePaintPreview(
-                  node as FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
-                  paintSpec,
-                )
-            : () => previewCursor('not-allowed'),
-        }
-      }
+      // Only `roof` / `roof-segment` reach a legacy paint arm (above) — every
+      // other paintable kind declares `capabilities.paint` and returns from the
+      // registry-driven dispatch at the top of this function.
 
       const disabledNodeTypes = ['zone']
       if (disabledNodeTypes.includes(node.type)) {
@@ -1124,6 +974,7 @@ export const SelectionManager = () => {
           key: `${node.type}:${node.id}:unsupported`,
           hoveredId: node.id as AnyNodeId,
           hoverMode: 'paint-disabled',
+          paintHover: null,
           apply: null,
           preview: () => previewCursor('not-allowed'),
         }
@@ -1143,6 +994,12 @@ export const SelectionManager = () => {
       if (!interaction) return
 
       event.stopPropagation()
+      lastEnterEvent = event
+
+      // Drive the paint HUD off this hover: the interaction carries the scopes +
+      // labels for the painted surface (`null` when it isn't paintable — no
+      // slots, etc. — which makes the HUD show the "hover a surface" hint).
+      useEditor.getState().setPaintHover(interaction.paintHover)
 
       if (activePreview?.key === interaction.key) {
         return
@@ -1161,6 +1018,10 @@ export const SelectionManager = () => {
     const onLeave = (event: NodeEvent) => {
       const interaction = getPaintInteraction(event)
       if (!interaction) return
+
+      // Leaving any surface → the HUD shows the "hover a surface" hint again.
+      lastEnterEvent = null
+      useEditor.getState().setPaintHover(null)
 
       if (activePreview?.key !== interaction.key) {
         return
@@ -1229,7 +1090,16 @@ export const SelectionManager = () => {
       emitter.on(`${type}:click` as any, onClick as any)
     }
 
+    // Cycling the application scope (Shift) fires no pointer event, so replay
+    // the last hover to re-resolve the spread and re-apply the preview at once.
+    const unsubscribePaintScope = useEditor.subscribe((state, prev) => {
+      if (state.paintScope === prev.paintScope || !lastEnterEvent) return
+      clearActivePreview()
+      onEnter(lastEnterEvent)
+    })
+
     return () => {
+      unsubscribePaintScope()
       for (const type of subscribedKinds) {
         emitter.off(`${type}:enter` as any, onEnter as any)
         emitter.off(`${type}:move` as any, onEnter as any)
@@ -1239,6 +1109,7 @@ export const SelectionManager = () => {
       clearActivePreview()
       useViewer.setState({ hoveredId: null })
       setHoverHighlightMode('default')
+      useEditor.getState().setPaintHover(null)
     }
   }, [isCurveReshape, mode, movingNode, setHoverHighlightMode])
 

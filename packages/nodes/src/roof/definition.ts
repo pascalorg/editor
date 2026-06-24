@@ -93,6 +93,7 @@ const roofHandles: HandleDescriptor<RoofNodeType>[] = [roofMoveHandle()]
  */
 export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   kind: 'roof',
+  snapProfile: 'structural',
   schemaVersion: 1,
   schema: RoofNode,
   category: 'structure',

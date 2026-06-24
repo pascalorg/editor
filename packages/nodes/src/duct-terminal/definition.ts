@@ -81,7 +81,6 @@ export const ductTerminalDefinition: NodeDefinition<typeof DuctTerminalNode> = {
     { key: 'Click', label: 'Place register' },
     { key: 'M', label: 'Mount: floor / ceiling / wall' },
     { key: 'R / T', label: 'Rotate ±45° (floor / ceiling)' },
-    { key: 'Shift', label: 'Smooth (no grid snap)' },
     { key: 'Esc', label: 'Exit' },
   ],
 

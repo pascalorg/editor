@@ -246,6 +246,7 @@ export {
 } from './lib/floorplan'
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
 export {
+  boundaryReshapeScope,
   curveReshapeScope,
   endpointReshapeScope,
   holeEditScope,
@@ -331,7 +332,12 @@ export type {
   ViewMode,
   WorkspaceMode,
 } from './store/use-editor'
-export { default as useEditor, isAngleSnapActive, isMagneticSnapActive } from './store/use-editor'
+export {
+  default as useEditor,
+  isAngleSnapActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
+} from './store/use-editor'
 export {
   default as useInteractionScope,
   getEditingHole,

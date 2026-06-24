@@ -1,4 +1,6 @@
 import type { ToolHint } from '@pascal-app/core'
+import type { SnapContext } from '../../../lib/snapping-mode'
+import useEditor from '../../../store/use-editor'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 
 /**
@@ -13,26 +15,37 @@ import { ContextualHelperPanel } from './contextual-helper-panel'
 export function RegisteredToolHelper({
   hints,
   shiftPressed = false,
+  snapContext = null,
 }: {
   hints: ToolHint[]
   shiftPressed?: boolean
+  snapContext?: SnapContext | null
 }) {
-  if (hints.length === 0) return null
+  // Live vertex count of an in-progress polygon draft, so hints gated on a
+  // minimum (e.g. "Finish" at ≥ 3) only appear once they're actually possible.
+  const draftVertexCount = useEditor((s) => s.draftVertexCount)
+  // The snapping chip (when a context is active) already shows Shift = cycle, so
+  // drop the redundant 'Cycle snapping mode' tool hint to avoid a double pill;
+  // also hide draft-gated hints until the draft is far enough along.
+  const visible = hints.filter(
+    (hint) =>
+      !(hint.key === 'Shift' && hint.label === 'Cycle snapping mode') &&
+      (hint.minDraftVertices == null || draftVertexCount >= hint.minDraftVertices),
+  )
+  if (visible.length === 0 && !snapContext) return null
   return (
     <ContextualHelperPanel
-      showSnapping
-      hints={hints.map((hint) => {
-        // Shift is a per-kind bypass for item / opening / zone / duct placement
-        // ("Free place", "Free angle", …) — those hints flip to a bypassed
-        // state while held. For wall / fence, Shift now cycles the snapping
-        // mode (no hold-to-bypass), so it must NOT show the bypass treatment.
-        const isBypassHint = hint.key === 'Shift' && hint.label !== 'Cycle snapping mode'
+      hints={visible.map((hint) => {
+        // Shift is a per-kind bypass for opening / zone / duct placement ("Free
+        // place", "Free angle", …) — those flip to a bypassed state while held.
+        const isBypassHint = hint.key === 'Shift'
         return {
           keys: [hint.key],
           label: shiftPressed && isBypassHint ? 'Guided constraints bypassed' : hint.label,
           active: shiftPressed && isBypassHint,
         }
       })}
+      snapContext={snapContext}
     />
   )
 }

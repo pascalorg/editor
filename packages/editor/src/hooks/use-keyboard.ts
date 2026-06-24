@@ -1,6 +1,7 @@
 import { type AnyNodeId, emitter, nodeRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
+import { steppedRotation } from '../components/tools/item/placement-math'
 import { toggleDoorOpenState } from '../lib/door-interaction'
 import { runRedo, runUndo } from '../lib/history'
 import {
@@ -9,7 +10,7 @@ import {
 } from '../lib/scene-clipboard'
 import { emitDeleteSFX, sfxEmitter } from '../lib/sfx-bus'
 import { toggleWindowOpenState } from '../lib/window-interaction'
-import useEditor from '../store/use-editor'
+import useEditor, { getActiveSnapContext } from '../store/use-editor'
 import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
 
 // Tools call this in their onCancel handler when they have an active mid-action to cancel,
@@ -51,13 +52,16 @@ export const useKeyboard = ({
     // free-place bypass during opening / zone placement — so this predicate
     // must NOT fire for those. Door / window moves still use Shift for free
     // place (out of this overhaul's scope), so they're excluded.
+    // Shift cycles the snapping mode (and clean-tap Ctrl the grid step) whenever
+    // there's an active snapping context — i.e. exactly when the HUD shows a
+    // snapping chip. That single source covers wall/fence/item drafting, every
+    // node move (including wall-hosted items), and endpoint/polygon reshaping,
+    // so the keys never silently stop working. Door / window keep Shift = free
+    // place until the modifier model unifies them.
     const isSnappingCycleContext = () => {
-      const ed = useEditor.getState()
       const moving = getMovingNode()
-      if (moving != null) return moving.type !== 'door' && moving.type !== 'window'
-      return (
-        ed.mode === 'build' && (ed.tool === 'wall' || ed.tool === 'fence' || ed.tool === 'item')
-      )
+      if (moving?.type === 'door' || moving?.type === 'window') return false
+      return getActiveSnapContext() != null
     }
 
     // A "clean tap" of Ctrl/Meta (pressed and released with NO other key in
@@ -80,6 +84,16 @@ export const useKeyboard = ({
 
       // Don't handle shortcuts if user is typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      if (e.key === 'Shift' && !e.repeat && useEditor.getState().mode === 'material-paint') {
+        // In paint mode Shift cycles the application scope (this surface →
+        // whole item / all matching / room) — the paint-mode analogue of the
+        // snapping-mode cycle below. The scope chip mirrors this key.
+        e.preventDefault()
+        useEditor.getState().cyclePaintScope()
+        sfxEmitter.emit('sfx:grid-snap')
         return
       }
 
@@ -283,14 +297,18 @@ export const useKeyboard = ({
             sfxEmitter.emit('sfx:item-rotate')
           } else if (node && 'rotation' in node) {
             e.preventDefault()
-            const ROTATION_STEP = Math.PI / 4
-
-            // Handle different rotation types (number for roof, array for items/windows/doors)
+            // Round to the nearest 45° then step one increment (not a blind +45°).
             if (typeof node.rotation === 'number') {
-              useScene.getState().updateNode(node.id, { rotation: node.rotation + ROTATION_STEP })
+              useScene
+                .getState()
+                .updateNode(node.id, { rotation: steppedRotation(node.rotation, 1) })
             } else if (Array.isArray(node.rotation)) {
               useScene.getState().updateNode(node.id, {
-                rotation: [node.rotation[0], node.rotation[1] + ROTATION_STEP, node.rotation[2]],
+                rotation: [
+                  node.rotation[0],
+                  steppedRotation(node.rotation[1], 1),
+                  node.rotation[2],
+                ],
               })
             }
             sfxEmitter.emit('sfx:item-rotate')
@@ -316,13 +334,18 @@ export const useKeyboard = ({
             sfxEmitter.emit('sfx:item-rotate')
           } else if (node && 'rotation' in node) {
             e.preventDefault()
-            const ROTATION_STEP = Math.PI / 4
-
+            // Round to the nearest 45° then step one increment back.
             if (typeof node.rotation === 'number') {
-              useScene.getState().updateNode(node.id, { rotation: node.rotation - ROTATION_STEP })
+              useScene
+                .getState()
+                .updateNode(node.id, { rotation: steppedRotation(node.rotation, -1) })
             } else if (Array.isArray(node.rotation)) {
               useScene.getState().updateNode(node.id, {
-                rotation: [node.rotation[0], node.rotation[1] - ROTATION_STEP, node.rotation[2]],
+                rotation: [
+                  node.rotation[0],
+                  steppedRotation(node.rotation[1], -1),
+                  node.rotation[2],
+                ],
               })
             }
             sfxEmitter.emit('sfx:item-rotate')

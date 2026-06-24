@@ -108,6 +108,7 @@ export type {
   SelectableConfig,
   SlotDeclaration,
   SnapPointKind,
+  SnapProfile,
   SnappableConfig,
   SnapServicesLike,
   SurfacePoint,

@@ -52,7 +52,6 @@ export const pipeTrapDefinition: NodeDefinition<typeof PipeTrapNode> = {
   toolHints: [
     { key: 'Click', label: 'Place trap' },
     { key: 'R / T', label: 'Rotate ±45°' },
-    { key: 'Shift', label: 'Smooth (no grid snap)' },
     { key: 'Esc', label: 'Exit' },
   ],
 

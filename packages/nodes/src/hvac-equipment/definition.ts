@@ -86,7 +86,6 @@ export const hvacEquipmentDefinition: NodeDefinition<typeof HvacEquipmentNode> =
   toolHints: [
     { key: 'Click', label: 'Place unit' },
     { key: 'R / T', label: 'Rotate ±45°' },
-    { key: 'Shift', label: 'Smooth (no grid snap)' },
     { key: 'Esc', label: 'Exit' },
   ],
 

@@ -554,7 +554,8 @@ export const WallTool: React.FC = () => {
       // angles / off). `'off'` is the bypass — there is no Shift hold-to-bypass.
       // Alt still bypasses Figma-style alignment guides independently.
       const angleLocked = buildingState.current === 1 && isAngleSnapActive()
-      const bypassAlign = event.nativeEvent?.altKey === true
+      // Alignment guides follow the snapping mode (lines = magnetic on), not Alt.
+      const bypassAlign = !isMagneticSnapActive()
       const snapResult = snapWallDraftPointDetailed({
         point: localPoint,
         walls,
@@ -634,7 +635,8 @@ export const WallTool: React.FC = () => {
       const walls = getCurrentLevelWalls()
       const localClick: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
 
-      const bypassAlign = event.nativeEvent?.altKey === true
+      // Alignment guides follow the snapping mode (lines = magnetic on), not Alt.
+      const bypassAlign = !isMagneticSnapActive()
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(

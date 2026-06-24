@@ -134,6 +134,7 @@ const fenceHandles: HandleDescriptor<FenceNodeType>[] = [
  */
 export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   kind: 'fence',
+  snapProfile: 'structural',
   schemaVersion: 1,
   schema: FenceNode,
   category: 'structure',

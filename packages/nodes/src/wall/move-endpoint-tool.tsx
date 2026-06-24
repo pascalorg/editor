@@ -19,6 +19,7 @@ import {
   formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  isAngleSnapActive,
   isMagneticSnapActive,
   isSegmentLongEnough,
   MeasurementPill,
@@ -177,7 +178,6 @@ function getLinkedWallUpdates(
 export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({ target }) => {
   const hasDraggedRef = useRef(false)
   const previousGridPosRef = useRef<WallPlanPoint | null>(null)
-  const shiftPressedRef = useRef(false)
   const altPressedRef = useRef(false)
   const nodeIdRef = useRef(target.wall.id)
   const originalStartRef = useRef<WallPlanPoint>([...target.wall.start] as WallPlanPoint)
@@ -288,21 +288,17 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
 
     const onGridMove = (event: GridEvent) => {
       const planPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
-      // Endpoint *move* snaps to the grid (and to other wall corners) —
-      // 45° angle snap is for the initial draft, where it gives clean
-      // orthogonal corners; here it would fight every perpendicular
-      // drag by warping the endpoint onto the nearest 45° line from
-      // the fixed corner.
-      //
-      // Shift is a hard snap bypass: raw endpoint position, no grid,
-      // no magnetic wall snap, and no alignment guide snap.
-      const bypassSnap = shiftPressedRef.current || event.nativeEvent.shiftKey
+      // Endpoint move honours the active snapping mode (the HUD chip): grid →
+      // lattice; lines → magnetic corner/alignment snap; angles → lock the
+      // segment to 15° rays from the FIXED corner; off → raw. No Shift bypass —
+      // Shift cycles the mode now, and Off is the bypass.
       const snapResult = snapWallDraftPointDetailed({
         point: planPoint,
         walls: levelWalls,
         ignoreWallIds: [nodeId],
-        bypassSnap,
-        magnetic: !bypassSnap && isMagneticSnapActive(),
+        start: fixedPoint,
+        angleSnap: isAngleSnapActive(),
+        magnetic: isMagneticSnapActive(),
       })
       const snappedPoint = snapResult.point
 
@@ -312,8 +308,10 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       // candidate, so the dot always sits on an actual point (endpoint /
       // midpoint), never an empty-space bbox corner. Layered on top of the
       // grid + corner snap above; Alt is reserved for corner-detach here.
+      // Alignment axes are the "Lines" snap, so gate them on the magnetic flag —
+      // Off / Grid / Angles must not pull the endpoint onto other elements' lines.
       let alignedPoint = snappedPoint
-      if (!bypassSnap && wallAlignmentCandidates.length > 0) {
+      if (isMagneticSnapActive() && wallAlignmentCandidates.length > 0) {
         const ar = resolveAlignment({
           moving: [{ nodeId, kind: 'corner', x: snappedPoint[0], z: snappedPoint[1] }],
           candidates: wallAlignmentCandidates,
@@ -328,7 +326,6 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       }
 
       if (
-        !bypassSnap &&
         previousGridPosRef.current &&
         (alignedPoint[0] !== previousGridPosRef.current[0] ||
           alignedPoint[1] !== previousGridPosRef.current[1])
@@ -414,9 +411,6 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return
       }
-      if (event.key === 'Shift') {
-        shiftPressedRef.current = true
-      }
       if (event.key === 'Alt') {
         altPressedRef.current = true
         setAltPressed(true)
@@ -424,9 +418,6 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') {
-        shiftPressedRef.current = false
-      }
       if (event.key === 'Alt') {
         altPressedRef.current = false
         setAltPressed(false)
@@ -434,7 +425,6 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const onWindowBlur = () => {
-      shiftPressedRef.current = false
       altPressedRef.current = false
       setAltPressed(false)
     }

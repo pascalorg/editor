@@ -31,7 +31,7 @@ import { stripPlacementMetadataFlags } from '../../../lib/placement-metadata'
 import { resolvePlanarCursorPosition } from '../../../lib/planar-cursor-placement'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
-import useEditor, { isMagneticSnapActive } from '../../../store/use-editor'
+import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
 import { swallowNextClick } from '../../editor/node-arrow-handles'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { DragBoundingBox } from '../shared/drag-bounding-box'
@@ -42,9 +42,8 @@ import { PlacementBox } from '../shared/placement-box'
 /** Snap a world-plan coordinate to the editor's active grid step (0.5 / 0.25
  *  / 0.1 / 0.05), read live so changing the step mid-drag takes effect. */
 const snapToGridStep = (value: number) => {
-  const state = useEditor.getState()
-  if (!resolveSnapFlags(state.snappingMode).grid) return value
-  const step = state.gridSnapStep
+  if (!resolveSnapFlags(getActiveSnappingMode()).grid) return value
+  const step = useEditor.getState().gridSnapStep
   return Math.round(value / step) * step
 }
 
@@ -420,7 +419,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         original: [originalPosition[0], originalPosition[2]],
         anchor: dragAnchorRef.current,
         mode: useAbsoluteCursorPlacement || cursorAttached ? 'absolute' : 'relative',
-        snap: event.nativeEvent?.altKey === true ? (value) => value : snapToGridStep,
+        // Snap follows the mode (raw in Off via snapToGridStep); Alt = force only.
+        snap: snapToGridStep,
       })
       dragAnchorRef.current = resolved.anchor
       let [x, z] = resolved.point
@@ -429,10 +429,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // moving item's edge lines up (on X or Z) with another item's edge,
       // snap and publish a guide. The guide connects to the nearest real
       // corner of the candidate (resolver tie-break), so the dot always sits
-      // on an actual point. Alt (free place) bypasses all snap; the active
-      // snapping mode governs whether magnetic alignment runs at all.
-      const freePlace = event.nativeEvent?.altKey === true
-      const bypass = freePlace || !isMagneticSnapActive()
+      // on an actual point. Alignment ("lines") follows the snapping mode only —
+      // Alt is force-place (forces a valid drop), it does not bypass snapping.
+      const bypass = !isMagneticSnapActive()
       if (!bypass && alignmentCandidates.length > 0) {
         const result = resolveAlignment({
           moving: movingFootprintAnchors(node, x, z, rotationRef.current),
@@ -493,7 +492,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       previewConnectivity(position, rotationRef.current)
 
       const prev = previousSnapRef.current
-      if (!freePlace && (!prev || prev[0] !== x || prev[1] !== z)) {
+      if (!prev || prev[0] !== x || prev[1] !== z) {
         sfxEmitter.emit('sfx:grid-snap')
         previousSnapRef.current = [x, z]
       }

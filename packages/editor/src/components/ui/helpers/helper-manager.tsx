@@ -11,18 +11,39 @@ import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import {
+  type ContextualShortcutHint,
   ROTATE_HANDLE_DRAG_LABEL,
   resolveRotateHandleHelpHints,
   resolveSelectModeHelpHints,
 } from '../../../lib/contextual-help'
 import { canDirectMoveNode, canDirectRotateNode } from '../../../lib/direct-manipulation'
+import type { ReshapeKind } from '../../../lib/interaction/scope'
+import { snapContextOf } from '../../../lib/snapping-mode'
 import useEditor from '../../../store/use-editor'
-import { useActiveHandleDrag, useMovingNode } from '../../../store/use-interaction-scope'
+import useInteractionScope, {
+  useActiveHandleDrag,
+  useMovingNode,
+} from '../../../store/use-interaction-scope'
 import { BuildingHelper } from './building-helper'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 import { ItemHelper } from './item-helper'
 import { RegisteredToolHelper } from './registered-tool-helper'
 import { RoofHelper } from './roof-helper'
+
+// Reshaping a selected node's geometry (endpoint / curve / polygon corner). The
+// snapping chip is the main control; these just name the gesture + Esc.
+function reshapingHints(reshape: ReshapeKind): ContextualShortcutHint[] {
+  const action =
+    reshape === 'curve'
+      ? 'Curve'
+      : reshape === 'endpoint'
+        ? 'Move endpoint'
+        : 'Move corner'
+  return [
+    { keys: ['Drag'], label: action },
+    { keys: ['Esc'], label: 'Cancel' },
+  ]
+}
 
 type ActiveModifierKeys = {
   command: boolean
@@ -66,6 +87,7 @@ function useActiveModifierKeys(): ActiveModifierKeys {
 export function HelperManager() {
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
+  const scope = useInteractionScope((s) => s.scope)
   const movingNode = useMovingNode()
   const activeHandleDrag = useActiveHandleDrag()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -77,6 +99,18 @@ export function HelperManager() {
         .map((id) => s.nodes[id as AnyNodeId])
         .filter((node): node is AnyNode => node !== undefined),
     ),
+  )
+  // The snapping context for whatever's active (wall / item / polygon) — drives
+  // which snapping chips the HUD shows, derived once and shared by every branch.
+  const snapContext = useMemo(
+    () =>
+      snapContextOf({
+        scope,
+        mode,
+        tool,
+        profileOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapProfile,
+      }),
+    [scope, mode, tool],
   )
   const selectModeHints = useMemo(
     () =>
@@ -100,16 +134,36 @@ export function HelperManager() {
     return <ContextualHelperPanel hints={resolveRotateHandleHelpHints(modifiers.shift)} />
   }
 
+  // Reshaping a node's geometry (endpoint / curve / polygon corner). Checked
+  // before the select branch so the idle "drag selected / add objects" hints
+  // never leak over an in-progress reshape — and it gets its own snapping chip.
+  if (scope.kind === 'reshaping') {
+    return <ContextualHelperPanel hints={reshapingHints(scope.reshape)} snapContext={snapContext} />
+  }
+
   if (movingNode) {
     if (movingNode.type === 'building') return <BuildingHelper showRotate />
-    return <ItemHelper showEsc />
+    // Force-place only makes sense for kinds that collision-validate their drop;
+    // structural kinds (wall/slab/…) never reject, so don't advertise Alt.
+    return (
+      <ItemHelper
+        showEsc
+        showForce={nodeRegistry.get(movingNode.type)?.snapProfile !== 'structural'}
+        snapContext={snapContext}
+      />
+    )
   }
 
+  // Paint mode advertises (and cycles, via Shift) the application scope — the
+  // only contextual control here. The chip hides itself for targets that only
+  // paint one surface, so this renders nothing until a scoped target is active.
   if (mode === 'material-paint') {
-    return null
+    return <ContextualHelperPanel hints={[]} showPaintScope />
   }
 
-  if (mode === 'select') {
+  // Idle select only — an active scope (handle-drag, box-select, …) must not show
+  // the idle selection hints.
+  if (mode === 'select' && scope.kind === 'idle') {
     return <ContextualHelperPanel hints={selectModeHints} />
   }
 
@@ -119,13 +173,19 @@ export function HelperManager() {
   if (tool) {
     const def = nodeRegistry.get(tool)
     if (def?.toolHints && def.toolHints.length > 0) {
-      return <RegisteredToolHelper hints={def.toolHints} shiftPressed={modifiers.shift} />
+      return (
+        <RegisteredToolHelper
+          hints={def.toolHints}
+          shiftPressed={modifiers.shift}
+          snapContext={snapContext}
+        />
+      )
     }
   }
 
   // Legacy fallback — only `roof` remains because it hasn't migrated to
   // `def.tool` / `def.toolHints` yet (no Stage D port). When roof
   // migrates, this switch deletes outright.
-  if (tool === 'roof') return <RoofHelper shiftPressed={modifiers.shift} />
+  if (tool === 'roof') return <RoofHelper snapContext={snapContext} />
   return null
 }

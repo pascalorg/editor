@@ -166,6 +166,7 @@ function itemWallMoveHandle(): HandleDescriptor<ItemNodeType> {
  */
 export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   kind: 'item',
+  snapProfile: 'item',
   schemaVersion: 1,
   schema: ItemNode,
   category: 'furnish',
@@ -316,7 +317,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     { key: 'R', label: 'Rotate counterclockwise' },
     { key: 'T', label: 'Rotate clockwise' },
     { key: 'Shift', label: 'Cycle snapping mode' },
-    { key: 'Alt', label: 'Free place (no snap)' },
+    { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

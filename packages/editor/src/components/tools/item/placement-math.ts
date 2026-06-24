@@ -1,16 +1,26 @@
 import { type AssetInput, isObject } from '@pascal-app/core'
 import { Euler, Matrix3, type Matrix4, Quaternion, Vector3 } from 'three'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
-import useEditor from '../../../store/use-editor'
+import useEditor, { getActiveSnappingMode } from '../../../store/use-editor'
 
-// Sentinel returned when the active snapping mode disables grid snapping.
+// Sentinel returned when the active context's snapping mode disables grid snap.
 // The snap helpers below treat any `step <= 0` as "no grid snap" and pass the
-// raw value through. When grid snapping is enabled (the default `'grid'` mode)
-// this returns the user's `gridSnapStep` exactly as before — so the default
-// path is byte-identical to the pre-mode behaviour.
+// raw value through. For items the default mode is now `lines` (grid off), so
+// item placement/move is free + line-snap unless the user opts into `grid`.
 function getGridSnapStep(): number {
-  const state = useEditor.getState()
-  return resolveSnapFlags(state.snappingMode).grid ? state.gridSnapStep : 0
+  return resolveSnapFlags(getActiveSnappingMode()).grid ? useEditor.getState().gridSnapStep : 0
+}
+
+const ROTATION_QUANTUM = Math.PI / 4
+
+/**
+ * R/T rotation: round the current angle to the nearest 45° then step ONE
+ * increment in `direction` (+1 / -1), so the node always lands on a clean 45°
+ * multiple regardless of its starting angle (12° → 45°, 40° → 90°) rather than a
+ * blind ±45° from an arbitrary angle.
+ */
+export function steppedRotation(current: number, direction: 1 | -1): number {
+  return (Math.round(current / ROTATION_QUANTUM) + direction) * ROTATION_QUANTUM
 }
 
 function positiveModulo(value: number, divisor: number): number {

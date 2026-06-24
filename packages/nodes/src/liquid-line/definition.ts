@@ -102,7 +102,6 @@ export const liquidLineDefinition: NodeDefinition<typeof LiquidLineNode> = {
   toolHints: [
     { key: 'Click', label: 'Start liquid line' },
     { key: 'Click again', label: 'Place it (locked to 45°)' },
-    { key: 'Shift', label: 'Free angle' },
     { key: 'Alt + drag', label: 'Go vertical ↕, click to place' },
     { key: 'F', label: 'Follow: trace a lineset' },
     { key: 'Esc', label: 'Cancel' },

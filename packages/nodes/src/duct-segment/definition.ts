@@ -165,7 +165,6 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   toolHints: [
     { key: 'Click', label: 'Start segment' },
     { key: 'Click again', label: 'Place it (locked to 45°)' },
-    { key: 'Shift', label: 'Free angle' },
     { key: 'Alt + drag', label: 'Go vertical ↕, click to place' },
     { key: '[ / ]', label: 'Duct diameter down / up' },
     { key: 'Q', label: 'Round / rect trunk' },

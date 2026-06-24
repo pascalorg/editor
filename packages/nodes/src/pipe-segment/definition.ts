@@ -110,7 +110,6 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
     { key: 'Q', label: 'Waste / vent' },
     { key: '[ / ]', label: 'Pipe size down / up' },
     { key: 'Alt + drag', label: 'Vertical stack ↕, click to place' },
-    { key: 'Shift', label: 'Free angle' },
     { key: 'Esc', label: 'Cancel start point' },
   ],
 
