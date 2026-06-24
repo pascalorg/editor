@@ -365,7 +365,7 @@ bun dev
 # 1. Build @pascal-app/core and @pascal-app/viewer
 # 2. Start watching both packages for changes
 # 3. Start the Next.js editor dev server
-# Open http://localhost:3000
+# Open http://localhost:3002
 ```
 
 **Important:** Always run `bun dev` from the root directory to ensure the package watchers are running. This enables hot reload when you edit files in `packages/core/src/` or `packages/viewer/src/`.
