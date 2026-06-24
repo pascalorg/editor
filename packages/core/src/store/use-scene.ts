@@ -622,6 +622,34 @@ function migrateNodes(nodes: Record<string, any>): {
         // 40° matches the RoofSegmentNode schema default.
         patchedNodes[id] = { ...rest, pitch: derived > 0 ? derived : 40 }
       }
+
+      const currentSegment = patchedNodes[id] as RoofSegmentNode & {
+        dutchGableOverhang?: unknown
+        dutchRidgeAxis?: unknown
+      }
+      if (currentSegment.roofType === 'dutch' && currentSegment.dutchGableOverhang === undefined) {
+        patchedNodes[id] = {
+          ...currentSegment,
+          dutchGableOverhang: 0,
+        }
+      }
+
+      const segmentWithGableOverhang = patchedNodes[id] as RoofSegmentNode & {
+        dutchRidgeAxis?: unknown
+      }
+      if (
+        segmentWithGableOverhang.roofType === 'dutch' &&
+        segmentWithGableOverhang.dutchRidgeAxis === undefined
+      ) {
+        const width =
+          typeof segmentWithGableOverhang.width === 'number' ? segmentWithGableOverhang.width : 8
+        const depth =
+          typeof segmentWithGableOverhang.depth === 'number' ? segmentWithGableOverhang.depth : 6
+        patchedNodes[id] = {
+          ...segmentWithGableOverhang,
+          dutchRidgeAxis: width >= depth ? 'x' : 'z',
+        }
+      }
     }
 
     if (node.type === 'door') {

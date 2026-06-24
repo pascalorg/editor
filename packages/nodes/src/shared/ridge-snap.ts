@@ -1,21 +1,21 @@
 import {
+  getRidgeVentLinesForSegment,
   getRoofSegmentVisibleTopBounds,
-  ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
 } from '@pascal-app/core'
 
 /**
  * Shared ridge-line snap math for ridge-vent placement + move tools.
  *
- * Ridge vents must sit centered on the segment's ridge — off-ridge the
- * cap's far half dips into the higher part of the slope ("goes inside"
- * the roof). So the placement tools clamp the cursor onto the ridge:
- * closest-point projection along the segment's local X axis, with the X
- * span clipped to where a real ridge actually exists for that roof type.
+ * Ridge vents must sit centered on a roof break line — off-line the cap's
+ * far half dips into the higher part of the slope ("goes inside" the roof).
+ * So the placement tools clamp the cursor onto the nearest generated ridge
+ * line, preserving the line's yaw for hip / lower-slope runs.
  *
- * Per roof type (the segment's ridge runs along the segment's local X):
+ * Per roof type:
  *   - gable / gambrel: ridge spans the full width.
- *   - mansard: ridge is shortened to the upper hip roof.
+ *   - mansard: top ridge, upper hip runs, plus lower-slope runs on all
+ *     four steep lower faces.
  *   - dutch: ridge is shortened by the hipped shoulders.
  *   - hip: ridge is shortened by the hipped ends — spans width − depth.
  *     A square hip (width ≤ depth) collapses to a single apex point.
@@ -30,51 +30,57 @@ export const RIDGE_LIFT = 0
 export type RidgeSnap = {
   /** Segment-local X of the snapped ridge position. */
   localX: number
-  /** Segment-local Z of the snapped ridge position (0 for peaked roofs). */
+  /** Segment-local Z of the snapped ridge position. */
   localZ: number
+  /** Segment-local yaw matching the snapped ridge line. */
+  rotation: number
 }
 
 export function resolveRidgeSnap(
   segment: RoofSegmentNode,
   cursorLocalX: number,
-  _cursorLocalZ: number,
+  cursorLocalZ: number,
 ): RidgeSnap | null {
   const roofType = segment.roofType ?? 'gable'
   if (roofType === 'flat') return null
 
-  const { width, depth, minX, maxX, minZ, maxZ } = getRoofSegmentVisibleTopBounds(segment)
-  const halfD = depth / 2
+  const lines =
+    roofType === 'shed'
+      ? getShedHighEaveLine(segment)
+      : getRidgeVentLinesForSegment(segment).map(({ start, end }) => ({ start, end }))
+  if (lines.length === 0) return null
 
-  const ridgeZ = roofType === 'shed' ? minZ : 0
-  if (roofType !== 'shed' && (minZ > 0 || maxZ < 0)) return null
-  const mansardInset =
-    Math.min(width, depth) *
-    (segment.mansardSteepWidthRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepWidthRatio)
-  const dutchInset =
-    Math.min(width, depth) * (segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio)
-  let ridgeMinX = minX
-  let ridgeMaxX = maxX
+  let best: RidgeSnap | null = null
+  let bestDistanceSq = Number.POSITIVE_INFINITY
 
-  if (roofType === 'hip') {
-    ridgeMinX = minX + halfD
-    ridgeMaxX = maxX - halfD
-  } else if (roofType === 'mansard') {
-    const shoulderMinX = minX + mansardInset
-    const shoulderMaxX = maxX - mansardInset
-    const topD = Math.max(0, maxZ - minZ - mansardInset * 2)
-    ridgeMinX = shoulderMinX + topD / 2
-    ridgeMaxX = shoulderMaxX - topD / 2
-  } else if (roofType === 'dutch') {
-    ridgeMinX = minX + dutchInset
-    ridgeMaxX = maxX - dutchInset
+  for (const line of lines) {
+    const [sx, sz] = line.start
+    const [ex, ez] = line.end
+    const dx = ex - sx
+    const dz = ez - sz
+    const lengthSq = dx * dx + dz * dz
+    const t =
+      lengthSq <= 1e-8
+        ? 0
+        : Math.max(0, Math.min(1, ((cursorLocalX - sx) * dx + (cursorLocalZ - sz) * dz) / lengthSq))
+    const localX = sx + dx * t
+    const localZ = sz + dz * t
+    const distanceSq = (cursorLocalX - localX) ** 2 + (cursorLocalZ - localZ) ** 2
+
+    if (distanceSq < bestDistanceSq) {
+      bestDistanceSq = distanceSq
+      best = {
+        localX,
+        localZ,
+        rotation: Math.atan2(-dz, dx),
+      }
+    }
   }
 
-  if (ridgeMinX > ridgeMaxX) {
-    const apexX = (ridgeMinX + ridgeMaxX) / 2
-    return { localX: apexX, localZ: ridgeZ }
-  }
+  return best
+}
 
-  const localX = Math.max(ridgeMinX, Math.min(ridgeMaxX, cursorLocalX))
-
-  return { localX, localZ: ridgeZ }
+function getShedHighEaveLine(segment: RoofSegmentNode) {
+  const { minX, maxX, minZ } = getRoofSegmentVisibleTopBounds(segment)
+  return [{ start: [minX, minZ] as [number, number], end: [maxX, minZ] as [number, number] }]
 }

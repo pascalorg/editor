@@ -3,8 +3,11 @@ import {
   type AnyNode,
   type AnyNodeId,
   AnyNode as AnyNodeSchema,
+  createDefaultRidgeVentsForSegment,
   getEffectiveWallSurfaceMaterial,
   getWallSurfaceMaterialSignature,
+  isDefaultRidgeVentNode,
+  type RoofSegmentNode,
   type WallNode,
 } from '../../schema'
 import type { CollectionId } from '../../schema/collections'
@@ -23,6 +26,21 @@ type WallMergePlan = {
   mergedChildren: WallNode['children']
   attachmentUpdates: WallAttachmentUpdate[]
 }
+
+const DEFAULT_RIDGE_VENT_REFRESH_FIELDS = new Set<string>([
+  'roofType',
+  'width',
+  'depth',
+  'trim',
+  'overhang',
+  'wallThickness',
+  'shingleThickness',
+  'gambrelLowerWidthRatio',
+  'mansardSteepWidthRatio',
+  'dutchHipWidthRatio',
+  'dutchGableOverhang',
+  'dutchRidgeAxis',
+])
 
 type ZodCheckLike = {
   _zod?: {
@@ -496,6 +514,44 @@ function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode
   return { ...currentNode, ...(sanitized.value as Partial<AnyNode>) } as AnyNode
 }
 
+function shouldRefreshDefaultRidgeVents(data: Partial<AnyNode>) {
+  return Object.keys(data).some((key) => DEFAULT_RIDGE_VENT_REFRESH_FIELDS.has(key))
+}
+
+function refreshDefaultRidgeVentsForSegment(
+  nextNodes: Record<AnyNodeId, AnyNode>,
+  segment: RoofSegmentNode,
+): AnyNodeId[] {
+  const childIds = Array.isArray(segment.children) ? (segment.children as AnyNodeId[]) : []
+  const defaultIds = childIds.filter((childId) =>
+    isDefaultRidgeVentNode(nextNodes[childId], segment.id),
+  )
+  if (defaultIds.length === 0) return []
+
+  const defaultIdSet = new Set(defaultIds)
+  for (const id of defaultIds) {
+    delete nextNodes[id]
+  }
+
+  const nextVents = createDefaultRidgeVentsForSegment(segment)
+  for (const vent of nextVents) {
+    nextNodes[vent.id as AnyNodeId] = {
+      ...vent,
+      parentId: segment.id,
+    } as AnyNode
+  }
+
+  nextNodes[segment.id as AnyNodeId] = {
+    ...segment,
+    children: [
+      ...childIds.filter((childId) => !defaultIdSet.has(childId)),
+      ...nextVents.map((vent) => vent.id as AnyNodeId),
+    ],
+  } as AnyNode
+
+  return nextVents.map((vent) => vent.id as AnyNodeId)
+}
+
 // Track pending RAF for updateNodesAction to prevent multiple queued callbacks
 let pendingRafId: number | null = null
 let pendingUpdates: Set<AnyNodeId> = new Set()
@@ -808,6 +864,11 @@ export const applyNodeChangesAction = (
       }
 
       nextNodes[id] = updatedNode
+      if (updatedNode.type === 'roof-segment' && shouldRefreshDefaultRidgeVents(data)) {
+        for (const ventId of refreshDefaultRidgeVentsForSegment(nextNodes, updatedNode)) {
+          nodesToMarkDirty.add(ventId)
+        }
+      }
       nodesToMarkDirty.add(id)
     }
 
@@ -905,6 +966,7 @@ export const updateNodesAction = (
 ) => {
   if (get().readOnly) return
   const parentsToUpdate = new Set<AnyNodeId>()
+  const extraNodesToUpdate = new Set<AnyNodeId>()
 
   set((state) => {
     const nextNodes = { ...state.nodes }
@@ -952,6 +1014,11 @@ export const updateNodesAction = (
 
       // Apply the update
       nextNodes[id] = updatedNode
+      if (updatedNode.type === 'roof-segment' && shouldRefreshDefaultRidgeVents(data)) {
+        for (const ventId of refreshDefaultRidgeVentsForSegment(nextNodes, updatedNode)) {
+          extraNodesToUpdate.add(ventId)
+        }
+      }
     }
 
     return { nodes: nextNodes }
@@ -963,6 +1030,9 @@ export const updateNodesAction = (
   }
   for (const pId of parentsToUpdate) {
     pendingUpdates.add(pId)
+  }
+  for (const id of extraNodesToUpdate) {
+    pendingUpdates.add(id)
   }
 
   if (pendingRafId !== null) {

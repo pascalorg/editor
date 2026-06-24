@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 import {
+  getDutchRidgeAxis,
   getRoofSegmentVisibleTopBounds,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
@@ -11,7 +12,7 @@ import {
 const MIN_DEFAULT_RIDGE_VENT_LENGTH_M = 0.4
 const DEFAULT_RIDGE_VENT_GENERATOR = 'default-ridge-vent'
 
-type RidgeVentLine = {
+export type RidgeVentLine = {
   name: string
   start: [number, number]
   end: [number, number]
@@ -51,7 +52,7 @@ export const RidgeVentNode = BaseNode.extend({
 
 export type RidgeVentNode = z.infer<typeof RidgeVentNode>
 
-function getDefaultRidgeVentLines(segment: RoofSegmentNode): RidgeVentLine[] {
+export function getRidgeVentLinesForSegment(segment: RoofSegmentNode): RidgeVentLine[] {
   const bounds = getRoofSegmentVisibleTopBounds(segment)
   const { width, depth, minX, maxX, minZ, maxZ } = bounds
   if (segment.roofType === 'flat' || segment.roofType === 'shed') return []
@@ -73,6 +74,28 @@ function getDefaultRidgeVentLines(segment: RoofSegmentNode): RidgeVentLine[] {
     const shoulderMaxZ = maxZ - inset
     const topW = Math.max(0, shoulderMaxX - shoulderMinX)
     const topD = Math.max(0, shoulderMaxZ - shoulderMinZ)
+    const lowerSlopeLines: RidgeVentLine[] = [
+      {
+        name: 'Slope Ridge Vent',
+        start: [shoulderMinX, shoulderMaxZ],
+        end: [minX, maxZ],
+      },
+      {
+        name: 'Slope Ridge Vent',
+        start: [shoulderMaxX, shoulderMaxZ],
+        end: [maxX, maxZ],
+      },
+      {
+        name: 'Slope Ridge Vent',
+        start: [shoulderMaxX, shoulderMinZ],
+        end: [maxX, minZ],
+      },
+      {
+        name: 'Slope Ridge Vent',
+        start: [shoulderMinX, shoulderMinZ],
+        end: [minX, minZ],
+      },
+    ]
 
     if (topW >= topD) {
       const leftRidge: [number, number] = [shoulderMinX + topD / 2, 0]
@@ -83,6 +106,7 @@ function getDefaultRidgeVentLines(segment: RoofSegmentNode): RidgeVentLine[] {
         { name: 'Hip Ridge Vent', start: [shoulderMinX, shoulderMinZ], end: leftRidge },
         { name: 'Hip Ridge Vent', start: [shoulderMaxX, shoulderMaxZ], end: rightRidge },
         { name: 'Hip Ridge Vent', start: [shoulderMaxX, shoulderMinZ], end: rightRidge },
+        ...lowerSlopeLines,
       ]
     }
 
@@ -94,6 +118,7 @@ function getDefaultRidgeVentLines(segment: RoofSegmentNode): RidgeVentLine[] {
       { name: 'Hip Ridge Vent', start: [shoulderMaxX, shoulderMaxZ], end: frontRidge },
       { name: 'Hip Ridge Vent', start: [shoulderMinX, shoulderMinZ], end: backRidge },
       { name: 'Hip Ridge Vent', start: [shoulderMaxX, shoulderMinZ], end: backRidge },
+      ...lowerSlopeLines,
     ]
   }
 
@@ -113,7 +138,7 @@ function getDefaultRidgeVentLines(segment: RoofSegmentNode): RidgeVentLine[] {
     const shoulderBackRight: [number, number] = [maxX - inset, minZ + inset]
     const shoulderBackLeft: [number, number] = [minX + inset, minZ + inset]
 
-    if (width >= depth) {
+    if (getDutchRidgeAxis(segment) === 'x') {
       return [
         ...(ridgeZVisible
           ? [
@@ -189,7 +214,7 @@ function getLineYaw(start: [number, number], end: [number, number]): number {
 }
 
 export function createDefaultRidgeVentsForSegment(segment: RoofSegmentNode): RidgeVentNode[] {
-  return getDefaultRidgeVentLines(segment)
+  return getRidgeVentLinesForSegment(segment)
     .map((line) => {
       const length = Math.hypot(line.end[0] - line.start[0], line.end[1] - line.start[1])
       if (length < MIN_DEFAULT_RIDGE_VENT_LENGTH_M) return null
@@ -225,6 +250,10 @@ export function isDefaultRidgeVentNode(
   }
 
   const hasCustomMaterial = vent.material !== undefined || vent.materialPreset !== undefined
-  const hasDefaultName = vent.name === 'Ridge Vent' || vent.name === 'Hip Ridge Vent'
+  const hasDefaultName =
+    vent.name === 'Ridge Vent' ||
+    vent.name === 'Hip Ridge Vent' ||
+    vent.name === 'Shoulder Ridge Vent' ||
+    vent.name === 'Slope Ridge Vent'
   return hasDefaultName && vent.style === 'shingled' && !hasCustomMaterial
 }

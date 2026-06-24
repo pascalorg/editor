@@ -1,4 +1,5 @@
 import {
+  getDutchRidgeAxis,
   getRoofSegmentSurfaceY,
   getSegmentSlopeFrame,
   ROOF_SHAPE_DEFAULTS,
@@ -76,6 +77,8 @@ type FaceShapeRatios = {
   gambrelLowerWidthRatio: number
   mansardSteepWidthRatio: number
   dutchHipWidthRatio: number
+  dutchGableOverhang: number
+  dutchRidgeAxis: 'x' | 'z'
 }
 
 const SHINGLE_SURFACE_EPSILON = 0.02
@@ -137,6 +140,7 @@ function getRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
     shinTopD,
     tanTheta,
     shingleThickness,
+    segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
   )
   const shapeRatios = {
     gambrelLowerWidthRatio:
@@ -144,6 +148,8 @@ function getRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
     mansardSteepWidthRatio:
       segment.mansardSteepWidthRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepWidthRatio,
     dutchHipWidthRatio: segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
+    dutchGableOverhang: segment.dutchGableOverhang ?? ROOF_SHAPE_DEFAULTS.dutchGableOverhang,
+    dutchRidgeAxis: getDutchRidgeAxis(segment),
   }
 
   return getRoofModuleFaces(
@@ -181,6 +187,7 @@ function getRoofFaceInsets(
   brushD: number,
   tanTheta: number,
   shingleThickness: number,
+  dutchHipWidthRatio: number,
 ): FaceInsets {
   let inset = (wh - baseY) * tanTheta
   const maxSafeInset = Math.min(brushW, brushD) / 2 - 0.005
@@ -202,7 +209,7 @@ function getRoofFaceInsets(
     iF = inset
   }
 
-  let dutchI = Math.min(width, depth) * 0.25
+  let dutchI = Math.min(width, depth) * dutchHipWidthRatio
   if (isVoid) dutchI += shingleThickness
   return { iF, iB, iL, iR, dutchI }
 }
@@ -312,43 +319,38 @@ function getRoofModuleFaces(
         ? insets.dutchI
         : Math.min(baseW, baseD) * shapeRatios.dutchHipWidthRatio
     const mh = wh + i * (tanTheta || 0)
+    const gableOverhang = Math.max(0, shapeRatios.dutchGableOverhang ?? 0)
+    const s1 = v(-w / 2 + i, mh, d / 2 - i)
+    const s2 = v(w / 2 - i, mh, d / 2 - i)
+    const s3 = v(w / 2 - i, mh, -d / 2 + i)
+    const s4 = v(-w / 2 + i, mh, -d / 2 + i)
 
-    if (w >= d) {
-      const m1 = v(-w / 2 + i, mh, d / 2 - i)
-      const m2 = v(w / 2 - i, mh, d / 2 - i)
-      const m3 = v(w / 2 - i, mh, -d / 2 + i)
-      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
-      const r1 = v(-w / 2 + i, h, 0)
-      const r2 = v(w / 2 - i, h, 0)
+    if (shapeRatios.dutchRidgeAxis === 'x') {
+      const m1 = v(-w / 2 + i - gableOverhang, mh, d / 2 - i)
+      const m2 = v(w / 2 - i + gableOverhang, mh, d / 2 - i)
+      const m3 = v(w / 2 - i + gableOverhang, mh, -d / 2 + i)
+      const m4 = v(-w / 2 + i - gableOverhang, mh, -d / 2 + i)
+      const r1 = v(-w / 2 + i - gableOverhang, h, 0)
+      const r2 = v(w / 2 - i + gableOverhang, h, 0)
 
-      faces.push(
-        [e1, e2, m2, m1],
-        [e2, e3, m3, m2],
-        [e3, e4, m4, m3],
-        [e4, e1, m1, m4],
-        [m4, m1, r1],
-        [m2, m3, r2],
-        [m1, m2, r2, r1],
-        [m3, m4, r1, r2],
-      )
+      faces.push([e1, e2, s2, s1], [e2, e3, s3, s2], [e3, e4, s4, s3], [e4, e1, s1, s4])
+      if (gableOverhang > 0) {
+        faces.push([s2, s3, m3, m2], [s4, s1, m1, m4])
+      }
+      faces.push([m4, m1, r1], [m2, m3, r2], [m1, m2, r2, r1], [m3, m4, r1, r2])
     } else {
-      const m1 = v(-w / 2 + i, mh, d / 2 - i)
-      const m2 = v(w / 2 - i, mh, d / 2 - i)
-      const m3 = v(w / 2 - i, mh, -d / 2 + i)
-      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
-      const r1 = v(0, h, d / 2 - i)
-      const r2 = v(0, h, -d / 2 + i)
+      const m1 = v(-w / 2 + i, mh, d / 2 - i + gableOverhang)
+      const m2 = v(w / 2 - i, mh, d / 2 - i + gableOverhang)
+      const m3 = v(w / 2 - i, mh, -d / 2 + i - gableOverhang)
+      const m4 = v(-w / 2 + i, mh, -d / 2 + i - gableOverhang)
+      const r1 = v(0, h, d / 2 - i + gableOverhang)
+      const r2 = v(0, h, -d / 2 + i - gableOverhang)
 
-      faces.push(
-        [e1, e2, m2, m1],
-        [e2, e3, m3, m2],
-        [e3, e4, m4, m3],
-        [e4, e1, m1, m4],
-        [m1, m2, r1],
-        [m3, m4, r2],
-        [m2, m3, r2, r1],
-        [m4, m1, r1, r2],
-      )
+      faces.push([e1, e2, s2, s1], [e2, e3, s3, s2], [e3, e4, s4, s3], [e4, e1, s1, s4])
+      if (gableOverhang > 0) {
+        faces.push([s1, s2, m2, m1], [s3, s4, m4, m3])
+      }
+      faces.push([m1, m2, r1], [m3, m4, r2], [m2, m3, r2, r1], [m4, m1, r1, r2])
     }
   }
 

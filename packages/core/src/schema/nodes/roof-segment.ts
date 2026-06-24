@@ -8,6 +8,10 @@ export const RoofType = z.enum(['hip', 'gable', 'shed', 'gambrel', 'dutch', 'man
 
 export type RoofType = z.infer<typeof RoofType>
 
+export const DutchRidgeAxis = z.enum(['x', 'z'])
+
+export type DutchRidgeAxis = z.infer<typeof DutchRidgeAxis>
+
 export const MIN_ROOF_SEGMENT_TRIM_SPAN = 0.1
 const DEFAULT_ROOF_SEGMENT_WIDTH = 8
 const DEFAULT_ROOF_SEGMENT_DEPTH = 6
@@ -67,6 +71,8 @@ export const ROOF_SHAPE_DEFAULTS = {
   dutchHipWidthRatio: 0.25,
   /** Dutch: hip face rises this fraction of the way to the peak. */
   dutchHipHeightRatio: 0.5,
+  /** Dutch: upper gable/rake roof projection beyond the triangular gable face. */
+  dutchGableOverhang: 0,
 } as const
 
 export const RoofSegmentNode = BaseNode.extend({
@@ -144,6 +150,8 @@ export const RoofSegmentNode = BaseNode.extend({
     .min(0.1)
     .max(0.9)
     .default(ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio),
+  dutchGableOverhang: z.number().min(0).default(ROOF_SHAPE_DEFAULTS.dutchGableOverhang),
+  dutchRidgeAxis: DutchRidgeAxis.default('x'),
   // Hosted accessories — chimney, dormer, skylight, box-vent,
   // ridge-vent, solar-panel, gutter. Each accessory's `parentId` points back
   // here; the segment renderer mounts them recursively via
@@ -169,6 +177,8 @@ export const RoofSegmentNode = BaseNode.extend({
   - gambrelLowerWidthRatio / gambrelLowerHeightRatio: kink position on gambrel roofs
   - mansardSteepWidthRatio / mansardSteepHeightRatio: waist position on mansard roofs
   - dutchHipWidthRatio / dutchHipHeightRatio: hip-to-gable split on dutch roofs
+  - dutchGableOverhang: upper gable/rake roof projection on Dutch roofs
+  - dutchRidgeAxis: orientation of the Dutch roof's upper gable ridge
   `,
 )
 
@@ -310,6 +320,7 @@ type ShapeRatios = {
   mansardSteepHeightRatio: number
   dutchHipWidthRatio: number
   dutchHipHeightRatio: number
+  dutchGableOverhang: number
 }
 
 type PitchInputs = {
@@ -333,6 +344,7 @@ function withRatioDefaults(input: PitchInputs): PitchInputs & ShapeRatios {
       input.mansardSteepHeightRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepHeightRatio,
     dutchHipWidthRatio: input.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
     dutchHipHeightRatio: input.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
+    dutchGableOverhang: input.dutchGableOverhang ?? ROOF_SHAPE_DEFAULTS.dutchGableOverhang,
   }
 }
 
@@ -420,6 +432,13 @@ export function getActiveRoofHeight(node: Parameters<typeof getSegmentSlopeFrame
   return getSegmentSlopeFrame(node).activeRh
 }
 
+export function getDutchRidgeAxis(
+  node: Pick<RoofSegmentNode, 'width' | 'depth'> & { dutchRidgeAxis?: unknown },
+): DutchRidgeAxis {
+  if (node.dutchRidgeAxis === 'x' || node.dutchRidgeAxis === 'z') return node.dutchRidgeAxis
+  return node.width >= node.depth ? 'x' : 'z'
+}
+
 export type RoofSegmentVisibleTopBounds = {
   minX: number
   maxX: number
@@ -457,6 +476,16 @@ export function getRoofSegmentVisibleTopBounds(
     backExt += shingleOverhang
   } else if (segment.roofType === 'shed' && activeRh > 0) {
     frontExt += shingleOverhang
+  }
+
+  if (segment.roofType === 'dutch') {
+    const gableOverhang = finiteNonNegative(segment.dutchGableOverhang)
+    if (getDutchRidgeAxis(segment) === 'x') {
+      xExt += gableOverhang
+    } else {
+      frontExt += gableOverhang
+      backExt += gableOverhang
+    }
   }
 
   let minX = trim.left > 0 ? -width / 2 + trim.left : -width / 2 - xExt
@@ -511,12 +540,16 @@ export function getRoofSegmentSurfaceY(
   const peakY = node.wallHeight + activeRh
   if (activeRh === 0) return node.wallHeight
 
-  if (
-    node.roofType === 'gable' ||
-    node.roofType === 'gambrel' ||
-    node.roofType === 'mansard' ||
-    node.roofType === 'dutch'
-  ) {
+  if (node.roofType === 'gable' || node.roofType === 'gambrel' || node.roofType === 'mansard') {
+    const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
+    return peakY - t * activeRh
+  }
+
+  if (node.roofType === 'dutch') {
+    if (getDutchRidgeAxis(node) === 'z') {
+      const t = node.width > 0 ? Math.abs(localX) / (node.width / 2) : 0
+      return peakY - t * activeRh
+    }
     const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
     return peakY - t * activeRh
   }

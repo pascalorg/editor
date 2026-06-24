@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  getRoofSegmentSurfaceY,
   getRoofSegmentVisibleTopBounds,
   normalizeRoofSegmentTrim,
   RoofSegmentNode,
@@ -122,5 +123,39 @@ describe('roof segment trim', () => {
     expect(trim.frontLeftZ).toBeCloseTo(2)
     expect(bounds.maxZ).toBeCloseTo(2.6)
     expect(bounds.maxX).toBeCloseTo(3.2)
+  })
+})
+
+describe('dutch roof segments', () => {
+  test('store ridge direction explicitly instead of deriving it from footprint proportions', () => {
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_test',
+      type: 'roof-segment',
+      roofType: 'dutch',
+      width: 6,
+      depth: 10,
+      dutchRidgeAxis: 'x',
+    })
+
+    const yAtDepthEave = getRoofSegmentSurfaceY(segment, 0, segment.depth / 2)
+    const yAtWidthEave = getRoofSegmentSurfaceY(segment, segment.width / 2, 0)
+
+    expect(yAtDepthEave).toBeLessThan(yAtWidthEave)
+  })
+
+  test('can orient the dutch ridge along depth', () => {
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_test',
+      type: 'roof-segment',
+      roofType: 'dutch',
+      width: 8,
+      depth: 6,
+      dutchRidgeAxis: 'z',
+    })
+
+    const yAtDepthEave = getRoofSegmentSurfaceY(segment, 0, segment.depth / 2)
+    const yAtWidthEave = getRoofSegmentSurfaceY(segment, segment.width / 2, 0)
+
+    expect(yAtWidthEave).toBeLessThan(yAtDepthEave)
   })
 })

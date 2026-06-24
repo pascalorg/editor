@@ -3,8 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  createDefaultRidgeVentsForSegment,
-  isDefaultRidgeVentNode,
+  type DutchRidgeAxis,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
   type RoofType,
@@ -36,6 +35,11 @@ const ROOF_TYPE_OPTIONS_2: { label: string; value: RoofType }[] = [
   { label: 'Gambrel', value: 'gambrel' },
   { label: 'Dutch', value: 'dutch' },
   { label: 'Mansard', value: 'mansard' },
+]
+
+const DUTCH_RIDGE_AXIS_OPTIONS: { label: string; value: DutchRidgeAxis }[] = [
+  { label: 'Width', value: 'x' },
+  { label: 'Depth', value: 'z' },
 ]
 
 // Carpenter / roofer convention: rise over a 12" run, converted to degrees.
@@ -80,23 +84,19 @@ export default function RoofSegmentPanel() {
     (roofType: RoofType) => {
       if (!(selectedId && node) || roofType === node.roofType) return
 
-      const nextSegment = RoofSegmentNodeSchema.parse({ ...node, roofType })
-      const nodes = useScene.getState().nodes
-      const defaultRidgeVentIds = (node.children ?? []).filter((childId) =>
-        isDefaultRidgeVentNode(nodes[childId as AnyNodeId], node.id),
-      ) as AnyNodeId[]
-      const ridgeVents = createDefaultRidgeVentsForSegment(nextSegment)
-
-      useScene.getState().applyNodeChanges({
-        update: [{ id: selectedId as AnyNodeId, data: { roofType } as Partial<AnyNode> }],
-        delete: defaultRidgeVentIds,
-        create: ridgeVents.map((ridgeVent) => ({
-          node: ridgeVent,
-          parentId: node.id as AnyNodeId,
-        })),
+      const data: Partial<RoofSegmentNode> = {
+        roofType,
+        ...(roofType === 'dutch' && node.roofType !== 'dutch'
+          ? { dutchRidgeAxis: node.width >= node.depth ? 'x' : 'z' }
+          : {}),
+      }
+      const nextSegment = RoofSegmentNodeSchema.parse({ ...node, ...data })
+      updateNode(selectedId as AnyNode['id'], {
+        roofType: nextSegment.roofType,
+        dutchRidgeAxis: nextSegment.dutchRidgeAxis,
       })
     },
-    [selectedId, node],
+    [selectedId, node, updateNode],
   )
 
   const handleClose = useCallback(() => {
@@ -301,8 +301,13 @@ export default function RoofSegmentPanel() {
 
       {node.roofType === 'dutch' && (
         <PanelSection title="Shape">
+          <SegmentedControl
+            onChange={(v) => handleUpdate({ dutchRidgeAxis: v })}
+            options={DUTCH_RIDGE_AXIS_OPTIONS}
+            value={node.dutchRidgeAxis}
+          />
           <SliderControl
-            label="Hip Width"
+            label="Hip Run"
             max={0.45}
             min={0.05}
             onChange={(v) => handleUpdate({ dutchHipWidthRatio: v })}
@@ -312,14 +317,24 @@ export default function RoofSegmentPanel() {
             value={Math.round(node.dutchHipWidthRatio * 100) / 100}
           />
           <SliderControl
-            label="Hip Height"
+            label="Gable Drop"
             max={0.9}
             min={0.1}
-            onChange={(v) => handleUpdate({ dutchHipHeightRatio: v })}
+            onChange={(v) => handleUpdate({ dutchHipHeightRatio: 1 - v })}
             precision={2}
             step={0.01}
             unit=""
-            value={Math.round(node.dutchHipHeightRatio * 100) / 100}
+            value={Math.round((1 - node.dutchHipHeightRatio) * 100) / 100}
+          />
+          <SliderControl
+            label="Gable Overhang"
+            max={1}
+            min={0}
+            onChange={(v) => handleUpdate({ dutchGableOverhang: v })}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={Math.round(node.dutchGableOverhang * 100) / 100}
           />
         </PanelSection>
       )}

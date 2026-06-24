@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getDutchRidgeAxis,
   getEffectiveNode,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
@@ -515,9 +516,12 @@ function updateMergedRoofGeometry(
       prepareBrushForCSG(combined)
 
       const resultGeo = csgGeometry(combined)
-      if (geometryHasNaNPositions(resultGeo)) {
+      if (geometryHasInvalidAttributes(resultGeo)) {
         if (!warnedMergedRoofNaNIds.has(roofNode.id)) {
-          console.warn('[RoofSystem] Skipping merged roof geometry with NaN positions', roofNode.id)
+          console.warn(
+            '[RoofSystem] Skipping merged roof geometry with invalid attributes',
+            roofNode.id,
+          )
           warnedMergedRoofNaNIds.add(roofNode.id)
         }
         resultGeo.dispose()
@@ -565,12 +569,35 @@ function updateMergedRoofGeometry(
   }
 }
 
-function geometryHasNaNPositions(geometry: THREE.BufferGeometry) {
+function geometryHasInvalidAttributes(geometry: THREE.BufferGeometry) {
   const position = geometry.getAttribute('position')
-  if (!position) return false
+  if (!(position && position.count > 0)) return true
 
-  for (let i = 0; i < position.array.length; i++) {
-    if (Number.isNaN(position.array[i])) return true
+  for (const name of ['position', 'normal', 'uv', 'uv2']) {
+    const attribute = geometry.getAttribute(name)
+    if (!attribute) continue
+    for (let i = 0; i < attribute.array.length; i++) {
+      if (!Number.isFinite(attribute.array[i])) return true
+    }
+  }
+
+  const index = geometry.getIndex()
+  if (!index || index.count === 0) return true
+  for (let i = 0; i < index.count; i++) {
+    const value = index.getX(i)
+    if (!Number.isInteger(value) || value < 0 || value >= position.count) return true
+  }
+
+  for (const group of geometry.groups) {
+    if (
+      !Number.isInteger(group.start) ||
+      !Number.isInteger(group.count) ||
+      group.start < 0 ||
+      group.count <= 0 ||
+      group.start + group.count > index.count
+    ) {
+      return true
+    }
   }
 
   return false
@@ -887,10 +914,12 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     gambrelLowerWidthRatio: node.gambrelLowerWidthRatio,
     mansardSteepWidthRatio: node.mansardSteepWidthRatio,
     dutchHipWidthRatio: node.dutchHipWidthRatio,
+    dutchGableOverhang: 0,
+    dutchRidgeAxis: getDutchRidgeAxis(node),
   }
 
   const verticalRt = activeRh > 0 ? deckThickness / cosTheta : deckThickness
-  const baseI = Math.min(width, depth) * 0.25
+  const baseI = Math.min(width, depth) * node.dutchHipWidthRatio
 
   const getVol = (
     wExt: number,
@@ -898,6 +927,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     baseY: number,
     matIndex: number,
     isVoid: boolean,
+    dutchGableOverhang = 0,
   ) => {
     const wV = Math.max(0.01, width + 2 * wExt)
     const dV = Math.max(0.01, depth + 2 * wExt)
@@ -929,7 +959,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
       width,
       depth,
       tanTheta,
-      shapeRatios,
+      { ...shapeRatios, dutchGableOverhang },
     )
     return createGeometryFromFaces(faces, matIndex)
   }
@@ -940,8 +970,8 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
   const horizontalOverhang = overhang * cosTheta
   const deckExt = wallThickness / 2 + horizontalOverhang
 
-  const deckTopGeo = getVol(deckExt, verticalRt, 0, 1, false)
-  const deckBotGeo = getVol(deckExt, 0, -5, 0, true)
+  const deckTopGeo = getVol(deckExt, verticalRt, 0, 1, false, node.dutchGableOverhang ?? 0)
+  const deckBotGeo = getVol(deckExt, 0, -5, 0, true, node.dutchGableOverhang ?? 0)
 
   const stSin = shingleThickness * sinTheta
   const stCos = shingleThickness * cosTheta
@@ -1019,6 +1049,10 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
 
   const insetsBot = getInsets(shinBotWh, botBaseY, true, shinBotW, shinBotD)
   const insetsTop = getInsets(shinTopWh, topBaseY, false, shinTopW, shinTopD)
+  const topShapeRatios: ShapeWidthRatios = {
+    ...shapeRatios,
+    dutchGableOverhang: node.dutchGableOverhang ?? 0,
+  }
 
   const botFaces = getModuleFaces(
     roofType,
@@ -1031,7 +1065,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     width,
     depth,
     tanTheta,
-    shapeRatios,
+    topShapeRatios,
   )
   const topFaces = getModuleFaces(
     roofType,
@@ -1044,7 +1078,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     width,
     depth,
     tanTheta,
-    shapeRatios,
+    topShapeRatios,
   )
 
   const shinBotGeo = createGeometryFromFaces(botFaces, 1)
@@ -1064,6 +1098,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     geo.groups = geo.groups.filter((g) => g.count > 0)
     if (geo.groups.length === 0) return null
     ensureRenderableGeometryAttributes(geo)
+    if (geometryHasInvalidAttributes(geo)) return null
     computeGeometryBoundsTree(geo)
     const brush = new Brush(geo, dummyMats)
     brush.updateMatrixWorld()
@@ -1180,6 +1215,10 @@ export function generateRoofSegmentGeometry(
     prepareBrushForCSG(combined)
 
     resultGeo = csgGeometry(combined)
+    if (geometryHasInvalidAttributes(resultGeo)) {
+      resultGeo.dispose()
+      resultGeo = csgGeometry(wallBrush).clone()
+    }
 
     const resultMaterials = csgMaterials(combined)
 
@@ -1336,7 +1375,7 @@ function isRakeFace(
 
 function getRakeAxis(node: RoofSegmentNode): 'x' | 'z' | null {
   if (node.roofType === 'gable' || node.roofType === 'gambrel') return 'x'
-  if (node.roofType === 'dutch') return node.width >= node.depth ? 'x' : 'z'
+  if (node.roofType === 'dutch') return getDutchRidgeAxis(node)
   return null
 }
 
@@ -1344,6 +1383,8 @@ type ShapeWidthRatios = {
   gambrelLowerWidthRatio: number
   mansardSteepWidthRatio: number
   dutchHipWidthRatio: number
+  dutchGableOverhang: number
+  dutchRidgeAxis: 'x' | 'z'
 }
 
 /**
@@ -1459,43 +1500,38 @@ function getModuleFaces(
         ? insets.dutchI
         : Math.min(baseW, baseD) * shapeRatios.dutchHipWidthRatio
     const mh = wh + i * (tanTheta || 0)
+    const gableOverhang = Math.max(0, shapeRatios.dutchGableOverhang ?? 0)
+    const s1 = v(-w / 2 + i, mh, d / 2 - i)
+    const s2 = v(w / 2 - i, mh, d / 2 - i)
+    const s3 = v(w / 2 - i, mh, -d / 2 + i)
+    const s4 = v(-w / 2 + i, mh, -d / 2 + i)
 
-    if (w >= d) {
-      const m1 = v(-w / 2 + i, mh, d / 2 - i)
-      const m2 = v(w / 2 - i, mh, d / 2 - i)
-      const m3 = v(w / 2 - i, mh, -d / 2 + i)
-      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
-      const r1 = v(-w / 2 + i, h, 0)
-      const r2 = v(w / 2 - i, h, 0)
+    if (shapeRatios.dutchRidgeAxis === 'x') {
+      const m1 = v(-w / 2 + i - gableOverhang, mh, d / 2 - i)
+      const m2 = v(w / 2 - i + gableOverhang, mh, d / 2 - i)
+      const m3 = v(w / 2 - i + gableOverhang, mh, -d / 2 + i)
+      const m4 = v(-w / 2 + i - gableOverhang, mh, -d / 2 + i)
+      const r1 = v(-w / 2 + i - gableOverhang, h, 0)
+      const r2 = v(w / 2 - i + gableOverhang, h, 0)
 
-      faces.push(
-        [e1, e2, m2, m1],
-        [e2, e3, m3, m2],
-        [e3, e4, m4, m3],
-        [e4, e1, m1, m4],
-        [m4, m1, r1],
-        [m2, m3, r2],
-        [m1, m2, r2, r1],
-        [m3, m4, r1, r2],
-      )
+      faces.push([e1, e2, s2, s1], [e2, e3, s3, s2], [e3, e4, s4, s3], [e4, e1, s1, s4])
+      if (gableOverhang > 0) {
+        faces.push([s2, s3, m3, m2], [s4, s1, m1, m4])
+      }
+      faces.push([m4, m1, r1], [m2, m3, r2], [m1, m2, r2, r1], [m3, m4, r1, r2])
     } else {
-      const m1 = v(-w / 2 + i, mh, d / 2 - i)
-      const m2 = v(w / 2 - i, mh, d / 2 - i)
-      const m3 = v(w / 2 - i, mh, -d / 2 + i)
-      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
-      const r1 = v(0, h, d / 2 - i)
-      const r2 = v(0, h, -d / 2 + i)
+      const m1 = v(-w / 2 + i, mh, d / 2 - i + gableOverhang)
+      const m2 = v(w / 2 - i, mh, d / 2 - i + gableOverhang)
+      const m3 = v(w / 2 - i, mh, -d / 2 + i - gableOverhang)
+      const m4 = v(-w / 2 + i, mh, -d / 2 + i - gableOverhang)
+      const r1 = v(0, h, d / 2 - i + gableOverhang)
+      const r2 = v(0, h, -d / 2 + i - gableOverhang)
 
-      faces.push(
-        [e1, e2, m2, m1],
-        [e2, e3, m3, m2],
-        [e3, e4, m4, m3],
-        [e4, e1, m1, m4],
-        [m1, m2, r1],
-        [m3, m4, r2],
-        [m2, m3, r2, r1],
-        [m4, m1, r1, r2],
-      )
+      faces.push([e1, e2, s2, s1], [e2, e3, s3, s2], [e3, e4, s4, s3], [e4, e1, s1, s4])
+      if (gableOverhang > 0) {
+        faces.push([s1, s2, m2, m1], [s3, s4, m4, m3])
+      }
+      faces.push([m1, m2, r1], [m3, m4, r2], [m2, m3, r2, r1], [m4, m1, r1, r2])
     }
   }
 
@@ -1526,6 +1562,7 @@ function createGeometryFromFaces(
     const vA = new THREE.Vector3().subVectors(p1, p0)
     const vB = new THREE.Vector3().subVectors(p2, p0)
     const normal = new THREE.Vector3().crossVectors(vA, vB).normalize()
+    if (normal.lengthSq() < 1e-12) continue
     let slopeAlignedDown: THREE.Vector3 | null = null
     let slopeAlignedAcross: THREE.Vector3 | null = null
     let slopeAlignedVOrigin = 0
@@ -1723,7 +1760,7 @@ export function getRoofOuterSurfaceFrameAtPoint(
 
   const topBaseY = 0
 
-  const baseI = Math.min(width, depth) * 0.25
+  const baseI = Math.min(width, depth) * segment.dutchHipWidthRatio
   const getInsets = (
     _wh: number,
     _baseY: number,
@@ -1767,6 +1804,8 @@ export function getRoofOuterSurfaceFrameAtPoint(
     gambrelLowerWidthRatio: segment.gambrelLowerWidthRatio,
     mansardSteepWidthRatio: segment.mansardSteepWidthRatio,
     dutchHipWidthRatio: segment.dutchHipWidthRatio,
+    dutchGableOverhang: segment.dutchGableOverhang ?? 0,
+    dutchRidgeAxis: getDutchRidgeAxis(segment),
   }
   const topFaces = getModuleFaces(
     roofType,

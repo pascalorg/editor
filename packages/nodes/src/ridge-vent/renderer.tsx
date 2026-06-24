@@ -174,9 +174,11 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
   // along the ridge — the snap re-clamps it to the segment's ridge span.
   const rotationY = node.rotation ?? 0
   const snap =
-    Math.abs(rotationY) < 1e-5 ? resolveRidgeSnap(segment, nodePosition[0] ?? 0, 0) : null
+    Math.abs(rotationY) < 1e-5
+      ? resolveRidgeSnap(segment, nodePosition[0] ?? 0, nodePosition[2] ?? 0)
+      : null
   const ridgeX = snap ? snap.localX : (nodePosition[0] ?? 0)
-  const ridgeZ = snap ? snap.localZ + (nodePosition[2] ?? 0) : (nodePosition[2] ?? 0)
+  const ridgeZ = nodePosition[2] ?? snap?.localZ ?? 0
   const baseY = getRoofTopSurfaceY(ridgeX, ridgeZ, segment)
   // Clamp legacy stored Y (absolute peak height from earlier versions) so the
   // vent doesn't fly off when the field was an absolute Y instead of offset.
