@@ -41,9 +41,7 @@ export function getRoofSurfaceFaceBoundsAt(
   lz: number,
 ): RoofSurfaceFaceBounds {
   const faces = getRoofSurfaceFaces(segment)
-  const face =
-    faces.find((candidate) => pointInPolygon([lx, lz], candidate.polygon)) ??
-    nearestFaceToPoint(faces, [lx, lz])
+  const face = topmostFaceAtPoint(faces, lx, lz) ?? nearestFaceToPoint(faces, [lx, lz])
   const { polygon } = face
 
   const xs = polygon.map((point) => point[0])
@@ -174,6 +172,25 @@ function getRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
       }
     })
     .filter((face) => face.polygon.length >= 3)
+}
+
+function topmostFaceAtPoint(
+  faces: RoofSurfaceFace[],
+  lx: number,
+  lz: number,
+): RoofSurfaceFace | null {
+  let best: RoofSurfaceFace | null = null
+  let bestY = Number.NEGATIVE_INFINITY
+
+  for (const face of faces) {
+    if (!pointInPolygon([lx, lz], face.polygon)) continue
+    const y = surfaceYOnFace(face.vertices, lx, lz)
+    if (y === null || y <= bestY) continue
+    best = face
+    bestY = y
+  }
+
+  return best
 }
 
 function getRoofFaceInsets(
@@ -326,31 +343,53 @@ function getRoofModuleFaces(
     const s4 = v(-w / 2 + i, mh, -d / 2 + i)
 
     if (shapeRatios.dutchRidgeAxis === 'x') {
-      const m1 = v(-w / 2 + i - gableOverhang, mh, d / 2 - i)
-      const m2 = v(w / 2 - i + gableOverhang, mh, d / 2 - i)
-      const m3 = v(w / 2 - i + gableOverhang, mh, -d / 2 + i)
-      const m4 = v(-w / 2 + i - gableOverhang, mh, -d / 2 + i)
-      const r1 = v(-w / 2 + i - gableOverhang, h, 0)
-      const r2 = v(w / 2 - i + gableOverhang, h, 0)
+      const r1 = v(-w / 2 + i, h, 0)
+      const r2 = v(w / 2 - i, h, 0)
 
       faces.push([e1, e2, s2, s1], [e2, e3, s3, s2], [e3, e4, s4, s3], [e4, e1, s1, s4])
+      faces.push([s4, s1, r1], [s2, s3, r2], [s1, s2, r2, r1], [s3, s4, r1, r2])
       if (gableOverhang > 0) {
-        faces.push([s2, s3, m3, m2], [s4, s1, m1, m4])
+        const m1 = v(-w / 2 + i - gableOverhang, mh, d / 2 - i)
+        const m2 = v(w / 2 - i + gableOverhang, mh, d / 2 - i)
+        const m3 = v(w / 2 - i + gableOverhang, mh, -d / 2 + i)
+        const m4 = v(-w / 2 + i - gableOverhang, mh, -d / 2 + i)
+        const q1 = v(-w / 2 + i - gableOverhang, h, 0)
+        const q2 = v(w / 2 - i + gableOverhang, h, 0)
+        faces.push(
+          [s4, s1, m1, m4],
+          [m1, s1, r1, q1],
+          [s4, m4, q1, r1],
+          [m4, m1, q1],
+          [s2, s3, m3, m2],
+          [s2, m2, q2, r2],
+          [m3, s3, r2, q2],
+          [m2, m3, q2],
+        )
       }
-      faces.push([m4, m1, r1], [m2, m3, r2], [m1, m2, r2, r1], [m3, m4, r1, r2])
     } else {
-      const m1 = v(-w / 2 + i, mh, d / 2 - i + gableOverhang)
-      const m2 = v(w / 2 - i, mh, d / 2 - i + gableOverhang)
-      const m3 = v(w / 2 - i, mh, -d / 2 + i - gableOverhang)
-      const m4 = v(-w / 2 + i, mh, -d / 2 + i - gableOverhang)
-      const r1 = v(0, h, d / 2 - i + gableOverhang)
-      const r2 = v(0, h, -d / 2 + i - gableOverhang)
+      const r1 = v(0, h, d / 2 - i)
+      const r2 = v(0, h, -d / 2 + i)
 
       faces.push([e1, e2, s2, s1], [e2, e3, s3, s2], [e3, e4, s4, s3], [e4, e1, s1, s4])
+      faces.push([s1, s2, r1], [s3, s4, r2], [s2, s3, r2, r1], [s4, s1, r1, r2])
       if (gableOverhang > 0) {
-        faces.push([s1, s2, m2, m1], [s3, s4, m4, m3])
+        const m1 = v(-w / 2 + i, mh, d / 2 - i + gableOverhang)
+        const m2 = v(w / 2 - i, mh, d / 2 - i + gableOverhang)
+        const m3 = v(w / 2 - i, mh, -d / 2 + i - gableOverhang)
+        const m4 = v(-w / 2 + i, mh, -d / 2 + i - gableOverhang)
+        const q1 = v(0, h, d / 2 - i + gableOverhang)
+        const q2 = v(0, h, -d / 2 + i - gableOverhang)
+        faces.push(
+          [s1, s2, m2, m1],
+          [s1, m1, q1, r1],
+          [m2, s2, r1, q1],
+          [m1, m2, q1],
+          [s3, s4, m4, m3],
+          [m4, s4, r2, q2],
+          [s3, m3, q2, r2],
+          [m3, m4, q2],
+        )
       }
-      faces.push([m1, m2, r1], [m3, m4, r2], [m2, m3, r2, r1], [m4, m1, r1, r2])
     }
   }
 

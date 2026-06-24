@@ -289,7 +289,6 @@ export function getRoofSegmentPlanLinework(node: RoofSegmentNode): {
       // Hipped lower skirt (eave corners → waist corners) + the gablet
       // fold, then a gable-style ridge on top of the waist.
       const i = Math.min(node.width, node.depth) * node.dutchHipWidthRatio
-      const o = Math.max(0, node.dutchGableOverhang ?? 0)
       if (hw - i > 0.02 && hd - i > 0.02) {
         const w1: PlanPt = [-hw + i, hd - i]
         const w2: PlanPt = [hw - i, hd - i]
@@ -298,13 +297,13 @@ export function getRoofSegmentPlanLinework(node: RoofSegmentNode): {
         hips.push([e1, w1], [e2, w2], [e3, w3], [e4, w4])
         breaks.push([w1, w2], [w2, w3], [w3, w4], [w4, w1])
         if (getDutchRidgeAxis(node) === 'x') {
-          const r1: PlanPt = [-hw + i - o, 0]
-          const r2: PlanPt = [hw - i + o, 0]
+          const r1: PlanPt = [-hw + i, 0]
+          const r2: PlanPt = [hw - i, 0]
           ridges.push([r1, r2])
           hips.push([w1, r1], [w4, r1], [w2, r2], [w3, r2])
         } else {
-          const r1: PlanPt = [0, hd - i + o]
-          const r2: PlanPt = [0, -hd + i - o]
+          const r1: PlanPt = [0, hd - i]
+          const r2: PlanPt = [0, -hd + i]
           ridges.push([r1, r2])
           hips.push([w1, r1], [w2, r1], [w3, r2], [w4, r2])
         }

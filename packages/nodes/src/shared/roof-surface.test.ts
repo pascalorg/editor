@@ -76,4 +76,26 @@ describe('getRoofSurfaceFaceBoundsAt', () => {
 
     expect(center).toBeGreaterThan(offRidge)
   })
+
+  test('dutch gable overhang projects a rake cap without widening the slope side', () => {
+    const segment = fixtureSegment({
+      roofType: 'dutch',
+      width: 8,
+      depth: 6,
+      wallThickness: 0,
+      deckThickness: 0,
+      overhang: 0,
+      shingleThickness: 0,
+      dutchHipWidthRatio: 0.25,
+      dutchGableOverhang: 1,
+      dutchRidgeAxis: 'x',
+    })
+
+    const bounds = getRoofSurfaceFaceBoundsAt(segment, -3, 0.75)
+
+    expect(bounds.minX).toBeCloseTo(-3.5)
+    expect(bounds.maxX).toBeCloseTo(-2.5)
+    expect(bounds.minZ).toBeCloseTo(0)
+    expect(bounds.maxZ).toBeCloseTo(1.5)
+  })
 })
