@@ -387,6 +387,26 @@ export function GlbScene({
   }, [gltf.scene])
   const zoneById = useMemo(() => new Map(zoneEntries.map((zone) => [zone.id, zone])), [zoneEntries])
 
+  // The dollhouse hides ceilings/roof — but only their OWN geometry. Items hosted
+  // on a ceiling (lamps, fans, recessed lights) are child identity nodes; hiding
+  // the whole occluder node would hide them too, so collect just the occluder's
+  // own meshes (stop descending at any nested identity node) and toggle those.
+  const occluderOwnMeshes = useMemo(() => {
+    const meshes: THREE.Mesh[] = []
+    const walk = (node: THREE.Object3D) => {
+      for (const child of node.children) {
+        if ((child.userData as PascalExtras).pascalId) continue // hosted item — keep visible
+        if ((child as THREE.Mesh).isMesh) meshes.push(child as THREE.Mesh)
+        walk(child)
+      }
+    }
+    for (const occluder of occluders) {
+      if ((occluder as THREE.Mesh).isMesh) meshes.push(occluder as THREE.Mesh)
+      walk(occluder)
+    }
+    return meshes
+  }, [occluders])
+
   // Move the camera to match the drill depth: a saved bookmark (extras.camera)
   // wins; otherwise fit to the target's bounds (the object, the room's polygon
   // footprint for empty zone nodes, the level, or the whole building). Mirrors
@@ -726,7 +746,7 @@ export function GlbScene({
     // focused level actually has rooms. Focusing a zone-less floor keeps the
     // building intact (otherwise its roof would just vanish with nothing to show).
     const revealing = !walk && selection.levelId != null && levelsWithZones.has(selection.levelId)
-    for (const occluder of occluders) occluder.visible = !revealing
+    for (const mesh of occluderOwnMeshes) mesh.visible = !revealing
 
     for (const { id, levelId, meshes, uniforms } of zoneFills.current) {
       const show =
@@ -938,9 +958,9 @@ export function GlbScene({
       outliner.hoveredObjects.length = 0
       document.body.style.cursor = 'auto'
       // Restore ceilings/roof — the GLB scene is cached by drei and may be reused.
-      for (const occluder of occluders) occluder.visible = true
+      for (const mesh of occluderOwnMeshes) mesh.visible = true
     },
-    [occluders],
+    [occluderOwnMeshes],
   )
 
   return (
