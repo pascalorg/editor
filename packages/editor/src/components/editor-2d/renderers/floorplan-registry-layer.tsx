@@ -141,6 +141,7 @@ type NodeDeps = {
   highlighted: boolean
   hovered: boolean
   moving: boolean
+  liveOverride: LiveNodeOverrides | undefined
   palette: FloorplanPalette | undefined
   siblingEpoch: number
   committedNodes: Record<string, AnyNode> | null
@@ -218,7 +219,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const ambientLevelId = useMemo<AnyNodeId | null>(() => {
     if (selectedLevelId || !ambientBuildingSourceId) return null
     const building = nodes[ambientBuildingSourceId]
-    if (!building || building.type !== 'building') return null
+    if (building?.type !== 'building') return null
     let zero: AnyNodeId | null = null
     let lowestId: AnyNodeId | null = null
     let lowestIdx = Number.POSITIVE_INFINITY
@@ -626,6 +627,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const hovered = hoveredId === id
       const moving = movingNode?.id === id
       const live = liveTransforms.get(id)
+      const liveOverride = liveOverrides.get(id)
       const dependsOnSiblingInputs = !!(
         def.floorplanDependsOnSiblings || def.floorplanSiblingOverrides
       )
@@ -636,6 +638,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         highlighted,
         hovered,
         moving,
+        liveOverride,
         palette: renderCtx?.palette,
         siblingEpoch: dependsOnSiblingInputs ? (nodeSiblingEpochs.get(id) ?? 0) : 0,
         // Sibling-dependent kinds (wall miters, opening cuts) read other nodes'
@@ -719,7 +722,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         ? def.floorplanSiblingOverrides({ nodeId: id, nodes, liveOverrides })
         : nodes
       const sourceNode = contextNodes !== nodes ? (contextNodes[id] ?? node) : node
-      const effectiveNode = applyLiveTransform(sourceNode)
+      const overrideNode = liveOverride
+        ? ({ ...sourceNode, ...liveOverride } as AnyNode)
+        : sourceNode
+      const effectiveNode = applyLiveTransform(overrideNode)
       const viewState = {
         selected,
         highlighted,
@@ -763,7 +769,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     const visit = (id: AnyNodeId) => {
       const node = nodes[id]
       if (!node) return
-      if ((node as { visible?: boolean }).visible === false) return
+      if (!isFloorplanNodeVisible(node, liveOverrides.get(id))) return
       buildEntry(id, node)
       const childIds = (node as unknown as { children?: AnyNodeId[] }).children
       if (Array.isArray(childIds)) {
@@ -790,7 +796,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const buildingScopedKindSet = new Set(buildingScopedKinds)
       for (const [id, node] of Object.entries(nodes)) {
         if (!node || !buildingScopedKindSet.has(node.type)) continue
-        if ((node as { visible?: boolean }).visible === false) continue
+        if (!isFloorplanNodeVisible(node, liveOverrides.get(id as AnyNodeId))) continue
         const parentId = (node as { parentId?: AnyNodeId | null }).parentId
         if (parentId !== activeBuildingId) continue
         const cid = id as AnyNodeId
@@ -2093,6 +2099,12 @@ function applyPositionLiveTransform(
   } as AnyNode
 }
 
+function isFloorplanNodeVisible(node: AnyNode, liveOverride?: LiveNodeOverrides): boolean {
+  const overrideVisible = liveOverride?.visible
+  if (typeof overrideVisible === 'boolean') return overrideVisible
+  return (node as { visible?: boolean }).visible !== false
+}
+
 function buildContext(
   node: AnyNode,
   nodes: Record<string, AnyNode>,
@@ -2303,6 +2315,8 @@ function computeAffectedSiblingIds(
     } else if (node.type === 'door' || node.type === 'window') {
       const hostId = (node as { parentId?: string }).parentId
       if (hostId) affected.add(hostId as AnyNodeId)
+      const liveHostId = (liveOverrides.get(id) as { parentId?: string } | undefined)?.parentId
+      if (liveHostId) affected.add(liveHostId as AnyNodeId)
     } else if (node.type === 'gutter') {
       const roofId = (node as { parentId?: string }).parentId
       if (roofId) {
@@ -2326,6 +2340,7 @@ function nodeDepsEqual(a: NodeDeps, b: NodeDeps): boolean {
     'highlighted',
     'hovered',
     'moving',
+    'liveOverride',
     'palette',
     'siblingEpoch',
     'committedNodes',

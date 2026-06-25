@@ -166,6 +166,7 @@ const doorHandles: HandleDescriptor<DoorNodeType>[] = [
  */
 export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   kind: 'door',
+  snapProfile: 'item',
   schemaVersion: 1,
   schema: DoorNode,
   category: 'structure',
@@ -251,6 +252,8 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place door on wall' },
+    { key: 'R', label: 'Flip side' },
+    { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

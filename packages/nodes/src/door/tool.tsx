@@ -1,6 +1,5 @@
 import {
   type AnyNodeId,
-  collectAlignmentAnchors,
   DoorNode,
   emitter,
   type GridEvent,
@@ -18,6 +17,7 @@ import {
   calculateItemRotation,
   EDITOR_LAYER,
   getSideFromNormal,
+  isMagneticSnapActive,
   isValidWallSideFace,
   triggerSFX,
   useAlignmentGuides,
@@ -36,7 +36,10 @@ import {
   resolveRoofWallOpeningTarget,
   worldToSelectedBuildingLocal,
 } from '../shared/roof-wall-opening-placement'
-import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
+import {
+  collectWallOpeningAlignmentCandidates,
+  resolveWallSlideAlignment,
+} from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
 import DoorPreview from './preview'
 
@@ -143,7 +146,7 @@ const DoorTool: React.FC = () => {
 
     // Alignment candidates — anchors of every alignable object; refreshed
     // after each placement. A door aligns by the plan position of its centre.
-    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+    let alignmentCandidates = collectWallOpeningAlignmentCandidates(useScene.getState().nodes, '')
 
     // On-host cursor: the green/red wireframe outline tracks a live draft.
     // Showing it always clears the off-host floating ghost (they never
@@ -194,19 +197,17 @@ const DoorTool: React.FC = () => {
       width: number,
       height: number,
       bypass: boolean,
-      bypassSnap: boolean,
       ignoreId?: string,
     ) => {
-      // bypassSnap is set by Shift (see callers). Shift = free-place: land at the
-      // raw cursor but keep the along-wall guides visible. bypass (Alt) still
-      // hard-disables alignment.
+      // `bypass` disables along-wall alignment — set when magnetic ("lines")
+      // snap is off. The grid component lives in `snapToHalf`, which is itself
+      // mode-aware (raw cursor when grid is off).
       const localX = resolveWallSlideAlignment({
         wallNode: wall,
         rawLocalX,
         width,
         candidates: alignmentCandidates,
-        bypass: bypass && !bypassSnap,
-        freePlace: bypassSnap,
+        bypass,
       })
       const { clampedX, clampedY } = clampToWall(wall, localX, width, height)
       const valid = !hasWallChildOverlap(wall.id, clampedX, clampedY, width, height, ignoreId)
@@ -224,9 +225,8 @@ const DoorTool: React.FC = () => {
       itemRotation: number
       cursorRotationY: number
       bypass: boolean
-      bypassSnap: boolean
     }) => {
-      const { wall, rawLocalX, side, itemRotation, cursorRotationY, bypass, bypassSnap } = args
+      const { wall, rawLocalX, side, itemRotation, cursorRotationY, bypass } = args
       const width = draftRef.current?.width ?? 0.9
       const height = draftRef.current?.height ?? 2.1
 
@@ -249,7 +249,6 @@ const DoorTool: React.FC = () => {
         width,
         height,
         bypass,
-        bypassSnap,
         draftRef.current.id,
       )
 
@@ -361,7 +360,7 @@ const DoorTool: React.FC = () => {
       useViewer.getState().setSelection({ selectedIds: [node.id] })
       useScene.temporal.getState().pause()
       triggerSFX('sfx:structure-build')
-      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+      alignmentCandidates = collectWallOpeningAlignmentCandidates(useScene.getState().nodes, '')
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
     }
@@ -387,17 +386,13 @@ const DoorTool: React.FC = () => {
       const itemRotation = calculateItemRotation(event.normal) + flipOffset
       const cursorRotation =
         calculateCursorRotation(event.normal, event.node.start, event.node.end) + flipOffset
-      const bypassSnap = event.nativeEvent?.shiftKey === true
-      const bypass = event.nativeEvent?.altKey === true || bypassSnap
-
       applyWallTarget({
         wall: event.node,
         rawLocalX: event.localPosition[0],
         side,
         itemRotation,
         cursorRotationY: cursorRotation,
-        bypass,
-        bypassSnap,
+        bypass: !isMagneticSnapActive(),
       })
       event.stopPropagation()
     }
@@ -415,20 +410,16 @@ const DoorTool: React.FC = () => {
       const faceSide = getSideFromNormal(event.normal)
       const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
       const itemRotation = calculateItemRotation(event.normal) + (sideFlip ? Math.PI : 0)
-      const bypassSnap = event.nativeEvent?.shiftKey === true
-      const bypass = event.nativeEvent?.altKey === true || bypassSnap
-
       const { clampedX, clampedY, valid } = resolveWallPlacement(
         event.node,
         event.localPosition[0],
         draftRef.current.width,
         draftRef.current.height,
-        bypass,
-        bypassSnap,
+        !isMagneticSnapActive(),
         draftRef.current.id,
       )
-      // Shift force-places over a collision (the draft stays red as a warning).
-      if (!valid && !bypassSnap) return
+      // Alt force-places over a collision (the draft stays red as a warning).
+      if (!valid && event.nativeEvent?.altKey !== true) return
 
       commitDoorAtWall(event.node, clampedX, clampedY, side, itemRotation)
       event.stopPropagation()
@@ -448,9 +439,9 @@ const DoorTool: React.FC = () => {
     // actually hovers a wall (onWallHover) or roof face (onRoofHover).
     const onGridFreeFollow = (event: GridEvent) => {
       if (useViewer.getState().cameraDragging) return
-      // A wall/roof mesh handler processed this exact pointermove (R3F + the
-      // grid raycast share the source DOM event's timeStamp) — it owns the
-      // frame and has snapped the draft, so skip the floor follow this tick.
+      // A wall/roof mesh handler processed this pointermove (shared DOM
+      // timeStamp) — it owns the frame and has snapped the draft, so skip the
+      // floor follow this tick.
       const ts = event.nativeEvent?.timeStamp ?? -1
       if (ts === lastMeshEventTime) return
       // Fresh floor-only frame: the cursor is off any wall/roof. Drop any draft
@@ -523,9 +514,9 @@ const DoorTool: React.FC = () => {
     const onRoofClick = (event: RoofEvent) => {
       if (!draftRef.current?.roofSegmentId) return
       const target = resolveRoofTarget(event)
-      // Shift force-places over a colliding roof-face target (see onWallClick).
+      // Alt force-places over a colliding roof-face target (see onWallClick).
       if (!target) return
-      if (!target.valid && event.nativeEvent?.shiftKey !== true) return
+      if (!target.valid && event.nativeEvent?.altKey !== true) return
       const { segment, face, position } = target
 
       const draft = draftRef.current

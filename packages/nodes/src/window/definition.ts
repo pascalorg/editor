@@ -160,6 +160,7 @@ const windowHandles: HandleDescriptor<WindowNodeType>[] = [
  */
 export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   kind: 'window',
+  snapProfile: 'item',
   schemaVersion: 1,
   schema: WindowNode,
   category: 'structure',
@@ -229,6 +230,8 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place window on wall' },
+    { key: 'R', label: 'Flip side' },
+    { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

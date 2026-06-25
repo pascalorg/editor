@@ -43,26 +43,13 @@ export const useKeyboard = ({
       return ed.mode === 'build' && (ed.tool === 'door' || ed.tool === 'window')
     }
 
-    // Shift cycles the snapping mode while a snapping-mode-governed draft is
-    // armed: wall / fence build, item placement (build + item tool), and any
-    // active node move (`movingNode` — covers item 3D moves plus the generic
-    // registry move for shelf / spawn / column / stair). For items, free place
-    // moved to Alt, so Shift is free to cycle here too. Elsewhere Shift keeps
-    // its existing meaning — multi-select in plain select mode (no movingNode),
-    // free-place bypass during opening / zone placement — so this predicate
-    // must NOT fire for those. Door / window moves still use Shift for free
-    // place (out of this overhaul's scope), so they're excluded.
-    // Shift cycles the snapping mode (and clean-tap Ctrl the grid step) whenever
-    // there's an active snapping context — i.e. exactly when the HUD shows a
-    // snapping chip. That single source covers wall/fence/item drafting, every
-    // node move (including wall-hosted items), and endpoint/polygon reshaping,
-    // so the keys never silently stop working. Door / window keep Shift = free
-    // place until the modifier model unifies them.
-    const isSnappingCycleContext = () => {
-      const moving = getMovingNode()
-      if (moving?.type === 'door' || moving?.type === 'window') return false
-      return getActiveSnapContext() != null
-    }
+    // Shift cycles the snapping mode (and a clean-tap Ctrl the grid step)
+    // whenever there's an active snapping context — i.e. exactly when the HUD
+    // shows a snapping chip. That single source covers wall/fence/item drafting,
+    // every node move (including wall-hosted items + door/window openings, which
+    // now declare `snapProfile`), and endpoint/polygon reshaping, so the keys
+    // never silently stop working. (Force-place lives on Alt for all of them.)
+    const isSnappingCycleContext = () => getActiveSnapContext() != null
 
     // A "clean tap" of Ctrl/Meta (pressed and released with NO other key in
     // between) cycles the grid step — same context as the Shift snapping-mode
