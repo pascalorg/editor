@@ -1,9 +1,10 @@
-import type {
-  FloorplanGeometry,
-  FloorplanPoint,
-  GeometryContext,
-  RoofNode,
-  RoofSegmentNode,
+import {
+  ROOF_SHAPE_DEFAULTS,
+  type FloorplanGeometry,
+  type FloorplanPoint,
+  type GeometryContext,
+  type RoofNode,
+  type RoofSegmentNode,
 } from '@pascal-app/core'
 
 /**
@@ -290,10 +291,14 @@ export function getRoofSegmentPlanLinework(node: RoofSegmentNode): {
       // section would have started.
       const i = Math.min(node.width, node.depth) * node.dutchHipWidthRatio
       if (hw - i > 0.02 && hd - i > 0.02) {
-        const w1: PlanPt = [-hw + i, hd - i]
-        const w2: PlanPt = [hw - i, hd - i]
-        const w3: PlanPt = [hw - i, -hd + i]
-        const w4: PlanPt = [-hw + i, -hd + i]
+        const waistLength =
+          node.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
+        const waistHalfX = node.width >= node.depth ? (hw - i) * waistLength : hw - i
+        const waistHalfZ = node.width >= node.depth ? hd - i : (hd - i) * waistLength
+        const w1: PlanPt = [-waistHalfX, waistHalfZ]
+        const w2: PlanPt = [waistHalfX, waistHalfZ]
+        const w3: PlanPt = [waistHalfX, -waistHalfZ]
+        const w4: PlanPt = [-waistHalfX, -waistHalfZ]
         hips.push([e1, w1], [e2, w2], [e3, w3], [e4, w4])
         breaks.push([w1, w2], [w2, w3], [w3, w4], [w4, w1])
       } else {

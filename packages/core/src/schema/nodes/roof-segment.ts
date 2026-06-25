@@ -67,6 +67,8 @@ export const ROOF_SHAPE_DEFAULTS = {
   dutchHipWidthRatio: 0.25,
   /** Dutch: hip face rises this fraction of the way to the peak. */
   dutchHipHeightRatio: 0.5,
+  /** Dutch: gable waist span along the ridge axis, as a fraction of the max span. */
+  dutchWaistLengthRatio: 1,
   /**
    * Dutch: how far the gablet's barge board extends outward past the gablet
    * end-wall, along the ridge axis, in metres. 0 disables the rake. The board
@@ -74,6 +76,8 @@ export const ROOF_SHAPE_DEFAULTS = {
    * and overhangs the lower hip skirt; the gablet end-wall itself stays put.
    */
   dutchGabletRake: 0,
+  /** Dutch: thickness of the top gable rake slab. */
+  dutchTopRakeThickness: 0.05,
 } as const
 
 export const RoofSegmentNode = BaseNode.extend({
@@ -151,7 +155,17 @@ export const RoofSegmentNode = BaseNode.extend({
     .min(0.1)
     .max(0.9)
     .default(ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio),
+  dutchWaistLengthRatio: z
+    .number()
+    .min(0.1)
+    .max(1)
+    .default(ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio),
   dutchGabletRake: z.number().min(0).max(3).default(ROOF_SHAPE_DEFAULTS.dutchGabletRake),
+  dutchTopRakeThickness: z
+    .number()
+    .min(0.01)
+    .max(0.5)
+    .default(ROOF_SHAPE_DEFAULTS.dutchTopRakeThickness),
   // Hosted accessories — chimney, dormer, skylight, box-vent,
   // ridge-vent, solar-panel, gutter. Each accessory's `parentId` points back
   // here; the segment renderer mounts them recursively via
@@ -177,7 +191,9 @@ export const RoofSegmentNode = BaseNode.extend({
   - gambrelLowerWidthRatio / gambrelLowerHeightRatio: kink position on gambrel roofs
   - mansardSteepWidthRatio / mansardSteepHeightRatio: waist position on mansard roofs
   - dutchHipWidthRatio / dutchHipHeightRatio: hip-to-gable split on dutch roofs
+  - dutchWaistLengthRatio: gable waist span along the ridge axis
   - dutchGabletRake: gablet barge-board overhang past the gablet end-wall (m, 0 = none)
+  - dutchTopRakeThickness: thickness of the top gable rake slab
   `,
 )
 
@@ -319,6 +335,7 @@ type ShapeRatios = {
   mansardSteepHeightRatio: number
   dutchHipWidthRatio: number
   dutchHipHeightRatio: number
+  dutchWaistLengthRatio: number
 }
 
 type PitchInputs = {
@@ -342,6 +359,8 @@ function withRatioDefaults(input: PitchInputs): PitchInputs & ShapeRatios {
       input.mansardSteepHeightRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepHeightRatio,
     dutchHipWidthRatio: input.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
     dutchHipHeightRatio: input.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
+    dutchWaistLengthRatio:
+      input.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
   }
 }
 
@@ -524,11 +543,48 @@ export function getRoofSegmentSurfaceY(
   if (
     node.roofType === 'gable' ||
     node.roofType === 'gambrel' ||
-    node.roofType === 'mansard' ||
-    node.roofType === 'dutch'
+    node.roofType === 'mansard'
   ) {
     const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
     return peakY - t * activeRh
+  }
+
+  if (node.roofType === 'dutch') {
+    const hipWidthRatio = node.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio
+    const hipHeightRatio = node.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio
+    const waistLengthRatio =
+      node.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
+    const inset = Math.min(node.width, node.depth) * hipWidthRatio
+    const lowerRise = activeRh * hipHeightRatio
+    if (node.width >= node.depth) {
+      const waistHalfX = Math.max(0, (node.width / 2 - inset) * waistLengthRatio)
+      const waistHalfZ = Math.max(0.0001, node.depth / 2 - inset)
+      if (Math.abs(localX) <= waistHalfX && Math.abs(localZ) <= waistHalfZ) {
+        const upperRise = activeRh * (1 - hipHeightRatio)
+        const upperTan = upperRise / waistHalfZ
+        return peakY - Math.abs(localZ) * upperTan
+      }
+
+      const xProgressDenom = Math.max(0.0001, node.width / 2 - waistHalfX)
+      const zProgressDenom = Math.max(0.0001, node.depth / 2 - waistHalfZ)
+      const xProgress = Math.max(0, Math.abs(localX) - waistHalfX) / xProgressDenom
+      const zProgress = Math.max(0, Math.abs(localZ) - waistHalfZ) / zProgressDenom
+      return node.wallHeight + lowerRise * (1 - Math.min(1, Math.max(xProgress, zProgress)))
+    }
+
+    const waistHalfX = Math.max(0.0001, node.width / 2 - inset)
+    const waistHalfZ = Math.max(0, (node.depth / 2 - inset) * waistLengthRatio)
+    if (Math.abs(localX) <= waistHalfX && Math.abs(localZ) <= waistHalfZ) {
+      const upperRise = activeRh * (1 - hipHeightRatio)
+      const upperRun = waistHalfX
+      const upperTan = upperRise / upperRun
+      return peakY - Math.abs(localX) * upperTan
+    }
+    const xProgressDenom = Math.max(0.0001, node.width / 2 - waistHalfX)
+    const zProgressDenom = Math.max(0.0001, node.depth / 2 - waistHalfZ)
+    const xProgress = Math.max(0, Math.abs(localX) - waistHalfX) / xProgressDenom
+    const zProgress = Math.max(0, Math.abs(localZ) - waistHalfZ) / zProgressDenom
+    return node.wallHeight + lowerRise * (1 - Math.min(1, Math.max(xProgress, zProgress)))
   }
 
   if (node.roofType === 'shed') {

@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
   type RoofType,
@@ -295,6 +296,44 @@ export default function RoofSegmentPanel() {
             step={0.01}
             unit=""
             value={Math.round(node.dutchHipHeightRatio * 100) / 100}
+          />
+          <SliderControl
+            label="Waist Length"
+            max={1}
+            min={0.1}
+            onChange={(v) => handleUpdate({ dutchWaistLengthRatio: v })}
+            precision={2}
+            step={0.01}
+            unit=""
+            value={
+              Math.round(
+                (node.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio) * 100,
+              ) / 100
+            }
+          />
+          <SliderControl
+            label="Top Rake Thick."
+            max={0.5}
+            min={0.01}
+            onChange={(v) => handleUpdate({ dutchTopRakeThickness: v })}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={
+              Math.round(
+                (node.dutchTopRakeThickness ?? ROOF_SHAPE_DEFAULTS.dutchTopRakeThickness) * 100,
+              ) / 100
+            }
+          />
+          <SliderControl
+            label="Top Rake Length"
+            max={3}
+            min={0}
+            onChange={(v) => handleUpdate({ dutchGabletRake: v })}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={Math.round((node.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake) * 100) / 100}
           />
         </PanelSection>
       )}

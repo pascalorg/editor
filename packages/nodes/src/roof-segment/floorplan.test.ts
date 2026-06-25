@@ -27,6 +27,7 @@ function dutchSegment(overrides: Partial<RoofSegmentNode> = {}): RoofSegmentNode
     mansardSteepHeightRatio: 0.7,
     dutchHipWidthRatio: 0.25,
     dutchHipHeightRatio: 0.5,
+    dutchWaistLengthRatio: 1,
     children: [],
     ...overrides,
   } as RoofSegmentNode
@@ -94,6 +95,29 @@ describe('getRoofSegmentPlanLinework', () => {
     expect(linework.hips).toContainEqual([
       [3, -4],
       [1.5, -2.5],
+    ])
+  })
+
+  test('shortens dutch waist length along the ridge axis', () => {
+    const linework = getRoofSegmentPlanLinework(dutchSegment({ dutchWaistLengthRatio: 0.5 }))
+
+    expect(linework.breaks).toEqual([
+      [
+        [-1.25, 1.5],
+        [1.25, 1.5],
+      ],
+      [
+        [1.25, 1.5],
+        [1.25, -1.5],
+      ],
+      [
+        [1.25, -1.5],
+        [-1.25, -1.5],
+      ],
+      [
+        [-1.25, -1.5],
+        [-1.25, 1.5],
+      ],
     ])
   })
 })

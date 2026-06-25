@@ -74,6 +74,7 @@ type FaceShapeRatios = {
   gambrelLowerWidthRatio: number
   mansardSteepWidthRatio: number
   dutchHipWidthRatio: number
+  dutchWaistLengthRatio: number
 }
 
 const SHINGLE_SURFACE_EPSILON = 0.02
@@ -116,6 +117,7 @@ function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
     segment.mansardSteepHeightRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepHeightRatio,
     segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
     segment.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
+    segment.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
   ].join('|')
 }
 
@@ -184,6 +186,8 @@ function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
     mansardSteepWidthRatio:
       segment.mansardSteepWidthRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepWidthRatio,
     dutchHipWidthRatio,
+    dutchWaistLengthRatio:
+      segment.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
   }
 
   return getRoofModuleFaces(
@@ -374,10 +378,11 @@ function getRoofModuleFaces(
     const mh = wh + i * (tanTheta || 0)
 
     if (w >= d) {
-      const m1 = v(-w / 2 + i, mh, d / 2 - i)
-      const m2 = v(w / 2 - i, mh, d / 2 - i)
-      const m3 = v(w / 2 - i, mh, -d / 2 + i)
-      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
+      const waistHalfSpan = (w / 2 - i) * shapeRatios.dutchWaistLengthRatio
+      const m1 = v(-waistHalfSpan, mh, d / 2 - i)
+      const m2 = v(waistHalfSpan, mh, d / 2 - i)
+      const m3 = v(waistHalfSpan, mh, -d / 2 + i)
+      const m4 = v(-waistHalfSpan, mh, -d / 2 + i)
 
       faces.push(
         [e1, e2, m2, m1],
@@ -385,11 +390,20 @@ function getRoofModuleFaces(
         [e3, e4, m4, m3],
         [e4, e1, m1, m4],
       )
+
+      const ridgeHalfSpan = waistHalfSpan
+      const topRun = d / 2 - i
+      if (ridgeHalfSpan > 0.001 && topRun > 0.001) {
+        const r1 = v(-ridgeHalfSpan, h, 0)
+        const r2 = v(ridgeHalfSpan, h, 0)
+        faces.push([m1, m2, r2, r1], [m3, m4, r1, r2])
+      }
     } else {
-      const m1 = v(-w / 2 + i, mh, d / 2 - i)
-      const m2 = v(w / 2 - i, mh, d / 2 - i)
-      const m3 = v(w / 2 - i, mh, -d / 2 + i)
-      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
+      const waistHalfSpan = (d / 2 - i) * shapeRatios.dutchWaistLengthRatio
+      const m1 = v(-w / 2 + i, mh, waistHalfSpan)
+      const m2 = v(w / 2 - i, mh, waistHalfSpan)
+      const m3 = v(w / 2 - i, mh, -waistHalfSpan)
+      const m4 = v(-w / 2 + i, mh, -waistHalfSpan)
 
       faces.push(
         [e1, e2, m2, m1],
@@ -397,6 +411,14 @@ function getRoofModuleFaces(
         [e3, e4, m4, m3],
         [e4, e1, m1, m4],
       )
+
+      const ridgeHalfSpan = waistHalfSpan
+      const topRun = w / 2 - i
+      if (ridgeHalfSpan > 0.001 && topRun > 0.001) {
+        const r1 = v(0, h, d / 2 - i)
+        const r2 = v(0, h, -d / 2 + i)
+        faces.push([m2, m3, r2, r1], [m4, m1, r1, r2])
+      }
     }
   }
 
@@ -649,10 +671,43 @@ export function getAnalyticalNormal(
   }
 
   if (roofType === 'dutch') {
-    const fx = halfW > 0 ? Math.abs(lx) / halfW : 0
-    const fz = halfD > 0 ? Math.abs(lz) / halfD : 0
-    if (fz >= fx) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan, out)
-    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, primaryTan, out)
+    const inset =
+      Math.min(width, depth) *
+      (seg.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio)
+    const heightRatio = seg.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio
+    const lengthRatio =
+      seg.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
+    const lowerRise = slope.activeRh * heightRatio
+
+    if (width >= depth) {
+      const waistHalfX = Math.max(0, (halfW - inset) * lengthRatio)
+      const waistHalfZ = Math.max(0, halfD - inset)
+      if (Math.abs(lx) <= waistHalfX && Math.abs(lz) <= waistHalfZ) {
+        const topRise = slope.activeRh * (1 - heightRatio)
+        const topTan = waistHalfZ > 0 ? topRise / waistHalfZ : 0
+        return buildSlopeNormal(0, lz >= 0 ? 1 : -1, topTan, out)
+      }
+
+      const xRun = Math.max(0.0001, halfW - waistHalfX)
+      const zRun = Math.max(0.0001, halfD - waistHalfZ)
+      const xTan = Math.abs(lx) > waistHalfX ? lowerRise / xRun : 0
+      const zTan = Math.abs(lz) > waistHalfZ ? lowerRise / zRun : 0
+      return out.set((lx >= 0 ? 1 : -1) * xTan, 1, (lz >= 0 ? 1 : -1) * zTan).normalize()
+    }
+
+    const waistHalfX = Math.max(0, halfW - inset)
+    const waistHalfZ = Math.max(0, (halfD - inset) * lengthRatio)
+    if (Math.abs(lx) <= waistHalfX && Math.abs(lz) <= waistHalfZ) {
+      const topRise = slope.activeRh * (1 - heightRatio)
+      const topTan = waistHalfX > 0 ? topRise / waistHalfX : 0
+      return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, topTan, out)
+    }
+
+    const xRun = Math.max(0.0001, halfW - waistHalfX)
+    const zRun = Math.max(0.0001, halfD - waistHalfZ)
+    const xTan = Math.abs(lx) > waistHalfX ? lowerRise / xRun : 0
+    const zTan = Math.abs(lz) > waistHalfZ ? lowerRise / zRun : 0
+    return out.set((lx >= 0 ? 1 : -1) * xTan, 1, (lz >= 0 ? 1 : -1) * zTan).normalize()
   }
 
   return out.set(0, 1, 0)

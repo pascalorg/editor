@@ -6,6 +6,7 @@ import {
   hasSegmentMaterialOverride,
   nodeRegistry,
   normalizeRoofSegmentTrim,
+  ROOF_SHAPE_DEFAULTS,
   type RoofNode,
   type RoofSegmentNode,
   type RoofType,
@@ -422,6 +423,7 @@ function updateMergedRoofGeometry(
   let totalDeckSlab: Brush | null = null
   let totalWall: Brush | null = null
   let totalInner: Brush | null = null
+  const dutchTopSkins: THREE.BufferGeometry[] = []
   const gabletBarges: THREE.BufferGeometry[] = []
 
   for (const child of children) {
@@ -457,6 +459,10 @@ function updateMergedRoofGeometry(
     if (brushes.gabletBarge) {
       brushes.gabletBarge.applyMatrix4(_matrix)
       gabletBarges.push(brushes.gabletBarge)
+    }
+    if (brushes.dutchTopSkin) {
+      brushes.dutchTopSkin.applyMatrix4(_matrix)
+      dutchTopSkins.push(brushes.dutchTopSkin)
     }
 
     if (totalShinSlab) {
@@ -526,6 +532,7 @@ function updateMergedRoofGeometry(
         totalDeckSlab.geometry.dispose()
         totalWall.geometry.dispose()
         totalInner.geometry.dispose()
+        for (const skin of dutchTopSkins) skin.dispose()
         for (const barge of gabletBarges) barge.dispose()
         return
       }
@@ -544,13 +551,15 @@ function updateMergedRoofGeometry(
       }
 
       let finalGeo = resultGeo
-      if (gabletBarges.length > 0) {
-        const merged = mergeGeometries([resultGeo, ...gabletBarges], true)
+      if (dutchTopSkins.length > 0 || gabletBarges.length > 0) {
+        const merged = mergeGeometries([resultGeo, ...dutchTopSkins, ...gabletBarges], true)
         if (merged) {
           resultGeo.dispose()
           finalGeo = merged
         }
       }
+      for (const skin of dutchTopSkins) skin.dispose()
+      for (const barge of gabletBarges) barge.dispose()
 
       finalGeo.computeVertexNormals()
       ensureRenderableGeometryAttributes(finalGeo)
@@ -634,6 +643,7 @@ type RoofSegmentBrushSet = {
   shinSlab: Brush
   wallBrush: Brush
   innerBrush: Brush
+  dutchTopSkin: THREE.BufferGeometry | null
   // Segment-local gablet barge boards (Dutch only). Merged into the final
   // shell as plain geometry rather than CSG-unioned: its top face is
   // intentionally coplanar with the shingle surface, and CSG coplanar
@@ -920,6 +930,8 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     gambrelLowerWidthRatio: node.gambrelLowerWidthRatio,
     mansardSteepWidthRatio: node.mansardSteepWidthRatio,
     dutchHipWidthRatio: node.dutchHipWidthRatio,
+    dutchWaistLengthRatio:
+      node.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
   }
 
   const verticalRt = activeRh > 0 ? deckThickness / cosTheta : deckThickness
@@ -1056,6 +1068,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
   const insetsBot = getInsets(shinBotWh, botBaseY, true, shinBotW, shinBotD)
   const insetsTop = getInsets(shinTopWh, topBaseY, false, shinTopW, shinTopD)
 
+  let dutchTopSkin: THREE.BufferGeometry | null = null
   let gabletBarge: THREE.BufferGeometry | null = null
   const botFaces = getModuleFaces(
     roofType,
@@ -1084,6 +1097,33 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     shapeRatios,
   )
 
+  if (roofType === 'dutch' && insetsTop.dutchI !== undefined) {
+    const topRakeThickness =
+      node.dutchTopRakeThickness ??
+      node.shingleThickness ??
+      ROOF_SHAPE_DEFAULTS.dutchTopRakeThickness
+    dutchTopSkin = buildDutchTopSkin(
+      shinTopW,
+      shinTopD,
+      shinTopWh,
+      shinTopRh,
+      insetsTop.dutchI,
+      tanTheta,
+      node.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
+    )
+    gabletBarge = buildDutchGabletBarge(
+      shinTopW,
+      shinTopD,
+      shinTopWh,
+      shinTopRh,
+      insetsTop.dutchI,
+      tanTheta,
+      node.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
+      node.dutchGabletRake && node.dutchGabletRake > 0 ? node.dutchGabletRake : topRakeThickness,
+      topRakeThickness,
+    )
+  }
+
   const shinBotGeo = createGeometryFromFaces(botFaces, 1)
   const shinTopGeo = createGeometryFromFaces(topFaces, (normal) =>
     normal.y > SHINGLE_SURFACE_EPSILON ? 3 : 1,
@@ -1091,6 +1131,12 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
 
   if (transZ !== 0) {
     shinTopGeo.translate(0, 0, transZ)
+  }
+  if (transZ !== 0 && dutchTopSkin) {
+    dutchTopSkin.translate(0, 0, transZ)
+  }
+  if (transZ !== 0 && gabletBarge) {
+    gabletBarge.translate(0, 0, transZ)
   }
 
   const toBrush = (geo: THREE.BufferGeometry): Brush | null => {
@@ -1161,6 +1207,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
         shinSlab,
         wallBrush,
         innerBrush,
+        dutchTopSkin,
         gabletBarge,
       }
       if (hasSegmentTrim(node)) {
@@ -1179,6 +1226,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
   if (shinBotBrush) shinBotBrush.geometry.dispose()
   if (wallBrush) wallBrush.geometry.dispose()
   if (innerBrush) innerBrush.geometry.dispose()
+  if (dutchTopSkin) dutchTopSkin.dispose()
 
   return null
 }
@@ -1212,7 +1260,7 @@ export function generateRoofSegmentGeometry(
     subtractAccessoryCuts(brushes, node, nodes)
   }
 
-  const { deckSlab, shinSlab, wallBrush, innerBrush, gabletBarge } = brushes
+  const { deckSlab, shinSlab, wallBrush, innerBrush, dutchTopSkin, gabletBarge } = brushes
   let resultGeo = new THREE.BufferGeometry()
 
   try {
@@ -1260,9 +1308,13 @@ export function generateRoofSegmentGeometry(
   wallBrush.geometry.dispose()
   innerBrush.geometry.dispose()
 
-  if (gabletBarge) {
-    const merged = mergeGeometries([resultGeo, gabletBarge], true)
-    gabletBarge.dispose()
+  if (dutchTopSkin || gabletBarge) {
+    const merged = mergeGeometries(
+      [resultGeo, ...(dutchTopSkin ? [dutchTopSkin] : []), ...(gabletBarge ? [gabletBarge] : [])],
+      true,
+    )
+    if (dutchTopSkin) dutchTopSkin.dispose()
+    if (gabletBarge) gabletBarge.dispose()
     if (merged) {
       resultGeo.dispose()
       resultGeo = merged
@@ -1401,6 +1453,7 @@ type ShapeWidthRatios = {
   gambrelLowerWidthRatio: number
   mansardSteepWidthRatio: number
   dutchHipWidthRatio: number
+  dutchWaistLengthRatio: number
 }
 
 /**
@@ -1518,10 +1571,11 @@ function getModuleFaces(
     const mh = wh + i * (tanTheta || 0)
 
     if (w >= d) {
-      const m1 = v(-w / 2 + i, mh, d / 2 - i)
-      const m2 = v(w / 2 - i, mh, d / 2 - i)
-      const m3 = v(w / 2 - i, mh, -d / 2 + i)
-      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
+      const waistHalfSpan = (w / 2 - i) * shapeRatios.dutchWaistLengthRatio
+      const m1 = v(-waistHalfSpan, mh, d / 2 - i)
+      const m2 = v(waistHalfSpan, mh, d / 2 - i)
+      const m3 = v(waistHalfSpan, mh, -d / 2 + i)
+      const m4 = v(-waistHalfSpan, mh, -d / 2 + i)
 
       faces.push(
         [e1, e2, m2, m1],
@@ -1530,10 +1584,11 @@ function getModuleFaces(
         [e4, e1, m1, m4],
       )
     } else {
-      const m1 = v(-w / 2 + i, mh, d / 2 - i)
-      const m2 = v(w / 2 - i, mh, d / 2 - i)
-      const m3 = v(w / 2 - i, mh, -d / 2 + i)
-      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
+      const waistHalfSpan = (d / 2 - i) * shapeRatios.dutchWaistLengthRatio
+      const m1 = v(-w / 2 + i, mh, waistHalfSpan)
+      const m2 = v(w / 2 - i, mh, waistHalfSpan)
+      const m3 = v(w / 2 - i, mh, -waistHalfSpan)
+      const m4 = v(-w / 2 + i, mh, -waistHalfSpan)
 
       faces.push(
         [e1, e2, m2, m1],
@@ -1547,10 +1602,9 @@ function getModuleFaces(
   return faces
 }
 
-// Append a watertight slab to `faces`: the planar `topPoly` (in the gablet
-// slope plane) plus a parallel copy dropped `thickness` straight down in Y,
-// joined by side quads. Winding is auto-oriented from the Newell normal so the
-// top cap faces up regardless of the input vertex order.
+// Append a thin prism for the rake. The input polygon stays anchored on the
+// roof-edge corner line; thickness drops vertically so the visible strip stays
+// parallel to the roof surface instead of reading like a perpendicular slab.
 function addBargeSlab(topPoly: THREE.Vector3[], thickness: number, faces: THREE.Vector3[][]) {
   if (topPoly.length < 3 || !(thickness > 0)) return
   let normalY = 0
@@ -1560,12 +1614,16 @@ function addBargeSlab(topPoly: THREE.Vector3[], thickness: number, faces: THREE.
     normalY += (a.z - b.z) * (a.x + b.x)
   }
   const top = normalY >= 0 ? topPoly.slice() : topPoly.slice().reverse()
-  const bottom = top.map((p) => new THREE.Vector3(p.x, p.y - thickness, p.z))
-  faces.push(top.map((p) => p.clone()))
-  faces.push(bottom.map((p) => p.clone()).reverse())
+  const inner = top.map((p) => new THREE.Vector3(p.x, p.y - thickness, p.z))
+  const pushDoubleSided = (poly: THREE.Vector3[]) => {
+    faces.push(poly.map((p) => p.clone()))
+    faces.push(poly.map((p) => p.clone()).reverse())
+  }
+  pushDoubleSided(top)
+  pushDoubleSided(inner.map((p) => p.clone()).reverse())
   for (let k = 0; k < top.length; k += 1) {
     const j = (k + 1) % top.length
-    faces.push([top[k]!.clone(), top[j]!.clone(), bottom[j]!.clone(), bottom[k]!.clone()])
+    pushDoubleSided([top[k]!.clone(), top[j]!.clone(), inner[j]!.clone(), inner[k]!.clone()])
   }
 }
 
@@ -1588,6 +1646,7 @@ function buildDutchGabletBarge(
   rh: number,
   i: number,
   tanTheta: number,
+  waistLengthRatio: number,
   rake: number,
   thickness: number,
 ): THREE.BufferGeometry | null {
@@ -1601,38 +1660,114 @@ function buildDutchGabletBarge(
 
   const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
   const faces: THREE.Vector3[][] = []
-  const addBoard = (apexIn: THREE.Vector3, baseIn: THREE.Vector3, outward: THREE.Vector3) => {
-    const apexOut = apexIn.clone().addScaledVector(outward, r)
-    const baseOut = baseIn.clone().addScaledVector(outward, r)
-    addBargeSlab([apexIn, baseIn, baseOut, apexOut], thickness, faces)
+  const addBoard = (apexEdge: THREE.Vector3, baseEdge: THREE.Vector3, inward: THREE.Vector3) => {
+    if (!(r > 0.0001)) return
+    const apexInner = apexEdge.clone().addScaledVector(inward, r)
+    const baseInner = baseEdge.clone().addScaledVector(inward, r)
+    addBargeSlab([apexInner, baseInner, baseEdge, apexEdge], thickness, faces)
   }
 
   if (W >= D) {
-    const xiL = -W / 2 + i
-    const xiR = W / 2 - i
+    const ridgeHalfSpan = (W / 2 - i) * waistLengthRatio
+    if (!(ridgeHalfSpan > 0.001)) return null
+    const xiL = -ridgeHalfSpan
+    const xiR = ridgeHalfSpan
     const frontZ = D / 2 - i
     const backZ = -D / 2 + i
-    const xNeg = v(-1, 0, 0)
-    const xPos = v(1, 0, 0)
-    addBoard(v(xiL, h, 0), v(xiL, mh, frontZ), xNeg)
-    addBoard(v(xiL, h, 0), v(xiL, mh, backZ), xNeg)
-    addBoard(v(xiR, h, 0), v(xiR, mh, frontZ), xPos)
-    addBoard(v(xiR, h, 0), v(xiR, mh, backZ), xPos)
+    const towardCenterFromLeft = v(1, 0, 0)
+    const towardCenterFromRight = v(-1, 0, 0)
+    addBoard(v(xiL, h, 0), v(xiL, mh, frontZ), towardCenterFromLeft)
+    addBoard(v(xiL, h, 0), v(xiL, mh, backZ), towardCenterFromLeft)
+    addBoard(v(xiR, h, 0), v(xiR, mh, frontZ), towardCenterFromRight)
+    addBoard(v(xiR, h, 0), v(xiR, mh, backZ), towardCenterFromRight)
+
+    const leftWallX = xiL + r
+    const rightWallX = xiR - r
+    const leftWall = [
+      v(leftWallX, h, 0),
+      v(leftWallX, mh, frontZ),
+      v(leftWallX, mh, backZ),
+    ]
+    const rightWall = [
+      v(rightWallX, h, 0),
+      v(rightWallX, mh, backZ),
+      v(rightWallX, mh, frontZ),
+    ]
+    faces.push(leftWall, leftWall.slice().reverse(), rightWall, rightWall.slice().reverse())
   } else {
-    const ziF = D / 2 - i
-    const ziB = -D / 2 + i
+    const ridgeHalfSpan = (D / 2 - i) * waistLengthRatio
+    if (!(ridgeHalfSpan > 0.001)) return null
+    const ziF = ridgeHalfSpan
+    const ziB = -ridgeHalfSpan
     const leftX = -W / 2 + i
     const rightX = W / 2 - i
-    const zPos = v(0, 0, 1)
-    const zNeg = v(0, 0, -1)
-    addBoard(v(0, h, ziF), v(leftX, mh, ziF), zPos)
-    addBoard(v(0, h, ziF), v(rightX, mh, ziF), zPos)
-    addBoard(v(0, h, ziB), v(leftX, mh, ziB), zNeg)
-    addBoard(v(0, h, ziB), v(rightX, mh, ziB), zNeg)
+    const towardCenterFromFront = v(0, 0, -1)
+    const towardCenterFromBack = v(0, 0, 1)
+    addBoard(v(0, h, ziF), v(leftX, mh, ziF), towardCenterFromFront)
+    addBoard(v(0, h, ziF), v(rightX, mh, ziF), towardCenterFromFront)
+    addBoard(v(0, h, ziB), v(leftX, mh, ziB), towardCenterFromBack)
+    addBoard(v(0, h, ziB), v(rightX, mh, ziB), towardCenterFromBack)
+
+    const frontWallZ = ziF - r
+    const backWallZ = ziB + r
+    const frontWall = [
+      v(0, h, frontWallZ),
+      v(rightX, mh, frontWallZ),
+      v(leftX, mh, frontWallZ),
+    ]
+    const backWall = [
+      v(0, h, backWallZ),
+      v(leftX, mh, backWallZ),
+      v(rightX, mh, backWallZ),
+    ]
+    faces.push(frontWall, frontWall.slice().reverse(), backWall, backWall.slice().reverse())
   }
 
   if (faces.length === 0) return null
   return createGeometryFromFaces(faces, (normal) => (normal.y > SHINGLE_SURFACE_EPSILON ? 3 : 1))
+}
+
+function buildDutchTopSkin(
+  W: number,
+  D: number,
+  wh: number,
+  rh: number,
+  i: number,
+  tanTheta: number,
+  waistLengthRatio: number,
+): THREE.BufferGeometry | null {
+  if (!(i > 0.001)) return null
+  const h = wh + Math.max(0.001, rh)
+  const mh = wh + i * (tanTheta || 0)
+  const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
+  const faces: THREE.Vector3[][] = []
+
+  if (W >= D) {
+    const ridgeHalfSpan = (W / 2 - i) * waistLengthRatio
+    const topRun = D / 2 - i
+    if (!(ridgeHalfSpan > 0.001) || !(topRun > 0.001)) return null
+    const m1 = v(-ridgeHalfSpan, mh, D / 2 - i)
+    const m2 = v(ridgeHalfSpan, mh, D / 2 - i)
+    const m3 = v(ridgeHalfSpan, mh, -D / 2 + i)
+    const m4 = v(-ridgeHalfSpan, mh, -D / 2 + i)
+    const r1 = v(-ridgeHalfSpan, h, 0)
+    const r2 = v(ridgeHalfSpan, h, 0)
+    faces.push([m1, m2, r2, r1], [m3, m4, r1, r2])
+  } else {
+    const ridgeHalfSpan = (D / 2 - i) * waistLengthRatio
+    const topRun = W / 2 - i
+    if (!(ridgeHalfSpan > 0.001) || !(topRun > 0.001)) return null
+    const m1 = v(-W / 2 + i, mh, ridgeHalfSpan)
+    const m2 = v(W / 2 - i, mh, ridgeHalfSpan)
+    const m3 = v(W / 2 - i, mh, -ridgeHalfSpan)
+    const m4 = v(-W / 2 + i, mh, -ridgeHalfSpan)
+    const r1 = v(0, h, D / 2 - i)
+    const r2 = v(0, h, -D / 2 + i)
+    faces.push([m2, m3, r2, r1], [m4, m1, r1, r2])
+  }
+
+  if (faces.length === 0) return null
+  return createGeometryFromFaces(faces, 3)
 }
 
 /**
@@ -1904,6 +2039,8 @@ export function getRoofOuterSurfaceFrameAtPoint(
     gambrelLowerWidthRatio: segment.gambrelLowerWidthRatio,
     mansardSteepWidthRatio: segment.mansardSteepWidthRatio,
     dutchHipWidthRatio: segment.dutchHipWidthRatio,
+    dutchWaistLengthRatio:
+      segment.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
   }
   const topFaces = getModuleFaces(
     roofType,
