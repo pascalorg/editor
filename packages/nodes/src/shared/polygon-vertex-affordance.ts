@@ -6,7 +6,12 @@ import {
   type FloorplanAffordanceSession,
   useScene,
 } from '@pascal-app/core'
-import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
+import {
+  getSegmentGridStep,
+  snapPointToGrid,
+  snapScalarToGrid,
+  type WallPlanPoint,
+} from '@pascal-app/editor'
 
 /**
  * Shared "edit polygon" floor-plan affordances. Used by kinds whose
@@ -123,7 +128,11 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
         affectedIds: [node.id],
         apply({ planPoint, modifiers }) {
           const rawPoint: WallPlanPoint = [planPoint[0], planPoint[1]]
-          const fallbackPoint = modifiers.shiftKey ? rawPoint : snapPointToGrid(rawPoint)
+          // Mode-driven grid snap (matches the chip): `getSegmentGridStep()` is
+          // 0 in any non-`grid` mode, so `lines` / `off` pass the raw point
+          // through (the resolver's wall-snap/alignment handles `lines`); `grid`
+          // quantizes to the live grid step. No Shift hold-to-bypass.
+          const fallbackPoint = snapPointToGrid(rawPoint, getSegmentGridStep())
           const snapped = resolveAffordancePlanPoint(options, {
             node,
             nodes,
@@ -207,7 +216,11 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
         affectedIds: [node.id],
         apply({ planPoint, modifiers }) {
           const rawPoint: WallPlanPoint = [planPoint[0], planPoint[1]]
-          const fallbackPoint = modifiers.shiftKey ? rawPoint : snapPointToGrid(rawPoint)
+          // Mode-driven grid snap (matches the chip): `getSegmentGridStep()` is
+          // 0 in any non-`grid` mode, so `lines` / `off` pass the raw point
+          // through (the resolver's wall-snap/alignment handles `lines`); `grid`
+          // quantizes to the live grid step. No Shift hold-to-bypass.
+          const fallbackPoint = snapPointToGrid(rawPoint, getSegmentGridStep())
           const snapped = resolveAffordancePlanPoint(options, {
             node,
             nodes,
@@ -301,12 +314,13 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
           const rawPoint: WallPlanPoint = [planPoint[0], planPoint[1]]
           const deltaX = rawPoint[0] - startX
           const deltaY = rawPoint[1] - startY
-          let projection = deltaX * normalX + deltaY * normalY
-          if (!modifiers.shiftKey) {
-            // Snap the projection scalar to a 0.5m grid (legacy uses the
-            // same half-meter snap for slab edges).
-            projection = Math.round(projection * 2) / 2
-          }
+          // Mode-driven snap of the perpendicular distance (matches the chip):
+          // `getSegmentGridStep()` is 0 in non-`grid` modes, so `snapScalarToGrid`
+          // passes the raw projection through; `grid` quantizes to the live step.
+          const projection = snapScalarToGrid(
+            deltaX * normalX + deltaY * normalY,
+            getSegmentGridStep(),
+          )
           const fallbackPoint: WallPlanPoint = [
             startX + normalX * projection,
             startY + normalY * projection,
