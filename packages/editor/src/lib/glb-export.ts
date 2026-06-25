@@ -156,6 +156,11 @@ function pairClones(
 // plain transform node instead of a primitive.
 const EMPTY_GEOMETRY = new THREE.BufferGeometry()
 
+// Hidden placeholder for a neutralised renderable that has no material: a valid
+// material keeps GLTFExporter from crashing on `material.isShaderMaterial`, while
+// EMPTY_GEOMETRY makes it emit a transform node instead of a primitive.
+const PLACEHOLDER_MATERIAL = new THREE.MeshBasicMaterial({ visible: false })
+
 /**
  * Strip everything that must not bake into the model:
  *  - Editor overlays on non-scene layers (gizmos, selection handles, ground
@@ -180,6 +185,25 @@ function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE
     if (!object.layers.isEnabled(SCENE_LAYER)) {
       if (identityNodes.has(object)) return
       toRemove.push(object)
+      return
+    }
+    // A renderable (Mesh / Line / Points) with no material can't produce valid
+    // glTF and crashes GLTFExporter, which reads `material.isShaderMaterial`
+    // unconditionally — e.g. an imported sub-model that left a mesh material-less.
+    // Non-Mesh renderables also slip past the `isMesh` checks below and the
+    // material conversion. Neutralise it: keep the node (so children survive) but
+    // strip its geometry + give it the hidden placeholder, or drop it if a leaf.
+    const renderable = object as THREE.Mesh & { isLine?: boolean; isPoints?: boolean }
+    if (
+      (renderable.isMesh === true || renderable.isLine === true || renderable.isPoints === true) &&
+      renderable.material == null
+    ) {
+      if (object.children.length > 0) {
+        renderable.geometry = EMPTY_GEOMETRY
+        renderable.material = PLACEHOLDER_MATERIAL
+      } else {
+        toRemove.push(object)
+      }
       return
     }
     const mesh = object as THREE.Mesh
