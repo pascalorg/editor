@@ -76,7 +76,6 @@ type UseFloorplanBackgroundPlacementArgs = {
     point: WallPlanPoint
     start?: WallPlanPoint
     angleSnap: boolean
-    bypassSnap?: boolean
   }) => WallPlanPoint
   toPoint2D: (point: WallPlanPoint) => { x: number; y: number }
   walls: WallNode[]
@@ -161,24 +160,21 @@ export function useFloorplanBackgroundPlacement({
       }
 
       if (isCeilingBuildActive) {
-        const bypassSnap = shiftPressed || event.shiftKey
-        // Align the committed vertex the same way the move-preview did, so
-        // the placed point matches what the user saw. Wall magnetic snap may
-        // still win; generic alignment is skipped when angle snap owns the
-        // vertex (matches the move branch).
-        const angleSnap = ceilingDraftPoints.length > 0 && !bypassSnap
+        // Align the committed vertex the same way the move-preview did, so the
+        // placed point matches what the user saw — mode-driven (the chip):
+        // `grid` quantizes, `angles` locks 15° rays, `lines` snaps onto walls /
+        // alignment, `off` is free. Alt forces (skips alignment).
+        const angleSnap = ceilingDraftPoints.length > 0 && isAngleSnapActive()
         const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: ceilingDraftPoints[ceilingDraftPoints.length - 1],
           angleSnap,
-          bypassSnap,
         })
         const snappedPoint = resolveCeilingPlanPointSnap({
           rawPoint: planPoint,
           fallbackPoint,
           levelId,
           altKey: event.altKey,
-          shiftKey: bypassSnap,
           align: !angleSnap,
         }).point
 
@@ -272,13 +268,11 @@ export function useFloorplanBackgroundPlacement({
       // swallow the click and skip local draft state updates — leaving
       // the 2D draft polygon invisible while the 3D tool builds fine).
       if (isPolygonBuildActive) {
-        const bypassSnap = shiftPressed || event.shiftKey
-        const angleSnap = activePolygonDraftPoints.length > 0 && !bypassSnap
+        const angleSnap = activePolygonDraftPoints.length > 0 && isAngleSnapActive()
         const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
           angleSnap,
-          bypassSnap,
         })
         let snappedPoint = fallbackPoint
         if (isSlabBuildActive) {
@@ -287,12 +281,11 @@ export function useFloorplanBackgroundPlacement({
             fallbackPoint,
             levelId,
             altKey: event.altKey,
-            shiftKey: bypassSnap,
             align: !angleSnap,
           }).point
         } else if (!angleSnap) {
           snappedPoint = alignFloorplanDraftPoint(fallbackPoint, {
-            bypass: event.altKey || bypassSnap,
+            bypass: event.altKey || !isMagneticSnapActive(),
           })
         }
 

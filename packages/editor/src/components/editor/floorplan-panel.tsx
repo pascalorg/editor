@@ -2167,15 +2167,14 @@ function snapPolygonDraftPoint({
   point,
   start,
   angleSnap,
-  bypassSnap,
 }: {
   point: WallPlanPoint
   start?: WallPlanPoint
   angleSnap: boolean
-  bypassSnap?: boolean
 }): WallPlanPoint {
-  if (bypassSnap) return point
-
+  // `snapToHalf`'s default step is 0 in any non-`grid` mode, so the grid branch
+  // passes the raw point through for `lines` / `off` (where wall-snap /
+  // alignment, run by the caller, takes over) — no explicit bypass needed.
   if (!(start && angleSnap)) {
     return [snapToHalf(point[0]), snapToHalf(point[1])]
   }
@@ -8624,24 +8623,23 @@ export function FloorplanPanel({
       }
 
       if (isCeilingBuildActive) {
-        const bypassSnap = shiftPressed || event.shiftKey
-        // Polygon vertex: grid (snapToHalf) or 15° angle snap from the
-        // previous vertex. Wall magnetic snap may still win, while
-        // generic alignment runs only when angle snap is OFF (first vertex,
-        // or Shift held) so it does not pull a locked angle sideways.
-        const angleSnap = ceilingDraftPoints.length > 0 && !bypassSnap
+        // Polygon vertex snapping is governed by the active snapping mode (the
+        // chip on the right): `grid` quantizes via `snapToHalf` (whose step is
+        // 0 — i.e. off — in any non-grid mode), `angles` locks to 15° rays from
+        // the previous vertex, `lines` pulls onto wall corners / alignment
+        // guides, `off` is free. No Shift hold-to-bypass; Alt forces (skips
+        // alignment).
+        const angleSnap = ceilingDraftPoints.length > 0 && isAngleSnapActive()
         const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: ceilingDraftPoints[ceilingDraftPoints.length - 1],
           angleSnap,
-          bypassSnap,
         })
         const snappedPoint = resolveCeilingPlanPointSnap({
           rawPoint: planPoint,
           fallbackPoint,
           levelId,
           altKey: event.altKey,
-          shiftKey: bypassSnap,
           align: !angleSnap,
         }).point
 
@@ -8719,13 +8717,15 @@ export function FloorplanPanel({
       // the local polygon-draft state actually updates as the cursor
       // moves (the catch-all would otherwise swallow the move event).
       if (isPolygonBuildActive) {
-        const bypassSnap = shiftPressed || event.shiftKey
-        const angleSnap = activePolygonDraftPoints.length > 0 && !bypassSnap
+        // Mode-driven (matches the chip): `grid` quantizes (`snapToHalf`'s step
+        // is 0 in non-grid modes), `angles` locks 15° rays from the previous
+        // vertex, `lines` snaps onto wall corners / alignment guides, `off` is
+        // free. No Shift bypass; Alt forces (skips alignment).
+        const angleSnap = activePolygonDraftPoints.length > 0 && isAngleSnapActive()
         const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
           angleSnap,
-          bypassSnap,
         })
         let snappedPoint = fallbackPoint
         if (isSlabBuildActive) {
@@ -8734,14 +8734,13 @@ export function FloorplanPanel({
             fallbackPoint,
             levelId,
             altKey: event.altKey,
-            shiftKey: bypassSnap,
             align: !angleSnap,
           }).point
         } else if (angleSnap) {
           useAlignmentGuides.getState().clear()
         } else {
           snappedPoint = alignFloorplanDraftPoint(fallbackPoint, {
-            bypass: event.altKey || bypassSnap,
+            bypass: event.altKey || !isMagneticSnapActive(),
           })
         }
 
@@ -8751,7 +8750,7 @@ export function FloorplanPanel({
 
         setCursorPoint((previousPoint) => {
           const hasChanged = !(previousPoint && pointsEqual(previousPoint, snappedPoint))
-          if (!bypassSnap && hasChanged && activePolygonDraftPoints.length > 0) {
+          if (hasChanged && activePolygonDraftPoints.length > 0) {
             sfxEmitter.emit('sfx:grid-snap')
           }
           return snappedPoint
@@ -9396,13 +9395,11 @@ export function FloorplanPanel({
         return
       }
 
-      const bypassSnap = shiftPressed || event.shiftKey
-      const angleSnap = activePolygonDraftPoints.length > 0 && !bypassSnap
+      const angleSnap = activePolygonDraftPoints.length > 0 && isAngleSnapActive()
       const fallbackPoint = snapPolygonDraftPoint({
         point: planPoint,
         start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
         angleSnap,
-        bypassSnap,
       })
 
       if (isCeilingBuildActive) {
@@ -9411,7 +9408,6 @@ export function FloorplanPanel({
           fallbackPoint,
           levelId,
           altKey: event.altKey,
-          shiftKey: bypassSnap,
           align: !angleSnap,
         }).point
         emitFloorplanGridEvent('double-click', snappedPoint, event)
@@ -9427,7 +9423,6 @@ export function FloorplanPanel({
           fallbackPoint,
           levelId,
           altKey: event.altKey,
-          shiftKey: bypassSnap,
           align: !angleSnap,
         }).point
         // Slab is registry-driven: forward the double-click so the 3D tool
@@ -9448,7 +9443,6 @@ export function FloorplanPanel({
       isRoofBuildActive,
       isZoneBuildActive,
       levelId,
-      shiftPressed,
     ],
   )
 
