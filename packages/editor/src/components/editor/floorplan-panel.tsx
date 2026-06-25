@@ -4715,6 +4715,204 @@ function FloorplanCursorIndicator(
   return <Editor2dFloorplanCursorIndicatorOverlay {...props} cursorPosition={cursorPosition} />
 }
 
+// Leaf overlay for the live wall / fence / roof draft segment (the directional
+// draws). It subscribes to the per-move END points in the draft store so a
+// `grid:move` re-renders ONLY this layer, not FloorplanPanel; the per-click
+// START points + render config arrive as props. Owns the draft polygon (wall +
+// roof rect), the fence segment line, and the wall length/angle measurement —
+// the cursor-following pieces the shared `FloorplanDraftLayer` no longer carries.
+function FloorplanLinearDraftLayer({
+  levelId,
+  wallDraftStart,
+  fenceDraftStart,
+  roofDraftStart,
+  isWallBuildActive,
+  isFenceBuildActive,
+  isRoofBuildActive,
+  walls,
+  unit,
+  draftFill,
+  draftStroke,
+  measurementStroke,
+  isDark,
+  unitsPerPixel,
+  sceneRotationDeg,
+}: {
+  levelId: string | null
+  wallDraftStart: WallPlanPoint | null
+  fenceDraftStart: WallPlanPoint | null
+  roofDraftStart: WallPlanPoint | null
+  isWallBuildActive: boolean
+  isFenceBuildActive: boolean
+  isRoofBuildActive: boolean
+  walls: WallNode[]
+  unit: 'metric' | 'imperial'
+  draftFill: string
+  draftStroke: string
+  measurementStroke: string
+  isDark: boolean
+  unitsPerPixel: number
+  sceneRotationDeg: number
+}) {
+  const wallDraftEnd = useFloorplanDraftPreview((s) => s.wallDraftEnd)
+  const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
+  const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
+
+  const draftPolygon = useMemo(() => {
+    if (
+      !(
+        levelId &&
+        wallDraftStart &&
+        wallDraftEnd &&
+        isSegmentLongEnough(wallDraftStart, wallDraftEnd)
+      )
+    ) {
+      return null
+    }
+    const draftWall = getSharedFloorplanWall(buildDraftWall(levelId, wallDraftStart, wallDraftEnd))
+    // Keep the live draft preview cheap; full level-wide mitering here runs on every mouse move.
+    return getWallPlanFootprint(draftWall, EMPTY_WALL_MITER_DATA)
+  }, [levelId, wallDraftStart, wallDraftEnd])
+
+  const draftPolygonPoints = useMemo(() => {
+    if (isRoofBuildActive && roofDraftStart && roofDraftEnd) {
+      const minX = Math.min(roofDraftStart[0], roofDraftEnd[0])
+      const maxX = Math.max(roofDraftStart[0], roofDraftEnd[0])
+      const minY = Math.min(roofDraftStart[1], roofDraftEnd[1])
+      const maxY = Math.max(roofDraftStart[1], roofDraftEnd[1])
+
+      if (Math.abs(maxX - minX) >= 1e-6 || Math.abs(maxY - minY) >= 1e-6) {
+        return formatPolygonPoints([
+          { x: minX, y: minY },
+          { x: maxX, y: minY },
+          { x: maxX, y: maxY },
+          { x: minX, y: maxY },
+        ])
+      }
+    }
+    return draftPolygon ? formatPolygonPoints(draftPolygon) : null
+  }, [draftPolygon, isRoofBuildActive, roofDraftEnd, roofDraftStart])
+
+  const fenceDraftSegment = useMemo(() => {
+    if (!(isFenceBuildActive && fenceDraftStart && fenceDraftEnd)) {
+      return null
+    }
+    if (getPlanPointDistance(toPoint2D(fenceDraftStart), toPoint2D(fenceDraftEnd)) < 1e-6) {
+      return null
+    }
+    return {
+      x1: toSvgX(fenceDraftStart[0]),
+      y1: toSvgY(fenceDraftStart[1]),
+      x2: toSvgX(fenceDraftEnd[0]),
+      y2: toSvgY(fenceDraftEnd[1]),
+    }
+  }, [fenceDraftEnd, fenceDraftStart, isFenceBuildActive])
+
+  // Live length + angle feedback for the wall draft — parity with the 3D
+  // `WallTool`, ported to 2D plan space.
+  const draftWallMeasurement = useMemo(() => {
+    if (
+      !(
+        isWallBuildActive &&
+        wallDraftStart &&
+        wallDraftEnd &&
+        isSegmentLongEnough(wallDraftStart, wallDraftEnd)
+      )
+    ) {
+      return null
+    }
+
+    const dx = wallDraftEnd[0] - wallDraftStart[0]
+    const dy = wallDraftEnd[1] - wallDraftStart[1]
+    const length = Math.hypot(dx, dy)
+
+    const draftFromStart: WallPlanPoint = [dx, dy]
+    const draftFromEnd: WallPlanPoint = [-dx, -dy]
+    const endpoints = [
+      { id: 'start', point: wallDraftStart, draftVector: draftFromStart },
+      { id: 'end', point: wallDraftEnd, draftVector: draftFromEnd },
+    ] as const
+
+    type AngleLabel = {
+      id: string
+      label: string
+      center: WallPlanPoint
+      radius: number
+      startAngle: number
+      endAngle: number
+      midAngle: number
+    }
+
+    const angleLabels: AngleLabel[] = []
+    for (const endpoint of endpoints) {
+      const connectedWall = walls.find((wall) =>
+        Boolean(getSegmentAngleReferenceAtPoint(endpoint.point, wall)),
+      )
+      if (!connectedWall) continue
+      const ref = getSegmentAngleReferenceAtPoint(endpoint.point, connectedWall)
+      if (!ref) continue
+
+      const angle = getAngleToSegmentReference(endpoint.draftVector, ref)
+      if (angle === null) continue
+      const arc = getAngleArcToSegmentReference(endpoint.draftVector, ref)
+      if (!arc || arc.angle < 0.01) continue
+
+      const refLen = Math.hypot(ref.vector[0], ref.vector[1])
+      const radius = Math.max(0.32, Math.min(0.72, Math.min(length, refLen) * 0.28))
+
+      angleLabels.push({
+        id: endpoint.id,
+        label: formatAngleRadians(angle),
+        center: endpoint.point,
+        radius,
+        startAngle: arc.startAngle,
+        endAngle: arc.endAngle,
+        midAngle: arc.midAngle,
+      })
+    }
+
+    return {
+      lengthLabel: formatMeasurement(length, unit),
+      midpoint: [
+        (wallDraftStart[0] + wallDraftEnd[0]) / 2,
+        (wallDraftStart[1] + wallDraftEnd[1]) / 2,
+      ] as WallPlanPoint,
+      direction: [dx / length, dy / length] as WallPlanPoint,
+      angleLabels,
+    }
+  }, [isWallBuildActive, unit, wallDraftEnd, wallDraftStart, walls])
+
+  return (
+    <>
+      <FloorplanDraftLayer
+        anchorFill={draftStroke}
+        draftAnchorPoints={EMPTY_DRAFT_ANCHOR_POINTS}
+        draftFill={draftFill}
+        draftPolygonPoints={draftPolygonPoints}
+        draftStroke={draftStroke}
+        linearDraftSegment={fenceDraftSegment}
+        polygonDraftClosingSegment={null}
+        polygonDraftPolygonPoints={null}
+        polygonDraftPolylinePoints={null}
+        unitsPerPixel={unitsPerPixel}
+      />
+
+      {draftWallMeasurement && (
+        <FloorplanDraftWallMeasurement
+          labelBackground={isDark ? '#0f172a' : '#ffffff'}
+          labelText={isDark ? '#e2e8f0' : '#171717'}
+          measurement={draftWallMeasurement}
+          measurementStroke={measurementStroke}
+          sceneRotationDeg={sceneRotationDeg}
+          unitsPerPixel={unitsPerPixel}
+        />
+      )}
+    </>
+  )
+}
+
+const EMPTY_DRAFT_ANCHOR_POINTS: Array<{ x: number; y: number; isPrimary: boolean }> = []
+
 export function FloorplanPanel({
   /**
    * Element to portal the compass button into. The 2D/3D navigation poses stay
@@ -4854,12 +5052,34 @@ export function FloorplanPanel({
     FLOORPLAN_VIEW_ROTATION_DEG + floorplanUserRotationDeg - buildingRotationDeg
   latestFloorplanUserRotationDegRef.current = floorplanUserRotationDeg
 
+  // Draft START points stay in panel state (set per click). The live END points
+  // are the per-move hot values — they live in `useFloorplanDraftPreview` so a
+  // `grid:move` re-renders only `FloorplanLinearDraftLayer`, not this panel.
+  // Shims keep the `setXDraftEnd(value | prev => …)` call sites unchanged.
   const [draftStart, setDraftStart] = useState<WallPlanPoint | null>(null)
-  const [draftEnd, setDraftEnd] = useState<WallPlanPoint | null>(null)
+  const setDraftEnd = useCallback(
+    (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
+      const store = useFloorplanDraftPreview.getState()
+      store.setWallDraftEnd(typeof next === 'function' ? next(store.wallDraftEnd) : next)
+    },
+    [],
+  )
   const [fenceDraftStart, setFenceDraftStart] = useState<WallPlanPoint | null>(null)
-  const [fenceDraftEnd, setFenceDraftEnd] = useState<WallPlanPoint | null>(null)
+  const setFenceDraftEnd = useCallback(
+    (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
+      const store = useFloorplanDraftPreview.getState()
+      store.setFenceDraftEnd(typeof next === 'function' ? next(store.fenceDraftEnd) : next)
+    },
+    [],
+  )
   const [roofDraftStart, setRoofDraftStart] = useState<WallPlanPoint | null>(null)
-  const [roofDraftEnd, setRoofDraftEnd] = useState<WallPlanPoint | null>(null)
+  const setRoofDraftEnd = useCallback(
+    (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
+      const store = useFloorplanDraftPreview.getState()
+      store.setRoofDraftEnd(typeof next === 'function' ? next(store.roofDraftEnd) : next)
+    },
+    [],
+  )
   const [ceilingDraftPoints, setCeilingDraftPoints] = useState<WallPlanPoint[]>([])
   const [slabDraftPoints, setSlabDraftPoints] = useState<WallPlanPoint[]>([])
   const [zoneDraftPoints, setZoneDraftPoints] = useState<WallPlanPoint[]>([])
@@ -5879,120 +6099,10 @@ export function FloorplanPanel({
     })
   }, [canUseSiteBoundaryVertexHandles, siteVertexDragState, visibleSitePolygon])
 
-  const draftPolygon = useMemo(() => {
-    if (!(levelId && draftStart && draftEnd && isSegmentLongEnough(draftStart, draftEnd))) {
-      return null
-    }
-
-    const draftWall = getSharedFloorplanWall(buildDraftWall(levelId, draftStart, draftEnd))
-    // Keep the live draft preview cheap; full level-wide mitering here runs on every mouse move.
-    return getWallPlanFootprint(draftWall, EMPTY_WALL_MITER_DATA)
-  }, [draftEnd, draftStart, levelId])
-  // Live length + angle feedback for the wall draft — parity with the 3D
-  // `WallTool` (`packages/nodes/src/wall/tool.tsx`), ported to 2D plan
-  // space. Length renders at the segment midpoint; angle arcs sit at
-  // each endpoint that meets an existing wall.
-  const draftWallMeasurement = useMemo(() => {
-    if (
-      !(isWallBuildActive && draftStart && draftEnd && isSegmentLongEnough(draftStart, draftEnd))
-    ) {
-      return null
-    }
-
-    const dx = draftEnd[0] - draftStart[0]
-    const dy = draftEnd[1] - draftStart[1]
-    const length = Math.hypot(dx, dy)
-
-    const draftFromStart: WallPlanPoint = [dx, dy]
-    const draftFromEnd: WallPlanPoint = [-dx, -dy]
-    const endpoints = [
-      { id: 'start', point: draftStart, draftVector: draftFromStart },
-      { id: 'end', point: draftEnd, draftVector: draftFromEnd },
-    ] as const
-
-    type AngleLabel = {
-      id: string
-      label: string
-      center: WallPlanPoint
-      radius: number
-      startAngle: number
-      endAngle: number
-      midAngle: number
-    }
-
-    const angleLabels: AngleLabel[] = []
-    for (const endpoint of endpoints) {
-      const connectedWall = walls.find((wall) =>
-        Boolean(getSegmentAngleReferenceAtPoint(endpoint.point, wall)),
-      )
-      if (!connectedWall) continue
-      const ref = getSegmentAngleReferenceAtPoint(endpoint.point, connectedWall)
-      if (!ref) continue
-
-      const angle = getAngleToSegmentReference(endpoint.draftVector, ref)
-      if (angle === null) continue
-      const arc = getAngleArcToSegmentReference(endpoint.draftVector, ref)
-      if (!arc || arc.angle < 0.01) continue
-
-      const refLen = Math.hypot(ref.vector[0], ref.vector[1])
-      const radius = Math.max(0.32, Math.min(0.72, Math.min(length, refLen) * 0.28))
-
-      angleLabels.push({
-        id: endpoint.id,
-        label: formatAngleRadians(angle),
-        center: endpoint.point,
-        radius,
-        startAngle: arc.startAngle,
-        endAngle: arc.endAngle,
-        midAngle: arc.midAngle,
-      })
-    }
-
-    return {
-      lengthLabel: formatMeasurement(length, unit),
-      midpoint: [
-        (draftStart[0] + draftEnd[0]) / 2,
-        (draftStart[1] + draftEnd[1]) / 2,
-      ] as WallPlanPoint,
-      direction: [dx / length, dy / length] as WallPlanPoint,
-      angleLabels,
-    }
-  }, [draftEnd, draftStart, isWallBuildActive, unit, walls])
-  const draftPolygonPoints = useMemo(() => {
-    if (isRoofBuildActive && roofDraftStart && roofDraftEnd) {
-      const minX = Math.min(roofDraftStart[0], roofDraftEnd[0])
-      const maxX = Math.max(roofDraftStart[0], roofDraftEnd[0])
-      const minY = Math.min(roofDraftStart[1], roofDraftEnd[1])
-      const maxY = Math.max(roofDraftStart[1], roofDraftEnd[1])
-
-      if (Math.abs(maxX - minX) >= 1e-6 || Math.abs(maxY - minY) >= 1e-6) {
-        return formatPolygonPoints([
-          { x: minX, y: minY },
-          { x: maxX, y: minY },
-          { x: maxX, y: maxY },
-          { x: minX, y: maxY },
-        ])
-      }
-    }
-
-    return draftPolygon ? formatPolygonPoints(draftPolygon) : null
-  }, [draftPolygon, isRoofBuildActive, roofDraftEnd, roofDraftStart])
-  const fenceDraftSegment = useMemo(() => {
-    if (!(isFenceBuildActive && fenceDraftStart && fenceDraftEnd)) {
-      return null
-    }
-
-    if (getPlanPointDistance(toPoint2D(fenceDraftStart), toPoint2D(fenceDraftEnd)) < 1e-6) {
-      return null
-    }
-
-    return {
-      x1: toSvgX(fenceDraftStart[0]),
-      y1: toSvgY(fenceDraftStart[1]),
-      x2: toSvgX(fenceDraftEnd[0]),
-      y2: toSvgY(fenceDraftEnd[1]),
-    }
-  }, [fenceDraftEnd, fenceDraftStart, isFenceBuildActive])
+  // The live wall / fence / roof draft preview (polygon + fence segment + wall
+  // measurement) moved into `FloorplanLinearDraftLayer`, which reads the per-
+  // move END points from the draft store so it re-renders per move without
+  // re-rendering this panel.
   const activePolygonDraftPoints = useMemo(() => {
     if (isCeilingBuildActive) {
       return ceilingDraftPoints
@@ -8651,10 +8761,12 @@ export function FloorplanPanel({
       }
 
       if (isRoofBuildActive) {
-        const bypassSnap = shiftPressed || event.shiftKey
-        let snappedPoint = bypassSnap ? planPoint : getSnappedFloorplanPoint(planPoint)
-        snappedPoint = alignFloorplanDraftPoint(snappedPoint, {
-          bypass: event.altKey || bypassSnap,
+        // Roof is placed as a footprint (no directional draw → polygon context:
+        // grid / lines / off, no angle lock). Mode-driven, matching the chip:
+        // `grid` quantizes via `getSnappedFloorplanPoint` (step 0 in non-grid
+        // modes), `lines` pulls onto alignment, `off` is free. Alt forces.
+        const snappedPoint = alignFloorplanDraftPoint(getSnappedFloorplanPoint(planPoint), {
+          bypass: event.altKey || !isMagneticSnapActive(),
         })
         emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
@@ -9225,7 +9337,6 @@ export function FloorplanPanel({
     setFenceDraftStart,
     setRoofDraftEnd,
     setRoofDraftStart,
-    shiftPressed,
     snapPolygonDraftPoint,
     snapWallDraftPoint: snapWallDraftPointMagnetic,
     toPoint2D,
@@ -10816,6 +10927,13 @@ export function FloorplanPanel({
                 outlineWidth={FLOORPLAN_MARQUEE_OUTLINE_WIDTH}
               />
 
+              {/* This shared layer now carries only the per-CLICK draft anchors
+                  (reference-scale start + committed polygon vertices). The
+                  cursor-following draft geometry moved to the leaves below
+                  (`FloorplanLinearDraftLayer` for wall/fence/roof,
+                  `FloorplanDraftCursorLayer` for polygon previews), which read
+                  the live END points from the draft store so a per-move update
+                  never re-renders this panel. */}
               <FloorplanDraftLayer
                 anchorFill={palette.anchor}
                 draftAnchorPoints={[
@@ -10835,28 +10953,32 @@ export function FloorplanPanel({
                   })),
                 ]}
                 draftFill={palette.draftFill}
-                draftPolygonPoints={draftPolygonPoints}
+                draftPolygonPoints={null}
                 draftStroke={palette.draftStroke}
-                linearDraftSegment={fenceDraftSegment}
-                // The cursor-following polygon-draft preview moved to
-                // `FloorplanDraftCursorLayer` (reads the live cursor from the
-                // draft store), so this shared layer no longer carries it.
+                linearDraftSegment={null}
                 polygonDraftClosingSegment={null}
                 polygonDraftPolygonPoints={null}
                 polygonDraftPolylinePoints={null}
                 unitsPerPixel={floorplanUnitsPerPixel}
               />
 
-              {draftWallMeasurement && (
-                <FloorplanDraftWallMeasurement
-                  labelBackground={isDark ? '#0f172a' : '#ffffff'}
-                  labelText={isDark ? '#e2e8f0' : '#171717'}
-                  measurement={draftWallMeasurement}
-                  measurementStroke={palette.measurementStroke}
-                  sceneRotationDeg={floorplanSceneRotationDeg}
-                  unitsPerPixel={floorplanUnitsPerPixel}
-                />
-              )}
+              <FloorplanLinearDraftLayer
+                draftFill={palette.draftFill}
+                draftStroke={palette.draftStroke}
+                fenceDraftStart={fenceDraftStart}
+                isDark={isDark}
+                isFenceBuildActive={isFenceBuildActive}
+                isRoofBuildActive={isRoofBuildActive}
+                isWallBuildActive={isWallBuildActive}
+                levelId={levelId}
+                measurementStroke={palette.measurementStroke}
+                roofDraftStart={roofDraftStart}
+                sceneRotationDeg={floorplanSceneRotationDeg}
+                unit={unit}
+                unitsPerPixel={floorplanUnitsPerPixel}
+                wallDraftStart={draftStart}
+                walls={walls}
+              />
 
               {/* Wall / fence endpoint, wall curve, slab / ceiling /
                   zone vertex+midpoint+edge handles are all driven by the

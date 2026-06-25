@@ -62,7 +62,6 @@ type UseFloorplanBackgroundPlacementArgs = {
   setFenceDraftStart: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
   setRoofDraftEnd: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
   setRoofDraftStart: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
-  shiftPressed: boolean
   snapWallDraftPoint: (args: {
     point: WallPlanPoint
     walls: WallNode[]
@@ -122,7 +121,6 @@ export function useFloorplanBackgroundPlacement({
   setFenceDraftStart,
   setRoofDraftEnd,
   setRoofDraftStart,
-  shiftPressed,
   snapWallDraftPoint,
   snapPolygonDraftPoint,
   toPoint2D,
@@ -184,11 +182,11 @@ export function useFloorplanBackgroundPlacement({
       }
 
       if (isRoofBuildActive) {
-        const bypassSnap = shiftPressed || event.shiftKey
-        const snappedPoint = alignFloorplanDraftPoint(
-          bypassSnap ? planPoint : getSnappedFloorplanPoint(planPoint),
-          { bypass: event.altKey || bypassSnap },
-        )
+        // Footprint placement (polygon context: grid / lines / off, no angle),
+        // mode-driven to match the chip. Alt forces (skips alignment).
+        const snappedPoint = alignFloorplanDraftPoint(getSnappedFloorplanPoint(planPoint), {
+          bypass: event.altKey || !isMagneticSnapActive(),
+        })
         emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
 
@@ -202,34 +200,29 @@ export function useFloorplanBackgroundPlacement({
       }
 
       if (isFenceBuildActive) {
-        const bypassSnap = shiftPressed || event.shiftKey
-        // Fence draft: grid snap (+ existing-wall/fence endpoint snap), then
-        // Figma alignment — endpoint snap wins (same precedence as move).
-        // While a draft is open the segment locks to 15° rays from its
-        // start unless Shift is held; Shift bypasses grid, magnetic,
-        // angle, and alignment snap. `gridSnap` keeps the regular snap
-        // on the world XZ grid even when the building is rotated.
+        // Fence draft: mode-driven (matches the chip), same as the move
+        // preview. `grid` snaps to the world XZ grid (rotation-safe via the
+        // `gridSnap` callback), `angles` locks 15° rays from the start, `lines`
+        // pulls onto walls / fences / alignment, `off` is free. Alt forces.
         const fenceStep = getSegmentGridStep()
-        const fenceAngleSnap = fenceDraftStart !== null && !bypassSnap && isAngleSnapActive()
+        const fenceAngleSnap = fenceDraftStart !== null && isAngleSnapActive()
         const fenceSnapped = snapFenceDraftPoint({
           point: planPoint,
           walls,
           fences,
           start: fenceDraftStart ?? undefined,
           angleSnap: fenceAngleSnap,
-          bypassSnap,
-          magnetic: !bypassSnap && isMagneticSnapActive(),
+          magnetic: isMagneticSnapActive(),
           gridSnap: (p) => worldGridSnap(p, fenceStep),
         })
-        const fenceGridBase = bypassSnap ? planPoint : worldGridSnap(planPoint, fenceStep)
+        const fenceGridBase = worldGridSnap(planPoint, fenceStep)
         const fenceLocked =
-          !bypassSnap &&
-          (fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1])
+          fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
         const snappedPoint =
           fenceLocked || fenceAngleSnap
             ? fenceSnapped
             : alignFloorplanDraftPoint(fenceSnapped, {
-                bypass: event.altKey || bypassSnap || !isMagneticSnapActive(),
+                bypass: event.altKey || !isMagneticSnapActive(),
               })
 
         emitFloorplanGridEvent('click', snappedPoint, event)
@@ -310,27 +303,22 @@ export function useFloorplanBackgroundPlacement({
       // / draftEnd state in the floor plan would never update, leaving
       // the dashed-line draft preview invisible.
       if (isWallBuildActive) {
-        const bypassSnap = shiftPressed || event.shiftKey
-        // Wall draft: grid snap (+ existing-wall endpoint/join snap), then
-        // Figma alignment — endpoint/join snap wins (same precedence as the
-        // move-preview branch), so committing onto a corner still works.
-        // While a draft is open the segment locks to 15° rays from its
-        // start unless Shift is held; Shift bypasses grid, magnetic,
-        // angle, and alignment snap. `gridSnap` keeps the regular snap
-        // on the world XZ grid even when the building is rotated.
+        // Wall draft: mode-driven (matches the chip + the move-preview branch).
+        // `grid` snaps to the world XZ grid (rotation-safe via `gridSnap`),
+        // `angles` locks 15° rays from the start, `lines` pulls the endpoint
+        // onto existing wall corners / edges + alignment, `off` is free.
+        // (Alt = commit a single wall, handled below — not a snap modifier.)
         const wallStep = getSegmentGridStep()
-        const wallAngleSnap = draftStart !== null && !bypassSnap && isAngleSnapActive()
+        const wallAngleSnap = draftStart !== null && isAngleSnapActive()
         const wallSnapped = snapWallDraftPoint({
           point: planPoint,
           walls,
           start: draftStart ?? undefined,
           angleSnap: wallAngleSnap,
-          bypassSnap,
           gridSnap: (p) => worldGridSnap(p, wallStep),
         })
-        const wallGridBase = bypassSnap ? planPoint : worldGridSnap(planPoint, wallStep)
-        const wallLocked =
-          !bypassSnap && (wallSnapped[0] !== wallGridBase[0] || wallSnapped[1] !== wallGridBase[1])
+        const wallGridBase = worldGridSnap(planPoint, wallStep)
+        const wallLocked = wallSnapped[0] !== wallGridBase[0] || wallSnapped[1] !== wallGridBase[1]
         let snappedPoint = wallSnapped
         if (wallLocked) {
           useAlignmentGuides.getState().clear()
@@ -340,7 +328,7 @@ export function useFloorplanBackgroundPlacement({
             // Figma alignment pulls the endpoint onto existing wall corners /
             // edges, so it is a line snap — suppress it whenever magnetic snap
             // is off (`'off'` / `'angles'`), matching the wall-geometry snap.
-            bypass: event.altKey || bypassSnap || !isMagneticSnapActive(),
+            bypass: event.altKey || !isMagneticSnapActive(),
           })
         }
 
@@ -414,7 +402,6 @@ export function useFloorplanBackgroundPlacement({
       setFenceDraftStart,
       setRoofDraftEnd,
       setRoofDraftStart,
-      shiftPressed,
       snapWallDraftPoint,
       snapPolygonDraftPoint,
       toPoint2D,
