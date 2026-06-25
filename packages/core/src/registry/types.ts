@@ -987,6 +987,17 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   snapProfile?: SnapProfile
 
   /**
+   * For `structural` kinds: does drafting this kind set a DIRECTION (so the
+   * angle-lock snapping mode is meaningful)? Wall/fence/slab/ceiling drafting
+   * draws directed edges → `true` (the default). Roof/stair/elevator are placed
+   * as axis-aligned footprints, not directional draws → `false`, so their
+   * drafting uses the no-angle `polygon` snap context (grid / lines / off)
+   * instead of the angle-bearing `wall` context. Ignored for `item` kinds
+   * (their context never carries an angle lock).
+   */
+  snapDraftDirectional?: boolean
+
+  /**
    * Optional translucent preview of the node — used by the move tool to
    * show where the node will land, and by the placement tool's cursor.
    * Receives the partially-resolved node (or a default-shaped stub during

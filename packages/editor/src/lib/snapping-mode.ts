@@ -137,8 +137,12 @@ export function snapContextOf(args: {
   mode: string
   tool: string | null
   profileOf: (typeOrTool: string) => SnapProfile | undefined
+  // Whether drafting a kind sets a direction (angle-lock meaningful). Injected
+  // like `profileOf` so `snapping-mode` need not import the registry; defaults
+  // to `true` (the structural draw default) when not supplied.
+  draftDirectionalOf?: (typeOrTool: string) => boolean
 }): SnapContext | null {
-  const { scope, mode, tool, profileOf } = args
+  const { scope, mode, tool, profileOf, draftDirectionalOf } = args
   switch (scope.kind) {
     case 'placing':
     case 'moving':
@@ -150,8 +154,12 @@ export function snapContextOf(args: {
       // — they use the no-angle 'polygon' set (grid / lines / off).
       return scope.reshape === 'endpoint' ? 'wall' : 'polygon'
     case 'drafting':
-      return scope.tool ? contextForProfile(profileOf(scope.tool), true) : null
+      return scope.tool
+        ? contextForProfile(profileOf(scope.tool), draftDirectionalOf?.(scope.tool) ?? true)
+        : null
     default:
-      return mode === 'build' && tool ? contextForProfile(profileOf(tool), true) : null
+      return mode === 'build' && tool
+        ? contextForProfile(profileOf(tool), draftDirectionalOf?.(tool) ?? true)
+        : null
   }
 }

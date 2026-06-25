@@ -775,9 +775,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // item's edge, snap and publish a guide. The guide connects to the
       // nearest real corner of the candidate (resolver tie-break), so the dot
       // always sits on an actual point. The delta is applied to BOTH the grid
-      // and cursor positions below. Alt (free place) bypasses all snap; the
-      // active snapping mode governs whether alignment runs at all ('off' /
-      // 'angles' disable magnetic alignment, matching the wall/fence flow).
+      // and cursor positions below. Alt is force-place only (it does NOT bypass
+      // snapping — 'off' mode is the no-snap bypass); the active snapping mode
+      // governs whether alignment runs at all ('off' / 'angles' disable
+      // magnetic alignment, 'lines' enables it, matching the wall/fence flow).
       const draft = draftNode.current
       let alignX = 0
       let alignZ = 0

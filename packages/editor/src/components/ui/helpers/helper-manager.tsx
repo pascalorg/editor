@@ -109,6 +109,7 @@ export function HelperManager() {
         mode,
         tool,
         profileOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapProfile,
+        draftDirectionalOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapDraftDirectional ?? true,
       }),
     [scope, mode, tool],
   )

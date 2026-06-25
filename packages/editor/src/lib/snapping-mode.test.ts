@@ -114,4 +114,25 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
     expect(ctx({ kind: 'moving', nodeType: 'door' })).toBeNull()
     expect(ctx({ kind: 'idle' }, 'build', 'shelf')).toBeNull()
   })
+
+  it('drafting a non-directional structural kind is angle-less (polygon, not wall)', () => {
+    // Roof / stair / elevator are placed as footprints, not directional draws →
+    // declared `snapDraftDirectional: false`, so their draft context drops the
+    // angle-lock mode. Directional structural kinds (no flag) stay `wall`.
+    const draftDirectionalOf = (t: string) => (t === 'roof' ? false : true)
+    const draftCtx = (tool: string) =>
+      snapContextOf({ scope: { kind: 'idle' }, mode: 'build', tool, profileOf, draftDirectionalOf })
+    expect(draftCtx('roof')).toBe('polygon')
+    expect(draftCtx('wall')).toBe('wall')
+    // Also via the explicit `drafting` scope path.
+    expect(
+      snapContextOf({
+        scope: { kind: 'drafting', tool: 'roof' },
+        mode: 'build',
+        tool: 'roof',
+        profileOf,
+        draftDirectionalOf,
+      }),
+    ).toBe('polygon')
+  })
 })

@@ -1191,6 +1191,7 @@ export function getActiveSnapContext(): SnapContext | null {
     mode: editor.mode,
     tool: editor.tool,
     profileOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapProfile,
+    draftDirectionalOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapDraftDirectional ?? true,
   })
 }
 

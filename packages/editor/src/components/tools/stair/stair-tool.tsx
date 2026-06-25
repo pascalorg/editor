@@ -23,6 +23,7 @@ import {
   resolveStairDestinationLevel,
   resolveStairPlacementLevelId,
 } from '../../../lib/stair-levels'
+import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
@@ -319,7 +320,8 @@ export const StairTool: React.FC = () => {
     // The probe is the RAW cursor, not the grid-snapped point: resolving
     // against the grid point would only catch anchors that happen to sit near
     // a grid line. Matched axes use the raw probe + snap delta; unmatched axes
-    // keep the normal grid snap. Alt bypasses.
+    // keep the normal grid snap. Alignment runs only when the magnetic (lines)
+    // snapping mode is active.
     const alignPoint = (
       gridX: number,
       gridZ: number,
@@ -348,20 +350,26 @@ export const StairTool: React.FC = () => {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const bypassSnap = event.nativeEvent?.shiftKey === true
+      // Grid snap follows the global mode (live step so the HUD chip is
+      // honest); Off keeps the raw cursor. Shift cycles the mode centrally.
+      const step = useEditor.getState().gridSnapStep
       const [gridX, gridZ] = alignPoint(
-        bypassSnap ? event.localPosition[0] : Math.round(event.localPosition[0] * 2) / 2,
-        bypassSnap ? event.localPosition[2] : Math.round(event.localPosition[2] * 2) / 2,
+        isGridSnapActive()
+          ? Math.round(event.localPosition[0] / step) * step
+          : event.localPosition[0],
+        isGridSnapActive()
+          ? Math.round(event.localPosition[2] / step) * step
+          : event.localPosition[2],
         event.localPosition[0],
         event.localPosition[2],
-        event.nativeEvent?.altKey === true || bypassSnap,
+        !isMagneticSnapActive(),
       )
       const position: [number, number, number] = [gridX, 0, gridZ]
       lastCanonicalPositionRef.current = position
       applyDraftPreview(position, rotationRef.current)
 
       if (
-        !bypassSnap &&
+        (isGridSnapActive() || isMagneticSnapActive()) &&
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
       ) {
@@ -372,13 +380,17 @@ export const StairTool: React.FC = () => {
     }
 
     const getAlignedGridPosition = (event: GridEvent): [number, number, number] => {
-      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const step = useEditor.getState().gridSnapStep
       const [gridX, gridZ] = alignPoint(
-        bypassSnap ? event.localPosition[0] : Math.round(event.localPosition[0] * 2) / 2,
-        bypassSnap ? event.localPosition[2] : Math.round(event.localPosition[2] * 2) / 2,
+        isGridSnapActive()
+          ? Math.round(event.localPosition[0] / step) * step
+          : event.localPosition[0],
+        isGridSnapActive()
+          ? Math.round(event.localPosition[2] / step) * step
+          : event.localPosition[2],
         event.localPosition[0],
         event.localPosition[2],
-        event.nativeEvent?.altKey === true || bypassSnap,
+        !isMagneticSnapActive(),
       )
       return [gridX, 0, gridZ]
     }

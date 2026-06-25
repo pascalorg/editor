@@ -421,6 +421,16 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
   schemaVersion: 1,
   schema: StairNode,
   category: 'structure',
+  snapProfile: 'structural',
+  // Placed as a footprint (R/T rotates), not a directional draw → no angle-lock
+  // mode. The toolHints presence routes it through the contextual HUD so the
+  // snapping chip shows during placement.
+  snapDraftDirectional: false,
+  toolHints: [
+    { key: 'Left click', label: 'Place stairs' },
+    { key: 'R / T', label: 'Rotate' },
+    { key: 'Esc', label: 'Cancel' },
+  ],
   surfaceRole: 'joinery',
 
   defaults: () => {
