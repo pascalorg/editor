@@ -6,6 +6,7 @@ import {
   type StairSegmentNode,
   useScene,
 } from '@pascal-app/core'
+import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
 // Minimums + max sweep mirror the 3D handles in
 // `packages/editor/src/components/editor/stair-segment-handles.tsx` so a 2D
@@ -232,12 +233,13 @@ export const stairRotateAffordance: FloorplanAffordance<StairNode> = {
 
     return {
       affectedIds: [stairId],
-      apply({ planPoint }) {
-        const currentAngle = Math.atan2(planPoint[1] - cz, planPoint[0] - cx)
-        let delta = currentAngle - initialAngle
-        // Wrap to [-π, π] so a drag crossing ±π doesn't flip sign mid-gesture.
-        while (delta > Math.PI) delta -= 2 * Math.PI
-        while (delta < -Math.PI) delta += 2 * Math.PI
+      apply({ planPoint, modifiers }) {
+        const delta = rotateAffordanceDelta({
+          center: [cx, cz],
+          initialAngle,
+          planPoint,
+          free: modifiers.shiftKey,
+        })
         const newRotation = initialRotation - delta
         lastRotation = newRotation
         useScene.getState().updateNode(stairId, { rotation: newRotation })

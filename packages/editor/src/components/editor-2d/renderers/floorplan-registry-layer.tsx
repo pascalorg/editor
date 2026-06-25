@@ -33,10 +33,12 @@ import {
   useRef,
   useState,
 } from 'react'
+import { ROTATE_HANDLE_DRAG_LABEL } from '../../../lib/contextual-help'
 import {
   canDirectRotateNode,
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
+  snapDirectRotationDelta,
 } from '../../../lib/direct-manipulation'
 import { createEditorApi } from '../../../lib/editor-api'
 import {
@@ -152,6 +154,20 @@ function affordanceReshapeScope(
   if (affordance.includes('endpoint')) {
     const endpoint = (payload as { endpoint?: 'start' | 'end' } | undefined)?.endpoint ?? 'end'
     return endpointReshapeScope(nodeId, endpoint)
+  }
+  // Roof-segment width/depth resize — a no-angle dimension edit, so the
+  // no-angle 'polygon' snap set (grid / lines / off) via a boundary scope.
+  // Matched exactly so a still-legacy `*-resize` affordance on another kind
+  // doesn't get a chip its snap math can't honour yet.
+  if (affordance === 'roof-segment-resize') {
+    return boundaryReshapeScope(nodeId)
+  }
+  // 2D corner rotate-arrow (column / elevator / roof-segment / shelf / spawn /
+  // stair). Begin the same handle-drag scope the 3D rotate gizmo uses, label-
+  // matched, so the contextual HUD shows the "Shift = rotate freely" hint over
+  // the drag. The affordance applies the 15° angle step itself.
+  if (affordance.includes('rotate')) {
+    return { kind: 'handle-drag', nodeId, handle: ROTATE_HANDLE_DRAG_LABEL }
   }
   return null
 }
@@ -968,13 +984,18 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   )
 
   useEffect(() => {
-    // Tear down the reshaping scope this drag opened (if any), matched by node
-    // id so a concurrent scope from another path is never ended by mistake.
+    // Tear down the scope this drag opened (if any) — a reshaping scope for an
+    // edit affordance, or a handle-drag scope for a rotate-arrow — matched by
+    // node id so a concurrent scope from another path is never ended by mistake.
     const endReshapeScope = (drag: ActiveDrag) => {
       if (drag.reshapeScopeNodeId) {
         useInteractionScope
           .getState()
-          .endIf((s) => s.kind === 'reshaping' && s.nodeId === drag.reshapeScopeNodeId)
+          .endIf(
+            (s) =>
+              (s.kind === 'reshaping' || s.kind === 'handle-drag') &&
+              s.nodeId === drag.reshapeScopeNodeId,
+          )
       }
     }
 
@@ -1006,6 +1027,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         let delta = current - rot.initialAngle
         while (delta > Math.PI) delta -= 2 * Math.PI
         while (delta < -Math.PI) delta += 2 * Math.PI
+        // Match the affordance's 15° angle step (Shift = free) so the wedge +
+        // degree chip read the committed rotation, not the raw pointer bearing.
+        delta = snapDirectRotationDelta(delta, event.shiftKey)
         if (Math.abs(delta) < 0.0087) {
           setRotationOverlay(null)
         } else {
