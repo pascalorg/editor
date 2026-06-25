@@ -296,6 +296,7 @@ function GlbItemLights({
         score: scoreReg(reg, selectedLevelId, levelMode, levelIndexById, interactiveState),
       }))
       scored.sort((a, b) => a.score - b.score)
+      const scoreByKey = new Map(scored.map((s) => [s.key, s.score] as const))
       const desired = scored
         .filter((s) => Number.isFinite(s.score))
         .slice(0, POOL_SIZE)
@@ -328,9 +329,8 @@ function GlbItemLights({
         const freeSlotData = slots.current[freeSlot]
         const currentKey = freeSlotData ? (freeSlotData.key ?? freeSlotData.pendingKey) : null
         if (currentKey && !desired.includes(currentKey)) {
-          const currentScore =
-            scored.find((s) => s.key === currentKey)?.score ?? Number.POSITIVE_INFINITY
-          const newScore = scored.find((s) => s.key === key)?.score ?? 0
+          const currentScore = scoreByKey.get(currentKey) ?? Number.POSITIVE_INFINITY
+          const newScore = scoreByKey.get(key) ?? 0
           if (currentScore - newScore < HYSTERESIS) {
             freeSlot++
             continue
@@ -370,17 +370,20 @@ function GlbItemLights({
     }
 
     // Per-frame: fade, snap position, and track intensity from control state.
+    // The pool lights stay permanently `visible` — only `intensity` is animated
+    // (an idle light just lerps to 0). Toggling `visible` would change the
+    // active-light count, which forces the WebGPU renderer to recompile every
+    // material's lighting node — a hard frame-time spike on every reassignment
+    // (i.e. on every camera move). Keeping the count fixed avoids that entirely.
     for (let i = 0; i < POOL_SIZE; i++) {
       const light = lightRefs.current[i]
       const slot = slots.current[i]
       if (!(light && slot)) continue
 
       if (slot.isFadingOut) {
-        light.visible = true
         light.intensity = MathUtils.lerp(light.intensity, 0, dt * 12)
         if (light.intensity < 0.01) {
           light.intensity = 0
-          light.visible = false
           slot.isFadingOut = false
           slot.key = slot.pendingKey
           slot.pendingKey = null
@@ -396,15 +399,12 @@ function GlbItemLights({
       }
 
       if (!slot.key) {
-        light.intensity = 0
-        light.visible = false
+        light.intensity = MathUtils.lerp(light.intensity, 0, dt * 12)
         continue
       }
       const reg = regByKey.get(slot.key)
       if (!reg) {
         slot.key = null
-        light.intensity = 0
-        light.visible = false
         continue
       }
 
@@ -428,13 +428,7 @@ function GlbItemLights({
       const targetIntensity = isOn
         ? MathUtils.lerp(reg.effect.intensityRange[0], reg.effect.intensityRange[1], t)
         : reg.effect.intensityRange[0]
-
-      if (targetIntensity > 0) light.visible = true
       light.intensity = MathUtils.lerp(light.intensity, targetIntensity, dt * 12)
-      if (targetIntensity <= 0 && light.intensity < 0.01) {
-        light.intensity = 0
-        light.visible = false
-      }
     }
   })
 
@@ -448,7 +442,6 @@ function GlbItemLights({
           ref={(el) => {
             lightRefs.current[i] = el
           }}
-          visible={false}
         />
       ))}
     </>
