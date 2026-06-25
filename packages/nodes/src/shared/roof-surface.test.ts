@@ -40,15 +40,15 @@ describe('getDownSlopeYaw', () => {
   test('flat segment has no down-slope direction (yaw 0)', () => {
     expect(getDownSlopeYaw(0, 0, fixtureSegment({ roofType: 'flat' }))).toBe(0)
   })
-  test('dutch x-ridge lower hip end yaws toward the side eave', () => {
+  test('dutch width-axis skirt yaws toward the side eave', () => {
     expect(getDownSlopeYaw(3.8, 0, fixtureSegment({ roofType: 'dutch' }))).toBeCloseTo(
       Math.PI / 2,
     )
   })
-  test('dutch x-ridge upper gable yaws toward the front eave', () => {
+  test('dutch width-axis front skirt yaws toward the front eave', () => {
     expect(getDownSlopeYaw(0, 1, fixtureSegment({ roofType: 'dutch' }))).toBeCloseTo(0)
   })
-  test('dutch z-ridge upper gable yaws toward the side eave', () => {
+  test('dutch depth-axis side skirt yaws toward the side eave', () => {
     expect(
       getDownSlopeYaw(1, 0, fixtureSegment({ roofType: 'dutch', width: 6, depth: 8 })),
     ).toBeCloseTo(Math.PI / 2)

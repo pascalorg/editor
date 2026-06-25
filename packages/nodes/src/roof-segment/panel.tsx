@@ -277,7 +277,7 @@ export default function RoofSegmentPanel() {
       {node.roofType === 'dutch' && (
         <PanelSection title="Shape">
           <SliderControl
-            label="Hip Width"
+            label="Waist Width"
             max={0.45}
             min={0.05}
             onChange={(v) => handleUpdate({ dutchHipWidthRatio: v })}
@@ -287,7 +287,7 @@ export default function RoofSegmentPanel() {
             value={Math.round(node.dutchHipWidthRatio * 100) / 100}
           />
           <SliderControl
-            label="Hip Height"
+            label="Waist Height"
             max={0.9}
             min={0.1}
             onChange={(v) => handleUpdate({ dutchHipHeightRatio: v })}

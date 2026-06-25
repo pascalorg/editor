@@ -33,41 +33,67 @@ function dutchSegment(overrides: Partial<RoofSegmentNode> = {}): RoofSegmentNode
 }
 
 describe('getRoofSegmentPlanLinework', () => {
-  test('keeps dutch width-axis gable triangle on the waist', () => {
+  test('keeps dutch width-axis hips on the waist rectangle with no upper ridge', () => {
     const linework = getRoofSegmentPlanLinework(dutchSegment())
 
-    expect(linework.ridges).toEqual([
+    expect(linework.ridges).toEqual([])
+    expect(linework.breaks).toEqual([
       [
-        [-2.5, 0],
-        [2.5, 0],
+        [-2.5, 1.5],
+        [2.5, 1.5],
+      ],
+      [
+        [2.5, 1.5],
+        [2.5, -1.5],
+      ],
+      [
+        [2.5, -1.5],
+        [-2.5, -1.5],
+      ],
+      [
+        [-2.5, -1.5],
+        [-2.5, 1.5],
       ],
     ])
     expect(linework.hips).toContainEqual([
+      [-4, 3],
       [-2.5, 1.5],
-      [-2.5, 0],
     ])
     expect(linework.hips).toContainEqual([
+      [4, 3],
       [2.5, 1.5],
-      [2.5, 0],
     ])
   })
 
-  test('keeps dutch depth-axis gable triangle on the waist when the depth exceeds the width', () => {
+  test('keeps dutch depth-axis hips on the waist rectangle when the depth exceeds the width', () => {
     const linework = getRoofSegmentPlanLinework(dutchSegment({ width: 6, depth: 8 }))
 
-    expect(linework.ridges).toEqual([
+    expect(linework.ridges).toEqual([])
+    expect(linework.breaks).toEqual([
       [
-        [0, 2.5],
-        [0, -2.5],
+        [-1.5, 2.5],
+        [1.5, 2.5],
+      ],
+      [
+        [1.5, 2.5],
+        [1.5, -2.5],
+      ],
+      [
+        [1.5, -2.5],
+        [-1.5, -2.5],
+      ],
+      [
+        [-1.5, -2.5],
+        [-1.5, 2.5],
       ],
     ])
     expect(linework.hips).toContainEqual([
+      [-3, 4],
       [-1.5, 2.5],
-      [0, 2.5],
     ])
     expect(linework.hips).toContainEqual([
+      [3, -4],
       [1.5, -2.5],
-      [0, -2.5],
     ])
   })
 })

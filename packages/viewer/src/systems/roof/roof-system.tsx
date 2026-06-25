@@ -15,7 +15,7 @@ import {
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes } from '../../lib/csg-utils'
@@ -422,6 +422,7 @@ function updateMergedRoofGeometry(
   let totalDeckSlab: Brush | null = null
   let totalWall: Brush | null = null
   let totalInner: Brush | null = null
+  const gabletBarges: THREE.BufferGeometry[] = []
 
   for (const child of children) {
     const brushes = withSegmentUvMatrix(
@@ -452,6 +453,11 @@ function updateMergedRoofGeometry(
     applyTransform(brushes.deckSlab)
     applyTransform(brushes.wallBrush)
     applyTransform(brushes.innerBrush)
+
+    if (brushes.gabletBarge) {
+      brushes.gabletBarge.applyMatrix4(_matrix)
+      gabletBarges.push(brushes.gabletBarge)
+    }
 
     if (totalShinSlab) {
       const next: Brush = csgEvaluator.evaluate(totalShinSlab, brushes.shinSlab, ADDITION) as Brush
@@ -520,6 +526,7 @@ function updateMergedRoofGeometry(
         totalDeckSlab.geometry.dispose()
         totalWall.geometry.dispose()
         totalInner.geometry.dispose()
+        for (const barge of gabletBarges) barge.dispose()
         return
       }
 
@@ -536,10 +543,19 @@ function updateMergedRoofGeometry(
         g.materialIndex = mapRoofGroupMaterialIndex(g.materialIndex, resultMaterials, matToIndex)
       }
 
-      resultGeo.computeVertexNormals()
-      ensureRenderableGeometryAttributes(resultGeo)
+      let finalGeo = resultGeo
+      if (gabletBarges.length > 0) {
+        const merged = mergeGeometries([resultGeo, ...gabletBarges], true)
+        if (merged) {
+          resultGeo.dispose()
+          finalGeo = merged
+        }
+      }
+
+      finalGeo.computeVertexNormals()
+      ensureRenderableGeometryAttributes(finalGeo)
       mergedMesh.geometry.dispose()
-      mergedMesh.geometry = resultGeo
+      mergedMesh.geometry = finalGeo
 
       finalWallTrimmed.geometry.dispose()
       shinDeck.geometry.dispose()
@@ -551,6 +567,7 @@ function updateMergedRoofGeometry(
     totalDeckSlab.geometry.dispose()
     totalWall.geometry.dispose()
     totalInner.geometry.dispose()
+    for (const barge of gabletBarges) barge.dispose()
   }
 }
 
@@ -617,6 +634,11 @@ type RoofSegmentBrushSet = {
   shinSlab: Brush
   wallBrush: Brush
   innerBrush: Brush
+  // Segment-local gablet barge boards (Dutch only). Merged into the final
+  // shell as plain geometry rather than CSG-unioned: its top face is
+  // intentionally coplanar with the shingle surface, and CSG coplanar
+  // clipping is exactly the case that yields NaN positions here.
+  gabletBarge: THREE.BufferGeometry | null
 }
 
 export function mapRoofGroupMaterialIndex(
@@ -901,7 +923,10 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
   }
 
   const verticalRt = activeRh > 0 ? deckThickness / cosTheta : deckThickness
-  const baseI = Math.min(width, depth) * 0.25
+  // Gablet inset must track dutchHipWidthRatio so the 3D waist matches both
+  // the 2D floorplan and the slope frame (which derives activeRh from the
+  // same ratio). A hardcoded 0.25 desyncs the gablet from the parameter.
+  const baseI = Math.min(width, depth) * node.dutchHipWidthRatio
 
   const getVol = (
     wExt: number,
@@ -1030,6 +1055,8 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
 
   const insetsBot = getInsets(shinBotWh, botBaseY, true, shinBotW, shinBotD)
   const insetsTop = getInsets(shinTopWh, topBaseY, false, shinTopW, shinTopD)
+
+  let gabletBarge: THREE.BufferGeometry | null = null
   const botFaces = getModuleFaces(
     roofType,
     shinBotW,
@@ -1134,6 +1161,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
         shinSlab,
         wallBrush,
         innerBrush,
+        gabletBarge,
       }
       if (hasSegmentTrim(node)) {
         subtractSegmentTrimCuts(brushes, node)
@@ -1184,7 +1212,7 @@ export function generateRoofSegmentGeometry(
     subtractAccessoryCuts(brushes, node, nodes)
   }
 
-  const { deckSlab, shinSlab, wallBrush, innerBrush } = brushes
+  const { deckSlab, shinSlab, wallBrush, innerBrush, gabletBarge } = brushes
   let resultGeo = new THREE.BufferGeometry()
 
   try {
@@ -1231,6 +1259,15 @@ export function generateRoofSegmentGeometry(
   shinSlab.geometry.dispose()
   wallBrush.geometry.dispose()
   innerBrush.geometry.dispose()
+
+  if (gabletBarge) {
+    const merged = mergeGeometries([resultGeo, gabletBarge], true)
+    gabletBarge.dispose()
+    if (merged) {
+      resultGeo.dispose()
+      resultGeo = merged
+    }
+  }
 
   resultGeo.computeVertexNormals()
   ensureRenderableGeometryAttributes(resultGeo)
@@ -1485,41 +1522,117 @@ function getModuleFaces(
       const m2 = v(w / 2 - i, mh, d / 2 - i)
       const m3 = v(w / 2 - i, mh, -d / 2 + i)
       const m4 = v(-w / 2 + i, mh, -d / 2 + i)
-      const r1 = v(-w / 2 + i, h, 0)
-      const r2 = v(w / 2 - i, h, 0)
 
       faces.push(
         [e1, e2, m2, m1],
         [e2, e3, m3, m2],
         [e3, e4, m4, m3],
         [e4, e1, m1, m4],
-        [m4, m1, r1],
-        [m2, m3, r2],
-        [m1, m2, r2, r1],
-        [m3, m4, r1, r2],
       )
     } else {
       const m1 = v(-w / 2 + i, mh, d / 2 - i)
       const m2 = v(w / 2 - i, mh, d / 2 - i)
       const m3 = v(w / 2 - i, mh, -d / 2 + i)
       const m4 = v(-w / 2 + i, mh, -d / 2 + i)
-      const r1 = v(0, h, d / 2 - i)
-      const r2 = v(0, h, -d / 2 + i)
 
       faces.push(
         [e1, e2, m2, m1],
         [e2, e3, m3, m2],
         [e3, e4, m4, m3],
         [e4, e1, m1, m4],
-        [m1, m2, r1],
-        [m3, m4, r2],
-        [m2, m3, r2, r1],
-        [m4, m1, r1, r2],
       )
     }
   }
 
   return faces
+}
+
+// Append a watertight slab to `faces`: the planar `topPoly` (in the gablet
+// slope plane) plus a parallel copy dropped `thickness` straight down in Y,
+// joined by side quads. Winding is auto-oriented from the Newell normal so the
+// top cap faces up regardless of the input vertex order.
+function addBargeSlab(topPoly: THREE.Vector3[], thickness: number, faces: THREE.Vector3[][]) {
+  if (topPoly.length < 3 || !(thickness > 0)) return
+  let normalY = 0
+  for (let k = 0; k < topPoly.length; k += 1) {
+    const a = topPoly[k]!
+    const b = topPoly[(k + 1) % topPoly.length]!
+    normalY += (a.z - b.z) * (a.x + b.x)
+  }
+  const top = normalY >= 0 ? topPoly.slice() : topPoly.slice().reverse()
+  const bottom = top.map((p) => new THREE.Vector3(p.x, p.y - thickness, p.z))
+  faces.push(top.map((p) => p.clone()))
+  faces.push(bottom.map((p) => p.clone()).reverse())
+  for (let k = 0; k < top.length; k += 1) {
+    const j = (k + 1) % top.length
+    faces.push([top[k]!.clone(), top[j]!.clone(), bottom[j]!.clone(), bottom[k]!.clone()])
+  }
+}
+
+/**
+ * Barge boards for the two Dutch gablets — the inverted-V trim that rides each
+ * gablet's slope planes and overhangs the lower hip skirt. Each board's inner
+ * edge sits on the gablet rake (apex → waist corner); the board then extends
+ * outward along the ridge axis by `rake` metres, past the gablet end-wall,
+ * staying coplanar with the main Dutch slope (slope Y depends only on the
+ * cross-axis, so the outward shift preserves the plane). The gablet end-wall
+ * itself is unchanged. Built from the shingle-top frame so the board sits flush
+ * with the visible roof surface. Geometry is merged into the shell rather than
+ * CSG-unioned (its top is coplanar with the shingle surface — the exact case
+ * that makes three-bvh-csg emit NaN positions).
+ */
+function buildDutchGabletBarge(
+  W: number,
+  D: number,
+  wh: number,
+  rh: number,
+  i: number,
+  tanTheta: number,
+  rake: number,
+  thickness: number,
+): THREE.BufferGeometry | null {
+  if (!(rake > 0.001) || !(thickness > 0.0001) || !(i > 0.001)) return null
+  const h = wh + Math.max(0.001, rh)
+  const mh = wh + i * (tanTheta || 0)
+  if (!(h > mh + 1e-4)) return null
+  // Clamp so the board never overshoots the eave corner (reach = hip inset).
+  const r = Math.min(rake, i * 0.98)
+  if (!(r > 0.001)) return null
+
+  const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
+  const faces: THREE.Vector3[][] = []
+  const addBoard = (apexIn: THREE.Vector3, baseIn: THREE.Vector3, outward: THREE.Vector3) => {
+    const apexOut = apexIn.clone().addScaledVector(outward, r)
+    const baseOut = baseIn.clone().addScaledVector(outward, r)
+    addBargeSlab([apexIn, baseIn, baseOut, apexOut], thickness, faces)
+  }
+
+  if (W >= D) {
+    const xiL = -W / 2 + i
+    const xiR = W / 2 - i
+    const frontZ = D / 2 - i
+    const backZ = -D / 2 + i
+    const xNeg = v(-1, 0, 0)
+    const xPos = v(1, 0, 0)
+    addBoard(v(xiL, h, 0), v(xiL, mh, frontZ), xNeg)
+    addBoard(v(xiL, h, 0), v(xiL, mh, backZ), xNeg)
+    addBoard(v(xiR, h, 0), v(xiR, mh, frontZ), xPos)
+    addBoard(v(xiR, h, 0), v(xiR, mh, backZ), xPos)
+  } else {
+    const ziF = D / 2 - i
+    const ziB = -D / 2 + i
+    const leftX = -W / 2 + i
+    const rightX = W / 2 - i
+    const zPos = v(0, 0, 1)
+    const zNeg = v(0, 0, -1)
+    addBoard(v(0, h, ziF), v(leftX, mh, ziF), zPos)
+    addBoard(v(0, h, ziF), v(rightX, mh, ziF), zPos)
+    addBoard(v(0, h, ziB), v(leftX, mh, ziB), zNeg)
+    addBoard(v(0, h, ziB), v(rightX, mh, ziB), zNeg)
+  }
+
+  if (faces.length === 0) return null
+  return createGeometryFromFaces(faces, (normal) => (normal.y > SHINGLE_SURFACE_EPSILON ? 3 : 1))
 }
 
 /**
@@ -1745,6 +1858,9 @@ export function getRoofOuterSurfaceFrameAtPoint(
   const topBaseY = 0
 
   const baseI = Math.min(width, depth) * 0.25
+  // Dutch gablet waist tracks dutchHipWidthRatio (see getRoofSegmentBrushes);
+  // the generic baseI above still drives the bottom-rect insets for other types.
+  const dutchBaseI = Math.min(width, depth) * segment.dutchHipWidthRatio
   const getInsets = (
     _wh: number,
     _baseY: number,
@@ -1775,7 +1891,7 @@ export function getRoofOuterSurfaceFrameAtPoint(
       iF = inset
     }
 
-    let structuralI = baseI
+    let structuralI = dutchBaseI
     if (isVoid) {
       structuralI += shingleThickness
     }

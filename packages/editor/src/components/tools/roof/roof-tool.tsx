@@ -193,15 +193,6 @@ function getRoofDraftFaces(node: RoofSegmentNode): Vector3[][] {
       const w3 = v(halfWidth - inset, midY, -halfDepth + inset)
       const w4 = v(-halfWidth + inset, midY, -halfDepth + inset)
       faces.push([e1, e2, w2, w1], [e2, e3, w3, w2], [e3, e4, w4, w3], [e4, e1, w1, w4])
-      if (width >= depth) {
-        const r1 = v(-halfWidth + inset, peakY, 0)
-        const r2 = v(halfWidth - inset, peakY, 0)
-        faces.push([w4, w1, r1], [w2, w3, r2], [w1, w2, r2, r1], [w3, w4, r1, r2])
-      } else {
-        const r1 = v(0, peakY, halfDepth - inset)
-        const r2 = v(0, peakY, -halfDepth + inset)
-        faces.push([w1, w2, r1], [w3, w4, r2], [w2, w3, r2, r1], [w4, w1, r1, r2])
-      }
       break
     }
     default:

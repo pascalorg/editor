@@ -67,6 +67,13 @@ export const ROOF_SHAPE_DEFAULTS = {
   dutchHipWidthRatio: 0.25,
   /** Dutch: hip face rises this fraction of the way to the peak. */
   dutchHipHeightRatio: 0.5,
+  /**
+   * Dutch: how far the gablet's barge board extends outward past the gablet
+   * end-wall, along the ridge axis, in metres. 0 disables the rake. The board
+   * lies in the gablet's slope planes (coplanar with the main Dutch slopes)
+   * and overhangs the lower hip skirt; the gablet end-wall itself stays put.
+   */
+  dutchGabletRake: 0,
 } as const
 
 export const RoofSegmentNode = BaseNode.extend({
@@ -144,6 +151,7 @@ export const RoofSegmentNode = BaseNode.extend({
     .min(0.1)
     .max(0.9)
     .default(ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio),
+  dutchGabletRake: z.number().min(0).max(3).default(ROOF_SHAPE_DEFAULTS.dutchGabletRake),
   // Hosted accessories — chimney, dormer, skylight, box-vent,
   // ridge-vent, solar-panel, gutter. Each accessory's `parentId` points back
   // here; the segment renderer mounts them recursively via
@@ -169,6 +177,7 @@ export const RoofSegmentNode = BaseNode.extend({
   - gambrelLowerWidthRatio / gambrelLowerHeightRatio: kink position on gambrel roofs
   - mansardSteepWidthRatio / mansardSteepHeightRatio: waist position on mansard roofs
   - dutchHipWidthRatio / dutchHipHeightRatio: hip-to-gable split on dutch roofs
+  - dutchGabletRake: gablet barge-board overhang past the gablet end-wall (m, 0 = none)
   `,
 )
 
