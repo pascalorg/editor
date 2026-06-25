@@ -569,7 +569,10 @@ export function GlbScene({
     const built: ZoneFill[] = []
     for (const entry of zoneEntries) {
       const shape = new THREE.Shape()
-      entry.polygon.forEach(([x, z], i) => (i === 0 ? shape.moveTo(x, -z) : shape.lineTo(x, -z)))
+      entry.polygon.forEach(([x, z], i) => {
+        if (i === 0) shape.moveTo(x, -z)
+        else shape.lineTo(x, -z)
+      })
       shape.closePath()
 
       const floorMaterial = createZoneFloorMaterial(entry.color)
