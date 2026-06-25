@@ -160,6 +160,7 @@ import {
   DEFAULT_STAIR_WIDTH,
 } from '../tools/stair/stair-defaults'
 import {
+  createWallOnCurrentLevel,
   isSegmentLongEnough,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
@@ -9309,6 +9310,13 @@ export function FloorplanPanel({
       // well used to double-create walls whenever the two snap
       // pipelines resolved endpoints ≥1e-6 apart (the duplicate
       // check compares exact endpoints).
+      //
+      // That 3D path is dead in 2D-only view — the canvas is
+      // `display:none`, so the tool never commits. Mirror the slab /
+      // ceiling 2D-only committers: create locally here, gated on the
+      // view, so split / 3D keep their single-owner tool commit.
+      const createdWall =
+        useEditor.getState().viewMode === '2d' ? createWallOnCurrentLevel(draftStart, point) : null
 
       // Alt commits a single wall: drop the draft so the next click
       // starts a fresh segment instead of chaining off this endpoint.
@@ -9319,10 +9327,13 @@ export function FloorplanPanel({
         return
       }
 
-      // Chain the next segment from the 3D tool's resolved commit
-      // point (it may have corner-snapped or split-adjusted the
-      // endpoint) so both views draft from the same start.
-      const nextStart: WallPlanPoint = useSegmentDraftChain.getState().wall ?? point
+      // Chain the next segment from the resolved commit endpoint (it may
+      // have corner-snapped or split-adjusted): the wall we just made in
+      // 2D-only, otherwise the 3D tool's published chain start. Both views
+      // then draft from the same start.
+      const nextStart: WallPlanPoint = createdWall
+        ? (createdWall.end as WallPlanPoint)
+        : (useSegmentDraftChain.getState().wall ?? point)
       setDraftStart(nextStart)
       setDraftEnd(nextStart)
       setCursorPoint(nextStart)

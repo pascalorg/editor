@@ -39,11 +39,21 @@ import {
   resolveDirectRotationPatch,
 } from '../../../lib/direct-manipulation'
 import { createEditorApi } from '../../../lib/editor-api'
+import {
+  type ActiveInteractionScope,
+  boundaryReshapeScope,
+  curveReshapeScope,
+  endpointReshapeScope,
+  holeEditScope,
+} from '../../../lib/interaction/scope'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
 import useEditor from '../../../store/use-editor'
-import { useEndpointReshape, useMovingNode } from '../../../store/use-interaction-scope'
+import useInteractionScope, {
+  useEndpointReshape,
+  useMovingNode,
+} from '../../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
@@ -110,6 +120,40 @@ type ActiveDrag = {
    * rotate affordance measures it: `atan2(pointer − pivot)`.
    */
   rotation?: { pivot: FloorplanPoint; initialAngle: number; radius: number }
+  /**
+   * Node id of the reshaping scope this drag began (boundary / curve / endpoint
+   * edits), so the matching `endIf` on release/cancel tears down exactly this
+   * scope. Unset for affordances that drive no snapping scope (resize / rotate).
+   */
+  reshapeScopeNodeId?: string
+}
+
+// Map a floor-plan affordance to the reshaping scope it represents, so the
+// dispatcher can drive the contextual snapping HUD (the chip) AND make
+// `getActiveSnapContext()` resolve the right mode-set during the edit. Geometry
+// edits that set a direction/shape map to a scope; resize / rotate / body-move
+// affordances return `null` (no polygon/wall snapping chip). Keyed off the
+// affordance name the kinds register (`move-vertex` / `move-edge` / `add-vertex`
+// / `curve` / `move-endpoint`).
+function affordanceReshapeScope(
+  affordance: string,
+  nodeId: string,
+  payload: unknown,
+): ActiveInteractionScope | null {
+  if (affordance.includes('vertex') || affordance.includes('edge')) {
+    const holeIndex = (payload as { holeIndex?: number } | undefined)?.holeIndex
+    return holeIndex !== undefined
+      ? holeEditScope({ nodeId, holeIndex })
+      : boundaryReshapeScope(nodeId)
+  }
+  if (affordance.includes('curve')) {
+    return curveReshapeScope(nodeId)
+  }
+  if (affordance.includes('endpoint')) {
+    const endpoint = (payload as { endpoint?: 'start' | 'end' } | undefined)?.endpoint ?? 'end'
+    return endpointReshapeScope(nodeId, endpoint)
+  }
+  return null
 }
 
 /**
@@ -898,6 +942,15 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         }
       }
 
+      // Begin the matching reshaping scope so the contextual snapping HUD shows
+      // the right chip during the edit AND `getActiveSnapContext()` resolves the
+      // polygon / wall mode-set the affordance's snap math reads. Torn down on
+      // release / cancel below. `null` for resize / rotate (no snapping chip).
+      const reshapeScope = affordanceReshapeScope(affordance, nodeId, payload)
+      if (reshapeScope) {
+        useInteractionScope.getState().begin(reshapeScope)
+      }
+
       dragRef.current = {
         pointerId: event.pointerId,
         handleId,
@@ -905,6 +958,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         snapshots,
         historyPaused: true,
         rotation,
+        reshapeScopeNodeId: reshapeScope ? nodeId : undefined,
       }
       setActiveDragId(handleId)
       setSelection({ selectedIds: [nodeId] })
@@ -914,6 +968,16 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   )
 
   useEffect(() => {
+    // Tear down the reshaping scope this drag opened (if any), matched by node
+    // id so a concurrent scope from another path is never ended by mistake.
+    const endReshapeScope = (drag: ActiveDrag) => {
+      if (drag.reshapeScopeNodeId) {
+        useInteractionScope
+          .getState()
+          .endIf((s) => s.kind === 'reshaping' && s.nodeId === drag.reshapeScopeNodeId)
+      }
+    }
+
     const onPointerMove = (event: PointerEvent) => {
       const drag = dragRef.current
       if (!drag || event.pointerId !== drag.pointerId) return
@@ -977,6 +1041,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         drag.session.commit()
         sfxEmitter.emit('sfx:structure-build')
         clearSurfacePlanSnapFeedback()
+        endReshapeScope(drag)
         dragRef.current = null
         setActiveDragId(null)
         setRotationOverlay(null)
@@ -1029,6 +1094,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       }
 
       clearSurfacePlanSnapFeedback()
+      endReshapeScope(drag)
       dragRef.current = null
       setActiveDragId(null)
       setRotationOverlay(null)
@@ -1055,6 +1121,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const overrides = useLiveNodeOverrides.getState()
       for (const id of drag.session.affectedIds) overrides.clear(id)
 
+      endReshapeScope(drag)
       dragRef.current = null
       setActiveDragId(null)
       setRotationOverlay(null)
@@ -1079,6 +1146,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         }
         const overrides = useLiveNodeOverrides.getState()
         for (const id of drag.session.affectedIds) overrides.clear(id)
+        endReshapeScope(drag)
         dragRef.current = null
       }
       // Clear any alignment guide a session left behind on mid-drag unmount.
