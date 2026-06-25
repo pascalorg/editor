@@ -95,6 +95,7 @@ import useEditor, {
   isMagneticSnapActive,
   selectSiteFloorplanContext,
 } from '../../store/use-editor'
+import { useFloorplanDraftPreview } from '../../store/use-floorplan-draft-preview'
 import useInteractionScope, {
   useActiveHandleDrag,
   useEndpointReshape,
@@ -4592,6 +4593,129 @@ function FloorplanStairBuildPreviewLayer({
   )
 }
 
+// Leaf overlay for the cursor-following draft preview: the cursor crosshair plus
+// the live polygon-draft edge (slab / zone / ceiling). Subscribes to
+// `useFloorplanDraftPreview.cursorPoint` directly so a per-`grid:move` cursor
+// update re-renders ONLY this tiny layer — never the (~120-220ms) FloorplanPanel.
+// Everything else it needs is per-click panel state (the committed draft points)
+// passed as props, so it re-renders on click via the parent and on move via the
+// store. SVG mirrors the cursor-driven branches of `FloorplanDraftLayer`.
+function FloorplanDraftCursorLayer({
+  activePolygonDraftPoints,
+  isPolygonDraftBuildActive,
+  cursorColor,
+  draftFill,
+  draftStroke,
+  polygonDraftStroke,
+  unitsPerPixel,
+}: {
+  activePolygonDraftPoints: WallPlanPoint[]
+  isPolygonDraftBuildActive: boolean
+  cursorColor: string
+  draftFill: string
+  draftStroke: string
+  polygonDraftStroke: string | undefined
+  unitsPerPixel: number
+}) {
+  const cursorPoint = useFloorplanDraftPreview((s) => s.cursorPoint)
+  const activeStroke = polygonDraftStroke ?? draftStroke
+  const strokeWidth = polygonDraftStroke ? FLOORPLAN_WALL_STROKE_WIDTH : '0.08'
+
+  const polygon = useMemo(() => {
+    if (!(isPolygonDraftBuildActive && cursorPoint && activePolygonDraftPoints.length >= 2)) {
+      return null
+    }
+    return formatPolygonPoints([...activePolygonDraftPoints.map(toPoint2D), toPoint2D(cursorPoint)])
+  }, [activePolygonDraftPoints, cursorPoint, isPolygonDraftBuildActive])
+
+  const polyline = useMemo(() => {
+    if (!(isPolygonDraftBuildActive && cursorPoint && activePolygonDraftPoints.length > 0)) {
+      return null
+    }
+    return formatPolygonPoints([...activePolygonDraftPoints.map(toPoint2D), toPoint2D(cursorPoint)])
+  }, [activePolygonDraftPoints, cursorPoint, isPolygonDraftBuildActive])
+
+  const closingSegment = useMemo(() => {
+    const firstPoint = activePolygonDraftPoints[0]
+    if (
+      !(isPolygonDraftBuildActive && cursorPoint && activePolygonDraftPoints.length >= 2) ||
+      !firstPoint
+    ) {
+      return null
+    }
+    return {
+      x1: toSvgX(cursorPoint[0]),
+      y1: toSvgY(cursorPoint[1]),
+      x2: toSvgX(firstPoint[0]),
+      y2: toSvgY(firstPoint[1]),
+    }
+  }, [activePolygonDraftPoints, cursorPoint, isPolygonDraftBuildActive])
+
+  return (
+    <>
+      {polygon && <polygon fill={draftFill} fillOpacity={0.2} points={polygon} stroke="none" />}
+
+      {polyline && (
+        <polyline
+          fill="none"
+          points={polyline}
+          stroke={activeStroke}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={strokeWidth}
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
+
+      {closingSegment && (
+        <line
+          stroke={activeStroke}
+          strokeDasharray="0.16 0.1"
+          strokeLinecap="round"
+          strokeOpacity={0.75}
+          strokeWidth={strokeWidth}
+          vectorEffect="non-scaling-stroke"
+          x1={closingSegment.x1}
+          x2={closingSegment.x2}
+          y1={closingSegment.y1}
+          y2={closingSegment.y2}
+        />
+      )}
+
+      {cursorPoint && (
+        <g>
+          <circle
+            cx={toSvgX(cursorPoint[0])}
+            cy={toSvgY(cursorPoint[1])}
+            fill={cursorColor}
+            fillOpacity={0.25}
+            r={FLOORPLAN_CURSOR_MARKER_GLOW_RADIUS_PX * unitsPerPixel}
+          />
+          <circle
+            cx={toSvgX(cursorPoint[0])}
+            cy={toSvgY(cursorPoint[1])}
+            fill={cursorColor}
+            fillOpacity={0.9}
+            r={FLOORPLAN_CURSOR_MARKER_CORE_RADIUS_PX * unitsPerPixel}
+          />
+        </g>
+      )}
+    </>
+  )
+}
+
+// Thin subscriber wrapper for the coordinate-badge overlay: reads the hot
+// screen-space cursor position from the draft store so a per-`pointermove`
+// update re-renders only the badge, not FloorplanPanel. The remaining props
+// (tool / mode / colour) are per-interaction panel state passed through — they
+// change rarely, never per move.
+function FloorplanCursorIndicator(
+  props: Omit<ComponentProps<typeof Editor2dFloorplanCursorIndicatorOverlay>, 'cursorPosition'>,
+) {
+  const cursorPosition = useFloorplanDraftPreview((s) => s.cursorPosition)
+  return <Editor2dFloorplanCursorIndicatorOverlay {...props} cursorPosition={cursorPosition} />
+}
+
 export function FloorplanPanel({
   /**
    * Element to portal the compass button into. The 2D/3D navigation poses stay
@@ -4751,8 +4875,33 @@ export function FloorplanPanel({
   const [referenceScaleUnit, setReferenceScaleUnit] = useState<ReferenceScaleUnit>(
     unit === 'imperial' ? 'feet' : 'meters',
   )
-  const [cursorPoint, setCursorPoint] = useState<WallPlanPoint | null>(null)
-  const [floorplanCursorPosition, setFloorplanCursorPosition] = useState<SvgPoint | null>(null)
+  // The cursor point is the hottest 2D state — every build/edit tool republishes
+  // it on `grid:move`. It lives in `useFloorplanDraftPreview` (not panel state)
+  // so a per-move update re-renders only `FloorplanDraftCursorLayer`, not this
+  // ~200ms panel. This shim keeps the `setCursorPoint(value)` /
+  // `setCursorPoint(prev => …)` call sites (and their snap-SFX side effects)
+  // unchanged while routing the write to the store; reads go through the store.
+  const setCursorPoint = useCallback(
+    (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
+      const store = useFloorplanDraftPreview.getState()
+      const value = typeof next === 'function' ? next(store.cursorPoint) : next
+      store.setCursorPoint(value)
+    },
+    [],
+  )
+  // The coordinate-badge cursor position is set on every SVG `pointermove` while
+  // a build/select tool is active — the single hottest 2D update. It lives in
+  // `useFloorplanDraftPreview` (not panel state) so a move re-renders only the
+  // badge leaf, not this panel. Shim preserves the existing call sites (value +
+  // functional-updater forms) while routing the write to the store.
+  const setFloorplanCursorPosition = useCallback(
+    (next: SvgPoint | null | ((prev: SvgPoint | null) => SvgPoint | null)) => {
+      const store = useFloorplanDraftPreview.getState()
+      const value = typeof next === 'function' ? next(store.cursorPosition) : next
+      store.setCursorPosition(value)
+    },
+    [],
+  )
   const [wallEndpointDraft, setWallEndpointDraft] = useState<WallEndpointDraft | null>(null)
   const [wallCurveDraft, setWallCurveDraft] = useState<WallCurveDraft | null>(null)
   const [hoveredOpeningId, setHoveredOpeningId] = useState<OpeningNode['id'] | null>(null)
@@ -5867,37 +6016,9 @@ export function FloorplanPanel({
     slabDraftPoints,
     zoneDraftPoints,
   ])
-  const polygonDraftPolylinePoints = useMemo(() => {
-    if (!(isPolygonDraftBuildActive && cursorPoint && activePolygonDraftPoints.length > 0)) {
-      return null
-    }
-
-    return formatPolygonPoints([...activePolygonDraftPoints.map(toPoint2D), toPoint2D(cursorPoint)])
-  }, [activePolygonDraftPoints, cursorPoint, isPolygonDraftBuildActive])
-  const polygonDraftPolygonPoints = useMemo(() => {
-    if (!(isPolygonDraftBuildActive && cursorPoint && activePolygonDraftPoints.length >= 2)) {
-      return null
-    }
-
-    return formatPolygonPoints([...activePolygonDraftPoints.map(toPoint2D), toPoint2D(cursorPoint)])
-  }, [activePolygonDraftPoints, cursorPoint, isPolygonDraftBuildActive])
-  const polygonDraftClosingSegment = useMemo(() => {
-    if (!(isPolygonDraftBuildActive && cursorPoint && activePolygonDraftPoints.length >= 2)) {
-      return null
-    }
-
-    const firstPoint = activePolygonDraftPoints[0]
-    if (!firstPoint) {
-      return null
-    }
-
-    return {
-      x1: toSvgX(cursorPoint[0]),
-      y1: toSvgY(cursorPoint[1]),
-      x2: toSvgX(firstPoint[0]),
-      y2: toSvgY(firstPoint[1]),
-    }
-  }, [activePolygonDraftPoints, cursorPoint, isPolygonDraftBuildActive])
+  // The cursor-following polygon-draft preview (slab / zone / ceiling) moved into
+  // `FloorplanDraftCursorLayer`, which reads the live cursor from the draft store
+  // so it re-renders per move without re-rendering this panel.
 
   const svgAspectRatio = surfaceSize.width / surfaceSize.height || 1
 
@@ -6315,8 +6436,12 @@ export function FloorplanPanel({
 
     // While the cursor drives live geometry (items, drafts, moves), `fittedViewport` changes every
     // pointermove. Syncing `viewport` here would call setState in a tight loop (max update depth).
+    // `cursorPoint` now lives in the draft store; read it non-reactively (this
+    // effect only re-runs when `fittedViewport` / the other transient signals
+    // change, and the viewport never refits mid-draft because scene data is
+    // stable then — so a live store read is sufficient and correct).
     const transientFloorplanFit =
-      cursorPoint != null ||
+      useFloorplanDraftPreview.getState().cursorPoint != null ||
       movingNode != null ||
       endpointReshape != null ||
       isCurveReshape ||
@@ -6329,7 +6454,6 @@ export function FloorplanPanel({
       )
     }
   }, [
-    cursorPoint,
     endpointReshape,
     fittedViewport,
     isCurveReshape,
@@ -10307,9 +10431,8 @@ export function FloorplanPanel({
     >
       <FloorplanSiteKeyHandler onRestoreGroundLevel={restoreGroundLevelStructureSelection} />
       <div className="relative min-h-0 flex-1" ref={viewportHostRef}>
-        <Editor2dFloorplanCursorIndicatorOverlay
+        <FloorplanCursorIndicator
           cursorColor={floorplanCursorColor}
-          cursorPosition={floorplanCursorPosition}
           floorplanSelectionTool={floorplanSelectionTool}
           indicatorBadgeOffsetX={FLOORPLAN_CURSOR_BADGE_OFFSET_X}
           indicatorBadgeOffsetY={FLOORPLAN_CURSOR_BADGE_OFFSET_Y}
@@ -10721,17 +10844,12 @@ export function FloorplanPanel({
                 draftPolygonPoints={draftPolygonPoints}
                 draftStroke={palette.draftStroke}
                 linearDraftSegment={fenceDraftSegment}
-                polygonDraftClosingSegment={polygonDraftClosingSegment}
-                polygonDraftPolygonPoints={polygonDraftPolygonPoints}
-                polygonDraftPolylinePoints={polygonDraftPolylinePoints}
-                polygonDraftStroke={
-                  isSlabBuildActive || isCeilingBuildActive ? palette.wallStroke : undefined
-                }
-                polygonDraftStrokeWidth={
-                  isSlabBuildActive || isCeilingBuildActive
-                    ? FLOORPLAN_WALL_STROKE_WIDTH
-                    : undefined
-                }
+                // The cursor-following polygon-draft preview moved to
+                // `FloorplanDraftCursorLayer` (reads the live cursor from the
+                // draft store), so this shared layer no longer carries it.
+                polygonDraftClosingSegment={null}
+                polygonDraftPolygonPoints={null}
+                polygonDraftPolylinePoints={null}
                 unitsPerPixel={floorplanUnitsPerPixel}
               />
 
@@ -10764,24 +10882,17 @@ export function FloorplanPanel({
                 />
               )}
 
-              {cursorPoint && (
-                <g>
-                  <circle
-                    cx={toSvgX(cursorPoint[0])}
-                    cy={toSvgY(cursorPoint[1])}
-                    fill={floorplanCursorColor}
-                    fillOpacity={0.25}
-                    r={FLOORPLAN_CURSOR_MARKER_GLOW_RADIUS_PX * floorplanUnitsPerPixel}
-                  />
-                  <circle
-                    cx={toSvgX(cursorPoint[0])}
-                    cy={toSvgY(cursorPoint[1])}
-                    fill={floorplanCursorColor}
-                    fillOpacity={0.9}
-                    r={FLOORPLAN_CURSOR_MARKER_CORE_RADIUS_PX * floorplanUnitsPerPixel}
-                  />
-                </g>
-              )}
+              <FloorplanDraftCursorLayer
+                activePolygonDraftPoints={activePolygonDraftPoints}
+                cursorColor={floorplanCursorColor}
+                draftFill={palette.draftFill}
+                draftStroke={palette.draftStroke}
+                isPolygonDraftBuildActive={isPolygonDraftBuildActive}
+                polygonDraftStroke={
+                  isSlabBuildActive || isCeilingBuildActive ? palette.wallStroke : undefined
+                }
+                unitsPerPixel={floorplanUnitsPerPixel}
+              />
 
               {activeDraftAnchorPoint && (
                 <circle
