@@ -6,6 +6,7 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  CeilingNode as CeilingNodeSchema,
   type ColumnNode,
   calculateLevelMiters,
   DEFAULT_ANGLE_STEP,
@@ -7607,6 +7608,27 @@ export function FloorplanPanel({
     [levelId, setSelection],
   )
 
+  const createCeilingOnCurrentLevel = useCallback(
+    (points: WallPlanPoint[]) => {
+      if (!levelId) {
+        return null
+      }
+      const { createNode, nodes } = useScene.getState()
+      const ceilingCount = Object.values(nodes).filter((node) => node.type === 'ceiling').length
+      const defaults = useEditor.getState().toolDefaults.ceiling ?? {}
+      const ceiling = CeilingNodeSchema.parse({
+        ...defaults,
+        name: `Ceiling ${ceilingCount + 1}`,
+        polygon: points.map(([x, z]) => [x, z] as [number, number]),
+      })
+      createNode(ceiling, levelId)
+      sfxEmitter.emit('sfx:structure-build')
+      setSelection({ selectedIds: [ceiling.id] })
+      return ceiling.id
+    },
+    [levelId, setSelection],
+  )
+
   useEffect(() => {
     if (!isStairBuildActive) {
       useStairBuildPreview.getState().reset()
@@ -9176,6 +9198,9 @@ export function FloorplanPanel({
 
       const firstPoint = ceilingDraftPoints[0]
       if (firstPoint && ceilingDraftPoints.length >= 3 && isPointNearPlanPoint(point, firstPoint)) {
+        if (useEditor.getState().viewMode === '2d') {
+          createCeilingOnCurrentLevel(ceilingDraftPoints)
+        }
         clearCeilingPlacementDraft()
         return
       }
@@ -9183,7 +9208,7 @@ export function FloorplanPanel({
       setCeilingDraftPoints((currentPoints) => [...currentPoints, point])
       setCursorPoint(point)
     },
-    [ceilingDraftPoints, clearCeilingPlacementDraft],
+    [ceilingDraftPoints, clearCeilingPlacementDraft, createCeilingOnCurrentLevel],
   )
   const handleCeilingPlacementConfirm = useCallback(
     (point?: WallPlanPoint) => {
@@ -9206,9 +9231,12 @@ export function FloorplanPanel({
         return
       }
 
+      if (useEditor.getState().viewMode === '2d') {
+        createCeilingOnCurrentLevel(nextPoints)
+      }
       clearCeilingPlacementDraft()
     },
-    [ceilingDraftPoints, clearCeilingPlacementDraft],
+    [ceilingDraftPoints, clearCeilingPlacementDraft, createCeilingOnCurrentLevel],
   )
   const handleZonePlacementPoint = useCallback(
     (point: WallPlanPoint) => {
