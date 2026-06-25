@@ -33,6 +33,7 @@ import {
   type RoofSegmentNode,
   type SiteNode,
   type SlabNode,
+  SlabNode as SlabNodeSchema,
   type SpawnNode,
   type StairNode,
   StairNode as StairNodeSchema,
@@ -7579,6 +7580,33 @@ export function FloorplanPanel({
     [levelId, setSelection],
   )
 
+  // Slab / ceiling are normally committed by their 3D registry tools (which
+  // accumulate the same `grid:click` vertices the panel emits). That path is
+  // dead in 2D-only view — the 3D canvas is `display:none`, so the tool never
+  // commits. These local committers (mirroring `createZoneOnCurrentLevel`, and
+  // the tools' own `commitSlab/CeilingDrawing`) are called ONLY in 2D-only view
+  // so split / 3D keep their single-owner tool commit (no double-create).
+  const createSlabOnCurrentLevel = useCallback(
+    (points: WallPlanPoint[]) => {
+      if (!levelId) {
+        return null
+      }
+      const { createNode, nodes } = useScene.getState()
+      const slabCount = Object.values(nodes).filter((node) => node.type === 'slab').length
+      const defaults = useEditor.getState().toolDefaults.slab ?? {}
+      const slab = SlabNodeSchema.parse({
+        ...defaults,
+        name: `Slab ${slabCount + 1}`,
+        polygon: points.map(([x, z]) => [x, z] as [number, number]),
+      })
+      createNode(slab, levelId)
+      sfxEmitter.emit('sfx:structure-build')
+      setSelection({ selectedIds: [slab.id] })
+      return slab.id
+    },
+    [levelId, setSelection],
+  )
+
   useEffect(() => {
     if (!isStairBuildActive) {
       useStairBuildPreview.getState().reset()
@@ -9097,6 +9125,10 @@ export function FloorplanPanel({
 
       const firstPoint = slabDraftPoints[0]
       if (firstPoint && slabDraftPoints.length >= 3 && isPointNearPlanPoint(point, firstPoint)) {
+        // 2D-only view: the 3D tool can't commit, so close the polygon here.
+        if (useEditor.getState().viewMode === '2d') {
+          createSlabOnCurrentLevel(slabDraftPoints)
+        }
         clearDraft()
         return
       }
@@ -9104,7 +9136,7 @@ export function FloorplanPanel({
       setSlabDraftPoints((currentPoints) => [...currentPoints, point])
       setCursorPoint(point)
     },
-    [clearDraft, slabDraftPoints],
+    [clearDraft, createSlabOnCurrentLevel, slabDraftPoints],
   )
   const handleSlabPlacementConfirm = useCallback(
     (point?: WallPlanPoint) => {
@@ -9127,9 +9159,13 @@ export function FloorplanPanel({
         return
       }
 
+      // 2D-only view: the 3D tool can't commit, so create the slab here.
+      if (useEditor.getState().viewMode === '2d') {
+        createSlabOnCurrentLevel(nextPoints)
+      }
       clearDraft()
     },
-    [clearDraft, slabDraftPoints],
+    [clearDraft, createSlabOnCurrentLevel, slabDraftPoints],
   )
   const handleCeilingPlacementPoint = useCallback(
     (point: WallPlanPoint) => {
