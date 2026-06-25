@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
+    "@typescript/native-preview": "7.0.0-dev.20260624.1",
     "dotenv-cli": "^11.0.0",
     "turbo": "^2.9.17",
     "typescript": "6.0.3",
