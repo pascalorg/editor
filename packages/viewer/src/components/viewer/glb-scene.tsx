@@ -391,6 +391,8 @@ export function GlbScene({
     }
   }, [gltf.scene])
   const zoneById = useMemo(() => new Map(zoneEntries.map((zone) => [zone.id, zone])), [zoneEntries])
+  // Level pascalIds bottom-to-top, for the interactive light pool's level factor.
+  const levelOrder = useMemo(() => levels.map((entry) => entry.id), [levels])
 
   // The dollhouse hides ceilings/roof — but only their OWN geometry. Items hosted
   // on a ceiling (lamps, fans, recessed lights) are child identity nodes; hiding
@@ -992,6 +994,7 @@ export function GlbScene({
           actions={actions}
           identity={identity}
           items={interactiveItems}
+          levelOrder={levelOrder}
           zones={zoneEntries}
         />
       ) : null}
