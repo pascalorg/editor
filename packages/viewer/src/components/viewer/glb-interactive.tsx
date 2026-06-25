@@ -12,7 +12,14 @@ import {
 import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { type AnimationAction, LoopRepeat, MathUtils, type Object3D, type PointLight, Vector3 } from 'three'
+import {
+  type AnimationAction,
+  LoopRepeat,
+  MathUtils,
+  type Object3D,
+  type PointLight,
+  Vector3,
+} from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import useViewer from '../../store/use-viewer'
 import { ControlWidget } from '../../systems/interactive/control-widget'
