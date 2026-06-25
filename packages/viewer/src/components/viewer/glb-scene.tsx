@@ -1,6 +1,6 @@
 'use client'
 
-import type { SurfaceRole } from '@pascal-app/core'
+import type { AnyNode, SurfaceRole } from '@pascal-app/core'
 import { Html, useAnimations } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -13,6 +13,7 @@ import { ZONE_LAYER } from '../../lib/layers'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
 import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
+import { GlbReferenceNodes } from './glb-reference-nodes'
 
 /** Vertical gap added per floor in `exploded` level mode (matches LevelSystem). */
 const EXPLODED_GAP = 5
@@ -281,6 +282,7 @@ function createZoneWallGeometry(polygon: [number, number][]): THREE.BufferGeomet
 export function GlbScene({
   url,
   interactiveItems,
+  referenceNodes,
   onLevelsChange,
   onIdentityChange,
   onHoverChange,
@@ -290,6 +292,9 @@ export function GlbScene({
   /** Light / animation effects + controls recovered from the DB scene graph,
    *  joined to the baked nodes by `pascalId` to re-light + re-animate the GLB. */
   interactiveItems?: GlbInteractiveItem[]
+  /** Scan / guide nodes from the scene graph, re-added at runtime (they're
+   *  stripped from the bake). Already filtered by the privacy flags upstream. */
+  referenceNodes?: AnyNode[]
   onLevelsChange?: (levels: GlbLevel[]) => void
   onIdentityChange?: (identity: GlbIdentity) => void
   onHoverChange?: (hover: GlbHover) => void
@@ -997,6 +1002,11 @@ export function GlbScene({
           levelOrder={levelOrder}
           zones={zoneEntries}
         />
+      ) : null}
+      {/* Scans + guides, stripped from the bake and re-added from scene data,
+          anchored to their parent level's baked node. */}
+      {referenceNodes?.length ? (
+        <GlbReferenceNodes identity={identity} nodes={referenceNodes} />
       ) : null}
       {/* Floating room labels. Each group's matrix is synced to its zone node
           every frame (above) so the label rides level stacking; the div fades
