@@ -5,6 +5,9 @@ import {
   CursorSphere,
   DimensionPill,
   EDITOR_LAYER,
+  isAngleSnapActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
@@ -50,8 +53,9 @@ import { pipeSegmentDefinition } from './definition'
  *     nominal DWV diameters.
  *   - Hold **Alt** → vertical mode (stacks): XZ locks to the start,
  *     mouse vertical motion drives Y, click commits the riser.
- *   - 45° XZ angle lock from the start; **Shift** frees the angle and
- *     grid snap.
+ *   - The in-flight end follows the active snapping mode: `angles` locks it
+ *     to 45° in XZ from the start; `grid`/`lines`/`off` leave it free. Shift
+ *     cycles the snapping mode.
  *   - Esc clears an anchored start point.
  */
 const PREVIEW_OPACITY = 0.55
@@ -336,12 +340,14 @@ const PipeSegmentTool = () => {
       port: ScenePort | null
       body: RunBodyHit | null
     } => {
+      // Port / body mating is the run's primary affordance; it stays on in
+      // every snapping mode except `off` (the raw-cursor bypass).
+      const snapEnabled = isGridSnapActive() || isMagneticSnapActive() || isAngleSnapActive()
       const start = startRef.current
       if (!start) {
         const raw: [number, number, number] = [event.localPosition[0], 0, event.localPosition[2]]
-        const step = useEditor.getState().gridSnapStep
-        const shift = event.nativeEvent?.shiftKey === true
-        if (event.nativeEvent?.altKey !== true) {
+        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+        if (event.nativeEvent?.altKey !== true && snapEnabled) {
           const port = findNearbyPort(raw)
           if (port) {
             const p: [number, number, number] = [
@@ -353,10 +359,8 @@ const PipeSegmentTool = () => {
           }
           // No open end nearby — try the side of a run (wye / santee tap).
           // Probe with a grid-snapped cursor so the tap steps along the run
-          // like every other placement; Shift frees it to ride smoothly.
-          const probe: [number, number, number] = shift
-            ? raw
-            : [snap(raw[0], step), 0, snap(raw[2], step)]
+          // like every other placement; `off` mode (step 0) rides smoothly.
+          const probe: [number, number, number] = [snap(raw[0], step), 0, snap(raw[2], step)]
           const body = findNearestRunBodyXZ(probe, BODY_SNAP_RADIUS_M, {
             kinds: ['pipe-segment'],
           })
@@ -374,10 +378,12 @@ const PipeSegmentTool = () => {
         start[1],
         event.localPosition[2],
       ]
-      const shift = event.nativeEvent?.shiftKey === true
-      const angled = shift ? rawXZ : projectToAngleLock(start, rawXZ)
-      const step = useEditor.getState().gridSnapStep
-      if (event.nativeEvent?.altKey !== true && !shift) {
+      // The 45° lock is now the `angles` snapping mode (Shift cycles to it),
+      // not a held key.
+      const angleLocked = isAngleSnapActive()
+      const angled = angleLocked ? projectToAngleLock(start, rawXZ) : rawXZ
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      if (event.nativeEvent?.altKey !== true && snapEnabled) {
         const port = findNearbyPort(rawXZ)
         if (port) {
           const p: [number, number, number] = [port.position[0], port.position[1], port.position[2]]
@@ -396,7 +402,7 @@ const PipeSegmentTool = () => {
         if (body) return { point: body.point, snapped: body.point, port: null, body }
       }
       let end: [number, number, number]
-      if (shift) {
+      if (!angleLocked) {
         end = [snap(angled[0], step), angled[1], snap(angled[2], step)]
       } else {
         // Snap the run LENGTH along the locked ray, not each axis — an
@@ -419,7 +425,7 @@ const PipeSegmentTool = () => {
       const anchor = altAnchorRef.current
       const start = startRef.current
       if (!anchor || !start) return null
-      const step = useEditor.getState().gridSnapStep
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const dy = (anchor.clientY - clientY) / ALT_PIXELS_PER_METER
       const snappedDy = snap(dy, step)
       const y = Math.min(ALT_Y_MAX_M, Math.max(ALT_Y_MIN_M, anchor.baseY + snappedDy))
@@ -428,17 +434,16 @@ const PipeSegmentTool = () => {
 
     // Resolve the cursor point (port / body / grid / angle snap) then layer
     // Figma-style alignment so a run lines up with other runs, fittings, and
-    // items as it's drawn. Free point (first vertex / Shift) snaps; an
-    // angle-locked continuation shows the guide passively. Port / body snap or
-    // Alt bypasses alignment.
+    // items as it's drawn. A free point (first vertex, or no angle lock) snaps;
+    // an angle-locked continuation shows the guide passively. Alignment follows
+    // the `lines` mode; a port / body snap or Alt-vertical bypasses it.
     const resolveAlignedPoint = (event: GridEvent) => {
       const r = resolveSnappedPoint(event)
       const hasStart = !!startRef.current
-      const shift = event.nativeEvent?.shiftKey === true
       const alt = event.nativeEvent?.altKey === true
       const point = alignDrawPoint(r.point, {
-        applySnap: !hasStart || shift,
-        bypass: alt || r.snapped !== null,
+        applySnap: !hasStart || !isAngleSnapActive(),
+        bypass: !isMagneticSnapActive() || alt || r.snapped !== null,
       })
       return { ...r, point }
     }

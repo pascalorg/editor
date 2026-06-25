@@ -19,6 +19,7 @@ export const pipeFittingDefinition: NodeDefinition<typeof PipeFittingNode> = {
   schema: PipeFittingNode,
   category: 'utility',
   distributionRole: 'fitting',
+  snapProfile: 'item',
 
   defaults: () => ({
     object: 'node',

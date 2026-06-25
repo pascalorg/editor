@@ -20,6 +20,7 @@ export const ductTerminalDefinition: NodeDefinition<typeof DuctTerminalNode> = {
   schema: DuctTerminalNode,
   category: 'utility',
   distributionRole: 'terminal',
+  snapProfile: 'item',
 
   defaults: () => ({
     object: 'node',

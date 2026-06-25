@@ -1,7 +1,7 @@
 'use client'
 
 import { emitter, type GridEvent, PipeTrapNode, useScene } from '@pascal-app/core'
-import { triggerSFX, useEditor } from '@pascal-app/editor'
+import { isGridSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -19,8 +19,9 @@ function snap(value: number, step: number): number {
 
 /**
  * Click-place tool for P-traps. The ghost follows the cursor on the
- * floor. **R / T** rotate the arm ±45°, **Shift** disables grid snap.
- * The pipe tool then draws the trap arm off the outlet toward the vent.
+ * floor. **R / T** rotate the arm ±45°; grid snap follows the active
+ * snapping mode (the contextual HUD chip — Shift cycles it). The pipe
+ * tool then draws the trap arm off the outlet toward the vent.
  */
 const PipeTrapTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
@@ -55,7 +56,7 @@ const PipeTrapTool = () => {
     if (!activeLevelId) return
 
     const resolve = (event: GridEvent) => {
-      const step = event.nativeEvent?.shiftKey === true ? 0 : useEditor.getState().gridSnapStep
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       return {
         position: [snap(event.localPosition[0], step), 0, snap(event.localPosition[2], step)] as [
           number,

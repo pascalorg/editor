@@ -22,6 +22,10 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
   schema: LinesetNode,
   category: 'utility',
   distributionRole: 'run',
+  // Directional run: like a wall, drafting sets a direction, so it takes the
+  // structural snapping context (grid / lines / angles / off) with a 45° angle
+  // lock available as a cyclable mode.
+  snapProfile: 'structural',
 
   defaults: () => ({
     object: 'node',

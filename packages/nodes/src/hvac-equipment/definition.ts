@@ -20,6 +20,7 @@ export const hvacEquipmentDefinition: NodeDefinition<typeof HvacEquipmentNode> =
   schema: HvacEquipmentNode,
   category: 'utility',
   distributionRole: 'equipment',
+  snapProfile: 'item',
 
   defaults: () => ({
     object: 'node',
