@@ -1,13 +1,12 @@
 'use client'
 
+import { emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
-import type { Mesh, Object3D } from 'three'
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import * as WebGPUTextureUtils from 'three/examples/jsm/utils/WebGPUTextureUtils.js'
+import { exportSceneToGlb, prepareSceneForExport } from '../../lib/glb-export'
 
 export function ExportManager() {
   const scene = useThree((state) => state.scene)
@@ -23,7 +22,26 @@ export function ExportManager() {
       }
 
       const date = new Date().toISOString().split('T')[0]
-      const exportScene = prepareSceneForExport(sceneGroup)
+
+      if (format === 'glb') {
+        const buffer = await exportSceneToGlb(sceneGroup, useScene.getState().nodes)
+        const blob = new Blob([buffer], { type: 'model/gltf-binary' })
+        downloadBlob(blob, `model_${date}.glb`)
+        return
+      }
+
+      // Hide editor affordances that live on the scene layer (selection handles,
+      // ceiling/site brackets) and let wall-cutout reveal all walls — the same
+      // synchronous capture path thumbnails use. We clone the scene inside the
+      // window, so the export snapshots the clean building, then restore.
+      emitter.emit('thumbnail:before-capture', undefined)
+      let prepared: ReturnType<typeof prepareSceneForExport>
+      try {
+        prepared = prepareSceneForExport(sceneGroup, useScene.getState().nodes)
+      } finally {
+        emitter.emit('thumbnail:after-capture', undefined)
+      }
+      const { scene: exportScene, animations } = prepared
 
       if (format === 'stl') {
         const exporter = new STLExporter()
@@ -40,37 +58,6 @@ export function ExportManager() {
         downloadBlob(blob, `model_${date}.obj`)
         return
       }
-
-      // Default: GLB export (existing behavior)
-      const exporter = new GLTFExporter()
-
-      // Compressed (KTX2/basis) textures must be decompressed during export or
-      // three r184's GLTFExporter throws "setTextureUtils() must be called".
-      // The app renders with WebGPURenderer, so use the WebGPU texture utils.
-      // We intentionally do NOT pass the live renderer: decompress() resizes
-      // whatever renderer it's given (and never restores it), which would
-      // corrupt the visible canvas. Omitting it lets three spin up and dispose
-      // its own throwaway renderer for the blit instead.
-      exporter.setTextureUtils({
-        decompress: (texture, maxTextureSize) =>
-          WebGPUTextureUtils.decompress(texture, maxTextureSize),
-      })
-
-      return new Promise<void>((resolve, reject) => {
-        exporter.parse(
-          exportScene,
-          (gltf) => {
-            const blob = new Blob([gltf as ArrayBuffer], { type: 'model/gltf-binary' })
-            downloadBlob(blob, `model_${date}.glb`)
-            resolve()
-          },
-          (error) => {
-            console.error('Export error:', error)
-            reject(error)
-          },
-          { binary: true },
-        )
-      })
     }
 
     setExportScene(exportFn)
@@ -81,33 +68,6 @@ export function ExportManager() {
   }, [scene, setExportScene])
 
   return null
-}
-
-function prepareSceneForExport(source: Object3D) {
-  const clone = source.clone(true)
-  const meshesToRemove: Mesh[] = []
-
-  clone.traverse((object) => {
-    if (isMeshWithInvalidGeometry(object)) meshesToRemove.push(object)
-  })
-
-  for (const mesh of meshesToRemove) {
-    mesh.removeFromParent()
-  }
-
-  return clone
-}
-
-function isMeshWithInvalidGeometry(object: Object3D): object is Mesh {
-  if (!isMesh(object)) return false
-
-  // Three exporters can crash when a Mesh has no readable position attribute.
-  const position = object.geometry?.getAttribute('position')
-  return !position || position.count === 0
-}
-
-function isMesh(object: Object3D): object is Mesh {
-  return (object as Mesh).isMesh === true
 }
 
 function downloadBlob(blob: Blob, filename: string) {

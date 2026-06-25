@@ -338,7 +338,13 @@ const PostProcessingPasses = ({
       const hasGeometry = scenePassColor.a
       const contentAlpha = hasGeometry.max(zonePass.a)
 
-      let sceneColor = scenePassColor as unknown as ReturnType<typeof vec4>
+      // Composite the zone-pass tint into the base scene so rooms show whether or
+      // not SSGI is enabled. When SSGI is on, the branch below overwrites this
+      // with its own zone-inclusive composite (no double-add).
+      let sceneColor = vec4(
+        add(scenePassColor.rgb, zonePass.rgb),
+        contentAlpha,
+      ) as unknown as ReturnType<typeof vec4>
 
       // Depth + normal MRT — shared by SSGI (diffuse/normal) and the ink pass
       // (depth/normal). Built whenever either is active.

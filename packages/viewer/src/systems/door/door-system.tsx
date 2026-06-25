@@ -1093,6 +1093,7 @@ function addDoorLeaf(
     hingeX,
     hingeSide,
     swingRotation,
+    openRotationY,
     segments,
     contentPadding,
     handle,
@@ -1118,6 +1119,10 @@ function addDoorLeaf(
     hingeX: number
     hingeSide: 'left' | 'right'
     swingRotation: number
+    // Leaf rotation (radians, about the hinge Y axis) at fully-open. The GLB
+    // exporter reads this off the leaf group to bake an open/close clip; it is
+    // the kinematic endpoint, independent of the current `swingRotation`.
+    openRotationY: number
     segments: DoorNode['segments']
     contentPadding: DoorNode['contentPadding']
     handle: boolean
@@ -1148,6 +1153,10 @@ function addDoorLeaf(
   const leafGroup = new THREE.Group()
   leafGroup.position.set(hingeX, 0, 0)
   leafGroup.rotation.y = swingRotation
+  // Marks this group as the swing leaf and records its fully-open angle so the
+  // GLB exporter can bake an open/close animation clip from a single pose. The
+  // exporter strips this marker before writing the file.
+  leafGroup.userData.pascalSwingLeaf = { axis: 'y', openRotationY }
   mesh.add(leafGroup)
 
   const addLeafBox = (
@@ -2462,6 +2471,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
       hingeX: -insideWidth / 2,
       hingeSide: 'left',
       swingRotation: -clampedSwingAngle * swingDirectionSign,
+      openRotationY: (-Math.PI / 2) * swingDirectionSign,
       segments,
       contentPadding,
       handle,
@@ -2490,6 +2500,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
       hingeX: insideWidth / 2,
       hingeSide: 'right',
       swingRotation: clampedSwingAngle * swingDirectionSign,
+      openRotationY: (Math.PI / 2) * swingDirectionSign,
       segments,
       contentPadding,
       handle,
@@ -2521,6 +2532,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
       hingeX,
       hingeSide: hingesSide,
       swingRotation: clampedSwingAngle * swingDirectionSign * hingeDirectionSign,
+      openRotationY: (Math.PI / 2) * swingDirectionSign * hingeDirectionSign,
       segments,
       contentPadding,
       handle,
