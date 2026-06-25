@@ -15,13 +15,13 @@ import {
   alignFloorplanDraftPoint,
   type FencePlanPoint,
   getSegmentGridStep,
+  isAngleSnapActive,
   isMagneticSnapActive,
   isSegmentLongEnough,
   snapBuildingLocalToWorldGrid,
   snapFenceDraftPoint,
   snapScalarToGrid,
   useAlignmentGuides,
-  WALL_GRID_STEP,
 } from '@pascal-app/editor'
 
 /**
@@ -158,24 +158,30 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
         // itself is excluded via `ignoreFenceIds`).
         const sceneNodes = useScene.getState().nodes
         const { walls: nextWalls, fences: nextFences } = collectLevel(sceneNodes, parentId)
-        // Endpoint move = grid snap only; the 45°-from-start angle
-        // snap is draft-only. Shift bypasses grid, magnetic, and alignment snap.
+        // The grid step follows the active snapping mode (`getSegmentGridStep()`
+        // is 0 outside grid mode), so `'lines' / 'angles' / 'off'` no longer
+        // force a grid snap the mode chip says is inactive — matching the wall
+        // endpoint affordance. In `'angles'` mode the endpoint angle-locks off
+        // the fixed corner (free length); the angle path ignores `gridSnap`.
+        const angleLocked = isAngleSnapActive()
         const snapped = snapFenceDraftPoint({
           point: planPoint as FencePlanPoint,
           walls: nextWalls,
           fences: nextFences,
           ignoreFenceIds: [node.id],
-          bypassSnap: modifiers.shiftKey,
-          magnetic: !modifiers.shiftKey && isMagneticSnapActive(),
-          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, WALL_GRID_STEP) as FencePlanPoint,
+          start: angleLocked ? fixedPoint : undefined,
+          angleSnap: angleLocked,
+          magnetic: isMagneticSnapActive(),
+          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()) as FencePlanPoint,
         })
         // Figma-style alignment on the dragged endpoint — snaps it onto
         // another object's edge / wall face and publishes a guide, matching
-        // the 3D fence endpoint action. The dragged fence and its linked
-        // siblings (which cascade with the endpoint) are excluded from the
-        // candidate pool. Alt is reserved for detach here, NOT bypass.
+        // the 3D fence endpoint action. It is a line snap, so gate it on the
+        // magnetic (`'lines'`) mode. The dragged fence and its linked siblings
+        // (which cascade with the endpoint) are excluded from the candidate
+        // pool. Alt is reserved for detach here, NOT bypass.
         const aligned = alignFloorplanDraftPoint(snapped, {
-          bypass: modifiers.shiftKey,
+          bypass: !isMagneticSnapActive(),
           excludeIds: [node.id, ...linkedOriginals.map((l) => l.id)],
         }) as FencePlanPoint
         const nextStart = endpoint === 'start' ? aligned : fixedPoint

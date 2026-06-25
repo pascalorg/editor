@@ -13,13 +13,13 @@ import {
 import {
   alignFloorplanDraftPoint,
   getSegmentGridStep,
+  isAngleSnapActive,
   isMagneticSnapActive,
   isSegmentLongEnough,
   snapBuildingLocalToWorldGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
   useAlignmentGuides,
-  WALL_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 
@@ -183,19 +183,28 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         // the legacy flow.
         const sceneNodes = useScene.getState().nodes
         const walls = collectLevelWalls(sceneNodes, node.id)
-        // Endpoint move = grid snap, never 45° from the fixed corner.
+        // The grid step follows the active snapping mode (`getSegmentGridStep()`
+        // is 0 outside grid mode), so `'lines' / 'angles' / 'off'` no longer
+        // force a grid snap the mode chip says is inactive. In `'angles'` mode
+        // the endpoint angle-locks off the fixed corner (free length), matching
+        // the draft tool — the angle path ignores the `gridSnap` override.
+        const angleLocked = isAngleSnapActive()
         const snapped = snapWallDraftPoint({
           point: planPoint as WallPlanPoint,
           walls,
           ignoreWallIds: [node.id],
+          start: angleLocked ? fixedPoint : undefined,
+          angleSnap: angleLocked,
           magnetic: isMagneticSnapActive(),
-          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, WALL_GRID_STEP),
+          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()),
         })
         // Figma-style alignment on the dragged corner — snaps it onto another
-        // object's edge / wall face and publishes a guide. The dragged wall
-        // and its linked siblings (which cascade with the corner) are excluded
-        // from the candidate pool. Alt is reserved for detach, NOT bypass.
+        // object's edge / wall face and publishes a guide. It is a line snap,
+        // so gate it on the magnetic (`'lines'`) mode like the draft tool does.
+        // The dragged wall and its linked siblings (which cascade with the
+        // corner) are excluded from the candidate pool. Alt is detach, NOT bypass.
         const aligned = alignFloorplanDraftPoint(snapped, {
+          bypass: !isMagneticSnapActive(),
           excludeIds: [node.id, ...linkedWalls.map((w) => w.id)],
         }) as WallPlanPoint
 
