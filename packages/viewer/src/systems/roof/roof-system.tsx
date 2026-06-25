@@ -2075,7 +2075,8 @@ function buildDutchTopSkin(
   }
 
   if (faces.length === 0) return null
-  return createGeometryFromFaces(faces, 3, { treatBidirectionalSlopeFacesAsSlope: true })
+  const doubleSidedFaces = faces.flatMap((face) => [face, face.slice().reverse()])
+  return createGeometryFromFaces(doubleSidedFaces, 3, { treatBidirectionalSlopeFacesAsSlope: true })
 }
 
 /**
