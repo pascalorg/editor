@@ -98,6 +98,7 @@ import useEditor, {
   selectSiteFloorplanContext,
 } from '../../store/use-editor'
 import { useFloorplanDraftPreview } from '../../store/use-floorplan-draft-preview'
+import { useFloorplanMarquee } from '../../store/use-floorplan-marquee'
 import useInteractionScope, {
   useActiveHandleDrag,
   useEndpointReshape,
@@ -368,14 +369,6 @@ type FloorplanSelectionBounds = {
   maxY: number
 }
 
-type FloorplanMarqueeState = {
-  pointerId: number
-  startClientX: number
-  startClientY: number
-  startPlanPoint: WallPlanPoint
-  currentPlanPoint: WallPlanPoint
-}
-
 type LinkedWallSnapshot = {
   id: WallNode['id']
   start: WallPlanPoint
@@ -436,10 +429,13 @@ type GuideTransformDraft = {
 
 type ReferenceScaleUnit = 'meters' | 'centimeters' | 'feet' | 'inches'
 
+// The in-flight reference-scale measurement. Only the per-CLICK fields live
+// here (guide + start anchor); the rubber-band's moving END is the shared
+// `useFloorplanDraftPreview.cursorPoint` (set on every move anyway), so it
+// never re-renders the panel — `FloorplanReferenceScaleDraftLine` reads it.
 type ReferenceScaleDraft = {
   guideId: GuideNode['id']
   start: WallPlanPoint | null
-  cursor: WallPlanPoint | null
 }
 
 type PendingReferenceScale = {
@@ -3404,20 +3400,50 @@ function FloorplanReferenceScaleLayer({
           unitsPerPixel={unitsPerPixel}
         />
       ))}
-      {draft?.start && draft.cursor && (
-        <FloorplanReferenceScaleLine
-          end={draft.cursor}
-          isDraft
-          label={`Ref ${formatMeasurement(
-            Math.hypot(draft.cursor[0] - draft.start[0], draft.cursor[1] - draft.start[1]),
-            unit,
-          )}`}
+      {draft?.start && (
+        <FloorplanReferenceScaleDraftLine
           palette={palette}
           start={draft.start}
+          unit={unit}
           unitsPerPixel={unitsPerPixel}
         />
       )}
     </>
+  )
+}
+
+// The live reference-scale rubber-band — split out of the layer so it can
+// subscribe to the shared cursor store for its moving END. A per-move cursor
+// update re-renders ONLY this line, never FloorplanPanel; the START anchor +
+// render config arrive as props (set per click, never per move).
+function FloorplanReferenceScaleDraftLine({
+  palette,
+  start,
+  unit,
+  unitsPerPixel,
+}: {
+  palette: FloorplanPalette
+  start: WallPlanPoint
+  unit: 'metric' | 'imperial'
+  unitsPerPixel: number
+}) {
+  const cursor = useFloorplanDraftPreview((s) => s.cursorPoint)
+  if (!cursor) {
+    return null
+  }
+
+  return (
+    <FloorplanReferenceScaleLine
+      end={cursor}
+      isDraft
+      label={`Ref ${formatMeasurement(
+        Math.hypot(cursor[0] - start[0], cursor[1] - start[1]),
+        unit,
+      )}`}
+      palette={palette}
+      start={start}
+      unitsPerPixel={unitsPerPixel}
+    />
   )
 }
 
@@ -4706,6 +4732,39 @@ function FloorplanDraftCursorLayer({
   )
 }
 
+// Leaf overlay for the marquee (box-select) rectangle. Subscribes to the
+// marquee store's moving corner so a per-move drag re-renders ONLY this layer,
+// never the (~120-220ms) FloorplanPanel. The bounds math is pure (the
+// module-scope `getFloorplanSelectionBounds` / `toSvgSelectionBounds`); the
+// cursor colour is the one bit of panel config, passed as a prop.
+function FloorplanMarqueeOverlay({ cursorColor }: { cursorColor: string }) {
+  const drag = useFloorplanMarquee((s) => s.drag)
+  const bounds = useMemo(() => {
+    if (!drag) {
+      return null
+    }
+    const dragDistance = Math.hypot(
+      drag.currentPlanPoint[0] - drag.startPlanPoint[0],
+      drag.currentPlanPoint[1] - drag.startPlanPoint[1],
+    )
+    if (dragDistance <= 0) {
+      return null
+    }
+    return toSvgSelectionBounds(
+      getFloorplanSelectionBounds(drag.startPlanPoint, drag.currentPlanPoint),
+    )
+  }, [drag])
+
+  return (
+    <FloorplanMarqueeLayer
+      bounds={bounds}
+      cursorColor={cursorColor}
+      glowWidth={FLOORPLAN_MARQUEE_GLOW_WIDTH}
+      outlineWidth={FLOORPLAN_MARQUEE_OUTLINE_WIDTH}
+    />
+  )
+}
+
 // Thin subscriber wrapper for the coordinate-badge overlay: reads the hot
 // screen-space cursor position from the draft store so a per-`pointermove`
 // update re-renders only the badge, not FloorplanPanel. The remaining props
@@ -5154,9 +5213,6 @@ export function FloorplanPanel({
   const setGuideLocked = useEditor((s) => s.setGuideLocked)
   const setGuideScaleReferenceVisible = useEditor((s) => s.setGuideScaleReferenceVisible)
   const clearGuideUi = useEditor((s) => s.clearGuideUi)
-  const [floorplanMarqueeState, setFloorplanMarqueeState] = useState<FloorplanMarqueeState | null>(
-    null,
-  )
   const [shiftPressed, setShiftPressed] = useState(false)
   const [rotationModifierPressed, setRotationModifierPressed] = useState(false)
   const [movingFloorplanNodeRevision, setMovingFloorplanNodeRevision] = useState(0)
@@ -6026,35 +6082,6 @@ export function FloorplanPanel({
     () => new Set([...selectedIds, ...previewSelectedIds]),
     [previewSelectedIds, selectedIds],
   )
-  const activeMarqueeBounds = useMemo(() => {
-    if (!floorplanMarqueeState) {
-      return null
-    }
-
-    return getFloorplanSelectionBounds(
-      floorplanMarqueeState.startPlanPoint,
-      floorplanMarqueeState.currentPlanPoint,
-    )
-  }, [floorplanMarqueeState])
-  const visibleMarqueeBounds = useMemo(() => {
-    if (!(floorplanMarqueeState && activeMarqueeBounds)) {
-      return null
-    }
-
-    const dragDistance = Math.hypot(
-      floorplanMarqueeState.currentPlanPoint[0] - floorplanMarqueeState.startPlanPoint[0],
-      floorplanMarqueeState.currentPlanPoint[1] - floorplanMarqueeState.startPlanPoint[1],
-    )
-
-    return dragDistance > 0 ? activeMarqueeBounds : null
-  }, [activeMarqueeBounds, floorplanMarqueeState])
-  const visibleSvgMarqueeBounds = useMemo(() => {
-    if (!visibleMarqueeBounds) {
-      return null
-    }
-
-    return toSvgSelectionBounds(visibleMarqueeBounds)
-  }, [visibleMarqueeBounds])
   const siteVertexHandles = useMemo(() => {
     if (!(canUseSiteBoundaryVertexHandles && visibleSitePolygon)) {
       return []
@@ -6901,7 +6928,6 @@ export function FloorplanPanel({
       setReferenceScaleDraft({
         guideId: guide.id,
         start: null,
-        cursor: null,
       })
       setPendingReferenceScale(null)
       setMode('select')
@@ -8769,16 +8795,10 @@ export function FloorplanPanel({
       if (referenceScaleDraft) {
         emitFloorplanGridEvent('move', getSnappedFloorplanPoint(planPoint), event)
 
+        // The rubber-band's moving end IS this cursor point — the draft-line
+        // leaf reads it from the store, so no per-move panel-state write.
         setCursorPoint((previousPoint) =>
           previousPoint && pointsEqual(previousPoint, planPoint) ? previousPoint : planPoint,
-        )
-        setReferenceScaleDraft((currentDraft) =>
-          currentDraft
-            ? {
-                ...currentDraft,
-                cursor: planPoint,
-              }
-            : currentDraft,
         )
         return
       }
@@ -9444,7 +9464,6 @@ export function FloorplanPanel({
           setReferenceScaleDraft({
             ...referenceScaleDraft,
             start: planPoint,
-            cursor: planPoint,
           })
           setCursorPoint(planPoint)
           return
@@ -10258,7 +10277,7 @@ export function FloorplanPanel({
       setCursorPoint(snappedPoint)
       floorplanMarqueeSnapPointRef.current = snappedPoint
       syncPreviewSelectedIds([])
-      setFloorplanMarqueeState({
+      useFloorplanMarquee.getState().begin({
         pointerId: event.pointerId,
         startClientX: event.clientX,
         startClientY: event.clientY,
@@ -10281,7 +10300,8 @@ export function FloorplanPanel({
         })
       }
 
-      if (floorplanMarqueeState?.pointerId !== event.pointerId) {
+      const marquee = useFloorplanMarquee.getState().drag
+      if (marquee?.pointerId !== event.pointerId) {
         return
       }
 
@@ -10296,8 +10316,8 @@ export function FloorplanPanel({
       setCursorPoint(snappedPoint)
 
       const dragDistance = Math.hypot(
-        event.clientX - floorplanMarqueeState.startClientX,
-        event.clientY - floorplanMarqueeState.startClientY,
+        event.clientX - marquee.startClientX,
+        event.clientY - marquee.startClientY,
       )
 
       if (
@@ -10310,37 +10330,22 @@ export function FloorplanPanel({
       floorplanMarqueeSnapPointRef.current = snappedPoint
 
       if (dragDistance >= FLOORPLAN_MARQUEE_DRAG_THRESHOLD_PX) {
-        const bounds = getFloorplanSelectionBounds(
-          floorplanMarqueeState.startPlanPoint,
-          snappedPoint,
-        )
+        const bounds = getFloorplanSelectionBounds(marquee.startPlanPoint, snappedPoint)
         syncPreviewSelectedIds(getFloorplanSelectionIdsInBounds(bounds))
       } else {
         syncPreviewSelectedIds([])
       }
 
-      setFloorplanMarqueeState((currentState) => {
-        if (!currentState || currentState.pointerId !== event.pointerId) {
-          return currentState
-        }
-
-        return {
-          ...currentState,
-          currentPlanPoint: snappedPoint,
-        }
-      })
+      // Advances the moving corner in the marquee store — re-renders only the
+      // marquee overlay leaf, never this panel.
+      useFloorplanMarquee.getState().setCurrent(snappedPoint)
     },
-    [
-      floorplanMarqueeState,
-      getFloorplanSelectionIdsInBounds,
-      getPlanPointFromClientPoint,
-      syncPreviewSelectedIds,
-    ],
+    [getFloorplanSelectionIdsInBounds, getPlanPointFromClientPoint, syncPreviewSelectedIds],
   )
 
   const handleMarqueePointerUp = useCallback(
     (event: ReactPointerEvent<SVGRectElement>) => {
-      const marqueeState = floorplanMarqueeState
+      const marqueeState = useFloorplanMarquee.getState().drag
       if (!marqueeState || marqueeState.pointerId !== event.pointerId) {
         return
       }
@@ -10376,13 +10381,12 @@ export function FloorplanPanel({
       }
 
       syncPreviewSelectedIds([])
-      setFloorplanMarqueeState(null)
+      useFloorplanMarquee.getState().reset()
       floorplanMarqueeSnapPointRef.current = null
     },
     [
       addFloorplanSelection,
       commitFloorplanSelection,
-      floorplanMarqueeState,
       getFloorplanHitIdAtPoint,
       getFloorplanSelectionIdsInBounds,
       getPlanPointFromClientPoint,
@@ -10393,7 +10397,7 @@ export function FloorplanPanel({
 
   const handleMarqueePointerCancel = useCallback(
     (event: ReactPointerEvent<SVGRectElement>) => {
-      if (floorplanMarqueeState?.pointerId !== event.pointerId) {
+      if (useFloorplanMarquee.getState().drag?.pointerId !== event.pointerId) {
         return
       }
 
@@ -10401,18 +10405,18 @@ export function FloorplanPanel({
         event.currentTarget.releasePointerCapture(event.pointerId)
       }
 
-      setFloorplanMarqueeState(null)
+      useFloorplanMarquee.getState().reset()
       setFloorplanCursorPosition(null)
       floorplanMarqueeSnapPointRef.current = null
       syncPreviewSelectedIds([])
       setCursorPoint(null)
     },
-    [floorplanMarqueeState?.pointerId, syncPreviewSelectedIds],
+    [syncPreviewSelectedIds],
   )
 
   useEffect(() => {
     if (!isMarqueeSelectionToolActive) {
-      setFloorplanMarqueeState(null)
+      useFloorplanMarquee.getState().reset()
       floorplanMarqueeSnapPointRef.current = null
       syncPreviewSelectedIds([])
       if (mode === 'select') {
@@ -10995,12 +10999,7 @@ export function FloorplanPanel({
                   the alignment guides. */}
               <FloorplanSnapBeaconLayer />
 
-              <FloorplanMarqueeLayer
-                bounds={visibleSvgMarqueeBounds}
-                cursorColor={palette.cursor}
-                glowWidth={FLOORPLAN_MARQUEE_GLOW_WIDTH}
-                outlineWidth={FLOORPLAN_MARQUEE_OUTLINE_WIDTH}
-              />
+              <FloorplanMarqueeOverlay cursorColor={palette.cursor} />
 
               {/* This shared layer now carries only the per-CLICK draft anchors
                   (reference-scale start + committed polygon vertices). The
