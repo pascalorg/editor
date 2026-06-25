@@ -7,7 +7,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
+import { Canvas, extend, type ThreeElement, useFrame, useThree } from '@react-three/fiber'
 import {
   forwardRef,
   useEffect,
@@ -38,7 +38,15 @@ import { SelectionManager } from './selection-manager'
 import { ViewerCamera } from './viewer-camera'
 
 declare module '@react-three/fiber' {
-  interface ThreeElements extends ThreeToJSXElements<typeof THREE> {}
+  // The TS 7 native compiler (tsgo) rejects mapping the entire `three/webgpu`
+  // namespace into JSX — `ThreeToJSXElements<typeof THREE>` triggers a TS2320
+  // heritage conflict with R3F's core-three base plus a TS2590 "union too
+  // complex". tsc 6 tolerates it; tsgo does not. R3F's base ThreeElements
+  // already covers core three, so we extract only the webgpu/TSL node materials
+  // we actually use as JSX (see r3f.docs.pmnd.rs/api/typescript).
+  interface ThreeElements {
+    lineBasicNodeMaterial: ThreeElement<typeof THREE.LineBasicNodeMaterial>
+  }
 }
 
 extend(THREE as any)

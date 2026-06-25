@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "build": "tsc --build",
-    "dev": "tsc --build --watch",
+    "dev": "tsgo --build --watch",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
