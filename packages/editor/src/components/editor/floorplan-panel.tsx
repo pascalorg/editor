@@ -56,6 +56,7 @@ import { useAlignmentGuides, useSegmentDraftChain, useWallSnapIndicator } from '
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Command, Ruler } from 'lucide-react'
 import {
+  type ComponentProps,
   memo,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -102,6 +103,7 @@ import useInteractionScope, {
   useReshapingNode,
 } from '../../store/use-interaction-scope'
 import usePlacementPreview from '../../store/use-placement-preview'
+import { useStairBuildPreview } from '../../store/use-stair-build-preview'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
@@ -4487,6 +4489,109 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
   )
 })
 
+// Static segment for the in-flight stair build preview. No per-render
+// dependency (the geometry only moves / rotates), so it lives at module scope
+// instead of a `useMemo`.
+const FLOORPLAN_PREVIEW_STAIR_SEGMENT = StairSegmentNodeSchema.parse({
+  id: 'sseg_floorplan_preview',
+  segmentType: 'stair',
+  width: DEFAULT_STAIR_WIDTH,
+  length: DEFAULT_STAIR_LENGTH,
+  height: DEFAULT_STAIR_HEIGHT,
+  stepCount: DEFAULT_STAIR_STEP_COUNT,
+  attachmentSide: DEFAULT_STAIR_ATTACHMENT_SIDE,
+  fillToFloor: DEFAULT_STAIR_FILL_TO_FLOOR,
+  thickness: DEFAULT_STAIR_THICKNESS,
+  position: [0, 0, 0],
+  metadata: { isTransient: true, isFloorplanPreview: true },
+})
+
+const EMPTY_FLOORPLAN_ID_SET: ReadonlySet<string> = new Set()
+
+type FloorplanStairLayerPalette = ComponentProps<typeof FloorplanStairLayer>['palette']
+
+// Leaf layer for the stair tool's in-flight 2D build preview. Subscribes to the
+// `useStairBuildPreview` store directly so a per-`grid:move` point update (or an
+// R/T rotation) re-renders ONLY this tiny layer — never the ~120-220ms
+// `FloorplanPanel`. This mirrors how column / elevator placement stays smooth by
+// routing preview state through a store + leaf. Committed stairs render through
+// `FloorplanRegistryLayer`; this layer is non-interactive (noop handlers, empty
+// hit sets), so it never participates in hover / select.
+function FloorplanStairBuildPreviewLayer({
+  palette,
+  isDeleteMode,
+}: {
+  palette: FloorplanStairLayerPalette
+  isDeleteMode: boolean
+}) {
+  const phase = useEditor((s) => s.phase)
+  const mode = useEditor((s) => s.mode)
+  const tool = useEditor((s) => s.tool)
+  const point = useStairBuildPreview((s) => s.point)
+  const rotation = useStairBuildPreview((s) => s.rotation)
+  const isActive = phase === 'structure' && mode === 'build' && tool === 'stair'
+
+  const previewEntry = useMemo(() => {
+    if (!(isActive && point)) {
+      return null
+    }
+    const previewStair = StairNodeSchema.parse({
+      id: 'stair_floorplan_preview',
+      name: 'Staircase preview',
+      position: [point[0], 0, point[1]],
+      rotation,
+      children: [FLOORPLAN_PREVIEW_STAIR_SEGMENT.id],
+      metadata: { isTransient: true, isFloorplanPreview: true },
+    })
+    const entry = buildSharedFloorplanStairEntry(previewStair, [FLOORPLAN_PREVIEW_STAIR_SEGMENT])
+    if (!entry) {
+      return null
+    }
+    const hitPolygons =
+      (previewStair.stairType ?? 'straight') === 'straight'
+        ? entry.segments.map((segmentEntry) => segmentEntry.polygon)
+        : [getFloorplanCurvedStairHitPolygon(previewStair)]
+
+    return {
+      ...entry,
+      hitPolygons,
+      segments: entry.segments.map((segmentEntry) => ({
+        ...segmentEntry,
+        innerPoints: formatPolygonPoints(segmentEntry.innerPolygon),
+        points: formatPolygonPoints(segmentEntry.polygon),
+        treadBars: segmentEntry.treadBars.map((polygon) => ({
+          points: formatPolygonPoints(polygon),
+          polygon,
+        })),
+      })),
+    }
+  }, [isActive, point, rotation])
+
+  if (!previewEntry) {
+    return null
+  }
+
+  return (
+    <FloorplanStairLayer
+      canFocusStairs={false}
+      canSelectStairs={false}
+      cursor={EDITOR_CURSOR}
+      highlightedIdSet={EMPTY_FLOORPLAN_ID_SET}
+      hitStrokeWidth={FLOORPLAN_OPENING_HIT_STROKE_WIDTH}
+      hoveredStairId={null}
+      isDeleteMode={isDeleteMode}
+      onStairDoubleClick={noopFloorplanStairHandler}
+      onStairHoverChange={noopFloorplanStairHandler}
+      onStairHoverEnter={noopFloorplanStairHandler}
+      onStairPointerDown={noopFloorplanStairHandler}
+      onStairSelect={noopFloorplanStairHandler}
+      palette={palette}
+      selectedIdSet={EMPTY_FLOORPLAN_ID_SET}
+      stairEntries={[previewEntry]}
+    />
+  )
+}
+
 export function FloorplanPanel({
   /**
    * Element to portal the compass button into. The 2D/3D navigation poses stay
@@ -4743,8 +4848,6 @@ export function FloorplanPanel({
       [site?.id],
     ),
   )
-  const [stairBuildPreviewPoint, setStairBuildPreviewPoint] = useState<WallPlanPoint | null>(null)
-  const [stairBuildPreviewRotation, setStairBuildPreviewRotation] = useState(0)
   const [isSpacePanPressed, setIsSpacePanPressed] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
   const [isRotatingFloorplan, setIsRotatingFloorplan] = useState(false)
@@ -5399,72 +5502,6 @@ export function FloorplanPanel({
     isFloorItemBuildActive ||
     isFloorItemMoveActive ||
     isRegistryToolBuildActive
-  const floorplanPreviewStairSegment = useMemo(
-    () =>
-      StairSegmentNodeSchema.parse({
-        id: 'sseg_floorplan_preview',
-        segmentType: 'stair',
-        width: DEFAULT_STAIR_WIDTH,
-        length: DEFAULT_STAIR_LENGTH,
-        height: DEFAULT_STAIR_HEIGHT,
-        stepCount: DEFAULT_STAIR_STEP_COUNT,
-        attachmentSide: DEFAULT_STAIR_ATTACHMENT_SIDE,
-        fillToFloor: DEFAULT_STAIR_FILL_TO_FLOOR,
-        thickness: DEFAULT_STAIR_THICKNESS,
-        position: [0, 0, 0],
-        metadata: { isTransient: true, isFloorplanPreview: true },
-      }),
-    [],
-  )
-  const floorplanPreviewStairEntry = useMemo(() => {
-    if (!(isStairBuildActive && stairBuildPreviewPoint)) {
-      return null
-    }
-
-    const previewStair = StairNodeSchema.parse({
-      id: 'stair_floorplan_preview',
-      name: 'Staircase preview',
-      position: [stairBuildPreviewPoint[0], 0, stairBuildPreviewPoint[1]],
-      rotation: stairBuildPreviewRotation,
-      children: [floorplanPreviewStairSegment.id],
-      metadata: { isTransient: true, isFloorplanPreview: true },
-    })
-
-    const entry = buildSharedFloorplanStairEntry(previewStair, [floorplanPreviewStairSegment])
-    if (!entry) {
-      return null
-    }
-    const hitPolygons =
-      (previewStair.stairType ?? 'straight') === 'straight'
-        ? entry.segments.map((segmentEntry) => segmentEntry.polygon)
-        : [getFloorplanCurvedStairHitPolygon(previewStair)]
-
-    return {
-      ...entry,
-      hitPolygons,
-      segments: entry.segments.map((segmentEntry) => ({
-        ...segmentEntry,
-        innerPoints: formatPolygonPoints(segmentEntry.innerPolygon),
-        points: formatPolygonPoints(segmentEntry.polygon),
-        treadBars: segmentEntry.treadBars.map((polygon) => ({
-          points: formatPolygonPoints(polygon),
-          polygon,
-        })),
-      })),
-    }
-  }, [
-    floorplanPreviewStairSegment,
-    isStairBuildActive,
-    stairBuildPreviewPoint,
-    stairBuildPreviewRotation,
-  ])
-  const renderedFloorplanStairEntries = useMemo(
-    () =>
-      floorplanPreviewStairEntry
-        ? [...floorplanStairEntries, floorplanPreviewStairEntry]
-        : floorplanStairEntries,
-    [floorplanPreviewStairEntry, floorplanStairEntries],
-  )
   const floorplanOpeningLocalY = useMemo(() => {
     if (movingNode?.type === 'door' || movingNode?.type === 'window') {
       return shiftPressed ? movingNode.position[1] : snapToHalf(movingNode.position[1])
@@ -7311,15 +7348,18 @@ export function FloorplanPanel({
 
   useEffect(() => {
     if (!isStairBuildActive) {
-      setStairBuildPreviewPoint(null)
-      setStairBuildPreviewRotation(0)
+      useStairBuildPreview.getState().reset()
       return
     }
 
     const handleGridMove = (event: GridEvent) => {
-      setStairBuildPreviewPoint(
-        getSnappedFloorplanPoint([event.localPosition[0], event.localPosition[2]]),
-      )
+      // Publish to the dedicated store (deduped on the snapped point), NOT panel
+      // state: the stair preview lives in `FloorplanStairBuildPreviewLayer`, so a
+      // per-move update re-renders only that tiny leaf instead of this entire
+      // (~200ms) panel — the same pattern that keeps column/elevator smooth.
+      useStairBuildPreview
+        .getState()
+        .setPoint(getSnappedFloorplanPoint([event.localPosition[0], event.localPosition[2]]))
     }
 
     emitter.on('grid:move', handleGridMove)
@@ -7525,9 +7565,9 @@ export function FloorplanPanel({
       }
 
       if (isStairBuildActive && (event.key === 'r' || event.key === 'R')) {
-        setStairBuildPreviewRotation((current) => current + Math.PI / 4)
+        useStairBuildPreview.getState().rotateBy(Math.PI / 4)
       } else if (isStairBuildActive && (event.key === 't' || event.key === 'T')) {
-        setStairBuildPreviewRotation((current) => current - Math.PI / 4)
+        useStairBuildPreview.getState().rotateBy(-Math.PI / 4)
       }
 
       if (
@@ -10519,31 +10559,14 @@ export function FloorplanPanel({
               />
 
               {/* Stair is fully registry-driven for committed nodes
-                  (`def.floorplan` on the stair kind). This layer only
-                  carries the in-flight stair preview, which lives outside
-                  the scene graph and so isn't visible to
-                  `FloorplanRegistryLayer`. When the preview entry is
-                  absent the array is empty and the layer renders nothing.
-                  Hover / select / double-click props are noops — the
-                  preview isn't interactive, and committed stairs route
-                  through `FloorplanRegistryLayer`. */}
-              <FloorplanStairLayer
-                canFocusStairs={false}
-                canSelectStairs={false}
-                cursor={EDITOR_CURSOR}
-                highlightedIdSet={highlightedFloorplanIdSet}
-                hitStrokeWidth={FLOORPLAN_OPENING_HIT_STROKE_WIDTH}
-                hoveredStairId={null}
-                isDeleteMode={isDeleteMode}
-                onStairDoubleClick={noopFloorplanStairHandler}
-                onStairHoverChange={noopFloorplanStairHandler}
-                onStairHoverEnter={noopFloorplanStairHandler}
-                onStairPointerDown={noopFloorplanStairHandler}
-                onStairSelect={noopFloorplanStairHandler}
-                palette={palette}
-                selectedIdSet={selectedIdSet}
-                stairEntries={renderedFloorplanStairEntries}
-              />
+                  (`def.floorplan` on the stair kind). The only thing left for
+                  this view is the in-flight build preview, which lives outside
+                  the scene graph (so `FloorplanRegistryLayer` can't see it).
+                  `FloorplanStairBuildPreviewLayer` owns it as a leaf that
+                  subscribes to the `useStairBuildPreview` store directly, so a
+                  per-`grid:move` cursor update re-renders only that tiny layer
+                  rather than this whole panel. */}
+              <FloorplanStairBuildPreviewLayer isDeleteMode={isDeleteMode} palette={palette} />
 
               <FloorplanReferenceScaleLayer
                 draft={referenceScaleDraft}

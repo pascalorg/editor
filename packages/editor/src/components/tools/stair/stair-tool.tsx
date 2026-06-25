@@ -264,7 +264,19 @@ export const StairTool: React.FC = () => {
       return { placementLevelId, previewNodes, stair }
     }
 
+    // The preview rebuild (full-scene copy + destination-level resolution +
+    // auto-opening CSG) is expensive; `grid:move` fires it every pointer event
+    // but the placed position is grid-snapped, so within a cell every rebuild
+    // is identical. Dedupe on the snapped position + rotation so we rebuild
+    // only when the staircase would actually land somewhere new — this is the
+    // difference between a smooth and a stuttering stair tool (the elevator is
+    // cheap because it has no opening sync).
+    let lastPreviewKey: string | null = null
+
     const applyDraftPreview = (position: [number, number, number], rotation: number) => {
+      const key = `${position[0].toFixed(3)},${position[2].toFixed(3)},${rotation.toFixed(4)}`
+      if (key === lastPreviewKey) return
+      lastPreviewKey = key
       const preview = buildPreviewScene(position, rotation)
       const visualPosition = preview
         ? getFloorStackPreviewPosition({
@@ -410,6 +422,9 @@ export const StairTool: React.FC = () => {
 
       commitStairPlacement(currentLevelId, position, rotationRef.current)
       openingPreview.clear()
+      // Commit cleared the opening preview, so force the next hover (even on the
+      // same cell) to rebuild rather than dedupe against the just-placed key.
+      lastPreviewKey = null
       alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
       useAlignmentGuides.getState().clear()
     }
