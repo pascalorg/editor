@@ -182,6 +182,25 @@ export type LinearResizeHandle<N> = {
    * the roof shell below it. Only consulted when `shape === 'tracker'`.
    */
   trackerBaseY?: (node: N, sceneApi: SceneApi) => number
+  /**
+   * Stand the chevron blade up into the node's facing plane instead of
+   * leaving it flat in the local XZ plane. For an `axis: 'x'` handle on a
+   * wall-mounted opening (door / window), the local XZ plane is horizontal,
+   * so the default blade is seen edge-on from the front — rotating it 90°
+   * about its pointing axis lays it in the wall face (local XY) so it reads
+   * face-on toward the camera. Chevron shape only; `axis: 'y'` handles are
+   * already stood up unconditionally so this is a no-op for them.
+   */
+  faceNormal?: boolean
+  /**
+   * Gate this arrow behind a click-to-latch cube. When set, the arrow is
+   * hidden until the user clicks the {@link LatchHandle} cube declaring the
+   * same `group` name; clicking the cube again hides it. Lets a node keep a
+   * dense cluster (e.g. a dormer's window width/height arrows) collapsed
+   * behind a single grip until the user opts in. The latch state is local to
+   * the selection and resets when the node is deselected.
+   */
+  latchGroup?: string
 }
 
 /**
@@ -365,6 +384,25 @@ export type TranslateHandle<N = any> = {
   portal?: HandlePortal
 }
 
+/**
+ * Click-to-latch cube. Renders a small persistent cube at `placement` that
+ * toggles the visibility of every handle tagged with the matching
+ * {@link LinearResizeHandle.latchGroup} `group`. Clicking the cube once shows
+ * the group's arrows; clicking again hides them. The latch state is local to
+ * the current selection and resets on deselect.
+ *
+ * Mirrors the duct-fitting selection cube but driven by descriptor data so any
+ * node can collapse a dense arrow cluster behind one grip — e.g. a dormer's
+ * window width/height arrows latch behind a cube at the window center.
+ */
+export type LatchHandle<N = any> = {
+  kind: 'latch'
+  /** The `latchGroup` name whose arrows this cube reveals / hides. */
+  group: string
+  placement: HandlePlacement<N>
+  portal?: HandlePortal
+}
+
 export type HandleDescriptor<N = any> =
   | LinearResizeHandle<N>
   | RadialResizeHandle<N>
@@ -372,6 +410,7 @@ export type HandleDescriptor<N = any> =
   | EndpointMoveHandle<N>
   | TapActionHandle<N>
   | TranslateHandle<N>
+  | LatchHandle<N>
 
 /**
  * Static array, or a function for shape-dependent cases (column

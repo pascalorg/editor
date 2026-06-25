@@ -66,7 +66,7 @@ export const GeometrySystem = () => {
   // `def.geometryKey`). Lets us skip a dispose+rebuild when a node is dirty
   // but its geometry inputs are unchanged — e.g. an item reparenting onto a
   // shelf dirties the shelf without altering its boards.
-  const builtGeometryKeyRef = useRef<Map<string, string>>(new Map())
+  const builtGeometryKeyRef = useRef<Map<string, GeometryBuildCacheEntry>>(new Map())
 
   // Re-mark every geometry-backed node dirty whenever a viewer appearance
   // value changes, so `def.geometry` builders re-run and pick up the new
@@ -93,6 +93,7 @@ export const GeometrySystem = () => {
   // then mark it dirty. Scoped to nodes carrying a `scene:` ref so an
   // unrelated material edit doesn't churn the whole scene.
   useEffect(() => {
+    void sceneMaterials
     const nodes = useScene.getState().nodes
     for (const node of Object.values(nodes)) {
       const def = nodeRegistry.get(node.type)
@@ -187,11 +188,10 @@ export const GeometrySystem = () => {
       // churn when an item reparents onto a shelf.
       if (def.geometryKey) {
         const builtKey = `${shading}|${textures}|${colorPreset}|${sceneTheme}|${def.geometryKey(effectiveNode)}`
-        if (builtGeometryKeyRef.current.get(id) === builtKey) {
+        if (shouldReuseGeometryBuild(builtGeometryKeyRef.current, id, group, builtKey)) {
           clearDirty(id as AnyNodeId)
           continue
         }
-        builtGeometryKeyRef.current.set(id, builtKey)
       }
 
       const parentId = (node.parentId ?? null) as AnyNodeId | null
@@ -380,3 +380,20 @@ function isCachedMaterial(value: unknown): boolean {
 }
 
 export default GeometrySystem
+
+export type GeometryBuildCacheEntry = {
+  group: Group
+  key: string
+}
+
+export function shouldReuseGeometryBuild(
+  cache: Map<string, GeometryBuildCacheEntry>,
+  id: string,
+  group: Group,
+  key: string,
+): boolean {
+  const cached = cache.get(id)
+  if (cached?.group === group && cached.key === key) return true
+  cache.set(id, { group, key })
+  return false
+}

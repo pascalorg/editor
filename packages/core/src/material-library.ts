@@ -4193,7 +4193,7 @@ export function getLibraryMaterialIdFromRef(materialRef?: string | null) {
 }
 
 export function getSceneMaterialIdFromRef(materialRef?: string | null): string | null {
-  if (!materialRef || !materialRef.startsWith(SCENE_MATERIAL_REF_PREFIX)) return null
+  if (!materialRef?.startsWith(SCENE_MATERIAL_REF_PREFIX)) return null
   return materialRef.slice(SCENE_MATERIAL_REF_PREFIX.length)
 }
 

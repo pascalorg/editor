@@ -1,4 +1,3 @@
-export { type LiquidLineConnectPlan, planLiquidLineConnect } from './connect'
 export { liquidLineDefinition } from './definition'
 export { buildLiquidLineGeometry } from './geometry'
 export { useLiquidLineToolOptions } from './options'

@@ -1,7 +1,8 @@
 import type { NodePort } from '@pascal-app/core'
 import { Euler, Vector3 } from 'three'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
 import type { DuctFittingNode } from './schema'
+
+const INCHES_TO_METERS = 0.0254
 
 /**
  * Collar stub length in meters — how far each port sticks out from the

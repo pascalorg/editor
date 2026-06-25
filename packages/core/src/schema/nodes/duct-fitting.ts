@@ -45,7 +45,7 @@ export const DuctFittingNode = BaseNode.extend({
   // matching the trunk the fitting sits in. Reducers ignore the shape.
   // When non-round, `diameter` carries the area-equivalent round size
   // (drives leg lengths + advertised ports).
-  shape: z.enum(['round', 'rect', 'oval']).default('round'),
+  shape: z.enum(['round', 'rect', 'oval']).default('rect'),
   // Rect / oval run-leg profile in inches (used when shape ≠ 'round').
   width: z.number().min(4).max(60).default(14),
   height: z.number().min(3).max(40).default(8),
@@ -53,13 +53,15 @@ export const DuctFittingNode = BaseNode.extend({
   // rect / oval profile matching the duct drawn off the tap. When
   // non-round, `diameter2` carries the branch's area-equivalent round
   // size. A cross's two opposed branches share this one profile.
-  shape2: z.enum(['round', 'rect', 'oval']).default('round'),
+  shape2: z.enum(['round', 'rect', 'oval']).default('rect'),
   // Rect / oval branch profile in inches (used when shape2 ≠ 'round').
   width2: z.number().min(4).max(60).default(14),
   height2: z.number().min(3).max(40).default(8),
   // Elbow turn angle in degrees. Residential sheet-metal elbows come in
-  // 90° and 45°; adjustable elbows cover the range between.
-  angle: z.number().min(15).max(90).default(90),
+  // 90° and 45°; adjustable elbows cover the range between. 0° is a
+  // straight coupling — what an elbow flattens to when its run is dragged
+  // into line with the fixed collar.
+  angle: z.number().min(0).max(90).default(90),
   // Tee branch angle in degrees, measured off the +X (outlet) axis: 90°
   // is a square straight tee, <90° a lateral whose branch sweeps
   // downstream toward the outlet (flow merges), >90° leans the branch
@@ -72,6 +74,7 @@ export const DuctFittingNode = BaseNode.extend({
   diameter2: z.number().min(2).max(48).default(6),
   ductMaterial: z.enum(['sheet-metal', 'flex', 'duct-board']).default('sheet-metal'),
   system: z.enum(['supply', 'return']).default('supply'),
+  slots: z.record(z.string(), z.string()).optional(),
 }).describe(
   dedent`
   Duct fitting - elbow, tee, cross, reducer, or square-to-round transition between duct runs.

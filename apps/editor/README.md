@@ -7,7 +7,7 @@ A 3D building editor built with React Three Fiber and WebGPU.
 This is a Turborepo monorepo with three main packages:
 
 ```
-editor-v2/
+editor/
 ├── apps/
 │   └── editor/          # Next.js application (this package)
 ├── packages/

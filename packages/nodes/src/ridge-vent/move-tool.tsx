@@ -5,6 +5,7 @@ import {
   emitter,
   type RidgeVentNode,
   type RoofEvent,
+  type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
   useScene,
@@ -20,8 +21,13 @@ import {
   createRelativeRoofDrag,
   type RelativeRoofDragTarget,
   roofSegmentLocalToBuildingLocal,
+  snapRelativeRoofDragTarget,
 } from '../shared/relative-roof-drag'
 import { getSurfaceY } from '../shared/roof-surface'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfaceNodePlacementGuides,
+} from '../shared/roof-surface-placement-guides'
 import RidgeVentPreview from './preview'
 
 type RidgeVentDragTarget = Pick<RelativeRoofDragTarget, 'segment' | 'localX'> & {
@@ -72,11 +78,13 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
       lastTarget = null
       lastSnap = null
       setPreviewPos(null)
+      clearRoofSurfacePlacementGuides()
     }
 
     const resolveTarget = (event: RoofEvent): RidgeVentDragTarget | null => {
-      const target = roofDrag.resolve(event)
-      if (!target) return null
+      const rawTarget = roofDrag.resolve(event)
+      if (!rawTarget) return null
+      const target = snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true)
       return {
         segment: target.segment,
         localX: target.localX,
@@ -111,6 +119,13 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
           target.localZ,
         ]),
       )
+      publishRoofSurfaceNodePlacementGuides({
+        roof: event.node as RoofNode,
+        segment: target.segment,
+        center: [target.localX, target.localY, target.localZ],
+        node,
+        mode: 'linear-edge',
+      })
       event.stopPropagation()
     }
 
@@ -157,6 +172,7 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
       if (obj) obj.visible = true
 
       triggerSFX('sfx:item-place')
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
       event.stopPropagation()
     }
@@ -175,6 +191,7 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
         useScene.getState().deleteNode(node.id as AnyNodeId)
         useScene.temporal.getState().resume()
         markToolCancelConsumed()
+        clearRoofSurfacePlacementGuides()
         exitMoveMode()
         return
       }
@@ -194,6 +211,7 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
 
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
     }
 
@@ -223,6 +241,7 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
 
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
+      clearRoofSurfacePlacementGuides()
       useScene.temporal.getState().resume()
     }
   }, [exitMoveMode, node])

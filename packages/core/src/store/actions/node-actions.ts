@@ -1,3 +1,4 @@
+import { nodeRegistry } from '../../registry/registry'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -1009,6 +1010,24 @@ export const deleteNodesAction = (
       allIds.add(plan.secondaryWallId)
     }
     for (const id of allIds) deletedIds.add(id)
+
+    // Let each deleted kind undo what it imposed on its neighbours (e.g. an
+    // auto-inserted elbow re-extends the duct runs it trimmed back onto the
+    // corner it replaced). Read against pre-deletion `nextNodes`; skip
+    // patches that target a node also being deleted.
+    for (const id of allIds) {
+      const node = nextNodes[id]
+      if (!node) continue
+      const onDelete = nodeRegistry.get(node.type)?.parametrics?.onDelete
+      if (!onDelete) continue
+      for (const { id: targetId, data } of onDelete(node, nextNodes)) {
+        if (allIds.has(targetId)) continue
+        const target = nextNodes[targetId]
+        if (!target) continue
+        nextNodes[targetId] = { ...target, ...data } as AnyNode
+        nodesToMarkDirty.add(targetId)
+      }
+    }
 
     for (const plan of mergePlans) {
       const primaryWall = nextNodes[plan.primaryWallId]

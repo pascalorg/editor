@@ -380,7 +380,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
       mesh.castShadow = !hasGlass
       mesh.receiveShadow = !hasGlass
     }
-  }, [ref, scene, shading, textures, colorPreset, node.slots, sceneMaterials])
+  }, [shading, textures, colorPreset, node.slots, sceneMaterials])
 
   const interactive = interactiveRef.current
   const animEffect =

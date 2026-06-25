@@ -1,5 +1,5 @@
 import { type AnyNode, useScene } from '@pascal-app/core'
-import { useEditor } from '@pascal-app/editor'
+import { triggerSFX, useEditor } from '@pascal-app/editor'
 import { Euler, Quaternion, Vector3 } from 'three'
 import type { DuctFittingNode } from '../duct-fitting/schema'
 
@@ -47,4 +47,5 @@ export function rotateFittingNode(node: AnyNode, steps: 1 | -1): void {
   useScene.getState().updateNode(fitting.id, {
     rotation: rotateEulerWorld(fitting.rotation, getRotationAxis(), steps),
   })
+  triggerSFX('sfx:item-rotate')
 }

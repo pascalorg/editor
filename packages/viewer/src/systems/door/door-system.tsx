@@ -108,6 +108,7 @@ export const DoorSystem = () => {
   // Editing a scene material a door slot references must rebuild that door
   // (door meshes are built by this system, not <GeometrySystem>).
   useEffect(() => {
+    void sceneMaterials
     const nodes = useScene.getState().nodes
     for (const node of Object.values(nodes)) {
       if (node?.type !== 'door') continue
