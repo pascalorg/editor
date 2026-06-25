@@ -13,6 +13,8 @@ import {
 import {
   DragBoundingBox,
   EDITOR_LAYER,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   stripPlacementMetadataFlags,
   triggerSFX,
@@ -144,14 +146,14 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     }
 
     const onMove = (event: GridEvent) => {
-      const bypass = event.nativeEvent?.shiftKey === true
-      const snap = bypass ? (v: number) => v : snapToGridStep
+      const snap = isGridSnapActive() ? snapToGridStep : (v: number) => v
       let dx = snap(event.localPosition[0] - centerX)
       let dz = snap(event.localPosition[2] - centerZ)
 
-      // Figma-style alignment: snap the run's footprint box edges onto
-      // nearby geometry and publish the guides (Alt / Shift bypass).
-      if (!bypass) {
+      // Figma-style magnetic alignment: snap the run's footprint box edges onto
+      // nearby geometry and publish the guides. Grid follows the snapping mode;
+      // lines follow magnetic alignment — the two are independent.
+      if (isMagneticSnapActive()) {
         const proposed: Aabb2D = {
           minX: baseAabb.minX + dx,
           maxX: baseAabb.maxX + dx,
@@ -168,7 +170,7 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
 
       const cur: [number, number] = [centerX + dx, centerZ + dz]
       if (
-        !bypass &&
+        (isGridSnapActive() || isMagneticSnapActive()) &&
         (!prevSnapRef.current ||
           prevSnapRef.current[0] !== cur[0] ||
           prevSnapRef.current[1] !== cur[1])

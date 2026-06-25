@@ -13,6 +13,8 @@ import {
 import {
   DragBoundingBox,
   EDITOR_LAYER,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   stripPlacementMetadataFlags,
   triggerSFX,
@@ -177,14 +179,14 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     let lastPos: Vec3 = originalPosition
 
     const onMove = (event: GridEvent) => {
-      const bypass = event.nativeEvent?.shiftKey === true
-      const snap = bypass ? (v: number) => v : snapToGridStep
+      const snap = isGridSnapActive() ? snapToGridStep : (v: number) => v
       let x = snap(event.localPosition[0])
       let z = snap(event.localPosition[2])
 
-      // Alignment: snap the footprint box edges onto nearby geometry and
-      // publish guides (Alt / Shift bypass).
-      if (!bypass) {
+      // Magnetic alignment: snap the footprint box edges onto nearby geometry
+      // and publish guides. Grid follows the snapping mode; lines follow
+      // magnetic alignment — the two are independent.
+      if (isMagneticSnapActive()) {
         const proposed: Aabb2D = {
           minX: x + ox - hx,
           maxX: x + ox + hx,
@@ -200,7 +202,11 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       }
 
       const next: Vec3 = [x, originalPosition[1], z]
-      if (next[0] !== lastPos[0] || next[2] !== lastPos[2]) triggerSFX('sfx:grid-snap')
+      if (
+        (isGridSnapActive() || isMagneticSnapActive()) &&
+        (next[0] !== lastPos[0] || next[2] !== lastPos[2])
+      )
+        triggerSFX('sfx:grid-snap')
       lastPos = next
       hasMoved = true
       setCursorPos(next)
