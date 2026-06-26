@@ -12,7 +12,7 @@ describe('DormerNode schema', () => {
     expect(parsed.height).toBe(0)
     expect(parsed.roofType).toBe('gable')
     expect(parsed.windowShape).toBe('rectangle')
-    expect(parsed.windowSill).toBe(true)
+    expect(parsed.windowSill).toBe(false)
   })
 
   test('windowColumns / windowRows clamped to [1, 8]', () => {

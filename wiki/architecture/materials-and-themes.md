@@ -87,7 +87,7 @@ Every procedural surface generates UVs in metres: 1 UV unit = 1 m.
 
 This contract is shared by wall `systems/wall/wall-system.tsx` (`ExtrudeGeometry`), slab `systems/slab/slab-system.tsx` (`generatePositiveSlabGeometry`, and `generatePoolGeometry`), ceiling `systems/ceiling/ceiling-system.tsx`, roof `systems/roof/roof-system.tsx`, and chimney/dormer `nodes/src/chimney/geometry.ts`.
 
-GLB item slots follow the same ~1 UV unit/m authoring convention, enforced by the slot validator's UV-presence check and the phase-6 Blender recipe. This is an authoring requirement, not a render-time correction.
+GLB item slots follow the same ~1 UV unit/m authoring convention, enforced by the slot validator's UV-presence check and the Blender recipe in [item-authoring](item-authoring.md). This is an authoring requirement, not a render-time correction.
 
 A catalog material's `repeat` (`mapProperties.repeatX/repeatY` in `packages/core/src/material-library.ts`) is therefore a per-material world-scale setting: tiles per metre.
 

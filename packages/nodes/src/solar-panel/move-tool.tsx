@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   emitter,
   type RoofEvent,
+  type RoofNode,
   type RoofSegmentNode,
   type SolarPanelNode,
   sceneRegistry,
@@ -22,8 +23,14 @@ import {
   createRelativeRoofDrag,
   type RelativeRoofDragTarget,
   roofSegmentLocalToBuildingLocal,
+  snapRelativeRoofDragTarget,
 } from '../shared/relative-roof-drag'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfaceNodePlacementGuides,
+  snapRoofSurfaceNodeTarget,
+} from '../shared/roof-surface-placement-guides'
 
 // MeshBasicMaterial: avoids the WebGPU "Color target has no corresponding
 // fragment stage output / writeMask not zero" error that fires when
@@ -103,10 +110,21 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
     const clearTarget = () => {
       lastTarget = null
       setHasHit(false)
+      clearRoofSurfacePlacementGuides()
+    }
+
+    const resolveSnappedTarget = (event: RoofEvent): RelativeRoofDragTarget | null => {
+      const rawTarget = roofDrag.resolve(event)
+      if (!rawTarget) return null
+      return snapRoofSurfaceNodeTarget({
+        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+        node,
+        bypass: event.nativeEvent?.shiftKey === true,
+      })
     }
 
     const updateGhost = (event: RoofEvent) => {
-      const target = roofDrag.resolve(event)
+      const target = resolveSnappedTarget(event)
       if (!target) {
         clearTarget()
         return
@@ -138,6 +156,12 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
         ]),
       )
       setHasHit(true)
+      publishRoofSurfaceNodePlacementGuides({
+        roof: event.node as RoofNode,
+        segment: target.segment,
+        center: [target.localX, target.localY, target.localZ],
+        node,
+      })
       event.stopPropagation()
     }
 
@@ -145,7 +169,7 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
       if (committed) return
       const st = useScene.getState()
 
-      const target = lastTarget ?? roofDrag.resolve(event)
+      const target = lastTarget ?? resolveSnappedTarget(event)
       if (!target) return
       committed = true
 
@@ -201,6 +225,7 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
       if (obj) obj.visible = true
 
       triggerSFX('sfx:item-place')
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
       event.stopPropagation()
     }
@@ -221,6 +246,7 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
         }
         useScene.getState().deleteNode(node.id as AnyNodeId)
         markToolCancelConsumed()
+        clearRoofSurfacePlacementGuides()
         exitMoveMode()
         return
       }
@@ -241,6 +267,7 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
 
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
     }
 
@@ -270,6 +297,7 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
 
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
+      clearRoofSurfacePlacementGuides()
       useScene.temporal.getState().resume()
     }
   }, [exitMoveMode, node])

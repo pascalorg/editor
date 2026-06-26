@@ -179,16 +179,20 @@ describe('planTeeAtRunBody', () => {
     expect(plan!.fitting.diameter2).toBe(6)
   })
 
-  test('45° drawn branch leaves square (projected perpendicular)', () => {
+  test('45° drawn branch builds a 45° lateral that follows the drawn run', () => {
     const run = trunk([
       [0, 0, 0],
       [6, 0, 0],
     ])
     const d = Math.SQRT1_2
+    // Drawn 45° downstream off the +X trunk. The tee becomes a lateral whose
+    // branch points along the drawn direction, so the new duct continues
+    // straight out of the collar instead of kinking square.
     const plan = planTeeAtRunBody(run, bodyHit(run, 0, [3, 0, 0]), [d, 0, d], ROUND_6)
     expect(plan).not.toBeNull()
+    expect(plan!.fitting.branchAngle).toBeCloseTo(45, 6)
     const branch = getDuctFittingPorts(plan!.fitting).find((p) => p.id === 'branch')!
-    expect(dot(branch.direction, [0, 0, 1])).toBeCloseTo(1, 6)
+    expect(dot(branch.direction, [d, 0, d])).toBeCloseTo(1, 6)
   })
 
   test('tap too close to a run end → null (use the end port instead)', () => {
@@ -502,10 +506,29 @@ describe('planElbowRealign', () => {
     expect(dot(outlet.direction, [0, 0, 1])).toBeCloseTo(1, 6)
   })
 
-  test('arrival needing a turn outside 15–90° → null', () => {
+  test('shallow arrival flattens the elbow toward a straight coupling', () => {
     const elbow = existingElbow()
-    // Away nearly opposite the fixed inlet direction → turn < 15°.
-    expect(planElbowRealign(elbow, 'outlet', [0.99, 0, 0.14])).toBeNull()
+    // Away nearly opposite the fixed inlet direction → turn < 15°. Unlike
+    // fresh-fitting creation, an existing elbow flattens to this small angle
+    // instead of bailing, so the run can be dragged dead straight.
+    const plan = planElbowRealign(elbow, 'outlet', [0.99, 0, 0.14])
+    expect(plan).not.toBeNull()
+    expect(plan!.update.data.angle).toBeLessThan(15)
+    expect(plan!.update.data.angle).toBeGreaterThanOrEqual(0)
+  })
+
+  test('run dragged into line flattens the elbow to a straight 0° coupling', () => {
+    const elbow = existingElbow()
+    // The free outlet pulled exactly opposite the mated inlet → no turn left.
+    const inlet = getDuctFittingPorts(elbow).find((p) => p.id === 'inlet')!
+    const away: Point = [-inlet.direction[0], -inlet.direction[1], -inlet.direction[2]]
+    const plan = planElbowRealign(elbow, 'outlet', away)
+    expect(plan).not.toBeNull()
+    expect(plan!.update.data.angle).toBeCloseTo(0, 5)
+  })
+
+  test('a back-turn sharper than 90° still bails', () => {
+    const elbow = existingElbow()
     // Away aligned WITH the fixed collar direction → turn > 90°.
     expect(planElbowRealign(elbow, 'outlet', [-0.99, 0, 0.14])).toBeNull()
   })

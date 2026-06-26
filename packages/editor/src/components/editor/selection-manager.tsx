@@ -568,10 +568,12 @@ const HIGHLIGHT_PROFILES = {
     emissiveIntensity: 0.46,
   },
   selection: {
+    // Keep the real material/texture readable: no albedo tint, just a gentle
+    // indigo emissive glow so it reads as selected.
     color: new Color('#818cf8'),
-    blend: 0.32,
-    emissiveBlend: 0.7,
-    emissiveIntensity: 0.42,
+    blend: 0,
+    emissiveBlend: 0.4,
+    emissiveIntensity: 0.12,
   },
 } as const
 
@@ -596,8 +598,30 @@ function isHighlightableMesh(object: Object3D): object is Mesh {
   )
 }
 
+const TEXTURE_MAP_KEYS = [
+  'map',
+  'normalMap',
+  'roughnessMap',
+  'metalnessMap',
+  'aoMap',
+  'emissiveMap',
+  'bumpMap',
+  'displacementMap',
+  'alphaMap',
+  'lightMap',
+] as const
+
 function createHighlightedMaterial(material: Material, kind: HighlightKind): Material {
   const highlightedMaterial = material.clone() as HighlightableMaterial
+  // `NodeMaterial.clone()` on the WebGPU backend drops the texture-map node
+  // assignments, so the clone renders flat. Re-attach the maps from the source
+  // material (they're shared by reference — same texture object) so the
+  // selected object keeps its texture under the highlight.
+  const src = material as unknown as Record<string, unknown>
+  const dst = highlightedMaterial as unknown as Record<string, unknown>
+  for (const key of TEXTURE_MAP_KEYS) {
+    if (src[key]) dst[key] = src[key]
+  }
   const profile = HIGHLIGHT_PROFILES[kind]
 
   if (highlightedMaterial.color instanceof Color) {
@@ -1157,6 +1181,7 @@ export const SelectionManager = () => {
       }
 
       interaction.apply()
+      sfxEmitter.emit('sfx:paint-apply')
       if (activePreview?.key === interaction.key) {
         activePreview = null
       } else {

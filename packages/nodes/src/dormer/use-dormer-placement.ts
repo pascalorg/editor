@@ -60,12 +60,14 @@ export function useDormerPlacement(opts: {
   activeBuildingId: string | undefined
   clearPreview: () => void
   segmentXform: DormerSegmentTransform | null
+  hitSegment: RoofSegmentNode | null
   hitLocal: [number, number, number] | null
   ghostRotation: number
 } {
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
 
   const [segmentXform, setSegmentXform] = useState<DormerSegmentTransform | null>(null)
+  const [hitSegment, setHitSegment] = useState<RoofSegmentNode | null>(null)
   const [hitLocal, setHitLocal] = useState<[number, number, number] | null>(null)
   const [ghostRotation, setGhostRotation] = useState(opts.initialRotation ?? 0)
   const lastSnapRef = useRef<[number, number] | null>(null)
@@ -81,6 +83,7 @@ export function useDormerPlacement(opts: {
 
   const clearPreview = () => {
     setSegmentXform(null)
+    setHitSegment(null)
     setHitLocal(null)
   }
 
@@ -136,6 +139,7 @@ export function useDormerPlacement(opts: {
       const xform = computeSegmentXform(hit.segment.id)
       if (!xform) return
       setSegmentXform(xform)
+      setHitSegment(hit.segment)
       // Lift the ghost to the actual roof-surface Y at the cursor so
       // it tracks the mouse along the slope. The CSG inside
       // `generateDormerGeometry` carves the dormer against the host
@@ -200,6 +204,7 @@ export function useDormerPlacement(opts: {
     activeBuildingId: activeBuildingId ?? undefined,
     clearPreview,
     segmentXform,
+    hitSegment,
     hitLocal,
     ghostRotation,
   }

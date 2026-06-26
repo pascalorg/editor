@@ -7,8 +7,15 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react'
+import { Canvas, extend, type ThreeElement, useFrame, useThree } from '@react-three/fiber'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import * as THREE from 'three/webgpu'
 import { hasDrawableGeometry } from '../../lib/drawable-geometry'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
@@ -31,7 +38,15 @@ import { SelectionManager } from './selection-manager'
 import { ViewerCamera } from './viewer-camera'
 
 declare module '@react-three/fiber' {
-  interface ThreeElements extends ThreeToJSXElements<typeof THREE> {}
+  // The TS 7 native compiler (tsgo) rejects mapping the entire `three/webgpu`
+  // namespace into JSX — `ThreeToJSXElements<typeof THREE>` triggers a TS2320
+  // heritage conflict with R3F's core-three base plus a TS2590 "union too
+  // complex". tsc 6 tolerates it; tsgo does not. R3F's base ThreeElements
+  // already covers core three, so we extract only the webgpu/TSL node materials
+  // we actually use as JSX (see r3f.docs.pmnd.rs/api/typescript).
+  interface ThreeElements {
+    lineBasicNodeMaterial: ThreeElement<typeof THREE.LineBasicNodeMaterial>
+  }
 }
 
 extend(THREE as any)
@@ -66,6 +81,38 @@ const DIRTY_BUILD_KINDS = new Set([
 ])
 
 const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakSet<object>()
+
+function canCreateWebGLContext() {
+  if (typeof document === 'undefined') return false
+
+  const canvas = document.createElement('canvas')
+  try {
+    return Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'))
+  } catch {
+    return false
+  }
+}
+
+function canMountGpuViewer() {
+  if (typeof window === 'undefined') return false
+  if (!('gpu' in navigator) && !canCreateWebGLContext()) return false
+
+  return true
+}
+
+function UnsupportedGpuViewerFallback() {
+  return (
+    <div className="flex h-full min-h-64 w-full items-center justify-center bg-[#fafafa] p-6 text-center text-neutral-900">
+      <div className="max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <h2 className="font-semibold text-lg">3D viewer unavailable</h2>
+        <p className="mt-2 text-neutral-600 text-sm">
+          This browser or environment does not expose WebGPU or WebGL, so Pascal cannot render the
+          3D scene here. Try opening the editor in a browser with hardware acceleration enabled.
+        </p>
+      </div>
+    </div>
+  )
+}
 
 /**
  * Renderer-level safety net against the empty-vertex-buffer crash.
@@ -349,6 +396,16 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     }
   }, [isolate])
 
+  const [rendererInitFailed, setRendererInitFailed] = useState(false)
+  // Capability detection runs after mount. We start optimistic (true) so the
+  // server-rendered markup and the first client render agree (no hydration
+  // mismatch); the effect flips it to false only on environments that expose
+  // neither WebGPU nor WebGL.
+  const [canMountViewer, setCanMountViewer] = useState(true)
+  useEffect(() => {
+    if (!canMountGpuViewer()) setCanMountViewer(false)
+  }, [])
+
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   const transparentBackground = useViewer((state) => state.transparentBackground)
   useLayoutEffect(() => {
@@ -401,6 +458,17 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   // Desktops (fine pointer) keep the original 1.5 cap.
   const maxDpr =
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 1.25 : 1.5
+  const showGpuFallback = !canMountViewer || rendererInitFailed
+  // When we can't mount the GPU canvas, the SceneReadyTracker never mounts and
+  // the host editor would otherwise wait on its scene-readiness timeout. Signal
+  // readiness explicitly so the host can drop its loader immediately.
+  useEffect(() => {
+    if (showGpuFallback) onSceneReadyChange?.(true)
+  }, [showGpuFallback, onSceneReadyChange])
+
+  if (showGpuFallback) {
+    return <UnsupportedGpuViewerFallback />
+  }
   return (
     <Canvas
       camera={{ position: [50, 50, 50], fov: 50 }}
@@ -430,6 +498,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
               // rejection forever.
               if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
               console.error('[viewer] WebGPURenderer init failed', err)
+              setRendererInitFailed(true)
               throw err
             }
           })()

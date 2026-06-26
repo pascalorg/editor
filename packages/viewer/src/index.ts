@@ -13,6 +13,25 @@ export { ErrorBoundary } from './components/error-boundary'
 // — no per-kind re-exports needed.
 export { NodeRenderer } from './components/renderers/node-renderer'
 export { default as Viewer, type ViewerHandle } from './components/viewer'
+export {
+  type BVHEcctrlApi,
+  default as BVHEcctrl,
+  type MovementInput,
+} from './components/viewer/bvh-ecctrl'
+export {
+  buildGlbInteractiveItems,
+  GlbInteractive,
+  type GlbInteractiveItem,
+} from './components/viewer/glb-interactive'
+export { buildGlbReferenceNodes } from './components/viewer/glb-reference-nodes'
+export {
+  type GlbHover,
+  type GlbIdentity,
+  type GlbLevel,
+  GlbScene,
+  type GlbWalkthrough,
+} from './components/viewer/glb-scene'
+export { GlbWalkthroughController } from './components/viewer/glb-walkthrough-controller'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
 export {
   DEFAULT_HOVER_STYLES,
@@ -157,6 +176,9 @@ export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 // 800+ lines of CSG / mitering logic during Phase 3. These exports are
 // removed in Phase 6 when the legacy mount points are deleted.
 export { WallSystem } from './systems/wall/wall-system'
-export { WindowAnimationSystem } from './systems/window/window-animation-system'
+export {
+  poseWindowMovingParts,
+  WindowAnimationSystem,
+} from './systems/window/window-animation-system'
 export { buildWindowPreviewMesh, WindowSystem } from './systems/window/window-system'
 export { ZoneSystem } from './systems/zone/zone-system'

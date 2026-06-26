@@ -11,6 +11,7 @@ export { default as Editor } from './components/editor'
 // they're referenced throughout the editor's own internals; the public
 // surface uses the shorter, shell-friendly names from the unified
 // preset-system spec.
+export { BakeExporter } from './components/editor/bake-exporter'
 export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
 // Embed surface — the editor's real in-canvas affordances, so a host can mount
 // authentic selection handles, interactive build tools, and the mover on top
@@ -39,7 +40,27 @@ export {
   formatMeasurement,
   MeasurementPill,
 } from './components/editor/measurement-pill'
-export { NodeArrowHandles } from './components/editor/node-arrow-handles'
+// In-world arrow handle primitives (chevron geometry, invisible hit area,
+// shared material, palette + scale constants). Re-exported so kind-owned
+// 3D selection affordances in `@pascal-app/nodes` (duct side-move / height /
+// extend arrows) reuse the same UI family as the wall / fence side handles.
+export {
+  ARROW_COLOR,
+  ARROW_HOVER_COLOR,
+  ARROW_SCALE,
+  createArrowHandleGeometry,
+  createArrowHitAreaGeometry,
+  HandleArrow,
+  type HandleArrowInputShape,
+  type HandleArrowPlacement,
+  type HandleArrowProps,
+  InvisibleHandleHitArea,
+  NO_RAYCAST,
+  NodeArrowHandles,
+  swallowNextClick,
+  useArrowMaterial,
+  useInvisibleHitAreaMaterial,
+} from './components/editor/node-arrow-handles'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,
@@ -245,6 +266,7 @@ export {
   getFloorplanWallThickness,
 } from './lib/floorplan'
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
+export { exportSceneToGlb } from './lib/glb-export'
 export {
   buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,

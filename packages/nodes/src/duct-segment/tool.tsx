@@ -2,11 +2,13 @@
 
 import {
   type AnyNode,
+  type CeilingNode,
+  type DuctFittingNode,
   DuctSegmentNode,
   emitter,
   type GridEvent,
-  getLevelHeight,
-  sceneRegistry,
+  getCeilingAt,
+  getCeilingHeightAt,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -19,8 +21,17 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { useEffect, useRef, useState } from 'react'
-import { type Group, Matrix4, Vector3 } from 'three'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type BufferGeometry,
+  DoubleSide,
+  type Group,
+  Matrix4,
+  Path,
+  Shape,
+  ShapeGeometry,
+  Vector3,
+} from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import {
   planCrossAtRunBody,
@@ -30,6 +41,7 @@ import {
 } from '../shared/auto-fitting'
 import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
+import { FittingGhost } from '../shared/mep-ghost'
 import {
   collectScenePorts,
   DUCT_PORT_SYSTEMS,
@@ -40,17 +52,17 @@ import {
   type ScenePort,
 } from '../shared/ports'
 import { ductSegmentDefinition } from './definition'
-import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
+import { ductPortDiameterIn, rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
 
 /**
- * One-segment-at-a-time placement tool for round duct segments.
+ * Continuous placement tool for duct segments.
  *
  * Mouse-driven model:
  *   - **First click** anchors the segment start (port snap joins onto an
  *     existing run / fitting collar).
- *   - **Second click** commits a two-point duct immediately and re-arms
- *     the tool — no polyline accumulation, no finish gesture. Chain runs
- *     by clicking again near the end you just placed (port snap).
+ *   - **Second click** commits a two-point duct immediately and keeps the
+ *     segment end anchored, so the next click continues the run like wall
+ *     drafting. No polyline accumulation, no finish gesture.
  *   - **Auto-elbow**: when either end snapped onto another RUN's open
  *     port at an angle (15–90°, vertical turns included), an elbow
  *     fitting is minted at the joint and the duct pulls back to its
@@ -69,9 +81,10 @@ import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
  *     vertical mouse motion drives Y. Click commits the riser segment.
  *   - **[ / ]** step the duct diameter through nominal US sizes; the
  *     ghost preview and the committed node both use it.
- *   - **C** toggles ceiling-level placement: the start point lands at
- *     the level's ceiling height (duct top hugging the ceiling) instead
- *     of the floor. Subsequent points inherit the start's Y as usual.
+ *   - **C** toggles ceiling-level placement: each point lands just below
+ *     the ceiling actually covering it (duct top hugging that ceiling)
+ *     instead of the floor, so a run tracks per-room ceiling heights.
+ *     Points not under any ceiling fall back to the floor.
  *   - Esc clears an anchored start point.
  */
 const PREVIEW_OPACITY = 0.55
@@ -93,6 +106,11 @@ const ALT_PIXELS_PER_METER = 100
 /** Bounds on Alt-driven Y so a wild fling doesn't fly off. */
 const ALT_Y_MIN_M = -3
 const ALT_Y_MAX_M = 10
+
+/** green-500 — the project's bounding-box / placeable accent. The cursor
+ *  ring + vertical line recolour to this while the point is snapped onto an
+ *  existing run, so the coincidence reads with the familiar snap green. */
+const SNAP_CURSOR_COLOR = '#22c55e'
 
 function snap(value: number, step: number): number {
   if (step <= 0) return value
@@ -161,6 +179,14 @@ function continuityRollFrom(port: ScenePort | null, newDir: Vector3): number | n
   const cross = new Vector3().crossVectors(srcDir, newDir)
   if (cross.lengthSq() < 1e-8) return srcRoll
   return rollToContinueAcrossElbow(srcDir, srcRoll, srcDir, newDir)
+}
+
+function continuityRollForRun(
+  startPort: ScenePort | null,
+  endPort: ScenePort | null,
+  dir: Vector3,
+): number {
+  return continuityRollFrom(startPort, dir) ?? continuityRollFrom(endPort, dir) ?? 0
 }
 
 /**
@@ -259,6 +285,209 @@ function projectToAngleLock(
   return [from[0] + Math.cos(snapped) * d, from[1], from[2] + Math.sin(snapped) * d]
 }
 
+/** The full set of nodes a drawn segment produces. The drawn `ducts`
+ *  (and any trunk `tails` from a tee / cross split) are previewed by the
+ *  duct ghost already; `fittings` are the auto-inserted elbow / tee /
+ *  cross nodes the ghost preview draws so the user sees them before the
+ *  commit. Shared by `commitSegment` and the live preview so what you see
+ *  is exactly what lands. */
+type DuctDrawPlan = {
+  fittings: DuctFittingNode[]
+  ducts: DuctSegmentNode[]
+  tails: DuctSegmentNode[]
+  updates: { id: AnyNode['id']; data: Partial<AnyNode> }[]
+}
+
+const elbowPlanFor = (
+  port: ScenePort | null,
+  awayDir: [number, number, number],
+  profile: DraftProfile,
+) => {
+  if (!port) return null
+  const owner = useScene.getState().nodes[port.nodeId]
+  if (owner?.type !== 'duct-segment') return null
+  const plan = planElbowAtPort(port, awayDir, profile)
+  if (!plan) return null
+  // Trim the run's snapped endpoint back to the elbow's inlet collar.
+  const path = owner.path.map((p) => [...p] as [number, number, number])
+  const index = port.id === 'start' ? 0 : path.length - 1
+  const neighbor = path[index === 0 ? 1 : index - 1]!
+  const remaining = Math.hypot(
+    plan.trimmedPortPoint[0] - neighbor[0],
+    plan.trimmedPortPoint[1] - neighbor[1],
+    plan.trimmedPortPoint[2] - neighbor[2],
+  )
+  // The trim must leave a real piece of the existing run AND not flip it.
+  const original = path[index]!
+  const originalLen = Math.hypot(
+    original[0] - neighbor[0],
+    original[1] - neighbor[1],
+    original[2] - neighbor[2],
+  )
+  if (remaining < 0.08 || remaining >= originalLen) return null
+  path[index] = plan.trimmedPortPoint
+  return { ...plan, trim: { id: port.nodeId, data: { path } as Partial<AnyNode> } }
+}
+
+const realignPlanFor = (port: ScenePort | null, awayDir: [number, number, number]) => {
+  if (!port) return null
+  const owner = useScene.getState().nodes[port.nodeId]
+  if (owner?.type !== 'duct-fitting') return null
+  return planElbowRealign(owner, port.id, awayDir)
+}
+
+/**
+ * Pure planner for a drawn duct segment: given its endpoints and what
+ * each end snapped onto (an open port, or a run body for a tee / cross
+ * tap), decide every node the commit creates / updates — auto-inserted
+ * elbows / tees / crosses, the drawn run (split in two when it crosses a
+ * trunk), trunk tails, and trim / realign updates. Reads the live scene
+ * graph but mutates nothing, so the live preview can call it each frame
+ * to ghost the fittings before the commit applies the identical plan.
+ */
+function planDuctDraw(
+  start: [number, number, number],
+  end: [number, number, number],
+  startPort: ScenePort | null,
+  startBody: RunBodyHit | null,
+  endPort: ScenePort | null,
+  endBody: RunBodyHit | null,
+  profile: DraftProfile,
+): DuctDrawPlan | null {
+  const length = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2])
+  if (length < 1e-4) return null
+  const dir: [number, number, number] = [
+    (end[0] - start[0]) / length,
+    (end[1] - start[1]) / length,
+    (end[2] - start[2]) / length,
+  ]
+
+  const startPlan = elbowPlanFor(startPort, dir, profile)
+  const endPlan = elbowPlanFor(endPort, [-dir[0], -dir[1], -dir[2]], profile)
+  const startRealign = startPlan ? null : realignPlanFor(startPort, dir)
+  const endRealign = endPlan ? null : realignPlanFor(endPort, [-dir[0], -dir[1], -dir[2]])
+  const trunkBody = startPlan ? null : startBody
+  const trunkOwner = trunkBody ? useScene.getState().nodes[trunkBody.nodeId] : null
+  const teePlan =
+    trunkBody && trunkOwner?.type === 'duct-segment'
+      ? planTeeAtRunBody(trunkOwner, trunkBody, dir, profile)
+      : null
+  const endTrunkBody = endPlan || endRealign ? null : endBody
+  const endTrunkOwner = endTrunkBody ? useScene.getState().nodes[endTrunkBody.nodeId] : null
+  const endTeePlan =
+    endTrunkBody && endTrunkOwner?.type === 'duct-segment'
+      ? planTeeAtRunBody(endTrunkOwner, endTrunkBody, [-dir[0], -dir[1], -dir[2]], profile)
+      : null
+  let ductStart =
+    startPlan?.collarPoint ?? teePlan?.branchCollar ?? startRealign?.collarPoint ?? start
+  let ductEnd = endPlan?.collarPoint ?? endTeePlan?.branchCollar ?? endRealign?.collarPoint ?? end
+  const remaining = Math.hypot(
+    ductEnd[0] - ductStart[0],
+    ductEnd[1] - ductStart[1],
+    ductEnd[2] - ductStart[2],
+  )
+  let plans = [startPlan, endPlan].filter((p) => p !== null)
+  let tee = teePlan
+  let endTee = endTeePlan && endTrunkBody?.nodeId === trunkBody?.nodeId ? null : endTeePlan
+  if (!endTee && endTeePlan) ductEnd = endRealign?.collarPoint ?? end
+  let realigns = [startRealign, endRealign].filter((p) => p !== null)
+
+  const crossHit = findRunBodyCrossingXZ(start, end, BODY_SNAP_RADIUS_M)
+  const crossOwner = crossHit ? useScene.getState().nodes[crossHit.nodeId] : null
+  const crossTappedElsewhere =
+    crossHit?.nodeId === trunkBody?.nodeId || crossHit?.nodeId === endTrunkBody?.nodeId
+  let cross =
+    crossHit && !crossTappedElsewhere && crossOwner?.type === 'duct-segment'
+      ? planCrossAtRunBody(crossOwner, crossHit, dir, profile)
+      : null
+
+  if (remaining <= 0.08) {
+    plans = []
+    tee = null
+    endTee = null
+    realigns = []
+    cross = null
+    ductStart = start
+    ductEnd = end
+  }
+
+  // Rect / oval continuity: roll the new run's cross-section so its
+  // profile stays continuous with whatever either end joined.
+  let roll = 0
+  if (profile.shape !== 'round') {
+    const newDir = new Vector3(...dir)
+    roll = continuityRollForRun(startPort, endPort, newDir)
+  }
+
+  const defaults = ductSegmentDefinition.defaults()
+  const toolDefaults = useEditor.getState().toolDefaults['duct-segment'] ?? {}
+  const makeDuct = (from: [number, number, number], to: [number, number, number]) =>
+    DuctSegmentNode.parse({
+      ...defaults,
+      ...toolDefaults,
+      name: profile.shape === 'rect' ? 'Trunk' : 'Duct run',
+      path: [from, to],
+      shape: profile.shape,
+      diameter: profile.diameter,
+      width: profile.width,
+      height: profile.height,
+      roll,
+    })
+  const ducts = cross
+    ? [
+        dist2(ductStart, cross.branchCollarNear) > 0.08 * 0.08
+          ? makeDuct(ductStart, cross.branchCollarNear)
+          : null,
+        dist2(cross.branchCollarFar, ductEnd) > 0.08 * 0.08
+          ? makeDuct(cross.branchCollarFar, ductEnd)
+          : null,
+      ].filter((d) => d !== null)
+    : [makeDuct(ductStart, ductEnd)]
+
+  const fittings: DuctFittingNode[] = [
+    ...plans.map((p) => p.fitting),
+    ...(tee ? [tee.fitting] : []),
+    ...(endTee ? [endTee.fitting] : []),
+    ...(cross ? [cross.fitting] : []),
+  ]
+  const tails: DuctSegmentNode[] = [
+    ...(tee ? [tee.trunkTail] : []),
+    ...(endTee ? [endTee.trunkTail] : []),
+    ...(cross ? [cross.trunkTail] : []),
+  ]
+  const updates: { id: AnyNode['id']; data: Partial<AnyNode> }[] = [
+    ...plans.map((p) => p.trim),
+    ...(tee ? [tee.trunkUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
+    ...(endTee ? [endTee.trunkUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
+    ...(cross ? [cross.trunkUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
+    ...realigns.map((p) => p.update as { id: AnyNode['id']; data: Partial<AnyNode> }),
+  ]
+
+  return { fittings, ducts, tails, updates }
+}
+
+function ductEndPort(duct: DuctSegmentNode, id: 'start' | 'end'): ScenePort | null {
+  if (duct.path.length < 2) return null
+  const index = id === 'start' ? 0 : duct.path.length - 1
+  const neighborIndex = id === 'start' ? 1 : duct.path.length - 2
+  const position = duct.path[index]!
+  const neighbor = duct.path[neighborIndex]!
+  const dx = position[0] - neighbor[0]
+  const dy = position[1] - neighbor[1]
+  const dz = position[2] - neighbor[2]
+  const len = Math.hypot(dx, dy, dz)
+  const direction: [number, number, number] =
+    len < 1e-9 ? [1, 0, 0] : [dx / len, dy / len, dz / len]
+  return {
+    id,
+    nodeId: duct.id,
+    position,
+    direction,
+    diameter: ductPortDiameterIn(duct),
+    system: duct.system,
+  }
+}
+
 const DuctSegmentTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const unit = useViewer((s) => s.unit)
@@ -285,12 +514,24 @@ const DuctSegmentTool = () => {
   // Ceiling mode (toggle with C): the first point lands at the level's
   // ceiling height (duct top hugging the ceiling) instead of the floor.
   const [ceilingMode, setCeilingMode] = useState(false)
-  // When the cursor is within snap range of an existing duct's endpoint we
-  // surface a brighter indicator and commit at the endpoint's exact coords.
+  // The shared coordinate when the cursor is within snap range of an existing
+  // duct (null = free placement). Drives the green cursor highlight so the
+  // user sees the next click will join an existing run, not freeform-place.
   const [snapTarget, setSnapTarget] = useState<[number, number, number] | null>(null)
+  // In ceiling mode, the ceiling the cursor is currently under — rendered as
+  // a translucent overlay so the duct reads as hung against a real surface
+  // rather than a dot floating in space. Null when off-ceiling.
+  const [hoverCeiling, setHoverCeiling] = useState<CeilingNode | null>(null)
   // True while Alt is held with a last point on the draft — drives the
   // vertical-cylinder ghost and the cursor HUD label.
   const [altActive, setAltActive] = useState(false)
+  // What the in-flight cursor end currently snaps onto (port end, or a
+  // run body for a tee / cross tap). Drives the auto-fitting GHOST so the
+  // user sees the elbow / tee / cross the next click will mint.
+  const [endSnap, setEndSnap] = useState<{ port: ScenePort | null; body: RunBodyHit | null }>({
+    port: null,
+    body: null,
+  })
   // Mirror into refs so emitter callbacks (closing over the first render's
   // setState) read the latest values without re-subscribing.
   const draftRef = useRef(draftPoints)
@@ -317,246 +558,63 @@ const DuctSegmentTool = () => {
   useEffect(() => {
     if (!activeLevelId) return
 
-    /**
-     * Auto-elbow gate: only joints onto another RUN's open end get a
-     * fitting minted. Ports on fittings / equipment / terminals are
-     * already proper connections — a duct mates straight onto those.
-     *
-     * The elbow's junction sits ON the drawn corner, so the existing run
-     * must trim back one leg to make room (`trim` update). Plans that
-     * would trim the run to (or past) nothing are dropped — that corner
-     * stays a plain butt joint. Guards against the snapped node having
-     * been deleted between clicks.
-     */
-    const elbowPlanFor = (port: ScenePort | null, awayDir: [number, number, number]) => {
-      if (!port) return null
-      const owner = useScene.getState().nodes[port.nodeId]
-      if (owner?.type !== 'duct-segment') return null
-      const plan = planElbowAtPort(port, awayDir, profileRef.current)
-      if (!plan) return null
-
-      // Trim the run's snapped endpoint back to the elbow's inlet collar.
-      const path = owner.path.map((p) => [...p] as [number, number, number])
-      const index = port.id === 'start' ? 0 : path.length - 1
-      const neighbor = path[index === 0 ? 1 : index - 1]!
-      const remaining = Math.hypot(
-        plan.trimmedPortPoint[0] - neighbor[0],
-        plan.trimmedPortPoint[1] - neighbor[1],
-        plan.trimmedPortPoint[2] - neighbor[2],
-      )
-      // The trim must leave a real piece of the existing run AND not flip
-      // it (trimmed point past the neighbor) — otherwise skip the fitting.
-      const original = path[index]!
-      const originalLen = Math.hypot(
-        original[0] - neighbor[0],
-        original[1] - neighbor[1],
-        original[2] - neighbor[2],
-      )
-      if (remaining < 0.08 || remaining >= originalLen) return null
-      path[index] = plan.trimmedPortPoint
-      return { ...plan, trim: { id: port.nodeId, data: { path } as Partial<AnyNode> } }
-    }
-
-    /**
-     * Realign gate: the snapped port belongs to an existing ELBOW's open
-     * collar — re-aim that elbow (junction + mated collar fixed, free
-     * collar swings to the drawn direction). Null when the owner isn't
-     * an elbow or the required turn leaves the 15–90° range.
-     */
-    const realignPlanFor = (port: ScenePort | null, awayDir: [number, number, number]) => {
-      if (!port) return null
-      const owner = useScene.getState().nodes[port.nodeId]
-      if (owner?.type !== 'duct-fitting') return null
-      return planElbowRealign(owner, port.id, awayDir)
-    }
-
-    // One segment per gesture: first click anchors the start, second
-    // click commits a two-point duct immediately. No selection switch —
-    // the tool stays armed so the next click starts the next segment
-    // (port snap joins it onto the end just committed).
+    // Continuous chain: first click anchors the start, each following
+    // click commits one two-point duct and uses that duct's far end as
+    // the next anchor. No selection switch or finish gesture.
     //
-    // When an end of the segment snapped onto another run's open port at
-    // an angle, an elbow fitting is minted at that joint and the duct is
-    // pulled back to the elbow's outlet collar — corners get real
-    // fittings instead of butt joints.
+    // All the auto-fitting decisions (elbow / tee / cross) live in the
+    // shared `planDuctDraw` so the live ghost previews exactly what this
+    // commit applies.
     const commitSegment = (
       start: [number, number, number],
       end: [number, number, number],
       endPort: ScenePort | null = null,
       endBody: RunBodyHit | null = null,
     ) => {
-      const length = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2])
-      if (length < 1e-4) return
-      const dir: [number, number, number] = [
-        (end[0] - start[0]) / length,
-        (end[1] - start[1]) / length,
-        (end[2] - start[2]) / length,
-      ]
-
-      const startPlan = elbowPlanFor(startPortRef.current, dir)
-      const endPlan = elbowPlanFor(endPort, [-dir[0], -dir[1], -dir[2]])
-      // Existing-fitting joints: re-aim the elbow whose collar was hit so
-      // it faces the drawn run instead of leaving a mismatched butt joint.
-      const startRealign = startPlan ? null : realignPlanFor(startPortRef.current, dir)
-      const endRealign = endPlan ? null : realignPlanFor(endPort, [-dir[0], -dir[1], -dir[2]])
-      // Tee tap: the start snapped onto a run's BODY (not an end port) —
-      // split the trunk and branch from the tee's collar.
-      const trunkBody = startPlan ? null : startBodyRef.current
-      const trunkOwner = trunkBody ? useScene.getState().nodes[trunkBody.nodeId] : null
-      const teePlan =
-        trunkBody && trunkOwner?.type === 'duct-segment'
-          ? planTeeAtRunBody(trunkOwner, trunkBody, dir, profileRef.current)
-          : null
-      // End tee tap: the END landed on a run's BODY — split that trunk and
-      // the new duct ends at the tee's branch collar. The branch leaves
-      // toward the drawn run (back along -dir, since dir points start→end).
-      const endTrunkBody = endPlan || endRealign ? null : endBody
-      const endTrunkOwner = endTrunkBody ? useScene.getState().nodes[endTrunkBody.nodeId] : null
-      const endTeePlan =
-        endTrunkBody && endTrunkOwner?.type === 'duct-segment'
-          ? planTeeAtRunBody(
-              endTrunkOwner,
-              endTrunkBody,
-              [-dir[0], -dir[1], -dir[2]],
-              profileRef.current,
-            )
-          : null
-      let ductStart =
-        startPlan?.collarPoint ?? teePlan?.branchCollar ?? startRealign?.collarPoint ?? start
-      let ductEnd =
-        endPlan?.collarPoint ?? endTeePlan?.branchCollar ?? endRealign?.collarPoint ?? end
-      // The collar pull-back must leave a real piece of duct between the
-      // fittings; if not, fall back to the plain joint.
-      const remaining = Math.hypot(
-        ductEnd[0] - ductStart[0],
-        ductEnd[1] - ductStart[1],
-        ductEnd[2] - ductStart[2],
+      const plan = planDuctDraw(
+        start,
+        end,
+        startPortRef.current,
+        startBodyRef.current,
+        endPort,
+        endBody,
+        profileRef.current,
       )
-      let plans = [startPlan, endPlan].filter((p) => p !== null)
-      let tee = teePlan
-      // Both ends tapping the SAME trunk would split one polyline twice in
-      // a single change (conflicting updates + double tail) — drop the end
-      // tee in that rare case and let the end butt-join instead.
-      let endTee = endTeePlan && endTrunkBody?.nodeId === trunkBody?.nodeId ? null : endTeePlan
-      if (!endTee && endTeePlan) ductEnd = endRealign?.collarPoint ?? end
-      let realigns = [startRealign, endRealign].filter((p) => p !== null)
-
-      // Cross tap: the drawn run passes straight THROUGH a trunk's body
-      // (interior crossing, not an end touch). Split that trunk and the
-      // drawn duct into two halves meeting the cross's opposed branch
-      // collars. Skip a run already tapped by a start / end tee so one
-      // polyline isn't split twice in a single change.
-      const crossHit = findRunBodyCrossingXZ(start, end, BODY_SNAP_RADIUS_M)
-      const crossOwner = crossHit ? useScene.getState().nodes[crossHit.nodeId] : null
-      const crossTappedElsewhere =
-        crossHit?.nodeId === trunkBody?.nodeId || crossHit?.nodeId === endTrunkBody?.nodeId
-      let cross =
-        crossHit && !crossTappedElsewhere && crossOwner?.type === 'duct-segment'
-          ? planCrossAtRunBody(crossOwner, crossHit, dir, profileRef.current)
-          : null
-
-      if (remaining <= 0.08) {
-        plans = []
-        tee = null
-        endTee = null
-        realigns = []
-        cross = null
-        ductStart = start
-        ductEnd = end
-      }
-
-      // Rect / oval continuity: roll the new run's cross-section so its
-      // profile stays continuous with whatever either end joined — run
-      // end or fitting collar, turn or straight continuation (see
-      // `continuityRollFrom`). The start joint wins if both ends join.
-      let roll = 0
-      if (profileRef.current.shape !== 'round') {
-        const newDir = new Vector3(...dir)
-        roll =
-          continuityRollFrom(startPortRef.current, newDir) ??
-          continuityRollFrom(endPort, newDir) ??
-          0
-      }
-
-      const defaults = ductSegmentDefinition.defaults()
-      const toolDefaults = useEditor.getState().toolDefaults['duct-segment'] ?? {}
-      const makeDuct = (from: [number, number, number], to: [number, number, number]) =>
-        DuctSegmentNode.parse({
-          ...defaults,
-          ...toolDefaults,
-          name: profileRef.current.shape === 'rect' ? 'Trunk' : 'Duct run',
-          path: [from, to],
-          shape: profileRef.current.shape,
-          diameter: profileRef.current.diameter,
-          width: profileRef.current.width,
-          height: profileRef.current.height,
-          roll,
-        })
-      // A cross splits the drawn run into two halves that meet its opposed
-      // branch collars; otherwise it's one duct end-to-end. Degenerate
-      // halves (the crossing too near an end) are dropped.
-      const ducts = cross
-        ? [
-            dist2(ductStart, cross.branchCollarNear) > 0.08 * 0.08
-              ? makeDuct(ductStart, cross.branchCollarNear)
-              : null,
-            dist2(cross.branchCollarFar, ductEnd) > 0.08 * 0.08
-              ? makeDuct(cross.branchCollarFar, ductEnd)
-              : null,
-          ].filter((d) => d !== null)
-        : [makeDuct(ductStart, ductEnd)]
+      if (!plan) return
       // One atomic change: trim / split the joined runs, create the
       // fittings + the new duct. Single undo step.
       useScene.getState().applyNodeChanges({
         create: [
-          ...plans.map((plan) => ({ node: plan.fitting, parentId: activeLevelId })),
-          ...(tee
-            ? [
-                { node: tee.fitting, parentId: activeLevelId },
-                { node: tee.trunkTail, parentId: activeLevelId },
-              ]
-            : []),
-          ...(endTee
-            ? [
-                { node: endTee.fitting, parentId: activeLevelId },
-                { node: endTee.trunkTail, parentId: activeLevelId },
-              ]
-            : []),
-          ...(cross
-            ? [
-                { node: cross.fitting, parentId: activeLevelId },
-                { node: cross.trunkTail, parentId: activeLevelId },
-              ]
-            : []),
-          ...ducts.map((node) => ({ node, parentId: activeLevelId })),
+          ...plan.fittings.map((node) => ({ node, parentId: activeLevelId })),
+          ...plan.tails.map((node) => ({ node, parentId: activeLevelId })),
+          ...plan.ducts.map((node) => ({ node, parentId: activeLevelId })),
         ],
-        update: [
-          ...plans.map((plan) => plan.trim),
-          ...(tee ? [tee.trunkUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
-          ...(endTee ? [endTee.trunkUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
-          ...(cross ? [cross.trunkUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
-          ...realigns.map((plan) => plan.update as { id: AnyNode['id']; data: Partial<AnyNode> }),
-        ],
+        update: plan.updates,
       })
+      const nextDuct = plan.ducts.at(-1)
+      const nextStart = nextDuct ? nextDuct.path[nextDuct.path.length - 1]! : end
+      const nextPort = nextDuct ? ductEndPort(nextDuct, 'end') : endPort
       triggerSFX('sfx:item-place')
-      setDraftPoints([])
+      setDraftPoints([nextStart])
       setSnapTarget(null)
-      startPortRef.current = null
-      startBodyRef.current = null
+      setEndSnap({ port: null, body: null })
+      startPortRef.current = nextPort
+      startBodyRef.current = nextPort ? null : endBody
       altAnchorRef.current = null
       setAltActive(false)
     }
 
-    // Base Y for a fresh run's first point: floor (0) by default, or just
-    // below the level's ceiling in ceiling mode so the duct's top hugs the
-    // ceiling (centerline = ceiling height − radius).
-    const resolveBaseY = (): number => {
+    // Y for a point at level-local `[x, z]`. Floor (0) when ceiling mode is
+    // off. In ceiling mode, query the ceiling actually covering that point
+    // and hang the duct just below it (centerline = ceiling underside −
+    // half the duct's vertical dimension) so its top hugs the ceiling. Each
+    // point follows its own ceiling, so a run stepping into a room with a
+    // different ceiling height tracks that change. Points not under any
+    // ceiling fall back to the floor.
+    const resolveCeilingY = (x: number, z: number): number => {
       if (!ceilingModeRef.current) return 0
-      const ceiling = getLevelHeight(
-        activeLevelId,
-        useScene.getState().nodes,
-        (wallId) => sceneRegistry.nodes.get(wallId)?.position.y,
-      )
+      const ceiling = getCeilingHeightAt(activeLevelId, useScene.getState().nodes, x, z)
+      if (ceiling === null) return 0
       const p = profileRef.current
       const verticalIn = p.shape === 'round' ? p.diameter : p.height
       return Math.max(0, ceiling - (verticalIn * 0.0254) / 2)
@@ -571,11 +629,11 @@ const DuctSegmentTool = () => {
       body: RunBodyHit | null
     } => {
       const last = draftRef.current.at(-1)
-      // First point of the run: grid-snapped placement at the base Y (floor,
-      // or ceiling height in ceiling mode). Endpoint snap can still join an
-      // existing run.
+      // First point of the run: grid-snapped placement. Y follows the
+      // ceiling under the cursor in ceiling mode (floor otherwise).
+      // Endpoint snap can still join an existing run.
       if (!last) {
-        const baseY = resolveBaseY()
+        const baseY = resolveCeilingY(event.localPosition[0], event.localPosition[2])
         const raw: [number, number, number] = [
           event.localPosition[0],
           baseY,
@@ -601,15 +659,20 @@ const DuctSegmentTool = () => {
           const body = findNearestRunBodyXZ(probe, BODY_SNAP_RADIUS_M)
           if (body) return { point: body.point, snapped: body.point, port: null, body }
         }
+        const sx = snap(raw[0], step)
+        const sz = snap(raw[2], step)
         return {
-          point: [snap(raw[0], step), baseY, snap(raw[2], step)],
+          point: [sx, resolveCeilingY(sx, sz), sz],
           snapped: null,
           port: null,
           body: null,
         }
       }
       // Subsequent points: angle-locked to 45° from `last` (Shift releases).
-      // Y stays at `last[1]` — depth changes come from Shift+click risers.
+      // Y inherits `last[1]` for the angle/probe math; the free placement
+      // below re-resolves it from the ceiling under the point in ceiling
+      // mode, so a run stepping into a room with a different ceiling height
+      // tracks that change. Depth changes otherwise come from Alt risers.
       const rawXZ: [number, number, number] = [
         event.localPosition[0],
         last[1],
@@ -638,8 +701,11 @@ const DuctSegmentTool = () => {
         const body = findNearestRunBodyXZ(probe, BODY_SNAP_RADIUS_M)
         if (body) return { point: body.point, snapped: body.point, port: null, body }
       }
+      const fx = snap(angled[0], step)
+      const fz = snap(angled[2], step)
+      const fy = ceilingModeRef.current ? resolveCeilingY(fx, fz) : angled[1]
       return {
-        point: [snap(angled[0], step), angled[1], snap(angled[2], step)],
+        point: [fx, fy, fz],
         snapped: null,
         port: null,
         body: null,
@@ -681,6 +747,17 @@ const DuctSegmentTool = () => {
       return { ...r, point }
     }
 
+    // The ceiling the cursor is under (ceiling mode only) — drives the
+    // translucent surface overlay so the in-flight point reads as hung
+    // against a real ceiling. Cleared when off-ceiling or out of mode.
+    const updateHoverCeiling = (x: number, z: number) => {
+      if (!ceilingModeRef.current) {
+        setHoverCeiling(null)
+        return
+      }
+      setHoverCeiling(getCeilingAt(activeLevelId, useScene.getState().nodes, x, z))
+    }
+
     const onMove = (event: GridEvent) => {
       const clientY = (event.nativeEvent as { clientY?: number } | undefined)?.clientY
       if (typeof clientY === 'number') lastClientYRef.current = clientY
@@ -691,12 +768,16 @@ const DuctSegmentTool = () => {
           clearDrawAlignment()
           setCursorPos(point)
           setSnapTarget(null)
+          setEndSnap({ port: null, body: null })
+          updateHoverCeiling(point[0], point[2])
           return
         }
       }
-      const { point, snapped } = resolveAlignedPoint(event)
+      const { point, snapped, port, body } = resolveAlignedPoint(event)
       setCursorPos(point)
       setSnapTarget(snapped)
+      setEndSnap({ port, body: port ? null : body })
+      updateHoverCeiling(point[0], point[2])
     }
 
     const onClick = (event: GridEvent) => {
@@ -783,12 +864,14 @@ const DuctSegmentTool = () => {
         setProfile((p) => ({ ...p, shape: p.shape === 'round' ? 'rect' : 'round' }))
         triggerSFX('sfx:grid-snap')
       } else if (e.key === 'c' || e.key === 'C') {
-        // Toggle ceiling mode. Only the first point reads the base Y, so
-        // toggling mid-run is a no-op until the next fresh segment — flip
-        // it only while unanchored to keep the behaviour predictable.
+        // Toggle ceiling mode: points hang from the ceiling above them
+        // (duct top hugging the ceiling) instead of sitting on the floor.
+        // Only flip while unanchored — already-placed points keep their Y,
+        // so a mid-run toggle would split a run across two height regimes.
         if (draftRef.current.length > 0) return
         e.preventDefault()
         setCeilingMode((m) => !m)
+        setHoverCeiling(null)
         triggerSFX('sfx:grid-snap')
       }
     }
@@ -807,6 +890,8 @@ const DuctSegmentTool = () => {
       setDraftPoints([])
       setCursorPos(null)
       setSnapTarget(null)
+      setEndSnap({ port: null, body: null })
+      setHoverCeiling(null)
       startPortRef.current = null
       startBodyRef.current = null
     }
@@ -838,6 +923,22 @@ const DuctSegmentTool = () => {
     previewSegments.push({ a: last, b: cursorPos })
   }
 
+  // Ghost the auto-inserted fittings (elbow / tee / cross) the next click
+  // will mint, by running the SAME planner the commit uses against the
+  // in-flight endpoints. Skipped in Alt-vertical mode (no XZ tap there).
+  const ghostFittings =
+    last && cursorPos && !altActive
+      ? (planDuctDraw(
+          last,
+          cursorPos,
+          startPortRef.current,
+          startBodyRef.current,
+          endSnap.port,
+          endSnap.body,
+          profile,
+        )?.fittings ?? [])
+      : []
+
   // Wall-style dimension pill above the cursor: absolute world coords before
   // the first point, signed per-axis deltas from the last placed point while
   // a segment is in flight. The actively-driven axis is emphasised — Y in
@@ -868,44 +969,70 @@ const DuctSegmentTool = () => {
           : 'z'
       : undefined
 
+  // When the in-flight point hangs above the floor (ceiling mode, or an
+  // Alt riser), the cursor marker itself rides AT the point (where the
+  // mouse is aiming and the next click commits), and a plumb line drops
+  // straight down to a faint ground ring on the floor below — so the plan
+  // position stays legible from any angle. A floor-level point keeps the
+  // standard fixed-height cursor look.
+  const cursorElevation = cursorPos ? cursorPos[1] : 0
+  const isElevated = cursorElevation > 0.001
+  const cursorGround: [number, number, number] | null = cursorPos
+    ? [cursorPos[0], 0, cursorPos[2]]
+    : null
+
   return (
     <LevelOffsetGroup>
+      {/* Ceiling-mode surface highlight — the ceiling the cursor is under,
+          tinted at its own elevation so the duct reads as hung against a
+          real surface instead of a point floating in space. */}
+      {ceilingMode && hoverCeiling && <CeilingHighlight ceiling={hoverCeiling} />}
       {/* Cursor marker — the same ground ring + vertical line + tool-icon
           badge walls and items show while drawing (icon resolved from the
           active `duct-segment` structure-tools entry). The dimension pill
           rides just above the cursor. */}
-      {cursorPos && (
+      {cursorPos && cursorGround && (
         <>
-          <CursorSphere position={cursorPos} ref={cursorRef} />
+          {/* In ceiling mode (or any elevated point) the ground ring sits on
+              the floor below the cursor and the line rises to the placement
+              point, with the bright dot + tool badge at its tip — exactly
+              where the next click commits. At floor level it's the standard
+              fixed-height cursor. */}
+          {isElevated ? (
+            <CursorSphere
+              color={snapTarget ? SNAP_CURSOR_COLOR : undefined}
+              dotAtTip
+              height={cursorElevation}
+              position={cursorGround}
+              ref={cursorRef}
+            />
+          ) : (
+            <CursorSphere
+              color={snapTarget ? SNAP_CURSOR_COLOR : undefined}
+              position={cursorPos}
+              ref={cursorRef}
+            />
+          )}
           {pillParts && (
             <group position={cursorPos}>
               <Html
                 center
-                position={[0, 0.35, 0]}
+                position={[0, 1.45, 0]}
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
                 zIndexRange={[100, 0]}
               >
-                <div className="flex flex-col items-center gap-1">
-                  <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
+                <div className="flex flex-col items-center gap-2">
                   {ceilingMode && !last && (
                     <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
                       Ceiling · C to toggle
                     </div>
                   )}
+                  <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
                 </div>
               </Html>
             </group>
           )}
         </>
-      )}
-      {/* Endpoint-snap halo — brighter ring around the target endpoint
-          while the cursor is within snap range, so the user sees that the
-          next click will join an existing duct rather than freeform-place. */}
-      {snapTarget && (
-        <mesh layers={EDITOR_LAYER} position={snapTarget}>
-          <sphereGeometry args={[0.12, 24, 16]} />
-          <meshBasicMaterial color="#818cf8" depthTest={false} opacity={0.35} transparent />
-        </mesh>
       )}
       {/* Committed point pips */}
       {draftPoints.map((p, i) => (
@@ -919,12 +1046,97 @@ const DuctSegmentTool = () => {
         <PreviewSegment
           a={seg.a}
           b={seg.b}
+          endPort={endSnap.port}
           key={`seg-${i}`}
           profile={profile}
           startPort={startPortRef.current}
         />
       ))}
+      {/* Auto-fitting ghosts — the elbow / tee / cross the next click mints. */}
+      {ghostFittings.map((fitting) => (
+        <FittingGhost fitting={fitting} key={fitting.id} />
+      ))}
     </LevelOffsetGroup>
+  )
+}
+
+/**
+ * Build a horizontal `ShapeGeometry` for a ceiling polygon (with holes) in
+ * level-local XZ, laid flat in the XZ plane. Mirrors the ceiling renderer /
+ * move-tool convention (Z negated, then rotated onto the floor plane).
+ */
+function buildCeilingShape(
+  polygon: Array<[number, number]>,
+  holes: Array<Array<[number, number]>>,
+): BufferGeometry | null {
+  if (polygon.length < 3) return null
+  const shape = new Shape()
+  const first = polygon[0]!
+  shape.moveTo(first[0], -first[1])
+  for (let i = 1; i < polygon.length; i++) {
+    const pt = polygon[i]!
+    shape.lineTo(pt[0], -pt[1])
+  }
+  shape.closePath()
+  for (const holePolygon of holes) {
+    if (holePolygon.length < 3) continue
+    const hole = new Path()
+    const hf = holePolygon[0]!
+    hole.moveTo(hf[0], -hf[1])
+    for (let i = 1; i < holePolygon.length; i++) {
+      const pt = holePolygon[i]!
+      hole.lineTo(pt[0], -pt[1])
+    }
+    hole.closePath()
+    shape.holes.push(hole)
+  }
+  const geometry = new ShapeGeometry(shape)
+  geometry.rotateX(-Math.PI / 2)
+  return geometry
+}
+
+/**
+ * Translucent overlay of the ceiling the cursor is under, drawn at the
+ * ceiling's own height. Gives the in-flight duct point a real surface to
+ * read against, so "hung against the ceiling" is visible from any angle
+ * instead of being a dot floating in space.
+ */
+function CeilingHighlight({ ceiling }: { ceiling: CeilingNode }) {
+  const geometry = useMemo(
+    () => buildCeilingShape(ceiling.polygon, ceiling.holes),
+    [ceiling.polygon, ceiling.holes],
+  )
+  const outline = useMemo(() => {
+    if (ceiling.polygon.length < 2) return null
+    const pts = ceiling.polygon.map(([x, z]) => new Vector3(x, 0, z))
+    const f = ceiling.polygon[0]!
+    pts.push(new Vector3(f[0], 0, f[1]))
+    return pts
+  }, [ceiling.polygon])
+  if (!geometry) return null
+  const y = ceiling.height ?? 2.5
+  return (
+    <group position={[0, y, 0]}>
+      <mesh geometry={geometry} layers={EDITOR_LAYER} renderOrder={1}>
+        <meshBasicMaterial
+          color="#818cf8"
+          depthWrite={false}
+          opacity={0.15}
+          side={DoubleSide}
+          transparent
+        />
+      </mesh>
+      {outline && (
+        <line>
+          <bufferGeometry
+            ref={(g) => {
+              if (g) g.setFromPoints(outline)
+            }}
+          />
+          <lineBasicMaterial color="#818cf8" opacity={0.6} transparent />
+        </line>
+      )}
+    </group>
   )
 }
 
@@ -933,11 +1145,13 @@ function PreviewSegment({
   b,
   profile,
   startPort,
+  endPort,
 }: {
   a: [number, number, number]
   b: [number, number, number]
   profile: DraftProfile
   startPort: ScenePort | null
+  endPort: ScenePort | null
 }) {
   const start = new Vector3(...a)
   const end = new Vector3(...b)
@@ -959,7 +1173,7 @@ function PreviewSegment({
           if (!m) return
           // Same basis AND roll as the commit will use, so the ghost
           // shows the orientation that actually lands.
-          const roll = continuityRollFrom(startPort, dir) ?? 0
+          const roll = continuityRollForRun(startPort, endPort, dir)
           const { width: x, height: z } = rectSectionAxes(dir, roll)
           m.quaternion.setFromRotationMatrix(new Matrix4().makeBasis(x, dir, z))
         }}

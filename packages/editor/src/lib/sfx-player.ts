@@ -59,6 +59,16 @@ export const SFX: Record<string, SFXConfig> = {
     volumeRange: [0.92, 1.0],
     panJitter: 0.15,
   },
+  // Ticks as a resize handle is dragged across snap steps. Fires in rapid
+  // succession, so it mirrors gridSnap: three variations cycled round-robin
+  // with pitch/pan jitter and a gap so the run reads as texture, not a tone.
+  resize: {
+    src: ['/audios/sfx/resize_0.mp3', '/audios/sfx/resize_1.mp3', '/audios/sfx/resize_2.mp3'],
+    rateRange: [0.98, 1.02],
+    volumeRange: [0.26, 0.34],
+    panJitter: 0.15,
+    minIntervalMs: 80,
+  },
   // Fired when a structure draft begins (first click of a wall/slab/etc).
   structureBuildStart: {
     src: '/audios/sfx/structure_build_start.mp3',
@@ -99,6 +109,15 @@ export const SFX: Record<string, SFXConfig> = {
     rateRange: [0.98, 1.02],
     volumeRange: [0.5, 0.6],
     panJitter: 0.1,
+  },
+  // Fired when a material is applied to a surface in paint mode. Painting can
+  // fire in quick succession across faces, so keep variation + a small gap.
+  paintApply: {
+    src: '/audios/sfx/paint_apply.mp3',
+    rateRange: [0.95, 1.05],
+    volumeRange: [0.85, 1.0],
+    panJitter: 0.12,
+    minIntervalMs: 60,
   },
 } as const
 

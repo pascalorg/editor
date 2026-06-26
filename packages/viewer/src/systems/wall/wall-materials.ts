@@ -37,12 +37,6 @@ const WALL_HIGHLIGHT_PROFILES = {
     emissiveBlend: 0.92,
     emissiveIntensity: 0.46,
   },
-  selection: {
-    color: new Color('#818cf8'),
-    blend: 0.32,
-    emissiveBlend: 0.7,
-    emissiveIntensity: 0.42,
-  },
 } as const
 
 type WallHighlightKind = keyof typeof WALL_HIGHLIGHT_PROFILES
@@ -52,10 +46,10 @@ export type WallMaterialArray = [Material, Material, Material]
 export interface WallMaterials {
   visible: WallMaterialArray
   invisible: WallMaterialArray
+  translucent: WallMaterialArray
   deleteVisible: WallMaterialArray
   deleteInvisible: WallMaterialArray
-  highlightedVisible: WallMaterialArray
-  highlightedInvisible: WallMaterialArray
+  deleteTranslucent: WallMaterialArray
   materialHash: string
 }
 
@@ -223,6 +217,68 @@ function createHighlightedWallMaterial(material: Material, kind: WallHighlightKi
   return highlightedMaterial
 }
 
+// Light selection highlight for walls (walls are excluded from the generic
+// editor selection highlight, so they need their own). Adds a gentle indigo
+// emissive (no albedo tint) so the real material/texture stays readable with a
+// soft "selected" glow. Two NodeMaterial-clone gotchas are handled:
+//   1. `clone()` on the WebGPU backend drops the texture-map nodes → re-attach
+//      them from the source (shared by reference).
+//   2. The wall's finish texture loads async, so an early clone has no map yet →
+//      cache keyed by the source `.map` and rebuild when it changes (self-heals
+//      once the texture lands).
+const SELECTION_HIGHLIGHT_COLOR = new Color('#818cf8')
+const SELECTION_EMISSIVE_BLEND = 0.4
+const SELECTION_EMISSIVE_INTENSITY = 0.12
+
+const SELECTION_TEXTURE_MAP_KEYS = [
+  'map',
+  'normalMap',
+  'roughnessMap',
+  'metalnessMap',
+  'aoMap',
+  'emissiveMap',
+  'bumpMap',
+  'displacementMap',
+  'alphaMap',
+  'lightMap',
+] as const
+
+const selectionHighlightCache = new WeakMap<Material, { clone: Material; map: unknown }>()
+
+function getSelectionHighlightMaterial(base: Material): Material {
+  const baseMap = (base as { map?: unknown }).map ?? null
+  const cached = selectionHighlightCache.get(base)
+  if (cached && cached.map === baseMap) return cached.clone
+
+  const clone = base.clone() as Material & {
+    emissive?: Color
+    emissiveIntensity?: number
+    needsUpdate?: boolean
+  }
+  // Re-attach texture maps the WebGPU NodeMaterial clone drops.
+  const src = base as unknown as Record<string, unknown>
+  const dst = clone as unknown as Record<string, unknown>
+  for (const key of SELECTION_TEXTURE_MAP_KEYS) {
+    if (src[key]) dst[key] = src[key]
+  }
+  if ('emissive' in clone && clone.emissive) {
+    clone.emissive = clone.emissive
+      .clone()
+      .lerp(SELECTION_HIGHLIGHT_COLOR, SELECTION_EMISSIVE_BLEND)
+  }
+  if ('emissiveIntensity' in clone) {
+    clone.emissiveIntensity = Math.max(clone.emissiveIntensity ?? 0, SELECTION_EMISSIVE_INTENSITY)
+  }
+  clone.needsUpdate = true
+  selectionHighlightCache.set(base, { clone, map: baseMap })
+  return clone
+}
+
+/** Lazy light-emissive selection variant of a wall's material array (keeps texture). */
+export function getSelectionHighlightMaterials(materials: WallMaterialArray): WallMaterialArray {
+  return materials.map(getSelectionHighlightMaterial) as WallMaterialArray
+}
+
 function createInvisibleWallMaterial(color: string, shading: RenderShading): Material {
   const material =
     shading === 'solid'
@@ -240,6 +296,25 @@ function createInvisibleWallMaterial(color: string, shading: RenderShading): Mat
         })
 
   material.opacityNode = mix(float(0.0), float(0.24), dotPattern())
+  return material
+}
+
+function createTranslucentWallMaterial(color: string, shading: RenderShading): Material {
+  const material =
+    shading === 'solid'
+      ? new MeshLambertNodeMaterial({
+          transparent: true,
+          color,
+          opacity: 0.35,
+          depthWrite: false,
+        })
+      : new MeshStandardNodeMaterial({
+          transparent: true,
+          color,
+          opacity: 0.35,
+          depthWrite: false,
+        })
+
   return material
 }
 
@@ -295,10 +370,10 @@ export function getMaterialsForWall(
   if (existing) {
     disposeOwnedMaterials([
       existing.invisible,
+      existing.translucent,
       existing.deleteVisible,
       existing.deleteInvisible,
-      existing.highlightedVisible,
-      existing.highlightedInvisible,
+      existing.deleteTranslucent,
     ])
   }
 
@@ -333,26 +408,39 @@ export function getMaterialsForWall(
     ),
   ]
 
-  const highlightedVisible = mapWallMaterialArray(visible, (material) =>
-    createHighlightedWallMaterial(material, 'selection'),
-  )
-  const highlightedInvisible = mapWallMaterialArray(invisible, (material) =>
-    createHighlightedWallMaterial(material, 'selection'),
-  )
+  const translucent: WallMaterialArray = [
+    createTranslucentWallMaterial(wallRoleColor, textures ? shading : 'solid'),
+    createTranslucentWallMaterial(
+      textures
+        ? resolveWallFaceColor(wallNode, 'interior', sceneMaterials, wallRoleColor)
+        : wallRoleColor,
+      textures ? shading : 'solid',
+    ),
+    createTranslucentWallMaterial(
+      textures
+        ? resolveWallFaceColor(wallNode, 'exterior', sceneMaterials, wallRoleColor)
+        : wallRoleColor,
+      textures ? shading : 'solid',
+    ),
+  ]
+
   const deleteVisible = mapWallMaterialArray(visible, (material) =>
     createHighlightedWallMaterial(material, 'delete'),
   )
   const deleteInvisible = mapWallMaterialArray(invisible, (material) =>
     createHighlightedWallMaterial(material, 'delete'),
   )
+  const deleteTranslucent = mapWallMaterialArray(translucent, (material) =>
+    createHighlightedWallMaterial(material, 'delete'),
+  )
 
   const result: WallMaterials = {
     visible,
     invisible,
+    translucent,
     deleteVisible,
     deleteInvisible,
-    highlightedVisible,
-    highlightedInvisible,
+    deleteTranslucent,
     materialHash,
   }
 

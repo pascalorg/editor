@@ -21,7 +21,7 @@ export const PipeTrapNode = BaseNode.extend({
   // Yaw in radians (the arm direction in plan).
   rotation: z.number().default(0),
   // Trap size in inches — matches the fixture drain it serves.
-  diameter: z.number().min(1.25).max(4).default(1.5),
+  diameter: z.number().min(1.25).max(4).default(2),
   pipeMaterial: z.enum(['pvc', 'abs', 'cast-iron']).default('pvc'),
   // Developed length of the trap arm (trap weir → vent) in meters. The
   // draw tool measures it when the arm is drawn; editable in the

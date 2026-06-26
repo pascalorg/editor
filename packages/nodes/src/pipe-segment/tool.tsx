@@ -55,6 +55,11 @@ import { pipeSegmentDefinition } from './definition'
  *   - Esc clears an anchored start point.
  */
 const PREVIEW_OPACITY = 0.55
+/** green-500 — the project's snap accent. The cursor ring + vertical line
+ *  recolour to this while the point is snapped onto an existing run / port,
+ *  so the coincidence reads with the familiar snap green (matches the duct
+ *  tool). */
+const SNAP_CURSOR_COLOR = '#22c55e'
 /** Nominal residential DWV sizes (inches). */
 const PIPE_DIAMETERS_IN = [1.25, 1.5, 2, 3, 4, 6] as const
 /** IPC default drain slope — ¼" per foot (1:48). */
@@ -86,6 +91,28 @@ function findNearbyPort(point: [number, number, number]): ScenePort | null {
     collectScenePorts({ systems: DWV_PORT_SYSTEMS }),
     PORT_SNAP_RADIUS_M,
   )
+}
+
+function pipeEndPort(pipe: PipeSegmentNode, id: 'start' | 'end'): ScenePort | null {
+  if (pipe.path.length < 2) return null
+  const index = id === 'start' ? 0 : pipe.path.length - 1
+  const neighborIndex = id === 'start' ? 1 : pipe.path.length - 2
+  const position = pipe.path[index]!
+  const neighbor = pipe.path[neighborIndex]!
+  const dx = position[0] - neighbor[0]
+  const dy = position[1] - neighbor[1]
+  const dz = position[2] - neighbor[2]
+  const len = Math.hypot(dx, dy, dz)
+  const direction: [number, number, number] =
+    len < 1e-9 ? [1, 0, 0] : [dx / len, dy / len, dz / len]
+  return {
+    id,
+    nodeId: pipe.id,
+    position,
+    direction,
+    diameter: pipe.diameter,
+    system: pipe.system,
+  }
 }
 
 function projectToAngleLock(
@@ -305,11 +332,14 @@ const PipeSegmentTool = () => {
           ...(cross ? [cross.runUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
         ],
       })
+      const nextPipe = pipes.at(-1)
+      const nextStart = nextPipe ? nextPipe.path[nextPipe.path.length - 1]! : end
+      const nextPort = nextPipe ? pipeEndPort(nextPipe, 'end') : endPort
       triggerSFX('sfx:item-place')
-      setDraftStart(null)
+      setDraftStart(nextStart)
       setSnapTarget(null)
-      startPortRef.current = null
-      startBodyRef.current = null
+      startPortRef.current = nextPort
+      startBodyRef.current = nextPort ? null : endBody
       altAnchorRef.current = null
       setAltActive(false)
     }
@@ -478,6 +508,14 @@ const PipeSegmentTool = () => {
         triggerSFX('sfx:grid-snap')
         startPortRef.current = port
         startBodyRef.current = port ? null : body
+        // Continue an existing run at its true size: adopt the snapped
+        // pipe's diameter so the new segment carries on at the same gauge
+        // instead of whatever size the tool last drew.
+        const ownerId = port?.nodeId ?? (port ? null : body?.nodeId)
+        const owner = ownerId ? useScene.getState().nodes[ownerId] : null
+        if (owner?.type === 'pipe-segment' && owner.diameter !== diameterRef.current) {
+          setDiameter(owner.diameter)
+        }
         setDraftStart(point)
         return
       }
@@ -612,7 +650,7 @@ const PipeSegmentTool = () => {
           dimension pill rides just above the cursor. */}
       {cursorPos && (
         <>
-          <CursorSphere position={cursorPos} />
+          <CursorSphere color={snapTarget ? SNAP_CURSOR_COLOR : undefined} position={cursorPos} />
           {pillParts && (
             <group position={cursorPos}>
               <Html
