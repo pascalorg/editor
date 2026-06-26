@@ -11,6 +11,7 @@ import {
 
 const MIN_DEFAULT_RIDGE_VENT_LENGTH_M = 0.4
 const DEFAULT_RIDGE_VENT_GENERATOR = 'default-ridge-vent'
+const AUTO_RIDGE_VENT_METADATA_KEY = 'autoRidgeVent'
 const UNTRIMMED_RIDGE_VENT_BOUNDS_TRIM: RoofSegmentTrim = {
   left: 0,
   right: 0,
@@ -230,4 +231,34 @@ export function isDefaultRidgeVentNode(
     vent.name === 'Shoulder Ridge Vent' ||
     vent.name === 'Slope Ridge Vent'
   return hasDefaultName && vent.style === 'shingled' && !hasCustomMaterial
+}
+
+function metadataRecord(metadata: unknown): Record<string, unknown> {
+  if (typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)) {
+    return metadata as Record<string, unknown>
+  }
+  return {}
+}
+
+export function hasAutoRidgeVentMetadata(
+  segment: Pick<RoofSegmentNode, 'metadata'>,
+): segment is Pick<RoofSegmentNode, 'metadata'> & {
+  metadata: Record<string, unknown> & { autoRidgeVent: boolean }
+} {
+  return typeof metadataRecord(segment.metadata)[AUTO_RIDGE_VENT_METADATA_KEY] === 'boolean'
+}
+
+export function isAutoRidgeVentEnabled(
+  segment: Pick<RoofSegmentNode, 'id' | 'children' | 'metadata'>,
+  nodes?: Record<string, unknown>,
+): boolean {
+  const metadataValue = metadataRecord(segment.metadata)[AUTO_RIDGE_VENT_METADATA_KEY]
+  if (typeof metadataValue === 'boolean') {
+    return metadataValue
+  }
+
+  if (!nodes) return false
+  return (segment.children ?? []).some((childId) =>
+    isDefaultRidgeVentNode(nodes[childId], segment.id),
+  )
 }

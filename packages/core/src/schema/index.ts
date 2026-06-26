@@ -101,6 +101,8 @@ export { PipeTrapNode } from './nodes/pipe-trap'
 export {
   createDefaultRidgeVentsForSegment,
   getRidgeVentLinesForSegment,
+  hasAutoRidgeVentMetadata,
+  isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
   type RidgeVentLine,
   RidgeVentNode,

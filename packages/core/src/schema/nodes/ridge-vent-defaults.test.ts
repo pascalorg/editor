@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   createDefaultRidgeVentsForSegment,
   getRidgeVentLinesForSegment,
+  isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
 } from './ridge-vent'
 import { RoofSegmentNode } from './roof-segment'
@@ -83,6 +84,28 @@ describe('createDefaultRidgeVentsForSegment', () => {
     const vents = createDefaultRidgeVentsForSegment(segment)
 
     expect(vents).toHaveLength(0)
+  })
+
+  test('treats legacy segments with generated ridge vents as auto-enabled', () => {
+    const segment = RoofSegmentNode.parse({
+      roofType: 'gable',
+      width: 8,
+      depth: 6,
+    })
+
+    const vents = createDefaultRidgeVentsForSegment(segment)
+    const nodes = Object.fromEntries(vents.map((vent) => [vent.id, vent]))
+
+    expect(
+      isAutoRidgeVentEnabled(
+        {
+          id: segment.id,
+          children: vents.map((vent) => vent.id),
+          metadata: {},
+        },
+        nodes,
+      ),
+    ).toBe(true)
   })
 
   test('omits Dutch ridge lines for either ridge direction', () => {

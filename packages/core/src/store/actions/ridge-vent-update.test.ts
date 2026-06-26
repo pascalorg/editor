@@ -138,4 +138,74 @@ describe('roof segment default ridge vents', () => {
       position: defaults[0]?.position,
     })
   })
+
+  test('creates default ridge vents after a geometry change when auto ridge vent is enabled', () => {
+    const roof = RoofNode.parse({ id: 'roof_test' as never, children: [] })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_test' as never,
+      parentId: roof.id,
+      roofType: 'flat',
+      width: 8,
+      depth: 6,
+      metadata: { autoRidgeVent: true },
+    })
+
+    useScene.getState().setScene(
+      {
+        [roof.id]: { ...roof, children: [segment.id] } as AnyNode,
+        [segment.id]: segment as AnyNode,
+      } as Record<AnyNodeId, AnyNode>,
+      [roof.id as AnyNodeId],
+    )
+
+    useScene.getState().updateNode(
+      segment.id as AnyNodeId,
+      {
+        roofType: 'gable',
+      } as Partial<AnyNode>,
+    )
+
+    const nextSegment = useScene.getState().nodes[segment.id as AnyNodeId] as
+      | RoofSegmentNode
+      | undefined
+
+    expect(nextSegment?.children).toHaveLength(1)
+    expect(useScene.getState().nodes[nextSegment?.children[0] as AnyNodeId]).toMatchObject({
+      type: 'ridge-vent',
+      roofSegmentId: segment.id,
+    })
+  })
+
+  test('does not create default ridge vents after a geometry change when auto ridge vent is disabled', () => {
+    const roof = RoofNode.parse({ id: 'roof_test' as never, children: [] })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_test' as never,
+      parentId: roof.id,
+      roofType: 'flat',
+      width: 8,
+      depth: 6,
+      metadata: { autoRidgeVent: false },
+    })
+
+    useScene.getState().setScene(
+      {
+        [roof.id]: { ...roof, children: [segment.id] } as AnyNode,
+        [segment.id]: segment as AnyNode,
+      } as Record<AnyNodeId, AnyNode>,
+      [roof.id as AnyNodeId],
+    )
+
+    useScene.getState().updateNode(
+      segment.id as AnyNodeId,
+      {
+        roofType: 'gable',
+      } as Partial<AnyNode>,
+    )
+
+    const nextSegment = useScene.getState().nodes[segment.id as AnyNodeId] as
+      | RoofSegmentNode
+      | undefined
+
+    expect(nextSegment?.children ?? []).toHaveLength(0)
+  })
 })

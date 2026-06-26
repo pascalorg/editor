@@ -6,6 +6,7 @@ import {
   createDefaultRidgeVentsForSegment,
   getEffectiveWallSurfaceMaterial,
   getWallSurfaceMaterialSignature,
+  isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
   type RoofSegmentNode,
   type WallNode,
@@ -520,11 +521,11 @@ function refreshDefaultRidgeVentsForSegment(
   segment: RoofSegmentNode,
 ): AnyNodeId[] {
   const childIds = Array.isArray(segment.children) ? (segment.children as AnyNodeId[]) : []
+  if (!isAutoRidgeVentEnabled(segment, nextNodes)) return []
+
   const defaultIds = childIds.filter((childId) =>
     isDefaultRidgeVentNode(nextNodes[childId], segment.id),
   )
-  if (defaultIds.length === 0) return []
-
   const defaultIdSet = new Set(defaultIds)
   for (const id of defaultIds) {
     delete nextNodes[id]

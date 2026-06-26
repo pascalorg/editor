@@ -3,6 +3,9 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  createDefaultRidgeVentsForSegment,
+  isAutoRidgeVentEnabled,
+  isDefaultRidgeVentNode,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
@@ -66,6 +69,13 @@ export default function RoofSegmentPanel() {
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined) : undefined,
   )
+  const autoRidgeVentEnabled = useScene((s) => {
+    const current = selectedId
+      ? (s.nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined)
+      : undefined
+    if (current?.type !== 'roof-segment') return false
+    return isAutoRidgeVentEnabled(current, s.nodes)
+  })
 
   const handleUpdate = useCallback(
     (updates: Partial<RoofSegmentNode>) => {
@@ -130,6 +140,48 @@ export default function RoofSegmentPanel() {
     }
   }, [selectedId, node, setSelection])
 
+  const handleAutoRidgeVentToggle = useCallback(
+    (checked: boolean) => {
+      if (!selectedId) return
+      const scene = useScene.getState()
+      const current = scene.nodes[selectedId as AnyNodeId] as RoofSegmentNode | undefined
+      if (current?.type !== 'roof-segment') return
+
+      scene.updateNode(selectedId as AnyNodeId, {
+        metadata: { ...metadataRecord(current.metadata), autoRidgeVent: checked },
+      })
+
+      const latest = useScene.getState().nodes[selectedId as AnyNodeId] as
+        | RoofSegmentNode
+        | undefined
+      if (latest?.type !== 'roof-segment') return
+
+      const defaultVentIds = (latest.children ?? []).filter((childId) =>
+        isDefaultRidgeVentNode(useScene.getState().nodes[childId as AnyNodeId], latest.id),
+      ) as AnyNodeId[]
+
+      if (!checked) {
+        if (defaultVentIds.length > 0) {
+          useScene.getState().deleteNodes(defaultVentIds)
+        }
+        return
+      }
+
+      if (defaultVentIds.length > 0) return
+
+      const ridgeVents = createDefaultRidgeVentsForSegment(latest)
+      if (ridgeVents.length === 0) return
+
+      scene.createNodes(
+        ridgeVents.map((ridgeVent) => ({
+          node: ridgeVent,
+          parentId: latest.id as AnyNodeId,
+        })),
+      )
+    },
+    [selectedId],
+  )
+
   if (!(node && node.type === 'roof-segment' && selectedId)) return null
 
   const showTrimPlanes = shouldShowTrimPlanes(node.metadata)
@@ -165,6 +217,13 @@ export default function RoofSegmentPanel() {
             })
           }
         />
+        {node.roofType !== 'shed' && node.roofType !== 'flat' && (
+          <ToggleControl
+            checked={autoRidgeVentEnabled}
+            label="Auto ridge vent"
+            onChange={handleAutoRidgeVentToggle}
+          />
+        )}
       </PanelSection>
 
       <PanelSection title="Footprint">
@@ -333,7 +392,9 @@ export default function RoofSegmentPanel() {
             precision={2}
             step={0.01}
             unit="m"
-            value={Math.round((node.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake) * 100) / 100}
+            value={
+              Math.round((node.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake) * 100) / 100
+            }
           />
         </PanelSection>
       )}
