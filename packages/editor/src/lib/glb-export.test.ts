@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { type AnyNode, sceneRegistry } from '@pascal-app/core'
+import { type AnyNode, DoorNode, sceneRegistry } from '@pascal-app/core'
 import * as THREE from 'three'
+import { buildDoorPreviewMesh } from '@pascal-app/viewer'
 import { prepareSceneForExport } from './glb-export'
 
 afterEach(() => {
@@ -135,7 +136,7 @@ describe('prepareSceneForExport', () => {
       kind: 'door',
       label: 'Front door',
       openable: true,
-      clips: ['Front door: open'],
+      clips: ['door_test: open'],
     })
 
     // The swing-leaf marker must not survive into glTF extras.
@@ -245,7 +246,7 @@ describe('prepareSceneForExport', () => {
 
     expect(animations).toHaveLength(1)
     const clip = animations[0]!
-    expect(clip.name).toBe('Door: open')
+    expect(clip.name).toBe('door_swing: open')
     expect(clip.duration).toBe(1)
     // Playback intent carried in extras so consumers can play once and hold.
     expect(clip.userData).toEqual({ loop: false })
@@ -263,5 +264,130 @@ describe('prepareSceneForExport', () => {
     // Rest pose is closed: the first keyframe is the identity rotation.
     const closed = new THREE.Quaternion().fromArray(Array.from(track.values).slice(0, 4))
     expect(closed.angleTo(new THREE.Quaternion())).toBeCloseTo(0)
+  })
+
+  test('bakes a sliding door into a sampled position clip', () => {
+    // Operation doors build their moving parts in a named group posed by
+    // `poseDoorMovingParts`; the exporter samples it into keyframes. The active
+    // panel group slides along x.
+    const root = new THREE.Group()
+    const doorGroup = new THREE.Group()
+    const activePanel = new THREE.Group()
+    activePanel.name = 'door-sliding-active'
+    activePanel.add(meshWithNodeMaterial(nodeMaterial()))
+    doorGroup.add(activePanel)
+    root.add(doorGroup)
+
+    const doorId = 'door_sliding'
+    sceneRegistry.nodes.set(doorId, doorGroup)
+    const nodes: Record<string, AnyNode> = {
+      [doorId]: {
+        object: 'node',
+        id: doorId,
+        type: 'door',
+        name: 'Slider',
+        doorType: 'sliding',
+        slideDirection: 'left',
+        width: 1,
+        height: 2.1,
+        frameThickness: 0.05,
+      } as unknown as AnyNode,
+    }
+
+    const { scene, animations } = prepareSceneForExport(root, nodes)
+
+    expect(animations).toHaveLength(1)
+    const clip = animations[0]!
+    expect(clip.name).toBe('door_sliding: open')
+    expect(clip.duration).toBe(1)
+    expect(clip.userData).toEqual({ loop: false })
+
+    const track = clip.tracks[0]!
+    expect(track).toBeInstanceOf(THREE.VectorKeyframeTrack)
+    expect(track.name.endsWith('.position')).toBe(true)
+    // 16 segments -> 17 keyframes, evenly spaced over the 1s clip.
+    expect(track.times.length).toBe(17)
+    expect(track.times[0]).toBeCloseTo(0)
+    expect(track.times[track.times.length - 1]!).toBeCloseTo(1)
+
+    // Rest pose is closed (first keyframe centred); the panel slides off-centre.
+    expect(track.values[0]!).toBeCloseTo(0)
+    expect(track.values[1]!).toBeCloseTo(0)
+    expect(track.values[2]!).toBeCloseTo(0)
+    const lastX = track.values[track.values.length - 3]!
+    expect(Math.abs(lastX)).toBeGreaterThan(0.1)
+
+    const target = scene.getObjectByProperty('uuid', track.name.replace('.position', ''))
+    expect(target).toBeDefined()
+
+    const exported = scene.getObjectByProperty('name', doorId)
+    expect(exported?.userData.openable).toBe(true)
+    expect(exported?.userData.clips).toEqual(['door_sliding: open'])
+  })
+
+  test('bakes a roll-up curtain into a sampled scale clip', () => {
+    // Roll-up geometry can't vanish in a glTF clip, so the bake scales the
+    // curtain group up into the lintel instead.
+    const root = new THREE.Group()
+    const doorGroup = new THREE.Group()
+    const curtain = new THREE.Group()
+    curtain.name = 'door-rollup-curtain'
+    curtain.add(meshWithNodeMaterial(nodeMaterial()))
+    doorGroup.add(curtain)
+    root.add(doorGroup)
+
+    const doorId = 'door_rollup'
+    sceneRegistry.nodes.set(doorId, doorGroup)
+    const nodes: Record<string, AnyNode> = {
+      [doorId]: {
+        object: 'node',
+        id: doorId,
+        type: 'door',
+        name: 'Roll-up',
+        doorType: 'garage-rollup',
+        width: 2.4,
+        height: 2.2,
+        frameThickness: 0.05,
+      } as unknown as AnyNode,
+    }
+
+    const { animations } = prepareSceneForExport(root, nodes)
+
+    expect(animations).toHaveLength(1)
+    const scaleTrack = animations[0]!.tracks.find((t) => t.name.endsWith('.scale'))
+    expect(scaleTrack).toBeInstanceOf(THREE.VectorKeyframeTrack)
+    // Rest pose is closed (full curtain, scale 1); it shrinks toward the header.
+    expect(Array.from(scaleTrack!.values).slice(0, 3)).toEqual([1, 1, 1])
+    const lastScaleY = scaleTrack!.values[scaleTrack!.values.length - 2]!
+    expect(lastScaleY).toBeLessThan(0.1)
+  })
+
+  // Regression: a folding door saved in an open state (|fold angle| > π/2) used
+  // to bake a 180°-flipped rest pose. The export clones + decomposes the door
+  // matrix, which re-derives a gimbal-flipped euler (x=z=π) for the wide Y
+  // rotation; the pose reset must zero the full euler triple, not just `.y`.
+  test('bakes an identity rest pose for an open folding door', () => {
+    const node = DoorNode.parse({
+      id: 'door_folding',
+      doorType: 'folding',
+      leafCount: 4,
+      operationState: 0.65,
+    })
+    const mesh = buildDoorPreviewMesh(node)
+    const root = new THREE.Group()
+    root.add(mesh)
+    sceneRegistry.nodes.set(node.id, mesh)
+
+    const { scene, animations } = prepareSceneForExport(root, {
+      [node.id]: node as unknown as AnyNode,
+    })
+
+    expect(animations).toHaveLength(1)
+    for (let index = 0; index < 4; index++) {
+      const panel = scene.getObjectByName(`door-fold-${index}`)
+      expect(panel).toBeDefined()
+      // Rest quaternion must be identity — no residual π on any axis.
+      expect(panel!.quaternion.angleTo(new THREE.Quaternion())).toBeLessThan(1e-4)
+    }
   })
 })

@@ -273,26 +273,6 @@ function addRotatedBox(
   parent.add(m)
 }
 
-function addBoxWithRotation(
-  parent: THREE.Object3D,
-  material: THREE.Material,
-  w: number,
-  h: number,
-  d: number,
-  x: number,
-  y: number,
-  z: number,
-  rotation: [number, number, number],
-) {
-  const geometry = new THREE.BoxGeometry(w, h, d)
-  applyWorldScaleBoxUVs(geometry, w, h, d)
-  const m = new THREE.Mesh(geometry, material)
-  m.position.set(x, y, z)
-  m.rotation.set(rotation[0], rotation[1], rotation[2])
-  tagDoorSlot(m)
-  parent.add(m)
-}
-
 function addShape(
   parent: THREE.Object3D,
   material: THREE.Material,
@@ -1335,6 +1315,156 @@ function addDoorLeaf(
   }
 }
 
+// Names of the re-poseable moving groups each operation-door builder emits. The
+// builder fills them with geometry at the CLOSED pose; `poseDoorMovingParts`
+// then transforms the group to a given open fraction. This is the same
+// build-once + pose-at-t split windows use (`poseWindowMovingParts`), and it is
+// the single source of truth for door kinematics: the live system poses the
+// registered mesh, and the GLB exporter poses an export clone to sample the
+// open/close keyframes for a baked animation clip.
+const SLIDING_ACTIVE_PANEL_NAME = 'door-sliding-active'
+const POCKET_LEAF_NAME = 'door-pocket-leaf'
+const BARN_LEAF_NAME = 'door-barn-leaf'
+const TILTUP_LEAF_NAME = 'door-tiltup-leaf'
+// Folding panels form a hinged chain; each `<name><index>` group is parented to
+// the previous one so a single per-joint rotation reproduces the accordion.
+const FOLDING_PANEL_NAME = 'door-fold-'
+// Sectional panels each ride the overhead curve independently (non-rigid as a
+// set), so each `<name><index>` group is posed on its own.
+const SECTIONAL_PANEL_NAME = 'door-sectional-'
+const ROLLUP_CURTAIN_NAME = 'door-rollup-curtain'
+
+/**
+ * Pose an operation door's moving parts (sliding/pocket/barn leaf, tilt-up and
+ * sectional panels, folding chain, roll-up curtain) at `value` (0 = closed,
+ * 1 = open) by transforming the named groups its builder emitted at the closed
+ * pose. Returns true when the door type has a pose path and its groups exist.
+ *
+ * Mirrors `poseWindowMovingParts`: the live door system calls it after a
+ * (re)build so `operationState` is reflected, and the GLB exporter calls it on a
+ * clone to sample keyframes. Swing doors are not handled here — their leaf group
+ * carries a `pascalSwingLeaf` marker the exporter reads directly.
+ *
+ * Roll-up is the one type whose live geometry changes (slats vanish onto a
+ * drum), which a glTF clip can't express; the baked approximation scales the
+ * curtain up into the lintel. The live roll-up animation keeps its full-detail
+ * rebuild and is intentionally NOT routed through this scale.
+ */
+export function poseDoorMovingParts(
+  node: DoorNode,
+  mesh: THREE.Object3D | undefined,
+  value: number,
+): boolean {
+  if (!mesh) return false
+  const t = clampDoorOperationState(value)
+  const frameThickness = node.frameThickness
+  const insideWidth = node.width - 2 * frameThickness
+  const leafHeight = node.height - frameThickness
+  const leafCenterY = -frameThickness / 2
+
+  switch (node.doorType) {
+    case 'sliding': {
+      const group = mesh.getObjectByName(SLIDING_ACTIVE_PANEL_NAME)
+      if (!group) return false
+      const activeSign = node.slideDirection === 'left' ? 1 : -1
+      group.position.x = -activeSign * insideWidth * 0.44 * t
+      return true
+    }
+    case 'pocket': {
+      const group = mesh.getObjectByName(POCKET_LEAF_NAME)
+      if (!group) return false
+      const slideSign = node.slideDirection === 'right' ? 1 : -1
+      group.position.x = slideSign * insideWidth * t
+      return true
+    }
+    case 'barn': {
+      const group = mesh.getObjectByName(BARN_LEAF_NAME)
+      if (!group) return false
+      const slideSign = node.slideDirection === 'right' ? 1 : -1
+      group.position.x = slideSign * insideWidth * t
+      return true
+    }
+    case 'garage-tiltup': {
+      const group = mesh.getObjectByName(TILTUP_LEAF_NAME)
+      if (!group) return false
+      // Rigid hinge: the closed leaf hangs from the lintel; opening rotates it
+      // about the top edge. `position` keeps the top edge tracking the hinge as
+      // the group rotates about its own origin (see the closed build below).
+      const angle = (Math.PI / 2) * t
+      const hingeY = leafCenterY + leafHeight / 2
+      group.rotation.set(-angle, 0, 0)
+      group.position.set(0, hingeY * (1 - Math.cos(angle)), Math.sin(angle) * (hingeY - leafHeight))
+      return true
+    }
+    case 'folding': {
+      const panelCount = node.leafCount === 2 ? 2 : 4
+      const foldAngle = Math.PI * 0.44 * t
+      // Each panel group is parented to the previous, so its rotation is the
+      // joint angle (the change in absolute segment direction), not the absolute
+      // angle: alternating panels target ∓foldAngle, so joints fold by ±2·angle.
+      // The leading sign folds the leaves toward −z (matching the original rig).
+      let posed = false
+      let prevDirection = 0
+      for (let index = 0; index < panelCount; index++) {
+        const group = mesh.getObjectByName(`${FOLDING_PANEL_NAME}${index}`)
+        const direction = index % 2 === 0 ? -1 : 1
+        if (group) {
+          posed = true
+          // Set the full triple (not just `.y`): when the export clones and
+          // decomposes the door matrix, a |Y| > π/2 rotation re-derives into a
+          // gimbal-flipped euler (x=z=π). Assigning only `.y` would leave that
+          // π residue on x/z and bake a flipped rest pose.
+          group.rotation.set(0, (prevDirection - direction) * foldAngle, 0)
+        }
+        prevDirection = direction
+      }
+      return posed
+    }
+    case 'garage-sectional': {
+      const panelCount = Math.max(3, Math.min(12, Math.round(node.garagePanelCount)))
+      const panelHeight = leafHeight / panelCount
+      const curveRadius = panelHeight * 0.58
+      const curveLength = (Math.PI / 2) * curveRadius
+      const overheadY = leafCenterY + leafHeight / 2 - panelHeight / 2
+      const openAmount = getDoorRenderOpenAmount('garage-sectional', t)
+      const travel =
+        openAmount * ((panelCount - 1) * panelHeight + curveLength + panelHeight * 0.65)
+      let posed = false
+      for (let index = 0; index < panelCount; index++) {
+        const group = mesh.getObjectByName(`${SECTIONAL_PANEL_NAME}${index}`)
+        if (!group) continue
+        posed = true
+        const orderFromTop = panelCount - 1 - index
+        const pathPosition = travel - orderFromTop * panelHeight
+        let y = overheadY + pathPosition
+        let z = 0
+        let rotationX = 0
+        if (pathPosition > 0 && pathPosition <= curveLength) {
+          const theta = pathPosition / curveRadius
+          rotationX = -theta
+          y = overheadY + curveRadius * Math.sin(theta)
+          z = -curveRadius * (1 - Math.cos(theta))
+        } else if (pathPosition > curveLength) {
+          rotationX = -Math.PI / 2
+          y = overheadY + curveRadius
+          z = -(curveRadius + pathPosition - curveLength)
+        }
+        group.position.set(0, y, z)
+        group.rotation.set(rotationX, 0, 0)
+      }
+      return posed
+    }
+    case 'garage-rollup': {
+      const group = mesh.getObjectByName(ROLLUP_CURTAIN_NAME)
+      if (!group) return false
+      group.scale.y = Math.max(0.02, 1 - t)
+      return true
+    }
+    default:
+      return false
+  }
+}
+
 function addFoldingDoor(
   mesh: THREE.Mesh,
   {
@@ -1344,7 +1474,6 @@ function addFoldingDoor(
     leafDepth,
     frameThickness,
     frameDepth,
-    operationState,
     leafCount,
     doorHeight,
     handleHeight,
@@ -1357,7 +1486,6 @@ function addFoldingDoor(
     leafDepth: number
     frameThickness: number
     frameDepth: number
-    operationState: number
     leafCount: DoorNode['leafCount']
     doorHeight: number
     handleHeight: number
@@ -1366,9 +1494,7 @@ function addFoldingDoor(
   },
 ) {
   const panelCount = leafCount === 2 ? 2 : 4
-  const foldAmount = clampDoorOperationState(operationState)
   const panelLength = insideWidth / panelCount
-  const foldAngle = Math.PI * 0.44 * foldAmount
 
   currentDoorSlot = 'hardware'
   addBox(
@@ -1382,31 +1508,20 @@ function addFoldingDoor(
     0,
   )
 
-  const vertices: Array<{ x: number; z: number }> = [{ x: -insideWidth / 2, z: 0 }]
+  // Build the panels as a hinged chain at the CLOSED pose: each panel group is
+  // parented to the previous one at that panel's end (`panelLength` along local
+  // x), starting from the left jamb. At rest every joint is straight, so the
+  // panels lie flat across the opening; `poseDoorMovingParts` folds the joints.
+  let parent: THREE.Object3D = mesh
   for (let index = 0; index < panelCount; index++) {
-    const previous = vertices[index]!
-    const direction = index % 2 === 0 ? -1 : 1
-    const angle = direction * foldAngle
-    vertices.push({
-      x: previous.x + panelLength * Math.cos(angle),
-      z: previous.z + panelLength * Math.sin(angle),
-    })
-  }
+    const group = new THREE.Group()
+    group.name = `${FOLDING_PANEL_NAME}${index}`
+    group.position.set(index === 0 ? -insideWidth / 2 : panelLength, 0, 0)
+    parent.add(group)
 
-  currentDoorSlot = undefined
-  for (let index = 0; index < panelCount; index++) {
-    const start = vertices[index]!
-    const end = vertices[index + 1]!
-    const dx = end.x - start.x
-    const dz = end.z - start.z
-    const centerX = (start.x + end.x) / 2
-    const centerZ = (start.z + end.z) / 2
-    const rotationY = Math.atan2(-dz, dx)
-    const localX = {
-      x: Math.cos(rotationY),
-      z: -Math.sin(rotationY),
-    }
-
+    // Panel content runs from local x=0 to x=panelLength, so it is centred at
+    // panelLength/2 within the group (the segment helper centres on leafCenterX).
+    currentDoorSlot = undefined
     const addFoldingLeafBox = (
       material: THREE.Material,
       w: number,
@@ -1415,19 +1530,7 @@ function addFoldingDoor(
       x: number,
       y: number,
       z: number,
-    ) => {
-      addRotatedBox(
-        mesh,
-        material,
-        w,
-        h,
-        d,
-        centerX + localX.x * x + Math.sin(rotationY) * z,
-        y,
-        centerZ + localX.z * x + Math.cos(rotationY) * z,
-        rotationY,
-      )
-    }
+    ) => addBox(group, material, w, h, d, panelLength / 2 + x, y, z)
 
     addLeafSegmentContent({
       addLeafBox: addFoldingLeafBox,
@@ -1441,43 +1544,37 @@ function addFoldingDoor(
       keepFrameWhenEmpty: true,
     })
 
+    // Reveal posts at the panel's hinge edges (local x=0 and x=panelLength).
     currentDoorSlot = undefined
-    for (const point of [start, end]) {
-      addBox(
-        mesh,
-        revealMaterial,
-        0.018,
-        leafHeight * 0.92,
-        leafDepth + 0.016,
-        point.x,
-        leafCenterY,
-        point.z,
-      )
+    for (const px of [0, panelLength]) {
+      addBox(group, revealMaterial, 0.018, leafHeight * 0.92, leafDepth + 0.016, px, leafCenterY, 0)
     }
+
+    parent = group
   }
 
-  const handlePoint = vertices[vertices.length - 1]!
+  // Handle on the free end of the last panel (its local x=panelLength edge).
   const handleY = handleHeight - doorHeight / 2
   currentDoorSlot = 'hardware'
   addBox(
-    mesh,
+    parent,
     hardwareMaterial,
     0.035,
     0.16,
     leafDepth + 0.035,
-    handlePoint.x - 0.035,
+    panelLength - 0.035,
     handleY,
-    handlePoint.z + 0.045,
+    0.045,
   )
   addBox(
-    mesh,
+    parent,
     hardwareMaterial,
     0.035,
     0.16,
     leafDepth + 0.035,
-    handlePoint.x - 0.035,
+    panelLength - 0.035,
     handleY,
-    handlePoint.z - 0.045,
+    -0.045,
   )
 }
 
@@ -1490,7 +1587,6 @@ function addPocketDoor(
     leafDepth,
     frameThickness,
     frameDepth,
-    operationState,
     slideDirection,
     doorHeight,
     handleHeight,
@@ -1503,7 +1599,6 @@ function addPocketDoor(
     leafDepth: number
     frameThickness: number
     frameDepth: number
-    operationState: number
     slideDirection: DoorNode['slideDirection']
     doorHeight: number
     handleHeight: number
@@ -1511,14 +1606,14 @@ function addPocketDoor(
     contentPadding: DoorNode['contentPadding']
   },
 ) {
-  const openAmount = clampDoorOperationState(operationState)
   const slideSign = slideDirection === 'right' ? 1 : -1
   const leafWidth = insideWidth
-  const leafCenterX = slideSign * insideWidth * openAmount
   const topY = leafCenterY + leafHeight / 2
   const pocketCenterX = slideSign * insideWidth
   const handleY = handleHeight - doorHeight / 2
-  const handleX = leafCenterX - slideSign * (leafWidth / 2 - 0.055)
+  // Leaf built closed (centred in the opening); `poseDoorMovingParts` slides the
+  // group into the pocket. Handle rides inside the group at its closed offset.
+  const handleX = -slideSign * (leafWidth / 2 - 0.055)
 
   currentDoorSlot = 'hardware'
   addBox(
@@ -1553,6 +1648,10 @@ function addPocketDoor(
     0,
   )
 
+  const leafGroup = new THREE.Group()
+  leafGroup.name = POCKET_LEAF_NAME
+  mesh.add(leafGroup)
+
   const addPocketLeafBox = (
     material: THREE.Material,
     w: number,
@@ -1561,13 +1660,13 @@ function addPocketDoor(
     x: number,
     y: number,
     z: number,
-  ) => addBox(mesh, material, w, h, d, x, y, z)
+  ) => addBox(leafGroup, material, w, h, d, x, y, z)
 
   addLeafSegmentContent({
     addLeafBox: addPocketLeafBox,
     leafWidth,
     leafHeight,
-    leafCenterX,
+    leafCenterX: 0,
     leafCenterY,
     leafDepth,
     segments,
@@ -1575,7 +1674,7 @@ function addPocketDoor(
   })
   currentDoorSlot = 'hardware'
   addBox(
-    mesh,
+    leafGroup,
     hardwareMaterial,
     0.03,
     0.18,
@@ -1585,7 +1684,7 @@ function addPocketDoor(
     leafDepth / 2 + 0.02,
   )
   addBox(
-    mesh,
+    leafGroup,
     hardwareMaterial,
     0.03,
     0.18,
@@ -1605,7 +1704,6 @@ function addBarnDoor(
     leafDepth,
     frameThickness,
     frameDepth,
-    operationState,
     slideDirection,
     doorHeight,
     handleHeight,
@@ -1618,7 +1716,6 @@ function addBarnDoor(
     leafDepth: number
     frameThickness: number
     frameDepth: number
-    operationState: number
     slideDirection: DoorNode['slideDirection']
     doorHeight: number
     handleHeight: number
@@ -1626,22 +1723,27 @@ function addBarnDoor(
     contentPadding: DoorNode['contentPadding']
   },
 ) {
-  const openAmount = clampDoorOperationState(operationState)
   const slideSign = slideDirection === 'right' ? 1 : -1
   const leafWidth = insideWidth * 1.06
-  const leafCenterX = slideSign * insideWidth * openAmount
   const faceZ = frameDepth / 2 + leafDepth / 2 + 0.028
   const trackY = leafCenterY + leafHeight / 2 + Math.max(frameThickness * 0.55, 0.045)
   const railLength = insideWidth * 2.25
   const railCenterX = slideSign * (insideWidth * 0.56)
   const handleY = handleHeight - doorHeight / 2
-  const handleX = leafCenterX - slideSign * (leafWidth / 2 - 0.075)
+  // Leaf + wheels + handle ride the BARN_LEAF group, built closed (leaf centred
+  // in the opening); `poseDoorMovingParts` slides the group along the rail. The
+  // rail and end stops stay static on the mesh.
+  const handleX = -slideSign * (leafWidth / 2 - 0.075)
   const wheelY = trackY - 0.075
 
   currentDoorSlot = 'hardware'
   addBox(mesh, hardwareMaterial, railLength, 0.035, 0.035, railCenterX, trackY, faceZ + 0.01)
   addBox(mesh, hardwareMaterial, 0.05, 0.13, 0.035, -insideWidth / 2, trackY - 0.02, faceZ + 0.01)
   addBox(mesh, hardwareMaterial, 0.05, 0.13, 0.035, insideWidth / 2, trackY - 0.02, faceZ + 0.01)
+
+  const leafGroup = new THREE.Group()
+  leafGroup.name = BARN_LEAF_NAME
+  mesh.add(leafGroup)
 
   const addBarnLeafBox = (
     material: THREE.Material,
@@ -1651,13 +1753,13 @@ function addBarnDoor(
     x: number,
     y: number,
     z: number,
-  ) => addBox(mesh, material, w, h, d, x, y, faceZ + z)
+  ) => addBox(leafGroup, material, w, h, d, x, y, faceZ + z)
 
   addLeafSegmentContent({
     addLeafBox: addBarnLeafBox,
     leafWidth,
     leafHeight,
-    leafCenterX,
+    leafCenterX: 0,
     leafCenterY,
     leafDepth,
     segments,
@@ -1667,23 +1769,23 @@ function addBarnDoor(
 
   currentDoorSlot = undefined
   addRotatedBox(
-    mesh,
+    leafGroup,
     revealMaterial,
     0.018,
     leafHeight * 0.86,
     0.012,
-    leafCenterX,
+    0,
     leafCenterY,
     faceZ + leafDepth / 2 + 0.014,
     -0.52,
   )
   addRotatedBox(
-    mesh,
+    leafGroup,
     revealMaterial,
     0.018,
     leafHeight * 0.86,
     0.012,
-    leafCenterX,
+    0,
     leafCenterY,
     faceZ + leafDepth / 2 + 0.014,
     0.52,
@@ -1691,22 +1793,13 @@ function addBarnDoor(
 
   currentDoorSlot = 'hardware'
   for (const offset of [-leafWidth * 0.28, leafWidth * 0.28]) {
-    addBox(mesh, hardwareMaterial, 0.085, 0.085, 0.035, leafCenterX + offset, wheelY, faceZ + 0.022)
-    addBox(
-      mesh,
-      hardwareMaterial,
-      0.026,
-      0.16,
-      0.026,
-      leafCenterX + offset,
-      wheelY - 0.075,
-      faceZ + 0.022,
-    )
+    addBox(leafGroup, hardwareMaterial, 0.085, 0.085, 0.035, offset, wheelY, faceZ + 0.022)
+    addBox(leafGroup, hardwareMaterial, 0.026, 0.16, 0.026, offset, wheelY - 0.075, faceZ + 0.022)
   }
 
   currentDoorSlot = 'hardware'
   addBox(
-    mesh,
+    leafGroup,
     hardwareMaterial,
     0.032,
     0.22,
@@ -1716,7 +1809,7 @@ function addBarnDoor(
     faceZ + leafDepth / 2 + 0.02,
   )
   addBox(
-    mesh,
+    leafGroup,
     hardwareMaterial,
     0.032,
     0.22,
@@ -1736,7 +1829,6 @@ function addSlidingDoor(
     leafDepth,
     frameThickness,
     frameDepth,
-    operationState,
     slideDirection,
     doorHeight,
     handleHeight,
@@ -1749,7 +1841,6 @@ function addSlidingDoor(
     leafDepth: number
     frameThickness: number
     frameDepth: number
-    operationState: number
     slideDirection: DoorNode['slideDirection']
     doorHeight: number
     handleHeight: number
@@ -1757,7 +1848,6 @@ function addSlidingDoor(
     contentPadding: DoorNode['contentPadding']
   },
 ) {
-  const openAmount = clampDoorOperationState(operationState)
   const activeOnRight = slideDirection === 'left'
   const fixedSign = activeOnRight ? -1 : 1
   const activeSign = activeOnRight ? 1 : -1
@@ -1765,12 +1855,14 @@ function addSlidingDoor(
   const panelHeight = leafHeight
   const closedActiveX = activeSign * insideWidth * 0.23
   const fixedX = fixedSign * insideWidth * 0.23
-  const activeX = closedActiveX - activeSign * insideWidth * 0.44 * openAmount
   const frontZ = leafDepth / 2 + 0.016
   const backZ = -leafDepth / 2 - 0.006
   const railY = leafCenterY + panelHeight / 2 - Math.min(frameThickness * 0.35, 0.02)
   const handleY = handleHeight - doorHeight / 2
-  const handleX = activeX + activeSign * (panelWidth / 2 - 0.06)
+  // Active panel + handle ride the SLIDING_ACTIVE_PANEL group, built at the
+  // closed position; `poseDoorMovingParts` slides the group behind the fixed
+  // panel. The fixed panel and rails stay static on the mesh.
+  const handleX = closedActiveX + activeSign * (panelWidth / 2 - 0.06)
 
   currentDoorSlot = 'hardware'
   addBox(
@@ -1804,6 +1896,10 @@ function addSlidingDoor(
     z: number,
   ) => addBox(mesh, material, w, h, d, x + fixedX, y, z + backZ)
 
+  const activePanelGroup = new THREE.Group()
+  activePanelGroup.name = SLIDING_ACTIVE_PANEL_NAME
+  mesh.add(activePanelGroup)
+
   const addActivePanelBox = (
     material: THREE.Material,
     w: number,
@@ -1812,7 +1908,7 @@ function addSlidingDoor(
     x: number,
     y: number,
     z: number,
-  ) => addBox(mesh, material, w, h, d, x + activeX, y, z + frontZ)
+  ) => addBox(activePanelGroup, material, w, h, d, x + closedActiveX, y, z + frontZ)
 
   addLeafSegmentContent({
     addLeafBox: addFixedPanelBox,
@@ -1838,7 +1934,7 @@ function addSlidingDoor(
   })
   currentDoorSlot = 'hardware'
   addBox(
-    mesh,
+    activePanelGroup,
     hardwareMaterial,
     0.032,
     0.24,
@@ -1848,7 +1944,7 @@ function addSlidingDoor(
     frontZ + leafDepth / 2 + 0.01,
   )
   addBox(
-    mesh,
+    activePanelGroup,
     hardwareMaterial,
     0.032,
     0.24,
@@ -1868,7 +1964,6 @@ function addGarageSectionalDoor(
     leafDepth,
     frameThickness,
     frameDepth,
-    operationState,
     garagePanelCount,
   }: {
     insideWidth: number
@@ -1877,19 +1972,13 @@ function addGarageSectionalDoor(
     leafDepth: number
     frameThickness: number
     frameDepth: number
-    operationState: number
     garagePanelCount: number
   },
 ) {
-  const openAmount = getDoorRenderOpenAmount('garage-sectional', operationState)
   const panelCount = Math.max(3, Math.min(12, Math.round(garagePanelCount)))
   const panelHeight = leafHeight / panelCount
   const panelGap = Math.min(0.012, panelHeight * 0.08)
   const travelDepth = Math.max(leafHeight, 1.4)
-  const curveRadius = panelHeight * 0.58
-  const curveLength = (Math.PI / 2) * curveRadius
-  const travel = openAmount * ((panelCount - 1) * panelHeight + curveLength + panelHeight * 0.65)
-  const overheadY = leafCenterY + leafHeight / 2 - panelHeight / 2
   const railY = leafCenterY + leafHeight / 2 - 0.04
   const railZ = -travelDepth / 2
 
@@ -1915,56 +2004,50 @@ function addGarageSectionalDoor(
     railZ,
   )
 
+  // Each panel is built flat (centred at its group origin) and the trims sit on
+  // the panel's front face in local space; `poseDoorMovingParts` rides each
+  // group along the overhead curve. Panel order, geometry and trim placement
+  // match the inline curve math (which the pose function reuses).
+  const revealOffset = (panelHeight - panelGap) * 0.22
+  const trimDepth = 0.01
+  const trimFaceOffset = leafDepth / 2 + trimDepth + 0.006
   for (let index = 0; index < panelCount; index++) {
-    const orderFromTop = panelCount - 1 - index
-    const pathPosition = travel - orderFromTop * panelHeight
-    let y = overheadY + pathPosition
-    let z = 0
-    let rotationX = 0
-
-    if (pathPosition > 0 && pathPosition <= curveLength) {
-      const theta = pathPosition / curveRadius
-      rotationX = -theta
-      y = overheadY + curveRadius * Math.sin(theta)
-      z = -curveRadius * (1 - Math.cos(theta))
-    } else if (pathPosition > curveLength) {
-      rotationX = -Math.PI / 2
-      y = overheadY + curveRadius
-      z = -(curveRadius + pathPosition - curveLength)
-    }
-
-    const revealOffset = (panelHeight - panelGap) * 0.22
-    const trimDepth = 0.01
-    const trimFaceOffset = leafDepth / 2 + trimDepth + 0.006
-    const addSectionalTrim = (localY: number) => {
-      currentDoorSlot = undefined
-      addBoxWithRotation(
-        mesh,
-        revealMaterial,
-        insideWidth - 0.16,
-        0.012,
-        trimDepth,
-        0,
-        y + localY * Math.cos(rotationX) - trimFaceOffset * Math.sin(rotationX),
-        z + localY * Math.sin(rotationX) + trimFaceOffset * Math.cos(rotationX),
-        [rotationX, 0, 0],
-      )
-    }
+    const group = new THREE.Group()
+    group.name = `${SECTIONAL_PANEL_NAME}${index}`
+    mesh.add(group)
 
     currentDoorSlot = 'panel'
-    addBoxWithRotation(
-      mesh,
+    addBox(
+      group,
       baseMaterial,
       insideWidth,
       Math.max(0.04, panelHeight - panelGap),
       leafDepth,
       0,
-      y,
-      z,
-      [rotationX, 0, 0],
+      0,
+      0,
     )
-    addSectionalTrim(revealOffset)
-    addSectionalTrim(-revealOffset)
+    currentDoorSlot = undefined
+    addBox(
+      group,
+      revealMaterial,
+      insideWidth - 0.16,
+      0.012,
+      trimDepth,
+      0,
+      revealOffset,
+      trimFaceOffset,
+    )
+    addBox(
+      group,
+      revealMaterial,
+      insideWidth - 0.16,
+      0.012,
+      trimDepth,
+      0,
+      -revealOffset,
+      trimFaceOffset,
+    )
   }
 
   currentDoorSlot = 'hardware'
@@ -1996,7 +2079,6 @@ function addGarageRollupDoor(
   const visibleHeight = leafHeight * (1 - openAmount)
   const visibleSlatCount = Math.ceil(visibleHeight / slatHeight)
   const topY = leafCenterY + leafHeight / 2
-  const curtainCenterY = topY - visibleHeight / 2
   const drumMaxRadius = Math.max(0.12, Math.min(0.22, leafHeight * 0.075))
   const drumY = topY + drumMaxRadius * 0.12
   const drumZ = -frameDepth / 2 - drumMaxRadius * 0.72
@@ -2024,23 +2106,33 @@ function addGarageRollupDoor(
   )
 
   if (visibleHeight > 0.01) {
+    // Wrap the visible curtain in a group pivoted at the lintel (topY). The live
+    // door keeps rebuilding the full slat detail per `operationState` (this group
+    // is just an organisational wrapper at scale 1 — world positions unchanged),
+    // but it gives the GLB exporter a single node to scale up into the header as
+    // an open clip, since the slats can't literally vanish in a glTF animation.
+    const curtain = new THREE.Group()
+    curtain.name = ROLLUP_CURTAIN_NAME
+    curtain.position.set(0, topY, 0)
+    mesh.add(curtain)
+
     currentDoorSlot = 'panel'
-    addBox(mesh, baseMaterial, insideWidth, visibleHeight, leafDepth, 0, curtainCenterY, 0)
+    addBox(curtain, baseMaterial, insideWidth, visibleHeight, leafDepth, 0, -visibleHeight / 2, 0)
 
     currentDoorSlot = undefined
     for (let index = 0; index < visibleSlatCount; index++) {
-      const y = topY - Math.min(visibleHeight, index * slatHeight)
-      addBox(mesh, revealMaterial, insideWidth - 0.08, 0.01, 0.012, 0, y, leafDepth / 2 + 0.012)
+      const y = -Math.min(visibleHeight, index * slatHeight)
+      addBox(curtain, revealMaterial, insideWidth - 0.08, 0.01, 0.012, 0, y, leafDepth / 2 + 0.012)
     }
 
     addBox(
-      mesh,
+      curtain,
       revealMaterial,
       insideWidth - 0.04,
       0.028,
       leafDepth + 0.018,
       0,
-      topY - visibleHeight,
+      -visibleHeight,
       leafDepth / 2 + 0.004,
     )
   }
@@ -2077,7 +2169,6 @@ function addGarageTiltupDoor(
     leafDepth,
     frameThickness,
     frameDepth,
-    operationState,
   }: {
     insideWidth: number
     leafHeight: number
@@ -2085,14 +2176,12 @@ function addGarageTiltupDoor(
     leafDepth: number
     frameThickness: number
     frameDepth: number
-    operationState: number
   },
 ) {
-  const openAmount = clampDoorOperationState(operationState)
-  const angle = (Math.PI / 2) * openAmount
   const hingeY = leafCenterY + leafHeight / 2
-  const panelCenterY = hingeY - Math.cos(angle) * (leafHeight / 2)
-  const panelCenterZ = -Math.sin(angle) * (leafHeight / 2)
+  // Leaf built closed (hanging from the lintel); `poseDoorMovingParts` rotates
+  // the group about the top hinge to open it. Rails + top bar stay static.
+  const panelCenterY = hingeY - leafHeight / 2
   const railLength = Math.max(leafHeight * 0.72, 1.2)
   const railY = hingeY - frameThickness * 0.35
   const railZ = -railLength / 2
@@ -2119,18 +2208,12 @@ function addGarageTiltupDoor(
     railZ,
   )
 
+  const leafGroup = new THREE.Group()
+  leafGroup.name = TILTUP_LEAF_NAME
+  mesh.add(leafGroup)
+
   currentDoorSlot = 'panel'
-  addBoxWithRotation(
-    mesh,
-    baseMaterial,
-    insideWidth,
-    leafHeight,
-    leafDepth,
-    0,
-    panelCenterY,
-    panelCenterZ,
-    [-angle, 0, 0],
-  )
+  addBox(leafGroup, baseMaterial, insideWidth, leafHeight, leafDepth, 0, panelCenterY, 0)
 
   const insetWidth = Math.max(0.1, insideWidth - 0.22)
   const insetHeight = Math.max(0.1, leafHeight - 0.28)
@@ -2138,16 +2221,15 @@ function addGarageTiltupDoor(
   const trimFaceOffset = leafDepth / 2 + trimDepth + 0.006
   const addTiltupTrim = (localX: number, localY: number, trimWidth: number, trimHeight: number) => {
     currentDoorSlot = undefined
-    addBoxWithRotation(
-      mesh,
+    addBox(
+      leafGroup,
       revealMaterial,
       trimWidth,
       trimHeight,
       trimDepth,
       localX,
-      panelCenterY + localY * Math.cos(angle) + trimFaceOffset * Math.sin(angle),
-      panelCenterZ - localY * Math.sin(angle) + trimFaceOffset * Math.cos(angle),
-      [-angle, 0, 0],
+      panelCenterY + localY,
+      trimFaceOffset,
     )
   }
 
@@ -2368,7 +2450,6 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
       leafDepth,
       frameThickness,
       frameDepth,
-      operationState,
       garagePanelCount,
     })
   } else if (doorType === 'garage-rollup') {
@@ -2389,7 +2470,6 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
       leafDepth,
       frameThickness,
       frameDepth,
-      operationState,
     })
   } else if (doorType === 'folding') {
     addFoldingDoor(mesh, {
@@ -2399,7 +2479,6 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
       leafDepth,
       frameThickness,
       frameDepth,
-      operationState,
       leafCount,
       doorHeight: height,
       handleHeight,
@@ -2414,7 +2493,6 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
       leafDepth,
       frameThickness,
       frameDepth,
-      operationState,
       slideDirection,
       doorHeight: height,
       handleHeight,
@@ -2429,7 +2507,6 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
       leafDepth,
       frameThickness,
       frameDepth,
-      operationState,
       slideDirection,
       doorHeight: height,
       handleHeight,
@@ -2444,7 +2521,6 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
       leafDepth,
       frameThickness,
       frameDepth,
-      operationState,
       slideDirection,
       doorHeight: height,
       handleHeight,
@@ -2547,6 +2623,14 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
       openingTopRadii: getDoorTopRadii(node, insideWidth, leafH),
       archHeight: node.archHeight ?? 0.45,
     })
+  }
+
+  // Operation doors build their moving parts at the closed pose inside named
+  // groups; reflect the door's current `operationState` by posing them. Roll-up
+  // is excluded: its live rebuild already renders the open state at full detail
+  // (the named curtain group is only there for the GLB exporter's scale clip).
+  if (doorType !== 'garage-rollup') {
+    poseDoorMovingParts(node, mesh, operationState)
   }
 
   syncDoorCutout(node, mesh)
