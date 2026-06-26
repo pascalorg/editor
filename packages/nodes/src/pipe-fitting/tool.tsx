@@ -226,7 +226,7 @@ const PipeFittingTool = () => {
       {/* Rotation HUD — active axis + key hints, pinned above the ghost. */}
       <Html
         center
-        position={[placement.position[0], placement.position[1] + 0.5, placement.position[2]]}
+        position={[placement.position[0], placement.position[1] + 1.45, placement.position[2]]}
         style={{ pointerEvents: 'none', userSelect: 'none' }}
         zIndexRange={[100, 0]}
       >

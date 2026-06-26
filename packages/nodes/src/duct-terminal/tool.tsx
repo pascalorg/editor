@@ -413,7 +413,7 @@ const DuctTerminalTool = () => {
       </group>
       <Html
         center
-        position={[previewPosition[0], previewPosition[1] + 0.45, previewPosition[2]]}
+        position={[previewPosition[0], previewPosition[1] + 1.45, previewPosition[2]]}
         style={{ pointerEvents: 'none', userSelect: 'none' }}
         zIndexRange={[100, 0]}
       >

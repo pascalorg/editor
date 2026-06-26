@@ -622,7 +622,7 @@ const PipeSegmentTool = () => {
             <group position={cursorPos}>
               <Html
                 center
-                position={[0, 0.3, 0]}
+                position={[0, 1.45, 0]}
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
                 zIndexRange={[100, 0]}
               >

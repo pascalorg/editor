@@ -462,7 +462,7 @@ const LiquidLineTool = () => {
             <group position={cursorPos}>
               <Html
                 center
-                position={[0, 0.45, 0]}
+                position={[0, 1.45, 0]}
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
                 zIndexRange={[100, 0]}
               >
@@ -488,7 +488,7 @@ const LiquidLineTool = () => {
               <group position={cursorPos}>
                 <Html
                   center
-                  position={[0, 0.35, 0]}
+                  position={[0, 1.45, 0]}
                   style={{ pointerEvents: 'none', userSelect: 'none' }}
                   zIndexRange={[100, 0]}
                 >
