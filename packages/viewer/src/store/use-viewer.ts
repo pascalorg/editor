@@ -15,7 +15,7 @@ type SelectionPath = {
   buildingId: BuildingNode['id'] | null
   levelId: LevelNode['id'] | null
   zoneId: ZoneNode['id'] | null
-  selectedIds: BaseNode['id'][] // For items/assets (multi-select)
+  selectedIds: BaseNode['id'][]
 }
 
 type Outliner = {
@@ -78,24 +78,21 @@ type ViewerState = {
   transparentBackground: boolean
   setTransparentBackground: (transparent: boolean) => void
 
-  // Embed-controlled ink-edge opacity override (null = use the per-mode default).
   inkOpacity: number | null
   setInkOpacity: (opacity: number | null) => void
 
   projectId: string | null
   setProjectId: (id: string | null) => void
-  projectPreferences: Record<
+  projectPreferences: Record
     string,
     { showScans?: boolean; showGuides?: boolean; showGrid?: boolean }
   >
 
-  // Smart selection update
   setSelection: (updates: Partial<SelectionPath>) => void
   resetSelection: () => void
 
-  outliner: Outliner // No setter as we will manipulate directly the arrays
+  outliner: Outliner
 
-  // Export functionality
   exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
   setExportScene: (fn: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null) => void
 
@@ -113,17 +110,22 @@ type ViewerState = {
    * height arrow, width arrow, etc.). Suppresses node pointer event
    * routing so the synthetic click on pointerup doesn't reroute
    * selection to whatever mesh the cursor lands on at release.
-   * Conceptually a sibling of `cameraDragging` — both mean "user is
-   * dragging; don't treat the next pointerup as a click on the
-   * scene." Set by the host (e.g. `NodeArrowHandles` in the editor);
-   * the viewer only reads it.
    */
   inputDragging: boolean
   setInputDragging: (dragging: boolean) => void
+
+  /**
+   * Current north-arrow bearing in degrees (clockwise from screen-up).
+   * Written every frame by NorthCompassR3F (inside the Canvas) and read
+   * by NorthCompassWidget (outside the Canvas) via this shared store.
+   * Not persisted — resets to 0 on mount.
+   */
+  northBearingDeg: number
+  setNorthBearingDeg: (deg: number) => void
 }
 
-type PersistedViewerState = Partial<
-  Pick<
+type PersistedViewerState = Partial
+  Pick
     ViewerState,
     | 'cameraMode'
     | 'sceneTheme'
@@ -314,7 +316,6 @@ const useViewer = create<ViewerState>()(
         set((state) => {
           const newSelection = { ...state.selection, ...updates }
 
-          // Hierarchy Guard: If we change a high-level parent, reset the children unless explicitly provided
           if (updates.buildingId !== undefined) {
             if (updates.levelId === undefined) newSelection.levelId = null
             if (updates.zoneId === undefined) newSelection.zoneId = null
@@ -355,8 +356,12 @@ const useViewer = create<ViewerState>()(
 
       cameraDragging: false,
       setCameraDragging: (dragging) => set({ cameraDragging: dragging }),
+
       inputDragging: false,
       setInputDragging: (dragging) => set({ inputDragging: dragging }),
+
+      northBearingDeg: 0,
+      setNorthBearingDeg: (deg) => set({ northBearingDeg: deg }),
     }),
     {
       name: 'viewer-preferences',
