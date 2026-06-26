@@ -1,6 +1,6 @@
 'use client'
 
-import { NorthCompassOverlay } from './north-compass'
+import { NorthCompassWidget } from './north-compass'
 import { Icon as IconifyIcon } from '@iconify/react'
 import {
   DropdownMenu,
@@ -514,14 +514,17 @@ export function CommunityViewerToolbarLeft() {
 
 export function CommunityViewerToolbarRight() {
   return (
-    <div className={TOOLBAR_CONTAINER}>
-      <LevelModeToggle />
-      <WallModeToggle />
-      <div className="my-1.5 w-px bg-border/50" />
-      <DisplayMenu />
-      <div className="my-1.5 w-px bg-border/50" />
-      <WalkthroughButton />
-      <PreviewButton />
-    </div>
+    <>
+      <NorthCompassWidget />
+      <div className={TOOLBAR_CONTAINER}>
+        <LevelModeToggle />
+        <WallModeToggle />
+        <div className="my-1.5 w-px bg-border/50" />
+        <DisplayMenu />
+        <div className="my-1.5 w-px bg-border/50" />
+        <WalkthroughButton />
+        <PreviewButton />
+      </div>
+    </>
   )
 }
