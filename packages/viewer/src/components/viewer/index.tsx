@@ -30,6 +30,7 @@ import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import FrameLimiter from './frame-limiter'
 import { Lights } from './lights'
+import { NorthCompassR3F } from './north-compass'
 import { PerfMonitor } from './perf-monitor'
 import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
 import { RegisteredSystems } from './registered-systems'
@@ -515,6 +516,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
       }}
     >
       <FrameLimiter fps={50} />
+      <NorthCompassR3F />
       <ViewerCamera />
       <GPUDeviceWatcher />
       <ToneMappingExposure />
