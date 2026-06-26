@@ -6,6 +6,7 @@ import { furnishTools } from '../../../components/ui/action-menu/furnish-tools'
 import { tools } from '../../../components/ui/action-menu/structure-tools'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import useEditor from '../../../store/use-editor'
+import useWallSnapIndicator from '../../../store/use-wall-snap-indicator'
 
 interface CursorSphereProps extends Omit<ThreeElements['group'], 'ref'> {
   color?: string
@@ -40,6 +41,10 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
   const mode = useEditor((s) => s.mode)
   const catalogCategory = useEditor((s) => s.catalogCategory)
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
+  // While a wall snap is active the beacon layer already marks the point
+  // (green square at a corner); hide the cursor's ground dot/ring so it
+  // doesn't sit on top of that glyph.
+  const isSnapping = useWallSnapIndicator((s) => s.point !== null)
 
   // Find the icon for the current tool
   let activeToolConfig = null
@@ -58,33 +63,35 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
       {/* Flat marker on the ground. The bright center dot moves to the tip
           of the line in `dotAtTip` mode (the placement point hangs above the
           floor), leaving a faint ring here so the plan position stays read. */}
-      <group rotation={[-Math.PI / 2, 0, 0]}>
-        {/* Center dot — at the ground unless the placement point is elevated */}
-        {!dotAtTip && (
+      {!isSnapping && (
+        <group rotation={[-Math.PI / 2, 0, 0]}>
+          {/* Center dot — at the ground unless the placement point is elevated */}
+          {!dotAtTip && (
+            <mesh layers={EDITOR_LAYER} renderOrder={2}>
+              <circleGeometry args={[0.06, 32]} />
+              <meshBasicMaterial
+                color={color}
+                depthTest={false}
+                depthWrite={false}
+                opacity={0.9}
+                transparent
+              />
+            </mesh>
+          )}
+
+          {/* Outer ring / glow */}
           <mesh layers={EDITOR_LAYER} renderOrder={2}>
-            <circleGeometry args={[0.06, 32]} />
+            <circleGeometry args={[0.2, 32]} />
             <meshBasicMaterial
               color={color}
               depthTest={false}
               depthWrite={false}
-              opacity={0.9}
+              opacity={dotAtTip ? 0.2 : 0.25}
               transparent
             />
           </mesh>
-        )}
-
-        {/* Outer ring / glow */}
-        <mesh layers={EDITOR_LAYER} renderOrder={2}>
-          <circleGeometry args={[0.2, 32]} />
-          <meshBasicMaterial
-            color={color}
-            depthTest={false}
-            depthWrite={false}
-            opacity={dotAtTip ? 0.2 : 0.25}
-            transparent
-          />
-        </mesh>
-      </group>
+        </group>
+      )}
 
       {/* Vertical line */}
       {height > 0 && (
