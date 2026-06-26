@@ -6,12 +6,17 @@ import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
  * MCP research fixtures.
  *
  * Footprint: 12 m × 8 m house centered at the origin, with a 12 m × 6 m
- * back garden zone immediately to the north of the house, surrounded by a
- * privacy fence on three sides.
+ * back garden zone to the north of the house (negative-Z side), surrounded
+ * by a privacy fence on three sides.
+ *
+ * Coordinate system: [x, z] on the XZ plane.
+ *   x runs west (negative) to east (positive).
+ *   z runs south (positive) to north (negative).
+ *   True North = world −Z direction (site.northDirection = π/2, the default).
  *
  * Contents:
  *   - 4 perimeter walls around the house
- *   - 1 front door (south wall), 1 large garden door (north wall)
+ *   - 1 front door (south wall, +Z side), 1 large garden door (north wall, −Z side)
  *   - 2 windows on the south wall, 1 window on each of east and west
  *   - 1 indoor "living" zone, 1 outdoor "garden" zone
  *   - 3 fence segments bounding the north/east/west of the garden
