@@ -10,8 +10,12 @@ import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
  * 5 windows (2 on the living/kitchen, 1 per bedroom, 1 on the bath).
  * Interior partitions split the north half into two bedrooms and a bath.
  *
- * Coordinate system: `[x, z]` on the XZ plane, with `x` running east/west
- * and `z` running north/south (positive z points south).
+ * Coordinate system: [x, z] on the XZ plane.
+ *   x runs west (negative) to east (positive).
+ *   z runs south (positive) to north (negative).
+ *   True North = world −Z direction (site.northDirection = π/2, the default).
+ *
+ * As a result: Z_MIN (−4) is the north wall, Z_MAX (+4) is the south wall.
  */
 
 // Perimeter extents: 10 m × 8 m.
