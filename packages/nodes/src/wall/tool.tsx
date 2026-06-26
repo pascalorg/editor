@@ -30,6 +30,7 @@ import {
   useEditor,
   useSegmentDraftChain,
   useWallSnapIndicator,
+  WALL_JOIN_SNAP_RADIUS,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -140,6 +141,13 @@ function distanceSquared(a: WallPlanPoint, b: WallPlanPoint) {
 
 function pointMatches(a: WallPlanPoint, b: WallPlanPoint, tolerance = 1e-5) {
   return distanceSquared(a, b) <= tolerance * tolerance
+}
+
+function isWithinWallJoinSnapRadius(point: WallPlanPoint, vertex: Vector3) {
+  const dx = point[0] - vertex.x
+  const dz = point[1] - vertex.z
+
+  return dx * dx + dz * dz <= WALL_JOIN_SNAP_RADIUS * WALL_JOIN_SNAP_RADIUS
 }
 
 function getNearestAxisAngleLabel(
@@ -487,6 +495,7 @@ export const WallTool: React.FC = () => {
   const wallPreviewRef = useRef<Mesh>(null!)
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
+  const chainFirstVertex = useRef<Vector3 | null>(null)
   const buildingState = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
@@ -509,8 +518,7 @@ export const WallTool: React.FC = () => {
     }
 
     // Align the drafted point onto another object's nearest real anchor and
-    // publish the guide. Alt bypasses alignment. Returns the possibly snapped
-    // point.
+    // publish the guide. Returns the possibly snapped point.
     const alignPoint = (
       point: WallPlanPoint,
       options: { applySnap?: boolean; bypass?: boolean },
@@ -535,6 +543,7 @@ export const WallTool: React.FC = () => {
 
     const stopDrafting = () => {
       buildingState.current = 0
+      chainFirstVertex.current = null
       if (wallPreviewRef.current) {
         wallPreviewRef.current.visible = false
       }
@@ -552,7 +561,6 @@ export const WallTool: React.FC = () => {
       const localPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
       // Snapping is governed entirely by the snapping mode (grid / lines /
       // angles / off). `'off'` is the bypass — there is no Shift hold-to-bypass.
-      // Alt still bypasses Figma-style alignment guides independently.
       const angleLocked = buildingState.current === 1 && isAngleSnapActive()
       // Alignment guides follow the snapping mode (lines = magnetic on), not Alt.
       const bypassAlign = !isMagneticSnapActive()
@@ -649,6 +657,7 @@ export const WallTool: React.FC = () => {
         )
         gridPosition = snappedStart
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
+        chainFirstVertex.current = startingPoint.current.clone()
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
         setAxisGuide({
@@ -696,9 +705,16 @@ export const WallTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
         useWallSnapIndicator.getState().clear()
 
-        // Alt commits a single wall — stop drafting instead of chaining
-        // so the next click starts a fresh start point.
-        if (event.nativeEvent?.altKey === true) {
+        const wallChainMode = useEditor.getState().wallChainMode
+        if (wallChainMode === 'single') {
+          stopDrafting()
+          return
+        }
+
+        if (
+          chainFirstVertex.current &&
+          isWithinWallJoinSnapRadius(createdWall.end, chainFirstVertex.current)
+        ) {
           stopDrafting()
           return
         }

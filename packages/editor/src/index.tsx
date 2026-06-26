@@ -134,6 +134,7 @@ export {
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   WALL_GRID_STEP,
+  WALL_JOIN_SNAP_RADIUS,
   type WallDraftSnapKind,
   type WallDraftSnapResult,
   type WallPlanPoint,

@@ -467,8 +467,7 @@ export const FenceTool: React.FC = () => {
     }
 
     // Align the drafted point onto another object's nearest real anchor and
-    // publish the guide. Alt bypasses alignment. Returns the possibly snapped
-    // point.
+    // publish the guide. Returns the possibly snapped point.
     const alignPoint = (point: FencePlanPoint, bypass: boolean): FencePlanPoint => {
       // Figma alignment pulls the endpoint onto existing corners / edges, so it
       // is a line snap — suppress it whenever magnetic snap is off (`'off'` /
@@ -500,8 +499,9 @@ export const FenceTool: React.FC = () => {
       const localPoint: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
       // While drafting, the segment locks to 15° rays from its start.
       // Snapping is governed by the snapping mode (`'off'` is the bypass);
-      // there is no Shift hold-to-bypass. Alt still bypasses alignment guides.
-      const bypassAlign = event.nativeEvent?.altKey === true
+      // there is no Shift hold-to-bypass. Alignment follows the magnetic snap
+      // mode, not Alt (Alt-tap toggles continuous/single chaining).
+      const bypassAlign = !isMagneticSnapActive()
 
       if (buildingState.current === 1) {
         const angleLocked = isAngleSnapActive()
@@ -567,7 +567,7 @@ export const FenceTool: React.FC = () => {
 
       const { walls, fences } = getCurrentLevelElements()
       const localClick: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
-      const bypassAlign = event.nativeEvent?.altKey === true
+      const bypassAlign = !isMagneticSnapActive()
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
@@ -611,6 +611,13 @@ export const FenceTool: React.FC = () => {
         // for the next segment, and drop the just-shown guide.
         refreshAlignmentCandidates()
         useAlignmentGuides.getState().clear()
+
+        // Single mode commits one segment per click: stop drafting so the next
+        // click starts a fresh segment instead of chaining off this endpoint.
+        if (useEditor.getState().fenceChainMode === 'single') {
+          stopDrafting()
+          return
+        }
 
         const nextStart = createdFence.end
         // Publish the resolved chain start so the 2D floor-plan draft

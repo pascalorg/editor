@@ -48,8 +48,19 @@ export const useKeyboard = ({
     // shows a snapping chip. That single source covers wall/fence/item drafting,
     // every node move (including wall-hosted items + door/window openings, which
     // now declare `snapProfile`), and endpoint/polygon reshaping, so the keys
-    // never silently stop working. (Force-place lives on Alt for all of them.)
+    // never silently stop working. (Force-place lives on Alt outside wall drafting.)
     const isSnappingCycleContext = () => getActiveSnapContext() != null
+    const isWallDraftingActive = () => {
+      const ed = useEditor.getState()
+      return ed.mode === 'build' && ed.tool === 'wall'
+    }
+    const isFenceDraftingActive = () => {
+      const ed = useEditor.getState()
+      return ed.mode === 'build' && ed.tool === 'fence'
+    }
+    // Alt-tap cycles the active drafting tool's chain mode (wall room/single,
+    // fence continuous/single). Only one of these is ever active at a time.
+    const isChainModeContext = () => isWallDraftingActive() || isFenceDraftingActive()
 
     // A "clean tap" of Ctrl/Meta (pressed and released with NO other key in
     // between) cycles the grid step — same context as the Shift snapping-mode
@@ -57,16 +68,22 @@ export const useKeyboard = ({
     // and is cleared the instant any other key fires, so chords like Ctrl+Z /
     // Ctrl+C never cycle.
     let ctrlTapClean = false
+    let altTapClean = false
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Control' || e.key === 'Meta') {
         // Only a fresh, modifier-free press starts a clean-tap candidate;
         // ignore key-repeat and presses already part of a combo.
         ctrlTapClean = !e.repeat && !e.shiftKey && !e.altKey
+        altTapClean = false
+      } else if (e.key === 'Alt') {
+        altTapClean = !e.repeat && !e.shiftKey && !e.ctrlKey && !e.metaKey && isChainModeContext()
+        ctrlTapClean = false
       } else {
         // Any non-modifier key (or a modifier combined with Ctrl/Meta) breaks
         // the clean tap.
         ctrlTapClean = false
+        altTapClean = false
       }
 
       // Don't handle shortcuts if user is typing in an input
@@ -413,18 +430,36 @@ export const useKeyboard = ({
       }
     }
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key !== 'Control' && e.key !== 'Meta') return
-      const wasClean = ctrlTapClean
-      ctrlTapClean = false
+      if (e.key === 'Control' || e.key === 'Meta') {
+        const wasClean = ctrlTapClean
+        ctrlTapClean = false
+        if (!wasClean) return
+        // Same scope as the Shift snapping-mode cycle: wall / fence build only,
+        // and never while typing in an input.
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+          return
+        }
+        if (!isSnappingCycleContext()) return
+        // Cycle the grid / measurement step (0.5 → 0.25 → 0.1 → 0.05).
+        useEditor.getState().cycleGridSnapStep()
+        sfxEmitter.emit('sfx:grid-snap')
+        return
+      }
+
+      if (e.key !== 'Alt') return
+      const wasClean = altTapClean
+      altTapClean = false
       if (!wasClean) return
-      // Same scope as the Shift snapping-mode cycle: wall / fence build only,
-      // and never while typing in an input.
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
       }
-      if (!isSnappingCycleContext()) return
-      // Cycle the grid / measurement step (0.5 → 0.25 → 0.1 → 0.05).
-      useEditor.getState().cycleGridSnapStep()
+      if (isWallDraftingActive()) {
+        useEditor.getState().cycleWallChainMode()
+      } else if (isFenceDraftingActive()) {
+        useEditor.getState().cycleFenceChainMode()
+      } else {
+        return
+      }
       sfxEmitter.emit('sfx:grid-snap')
     }
 

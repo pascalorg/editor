@@ -167,6 +167,7 @@ import {
   snapWallDraftPointDetailed,
   snapPointToGrid as snapWallPointToGrid,
   WALL_GRID_STEP,
+  WALL_JOIN_SNAP_RADIUS,
   type WallPlanPoint,
 } from '../tools/wall/wall-drafting'
 
@@ -2457,6 +2458,13 @@ function FloorplanDraftWallMeasurement({
 
 function pointsEqual(a: WallPlanPoint, b: WallPlanPoint): boolean {
   return a[0] === b[0] && a[1] === b[1]
+}
+
+function isWithinWallJoinSnapRadius(point: WallPlanPoint, firstVertex: WallPlanPoint): boolean {
+  const dx = point[0] - firstVertex[0]
+  const dz = point[1] - firstVertex[1]
+
+  return dx * dx + dz * dz <= WALL_JOIN_SNAP_RADIUS * WALL_JOIN_SNAP_RADIUS
 }
 
 function haveSameIds(currentIds: string[], nextIds: string[]): boolean {
@@ -5119,6 +5127,7 @@ export function FloorplanPanel({
   // `grid:move` re-renders only `FloorplanLinearDraftLayer`, not this panel.
   // Shims keep the `setXDraftEnd(value | prev => …)` call sites unchanged.
   const [draftStart, setDraftStart] = useState<WallPlanPoint | null>(null)
+  const [wallChainFirstVertex, setWallChainFirstVertex] = useState<WallPlanPoint | null>(null)
   const setDraftEnd = useCallback(
     (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
       const store = useFloorplanDraftPreview.getState()
@@ -7477,7 +7486,9 @@ export function FloorplanPanel({
 
   const clearWallPlacementDraft = useCallback(() => {
     setDraftStart(null)
+    setWallChainFirstVertex(null)
     setDraftEnd(null)
+    useSegmentDraftChain.getState().clear('wall')
   }, [])
   const clearFencePlacementDraft = useCallback(() => {
     setFenceDraftStart(null)
@@ -8859,7 +8870,8 @@ export function FloorplanPanel({
         // Figma alignment — same endpoint-wins precedence as the wall branch.
         // While a draft is open the segment locks to 15° rays from its start.
         // Snapping is governed by the snapping mode (`'off'` is the bypass);
-        // there is no Shift hold-to-bypass. Alt still bypasses Figma alignment.
+        // there is no Shift hold-to-bypass. Alignment follows the magnetic snap
+        // mode, not Alt (Alt-tap toggles continuous/single chaining).
         const fenceAngleSnap = fenceDraftStart !== null && isAngleSnapActive()
         const fenceSnapped = snapFenceDraftPoint({
           point: planPoint,
@@ -8878,7 +8890,7 @@ export function FloorplanPanel({
           snappedPoint = alignFloorplanDraftPoint(fenceSnapped, {
             // Alignment is a line snap (pulls onto existing corners/edges) —
             // suppress it whenever magnetic snap is off (`'off'` / `'angles'`).
-            bypass: event.altKey || !isMagneticSnapActive(),
+            bypass: !isMagneticSnapActive(),
           })
 
         emitFloorplanGridEvent('move', snappedPoint, event)
@@ -9059,7 +9071,7 @@ export function FloorplanPanel({
       // Wall draft: grid + magnetic snap, then Figma-style alignment.
       // While a draft is open the segment locks to 15° rays from its start.
       // Snapping is governed by the snapping mode (`'off'` is the bypass);
-      // there is no Shift hold-to-bypass. Alt still bypasses Figma alignment.
+      // there is no Shift hold-to-bypass.
       const wallAngleSnap = draftStart !== null && isAngleSnapActive()
       const wallSnap = snapWallDraftPointDetailed({
         point: planPoint,
@@ -9080,7 +9092,7 @@ export function FloorplanPanel({
           applySnap: !wallAngleSnap,
           // Alignment is a line snap (pulls onto existing corners/edges) —
           // suppress it whenever magnetic snap is off (`'off'` / `'angles'`).
-          bypass: event.altKey || !isMagneticSnapActive(),
+          bypass: !isMagneticSnapActive(),
         })
       }
       useWallSnapIndicator
@@ -9309,9 +9321,10 @@ export function FloorplanPanel({
   )
 
   const handleWallPlacementPoint = useCallback(
-    (point: WallPlanPoint, options?: { singleWall?: boolean }) => {
+    (point: WallPlanPoint) => {
       if (!draftStart) {
         setDraftStart(point)
+        setWallChainFirstVertex(point)
         setDraftEnd(point)
         setCursorPoint(point)
         return
@@ -9338,27 +9351,29 @@ export function FloorplanPanel({
       const createdWall =
         useEditor.getState().viewMode === '2d' ? createWallOnCurrentLevel(draftStart, point) : null
 
-      // Alt commits a single wall: drop the draft so the next click
-      // starts a fresh segment instead of chaining off this endpoint.
-      if (options?.singleWall) {
-        setDraftStart(null)
-        setDraftEnd(null)
-        setCursorPoint(null)
-        return
-      }
-
       // Chain the next segment from the resolved commit endpoint (it may
       // have corner-snapped or split-adjusted): the wall we just made in
       // 2D-only, otherwise the 3D tool's published chain start. Both views
       // then draft from the same start.
+      const publishedNextStart = useSegmentDraftChain.getState().wall
       const nextStart: WallPlanPoint = createdWall
         ? (createdWall.end as WallPlanPoint)
-        : (useSegmentDraftChain.getState().wall ?? point)
+        : (publishedNextStart ?? point)
+
+      if (
+        useEditor.getState().wallChainMode === 'single' ||
+        (wallChainFirstVertex && isWithinWallJoinSnapRadius(nextStart, wallChainFirstVertex))
+      ) {
+        clearWallPlacementDraft()
+        setCursorPoint(null)
+        return
+      }
+
       setDraftStart(nextStart)
       setDraftEnd(nextStart)
       setCursorPoint(nextStart)
     },
-    [draftStart],
+    [clearWallPlacementDraft, draftStart, wallChainFirstVertex],
   )
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({
     ceilingPolygons: displayCeilingPolygons,

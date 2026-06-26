@@ -152,6 +152,8 @@ export type StructureLayer = 'zones' | 'elements'
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
 export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
+export type WallChainMode = 'room' | 'single'
+export type FenceChainMode = 'continuous' | 'single'
 
 export type NavigationSyncSource = '2d' | '3d'
 
@@ -373,6 +375,12 @@ type EditorState = {
   setSnappingMode: (context: SnapContext, mode: SnappingMode) => void
   // Cycle the *active* context's mode within its own set; returns the new value.
   cycleSnappingMode: () => SnappingMode
+  wallChainMode: WallChainMode
+  setWallChainMode: (mode: WallChainMode) => void
+  cycleWallChainMode: () => WallChainMode
+  fenceChainMode: FenceChainMode
+  setFenceChainMode: (mode: FenceChainMode) => void
+  cycleFenceChainMode: () => FenceChainMode
   showReferenceFloor: boolean
   toggleReferenceFloor: () => void
   setShowReferenceFloor: (show: boolean) => void
@@ -422,6 +430,8 @@ type PersistedEditorLayoutState = Pick<
   | 'gridSnapStep'
   | 'magneticSnap'
   | 'snappingModeByContext'
+  | 'wallChainMode'
+  | 'fenceChainMode'
   | 'showReferenceFloor'
   | 'referenceFloorOffset'
   | 'referenceFloorOpacity'
@@ -450,6 +460,8 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
     item: defaultSnappingModeFor('item'),
     polygon: defaultSnappingModeFor('polygon'),
   },
+  wallChainMode: 'room',
+  fenceChainMode: 'continuous',
   showReferenceFloor: false,
   referenceFloorOffset: 1,
   referenceFloorOpacity: 0.35,
@@ -560,6 +572,14 @@ function migrateSnappingMode(value: unknown, context: SnapContext): SnappingMode
     : defaultSnappingModeFor(context)
 }
 
+function migrateWallChainMode(value: unknown): WallChainMode {
+  return value === 'single' || value === 'room' ? value : 'room'
+}
+
+function migrateFenceChainMode(value: unknown): FenceChainMode {
+  return value === 'single' || value === 'continuous' ? value : 'continuous'
+}
+
 function normalizePersistedEditorLayoutState(
   state: Partial<PersistedEditorLayoutState> | null | undefined,
 ): PersistedEditorLayoutState {
@@ -581,6 +601,8 @@ function normalizePersistedEditorLayoutState(
       item: migrateSnappingMode(state?.snappingModeByContext?.item, 'item'),
       polygon: migrateSnappingMode(state?.snappingModeByContext?.polygon, 'polygon'),
     },
+    wallChainMode: migrateWallChainMode(state?.wallChainMode),
+    fenceChainMode: migrateFenceChainMode(state?.fenceChainMode),
     showReferenceFloor: state?.showReferenceFloor === true,
     referenceFloorOffset:
       typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
@@ -1048,6 +1070,20 @@ const useEditor = create<EditorState>()(
         }))
         return next
       },
+      wallChainMode: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.wallChainMode,
+      setWallChainMode: (mode) => set({ wallChainMode: mode }),
+      cycleWallChainMode: () => {
+        const next = get().wallChainMode === 'room' ? 'single' : 'room'
+        set({ wallChainMode: next })
+        return next
+      },
+      fenceChainMode: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.fenceChainMode,
+      setFenceChainMode: (mode) => set({ fenceChainMode: mode }),
+      cycleFenceChainMode: () => {
+        const next = get().fenceChainMode === 'continuous' ? 'single' : 'continuous'
+        set({ fenceChainMode: next })
+        return next
+      },
       showReferenceFloor: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showReferenceFloor,
       toggleReferenceFloor: () =>
         set((state) => ({ showReferenceFloor: !state.showReferenceFloor })),
@@ -1141,6 +1177,8 @@ const useEditor = create<EditorState>()(
         gridSnapStep: state.gridSnapStep,
         magneticSnap: state.magneticSnap,
         snappingModeByContext: state.snappingModeByContext,
+        wallChainMode: state.wallChainMode,
+        fenceChainMode: state.fenceChainMode,
         showReferenceFloor: state.showReferenceFloor,
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,

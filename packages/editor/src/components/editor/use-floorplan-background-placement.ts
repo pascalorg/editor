@@ -6,7 +6,7 @@ import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
-import { isAngleSnapActive, isMagneticSnapActive } from '../../store/use-editor'
+import useEditor, { isAngleSnapActive, isMagneticSnapActive } from '../../store/use-editor'
 import usePlacementPreview from '../../store/use-placement-preview'
 import useSegmentDraftChain from '../../store/use-segment-draft-chain'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
@@ -43,7 +43,7 @@ type UseFloorplanBackgroundPlacementArgs = {
   ) => boolean
   handleCeilingPlacementPoint: (point: WallPlanPoint) => void
   handleSlabPlacementPoint: (point: WallPlanPoint) => void
-  handleWallPlacementPoint: (point: WallPlanPoint, options?: { singleWall?: boolean }) => void
+  handleWallPlacementPoint: (point: WallPlanPoint) => void
   handleZonePlacementPoint: (point: WallPlanPoint) => void
   isCeilingBuildActive: boolean
   isCeilingItemPlacementActive: boolean
@@ -203,7 +203,7 @@ export function useFloorplanBackgroundPlacement({
         // Fence draft: mode-driven (matches the chip), same as the move
         // preview. `grid` snaps to the world XZ grid (rotation-safe via the
         // `gridSnap` callback), `angles` locks 15° rays from the start, `lines`
-        // pulls onto walls / fences / alignment, `off` is free. Alt forces.
+        // pulls onto walls / fences / alignment, `off` is free.
         const fenceStep = getSegmentGridStep()
         const fenceAngleSnap = fenceDraftStart !== null && isAngleSnapActive()
         const fenceSnapped = snapFenceDraftPoint({
@@ -222,7 +222,7 @@ export function useFloorplanBackgroundPlacement({
           fenceLocked || fenceAngleSnap
             ? fenceSnapped
             : alignFloorplanDraftPoint(fenceSnapped, {
-                bypass: event.altKey || !isMagneticSnapActive(),
+                bypass: !isMagneticSnapActive(),
               })
 
         emitFloorplanGridEvent('click', snappedPoint, event)
@@ -242,6 +242,14 @@ export function useFloorplanBackgroundPlacement({
         } else if (
           getPlanPointDistance(toPoint2D(fenceDraftStart), toPoint2D(snappedPoint)) >= 0.01
         ) {
+          // Single mode commits one segment per click: the same emit above
+          // already made the 3D fence tool stopDrafting, so close the 2D
+          // draft too instead of chaining.
+          if (useEditor.getState().fenceChainMode === 'single') {
+            clearFencePlacementDraft()
+            setCursorPoint(snappedPoint)
+            return true
+          }
           // The 3D fence tool owns creation and keeps chaining from the
           // committed fence's resolved end — chain the 2D draft from the
           // same published point so both views draft the next segment
@@ -307,7 +315,6 @@ export function useFloorplanBackgroundPlacement({
         // `grid` snaps to the world XZ grid (rotation-safe via `gridSnap`),
         // `angles` locks 15° rays from the start, `lines` pulls the endpoint
         // onto existing wall corners / edges + alignment, `off` is free.
-        // (Alt = commit a single wall, handled below — not a snap modifier.)
         const wallStep = getSegmentGridStep()
         const wallAngleSnap = draftStart !== null && isAngleSnapActive()
         const wallSnapped = snapWallDraftPoint({
@@ -328,7 +335,7 @@ export function useFloorplanBackgroundPlacement({
             // Figma alignment pulls the endpoint onto existing wall corners /
             // edges, so it is a line snap — suppress it whenever magnetic snap
             // is off (`'off'` / `'angles'`), matching the wall-geometry snap.
-            bypass: event.altKey || !isMagneticSnapActive(),
+            bypass: !isMagneticSnapActive(),
           })
         }
 
@@ -344,7 +351,7 @@ export function useFloorplanBackgroundPlacement({
           return true
         }
 
-        handleWallPlacementPoint(snappedPoint, { singleWall: event.altKey })
+        handleWallPlacementPoint(snappedPoint)
         return true
       }
 

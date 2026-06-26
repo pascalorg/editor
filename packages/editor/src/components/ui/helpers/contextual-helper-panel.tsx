@@ -8,7 +8,11 @@ import {
   type SnapContext,
 } from '../../../lib/snapping-mode'
 import { cn } from '../../../lib/utils'
-import useEditor, { type GridSnapStep } from '../../../store/use-editor'
+import useEditor, {
+  type FenceChainMode,
+  type GridSnapStep,
+  type WallChainMode,
+} from '../../../store/use-editor'
 import { ShortcutToken } from '../primitives/shortcut-token'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 
@@ -43,6 +47,26 @@ const SNAPPING_MODE_LABELS = {
   angles: 'Angles',
   off: 'Off',
 } as const
+
+const WALL_CHAIN_MODE_ICONS: Record<WallChainMode, string> = {
+  room: 'lucide:square',
+  single: 'lucide:minus',
+}
+
+const WALL_CHAIN_MODE_LABELS: Record<WallChainMode, string> = {
+  room: 'Room (auto-close)',
+  single: 'Single wall',
+}
+
+const FENCE_CHAIN_MODE_ICONS: Record<FenceChainMode, string> = {
+  continuous: 'lucide:waypoints',
+  single: 'lucide:minus',
+}
+
+const FENCE_CHAIN_MODE_LABELS: Record<FenceChainMode, string> = {
+  continuous: 'Continuous',
+  single: 'Single fence',
+}
 
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
 
@@ -107,6 +131,76 @@ function SnappingChips({ context }: { context: SnapContext }) {
         </Tooltip>
       ) : null}
     </>
+  )
+}
+
+function nextWallChainMode(mode: WallChainMode): WallChainMode {
+  return mode === 'room' ? 'single' : 'room'
+}
+
+function WallChainModeChip() {
+  const wallChainMode = useEditor((s) => s.wallChainMode)
+  const setWallChainMode = useEditor((s) => s.setWallChainMode)
+  const label = WALL_CHAIN_MODE_LABELS[wallChainMode]
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          aria-label={`Wall drafting: ${label}`}
+          className={`${PILL_CLASS} pointer-events-auto cursor-pointer transition-colors hover:bg-accent`}
+          onClick={() => setWallChainMode(nextWallChainMode(wallChainMode))}
+          type="button"
+        >
+          <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium">
+            <Icon
+              className="shrink-0"
+              height={13}
+              icon={WALL_CHAIN_MODE_ICONS[wallChainMode]}
+              width={13}
+            />
+            <span className="truncate">{label}</span>
+          </span>
+          <ShortcutToken className="h-6 px-1.5 text-[10px]" value="Alt" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="left">Wall drafting mode - click or tap Alt to cycle</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function nextFenceChainMode(mode: FenceChainMode): FenceChainMode {
+  return mode === 'continuous' ? 'single' : 'continuous'
+}
+
+function FenceChainModeChip() {
+  const fenceChainMode = useEditor((s) => s.fenceChainMode)
+  const setFenceChainMode = useEditor((s) => s.setFenceChainMode)
+  const label = FENCE_CHAIN_MODE_LABELS[fenceChainMode]
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          aria-label={`Fence drafting: ${label}`}
+          className={`${PILL_CLASS} pointer-events-auto cursor-pointer transition-colors hover:bg-accent`}
+          onClick={() => setFenceChainMode(nextFenceChainMode(fenceChainMode))}
+          type="button"
+        >
+          <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium">
+            <Icon
+              className="shrink-0"
+              height={13}
+              icon={FENCE_CHAIN_MODE_ICONS[fenceChainMode]}
+              width={13}
+            />
+            <span className="truncate">{label}</span>
+          </span>
+          <ShortcutToken className="h-6 px-1.5 text-[10px]" value="Alt" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="left">Fence drafting mode - click or tap Alt to cycle</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -198,18 +292,31 @@ export function ContextualHelperPanel({
   hints,
   snapContext = null,
   showPaintScope = false,
+  showWallChainMode = false,
+  showFenceChainMode = false,
 }: {
   hints: ContextualShortcutHint[]
   // The active snapping context drives the snapping chips (which mode set). Null
   // → no snapping chips for this interaction.
   snapContext?: SnapContext | null
   showPaintScope?: boolean
+  showWallChainMode?: boolean
+  showFenceChainMode?: boolean
 }) {
-  if (hints.length === 0 && !snapContext && !showPaintScope) return null
+  if (
+    hints.length === 0 &&
+    !snapContext &&
+    !showPaintScope &&
+    !showWallChainMode &&
+    !showFenceChainMode
+  )
+    return null
 
   return (
     <div className="pointer-events-none fixed top-1/2 right-4 z-40 flex max-w-[260px] -translate-y-1/2 flex-col items-end gap-2">
       {snapContext ? <SnappingChips context={snapContext} /> : null}
+      {showWallChainMode ? <WallChainModeChip /> : null}
+      {showFenceChainMode ? <FenceChainModeChip /> : null}
       {showPaintScope ? <PaintScopeChip /> : null}
       {hints.map((hint) => (
         <div

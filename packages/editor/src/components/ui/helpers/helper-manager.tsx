@@ -177,6 +177,8 @@ export function HelperManager() {
       return (
         <RegisteredToolHelper
           hints={def.toolHints}
+          showFenceChainMode={mode === 'build' && tool === 'fence'}
+          showWallChainMode={mode === 'build' && tool === 'wall'}
           shiftPressed={modifiers.shift}
           snapContext={snapContext}
         />
