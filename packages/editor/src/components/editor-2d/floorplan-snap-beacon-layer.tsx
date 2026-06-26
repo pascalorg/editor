@@ -14,12 +14,14 @@ import { useFloorplanRender } from './floorplan-render-context'
  *   endpoint (corner) → square    midpoint → triangle
  *   intersection      → ✕ cross   wall body (edge) → circle
  *
- * Indigo to match the 3D beacon and stay distinct from the red Figma alignment
- * guides. Sizes are pixel-budgeted via `unitsPerPixel` so the marker stays a
+ * Indigo to match the 3D beacon, except the corner (endpoint) square which is
+ * green to match the alignment guides. Sizes are pixel-budgeted via
+ * `unitsPerPixel` so the marker stays a
  * constant size on screen at any zoom. Mounted inside the `data-floorplan-scene`
  * group so coordinates are world meters (XZ) 1:1, like the alignment guides.
  */
 const COLOR = '#6366f1' // indigo-500 — matches the 3D beacon
+const ENDPOINT_COLOR = '#22c55e' // green-500 — corner (endpoint) snap accent
 
 export const FloorplanSnapBeaconLayer = memo(function FloorplanSnapBeaconLayer() {
   const point = useWallSnapIndicator((s) => s.point)
@@ -54,7 +56,7 @@ function SnapMarker({
   z: number
 }) {
   if (kind === 'endpoint') {
-    return <rect fill={color} height={m * 2} width={m * 2} x={x - m} y={z - m} />
+    return <rect fill={ENDPOINT_COLOR} height={m * 2} width={m * 2} x={x - m} y={z - m} />
   }
   if (kind === 'midpoint') {
     const t = m * 1.3

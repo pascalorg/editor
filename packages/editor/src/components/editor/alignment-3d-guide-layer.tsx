@@ -49,6 +49,14 @@ const guideMaterial = new MeshBasicNodeMaterial({
   toneMapped: false,
   transparent: true,
 })
+const DOT_COLOR = 0x22_c5_5e // green-500 — matches the wall-snap marker
+const dotMaterial = new MeshBasicNodeMaterial({
+  color: DOT_COLOR,
+  depthTest: false,
+  depthWrite: false,
+  toneMapped: false,
+  transparent: true,
+})
 const DASH_GEOMETRY = new BoxGeometry(1, 1, 1)
 const DOT_GEOMETRY = new CircleGeometry(1, 24)
 
@@ -150,7 +158,7 @@ function Dot({ position }: { position: Vec3 }) {
     <mesh
       geometry={DOT_GEOMETRY}
       layers={EDITOR_LAYER}
-      material={guideMaterial}
+      material={dotMaterial}
       position={position}
       renderOrder={1001}
       rotation={[-Math.PI / 2, 0, 0]}
