@@ -131,19 +131,29 @@ There is no per-kind snapping switch.
   These resolve the mode from the scope via `getActiveSnapContext()` → `snappingModeByContext[context]`.
 - **Modifiers.** Shift (tap) cycles the mode for the active context; Ctrl (tap) cycles the grid step;
   Alt (hold) is force / free (raw cursor + commit past invalid; for MEP runs, the vertical-riser carve-out).
-  Shift is **not** a snap bypass and Alt is **not** a toggle.
+  Shift is **not** a snap bypass. Alt is **not** a snap toggle. **Exception — wall/fence drafting:** those
+  tools have no force role (a wall/fence always places), so a clean **Alt-tap** cycles the chain mode
+  (`wallChainMode` room/single, `fenceChainMode` continuous/single) — wired in `hooks/use-keyboard.ts` via
+  `isChainModeContext()`, persisted in `useEditor`, surfaced as a clickable HUD chip. This is the one
+  sanctioned Alt-as-toggle, and only where Alt-as-force is meaningless.
 - **The chip is the scope's.** The contextual HUD shows the active context's mode and is the only place the
   mode is cycled — so a tool that wants its chip must run inside a scope whose `snapContextOf` resolves
   (a build tool, `drafting`, `placing`/`moving`, or `reshaping`).
 
-**Known-legacy (migrate on touch).** A few bespoke movers predate this model and still read
-`event.shiftKey` as a snap bypass with hardcoded steps: the MEP move/endpoint tools
-(`packages/nodes/src/{duct-segment,pipe-segment,liquid-line,lineset,duct-fitting}/{move-tool,selection}.tsx`),
-tracked in `plans/editor-placement-interaction-overhaul.md`. A PR that **touches** one must migrate it to
-the model above, not extend the legacy path. Note: opening a `moving` scope from a bespoke mover is **not**
-the migration — `useMovingNode()` reads the scope, so `tool-manager` re-mounts the generic
-`MoveRegistryNodeTool` alongside it (the dual-path FPS/teleport bug). Resolve the mode without a global
-`moving`/`reshaping` scope; see the plan's dual-path note.
+**Known-legacy (migrate on touch).** Two legacy modifier patterns predate this model and survive in
+spots not yet touched; both are tracked in `plans/editor-placement-interaction-overhaul.md`. A PR that
+**touches** one must migrate it to the model above, not extend the legacy path:
+1. **`event.shiftKey` as a snap bypass with hardcoded steps** — the MEP move/endpoint tools
+   (`packages/nodes/src/{duct-segment,pipe-segment,liquid-line,lineset,duct-fitting}/{move-tool,selection}.tsx`).
+   Opening a `moving` scope from a bespoke mover is **not** the migration — `useMovingNode()` reads the scope,
+   so `tool-manager` re-mounts the generic `MoveRegistryNodeTool` alongside it (the dual-path FPS/teleport
+   bug). Resolve the mode without a global `moving`/`reshaping` scope; see the plan's dual-path note.
+2. **`event.altKey` as an alignment bypass** — the roof / polygon / slab pointer-move previews in
+   `components/editor/floorplan-panel.tsx` and the ceiling/slab `resolveSlabPlanPointSnap` / `resolveCeilingPlanPointSnap`
+   paths still pass `event.altKey` to suppress Figma-alignment. Alignment must instead follow the magnetic snap
+   mode (`bypass: !isMagneticSnapActive()`). **Already migrated (do not regress):** wall + fence drafting (3D
+   `{wall,fence}/tool.tsx` + the 2D `use-floorplan-background-placement.ts` / `floorplan-panel.tsx` paths), where
+   Alt was freed for the chain-mode toggle above.
 
 ---
 
