@@ -115,6 +115,38 @@ The policy is binary (`IDLE_POLICY` vs `ACTIVE_POLICY`) keyed on `isActive`.
 
 ---
 
+## Snapping mode & modifiers (the unified model)
+
+Snapping is a persistent, **per-context**, always-visible mode — not a held-Shift bypass.
+The active scope selects the *context*; the context's current mode selects the *behaviour*.
+There is no per-kind snapping switch.
+
+- **Contexts** (`lib/snapping-mode.ts`, `SNAP_PROFILES`): `wall` (grid/lines/angles/off, default grid),
+  `item` (lines/grid/off, default lines), `polygon` (grid/lines/off, default grid). A kind opts in by
+  declaring `NodeDefinition.snapProfile` (`'item' | 'structural'`); `snapContextOf(scope × profile)` maps
+  it — `structural` while **setting direction** (drafting / endpoint drag) → `wall` (angle-bearing),
+  `structural` otherwise (translate / curve) → `polygon` (no angle), `item` → `item`. No profile → no chip.
+- **Single read path.** Tools read `isGridSnapActive()` / `isMagneticSnapActive()` / `isAngleSnapActive()`
+  (`store/use-editor`); the grid step is `useEditor.getState().gridSnapStep` gated on `isGridSnapActive()`.
+  These resolve the mode from the scope via `getActiveSnapContext()` → `snappingModeByContext[context]`.
+- **Modifiers.** Shift (tap) cycles the mode for the active context; Ctrl (tap) cycles the grid step;
+  Alt (hold) is force / free (raw cursor + commit past invalid; for MEP runs, the vertical-riser carve-out).
+  Shift is **not** a snap bypass and Alt is **not** a toggle.
+- **The chip is the scope's.** The contextual HUD shows the active context's mode and is the only place the
+  mode is cycled — so a tool that wants its chip must run inside a scope whose `snapContextOf` resolves
+  (a build tool, `drafting`, `placing`/`moving`, or `reshaping`).
+
+**Known-legacy (migrate on touch).** A few bespoke movers predate this model and still read
+`event.shiftKey` as a snap bypass with hardcoded steps: the MEP move/endpoint tools
+(`packages/nodes/src/{duct-segment,pipe-segment,liquid-line,lineset,duct-fitting}/{move-tool,selection}.tsx`),
+tracked in `plans/editor-placement-interaction-overhaul.md`. A PR that **touches** one must migrate it to
+the model above, not extend the legacy path. Note: opening a `moving` scope from a bespoke mover is **not**
+the migration — `useMovingNode()` reads the scope, so `tool-manager` re-mounts the generic
+`MoveRegistryNodeTool` alongside it (the dual-path FPS/teleport bug). Resolve the mode without a global
+`moving`/`reshaping` scope; see the plan's dual-path note.
+
+---
+
 ## Migration status (strangler fig)
 
 The scope is the target source of truth, but the legacy `useEditor` flags still
@@ -140,3 +172,4 @@ independent flag clear can't stomp an unrelated scope) to keep the scope in sync
 - **`update` cannot change `kind`.** Switching interactions is a `begin`, not a patch.
 - **Hot-set and overlay policy are pure derivations of the scope** (and, for the hot-set, the candidate metadata). Don't branch overlay/picking behaviour on legacy flags — branch on the scope.
 - **Don't add new `useEditor` interaction flags.** New interactions go through the scope.
+- **Snapping is mode-driven.** Read snap state through `isGridSnapActive` / `isMagneticSnapActive` / `isAngleSnapActive` (gate any grid step on the first); never bypass snapping via `event.shiftKey` / `modifiers.shiftKey`, and never hardcode an ungated grid step. Snappable kinds declare `snapProfile`. Shift cycles the mode; Alt is force/free.

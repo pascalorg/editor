@@ -25,6 +25,7 @@ Required on every review. Read the remaining pages on demand when the diff touch
 - `wiki/architecture/spatial-queries.md`
 - `wiki/architecture/node-schemas.md`
 - `wiki/architecture/events.md`
+- `wiki/architecture/interaction-scope.md` — the interaction state machine + the unified snapping/modifier convention. Read whenever the diff touches a tool, a `move-tool` / `selection` / endpoint / reshape file, `lib/interaction/**`, `lib/snapping-mode.ts`, or `use-interaction-scope`.
 
 If anything in the diff looks like a new dispatch surface or registry concept, also skim the live charter at `plans/editor-node-registry.md` (in the private-editor repo) — it owns the current contract and which kind sits at which migration stage.
 
@@ -134,6 +135,17 @@ If the PR adds or modifies a node kind, check against `wiki/architecture/node-de
 - **Editor overlay meshes must carry the editor layer.** Any new `<mesh>` / `<line*>` / `<points>` / `<sprite>` an editor overlay or tool component adds to the 3D scene (gizmos, handles, guides, previews, cursor meshes, marquees) must set `layers={EDITOR_LAYER}` — or `GRID_LAYER` for the ground grid, `ZONE_LAYER` for zone fills. The thumbnail/snapshot camera renders only layer 0, so an untagged overlay leaks into exports (and gets inked / SSGI-darkened in the live view). Flag any overlay-component primitive that omits the layer assignment. See `wiki/architecture/layers.md`.
 - New node types are added by creating one folder under `packages/nodes/src/<kind>/` and registering its definition in `builtinPlugin.nodes`. Adding to a hand-maintained list elsewhere is a sign the registry hasn't absorbed that surface yet — check `plans/editor-node-registry.md` § "Known un-shimmed hardcoded lists" before assuming it's a violation.
 - `AnyNode` is hand-maintained for now (full runtime derivation would lose static typing); `packages/nodes/src/index.test.ts` is the drift gate. If a PR adds a kind to `AnyNode` without adding it to `builtinPlugin.nodes` (or vice versa), the parity test catches it — but flag it in review too.
+
+### F. Interaction scope, snapping & modifiers
+
+Apply when the diff touches a tool, a `move-tool` / `selection` / endpoint / reshape file, `lib/interaction/**`, `lib/snapping-mode.ts`, or `use-interaction-scope`. Source of truth: `wiki/architecture/interaction-scope.md` and `wiki/architecture/tools.md`.
+
+- **No new `useEditor` interaction flag.** "What the user is doing" is owned by `useInteractionScope` (`begin` / `update` / `end` / `endIf`). A new `useEditor` boolean for an in-flight interaction (`moving…`, `curving…`, `dragging…`, `editing…`, `…InFlight`) is a **blocker** — it goes through the scope. The legacy mirror flags are being retired, not extended.
+- **Snapping is mode-driven; Shift is not a bypass.** A tool / `move-tool` / `selection` file that reads `event.shiftKey`, `event.nativeEvent?.shiftKey`, or `modifiers.shiftKey` to **bypass snapping** (raw cursor, skip grid, skip angle) is a **blocker** — the convention is Shift = *cycle the mode*, Alt = force/free. Snap state must come from `isGridSnapActive()` / `isMagneticSnapActive()` / `isAngleSnapActive()`. Grep tell: `shiftKey` near a snap / step / `projectToAngleLock` / alignment expression in `packages/nodes/src/<kind>/{tool,move-tool,selection}.tsx`. (Shift for *multi-select* in select mode, or a documented topology opt-out, is fine — confirm which it is.)
+- **No hardcoded, ungated grid step.** A quantize that isn't gated on `isGridSnapActive()` — always `useEditor.getState().gridSnapStep`, or a constant `WALL_GRID_STEP` / `0.5` / `getSegmentGridStep()` applied unconditionally — ignores the active mode and is a **blocker**. The gated form is `const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0`.
+- **Snappable kinds declare `snapProfile`.** A kind whose tool snaps but whose `NodeDefinition` omits `snapProfile` (`'item' | 'structural'`) gets no contextual chip and the wrong default mode-set — flag it (suggestion, blocker if it ships a bespoke per-kind snapping switch instead).
+- **Bespoke movers must not open a `moving` scope.** `useMovingNode()` reads the scope, and `tool-manager` mounts the generic `MoveRegistryNodeTool` whenever it's non-null. A bespoke `move-tool.tsx` that calls `begin(movingScope(...))` or `setMovingNode(node)` re-creates the dual-path double-handling (FPS collapse / teleport on move). **Blocker.** Mode-driven snapping inside a bespoke mover must resolve the mode without a global `moving` / `reshaping` scope (see `interaction-scope.md` § "Snapping mode & modifiers").
+- **Known-legacy exceptions (migrate on touch).** The MEP move/endpoint tools (`packages/nodes/src/{duct-segment,pipe-segment,liquid-line,lineset,duct-fitting}/{move-tool,selection}.tsx`) still carry the legacy `shiftKey` bypass; they are tracked debt in `plans/editor-placement-interaction-overhaul.md`. A PR that **touches** one of these must migrate it onto the model above, not extend the legacy path. A PR that adds a **new** tool on the legacy `shiftKey`-bypass pattern is a blocker regardless.
 
 ## 5. Output format
 
