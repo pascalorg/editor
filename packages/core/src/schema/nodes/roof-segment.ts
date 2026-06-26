@@ -68,16 +68,16 @@ export const ROOF_SHAPE_DEFAULTS = {
   /** Dutch: hip face rises this fraction of the way to the peak. */
   dutchHipHeightRatio: 0.5,
   /** Dutch: gable waist span along the ridge axis, as a fraction of the max span. */
-  dutchWaistLengthRatio: 1,
+  dutchWaistLengthRatio: 0.98,
   /**
    * Dutch: how far the gablet's barge board extends outward past the gablet
    * end-wall, along the ridge axis, in metres. 0 disables the rake. The board
    * lies in the gablet's slope planes (coplanar with the main Dutch slopes)
    * and overhangs the lower hip skirt; the gablet end-wall itself stays put.
    */
-  dutchGabletRake: 0,
+  dutchGabletRake: 0.48,
   /** Dutch: thickness of the top gable rake slab. */
-  dutchTopRakeThickness: 0.05,
+  dutchTopRakeThickness: 0.21,
 } as const
 
 export const RoofSegmentNode = BaseNode.extend({

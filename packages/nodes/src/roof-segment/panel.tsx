@@ -85,6 +85,27 @@ export default function RoofSegmentPanel() {
     [selectedId, updateNode],
   )
 
+  const handleRoofTypeChange = useCallback(
+    (roofType: RoofType) => {
+      // Switching to Dutch resets the shape parameters to their defaults so the
+      // gablet is well-formed regardless of the leftover values from the
+      // previous roof type.
+      handleUpdate(
+        roofType === 'dutch'
+          ? {
+              roofType,
+              dutchHipWidthRatio: ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
+              dutchHipHeightRatio: ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
+              dutchWaistLengthRatio: ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
+              dutchGabletRake: ROOF_SHAPE_DEFAULTS.dutchGabletRake,
+              dutchTopRakeThickness: ROOF_SHAPE_DEFAULTS.dutchTopRakeThickness,
+            }
+          : { roofType },
+      )
+    },
+    [handleUpdate],
+  )
+
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
@@ -196,12 +217,12 @@ export default function RoofSegmentPanel() {
     >
       <PanelSection title="Roof Type">
         <SegmentedControl
-          onChange={(v) => handleUpdate({ roofType: v })}
+          onChange={(v) => handleRoofTypeChange(v)}
           options={ROOF_TYPE_OPTIONS}
           value={node.roofType}
         />
         <SegmentedControl
-          onChange={(v) => handleUpdate({ roofType: v })}
+          onChange={(v) => handleRoofTypeChange(v)}
           options={ROOF_TYPE_OPTIONS_2}
           value={node.roofType}
         />
