@@ -1,11 +1,11 @@
 'use client'
 
-import useScene from '@pascal-app/core/store/use-scene'
 import { NORTH_DIRECTION_DEFAULT } from '@pascal-app/core/schema'
-import { useViewer } from '@pascal-app/viewer'
+import useScene from '@pascal-app/core/store/use-scene'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import * as THREE from 'three'
+import { useNorthBridge } from './north-compass-bridge'
 
 /**
  * Reads the northDirection from the first Site node in the scene.
@@ -95,53 +95,53 @@ function CompassSVG({ bearingDeg }: { bearingDeg: number }) {
 }
 
 /**
- * NorthCompass reads the camera azimuth from R3F each frame, combines it with
- * the scene's northDirection, and renders the SVG widget as a DOM overlay.
- *
- * Mount this inside the R3F <Canvas> so useFrame is available, but use a
- * React portal / absolute-positioned div trick via useState to push the SVG
- * outside the canvas into normal DOM flow.
+ * Mounts inside the R3F <Canvas>. Reads the camera azimuth every frame,
+ * combines it with the scene's northDirection, and pushes the result to
+ * the bridge store so NorthCompassWidget (outside the canvas) can render it.
  */
 export function NorthCompassR3F() {
   const { camera } = useThree()
   const northDirection = useNorthDirection()
-  const [bearingDeg, setBearingDeg] = useState(0)
+  const setBearingDeg = useNorthBridge((s) => s.setBearingDeg)
 
   // Scratch objects — allocated once, reused every frame.
   const _euler = useRef(new THREE.Euler())
   const _quat = useRef(new THREE.Quaternion())
+  const _prevDeg = useRef(0)
 
   useFrame(() => {
-    // Extract the camera's world yaw (rotation around Y axis).
     camera.getWorldQuaternion(_quat.current)
     _euler.current.setFromQuaternion(_quat.current, 'YXZ')
-    const cameraYawRad = _euler.current.y // radians, CCW from +Z in Three.js
+    const cameraYawRad = _euler.current.y
 
-    // northDirection is CCW from +X in radians.
-    // The angle from camera-forward to north:
-    //   northDirection offset from +X → convert to "from +Z": subtract π/2
-    //   then subtract camera yaw to get screen-relative bearing.
-    //   Negate because screen rotation is clockwise.
     const northFromScreen = -(northDirection - Math.PI / 2 - cameraYawRad)
     const deg = ((northFromScreen * 180) / Math.PI + 360) % 360
 
     // Only trigger re-render when bearing changes by more than 0.5°.
-    setBearingDeg((prev) => (Math.abs(prev - deg) > 0.5 ? deg : prev))
+    if (Math.abs(_prevDeg.current - deg) > 0.5) {
+      _prevDeg.current = deg
+      setBearingDeg(deg)
+    }
   })
 
-  // This component only drives state; the SVG is rendered by NorthCompass below.
-  // Return null here — the parent component renders the SVG in DOM overlay.
   return null
 }
 
 /**
- * The full compass widget: a thin wrapper that places the SVG in the
- * bottom-right corner of the viewer and mounts the R3F frame-reader inside
- * the canvas via the viewer's existing <Canvas>.
- *
- * Usage (in viewer-toolbar or viewport wrapper):
- *   <NorthCompassOverlay />
- *   — but the R3F part must live inside the Canvas. See NorthCompassWidget.
+ * DOM overlay — place this outside the Canvas, over the viewport.
+ * Reads the bearing from the bridge store.
+ */
+export function NorthCompassWidget() {
+  const bearingDeg = useNorthBridge((s) => s.bearingDeg)
+  return (
+    <div className="pointer-events-none absolute bottom-3 right-3 z-10 text-foreground/70">
+      <CompassSVG bearingDeg={bearingDeg} />
+    </div>
+  )
+}
+
+/**
+ * Low-level overlay if you want to pass bearingDeg manually.
  */
 export function NorthCompassOverlay({ bearingDeg }: { bearingDeg: number }) {
   return (
