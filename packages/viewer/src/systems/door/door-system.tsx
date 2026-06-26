@@ -1392,7 +1392,7 @@ export function poseDoorMovingParts(
       // the group rotates about its own origin (see the closed build below).
       const angle = (Math.PI / 2) * t
       const hingeY = leafCenterY + leafHeight / 2
-      group.rotation.x = -angle
+      group.rotation.set(-angle, 0, 0)
       group.position.set(0, hingeY * (1 - Math.cos(angle)), Math.sin(angle) * (hingeY - leafHeight))
       return true
     }
@@ -1410,7 +1410,11 @@ export function poseDoorMovingParts(
         const direction = index % 2 === 0 ? -1 : 1
         if (group) {
           posed = true
-          group.rotation.y = (prevDirection - direction) * foldAngle
+          // Set the full triple (not just `.y`): when the export clones and
+          // decomposes the door matrix, a |Y| > π/2 rotation re-derives into a
+          // gimbal-flipped euler (x=z=π). Assigning only `.y` would leave that
+          // π residue on x/z and bake a flipped rest pose.
+          group.rotation.set(0, (prevDirection - direction) * foldAngle, 0)
         }
         prevDirection = direction
       }
@@ -1446,7 +1450,7 @@ export function poseDoorMovingParts(
           z = -(curveRadius + pathPosition - curveLength)
         }
         group.position.set(0, y, z)
-        group.rotation.x = rotationX
+        group.rotation.set(rotationX, 0, 0)
       }
       return posed
     }

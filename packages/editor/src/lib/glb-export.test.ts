@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { type AnyNode, sceneRegistry } from '@pascal-app/core'
+import { type AnyNode, DoorNode, sceneRegistry } from '@pascal-app/core'
 import * as THREE from 'three'
+import { buildDoorPreviewMesh } from '@pascal-app/viewer'
 import { prepareSceneForExport } from './glb-export'
 
 afterEach(() => {
@@ -359,5 +360,34 @@ describe('prepareSceneForExport', () => {
     expect(Array.from(scaleTrack!.values).slice(0, 3)).toEqual([1, 1, 1])
     const lastScaleY = scaleTrack!.values[scaleTrack!.values.length - 2]!
     expect(lastScaleY).toBeLessThan(0.1)
+  })
+
+  // Regression: a folding door saved in an open state (|fold angle| > π/2) used
+  // to bake a 180°-flipped rest pose. The export clones + decomposes the door
+  // matrix, which re-derives a gimbal-flipped euler (x=z=π) for the wide Y
+  // rotation; the pose reset must zero the full euler triple, not just `.y`.
+  test('bakes an identity rest pose for an open folding door', () => {
+    const node = DoorNode.parse({
+      id: 'door_folding',
+      doorType: 'folding',
+      leafCount: 4,
+      operationState: 0.65,
+    })
+    const mesh = buildDoorPreviewMesh(node)
+    const root = new THREE.Group()
+    root.add(mesh)
+    sceneRegistry.nodes.set(node.id, mesh)
+
+    const { scene, animations } = prepareSceneForExport(root, {
+      [node.id]: node as unknown as AnyNode,
+    })
+
+    expect(animations).toHaveLength(1)
+    for (let index = 0; index < 4; index++) {
+      const panel = scene.getObjectByName(`door-fold-${index}`)
+      expect(panel).toBeDefined()
+      // Rest quaternion must be identity — no residual π on any axis.
+      expect(panel!.quaternion.angleTo(new THREE.Quaternion())).toBeLessThan(1e-4)
+    }
   })
 })
