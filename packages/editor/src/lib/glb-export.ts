@@ -1,14 +1,21 @@
 import {
   type AnyNode,
+  type DoorNode,
   emitter,
   getLevelDisplayName,
+  isOperationDoorType,
   itemClipRegistry,
   type LevelNode,
   sceneRegistry,
   type WindowNode,
   type ZoneNode,
 } from '@pascal-app/core'
-import { poseWindowMovingParts, SCENE_LAYER, snapLevelsToTruePositions } from '@pascal-app/viewer'
+import {
+  poseDoorMovingParts,
+  poseWindowMovingParts,
+  SCENE_LAYER,
+  snapLevelsToTruePositions,
+} from '@pascal-app/viewer'
 import type { Object3D } from 'three'
 import * as THREE from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
@@ -434,11 +441,127 @@ function bakeItemClip(id: string, itemObject: THREE.Object3D): THREE.AnimationCl
 }
 
 /**
+ * Bake a door's open motion. Swing doors (hinged/double/french) carry a
+ * `pascalSwingLeaf` marker and bake a single quaternion track per leaf;
+ * operation doors (sliding/pocket/barn/folding/garage-*) build their moving
+ * parts in named groups posed by `poseDoorMovingParts`, sampled here into
+ * keyframes (their motion is non-linear, e.g. the sectional's overhead curve).
+ */
+function bakeDoorClip(
+  id: string,
+  node: AnyNode,
+  doorObject: THREE.Object3D,
+): THREE.AnimationClip | null {
+  if (node.type === 'door' && isOperationDoorType((node as DoorNode).doorType)) {
+    return bakeOperationDoorClip(id, node as DoorNode, doorObject)
+  }
+  return bakeSwingDoorClip(id, node, doorObject)
+}
+
+/** Number of keyframes sampled across an operation door's 0→1 open motion. */
+const OPERATION_DOOR_SAMPLES = 16
+
+/**
+ * Sample an operation door's open motion into keyframe tracks by posing the
+ * export clone with `poseDoorMovingParts` at evenly-spaced fractions. Only the
+ * named moving groups change (their children are rigid), so a track is emitted
+ * per group whose position / rotation / scale actually moves. The clone is left
+ * posed closed so the GLB's rest state is shut.
+ */
+function bakeOperationDoorClip(
+  id: string,
+  node: DoorNode,
+  doorObject: THREE.Object3D,
+): THREE.AnimationClip | null {
+  if (!poseDoorMovingParts(node, doorObject, 0)) return null
+
+  const objects: THREE.Object3D[] = []
+  doorObject.traverse((object) => objects.push(object))
+  const basePoses = objects.map((object) => ({
+    position: object.position.clone(),
+    quaternion: object.quaternion.clone(),
+    scale: object.scale.clone(),
+  }))
+
+  const times: number[] = []
+  const positionSamples = objects.map(() => [] as number[])
+  const quaternionSamples = objects.map(() => [] as number[])
+  const scaleSamples = objects.map(() => [] as number[])
+
+  for (let step = 0; step <= OPERATION_DOOR_SAMPLES; step++) {
+    const t = step / OPERATION_DOOR_SAMPLES
+    times.push(t)
+    poseDoorMovingParts(node, doorObject, t)
+    for (let i = 0; i < objects.length; i++) {
+      const object = objects[i]!
+      positionSamples[i]!.push(...object.position.toArray())
+      quaternionSamples[i]!.push(...object.quaternion.toArray())
+      scaleSamples[i]!.push(...object.scale.toArray())
+    }
+  }
+
+  const tracks: THREE.KeyframeTrack[] = []
+  for (let i = 0; i < objects.length; i++) {
+    const object = objects[i]!
+    const base = basePoses[i]!
+    if (samplesMovePosition(positionSamples[i]!, base.position)) {
+      tracks.push(
+        new THREE.VectorKeyframeTrack(`${object.uuid}.position`, times, positionSamples[i]!),
+      )
+    }
+    if (samplesMoveQuaternion(quaternionSamples[i]!, base.quaternion)) {
+      tracks.push(
+        new THREE.QuaternionKeyframeTrack(
+          `${object.uuid}.quaternion`,
+          times,
+          quaternionSamples[i]!,
+        ),
+      )
+    }
+    if (samplesMoveScale(scaleSamples[i]!, base.scale)) {
+      tracks.push(new THREE.VectorKeyframeTrack(`${object.uuid}.scale`, times, scaleSamples[i]!))
+    }
+  }
+
+  poseDoorMovingParts(node, doorObject, 0)
+
+  if (tracks.length === 0) return null
+  return openClip(id, node, tracks)
+}
+
+function samplesMovePosition(flat: number[], base: THREE.Vector3): boolean {
+  const point = new THREE.Vector3()
+  for (let i = 0; i < flat.length; i += 3) {
+    point.set(flat[i]!, flat[i + 1]!, flat[i + 2]!)
+    if (point.distanceToSquared(base) > POSE_EPSILON) return true
+  }
+  return false
+}
+
+function samplesMoveQuaternion(flat: number[], base: THREE.Quaternion): boolean {
+  const quaternion = new THREE.Quaternion()
+  for (let i = 0; i < flat.length; i += 4) {
+    quaternion.set(flat[i]!, flat[i + 1]!, flat[i + 2]!, flat[i + 3]!)
+    if (base.angleTo(quaternion) > POSE_EPSILON) return true
+  }
+  return false
+}
+
+function samplesMoveScale(flat: number[], base: THREE.Vector3): boolean {
+  const point = new THREE.Vector3()
+  for (let i = 0; i < flat.length; i += 3) {
+    point.set(flat[i]!, flat[i + 1]!, flat[i + 2]!)
+    if (point.distanceToSquared(base) > POSE_EPSILON) return true
+  }
+  return false
+}
+
+/**
  * Bake a swing door's open motion. Each marked leaf is rotated from closed
  * (rest pose) to its fully-open angle and emitted as a 1-second quaternion
  * track; the leaf is left at the closed pose so the GLB's rest state is shut.
  */
-function bakeDoorClip(
+function bakeSwingDoorClip(
   id: string,
   node: AnyNode,
   doorObject: THREE.Object3D,

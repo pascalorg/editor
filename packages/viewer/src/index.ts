@@ -111,7 +111,7 @@ export {
   createColumnTorusGeometry,
 } from './systems/column/column-geometry'
 export { DoorAnimationSystem } from './systems/door/door-animation-system'
-export { buildDoorPreviewMesh, DoorSystem } from './systems/door/door-system'
+export { buildDoorPreviewMesh, DoorSystem, poseDoorMovingParts } from './systems/door/door-system'
 export { ElevatorInteractionSystem } from './systems/elevator/elevator-interaction-system'
 // Fence system follows the wall re-export pattern — composed into the
 // registry-driven fence definition's `def.system`. Removed in Phase 6

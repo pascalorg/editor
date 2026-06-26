@@ -264,4 +264,100 @@ describe('prepareSceneForExport', () => {
     const closed = new THREE.Quaternion().fromArray(Array.from(track.values).slice(0, 4))
     expect(closed.angleTo(new THREE.Quaternion())).toBeCloseTo(0)
   })
+
+  test('bakes a sliding door into a sampled position clip', () => {
+    // Operation doors build their moving parts in a named group posed by
+    // `poseDoorMovingParts`; the exporter samples it into keyframes. The active
+    // panel group slides along x.
+    const root = new THREE.Group()
+    const doorGroup = new THREE.Group()
+    const activePanel = new THREE.Group()
+    activePanel.name = 'door-sliding-active'
+    activePanel.add(meshWithNodeMaterial(nodeMaterial()))
+    doorGroup.add(activePanel)
+    root.add(doorGroup)
+
+    const doorId = 'door_sliding'
+    sceneRegistry.nodes.set(doorId, doorGroup)
+    const nodes: Record<string, AnyNode> = {
+      [doorId]: {
+        object: 'node',
+        id: doorId,
+        type: 'door',
+        name: 'Slider',
+        doorType: 'sliding',
+        slideDirection: 'left',
+        width: 1,
+        height: 2.1,
+        frameThickness: 0.05,
+      } as unknown as AnyNode,
+    }
+
+    const { scene, animations } = prepareSceneForExport(root, nodes)
+
+    expect(animations).toHaveLength(1)
+    const clip = animations[0]!
+    expect(clip.name).toBe('Slider: open')
+    expect(clip.duration).toBe(1)
+    expect(clip.userData).toEqual({ loop: false })
+
+    const track = clip.tracks[0]!
+    expect(track).toBeInstanceOf(THREE.VectorKeyframeTrack)
+    expect(track.name.endsWith('.position')).toBe(true)
+    // 16 segments -> 17 keyframes, evenly spaced over the 1s clip.
+    expect(track.times.length).toBe(17)
+    expect(track.times[0]).toBeCloseTo(0)
+    expect(track.times[track.times.length - 1]!).toBeCloseTo(1)
+
+    // Rest pose is closed (first keyframe centred); the panel slides off-centre.
+    expect(track.values[0]!).toBeCloseTo(0)
+    expect(track.values[1]!).toBeCloseTo(0)
+    expect(track.values[2]!).toBeCloseTo(0)
+    const lastX = track.values[track.values.length - 3]!
+    expect(Math.abs(lastX)).toBeGreaterThan(0.1)
+
+    const target = scene.getObjectByProperty('uuid', track.name.replace('.position', ''))
+    expect(target).toBeDefined()
+
+    const exported = scene.getObjectByProperty('name', doorId)
+    expect(exported?.userData.openable).toBe(true)
+    expect(exported?.userData.clips).toEqual(['Slider: open'])
+  })
+
+  test('bakes a roll-up curtain into a sampled scale clip', () => {
+    // Roll-up geometry can't vanish in a glTF clip, so the bake scales the
+    // curtain group up into the lintel instead.
+    const root = new THREE.Group()
+    const doorGroup = new THREE.Group()
+    const curtain = new THREE.Group()
+    curtain.name = 'door-rollup-curtain'
+    curtain.add(meshWithNodeMaterial(nodeMaterial()))
+    doorGroup.add(curtain)
+    root.add(doorGroup)
+
+    const doorId = 'door_rollup'
+    sceneRegistry.nodes.set(doorId, doorGroup)
+    const nodes: Record<string, AnyNode> = {
+      [doorId]: {
+        object: 'node',
+        id: doorId,
+        type: 'door',
+        name: 'Roll-up',
+        doorType: 'garage-rollup',
+        width: 2.4,
+        height: 2.2,
+        frameThickness: 0.05,
+      } as unknown as AnyNode,
+    }
+
+    const { animations } = prepareSceneForExport(root, nodes)
+
+    expect(animations).toHaveLength(1)
+    const scaleTrack = animations[0]!.tracks.find((t) => t.name.endsWith('.scale'))
+    expect(scaleTrack).toBeInstanceOf(THREE.VectorKeyframeTrack)
+    // Rest pose is closed (full curtain, scale 1); it shrinks toward the header.
+    expect(Array.from(scaleTrack!.values).slice(0, 3)).toEqual([1, 1, 1])
+    const lastScaleY = scaleTrack!.values[scaleTrack!.values.length - 2]!
+    expect(lastScaleY).toBeLessThan(0.1)
+  })
 })
