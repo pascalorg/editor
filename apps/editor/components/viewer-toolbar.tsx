@@ -1,6 +1,5 @@
 'use client'
 
-import { NorthCompassWidget } from './north-compass'
 import { Icon as IconifyIcon } from '@iconify/react'
 import {
   DropdownMenu,
@@ -266,9 +265,6 @@ function WallModeToggle() {
   )
 }
 
-// One dropdown that gathers every "how the scene looks" control: grid, shadows,
-// camera projection, units, render mode, edges and scene theme.
-
 const EDGE_OPTIONS = [
   { id: 'off', name: 'Off', detail: 'No edge lines' },
   { id: 'soft', name: 'Soft', detail: 'Faint outline of major creases' },
@@ -300,7 +296,6 @@ function DisplayMenu() {
   const activeEdges = EDGE_OPTIONS.find((option) => option.id === edges) ?? EDGE_OPTIONS[0]
   const activeTheme = getSceneTheme(sceneTheme)
 
-  // Keep the menu open when flipping a toggle.
   const keepOpen = (event: Event, fn: () => void) => {
     event.preventDefault()
     fn()
@@ -514,17 +509,14 @@ export function CommunityViewerToolbarLeft() {
 
 export function CommunityViewerToolbarRight() {
   return (
-    <>
-      <NorthCompassWidget />
-      <div className={TOOLBAR_CONTAINER}>
-        <LevelModeToggle />
-        <WallModeToggle />
-        <div className="my-1.5 w-px bg-border/50" />
-        <DisplayMenu />
-        <div className="my-1.5 w-px bg-border/50" />
-        <WalkthroughButton />
-        <PreviewButton />
-      </div>
-    </>
+    <div className={TOOLBAR_CONTAINER}>
+      <LevelModeToggle />
+      <WallModeToggle />
+      <div className="my-1.5 w-px bg-border/50" />
+      <DisplayMenu />
+      <div className="my-1.5 w-px bg-border/50" />
+      <WalkthroughButton />
+      <PreviewButton />
+    </div>
   )
 }
