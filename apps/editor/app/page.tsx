@@ -1,18 +1,15 @@
 'use client'
-
 import { Editor, ItemsPanel } from '@pascal-app/editor'
 import { Hammer, Layers, Package, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { BuildTab } from '@/components/build-tab'
+import { NorthCompassWidget } from '@/components/north-compass'
 import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
 } from '@/components/viewer-toolbar'
 
-// The open-source editor only ships the built-in catalog (no uploaded items),
-// so the Library/Community/Mine source chips and tag filters add nothing —
-// drop them and keep the panel to plain categories.
 function EditorItemsPanel() {
   return <ItemsPanel showSourceFilter={false} showTagFilters={false} />
 }
@@ -111,6 +108,7 @@ export default function Home() {
         sidebarTabs={SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
+        viewerBanner={<NorthCompassWidget />}
       />
     </div>
   )
