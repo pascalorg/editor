@@ -130,7 +130,7 @@ export {
 } from './nodes/roof-segment-walls'
 export { ScanNode } from './nodes/scan'
 export { ShelfNode } from './nodes/shelf'
-export { SiteNode } from './nodes/site'
+export { NORTH_DIRECTION_DEFAULT, SiteNode } from './nodes/site'
 export {
   SKYLIGHT_TYPE_ORDER,
   SKYLIGHT_TYPE_PRESETS,
