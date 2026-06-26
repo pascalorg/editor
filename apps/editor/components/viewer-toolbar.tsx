@@ -1,5 +1,6 @@
 'use client'
 
+import { NorthCompassOverlay } from './north-compass'
 import { Icon as IconifyIcon } from '@iconify/react'
 import {
   DropdownMenu,
