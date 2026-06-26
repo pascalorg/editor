@@ -1401,7 +1401,8 @@ export function poseDoorMovingParts(
       const foldAngle = Math.PI * 0.44 * t
       // Each panel group is parented to the previous, so its rotation is the
       // joint angle (the change in absolute segment direction), not the absolute
-      // angle: alternating panels target ±foldAngle, so joints fold by ±2·angle.
+      // angle: alternating panels target ∓foldAngle, so joints fold by ±2·angle.
+      // The leading sign folds the leaves toward −z (matching the original rig).
       let posed = false
       let prevDirection = 0
       for (let index = 0; index < panelCount; index++) {
@@ -1409,7 +1410,7 @@ export function poseDoorMovingParts(
         const direction = index % 2 === 0 ? -1 : 1
         if (group) {
           posed = true
-          group.rotation.y = (direction - prevDirection) * foldAngle
+          group.rotation.y = (prevDirection - direction) * foldAngle
         }
         prevDirection = direction
       }

@@ -526,7 +526,7 @@ function bakeOperationDoorClip(
   poseDoorMovingParts(node, doorObject, 0)
 
   if (tracks.length === 0) return null
-  return openClip(id, node, tracks)
+  return openClip(id, tracks)
 }
 
 function samplesMovePosition(flat: number[], base: THREE.Vector3): boolean {
@@ -588,21 +588,24 @@ function bakeSwingDoorClip(
   })
 
   if (tracks.length === 0) return null
-  return openClip(id, node, tracks)
+  return openClip(id, tracks)
 }
 
 /**
- * Wrap an open motion in a named 1-second clip. The name uses the node's label
- * when set (e.g. "Door 1: open") so a glTF player lists readable clips, falling
- * back to the id. glTF has no core loop flag — the player decides — so we stamp
- * `extras.loop = false` (via the clip's userData, which `GLTFExporter`
- * serialises onto the animation): Pascal's `/viewer` and any extras-aware
- * consumer play it once and hold the open pose; a dumb glTF player still loops.
- * Consumers map a clip back to its node by walking up from a channel's target to
- * the nearest ancestor carrying `extras.pascalId`, so the name stays cosmetic.
+ * Wrap an open motion in a named 1-second clip. The name is keyed by the node id
+ * (`<id>: open`), NOT the node's display name: clip names must be unique because
+ * the baked viewer drives playback by clip name (`useAnimations` maps name →
+ * action), so two same-named openables (e.g. several "Window 1"s) would collapse
+ * to a single action and a trigger on one would animate another. The
+ * human-readable name lives in `extras.label` instead. glTF has no core loop
+ * flag — the player decides — so we stamp `extras.loop = false` (via the clip's
+ * userData, which `GLTFExporter` serialises onto the animation): Pascal's
+ * `/viewer` and any extras-aware consumer play it once and hold the open pose; a
+ * dumb glTF player still loops. Consumers map a clip back to its node by walking
+ * up from a channel's target to the nearest ancestor carrying `extras.pascalId`.
  */
-function openClip(id: string, node: AnyNode, tracks: THREE.KeyframeTrack[]): THREE.AnimationClip {
-  const clip = new THREE.AnimationClip(`${node.name ?? id}: open`, 1, tracks)
+function openClip(id: string, tracks: THREE.KeyframeTrack[]): THREE.AnimationClip {
+  const clip = new THREE.AnimationClip(`${id}: open`, 1, tracks)
   clip.userData = { loop: false }
   return clip
 }
@@ -662,7 +665,7 @@ function bakeWindowClip(
   poseWindowMovingParts(node, windowObject, 0)
 
   if (tracks.length === 0) return null
-  return openClip(id, node, tracks)
+  return openClip(id, tracks)
 }
 
 // --- Identity stamping ---------------------------------------------------

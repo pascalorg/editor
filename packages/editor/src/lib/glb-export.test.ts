@@ -135,7 +135,7 @@ describe('prepareSceneForExport', () => {
       kind: 'door',
       label: 'Front door',
       openable: true,
-      clips: ['Front door: open'],
+      clips: ['door_test: open'],
     })
 
     // The swing-leaf marker must not survive into glTF extras.
@@ -245,7 +245,7 @@ describe('prepareSceneForExport', () => {
 
     expect(animations).toHaveLength(1)
     const clip = animations[0]!
-    expect(clip.name).toBe('Door: open')
+    expect(clip.name).toBe('door_swing: open')
     expect(clip.duration).toBe(1)
     // Playback intent carried in extras so consumers can play once and hold.
     expect(clip.userData).toEqual({ loop: false })
@@ -297,7 +297,7 @@ describe('prepareSceneForExport', () => {
 
     expect(animations).toHaveLength(1)
     const clip = animations[0]!
-    expect(clip.name).toBe('Slider: open')
+    expect(clip.name).toBe('door_sliding: open')
     expect(clip.duration).toBe(1)
     expect(clip.userData).toEqual({ loop: false })
 
@@ -321,7 +321,7 @@ describe('prepareSceneForExport', () => {
 
     const exported = scene.getObjectByProperty('name', doorId)
     expect(exported?.userData.openable).toBe(true)
-    expect(exported?.userData.clips).toEqual(['Slider: open'])
+    expect(exported?.userData.clips).toEqual(['door_sliding: open'])
   })
 
   test('bakes a roll-up curtain into a sampled scale clip', () => {
