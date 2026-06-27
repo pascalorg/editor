@@ -47,7 +47,10 @@ export {
 } from './nodes/column'
 export { ConeNode } from './nodes/cone'
 export { ConformalStripNode } from './nodes/conformal-strip'
+export { ConveyorBeltDirection, ConveyorBeltNode, ConveyorBeltPoint } from './nodes/conveyor-belt'
 export { CylinderNode } from './nodes/cylinder'
+export { DataChartKind, DataChartNode } from './nodes/data-chart'
+export { DataTableNode, DataTableRow } from './nodes/data-table'
 export { DataWidgetKind, DataWidgetNode } from './nodes/data-widget'
 export { DoorNode, DoorSegment } from './nodes/door'
 export {

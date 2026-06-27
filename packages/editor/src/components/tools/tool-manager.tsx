@@ -59,6 +59,7 @@ export const ToolManager: React.FC = () => {
   const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
   const movingPipeEndpoint = useEditor((state) => state.movingPipeEndpoint)
   const movingCableTrayEndpoint = useEditor((state) => state.movingCableTrayEndpoint)
+  const movingConveyorBeltEndpoint = useEditor((state) => state.movingConveyorBeltEndpoint)
   const movingRoadEndpoint = useEditor((state) => state.movingRoadEndpoint)
   const movingSteelBeamEndpoint = useEditor((state) => state.movingSteelBeamEndpoint)
   const curvingWall = useEditor((state) => state.curvingWall)
@@ -251,6 +252,18 @@ export const ToolManager: React.FC = () => {
             return RegistryAffordance ? (
               <Suspense fallback={null}>
                 <RegistryAffordance target={movingCableTrayEndpoint} />
+              </Suspense>
+            ) : null
+          })()}
+        {movingConveyorBeltEndpoint &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(
+              movingConveyorBeltEndpoint.conveyorBelt.type,
+              'move-endpoint',
+            )
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance target={movingConveyorBeltEndpoint} />
               </Suspense>
             ) : null
           })()}

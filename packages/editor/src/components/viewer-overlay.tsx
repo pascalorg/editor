@@ -182,7 +182,9 @@ export const ViewerOverlay = ({
             {onBack ? (
               <button
                 className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
+                data-testid="preview-exit-button"
                 onClick={onBack}
+                type="button"
               >
                 <ArrowLeft className="h-4 w-4 text-muted-foreground" />
               </button>

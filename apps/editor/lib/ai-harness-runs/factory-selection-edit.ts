@@ -1251,6 +1251,118 @@ export function composeSelectionTankKindEdit(input: {
   }
 }
 
+// Opacity edit — direct-field nodes (pipe, cable-tray, etc.) and material nodes.
+const OPACITY_DIRECT_FIELD_TYPES = new Set(['pipe', 'cable-tray', 'pipe-fitting', 'steel-beam', 'tank', 'zone'])
+
+export function looksLikeSelectionOpacityEdit(prompt: string) {
+  return /透明度?|不透明度?|半透明|opacity|transparent(?:cy)?|alpha|\d+%.*透|透.*\d+%/i.test(prompt)
+}
+
+export function resolveOpacityValue(prompt: string): number | undefined {
+  // "80%" or "80％"
+  const pctMatch = prompt.match(/(\d+(?:\.\d+)?)\s*[%％]/)
+  if (pctMatch) return Math.min(1, Math.max(0, Number(pctMatch[1]) / 100))
+  // "0.8" or "0.5" decimal
+  const decMatch = prompt.match(/\b0\.\d+\b/)
+  if (decMatch) return Math.min(1, Math.max(0, Number(decMatch[0])))
+  // keywords
+  if (/完全透明|全透明|invisible|fully.?transparent/i.test(prompt)) return 0
+  if (/完全不透明|fully.?opaque/i.test(prompt)) return 1
+  if (/半透明|semi.?transparent/i.test(prompt)) return 0.5
+  return undefined
+}
+
+export function composeSelectionOpacityEdit(input: {
+  prompt: string
+  context?: unknown
+}): FactorySelectionEditResult | null {
+  if (!looksLikeSelectionOpacityEdit(input.prompt)) return null
+  const snapshot = selectionSnapshotFromContext(input.context)
+  if (!snapshot?.selectedIds.length) {
+    return {
+      patches: [],
+      nodeIds: [],
+      changed: [],
+      missingReason: 'No canvas object is selected. Select an object before asking for an opacity change.',
+    }
+  }
+
+  const opacity = resolveOpacityValue(input.prompt)
+  if (opacity === undefined) {
+    return {
+      patches: [],
+      nodeIds: [],
+      changed: [],
+      missingReason: 'Could not determine the target opacity value. Try "透明度50%" or "opacity 0.8".',
+    }
+  }
+
+  const candidates = expandedEditableNodes(snapshot)
+  const patches: FactorySceneEditPatch[] = []
+
+  for (const node of candidates) {
+    if (OPACITY_DIRECT_FIELD_TYPES.has(node.type)) {
+      // Direct field on node (pipe, cable-tray, etc.)
+      patches.push({ op: 'update', id: node.id, data: { opacity } })
+    } else if (MATERIAL_NODE_TYPES.has(node.type)) {
+      // Merge into existing material.properties
+      const existing = node.material?.properties ?? {}
+      patches.push({
+        op: 'update',
+        id: node.id,
+        data: {
+          material: {
+            preset: 'custom',
+            properties: { ...existing, opacity, transparent: opacity < 1 },
+          },
+          materialPreset: null,
+        },
+      })
+    }
+    // wall / roof / stair — each has split material fields; apply to all sub-materials
+    else if (node.type === 'wall') {
+      const mat = (color: string | undefined) => ({
+        preset: 'custom' as const,
+        properties: { color: color ?? '#ffffff', roughness: 0.55, metalness: 0, opacity, transparent: opacity < 1, side: 'front' as const },
+      })
+      const c = node.color ?? node.shellColor
+      patches.push({ op: 'update', id: node.id, data: {
+        interiorMaterial: mat(c), interiorMaterialPreset: null,
+        exteriorMaterial: mat(c), exteriorMaterialPreset: null,
+        material: null, materialPreset: null,
+      }})
+    } else if (node.type === 'roof') {
+      const mat = (color: string | undefined) => ({
+        preset: 'custom' as const,
+        properties: { color: color ?? '#ffffff', roughness: 0.55, metalness: 0, opacity, transparent: opacity < 1, side: 'front' as const },
+      })
+      const c = node.color
+      patches.push({ op: 'update', id: node.id, data: {
+        topMaterial: mat(c), topMaterialPreset: null,
+        edgeMaterial: mat(c), edgeMaterialPreset: null,
+        wallMaterial: mat(c), wallMaterialPreset: null,
+        material: null, materialPreset: null,
+      }})
+    }
+  }
+
+  if (!patches.length) {
+    return {
+      patches: [],
+      nodeIds: [],
+      changed: [],
+      missingReason: 'The selected object does not support opacity editing.',
+    }
+  }
+
+  return {
+    patches,
+    nodeIds: patches.map((p) => p.id),
+    changed: patches.map((p) => snapshot.nodes.find((n) => n.id === p.id)?.name ?? p.id),
+    summary: [`Set opacity to ${Math.round(opacity * 100)}% on ${patches.length} object(s).`],
+  }
+}
+
 export function composeSelectionEdit(input: {
   prompt: string
   context?: unknown
@@ -1259,6 +1371,7 @@ export function composeSelectionEdit(input: {
     composeSelectionDeleteEdit(input) ??
     composeSelectionMoveEdit(input) ??
     composeSelectionRotateEdit(input) ??
+    composeSelectionOpacityEdit(input) ??
     composeSelectionColorEdit(input) ??
     composeSelectionTankKindEdit(input) ??
     composeSelectionTowerLevelEdit(input) ??

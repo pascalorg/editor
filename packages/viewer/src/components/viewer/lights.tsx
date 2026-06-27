@@ -9,6 +9,7 @@ import type {
 } from 'three/webgpu'
 import * as THREE from 'three/webgpu'
 import { getSceneTheme } from '../../lib/scene-themes'
+import { expandBoundsByGroundShadow, fitShadowSphereFromBox } from '../../lib/shadow-frustum'
 import useViewer from '../../store/use-viewer'
 
 // Diagnostic toggle: `?disable=shadows` skips the shadow-map render pass
@@ -66,6 +67,9 @@ export function Lights() {
   const shadowRadius = useRef(SHADOW_FALLBACK_RADIUS) // sphere radius
   const shadowDir = useRef(new THREE.Vector3()) // scratch: per-light direction
   const boundsBox = useRef(new THREE.Box3()) // scratch: union AABB
+  const sceneBoundsBox = useRef(new THREE.Box3()) // cached caster AABB
+  const lightBoundsBox = useRef(new THREE.Box3()) // caster AABB + ground projection
+  const lightBoundsSphere = useRef(new THREE.Sphere()) // per-light fitted sphere
   const boundsSphere = useRef(new THREE.Sphere()) // scratch: fitted sphere
   const lastBoundsTime = useRef(-1) // last refresh timestamp (-1 = never)
 
@@ -89,11 +93,10 @@ export function Lights() {
     const dt = Math.min(delta, 0.1) * 4
 
     // Fit each shadow-casting light's frustum to the BUILDING geometry rather
-    // than the camera. We refresh the union bounds on an interval (cheap enough,
-    // and bounds only change while editing), fit a sphere, and size + place the
-    // ortho shadow camera so the building (plus a margin) is fully covered from
-    // the light's direction. The light DIRECTION stays exactly as the theme
-    // specifies; only its position/distance and the frustum extents change.
+    // than the camera. We refresh the union bounds on an interval, then expand
+    // each light's fit by that light direction's ground projection. The light
+    // DIRECTION stays exactly as the theme specifies; only its position/distance
+    // and the frustum extents change.
     if (shadows) {
       const now = state.clock.elapsedTime
       if (now - lastBoundsTime.current >= BOUNDS_REFRESH_INTERVAL) {
@@ -120,20 +123,13 @@ export function Lights() {
         if (finiteBounds) {
           shadowFocus.current.copy(center)
           shadowRadius.current = radius
+          sceneBoundsBox.current.copy(box)
         } else {
           shadowFocus.current.set(0, 0, 0)
           shadowRadius.current = SHADOW_FALLBACK_RADIUS
+          sceneBoundsBox.current.makeEmpty()
         }
       }
-
-      const focus = shadowFocus.current
-      // Ortho half-extent: the building sphere plus a proportional margin.
-      const size = shadowRadius.current * SHADOW_MARGIN_SCALE + SHADOW_MARGIN
-      // Park the light just outside the sphere so the near plane stays positive
-      // and the whole building fits between near and far along the light axis.
-      const distance = size + SHADOW_BACKOFF
-      const near = SHADOW_BACKOFF
-      const far = distance + size
 
       for (let index = 0; index < theme.lights.length; index++) {
         const config = theme.lights[index]
@@ -142,7 +138,27 @@ export function Lights() {
         const [ox, oy, oz] = config.position
         const dir = shadowDir.current.set(ox, oy, oz)
         if (dir.lengthSq() === 0) dir.set(0, 1, 0)
-        dir.normalize().multiplyScalar(distance)
+        dir.normalize()
+
+        const sphere = lightBoundsSphere.current
+        if (!sceneBoundsBox.current.isEmpty()) {
+          expandBoundsByGroundShadow(lightBoundsBox.current, sceneBoundsBox.current, dir)
+          fitShadowSphereFromBox(lightBoundsBox.current, sphere)
+        } else {
+          sphere.center.copy(shadowFocus.current)
+          sphere.radius = shadowRadius.current
+        }
+
+        const focus = sphere.center
+        // Ortho half-extent: caster bounds plus the projected ground shadow.
+        const size = sphere.radius * SHADOW_MARGIN_SCALE + SHADOW_MARGIN
+        // Park the light just outside the fitted sphere so the near plane stays
+        // positive and the caster/projected ground area fits along the light axis.
+        const distance = size + SHADOW_BACKOFF
+        const near = SHADOW_BACKOFF
+        const far = distance + size
+
+        dir.multiplyScalar(distance)
         light.position.set(focus.x + dir.x, focus.y + dir.y, focus.z + dir.z)
         light.target.position.copy(focus)
         light.target.updateMatrixWorld()

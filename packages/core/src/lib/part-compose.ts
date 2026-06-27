@@ -5256,7 +5256,7 @@ function composeCylindricalTank(
   const axis = partAxis(part.axis, 'x')
   const center = add(origin, part.position ?? [0, 0.55, 0])
   const radius = clamp(part.radius, 0.24, 0.05, 2)
-  const length = clamp(part.length ?? part.height, 0.9, 0.16, 6)
+  const length = clamp(part.length ?? part.height, 0.9, 0.16, 24)
   const wallThickness = clamp(
     part.thickness ?? part.shellThickness,
     radius * 0.075,
@@ -5485,7 +5485,8 @@ function composeChimneyStack(
   const height = clamp(part.height ?? part.length, 6, 0.6, 80)
   const baseRadius = clamp(part.radius ?? part.width ?? part.diameter, height * 0.055, 0.05, 6)
   const topRadius = clamp(part.topRadius, baseRadius * 0.72, baseRadius * 0.28, baseRadius)
-  const center = add(origin, part.position ?? [0, height / 2, 0])
+  const rawCenter = add(origin, part.position ?? [0, height / 2, 0])
+  const center: Vec3 = [rawCenter[0], Math.max(rawCenter[1], origin[1] + height / 2), rawCenter[2]]
   const shaftMaterial = partMaterial(part, material(input.primaryColor ?? '#d8d4ca', 0.58, 0.18))
   const concreteMaterial = material('#d8d4ca', 0.62, 0.12)
   const redMaterial = material(part.secondaryColor ?? input.secondaryColor ?? '#b91c1c', 0.46, 0.22)

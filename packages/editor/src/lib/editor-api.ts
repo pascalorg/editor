@@ -1,4 +1,4 @@
-import type { AnyNode, EditorApi, FenceNode, WallNode } from '@pascal-app/core'
+import type { AnyNode, ConveyorBeltNode, EditorApi, FenceNode, WallNode } from '@pascal-app/core'
 import useEditor from '../store/use-editor'
 
 type EditorState = ReturnType<typeof useEditor.getState>
@@ -18,6 +18,8 @@ const endpointEngagers: Record<string, EndpointEngager> = {
     editor.setMovingWallEndpoint({ wall: node as WallNode, endpoint }),
   fence: (node, endpoint, editor) =>
     editor.setMovingFenceEndpoint({ fence: node as FenceNode, endpoint }),
+  'conveyor-belt': (node, endpoint, editor) =>
+    editor.setMovingConveyorBeltEndpoint({ conveyorBelt: node as ConveyorBeltNode, endpoint }),
 }
 
 /**
@@ -41,6 +43,7 @@ export function createEditorApi(): EditorApi {
       editor.setMovingNode(node as Parameters<typeof editor.setMovingNode>[0])
       editor.setMovingWallEndpoint(null)
       editor.setMovingFenceEndpoint(null)
+      editor.setMovingConveyorBeltEndpoint(null)
       editor.setCurvingWall(null)
       editor.setCurvingFence(null)
     },
@@ -52,6 +55,7 @@ export function createEditorApi(): EditorApi {
       editor.setMovingNode(node as Parameters<typeof editor.setMovingNode>[0])
       editor.setMovingWallEndpoint(null)
       editor.setMovingFenceEndpoint(null)
+      editor.setMovingConveyorBeltEndpoint(null)
       editor.setCurvingWall(null)
       editor.setCurvingFence(null)
     },

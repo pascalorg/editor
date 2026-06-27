@@ -12,6 +12,7 @@ const BESPOKE_PLAN_DRAG_3D_KINDS = [
   'stair',
   'stair-segment',
   'pipe',
+  'conveyor-belt',
   'cable-tray',
   'road',
   'steel-beam',

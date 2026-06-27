@@ -164,6 +164,7 @@ export const CustomCameraControls = () => {
   const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
   const movingPipeEndpoint = useEditor((s) => s.movingPipeEndpoint)
   const movingCableTrayEndpoint = useEditor((s) => s.movingCableTrayEndpoint)
+  const movingConveyorBeltEndpoint = useEditor((s) => s.movingConveyorBeltEndpoint)
   const movingRoadEndpoint = useEditor((s) => s.movingRoadEndpoint)
   const movingSteelBeamEndpoint = useEditor((s) => s.movingSteelBeamEndpoint)
   const isBoxSelectActive = mode === 'select' && selectionTool === 'marquee'
@@ -174,6 +175,7 @@ export const CustomCameraControls = () => {
       movingFenceEndpoint ||
       movingPipeEndpoint ||
       movingCableTrayEndpoint ||
+      movingConveyorBeltEndpoint ||
       movingRoadEndpoint ||
       movingSteelBeamEndpoint ||
       isBoxSelectActive,

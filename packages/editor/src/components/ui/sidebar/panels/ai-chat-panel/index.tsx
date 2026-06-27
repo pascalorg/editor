@@ -9,8 +9,10 @@ import {
   ItemNode,
   pauseSpaceDetection,
   resumeSpaceDetection,
+  sceneRegistry,
   type LevelNode,
   type Vec3,
+  useLiveData,
   useScene,
 } from '@pascal-app/core'
 import { createModelNodes } from '@pascal-app/articraft-bridge/scene-converter'
@@ -2831,8 +2833,16 @@ type FactoryE2eBridge = {
   applyFactoryRun: (data: unknown) => string[]
   cameraView: (view: 'isometric' | 'top' | 'side') => void
   clearSelection: () => void
+  liveDataValue: (path: string) => unknown
+  nodeTransform: (nodeId: string) => {
+    position: [number, number, number]
+    rotation: [number, number, number]
+    scale: [number, number, number]
+    visible: boolean
+  } | null
   selectNode: (nodeId: string) => void
   setSelectMode: () => void
+  setPreviewMode: (enabled: boolean) => void
   selectedIds: () => string[]
   viewerFlags: () => { cameraDragging: boolean; inputDragging: boolean; spacePanning: boolean }
 }
@@ -3076,6 +3086,20 @@ export function AiChatPanel() {
         useViewer.getState().setSelection({ selectedIds: [] })
         useEditor.getState().setEditingAssemblyId(null)
         useEditor.getState().setSelectedMaterialTarget(null)
+      },
+      setPreviewMode: (enabled: boolean) => {
+        useEditor.getState().setPreviewMode(enabled)
+      },
+      liveDataValue: (path: string) => useLiveData.getState().values[path],
+      nodeTransform: (nodeId: string) => {
+        const object = sceneRegistry.nodes.get(nodeId as AnyNodeId)
+        if (!object) return null
+        return {
+          position: [object.position.x, object.position.y, object.position.z],
+          rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
+          scale: [object.scale.x, object.scale.y, object.scale.z],
+          visible: object.visible,
+        }
       },
       setSelectMode: () => {
         useEditor.setState({
@@ -3474,8 +3498,9 @@ export function AiChatPanel() {
   const importArticraftResult = useCallback((result: ArticraftResult): number => {
     const levelId = useViewer.getState().selection.levelId
     const scene = useScene.getState()
+    const hasArticraftJoints = (result.jointCount ?? 0) > 0 || result.joints.length > 0
 
-    if (result.asset) {
+    if (result.asset && !hasArticraftJoints) {
       const item = ItemNode.parse({
         name: result.name,
         asset: result.asset,

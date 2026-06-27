@@ -944,6 +944,83 @@ function publishStatusFromGovernance(
   return audit.score >= 0.85 ? 'publishable' : 'needs_review'
 }
 
+function installedPackFromManifest(
+  manifest: ProfilePackManifest,
+  pathName: string,
+  enabledEntry: EnabledPackIndex['enabledPacks'][number] | undefined,
+  counts: {
+    profileCount: number
+    layoutCount: number
+    partPresetCount: number
+    qualityRuleCount: number
+    factoryArchitectureCount: number
+    processTemplateCount: number
+  },
+): InstalledProfilePack {
+  return {
+    id: manifest.id,
+    name: manifest.name,
+    industry: manifest.industry,
+    version: manifest.version,
+    schemaVersion: manifest.schemaVersion,
+    description: manifest.description,
+    profileCount: counts.profileCount,
+    layoutCount: counts.layoutCount,
+    partPresetCount: counts.partPresetCount,
+    qualityRuleCount: counts.qualityRuleCount,
+    factoryArchitectureCount: counts.factoryArchitectureCount,
+    processTemplateCount: counts.processTemplateCount,
+    dependsOn: manifest.dependsOn,
+    enabled: enabledEntry?.enabled !== false,
+    path: pathName,
+    installedAt: enabledEntry?.installedAt,
+  }
+}
+
+async function countPackRecordsFromDir(
+  dir: string,
+  files: readonly string[] | undefined,
+): Promise<number> {
+  if (!files?.length) return 0
+  const resolvedDir = path.resolve(dir)
+  let count = 0
+  for (const rel of files) {
+    if (!isSafeProfilePackPath(rel)) throw new Error(`Unsafe resource path in manifest: ${rel}`)
+    const file = path.resolve(dir, rel)
+    if (!(file === resolvedDir || file.startsWith(`${resolvedDir}${path.sep}`))) {
+      throw new Error(`Resource path escapes pack directory: ${rel}`)
+    }
+    count += resourceArray(parseProfileJson(await fs.readFile(file), rel), rel).length
+  }
+  return count
+}
+
+async function countInstalledPackRecords(dir: string, manifest: ProfilePackManifest) {
+  const [
+    profileCount,
+    layoutCount,
+    partPresetCount,
+    qualityRuleCount,
+    factoryArchitectureCount,
+    processTemplateCount,
+  ] = await Promise.all([
+    countPackRecordsFromDir(dir, manifest.profiles),
+    countPackRecordsFromDir(dir, manifest.layouts),
+    countPackRecordsFromDir(dir, manifest.partPresets),
+    countPackRecordsFromDir(dir, manifest.qualityRules),
+    countPackRecordsFromDir(dir, manifest.factoryArchitectures),
+    countPackRecordsFromDir(dir, manifest.processTemplates),
+  ])
+  return {
+    profileCount,
+    layoutCount,
+    partPresetCount,
+    qualityRuleCount,
+    factoryArchitectureCount,
+    processTemplateCount,
+  }
+}
+
 export async function listCloudProfilePacks(): Promise<CloudProfilePack[]> {
   const repoRoot = await findRepoRoot()
   const cloudRoot = simulatedProfilePackCloudRoot(repoRoot)
@@ -1203,24 +1280,12 @@ export async function listInstalledProfilePacks(): Promise<InstalledProfilePack[
     const manifestPath = path.join(dir, 'pack.json')
     if (!(await exists(manifestPath))) continue
     try {
-      const validation = await validateProfilePackDir(dir)
+      const manifest = normalizeProfilePackManifest(
+        parseProfileJson(await fs.readFile(manifestPath), `${entry.name}/pack.json`),
+      )
       const enabledEntry = enabledByPath.get(entry.name)
-      packs.push({
-        id: validation.manifest.id,
-        name: validation.manifest.name,
-        industry: validation.manifest.industry,
-        version: validation.manifest.version,
-        schemaVersion: validation.manifest.schemaVersion,
-        description: validation.manifest.description,
-        profileCount: validation.profiles.length,
-        layoutCount: validation.resources.layouts.length,
-        partPresetCount: validation.resources.partPresets.length,
-        qualityRuleCount: validation.resources.qualityRules.length,
-        dependsOn: validation.manifest.dependsOn,
-        enabled: enabledEntry?.enabled !== false,
-        path: entry.name,
-        installedAt: enabledEntry?.installedAt,
-      })
+      const counts = await countInstalledPackRecords(dir, manifest)
+      packs.push(installedPackFromManifest(manifest, entry.name, enabledEntry, counts))
     } catch {}
   }
   for (const pack of packs) {

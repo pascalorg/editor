@@ -6,7 +6,7 @@
     "processId": "refinery_basic_complex",
     "layoutStyle": "parallel_bays",
     "defaultDimensions": {
-      "length": 104,
+      "length": 50,
       "width": 46
     },
     "scopes": [
@@ -149,25 +149,74 @@
       "primaryAxis": "x",
       "secondaryAxis": "z",
       "indoorWorkshop": false,
-      "highestStationId": "atmospheric_distillation_unit",
+      "outdoorHeavyIndustry": true,
+      "highestStationId": "flare_system",
       "longAxisStationId": "pipe_rack",
-      "sideBranchStationIds": [
-        "crude_storage_tank",
-        "intermediate_storage_tank",
-        "product_storage_tank",
-        "sulfur_recovery_unit",
-        "flare_system",
-        "utility_boiler",
-        "control_room"
-      ],
       "scale": "conceptual",
-      "notes": [
-        "Keep crude/intermediate/product tank farms separated from hot process units.",
-        "Place CDU/VDU upstream, delayed coker near VDU bottom products, FCC/gas fractionation/hydrotreating/reformer in conversion area.",
-        "Flare is a safety system at a remote side/back location; do not use it as normal FCC rich-gas destination.",
-        "Pipe rack runs along the main process edge and carries process/utility/cable connections without hiding equipment."
+      "omitPerimeterWalls": true,
+      "interStationGap": 1.5,
+      "interModuleGap": 2.5,
+      "packingStyle": "dense",
+      "zones": [
+        {
+          "id": "zone_crude",
+          "label": "原油罐区",
+          "normalizedX": [0.0, 0.28],
+          "normalizedZ": [0.0, 0.5],
+          "stationIds": ["crude_storage_tank", "desalter"]
+        },
+        {
+          "id": "zone_distillation",
+          "label": "常减压蒸馏",
+          "normalizedX": [0.28, 0.56],
+          "normalizedZ": [0.0, 0.55],
+          "stationIds": ["atmospheric_distillation_unit", "vacuum_distillation_unit"]
+        },
+        {
+          "id": "zone_conversion",
+          "label": "转化与加氢区",
+          "normalizedX": [0.28, 0.72],
+          "normalizedZ": [0.5, 1.0],
+          "stationIds": ["fluid_catalytic_cracking_unit", "gas_fractionation_unit", "hydrotreating_unit", "catalytic_reformer_unit", "delayed_coker_unit"]
+        },
+        {
+          "id": "zone_intermediate",
+          "label": "中间料罐区",
+          "normalizedX": [0.55, 0.75],
+          "normalizedZ": [0.0, 0.5],
+          "stationIds": ["intermediate_storage_tank"]
+        },
+        {
+          "id": "zone_product",
+          "label": "成品罐区",
+          "normalizedX": [0.72, 1.0],
+          "normalizedZ": [0.5, 1.0],
+          "stationIds": ["product_storage_tank"]
+        },
+        {
+          "id": "zone_utilities",
+          "label": "公用工程与安全",
+          "normalizedX": [0.75, 1.0],
+          "normalizedZ": [0.0, 0.5],
+          "stationIds": ["sulfur_recovery_unit", "utility_boiler", "control_room", "flare_system"]
+        },
+        {
+          "id": "zone_pipe_rack",
+          "label": "主管廊",
+          "normalizedX": [0.0, 1.0],
+          "normalizedZ": [0.45, 0.55],
+          "stationIds": ["pipe_rack"]
+        }
       ],
-      "omitPerimeterWalls": true
+      "notes": [
+        "CRITICAL: This is a dense industrial plant — all modules must be packed tightly together, interStationGap=1.5, NOT spread across empty ground.",
+        "Pipe rack runs east-west through the Z-center of the plant connecting all zones; all process units connect laterally to the pipe rack.",
+        "CDU/VDU are the tallest process columns and the visual centerpiece — place them prominently in the center-north zone.",
+        "FCC reactor-regenerator is the largest equipment cluster — place it in center-south zone adjacent to pipe rack.",
+        "Crude tank farm and product tank farm are on opposite ends of the plant (west and east respectively).",
+        "Flare stack is at the far east or south-east corner for safety separation — it must be clearly separated from process units.",
+        "Do NOT leave large empty spaces between stations — each station should be within 2 units of its nearest neighbor."
+      ]
     }
   }
 ]

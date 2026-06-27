@@ -10,6 +10,7 @@ import {
   type CapsuleNode,
   type CeilingNode,
   type ColumnNode,
+  type ConveyorBeltNode,
   type CylinderNode,
   type DataWidgetNode,
   type DoorNode,
@@ -72,6 +73,7 @@ export type StructureTool =
   | 'fence'
   | 'pipe-fitting'
   | 'pipe'
+  | 'conveyor-belt'
   | 'cable-tray'
   | 'ladder'
   | 'steel-beam'
@@ -92,6 +94,8 @@ export type StructureTool =
   | 'shelf'
   | 'tank'
   | 'data-widget'
+  | 'data-chart'
+  | 'data-table'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'
@@ -143,7 +147,7 @@ export type StructureLayer = 'zones' | 'elements' | 'industrial' | 'data'
 export type StairPlacementType = 'straight' | 'curved' | 'spiral'
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
-export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
+export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05 | 0.01
 
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool
@@ -165,6 +169,11 @@ export type MovingPipeEndpoint = {
 
 export type MovingCableTrayEndpoint = {
   cableTray: CableTrayNode
+  endpoint: 'start' | 'end'
+}
+
+export type MovingConveyorBeltEndpoint = {
+  conveyorBelt: ConveyorBeltNode
   endpoint: 'start' | 'end'
 }
 
@@ -202,6 +211,7 @@ export type MovingNode =
   | FenceNode
   | PipeFittingNode
   | PipeNode
+  | ConveyorBeltNode
   | CableTrayNode
   | RoadNode
   | RoofNode
@@ -266,6 +276,8 @@ type EditorState = {
   setMovingPipeEndpoint: (value: MovingPipeEndpoint | null) => void
   movingCableTrayEndpoint: MovingCableTrayEndpoint | null
   setMovingCableTrayEndpoint: (value: MovingCableTrayEndpoint | null) => void
+  movingConveyorBeltEndpoint: MovingConveyorBeltEndpoint | null
+  setMovingConveyorBeltEndpoint: (value: MovingConveyorBeltEndpoint | null) => void
   movingRoadEndpoint: MovingRoadEndpoint | null
   setMovingRoadEndpoint: (value: MovingRoadEndpoint | null) => void
   movingSteelBeamEndpoint: MovingSteelBeamEndpoint | null
@@ -400,7 +412,7 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   referenceFloorOpacity: 0.35,
 }
 
-const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
+const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05, 0.01]
 
 function normalizeModeForPhase(phase: Phase, mode: Mode | undefined): Mode {
   return 'select'
@@ -506,10 +518,14 @@ export function normalizePersistedEditorUiState(
   }
 
   if (structureLayer === 'data') {
+    const dataTool = state?.tool
     return {
       phase,
       mode,
-      tool: 'data-widget',
+      tool:
+        dataTool === 'data-widget' || dataTool === 'data-chart' || dataTool === 'data-table'
+          ? dataTool
+          : 'data-widget',
       structureLayer,
       catalogCategory: null,
       viewMode,
@@ -755,6 +771,8 @@ const useEditor = create<EditorState>()(
       setMovingPipeEndpoint: (value) => set({ movingPipeEndpoint: value }),
       movingCableTrayEndpoint: null,
       setMovingCableTrayEndpoint: (value) => set({ movingCableTrayEndpoint: value }),
+      movingConveyorBeltEndpoint: null,
+      setMovingConveyorBeltEndpoint: (value) => set({ movingConveyorBeltEndpoint: value }),
       movingRoadEndpoint: null,
       setMovingRoadEndpoint: (value) => set({ movingRoadEndpoint: value }),
       movingSteelBeamEndpoint: null,

@@ -601,6 +601,26 @@ describe('composePartPrimitives', () => {
     expect(shapes.filter((shape) => shape.semanticRole === 'saddle_support')).toHaveLength(2)
   })
 
+  test('preserves tall vertical cylindrical tanks for process towers', () => {
+    const shapes = composePartPrimitives({
+      name: 'Tall distillation column',
+      parts: [
+        {
+          kind: 'cylindrical_tank',
+          semanticRole: 'distillation_column_shell',
+          height: 13.2,
+          radius: 0.78,
+          axis: 'y',
+          position: [0, 6.6, 0],
+        },
+      ],
+    })
+
+    const shell = shapes.find((shape) => shape.semanticRole === 'distillation_column_shell')
+    expect(shell?.kind).toBe('hollow-cylinder')
+    expect(shell?.height).toBe(13.2)
+  })
+
   test('composes agitator tank parts with vessel shell, heads, mixer, nozzles, and legs', () => {
     const shapes = composePartPrimitives({
       name: 'Stirred reactor',
@@ -914,6 +934,27 @@ describe('composePartPrimitives', () => {
     expect(whiteBands).toHaveLength(2)
     expect(redBands[0]?.material?.properties?.color).toBe('#b91c1c')
     expect(whiteBands[0]?.material?.properties?.color).toBe('#f8fafc')
+  })
+
+  test('keeps explicitly positioned chimney stacks above the local ground plane', () => {
+    const shapes = composePartPrimitives({
+      name: 'grounded chimney',
+      parts: [
+        {
+          kind: 'chimney_stack',
+          semanticRole: 'flare_stack',
+          height: 8,
+          radius: 0.3,
+          position: [0, 0, 0],
+        },
+      ],
+    })
+
+    const shell = shapes.find((shape) => shape.semanticRole === 'flare_stack')
+    const base = shapes.find((shape) => shape.semanticRole === 'chimney_base')
+
+    expect(shell?.position?.[1]).toBe(4)
+    expect(base?.position?.[1]).toBeGreaterThan(0)
   })
 
   test('composes common factory pump and blower structures', () => {

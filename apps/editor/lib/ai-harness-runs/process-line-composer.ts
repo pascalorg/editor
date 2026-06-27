@@ -72,6 +72,23 @@ const MEDIUM_COLOR: Record<ProcessConnectionMedium, string> = {
   molten_metal: '#dc2626',
 }
 
+const PROCESS_CONNECTION_MEDIA = new Set<ProcessConnectionMedium>([
+  'water',
+  'hydrogen',
+  'oxygen',
+  'power',
+  'cooling',
+  'material',
+  'gas',
+  'molten_metal',
+])
+
+function normalizeConnectionMedium(value: unknown): ProcessConnectionMedium | undefined {
+  return typeof value === 'string' && PROCESS_CONNECTION_MEDIA.has(value as ProcessConnectionMedium)
+    ? (value as ProcessConnectionMedium)
+    : undefined
+}
+
 function isCementProcessLine(plan: ProcessLinePlan) {
   return plan.sourcePack?.industry === 'cement' || plan.processId?.startsWith('cement_') === true
 }
@@ -106,6 +123,7 @@ function connectionRenderSpec(
   visualKind: ProcessConnectionVisualKind,
   medium?: ProcessConnectionMedium,
 ): ConnectionRenderSpec {
+  const normalizedMedium = normalizeConnectionMedium(medium)
   if (visualKind === 'cable_tray') {
     return {
       nodeKind: 'cable_tray',
@@ -120,7 +138,7 @@ function connectionRenderSpec(
       nodeKind: 'cable_tray',
       label: 'transfer route',
       resolver: 'native-flow-transfer',
-      color: MEDIUM_COLOR[medium ?? 'material'],
+      color: MEDIUM_COLOR[normalizedMedium ?? 'material'],
       elevation: 2.1,
       tray: { width: 0.42, sideHeight: 0.08, thickness: 0.035, rungSpacing: 0.5, showRungs: false },
     }
@@ -175,10 +193,10 @@ function connectionRenderSpec(
     nodeKind: 'pipe',
     label: 'pipe',
     resolver: 'native-pipe',
-    color: MEDIUM_COLOR[medium ?? 'material'],
+    color: MEDIUM_COLOR[normalizedMedium ?? 'material'],
     elevation: 1.15,
-    diameter: pipeDiameter(medium),
-    insulated: medium === 'cooling',
+    diameter: pipeDiameter(normalizedMedium),
+    insulated: normalizedMedium === 'cooling',
     temperatureC: 20,
   }
 }
@@ -309,12 +327,13 @@ function connectionSegmentName(input: {
   segmentIndex: number
   segmentCount: number
 }) {
+  const medium = normalizeConnectionMedium(input.connection.medium)
   const suffix =
     input.segmentCount > 1
       ? `${input.connectionIndex + 1}.${input.segmentIndex + 1}`
       : `${input.connectionIndex + 1}`
-  const spec = connectionRenderSpec(input.connection.visualKind, input.connection.medium)
-  return `${input.connection.medium ?? 'process'} ${spec.label} ${suffix}`
+  const spec = connectionRenderSpec(input.connection.visualKind, medium)
+  return `${medium ?? 'process'} ${spec.label} ${suffix}`
 }
 
 function connectionMetadata(input: {
@@ -327,10 +346,11 @@ function connectionMetadata(input: {
   sourcePrompt: string
   placement: GeneratedGeometryPlacementSpec
 }) {
+  const medium = normalizeConnectionMedium(input.connection.medium)
   return {
     ...processMetadata(input),
     role: 'process-line-connection',
-    ...(input.connection.medium ? { connectionRole: input.connection.medium } : {}),
+    ...(medium ? { connectionRole: medium } : {}),
     connectionIndex: input.connectionIndex,
     fromStationId: input.connection.fromStationId,
     toStationId: input.connection.toStationId,
@@ -362,7 +382,7 @@ function connectionMetadata(input: {
       : {}),
     ...(input.segmentIndex != null ? { routeSegmentIndex: input.segmentIndex } : {}),
     ...(input.segmentCount != null ? { routeSegmentCount: input.segmentCount } : {}),
-    resolver: connectionRenderSpec(input.connection.visualKind, input.connection.medium).resolver,
+    resolver: connectionRenderSpec(input.connection.visualKind, medium).resolver,
   }
 }
 
@@ -378,7 +398,8 @@ function createConnectionPatch(input: {
   placement: GeneratedGeometryPlacementSpec
 }) {
   const metadata = connectionMetadata(input)
-  const spec = connectionRenderSpec(input.connection.visualKind, input.connection.medium)
+  const medium = normalizeConnectionMedium(input.connection.medium)
+  const spec = connectionRenderSpec(input.connection.visualKind, medium)
   if (spec.nodeKind === 'cable_tray') {
     const node = CableTrayNode.parse({
       name: connectionSegmentName(input),
@@ -397,11 +418,11 @@ function createConnectionPatch(input: {
     start: input.segment.start,
     end: input.segment.end,
     elevation: input.route.elevation ?? spec.elevation,
-    diameter: spec.diameter ?? pipeDiameter(input.connection.medium),
-    insulated: spec.insulated ?? input.connection.medium === 'cooling',
+    diameter: spec.diameter ?? pipeDiameter(medium),
+    insulated: spec.insulated ?? medium === 'cooling',
     pressureKpa: 0,
     temperatureC: spec.temperatureC ?? 20,
-    medium: pipeMedium(input.connection.medium),
+    medium: pipeMedium(medium),
     color: spec.color,
     metadata,
   })
@@ -454,7 +475,8 @@ function createConnectionSupportPatches(input: {
   sourcePrompt: string
   placement: GeneratedGeometryPlacementSpec
 }) {
-  const spec = connectionRenderSpec(input.connection.visualKind, input.connection.medium)
+  const medium = normalizeConnectionMedium(input.connection.medium)
+  const spec = connectionRenderSpec(input.connection.visualKind, medium)
   const elevation = input.route.elevation ?? spec.elevation
   if (elevation < ROUTE_SUPPORT_MIN_ELEVATION) return []
 
@@ -523,7 +545,8 @@ function createRouteElbowFittings(input: {
   sourcePrompt: string
   placement: GeneratedGeometryPlacementSpec
 }) {
-  const spec = connectionRenderSpec(input.connection.visualKind, input.connection.medium)
+  const medium = normalizeConnectionMedium(input.connection.medium)
+  const spec = connectionRenderSpec(input.connection.visualKind, medium)
   if (spec.nodeKind !== 'pipe' || input.route.points.length < 3) return []
 
   const patches: GeneratedGeometryCreatePatch[] = []
@@ -531,13 +554,13 @@ function createRouteElbowFittings(input: {
     const point = input.route.points[pointIndex]
     if (!point) continue
     const node = PipeFittingNode.parse({
-      name: `${input.connection.medium ?? 'process'} pipe elbow ${input.connectionIndex + 1}.${pointIndex}`,
+      name: `${medium ?? 'process'} pipe elbow ${input.connectionIndex + 1}.${pointIndex}`,
       fittingKind: 'elbow',
       position: [point[0], input.route.elevation ?? spec.elevation, point[1]],
-      diameter: spec.diameter ?? pipeDiameter(input.connection.medium),
+      diameter: spec.diameter ?? pipeDiameter(medium),
       pressureKpa: 0,
       temperatureC: spec.temperatureC ?? 20,
-      medium: pipeMedium(input.connection.medium),
+      medium: pipeMedium(medium),
       color: spec.color,
       metadata: {
         ...connectionMetadata(input),
@@ -559,7 +582,8 @@ function createConnectionFittings(input: {
 }) {
   const outgoing = new Map<string, ProcessConnectionPlan[]>()
   for (const connection of input.plan.connections) {
-    if (connectionRenderSpec(connection.visualKind, connection.medium).nodeKind !== 'pipe') continue
+    const medium = normalizeConnectionMedium(connection.medium)
+    if (connectionRenderSpec(connection.visualKind, medium).nodeKind !== 'pipe') continue
     outgoing.set(connection.fromStationId, [
       ...(outgoing.get(connection.fromStationId) ?? []),
       connection,
@@ -571,7 +595,9 @@ function createConnectionFittings(input: {
     if (connections.length < 2) continue
     const station = input.placements.get(stationId)
     if (!station) continue
-    const medium = connections.find((connection) => connection.medium)?.medium
+    const medium = normalizeConnectionMedium(
+      connections.find((connection) => connection.medium)?.medium,
+    )
     const node = PipeFittingNode.parse({
       name: `${station.displayLabel ?? station.label} branch tee`,
       fittingKind: 'tee',
@@ -584,7 +610,7 @@ function createConnectionFittings(input: {
       metadata: {
         ...processMetadata(input),
         role: 'process-line-fitting',
-        connectionRole: medium,
+        ...(medium ? { connectionRole: medium } : {}),
         stationId,
         stationRole: station.role,
         resolver: 'native-pipe-fitting',
@@ -862,6 +888,7 @@ export function composeProcessLine(input: {
     plan,
     boundary: layoutBoundary,
   })
+  const resolvedBoundary = resolvedLayout.boundary
   const omitPerimeterWalls = processLineOmitPerimeterWalls(plan)
   const { layoutDiagnostics, layoutStrategy, stationPlacements } = resolvedLayout
   const focusBounds = focusBoundsFromPlacements({ plan, stationPlacements })
@@ -886,8 +913,8 @@ export function composeProcessLine(input: {
         placement: shellPlacement,
         params: {
           ...input.params,
-          length,
-          width,
+          length: resolvedBoundary.length,
+          width: resolvedBoundary.width,
           ...(omitPerimeterWalls != null ? { omitPerimeterWalls } : {}),
         },
       })
@@ -952,7 +979,7 @@ export function composeProcessLine(input: {
           plan,
           placements: placementByStation,
           stationPlacements,
-          boundary: layoutBoundary,
+          boundary: resolvedBoundary,
           routeObstacles: [...stationRouteObstacles, ...(input.routeObstacles ?? [])],
           portOverrides: input.portOverrides,
           sourcePrompt: input.prompt,
@@ -967,7 +994,7 @@ export function composeProcessLine(input: {
             connectionIndex,
             placements: placementByStation,
             stationPlacements,
-            boundary: layoutBoundary,
+            boundary: resolvedBoundary,
             portOverrides: input.portOverrides,
             routeObstacles,
           })

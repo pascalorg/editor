@@ -28,6 +28,7 @@ const WALL_ANGLE_SNAP_BY_GRID_STEP: Record<number, number> = {
   0.25: Math.PI / 8,
   0.1: Math.PI / 12,
   0.05: Math.PI / 36,
+  0.01: Math.PI / 180,
 }
 
 type WallSplitIntersection = {

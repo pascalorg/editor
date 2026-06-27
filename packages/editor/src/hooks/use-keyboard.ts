@@ -37,6 +37,14 @@ const ARROW_NUDGE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDo
 const NUDGE_STEP = 0.02
 const NUDGE_STEP_FINE = 0.005
 const NUDGE_STEP_COARSE = 0.1
+const INDUSTRIAL_VERTICAL_NUDGE_TYPES = new Set([
+  'tank',
+  'pipe',
+  'conveyor-belt',
+  'pipe-fitting',
+  'cable-tray',
+  'steel-beam',
+])
 
 function getPlanNudgeDelta(key: string, step: number): [number, number, number] | null {
   if (key === 'ArrowLeft') return [-step, 0, 0]
@@ -60,6 +68,14 @@ function getPositionPatchForPlanNudge(node: AnyNode, delta: [number, number, num
     return {
       start: [node.start[0] + delta[0], node.start[1] + delta[2]] as [number, number],
       end: [node.end[0] + delta[0], node.end[1] + delta[2]] as [number, number],
+    }
+  }
+
+  if (node.type === 'conveyor-belt') {
+    return {
+      points: node.points.map(
+        ([x, y, z]) => [x + delta[0], y, z + delta[2]] as [number, number, number],
+      ),
     }
   }
 
@@ -88,6 +104,14 @@ function nudgeSelectedNodesOnPlan(key: string, step: number): boolean {
 }
 
 function getPositionPatchForVerticalNudge(node: AnyNode, deltaY: number) {
+  if (
+    INDUSTRIAL_VERTICAL_NUDGE_TYPES.has(node.type) &&
+    'elevation' in node &&
+    typeof node.elevation === 'number'
+  ) {
+    return { elevation: node.elevation + deltaY }
+  }
+
   const position = (node as { position?: unknown }).position
   if (!Array.isArray(position) || position.length < 3) return null
   const [x, y, z] = position

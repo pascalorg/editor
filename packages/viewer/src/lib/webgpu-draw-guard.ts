@@ -2,8 +2,9 @@ import type { WebGPURenderer } from 'three/webgpu'
 import { hasDrawableGeometry } from './drawable-geometry'
 import { ensureWebGPUCompatibleGeometry } from './safe-geometry'
 
-const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakSet<object>()
-const warnedRepairedDraw = process.env.NODE_ENV === 'production' ? null : new WeakSet<object>()
+const debugGeometry = process.env.NEXT_PUBLIC_VIEWER_DEBUG_GEOMETRY === '1'
+const warnedEmptyDraw = debugGeometry ? new WeakSet<object>() : null
+const warnedRepairedDraw = debugGeometry ? new WeakSet<object>() : null
 const validatedDrawGeometries = new WeakSet<object>()
 
 /**

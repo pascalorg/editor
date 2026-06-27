@@ -135,10 +135,10 @@ describe('factory layout patches', () => {
     expect(roofPatch?.node).toMatchObject({ position: [0, 2.5, 0] })
   })
 
-
   test('creates a building and both story levels when no building context exists', () => {
     const plan = buildFactoryLayoutCreatePatches({
-      prompt: '\u751f\u62105\u7c73*10\uff0c\u9ad82\u7c735\u7684\u5c4b\u5b50\uff0c\u7136\u540e\u5c4b\u5b50\u4e0a\u9762\u8fd8\u6709\u4e00\u5c42\uff0c\u4e5f\u662f5\u7c73*10\uff0c\u9ad82\u7c735\u3002\u5e26\u5c4b\u9876\u3002',
+      prompt:
+        '\u751f\u62105\u7c73*10\uff0c\u9ad82\u7c735\u7684\u5c4b\u5b50\uff0c\u7136\u540e\u5c4b\u5b50\u4e0a\u9762\u8fd8\u6709\u4e00\u5c42\uff0c\u4e5f\u662f5\u7c73*10\uff0c\u9ad82\u7c735\u3002\u5e26\u5c4b\u9876\u3002',
       plan: {
         ...housePlan,
         stories: 2,
@@ -170,9 +170,10 @@ describe('factory layout patches', () => {
     )
   })
 
-  test('does not treat upper-story wording as canvas-top placement', () => {
+  test('places default layout to the right of existing scene bounds', () => {
     const plan = buildFactoryLayoutCreatePatches({
-      prompt: '\u751f\u62105\u7c73*10\uff0c\u9ad82\u7c735\u7684\u5c4b\u5b50\uff0c\u7136\u540e\u5c4b\u5b50\u4e0a\u9762\u8fd8\u6709\u4e00\u5c42\uff0c\u4e5f\u662f5\u7c73*10\uff0c\u9ad82\u7c735\u3002\u5e26\u5c4b\u9876\u3002',
+      prompt:
+        '\u751f\u62105\u7c73*10\uff0c\u9ad82\u7c735\u7684\u5c4b\u5b50\uff0c\u7136\u540e\u5c4b\u5b50\u4e0a\u9762\u8fd8\u6709\u4e00\u5c42\uff0c\u4e5f\u662f5\u7c73*10\uff0c\u9ad82\u7c735\u3002\u5e26\u5c4b\u9876\u3002',
       plan: {
         ...housePlan,
         stories: 2,
@@ -198,17 +199,17 @@ describe('factory layout patches', () => {
     expect(plan.patches[1]?.node).toMatchObject({
       type: 'zone',
       polygon: [
-        [-2.5, -5],
-        [2.5, -5],
-        [2.5, 5],
-        [-2.5, 5],
+        [11, -5],
+        [16, -5],
+        [16, 5],
+        [11, 5],
       ],
       metadata: {
-        layoutPlacementIntent: 'default-origin',
+        layoutPlacementIntent: 'avoid-existing-right',
       },
     })
     expect(plan.patches.find((patch) => patch.node.type === 'roof')?.node).toMatchObject({
-      position: [0, 2.5, 0],
+      position: [13.5, 2.5, 0],
     })
   })
 

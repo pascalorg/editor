@@ -28,6 +28,7 @@ export const pipeDefinition: NodeDefinition<typeof PipeNode> = {
     showHangers: true,
     hangerSpacing: 2,
     color: '#b0b8c0',
+    opacity: 1,
   }),
 
   capabilities: {

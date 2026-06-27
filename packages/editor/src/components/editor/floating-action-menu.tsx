@@ -6,10 +6,12 @@ import {
   type CableTrayNode,
   type CeilingNode,
   ColumnNode,
+  type ConveyorBeltNode,
   DoorNode,
   ElevatorNode,
   FenceNode,
   generateId,
+  getConveyorPortPoint,
   getPipeEndpoint3D,
   ItemNode,
   isPipeNearlyVertical,
@@ -55,6 +57,7 @@ const ALLOWED_TYPES = [
   'wall',
   'fence',
   'pipe',
+  'conveyor-belt',
   'cable-tray',
   'road',
   'steel-beam',
@@ -139,6 +142,7 @@ export function FloatingActionMenu() {
   const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
   const movingPipeEndpoint = useEditor((s) => s.movingPipeEndpoint)
   const movingCableTrayEndpoint = useEditor((s) => s.movingCableTrayEndpoint)
+  const movingConveyorBeltEndpoint = useEditor((s) => s.movingConveyorBeltEndpoint)
   const movingRoadEndpoint = useEditor((s) => s.movingRoadEndpoint)
   const movingSteelBeamEndpoint = useEditor((s) => s.movingSteelBeamEndpoint)
   const curvingFence = useEditor((s) => s.curvingFence)
@@ -151,6 +155,7 @@ export function FloatingActionMenu() {
   const setMovingFenceEndpoint = useEditor((s) => s.setMovingFenceEndpoint)
   const setMovingPipeEndpoint = useEditor((s) => s.setMovingPipeEndpoint)
   const setMovingCableTrayEndpoint = useEditor((s) => s.setMovingCableTrayEndpoint)
+  const setMovingConveyorBeltEndpoint = useEditor((s) => s.setMovingConveyorBeltEndpoint)
   const setMovingRoadEndpoint = useEditor((s) => s.setMovingRoadEndpoint)
   const setMovingSteelBeamEndpoint = useEditor((s) => s.setMovingSteelBeamEndpoint)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
@@ -268,6 +273,7 @@ export function FloatingActionMenu() {
         node?.type === 'wall' ||
         node?.type === 'fence' ||
         node?.type === 'pipe' ||
+        node?.type === 'conveyor-belt' ||
         node?.type === 'cable-tray' ||
         node?.type === 'road' ||
         node?.type === 'steel-beam'
@@ -288,7 +294,13 @@ export function FloatingActionMenu() {
                   const point = getPipeEndpoint3D(node as PipeNode, 'start')
                   return obj.localToWorld(new THREE.Vector3(point.x, 0, point.z))
                 })()
-              : obj.localToWorld(new THREE.Vector3(segment.start[0], 0, segment.start[1]))
+              : node.type === 'conveyor-belt'
+                ? (() => {
+                    const point = getConveyorPortPoint(node as ConveyorBeltNode, 'in') ??
+                      (node as ConveyorBeltNode).points[0] ?? [0, 0, 0]
+                    return obj.localToWorld(new THREE.Vector3(point[0], 0, point[2]))
+                  })()
+                : obj.localToWorld(new THREE.Vector3(segment.start[0], 0, segment.start[1]))
         const endWorld =
           node.type === 'wall'
             ? obj.localToWorld(
@@ -303,19 +315,30 @@ export function FloatingActionMenu() {
                   const point = getPipeEndpoint3D(node as PipeNode, 'end')
                   return obj.localToWorld(new THREE.Vector3(point.x, 0, point.z))
                 })()
-              : obj.localToWorld(new THREE.Vector3(segment.end[0], 0, segment.end[1]))
+              : node.type === 'conveyor-belt'
+                ? (() => {
+                    const conveyor = node as ConveyorBeltNode
+                    const point = getConveyorPortPoint(conveyor, 'out') ??
+                      conveyor.points[conveyor.points.length - 1] ?? [0, 0, 0]
+                    return obj.localToWorld(new THREE.Vector3(point[0], 0, point[2]))
+                  })()
+                : obj.localToWorld(new THREE.Vector3(segment.end[0], 0, segment.end[1]))
         const startY =
           node.type === 'pipe'
             ? getPipeEndpoint3D(node as PipeNode, 'start').y + endpointYOffset
-            : node.type === 'cable-tray' || node.type === 'steel-beam'
-              ? ((node as CableTrayNode | SteelBeamNode).elevation ?? 0) + endpointYOffset
-              : startWorld.y + endpointYOffset
+            : node.type === 'conveyor-belt'
+              ? ((node as ConveyorBeltNode).elevation ?? 0) + endpointYOffset
+              : node.type === 'cable-tray' || node.type === 'steel-beam'
+                ? ((node as CableTrayNode | SteelBeamNode).elevation ?? 0) + endpointYOffset
+                : startWorld.y + endpointYOffset
         const endY =
           node.type === 'pipe'
             ? getPipeEndpoint3D(node as PipeNode, 'end').y + endpointYOffset
-            : node.type === 'cable-tray' || node.type === 'steel-beam'
-              ? ((node as CableTrayNode | SteelBeamNode).elevation ?? 0) + endpointYOffset
-              : endWorld.y + endpointYOffset
+            : node.type === 'conveyor-belt'
+              ? ((node as ConveyorBeltNode).elevation ?? 0) + endpointYOffset
+              : node.type === 'cable-tray' || node.type === 'steel-beam'
+                ? ((node as CableTrayNode | SteelBeamNode).elevation ?? 0) + endpointYOffset
+                : endWorld.y + endpointYOffset
 
         if (startEndpointGroupRef.current) {
           startEndpointGroupRef.current.position.set(startWorld.x, startY, startWorld.z)
@@ -408,6 +431,8 @@ export function FloatingActionMenu() {
         setMovingPipeEndpoint({ pipe: node, endpoint })
       } else if (node.type === 'cable-tray') {
         setMovingCableTrayEndpoint({ cableTray: node, endpoint })
+      } else if (node.type === 'conveyor-belt') {
+        setMovingConveyorBeltEndpoint({ conveyorBelt: node, endpoint })
       } else if (node.type === 'road') {
         setMovingRoadEndpoint({ road: node, endpoint })
       } else if (node.type === 'steel-beam') {
@@ -420,6 +445,7 @@ export function FloatingActionMenu() {
     [
       node,
       setMovingCableTrayEndpoint,
+      setMovingConveyorBeltEndpoint,
       setMovingFenceEndpoint,
       setMovingPipeEndpoint,
       setMovingRoadEndpoint,
@@ -672,6 +698,7 @@ export function FloatingActionMenu() {
     movingFenceEndpoint ||
     movingPipeEndpoint ||
     movingCableTrayEndpoint ||
+    movingConveyorBeltEndpoint ||
     movingRoadEndpoint ||
     movingSteelBeamEndpoint ||
     curvingFence ||
@@ -737,6 +764,7 @@ export function FloatingActionMenu() {
       {(node?.type === 'wall' ||
         node?.type === 'fence' ||
         node?.type === 'pipe' ||
+        node?.type === 'conveyor-belt' ||
         node?.type === 'cable-tray' ||
         node?.type === 'road' ||
         node?.type === 'steel-beam') && (

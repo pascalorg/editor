@@ -36,7 +36,7 @@
     ],
     "defaultLayoutStyle": "parallel_bays",
     "defaultDimensions": {
-      "length": 92,
+      "length": 46,
       "width": 42
     },
     "safetyTags": [
@@ -421,10 +421,7 @@
         "atmospheric_distillation_unit",
         "vacuum_distillation_unit",
         "fluid_catalytic_cracking_unit",
-        "delayed_coker_unit",
-        "gas_fractionation_unit",
-        "crude_storage_tank",
-        "product_storage_tank"
+        "delayed_coker_unit"
       ],
       "mainProcessStationIds": [
         "desalter",
@@ -444,10 +441,15 @@
         "control_room"
       ],
       "notes": [
-        "FCC rich gas is a normal valuable stream to gas fractionation/LPG recovery, not to flare.",
-        "Vacuum residue leaves VDU bottom to delayed coker in this basic Chinese-refinery-oriented configuration.",
-        "Catalytic reformer hydrogen-rich gas supplies hydrotreating hydrogen demand.",
-        "Flare system represents emergency relief only."
+        "CRITICAL: Pack all stations densely — interStationGap must not exceed 2 units. The plant should look like a real industrial site, not scattered islands.",
+        "Pipe rack is the backbone spine running east-west; every process station connects to it laterally within reach.",
+        "Process flow direction: crude (west) → desalter → CDU/VDU → coker/FCC → hydrotreating/reformer → product tanks (east).",
+        "CDU atmospheric tower and VDU are the tallest process columns; place them as the visual center of the plant.",
+        "FCC rich gas goes to gas fractionation/LPG recovery, not to flare.",
+        "Vacuum residue leaves VDU bottom to delayed coker.",
+        "Catalytic reformer hydrogen-rich gas supplies hydrotreating.",
+        "Flare system is emergency relief only — far corner, clearly separated.",
+        "CDU atmospheric tower is the tallest process column; VDU has noticeably larger diameter; flare stack is the single tallest element overall."
       ]
     }
   }

@@ -226,6 +226,7 @@ export { type CommandAction, useCommandRegistry } from './store/use-command-regi
 export type {
   FloorplanSelectionTool,
   MovingCableTrayEndpoint,
+  MovingConveyorBeltEndpoint,
   MovingFenceEndpoint,
   MovingPipeEndpoint,
   MovingRoadEndpoint,

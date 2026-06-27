@@ -6,8 +6,29 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const MAX_PROFILE_PACK_BYTES = 8 * 1024 * 1024
+const PROFILE_PACK_CACHE_TTL_MS = 60_000
+
+type ProfilePackResponsePayload = Awaited<ReturnType<typeof buildProfilePackResponse>>
+
+let cachedProfilePackResponse:
+  | {
+      expiresAt: number
+      promise: Promise<ProfilePackResponsePayload>
+    }
+  | undefined
 
 export async function GET() {
+  const now = Date.now()
+  if (!cachedProfilePackResponse || cachedProfilePackResponse.expiresAt <= now) {
+    cachedProfilePackResponse = {
+      expiresAt: now + PROFILE_PACK_CACHE_TTL_MS,
+      promise: buildProfilePackResponse(),
+    }
+  }
+  return NextResponse.json(await cachedProfilePackResponse.promise)
+}
+
+async function buildProfilePackResponse() {
   const [packs, loadedProfiles] = await Promise.all([
     listInstalledProfilePacks(),
     loadDeviceProfiles(),
@@ -33,7 +54,7 @@ export async function GET() {
       },
       overridden: profile.overrides,
     }))
-  return NextResponse.json({
+  return {
     packs,
     profileDebug,
     conflicts,
@@ -46,7 +67,7 @@ export async function GET() {
       loadedProfileCount: profileDebug.length,
       conflictCount: conflicts.length,
     },
-  })
+  }
 }
 
 export async function POST(request: Request) {
@@ -70,6 +91,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await installProfilePackZip(Buffer.from(await file.arrayBuffer()))
+    cachedProfilePackResponse = undefined
     const packs = await listInstalledProfilePacks()
     return NextResponse.json({ ok: true, ...result, packs })
   } catch (error) {

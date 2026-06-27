@@ -7,6 +7,21 @@ export type StaticLiveDataKey =
   | 'alarm.count'
 
 export type StaticLiveDataValue = string | number | boolean
+export type LiveDataValue = StaticLiveDataValue
+
+export type LiveDataPath = {
+  path: string
+  label: string
+  valueType: 'number' | 'boolean' | 'string'
+  unit?: string
+  category?: string
+}
+
+export type LiveDataSnapshot = {
+  values: Record<string, LiveDataValue>
+  seq?: number
+  timestamp?: number
+}
 
 export type StaticLiveDataEntry = {
   key: StaticLiveDataKey
@@ -34,6 +49,15 @@ export const STATIC_LIVE_DATA_OPTIONS = Object.values(STATIC_LIVE_DATA).map((ent
   value: entry.key,
 }))
 
+export const STATIC_LIVE_DATA_PATHS: LiveDataPath[] = Object.values(STATIC_LIVE_DATA).map((entry) => ({
+  path: entry.key,
+  label: entry.label,
+  unit: entry.unit,
+  category: entry.key.split('.')[0],
+  valueType:
+    typeof entry.value === 'number' ? 'number' : typeof entry.value === 'boolean' ? 'boolean' : 'string',
+}))
+
 export function getStaticLiveDataValue(
   key: string | null | undefined,
 ): StaticLiveDataValue | undefined {
@@ -46,6 +70,16 @@ export function formatStaticLiveDataValue(key: string | null | undefined): strin
   const entry = STATIC_LIVE_DATA[key as StaticLiveDataKey]
   if (!entry) return '?'
   return `${entry.value}${entry.unit ? ` ${entry.unit}` : ''}`
+}
+
+export function formatLiveDataValue(value: LiveDataValue | undefined, unit?: string): string {
+  if (value == null) return '?'
+  return `${value}${unit ? ` ${unit}` : ''}`
+}
+
+export function getLiveDataPathLabel(path: string | null | undefined): string {
+  if (!path) return ''
+  return STATIC_LIVE_DATA_PATHS.find((entry) => entry.path === path)?.label ?? path
 }
 
 export function renderLiveDataTemplate(

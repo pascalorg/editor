@@ -26,6 +26,8 @@ const MACHINE_TOOLS_PACK_PATH = 'industry.machine-tools.basic@0.1.0'
 const FINE_CHEMICAL_BASIC_PACK_PATH = 'industry.fine-chemical.basic@0.1.0'
 const FINE_CHEMICAL_PHARMA_PACK_PATH = 'industry.fine-chemical.pharma-intermediate@0.1.0'
 const KNOWLEDGE_PACK_DIR = 'codex-knowledge-pack-test'
+const CEMENT_PROFILE_COUNT = 30
+const CEMENT_QUALITY_RULE_COUNT = 30
 
 async function cementZip() {
   const root = await findRepoRoot()
@@ -37,6 +39,20 @@ async function cementZip() {
       'data',
       'profile-pack-cloud',
       'industry.cement.basic-0.1.0.zip',
+    ),
+  )
+}
+
+async function refineryZip() {
+  const root = await findRepoRoot()
+  return fs.readFile(
+    path.join(
+      root,
+      'apps',
+      'editor',
+      'data',
+      'profile-pack-cloud',
+      'industry.refinery.basic-0.1.0.zip',
     ),
   )
 }
@@ -89,12 +105,62 @@ describe('profile packs', () => {
       version: '0.1.0',
       industry: 'cement',
     })
-    expect(validation.profiles).toHaveLength(25)
+    expect(validation.profiles).toHaveLength(CEMENT_PROFILE_COUNT)
     expect(validation.profiles.map((profile) => profile.id)).toContain('cement.rotary_kiln')
     expect(audit).toMatchObject({
       ok: true,
-      summary: { profileCount: 25, qualityRuleCount: 25 },
+      summary: {
+        profileCount: CEMENT_PROFILE_COUNT,
+        qualityRuleCount: CEMENT_QUALITY_RULE_COUNT,
+      },
     })
+  })
+
+  test('keeps refinery chimney-stack parts anchored above the ground in source and cloud zip', async () => {
+    const root = await findRepoRoot()
+    const sourceValidation = await validateProfilePackDir(
+      path.join(
+        root,
+        'apps',
+        'editor',
+        'data',
+        'profile-pack-cloud',
+        'industry.refinery.basic-0.1.0',
+      ),
+    )
+    const zipValidation = validateProfilePackZip(await refineryZip())
+
+    for (const validation of [sourceValidation, zipValidation]) {
+      const roles = new Map(
+        validation.profiles
+          .flatMap((profile) => profile.parts ?? [])
+          .filter((part) => part.kind === 'chimney_stack')
+          .map((part) => [part.semanticRole, part]),
+      )
+
+      expect(roles.get('flue_gas_stack')).toMatchObject({ height: 6, position: [0, 3, 0] })
+      expect(roles.get('tail_gas_stack')).toMatchObject({
+        height: 3.8,
+        position: [1.6, 1.9, 0.6],
+      })
+      expect(roles.get('flare_stack')).toMatchObject({ height: 13.5, position: [0, 6.75, 0] })
+      expect(roles.get('boiler_stack')).toMatchObject({ height: 4.2, position: [0, 2.1, 0] })
+
+      const flareSystem = validation.profiles.find(
+        (profile) => profile.id === 'refinery.flare_system',
+      )
+      const flareParts = new Map(
+        (flareSystem?.parts ?? []).map((part) => [part.semanticRole, part]),
+      )
+      expect(flareParts.get('knockout_drum')).toMatchObject({
+        axis: 'x',
+        position: [1.6, 0.36, 0.6],
+      })
+      expect(flareParts.get('relief_gas_inlet')).toMatchObject({
+        axis: 'y',
+        position: [1.6, 1.3, 0.6],
+      })
+    }
   })
 
   test('validates and installs the robotics knowledge package', async () => {
@@ -621,7 +687,7 @@ describe('profile packs', () => {
     expect(installed.pack).toMatchObject({
       id: 'industry.cement.basic',
       enabled: true,
-      profileCount: 25,
+      profileCount: CEMENT_PROFILE_COUNT,
       path: PACK_PATH,
     })
     expect(await listInstalledProfilePacks()).toEqual(
@@ -629,7 +695,7 @@ describe('profile packs', () => {
         expect.objectContaining({
           id: 'industry.cement.basic',
           enabled: true,
-          profileCount: 25,
+          profileCount: CEMENT_PROFILE_COUNT,
         }),
       ]),
     )
@@ -697,7 +763,7 @@ describe('profile packs', () => {
         expect.objectContaining({
           id: 'cement',
           packCount: 1,
-          profileCount: 25,
+          profileCount: CEMENT_PROFILE_COUNT,
         }),
         expect.objectContaining({
           id: 'fine-chemical.pharma-intermediate',

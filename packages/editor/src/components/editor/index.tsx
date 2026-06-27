@@ -41,7 +41,9 @@ import { initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
+import { DynamicPreviewRuntime } from '../systems/live-data/dynamic-preview-runtime'
 import { LiveDataBindingRuntime } from '../systems/live-data/live-data-binding-runtime'
+import { LiveDataSourceConnector } from '../systems/live-data/live-data-source-connector'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
 import { StairEditSystem } from '../systems/stair/stair-edit-system'
 import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
@@ -694,6 +696,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <RoofEditSystem />
       <StairEditSystem />
       <LiveDataBindingRuntime />
+      <DynamicPreviewRuntime />
       {!(isPreviewMode || isFirstPersonMode) && <SiteEdgeLabels />}
       {!(isLoading || isFirstPersonMode || isPreviewMode) && <SnapAwareGrid />}
       {!(isLoading || noEditing) && <ToolManager />}
@@ -1238,6 +1241,7 @@ export default function Editor({
 
     return (
       <PresetsProvider adapter={presetsAdapter}>
+        <LiveDataSourceConnector />
         <DeleteSelectionConfirmDialog
           onCancel={handleCancelDeleteSelection}
           onConfirm={handleConfirmDeleteSelection}
@@ -1304,6 +1308,7 @@ export default function Editor({
 
   return (
     <PresetsProvider adapter={presetsAdapter}>
+      <LiveDataSourceConnector />
       <div
         className={`dark flex h-full w-full bg-neutral-100 text-foreground ${
           isActivePreviewMode ? '' : 'gap-3 p-3'

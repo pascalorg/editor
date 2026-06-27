@@ -9,6 +9,7 @@ import { CeilingNode } from './ceiling'
 import { ColumnNode } from './column'
 import { ConeNode } from './cone'
 import { ConformalStripNode } from './conformal-strip'
+import { ConveyorBeltNode } from './conveyor-belt'
 import { CylinderNode } from './cylinder'
 import { DataWidgetNode } from './data-widget'
 import { ExtrudeNode } from './extrude'
@@ -52,6 +53,7 @@ export const LevelNode = BaseNode.extend({
         WallNode.shape.id,
         FenceNode.shape.id,
         CableTrayNode.shape.id,
+        ConveyorBeltNode.shape.id,
         ConeNode.shape.id,
         ConformalStripNode.shape.id,
         CylinderNode.shape.id,

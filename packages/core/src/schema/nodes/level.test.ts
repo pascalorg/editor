@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { AnyNode } from '../types'
 import { BoxNode } from './box'
 import { CableTrayNode } from './cable-tray'
+import { ConveyorBeltNode } from './conveyor-belt'
 import { LevelNode } from './level'
 import { SteelBeamNode } from './steel-beam'
 
@@ -15,12 +16,18 @@ describe('LevelNode', () => {
       start: [0, 1],
       end: [1, 1],
     })
-
-    const level = LevelNode.parse({
-      children: [cableTray.id, steelBeam.id],
+    const conveyorBelt = ConveyorBeltNode.parse({
+      points: [
+        [0, 0, 2],
+        [1, 0, 2],
+      ],
     })
 
-    expect(level.children).toEqual([cableTray.id, steelBeam.id])
+    const level = LevelNode.parse({
+      children: [cableTray.id, steelBeam.id, conveyorBelt.id],
+    })
+
+    expect(level.children).toEqual([cableTray.id, steelBeam.id, conveyorBelt.id])
     expect(AnyNode.safeParse(level).success).toBe(true)
   })
 

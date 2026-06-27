@@ -27,6 +27,8 @@ type SceneBoundsLike = {
   size?: Vec2
 }
 
+const AUTO_PLACE_GAP = 6
+
 export type FactoryBuildingSpec = {
   length: number
   width: number
@@ -296,13 +298,21 @@ function resolveLayoutCenter(input: {
 
   const bounds = sceneBoundsFromMetadata(input.metadata)
   const intent = layoutPlacementIntent(input.prompt)
-  if (!bounds || (!intent.horizontal && !intent.vertical)) {
+  if (!bounds) {
     return { centerX: 0, centerZ: 0, placementIntent: 'default-origin' }
   }
 
-  const margin = 1
   const defaultCenterX = bounds.center?.[0] ?? (bounds.min[0] + bounds.max[0]) / 2
   const defaultCenterZ = bounds.center?.[1] ?? (bounds.min[1] + bounds.max[1]) / 2
+  if (!intent.horizontal && !intent.vertical) {
+    return {
+      centerX: bounds.max[0] + AUTO_PLACE_GAP + input.dimensions.length / 2,
+      centerZ: defaultCenterZ,
+      placementIntent: 'avoid-existing-right',
+    }
+  }
+
+  const margin = 1
   const centerX =
     intent.horizontal === 'left'
       ? bounds.min[0] + margin + input.dimensions.length / 2

@@ -86,7 +86,7 @@ export default function CableTrayTool() {
   const unit = useViewer((state) => state.unit)
   const theme = useViewer((state) => state.theme)
   const cursorRef = useRef<Group>(null)
-  const previewRef = useRef<Mesh>(null!)
+  const previewRef = useRef<Mesh | null>(null)
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const buildingState = useRef(0)
@@ -102,7 +102,9 @@ export default function CableTrayTool() {
     let previousEnd: WallPlanPoint | null = null
     const stopDrafting = () => {
       buildingState.current = 0
-      previewRef.current.visible = false
+      if (previewRef.current) {
+        previewRef.current.visible = false
+      }
       setLengthLabel(null)
     }
 
@@ -145,6 +147,9 @@ export default function CableTrayTool() {
     }
 
     const onGridClick = (event: GridEvent) => {
+      const preview = previewRef.current
+      if (!preview) return
+
       const walls = getCurrentLevelWalls()
       const localClick: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
       if (buildingState.current === 0) {
@@ -152,7 +157,7 @@ export default function CableTrayTool() {
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
-        previewRef.current.visible = true
+        preview.visible = true
         cursorRef.current?.position.set(snappedStart[0], event.localPosition[1], snappedStart[1])
       } else {
         const snappedEnd = snapWallDraftPoint({
@@ -171,7 +176,7 @@ export default function CableTrayTool() {
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
         endingPoint.current.copy(startingPoint.current)
         cursorRef.current?.position.set(nextStart[0], event.localPosition[1], nextStart[1])
-        previewRef.current.visible = false
+        preview.visible = false
         buildingState.current = 1
         setLengthLabel(null)
       }
@@ -234,4 +239,3 @@ export default function CableTrayTool() {
     </group>
   )
 }
-

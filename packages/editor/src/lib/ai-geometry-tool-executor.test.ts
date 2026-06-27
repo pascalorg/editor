@@ -998,6 +998,12 @@ describe('AI geometry tool executor', () => {
     expect(widthWheel).toMatchObject({ height: 0.18 })
   })
 
+  test('normalizes round primitive diameter to radius', () => {
+    const [sphere] = normalizeGeometryToolShapes([{ kind: 'sphere', diameter: 1 }])
+
+    expect(sphere).toMatchObject({ kind: 'sphere', radius: 0.5, position: [0, 0.5, 0] })
+  })
+
   test('grounds standalone primitives when position is omitted', () => {
     const [cone, horizontalCone, explicitCone] = normalizeGeometryToolShapes([
       { kind: 'cone', radius: 0.5, height: 2 },
@@ -4191,6 +4197,53 @@ describe('AI geometry tool executor', () => {
     expect(inletFlange?.position?.[2]).toBeGreaterThan(0.45)
     expect(outletFlange?.position?.[1]).toBeGreaterThan(0.8)
     expect(new Set(exactShapeKeys).size).toBe(exactShapeKeys.length)
+  })
+
+  test('keeps distillation tray-band flange rings on their explicit tower positions', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        family: 'pump',
+        category: 'water pump',
+        length: 2,
+        width: 0.9,
+        height: 1.1,
+        parts: [
+          { id: 'base', kind: 'skid_base', semanticRole: 'support_base', length: 2 },
+          { id: 'motor', kind: 'ribbed_motor_body', semanticRole: 'drive_motor' },
+          { id: 'casing', kind: 'volute_casing', semanticRole: 'volute_casing', side: 'front' },
+          { id: 'inlet', kind: 'inlet_port', semanticRole: 'inlet_port', connectTo: 'casing' },
+          { id: 'outlet', kind: 'outlet_port', semanticRole: 'outlet_port', connectTo: 'casing' },
+          {
+            id: 'tray_band_top',
+            kind: 'flange_ring',
+            semanticRole: 'tray_band',
+            axis: 'y',
+            radius: 0.86,
+            tubeRadius: 0.04,
+            position: [0, 8.2, 0],
+            includeBolts: false,
+          },
+        ],
+      },
+      { prompt: 'create a water pump with an explicit tray band marker' },
+    )
+
+    const parts = sourceParts(result.artifact?.sourceArgs.parts)
+    const trayPart = parts.find((part) => part.id === 'tray_band_top')
+    const trayShape = result.artifact?.shapes.find(
+      (shape) => shape.sourcePartId === 'tray_band_top' && shape.kind === 'torus',
+    )
+
+    expect(trayPart).toMatchObject({
+      semanticRole: 'tray_band',
+      position: [0, 8.2, 0],
+    })
+    expect(trayPart).not.toHaveProperty('connectTo')
+    expect(trayShape?.position?.[0]).toBeCloseTo(0)
+    expect(trayShape?.position?.[1]).toBeCloseTo(8.2, 1)
+    expect(trayShape?.position?.[2]).toBeCloseTo(0)
+    expect(trayShape?.axis).toBe('y')
   })
 
   test('routes conveyor requests without explicit parts through industrial family parts', () => {

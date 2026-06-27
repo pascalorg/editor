@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode } from '@pascal-app/core'
 import {
+  getArticraftJointChannelsForSelection,
+  translateArticraftJointName,
+} from './articraft-dynamic-channels'
+import {
   type ArticraftJointMetadata,
   applyArticraftJointValue,
   buildArticraftJointPatch,
@@ -58,5 +62,78 @@ describe('articraft joint helpers', () => {
       position?: [number, number, number]
     }
     expect(patch.position).toEqual([1, 2, 3.5])
+  })
+
+  test('builds dynamic channels for Articraft joints in the selected record', () => {
+    const root = {
+      id: 'crane_root',
+      type: 'group',
+      metadata: { articraft: { recordId: 'rec_crane' } },
+    } as unknown as AnyNode
+    const slewing = {
+      id: 'slewing_node',
+      type: 'box',
+      metadata: {
+        articraft: { recordId: 'rec_crane' },
+        articraftJoint: {
+          jointName: 'slewing_unit',
+          jointType: 'revolute',
+          axis: [0, 1, 0],
+          limits: { lower: -1, upper: 1 },
+        },
+      },
+    } as unknown as AnyNode
+    const trolley = {
+      id: 'trolley_node',
+      type: 'box',
+      metadata: {
+        articraft: { recordId: 'rec_crane' },
+        articraftJoint: {
+          jointName: 'upperworks_trolley_travel',
+          jointType: 'prismatic',
+          axis: [1, 0, 0],
+          limits: { lower: 0, upper: 4 },
+        },
+      },
+    } as unknown as AnyNode
+
+    const channels = getArticraftJointChannelsForSelection(root, {
+      crane_root: root,
+      slewing_node: slewing,
+      trolley_node: trolley,
+    })
+
+    expect(channels).toHaveLength(2)
+    expect(channels.map((channel) => channel.source).sort()).toEqual([
+      'slewing_unit',
+      'upperworks_trolley_travel',
+    ])
+    expect(channels.find((channel) => channel.source === 'slewing_unit')).toMatchObject({
+      axis: 'y',
+      motion: 'rotation',
+      outputRange: [-1, 1],
+      targetNodeId: 'slewing_node',
+    })
+    expect(
+      channels.find((channel) => channel.source === 'upperworks_trolley_travel'),
+    ).toMatchObject({
+      axis: 'x',
+      motion: 'translation',
+      outputRange: [0, 4],
+      targetNodeId: 'trolley_node',
+    })
+  })
+
+  test('translates common joint names for the dynamic panel', () => {
+    expect(translateArticraftJointName('slewing_unit')).toBe('\u56de\u8f6c\u5355\u5143')
+    expect(translateArticraftJointName('upperworks_trolley_travel')).toBe(
+      '\u4e0a\u8f66\u5c0f\u8f66\u884c\u8d70',
+    )
+    expect(translateArticraftJointName('lower_arm_to_upper_arm')).toBe(
+      '\u4e0b\u81c2\u5230\u4e0a\u81c2',
+    )
+    expect(translateArticraftJointName('upper_arm_to_lamp_head')).toBe(
+      '\u4e0a\u81c2\u5230\u706f\u5934',
+    )
   })
 })

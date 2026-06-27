@@ -38,4 +38,12 @@ describe('primitive system prompts', () => {
       'do not match stirred_reactor profiles or add vessel shells',
     )
   })
+
+  test('tells geometry generation to use hemisphere for Chinese half-sphere requests', () => {
+    expect(PRIMITIVE_STAGE1_ANALYST_PROMPT).toContain('kind:"hemisphere"')
+    expect(PRIMITIVE_STAGE1_ANALYST_PROMPT).toContain('\u534a\u5706\u5f62\u7403')
+    expect(PRIMITIVE_STAGE1_ANALYST_PROMPT).toContain(
+      'Do not use kind:"sphere" unless the user asks for a complete ball/sphere.',
+    )
+  })
 })

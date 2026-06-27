@@ -8,7 +8,10 @@ import { CeilingNode } from './nodes/ceiling'
 import { ColumnNode } from './nodes/column'
 import { ConeNode } from './nodes/cone'
 import { ConformalStripNode } from './nodes/conformal-strip'
+import { ConveyorBeltNode } from './nodes/conveyor-belt'
 import { CylinderNode } from './nodes/cylinder'
+import { DataChartNode } from './nodes/data-chart'
+import { DataTableNode } from './nodes/data-table'
 import { DataWidgetNode } from './nodes/data-widget'
 import { DoorNode } from './nodes/door'
 import { ElevatorNode } from './nodes/elevator'
@@ -53,9 +56,12 @@ export const AnyNode = z.discriminatedUnion('type', [
   CableTrayNode,
   BoxNode,
   CylinderNode,
+  DataChartNode,
+  DataTableNode,
   DataWidgetNode,
   ConeNode,
   ConformalStripNode,
+  ConveyorBeltNode,
   FrustumNode,
   HemisphereNode,
   TorusNode,

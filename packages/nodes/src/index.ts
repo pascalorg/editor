@@ -8,7 +8,10 @@ import { ceilingDefinition } from './ceiling'
 import { columnDefinition } from './column'
 import { coneDefinition } from './cone'
 import { conformalStripDefinition } from './conformal-strip'
+import { conveyorBeltDefinition } from './conveyor-belt'
 import { cylinderDefinition } from './cylinder'
+import { dataChartDefinition } from './data-chart'
+import { dataTableDefinition } from './data-table'
 import { dataWidgetDefinition } from './data-widget'
 import { doorDefinition } from './door'
 import { elevatorDefinition } from './elevator'
@@ -69,12 +72,15 @@ export const builtinPlugin: Plugin = {
     // Stage E-complete (full registry path)
     assemblyDefinition as unknown as AnyNodeDefinition,
     dataWidgetDefinition as unknown as AnyNodeDefinition,
+    dataChartDefinition as unknown as AnyNodeDefinition,
+    dataTableDefinition as unknown as AnyNodeDefinition,
     shelfDefinition as unknown as AnyNodeDefinition,
     spawnDefinition as unknown as AnyNodeDefinition,
     wallDefinition as unknown as AnyNodeDefinition,
     fenceDefinition as unknown as AnyNodeDefinition,
     pipeFittingDefinition as unknown as AnyNodeDefinition,
     pipeDefinition as unknown as AnyNodeDefinition,
+    conveyorBeltDefinition as unknown as AnyNodeDefinition,
     cableTrayDefinition as unknown as AnyNodeDefinition,
     ladderDefinition as unknown as AnyNodeDefinition,
     steelBeamDefinition as unknown as AnyNodeDefinition,
@@ -127,7 +133,10 @@ export { ceilingDefinition } from './ceiling'
 export { columnDefinition } from './column'
 export { coneDefinition } from './cone'
 export { conformalStripDefinition } from './conformal-strip'
+export { conveyorBeltDefinition } from './conveyor-belt'
 export { cylinderDefinition } from './cylinder'
+export { dataChartDefinition } from './data-chart'
+export { dataTableDefinition } from './data-table'
 export { dataWidgetDefinition } from './data-widget'
 export { doorDefinition } from './door'
 export { elevatorDefinition } from './elevator'

@@ -107,6 +107,7 @@ type RawShape = Omit<PrimitiveShapeInput, 'kind' | 'material'> & {
   type?: string
   params?: Record<string, unknown>
   size?: number[]
+  diameter?: number
   color?: number[]
   material?: PrimitiveMaterialInput | Record<string, unknown> | string
   materialColor?: string
@@ -1973,6 +1974,16 @@ function normalizeRegistryFlangeConnectorPlacement(
   partByReference: ReadonlyMap<string, PartComposePartInput>,
   flangeIndex: number,
 ): PartComposePartInput {
+  const semanticRole = normalizeRequiredRoleToken(String(part.semanticRole ?? ''))
+  if (
+    semanticRole === 'tray_band' ||
+    semanticRole === 'vessel_seam' ||
+    semanticRole === 'riding_ring' ||
+    semanticRole === 'support_ring' ||
+    semanticRole === 'girth_gear'
+  ) {
+    return part
+  }
   const text = [
     part.id,
     part.sourcePartId,
@@ -5280,7 +5291,22 @@ export function normalizeGeometryToolShapes(
     const normalizedThickness =
       kind === 'rounded-panel' ? (rawThickness ?? rawHeight ?? size?.[1]) : rawThickness
     const normalizedDepth = kind === 'extrude' ? (rawDepth ?? rawWidth ?? size?.[2]) : rawDepth
-    const radius = read('radius') as number | undefined
+    const rawDiameter = read('diameter')
+    const diameter =
+      typeof rawDiameter === 'number' && Number.isFinite(rawDiameter) && rawDiameter > 0
+        ? rawDiameter
+        : undefined
+    const radiusKind =
+      kind === 'cylinder' ||
+      kind === 'hollow-cylinder' ||
+      kind === 'cone' ||
+      kind === 'capsule' ||
+      kind === 'half-cylinder' ||
+      kind === 'sphere' ||
+      kind === 'hemisphere'
+    const radius =
+      (read('radius') as number | undefined) ??
+      (radiusKind && diameter != null ? diameter / 2 : undefined)
     const radiusTop = read('radiusTop') as number | undefined
     const radiusBottom = read('radiusBottom') as number | undefined
     const majorRadius = read('majorRadius') as number | undefined

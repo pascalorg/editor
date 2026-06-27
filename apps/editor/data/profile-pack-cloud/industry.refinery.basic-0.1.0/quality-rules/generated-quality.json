@@ -56,6 +56,8 @@
     "id": "quality.refinery.atmospheric_distillation_unit",
     "requiredRoles": [
       "distillation_column_shell",
+      "pre_flash_column_shell",
+      "side_stripper_column",
       "tray_band",
       "heat_exchanger_shell",
       "fired_heater",
@@ -67,7 +69,7 @@
     ],
     "shapeCount": {
       "min": 10,
-      "max": 86
+      "max": 180
     },
     "forbiddenRoles": [
       "flare_stack_as_process_unit",
@@ -90,7 +92,7 @@
     ],
     "shapeCount": {
       "min": 10,
-      "max": 86
+      "max": 120
     },
     "forbiddenRoles": [
       "flare_stack_as_process_unit",

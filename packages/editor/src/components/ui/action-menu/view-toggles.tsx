@@ -25,7 +25,7 @@ import { ActionButton } from './action-button'
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const ACCEPTED_FILE_TYPES = '.glb,.gltf,image/jpeg,image/png,image/webp,image/gif'
-const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
+const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05, 0.01]
 const REFERENCES_EMPTY_TEXT =
   'Upload GLB meshes as scan references or blueprint images as guide references.'
 

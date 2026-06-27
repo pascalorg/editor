@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { cn } from '../../../lib/utils'
 import { PanelSectionExpansionContext } from '../controls/panel-section'
+import { DynamicInspector } from './dynamic-inspector/dynamic-inspector'
 
 const INSPECTOR_SECTIONS_PINNED_KEY = 'pascal:inspector-sections-pinned'
 
@@ -174,6 +175,7 @@ export function PanelWrapper({
                     ? 'bg-[#3A3358] text-[#E8DEFF]'
                     : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
                 )}
+                data-testid={`inspector-tab-${tab.key}`}
                 key={tab.key}
                 onClick={() => setInspectorTab(tab.key)}
                 type="button"
@@ -190,10 +192,13 @@ export function PanelWrapper({
 
       {/* Content */}
       <PanelSectionExpansionContext.Provider
-        value={{ pinned: inspectorSectionsPinned, resetKey: String(resetKey) }}
+        value={{
+          pinned: inspectorTab === 'dynamic' ? true : inspectorSectionsPinned,
+          resetKey: String(resetKey),
+        }}
       >
         <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {children}
+          {inspectorTab === 'dynamic' ? <DynamicInspector /> : children}
         </div>
       </PanelSectionExpansionContext.Provider>
     </div>

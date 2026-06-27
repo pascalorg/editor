@@ -35,6 +35,7 @@ export const PipeFittingNode = BaseNode.extend({
   temperatureC: z.number().default(180),
   medium: PipeMedium.default('steam'),
   color: z.string().default('#b0b8c0'),
+  opacity: z.number().min(0).max(1).default(1),
 }).describe(
   dedent`
   Pipe fitting node - industrial pipe fittings such as elbows, tees, and crosses.

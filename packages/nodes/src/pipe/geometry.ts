@@ -15,11 +15,13 @@ import {
 } from 'three'
 import type { PipeNode } from './schema'
 
-function createPipeMaterial(color: string) {
+function createPipeMaterial(color: string, opacity = 1) {
   return new MeshStandardMaterial({
     color,
     metalness: 0.45,
     roughness: 0.42,
+    transparent: opacity < 1,
+    opacity,
   })
 }
 
@@ -67,7 +69,7 @@ function buildPipeMeshes(node: PipeNode, group: Group) {
 
   addInsulationShell(group, node, radius, (pipeRadius) => {
     const geometry = new TubeGeometry(curve, tubularSegments, pipeRadius, 16, false)
-    const mesh = new Mesh(geometry, createPipeMaterial(node.color))
+    const mesh = new Mesh(geometry, createPipeMaterial(node.color, node.opacity))
     mesh.castShadow = true
     mesh.receiveShadow = true
     return mesh
@@ -77,7 +79,7 @@ function buildPipeMeshes(node: PipeNode, group: Group) {
 
   const length = getWallCurveLength(node)
   const hangerCount = Math.max(1, Math.floor(length / node.hangerSpacing))
-  const hangerMaterial = createPipeMaterial('#8a9098')
+  const hangerMaterial = createPipeMaterial('#8a9098', node.opacity)
 
   for (let index = 0; index <= hangerCount; index += 1) {
     const t = index / hangerCount

@@ -44,6 +44,38 @@ export type {
 } from './events/bus'
 export { emitter, eventSuffixes } from './events/bus'
 export {
+  buildDynamicCapabilityMetadata,
+  COMMON_DYNAMIC_TYPES,
+  getDynamicTypesForNode,
+  getDynamicTypesForSemanticType,
+  getNodeSemanticType,
+  getRecommendedDynamicTypeForNode,
+  getRecommendedDynamicTypeForSemanticType,
+  inferNodeSemanticType,
+  NODE_TYPE_SEMANTIC_DEFAULTS,
+  SEMANTIC_DYNAMIC_TYPES,
+} from './dynamics/capabilities'
+export {
+  isDynamicBinding,
+  isDynamicJointBinding,
+  isDynamicJointChannel,
+  readDynamicMetadata,
+  writeDynamicMetadataPatch,
+} from './dynamics/metadata'
+export {
+  DYNAMIC_TYPE_LABELS,
+  type DynamicAxis,
+  type DynamicBinding,
+  type DynamicCapabilityMetadata,
+  type DynamicConveyorEndpointBehavior,
+  type DynamicJointBinding,
+  type DynamicJointChannel,
+  type DynamicJointMotionKind,
+  type DynamicMetadata,
+  type DynamicType,
+  SEMANTIC_TYPE_LABELS,
+} from './dynamics/types'
+export {
   sceneRegistry,
   useRegistry,
 } from './hooks/scene-registry/scene-registry'
@@ -344,11 +376,16 @@ export {
   wallTouchesOthers,
 } from './lib/space-detection'
 export {
+  formatLiveDataValue,
+  getLiveDataPathLabel,
   formatStaticLiveDataValue,
   getStaticLiveDataValue,
   isLiveDataBindingConfig,
   type LiveDataBindingConfig,
   type LiveDataBindingEffect,
+  type LiveDataPath,
+  type LiveDataSnapshot,
+  type LiveDataValue,
   renderLiveDataTemplate,
   resolveBindingColor,
   resolveBindingPositionYOffset,
@@ -356,10 +393,16 @@ export {
   resolveBindingRotationYOffset,
   STATIC_LIVE_DATA,
   STATIC_LIVE_DATA_OPTIONS,
+  STATIC_LIVE_DATA_PATHS,
   type StaticLiveDataEntry,
   type StaticLiveDataKey,
   type StaticLiveDataValue,
 } from './live-data/static-live-data'
+export {
+  getLiveDataValue,
+  type LiveDataConnectionStatus,
+  useLiveData,
+} from './live-data/live-data-store'
 export {
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
@@ -491,6 +534,32 @@ export {
 } from './systems/wall/wall-move'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
+export {
+  createTransferEndpointConnection,
+  getTransferPortPoint,
+  isTransferEndpointNode,
+  resolveTransferEndpointSnap,
+  TRANSFER_ENDPOINT_SNAP_DISTANCE,
+  type TransferEndpointNode,
+  type TransferEndpointSnap,
+} from './transfer-network/endpoints'
+export {
+  addTransferConnectionToMetadata,
+  areConveyorPortsTouching,
+  createConveyorEndpointConnection,
+  distance3D,
+  getConveyorPortPoint,
+  getTransferConnections,
+  isConveyorBeltRouteNode,
+  removeTransferConnectionsFromMetadata,
+  removeTransferConnectionsReferencingNodesFromMetadata,
+  resolveConveyorEndpointSnap,
+  TRANSFER_ENDPOINT_SNAP_THRESHOLD,
+  type ConveyorBeltRouteNode,
+  type ConveyorEndpointSnap,
+  type TransferConnection,
+  type TransferPort,
+} from './transfer-network/conveyor'
 export { isObject } from './utils/types'
 export {
   type BuildStats,

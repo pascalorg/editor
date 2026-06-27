@@ -1,4 +1,5 @@
 import type { Vec3 } from '@pascal-app/core/lib/primitive-compose'
+import { resolveProcessEquipmentContract } from './process-equipment-contracts'
 import type {
   ProcessLayoutDiagnostic,
   ProcessLayoutDiagnostics,
@@ -10,7 +11,6 @@ import type {
   ProcessStationPlan,
   StationPlacement,
 } from './process-line-types'
-import { resolveProcessEquipmentContract } from './process-equipment-contracts'
 
 export const PROCESS_STATION_FOOTPRINTS: Record<
   ProcessLineFootprintHint,
@@ -110,6 +110,74 @@ export function buildStationPlacement(input: {
   }
 }
 
+function packedRowLength(stations: ProcessStationPlan[], plan?: ProcessLinePlan) {
+  if (!stations.length) return 0
+  return (
+    stations.reduce((sum, station) => sum + stationXExtent(station, plan) * 2, 0) +
+    Math.max(0, stations.length - 1) * MIN_STATION_GAP
+  )
+}
+
+function requiredBoundaryForParallelBays(input: {
+  plan: ProcessLinePlan
+  boundary: LayoutBoundary
+}) {
+  const splitIndex = Math.ceil(input.plan.stations.length / 2)
+  const firstRow = input.plan.stations.slice(0, splitIndex)
+  const secondRow = input.plan.stations.slice(splitIndex)
+  const maxRowLength = Math.max(
+    packedRowLength(firstRow, input.plan),
+    packedRowLength(secondRow, input.plan),
+  )
+  const firstRowHalfWidth = Math.max(
+    0,
+    ...firstRow.map((station) => stationZExtent(station, input.plan)),
+  )
+  const secondRowHalfWidth = Math.max(
+    0,
+    ...secondRow.map((station) => stationZExtent(station, input.plan)),
+  )
+  const maxHalfWidth = Math.max(firstRowHalfWidth, secondRowHalfWidth)
+  return {
+    length: Math.max(input.boundary.length, maxRowLength + DEFAULT_CLEARANCE * 2),
+    width: Math.max(
+      input.boundary.width,
+      secondRow.length
+        ? (ROW_GAP / 2 + maxHalfWidth) * 2 + maxHalfWidth * 2 + DEFAULT_CLEARANCE * 2
+        : maxHalfWidth * 2 + DEFAULT_CLEARANCE * 2,
+    ),
+  }
+}
+
+function expandedBoundaryForPlan(input: {
+  plan: ProcessLinePlan
+  boundary: LayoutBoundary
+  style: ProcessLayoutStyle
+}): LayoutBoundary | undefined {
+  if (!input.plan.sourcePack && !input.plan.architecture) return undefined
+  const required =
+    preferredLayoutStyle(input.style) === 'parallel_bays'
+      ? requiredBoundaryForParallelBays(input)
+      : {
+          length: packedRowLength(input.plan.stations, input.plan) + DEFAULT_CLEARANCE * 2,
+          width:
+            Math.max(
+              0,
+              ...input.plan.stations.map((station) => stationZExtent(station, input.plan)),
+            ) *
+              2 +
+            DEFAULT_CLEARANCE * 2,
+        }
+  const length = Math.max(input.boundary.length, required.length)
+  const width = Math.max(input.boundary.width, required.width)
+  if (length <= input.boundary.length && width <= input.boundary.width) return undefined
+  return {
+    ...input.boundary,
+    length,
+    width,
+  }
+}
+
 function stationXExtent(station: ProcessStationPlan, plan?: ProcessLinePlan) {
   const footprint = stationFootprint(station, plan)
   const clearance = stationClearance(station)
@@ -156,7 +224,8 @@ function buildPackedLinearPlacements(input: {
   const stationLength = extents.reduce((sum, extent) => sum + extent * 2, 0)
   const compactLength = stationLength + Math.max(0, physicalStations.length - 1) * MIN_STATION_GAP
   const spreadLength = input.boundary.length * 0.82
-  const shouldSpread = input.spreadToBoundary && physicalStations.length > 1 && spreadLength > compactLength
+  const shouldSpread =
+    input.spreadToBoundary && physicalStations.length > 1 && spreadLength > compactLength
   const gap = shouldSpread
     ? (spreadLength - stationLength) / Math.max(1, physicalStations.length - 1)
     : MIN_STATION_GAP
@@ -245,6 +314,7 @@ export function resolveProcessLineLayout(input: {
   layoutDiagnostics: ProcessLayoutDiagnostics
   layoutStrategy: ProcessLayoutStrategy
   stationPlacements: StationPlacement[]
+  boundary: LayoutBoundary
 } {
   const preferredStyle = preferredLayoutStyle(input.plan.layoutStyle)
   const candidates: LayoutCandidate[] =
@@ -308,6 +378,7 @@ export function resolveProcessLineLayout(input: {
       stationPlacements: [],
       layoutDiagnostics,
       layoutStrategy: { style: preferredStyle, repaired: false },
+      boundary: input.boundary,
     }
   }
 
@@ -324,6 +395,40 @@ export function resolveProcessLineLayout(input: {
       stationPlacements: candidate.stationPlacements,
       layoutDiagnostics,
       layoutStrategy: candidate.strategy,
+      boundary: input.boundary,
+    }
+  }
+
+  const expandedBoundary = expandedBoundaryForPlan({
+    plan: input.plan,
+    boundary: input.boundary,
+    style: input.plan.layoutStyle,
+  })
+  if (expandedBoundary) {
+    const stationPlacements =
+      preferredStyle === 'parallel_bays'
+        ? buildParallelBayPlacements({ plan: input.plan, boundary: expandedBoundary })
+        : buildPackedLinearPlacements({
+            stations: input.plan.stations,
+            plan: input.plan,
+            boundary: expandedBoundary,
+          })
+    const layoutDiagnostics = validateProcessLineLayout({
+      plan: input.plan,
+      stationPlacements,
+      boundary: expandedBoundary,
+    })
+    if (layoutDiagnostics.fits) {
+      return {
+        stationPlacements,
+        layoutDiagnostics,
+        layoutStrategy: {
+          style: preferredStyle,
+          repaired: true,
+          reason: 'Expanded process shell boundary to fit station clearance boxes.',
+        },
+        boundary: expandedBoundary,
+      }
     }
   }
 
@@ -344,6 +449,7 @@ export function resolveProcessLineLayout(input: {
       repaired: false,
       reason: 'No available layout candidate fit the process shell boundary.',
     },
+    boundary: input.boundary,
   }
 }
 

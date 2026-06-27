@@ -12,11 +12,13 @@ import {
 } from 'three'
 import type { PipeFittingNode } from './schema'
 
-function createPipeMaterial(color: string) {
+function createPipeMaterial(color: string, opacity = 1) {
   return new MeshStandardMaterial({
     color,
     metalness: 0.45,
     roughness: 0.42,
+    transparent: opacity < 1,
+    opacity,
   })
 }
 
@@ -211,6 +213,6 @@ export function buildPipeFittingGeometry(node: PipeFittingNode): Group {
     )
   }
 
-  addFittingLayer(group, node, innerRadius, createPipeMaterial(node.color))
+  addFittingLayer(group, node, innerRadius, createPipeMaterial(node.color, node.opacity))
   return group
 }

@@ -62,7 +62,6 @@ export default function DataWidgetPanel() {
             { label: '标签', value: 'label' },
             { label: '徽章', value: 'badge' },
             { label: '卡片', value: 'card' },
-            { label: '图表', value: 'chart' },
           ]}
           value={node.widgetType}
         />
@@ -88,7 +87,7 @@ export default function DataWidgetPanel() {
             value={node.template}
           />
         </label>
-        {node.widgetType === 'card' || node.widgetType === 'chart' ? (
+        {node.widgetType === 'card' ? (
           <label className="flex flex-col gap-1 text-muted-foreground text-xs">
             标题
             <input

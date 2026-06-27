@@ -24,6 +24,9 @@ const TYPE_DEFAULTS: Record<string, NodeDisplay> = {
   'cable-tray': { icon: '/icons/pipe.svg', label: 'Cable tray' },
   ladder: { icon: '/icons/stairs.webp', label: 'Ladder' },
   'steel-beam': { icon: '/icons/column.webp', label: 'Steel beam' },
+  'data-widget': { icon: '/icons/data-widget.svg', label: 'Data widget' },
+  'data-chart': { icon: '/icons/data-chart.svg', label: 'Chart widget' },
+  'data-table': { icon: '/icons/data-table.svg', label: 'Table widget' },
 }
 
 export function getNodeDisplay(node: AnyNode | null | undefined): NodeDisplay {

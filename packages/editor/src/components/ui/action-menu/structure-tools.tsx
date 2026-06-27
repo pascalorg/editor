@@ -33,11 +33,14 @@ export const tools: ToolConfig[] = [
 
 export const dataTools: ToolConfig[] = [
   { id: 'data-widget', iconSrc: '/icons/data-widget.svg', label: 'Data Widget' },
+  { id: 'data-chart', iconSrc: '/icons/data-chart.svg', label: '图表' },
+  { id: 'data-table', iconSrc: '/icons/data-table.svg', label: '列表' },
 ]
 
 export const industrialTools: ToolConfig[] = [
   { id: 'tank', iconSrc: '/icons/tank.svg', label: 'Tank' },
   { id: 'pipe', iconSrc: '/icons/pipe.svg', label: 'Pipe' },
+  { id: 'conveyor-belt', iconSrc: '/icons/pipe.svg', label: 'Conveyor belt' },
   { id: 'pipe-fitting', iconSrc: '/icons/pipe-fitting.svg', label: 'Pipe fitting' },
   { id: 'cable-tray', iconSrc: '/icons/pipe.svg', label: 'Cable tray' },
   { id: 'steel-beam', iconSrc: '/icons/column.webp', label: 'Steel beam' },
@@ -53,6 +56,7 @@ const STRUCTURE_TOOL_KEYS: Partial<Record<StructureTool, string>> = {
   fence: 'fence',
   road: 'groundStrip',
   pipe: 'pipe',
+  'conveyor-belt': 'conveyorBelt',
   'pipe-fitting': 'pipeFitting',
   tank: 'tank',
   'cable-tray': 'cableTray',
@@ -65,6 +69,8 @@ const STRUCTURE_TOOL_KEYS: Partial<Record<StructureTool, string>> = {
   zone: 'zone',
   spawn: 'spawn',
   'data-widget': 'dataWidget',
+  'data-chart': 'dataChart',
+  'data-table': 'dataTable',
   shelf: 'shelf',
 }
 

@@ -287,6 +287,23 @@ for (const definition of PRIMITIVE_DEFINITIONS) {
   }
 }
 
+for (const alias of [
+  '\u534a\u7403',
+  '\u534a\u7403\u4f53',
+  '\u534a\u5706\u7403',
+  '\u534a\u5706\u5f62\u7403',
+  'semi-sphere',
+  'semi sphere',
+]) {
+  primitiveAliasMap.set(
+    alias
+      .trim()
+      .replace(/[\s_]+/g, '-')
+      .toLowerCase(),
+    'hemisphere',
+  )
+}
+
 function normalizeName(value: unknown): string {
   return typeof value === 'string'
     ? value

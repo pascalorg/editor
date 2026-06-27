@@ -23,6 +23,7 @@ export const PipeNode = BaseNode.extend({
   showHangers: z.boolean().default(true),
   hangerSpacing: z.number().default(2),
   color: z.string().default('#b0b8c0'),
+  opacity: z.number().min(0).max(1).default(1),
 }).describe(
   dedent`
   Pipe node — steam / utility routing segment in level coordinates.

@@ -8,13 +8,35 @@ import {
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+const CLOUD_PROFILE_PACK_CACHE_TTL_MS = 60_000
+
+type CloudCatalogResponsePayload = Awaited<ReturnType<typeof buildCloudCatalogResponse>>
+
+let cachedCloudCatalogResponse:
+  | {
+      expiresAt: number
+      promise: Promise<CloudCatalogResponsePayload>
+    }
+  | undefined
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export async function GET() {
+  const now = Date.now()
+  if (!cachedCloudCatalogResponse || cachedCloudCatalogResponse.expiresAt <= now) {
+    cachedCloudCatalogResponse = {
+      expiresAt: now + CLOUD_PROFILE_PACK_CACHE_TTL_MS,
+      promise: buildCloudCatalogResponse(),
+    }
+  }
+  return NextResponse.json(await cachedCloudCatalogResponse.promise)
+}
+
+async function buildCloudCatalogResponse() {
   const catalog = await listCloudProfilePackCatalog()
-  return NextResponse.json({ packs: catalog.packs, catalog })
+  return { packs: catalog.packs, catalog }
 }
 
 export async function POST(request: Request) {
@@ -33,6 +55,7 @@ export async function POST(request: Request) {
       body.id,
       typeof body.version === 'string' ? body.version : undefined,
     )
+    cachedCloudCatalogResponse = undefined
     const packs = await listInstalledProfilePacks()
     const catalog = await listCloudProfilePackCatalog()
     return NextResponse.json({ ok: true, ...result, packs, cloudPacks: catalog.packs, catalog })

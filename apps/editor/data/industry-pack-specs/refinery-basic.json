@@ -736,7 +736,14 @@
         },
         {
           "kind": "chimney_stack",
-          "semanticRole": "flue_gas_stack"
+          "semanticRole": "flue_gas_stack",
+          "height": 6,
+          "radius": 0.42,
+          "position": [
+            0,
+            3,
+            0
+          ]
         },
         {
           "kind": "service_platform",
@@ -897,7 +904,14 @@
         },
         {
           "kind": "chimney_stack",
-          "semanticRole": "tail_gas_stack"
+          "semanticRole": "tail_gas_stack",
+          "height": 3.8,
+          "radius": 0.18,
+          "position": [
+            1.6,
+            1.9,
+            0.6
+          ]
         },
         {
           "kind": "inlet_port",
@@ -926,15 +940,20 @@
       "defaultDimensions": {
         "length": 4.2,
         "width": 2.6,
-        "height": 10
+        "height": 14
       },
       "parts": [
         {
           "kind": "chimney_stack",
           "semanticRole": "flare_stack",
-          "height": 9.5,
+          "height": 13.5,
           "radius": 0.28,
-          "warningStripes": true
+          "warningStripes": true,
+          "position": [
+            0,
+            6.75,
+            0
+          ]
         },
         {
           "kind": "cylindrical_tank",
@@ -1018,7 +1037,12 @@
           "kind": "chimney_stack",
           "semanticRole": "boiler_stack",
           "height": 4.2,
-          "radius": 0.22
+          "radius": 0.22,
+          "position": [
+            0,
+            2.1,
+            0
+          ]
         },
         {
           "kind": "pipe_manifold",

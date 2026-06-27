@@ -17,19 +17,6 @@ export const pipeParametrics: ParametricDescriptor<PipeNode> = {
       ],
     },
     {
-      label: PL.process(),
-      fields: [
-        {
-          key: 'medium',
-          kind: 'enum',
-          options: ['steam', 'condensate', 'water'],
-          display: 'segmented',
-        },
-        { key: 'pressureKpa', kind: 'number', unit: 'kPa', min: 0, max: 5000, step: 10 },
-        { key: 'temperatureC', kind: 'number', unit: '°C', min: -20, max: 400, step: 1 },
-      ],
-    },
-    {
       label: PL.appearance(),
       fields: [
         { key: 'color', kind: 'color' },

@@ -9,6 +9,7 @@ import { getMaterialsForWall, getWallMaterialHash } from './wall-materials'
 const tmpVec = new Vector3()
 const u = new Vector3()
 const v = new Vector3()
+const debugWalls = process.env.NEXT_PUBLIC_VIEWER_DEBUG_WALLS === '1'
 
 function getWallHideState(
   wallNode: WallNode,
@@ -109,7 +110,7 @@ export const WallCutout = () => {
       lastUpdateTime.current = currentTime
       camera.getWorldDirection(u)
 
-      if (lastLoggedRenderSettingsKey.current !== renderSettingsKey) {
+      if (debugWalls && lastLoggedRenderSettingsKey.current !== renderSettingsKey) {
         lastLoggedRenderSettingsKey.current = renderSettingsKey
         console.log('[viewer/wall-cutout] Applying wall materials.', {
           wallCount: walls.size,

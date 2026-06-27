@@ -11,7 +11,10 @@ import type {
   ColumnNode,
   ConeNode,
   ConformalStripNode,
+  ConveyorBeltNode,
   CylinderNode,
+  DataChartNode,
+  DataTableNode,
   DataWidgetNode,
   DoorNode,
   ElevatorNode,
@@ -88,9 +91,12 @@ export type BoxEvent = NodeEvent<BoxNode>
 export type AssemblyEvent = NodeEvent<AssemblyNode>
 export type CableTrayEvent = NodeEvent<CableTrayNode>
 export type CylinderEvent = NodeEvent<CylinderNode>
+export type DataChartEvent = NodeEvent<DataChartNode>
+export type DataTableEvent = NodeEvent<DataTableNode>
 export type DataWidgetEvent = NodeEvent<DataWidgetNode>
 export type ConeEvent = NodeEvent<ConeNode>
 export type ConformalStripEvent = NodeEvent<ConformalStripNode>
+export type ConveyorBeltEvent = NodeEvent<ConveyorBeltNode>
 export type FrustumEvent = NodeEvent<FrustumNode>
 export type SphereEvent = NodeEvent<SphereNode>
 export type HemisphereEvent = NodeEvent<HemisphereNode>
@@ -247,9 +253,12 @@ type EditorEvents = GridEvents &
   NodeEvents<'box', BoxEvent> &
   NodeEvents<'cable-tray', CableTrayEvent> &
   NodeEvents<'cylinder', CylinderEvent> &
+  NodeEvents<'data-chart', DataChartEvent> &
+  NodeEvents<'data-table', DataTableEvent> &
   NodeEvents<'data-widget', DataWidgetEvent> &
   NodeEvents<'cone', ConeEvent> &
   NodeEvents<'conformal-strip', ConformalStripEvent> &
+  NodeEvents<'conveyor-belt', ConveyorBeltEvent> &
   NodeEvents<'frustum', FrustumEvent> &
   NodeEvents<'hemisphere', HemisphereEvent> &
   NodeEvents<'torus', TorusEvent> &

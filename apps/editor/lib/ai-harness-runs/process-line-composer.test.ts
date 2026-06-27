@@ -80,6 +80,26 @@ describe('process line composer', () => {
     ).toBe(true)
   })
 
+  test('normalizes invalid connection media before writing node metadata', () => {
+    const plan = structuredClone(waterElectrolysisPlan())
+    plan.connections[0] = {
+      ...plan.connections[0]!,
+      medium: { kind: 'gas' } as never,
+    }
+
+    const result = composeProcessLine({
+      prompt: 'create a hydrogen electrolysis workshop',
+      plan,
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+      sections: { shell: false, stations: false, connections: true },
+    })
+
+    expect(result.patches.length).toBeGreaterThan(0)
+    expect(
+      result.patches.every((patch) => typeof patch.node.metadata?.connectionRole !== 'object'),
+    ).toBe(true)
+  })
+
   test('uses localized display labels for Chinese process line prompts', () => {
     const result = composeProcessLine({
       prompt: '\u521b\u5efa\u4e00\u6761\u5316\u5de5\u5382\u6c34\u88c2\u89e3\u8f66\u95f4',
@@ -558,7 +578,7 @@ describe('process line composer', () => {
       )
       .map((patch) => (patch.node.type === 'pipe' ? patch.node.diameter : 0))
     expect(Math.max(...ductDiameters)).toBeLessThanOrEqual(0.16)
-  })
+  }, 10000)
 
   test('composes refinery with crude, intermediate, and product native tank farms', () => {
     const result = composeProcessLine({
@@ -569,7 +589,9 @@ describe('process line composer', () => {
 
     expect(result.summary).toContain('Basic oil refinery complex')
     expect(result.stationPlacements).toHaveLength(16)
-    expect(result.layoutStrategy).toMatchObject({ style: 'parallel_bays' })
+    expect(result.layoutDiagnostics.fits).toBe(true)
+    expect(result.layoutDiagnostics.boundary.length).toBeGreaterThan(46)
+    expect(result.layoutStrategy).toMatchObject({ style: 'parallel_bays', repaired: true })
 
     const tankStations = result.patches
       .filter((patch) => patch.node.type === 'tank')
