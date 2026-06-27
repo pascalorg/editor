@@ -3,7 +3,9 @@ import {
   type AnyNodeId,
   getActiveRoofHeight,
   getEffectiveNode,
+  getRoofSegmentSurfaceY,
   getRoofSegmentVisibleTopBounds,
+  getSegmentSlopeFrame,
   MIN_ROOF_SEGMENT_TRIM_SPAN,
   normalizeRoofSegmentTrim,
   type RoofNode,
@@ -13,7 +15,14 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { generateRoofSegmentGeometry, useViewer } from '@pascal-app/viewer'
+import {
+  Brush,
+  csgEvaluator,
+  generateRoofSegmentGeometry,
+  INTERSECTION,
+  prepareBrushForCSG,
+  useViewer,
+} from '@pascal-app/viewer'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -158,18 +167,17 @@ const trimDiagonalPreviewRailMaterial = new MeshBasicNodeMaterial({
 })
 
 // ─── Section-cut (cutaway) feedback ──────────────────────────────────
-// Drawn by slicing the segment's REAL roof mesh (shingle + deck + walls,
-// hollow attic between them) with the trim plane. Because the mesh carries
-// material thickness, the slice yields the actual construction bands the cut
-// exposes — roof layer + wall bands — not a single filled silhouette. The
-// violet outline (cut line) and a translucent violet fill read together as a
-// ghost cross-section of what the trim removes.
-const SECTION_FILL_COLOR = '#818cf8'
-const SECTION_OUTLINE_COLOR = '#818cf8'
+// The cross-section the trim removes, computed analytically: each cut line is
+// sampled against the parametric roof surface (`getRoofSegmentSurfaceY`) to get
+// the sloped top profile, then closed down to the segment base into a solid
+// band. A solid red fill + darker red outline read together as a SketchUp-style
+// section cut of what the trim removes.
+const SECTION_FILL_COLOR = '#b91c1c'
+const SECTION_OUTLINE_COLOR = '#7f1d1d'
 const SECTION_FILL_RENDER_ORDER = 1000
 const SECTION_OUTLINE_RENDER_ORDER = 1002
-// Slice just inside the kept material so the plane never sits coplanar with
-// the mesh's own cut face (which would slice degenerately).
+// Build the cut line just inside the kept material so the section plane never
+// sits coplanar with the mesh's own cut face.
 const SECTION_PLANE_INSET = 0.004
 
 // A vertical cut plane defined by a horizontal line through the XZ ground
@@ -188,11 +196,21 @@ type SectionPlaneSpec = {
   // the infinite plane grazes the rest of the roof.
   uMin: number
   uMax: number
+  // How far the slab extends past each end of the cut line. A FREE (untrimmed)
+  // end has eave/overhang material beyond the footprint edge, so we extend to
+  // capture it; a TRIMMED end has none, so we clamp to 0 — otherwise the slab
+  // grabs phantom material from the untrimmed shell and the red section pokes
+  // out past the trim box. `dir` points A→B, so uMin is always endpoint A and
+  // uMax endpoint B; `extendMin` applies at A, `extendMax` at B.
+  extendMin: number
+  extendMax: number
 }
 
 // Build a section plane from two XZ points on the cut line. `inset` shifts the
 // plane along its normal toward the supplied "inside" point so the slice sits
 // just inside kept material instead of coplanar with the mesh's own cut face.
+// `extendA` / `extendB` set the slab overrun past endpoint A / B (0 at trimmed
+// ends, a small overhang allowance at free ends).
 function makeSectionPlane(
   ax: number,
   az: number,
@@ -200,6 +218,8 @@ function makeSectionPlane(
   bz: number,
   inset = 0,
   insidePoint?: readonly [number, number],
+  extendA = 0,
+  extendB = 0,
 ): SectionPlaneSpec {
   const dir = new THREE.Vector2(bx - ax, bz - az)
   if (dir.lengthSq() < 1e-12) dir.set(1, 0)
@@ -213,9 +233,10 @@ function makeSectionPlane(
     origin.x += normal.x * inset * sign
     origin.y += normal.y * inset * sign
   }
+  // dir = (B-A).normalized, so dir·B - dir·A = |B-A| > 0 → uB is always uMax.
   const uA = dir.x * ax + dir.y * az
   const uB = dir.x * bx + dir.y * bz
-  return { origin, dir, normal, uMin: Math.min(uA, uB), uMax: Math.max(uA, uB) }
+  return { origin, dir, normal, uMin: uA, uMax: uB, extendMin: extendA, extendMax: extendB }
 }
 
 // Lift a 2D plane-frame point (u = projection along dir, v = world Y) back to
@@ -230,9 +251,9 @@ const sectionFillMaterial = new MeshBasicNodeMaterial({
   color: SECTION_FILL_COLOR,
   depthTest: false,
   depthWrite: false,
-  opacity: 0.32,
+  opacity: 1,
   side: THREE.DoubleSide,
-  transparent: true,
+  transparent: false,
 })
 
 const sectionOutlineMaterial = new LineBasicNodeMaterial({
@@ -240,228 +261,150 @@ const sectionOutlineMaterial = new LineBasicNodeMaterial({
   depthTest: false,
   depthWrite: false,
   linewidth: 2,
-  transparent: true,
 })
 
-type Seg2D = [number, number, number, number]
+// Number of samples taken across a cut line. Dense uniform sampling keeps the
+// outline builder roofType-agnostic; `getRoofSegmentSurfaceY` is piecewise-linear,
+// so a kink that falls between two samples is rounded slightly — acceptable for an
+// overlay, and avoided in practice by the per-metre floor below.
+const SECTION_SAMPLE_SPACING = 0.1
+const SECTION_MIN_SAMPLES = 24
 
-// Slice every triangle of a mesh geometry by an arbitrary vertical plane,
-// returning the crossing segments projected into the plane's 2D frame
-// (u = projection along the plane's in-plane horizontal direction, v = world
-// up) so we can lift back to 3D via `liftSectionPoint`.
-function sliceGeometryByPlane(geometry: THREE.BufferGeometry, plane: SectionPlaneSpec): Seg2D[] {
-  const pos = geometry.getAttribute('position') as THREE.BufferAttribute | undefined
-  if (!pos) return []
-  const index = geometry.getIndex()
-  const triCount = index ? index.count / 3 : pos.count / 3
-  const segments: Seg2D[] = []
+// Half-thickness of the slab brush intersected with the roof shell. The wafer
+// must be thin enough to read as a flat cut face but thick enough that CSG
+// produces a stable, non-degenerate solid.
+const SECTION_SLAB_HALF_THICKNESS = 0.006
 
-  // Signed plane constant: a vertex (x, z) is on the plane when
-  // normal·(x,z) === planeConst.
-  const planeConst = plane.normal.x * plane.origin.x + plane.normal.y * plane.origin.y
+// How far the slab overruns a FREE (untrimmed) cut-line end, so eave/overhang
+// and shingle material just past the footprint edge is still captured. Trimmed
+// ends use 0 (see `SectionPlaneSpec.extendMin/Max`).
+const SECTION_FREE_END_EXTENSION = 1
 
-  for (let t = 0; t < triCount; t++) {
-    const i0 = index ? index.getX(t * 3) : t * 3
-    const i1 = index ? index.getX(t * 3 + 1) : t * 3 + 1
-    const i2 = index ? index.getX(t * 3 + 2) : t * 3 + 2
-    const tri = [i0, i1, i2]
-    const us = [0, 0, 0]
-    const vs = [0, 0, 0]
-    const d = [0, 0, 0]
-    for (let k = 0; k < 3; k++) {
-      const vi = tri[k]!
-      const x = pos.getComponent(vi, 0)
-      const y = pos.getComponent(vi, 1)
-      const z = pos.getComponent(vi, 2)
-      us[k] = plane.dir.x * x + plane.dir.y * z
-      vs[k] = y
-      d[k] = plane.normal.x * x + plane.normal.y * z - planeConst
+// Builds the crisp cut-edge OUTLINE for one plane: sample the parametric roof
+// surface along the cut line to get the sloped top edge, in the plane's 2D
+// frame (u along `dir`, v = world Y), and emit it as line-segment pairs. Only
+// the surface line is drawn — no verticals or base — so the outline hugs the
+// real roof material and never traces the hollow attic.
+function buildSectionOutline(
+  segment: RoofSegmentNode,
+  plane: SectionPlaneSpec,
+  outlinePositions: number[],
+): void {
+  const span = plane.uMax - plane.uMin
+  if (!(span > 1e-4)) return
+
+  const sampleCount = Math.max(SECTION_MIN_SAMPLES, Math.ceil(span / SECTION_SAMPLE_SPACING))
+  let prev: [number, number, number] | null = null
+  for (let i = 0; i <= sampleCount; i++) {
+    const u = plane.uMin + (span * i) / sampleCount
+    const [x, , z] = liftSectionPoint(plane, u, 0)
+    const surfaceY = getRoofSegmentSurfaceY(segment, x, z)
+    const point = liftSectionPoint(plane, u, Number.isFinite(surfaceY) ? surfaceY : 0)
+    if (prev) {
+      outlinePositions.push(prev[0], prev[1], prev[2], point[0], point[1], point[2])
     }
-    // Intersection points where edges cross the plane.
-    const hitU: number[] = []
-    const hitV: number[] = []
-    for (let e = 0; e < 3; e++) {
-      const a = e
-      const b = (e + 1) % 3
-      const da = d[a]!
-      const db = d[b]!
-      if (da === 0) {
-        hitU.push(us[a]!)
-        hitV.push(vs[a]!)
-      }
-      if ((da < 0 && db > 0) || (da > 0 && db < 0)) {
-        const s = da / (da - db)
-        hitU.push(us[a]! + (us[b]! - us[a]!) * s)
-        hitV.push(vs[a]! + (vs[b]! - vs[a]!) * s)
-      }
-    }
-    if (hitU.length >= 2) {
-      const clipped = clipSegmentToU(
-        hitU[0]!,
-        hitV[0]!,
-        hitU[1]!,
-        hitV[1]!,
-        plane.uMin,
-        plane.uMax,
-      )
-      if (clipped) segments.push(clipped)
-    }
+    prev = point
   }
-  return segments
 }
 
-// Clip a 2D slice segment to the [uMin, uMax] band along the u axis, returning
-// null when the segment lies entirely outside the band. v is interpolated.
-function clipSegmentToU(
-  u1: number,
-  v1: number,
-  u2: number,
-  v2: number,
-  uMin: number,
-  uMax: number,
-): Seg2D | null {
-  let aU = u1
-  let aV = v1
-  let bU = u2
-  let bV = v2
-  if (aU > bU) {
-    ;[aU, bU] = [bU, aU]
-    ;[aV, bV] = [bV, aV]
-  }
-  if (bU < uMin || aU > uMax) return null
-  const du = bU - aU
-  if (du > 1e-9) {
-    if (aU < uMin) {
-      const s = (uMin - aU) / du
-      aV = aV + (bV - aV) * s
-      aU = uMin
-    }
-    if (bU > uMax) {
-      const s = (uMax - aU) / (bU - aU)
-      bV = aV + (bV - aV) * s
-      bU = uMax
-    }
-  }
-  return [aU, aV, bU, bV]
-}
+// Builds a thin oriented slab brush straddling one cut line, spanning the full
+// segment height. Intersecting it with the roof shell yields exactly the
+// material the cut passes through (roof slab + wall bands), leaving the hollow
+// attic empty — a true section cut.
+function buildSectionSlabBrush(
+  plane: SectionPlaneSpec,
+  vMin: number,
+  vMax: number,
+): Brush | null {
+  const span = plane.uMax - plane.uMin
+  const height = vMax - vMin
+  if (!(span > 1e-4 && height > 1e-4)) return null
 
-// Weld loose 2D slice segments into closed loops. Endpoints are snapped to a
-// quantisation grid so the two triangles sharing a mesh edge collapse onto one
-// shared vertex; we then walk the resulting (mostly manifold) edge graph,
-// consuming each undirected edge once, to recover closed boundary loops. This
-// is robust to junctions and tiny CSG float drift in a way greedy chaining is
-// not — the previous greedy version stalled at the eave junction (where the
-// roof band meets the wall) and produced no usable loop, so the fill vanished.
-const SECTION_LOOP_QUANT = 1e-3 // 1 mm weld grid
+  // Extend past each end only as far as that end allows: a free edge gets an
+  // overhang allowance so eave/shingle material is captured; a trimmed end gets
+  // 0 so the slab stops at the cut line and the section never pokes past the
+  // trim box. The box is centred on the extended span's midpoint.
+  const uLo = plane.uMin - plane.extendMin
+  const uHi = plane.uMax + plane.extendMax
+  const length = uHi - uLo
+  const geometry = new THREE.BoxGeometry(length, height, SECTION_SLAB_HALF_THICKNESS * 2)
+  const yaw = Math.atan2(-plane.dir.y, plane.dir.x)
+  geometry.rotateY(yaw)
+  const midU = (uLo + uHi) / 2
+  const [cx, , cz] = liftSectionPoint(plane, midU, 0)
+  geometry.translate(cx, (vMin + vMax) / 2, cz)
 
-function buildSectionLoops(segments: Seg2D[]): THREE.Vector2[][] {
-  const points: THREE.Vector2[] = []
-  const idByKey = new Map<string, number>()
-  const keyOf = (x: number, y: number) =>
-    `${Math.round(x / SECTION_LOOP_QUANT)}:${Math.round(y / SECTION_LOOP_QUANT)}`
-  const idFor = (x: number, y: number): number => {
-    const key = keyOf(x, y)
-    const existing = idByKey.get(key)
-    if (existing !== undefined) return existing
-    const id = points.length
-    points.push(new THREE.Vector2(x, y))
-    idByKey.set(key, id)
-    return id
-  }
-
-  const edgeKey = (a: number, b: number) => (a < b ? `${a}_${b}` : `${b}_${a}`)
-  const adjacency = new Map<number, number[]>()
-  const seenEdges = new Set<string>()
-  const addAdj = (a: number, b: number) => {
-    const list = adjacency.get(a)
-    if (list) list.push(b)
-    else adjacency.set(a, [b])
-  }
-
-  for (const [x1, y1, x2, y2] of segments) {
-    const a = idFor(x1, y1)
-    const b = idFor(x2, y2)
-    if (a === b) continue
-    const ek = edgeKey(a, b)
-    if (seenEdges.has(ek)) continue
-    seenEdges.add(ek)
-    addAdj(a, b)
-    addAdj(b, a)
-  }
-
-  const usedEdges = new Set<string>()
-  const loops: THREE.Vector2[][] = []
-
-  for (let start = 0; start < points.length; start++) {
-    const neighbors = adjacency.get(start)
-    if (!neighbors) continue
-    for (const first of neighbors) {
-      if (usedEdges.has(edgeKey(start, first))) continue
-
-      const loopIds: number[] = [start]
-      let prev = start
-      let current = first
-      usedEdges.add(edgeKey(start, first))
-
-      while (current !== start) {
-        loopIds.push(current)
-        const next = (adjacency.get(current) ?? []).find(
-          (cand) => cand !== prev && !usedEdges.has(edgeKey(current, cand)),
-        )
-        if (next === undefined) break
-        usedEdges.add(edgeKey(current, next))
-        prev = current
-        current = next
-      }
-
-      if (current === start && loopIds.length >= 3) {
-        loops.push(loopIds.map((id) => points[id]!.clone()))
-      }
-    }
-  }
-
-  return loops
+  const brush = new Brush(geometry)
+  prepareBrushForCSG(brush)
+  return brush
 }
 
 // Builds the combined fill + outline geometries (segment-local 3D) for all
-// active trim planes by slicing the live roof mesh.
+// active trim planes. The fill is the CSG intersection of the untrimmed roof
+// shell with a thin slab at each cut line (material only — attic stays hollow);
+// the outline is the analytic surface edge. Both in segment-local space, to be
+// mounted under the segment-world-matrix group.
 function buildSectionGeometries(
-  geometry: THREE.BufferGeometry,
+  segment: RoofSegmentNode,
   planes: SectionPlaneSpec[],
 ): { fill: THREE.BufferGeometry; outline: THREE.BufferGeometry } | null {
   const outlinePositions: number[] = []
-  const fillPositions: number[] = []
-
   for (const plane of planes) {
-    const segments = sliceGeometryByPlane(geometry, plane)
-    if (segments.length === 0) continue
+    buildSectionOutline(segment, plane, outlinePositions)
+  }
+  if (outlinePositions.length === 0) return null
 
-    for (const [u1, v1, u2, v2] of segments) {
-      const a = liftSectionPoint(plane, u1, v1)
-      const b = liftSectionPoint(plane, u2, v2)
-      outlinePositions.push(a[0], a[1], a[2], b[0], b[1], b[2])
-    }
+  // Untrimmed shell — the source we intersect slabs against.
+  const shellGeometry = generateRoofSegmentGeometry({ ...segment, trim: ZERO_TRIM })
+  const shell = new Brush(shellGeometry)
+  prepareBrushForCSG(shell)
 
-    // Fill: weld the slice segments into closed loops and fill each as a solid
-    // silhouette (no holes — the user wants the whole cut shape filled, not the
-    // hollow construction bands). Each loop is triangulated independently and
-    // its winding ignored, so overlapping bands simply paint the union solid.
-    const loops = buildSectionLoops(segments)
-    for (const loop of loops) {
-      if (loop.length < 3) continue
-      const tris = THREE.ShapeUtils.triangulateShape(loop, [])
-      for (const tri of tris) {
-        for (const idx of tri) {
-          const p = loop[idx]
-          if (!p) continue
-          const [x, y, z] = liftSectionPoint(plane, p.x, p.y)
-          fillPositions.push(x, y, z)
+  const slopeFrame = getSegmentSlopeFrame(segment)
+  // Span the full material height — wall bands (base→eave) plus the deck/shingle
+  // wedge above — so the cut face fills completely. The earlier red bars that
+  // poked below the box were horizontal overshoot (the untrimmed slab dragging
+  // wall material past a perpendicular cut), now fixed by the per-end slab
+  // extension clamp; clipping the wall band off here only left gaps.
+  const vMin = -0.05
+  const vMax =
+    segment.wallHeight + slopeFrame.activeRh + segment.deckThickness + segment.shingleThickness + 0.5
+
+  const fillPositions: number[] = []
+  // Section cut only needs material presence, not per-face materials — disable
+  // group bookkeeping on the shared evaluator for this pass so mismatched slab /
+  // shell material slots can't misalign group indices and crash.
+  const prevUseGroups = csgEvaluator.useGroups
+  const prevAttributes = csgEvaluator.attributes
+  csgEvaluator.useGroups = false
+  csgEvaluator.attributes = ['position']
+  try {
+    for (const plane of planes) {
+      const slab = buildSectionSlabBrush(plane, vMin, vMax)
+      if (!slab) continue
+      try {
+        const result = csgEvaluator.evaluate(shell, slab, INTERSECTION) as Brush
+        const geo = result.geometry as THREE.BufferGeometry
+        const pos = geo.getAttribute('position') as THREE.BufferAttribute | undefined
+        if (pos) {
+          const index = geo.getIndex()
+          const count = index ? index.count : pos.count
+          for (let i = 0; i < count; i++) {
+            const vi = index ? index.getX(i) : i
+            fillPositions.push(pos.getX(vi), pos.getY(vi), pos.getZ(vi))
+          }
         }
+        geo.dispose()
+      } catch (e) {
+        console.error('Roof section-cut CSG failed:', e)
+      } finally {
+        slab.geometry.dispose()
       }
     }
+  } finally {
+    csgEvaluator.useGroups = prevUseGroups
+    csgEvaluator.attributes = prevAttributes
+    shellGeometry.dispose()
   }
-
-  if (outlinePositions.length === 0) return null
 
   const fill = new THREE.BufferGeometry()
   fill.setAttribute('position', new THREE.Float32BufferAttribute(fillPositions, 3))
@@ -470,9 +413,8 @@ function buildSectionGeometries(
   return { fill, outline }
 }
 
-// Zeroed trim — slicing the FULL (uncut) roof volume at the trim plane gives
-// the true cross-section silhouette of what the cut removes, instead of the
-// already-cut mesh whose face sits coplanar with the plane.
+// Zeroed trim — the section fill intersects the FULL (untrimmed) roof shell at
+// the cut line, so we regenerate the shell with no trim and slab-intersect it.
 const ZERO_TRIM: RoofSegmentTrim = {
   left: 0,
   right: 0,
@@ -492,10 +434,10 @@ const ZERO_TRIM: RoofSegmentTrim = {
   backRightZ: 0,
 }
 
-// Shape fields that affect the segment's 3D volume. Trim is excluded on
-// purpose — we always slice the untrimmed roof — so the (expensive) CSG
-// rebuild only reruns when the roof's actual shape changes, not on every
-// drag tick. The cheap re-slice below tracks the moving planes instead.
+// Shape fields that affect the segment's 3D volume. Trim is excluded — the cut
+// lines arrive via `planes`, whose endpoints already encode the trim — so the
+// memo recomputes when either the roof shape or any trim changes, and the shell
+// regeneration only reruns when the actual roof shape changes.
 function segmentShapeKey(segment: RoofSegmentNode): string {
   return JSON.stringify([
     segment.roofType,
@@ -517,12 +459,12 @@ function segmentShapeKey(segment: RoofSegmentNode): string {
   ])
 }
 
-// Renders the cutaway bands (outline + faint fill) for the active trim
-// planes, in segment-local space (mounted under the segment-world-matrix
-// group). Generates the untrimmed segment volume itself and slices it, so the
-// result is deterministic and independent of the registry mesh's rebuild
-// timing (which lags a few frames behind a drag and may still hold the
-// placeholder geometry).
+// Renders the cutaway section cut (material fill + cut-edge outline) for the
+// active trim planes, in segment-local space (mounted under the
+// segment-world-matrix group). The fill is the CSG intersection of the
+// untrimmed roof shell with a thin slab at each cut line, so only real material
+// is shown and the hollow attic stays empty; the outline is the analytic
+// surface edge.
 function SectionCut({
   segment,
   planes,
@@ -532,24 +474,12 @@ function SectionCut({
 }) {
   const shapeKey = segmentShapeKey(segment)
 
-  // Untrimmed segment volume — rebuilt only when the roof shape changes.
-  const sliceSource = useMemo(() => {
-    return generateRoofSegmentGeometry({ ...segment, trim: ZERO_TRIM })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapeKey])
-
-  useEffect(() => {
-    return () => {
-      sliceSource.dispose()
-    }
-  }, [sliceSource])
-
   const geometries = useMemo(() => {
     if (planes.length === 0) return null
-    return buildSectionGeometries(sliceSource, planes)
-    // Re-slice whenever the active planes change (drag / commit).
+    return buildSectionGeometries(segment, planes)
+    // Recompute when the roof shape (shapeKey) or the cut lines (planes) change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sliceSource, JSON.stringify(planes)])
+  }, [shapeKey, JSON.stringify(planes)])
 
   useEffect(() => {
     return () => {
@@ -993,21 +923,67 @@ function RoofTrimHandles() {
   // Inside reference: the kept-region center, on the kept side of every cut so
   // the inset always shifts the slice into solid material.
   const insideRef: readonly [number, number] = [0, 0]
+  // A perpendicular end is "free" (extend to catch overhang) when that side
+  // isn't trimmed, else clamped to the cut line (0) so the slab can't reach
+  // into the region another cut removed.
+  const freeExt = (trimmed: boolean) => (trimmed ? 0 : SECTION_FREE_END_EXTENSION)
   if (trim.left > 0) {
-    sectionPlanes.push(makeSectionPlane(leftX, backZ, leftX, frontZ, SECTION_PLANE_INSET, insideRef))
+    // line back→front: end A = back edge, end B = front edge.
+    sectionPlanes.push(
+      makeSectionPlane(
+        leftX,
+        backZ,
+        leftX,
+        frontZ,
+        SECTION_PLANE_INSET,
+        insideRef,
+        freeExt(trim.back > 0),
+        freeExt(trim.front > 0),
+      ),
+    )
   }
   if (trim.right > 0) {
     sectionPlanes.push(
-      makeSectionPlane(rightX, backZ, rightX, frontZ, SECTION_PLANE_INSET, insideRef),
+      makeSectionPlane(
+        rightX,
+        backZ,
+        rightX,
+        frontZ,
+        SECTION_PLANE_INSET,
+        insideRef,
+        freeExt(trim.back > 0),
+        freeExt(trim.front > 0),
+      ),
     )
   }
   if (trim.front > 0) {
+    // line left→right: end A = left edge, end B = right edge.
     sectionPlanes.push(
-      makeSectionPlane(leftX, frontZ, rightX, frontZ, SECTION_PLANE_INSET, insideRef),
+      makeSectionPlane(
+        leftX,
+        frontZ,
+        rightX,
+        frontZ,
+        SECTION_PLANE_INSET,
+        insideRef,
+        freeExt(trim.left > 0),
+        freeExt(trim.right > 0),
+      ),
     )
   }
   if (trim.back > 0) {
-    sectionPlanes.push(makeSectionPlane(leftX, backZ, rightX, backZ, SECTION_PLANE_INSET, insideRef))
+    sectionPlanes.push(
+      makeSectionPlane(
+        leftX,
+        backZ,
+        rightX,
+        backZ,
+        SECTION_PLANE_INSET,
+        insideRef,
+        freeExt(trim.left > 0),
+        freeExt(trim.right > 0),
+      ),
+    )
   }
 
   // Diagonal/corner cuts run at an angle, so they need a generic vertical
@@ -1044,11 +1020,32 @@ function RoofTrimHandles() {
         ]
     }
   }
+  // Each diagonal endpoint lands on a side edge (see `diagonalCutLine`): end A
+  // and end B touch the two sides named below. Extend only where that side is
+  // free, so the diagonal section never reaches past an adjacent trimmed edge.
+  const diagonalEndSides: Record<DiagonalTrimSide, [RoofTrimSide, RoofTrimSide]> = {
+    frontLeft: ['front', 'left'],
+    frontRight: ['right', 'front'],
+    backLeft: ['left', 'back'],
+    backRight: ['back', 'right'],
+  }
   for (const side of ['frontLeft', 'frontRight', 'backLeft', 'backRight'] as const) {
     const line = diagonalCutLine(side)
     if (!line) continue
     const [s, e] = line
-    sectionPlanes.push(makeSectionPlane(s[0], s[1], e[0], e[1], SECTION_PLANE_INSET, insideRef))
+    const [sideA, sideB] = diagonalEndSides[side]
+    sectionPlanes.push(
+      makeSectionPlane(
+        s[0],
+        s[1],
+        e[0],
+        e[1],
+        SECTION_PLANE_INSET,
+        insideRef,
+        freeExt(trim[sideA] > 0),
+        freeExt(trim[sideB] > 0),
+      ),
+    )
   }
 
   const pointOnTrimLineAtX = (
@@ -1172,6 +1169,10 @@ function RoofTrimHandles() {
         pointerValue - initialPointerValue,
       )
       useLiveNodeOverrides.getState().set(segmentId, { trim: pendingTrim })
+      // Re-trim the clean merged shell live: marking the segment dirty queues
+      // its parent roof for a merged rebuild (RoofSystem reads the live trim
+      // override via getEffectiveNode), so the dragged cut matches the commit.
+      useScene.getState().markDirty(segmentId)
     }
 
     updateFromPointer(event.clientX, event.clientY)
@@ -1545,7 +1546,7 @@ function RoofTrimHandles() {
 
   return (
     <group ref={groupRef}>
-      {draggingSide && sectionPlanes.length > 0 ? (
+      {sectionPlanes.length > 0 ? (
         <SectionCut planes={sectionPlanes} segment={liveSegment} />
       ) : null}
       {renderTrimPlane(
@@ -1579,9 +1580,11 @@ function RoofTrimHandles() {
  * editor selection — without causing React re-renders in RoofRenderer.
  *
  * Full edit-mode (segment selected):
- *   - merged-roof mesh is hidden
- *   - segments-wrapper group is shown (individual segments visible for editing)
- *   - all children are marked dirty so RoofSystem rebuilds their geometry
+ *   - merged-roof mesh stays VISIBLE — it rebuilds live from each segment's
+ *     trim override, so the edited cutaway matches the clean commit instead of
+ *     exposing the per-segment meshes' abutting end-cap faces
+ *   - segments-wrapper group stays hidden (handles render from RoofTrimHandles)
+ *   - all children are marked dirty so RoofSystem rebuilds the merged shell
  *
  * Accessory-reveal mode (a dormer/chimney/etc. hosted on a segment is selected):
  *   - merged-roof mesh stays visible (we don't want the appearance to jump)
@@ -1645,8 +1648,14 @@ export const RoofEditSystem = () => {
       const isActive = activeRoofIds.has(roofId)
       const isReveal = revealRoofIds.has(roofId)
 
-      if (mergedMesh) mergedMesh.visible = !isActive
-      if (segmentsWrapper) segmentsWrapper.visible = isActive || isReveal
+      // Keep the clean merged shell visible during trim editing too (not just
+      // when deselected). The merged shell rebuilds live from each segment's
+      // trim override (RoofSystem reads getEffectiveNode), so the dragged
+      // cutaway matches the commit. Showing the individual per-segment meshes
+      // instead would expose their abutting end-cap faces (the white planes the
+      // merged union removes) — exactly what the commit doesn't show.
+      if (mergedMesh) mergedMesh.visible = true
+      if (segmentsWrapper) segmentsWrapper.visible = isReveal
 
       const roofNode = nodes[roofId as AnyNodeId] as RoofNode | undefined
       if (roofNode?.children?.length) {

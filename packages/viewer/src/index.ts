@@ -34,6 +34,7 @@ export {
   csgEvaluator,
   csgGeometry,
   csgMaterials,
+  INTERSECTION,
   prepareBrushForCSG,
   SUBTRACTION,
 } from './lib/csg-utils'
