@@ -88,7 +88,6 @@ export {
 } from './components/tools/item/use-placement-coordinator'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
-export { FacingIndicator } from './components/tools/shared/facing-indicator'
 export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'
 export { useFreshPlacementVisibility } from './components/tools/shared/fresh-placement-visibility'
 // Phase 5 Stage D — PolygonEditor for slab/ceiling boundary + hole editors.

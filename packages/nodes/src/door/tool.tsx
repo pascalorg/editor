@@ -16,13 +16,13 @@ import {
   calculateCursorRotation,
   calculateItemRotation,
   EDITOR_LAYER,
-  FacingIndicator,
   getSideFromNormal,
   isMagneticSnapActive,
   isValidWallSideFace,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  useFacingPose,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -75,7 +75,6 @@ type HostKind = 'wall' | 'roof' | null
 const DoorTool: React.FC = () => {
   const draftRef = useRef<DoorNode | null>(null)
   const cursorGroupRef = useRef<Group>(null!)
-  const indicatorYOffsetRef = useRef<Group>(null!)
   const edgesRef = useRef<LineSegments>(null!)
 
   // Off-host floating ghost: the real door geometry follows the cursor over
@@ -99,6 +98,10 @@ const DoorTool: React.FC = () => {
       }),
     [fallbackPose?.side],
   )
+  // The frame depth is a fixed parse default (the `side` flip doesn't change
+  // it); a ref lets the facing-pose publish inside the setup effect read it
+  // without re-subscribing every event listener.
+  const frameDepthRef = useRef(ghostStub.frameDepth)
 
   useEffect(() => {
     useScene.temporal.getState().pause()
@@ -145,6 +148,7 @@ const DoorTool: React.FC = () => {
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
       setFallbackPose(null)
+      useFacingPose.getState().clear()
     }
 
     // Alignment candidates — anchors of every alignable object; refreshed
@@ -166,8 +170,15 @@ const DoorTool: React.FC = () => {
       group.visible = true
       group.position.set(...worldPosition)
       group.rotation.y = cursorRotationY
-      indicatorYOffsetRef.current?.position.set(0, indicatorYOffset, 0)
       edgeMaterial.color.setHex(valid ? 0x22_c5_5e : 0xef_44_44)
+      // Forward-facing triangle (editor-side overlay). The cursor group is
+      // already yawed so +Z faces out of the wall, so the door's front is +Z.
+      // The indicator rides at the sill (`indicatorYOffset`, the door's base).
+      useFacingPose.getState().set({
+        position: [worldPosition[0], worldPosition[1] + indicatorYOffset, worldPosition[2]],
+        rotationY: cursorRotationY,
+        depth: frameDepthRef.current,
+      })
     }
 
     // Off-host fallback: hide the wireframe outline and float the real door
@@ -183,6 +194,8 @@ const DoorTool: React.FC = () => {
       })
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
+      // Off-host (invalid) floating ghost — no direction triangle.
+      useFacingPose.getState().clear()
     }
 
     const showRoofFallbackCursor = (event: RoofEvent) => {
@@ -677,9 +690,6 @@ const DoorTool: React.FC = () => {
           material={edgeMaterial}
           ref={edgesRef}
         />
-        <group ref={indicatorYOffsetRef}>
-          <FacingIndicator depth={ghostStub.frameDepth} />
-        </group>
       </group>
       {fallbackPose && (
         <group position={fallbackPose.position} rotation-y={fallbackPose.rotationY}>

@@ -25,6 +25,7 @@ import {
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  useFacingPose,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -261,6 +262,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
       setGhostPose(null)
+      useFacingPose.getState().clear()
     }
 
     // Alignment candidates — only OTHER things on a wall (sibling openings +
@@ -413,18 +415,32 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         target.wallNode.end[1] - target.wallNode.start[1],
         target.wallNode.end[0] - target.wallNode.start[0],
       )
+      const ghostWorldPos = wallLocalToWorld(
+        target.wallNode,
+        target.clampedX,
+        target.clampedY,
+        getLevelYOffset(),
+        getSlabElevation(target.event),
+      )
+      const ghostYaw = target.itemRotation - wallAngle
       setGhostPose({
-        position: wallLocalToWorld(
-          target.wallNode,
-          target.clampedX,
-          target.clampedY,
-          getLevelYOffset(),
-          getSlabElevation(target.event),
-        ),
-        rotationY: target.itemRotation - wallAngle,
+        position: ghostWorldPos,
+        rotationY: ghostYaw,
         tint: placement.tint,
         floorY: getLevelYOffset() + getSlabElevation(target.event),
         side: target.side,
+      })
+      // Forward-facing triangle (editor-side overlay), in the same building-local
+      // frame the ghost renders in. The window's front is its local +Z. Drop it
+      // to the floor under the wall (the ghost Y is the sill centre, up the wall).
+      useFacingPose.getState().set({
+        position: [
+          ghostWorldPos[0],
+          getLevelYOffset() + getSlabElevation(target.event),
+          ghostWorldPos[2],
+        ],
+        rotationY: ghostYaw,
+        depth: movingWindowNode.frameDepth ?? 0.07,
       })
 
       publishOpeningGuidesForWallEvent({
@@ -595,6 +611,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     // which previews with the real mesh (the ghost-tint flow is wall-specific).
     const revealRealNode = () => {
       setGhostPose(null)
+      useFacingPose.getState().clear()
       const live = useScene.getState().nodes[movingWindowNode.id as AnyNodeId] as
         | WindowNode
         | undefined
@@ -652,6 +669,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         floorY: getLevelYOffset(),
         side: sideOverride,
       })
+      // Off-wall (no host) floating ghost — no direction triangle.
+      useFacingPose.getState().clear()
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -953,6 +972,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       useLiveTransforms.getState().clear(movingWindowNode.id)
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
+      useFacingPose.getState().clear()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)

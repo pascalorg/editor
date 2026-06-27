@@ -24,6 +24,7 @@ import {
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  useFacingPose,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -228,6 +229,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
       setGhostPose(null)
+      useFacingPose.getState().clear()
     }
 
     // Alignment candidates — only OTHER things on a wall (sibling openings +
@@ -374,17 +376,31 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         target.wallNode.end[1] - target.wallNode.start[1],
         target.wallNode.end[0] - target.wallNode.start[0],
       )
+      const ghostWorldPos = wallLocalToWorld(
+        target.wallNode,
+        target.clampedX,
+        target.clampedY,
+        getLevelYOffset(),
+        getSlabElevation(target.event),
+      )
+      const ghostYaw = target.itemRotation - wallAngle
       setGhostPose({
-        position: wallLocalToWorld(
-          target.wallNode,
-          target.clampedX,
-          target.clampedY,
-          getLevelYOffset(),
-          getSlabElevation(target.event),
-        ),
-        rotationY: target.itemRotation - wallAngle,
+        position: ghostWorldPos,
+        rotationY: ghostYaw,
         tint: placement.tint,
         side: target.side,
+      })
+      // Forward-facing triangle (editor-side overlay), in the same building-local
+      // frame the ghost renders in. The door's front is its local +Z. Drop it to
+      // the floor under the wall (the ghost Y is the opening centre, ~1m up).
+      useFacingPose.getState().set({
+        position: [
+          ghostWorldPos[0],
+          getLevelYOffset() + getSlabElevation(target.event),
+          ghostWorldPos[2],
+        ],
+        rotationY: ghostYaw,
+        depth: movingDoorNode.frameDepth ?? 0.07,
       })
 
       publishOpeningGuidesForWallEvent({
@@ -552,6 +568,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     // which previews with the real mesh (the ghost-tint flow is wall-specific).
     const revealRealNode = () => {
       setGhostPose(null)
+      useFacingPose.getState().clear()
       const live = useScene.getState().nodes[movingDoorNode.id as AnyNodeId] as DoorNode | undefined
       if (live && live.visible === false) {
         useScene.getState().updateNode(movingDoorNode.id, { visible: true })
@@ -612,6 +629,8 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         tint: 'invalid',
         side: sideOverride,
       })
+      // Off-wall (no host) floating ghost — no direction triangle.
+      useFacingPose.getState().clear()
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -918,6 +937,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       useLiveTransforms.getState().clear(movingDoorNode.id)
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
+      useFacingPose.getState().clear()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)
