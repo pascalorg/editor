@@ -4,7 +4,15 @@ import { BaseNode, nodeType, objectId } from '../base'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
 
-export const RoofType = z.enum(['hip', 'gable', 'shed', 'gambrel', 'dutch', 'mansard', 'flat'])
+export const RoofType = z.enum([
+  'hip',
+  'gable',
+  'shed',
+  'gambrel',
+  'dutch',
+  'mansard',
+  'flat',
+])
 
 export type RoofType = z.infer<typeof RoofType>
 
@@ -344,6 +352,17 @@ type PitchInputs = {
   depth: number
 } & Partial<ShapeRatios>
 
+export type DutchRoofMetrics = {
+  axis: 'x' | 'z'
+  inset: number
+  waistHalfX: number
+  waistHalfZ: number
+  ridgeStart: readonly [number, number]
+  ridgeEnd: readonly [number, number]
+  shoulderInsetAlongDepth: number
+  shoulderInsetAlongWidth: number
+}
+
 function withRatioDefaults(input: PitchInputs): PitchInputs & ShapeRatios {
   return {
     ...input,
@@ -361,6 +380,46 @@ function withRatioDefaults(input: PitchInputs): PitchInputs & ShapeRatios {
     dutchHipHeightRatio: input.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
     dutchWaistLengthRatio:
       input.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
+  }
+}
+
+export function getDutchRoofMetrics(
+  input: Pick<RoofSegmentNode, 'width' | 'depth'> &
+    Partial<Pick<RoofSegmentNode, 'dutchHipWidthRatio' | 'dutchWaistLengthRatio'>>,
+): DutchRoofMetrics {
+  const width = finitePositive(input.width, DEFAULT_ROOF_SEGMENT_WIDTH)
+  const depth = finitePositive(input.depth, DEFAULT_ROOF_SEGMENT_DEPTH)
+  const inset =
+    Math.min(width, depth) * (input.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio)
+  const waistLengthRatio =
+    input.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
+
+  if (width >= depth) {
+    const waistHalfX = Math.max(0, (width / 2 - inset) * waistLengthRatio)
+    const waistHalfZ = Math.max(0, depth / 2 - inset)
+    return {
+      axis: 'x',
+      inset,
+      waistHalfX,
+      waistHalfZ,
+      ridgeStart: [-waistHalfX, 0],
+      ridgeEnd: [waistHalfX, 0],
+      shoulderInsetAlongDepth: Math.max(0, depth / 2 - waistHalfZ),
+      shoulderInsetAlongWidth: Math.max(0, width / 2 - waistHalfX),
+    }
+  }
+
+  const waistHalfX = Math.max(0, width / 2 - inset)
+  const waistHalfZ = Math.max(0, (depth / 2 - inset) * waistLengthRatio)
+  return {
+    axis: 'z',
+    inset,
+    waistHalfX,
+    waistHalfZ,
+    ridgeStart: [0, waistHalfZ],
+    ridgeEnd: [0, -waistHalfZ],
+    shoulderInsetAlongDepth: Math.max(0, depth / 2 - waistHalfZ),
+    shoulderInsetAlongWidth: Math.max(0, width / 2 - waistHalfX),
   }
 }
 
@@ -550,40 +609,35 @@ export function getRoofSegmentSurfaceY(
   }
 
   if (node.roofType === 'dutch') {
-    const hipWidthRatio = node.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio
     const hipHeightRatio = node.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio
-    const waistLengthRatio =
-      node.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
-    const inset = Math.min(node.width, node.depth) * hipWidthRatio
+    const metrics = getDutchRoofMetrics(node)
     const lowerRise = activeRh * hipHeightRatio
-    if (node.width >= node.depth) {
-      const waistHalfX = Math.max(0, (node.width / 2 - inset) * waistLengthRatio)
-      const waistHalfZ = Math.max(0.0001, node.depth / 2 - inset)
-      if (Math.abs(localX) <= waistHalfX && Math.abs(localZ) <= waistHalfZ) {
+    if (metrics.axis === 'x') {
+      const waistHalfZ = Math.max(0.0001, metrics.waistHalfZ)
+      if (Math.abs(localX) <= metrics.waistHalfX && Math.abs(localZ) <= waistHalfZ) {
         const upperRise = activeRh * (1 - hipHeightRatio)
         const upperTan = upperRise / waistHalfZ
         return peakY - Math.abs(localZ) * upperTan
       }
 
-      const xProgressDenom = Math.max(0.0001, node.width / 2 - waistHalfX)
+      const xProgressDenom = Math.max(0.0001, node.width / 2 - metrics.waistHalfX)
       const zProgressDenom = Math.max(0.0001, node.depth / 2 - waistHalfZ)
-      const xProgress = Math.max(0, Math.abs(localX) - waistHalfX) / xProgressDenom
+      const xProgress = Math.max(0, Math.abs(localX) - metrics.waistHalfX) / xProgressDenom
       const zProgress = Math.max(0, Math.abs(localZ) - waistHalfZ) / zProgressDenom
       return node.wallHeight + lowerRise * (1 - Math.min(1, Math.max(xProgress, zProgress)))
     }
 
-    const waistHalfX = Math.max(0.0001, node.width / 2 - inset)
-    const waistHalfZ = Math.max(0, (node.depth / 2 - inset) * waistLengthRatio)
-    if (Math.abs(localX) <= waistHalfX && Math.abs(localZ) <= waistHalfZ) {
+    const waistHalfX = Math.max(0.0001, metrics.waistHalfX)
+    if (Math.abs(localX) <= waistHalfX && Math.abs(localZ) <= metrics.waistHalfZ) {
       const upperRise = activeRh * (1 - hipHeightRatio)
       const upperRun = waistHalfX
       const upperTan = upperRise / upperRun
       return peakY - Math.abs(localX) * upperTan
     }
     const xProgressDenom = Math.max(0.0001, node.width / 2 - waistHalfX)
-    const zProgressDenom = Math.max(0.0001, node.depth / 2 - waistHalfZ)
+    const zProgressDenom = Math.max(0.0001, node.depth / 2 - metrics.waistHalfZ)
     const xProgress = Math.max(0, Math.abs(localX) - waistHalfX) / xProgressDenom
-    const zProgress = Math.max(0, Math.abs(localZ) - waistHalfZ) / zProgressDenom
+    const zProgress = Math.max(0, Math.abs(localZ) - metrics.waistHalfZ) / zProgressDenom
     return node.wallHeight + lowerRise * (1 - Math.min(1, Math.max(xProgress, zProgress)))
   }
 

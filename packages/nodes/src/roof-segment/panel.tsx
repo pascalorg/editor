@@ -31,10 +31,10 @@ const ROOF_TYPE_OPTIONS: { label: string; value: RoofType }[] = [
   { label: 'Hip', value: 'hip' },
   { label: 'Gable', value: 'gable' },
   { label: 'Shed', value: 'shed' },
-  { label: 'Flat', value: 'flat' },
 ]
 
 const ROOF_TYPE_OPTIONS_2: { label: string; value: RoofType }[] = [
+  { label: 'Flat', value: 'flat' },
   { label: 'Gambrel', value: 'gambrel' },
   { label: 'Dutch', value: 'dutch' },
   { label: 'Mansard', value: 'mansard' },

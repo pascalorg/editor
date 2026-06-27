@@ -1,5 +1,5 @@
 import {
-  ROOF_SHAPE_DEFAULTS,
+  getDutchRoofMetrics,
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
@@ -286,24 +286,19 @@ export function getRoofSegmentPlanLinework(node: RoofSegmentNode): {
       break
     }
     case 'dutch': {
-      // Hipped lower skirt only for now: eave corners → waist corners,
-      // with the waist rectangle marking where the removed upper Dutch
-      // section would have started.
-      const i = Math.min(node.width, node.depth) * node.dutchHipWidthRatio
-      if (hw - i > 0.02 && hd - i > 0.02) {
-        const waistLength =
-          node.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
-        const waistHalfX = node.width >= node.depth ? (hw - i) * waistLength : hw - i
-        const waistHalfZ = node.width >= node.depth ? hd - i : (hd - i) * waistLength
-        const w1: PlanPt = [-waistHalfX, waistHalfZ]
-        const w2: PlanPt = [waistHalfX, waistHalfZ]
-        const w3: PlanPt = [waistHalfX, -waistHalfZ]
-        const w4: PlanPt = [-waistHalfX, -waistHalfZ]
-        hips.push([e1, w1], [e2, w2], [e3, w3], [e4, w4])
-        breaks.push([w1, w2], [w2, w3], [w3, w4], [w4, w1])
-      } else {
+      const metrics = getDutchRoofMetrics(node)
+      if (!(metrics.waistHalfX > 0.02 && metrics.waistHalfZ > 0.02)) {
         pushHip()
+        break
       }
+
+      const w1: PlanPt = [-metrics.waistHalfX, metrics.waistHalfZ]
+      const w2: PlanPt = [metrics.waistHalfX, metrics.waistHalfZ]
+      const w3: PlanPt = [metrics.waistHalfX, -metrics.waistHalfZ]
+      const w4: PlanPt = [-metrics.waistHalfX, -metrics.waistHalfZ]
+      hips.push([e1, w1], [e2, w2], [e3, w3], [e4, w4])
+      breaks.push([w1, w2], [w2, w3], [w3, w4], [w4, w1])
+      ridges.push([metrics.ridgeStart, metrics.ridgeEnd])
       break
     }
   }

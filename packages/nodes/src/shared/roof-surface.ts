@@ -1,9 +1,11 @@
 import {
+  getRoofModuleFaces,
   getRoofSegmentSurfaceY,
+  getRoofShapeInsets,
+  getRoofShapeRatios,
   getSegmentSlopeFrame,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
-  type RoofType,
 } from '@pascal-app/core'
 import * as THREE from 'three'
 
@@ -63,19 +65,6 @@ type RoofSurfaceFace = {
   vertices: FaceVertex[]
 }
 type FaceVertex = { x: number; y: number; z: number }
-type FaceInsets = {
-  iF?: number
-  iB?: number
-  iL?: number
-  iR?: number
-  dutchI?: number
-}
-type FaceShapeRatios = {
-  gambrelLowerWidthRatio: number
-  mansardSteepWidthRatio: number
-  dutchHipWidthRatio: number
-  dutchWaistLengthRatio: number
-}
 
 const SHINGLE_SURFACE_EPSILON = 0.02
 const FACE_TOLERANCE = 1e-6
@@ -167,42 +156,41 @@ function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
   const topBaseY = shinBotWh - dropTop
 
   const dutchHipWidthRatio = segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio
-  const insetsTop = getRoofFaceInsets(
+  const insetsTop = getRoofShapeInsets({
     roofType,
     width,
     depth,
-    shinTopWh,
-    topBaseY,
-    false,
-    shinTopW,
-    shinTopD,
+    wh: shinTopWh,
+    baseY: topBaseY,
+    isVoid: false,
+    brushW: shinTopW,
+    brushD: shinTopD,
     tanTheta,
     shingleThickness,
     dutchHipWidthRatio,
-  )
-  const shapeRatios = {
-    gambrelLowerWidthRatio:
-      segment.gambrelLowerWidthRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerWidthRatio,
-    mansardSteepWidthRatio:
-      segment.mansardSteepWidthRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepWidthRatio,
+  })
+  const shapeRatios = getRoofShapeRatios({
+    gambrelLowerWidthRatio: segment.gambrelLowerWidthRatio,
+    mansardSteepWidthRatio: segment.mansardSteepWidthRatio,
     dutchHipWidthRatio,
-    dutchWaistLengthRatio:
-      segment.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
-  }
+    dutchHipHeightRatio: segment.dutchHipHeightRatio,
+    dutchWaistLengthRatio: segment.dutchWaistLengthRatio,
+    dutchGabletRake: segment.dutchGabletRake,
+  })
 
-  return getRoofModuleFaces(
-    roofType,
-    shinTopW,
-    shinTopD,
-    shinTopWh,
-    shinTopRh,
-    topBaseY,
-    insetsTop,
-    width,
-    depth,
+  return getRoofModuleFaces({
+    type: roofType,
+    w: shinTopW,
+    d: shinTopD,
+    wh: shinTopWh,
+    rh: shinTopRh,
+    baseY: topBaseY,
+    insets: insetsTop,
+    baseW: width,
+    baseD: depth,
     tanTheta,
     shapeRatios,
-  )
+  })
     .filter((face) => faceNormalY(face) > SHINGLE_SURFACE_EPSILON)
     .map((face) => {
       const vertices = face.map((point) => ({ ...point, z: point.z + transZ }))
@@ -231,198 +219,6 @@ function topmostFaceAtPoint(
   }
 
   return best
-}
-
-function getRoofFaceInsets(
-  roofType: RoofType,
-  width: number,
-  depth: number,
-  wh: number,
-  baseY: number,
-  isVoid: boolean,
-  brushW: number,
-  brushD: number,
-  tanTheta: number,
-  shingleThickness: number,
-  dutchHipWidthRatio: number,
-): FaceInsets {
-  let inset = (wh - baseY) * tanTheta
-  const maxSafeInset = Math.min(brushW, brushD) / 2 - 0.005
-  if (inset > maxSafeInset) inset = maxSafeInset
-
-  let iF = 0
-  let iB = 0
-  let iL = 0
-  let iR = 0
-  if (roofType === 'hip' || roofType === 'mansard' || roofType === 'dutch') {
-    iF = inset
-    iB = inset
-    iL = inset
-    iR = inset
-  } else if (roofType === 'gable' || roofType === 'gambrel') {
-    iF = inset
-    iB = inset
-  } else if (roofType === 'shed') {
-    iF = inset
-  }
-
-  let dutchI = Math.min(width, depth) * dutchHipWidthRatio
-  if (isVoid) dutchI += shingleThickness
-  return { iF, iB, iL, iR, dutchI }
-}
-
-function getRoofModuleFaces(
-  type: RoofType,
-  w: number,
-  d: number,
-  wh: number,
-  rh: number,
-  baseY: number,
-  insets: FaceInsets,
-  baseW: number,
-  baseD: number,
-  tanTheta: number,
-  shapeRatios: FaceShapeRatios,
-): FaceVertex[][] {
-  const v = (x: number, y: number, z: number): FaceVertex => ({ x, y, z })
-  const { iF = 0, iB = 0, iL = 0, iR = 0 } = insets
-
-  const b1 = v(-w / 2 + iL, baseY, d / 2 - iF)
-  const b2 = v(w / 2 - iR, baseY, d / 2 - iF)
-  const b3 = v(w / 2 - iR, baseY, -d / 2 + iB)
-  const b4 = v(-w / 2 + iL, baseY, -d / 2 + iB)
-  const bottom = [b4, b3, b2, b1]
-
-  const e1 = v(-w / 2, wh, d / 2)
-  const e2 = v(w / 2, wh, d / 2)
-  const e3 = v(w / 2, wh, -d / 2)
-  const e4 = v(-w / 2, wh, -d / 2)
-
-  const faces: FaceVertex[][] = []
-  faces.push([b1, b2, e2, e1], [b2, b3, e3, e2], [b3, b4, e4, e3], [b4, b1, e1, e4], bottom)
-
-  const h = wh + Math.max(0.001, rh)
-
-  if (type === 'flat' || rh === 0) {
-    faces.push([e1, e2, e3, e4])
-  } else if (type === 'gable') {
-    const r1 = v(-w / 2, h, 0)
-    const r2 = v(w / 2, h, 0)
-    faces.push([e4, e1, r1], [e2, e3, r2], [e1, e2, r2, r1], [e3, e4, r1, r2])
-  } else if (type === 'hip') {
-    if (Math.abs(w - d) < 0.01) {
-      const r = v(0, h, 0)
-      faces.push([e4, e1, r], [e1, e2, r], [e2, e3, r], [e3, e4, r])
-    } else if (w >= d) {
-      const r1 = v(-w / 2 + d / 2, h, 0)
-      const r2 = v(w / 2 - d / 2, h, 0)
-      faces.push([e4, e1, r1], [e2, e3, r2], [e1, e2, r2, r1], [e3, e4, r1, r2])
-    } else {
-      const r1 = v(0, h, d / 2 - w / 2)
-      const r2 = v(0, h, -d / 2 + w / 2)
-      faces.push([e1, e2, r1], [e3, e4, r2], [e2, e3, r2, r1], [e4, e1, r1, r2])
-    }
-  } else if (type === 'shed') {
-    const t1 = v(-w / 2, h, -d / 2)
-    const t2 = v(w / 2, h, -d / 2)
-    faces.push([e1, e2, t2, t1], [e2, e3, t2], [e3, e4, t1, t2], [e4, e1, t1])
-  } else if (type === 'gambrel') {
-    const mz = (baseD / 2) * shapeRatios.gambrelLowerWidthRatio
-    const dist = d / 2 - mz
-    const mh = wh + dist * (tanTheta || 0)
-
-    const m1 = v(-w / 2, mh, mz)
-    const m2 = v(w / 2, mh, mz)
-    const m3 = v(w / 2, mh, -mz)
-    const m4 = v(-w / 2, mh, -mz)
-    const r1 = v(-w / 2, h, 0)
-    const r2 = v(w / 2, h, 0)
-    faces.push(
-      [e4, e1, m1, r1, m4],
-      [e2, e3, m3, r2, m2],
-      [e1, e2, m2, m1],
-      [m1, m2, r2, r1],
-      [e3, e4, m4, m3],
-      [m3, m4, r1, r2],
-    )
-  } else if (type === 'mansard') {
-    const i = Math.min(baseW, baseD) * shapeRatios.mansardSteepWidthRatio
-    const mh = wh + i * (tanTheta || 0)
-
-    const m1 = v(-w / 2 + i, mh, d / 2 - i)
-    const m2 = v(w / 2 - i, mh, d / 2 - i)
-    const m3 = v(w / 2 - i, mh, -d / 2 + i)
-    const m4 = v(-w / 2 + i, mh, -d / 2 + i)
-    const topW = w - i * 2
-    const topD = d - i * 2
-
-    faces.push([e1, e2, m2, m1], [e2, e3, m3, m2], [e3, e4, m4, m3], [e4, e1, m1, m4])
-
-    if (Math.abs(topW - topD) < 0.01) {
-      const r = v(0, h, 0)
-      faces.push([m4, m1, r], [m1, m2, r], [m2, m3, r], [m3, m4, r])
-    } else if (topW >= topD) {
-      const r1 = v(-topW / 2 + topD / 2, h, 0)
-      const r2 = v(topW / 2 - topD / 2, h, 0)
-      faces.push([m4, m1, r1], [m2, m3, r2], [m1, m2, r2, r1], [m3, m4, r1, r2])
-    } else {
-      const r1 = v(0, h, topD / 2 - topW / 2)
-      const r2 = v(0, h, -topD / 2 + topW / 2)
-      faces.push([m1, m2, r1], [m3, m4, r2], [m2, m3, r2, r1], [m4, m1, r1, r2])
-    }
-  } else if (type === 'dutch') {
-    const i =
-      insets.dutchI !== undefined
-        ? insets.dutchI
-        : Math.min(baseW, baseD) * shapeRatios.dutchHipWidthRatio
-    const mh = wh + i * (tanTheta || 0)
-
-    if (w >= d) {
-      const waistHalfSpan = (w / 2 - i) * shapeRatios.dutchWaistLengthRatio
-      const m1 = v(-waistHalfSpan, mh, d / 2 - i)
-      const m2 = v(waistHalfSpan, mh, d / 2 - i)
-      const m3 = v(waistHalfSpan, mh, -d / 2 + i)
-      const m4 = v(-waistHalfSpan, mh, -d / 2 + i)
-
-      faces.push(
-        [e1, e2, m2, m1],
-        [e2, e3, m3, m2],
-        [e3, e4, m4, m3],
-        [e4, e1, m1, m4],
-      )
-
-      const ridgeHalfSpan = waistHalfSpan
-      const topRun = d / 2 - i
-      if (ridgeHalfSpan > 0.001 && topRun > 0.001) {
-        const r1 = v(-ridgeHalfSpan, h, 0)
-        const r2 = v(ridgeHalfSpan, h, 0)
-        faces.push([m1, m2, r2, r1], [m3, m4, r1, r2])
-      }
-    } else {
-      const waistHalfSpan = (d / 2 - i) * shapeRatios.dutchWaistLengthRatio
-      const m1 = v(-w / 2 + i, mh, waistHalfSpan)
-      const m2 = v(w / 2 - i, mh, waistHalfSpan)
-      const m3 = v(w / 2 - i, mh, -waistHalfSpan)
-      const m4 = v(-w / 2 + i, mh, -waistHalfSpan)
-
-      faces.push(
-        [e1, e2, m2, m1],
-        [e2, e3, m3, m2],
-        [e3, e4, m4, m3],
-        [e4, e1, m1, m4],
-      )
-
-      const ridgeHalfSpan = waistHalfSpan
-      const topRun = w / 2 - i
-      if (ridgeHalfSpan > 0.001 && topRun > 0.001) {
-        const r1 = v(0, h, d / 2 - i)
-        const r2 = v(0, h, -d / 2 + i)
-        faces.push([m2, m3, r2, r1], [m4, m1, r1, r2])
-      }
-    }
-  }
-
-  return faces
 }
 
 function faceNormalY(face: FaceVertex[]): number {
@@ -643,9 +439,8 @@ export function getAnalyticalNormal(
   // ends and gable sides — both share the same primaryTan from the
   // slope frame, so directional dispatch is enough.
   if (roofType === 'hip') {
-    const fx = halfW > 0 ? Math.abs(lx) / halfW : 0
-    const fz = halfD > 0 ? Math.abs(lz) / halfD : 0
-    if (fz >= fx) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan, out)
+    const onZ = (halfD > 0 ? Math.abs(lz) / halfD : 0) >= (halfW > 0 ? Math.abs(lx) / halfW : 0)
+    if (onZ) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan, out)
     return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, primaryTan, out)
   }
 
@@ -672,11 +467,9 @@ export function getAnalyticalNormal(
 
   if (roofType === 'dutch') {
     const inset =
-      Math.min(width, depth) *
-      (seg.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio)
+      Math.min(width, depth) * (seg.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio)
     const heightRatio = seg.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio
-    const lengthRatio =
-      seg.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
+    const lengthRatio = seg.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
     const lowerRise = slope.activeRh * heightRatio
 
     if (width >= depth) {

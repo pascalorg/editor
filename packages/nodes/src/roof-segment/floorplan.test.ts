@@ -34,10 +34,15 @@ function dutchSegment(overrides: Partial<RoofSegmentNode> = {}): RoofSegmentNode
 }
 
 describe('getRoofSegmentPlanLinework', () => {
-  test('keeps dutch width-axis hips on the waist rectangle with no upper ridge', () => {
+  test('draws a dutch width-axis upper ridge plus waist linework', () => {
     const linework = getRoofSegmentPlanLinework(dutchSegment())
 
-    expect(linework.ridges).toEqual([])
+    expect(linework.ridges).toEqual([
+      [
+        [-2.5, 0],
+        [2.5, 0],
+      ],
+    ])
     expect(linework.breaks).toEqual([
       [
         [-2.5, 1.5],
@@ -66,10 +71,15 @@ describe('getRoofSegmentPlanLinework', () => {
     ])
   })
 
-  test('keeps dutch depth-axis hips on the waist rectangle when the depth exceeds the width', () => {
+  test('draws a dutch depth-axis upper ridge when the depth exceeds the width', () => {
     const linework = getRoofSegmentPlanLinework(dutchSegment({ width: 6, depth: 8 }))
 
-    expect(linework.ridges).toEqual([])
+    expect(linework.ridges).toEqual([
+      [
+        [0, 2.5],
+        [0, -2.5],
+      ],
+    ])
     expect(linework.breaks).toEqual([
       [
         [-1.5, 2.5],
@@ -101,6 +111,12 @@ describe('getRoofSegmentPlanLinework', () => {
   test('shortens dutch waist length along the ridge axis', () => {
     const linework = getRoofSegmentPlanLinework(dutchSegment({ dutchWaistLengthRatio: 0.5 }))
 
+    expect(linework.ridges).toEqual([
+      [
+        [-1.25, 0],
+        [1.25, 0],
+      ],
+    ])
     expect(linework.breaks).toEqual([
       [
         [-1.25, 1.5],

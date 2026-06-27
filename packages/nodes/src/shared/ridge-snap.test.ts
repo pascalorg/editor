@@ -3,34 +3,59 @@ import { RoofSegmentNode } from '@pascal-app/core'
 import { resolveRidgeSnap } from './ridge-snap'
 
 describe('resolveRidgeSnap', () => {
-  test('does not snap Dutch ridges until the Dutch ridge model is rebuilt', () => {
+  test('snaps Dutch width-axis center clicks to the shortened top ridge', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'dutch',
       width: 8,
       depth: 6,
       pitch: 40,
+      overhang: 0,
+      wallThickness: 0,
+      shingleThickness: 0,
     })
 
-    const right = resolveRidgeSnap(segment, 3, 0)
-    const left = resolveRidgeSnap(segment, -3, 0)
+    const center = resolveRidgeSnap(segment, 0, 0)
 
-    expect(right).toBeNull()
-    expect(left).toBeNull()
+    expect(center?.localX).toBeCloseTo(0)
+    expect(center?.localZ).toBeCloseTo(0)
+    expect(center?.rotation).toBeCloseTo(0)
   })
 
-  test('does not snap Dutch ridges when the depth exceeds the width', () => {
+  test('snaps Dutch depth-axis center clicks to the shortened top ridge', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'dutch',
       width: 6,
       depth: 8,
       pitch: 40,
+      overhang: 0,
+      wallThickness: 0,
+      shingleThickness: 0,
     })
 
-    const front = resolveRidgeSnap(segment, 0, 2)
-    const back = resolveRidgeSnap(segment, 0, -2)
+    const center = resolveRidgeSnap(segment, 0, 0)
 
-    expect(front).toBeNull()
-    expect(back).toBeNull()
+    expect(center?.localX).toBeCloseTo(0)
+    expect(center?.localZ).toBeCloseTo(0)
+    expect(center?.rotation).toBeCloseTo(Math.PI / 2)
+  })
+
+  test('keeps Dutch shoulder clicks on the upper gable ridge instead of lower hip seams', () => {
+    const segment = RoofSegmentNode.parse({
+      roofType: 'dutch',
+      width: 8,
+      depth: 6,
+      pitch: 40,
+      overhang: 0,
+      wallThickness: 0,
+      shingleThickness: 0,
+    })
+
+    const snap = resolveRidgeSnap(segment, 3.8, 2.8)
+
+    expect(snap).not.toBeNull()
+    expect(snap?.localX).toBeCloseTo(2.45)
+    expect(snap?.localZ).toBeCloseTo(0)
+    expect(snap?.rotation).toBeCloseTo(0)
   })
 
   test('snaps mansard center clicks to the upper top ridge', () => {

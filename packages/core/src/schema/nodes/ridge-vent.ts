@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 import {
+  getDutchRoofMetrics,
   getRoofSegmentVisibleTopBounds,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
@@ -145,7 +146,20 @@ export function getRidgeVentLinesForSegment(segment: RoofSegmentNode): RidgeVent
   }
 
   if (segment.roofType === 'dutch') {
-    return []
+    const metrics = getDutchRoofMetrics({
+      width,
+      depth,
+      dutchHipWidthRatio: segment.dutchHipWidthRatio,
+      dutchWaistLengthRatio: segment.dutchWaistLengthRatio,
+    })
+
+    if (metrics.axis === 'x') {
+      if (!(metrics.waistHalfX > 0.01 && ridgeZVisible)) return []
+      return [{ name: 'Ridge Vent', start: [-metrics.waistHalfX, 0], end: [metrics.waistHalfX, 0] }]
+    }
+
+    if (!(metrics.waistHalfZ > 0.01 && ridgeXVisible)) return []
+    return [{ name: 'Ridge Vent', start: [0, metrics.waistHalfZ], end: [0, -metrics.waistHalfZ] }]
   }
 
   if (segment.roofType !== 'hip') {

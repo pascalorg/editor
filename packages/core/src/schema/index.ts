@@ -110,6 +110,7 @@ export {
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export type {
+  DutchRoofMetrics,
   RoofSegmentSurfaceMaterialRole,
   RoofSegmentSurfaceMaterialSpec,
   RoofSegmentVisibleTopBounds,
@@ -117,6 +118,7 @@ export type {
 } from './nodes/roof-segment'
 export {
   getActiveRoofHeight,
+  getDutchRoofMetrics,
   getEffectiveSegmentSurfaceMaterial,
   getPitchFromActiveRoofHeight,
   getRoofSegmentSurfaceY,
@@ -130,6 +132,19 @@ export {
   RoofSegmentTrim,
   RoofType,
 } from './nodes/roof-segment'
+export type {
+  DutchRoofShapeMetrics,
+  RoofShapeFaceVertex,
+  RoofShapeInsets,
+  RoofShapeRatios,
+} from './nodes/roof-segment-shape'
+export {
+  getDutchEndSlopeFaces,
+  getDutchRoofShapeMetrics,
+  getRoofModuleFaces,
+  getRoofShapeInsets,
+  getRoofShapeRatios,
+} from './nodes/roof-segment-shape'
 export type { RoofSegmentWallFace, RoofWallFaceId } from './nodes/roof-segment-walls'
 export {
   clampRectToRoofWallFace,
