@@ -120,6 +120,7 @@ export function prepareSceneForExport(
   }
 
   pruneNonRenderableMeshes(scene, identityNodes)
+  normalizeGeometryIndex(scene)
   convertMaterials(scene)
 
   const { clips, clipNamesByNode } = bakeAnimationClips(cloneByOriginal, nodes)
@@ -217,6 +218,24 @@ function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE
   for (const object of toRemove) {
     object.removeFromParent()
   }
+}
+
+/**
+ * Coerce every surviving mesh's `geometry.index` from `undefined` to `null`.
+ * three r184's STLExporter (and the OBJ/GLB paths) guard with `index !== null`
+ * and then read `index.count`; a `BufferGeometry` whose index was never set
+ * reports `undefined`, which passes that guard and crashes with
+ * `Cannot read properties of undefined (reading 'count')`. `BufferGeometry`
+ * treats `null` as "no index" (non-indexed draw), so this is the safe form the
+ * exporters expect. Fixes Sentry MONOREPO-EDITOR-E0.
+ */
+function normalizeGeometryIndex(root: THREE.Object3D) {
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh) return
+    const geometry = mesh.geometry as THREE.BufferGeometry | undefined
+    if (geometry && geometry.index === undefined) geometry.index = null
+  })
 }
 
 function isRenderableMesh(mesh: THREE.Mesh): boolean {
