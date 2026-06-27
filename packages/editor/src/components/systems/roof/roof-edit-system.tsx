@@ -13,11 +13,11 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { generateRoofSegmentGeometry, useViewer } from '@pascal-app/viewer'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import useEditor from '../../../store/use-editor'
 import { swallowNextClick } from '../../editor/handles/use-handle-drag'
@@ -156,6 +156,338 @@ const trimDiagonalPreviewRailMaterial = new MeshBasicNodeMaterial({
   opacity: 0.42,
   transparent: true,
 })
+
+// ─── Section-cut (cutaway) feedback ──────────────────────────────────
+// Drawn by slicing the segment's REAL roof mesh (shingle + deck + walls,
+// hollow attic between them) with the trim plane. Because the mesh carries
+// material thickness, the slice yields the actual construction bands the cut
+// exposes — roof layer + wall bands — not a single filled silhouette. The
+// outline (cut line) is the star; a very faint fill adds subtle solidity.
+const SECTION_FILL_COLOR = '#fbbf24'
+const SECTION_OUTLINE_COLOR = '#f59e0b'
+const SECTION_FILL_RENDER_ORDER = 1000
+const SECTION_OUTLINE_RENDER_ORDER = 1002
+// Slice just inside the kept material so the plane never sits coplanar with
+// the mesh's own cut face (which would slice degenerately).
+const SECTION_PLANE_INSET = 0.004
+const SECTION_WELD_EPSILON = 1e-4
+
+type SectionAxis = 'x' | 'z'
+// Which trim sides cut on which axis, and the sign that points into kept
+// material (left keeps +x, right keeps -x, etc.).
+type SectionPlaneSpec = { axis: SectionAxis; value: number }
+
+const sectionFillMaterial = new MeshBasicNodeMaterial({
+  color: SECTION_FILL_COLOR,
+  depthTest: false,
+  depthWrite: false,
+  opacity: 0.08,
+  side: THREE.DoubleSide,
+  transparent: true,
+})
+
+const sectionOutlineMaterial = new LineBasicNodeMaterial({
+  color: SECTION_OUTLINE_COLOR,
+  depthTest: false,
+  depthWrite: false,
+  linewidth: 2,
+  transparent: true,
+})
+
+type Seg2D = [number, number, number, number]
+
+// Slice every triangle of a mesh geometry by an axis-aligned vertical plane,
+// returning the crossing segments projected into the plane's 2D frame
+// (u = the in-plane horizontal axis, v = world up) alongside the fixed
+// coordinate so we can lift back to 3D.
+function sliceGeometryByPlane(geometry: THREE.BufferGeometry, plane: SectionPlaneSpec): Seg2D[] {
+  const pos = geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+  if (!pos) return []
+  const index = geometry.getIndex()
+  const triCount = index ? index.count / 3 : pos.count / 3
+  const segments: Seg2D[] = []
+
+  const ax = plane.axis === 'x' ? 0 : 2 // fixed axis component
+  const uAxis = plane.axis === 'x' ? 2 : 0 // in-plane horizontal → u
+
+  for (let t = 0; t < triCount; t++) {
+    const i0 = index ? index.getX(t * 3) : t * 3
+    const i1 = index ? index.getX(t * 3 + 1) : t * 3 + 1
+    const i2 = index ? index.getX(t * 3 + 2) : t * 3 + 2
+    const tri = [i0, i1, i2]
+    const fixed = [0, 0, 0]
+    const us = [0, 0, 0]
+    const vs = [0, 0, 0]
+    for (let k = 0; k < 3; k++) {
+      const vi = tri[k]!
+      fixed[k] = pos.getComponent(vi, ax)
+      us[k] = pos.getComponent(vi, uAxis)
+      vs[k] = pos.getComponent(vi, 1)
+    }
+    const d = [fixed[0]! - plane.value, fixed[1]! - plane.value, fixed[2]! - plane.value]
+    // Intersection points where edges cross the plane.
+    const hitU: number[] = []
+    const hitV: number[] = []
+    for (let e = 0; e < 3; e++) {
+      const a = e
+      const b = (e + 1) % 3
+      const da = d[a]!
+      const db = d[b]!
+      if (da === 0) {
+        hitU.push(us[a]!)
+        hitV.push(vs[a]!)
+      }
+      if ((da < 0 && db > 0) || (da > 0 && db < 0)) {
+        const s = da / (da - db)
+        hitU.push(us[a]! + (us[b]! - us[a]!) * s)
+        hitV.push(vs[a]! + (vs[b]! - vs[a]!) * s)
+      }
+    }
+    if (hitU.length >= 2) {
+      segments.push([hitU[0]!, hitV[0]!, hitU[1]!, hitV[1]!])
+    }
+  }
+  return segments
+}
+
+// Stitches loose 2D segments into closed loops (for fill triangulation).
+function stitchSegments2D(segments: Seg2D[]): THREE.Vector2[][] {
+  const remaining = segments.slice()
+  const loops: THREE.Vector2[][] = []
+  const close = (a: number, b: number) => Math.abs(a - b) <= SECTION_WELD_EPSILON
+
+  while (remaining.length > 0) {
+    const seed = remaining.shift()!
+    const loop = [new THREE.Vector2(seed[0], seed[1]), new THREE.Vector2(seed[2], seed[3])]
+    let grew = true
+    while (grew) {
+      grew = false
+      const end = loop[loop.length - 1]!
+      for (let i = 0; i < remaining.length; i++) {
+        const [x1, y1, x2, y2] = remaining[i]!
+        if (close(x1, end.x) && close(y1, end.y)) {
+          loop.push(new THREE.Vector2(x2, y2))
+          remaining.splice(i, 1)
+          grew = true
+          break
+        }
+        if (close(x2, end.x) && close(y2, end.y)) {
+          loop.push(new THREE.Vector2(x1, y1))
+          remaining.splice(i, 1)
+          grew = true
+          break
+        }
+      }
+      const head = loop[0]!
+      const tail = loop[loop.length - 1]!
+      if (loop.length >= 3 && close(head.x, tail.x) && close(head.y, tail.y)) {
+        loop.pop()
+        break
+      }
+    }
+    if (loop.length >= 3) loops.push(loop)
+  }
+  return loops
+}
+
+function loopArea(loop: THREE.Vector2[]): number {
+  let a = 0
+  for (let i = 0; i < loop.length; i++) {
+    const p = loop[i]!
+    const q = loop[(i + 1) % loop.length]!
+    a += p.x * q.y - q.x * p.y
+  }
+  return a / 2
+}
+
+function pointInLoop(pt: THREE.Vector2, loop: THREE.Vector2[]): boolean {
+  let inside = false
+  for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+    const pi = loop[i]!
+    const pj = loop[j]!
+    if (
+      pi.y > pt.y !== pj.y > pt.y &&
+      pt.x < ((pj.x - pi.x) * (pt.y - pi.y)) / (pj.y - pi.y) + pi.x
+    ) {
+      inside = !inside
+    }
+  }
+  return inside
+}
+
+// Builds the combined fill + outline geometries (segment-local 3D) for all
+// active trim planes by slicing the live roof mesh.
+function buildSectionGeometries(
+  geometry: THREE.BufferGeometry,
+  planes: SectionPlaneSpec[],
+): { fill: THREE.BufferGeometry; outline: THREE.BufferGeometry } | null {
+  const outlinePositions: number[] = []
+  const fillPositions: number[] = []
+
+  // Lift a 2D plane-frame point (u, v) back to segment-local 3D.
+  const lift = (axis: SectionAxis, value: number, u: number, v: number): [number, number, number] =>
+    axis === 'x' ? [value, v, u] : [u, v, value]
+
+  for (const plane of planes) {
+    const segments = sliceGeometryByPlane(geometry, plane)
+    if (segments.length === 0) continue
+
+    for (const [u1, v1, u2, v2] of segments) {
+      const a = lift(plane.axis, plane.value, u1, v1)
+      const b = lift(plane.axis, plane.value, u2, v2)
+      outlinePositions.push(a[0], a[1], a[2], b[0], b[1], b[2])
+    }
+
+    // Fill: stitch loops, classify holes by containment parity, triangulate.
+    const loops = stitchSegments2D(segments)
+    if (loops.length === 0) continue
+    const enriched = loops.map((loop) => ({ loop, area: Math.abs(loopArea(loop)) }))
+    enriched.sort((p, q) => q.area - p.area)
+    const used = new Array(enriched.length).fill(false)
+
+    for (let i = 0; i < enriched.length; i++) {
+      if (used[i]) continue
+      const outer = enriched[i]!.loop
+      used[i] = true
+      const holes: THREE.Vector2[][] = []
+      for (let j = i + 1; j < enriched.length; j++) {
+        if (used[j]) continue
+        const cand = enriched[j]!.loop
+        const probe = cand[0]!
+        if (pointInLoop(probe, outer)) {
+          holes.push(cand)
+          used[j] = true
+        }
+      }
+      const tris = THREE.ShapeUtils.triangulateShape(outer, holes)
+      const all = [outer, ...holes].flat()
+      for (const tri of tris) {
+        for (const idx of tri) {
+          const p = all[idx]
+          if (!p) continue
+          const [x, y, z] = lift(plane.axis, plane.value, p.x, p.y)
+          fillPositions.push(x, y, z)
+        }
+      }
+    }
+  }
+
+  if (outlinePositions.length === 0) return null
+
+  const fill = new THREE.BufferGeometry()
+  fill.setAttribute('position', new THREE.Float32BufferAttribute(fillPositions, 3))
+  const outline = new THREE.BufferGeometry()
+  outline.setAttribute('position', new THREE.Float32BufferAttribute(outlinePositions, 3))
+  return { fill, outline }
+}
+
+// Zeroed trim — slicing the FULL (uncut) roof volume at the trim plane gives
+// the true cross-section silhouette of what the cut removes, instead of the
+// already-cut mesh whose face sits coplanar with the plane.
+const ZERO_TRIM: RoofSegmentTrim = {
+  left: 0,
+  right: 0,
+  front: 0,
+  back: 0,
+  frontLeft: 0,
+  frontRight: 0,
+  backLeft: 0,
+  backRight: 0,
+  frontLeftX: 0,
+  frontLeftZ: 0,
+  frontRightX: 0,
+  frontRightZ: 0,
+  backLeftX: 0,
+  backLeftZ: 0,
+  backRightX: 0,
+  backRightZ: 0,
+}
+
+// Shape fields that affect the segment's 3D volume. Trim is excluded on
+// purpose — we always slice the untrimmed roof — so the (expensive) CSG
+// rebuild only reruns when the roof's actual shape changes, not on every
+// drag tick. The cheap re-slice below tracks the moving planes instead.
+function segmentShapeKey(segment: RoofSegmentNode): string {
+  return JSON.stringify([
+    segment.roofType,
+    segment.width,
+    segment.depth,
+    segment.wallHeight,
+    segment.pitch,
+    segment.wallThickness,
+    segment.deckThickness,
+    segment.overhang,
+    segment.shingleThickness,
+    segment.gambrelLowerWidthRatio,
+    segment.gambrelLowerHeightRatio,
+    segment.mansardSteepWidthRatio,
+    segment.mansardSteepHeightRatio,
+    segment.dutchHipWidthRatio,
+    segment.dutchHipHeightRatio,
+    segment.dutchWaistLengthRatio,
+  ])
+}
+
+// Renders the cutaway bands (outline + faint fill) for the active trim
+// planes, in segment-local space (mounted under the segment-world-matrix
+// group). Generates the untrimmed segment volume itself and slices it, so the
+// result is deterministic and independent of the registry mesh's rebuild
+// timing (which lags a few frames behind a drag and may still hold the
+// placeholder geometry).
+function SectionCut({
+  segment,
+  planes,
+}: {
+  segment: RoofSegmentNode
+  planes: SectionPlaneSpec[]
+}) {
+  const shapeKey = segmentShapeKey(segment)
+
+  // Untrimmed segment volume — rebuilt only when the roof shape changes.
+  const sliceSource = useMemo(() => {
+    return generateRoofSegmentGeometry({ ...segment, trim: ZERO_TRIM })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shapeKey])
+
+  useEffect(() => {
+    return () => {
+      sliceSource.dispose()
+    }
+  }, [sliceSource])
+
+  const geometries = useMemo(() => {
+    if (planes.length === 0) return null
+    return buildSectionGeometries(sliceSource, planes)
+    // Re-slice whenever the active planes change (drag / commit).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sliceSource, JSON.stringify(planes)])
+
+  useEffect(() => {
+    return () => {
+      geometries?.fill.dispose()
+      geometries?.outline.dispose()
+    }
+  }, [geometries])
+
+  if (!geometries) return null
+
+  return (
+    <group layers={EDITOR_LAYER}>
+      <mesh
+        geometry={geometries.fill}
+        material={sectionFillMaterial}
+        raycast={() => null}
+        renderOrder={SECTION_FILL_RENDER_ORDER}
+      />
+      <lineSegments
+        frustumCulled={false}
+        geometry={geometries.outline}
+        material={sectionOutlineMaterial}
+        renderOrder={SECTION_OUTLINE_RENDER_ORDER}
+      />
+    </group>
+  )
+}
 
 const _dragNdc = new THREE.Vector2()
 const _dragRaycaster = new THREE.Raycaster()
@@ -563,6 +895,15 @@ function RoofTrimHandles() {
   const visualFrontZ = trim.front > 0 ? frontZ : visibleBounds.maxZ
   const visualBackZ = trim.back > 0 ? backZ : visibleBounds.minZ
   const maxDiagonalTrim = Math.max(0, Math.min(keptWidth, keptDepth) - MIN_ROOF_SEGMENT_TRIM_SPAN)
+
+  // Cross-section planes the active trim cuts expose. Slice the live roof
+  // mesh just inside the kept material (the cut sits coplanar with the mesh's
+  // own face otherwise) so the cutaway shows real construction layers.
+  const sectionPlanes: SectionPlaneSpec[] = []
+  if (trim.left > 0) sectionPlanes.push({ axis: 'x', value: leftX + SECTION_PLANE_INSET })
+  if (trim.right > 0) sectionPlanes.push({ axis: 'x', value: rightX - SECTION_PLANE_INSET })
+  if (trim.front > 0) sectionPlanes.push({ axis: 'z', value: frontZ - SECTION_PLANE_INSET })
+  if (trim.back > 0) sectionPlanes.push({ axis: 'z', value: backZ + SECTION_PLANE_INSET })
 
   const pointOnTrimLineAtX = (
     start: readonly [number, number],
@@ -1056,6 +1397,9 @@ function RoofTrimHandles() {
 
   return (
     <group ref={groupRef}>
+      {sectionPlanes.length > 0 ? (
+        <SectionCut planes={sectionPlanes} segment={liveSegment} />
+      ) : null}
       {renderTrimPlane(
         'left',
         [visualLeftX, handleY / 2, visibleCenterZ],
