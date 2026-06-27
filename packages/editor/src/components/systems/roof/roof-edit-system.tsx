@@ -162,26 +162,75 @@ const trimDiagonalPreviewRailMaterial = new MeshBasicNodeMaterial({
 // hollow attic between them) with the trim plane. Because the mesh carries
 // material thickness, the slice yields the actual construction bands the cut
 // exposes — roof layer + wall bands — not a single filled silhouette. The
-// outline (cut line) is the star; a very faint fill adds subtle solidity.
-const SECTION_FILL_COLOR = '#fbbf24'
-const SECTION_OUTLINE_COLOR = '#f59e0b'
+// violet outline (cut line) and a translucent violet fill read together as a
+// ghost cross-section of what the trim removes.
+const SECTION_FILL_COLOR = '#818cf8'
+const SECTION_OUTLINE_COLOR = '#818cf8'
 const SECTION_FILL_RENDER_ORDER = 1000
 const SECTION_OUTLINE_RENDER_ORDER = 1002
 // Slice just inside the kept material so the plane never sits coplanar with
 // the mesh's own cut face (which would slice degenerately).
 const SECTION_PLANE_INSET = 0.004
-const SECTION_WELD_EPSILON = 1e-4
 
-type SectionAxis = 'x' | 'z'
-// Which trim sides cut on which axis, and the sign that points into kept
-// material (left keeps +x, right keeps -x, etc.).
-type SectionPlaneSpec = { axis: SectionAxis; value: number }
+// A vertical cut plane defined by a horizontal line through the XZ ground
+// plane. `origin` is a point on the line, `dir` is the unit in-plane
+// horizontal direction (in XZ), and `normal` is the unit XZ normal. Vertices
+// are projected to (u = dir·xz, v = world Y) for slicing and lifted back via
+// `origin + dir`. This handles both the axis-aligned sides (left/right cut on
+// x, front/back on z) and the angled diagonal/corner cuts.
+type SectionPlaneSpec = {
+  origin: THREE.Vector2 // point on the cut line, (x, z)
+  dir: THREE.Vector2 // unit in-plane horizontal direction, (x, z)
+  normal: THREE.Vector2 // unit normal in the XZ plane, (x, z)
+  // The cut plane is infinite, but the visible cut only spans the footprint
+  // edge between the two endpoints. We clip slice segments to this u-range
+  // (u = projection along `dir`) so the silhouette doesn't sprout lines where
+  // the infinite plane grazes the rest of the roof.
+  uMin: number
+  uMax: number
+}
+
+// Build a section plane from two XZ points on the cut line. `inset` shifts the
+// plane along its normal toward the supplied "inside" point so the slice sits
+// just inside kept material instead of coplanar with the mesh's own cut face.
+function makeSectionPlane(
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  inset = 0,
+  insidePoint?: readonly [number, number],
+): SectionPlaneSpec {
+  const dir = new THREE.Vector2(bx - ax, bz - az)
+  if (dir.lengthSq() < 1e-12) dir.set(1, 0)
+  dir.normalize()
+  const normal = new THREE.Vector2(dir.y, -dir.x)
+  const origin = new THREE.Vector2(ax, az)
+  if (inset !== 0 && insidePoint) {
+    const toInsideX = insidePoint[0] - ax
+    const toInsideZ = insidePoint[1] - az
+    const sign = normal.x * toInsideX + normal.y * toInsideZ >= 0 ? 1 : -1
+    origin.x += normal.x * inset * sign
+    origin.y += normal.y * inset * sign
+  }
+  const uA = dir.x * ax + dir.y * az
+  const uB = dir.x * bx + dir.y * bz
+  return { origin, dir, normal, uMin: Math.min(uA, uB), uMax: Math.max(uA, uB) }
+}
+
+// Lift a 2D plane-frame point (u = projection along dir, v = world Y) back to
+// segment-local 3D using the plane's origin and direction.
+function liftSectionPoint(plane: SectionPlaneSpec, u: number, v: number): [number, number, number] {
+  const uOrigin = plane.dir.x * plane.origin.x + plane.dir.y * plane.origin.y
+  const t = u - uOrigin
+  return [plane.origin.x + plane.dir.x * t, v, plane.origin.y + plane.dir.y * t]
+}
 
 const sectionFillMaterial = new MeshBasicNodeMaterial({
   color: SECTION_FILL_COLOR,
   depthTest: false,
   depthWrite: false,
-  opacity: 0.08,
+  opacity: 0.32,
   side: THREE.DoubleSide,
   transparent: true,
 })
@@ -196,10 +245,10 @@ const sectionOutlineMaterial = new LineBasicNodeMaterial({
 
 type Seg2D = [number, number, number, number]
 
-// Slice every triangle of a mesh geometry by an axis-aligned vertical plane,
+// Slice every triangle of a mesh geometry by an arbitrary vertical plane,
 // returning the crossing segments projected into the plane's 2D frame
-// (u = the in-plane horizontal axis, v = world up) alongside the fixed
-// coordinate so we can lift back to 3D.
+// (u = projection along the plane's in-plane horizontal direction, v = world
+// up) so we can lift back to 3D via `liftSectionPoint`.
 function sliceGeometryByPlane(geometry: THREE.BufferGeometry, plane: SectionPlaneSpec): Seg2D[] {
   const pos = geometry.getAttribute('position') as THREE.BufferAttribute | undefined
   if (!pos) return []
@@ -207,24 +256,27 @@ function sliceGeometryByPlane(geometry: THREE.BufferGeometry, plane: SectionPlan
   const triCount = index ? index.count / 3 : pos.count / 3
   const segments: Seg2D[] = []
 
-  const ax = plane.axis === 'x' ? 0 : 2 // fixed axis component
-  const uAxis = plane.axis === 'x' ? 2 : 0 // in-plane horizontal → u
+  // Signed plane constant: a vertex (x, z) is on the plane when
+  // normal·(x,z) === planeConst.
+  const planeConst = plane.normal.x * plane.origin.x + plane.normal.y * plane.origin.y
 
   for (let t = 0; t < triCount; t++) {
     const i0 = index ? index.getX(t * 3) : t * 3
     const i1 = index ? index.getX(t * 3 + 1) : t * 3 + 1
     const i2 = index ? index.getX(t * 3 + 2) : t * 3 + 2
     const tri = [i0, i1, i2]
-    const fixed = [0, 0, 0]
     const us = [0, 0, 0]
     const vs = [0, 0, 0]
+    const d = [0, 0, 0]
     for (let k = 0; k < 3; k++) {
       const vi = tri[k]!
-      fixed[k] = pos.getComponent(vi, ax)
-      us[k] = pos.getComponent(vi, uAxis)
-      vs[k] = pos.getComponent(vi, 1)
+      const x = pos.getComponent(vi, 0)
+      const y = pos.getComponent(vi, 1)
+      const z = pos.getComponent(vi, 2)
+      us[k] = plane.dir.x * x + plane.dir.y * z
+      vs[k] = y
+      d[k] = plane.normal.x * x + plane.normal.y * z - planeConst
     }
-    const d = [fixed[0]! - plane.value, fixed[1]! - plane.value, fixed[2]! - plane.value]
     // Intersection points where edges cross the plane.
     const hitU: number[] = []
     const hitV: number[] = []
@@ -244,75 +296,131 @@ function sliceGeometryByPlane(geometry: THREE.BufferGeometry, plane: SectionPlan
       }
     }
     if (hitU.length >= 2) {
-      segments.push([hitU[0]!, hitV[0]!, hitU[1]!, hitV[1]!])
+      const clipped = clipSegmentToU(
+        hitU[0]!,
+        hitV[0]!,
+        hitU[1]!,
+        hitV[1]!,
+        plane.uMin,
+        plane.uMax,
+      )
+      if (clipped) segments.push(clipped)
     }
   }
   return segments
 }
 
-// Stitches loose 2D segments into closed loops (for fill triangulation).
-function stitchSegments2D(segments: Seg2D[]): THREE.Vector2[][] {
-  const remaining = segments.slice()
+// Clip a 2D slice segment to the [uMin, uMax] band along the u axis, returning
+// null when the segment lies entirely outside the band. v is interpolated.
+function clipSegmentToU(
+  u1: number,
+  v1: number,
+  u2: number,
+  v2: number,
+  uMin: number,
+  uMax: number,
+): Seg2D | null {
+  let aU = u1
+  let aV = v1
+  let bU = u2
+  let bV = v2
+  if (aU > bU) {
+    ;[aU, bU] = [bU, aU]
+    ;[aV, bV] = [bV, aV]
+  }
+  if (bU < uMin || aU > uMax) return null
+  const du = bU - aU
+  if (du > 1e-9) {
+    if (aU < uMin) {
+      const s = (uMin - aU) / du
+      aV = aV + (bV - aV) * s
+      aU = uMin
+    }
+    if (bU > uMax) {
+      const s = (uMax - aU) / (bU - aU)
+      bV = aV + (bV - aV) * s
+      bU = uMax
+    }
+  }
+  return [aU, aV, bU, bV]
+}
+
+// Weld loose 2D slice segments into closed loops. Endpoints are snapped to a
+// quantisation grid so the two triangles sharing a mesh edge collapse onto one
+// shared vertex; we then walk the resulting (mostly manifold) edge graph,
+// consuming each undirected edge once, to recover closed boundary loops. This
+// is robust to junctions and tiny CSG float drift in a way greedy chaining is
+// not — the previous greedy version stalled at the eave junction (where the
+// roof band meets the wall) and produced no usable loop, so the fill vanished.
+const SECTION_LOOP_QUANT = 1e-3 // 1 mm weld grid
+
+function buildSectionLoops(segments: Seg2D[]): THREE.Vector2[][] {
+  const points: THREE.Vector2[] = []
+  const idByKey = new Map<string, number>()
+  const keyOf = (x: number, y: number) =>
+    `${Math.round(x / SECTION_LOOP_QUANT)}:${Math.round(y / SECTION_LOOP_QUANT)}`
+  const idFor = (x: number, y: number): number => {
+    const key = keyOf(x, y)
+    const existing = idByKey.get(key)
+    if (existing !== undefined) return existing
+    const id = points.length
+    points.push(new THREE.Vector2(x, y))
+    idByKey.set(key, id)
+    return id
+  }
+
+  const edgeKey = (a: number, b: number) => (a < b ? `${a}_${b}` : `${b}_${a}`)
+  const adjacency = new Map<number, number[]>()
+  const seenEdges = new Set<string>()
+  const addAdj = (a: number, b: number) => {
+    const list = adjacency.get(a)
+    if (list) list.push(b)
+    else adjacency.set(a, [b])
+  }
+
+  for (const [x1, y1, x2, y2] of segments) {
+    const a = idFor(x1, y1)
+    const b = idFor(x2, y2)
+    if (a === b) continue
+    const ek = edgeKey(a, b)
+    if (seenEdges.has(ek)) continue
+    seenEdges.add(ek)
+    addAdj(a, b)
+    addAdj(b, a)
+  }
+
+  const usedEdges = new Set<string>()
   const loops: THREE.Vector2[][] = []
-  const close = (a: number, b: number) => Math.abs(a - b) <= SECTION_WELD_EPSILON
 
-  while (remaining.length > 0) {
-    const seed = remaining.shift()!
-    const loop = [new THREE.Vector2(seed[0], seed[1]), new THREE.Vector2(seed[2], seed[3])]
-    let grew = true
-    while (grew) {
-      grew = false
-      const end = loop[loop.length - 1]!
-      for (let i = 0; i < remaining.length; i++) {
-        const [x1, y1, x2, y2] = remaining[i]!
-        if (close(x1, end.x) && close(y1, end.y)) {
-          loop.push(new THREE.Vector2(x2, y2))
-          remaining.splice(i, 1)
-          grew = true
-          break
-        }
-        if (close(x2, end.x) && close(y2, end.y)) {
-          loop.push(new THREE.Vector2(x1, y1))
-          remaining.splice(i, 1)
-          grew = true
-          break
-        }
+  for (let start = 0; start < points.length; start++) {
+    const neighbors = adjacency.get(start)
+    if (!neighbors) continue
+    for (const first of neighbors) {
+      if (usedEdges.has(edgeKey(start, first))) continue
+
+      const loopIds: number[] = [start]
+      let prev = start
+      let current = first
+      usedEdges.add(edgeKey(start, first))
+
+      while (current !== start) {
+        loopIds.push(current)
+        const next = (adjacency.get(current) ?? []).find(
+          (cand) => cand !== prev && !usedEdges.has(edgeKey(current, cand)),
+        )
+        if (next === undefined) break
+        usedEdges.add(edgeKey(current, next))
+        prev = current
+        current = next
       }
-      const head = loop[0]!
-      const tail = loop[loop.length - 1]!
-      if (loop.length >= 3 && close(head.x, tail.x) && close(head.y, tail.y)) {
-        loop.pop()
-        break
+
+      if (current === start && loopIds.length >= 3) {
+        loops.push(loopIds.map((id) => points[id]!.clone()))
       }
     }
-    if (loop.length >= 3) loops.push(loop)
   }
+
   return loops
-}
-
-function loopArea(loop: THREE.Vector2[]): number {
-  let a = 0
-  for (let i = 0; i < loop.length; i++) {
-    const p = loop[i]!
-    const q = loop[(i + 1) % loop.length]!
-    a += p.x * q.y - q.x * p.y
-  }
-  return a / 2
-}
-
-function pointInLoop(pt: THREE.Vector2, loop: THREE.Vector2[]): boolean {
-  let inside = false
-  for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
-    const pi = loop[i]!
-    const pj = loop[j]!
-    if (
-      pi.y > pt.y !== pj.y > pt.y &&
-      pt.x < ((pj.x - pi.x) * (pt.y - pi.y)) / (pj.y - pi.y) + pi.x
-    ) {
-      inside = !inside
-    }
-  }
-  return inside
 }
 
 // Builds the combined fill + outline geometries (segment-local 3D) for all
@@ -324,48 +432,29 @@ function buildSectionGeometries(
   const outlinePositions: number[] = []
   const fillPositions: number[] = []
 
-  // Lift a 2D plane-frame point (u, v) back to segment-local 3D.
-  const lift = (axis: SectionAxis, value: number, u: number, v: number): [number, number, number] =>
-    axis === 'x' ? [value, v, u] : [u, v, value]
-
   for (const plane of planes) {
     const segments = sliceGeometryByPlane(geometry, plane)
     if (segments.length === 0) continue
 
     for (const [u1, v1, u2, v2] of segments) {
-      const a = lift(plane.axis, plane.value, u1, v1)
-      const b = lift(plane.axis, plane.value, u2, v2)
+      const a = liftSectionPoint(plane, u1, v1)
+      const b = liftSectionPoint(plane, u2, v2)
       outlinePositions.push(a[0], a[1], a[2], b[0], b[1], b[2])
     }
 
-    // Fill: stitch loops, classify holes by containment parity, triangulate.
-    const loops = stitchSegments2D(segments)
-    if (loops.length === 0) continue
-    const enriched = loops.map((loop) => ({ loop, area: Math.abs(loopArea(loop)) }))
-    enriched.sort((p, q) => q.area - p.area)
-    const used = new Array(enriched.length).fill(false)
-
-    for (let i = 0; i < enriched.length; i++) {
-      if (used[i]) continue
-      const outer = enriched[i]!.loop
-      used[i] = true
-      const holes: THREE.Vector2[][] = []
-      for (let j = i + 1; j < enriched.length; j++) {
-        if (used[j]) continue
-        const cand = enriched[j]!.loop
-        const probe = cand[0]!
-        if (pointInLoop(probe, outer)) {
-          holes.push(cand)
-          used[j] = true
-        }
-      }
-      const tris = THREE.ShapeUtils.triangulateShape(outer, holes)
-      const all = [outer, ...holes].flat()
+    // Fill: weld the slice segments into closed loops and fill each as a solid
+    // silhouette (no holes — the user wants the whole cut shape filled, not the
+    // hollow construction bands). Each loop is triangulated independently and
+    // its winding ignored, so overlapping bands simply paint the union solid.
+    const loops = buildSectionLoops(segments)
+    for (const loop of loops) {
+      if (loop.length < 3) continue
+      const tris = THREE.ShapeUtils.triangulateShape(loop, [])
       for (const tri of tris) {
         for (const idx of tri) {
-          const p = all[idx]
+          const p = loop[idx]
           if (!p) continue
-          const [x, y, z] = lift(plane.axis, plane.value, p.x, p.y)
+          const [x, y, z] = liftSectionPoint(plane, p.x, p.y)
           fillPositions.push(x, y, z)
         }
       }
@@ -832,6 +921,7 @@ function RoofTrimHandles() {
     segment ? JSON.stringify(s.overrides.get(segment.id) ?? null) : null,
   )
   const [hoveredSide, setHoveredSide] = useState<RoofTrimSide | null>(null)
+  const [draggingSide, setDraggingSide] = useState<RoofTrimSide | null>(null)
   const groupRef = useRef<THREE.Group>(null)
   const dragCleanupRef = useRef<(() => void) | null>(null)
   const { camera, gl } = useThree()
@@ -900,10 +990,66 @@ function RoofTrimHandles() {
   // mesh just inside the kept material (the cut sits coplanar with the mesh's
   // own face otherwise) so the cutaway shows real construction layers.
   const sectionPlanes: SectionPlaneSpec[] = []
-  if (trim.left > 0) sectionPlanes.push({ axis: 'x', value: leftX + SECTION_PLANE_INSET })
-  if (trim.right > 0) sectionPlanes.push({ axis: 'x', value: rightX - SECTION_PLANE_INSET })
-  if (trim.front > 0) sectionPlanes.push({ axis: 'z', value: frontZ - SECTION_PLANE_INSET })
-  if (trim.back > 0) sectionPlanes.push({ axis: 'z', value: backZ + SECTION_PLANE_INSET })
+  // Inside reference: the kept-region center, on the kept side of every cut so
+  // the inset always shifts the slice into solid material.
+  const insideRef: readonly [number, number] = [0, 0]
+  if (trim.left > 0) {
+    sectionPlanes.push(makeSectionPlane(leftX, backZ, leftX, frontZ, SECTION_PLANE_INSET, insideRef))
+  }
+  if (trim.right > 0) {
+    sectionPlanes.push(
+      makeSectionPlane(rightX, backZ, rightX, frontZ, SECTION_PLANE_INSET, insideRef),
+    )
+  }
+  if (trim.front > 0) {
+    sectionPlanes.push(
+      makeSectionPlane(leftX, frontZ, rightX, frontZ, SECTION_PLANE_INSET, insideRef),
+    )
+  }
+  if (trim.back > 0) {
+    sectionPlanes.push(makeSectionPlane(leftX, backZ, rightX, backZ, SECTION_PLANE_INSET, insideRef))
+  }
+
+  // Diagonal/corner cuts run at an angle, so they need a generic vertical
+  // plane through the corner cut line. The endpoints match the rail line
+  // geometry in renderDiagonalTrimPlane (start/end before the visual-bounds
+  // extension; only direction matters for slicing).
+  const diagonalCutLine = (
+    side: DiagonalTrimSide,
+  ): [[number, number], [number, number]] | null => {
+    const [xKey, zKey] = getDiagonalAxisKeys(side)
+    const dx = trim[xKey]
+    const dz = trim[zKey]
+    if (!(dx > 0 && dz > 0)) return null
+    switch (side) {
+      case 'frontLeft':
+        return [
+          [leftX + dx, frontZ],
+          [leftX, frontZ - dz],
+        ]
+      case 'frontRight':
+        return [
+          [rightX, frontZ - dz],
+          [rightX - dx, frontZ],
+        ]
+      case 'backLeft':
+        return [
+          [leftX, backZ + dz],
+          [leftX + dx, backZ],
+        ]
+      case 'backRight':
+        return [
+          [rightX - dx, backZ],
+          [rightX, backZ + dz],
+        ]
+    }
+  }
+  for (const side of ['frontLeft', 'frontRight', 'backLeft', 'backRight'] as const) {
+    const line = diagonalCutLine(side)
+    if (!line) continue
+    const [s, e] = line
+    sectionPlanes.push(makeSectionPlane(s[0], s[1], e[0], e[1], SECTION_PLANE_INSET, insideRef))
+  }
 
   const pointOnTrimLineAtX = (
     start: readonly [number, number],
@@ -1011,6 +1157,7 @@ function RoofTrimHandles() {
     if (initialPointerValue === null) return
 
     document.body.style.cursor = getTrimCursor(side)
+    setDraggingSide(side)
     useEditor.getState().setActiveHandleDrag({ nodeId: segmentId, label: getTrimLabel(side) })
     useViewer.getState().setInputDragging(true)
     useScene.temporal.getState().pause()
@@ -1045,6 +1192,7 @@ function RoofTrimHandles() {
       useScene.temporal.getState().resume()
       useEditor.getState().setActiveHandleDrag(null)
       useViewer.getState().setInputDragging(false)
+      setDraggingSide(null)
       dragCleanupRef.current = null
     }
 
@@ -1397,7 +1545,7 @@ function RoofTrimHandles() {
 
   return (
     <group ref={groupRef}>
-      {sectionPlanes.length > 0 ? (
+      {draggingSide && sectionPlanes.length > 0 ? (
         <SectionCut planes={sectionPlanes} segment={liveSegment} />
       ) : null}
       {renderTrimPlane(
