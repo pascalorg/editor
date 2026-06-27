@@ -1460,6 +1460,15 @@ export const SelectionManager = () => {
       if (activeStrategy?.isValid(node)) {
         event.stopPropagation()
         clickHandledRef.current = true
+        // Reset the handled flag after a short delay so the grid:click that the
+        // SAME DOM click also raycasts is ignored (it fires synchronously, before
+        // this 50ms macrotask). Scheduled here — right after the flag is set — so
+        // EVERY branch below clears it, including the click-to-move early return
+        // (which previously skipped the reset and left empty-click deselect stuck
+        // until the next normal select).
+        setTimeout(() => {
+          clickHandledRef.current = false
+        }, 50)
 
         let nodeToSelect = node
         if (node.type === 'roof-segment' && node.parentId) {
@@ -1582,11 +1591,6 @@ export const SelectionManager = () => {
         if (!nextMaterialTargetHandled && useEditor.getState().selectedMaterialTarget) {
           useEditor.getState().setSelectedMaterialTarget(null)
         }
-
-        // Reset the handled flag after a short delay to allow grid:click to be ignored
-        setTimeout(() => {
-          clickHandledRef.current = false
-        }, 50)
       }
     }
 
