@@ -3,7 +3,6 @@ import {
   type AnyNodeId,
   getActiveRoofHeight,
   getEffectiveNode,
-  getRoofSegmentSurfaceY,
   getRoofSegmentVisibleTopBounds,
   getSegmentSlopeFrame,
   MIN_ROOF_SEGMENT_TRIM_SPAN,
@@ -167,13 +166,17 @@ const trimDiagonalPreviewRailMaterial = new MeshBasicNodeMaterial({
 })
 
 // ─── Section-cut (cutaway) feedback ──────────────────────────────────
-// The cross-section the trim removes, computed analytically: each cut line is
-// sampled against the parametric roof surface (`getRoofSegmentSurfaceY`) to get
-// the sloped top profile, then closed down to the segment base into a solid
-// band. A solid red fill + darker red outline read together as a SketchUp-style
-// section cut of what the trim removes.
-const SECTION_FILL_COLOR = '#b91c1c'
-const SECTION_OUTLINE_COLOR = '#7f1d1d'
+// The cross-section the trim removes: a thin slab at each cut line is
+// intersected with the untrimmed roof shell, so the fill shows real material
+// only (wall + deck bands) and leaves the hollow attic empty. The outline is
+// the edge silhouette of that fill. A translucent red fill + darker red outline
+// read together as a SketchUp-style section cut of what the trim removes.
+// Matches the app's destructive red (`--destructive`, oklch(0.577 0.245 27.325)
+// ≈ #dc2626 / red-600 — the delete/destructive button color). Three's
+// MeshBasicNodeMaterial color doesn't parse oklch() strings, so use the sRGB hex
+// equivalent; the outline is a darker shade of the same hue.
+const SECTION_FILL_COLOR = '#dc2626'
+const SECTION_OUTLINE_COLOR = '#991b1b'
 const SECTION_FILL_RENDER_ORDER = 1000
 const SECTION_OUTLINE_RENDER_ORDER = 1002
 // Build the cut line just inside the kept material so the section plane never
@@ -251,9 +254,9 @@ const sectionFillMaterial = new MeshBasicNodeMaterial({
   color: SECTION_FILL_COLOR,
   depthTest: false,
   depthWrite: false,
-  opacity: 1,
+  opacity: 0.85,
   side: THREE.DoubleSide,
-  transparent: false,
+  transparent: true,
 })
 
 const sectionOutlineMaterial = new LineBasicNodeMaterial({
@@ -262,13 +265,6 @@ const sectionOutlineMaterial = new LineBasicNodeMaterial({
   depthWrite: false,
   linewidth: 2,
 })
-
-// Number of samples taken across a cut line. Dense uniform sampling keeps the
-// outline builder roofType-agnostic; `getRoofSegmentSurfaceY` is piecewise-linear,
-// so a kink that falls between two samples is rounded slightly — acceptable for an
-// overlay, and avoided in practice by the per-metre floor below.
-const SECTION_SAMPLE_SPACING = 0.1
-const SECTION_MIN_SAMPLES = 24
 
 // Half-thickness of the slab brush intersected with the roof shell. The wafer
 // must be thin enough to read as a flat cut face but thick enough that CSG
@@ -279,33 +275,6 @@ const SECTION_SLAB_HALF_THICKNESS = 0.006
 // and shingle material just past the footprint edge is still captured. Trimmed
 // ends use 0 (see `SectionPlaneSpec.extendMin/Max`).
 const SECTION_FREE_END_EXTENSION = 1
-
-// Builds the crisp cut-edge OUTLINE for one plane: sample the parametric roof
-// surface along the cut line to get the sloped top edge, in the plane's 2D
-// frame (u along `dir`, v = world Y), and emit it as line-segment pairs. Only
-// the surface line is drawn — no verticals or base — so the outline hugs the
-// real roof material and never traces the hollow attic.
-function buildSectionOutline(
-  segment: RoofSegmentNode,
-  plane: SectionPlaneSpec,
-  outlinePositions: number[],
-): void {
-  const span = plane.uMax - plane.uMin
-  if (!(span > 1e-4)) return
-
-  const sampleCount = Math.max(SECTION_MIN_SAMPLES, Math.ceil(span / SECTION_SAMPLE_SPACING))
-  let prev: [number, number, number] | null = null
-  for (let i = 0; i <= sampleCount; i++) {
-    const u = plane.uMin + (span * i) / sampleCount
-    const [x, , z] = liftSectionPoint(plane, u, 0)
-    const surfaceY = getRoofSegmentSurfaceY(segment, x, z)
-    const point = liftSectionPoint(plane, u, Number.isFinite(surfaceY) ? surfaceY : 0)
-    if (prev) {
-      outlinePositions.push(prev[0], prev[1], prev[2], point[0], point[1], point[2])
-    }
-    prev = point
-  }
-}
 
 // Builds a thin oriented slab brush straddling one cut line, spanning the full
 // segment height. Intersecting it with the roof shell yields exactly the
@@ -341,18 +310,16 @@ function buildSectionSlabBrush(
 
 // Builds the combined fill + outline geometries (segment-local 3D) for all
 // active trim planes. The fill is the CSG intersection of the untrimmed roof
-// shell with a thin slab at each cut line (material only — attic stays hollow);
-// the outline is the analytic surface edge. Both in segment-local space, to be
-// mounted under the segment-world-matrix group.
+// shell with a thin slab at each cut line (material only — attic stays hollow).
+// The outline is the edge silhouette of that same fill (via EdgesGeometry), so
+// it traces the real cut shape — wall/deck band boundaries and the hollow-attic
+// edge — instead of just the top surface line. Both in segment-local space, to
+// be mounted under the segment-world-matrix group.
 function buildSectionGeometries(
   segment: RoofSegmentNode,
   planes: SectionPlaneSpec[],
 ): { fill: THREE.BufferGeometry; outline: THREE.BufferGeometry } | null {
-  const outlinePositions: number[] = []
-  for (const plane of planes) {
-    buildSectionOutline(segment, plane, outlinePositions)
-  }
-  if (outlinePositions.length === 0) return null
+  if (planes.length === 0) return null
 
   // Untrimmed shell — the source we intersect slabs against.
   const shellGeometry = generateRoofSegmentGeometry({ ...segment, trim: ZERO_TRIM })
@@ -370,6 +337,7 @@ function buildSectionGeometries(
     segment.wallHeight + slopeFrame.activeRh + segment.deckThickness + segment.shingleThickness + 0.5
 
   const fillPositions: number[] = []
+  const outlinePositions: number[] = []
   // Section cut only needs material presence, not per-face materials — disable
   // group bookkeeping on the shared evaluator for this pass so mismatched slab /
   // shell material slots can't misalign group indices and crash.
@@ -385,13 +353,24 @@ function buildSectionGeometries(
         const result = csgEvaluator.evaluate(shell, slab, INTERSECTION) as Brush
         const geo = result.geometry as THREE.BufferGeometry
         const pos = geo.getAttribute('position') as THREE.BufferAttribute | undefined
-        if (pos) {
+        if (pos && pos.count > 0) {
           const index = geo.getIndex()
           const count = index ? index.count : pos.count
           for (let i = 0; i < count; i++) {
             const vi = index ? index.getX(i) : i
             fillPositions.push(pos.getX(vi), pos.getY(vi), pos.getZ(vi))
           }
+          // Trace the silhouette of the cut face itself. EdgesGeometry emits a
+          // boundary/crease line list; the thin wafer's flat cut caps give a
+          // crisp outline of the actual material shape.
+          const edges = new THREE.EdgesGeometry(geo, 1)
+          const ep = edges.getAttribute('position') as THREE.BufferAttribute | undefined
+          if (ep) {
+            for (let i = 0; i < ep.count; i++) {
+              outlinePositions.push(ep.getX(i), ep.getY(i), ep.getZ(i))
+            }
+          }
+          edges.dispose()
         }
         geo.dispose()
       } catch (e) {
@@ -405,6 +384,8 @@ function buildSectionGeometries(
     csgEvaluator.attributes = prevAttributes
     shellGeometry.dispose()
   }
+
+  if (fillPositions.length === 0) return null
 
   const fill = new THREE.BufferGeometry()
   fill.setAttribute('position', new THREE.Float32BufferAttribute(fillPositions, 3))
