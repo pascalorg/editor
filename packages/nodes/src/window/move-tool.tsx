@@ -14,12 +14,14 @@ import {
 } from '@pascal-app/core'
 import {
   calculateItemRotation,
+  clearPlacementSurface,
   consumePlacementDragRelease,
   EDITOR_LAYER,
   getSideFromNormal,
   isGridSnapActive,
   isMagneticSnapActive,
   isValidWallSideFace,
+  publishPlacementSurface,
   snapToHalf,
   stripPlacementMetadataFlags,
   triggerSFX,
@@ -29,7 +31,7 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BoxGeometry, EdgesGeometry, type Group } from 'three'
+import { BoxGeometry, EdgesGeometry, type Group, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
   clearOpeningGuides3D,
@@ -263,6 +265,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       clearOpeningGuides3D()
       setGhostPose(null)
       useFacingPose.getState().clear()
+      clearPlacementSurface()
     }
 
     // Alignment candidates — only OTHER things on a wall (sibling openings +
@@ -442,6 +445,12 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         rotationY: ghostYaw,
         depth: movingWindowNode.frameDepth ?? 0.07,
       })
+      // Publish the wall surface so the snap grid tilts into the wall plane at
+      // the opening (its outward normal is the window's facing, +Z by `ghostYaw`).
+      publishPlacementSurface(
+        new Vector3(...ghostWorldPos),
+        new Vector3(Math.sin(ghostYaw), 0, Math.cos(ghostYaw)),
+      )
 
       publishOpeningGuidesForWallEvent({
         wall: target.wallNode,
@@ -612,6 +621,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     const revealRealNode = () => {
       setGhostPose(null)
       useFacingPose.getState().clear()
+      clearPlacementSurface()
       const live = useScene.getState().nodes[movingWindowNode.id as AnyNodeId] as
         | WindowNode
         | undefined
@@ -669,8 +679,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         floorY: getLevelYOffset(),
         side: sideOverride,
       })
-      // Off-wall (no host) floating ghost — no direction triangle.
+      // Off-wall (no host) floating ghost — no direction triangle, no wall grid.
       useFacingPose.getState().clear()
+      clearPlacementSurface()
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -939,6 +950,43 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     window.addEventListener('keydown', onAltToggle)
     window.addEventListener('keyup', onAltToggle)
 
+    // Seed the wall snap surface on mount so the grid tilts into the wall on the
+    // FIRST frame — before any pointer move. Without it the grid briefly shows
+    // the moving node's horizontal fallback until the first `wall:move` publishes.
+    // Only applies to a window already hosted on a wall (not a fresh placement or
+    // a roof-segment host).
+    if (!isNew && movingWindowNode.wallId) {
+      const hostWall = useScene.getState().nodes[movingWindowNode.wallId as AnyNodeId]
+      if (hostWall?.type === 'wall') {
+        const wallAngle = Math.atan2(
+          hostWall.end[1] - hostWall.start[1],
+          hostWall.end[0] - hostWall.start[0],
+        )
+        const ghostYaw = movingWindowNode.rotation[1] - wallAngle
+        const seedPos = wallLocalToWorld(
+          hostWall,
+          movingWindowNode.position[0],
+          movingWindowNode.position[1],
+          getLevelYOffset(),
+          spatialGridManager.getSlabElevationForWall(
+            hostWall.parentId ?? '',
+            hostWall.start,
+            hostWall.end,
+          ),
+        )
+        publishPlacementSurface(
+          new Vector3(...seedPos),
+          new Vector3(Math.sin(ghostYaw), 0, Math.cos(ghostYaw)),
+        )
+        // Claim the pointer for the wall so the floor free-follow stands down for
+        // the first frames after grab. Otherwise the first `grid:move` (the window
+        // mesh occludes the wall under the cursor, so no `wall:move` fires yet)
+        // takes the off-wall branch and clears the seeded surface — the grid would
+        // flash back to horizontal before `wall:move` re-publishes the vertical one.
+        markWallOwnedPointer()
+      }
+    }
+
     return () => {
       // Safety cleanup: if still transient on unmount (e.g. phase switch mid-move)
       const current = useScene.getState().nodes[movingWindowNode.id as AnyNodeId] as
@@ -973,6 +1021,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
       useFacingPose.getState().clear()
+      clearPlacementSurface()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)

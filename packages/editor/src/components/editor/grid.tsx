@@ -4,7 +4,7 @@ import { type AnyNodeId, emitter, type GridEvent, sceneRegistry } from '@pascal-
 import { GRID_LAYER, getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MathUtils, type Mesh, PlaneGeometry, Quaternion, Vector2, Vector3 } from 'three'
+import { DoubleSide, type Mesh, PlaneGeometry, Quaternion, Vector2, Vector3 } from 'three'
 import { color, float, fract, fwidth, mix, positionLocal, uniform } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useCeilingEvents } from '../../hooks/use-ceiling-events'
@@ -16,7 +16,7 @@ import useInteractionScope, { getMovingNode } from '../../store/use-interaction-
 // Reveal radius (m) of the cursor-local grid patch shown while placing/moving in
 // grid-snap mode — much tighter than the idle reveal so only the area you're
 // about to snap into lights up.
-const PLACEMENT_REVEAL_RADIUS = 5
+const PLACEMENT_REVEAL_RADIUS = 12
 
 const UP = new Vector3(0, 1, 0)
 // PlaneGeometry faces +Z; this is the orientation that lays it flat (its normal
@@ -54,13 +54,25 @@ export const Grid = ({
   const cursorPositionRef = useRef(new Vector2(0, 0))
   // Scratch for reading a moving node's world Y (surface elevation) each frame.
   const worldPosRef = useRef(new Vector3())
+  // Scratch for the wall-anchored branch: invert the plane orientation to map the
+  // ghost into plane-local XY (the cursor reveal) without re-centring the mesh.
+  const invQuatRef = useRef(new Quaternion())
+  const wallCursorRef = useRef(new Vector3())
+  // Last Y pushed to `gridY` state, so the per-frame surface follow only triggers
+  // a React re-render when the height actually changes (not every frame).
+  const lastGridYRef = useRef<number | null>(null)
 
   // Reveal radius + baseline alpha are uniforms so a placement/move can shrink
   // the grid to a tight cursor patch (and drop the always-on baseline) without
   // rebuilding the shader. Driven each frame in `useFrame`.
   const revealRadiusUniform = useMemo(() => uniform(revealRadius), [revealRadius])
   const baseAlphaUniform = useMemo(() => uniform(0.4), [])
-  const cellSizeUniform = useMemo(() => uniform(cellSize), [cellSize])
+  // Created once and driven by `.value` each frame (see `useFrame`). Keying this
+  // on `cellSize` rebuilt the uniform AND the material `useMemo` below on every
+  // `gridSnapStep` change — a full shader recompile that stalled hard whenever
+  // the grid resolution changed. The live cell size is a uniform write only.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: created once on purpose; `.value` is driven each frame.
+  const cellSizeUniform = useMemo(() => uniform(cellSize), [])
   const patchAlphaUniform = useMemo(() => uniform(1), [])
 
   const material = useMemo(() => {
@@ -124,6 +136,14 @@ export const Grid = ({
       colorNode: gridColor,
       opacityNode: finalAlpha,
       depthWrite: false,
+      // `depthTest` is toggled per-frame in `useFrame`: ON for the floor lattice
+      // (so the ground occludes a sub-floor grid) and OFF on a wall (so the
+      // lattice shows through the wall when the opening is handled from the far
+      // side). Default ON for the floor case.
+      depthTest: true,
+      // Wall-plane placements are handled from either side of the wall, so the
+      // lattice must render from both faces.
+      side: DoubleSide,
     })
   }, [
     cellThickness,
@@ -150,13 +170,10 @@ export const Grid = ({
   useCeilingEvents()
 
   // Track the last world-space cursor hit. The reveal-fade shader reads
-  // `positionLocal.xy` (vertex position on the un-transformed plane), and
-  // the mesh's -π/2 X rotation maps `positionLocal.y` to world `-Z`
-  // relative to the mesh origin. The mesh origin itself is lerped each
-  // frame toward the active building's world XZ (see `useFrame` below),
-  // so the local-frame cursor must be recomputed every frame from the
-  // stored world cursor — otherwise the ring drifts whenever the grid is
-  // mid-lerp (e.g. just after a building rotation commits).
+  // `positionLocal.xy` (vertex position on the un-transformed plane), and the
+  // laid-flat orientation maps `positionLocal.y` to world `-Z` relative to the
+  // mesh origin. The cursor is recomputed every frame from the stored world hit
+  // so the reveal stays put regardless of where the mesh origin sits.
   const lastWorldCursorRef = useRef<{ x: number; z: number } | null>(null)
   useEffect(() => {
     const onGridMove = (event: GridEvent) => {
@@ -169,7 +186,7 @@ export const Grid = ({
     }
   }, [])
 
-  useFrame((_, delta) => {
+  useFrame(() => {
     const { levelId } = useViewer.getState().selection
     let levelY = 0
     if (levelId) {
@@ -198,26 +215,50 @@ export const Grid = ({
     const gridMesh = gridRef.current
     const onWall = surfacePoint != null && Math.abs(surfaceNormal.y) < 0.5
     if (onWall && surfacePoint) {
-      // Vertical surface: drop the plane onto the wall at the contact point and
-      // orient it into the wall plane. The patch reveals centred there — a wall
-      // has no world-anchored floor lattice to track.
-      gridMesh.position.copy(surfacePoint)
+      // Wall-anchored lattice: orient the plane into the wall and pin the mesh to
+      // the plane's FOOT (the point on the wall plane closest to the world origin)
+      // — never the moving ghost. Sliding the opening along the wall then only
+      // moves the reveal patch (the cursor uniform); the snap lattice stays put.
+      // (Copying `surfacePoint` here made the grid follow the item — useless.)
       gridMesh.quaternion.setFromUnitVectors(PLANE_LOCAL_NORMAL, surfaceNormal)
-      cursorPositionRef.current.set(0, 0)
-      setGridY(surfacePoint.y)
+      const planeOffset = surfacePoint.dot(surfaceNormal)
+      gridMesh.position.copy(surfaceNormal).multiplyScalar(planeOffset)
+      // Cursor → plane-local XY: rotate (ghost − anchor) by the inverse plane
+      // orientation. Both lie in the plane, so the resulting local Z is ~0.
+      invQuatRef.current.copy(gridMesh.quaternion).invert()
+      wallCursorRef.current
+        .copy(surfacePoint)
+        .sub(gridMesh.position)
+        .applyQuaternion(invQuatRef.current)
+      cursorPositionRef.current.set(wallCursorRef.current.x, wallCursorRef.current.y)
+      if (lastGridYRef.current !== surfacePoint.y) {
+        lastGridYRef.current = surfacePoint.y
+        setGridY(surfacePoint.y)
+      }
     } else {
       // Horizontal: keep the lattice anchored to world XZ (0,0); only the Y
-      // origin follows the surface height (floor / shelf top), lerped. Cursor
-      // uniform tracks the world cursor (mirrored on Z for the laid-flat plane).
+      // origin follows the surface height (floor / shelf top). Snap directly —
+      // the old lerp made the grid visibly drift up to a new floor height.
+      // Cursor uniform tracks the world cursor (mirrored on Z for the flat plane).
       const targetY = surfacePoint ? surfacePoint.y : levelY
-      const newY = MathUtils.lerp(gridMesh.position.y, targetY, 12 * delta)
-      gridMesh.position.set(0, newY, 0)
+      gridMesh.position.set(0, targetY, 0)
       gridMesh.quaternion.copy(HORIZONTAL_QUATERNION)
       const world = lastWorldCursorRef.current
       if (world) {
         cursorPositionRef.current.set(world.x, -world.z)
       }
-      setGridY(newY)
+      if (lastGridYRef.current !== targetY) {
+        lastGridYRef.current = targetY
+        setGridY(targetY)
+      }
+    }
+
+    // Floor grid depth-tests against the scene (ground occludes a sub-floor
+    // lattice); the wall grid ignores depth so it stays visible through the wall
+    // when the opening is being handled from the opposite side.
+    if (material.depthTest === onWall) {
+      material.depthTest = !onWall
+      material.needsUpdate = true
     }
 
     // While placing/moving: in grid-snap mode shrink to a tight cursor patch
@@ -243,7 +284,9 @@ export const Grid = ({
     baseAlphaUniform.value = 0
     cellSizeUniform.value = useEditor.getState().gridSnapStep
     patchAlphaUniform.value = 1.5
-    gridRef.current.visible = useViewer.getState().showGrid && snapPatchVisible
+    // The 3D grid is purely a placement aid now (no user-facing show/hide
+    // setting): visible only while actively placing/moving in grid-snap mode.
+    gridRef.current.visible = snapPatchVisible
   })
 
   // Pass the geometry as a prop instead of a JSX child so the mesh
@@ -261,6 +304,12 @@ export const Grid = ({
   return (
     // Orientation is driven imperatively in `useFrame` (horizontal by default,
     // tilted into the wall plane while placing on a wall), so no static rotation.
-    <mesh geometry={geometry} layers={GRID_LAYER} material={material} ref={gridRef} />
+    <mesh
+      geometry={geometry}
+      layers={GRID_LAYER}
+      material={material}
+      ref={gridRef}
+      renderOrder={1}
+    />
   )
 }

@@ -211,6 +211,12 @@ export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 export { markToolCancelConsumed } from './hooks/use-keyboard'
 export { type Selection, useSelection } from './hooks/use-selection'
 export {
+  clearPlacementSurface,
+  getPlacementSurface,
+  type PlacementSurface,
+  publishPlacementSurface,
+} from './lib/active-placement-surface'
+export {
   CEILING_ALIGNMENT_THRESHOLD_M,
   type CeilingPlanSnapInput,
   type CeilingPlanSnapResult,
