@@ -16,12 +16,14 @@ import {
   calculateCursorRotation,
   calculateItemRotation,
   EDITOR_LAYER,
+  FacingIndicator,
   getSideFromNormal,
   isMagneticSnapActive,
   isValidWallSideFace,
   snapToHalf,
   triggerSFX,
   useAlignmentGuides,
+  useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -86,6 +88,7 @@ type HostKind = 'wall' | 'roof' | null
 const WindowTool: React.FC = () => {
   const draftRef = useRef<WindowNode | null>(null)
   const cursorGroupRef = useRef<Group>(null!)
+  const indicatorYOffsetRef = useRef<Group>(null!)
   const edgesRef = useRef<LineSegments>(null!)
 
   // Off-host floating ghost: the real window geometry follows the cursor
@@ -169,6 +172,7 @@ const WindowTool: React.FC = () => {
       worldPosition: [number, number, number],
       cursorRotationY: number,
       valid: boolean,
+      indicatorYOffset: number,
     ) => {
       setFallbackPose(null)
       const group = cursorGroupRef.current
@@ -176,6 +180,7 @@ const WindowTool: React.FC = () => {
       group.visible = true
       group.position.set(...worldPosition)
       group.rotation.y = cursorRotationY
+      indicatorYOffsetRef.current?.position.set(0, indicatorYOffset, 0)
       edgeMaterial.color.setHex(valid ? 0x22_c5_5e : 0xef_44_44)
     }
 
@@ -341,6 +346,7 @@ const WindowTool: React.FC = () => {
         ),
         cursorRotationY,
         valid,
+        -clampedY,
       )
 
       if (draftRef.current) {
@@ -411,11 +417,16 @@ const WindowTool: React.FC = () => {
 
       useScene.getState().createNode(node, wall.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
-      useScene.temporal.getState().pause()
       triggerSFX('sfx:structure-build')
-      alignmentCandidates = collectWallOpeningAlignmentCandidates(useScene.getState().nodes, '')
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
+      if (useEditor.getState().getContinuation('point') === 'repeat') {
+        useScene.temporal.getState().pause()
+        alignmentCandidates = collectWallOpeningAlignmentCandidates(useScene.getState().nodes, '')
+      } else {
+        hideCursor()
+        useEditor.getState().setTool(null)
+      }
     }
 
     // ── Direct wall-mesh hover ──────────────────────────────────────
@@ -531,7 +542,7 @@ const WindowTool: React.FC = () => {
 
     const updateRoofCursor = (target: RoofWallOpeningTarget, roof: RoofNode) => {
       const pose = getRoofWallOpeningCursorPose(target, roof)
-      if (pose) updateCursor(pose.position, pose.rotationY, target.valid)
+      if (pose) updateCursor(pose.position, pose.rotationY, target.valid, -target.position[1])
     }
 
     const onRoofHover = (event: RoofEvent) => {
@@ -624,8 +635,13 @@ const WindowTool: React.FC = () => {
       // picks up the new opening cut.
       useScene.getState().dirtyNodes.add(segment.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
-      useScene.temporal.getState().pause()
       triggerSFX('sfx:structure-build')
+      if (useEditor.getState().getContinuation('point') === 'repeat') {
+        useScene.temporal.getState().pause()
+      } else {
+        hideCursor()
+        useEditor.getState().setTool(null)
+      }
       event.stopPropagation()
     }
 
@@ -714,6 +730,9 @@ const WindowTool: React.FC = () => {
           material={edgeMaterial}
           ref={edgesRef}
         />
+        <group ref={indicatorYOffsetRef}>
+          <FacingIndicator depth={ghostStub.frameDepth} />
+        </group>
       </group>
       {fallbackPose && (
         <group position={fallbackPose.position} rotation-y={fallbackPose.rotationY}>

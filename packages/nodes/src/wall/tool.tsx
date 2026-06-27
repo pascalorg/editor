@@ -705,8 +705,7 @@ export const WallTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
         useWallSnapIndicator.getState().clear()
 
-        const wallChainMode = useEditor.getState().wallChainMode
-        if (wallChainMode === 'single') {
+        if (useEditor.getState().getContinuation('wall') === 'single') {
           stopDrafting()
           return
         }

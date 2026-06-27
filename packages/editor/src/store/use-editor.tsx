@@ -35,6 +35,13 @@ import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {
+  CONTINUATION_PROFILES,
+  type ContinuationContext,
+  type ContinuationMode,
+  continuationContextOf,
+  nextContinuation,
+} from '../lib/continuation'
+import {
   type ActivePaintMaterial,
   type PaintableMaterialTarget,
   resolveActivePaintMaterialFromSelection,
@@ -152,8 +159,6 @@ export type StructureLayer = 'zones' | 'elements'
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
 export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
-export type WallChainMode = 'room' | 'single'
-export type FenceChainMode = 'continuous' | 'single'
 
 export type NavigationSyncSource = '2d' | '3d'
 
@@ -312,6 +317,12 @@ type EditorState = {
   // surface" hint). Set by the selection-manager paint hover; not persisted.
   paintHover: PaintHoverInfo | null
   setPaintHover: (info: PaintHoverInfo | null) => void
+  // Embedder capability: true when a host (e.g. community) can locate a selected
+  // node in its catalog browser. Gates the node action menu's "Find" button; the
+  // editor itself emits `selection:find-node` and lets the host fulfil it. Not
+  // persisted — it's a per-mount capability the host registers.
+  canFindNode: boolean
+  setCanFindNode: (canFind: boolean) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
   guideUi: Record<string, GuideUiState>
@@ -375,12 +386,10 @@ type EditorState = {
   setSnappingMode: (context: SnapContext, mode: SnappingMode) => void
   // Cycle the *active* context's mode within its own set; returns the new value.
   cycleSnappingMode: () => SnappingMode
-  wallChainMode: WallChainMode
-  setWallChainMode: (mode: WallChainMode) => void
-  cycleWallChainMode: () => WallChainMode
-  fenceChainMode: FenceChainMode
-  setFenceChainMode: (mode: FenceChainMode) => void
-  cycleFenceChainMode: () => FenceChainMode
+  continuationByContext: Record<ContinuationContext, ContinuationMode>
+  setContinuation: (context: ContinuationContext, mode: ContinuationMode) => void
+  cycleContinuation: (context: ContinuationContext) => ContinuationMode
+  getContinuation: (context: ContinuationContext) => ContinuationMode
   showReferenceFloor: boolean
   toggleReferenceFloor: () => void
   setShowReferenceFloor: (show: boolean) => void
@@ -430,8 +439,7 @@ type PersistedEditorLayoutState = Pick<
   | 'gridSnapStep'
   | 'magneticSnap'
   | 'snappingModeByContext'
-  | 'wallChainMode'
-  | 'fenceChainMode'
+  | 'continuationByContext'
   | 'showReferenceFloor'
   | 'referenceFloorOffset'
   | 'referenceFloorOpacity'
@@ -460,8 +468,11 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
     item: defaultSnappingModeFor('item'),
     polygon: defaultSnappingModeFor('polygon'),
   },
-  wallChainMode: 'room',
-  fenceChainMode: 'continuous',
+  continuationByContext: {
+    wall: CONTINUATION_PROFILES.wall.default,
+    fence: CONTINUATION_PROFILES.fence.default,
+    point: CONTINUATION_PROFILES.point.default,
+  },
   showReferenceFloor: false,
   referenceFloorOffset: 1,
   referenceFloorOpacity: 0.35,
@@ -572,16 +583,40 @@ function migrateSnappingMode(value: unknown, context: SnapContext): SnappingMode
     : defaultSnappingModeFor(context)
 }
 
-function migrateWallChainMode(value: unknown): WallChainMode {
-  return value === 'single' || value === 'room' ? value : 'room'
+type LegacyContinuationState = {
+  continuationByContext?: Partial<Record<ContinuationContext, unknown>>
+  wallChainMode?: unknown
+  fenceChainMode?: unknown
 }
 
-function migrateFenceChainMode(value: unknown): FenceChainMode {
-  return value === 'single' || value === 'continuous' ? value : 'continuous'
+function migrateContinuationMode(
+  value: unknown,
+  context: ContinuationContext,
+): ContinuationMode | null {
+  const profile = CONTINUATION_PROFILES[context]
+  return profile.options.includes(value as ContinuationMode) ? (value as ContinuationMode) : null
+}
+
+function normalizeContinuationByContext(
+  state: LegacyContinuationState | null | undefined,
+): Record<ContinuationContext, ContinuationMode> {
+  return {
+    wall:
+      migrateContinuationMode(state?.continuationByContext?.wall, 'wall') ??
+      migrateContinuationMode(state?.wallChainMode, 'wall') ??
+      CONTINUATION_PROFILES.wall.default,
+    fence:
+      migrateContinuationMode(state?.continuationByContext?.fence, 'fence') ??
+      migrateContinuationMode(state?.fenceChainMode, 'fence') ??
+      CONTINUATION_PROFILES.fence.default,
+    point:
+      migrateContinuationMode(state?.continuationByContext?.point, 'point') ??
+      CONTINUATION_PROFILES.point.default,
+  }
 }
 
 function normalizePersistedEditorLayoutState(
-  state: Partial<PersistedEditorLayoutState> | null | undefined,
+  state: (Partial<PersistedEditorLayoutState> & LegacyContinuationState) | null | undefined,
 ): PersistedEditorLayoutState {
   return {
     activeSidebarPanel:
@@ -601,8 +636,7 @@ function normalizePersistedEditorLayoutState(
       item: migrateSnappingMode(state?.snappingModeByContext?.item, 'item'),
       polygon: migrateSnappingMode(state?.snappingModeByContext?.polygon, 'polygon'),
     },
-    wallChainMode: migrateWallChainMode(state?.wallChainMode),
-    fenceChainMode: migrateFenceChainMode(state?.fenceChainMode),
+    continuationByContext: normalizeContinuationByContext(state),
     showReferenceFloor: state?.showReferenceFloor === true,
     referenceFloorOffset:
       typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
@@ -932,6 +966,8 @@ const useEditor = create<EditorState>()(
       },
       paintHover: null,
       setPaintHover: (info) => set({ paintHover: info }),
+      canFindNode: false,
+      setCanFindNode: (canFind) => set({ canFindNode: canFind }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
       guideUi: {},
@@ -1070,19 +1106,24 @@ const useEditor = create<EditorState>()(
         }))
         return next
       },
-      wallChainMode: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.wallChainMode,
-      setWallChainMode: (mode) => set({ wallChainMode: mode }),
-      cycleWallChainMode: () => {
-        const next = get().wallChainMode === 'room' ? 'single' : 'room'
-        set({ wallChainMode: next })
+      continuationByContext: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.continuationByContext,
+      setContinuation: (context, mode) => {
+        const next =
+          migrateContinuationMode(mode, context) ?? CONTINUATION_PROFILES[context].default
+        set((state) => ({
+          continuationByContext: { ...state.continuationByContext, [context]: next },
+        }))
+      },
+      cycleContinuation: (context) => {
+        const next = nextContinuation(context, get().getContinuation(context))
+        set((state) => ({
+          continuationByContext: { ...state.continuationByContext, [context]: next },
+        }))
         return next
       },
-      fenceChainMode: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.fenceChainMode,
-      setFenceChainMode: (mode) => set({ fenceChainMode: mode }),
-      cycleFenceChainMode: () => {
-        const next = get().fenceChainMode === 'continuous' ? 'single' : 'continuous'
-        set({ fenceChainMode: next })
-        return next
+      getContinuation: (context) => {
+        const current = get().continuationByContext[context]
+        return migrateContinuationMode(current, context) ?? CONTINUATION_PROFILES[context].default
       },
       showReferenceFloor: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showReferenceFloor,
       toggleReferenceFloor: () =>
@@ -1177,8 +1218,7 @@ const useEditor = create<EditorState>()(
         gridSnapStep: state.gridSnapStep,
         magneticSnap: state.magneticSnap,
         snappingModeByContext: state.snappingModeByContext,
-        wallChainMode: state.wallChainMode,
-        fenceChainMode: state.fenceChainMode,
+        continuationByContext: state.continuationByContext,
         showReferenceFloor: state.showReferenceFloor,
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,
@@ -1231,6 +1271,21 @@ export function getActiveSnapContext(): SnapContext | null {
     profileOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapProfile,
     draftDirectionalOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapDraftDirectional ?? true,
   })
+}
+
+export function getActiveContinuationContext(): ContinuationContext | null {
+  const scope = useInteractionScope.getState().scope
+  if (scope.kind === 'drafting') return continuationContextOf(scope.tool)
+  if (scope.kind === 'placing') return continuationContextOf(scope.nodeType)
+  if (scope.kind !== 'idle') return null
+
+  const editor = useEditor.getState()
+  if (editor.mode !== 'build' || !editor.tool) return null
+  return continuationContextOf(editor.tool)
+}
+
+export function getContinuation(context: ContinuationContext): ContinuationMode {
+  return useEditor.getState().getContinuation(context)
 }
 
 /**

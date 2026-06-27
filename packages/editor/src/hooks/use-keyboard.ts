@@ -10,7 +10,7 @@ import {
 } from '../lib/scene-clipboard'
 import { emitDeleteSFX, sfxEmitter } from '../lib/sfx-bus'
 import { toggleWindowOpenState } from '../lib/window-interaction'
-import useEditor, { getActiveSnapContext } from '../store/use-editor'
+import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
 import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
 
 // Tools call this in their onCancel handler when they have an active mid-action to cancel,
@@ -48,42 +48,24 @@ export const useKeyboard = ({
     // shows a snapping chip. That single source covers wall/fence/item drafting,
     // every node move (including wall-hosted items + door/window openings, which
     // now declare `snapProfile`), and endpoint/polygon reshaping, so the keys
-    // never silently stop working. (Force-place lives on Alt outside wall drafting.)
+    // never silently stop working. Force-place lives on Alt where a tool supports it.
     const isSnappingCycleContext = () => getActiveSnapContext() != null
-    const isWallDraftingActive = () => {
-      const ed = useEditor.getState()
-      return ed.mode === 'build' && ed.tool === 'wall'
-    }
-    const isFenceDraftingActive = () => {
-      const ed = useEditor.getState()
-      return ed.mode === 'build' && ed.tool === 'fence'
-    }
-    // Alt-tap cycles the active drafting tool's chain mode (wall room/single,
-    // fence continuous/single). Only one of these is ever active at a time.
-    const isChainModeContext = () => isWallDraftingActive() || isFenceDraftingActive()
-
     // A "clean tap" of Ctrl/Meta (pressed and released with NO other key in
     // between) cycles the grid step — same context as the Shift snapping-mode
     // cycle. `ctrlTapClean` starts true the moment Ctrl/Meta goes down alone
     // and is cleared the instant any other key fires, so chords like Ctrl+Z /
     // Ctrl+C never cycle.
     let ctrlTapClean = false
-    let altTapClean = false
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Control' || e.key === 'Meta') {
         // Only a fresh, modifier-free press starts a clean-tap candidate;
         // ignore key-repeat and presses already part of a combo.
         ctrlTapClean = !e.repeat && !e.shiftKey && !e.altKey
-        altTapClean = false
-      } else if (e.key === 'Alt') {
-        altTapClean = !e.repeat && !e.shiftKey && !e.ctrlKey && !e.metaKey && isChainModeContext()
-        ctrlTapClean = false
       } else {
         // Any non-modifier key (or a modifier combined with Ctrl/Meta) breaks
         // the clean tap.
         ctrlTapClean = false
-        altTapClean = false
       }
 
       // Don't handle shortcuts if user is typing in an input
@@ -108,6 +90,23 @@ export const useKeyboard = ({
         useEditor.getState().cycleSnappingMode()
         sfxEmitter.emit('sfx:grid-snap')
         return
+      }
+
+      if (
+        (e.key === 'c' || e.key === 'C') &&
+        !e.repeat &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.shiftKey &&
+        !e.altKey
+      ) {
+        const context = getActiveContinuationContext()
+        if (context) {
+          e.preventDefault()
+          useEditor.getState().cycleContinuation(context)
+          sfxEmitter.emit('sfx:grid-snap')
+          return
+        }
       }
 
       if (e.key === 'Escape') {
@@ -434,8 +433,8 @@ export const useKeyboard = ({
         const wasClean = ctrlTapClean
         ctrlTapClean = false
         if (!wasClean) return
-        // Same scope as the Shift snapping-mode cycle: wall / fence build only,
-        // and never while typing in an input.
+        // Same scope as the Shift snapping-mode cycle, and never while typing
+        // in an input.
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
           return
         }
@@ -445,22 +444,6 @@ export const useKeyboard = ({
         sfxEmitter.emit('sfx:grid-snap')
         return
       }
-
-      if (e.key !== 'Alt') return
-      const wasClean = altTapClean
-      altTapClean = false
-      if (!wasClean) return
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return
-      }
-      if (isWallDraftingActive()) {
-        useEditor.getState().cycleWallChainMode()
-      } else if (isFenceDraftingActive()) {
-        useEditor.getState().cycleFenceChainMode()
-      } else {
-        return
-      }
-      sfxEmitter.emit('sfx:grid-snap')
     }
 
     window.addEventListener('keydown', handleKeyDown)

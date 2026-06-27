@@ -128,10 +128,15 @@ const ShelfTool = () => {
       useScene.getState().createNode(shelf, activeLevelId)
       useViewer.getState().setSelection({ selectedIds: [shelf.id] })
       triggerSFX('sfx:item-place')
-      // The placed shelf is now a valid alignment target for the next one;
-      // refresh the candidate pool and drop the guide from this drop.
-      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
       useAlignmentGuides.getState().clear()
+      if (useEditor.getState().getContinuation('point') === 'repeat') {
+        // The placed shelf is now a valid alignment target for the next one.
+        alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
+      } else {
+        cursorVisibleRef.current = false
+        setCursorVisible(false)
+        useEditor.getState().setTool(null)
+      }
 
       stopPlacementCommitPropagation(event)
     }

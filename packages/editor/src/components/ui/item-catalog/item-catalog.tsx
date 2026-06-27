@@ -53,16 +53,6 @@ export function ItemCatalog({
       })
     })()
 
-  const categoryItems = filteredItems
-
-  // Auto-select first item if current selection is not in the filtered list
-  useEffect(() => {
-    const isCurrentItemInCategory = categoryItems.some((item) => item.src === selectedItem?.src)
-    if (!isCurrentItemInCategory && categoryItems.length > 0) {
-      setSelectedItem(categoryItems[0] as AssetInput)
-    }
-  }, [categoryItems, selectedItem?.src, setSelectedItem])
-
   if (filteredItems.length === 0 && emptyState) {
     return <>{emptyState}</>
   }

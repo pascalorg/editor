@@ -1,6 +1,9 @@
 export type ContextualShortcutHint = {
   keys: string[]
   label: string
+  // Optional secondary line under the label for a terser qualifier
+  // (e.g. "disable 15° snap"). The HUD wraps both lines rather than truncating.
+  subtitle?: string
   active?: boolean
 }
 

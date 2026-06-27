@@ -1,14 +1,28 @@
 'use client'
 
-import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
+import { type AnyNodeId, emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { GRID_LAYER, getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MathUtils, type Mesh, PlaneGeometry, Vector2 } from 'three'
+import { MathUtils, type Mesh, PlaneGeometry, Quaternion, Vector2, Vector3 } from 'three'
 import { color, float, fract, fwidth, mix, positionLocal, uniform } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useCeilingEvents } from '../../hooks/use-ceiling-events'
 import { useGridEvents } from '../../hooks/use-grid-events'
+import { getPlacementSurface } from '../../lib/active-placement-surface'
+import useEditor, { isGridSnapActive } from '../../store/use-editor'
+import useInteractionScope, { getMovingNode } from '../../store/use-interaction-scope'
+
+// Reveal radius (m) of the cursor-local grid patch shown while placing/moving in
+// grid-snap mode — much tighter than the idle reveal so only the area you're
+// about to snap into lights up.
+const PLACEMENT_REVEAL_RADIUS = 5
+
+const UP = new Vector3(0, 1, 0)
+// PlaneGeometry faces +Z; this is the orientation that lays it flat (its normal
+// → world +Y), equivalent to the old `rotation-x={-π/2}`.
+const PLANE_LOCAL_NORMAL = new Vector3(0, 0, 1)
+const HORIZONTAL_QUATERNION = new Quaternion().setFromUnitVectors(PLANE_LOCAL_NORMAL, UP)
 
 export const Grid = ({
   cellSize = 0.5,
@@ -38,6 +52,16 @@ export const Grid = ({
   const effectiveSectionColor = isDark ? '#666677' : sectionColor
 
   const cursorPositionRef = useRef(new Vector2(0, 0))
+  // Scratch for reading a moving node's world Y (surface elevation) each frame.
+  const worldPosRef = useRef(new Vector3())
+
+  // Reveal radius + baseline alpha are uniforms so a placement/move can shrink
+  // the grid to a tight cursor patch (and drop the always-on baseline) without
+  // rebuilding the shader. Driven each frame in `useFrame`.
+  const revealRadiusUniform = useMemo(() => uniform(revealRadius), [revealRadius])
+  const baseAlphaUniform = useMemo(() => uniform(0.4), [])
+  const cellSizeUniform = useMemo(() => uniform(cellSize), [cellSize])
+  const patchAlphaUniform = useMemo(() => uniform(1), [])
 
   const material = useMemo(() => {
     // Use xy since plane geometry is in XY space (before rotation)
@@ -48,7 +72,7 @@ export const Grid = ({
 
     // Grid line function using fwidth for anti-aliasing
     // Returns 1 on grid lines, 0 elsewhere
-    const getGrid = (size: number, thickness: number) => {
+    const getGrid = (size: number | typeof cellSizeUniform, thickness: number) => {
       const r = pos.div(size)
       const fw = fwidth(r)
       // Distance to nearest grid line for each axis
@@ -70,7 +94,7 @@ export const Grid = ({
       return lineX.max(lineY)
     }
 
-    const g1 = getGrid(cellSize, cellThickness)
+    const g1 = getGrid(cellSizeUniform, cellThickness)
     const g2 = getGrid(sectionSize, sectionThickness)
 
     // Distance fade from center
@@ -79,7 +103,9 @@ export const Grid = ({
 
     // Cursor reveal effect - distance from cursor
     const cursorDist = pos.sub(cursorPos).length()
-    const cursorFade = float(1).sub(cursorDist.div(revealRadius).clamp(0, 1)).smoothstep(0, 1)
+    const cursorFade = float(1)
+      .sub(cursorDist.div(revealRadiusUniform).clamp(0, 1))
+      .smoothstep(0, 1)
 
     // Mix colors based on section grid
     const gridColor = mix(
@@ -88,12 +114,10 @@ export const Grid = ({
       float(sectionThickness).mul(g2).min(1),
     )
 
-    // Baseline alpha: small amount of opacity everywhere the grid exists
-    const baseAlpha = float(0.4) // Subtle global visibility
-
     // Combined alpha with cursor fade and baseline minimum
-    const alpha = g1.add(g2).mul(fade).mul(cursorFade.max(baseAlpha))
-    const finalAlpha = mix(alpha.mul(0.75), alpha, g2)
+    const alpha = g1.add(g2).mul(fade).mul(cursorFade.max(baseAlphaUniform))
+    const boostedAlpha = alpha.mul(patchAlphaUniform).min(1)
+    const finalAlpha = mix(boostedAlpha.mul(0.75), boostedAlpha, g2)
 
     return new MeshBasicNodeMaterial({
       transparent: true,
@@ -102,7 +126,6 @@ export const Grid = ({
       depthWrite: false,
     })
   }, [
-    cellSize,
     cellThickness,
     effectiveCellColor,
     sectionSize,
@@ -110,7 +133,10 @@ export const Grid = ({
     effectiveSectionColor,
     fadeDistance,
     fadeStrength,
-    revealRadius,
+    revealRadiusUniform,
+    baseAlphaUniform,
+    cellSizeUniform,
+    patchAlphaUniform,
   ])
 
   const gridRef = useRef<Mesh>(null!)
@@ -145,30 +171,80 @@ export const Grid = ({
 
   useFrame((_, delta) => {
     const { levelId } = useViewer.getState().selection
-    // Grid stays anchored to world XZ (0, 0) — never chases the active
-    // building. The Y origin still lerps to the active level so the grid
-    // sits at floor height when a level is open.
-    let targetY = 0
+    let levelY = 0
     if (levelId) {
       const levelMesh = sceneRegistry.nodes.get(levelId)
       if (levelMesh) {
-        targetY = levelMesh.position.y
+        levelY = levelMesh.position.y
       }
     }
-    const newY = MathUtils.lerp(gridRef.current.position.y, targetY, 12 * delta)
-    gridRef.current.position.y = newY
-    setGridY(newY)
 
-    // Grid XZ is fixed at world origin, so the local-frame cursor uniform
-    // is just the world cursor (mirrored on Z to match the -π/2 X-rotation
-    // of the plane).
-    const world = lastWorldCursorRef.current
-    if (world) {
-      cursorPositionRef.current.set(world.x, -world.z)
+    // Resolve the surface the active ghost is snapped to (contact point +
+    // normal). A fresh GLB item / drawn kind publishes via the surface module; a
+    // moving node is read straight off its mesh (treated as horizontal). Null
+    // when nothing is being placed.
+    const published = getPlacementSurface()
+    const movingForGrid = getMovingNode()
+    let surfacePoint: Vector3 | null = null
+    let surfaceNormal = UP
+    if (published) {
+      surfacePoint = published.point
+      surfaceNormal = published.normal
+    } else if (movingForGrid) {
+      const ghostMesh = sceneRegistry.nodes.get(movingForGrid.id as AnyNodeId)
+      if (ghostMesh) surfacePoint = ghostMesh.getWorldPosition(worldPosRef.current)
     }
-  })
 
-  const showGrid = useViewer((state) => state.showGrid)
+    const gridMesh = gridRef.current
+    const onWall = surfacePoint != null && Math.abs(surfaceNormal.y) < 0.5
+    if (onWall && surfacePoint) {
+      // Vertical surface: drop the plane onto the wall at the contact point and
+      // orient it into the wall plane. The patch reveals centred there — a wall
+      // has no world-anchored floor lattice to track.
+      gridMesh.position.copy(surfacePoint)
+      gridMesh.quaternion.setFromUnitVectors(PLANE_LOCAL_NORMAL, surfaceNormal)
+      cursorPositionRef.current.set(0, 0)
+      setGridY(surfacePoint.y)
+    } else {
+      // Horizontal: keep the lattice anchored to world XZ (0,0); only the Y
+      // origin follows the surface height (floor / shelf top), lerped. Cursor
+      // uniform tracks the world cursor (mirrored on Z for the laid-flat plane).
+      const targetY = surfacePoint ? surfacePoint.y : levelY
+      const newY = MathUtils.lerp(gridMesh.position.y, targetY, 12 * delta)
+      gridMesh.position.set(0, newY, 0)
+      gridMesh.quaternion.copy(HORIZONTAL_QUATERNION)
+      const world = lastWorldCursorRef.current
+      if (world) {
+        cursorPositionRef.current.set(world.x, -world.z)
+      }
+      setGridY(newY)
+    }
+
+    // While placing/moving: in grid-snap mode shrink to a tight cursor patch
+    // (drop the always-on baseline so only the snap area near the cursor shows);
+    // when NOT grid-snapping, hide the grid entirely. Idle keeps the full grid.
+    // "Actively placing/moving" means a ghost is being positioned: a movingNode
+    // (preset/node move), an in-progress draft (wall/fence), or an armed GLB item
+    // in build mode. A merely-armed build tool with no ghost is NOT placing —
+    // otherwise the patch would show while the user isn't positioning anything.
+    const ed = useEditor.getState()
+    const scopeKind = useInteractionScope.getState().scope.kind
+    const placingOrMoving =
+      getMovingNode() != null ||
+      scopeKind === 'drafting' ||
+      scopeKind === 'placing' ||
+      (ed.mode === 'build' && ed.selectedItem != null)
+    const gridSnap = isGridSnapActive()
+    // The grid is a placement aid, not always-on chrome: it shows ONLY while
+    // actively placing/moving in grid-snap mode, as a tight cursor patch. Idle,
+    // select, and non-grid placement all hide it entirely.
+    const snapPatchVisible = placingOrMoving && gridSnap
+    revealRadiusUniform.value = PLACEMENT_REVEAL_RADIUS
+    baseAlphaUniform.value = 0
+    cellSizeUniform.value = useEditor.getState().gridSnapStep
+    patchAlphaUniform.value = 1.5
+    gridRef.current.visible = useViewer.getState().showGrid && snapPatchVisible
+  })
 
   // Pass the geometry as a prop instead of a JSX child so the mesh
   // is never reconciled with R3F's empty placeholder `BufferGeometry`.
@@ -183,13 +259,8 @@ export const Grid = ({
   useEffect(() => () => geometry.dispose(), [geometry])
 
   return (
-    <mesh
-      geometry={geometry}
-      layers={GRID_LAYER}
-      material={material}
-      ref={gridRef}
-      rotation-x={-Math.PI / 2}
-      visible={showGrid}
-    />
+    // Orientation is driven imperatively in `useFrame` (horizontal by default,
+    // tilted into the wall plane while placing on a wall), so no static rotation.
+    <mesh geometry={geometry} layers={GRID_LAYER} material={material} ref={gridRef} />
   )
 }

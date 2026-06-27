@@ -25,6 +25,7 @@ import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
 import { RoofTool } from './roof/roof-tool'
 import { getRegistryAffordanceTool } from './shared/affordance-dispatch'
+import { FacingPoseIndicator } from './shared/facing-pose-indicator'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
 import { StairTool } from './stair/stair-tool'
 import { ZoneBoundaryEditor } from './zone/zone-boundary-editor'
@@ -295,6 +296,10 @@ export const ToolManager: React.FC = () => {
             tools above. Lives inside the building-local group so the
             building-local guide coords render at the right world position. */}
         <Alignment3DGuideLayer />
+        {/* The one forward-facing triangle renderer. Placement/move tools
+            publish their ghost pose to `useFacingPose`; this draws it. Mounted
+            here so it shares the building-local frame the tools publish in. */}
+        <FacingPoseIndicator />
         {/* Wall-plane proximity / sill / equal-spacing guides for openings,
             published by the door/window move tools in the same world frame. */}
         <OpeningGuides3DLayer />

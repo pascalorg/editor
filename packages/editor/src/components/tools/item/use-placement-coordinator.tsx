@@ -27,7 +27,10 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box3,
+  BufferGeometry,
+  DoubleSide,
   Euler,
+  Float32BufferAttribute,
   type Group,
   type LineSegments,
   Matrix4,
@@ -40,6 +43,10 @@ import {
 } from 'three'
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
+import {
+  clearPlacementSurface,
+  publishPlacementSurface,
+} from '../../../lib/active-placement-surface'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { formatLinearMeasurement } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -184,6 +191,45 @@ const center = vec2(0.5, 0.5)
 const dist = distance(uv(), center)
 const radialOpacity = smoothstep(0, 0.7, dist).mul(0.6)
 basePlaneMaterial.opacityNode = radialOpacity
+
+// Facing indicator: a small flat triangle on the floor in front of the ghost,
+// pointing along the item's forward (-Z) direction. The cursor group already
+// applies the item rotation, so the triangle stays in the group's local frame.
+// Pushed clear of the measurement label pill (which sits ~0.24 off the same
+// edge) and sized up so it stays legible at shallow camera angles.
+const FACING_INDICATOR_WIDTH = 0.4
+const FACING_INDICATOR_LENGTH = 0.46
+const FACING_INDICATOR_GAP = 0.45
+const facingIndicatorGeometry = (() => {
+  const geometry = new BufferGeometry()
+  // Tip at local +Z (the item's forward face); base across the X axis.
+  geometry.setAttribute(
+    'position',
+    new Float32BufferAttribute(
+      [
+        0,
+        0,
+        FACING_INDICATOR_LENGTH,
+        FACING_INDICATOR_WIDTH / 2,
+        0,
+        0,
+        -FACING_INDICATOR_WIDTH / 2,
+        0,
+        0,
+      ],
+      3,
+    ),
+  )
+  return geometry
+})()
+const facingIndicatorMaterial = new MeshBasicNodeMaterial({
+  color: 0x22_c5_5e, // green-500 (forward)
+  depthTest: false,
+  depthWrite: false,
+  // The flat triangle is viewed from above; DoubleSide makes it visible
+  // regardless of vertex winding (and from a camera orbited below the floor).
+  side: DoubleSide,
+})
 
 export interface PlacementCoordinatorConfig {
   asset: AssetInput | null
@@ -450,6 +496,30 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             canPlaceOnCeiling: () => ({ valid: true }),
           }
         : validators
+
+    const finishCommittedPlacement = (
+      committedId: string | null,
+      wasAdopted: boolean,
+      repeat: () => void,
+    ) => {
+      if (configRef.current.onCommitted()) {
+        repeat()
+        return
+      }
+
+      useAlignmentGuides.getState().clear()
+      useScene.temporal.getState().resume()
+      if (committedId) {
+        useViewer.getState().setSelection({ selectedIds: [committedId as AnyNodeId] })
+      }
+      if (!wasAdopted) {
+        useEditor.getState().setTool(null)
+      }
+      // A non-repeating placement is finished: return to select mode so the user
+      // lands on the just-placed (now selected) node instead of a tool-less build
+      // limbo. Repeat placements took the early return above and stay armed.
+      useEditor.getState().setMode('select')
+    }
 
     const revalidate = (): boolean => {
       const placeable = altFreeRef.current || checkCanPlace(getContext(), validators)
@@ -869,8 +939,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         useLiveTransforms.getState().clear(draftNode.current.id)
       }
 
-      draftNode.commit(result.nodeUpdate)
-      if (configRef.current.onCommitted()) {
+      const committedId = draftNode.current?.id ?? null
+      const wasAdopted = draftNode.isAdopted
+      const finalId = draftNode.commit(result.nodeUpdate)
+      finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
         draftNode.create(
           gridPosition.current,
           asset,
@@ -886,7 +958,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         updatePreviewGeometry(previewBounds)
         updateDimensionGuides(previewBounds)
         revalidate()
-      }
+      })
     }
 
     // ---- Wall Handlers ----
@@ -1065,12 +1137,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (draftNode.current) {
         useLiveTransforms.getState().clear(draftNode.current.id)
       }
-      draftNode.commit(result.nodeUpdate)
+      const committedId = draftNode.current?.id ?? null
+      const wasAdopted = draftNode.isAdopted
+      const finalId = draftNode.commit(result.nodeUpdate)
       if (result.dirtyNodeId) {
         useScene.getState().dirtyNodes.add(result.dirtyNodeId)
       }
 
-      if (configRef.current.onCommitted()) {
+      finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
         const nodes = useScene.getState().nodes
         const enterResult = wallStrategy.enter(
           getContext(),
@@ -1084,7 +1158,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         } else {
           revalidate()
         }
-      }
+      })
     }
 
     const onWallLeave = (event: WallEvent) => {
@@ -1222,16 +1296,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (draftNode.current) {
         useLiveTransforms.getState().clear(draftNode.current.id)
       }
-      draftNode.commit(result.nodeUpdate)
+      const committedId = draftNode.current?.id ?? null
+      const wasAdopted = draftNode.isAdopted
+      const finalId = draftNode.commit(result.nodeUpdate)
 
-      if (configRef.current.onCommitted()) {
+      finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
         const enterResult = roofWallStrategy.enter(getContext(), event, altFreeRef.current)
         if (enterResult) {
           applyTransition(enterResult)
         } else {
           revalidate()
         }
-      }
+      })
     }
 
     const onRoofWallLeave = (event: RoofEvent) => {
@@ -1431,15 +1507,17 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
               if (draftNode.current) {
                 useLiveTransforms.getState().clear(draftNode.current.id)
               }
-              draftNode.commit(result.nodeUpdate)
-              if (configRef.current.onCommitted()) {
+              const committedId = draftNode.current?.id ?? null
+              const wasAdopted = draftNode.isAdopted
+              const finalId = draftNode.commit(result.nodeUpdate)
+              finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
                 const enterResult = shelfSurfaceStrategy.enter(ctx, synthetic as never)
                 if (enterResult) {
                   applyTransition(enterResult)
                 } else {
                   revalidate()
                 }
-              }
+              })
               return
             }
           }
@@ -1457,15 +1535,17 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
               if (draftNode.current) {
                 useLiveTransforms.getState().clear(draftNode.current.id)
               }
-              draftNode.commit(result.nodeUpdate)
-              if (configRef.current.onCommitted()) {
+              const committedId = draftNode.current?.id ?? null
+              const wasAdopted = draftNode.isAdopted
+              const finalId = draftNode.commit(result.nodeUpdate)
+              finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
                 const enterResult = itemSurfaceStrategy.enter(ctx, synthetic)
                 if (enterResult) {
                   applyTransition(enterResult)
                 } else {
                   revalidate()
                 }
-              }
+              })
               return
             }
           }
@@ -1486,8 +1566,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
               if (draftNode.current) {
                 useLiveTransforms.getState().clear(draftNode.current.id)
               }
-              draftNode.commit(result.nodeUpdate)
-              if (configRef.current.onCommitted()) {
+              const committedId = draftNode.current?.id ?? null
+              const wasAdopted = draftNode.isAdopted
+              const finalId = draftNode.commit(result.nodeUpdate)
+              finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
                 const nodes = useScene.getState().nodes
                 const enterResult = ceilingStrategy.enter(
                   getContext(),
@@ -1500,7 +1582,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
                 } else {
                   revalidate()
                 }
-              }
+              })
               return
             }
           }
@@ -1516,9 +1598,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (draftNode.current) {
         useLiveTransforms.getState().clear(draftNode.current.id)
       }
-      draftNode.commit(result.nodeUpdate)
+      const committedId = draftNode.current?.id ?? null
+      const wasAdopted = draftNode.isAdopted
+      const finalId = draftNode.commit(result.nodeUpdate)
 
-      if (configRef.current.onCommitted()) {
+      finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
         // Try to set up next draft on the same surface
         const enterResult = itemSurfaceStrategy.enter(getContext(), event)
         if (enterResult) {
@@ -1526,7 +1610,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         } else {
           revalidate()
         }
-      }
+      })
     }
 
     // ---- Ceiling Handlers ----
@@ -1642,9 +1726,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (draftNode.current) {
         useLiveTransforms.getState().clear(draftNode.current.id)
       }
-      draftNode.commit(result.nodeUpdate)
+      const committedId = draftNode.current?.id ?? null
+      const wasAdopted = draftNode.isAdopted
+      const finalId = draftNode.commit(result.nodeUpdate)
 
-      if (configRef.current.onCommitted()) {
+      finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
         const nodes = useScene.getState().nodes
         const enterResult = ceilingStrategy.enter(getContext(), event, resolveLevelId, nodes)
         if (enterResult) {
@@ -1652,7 +1738,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         } else {
           revalidate()
         }
-      }
+      })
     }
 
     const onCeilingLeave = (event: CeilingEvent) => {
@@ -1780,16 +1866,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (draftNode.current) {
         useLiveTransforms.getState().clear(draftNode.current.id)
       }
-      draftNode.commit(result.nodeUpdate)
+      const committedId = draftNode.current?.id ?? null
+      const wasAdopted = draftNode.isAdopted
+      const finalId = draftNode.commit(result.nodeUpdate)
 
-      if (configRef.current.onCommitted()) {
+      finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
         const enterResult = shelfSurfaceStrategy.enter(getContext(), event)
         if (enterResult) {
           applyTransition(enterResult)
         } else {
           revalidate()
         }
-      }
+      })
     }
 
     // ---- Keyboard rotation ----
@@ -2141,6 +2229,31 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   // Restore the draft mesh's raycast when the coordinator unmounts (tool change).
   useEffect(() => () => reconcileDraftRaycast(null), [reconcileDraftRaycast])
 
+  // Publish the ghost's surface (contact point + normal) so the grid's snap
+  // patch sits at the item's resolved height (e.g. a shelf top) and orients to
+  // the surface (vertical in a wall plane). Only this coordinator publishes — a
+  // moving existing node has no draft here, so the grid reads that case straight
+  // off the node's mesh. Cleared when idle.
+  const surfaceNormalRef = useRef(new Vector3(0, 1, 0))
+  useFrame(() => {
+    const ghost = cursorGroupRef.current
+    if (asset && ghost) {
+      const surf = placementState.current.surface
+      const n = surfaceNormalRef.current
+      if (surf === 'wall' || surf === 'roof-wall') {
+        // Wall-attached: the item's forward (+Z) faces out of the wall, so the
+        // item's outward face direction IS the wall normal.
+        n.set(0, 0, 1).applyQuaternion(ghost.quaternion)
+      } else {
+        n.set(0, 1, 0)
+      }
+      publishPlacementSurface(ghost.position, n)
+    } else {
+      clearPlacementSurface()
+    }
+  })
+  useEffect(() => () => clearPlacementSurface(), [])
+
   useFrame(() => {
     if (!asset) {
       reconcileDraftRaycast(null)
@@ -2245,6 +2358,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     currentDimensionBounds.dimensions[1] / 2,
     currentDimensionBounds.center[2] - currentDimensionBounds.dimensions[2] / 2,
   ]
+  const facingIndicatorPosition: [number, number, number] = [
+    currentDimensionBounds.center[0],
+    0.02,
+    currentDimensionBounds.center[2] +
+      currentDimensionBounds.dimensions[2] / 2 +
+      FACING_INDICATOR_GAP,
+  ]
 
   const measurementContent = (
     <>
@@ -2345,6 +2465,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         material={basePlaneMaterial}
         ref={basePlaneRef}
         renderOrder={999}
+      />
+      <mesh
+        geometry={facingIndicatorGeometry}
+        layers={EDITOR_LAYER}
+        material={facingIndicatorMaterial}
+        position={facingIndicatorPosition}
+        renderOrder={1000}
       />
     </group>
   )

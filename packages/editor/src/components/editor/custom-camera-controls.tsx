@@ -1153,12 +1153,12 @@ export const CustomCameraControls = () => {
   }, [])
 
   // Preset capture mode frames a single subtree (often a 0.3–2m preset),
-  // so the default 6m minDistance prevents the user from getting close
+  // so the default 2m minDistance prevents the user from getting close
   // enough to compose a good thumbnail. Relax the clamp to 0.5m while
   // capturing presets; reset on exit so general editing keeps the looser
   // navigation guardrails.
   const isPresetCapture = captureMode.mode === 'preset'
-  const minDistance = isPresetCapture ? 0.5 : 6
+  const minDistance = isPresetCapture ? 0.5 : 2
 
   if (isFirstPersonMode) {
     return null

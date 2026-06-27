@@ -500,7 +500,7 @@ export const FenceTool: React.FC = () => {
       // While drafting, the segment locks to 15° rays from its start.
       // Snapping is governed by the snapping mode (`'off'` is the bypass);
       // there is no Shift hold-to-bypass. Alignment follows the magnetic snap
-      // mode, not Alt (Alt-tap toggles continuous/single chaining).
+      // mode, not Alt (continuation is cycled through the HUD / C).
       const bypassAlign = !isMagneticSnapActive()
 
       if (buildingState.current === 1) {
@@ -614,7 +614,7 @@ export const FenceTool: React.FC = () => {
 
         // Single mode commits one segment per click: stop drafting so the next
         // click starts a fresh segment instead of chaining off this endpoint.
-        if (useEditor.getState().fenceChainMode === 'single') {
+        if (useEditor.getState().getContinuation('fence') === 'single') {
           stopDrafting()
           return
         }

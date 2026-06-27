@@ -133,6 +133,7 @@ function shelfHandles(_node: ShelfNodeType): HandleDescriptor<ShelfNodeType>[] {
 export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   kind: 'shelf',
   snapProfile: 'item',
+  facingIndicator: true,
   schemaVersion: 2,
   schema: ShelfNode,
   category: 'furnish',

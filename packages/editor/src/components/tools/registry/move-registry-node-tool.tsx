@@ -16,6 +16,7 @@ import {
   type PortConnectivity,
   resolveAlignment,
   resolveConnectivityUpdates,
+  resolveFacingIndicator,
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
@@ -32,6 +33,7 @@ import { resolvePlanarCursorPosition } from '../../../lib/planar-cursor-placemen
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
+import useFacingPose from '../../../store/use-facing-pose'
 import { swallowNextClick } from '../../editor/node-arrow-handles'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { DragBoundingBox } from '../shared/drag-bounding-box'
@@ -772,6 +774,23 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       null,
     [node],
   )
+
+  // Forward-facing triangle for the footprint-box branch (item / shelf / column
+  // — anything that renders `<PlacementBox>`). Published to the editor-side
+  // overlay; the `<DragBoundingBox>` branch (e.g. stair, which has no centred
+  // footprint) publishes its own. The box is centred on `cursorPosition`, so
+  // the footprint centre is the origin. Clears on unmount.
+  const facing = resolveFacingIndicator(node.type)
+  useEffect(() => {
+    if (!previewVisible || !facing || !boxDimensions) return
+    useFacingPose.getState().set({
+      position: cursorPosition,
+      rotationY: cursorRotationY,
+      depth: boxDimensions[2],
+      reversed: facing.reversed,
+    })
+  }, [previewVisible, facing, boxDimensions, cursorPosition, cursorRotationY])
+  useEffect(() => () => useFacingPose.getState().clear(), [])
 
   if (!previewVisible) return null
 

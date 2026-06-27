@@ -422,6 +422,10 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
   schema: StairNode,
   category: 'structure',
   snapProfile: 'structural',
+  // A footprint with a clear front: you approach a stair from the low end,
+  // which sits on the -Z side of the run (the run ascends along +Z). Show the
+  // floor facing triangle there, pointing out of the entry, while placing/moving.
+  facingIndicator: { reversed: true },
   // Placed as a footprint (R/T rotates), not a directional draw → no angle-lock
   // mode. The toolHints presence routes it through the contextual HUD so the
   // snapping chip shows during placement.

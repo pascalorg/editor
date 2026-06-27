@@ -167,6 +167,7 @@ const doorHandles: HandleDescriptor<DoorNodeType>[] = [
 export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   kind: 'door',
   snapProfile: 'item',
+  facingIndicator: true,
   schemaVersion: 1,
   schema: DoorNode,
   category: 'structure',

@@ -16,6 +16,7 @@ import {
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  useFacingPose,
   usePlacementPreview,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -101,6 +102,13 @@ const ColumnTool = () => {
         levelId: activeLevelId,
       })
       cursorRef.current?.position.set(...visualPosition)
+      // Forward-facing floor triangle, drawn by the editor-side overlay. Columns
+      // never rotate (`rotation: 0`), so the triangle just sits in front.
+      useFacingPose.getState().set({
+        position: visualPosition,
+        rotationY: previewNode.rotation,
+        depth: previewNode.depth,
+      })
       lastCursorRef.current = position
 
       // Publish a transient, positioned preview node for the 2D floor-plan
@@ -130,12 +138,17 @@ const ColumnTool = () => {
       useScene.getState().createNode(column, activeLevelId)
       useViewer.getState().setSelection({ selectedIds: [column.id] })
       triggerSFX('sfx:structure-build')
-      // The placed column is now a valid alignment target for the next one;
-      // refresh the candidate pool and drop the guide from this drop. The
-      // 2D ghost re-publishes on the next move.
-      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
       useAlignmentGuides.getState().clear()
       usePlacementPreview.getState().clear()
+      if (useEditor.getState().getContinuation('point') === 'repeat') {
+        // The placed column is now a valid alignment target for the next one.
+        alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
+      } else {
+        cursorVisibleRef.current = false
+        setCursorVisible(false)
+        useFacingPose.getState().clear()
+        useEditor.getState().setTool(null)
+      }
       stopPlacementCommitPropagation(event)
     }
 
@@ -147,6 +160,7 @@ const ColumnTool = () => {
       unsubscribePlacementClicks()
       useAlignmentGuides.getState().clear()
       usePlacementPreview.getState().clear()
+      useFacingPose.getState().clear()
     }
   }, [activeLevelId, previewNode])
 

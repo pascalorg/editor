@@ -733,6 +733,14 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   category: NodeCategory
   surfaceRole?: SurfaceRole
   /**
+   * Show a floor direction-triangle while placing/moving — the kind has a
+   * meaningful front. `true` points along the node's local +Z (forward).
+   * `{ reversed: true }` points along local -Z, for kinds whose front is the
+   * -Z side (a stair faces *out* of its run: you approach from the low end,
+   * which sits on the -Z side of the footprint).
+   */
+  facingIndicator?: boolean | { reversed?: boolean }
+  /**
    * Role this kind plays in a distribution system (HVAC duct / DWV pipe /
    * refrigerant lineset). Lets the system-graph summary classify a
    * component without branching on `node.type`:

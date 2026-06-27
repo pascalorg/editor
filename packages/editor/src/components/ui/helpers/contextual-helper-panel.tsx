@@ -1,4 +1,9 @@
 import { Icon } from '@iconify/react'
+import { Fragment } from 'react'
+import {
+  CONTINUATION_PROFILES,
+  type ContinuationContext,
+} from '../../../lib/continuation'
 import type { ContextualShortcutHint } from '../../../lib/contextual-help'
 import { hasActivePaintMaterial } from '../../../lib/material-paint'
 import { paintScopeLabel, type PaintScope } from '../../../lib/paint-scope'
@@ -8,29 +13,98 @@ import {
   type SnapContext,
 } from '../../../lib/snapping-mode'
 import { cn } from '../../../lib/utils'
-import useEditor, {
-  type FenceChainMode,
-  type GridSnapStep,
-  type WallChainMode,
-} from '../../../store/use-editor'
+import useEditor, { type GridSnapStep } from '../../../store/use-editor'
 import { ShortcutToken } from '../primitives/shortcut-token'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 
-const PILL_CLASS =
-  'flex items-center gap-3 rounded-full border border-border bg-popover/90 py-1.5 pr-1.5 pl-3.5 text-foreground text-[11px] shadow-md shadow-black/10 backdrop-blur-md'
+// One muted container holds every row — passive key hints and interactive chips
+// alike — so the HUD reads as a single panel, not a stack of floating pills. The
+// background is near-opaque (`bg-background/95`) with a single backdrop blur so
+// active rows stay readable over the 3D scene even while a modifier is held.
+// A 2-track grid: column 1 sizes to `max-content` (the widest key across ALL
+// rows), column 2 (`1fr`) is the label. Every row is a subgrid sharing those
+// tracks, so labels align even when keys differ in width (⌘ vs Shift) or wrap to
+// two lines. Near-opaque bg + single backdrop blur keeps active rows readable.
+const CONTAINER_CLASS =
+  'pointer-events-none fixed top-1/2 right-4 z-40 grid max-w-[260px] -translate-y-1/2 grid-cols-[max-content_1fr] gap-x-2.5 gap-y-1.5 rounded-lg border border-border bg-background/95 px-3 py-2.5 shadow-lg backdrop-blur-md'
 
-// Multiple keys in a contextual hint are alternatives (e.g. Rotate R / T), not a
-// chord — the HUD never shows key chords — so they read on one line split by "/".
+const TOKEN_CLASS = 'h-5 px-1.5 text-[10px]'
+
+// Each row spans both columns as its own subgrid, inheriting the container's
+// tracks so its key/label cells land on the shared column lines.
+const ROW_CLASS = 'col-span-2 grid grid-cols-subgrid'
+
+// The key cell (column 1). `items-center` centres the token; the row's
+// `items-start` keeps it on the label's first line when the label wraps.
+const KEY_CELL_CLASS = 'flex items-center gap-1'
+
 function ShortcutSequence({ keys }: { keys: string[] }) {
   return (
-    <div className="flex shrink-0 items-center gap-1">
+    <div className={KEY_CELL_CLASS}>
       {keys.map((key, index) => (
-        <div className="flex items-center gap-1" key={`${key}-${index}`}>
+        <Fragment key={`${key}-${index}`}>
           {index > 0 ? <span className="text-[9px] text-muted-foreground/70">/</span> : null}
-          <ShortcutToken className="h-6 px-1.5 text-[10px]" value={key} />
-        </div>
+          <ShortcutToken className={TOKEN_CLASS} value={key} />
+        </Fragment>
       ))}
     </div>
+  )
+}
+
+// Shared single-line chip row (key cell + icon/label cell). Rendered either as a
+// passive row (no `onClick`) or a clickable button. The outer container is
+// `pointer-events-none`, so clickable chips opt back in.
+function ChipRow({
+  ariaLabel,
+  icon,
+  label,
+  onClick,
+  shortcut,
+  tooltip,
+}: {
+  ariaLabel?: string
+  icon?: string
+  label: string
+  onClick?: () => void
+  shortcut?: string
+  tooltip?: string
+}) {
+  const body = (
+    <>
+      <span className={KEY_CELL_CLASS}>
+        {shortcut ? <ShortcutToken className={TOKEN_CLASS} value={shortcut} /> : null}
+      </span>
+      <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
+        {icon ? <Icon className="shrink-0" height={13} icon={icon} width={13} /> : null}
+        <span className="truncate">{label}</span>
+      </span>
+    </>
+  )
+
+  if (!onClick) {
+    return <div className={cn(ROW_CLASS, 'items-center')}>{body}</div>
+  }
+
+  const button = (
+    <button
+      aria-label={ariaLabel ?? label}
+      className={cn(
+        ROW_CLASS,
+        'pointer-events-auto cursor-pointer items-center rounded-md text-left transition-colors hover:bg-muted/60',
+      )}
+      onClick={onClick}
+      type="button"
+    >
+      {body}
+    </button>
+  )
+
+  if (!tooltip) return button
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent side="left">{tooltip}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -48,26 +122,6 @@ const SNAPPING_MODE_LABELS = {
   off: 'Off',
 } as const
 
-const WALL_CHAIN_MODE_ICONS: Record<WallChainMode, string> = {
-  room: 'lucide:square',
-  single: 'lucide:minus',
-}
-
-const WALL_CHAIN_MODE_LABELS: Record<WallChainMode, string> = {
-  room: 'Room (auto-close)',
-  single: 'Single wall',
-}
-
-const FENCE_CHAIN_MODE_ICONS: Record<FenceChainMode, string> = {
-  continuous: 'lucide:waypoints',
-  single: 'lucide:minus',
-}
-
-const FENCE_CHAIN_MODE_LABELS: Record<FenceChainMode, string> = {
-  continuous: 'Continuous',
-  single: 'Single fence',
-}
-
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
 
 function nextGridSnapStep(step: GridSnapStep): GridSnapStep {
@@ -75,10 +129,8 @@ function nextGridSnapStep(step: GridSnapStep): GridSnapStep {
   return GRID_SNAP_STEPS[(index + 1) % GRID_SNAP_STEPS.length] ?? GRID_SNAP_STEPS[0]!
 }
 
-// Interactive chip rows: the active interaction's own snapping controls, scoped
-// to its context (wall / item / polygon) so each action shows only the modes
-// that make sense for it. The surrounding stack is `pointer-events-none` (passive
-// key hints), so these pills carve out `pointer-events-auto` to stay clickable.
+// The active interaction's snapping controls, scoped to its context (wall / item
+// / polygon) so each action shows only the modes that make sense for it.
 function SnappingChips({ context }: { context: SnapContext }) {
   const snappingMode = useEditor((s) => s.snappingModeByContext[context])
   const setSnappingMode = useEditor((s) => s.setSnappingMode)
@@ -89,118 +141,43 @@ function SnappingChips({ context }: { context: SnapContext }) {
 
   return (
     <>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            aria-label={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
-            className={`${PILL_CLASS} pointer-events-auto cursor-pointer transition-colors hover:bg-accent`}
-            onClick={() => setSnappingMode(context, cycleSnappingModeIn(context, snappingMode))}
-            type="button"
-          >
-            <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium">
-              <Icon
-                className="shrink-0"
-                height={13}
-                icon={SNAPPING_MODE_ICONS[snappingMode]}
-                width={13}
-              />
-              <span className="truncate">Snapping: {SNAPPING_MODE_LABELS[snappingMode]}</span>
-            </span>
-            <ShortcutToken className="h-6 px-1.5 text-[10px]" value="Shift" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="left">Snapping mode — click or press Shift to cycle</TooltipContent>
-      </Tooltip>
-
+      <ChipRow
+        ariaLabel={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
+        icon={SNAPPING_MODE_ICONS[snappingMode]}
+        label={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
+        onClick={() => setSnappingMode(context, cycleSnappingModeIn(context, snappingMode))}
+        shortcut="Shift"
+        tooltip="Snapping mode — click or press Shift to cycle"
+      />
       {gridActive ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              aria-label={`Grid step: ${gridSnapStep.toFixed(2)} m`}
-              className={`${PILL_CLASS} pointer-events-auto cursor-pointer transition-colors hover:bg-accent`}
-              onClick={() => setGridSnapStep(nextGridSnapStep(gridSnapStep))}
-              type="button"
-            >
-              <span className="min-w-0 flex-1 truncate font-medium">
-                Grid: <span className="tabular-nums">{gridSnapStep.toFixed(2)}</span> m
-              </span>
-              <ShortcutToken className="h-6 px-1.5 text-[10px]" value="Ctrl" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="left">Grid step — click or tap Ctrl to cycle</TooltipContent>
-        </Tooltip>
+        <ChipRow
+          ariaLabel={`Grid step: ${gridSnapStep.toFixed(2)} m`}
+          label={`Grid: ${gridSnapStep.toFixed(2)} m`}
+          onClick={() => setGridSnapStep(nextGridSnapStep(gridSnapStep))}
+          shortcut="Ctrl"
+          tooltip="Grid step — click or tap Ctrl to cycle"
+        />
       ) : null}
     </>
   )
 }
 
-function nextWallChainMode(mode: WallChainMode): WallChainMode {
-  return mode === 'room' ? 'single' : 'room'
-}
-
-function WallChainModeChip() {
-  const wallChainMode = useEditor((s) => s.wallChainMode)
-  const setWallChainMode = useEditor((s) => s.setWallChainMode)
-  const label = WALL_CHAIN_MODE_LABELS[wallChainMode]
+function ContinuationChip({ context }: { context: ContinuationContext }) {
+  const mode = useEditor((s) => s.getContinuation(context))
+  const cycleContinuation = useEditor((s) => s.cycleContinuation)
+  const profile = CONTINUATION_PROFILES[context]
+  const label = profile.labels[mode] ?? mode
+  const icon = profile.icons[mode] ?? 'lucide:repeat'
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          aria-label={`Wall drafting: ${label}`}
-          className={`${PILL_CLASS} pointer-events-auto cursor-pointer transition-colors hover:bg-accent`}
-          onClick={() => setWallChainMode(nextWallChainMode(wallChainMode))}
-          type="button"
-        >
-          <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium">
-            <Icon
-              className="shrink-0"
-              height={13}
-              icon={WALL_CHAIN_MODE_ICONS[wallChainMode]}
-              width={13}
-            />
-            <span className="truncate">{label}</span>
-          </span>
-          <ShortcutToken className="h-6 px-1.5 text-[10px]" value="Alt" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="left">Wall drafting mode - click or tap Alt to cycle</TooltipContent>
-    </Tooltip>
-  )
-}
-
-function nextFenceChainMode(mode: FenceChainMode): FenceChainMode {
-  return mode === 'continuous' ? 'single' : 'continuous'
-}
-
-function FenceChainModeChip() {
-  const fenceChainMode = useEditor((s) => s.fenceChainMode)
-  const setFenceChainMode = useEditor((s) => s.setFenceChainMode)
-  const label = FENCE_CHAIN_MODE_LABELS[fenceChainMode]
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          aria-label={`Fence drafting: ${label}`}
-          className={`${PILL_CLASS} pointer-events-auto cursor-pointer transition-colors hover:bg-accent`}
-          onClick={() => setFenceChainMode(nextFenceChainMode(fenceChainMode))}
-          type="button"
-        >
-          <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium">
-            <Icon
-              className="shrink-0"
-              height={13}
-              icon={FENCE_CHAIN_MODE_ICONS[fenceChainMode]}
-              width={13}
-            />
-            <span className="truncate">{label}</span>
-          </span>
-          <ShortcutToken className="h-6 px-1.5 text-[10px]" value="Alt" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="left">Fence drafting mode - click or tap Alt to cycle</TooltipContent>
-    </Tooltip>
+    <ChipRow
+      ariaLabel={`Continuation: ${label}`}
+      icon={icon}
+      label={label}
+      onClick={() => cycleContinuation(context)}
+      shortcut="C"
+      tooltip="Continuation — click or press C to cycle"
+    />
   )
 }
 
@@ -213,7 +190,7 @@ const PAINT_SCOPE_ICONS: Record<PaintScope, string> = {
 
 // The painter's application-scope chip. Driven entirely by the hovered node's
 // derived `paintHover` (scopes + labels), so it works for any kind without a
-// per-target table. Carves out `pointer-events-auto` like the snapping chips.
+// per-target table.
 function PaintScopeChip() {
   // What the cursor is over (that's what the next click paints). `null` when not
   // over a paintable surface — including an item with no slots.
@@ -226,26 +203,13 @@ function PaintScopeChip() {
   // Nothing to paint with yet (no material picked, not erasing) → the first step
   // is choosing a material, so say that before anything about scope or hovering.
   if (!(paintEraser || hasActivePaintMaterial(activePaintMaterial))) {
-    return (
-      <div className={PILL_CLASS}>
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium text-muted-foreground">
-          <Icon className="shrink-0" height={13} icon="lucide:palette" width={13} />
-          <span className="truncate">Select a material to paint</span>
-        </span>
-      </div>
-    )
+    return <ChipRow icon="lucide:palette" label="Select a material to paint" />
   }
 
   // Not over anything paintable → guide the user to hover, still teaching Shift.
   if (!paintHover) {
     return (
-      <div className={PILL_CLASS}>
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium text-muted-foreground">
-          <Icon className="shrink-0" height={13} icon="lucide:mouse-pointer-click" width={13} />
-          <span className="truncate">Hover a surface to paint</span>
-        </span>
-        <ShortcutToken className="h-6 px-1.5 text-[10px]" value="Shift" />
-      </div>
+      <ChipRow icon="lucide:mouse-pointer-click" label="Hover a surface to paint" shortcut="Shift" />
     )
   }
 
@@ -255,36 +219,25 @@ function PaintScopeChip() {
   const effective: PaintScope = scopes.includes(paintScope) ? paintScope : 'single'
 
   // Paintable but with no scope choice (roof, a one-slot node, …) → a passive
-  // pill that still names the surface, so the user always sees what they'll paint.
+  // row that still names the surface, so the user always sees what they'll paint.
   if (scopes.length <= 1) {
     return (
-      <div className={PILL_CLASS}>
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium">
-          <Icon className="shrink-0" height={13} icon={PAINT_SCOPE_ICONS[effective]} width={13} />
-          <span className="truncate">Paint: {paintScopeLabel(effective, paintHover)}</span>
-        </span>
-      </div>
+      <ChipRow
+        icon={PAINT_SCOPE_ICONS[effective]}
+        label={`Paint: ${paintScopeLabel(effective, paintHover)}`}
+      />
     )
   }
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          aria-label={`Paint scope: ${paintScopeLabel(effective, paintHover)}`}
-          className={`${PILL_CLASS} pointer-events-auto cursor-pointer transition-colors hover:bg-accent`}
-          onClick={() => cyclePaintScope()}
-          type="button"
-        >
-          <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium">
-            <Icon className="shrink-0" height={13} icon={PAINT_SCOPE_ICONS[effective]} width={13} />
-            <span className="truncate">Paint: {paintScopeLabel(effective, paintHover)}</span>
-          </span>
-          <ShortcutToken className="h-6 px-1.5 text-[10px]" value="Shift" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="left">Paint scope — click or press Shift to cycle</TooltipContent>
-    </Tooltip>
+    <ChipRow
+      ariaLabel={`Paint scope: ${paintScopeLabel(effective, paintHover)}`}
+      icon={PAINT_SCOPE_ICONS[effective]}
+      label={`Paint: ${paintScopeLabel(effective, paintHover)}`}
+      onClick={() => cyclePaintScope()}
+      shortcut="Shift"
+      tooltip="Paint scope — click or press Shift to cycle"
+    />
   )
 }
 
@@ -292,43 +245,44 @@ export function ContextualHelperPanel({
   hints,
   snapContext = null,
   showPaintScope = false,
-  showWallChainMode = false,
-  showFenceChainMode = false,
+  continuationContext = null,
 }: {
   hints: ContextualShortcutHint[]
   // The active snapping context drives the snapping chips (which mode set). Null
   // → no snapping chips for this interaction.
   snapContext?: SnapContext | null
   showPaintScope?: boolean
-  showWallChainMode?: boolean
-  showFenceChainMode?: boolean
+  continuationContext?: ContinuationContext | null
 }) {
-  if (
-    hints.length === 0 &&
-    !snapContext &&
-    !showPaintScope &&
-    !showWallChainMode &&
-    !showFenceChainMode
-  )
+  if (hints.length === 0 && !snapContext && !showPaintScope && !continuationContext)
     return null
 
   return (
-    <div className="pointer-events-none fixed top-1/2 right-4 z-40 flex max-w-[260px] -translate-y-1/2 flex-col items-end gap-2">
+    <div className={CONTAINER_CLASS}>
       {snapContext ? <SnappingChips context={snapContext} /> : null}
-      {showWallChainMode ? <WallChainModeChip /> : null}
-      {showFenceChainMode ? <FenceChainModeChip /> : null}
+      {continuationContext ? <ContinuationChip context={continuationContext} /> : null}
       {showPaintScope ? <PaintScopeChip /> : null}
       {hints.map((hint) => (
         <div
-          className={cn(
-            PILL_CLASS,
-            'w-full justify-between',
-            hint.active && 'border-primary/40 bg-primary/10 text-foreground',
-          )}
+          className={cn(ROW_CLASS, 'items-start', hint.active && 'rounded-md bg-primary/10')}
           key={`${hint.keys.join('+')}:${hint.label}`}
         >
-          <span className="min-w-0 flex-1 truncate font-medium leading-snug">{hint.label}</span>
           <ShortcutSequence keys={hint.keys} />
+          <div className="min-w-0">
+            <div
+              className={cn(
+                'text-xs leading-5',
+                hint.active ? 'text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              {hint.label}
+            </div>
+            {hint.subtitle ? (
+              <div className="text-[10px] text-muted-foreground/70 leading-snug">
+                {hint.subtitle}
+              </div>
+            ) : null}
+          </div>
         </div>
       ))}
     </div>

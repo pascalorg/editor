@@ -161,6 +161,7 @@ const windowHandles: HandleDescriptor<WindowNodeType>[] = [
 export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   kind: 'window',
   snapProfile: 'item',
+  facingIndicator: true,
   schemaVersion: 1,
   schema: WindowNode,
   category: 'structure',

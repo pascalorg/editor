@@ -24,6 +24,7 @@ import {
   resolveStairPlacementLevelId,
 } from '../../../lib/stair-levels'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
+import useFacingPose from '../../../store/use-facing-pose'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
@@ -300,6 +301,19 @@ export const StairTool: React.FC = () => {
         previewRef.current.rotation.y = rotation
       }
 
+      // Forward-facing triangle (editor-side overlay). The run ascends along
+      // local +Z from the entry at z≈0; the stair's front is the -Z entry side,
+      // so `reversed` points the triangle out of the entry (where you approach
+      // from), sitting just before it — not inside the footprint or at the
+      // elevated far end. Centre is the footprint mid-run (origin is the entry).
+      useFacingPose.getState().set({
+        position: visualPosition,
+        rotationY: rotation,
+        depth: DEFAULT_STAIR_LENGTH,
+        center: [0, DEFAULT_STAIR_LENGTH / 2],
+        reversed: true,
+      })
+
       if (!preview) {
         openingPreview.clear()
         return
@@ -425,8 +439,17 @@ export const StairTool: React.FC = () => {
       // Commit cleared the opening preview, so force the next hover (even on the
       // same cell) to rebuild rather than dedupe against the just-placed key.
       lastPreviewKey = null
-      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
       useAlignmentGuides.getState().clear()
+
+      // Single by default; the C-toggle ('point' context, shared with every
+      // other placement tool) opts into placing more. On single, drop the tool
+      // and the facing triangle so we fall back to select after one stair.
+      if (useEditor.getState().getContinuation('point') === 'repeat') {
+        alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
+      } else {
+        useFacingPose.getState().clear()
+        useEditor.getState().setTool(null)
+      }
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -471,6 +494,7 @@ export const StairTool: React.FC = () => {
       window.removeEventListener('keydown', onKeyDown)
       useAlignmentGuides.getState().clear()
       openingPreview.clear()
+      useFacingPose.getState().clear()
     }
   }, [currentLevelId])
 
@@ -478,7 +502,9 @@ export const StairTool: React.FC = () => {
     <group>
       <CursorSphere ref={cursorRef} />
 
-      {/* 3D ghost preview — position/rotation updated imperatively */}
+      {/* 3D ghost preview — position/rotation updated imperatively. The
+          forward-facing triangle is drawn by the editor-side overlay from the
+          pose published in `applyDraftPreview`. */}
       <group ref={previewRef}>
         <mesh castShadow geometry={previewGeometry}>
           <meshStandardMaterial color="#818cf8" depthWrite={false} opacity={0.35} transparent />

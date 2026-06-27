@@ -315,6 +315,7 @@ function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[]
 export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   kind: 'column',
   snapProfile: 'item',
+  facingIndicator: true,
   schemaVersion: 1,
   schema: ColumnNode,
   category: 'structure',

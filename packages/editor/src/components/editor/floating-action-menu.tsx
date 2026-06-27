@@ -8,6 +8,7 @@ import {
   DEFAULT_WALL_HEIGHT,
   DoorNode,
   ElevatorNode,
+  emitter,
   FenceNode,
   generateId,
   getActiveRoofHeight,
@@ -215,6 +216,7 @@ export function FloatingActionMenu() {
   const updateNode = useScene((s) => s.updateNode)
   const mode = useEditor((s) => s.mode)
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
+  const canFindNode = useEditor((s) => s.canFindNode)
   const endpointReshape = useEndpointReshape()
   const isCurveReshape = useIsCurveReshape()
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -655,6 +657,16 @@ export function FloatingActionMenu() {
     [node?.type, selectedId, setSelection],
   )
 
+  // "Find in catalog": the editor only signals intent — the host (community)
+  // listens for `selection:find-node` and reveals the node in its browser.
+  const handleFind = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (node) emitter.emit('selection:find-node' as never, node as never)
+    },
+    [node],
+  )
+
   if (
     !(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete') ||
     endpointReshape ||
@@ -676,6 +688,7 @@ export function FloatingActionMenu() {
         >
           <div className="relative" ref={menuScaleRef} style={{ transformOrigin: 'center center' }}>
             <NodeActionMenu
+              onFind={node && canFindNode ? handleFind : undefined}
               onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
               onCurve={
                 node?.type === 'fence' || (node?.type === 'wall' && canCurveSelectedWall)

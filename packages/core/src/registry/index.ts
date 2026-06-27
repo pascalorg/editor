@@ -30,6 +30,7 @@ export {
   nodeRegistry,
   type PluginDiscovery,
   registerNode,
+  resolveFacingIndicator,
   setPluginDiscovery,
 } from './registry'
 export {

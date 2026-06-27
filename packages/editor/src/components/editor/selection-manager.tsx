@@ -32,6 +32,7 @@ import {
   getRoofMaterialArray,
   useViewer,
 } from '@pascal-app/viewer'
+import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D, Vector3 } from 'three'
 import {
@@ -701,6 +702,10 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
 export const SelectionManager = () => {
   const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
+  // The canvas element — cursor styling must land here, not on `document.body`:
+  // the editor wraps the canvas in a div with a custom `cursor: url(...)`, which
+  // (being a closer ancestor) overrides any body cursor over the canvas.
+  const glDomElement = useThree((s) => s.gl.domElement)
   const setHoverHighlightMode = useViewer((s) => s.setHoverHighlightMode)
   const modifierKeysRef = useRef<SelectionModifierKeys>({
     meta: false,
@@ -1252,6 +1257,52 @@ export const SelectionManager = () => {
     }
   }, [isCurveReshape, mode, movingNode])
 
+  // Move cursor over the selected movable node: the visual cue that clicking it
+  // picks it up (replaces the removed move-cross gizmo). Reacts only when the
+  // hovered/selected node changes (not on every camera move) so it doesn't fight
+  // the rotate/resize gizmos' own hover cursors. Clears only the cursor it owns.
+  useEffect(() => {
+    if (mode !== 'select') return
+    let owns = false
+    let prevKey = ' '
+    const applyCursor = () => {
+      const { selection, hoveredId } = useViewer.getState()
+      const sole = selection.selectedIds.length === 1 ? selection.selectedIds[0] : null
+      const key = `${hoveredId ?? ''}|${sole ?? ''}`
+      if (key === prevKey) return
+      prevKey = key
+      const node =
+        sole != null && hoveredId === sole && !getMovingNode()
+          ? useScene.getState().nodes[sole as AnyNodeId]
+          : null
+      if (node && canDirectMoveNode(node)) {
+        glDomElement.style.cursor = 'move'
+        owns = true
+      } else if (owns) {
+        glDomElement.style.cursor = ''
+        owns = false
+      }
+    }
+    applyCursor()
+    const unsub = useViewer.subscribe(applyCursor)
+    return () => {
+      unsub()
+      if (owns) glDomElement.style.cursor = ''
+    }
+  }, [mode, glDomElement])
+
+  // While a node is actively being moved (click-to-move / Move button, or a
+  // fresh preset placement), show a grabbing hand. Mode-independent: presets
+  // move in build mode. Overrides the hover 'move' cursor (which bails while a
+  // movingNode exists), and clears back to the canvas's custom cursor on drop.
+  useEffect(() => {
+    if (!movingNode) return
+    glDomElement.style.cursor = 'grabbing'
+    return () => {
+      glDomElement.style.cursor = ''
+    }
+  }, [movingNode, glDomElement])
+
   useEffect(() => {
     if (mode !== 'select') return
     if (movingNode || isCurveReshape) return
@@ -1437,6 +1488,23 @@ export const SelectionManager = () => {
           useInteractionScope
             .getState()
             .endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
+        }
+
+        // Click-to-move: clicking the already-selected sole movable node with
+        // no modifiers picks it up instead of re-selecting — the move-cross
+        // gizmo's old job, now on the node body. `setMovingNode` arms the
+        // registry move tool in click-to-commit mode, exactly like the floating
+        // Move button. The first (selecting) click can't hit this because the
+        // node isn't yet in `selectedIdsBeforeRouting`.
+        const nativeEvent = event.nativeEvent
+        const hasModifier = nativeEvent.shiftKey || isCommandModifier(nativeEvent)
+        const isAlreadySole =
+          selectedIdsBeforeRouting.length === 1 && selectedIdsBeforeRouting[0] === nodeToSelect.id
+        if (!hasModifier && isAlreadySole && !getMovingNode() && canDirectMoveNode(nodeToSelect)) {
+          sfxEmitter.emit('sfx:item-pick')
+          useEditor.getState().setMovingNode(nodeToSelect as never)
+          useViewer.getState().setSelection({ selectedIds: [] })
+          return
         }
 
         activeStrategy.handleSelect(

@@ -131,11 +131,9 @@ There is no per-kind snapping switch.
   These resolve the mode from the scope via `getActiveSnapContext()` → `snappingModeByContext[context]`.
 - **Modifiers.** Shift (tap) cycles the mode for the active context; Ctrl (tap) cycles the grid step;
   Alt (hold) is force / free (raw cursor + commit past invalid; for MEP runs, the vertical-riser carve-out).
-  Shift is **not** a snap bypass. Alt is **not** a snap toggle. **Exception — wall/fence drafting:** those
-  tools have no force role (a wall/fence always places), so a clean **Alt-tap** cycles the chain mode
-  (`wallChainMode` room/single, `fenceChainMode` continuous/single) — wired in `hooks/use-keyboard.ts` via
-  `isChainModeContext()`, persisted in `useEditor`, surfaced as a clickable HUD chip. This is the one
-  sanctioned Alt-as-toggle, and only where Alt-as-force is meaningless.
+  Shift is **not** a snap bypass. Alt is **not** a snap toggle. Placement continuation (wall room/single,
+  fence continuous/single, point once/repeat) is a separate per-context mode, cycled by **C** and surfaced as
+  a clickable HUD chip.
 - **The chip is the scope's.** The contextual HUD shows the active context's mode and is the only place the
   mode is cycled — so a tool that wants its chip must run inside a scope whose `snapContextOf` resolves
   (a build tool, `drafting`, `placing`/`moving`, or `reshaping`).

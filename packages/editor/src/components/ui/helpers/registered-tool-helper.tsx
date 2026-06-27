@@ -1,4 +1,5 @@
 import type { ToolHint } from '@pascal-app/core'
+import type { ContinuationContext } from '../../../lib/continuation'
 import type { SnapContext } from '../../../lib/snapping-mode'
 import useEditor from '../../../store/use-editor'
 import { ContextualHelperPanel } from './contextual-helper-panel'
@@ -16,14 +17,12 @@ export function RegisteredToolHelper({
   hints,
   shiftPressed = false,
   snapContext = null,
-  showWallChainMode = false,
-  showFenceChainMode = false,
+  continuationContext = null,
 }: {
   hints: ToolHint[]
   shiftPressed?: boolean
   snapContext?: SnapContext | null
-  showWallChainMode?: boolean
-  showFenceChainMode?: boolean
+  continuationContext?: ContinuationContext | null
 }) {
   // Live vertex count of an in-progress polygon draft, so hints gated on a
   // minimum (e.g. "Finish" at ≥ 3) only appear once they're actually possible.
@@ -36,8 +35,7 @@ export function RegisteredToolHelper({
       !(hint.key === 'Shift' && hint.label === 'Cycle snapping mode') &&
       (hint.minDraftVertices == null || draftVertexCount >= hint.minDraftVertices),
   )
-  if (visible.length === 0 && !snapContext && !showWallChainMode && !showFenceChainMode)
-    return null
+  if (visible.length === 0 && !snapContext && !continuationContext) return null
   return (
     <ContextualHelperPanel
       hints={visible.map((hint) => {
@@ -50,9 +48,8 @@ export function RegisteredToolHelper({
           active: shiftPressed && isBypassHint,
         }
       })}
+      continuationContext={continuationContext}
       snapContext={snapContext}
-      showWallChainMode={showWallChainMode}
-      showFenceChainMode={showFenceChainMode}
     />
   )
 }

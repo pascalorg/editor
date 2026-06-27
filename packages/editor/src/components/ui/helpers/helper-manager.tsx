@@ -16,10 +16,12 @@ import {
   resolveRotateHandleHelpHints,
   resolveSelectModeHelpHints,
 } from '../../../lib/contextual-help'
+import { continuationContextOf } from '../../../lib/continuation'
 import { canDirectMoveNode, canDirectRotateNode } from '../../../lib/direct-manipulation'
 import type { ReshapeKind } from '../../../lib/interaction/scope'
+import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
 import { snapContextOf } from '../../../lib/snapping-mode'
-import useEditor from '../../../store/use-editor'
+import useEditor, { getActiveContinuationContext } from '../../../store/use-editor'
 import useInteractionScope, {
   useActiveHandleDrag,
   useMovingNode,
@@ -113,6 +115,10 @@ export function HelperManager() {
       }),
     [scope, mode, tool],
   )
+  const continuationContext = useMemo(
+    () => getActiveContinuationContext(),
+    [scope, mode, tool],
+  )
   const selectModeHints = useMemo(
     () =>
       resolveSelectModeHelpHints({
@@ -144,10 +150,17 @@ export function HelperManager() {
 
   if (movingNode) {
     if (movingNode.type === 'building') return <BuildingHelper showRotate />
+    // A fresh placement (e.g. a positioned preset like a shelf) advertises its
+    // once/repeat continuation, exactly like the GLB item tool — but an existing
+    // node being *moved* is not a placement, so it gets no continuation chip.
+    const movingContinuationContext = isFreshPlacementMetadata(movingNode.metadata)
+      ? continuationContextOf(movingNode.type)
+      : null
     // Force-place only makes sense for kinds that collision-validate their drop;
     // structural kinds (wall/slab/…) never reject, so don't advertise Alt.
     return (
       <ItemHelper
+        continuationContext={movingContinuationContext}
         showEsc
         showForce={nodeRegistry.get(movingNode.type)?.snapProfile !== 'structural'}
         snapContext={snapContext}
@@ -176,9 +189,8 @@ export function HelperManager() {
     if (def?.toolHints && def.toolHints.length > 0) {
       return (
         <RegisteredToolHelper
+          continuationContext={continuationContext}
           hints={def.toolHints}
-          showFenceChainMode={mode === 'build' && tool === 'fence'}
-          showWallChainMode={mode === 'build' && tool === 'wall'}
           shiftPressed={modifiers.shift}
           snapContext={snapContext}
         />

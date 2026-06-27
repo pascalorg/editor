@@ -167,6 +167,7 @@ function itemWallMoveHandle(): HandleDescriptor<ItemNodeType> {
 export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   kind: 'item',
   snapProfile: 'item',
+  facingIndicator: true,
   schemaVersion: 1,
   schema: ItemNode,
   category: 'furnish',

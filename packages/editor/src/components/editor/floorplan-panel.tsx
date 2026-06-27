@@ -8871,7 +8871,7 @@ export function FloorplanPanel({
         // While a draft is open the segment locks to 15° rays from its start.
         // Snapping is governed by the snapping mode (`'off'` is the bypass);
         // there is no Shift hold-to-bypass. Alignment follows the magnetic snap
-        // mode, not Alt (Alt-tap toggles continuous/single chaining).
+        // mode, not Alt (continuation is cycled through the HUD / C).
         const fenceAngleSnap = fenceDraftStart !== null && isAngleSnapActive()
         const fenceSnapped = snapFenceDraftPoint({
           point: planPoint,
@@ -9361,7 +9361,7 @@ export function FloorplanPanel({
         : (publishedNextStart ?? point)
 
       if (
-        useEditor.getState().wallChainMode === 'single' ||
+        useEditor.getState().getContinuation('wall') === 'single' ||
         (wallChainFirstVertex && isWithinWallJoinSnapRadius(nextStart, wallChainFirstVertex))
       ) {
         clearWallPlacementDraft()

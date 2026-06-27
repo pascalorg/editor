@@ -245,7 +245,7 @@ export function useFloorplanBackgroundPlacement({
           // Single mode commits one segment per click: the same emit above
           // already made the 3D fence tool stopDrafting, so close the 2D
           // draft too instead of chaining.
-          if (useEditor.getState().fenceChainMode === 'single') {
+          if (useEditor.getState().getContinuation('fence') === 'single') {
             clearFencePlacementDraft()
             setCursorPoint(snappedPoint)
             return true
