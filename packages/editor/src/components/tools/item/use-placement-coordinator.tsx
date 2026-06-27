@@ -27,10 +27,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box3,
-  BufferGeometry,
-  DoubleSide,
   Euler,
-  Float32BufferAttribute,
   type Group,
   type LineSegments,
   Matrix4,
@@ -52,6 +49,7 @@ import { formatLinearMeasurement } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveAlignmentForActiveBuilding } from '../../../lib/world-grid-snap'
 import useEditor, { isMagneticSnapActive } from '../../../store/use-editor'
+import useFacingPose from '../../../store/use-facing-pose'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
   createLineGeometry,
@@ -84,6 +82,13 @@ const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 /** Figma-style alignment-snap threshold (meters), matching the 2D
  *  floor-plan overlay and the 3D registry move tool. */
 const ALIGNMENT_THRESHOLD_M = 0.08
+
+/** Right-click cancels an active placement — but the right button also orbits
+ *  the camera (CameraControls ROTATE). Only a quick, near-stationary right
+ *  press/release counts as a cancel; anything that moves past the pixel
+ *  threshold or is held longer is treated as a camera orbit and left alone. */
+const RIGHT_CLICK_CANCEL_MAX_MOVE_PX = 4
+const RIGHT_CLICK_CANCEL_MAX_MS = 200
 
 /**
  * Expand `bounds` outward so each axis is rounded up to the active grid step.
@@ -192,45 +197,6 @@ const dist = distance(uv(), center)
 const radialOpacity = smoothstep(0, 0.7, dist).mul(0.6)
 basePlaneMaterial.opacityNode = radialOpacity
 
-// Facing indicator: a small flat triangle on the floor in front of the ghost,
-// pointing along the item's forward (-Z) direction. The cursor group already
-// applies the item rotation, so the triangle stays in the group's local frame.
-// Pushed clear of the measurement label pill (which sits ~0.24 off the same
-// edge) and sized up so it stays legible at shallow camera angles.
-const FACING_INDICATOR_WIDTH = 0.4
-const FACING_INDICATOR_LENGTH = 0.46
-const FACING_INDICATOR_GAP = 0.45
-const facingIndicatorGeometry = (() => {
-  const geometry = new BufferGeometry()
-  // Tip at local +Z (the item's forward face); base across the X axis.
-  geometry.setAttribute(
-    'position',
-    new Float32BufferAttribute(
-      [
-        0,
-        0,
-        FACING_INDICATOR_LENGTH,
-        FACING_INDICATOR_WIDTH / 2,
-        0,
-        0,
-        -FACING_INDICATOR_WIDTH / 2,
-        0,
-        0,
-      ],
-      3,
-    ),
-  )
-  return geometry
-})()
-const facingIndicatorMaterial = new MeshBasicNodeMaterial({
-  color: 0x22_c5_5e, // green-500 (forward)
-  depthTest: false,
-  depthWrite: false,
-  // The flat triangle is viewed from above; DoubleSide makes it visible
-  // regardless of vertex winding (and from a camera orbited below the floor).
-  side: DoubleSide,
-})
-
 export interface PlacementCoordinatorConfig {
   asset: AssetInput | null
   draftNode: DraftNodeHandle
@@ -271,6 +237,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   )
   const altFreeRef = useRef(false)
   const previewBoundsSignatureRef = useRef<string | null>(null)
+  // Footprint shape (depth along local +Z and [x, z] centre) of the current
+  // preview box, mirrored from the rendered dimension bounds so the per-frame
+  // surface publisher can position the forward-facing triangle without reading
+  // React state. Updated in the render body below.
+  const facingShapeRef = useRef<{ depth: number; center: [number, number] }>({
+    depth: 0,
+    center: [0, 0],
+  })
   // Goes true the first time a 3D pointer event drives this coordinator.
   // The per-frame mesh-position lerp below is only useful for that path;
   // when the move is being driven externally (2D `FloorplanRegistryMoveOverlay`
@@ -2017,13 +1991,35 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
     emitter.on('tool:cancel', onCancel)
 
-    // ---- Right-click cancel ----
-    const onContextMenu = (event: MouseEvent) => {
-      if (configRef.current.onCancel) {
-        event.preventDefault()
-        configRef.current.onCancel()
+    // ---- Right-click cancel (quick click only, never a right-drag orbit) ----
+    // The right button is also the camera-orbit control, so a contextmenu/up
+    // alone can't tell "cancel placement" from "move the camera". Record the
+    // right-button-down point + time and only cancel on release when the
+    // pointer barely moved within a short window — a longer / further press is
+    // an orbit and must leave the placement untouched.
+    let rightDown: { x: number; y: number; t: number } | null = null
+    const onRightPointerDown = (event: PointerEvent) => {
+      if (event.button !== 2) return
+      rightDown = { x: event.clientX, y: event.clientY, t: performance.now() }
+    }
+    const onRightPointerUp = (event: PointerEvent) => {
+      if (event.button !== 2) return
+      const down = rightDown
+      rightDown = null
+      if (!down || !configRef.current.onCancel) return
+      const movedSq = (event.clientX - down.x) ** 2 + (event.clientY - down.y) ** 2
+      const elapsed = performance.now() - down.t
+      if (movedSq <= RIGHT_CLICK_CANCEL_MAX_MOVE_PX ** 2 && elapsed <= RIGHT_CLICK_CANCEL_MAX_MS) {
+        onCancel()
       }
     }
+    // Suppress the OS context menu while placing; the cancel itself is decided
+    // on pointerup above.
+    const onContextMenu = (event: MouseEvent) => {
+      if (configRef.current.onCancel) event.preventDefault()
+    }
+    window.addEventListener('pointerdown', onRightPointerDown, true)
+    window.addEventListener('pointerup', onRightPointerUp, true)
     window.addEventListener('contextmenu', onContextMenu)
 
     // ---- Bounding box geometry ----
@@ -2150,6 +2146,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('pointerdown', onRightPointerDown, true)
+      window.removeEventListener('pointerup', onRightPointerUp, true)
       window.removeEventListener('contextmenu', onContextMenu)
     }
   }, [
@@ -2231,28 +2229,70 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
   // Publish the ghost's surface (contact point + normal) so the grid's snap
   // patch sits at the item's resolved height (e.g. a shelf top) and orients to
-  // the surface (vertical in a wall plane). Only this coordinator publishes — a
+  // the surface (vertical in a wall plane), AND publish the forward-facing
+  // triangle pose to the single editor-side overlay (`<FacingPoseIndicator>`)
+  // instead of drawing an inline triangle. Only this coordinator publishes — a
   // moving existing node has no draft here, so the grid reads that case straight
   // off the node's mesh. Cleared when idle.
   const surfaceNormalRef = useRef(new Vector3(0, 1, 0))
+  const facingForwardRef = useRef(new Vector3(0, 0, 1))
+  const facingQuatRef = useRef(new Quaternion())
   useFrame(() => {
     const ghost = cursorGroupRef.current
-    if (asset && ghost) {
-      const surf = placementState.current.surface
-      const n = surfaceNormalRef.current
-      if (surf === 'wall' || surf === 'roof-wall') {
-        // Wall-attached: the item's forward (+Z) faces out of the wall, so the
-        // item's outward face direction IS the wall normal.
-        n.set(0, 0, 1).applyQuaternion(ghost.quaternion)
-      } else {
-        n.set(0, 1, 0)
-      }
-      publishPlacementSurface(ghost.position, n)
-    } else {
+    if (!(asset && ghost)) {
       clearPlacementSurface()
+      useFacingPose.getState().clear()
+      return
+    }
+    const surf = placementState.current.surface
+    const n = surfaceNormalRef.current
+    const shape = facingShapeRef.current
+    // Triangle yaw / Y default to the floor case: the cursor group's own yaw is
+    // the item's forward on the floor, and the triangle rides at the ghost's Y.
+    let facingYaw = ghost.rotation.y
+    let facingY = ghost.position.y
+    if (surf === 'wall' || surf === 'roof-wall') {
+      // Wall/roof-segment faces: the cursor group's yaw is the symmetric
+      // wireframe yaw (π off the real facing for a wall, and a different frame
+      // for a roof face), so derive the item's TRUE outward facing from the
+      // draft mesh's world orientation — its local +Z faces out of the host
+      // surface. This keeps BOTH the grid normal and the triangle correct for
+      // wall and roof-segment hosts alike, rather than the old quaternion read
+      // that pointed the wrong way.
+      const mesh = draftNode.current ? sceneRegistry.nodes.get(draftNode.current.id) : null
+      if (mesh) {
+        mesh.getWorldQuaternion(facingQuatRef.current)
+        const fwd = facingForwardRef.current.set(0, 0, 1).applyQuaternion(facingQuatRef.current)
+        fwd.y = 0
+        if (fwd.lengthSq() > 1e-6) facingYaw = Math.atan2(fwd.x, fwd.z)
+      }
+      // The forward triangle is a floor aid; drop it to the building-local floor
+      // under the wall (the ghost Y is up on the wall).
+      facingY = 0
+      n.set(Math.sin(facingYaw), 0, Math.cos(facingYaw))
+    } else {
+      n.set(0, 1, 0)
+    }
+    publishPlacementSurface(ghost.position, n)
+
+    if (shape.depth > 0) {
+      useFacingPose.getState().set({
+        position: [ghost.position.x, facingY, ghost.position.z],
+        rotationY: facingYaw,
+        depth: shape.depth,
+        center: shape.center,
+      })
+    } else {
+      useFacingPose.getState().clear()
     }
   })
-  useEffect(() => () => clearPlacementSurface(), [])
+  useEffect(
+    () => () => {
+      clearPlacementSurface()
+      useFacingPose.getState().clear()
+    },
+    [],
+  )
 
   useFrame(() => {
     if (!asset) {
@@ -2340,6 +2380,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const initialDepthGuideGeometry = useMemo(() => createLineGeometry(), [])
   const initialHeightGuideGeometry = useMemo(() => createLineGeometry(), [])
   const currentDimensionBounds = dimensionBounds ?? initialDimensionBounds
+  // Feed the footprint shape to the per-frame surface publisher, which orients
+  // and positions the forward-facing triangle via `useFacingPose`.
+  facingShapeRef.current = {
+    depth: currentDimensionBounds.dimensions[2],
+    center: [currentDimensionBounds.center[0], currentDimensionBounds.center[2]],
+  }
   const widthLabel = formatLinearMeasurement(currentDimensionBounds.dimensions[0], unit)
   const depthLabel = formatLinearMeasurement(currentDimensionBounds.dimensions[2], unit)
   const heightLabel = formatLinearMeasurement(currentDimensionBounds.dimensions[1], unit)
@@ -2358,14 +2404,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     currentDimensionBounds.dimensions[1] / 2,
     currentDimensionBounds.center[2] - currentDimensionBounds.dimensions[2] / 2,
   ]
-  const facingIndicatorPosition: [number, number, number] = [
-    currentDimensionBounds.center[0],
-    0.02,
-    currentDimensionBounds.center[2] +
-      currentDimensionBounds.dimensions[2] / 2 +
-      FACING_INDICATOR_GAP,
-  ]
-
   const measurementContent = (
     <>
       <lineSegments
@@ -2465,13 +2503,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         material={basePlaneMaterial}
         ref={basePlaneRef}
         renderOrder={999}
-      />
-      <mesh
-        geometry={facingIndicatorGeometry}
-        layers={EDITOR_LAYER}
-        material={facingIndicatorMaterial}
-        position={facingIndicatorPosition}
-        renderOrder={1000}
       />
     </group>
   )
