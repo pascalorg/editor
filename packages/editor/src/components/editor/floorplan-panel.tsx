@@ -5046,6 +5046,11 @@ export function FloorplanPanel({
   // the user closes and re-opens the 2D editor instead of restoring the
   // stale viewport from before they closed it.
   const isFloorplanOpen = useEditor((state) => state.isFloorplanOpen)
+  // Mirror for callbacks that fire outside React's render (the per-frame
+  // navigation-pose subscriber): when the 2D panel is hidden (`display:none` in
+  // 3D mode) it must NOT re-render on every camera-zoom frame.
+  const isFloorplanOpenRef = useRef(isFloorplanOpen)
+  isFloorplanOpenRef.current = isFloorplanOpen
   const selectedReferenceId = useEditor((state) => state.selectedReferenceId)
   const setSelectedReferenceId = useEditor((state) => state.setSelectedReferenceId)
   const setMode = useEditor((state) => state.setMode)
@@ -6441,6 +6446,13 @@ export function FloorplanPanel({
 
   const syncFloorplanViewportToNavigationPose = useCallback(
     (pose: NavigationSyncPose) => {
+      // Skip the viewport sync while the 2D panel is hidden (3D mode). It writes
+      // React state (`setViewport`) that re-renders the whole floorplan SVG, so
+      // doing it every camera-zoom frame for an invisible panel was a needless
+      // per-frame stall. The catch-up effect below re-syncs on reopen.
+      if (!isFloorplanOpenRef.current) {
+        return
+      }
       if (floorplanRotationStateRef.current) {
         return
       }
@@ -6471,9 +6483,12 @@ export function FloorplanPanel({
 
     latestNavigationSyncPoseRef.current = pose
     if (pose.source === '3d') {
+      // Re-runs when the panel reopens (`isFloorplanOpen`) so the viewport
+      // catches up to the camera after the per-frame sync was skipped while
+      // hidden; a no-op while closed (the sync early-returns).
       syncFloorplanViewportToNavigationPose(pose)
     }
-  }, [syncFloorplanViewportToNavigationPose])
+  }, [isFloorplanOpen, syncFloorplanViewportToNavigationPose])
 
   useEffect(() => {
     return useEditor.subscribe((state) => {
