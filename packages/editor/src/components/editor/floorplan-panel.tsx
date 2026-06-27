@@ -10797,7 +10797,16 @@ export function FloorplanPanel({
           <div className="flex h-full items-center justify-center px-6 text-center text-muted-foreground text-sm">
             Switch to a building level to view and edit the floorplan.
           </div>
-        ) : (
+        ) : isFloorplanOpen ? (
+          // The panel stays mounted in 3D mode (display:none) to keep the
+          // portalled compass + viewport state warm, but the heavy 2D scene
+          // (registry layer → one InteractiveGeometry per node, geometry
+          // renderer, handle layers) must NOT render/reconcile while hidden —
+          // otherwise every scene/selection change in pure 3D re-rendered the
+          // whole floorplan tree (profiler: 150–200ms on a wall-endpoint drag).
+          // `isFloorplanOpen` is `viewMode !== '3d'`, so this still renders fully
+          // in both 2D and split. Viewport state lives on the still-mounted
+          // panel, so pan/zoom is preserved across the toggle.
           <svg
             className="h-full w-full touch-none"
             onClick={isMarqueeSelectionToolActive ? undefined : handleSvgClick}
@@ -11137,7 +11146,7 @@ export function FloorplanPanel({
               />
             )}
           </svg>
-        )}
+        ) : null}
       </div>
     </div>
   )

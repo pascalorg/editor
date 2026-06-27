@@ -11,6 +11,7 @@ import {
   pauseSceneHistory,
   resolveAlignment,
   resumeSceneHistory,
+  useLiveNodeOverrides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -230,18 +231,42 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     pauseSceneHistory(useScene)
     let wasCommitted = false
 
+    // Wall ids carrying a live position override during the drag. Mirrors the
+    // 3D/2D wall MOVE tools: preview via `useLiveNodeOverrides` (the wall
+    // system, wall panel, and 2D floor plan all merge it) instead of writing
+    // the scene store every tick. A per-tick `updateNodes` hands a fresh `nodes`
+    // reference to every `useScene(s => s.nodes)` subscriber (sidebar panels,
+    // contextual HUD, tooltips, floor plan) and rebuilds them all each frame.
+    // The store is written ONCE, atomically, on commit.
+    const touchedWallIds = new Set<AnyNodeId>()
+
     const applyNodePreview = (
       updates: Array<{ id: WallNode['id']; start: WallPlanPoint; end: WallPlanPoint }>,
     ) => {
-      useScene.getState().updateNodes(
-        updates.map((entry) => ({
-          id: entry.id as AnyNodeId,
-          data: { start: entry.start, end: entry.end },
-        })),
+      const overrides = useLiveNodeOverrides.getState()
+      const sceneState = useScene.getState()
+      overrides.setMany(
+        updates.map(
+          (entry) =>
+            [entry.id, { start: entry.start, end: entry.end }] as [string, Record<string, unknown>],
+        ),
       )
       for (const entry of updates) {
-        useScene.getState().markDirty(entry.id as AnyNodeId)
+        touchedWallIds.add(entry.id as AnyNodeId)
+        sceneState.markDirty(entry.id as AnyNodeId)
       }
+    }
+
+    // Drop every live override (mesh + miters revert to the scene store, which
+    // was never mutated during the drag) and re-dirty so geometry rebuilds.
+    const clearPreviewOverrides = () => {
+      const overrides = useLiveNodeOverrides.getState()
+      const sceneState = useScene.getState()
+      for (const id of touchedWallIds) {
+        overrides.clear(id)
+        sceneState.markDirty(id)
+      }
+      touchedWallIds.clear()
     }
 
     const applyPreview = (movingPoint: WallPlanPoint, detachLinkedWalls = false) => {
@@ -277,13 +302,21 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const restoreOriginal = (clearAngleLabel = true) => {
-      applyNodePreview([
-        { id: nodeId, start: originalStart, end: originalEnd },
-        ...linkedOriginalsRef.current,
-      ])
+      clearPreviewOverrides()
       if (clearAngleLabel) {
         setAngleLabel(null)
       }
+    }
+
+    // Eat the click the browser fires right after the commit pointerup so it
+    // doesn't fall through to the wall body and arm the wall move tool.
+    const swallowNextClick = () => {
+      const swallow = (e: Event) => {
+        e.stopPropagation()
+        e.preventDefault()
+      }
+      window.addEventListener('click', swallow, { capture: true, once: true })
+      setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 300)
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -351,6 +384,12 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     const onPointerUp = () => {
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
+      // The handle sits on the wall body, so the browser fires a click on the
+      // wall after this release. Swallow it on EVERY endpoint-tool release (a
+      // no-drag tap dismisses, a drag commits) — otherwise that click falls
+      // through to the selection manager and arms the wall MOVE tool, a mode the
+      // user never asked for.
+      swallowNextClick()
       // Press-release without drag: dismiss the tool without committing.
       if (!hasDraggedRef.current) {
         useViewer.getState().setSelection({ selectedIds: [nodeId] })
@@ -367,26 +406,33 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       if (hasChanged && isSegmentLongEnough(preview.start, preview.end)) {
         wasCommitted = true
 
-        // Restore original baseline while paused so the next resume+update
-        // registers as a single tracked change (undo reverts to original).
-        applyNodePreview([
-          { id: nodeId, start: originalStart, end: originalEnd },
-          ...linkedOriginalsRef.current,
-        ])
+        const linkedUpdates = altPressedRef.current
+          ? []
+          : getLinkedWallUpdates(
+              linkedOriginalsRef.current,
+              originalStart,
+              originalEnd,
+              preview.start,
+              preview.end,
+            )
 
+        // Drop the live overrides; the store write below is the source of truth.
+        // The store sat at the pre-drag (original) values the whole drag — only
+        // overrides moved — so one resume+write records original→final as a
+        // single tracked change (one Ctrl-Z reverts to original).
+        clearPreviewOverrides()
         resumeSceneHistory(useScene)
-        applyNodePreview([
-          { id: nodeId, start: preview.start, end: preview.end },
-          ...(altPressedRef.current
-            ? []
-            : getLinkedWallUpdates(
-                linkedOriginalsRef.current,
-                originalStart,
-                originalEnd,
-                preview.start,
-                preview.end,
-              )),
+        useScene.getState().updateNodes([
+          { id: nodeId as AnyNodeId, data: { start: preview.start, end: preview.end } },
+          ...linkedUpdates.map((u) => ({
+            id: u.id as AnyNodeId,
+            data: { start: u.start, end: u.end },
+          })),
         ])
+        useScene.getState().markDirty(nodeId as AnyNodeId)
+        for (const u of linkedUpdates) {
+          useScene.getState().markDirty(u.id as AnyNodeId)
+        }
         pauseSceneHistory(useScene)
         triggerSFX('sfx:item-place')
       }
