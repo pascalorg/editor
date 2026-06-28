@@ -212,7 +212,11 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
       center: [cx, cy],
       width,
       height: depth,
-      rotation: transform.rotation,
+      // `rotateVec` (the footprint polygon) applies R(-angle), but the renderer
+      // draws the image with SVG `rotate(+deg)` = R(+angle). Negate so the
+      // sprite rotates the same way as its footprint box (and 3D); otherwise the
+      // two counter-rotate and diverge by 2x the item's rotation.
+      rotation: -transform.rotation,
     })
   }
   // Move handle — orange dot at the item center. Only when selected and not
