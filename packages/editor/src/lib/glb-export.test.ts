@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { type AnyNode, DoorNode, sceneRegistry } from '@pascal-app/core'
-import * as THREE from 'three'
 import { buildDoorPreviewMesh } from '@pascal-app/viewer'
+import * as THREE from 'three'
 import { prepareSceneForExport } from './glb-export'
 
 afterEach(() => {
