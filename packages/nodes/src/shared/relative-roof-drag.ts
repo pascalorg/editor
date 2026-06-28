@@ -18,6 +18,8 @@ export type RelativeRoofDragTarget = {
   hit: RoofSegmentHit
 }
 
+const ROOF_DRAG_SNAP_STEP_M = 0.05
+
 type RelativeRoofDragState = {
   segmentId: string
   anchor: [number, number]
@@ -112,5 +114,22 @@ export function createRelativeRoofDrag(original: {
         hit,
       }
     },
+  }
+}
+
+export function snapRelativeRoofDragTarget(
+  target: RelativeRoofDragTarget,
+  bypass = false,
+): RelativeRoofDragTarget {
+  if (bypass) return target
+  const localX = Math.round(target.localX / ROOF_DRAG_SNAP_STEP_M) * ROOF_DRAG_SNAP_STEP_M
+  const localZ = Math.round(target.localZ / ROOF_DRAG_SNAP_STEP_M) * ROOF_DRAG_SNAP_STEP_M
+  const surfaceOffsetY = target.localY - getSurfaceY(target.localX, target.localZ, target.segment)
+  const localY = getSurfaceY(localX, localZ, target.segment) + surfaceOffsetY
+  return {
+    ...target,
+    localX,
+    localY,
+    localZ,
   }
 }

@@ -16,6 +16,11 @@ import * as THREE from 'three'
 import { resolveRidgeSnap } from '../shared/ridge-snap'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfacePlacementGuides,
+  roofSurfaceFootprintFromNode,
+} from '../shared/roof-surface-placement-guides'
 import { ridgeVentDefinition } from './definition'
 import RidgeVentPreview from './preview'
 
@@ -73,6 +78,7 @@ const RidgeVentTool = () => {
       const snap = resolveRidgeSnap(hit.segment, hit.localX, hit.localZ)
       if (!snap) {
         setPreviewPos(null)
+        clearRoofSurfacePlacementGuides()
         return
       }
       const segObj = sceneRegistry.nodes.get(hit.segment.id)
@@ -96,6 +102,13 @@ const RidgeVentTool = () => {
 
       setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
       setPreviewPos(worldToBuildingLocal(ridgeWorld[0], ridgeWorld[1], ridgeWorld[2]))
+      publishRoofSurfacePlacementGuides({
+        roof: event.node as RoofNode,
+        segment: hit.segment,
+        center: [snap.localX, hit.localY, snap.localZ],
+        footprint: roofSurfaceFootprintFromNode(previewNode),
+        mode: 'linear-edge',
+      })
       event.stopPropagation()
     }
 
@@ -122,6 +135,7 @@ const RidgeVentTool = () => {
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
       setSelection({ selectedIds: [vent.id] })
       triggerSFX('sfx:item-place')
+      clearRoofSurfacePlacementGuides()
       event.stopPropagation()
     }
 
@@ -133,8 +147,9 @@ const RidgeVentTool = () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
+      clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection])
+  }, [activeBuildingId, setSelection, previewNode])
 
   return (
     <>
@@ -150,7 +165,10 @@ const RidgeVentTool = () => {
           )
           return !!hit && !!resolveRidgeSnap(hit.segment, hit.localX, hit.localZ)
         }}
-        onInvalidTarget={() => setPreviewPos(null)}
+        onInvalidTarget={() => {
+          setPreviewPos(null)
+          clearRoofSurfacePlacementGuides()
+        }}
       />
       {activeBuildingId && previewPos && (
         <group position={previewPos}>

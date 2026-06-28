@@ -51,6 +51,13 @@ const CHEVRON_DEPTH = 0.08
 const CHEVRON_BEVEL_THICKNESS = 0.035
 const CHEVRON_BEVEL_SIZE = 0.03
 const CHEVRON_BEVEL_SEGMENTS = 10
+// Slimmer extrude profile matching the legacy wall side handles
+// (`wall-move-side-handles.tsx`) — opt-in via the `thin` prop so the chunkier
+// default is preserved for every other handle that uses the shared chevron.
+const CHEVRON_THIN_DEPTH = 0.045
+const CHEVRON_THIN_BEVEL_THICKNESS = 0.018
+const CHEVRON_THIN_BEVEL_SIZE = 0.02
+const CHEVRON_THIN_BEVEL_SEGMENTS = 8
 const MOVE_CROSS_HALF_LENGTH = 0.36
 const MOVE_CROSS_SHAFT_HALF_WIDTH = 0.03
 const MOVE_CROSS_HEAD_HALF_WIDTH = 0.12
@@ -64,7 +71,7 @@ const ROTATE_HANDLE_HALF_SWEEP = Math.PI / 3
 const ROTATE_RIBBON_HALF_WIDTH = 0.02
 const ROTATE_HEAD_HALF_WIDTH = 0.045
 const TRACKER_CUBE_SIZE = 0.16
-export const CORNER_HEX_RADIUS = 0.16
+export const CORNER_HEX_RADIUS = 0.11
 
 export type HandleArrowShape = 'chevron' | 'cross' | 'curved-arrow' | 'tracker' | 'corner-picker'
 export type HandleArrowInputShape = HandleArrowShape | 'arrow' | 'move-cross'
@@ -90,6 +97,8 @@ export type HandleArrowProps = {
   indicatorRotation?: readonly [number, number, number]
   onPointerEnter?: PointerHandler
   onPointerLeave?: PointerHandler
+  // Extrude the slimmer wall-handle chevron profile (chevron shape only).
+  thin?: boolean
 }
 
 function normalizeHandleArrowShape(shape: HandleArrowInputShape, cursor: Cursor): HandleArrowShape {
@@ -179,8 +188,9 @@ export function createRotateArrowHandleGeometry() {
 
 // Reused chevron+shaft silhouette. The chevron points along +X by default;
 // callers rotate it around Y for Z-axis handles and into a vertical frame for
-// Y-axis handles.
-export function createArrowHandleGeometry() {
+// Y-axis handles. `thin` extrudes the slimmer wall-handle profile.
+export function createArrowHandleGeometry(thin = false) {
+  const depth = thin ? CHEVRON_THIN_DEPTH : CHEVRON_DEPTH
   const shape = new Shape()
   shape.moveTo(CHEVRON_MAX_X, 0)
   shape.lineTo(CHEVRON_NOTCH_X, CHEVRON_HALF_WIDTH)
@@ -191,16 +201,16 @@ export function createArrowHandleGeometry() {
   shape.lineTo(CHEVRON_NOTCH_X, -CHEVRON_HALF_WIDTH)
   shape.lineTo(CHEVRON_MAX_X, 0)
   const geometry = new ExtrudeGeometry(shape, {
-    depth: CHEVRON_DEPTH,
+    depth,
     bevelEnabled: true,
-    bevelThickness: CHEVRON_BEVEL_THICKNESS,
-    bevelSize: CHEVRON_BEVEL_SIZE,
+    bevelThickness: thin ? CHEVRON_THIN_BEVEL_THICKNESS : CHEVRON_BEVEL_THICKNESS,
+    bevelSize: thin ? CHEVRON_THIN_BEVEL_SIZE : CHEVRON_BEVEL_SIZE,
     bevelOffset: 0,
-    bevelSegments: CHEVRON_BEVEL_SEGMENTS,
+    bevelSegments: thin ? CHEVRON_THIN_BEVEL_SEGMENTS : CHEVRON_BEVEL_SEGMENTS,
     curveSegments: 16,
     steps: 1,
   })
-  geometry.translate(0, 0, -CHEVRON_DEPTH / 2)
+  geometry.translate(0, 0, -depth / 2)
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
   geometry.computeBoundingSphere()
@@ -326,8 +336,8 @@ export function createEndpointHitAreaGeometry(radius: number) {
   return geometry
 }
 
-function createHandleArrowGeometry(shape: HandleArrowShape) {
-  if (shape === 'chevron') return createArrowHandleGeometry()
+function createHandleArrowGeometry(shape: HandleArrowShape, thin = false) {
+  if (shape === 'chevron') return createArrowHandleGeometry(thin)
   if (shape === 'cross') return createMoveCrossHandleGeometry()
   if (shape === 'curved-arrow') return createRotateArrowHandleGeometry()
   if (shape === 'tracker') {
@@ -471,9 +481,10 @@ export function HandleArrow({
   onPointerDown,
   onPointerEnter,
   onPointerLeave,
+  thin = false,
 }: HandleArrowProps) {
   const visualShape = normalizeHandleArrowShape(shape, cursor)
-  const geometry = useMemo(() => createHandleArrowGeometry(visualShape), [visualShape])
+  const geometry = useMemo(() => createHandleArrowGeometry(visualShape, thin), [visualShape, thin])
   const hitGeometry = useMemo(() => createHandleArrowHitGeometry(visualShape), [visualShape])
   const indicatorMaterial = useHandleArrowMaterial(visualShape)
   const hitMaterial = useInvisibleHitAreaMaterial()

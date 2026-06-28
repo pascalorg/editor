@@ -11,6 +11,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  consumePlacementDragRelease,
   DragBoundingBox,
   EDITOR_LAYER,
   isGridSnapActive,
@@ -24,11 +25,13 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useState } from 'react'
 import { Box3, Euler, type Material, type Mesh, MeshBasicMaterial, Vector3 } from 'three'
+import { autoOffsetInvalidationUpdates } from '../shared/auto-offset-tag'
 import {
   type Aabb2D,
   collectGhostAlignmentCandidates,
   resolveGhostAlignment,
 } from '../shared/ghost-alignment'
+import { type RunMoveConnectivity, startRunMoveConnectivity } from '../shared/run-move-connectivity'
 import { buildDuctFittingGeometry } from './geometry'
 
 type Vec3 = [number, number, number]
@@ -176,9 +179,24 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     }
     if (existedAtStart) setMeshHidden(true)
 
+    // Carry connected ducts as the fitting slides: the part of the move along
+    // a run's axis stretches it, the part across translates the whole run (and
+    // propagates to its far joint). Snapshot once at drag start; only existing
+    // fittings are mated to anything.
+    const connectivity: RunMoveConnectivity | null = existedAtStart
+      ? startRunMoveConnectivity(node)
+      : null
+
     let lastPos: Vec3 = originalPosition
+    // Tracks whether the last frame held Alt: the fitting is detached from its
+    // connected ducts for the drag, so they stay put (no follow) and the
+    // commit omits their updates. Mirrors the duct endpoint's Alt-detach.
+    let lastDetached = false
 
     const onMove = (event: GridEvent) => {
+      // Alt = detach: drop the connected-duct follow so the fitting moves on
+      // its own, leaving every mated run where it sits.
+      const detached = event.nativeEvent?.altKey === true
       const snap = isGridSnapActive() ? snapToGridStep : (v: number) => v
       let x = snap(event.localPosition[0])
       let z = snap(event.localPosition[2])
@@ -200,21 +218,29 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       } else {
         useAlignmentGuides.getState().clear()
       }
+      const next: Vec3 = [x, lastPos[1], z]
 
-      const next: Vec3 = [x, originalPosition[1], z]
       if (
         (isGridSnapActive() || isMagneticSnapActive()) &&
         (next[0] !== lastPos[0] || next[2] !== lastPos[2])
       )
         triggerSFX('sfx:grid-snap')
       lastPos = next
+      lastDetached = detached
       hasMoved = true
       setCursorPos(next)
+      // Detached: keep the followers at their origin (drop any live overrides
+      // from a prior non-detached frame). Otherwise preview the follow.
+      if (detached) connectivity?.clear()
+      else connectivity?.preview({ position: next })
     }
 
-    const commit = (event: GridEvent) => {
+    const commit = (event: GridEvent, fromDragRelease = false) => {
       if (committed) return
-      if (Date.now() - activatedAt < 150) {
+      // The 150ms debounce only guards click-to-place against the arming click
+      // double-firing; a press-drag release is a distinct pointerup gesture, so
+      // it skips the guard (a quick drag-flick still commits).
+      if (!fromDragRelease && Date.now() - activatedAt < 150) {
         event.nativeEvent?.stopPropagation?.()
         return
       }
@@ -236,10 +262,24 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         useScene.getState().createNode(created as AnyNode, node.parentId as AnyNodeId)
         selectId = created.id as AnyNodeId
       } else {
-        useScene.getState().updateNode(nodeId, { position: lastPos } as Partial<AnyNode>)
-        useScene.getState().markDirty(nodeId)
+        // Fold connected-duct / sibling-run follow-updates into the SAME batch
+        // as the moved fitting so the whole joint is one undo step. Detached
+        // (Alt on the final frame): the joint is broken, so nothing follows.
+        const followUpdates = lastDetached
+          ? []
+          : (connectivity?.commitUpdates({ position: lastPos }) ?? [])
+        const scene = useScene.getState()
+        scene.updateNodes([
+          { id: nodeId, data: { position: lastPos } as Partial<AnyNode> },
+          ...followUpdates,
+          ...autoOffsetInvalidationUpdates(scene.nodes, nodeId),
+        ])
+        scene.markDirty(nodeId)
       }
       useScene.temporal.getState().pause()
+      // Followers are committed to the store — drop their live overrides so
+      // renderers read the canonical path/position.
+      connectivity?.clear()
       setMeshHidden(false)
 
       useAlignmentGuides.getState().clear()
@@ -251,6 +291,7 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     }
 
     const onCancel = () => {
+      connectivity?.clear()
       if (existedAtStart) {
         setMeshHidden(false)
         useViewer.getState().setSelection({ selectedIds: [nodeId] })
@@ -262,14 +303,39 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       useEditor.getState().setMovingNode(null)
     }
 
+    // Press-drag-release: when the move was engaged by the drag gesture (the
+    // selection rig's move cross or a future floating drag), `placementDragMode`
+    // is set, so commit on pointer-up at the last previewed position instead of
+    // waiting for a second click — same contract as every other move tool.
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      // A press-release that never moved isn't a placement — back out cleanly
+      // (drop the ghost, re-select the fitting) instead of leaving the tool
+      // armed waiting for a click.
+      if (!hasMoved) {
+        onCancel()
+        return
+      }
+      commit(
+        {
+          nativeEvent: event,
+          stopPropagation: () => event.stopPropagation(),
+        } as unknown as GridEvent,
+        true,
+      )
+    }
+
     emitter.on('grid:move', onMove)
     emitter.on('grid:click', commit)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', commit)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
+      connectivity?.clear()
       useAlignmentGuides.getState().clear()
       if (existedAtStart) setMeshHidden(false)
       useScene.temporal.getState().resume()

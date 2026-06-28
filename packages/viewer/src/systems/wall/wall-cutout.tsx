@@ -36,6 +36,10 @@ function getWallHideState(
   return hideWall
 }
 
+function sameMaterialArray(a: Material | Material[], b: Material[]): boolean {
+  return Array.isArray(a) && a.length === b.length && a.every((material, i) => material === b[i])
+}
+
 export const WallCutout = () => {
   const lastCameraPosition = useRef(new Vector3())
   const lastCameraTarget = useRef(new Vector3())
@@ -113,7 +117,13 @@ export const WallCutout = () => {
           useScene.getState().materials,
         )
 
-        if (hideWall) {
+        if (wallMode === 'translucent') {
+          ;(wallMesh as Mesh).material = isDeleteHighlighted
+            ? materials.deleteTranslucent
+            : isSelectionHighlighted
+              ? getSelectionHighlightMaterials(materials.translucent)
+              : materials.translucent
+        } else if (hideWall) {
           ;(wallMesh as Mesh).material = isDeleteHighlighted
             ? materials.deleteInvisible
             : isSelectionHighlighted
@@ -160,6 +170,11 @@ export const WallCutout = () => {
           wallMesh.material = mats.visible
         } else if (current === mats.deleteInvisible) {
           wallMesh.material = mats.invisible
+        } else if (
+          current === mats.deleteTranslucent ||
+          sameMaterialArray(current, getSelectionHighlightMaterials(mats.translucent))
+        ) {
+          wallMesh.material = mats.translucent
         }
       })
     }

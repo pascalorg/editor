@@ -29,6 +29,7 @@ import {
   collectGhostAlignmentCandidates,
   resolveGhostAlignment,
 } from '../shared/ghost-alignment'
+import { type RunMoveConnectivity, startRunMoveConnectivity } from '../shared/run-move-connectivity'
 
 type Vec3 = [number, number, number]
 
@@ -139,6 +140,12 @@ export const MoveLinesetTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     }
     if (existedAtStart) setMeshHidden(true)
 
+    // Carry connected fittings (+ their other runs) as the whole run slides.
+    // Snapshot once at drag start; only existing runs are mated to anything.
+    const connectivity: RunMoveConnectivity | null = existedAtStart
+      ? startRunMoveConnectivity(node)
+      : null
+
     const setPreview = (path: Vec3[]) => {
       previewPathRef.current = path
       setPreviewPath(path)
@@ -178,7 +185,9 @@ export const MoveLinesetTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       }
       prevSnapRef.current = cur
       hasMovedRef.current = true
-      setPreview(originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3))
+      const nextPath = originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3)
+      setPreview(nextPath)
+      connectivity?.preview({ path: nextPath })
     }
 
     const commit = (event: GridEvent) => {
@@ -206,10 +215,21 @@ export const MoveLinesetTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         useScene.getState().createNode(created as AnyNode, node.parentId as AnyNodeId)
         selectId = created.id as AnyNodeId
       } else {
-        useScene.getState().updateNode(nodeId, { path: finalPath } as Partial<AnyNode>)
+        // Fold connected-fitting / sibling-run follow-updates into the SAME
+        // batch as the moved run so the whole joint is one undo step.
+        const followUpdates = connectivity?.commitUpdates({ path: finalPath }) ?? []
+        useScene
+          .getState()
+          .updateNodes([
+            { id: nodeId, data: { path: finalPath } as Partial<AnyNode> },
+            ...followUpdates,
+          ])
         useScene.getState().markDirty(nodeId)
       }
       useScene.temporal.getState().pause()
+      // Followers are committed to the store — drop their live overrides so
+      // renderers read the canonical path/position.
+      connectivity?.clear()
       setMeshHidden(false)
 
       useAlignmentGuides.getState().clear()
@@ -221,6 +241,7 @@ export const MoveLinesetTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     }
 
     const onCancel = () => {
+      connectivity?.clear()
       if (existedAtStart) {
         setMeshHidden(false)
         useViewer.getState().setSelection({ selectedIds: [nodeId] })
@@ -240,6 +261,7 @@ export const MoveLinesetTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', commit)
       emitter.off('tool:cancel', onCancel)
+      connectivity?.clear()
       useAlignmentGuides.getState().clear()
       if (existedAtStart) setMeshHidden(false)
       useScene.temporal.getState().resume()

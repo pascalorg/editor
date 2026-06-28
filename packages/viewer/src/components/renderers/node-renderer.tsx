@@ -8,7 +8,7 @@ import { ParametricNodeRenderer } from './parametric-node-renderer'
 // on every render — that would create a new Suspense boundary each time.
 const lazyCache = new WeakMap<RendererSource<AnyNode>, ComponentType<{ node: AnyNode }>>()
 
-function getRegistryRenderer(
+export function getRegistryRenderer(
   source: RendererSource<AnyNode>,
 ): ComponentType<{ node: AnyNode }> | null {
   const cached = lazyCache.get(source)

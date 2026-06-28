@@ -1,3 +1,5 @@
+import type { GeometryContext } from '@pascal-app/core'
+import type { ColorPreset, RenderShading } from '@pascal-app/viewer'
 import {
   BufferGeometry,
   CylinderGeometry,
@@ -5,8 +7,8 @@ import {
   Euler,
   Float32BufferAttribute,
   Group,
+  type Material,
   Mesh,
-  type MeshStandardMaterial,
   SphereGeometry,
   TorusGeometry,
   Vector3,
@@ -18,6 +20,7 @@ import {
   createDuctMaterial,
   INCHES_TO_METERS,
 } from '../duct-segment/geometry'
+import { DUCT_BODY_SLOT_ID } from '../shared/duct-body-paint'
 import { localFittingPorts } from './ports'
 import type { DuctFittingNode } from './schema'
 
@@ -76,7 +79,7 @@ function buildMiteredElbow(
   sweepM: number,
   cheekM: number,
   profileShape: 'rect' | 'oval',
-  material: MeshStandardMaterial,
+  material: Material,
 ): Mesh {
   const travelIn = inletPos.clone().multiplyScalar(-1).normalize() // inlet → junction
   const travelOut = outletPos.clone().normalize() // junction → outlet
@@ -155,7 +158,7 @@ function buildRectToRoundLoft(
   widthM: number,
   heightM: number,
   radius: number,
-  material: MeshStandardMaterial,
+  material: Material,
 ): Mesh {
   const hw = widthM / 2
   const hh = heightM / 2
@@ -212,9 +215,23 @@ function buildRectToRoundLoft(
  * height rides local +Y — for the horizontal-plane orientations trunks
  * are drawn in, that's world-vertical.
  */
-export function buildDuctFittingGeometry(node: DuctFittingNode): Group {
+export function buildDuctFittingGeometry(
+  node: DuctFittingNode,
+  ctx?: GeometryContext,
+  shading: RenderShading = 'rendered',
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+  sceneTheme?: string,
+): Group {
   const group = new Group()
-  const material = createDuctMaterial(node)
+  const material = createDuctMaterial(
+    node,
+    ctx?.materials,
+    shading,
+    textures,
+    colorPreset,
+    sceneTheme,
+  )
   const radiusMain = (node.diameter * INCHES_TO_METERS) / 2
   const ports = localFittingPorts(node)
   const widthM = node.width * INCHES_TO_METERS
@@ -458,6 +475,11 @@ export function buildDuctFittingGeometry(node: DuctFittingNode): Group {
     collar.quaternion.setFromUnitVectors(new Vector3(0, 0, 1), port.direction)
     group.add(collar)
   }
+
+  group.traverse((object) => {
+    const mesh = object as Mesh
+    if (mesh.isMesh) mesh.userData.slotId = DUCT_BODY_SLOT_ID
+  })
 
   return group
 }

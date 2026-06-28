@@ -27,7 +27,7 @@ const PipeTrapTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const [cursor, setCursor] = useState<[number, number, number] | null>(null)
   const [yaw, setYaw] = useState(0)
-  const [diameter] = useState(1.5)
+  const [diameter] = useState(pipeTrapDefinition.defaults().diameter)
   const yawRef = useRef(0)
   const diameterRef = useRef(diameter)
   diameterRef.current = diameter

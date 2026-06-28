@@ -16,6 +16,11 @@ import * as THREE from 'three'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfacePlacementGuides,
+  roofSurfaceFootprintFromNode,
+} from '../shared/roof-surface-placement-guides'
 import { cupolaDefinition } from './definition'
 import CupolaPreview from './preview'
 
@@ -77,6 +82,12 @@ const CupolaTool = () => {
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
       setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
       setPreviewPos(worldToBuildingLocal(wx, wy, wz))
+      publishRoofSurfacePlacementGuides({
+        roof: event.node as RoofNode,
+        segment: hit.segment,
+        center: [hit.localX, hit.localY, hit.localZ],
+        footprint: roofSurfaceFootprintFromNode(previewNode),
+      })
       event.stopPropagation()
     }
 
@@ -101,6 +112,7 @@ const CupolaTool = () => {
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
       setSelection({ selectedIds: [cupola.id] })
       triggerSFX('sfx:item-place')
+      clearRoofSurfacePlacementGuides()
       event.stopPropagation()
     }
 
@@ -112,8 +124,9 @@ const CupolaTool = () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
+      clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection])
+  }, [activeBuildingId, setSelection, previewNode])
 
   return (
     <>
@@ -123,6 +136,7 @@ const CupolaTool = () => {
         onInvalidTarget={() => {
           setPreviewPos(null)
           setPreviewSurfaceQuat(null)
+          clearRoofSurfacePlacementGuides()
         }}
       />
       {activeBuildingId && previewPos && previewSurfaceQuat && (

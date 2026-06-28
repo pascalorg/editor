@@ -27,7 +27,7 @@ export const pipeTrapDefinition: NodeDefinition<typeof PipeTrapNode> = {
     metadata: {},
     position: [0, 0, 0],
     rotation: 0,
-    diameter: 1.5,
+    diameter: 2,
     pipeMaterial: 'pvc',
     armLengthM: 0,
   }),

@@ -1,5 +1,7 @@
 import { type AnyNode, type NodeDefinition, useScene } from '@pascal-app/core'
+import { ductBodyPaint, ductBodySlots } from '../shared/duct-body-paint'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
+import { createSegmentMoveAffordance } from '../shared/path-segment-affordance'
 import { buildDuctSegmentFloorplan } from './floorplan'
 import { buildDuctSegmentGeometry, ductPortDiameterIn } from './geometry'
 import { ductSegmentParametrics } from './parametrics'
@@ -75,6 +77,8 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    slots: () => ductBodySlots(),
+    paint: ductBodyPaint,
   },
 
   parametrics: ductSegmentParametrics,
@@ -107,6 +111,7 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
       n.insulated,
       n.insulationR,
       n.system,
+      n.slots,
     ]),
 
   // Open run ends as typed ports — directions point outward along the
@@ -151,6 +156,9 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   // `endpoint-handle` per path vertex; this drags the matching point.
   floorplanAffordances: {
     'move-path-point': createPathPointMoveAffordance('duct-segment'),
+    // 2D twin of the 3D side-move arrows: slide a segment perpendicular to
+    // itself. (Length editing stays on the per-vertex hex handles.)
+    'move-segment': createSegmentMoveAffordance('duct-segment'),
   },
 
   // Selection-time path-point handles (drag to edit a committed run).
@@ -168,7 +176,7 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Start segment' },
-    { key: 'Click again', label: 'Place it (locked to 45°)' },
+    { key: 'Click again', label: 'Place and continue' },
     { key: 'Alt + drag', label: 'Go vertical ↕, click to place' },
     { key: '[ / ]', label: 'Duct diameter down / up' },
     { key: 'Q', label: 'Round / rect trunk' },

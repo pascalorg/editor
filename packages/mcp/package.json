@@ -48,7 +48,7 @@
   ],
   "scripts": {
     "build": "tsc --build",
-    "dev": "tsc --build --watch",
+    "dev": "tsgo --build --watch",
     "start": "bun dist/bin/pascal-mcp.js",
     "test": "bun test",
     "smoke": "bun run scripts/smoke.ts",

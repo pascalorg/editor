@@ -43,6 +43,9 @@ function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeT
   return {
     kind: 'linear-resize',
     axis: 'x',
+    // Stand the blade up into the wall face so it reads face-on from the
+    // front instead of edge-on (the window sits on a vertical wall).
+    faceNormal: true,
     anchor: side === 'right' ? 'min' : 'max',
     min: MIN_WINDOW_WIDTH,
     max: (n, scene) => {

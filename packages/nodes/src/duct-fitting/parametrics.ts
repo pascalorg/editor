@@ -7,19 +7,41 @@ import {
 } from '@pascal-app/core'
 import { Vector3 } from 'three'
 import {
-  ductPortDiameterIn,
-  equivalentDiameterIn,
-  ovalEquivalentDiameterIn,
-  rollToContinueAcrossElbow,
-} from '../duct-segment/geometry'
+  autoOffsetInvalidationUpdates,
+  readAutoOffsetTag,
+  withAutoOffsetTag,
+} from '../shared/auto-offset-tag'
+import { DuctFittingSizeSwapEditor } from './inspector-editors'
 import { getDuctFittingPorts } from './ports'
 import type { DuctFittingNode } from './schema'
 
 /** Schema bounds for `diameter` / `diameter2`. */
 const clampDiameter = (d: number) => Math.min(48, Math.max(2, d))
 
+const equivalentDiameterIn = (widthIn: number, heightIn: number): number =>
+  2 * Math.sqrt((widthIn * heightIn) / Math.PI)
+
+const ovalEquivalentDiameterIn = (widthIn: number, heightIn: number): number => {
+  const minor = Math.min(widthIn, heightIn)
+  const major = Math.max(widthIn, heightIn)
+  const area = (major - minor) * minor + Math.PI * (minor / 2) ** 2
+  return 2 * Math.sqrt(area / Math.PI)
+}
+
+const ductPortDiameterIn = (node: DuctSegmentNode): number => {
+  if (node.shape === 'rect' && node.width && node.height) {
+    return equivalentDiameterIn(node.width, node.height)
+  }
+  if (node.shape === 'oval' && node.width && node.height) {
+    return ovalEquivalentDiameterIn(node.width, node.height)
+  }
+  return node.diameter
+}
+
 /** A duct endpoint sitting this close to a collar counts as mated. */
-const MATE_TOL_M = 0.03
+const MATE_TOL_M = 0.05
+
+type Point = [number, number, number]
 
 type DuctMate = { duct: DuctSegmentNode; endIndex: number }
 
@@ -28,10 +50,13 @@ type DuctMate = { duct: DuctSegmentNode; endIndex: number }
  * port id. Auto-minted joints place duct ends exactly on the collar, so
  * a tight distance check is enough — no connectivity graph yet.
  */
-function matedDucts(fitting: DuctFittingNode): Map<string, DuctMate> {
+function matedDucts(
+  fitting: DuctFittingNode,
+  nodes: Record<AnyNodeId, AnyNode> = useScene.getState().nodes,
+): Map<string, DuctMate> {
   const mates = new Map<string, DuctMate>()
   const ports = getDuctFittingPorts(fitting)
-  for (const node of Object.values(useScene.getState().nodes)) {
+  for (const node of Object.values(nodes)) {
     if (node.type !== 'duct-segment') continue
     const duct = node as DuctSegmentNode
     for (const endIndex of [0, duct.path.length - 1]) {
@@ -49,6 +74,25 @@ function matedDucts(fitting: DuctFittingNode): Map<string, DuctMate> {
     }
   }
   return mates
+}
+
+function refreshedAutoOffsetMetadata(
+  duct: DuctSegmentNode,
+  endIndex: number,
+  target: Point,
+): Record<string, unknown> | null {
+  const tag = readAutoOffsetTag(duct)
+  if (!tag) return null
+  let changed = false
+  const base = tag.base.map((patch) => {
+    if (patch.id !== duct.id || !Array.isArray(patch.data.path)) return patch
+    const path = patch.data.path.map((p) => (Array.isArray(p) ? [...p] : p))
+    if (!Array.isArray(path[endIndex])) return patch
+    path[endIndex] = [...target]
+    changed = true
+    return { ...patch, data: { ...patch.data, path } }
+  })
+  return changed ? withAutoOffsetTag(duct.metadata, { ...tag, base }) : null
 }
 
 export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
@@ -127,34 +171,48 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
         path[mate.endIndex] = [...target.position]
         data.path = path
       }
-      // Steep rect / oval runs also re-derive their cross-section roll
-      // so a riser's profile stays continuous through the fitting (same
-      // continuity the draw tool computes; runs flipped to rect after
-      // drawing never got it). Horizontal runs are left alone — their
-      // roll-0 orientation is canonical and re-deriving it from a
-      // possibly-stale riser roll would corrupt it.
-      if (next.shape !== 'round' && mate.duct.shape !== 'round') {
-        const away = mate.duct.path[mate.endIndex === 0 ? 1 : mate.duct.path.length - 2]
-        const source = getDuctFittingPorts(next).find(
-          (p) => p.id !== portId && p.id !== 'branch' && p.id !== 'branch2',
-        )
-        if (away && source) {
-          const newDir = new Vector3(away[0] - end[0], away[1] - end[1], away[2] - end[2])
-          if (newDir.lengthSq() >= 1e-10) {
-            newDir.normalize()
-            if (Math.abs(newDir.y) >= Math.SQRT1_2) {
-              const srcMate = mates.get(source.id)
-              const srcRoll = srcMate && srcMate.duct.shape !== 'round' ? srcMate.duct.roll : 0
-              const srcDir = new Vector3(...source.direction)
-              const roll = rollToContinueAcrossElbow(srcDir, srcRoll, srcDir, newDir)
-              if (Math.abs(roll - mate.duct.roll) > 1e-6) data.roll = roll
-            }
-          }
-        }
-      }
+      const metadata = refreshedAutoOffsetMetadata(
+        mate.duct,
+        mate.endIndex,
+        target.position as Point,
+      )
+      if (metadata) data.metadata = metadata as DuctSegmentNode['metadata']
       if (Object.keys(data).length > 0) updates.push({ id: mate.duct.id, data })
     }
-    return updates
+    return [...updates, ...autoOffsetInvalidationUpdates(useScene.getState().nodes, next.id)]
+  },
+
+  // Deleting an auto-inserted elbow restores the corner it replaced: both
+  // mated runs were pulled back one leg onto its collars, with the
+  // junction (the fitting's position) sitting exactly on the corner they
+  // originally met at. Re-extend each mated endpoint back to that junction
+  // so the L-shape returns to its pre-fitting length. Scoped to elbows —
+  // tees / crosses split a trunk into two separate nodes, which can't be
+  // re-joined by moving an endpoint.
+  onDelete: (fitting, nodes) => {
+    const invalidations = autoOffsetInvalidationUpdates(nodes, fitting.id)
+    if (fitting.fittingType !== 'elbow') return invalidations
+    const junction = new Vector3(...fitting.position)
+    const updates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }> = []
+    for (const mate of matedDucts(fitting, nodes).values()) {
+      const end = mate.duct.path[mate.endIndex]
+      if (!end) continue
+      const dx = end[0] - junction.x
+      const dy = end[1] - junction.y
+      const dz = end[2] - junction.z
+      if (dx * dx + dy * dy + dz * dz < 1e-12) continue
+      const path = mate.duct.path.map((p) => [...p] as Point)
+      path[mate.endIndex] = [junction.x, junction.y, junction.z]
+      const data: Partial<DuctSegmentNode> = { path }
+      const metadata = refreshedAutoOffsetMetadata(mate.duct, mate.endIndex, [
+        junction.x,
+        junction.y,
+        junction.z,
+      ])
+      if (metadata) data.metadata = metadata as DuctSegmentNode['metadata']
+      updates.push({ id: mate.duct.id, data })
+    }
+    return [...updates, ...invalidations]
   },
   groups: [
     {
@@ -170,7 +228,7 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
           key: 'angle',
           kind: 'number',
           unit: '°',
-          min: 15,
+          min: 0,
           max: 90,
           step: 15,
           visibleIf: (n) => n.fittingType === 'elbow',
@@ -233,6 +291,13 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
           min: 3,
           max: 40,
           step: 1,
+          visibleIf: (n) =>
+            n.fittingType === 'transition' || (n.shape !== 'round' && n.fittingType !== 'reducer'),
+        },
+        {
+          key: 'swapWidthHeight',
+          kind: 'custom',
+          component: DuctFittingSizeSwapEditor,
           visibleIf: (n) =>
             n.fittingType === 'transition' || (n.shape !== 'round' && n.fittingType !== 'reducer'),
         },

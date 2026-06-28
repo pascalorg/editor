@@ -2404,18 +2404,7 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
         textures,
         colorPreset,
       }),
-    [
-      shading,
-      textures,
-      colorPreset,
-      node.material,
-      node.material?.preset,
-      node.material?.properties,
-      node.material?.texture,
-      node.materialPreset,
-      node.slots,
-      sceneMaterials,
-    ],
+    [shading, textures, colorPreset, node, sceneMaterials],
   )
 
   useRegistry(node.id, node.type, ref)

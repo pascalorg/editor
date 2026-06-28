@@ -27,18 +27,18 @@ import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { offsetPathHorizontal } from '../shared/path-offset'
 import { collectScenePorts, findNearestPortXZ, REFRIGERANT_PORT_SYSTEMS } from '../shared/ports'
-import { planLiquidLineConnect } from './connect'
 import { liquidLineDefinition } from './definition'
 import { useLiquidLineToolOptions } from './options'
 
 /**
- * One-segment-at-a-time placement tool for standalone liquid lines — the same
- * draw model as the lineset tool (the line it used to be a rail of):
+ * Continuous placement tool for standalone liquid lines — the same draw model
+ * as the lineset tool (the line it used to be a rail of):
  *   - **First click** anchors the run start; within range of a refrigerant
  *     service port it snaps onto it so a run mates flush.
- *   - **Second click** commits a two-point line and re-arms; the in-flight end
- *     follows the active snapping mode (`angles` locks it to 45°; Shift cycles
- *     the snapping mode), Alt drags it vertical.
+ *   - **Second click** commits a two-point line and keeps its far end anchored,
+ *     so the next click continues the run; the in-flight end follows the active
+ *     snapping mode (`angles` locks it to 45°; Shift cycles the mode), Alt drags
+ *     it vertical.
  *
  * **Follow mode** (toggled by the MEP panel's Follow button or the `F` key):
  * instead of free-drawing, hover an existing lineset and click — a liquid line
@@ -121,46 +121,138 @@ function traceOffsetMeters(lineset: LinesetNode): number {
   return suctionR + jacket + FOLLOW_GAP_M + GHOST_RADIUS_M
 }
 
-type FollowTarget = { lineset: LinesetNode; sign: number }
+/** Coincidence tolerance (meters) for treating two endpoints as the same joint
+ *  when chaining linesets — the draw tool snaps endpoints exactly, so this only
+ *  needs to absorb float drift. */
+const JOINT_EPS_M = 1e-3
+
+function samePt(a: Vec3, b: Vec3): boolean {
+  return (
+    Math.abs(a[0] - b[0]) < JOINT_EPS_M &&
+    Math.abs(a[1] - b[1]) < JOINT_EPS_M &&
+    Math.abs(a[2] - b[2]) < JOINT_EPS_M
+  )
+}
+
+/** Quantized coordinate key so endpoints sharing a joint hash together. */
+function jointKey(p: Vec3): string {
+  return `${Math.round(p[0] / JOINT_EPS_M)},${Math.round(p[1] / JOINT_EPS_M)},${Math.round(
+    p[2] / JOINT_EPS_M,
+  )}`
+}
 
 /**
- * Nearest lineset whose path passes within `FOLLOW_PICK_RADIUS_M` of the
- * cursor, plus which side of it the cursor is on (`sign`, matching
- * `offsetPathHorizontal`'s side convention). Restricted to the active level.
+ * Whole-run trace target: the assembled centerline of every lineset chained to
+ * the hovered one (each lineset is its own two-point node now), which side the
+ * cursor is on (`sign`, matching `offsetPathHorizontal`'s convention), and a
+ * representative lineset for the offset distance.
+ */
+type FollowTarget = { path: Vec3[]; sign: number; lineset: LinesetNode }
+
+/**
+ * Walk the chain of linesets joined end-to-end at shared joint coordinates,
+ * starting from `start`, into one continuous centerline. Follows a joint only
+ * when it has a single unvisited continuation (degree-2) — a branch / junction
+ * (degree ≥ 3) ends the run so the trace stays a simple path.
+ */
+function assembleRun(start: LinesetNode, linesets: LinesetNode[]): Vec3[] {
+  const byJoint = new Map<string, LinesetNode[]>()
+  for (const ls of linesets) {
+    const a = ls.path[0] as Vec3
+    const b = ls.path[ls.path.length - 1] as Vec3
+    for (const key of [jointKey(a), jointKey(b)]) {
+      const arr = byJoint.get(key)
+      if (arr) arr.push(ls)
+      else byJoint.set(key, [ls])
+    }
+  }
+
+  const visited = new Set<string>([start.id])
+  let points: Vec3[] = (start.path as Vec3[]).map((p) => [...p] as Vec3)
+
+  // Grow the run one lineset at a time off the chosen terminal, until a joint
+  // has no unique continuation. `atEnd` extends after the last point; otherwise
+  // before the first.
+  const grow = (atEnd: boolean) => {
+    for (;;) {
+      const terminal = atEnd ? points[points.length - 1]! : points[0]!
+      const next = (byJoint.get(jointKey(terminal)) ?? []).filter((ls) => !visited.has(ls.id))
+      if (next.length !== 1) break
+      const node = next[0]!
+      visited.add(node.id)
+      const np = (node.path as Vec3[]).map((p) => [...p] as Vec3)
+      if (atEnd) {
+        if (samePt(np[np.length - 1]!, terminal)) np.reverse() // np must start at terminal
+        points = [...points, ...np.slice(1)]
+      } else {
+        if (samePt(np[0]!, terminal)) np.reverse() // np must end at terminal
+        points = [...np.slice(0, np.length - 1), ...points]
+      }
+    }
+  }
+  grow(true)
+  grow(false)
+  return points
+}
+
+/** Cursor side relative to the assembled run's nearest segment, as the offset
+ *  sign for `offsetPathHorizontal`. */
+function sideSign(path: Vec3[], point: Vec3): number {
+  let bestD = Number.POSITIVE_INFINITY
+  let bi = 0
+  for (let i = 0; i < path.length - 1; i++) {
+    const d = distToSegmentXZ(point, path[i]!, path[i + 1]!)
+    if (d < bestD) {
+      bestD = d
+      bi = i
+    }
+  }
+  const a = path[bi]!
+  const b = path[bi + 1]!
+  // Side vector = normalize(heading_xz) × UP = (-hz, 0, hx).
+  const hx = b[0] - a[0]
+  const hz = b[2] - a[2]
+  const hlen = Math.hypot(hx, hz)
+  const sx = hlen > 1e-9 ? -hz / hlen : 0
+  const sz = hlen > 1e-9 ? hx / hlen : 0
+  return (point[0] - a[0]) * sx + (point[2] - a[2]) * sz >= 0 ? 1 : -1
+}
+
+/**
+ * Nearest lineset within `FOLLOW_PICK_RADIUS_M` of the cursor, expanded into
+ * the whole connected run it belongs to. Restricted to the active level.
  */
 function findFollowTarget(point: Vec3, levelId: AnyNodeId): FollowTarget | null {
   const scene = useScene.getState()
-  let best: FollowTarget | null = null
-  let bestD = FOLLOW_PICK_RADIUS_M
+  const linesets: LinesetNode[] = []
   for (const n of Object.values(scene.nodes)) {
     if (!n || n.type !== 'lineset') continue
     if ((n.parentId as AnyNodeId | null) !== levelId) continue
     const ls = n as LinesetNode
-    if (ls.path.length < 2) continue
+    if (ls.path.length >= 2) linesets.push(ls)
+  }
+
+  let hovered: LinesetNode | null = null
+  let bestD = FOLLOW_PICK_RADIUS_M
+  for (const ls of linesets) {
     for (let i = 0; i < ls.path.length - 1; i++) {
-      const a = ls.path[i] as Vec3
-      const b = ls.path[i + 1] as Vec3
-      const d = distToSegmentXZ(point, a, b)
+      const d = distToSegmentXZ(point, ls.path[i] as Vec3, ls.path[i + 1] as Vec3)
       if (d >= bestD) continue
       bestD = d
-      // Side vector = normalize(heading_xz) × UP = (-hz, 0, hx); sign is which
-      // side of the segment the cursor sits on.
-      const hx = b[0] - a[0]
-      const hz = b[2] - a[2]
-      const hlen = Math.hypot(hx, hz)
-      const sx = hlen > 1e-9 ? -hz / hlen : 0
-      const sz = hlen > 1e-9 ? hx / hlen : 0
-      const dot = (point[0] - a[0]) * sx + (point[2] - a[2]) * sz
-      best = { lineset: ls, sign: dot >= 0 ? 1 : -1 }
+      hovered = ls
     }
   }
-  return best
+  if (!hovered) return null
+
+  const path = assembleRun(hovered, linesets)
+  if (path.length < 2) return null
+  return { path, sign: sideSign(path, point), lineset: hovered }
 }
 
-/** The offset path a follow-target would trace, or null if degenerate. */
+/** The offset centerline a follow-target would trace, or null if degenerate. */
 function tracePath(target: FollowTarget): Vec3[] | null {
   const offset = target.sign * traceOffsetMeters(target.lineset)
-  const traced = offsetPathHorizontal(target.lineset.path as Vec3[], offset)
+  const traced = offsetPathHorizontal(target.path, offset)
   return traced.length >= 2 ? traced : null
 }
 
@@ -203,47 +295,39 @@ const LiquidLineTool = () => {
         Math.abs(start[2] - end[2]) < 1e-4
       if (sameSpot) return
 
-      // Fold into any existing run that shares this segment's endpoint, so two
-      // runs meeting at a coordinate become one mitered path instead of
-      // overlapping nodes. Only same-level runs are candidates.
-      const scene = useScene.getState()
-      const existing = Object.values(scene.nodes).filter(
-        (n): n is LiquidLineNode =>
-          n?.type === 'liquid-line' && (n.parentId as AnyNodeId | null) === activeLevelId,
-      )
-      const plan = planLiquidLineConnect(existing, start, end)
-
-      if (plan.kind === 'create') {
-        const line = LiquidLineNode.parse({
-          ...liquidLineDefinition.defaults(),
-          name: 'Liquid Line',
-          path: plan.path,
-        })
-        scene.createNode(line, activeLevelId)
-      } else if (plan.kind === 'extend') {
-        scene.updateNode(plan.id, { path: plan.path })
-      } else {
-        scene.updateNode(plan.id, { path: plan.path })
-        scene.deleteNode(plan.deleteId)
-      }
+      // Each drawn segment is its own standalone two-point liquid-line node.
+      // Independent nodes mean each segment selects and deletes on its own,
+      // rather than folding into one mitered polyline run.
+      const line = LiquidLineNode.parse({
+        ...liquidLineDefinition.defaults(),
+        name: 'Liquid Line',
+        path: [start, end],
+      })
+      useScene.getState().createNode(line, activeLevelId)
       triggerSFX('sfx:item-place')
-      setDraftPoints([])
+      setDraftPoints([end])
       setSnapTarget(null)
       altAnchorRef.current = null
       setAltActive(false)
     }
 
-    // Lay a liquid line beside a lineset, tracing its whole path at the offset.
+    // Lay liquid lines beside the whole connected lineset run, tracing its
+    // assembled centerline at the offset. One two-point node per segment so the
+    // result stays per-segment selectable, matching free-drawn liquid lines.
     const commitTrace = (target: FollowTarget) => {
       const traced = tracePath(target)
       if (!traced) return
-      const scene = useScene.getState()
-      const line = LiquidLineNode.parse({
-        ...liquidLineDefinition.defaults(),
-        name: 'Liquid Line',
-        path: traced,
-      })
-      scene.createNode(line, activeLevelId)
+      const defaults = liquidLineDefinition.defaults()
+      const create = []
+      for (let i = 0; i < traced.length - 1; i++) {
+        const a = traced[i]!
+        const b = traced[i + 1]!
+        if (samePt(a, b)) continue
+        const node = LiquidLineNode.parse({ ...defaults, name: 'Liquid Line', path: [a, b] })
+        create.push({ node, parentId: activeLevelId })
+      }
+      if (create.length === 0) return
+      useScene.getState().applyNodeChanges({ create })
       triggerSFX('sfx:item-place')
       setTraceGhost(null)
       followTargetRef.current = null
@@ -478,7 +562,7 @@ const LiquidLineTool = () => {
                   }}
                 >
                   {followTargetRef.current
-                    ? 'Click to trace this lineset'
+                    ? 'Click to trace this lineset run'
                     : 'Follow: hover a lineset'}
                 </div>
               </Html>

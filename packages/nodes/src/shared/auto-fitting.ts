@@ -202,9 +202,10 @@ export type TeeTapPlan = {
  * upstream half (trimmed one leg short), a new duct-segment node carries
  * the downstream half (starting one leg after), and the tee's run legs
  * bridge the gap with its junction exactly on the centerline hit. The
- * branch collar points along `awayDir` projected perpendicular to the
- * trunk axis — a tee's branch is square to its run, so a 45° drawn
- * branch leaves square and the drawn duct continues from the collar.
+ * branch collar follows `awayDir`: the tee becomes a lateral whose
+ * `branchAngle` (clamped to the buildable 45–135° range) matches the turn
+ * the drawn run makes off the trunk, so the new duct continues straight
+ * out of the collar instead of kinking square.
  *
  * Returns null when the tap can't be built: too close to the segment's
  * ends (no room for the run legs — join the end port instead), or the
@@ -223,12 +224,37 @@ export function planTeeAtRunBody(
   if (axis.lengthSq() < 1e-10) return null
   axis.normalize()
 
-  // Branch leaves square to the run: project the drawn direction onto
-  // the plane perpendicular to the trunk axis.
-  const away = new Vector3(...awayDir)
+  // The branch FOLLOWS the drawn run's angle: the tee becomes a lateral
+  // whose `branchAngle` matches the actual turn the new run makes off the
+  // trunk, instead of forcing a square tap and kinking the drawn duct.
+  // `branchDir` is the drawn direction's component square to the trunk —
+  // it sets the PLANE the branch leans in; the lean amount comes from how
+  // much of `away` runs along the trunk vs. across it.
+  const away = new Vector3(...awayDir).normalize()
+  if (away.lengthSq() < 1e-10) return null
   const branchDir = away.clone().addScaledVector(axis, -away.dot(axis))
   if (branchDir.lengthSq() < 1e-6) return null
   branchDir.normalize()
+
+  // `branchAngle` is measured off the +X (outlet / downstream) axis in the
+  // tee's local XZ plane, where +Z is the branch's square direction. So
+  // the angle is atan2(across-trunk component, along-trunk component) of
+  // the drawn run — 90° when square, <90° leaning downstream, >90° leaning
+  // upstream. Clamped to the schema's buildable 45–135° lateral range.
+  const acrossLen = Math.sqrt(Math.max(0, 1 - away.dot(axis) ** 2))
+  const branchAngleDeg = Math.min(
+    135,
+    Math.max(45, (Math.atan2(acrossLen, away.dot(axis)) * 180) / Math.PI),
+  )
+  const phi = (branchAngleDeg * Math.PI) / 180
+  // Actual branch outward direction at the (possibly clamped) angle — the
+  // new run starts at its collar. When unclamped this equals `away`, so
+  // the drawn duct continues straight out of the tee.
+  const branchOutDir = axis
+    .clone()
+    .multiplyScalar(Math.cos(phi))
+    .addScaledVector(branchDir, Math.sin(phi))
+    .normalize()
 
   // Room check: both run legs must fit inside the hit segment with a
   // margin of real duct on each side.
@@ -244,8 +270,9 @@ export function planTeeAtRunBody(
   const MIN_STUB = 0.08
   if (upstream < legRun + MIN_STUB || downstream < legRun + MIN_STUB) return null
 
-  // Local +X (the run) → axis, local +Z (the branch) → branchDir. Both
-  // pairs are perpendicular, so the basis transfer is exact.
+  // Local +X (the run) → axis, local +Z (the branch plane) → branchDir.
+  // Both pairs are perpendicular, so the basis transfer is exact and the
+  // local branch leg (cos φ, sin φ) lands on `branchOutDir` in world.
   const localFrame = frame(new Vector3(1, 0, 0), new Vector3(0, 0, 1))
   const worldFrame = frame(axis, branchDir)
   if (!localFrame || !worldFrame) return null
@@ -256,7 +283,7 @@ export function planTeeAtRunBody(
 
   const inletTrim = P.clone().addScaledVector(axis, -legRun)
   const outletTrim = P.clone().addScaledVector(axis, legRun)
-  const collar = P.clone().addScaledVector(branchDir, legBranch)
+  const collar = P.clone().addScaledVector(branchOutDir, legBranch)
 
   const fitting = DuctFittingNode.parse({
     object: 'node',
@@ -273,6 +300,7 @@ export function planTeeAtRunBody(
     width2: branch.width,
     height2: branch.height,
     diameter2: branchDiameterIn,
+    branchAngle: branchAngleDeg,
     ductMaterial: 'sheet-metal',
     system: trunk.system,
     position: [P.x, P.y, P.z],
@@ -462,24 +490,30 @@ export type ElbowRealignPlan = {
   collarPoint: Point
 }
 
+export type PipeElbowRealignPlan = {
+  update: { id: PipeFittingNode['id']; data: { angle: number; rotation: Point } }
+  collarPoint: Point
+}
+
 /**
- * Re-aim an existing elbow whose open collar a new run just snapped
- * onto. The junction stays put and the OTHER collar keeps its exact
- * position + direction (it's mated to something), while the snapped
- * collar swings to face the incoming run — the elbow's `angle` adjusts
- * to whatever turn that requires.
+ * Shared elbow re-aim geometry for duct AND pipe elbows — both share the
+ * exact same local convention (inlet -X, outlet turned `angle`° in XZ,
+ * 15–90° buildable range), so only the collar leg length differs.
  *
- * Geometry: with the fixed collar's outward direction f and the desired
- * free direction `awayDir`, the elbow's local inlet/outlet pair subtends
- * 180° − angle, so the new turn is θ = 180° − ∠(f, away). Buildable only
- * while θ stays in the elbow's 15–90° range — otherwise null and the
- * caller leaves the joint as a plain butt joint.
+ * The junction stays put and the OTHER collar keeps its exact position +
+ * direction (it's mated to something), while the snapped collar swings to
+ * face `awayDir` — the elbow's `angle` adjusts to whatever turn that
+ * requires. Geometry: with the fixed collar's outward direction f and the
+ * desired free direction `awayDir`, the elbow's local inlet/outlet pair
+ * subtends 180° − angle, so the new turn is θ = 180° − ∠(f, away).
+ * Buildable only while θ stays in 15–90° — otherwise null.
  */
-export function planElbowRealign(
-  elbow: DuctFittingNode,
+function planElbowRealignCore(
+  elbow: { fittingType: string; rotation: Point; angle: number; position: Point },
   snappedPortId: string,
   awayDir: Point,
-): ElbowRealignPlan | null {
+  leg: number,
+): { angle: number; rotation: Point; collarPoint: Point } | null {
   if (elbow.fittingType !== 'elbow') return null
   if (snappedPortId !== 'inlet' && snappedPortId !== 'outlet') return null
 
@@ -498,10 +532,14 @@ export function planElbowRealign(
   )
   const fixedWorld = snappedPortId === 'inlet' ? outletWorld : inletWorld
 
-  // New turn from the fixed collar / free collar pair.
+  // New turn from the fixed collar / free collar pair. Unlike fresh-fitting
+  // creation (which butt-joins near-straight runs rather than minting a flat
+  // elbow), an EXISTING elbow may flatten all the way to 0° — a straight
+  // coupling — when its run is dragged into line, so only the upper bound
+  // guards here.
   const spread = fixedWorld.angleTo(away)
   const turnNew = Math.PI - spread
-  if (turnNew < MIN_TURN_RAD || turnNew > MAX_TURN_RAD) return null
+  if (turnNew > MAX_TURN_RAD) return null
 
   // Local outward pair at the new angle, ordered (fixed, free) to match
   // the world pair.
@@ -512,23 +550,115 @@ export function planElbowRealign(
 
   const localFrame = frame(fixedLocal, freeLocal)
   const worldFrame = frame(fixedWorld, away)
-  if (!localFrame || !worldFrame) return null
-  const rotation = new Quaternion().setFromRotationMatrix(
-    worldFrame.multiply(localFrame.transpose()),
-  )
+  // At (near-)straight the two collars are collinear, so the bend plane is
+  // undefined and `frame()` returns null. Map the fixed collar's local axis
+  // onto its world direction instead; the free collar (antiparallel) lands
+  // on `away` for free, and a straight coupling's roll is arbitrary.
+  const rotation =
+    localFrame && worldFrame
+      ? new Quaternion().setFromRotationMatrix(worldFrame.multiply(localFrame.transpose()))
+      : new Quaternion().setFromUnitVectors(fixedLocal, fixedWorld)
   const euler = new Euler().setFromQuaternion(rotation)
 
-  const leg = fittingLegLength(elbow.diameter)
   const collar = new Vector3(...elbow.position).addScaledVector(away, leg)
 
   return {
-    update: {
-      id: elbow.id,
-      data: {
-        angle: Math.min(90, (turnNew * 180) / Math.PI),
-        rotation: [euler.x, euler.y, euler.z],
-      },
-    },
+    angle: Math.max(0, Math.min(90, (turnNew * 180) / Math.PI)),
+    rotation: [euler.x, euler.y, euler.z],
+    collarPoint: [collar.x, collar.y, collar.z],
+  }
+}
+
+/** Re-aim a DUCT elbow whose open collar a new run just snapped onto. */
+export function planElbowRealign(
+  elbow: DuctFittingNode,
+  snappedPortId: string,
+  awayDir: Point,
+): ElbowRealignPlan | null {
+  const core = planElbowRealignCore(elbow, snappedPortId, awayDir, fittingLegLength(elbow.diameter))
+  if (!core) return null
+  return {
+    update: { id: elbow.id, data: { angle: core.angle, rotation: core.rotation } },
+    collarPoint: core.collarPoint,
+  }
+}
+
+/** Re-aim a DWV PIPE elbow — same geometry, pipe collar leg length. */
+export function planPipeElbowRealign(
+  elbow: PipeFittingNode,
+  snappedPortId: string,
+  awayDir: Point,
+): PipeElbowRealignPlan | null {
+  const core = planElbowRealignCore(
+    elbow,
+    snappedPortId,
+    awayDir,
+    pipeFittingLegLength(elbow.diameter),
+  )
+  if (!core) return null
+  return {
+    update: { id: elbow.id, data: { angle: core.angle, rotation: core.rotation } },
+    collarPoint: core.collarPoint,
+  }
+}
+
+// ─── Tee branch re-aim (run dragged off an existing tee's branch) ────
+
+export type TeeBranchRealignPlan = {
+  /** Patch for the existing tee: new branch lean angle. The run axis and
+   *  the tee's orientation stay fixed (inlet / outlet stay mated to the
+   *  trunk) — only `branchAngle` changes. */
+  update: { id: DuctFittingNode['id']; data: { branchAngle: number } }
+  /** Where the branch collar lands at the new angle — the dragged run's
+   *  mated end rides here. */
+  collarPoint: Point
+}
+
+/**
+ * Re-aim a duct TEE's branch to follow a run dragged off its branch collar.
+ *
+ * Unlike the elbow (which re-orients its whole body), a tee's run legs stay
+ * mated to the trunk, so the body orientation is FIXED: the branch can only
+ * swing within the tee's local XZ plane (local +X = run axis, +Z = the
+ * square branch direction). `awayDir` (junction → dragged end) is projected
+ * onto that plane and read as the lean angle off +X — 90° square, <90°
+ * leaning downstream toward the outlet, >90° upstream toward the inlet —
+ * clamped to the schema's buildable 45–135° lateral range.
+ */
+export function planTeeBranchRealign(
+  tee: DuctFittingNode,
+  awayDir: Point,
+): TeeBranchRealignPlan | null {
+  if (tee.fittingType !== 'tee') return null
+  const away = new Vector3(...awayDir)
+  if (away.lengthSq() < 1e-10) return null
+  away.normalize()
+
+  const rot = new Quaternion().setFromEuler(
+    new Euler(tee.rotation[0], tee.rotation[1], tee.rotation[2]),
+  )
+  const runAxis = new Vector3(1, 0, 0).applyQuaternion(rot)
+  const squareDir = new Vector3(0, 0, 1).applyQuaternion(rot)
+  const ax = away.dot(runAxis)
+  const az = away.dot(squareDir)
+  // Drag straight along the run axis (no square component) leaves the lean
+  // undefined — hold the frame.
+  if (Math.abs(ax) < 1e-9 && Math.abs(az) < 1e-9) return null
+
+  const branchAngleDeg = Math.min(135, Math.max(45, (Math.atan2(az, ax) * 180) / Math.PI))
+  const phi = (branchAngleDeg * Math.PI) / 180
+  const branchDir = runAxis
+    .clone()
+    .multiplyScalar(Math.cos(phi))
+    .addScaledVector(squareDir, Math.sin(phi))
+    .normalize()
+  const collar = new Vector3(...tee.position).addScaledVector(
+    branchDir,
+    fittingLegLength(tee.diameter2),
+  )
+
+  return {
+    update: { id: tee.id, data: { branchAngle: branchAngleDeg } },
     collarPoint: [collar.x, collar.y, collar.z],
   }
 }

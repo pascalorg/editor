@@ -9,6 +9,7 @@ export type {
   HandleList,
   HandlePlacement,
   HandlePortal,
+  LatchHandle,
   LinearResizeHandle,
   RadialResizeHandle,
   TapActionHandle,

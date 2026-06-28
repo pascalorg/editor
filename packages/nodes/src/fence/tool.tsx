@@ -560,6 +560,7 @@ export const FenceTool: React.FC = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (!previewRef.current) return
       if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
         stopDrafting()
         return

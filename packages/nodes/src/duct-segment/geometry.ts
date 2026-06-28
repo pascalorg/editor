@@ -1,9 +1,18 @@
+import type { GeometryContext } from '@pascal-app/core'
+import {
+  type ColorPreset,
+  createSurfaceRoleMaterial,
+  type RenderShading,
+  resolveMaterialRef,
+  resolveSlotDefaultMaterial,
+} from '@pascal-app/viewer'
 import {
   BoxGeometry,
   CatmullRomCurve3,
   CylinderGeometry,
   ExtrudeGeometry,
   Group,
+  type Material,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
@@ -13,6 +22,7 @@ import {
   TubeGeometry,
   Vector3,
 } from 'three'
+import { DUCT_BODY_SLOT_DEFAULT, DUCT_BODY_SLOT_ID } from '../shared/duct-body-paint'
 import type { DuctSegmentNode } from './schema'
 
 export const INCHES_TO_METERS = 0.0254
@@ -137,7 +147,7 @@ export function buildRectSection(
   end: Vector3,
   widthM: number,
   heightM: number,
-  material: MeshStandardMaterial,
+  material: Material,
   name: string,
   roll = 0,
 ): Mesh | null {
@@ -200,7 +210,7 @@ export function buildOvalSection(
   end: Vector3,
   widthM: number,
   heightM: number,
-  material: MeshStandardMaterial,
+  material: Material,
   name: string,
   roll = 0,
 ): Mesh | null {
@@ -226,7 +236,7 @@ export function buildSection(
   start: Vector3,
   end: Vector3,
   radius: number,
-  material: MeshStandardMaterial,
+  material: Material,
   name: string,
 ): Mesh | null {
   const dir = new Vector3().subVectors(end, start)
@@ -318,6 +328,7 @@ function helixRidgeFor(
 type DuctAppearance = {
   ductMaterial: 'sheet-metal' | 'spiral' | 'flex' | 'duct-board'
   system: 'supply' | 'return'
+  slots?: Record<string, string>
 }
 
 function getSystemTint(node: DuctAppearance): string {
@@ -330,12 +341,25 @@ function getSystemTint(node: DuctAppearance): string {
  * metal. Shared with the fitting builder so connected runs and junctions
  * look like one piece.
  */
-export function createDuctMaterial(_node: DuctAppearance): MeshStandardMaterial {
-  return new MeshStandardMaterial({
-    color: '#ffffff',
-    metalness: 0,
-    roughness: 0.7,
-  })
+export function createDuctMaterial(
+  node: DuctAppearance,
+  sceneMaterials?: GeometryContext['materials'],
+  shading: RenderShading = 'rendered',
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+  sceneTheme?: string,
+): Material {
+  if (!textures) {
+    return createSurfaceRoleMaterial('furnishing', colorPreset, undefined, sceneTheme)
+  }
+
+  const slotRef = node.slots?.[DUCT_BODY_SLOT_ID]
+  if (slotRef) {
+    const resolved = resolveMaterialRef(slotRef, sceneMaterials, shading)
+    if (resolved) return resolved
+  }
+
+  return resolveSlotDefaultMaterial(DUCT_BODY_SLOT_DEFAULT, shading, 0.7)
 }
 
 /**
@@ -354,7 +378,14 @@ export function createDuctMaterial(_node: DuctAppearance): MeshStandardMaterial 
  * identity since the schema has no position field — the path itself is
  * absolute within the level).
  */
-export function buildDuctSegmentGeometry(node: DuctSegmentNode): Group {
+export function buildDuctSegmentGeometry(
+  node: DuctSegmentNode,
+  ctx?: GeometryContext,
+  shading: RenderShading = 'rendered',
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+  sceneTheme?: string,
+): Group {
   const group = new Group()
   if (node.path.length < 2) return group
 
@@ -363,7 +394,14 @@ export function buildDuctSegmentGeometry(node: DuctSegmentNode): Group {
   const radius = (node.diameter * INCHES_TO_METERS) / 2
   const widthM = node.width * INCHES_TO_METERS
   const heightM = node.height * INCHES_TO_METERS
-  const ductMaterial = createDuctMaterial(node)
+  const ductMaterial = createDuctMaterial(
+    node,
+    ctx?.materials,
+    shading,
+    textures,
+    colorPreset,
+    sceneTheme,
+  )
 
   const points = node.path.map(([x, y, z]) => new Vector3(x, y, z))
 
@@ -371,9 +409,10 @@ export function buildDuctSegmentGeometry(node: DuctSegmentNode): Group {
     half: number,
     rectW: number,
     rectH: number,
-    material: MeshStandardMaterial,
+    material: Material,
     namePrefix: string,
     endInsetM = 0,
+    paintableBody = false,
   ) => {
     for (let i = 0; i < points.length - 1; i++) {
       // Loop bounds + min(2) on the schema guarantee both points exist.
@@ -396,7 +435,10 @@ export function buildDuctSegmentGeometry(node: DuctSegmentNode): Group {
         : isOval
           ? buildOvalSection(a, b, rectW, rectH, material, `${namePrefix}-section-${i}`, node.roll)
           : buildSection(a, b, half, material, `${namePrefix}-section-${i}`)
-      if (mesh) group.add(mesh)
+      if (mesh) {
+        if (paintableBody) mesh.userData.slotId = DUCT_BODY_SLOT_ID
+        group.add(mesh)
+      }
     }
     // Joint caps at interior points only (skip first and last — they're
     // open ends; equipment / terminal / fitting collars cap them). Rect
@@ -410,11 +452,12 @@ export function buildDuctSegmentGeometry(node: DuctSegmentNode): Group {
           : new Mesh(new SphereGeometry(half, RADIAL_SEGMENTS, 12), material)
       joint.name = `${namePrefix}-joint-${i}`
       joint.position.copy(points[i] as Vector3)
+      if (paintableBody) joint.userData.slotId = DUCT_BODY_SLOT_ID
       group.add(joint)
     }
   }
 
-  addRun(radius, widthM, heightM, ductMaterial, 'duct')
+  addRun(radius, widthM, heightM, ductMaterial, 'duct', 0, true)
 
   // Construction body detail: spiral winds its lock seam, flex its wire
   // helix (tight pitch — reads as corrugation) over each round section.

@@ -13,6 +13,11 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfacePlacementGuides,
+  roofSurfaceFootprintFromNode,
+} from '../shared/roof-surface-placement-guides'
 import { gutterDefinition } from './definition'
 import { type EaveSnap, resolveEaveSnap } from './eave-snap'
 import GutterPreview from './preview'
@@ -100,6 +105,13 @@ const GutterTool = () => {
         },
         snap,
       })
+      publishRoofSurfacePlacementGuides({
+        roof,
+        segment: hit.segment,
+        center: [snap.eaveX, snap.eaveY, snap.eaveZ],
+        footprint: roofSurfaceFootprintFromNode({ ...previewNode, rotation: snap.rotation }),
+        mode: 'linear-edge',
+      })
       event.stopPropagation()
     }
 
@@ -129,6 +141,7 @@ const GutterTool = () => {
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
       setSelection({ selectedIds: [gutter.id] })
       triggerSFX('sfx:item-place')
+      clearRoofSurfacePlacementGuides()
       event.stopPropagation()
     }
 
@@ -140,15 +153,19 @@ const GutterTool = () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
+      clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection])
+  }, [activeBuildingId, setSelection, previewNode])
 
   return (
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
         ghost={<GutterPreview node={previewNode} invalid />}
-        onInvalidTarget={() => setTarget(null)}
+        onInvalidTarget={() => {
+          setTarget(null)
+          clearRoofSurfacePlacementGuides()
+        }}
       />
       {activeBuildingId && target && (
         <group position={target.roof.position} rotation-y={target.roof.rotation}>

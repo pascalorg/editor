@@ -9,6 +9,7 @@ import {
   DEFAULT_ANGLE_STEP,
   type HandleDescriptor,
   type HandlePortal,
+  type LatchHandle,
   type LinearResizeHandle,
   nodeRegistry,
   type RadialResizeHandle,
@@ -44,6 +45,7 @@ import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { RESIZE_HANDLE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from '../../lib/contextual-help'
 import { createEditorApi } from '../../lib/editor-api'
+import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor from '../../store/use-editor'
 import useInteractionScope, {
@@ -112,11 +114,16 @@ export {
   ARROW_COLOR,
   ARROW_HOVER_COLOR,
   ARROW_SCALE,
+  createArrowHandleGeometry,
   createArrowHitAreaGeometry,
   createEndpointHitAreaGeometry,
   createMoveCrossHandleGeometry,
   createRotateArrowHandleGeometry,
   createRotateArrowHitAreaGeometry,
+  HandleArrow,
+  type HandleArrowInputShape,
+  type HandleArrowPlacement,
+  type HandleArrowProps,
   HIT_AREA_MARGIN,
   InvisibleHandleHitArea,
   NO_RAYCAST,
@@ -374,6 +381,21 @@ function NodeArrowHandlesForNode({
   // hook count between renders and trip React's rules-of-hooks check.
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const [preDragNode, setPreDragNode] = useState<AnyNode | null>(null)
+  // Latch groups currently toggled open. A `latch` cube descriptor flips its
+  // group here on click; arrows tagged with a `latchGroup` only render while
+  // their group is in this set. Local to this mount, so it resets on deselect
+  // (the rig remounts per selection — see the `key` on NodeArrowHandlesForNode).
+  const [openLatchGroups, setOpenLatchGroups] = useState<ReadonlySet<string>>(() => new Set())
+  const toggleLatchGroup = useMemo(
+    () => (group: string) =>
+      setOpenLatchGroups((prev) => {
+        const next = new Set(prev)
+        if (next.has(group)) next.delete(group)
+        else next.add(group)
+        return next
+      }),
+    [],
+  )
   const dragControls = useMemo<HandleDragControls>(
     () => ({
       onStart: (index: number, snapshot: AnyNode) => {
@@ -411,6 +433,21 @@ function NodeArrowHandlesForNode({
 
   const arrows = descriptors.map((descriptor, index) => {
     if (activeIsRotate && 'shape' in descriptor && descriptor.shape === 'move-cross') return null
+    // A `latch` cube toggles its group's visibility; render it always.
+    if (descriptor.kind === 'latch') {
+      return (
+        <LatchCube
+          descriptor={descriptor}
+          key={index}
+          node={node}
+          onToggle={toggleLatchGroup}
+          open={openLatchGroups.has(descriptor.group)}
+        />
+      )
+    }
+    // Arrows tagged with a latch group stay hidden until that group is open.
+    const latchGroup = descriptor.kind === 'linear-resize' ? descriptor.latchGroup : undefined
+    if (latchGroup && !openLatchGroups.has(latchGroup)) return null
     return (
       <ArrowHandle
         activeIndex={activeIndex}
@@ -670,6 +707,11 @@ function LinearArrow({
               ? 1
               : -1
 
+      // Last value an emitted resize tick fired at — a new tick fires only
+      // when the (snapped + clamped) value actually changes, so the cue
+      // tracks real size steps instead of every sub-pixel pointer jitter.
+      let lastTickValue = initialValue
+
       return {
         overrideId,
         onBegin: () => {
@@ -701,6 +743,10 @@ function LinearArrow({
               ? snapScalar(rawNext, gridSnapStep)
               : rawNext
           const next = Math.min(maxBound, Math.max(minBound, snappedNext))
+          if (next !== lastTickValue) {
+            lastTickValue = next
+            sfxEmitter.emit('sfx:resize')
+          }
           const patch = descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>
           // Let the kind publish live guides for the edge being resized.
           onDrag?.({ ...(initialNode as object), ...patch } as AnyNode, sceneApi)
@@ -714,10 +760,19 @@ function LinearArrow({
   // X+Z rotation chain matching DoorHeightArrowHandle. When the handle
   // sits below the node (placement Y < 0, e.g. window bottom arrow),
   // flip the Z rotation so the chevron points outward (downward).
+  //
+  // For axis === 'x' with `faceNormal` (wall-mounted opening width arrows),
+  // roll the blade 90° about its own pointing (X) axis so it stands up from
+  // the horizontal XZ plane into the node's facing plane (XY = the wall
+  // face) — otherwise the blade is seen edge-on from the front.
+  const faceNormalX =
+    descriptor.kind === 'linear-resize' && descriptor.axis === 'x' && descriptor.faceNormal === true
   const innerRotation: [number, number, number] =
     descriptor.axis === 'y'
       ? [0, Math.PI / 2, position[1] < 0 ? -Math.PI / 2 : Math.PI / 2]
-      : [0, 0, 0]
+      : faceNormalX
+        ? [Math.PI / 2, 0, 0]
+        : [0, 0, 0]
 
   // Optional guide decoration — linear handles use it for curved-stair
   // width / inner-radius rings; radial handles use it for the column's
@@ -803,6 +858,7 @@ function LinearArrow({
         onPointerDown={activate}
         placement={{ position, rotation: [0, rotationY, 0], baseScale }}
         shape="chevron"
+        thin
       >
         {showLabel ? <DimensionLabel position={[0, 0.22, 0]} text={labelText} /> : null}
       </HandleArrow>
@@ -1213,6 +1269,7 @@ function ArcArrow({
           baseScale,
         }}
         shape={isRotateShape ? 'curved-arrow' : 'chevron'}
+        thin
       />
     </>
   )
@@ -1276,6 +1333,56 @@ function TapActionArrow({
       onPointerDown={onActivate}
       placement={{ position, rotation, baseScale }}
       shape={shape === 'move-cross' ? 'move-cross' : 'chevron'}
+      thin
+    />
+  )
+}
+
+// Click-to-latch cube. A persistent grip (the `tracker` cube) that toggles
+// the visibility of every arrow tagged with its `latchGroup` on click. Sized
+// to match the duct selection cube (`baseScale = zoom`, full TRACKER_CUBE_SIZE)
+// so every latch grip reads the same across the app. Stays highlighted while
+// its group is open so the user can tell it's engaged.
+function LatchCube({
+  descriptor,
+  node,
+  open,
+  onToggle,
+}: {
+  descriptor: LatchHandle<AnyNode>
+  node: AnyNode
+  open: boolean
+  onToggle: (group: string) => void
+}) {
+  const [isHovered, setIsHovered] = useState(false)
+  const { camera } = useThree()
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const baseScale = zoom
+
+  const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
+  const position = descriptor.placement.position(node, placementSceneApi)
+  const rotationY = descriptor.placement.rotationY?.(node, placementSceneApi) ?? 0
+
+  // Route through the shared tap path so the cube click is swallowed before it
+  // reaches the select tool — stops R3F propagation, suppresses box-select, and
+  // eats the trailing DOM click that would otherwise select the host node.
+  const onPointerDown = useHandleDrag({
+    kind: 'tap',
+    onTap: () => {
+      setIsHovered(false)
+      onToggle(descriptor.group)
+    },
+  })
+
+  return (
+    <HandleArrow
+      cursor="grab"
+      hover={isHovered || open}
+      hoverScale={1.15}
+      onHoverChange={setIsHovered}
+      onPointerDown={onPointerDown}
+      placement={{ position, rotation: [0, rotationY, 0], baseScale }}
+      shape="tracker"
     />
   )
 }
