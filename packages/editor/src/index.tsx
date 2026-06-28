@@ -79,6 +79,7 @@ export {
 // shared/segment-angle.ts) once every Stage D port is in.
 export {
   createFenceOnCurrentLevel,
+  createSplineFenceOnCurrentLevel,
   type FencePlanPoint,
   snapFenceDraftPoint,
 } from './components/tools/fence/fence-drafting'
@@ -339,7 +340,9 @@ export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type {
   FloorplanSelectionTool,
+  MovingFenceControlPoint,
   MovingFenceEndpoint,
+  MovingFenceTangent,
   MovingWallEndpoint,
   SplitOrientation,
   Tool,

@@ -170,6 +170,20 @@ export type MovingFenceEndpoint = {
   endpoint: 'start' | 'end'
 }
 
+export type MovingFenceControlPoint = {
+  fence: FenceNode
+  /** Index into the spline fence's `path` of the control point being dragged. */
+  index: number
+}
+
+export type MovingFenceTangent = {
+  fence: FenceNode
+  /** Index into `path` whose tangent handle is being dragged. */
+  index: number
+  /** Which end of the symmetric handle the user grabbed. */
+  side: 'in' | 'out'
+}
+
 export type MaterialTargetRole =
   | WallSurfaceSide
   | StairSurfaceMaterialRole
@@ -289,6 +303,10 @@ type EditorState = {
   setMovingWallEndpoint: (value: MovingWallEndpoint | null) => void
   movingFenceEndpoint: MovingFenceEndpoint | null
   setMovingFenceEndpoint: (value: MovingFenceEndpoint | null) => void
+  movingFenceControlPoint: MovingFenceControlPoint | null
+  setMovingFenceControlPoint: (value: MovingFenceControlPoint | null) => void
+  movingFenceTangent: MovingFenceTangent | null
+  setMovingFenceTangent: (value: MovingFenceTangent | null) => void
   /**
    * Generic per-kind handle drag state. Set by a node's resize handle
    * (height arrow, width arrow, rise / sweep / inner-radius for curved
@@ -313,6 +331,11 @@ type EditorState = {
   setCurvingWall: (wall: WallNode | null) => void
   curvingFence: FenceNode | null
   setCurvingFence: (fence: FenceNode | null) => void
+  // Fence placement sub-mode. 'straight' = the classic two-click segment
+  // chain; 'spline' = drop control points, commit one smooth Catmull-Rom
+  // fence (the "flying path"). Read by the fence tool in both 2D and 3D.
+  fenceDrawMode: 'straight' | 'spline'
+  setFenceDrawMode: (mode: 'straight' | 'spline') => void
   selectedMaterialTarget: SelectedMaterialTarget | null
   setSelectedMaterialTarget: (target: SelectedMaterialTarget | null) => void
   activePaintMaterial: ActivePaintMaterial | null
@@ -831,6 +854,10 @@ const useEditor = create<EditorState>()(
       setMovingWallEndpoint: (value) => set({ movingWallEndpoint: value }),
       movingFenceEndpoint: null,
       setMovingFenceEndpoint: (value) => set({ movingFenceEndpoint: value }),
+      movingFenceControlPoint: null,
+      setMovingFenceControlPoint: (value) => set({ movingFenceControlPoint: value }),
+      movingFenceTangent: null,
+      setMovingFenceTangent: (value) => set({ movingFenceTangent: value }),
       activeHandleDrag: null,
       setActiveHandleDrag: (drag) => set({ activeHandleDrag: drag }),
       rotationAxis: 'y',
@@ -844,6 +871,8 @@ const useEditor = create<EditorState>()(
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       curvingFence: null,
       setCurvingFence: (fence) => set({ curvingFence: fence }),
+      fenceDrawMode: 'straight',
+      setFenceDrawMode: (mode) => set({ fenceDrawMode: mode }),
       selectedMaterialTarget: null,
       setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
       activePaintMaterial: null,

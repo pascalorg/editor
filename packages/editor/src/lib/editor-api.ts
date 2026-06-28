@@ -58,5 +58,15 @@ export function createEditorApi(): EditorApi {
     engageEndpointMove(node: AnyNode, endpoint: 'start' | 'end') {
       endpointEngagers[node.type]?.(node, endpoint, useEditor.getState())
     },
+    engageControlPointMove(node: AnyNode, index: number) {
+      if (node.type !== 'fence') return
+      const editor = useEditor.getState()
+      editor.setMovingFenceControlPoint({ fence: node as FenceNode, index })
+    },
+    engageTangentMove(node: AnyNode, index: number, side: 'in' | 'out') {
+      if (node.type !== 'fence') return
+      const editor = useEditor.getState()
+      editor.setMovingFenceTangent({ fence: node as FenceNode, index, side })
+    },
   }
 }

@@ -58,6 +58,8 @@ export const ToolManager: React.FC = () => {
   const movingNode = useEditor((state) => state.movingNode)
   const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
   const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
+  const movingFenceControlPoint = useEditor((state) => state.movingFenceControlPoint)
+  const movingFenceTangent = useEditor((state) => state.movingFenceTangent)
   const curvingWall = useEditor((state) => state.curvingWall)
   const curvingFence = useEditor((state) => state.curvingFence)
   const editingHole = useEditor((state) => state.editingHole)
@@ -238,6 +240,30 @@ export const ToolManager: React.FC = () => {
             return RegistryAffordance ? (
               <Suspense fallback={null}>
                 <RegistryAffordance target={movingFenceEndpoint} />
+              </Suspense>
+            ) : null
+          })()}
+        {movingFenceControlPoint &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(
+              movingFenceControlPoint.fence.type,
+              'move-control-point',
+            )
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance target={movingFenceControlPoint} />
+              </Suspense>
+            ) : null
+          })()}
+        {movingFenceTangent &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(
+              movingFenceTangent.fence.type,
+              'move-tangent',
+            )
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance target={movingFenceTangent} />
               </Suspense>
             ) : null
           })()}

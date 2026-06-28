@@ -55,6 +55,16 @@ export type EditorApi = {
    * fences). No-ops for kinds without endpoints.
    */
   engageEndpointMove: (node: AnyNode, endpoint: 'start' | 'end') => void
+  /**
+   * Engage drag of a single spline control point (by `path` index). Used by
+   * spline fences to reshape their curve. No-ops for kinds without a path.
+   */
+  engageControlPointMove: (node: AnyNode, index: number) => void
+  /**
+   * Engage drag of a control point's tangent handle (by `path` index + which
+   * end). Bends the curve through that point. No-ops for kinds without a path.
+   */
+  engageTangentMove: (node: AnyNode, index: number, side: 'in' | 'out') => void
 }
 
 export type HandlePortal = 'self' | 'parent' | 'grandparent'
@@ -329,6 +339,12 @@ export type TapActionHandle<N = any> = {
    * import 3D libs.
    */
   nodeHeight?: (node: N) => number
+  /**
+   * `shape: 'corner-picker'` only. When true the disc + ring render as a
+   * smooth circle instead of the default hexagon. Used by spline-fence
+   * control points to distinguish them visually.
+   */
+  round?: boolean
   /**
    * `shape: 'move-cross'` only — tilts the flat cross to lie in the right
    * plane. `'horizontal'` (default) leaves it flat on the floor; `'node-normal'`

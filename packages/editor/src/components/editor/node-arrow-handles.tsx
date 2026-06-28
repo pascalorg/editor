@@ -1352,6 +1352,7 @@ function TapActionArrow({
         onHoverChange={setIsHovered}
         onPointerDown={onActivate}
         position={position}
+        round={descriptor.round === true}
       />
     )
   }
@@ -1457,6 +1458,7 @@ function CornerPickerShape({
   hover,
   onHoverChange,
   onPointerDown,
+  round = false,
 }: {
   position: readonly [number, number, number]
   height: number
@@ -1465,6 +1467,7 @@ function CornerPickerShape({
   hover: boolean
   onHoverChange: (hovered: boolean) => void
   onPointerDown: (event: ThreeEvent<PointerEvent>) => void
+  round?: boolean
 }) {
   const dashedGeometry = useMemo(() => buildDashedVerticalGeometry(height), [height])
   useEffect(() => () => dashedGeometry.dispose(), [dashedGeometry])
@@ -1542,10 +1545,11 @@ function CornerPickerShape({
           onHoverChange={onHoverChange}
           onPointerDown={onPointerDown}
           placement={{ position: [0, 0, 0], baseScale }}
+          round={round}
           shape="corner-picker"
         />
         <mesh material={ringMaterial} renderOrder={1002} scale={scale}>
-          <ringGeometry args={[CORNER_HEX_RADIUS, CORNER_HEX_RADIUS * 1.18, 6]} />
+          <ringGeometry args={[CORNER_HEX_RADIUS, CORNER_HEX_RADIUS * 1.18, round ? 32 : 6]} />
         </mesh>
       </group>
     </>

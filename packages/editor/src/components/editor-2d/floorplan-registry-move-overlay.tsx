@@ -435,9 +435,13 @@ export function FloorplanRegistryMoveOverlay() {
     // point by the cursor delta and commit the translated `path` instead.
     // The reference origin is the path centre so the SVG `translate` delta
     // matches the geometry's actual location (which isn't at [0,0,0]).
+    // Only 3D `[x, y, z]` polyline kinds (duct / pipe / lineset) are handled
+    // here. A spline fence also carries a `path`, but it is 2D (`[x, y]`) and
+    // moves through its own `floorplanMoveTarget`, so exclude shorter tuples.
+    const rawPath = (movingNode as { path?: unknown }).path
     const originalPath =
-      'path' in movingNode && Array.isArray((movingNode as { path?: unknown }).path)
-        ? (movingNode as { path: [number, number, number][] }).path.map(
+      Array.isArray(rawPath) && Array.isArray(rawPath[0]) && rawPath[0].length >= 3
+        ? (rawPath as [number, number, number][]).map(
             (p) => [...p] as [number, number, number],
           )
         : null

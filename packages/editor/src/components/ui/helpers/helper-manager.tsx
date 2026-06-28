@@ -15,6 +15,7 @@ import { canDirectMoveNode, canDirectRotateNode } from '../../../lib/direct-mani
 import useEditor from '../../../store/use-editor'
 import { BuildingHelper } from './building-helper'
 import { ContextualHelperPanel } from './contextual-helper-panel'
+import { FenceHelper } from './fence-helper'
 import { ItemHelper } from './item-helper'
 import { RegisteredToolHelper } from './registered-tool-helper'
 import { RoofHelper } from './roof-helper'
@@ -112,6 +113,10 @@ export function HelperManager() {
   if (tool) {
     const def = nodeRegistry.get(tool)
     if (def?.toolHints && def.toolHints.length > 0) {
+      // Fence adds a Straight / Curved mode toggle above the standard hints.
+      if (tool === 'fence') {
+        return <FenceHelper hints={def.toolHints} shiftPressed={modifiers.shift} />
+      }
       return <RegisteredToolHelper hints={def.toolHints} shiftPressed={modifiers.shift} />
     }
   }

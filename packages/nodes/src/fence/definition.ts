@@ -1,6 +1,17 @@
-import type { FenceNode as FenceNodeType, HandleDescriptor, NodeDefinition } from '@pascal-app/core'
+import {
+  type FenceNode as FenceNodeType,
+  getFenceControlHandle,
+  type HandleDescriptor,
+  isSplineFence,
+  type NodeDefinition,
+} from '@pascal-app/core'
 import { buildFenceFloorplan } from './floorplan'
-import { fenceCurveAffordance, fenceMoveEndpointAffordance } from './floorplan-affordances'
+import {
+  fenceControlPointAffordance,
+  fenceCurveAffordance,
+  fenceMoveEndpointAffordance,
+  fenceTangentAffordance,
+} from './floorplan-affordances'
 import { fenceFloorplanMoveTarget } from './floorplan-move'
 import { buildFenceGeometry } from './geometry'
 import { fencePaint } from './paint'
@@ -112,13 +123,83 @@ function fenceCornerPicker(endpoint: 'start' | 'end'): HandleDescriptor<FenceNod
   }
 }
 
-const fenceHandles: HandleDescriptor<FenceNodeType>[] = [
-  fenceSideMoveHandle('front'),
-  fenceSideMoveHandle('back'),
-  fenceHeightHandle(),
-  fenceCornerPicker('start'),
-  fenceCornerPicker('end'),
-]
+// On-screen length multiplier for the 3D tangent arm — matches the 2D
+// builder's TANGENT_HANDLE_ARM_SCALE so the visual handle is grabbable and the
+// drag tool divides it back out when storing the tangent.
+const TANGENT_HANDLE_ARM_SCALE = 3
+
+// Spline control-point picker — one per `path` point. Tap engages the
+// control-point drag tool (reshapes the curve). Mirrors the corner picker's
+// dashed-leader look so the editing affordance reads consistently.
+function fenceControlPointPicker(index: number): HandleDescriptor<FenceNodeType> {
+  return {
+    kind: 'tap-action',
+    shape: 'corner-picker',
+    cursor: 'move',
+    nodeHeight: (n) => n.height ?? 1.8,
+    onActivate: (node, _scene, editor) => editor.engageControlPointMove(node, index),
+    placement: {
+      position: (n) => {
+        const point = n.path?.[index] ?? n.start
+        return [point[0], 0, point[1]]
+      },
+    },
+  }
+}
+
+// Tangent-handle picker — one per control-point end (in / out). Tap engages
+// the tangent drag tool, which bends the curve through that point. Placed at
+// `point ± handle * scale` so the two ends straddle the control point.
+function fenceTangentPicker(index: number, side: 'in' | 'out'): HandleDescriptor<FenceNodeType> {
+  const sign = side === 'out' ? 1 : -1
+  return {
+    kind: 'tap-action',
+    shape: 'corner-picker',
+    round: true,
+    cursor: 'move',
+    nodeHeight: (n) => (n.height ?? 1.8) * 0.6,
+    onActivate: (node, _scene, editor) => editor.engageTangentMove(node, index, side),
+    placement: {
+      position: (n) => {
+        const point = n.path?.[index] ?? n.start
+        if (!n.path) return [point[0], 0, point[1]]
+        const handle = getFenceControlHandle(n.path, n.tangents, index)
+        return [
+          point[0] + sign * handle.x * TANGENT_HANDLE_ARM_SCALE,
+          0,
+          point[1] + sign * handle.y * TANGENT_HANDLE_ARM_SCALE,
+        ]
+      },
+    },
+  }
+}
+
+// Straight / arc fences expose the front + back side-move arrows, the height
+// arrow, and the endpoint pickers. Spline fences instead expose one round
+// picker per control point plus its tangent handles; the side-move arrows are
+// dropped (a perpendicular "front/back" makes no sense against a curve — body
+// move stays available via the floating menu / 2D plan), leaving only the
+// height arrow.
+const fenceHandles = (node: FenceNodeType): HandleDescriptor<FenceNodeType>[] => {
+  if (isSplineFence(node) && node.path) {
+    return [
+      fenceHeightHandle(),
+      ...node.path.flatMap((_, index) => [
+        fenceControlPointPicker(index),
+        fenceTangentPicker(index, 'out'),
+        fenceTangentPicker(index, 'in'),
+      ]),
+    ]
+  }
+
+  return [
+    fenceSideMoveHandle('front'),
+    fenceSideMoveHandle('back'),
+    fenceHeightHandle(),
+    fenceCornerPicker('start'),
+    fenceCornerPicker('end'),
+  ]
+}
 
 /**
  * Fence — Phase 5 batch kind. Stage B complete: `def.geometry` drives
@@ -209,6 +290,8 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   // pointer-up).
   floorplanAffordances: {
     'move-endpoint': fenceMoveEndpointAffordance,
+    'move-control-point': fenceControlPointAffordance,
+    'move-tangent': fenceTangentAffordance,
     curve: fenceCurveAffordance,
   },
   // Body move on the fence is driven by the two `move-arrow` chevrons
@@ -225,11 +308,14 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   affordanceTools: {
     curve: () => import('./curve-tool'),
     'move-endpoint': () => import('./move-endpoint-tool'),
+    'move-control-point': () => import('./move-control-point-tool'),
+    'move-tangent': () => import('./move-tangent-tool'),
     move: () => import('./move-tool'),
   },
 
   toolHints: [
-    { key: 'Left click', label: 'Set fence start / end' },
+    { key: 'Left click', label: 'Set fence start / end (or drop spline points)' },
+    { key: 'Double click / Enter', label: 'Finish curved fence' },
     { key: 'Shift', label: 'Free angle (no 15° snap)' },
     { key: 'Esc', label: 'Cancel' },
   ],

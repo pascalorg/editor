@@ -23,6 +23,8 @@ type UseFloorplanBackgroundPlacementArgs = {
     event: ReactMouseEvent<SVGSVGElement>,
   ) => void
   fenceDraftStart: WallPlanPoint | null
+  fenceDrawMode: 'straight' | 'spline'
+  setFenceSplineDraftPoints: React.Dispatch<React.SetStateAction<WallPlanPoint[]>>
   fences: FenceNode[]
   findClosestWallPoint: (
     point: WallPlanPoint,
@@ -96,6 +98,8 @@ export function useFloorplanBackgroundPlacement({
   clearWallPlacementDraft,
   emitFloorplanGridEvent,
   fenceDraftStart,
+  fenceDrawMode,
+  setFenceSplineDraftPoints,
   fences,
   findClosestWallPoint,
   floorplanOpeningLocalY,
@@ -201,6 +205,25 @@ export function useFloorplanBackgroundPlacement({
           setRoofDraftStart(snappedPoint)
           setRoofDraftEnd(snappedPoint)
         }
+        return true
+      }
+
+      if (isFenceBuildActive && fenceDrawMode === 'spline') {
+        const bypassSnap = shiftPressed || event.shiftKey
+        const fenceStep = WALL_GRID_STEP
+        const snappedPoint = bypassSnap ? planPoint : worldGridSnap(planPoint, fenceStep)
+
+        // Emit so the kind-owned SplineFenceDraft (which owns creation) also
+        // sees the click. Double-click commits — the tool's detail >= 2 guard
+        // creates the fence; clear the local 2D preview to match.
+        emitFloorplanGridEvent('click', snappedPoint, event)
+        setCursorPoint(snappedPoint)
+
+        if (event.detail >= 2) {
+          setFenceSplineDraftPoints([])
+          return true
+        }
+        setFenceSplineDraftPoints((prev) => [...prev, snappedPoint])
         return true
       }
 
@@ -400,6 +423,8 @@ export function useFloorplanBackgroundPlacement({
       isCeilingBuildActive,
       isCeilingItemPlacementActive,
       isFenceBuildActive,
+      fenceDrawMode,
+      setFenceSplineDraftPoints,
       isFloorplanGridInteractionActive,
       isOpeningPlacementActive,
       isPolygonBuildActive,

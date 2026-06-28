@@ -1,8 +1,8 @@
 import {
   type AnyNodeId,
   type FenceNode,
-  getWallCurveFrameAt,
-  getWallCurveLength,
+  getFenceCenterlineFrameAt,
+  getFenceCenterlineLength,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -36,7 +36,7 @@ function createFencePartGeometry(part: FencePart) {
 }
 
 function getFencePointAt(fence: FenceNode, t: number) {
-  const frame = getWallCurveFrameAt(fence, t)
+  const frame = getFenceCenterlineFrameAt(fence, t)
   return {
     point: frame.point,
     tangentAngle: Math.atan2(frame.tangent.y, frame.tangent.x),
@@ -76,7 +76,7 @@ function createFenceCurveSpanParts(
   const frameCount = Math.max(
     1,
     Math.ceil(
-      (getWallCurveLength(fence) * Math.max(1e-4, endT - startT)) / MIN_CURVE_SEGMENT_LENGTH,
+      (getFenceCenterlineLength(fence) * Math.max(1e-4, endT - startT)) / MIN_CURVE_SEGMENT_LENGTH,
     ),
   )
 
@@ -176,7 +176,7 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
   const base: FencePart[] = []
   const rail: FencePart[] = []
 
-  const length = Math.max(getWallCurveLength(fence), 0.01)
+  const length = Math.max(getFenceCenterlineLength(fence), 0.01)
   const panelDepth = Math.max(fence.thickness, 0.03)
   const clearance = Math.max(fence.groundClearance, 0)
   const isFloating = fence.baseStyle === 'floating'
@@ -287,7 +287,7 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
   const infill: FencePart[] = []
   const base: FencePart[] = []
   const rail: FencePart[] = []
-  const length = Math.max(getWallCurveLength(fence), 0.01)
+  const length = Math.max(getFenceCenterlineLength(fence), 0.01)
   const panelDepth = Math.max(fence.thickness, 0.03)
   const clearance = Math.max(fence.groundClearance, 0)
   const styleDefaults = getStyleDefaults(fence.style)

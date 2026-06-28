@@ -198,6 +198,18 @@ export { createSurfaceOpeningPreviewController } from './systems/stair/stair-ope
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export {
+  getFenceCenterlineFrameAt,
+  getFenceCenterlineLength,
+  sampleFenceCenterline,
+} from './systems/fence/fence-centerline'
+export {
+  getFenceControlHandle,
+  getFenceSplineFrameAt,
+  getFenceSplineLength,
+  isSplineFence,
+  sampleFenceSpline,
+} from './systems/fence/fence-spline'
+export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallChordFrame,

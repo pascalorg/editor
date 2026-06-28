@@ -24,6 +24,7 @@ import {
   getWallPlanFootprint,
   type ItemNode,
   isCurvedWall,
+  isSplineFence,
   type LevelNode,
   loadAssetUrl,
   nodeRegistry,
@@ -38,7 +39,8 @@ import {
   StairNode as StairNodeSchema,
   type StairSegmentNode,
   StairSegmentNode as StairSegmentNodeSchema,
-  sampleWallCenterline,
+  sampleFenceCenterline,
+  sampleFenceSpline,
   sceneRegistry,
   snapPointAlongAngleRay,
   useInteractive,
@@ -4576,6 +4578,7 @@ export function FloorplanPanel({
   const movingNode = useEditor((state) => state.movingNode)
   const curvingWall = useEditor((state) => state.curvingWall)
   const curvingFence = useEditor((state) => state.curvingFence)
+  const fenceDrawMode = useEditor((state) => state.fenceDrawMode)
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const activeHandleDrag = useEditor((state) => state.activeHandleDrag)
@@ -4657,6 +4660,10 @@ export function FloorplanPanel({
   const [draftEnd, setDraftEnd] = useState<WallPlanPoint | null>(null)
   const [fenceDraftStart, setFenceDraftStart] = useState<WallPlanPoint | null>(null)
   const [fenceDraftEnd, setFenceDraftEnd] = useState<WallPlanPoint | null>(null)
+  // Spline ("flying path") fence draft: control points dropped so far. The
+  // kind-owned SplineFenceDraft owns creation via the shared grid emitter;
+  // this is the 2D preview state only.
+  const [fenceSplineDraftPoints, setFenceSplineDraftPoints] = useState<WallPlanPoint[]>([])
   const [roofDraftStart, setRoofDraftStart] = useState<WallPlanPoint | null>(null)
   const [roofDraftEnd, setRoofDraftEnd] = useState<WallPlanPoint | null>(null)
   const [ceilingDraftPoints, setCeilingDraftPoints] = useState<WallPlanPoint[]>([])
@@ -5218,12 +5225,13 @@ export function FloorplanPanel({
     })
 
     const fenceEntries = referenceFences.flatMap((fence) => {
-      const centerline = isCurvedWall(fence)
-        ? sampleWallCenterline(fence, 24)
-        : [
-            { x: fence.start[0], y: fence.start[1] },
-            { x: fence.end[0], y: fence.end[1] },
-          ]
+      const centerline =
+        isSplineFence(fence) || isCurvedWall(fence)
+          ? sampleFenceCenterline(fence, 24)
+          : [
+              { x: fence.start[0], y: fence.start[1] },
+              { x: fence.end[0], y: fence.end[1] },
+            ]
       const path = buildSvgPolylinePath(centerline)
       if (!path) {
         return []
@@ -5820,7 +5828,7 @@ export function FloorplanPanel({
     return draftPolygon ? formatPolygonPoints(draftPolygon) : null
   }, [draftPolygon, isRoofBuildActive, roofDraftEnd, roofDraftStart])
   const fenceDraftSegment = useMemo(() => {
-    if (!(isFenceBuildActive && fenceDraftStart && fenceDraftEnd)) {
+    if (!(isFenceBuildActive && fenceDrawMode === 'straight' && fenceDraftStart && fenceDraftEnd)) {
       return null
     }
 
@@ -5834,7 +5842,23 @@ export function FloorplanPanel({
       x2: toSvgX(fenceDraftEnd[0]),
       y2: toSvgY(fenceDraftEnd[1]),
     }
-  }, [fenceDraftEnd, fenceDraftStart, isFenceBuildActive])
+  }, [fenceDraftEnd, fenceDraftStart, isFenceBuildActive, fenceDrawMode])
+
+  // Smooth spline preview: the SVG polyline through the dropped control
+  // points + the live cursor, sampled as a Catmull-Rom curve to match the
+  // committed fence centerline.
+  const fenceSplineDraftPathD = useMemo(() => {
+    if (!(isFenceBuildActive && fenceDrawMode === 'spline')) return null
+    const points = cursorPoint
+      ? [...fenceSplineDraftPoints, cursorPoint]
+      : fenceSplineDraftPoints
+    if (points.length < 2) return null
+    const sampled = sampleFenceSpline(points, undefined, 14)
+    return [
+      `M ${toSvgX(sampled[0]!.x)} ${toSvgY(sampled[0]!.y)}`,
+      ...sampled.slice(1).map((p) => `L ${toSvgX(p.x)} ${toSvgY(p.y)}`),
+    ].join(' ')
+  }, [cursorPoint, fenceSplineDraftPoints, isFenceBuildActive, fenceDrawMode])
   const activePolygonDraftPoints = useMemo(() => {
     if (isCeilingBuildActive) {
       return ceilingDraftPoints
@@ -7212,6 +7236,7 @@ export function FloorplanPanel({
   const clearFencePlacementDraft = useCallback(() => {
     setFenceDraftStart(null)
     setFenceDraftEnd(null)
+    setFenceSplineDraftPoints([])
   }, [])
   const clearRoofPlacementDraft = useCallback(() => {
     setRoofDraftStart(null)
@@ -8536,6 +8561,16 @@ export function FloorplanPanel({
         return
       }
 
+      if (isFenceBuildActive && fenceDrawMode === 'spline') {
+        const bypassSnap = shiftPressed || event.shiftKey
+        const snappedPoint = bypassSnap ? planPoint : snapWallPointToGrid(planPoint)
+        emitFloorplanGridEvent('move', snappedPoint, event)
+        setCursorPoint((previousPoint) =>
+          previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
+        )
+        return
+      }
+
       if (isFenceBuildActive) {
         const bypassSnap = shiftPressed || event.shiftKey
         // Fence draft: grid snap (+ existing-wall/fence endpoint snap), then
@@ -8804,6 +8839,7 @@ export function FloorplanPanel({
       isCeilingBuildActive,
       isCeilingItemPlacementActive,
       isFenceBuildActive,
+      fenceDrawMode,
       isFloorplanGridInteractionActive,
       isMarqueeSelectionToolActive,
       isOpeningBuildActive,
@@ -9055,6 +9091,8 @@ export function FloorplanPanel({
     clearWallPlacementDraft,
     emitFloorplanGridEvent,
     fenceDraftStart,
+    fenceDrawMode,
+    setFenceSplineDraftPoints,
     fences,
     findClosestWallPoint,
     floorplanOpeningLocalY,
@@ -10733,6 +10771,33 @@ export function FloorplanPanel({
                 }
                 unitsPerPixel={floorplanUnitsPerPixel}
               />
+
+              {/* Spline ("flying path") fence draft preview — smooth curve
+                  through the dropped control points + cursor, plus a dot at
+                  each dropped point. */}
+              {fenceSplineDraftPathD && (
+                <path
+                  d={fenceSplineDraftPathD}
+                  fill="none"
+                  stroke="#8381ed"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
+              {isFenceBuildActive &&
+                fenceDrawMode === 'spline' &&
+                fenceSplineDraftPoints.map((point, index) => (
+                  <circle
+                    cx={toSvgX(point[0])}
+                    cy={toSvgY(point[1])}
+                    fill={palette.anchor}
+                    key={`fence-spline-draft-${index}`}
+                    r={3}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
 
               {draftWallMeasurement && (
                 <FloorplanDraftWallMeasurement
