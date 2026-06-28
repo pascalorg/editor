@@ -11,7 +11,7 @@ import { useCeilingEvents } from '../../hooks/use-ceiling-events'
 import { useGridEvents } from '../../hooks/use-grid-events'
 import { getPlacementSurface } from '../../lib/active-placement-surface'
 import useEditor, { isGridSnapActive } from '../../store/use-editor'
-import useInteractionScope, { getMovingNode } from '../../store/use-interaction-scope'
+import { getMovingNode } from '../../store/use-interaction-scope'
 
 // Reveal radius (m) of the cursor-local grid patch shown while placing/moving in
 // grid-snap mode — much tighter than the idle reveal so only the area you're
@@ -261,31 +261,19 @@ export const Grid = ({
       material.needsUpdate = true
     }
 
-    // While placing/moving: in grid-snap mode shrink to a tight cursor patch
-    // (drop the always-on baseline so only the snap area near the cursor shows);
-    // when NOT grid-snapping, hide the grid entirely. Idle keeps the full grid.
-    // "Actively placing/moving" means a ghost is being positioned: a movingNode
-    // (preset/node move), an in-progress draft (wall/fence), or an armed GLB item
-    // in build mode. A merely-armed build tool with no ghost is NOT placing —
-    // otherwise the patch would show while the user isn't positioning anything.
-    const ed = useEditor.getState()
-    const scopeKind = useInteractionScope.getState().scope.kind
-    const placingOrMoving =
-      getMovingNode() != null ||
-      scopeKind === 'drafting' ||
-      scopeKind === 'placing' ||
-      (ed.mode === 'build' && ed.selectedItem != null)
-    const gridSnap = isGridSnapActive()
-    // The grid is a placement aid, not always-on chrome: it shows ONLY while
-    // actively placing/moving in grid-snap mode, as a tight cursor patch. Idle,
-    // select, and non-grid placement all hide it entirely.
-    const snapPatchVisible = placingOrMoving && gridSnap
+    // The grid is a placement aid: a tight cursor patch (no always-on baseline)
+    // shown whenever the active context is in grid-snap mode — ANY armed
+    // draft/build tool (wall / slab / fence / ceiling / zone / column / MEP / …),
+    // a node move, or a reshape — and hidden in select/idle, paint, and non-grid
+    // (lines/off) modes. `isGridSnapActive()` already derives the snap context
+    // from the interaction scope OR the armed build tool and is true only when
+    // that context resolves to grid, so it IS the gate. (Previously this also
+    // required a ghost in flight, so a merely-armed draft tool showed nothing.)
+    const snapPatchVisible = isGridSnapActive()
     revealRadiusUniform.value = PLACEMENT_REVEAL_RADIUS
     baseAlphaUniform.value = 0
     cellSizeUniform.value = useEditor.getState().gridSnapStep
     patchAlphaUniform.value = 1.5
-    // The 3D grid is purely a placement aid now (no user-facing show/hide
-    // setting): visible only while actively placing/moving in grid-snap mode.
     gridRef.current.visible = snapPatchVisible
   })
 
