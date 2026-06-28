@@ -181,16 +181,25 @@ export function HelperManager() {
     return <ContextualHelperPanel hints={selectModeHints} />
   }
 
-  // Registry-first: kinds with `def.toolHints` render through the generic
-  // `RegisteredToolHelper`. Today that covers ceiling / door / fence /
-  // item / shelf / slab / spawn / wall / window.
+  // Legacy fallback — only `roof` remains because it hasn't migrated to
+  // `def.tool` / `def.toolHints` yet (no Stage D port). Checked before the
+  // generic tool branch so the snap-context fallback below doesn't capture it
+  // and drop its bespoke `RoofHelper` hints. When roof migrates, this deletes.
+  if (tool === 'roof') return <RoofHelper snapContext={snapContext} />
+
+  // Registry-first: a kind renders the generic `RegisteredToolHelper` when it
+  // declares `def.toolHints`, OR whenever its draft resolves to a snap /
+  // continuation context — so a snappable tool with NO hand-written hints (e.g.
+  // `zone`) still advertises the snapping chip it already honors (Shift = cycle).
+  // `RegisteredToolHelper` self-hides when there's genuinely nothing to show.
   if (tool) {
     const def = nodeRegistry.get(tool)
-    if (def?.toolHints && def.toolHints.length > 0) {
+    const hints = def?.toolHints ?? []
+    if (hints.length > 0 || snapContext || continuationContext) {
       return (
         <RegisteredToolHelper
           continuationContext={continuationContext}
-          hints={def.toolHints}
+          hints={hints}
           shiftPressed={modifiers.shift}
           snapContext={snapContext}
         />
@@ -198,9 +207,5 @@ export function HelperManager() {
     }
   }
 
-  // Legacy fallback — only `roof` remains because it hasn't migrated to
-  // `def.tool` / `def.toolHints` yet (no Stage D port). When roof
-  // migrates, this switch deletes outright.
-  if (tool === 'roof') return <RoofHelper snapContext={snapContext} />
   return null
 }
