@@ -157,6 +157,7 @@ const treeNodeByType: Record<
   'turbine-vent': RegistryTreeNode,
   cupola: RegistryTreeNode,
   'eyebrow-vent': RegistryTreeNode,
+  skylight: RegistryTreeNode,
   roof: RoofTreeNode,
   stair: StairTreeNode,
   door: DoorTreeNode,

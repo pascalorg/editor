@@ -18,7 +18,8 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
-import type * as THREE from 'three'
+import * as THREE from 'three'
+import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import {
   buildDormerFallbackGeometry,
   DORMER_GABLE_MATERIAL_INDEX,
@@ -145,6 +146,19 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
 
   useEffect(() => () => geometry?.dispose(), [geometry])
 
+  // Map dormer-local geometry into the host segment's local frame (where the
+  // trim cut prisms live) — same pose the inner mesh group is mounted with.
+  const localToSegment = useMemo(
+    () =>
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0),
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), node.rotation ?? 0),
+        new THREE.Vector3(1, 1, 1),
+      ),
+    [node.position[0], node.position[1], node.position[2], node.rotation],
+  )
+  const clippedGeometry = useSegmentTrimClippedGeometry(geometry, segment, localToSegment)
+
   if (!(segment && geometry)) return null
 
   // Dormers are mounted inside `RoofRenderer`'s `roof-elements` group
@@ -171,8 +185,15 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
         ref={ref}
         rotation-y={node.rotation ?? 0}
       >
-        <mesh castShadow geometry={geometry} material={material} name="dormer-body" receiveShadow />
+        <mesh
+          castShadow
+          geometry={clippedGeometry ?? geometry}
+          material={material}
+          name="dormer-body"
+          receiveShadow
+        />
         <DormerWindowAssembly
+          dormerToSegment={localToSegment}
           frameMaterial={frameSideMat}
           glassMaterial={glassMat}
           node={node}

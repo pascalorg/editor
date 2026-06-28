@@ -24,6 +24,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { resolveRidgeSnap } from '../shared/ridge-snap'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
+import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildRidgeVentGeometry } from './geometry'
 
 function ridgeVentSegmentGeometryKey(segment: RoofSegmentNode | undefined): string {
@@ -191,6 +192,31 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
     parentRoof,
   ])
 
+  // Map vent-local geometry into the host segment's local frame (where the trim
+  // cut prisms live). Recompose the same pose the inner mesh group is mounted
+  // with — ridge snap for X/Z, slope-locked base Y + offset, yaw — so the clip
+  // matches the rendered placement. Computed before the early return so the
+  // hook order stays stable.
+  const localToSegment = useMemo(() => {
+    if (!segment) return new THREE.Matrix4()
+    const rotationY = node.rotation ?? 0
+    const snap =
+      Math.abs(rotationY) < 1e-5
+        ? resolveRidgeSnap(segment, nodePosition[0] ?? 0, nodePosition[2] ?? 0)
+        : null
+    const ridgeX = snap ? snap.localX : (nodePosition[0] ?? 0)
+    const ridgeZ = nodePosition[2] ?? snap?.localZ ?? 0
+    const baseY = getRoofTopSurfaceY(ridgeX, ridgeZ, segment)
+    const yOffset = Math.max(-2, Math.min(2, nodePosition[1] ?? 0))
+    const ridgeY = baseY + yOffset
+    return new THREE.Matrix4().compose(
+      new THREE.Vector3(ridgeX, ridgeY, ridgeZ),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY),
+      new THREE.Vector3(1, 1, 1),
+    )
+  }, [segment, node.rotation, nodePosition[0], nodePosition[1], nodePosition[2]])
+  const clippedGeometry = useSegmentTrimClippedGeometry(geometry, segment, localToSegment)
+
   if (!segment) return null
 
   // `node.position` is segment-local (placement / move tools resolve the
@@ -234,7 +260,7 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
       >
         <mesh
           castShadow
-          geometry={geometry}
+          geometry={clippedGeometry ?? geometry}
           material={material}
           name="ridge-vent-surface"
           receiveShadow

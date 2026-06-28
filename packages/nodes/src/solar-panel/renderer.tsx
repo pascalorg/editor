@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { surfaceQuatFromNormal } from '../shared/roof-surface'
+import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildSolarPanelGeometry, getDefaultPanelMaterial } from './geometry'
 
 // Module-scope scratch vectors and quaternions for composing the panel's
@@ -156,6 +157,34 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
     [surfaceFrame.normal],
   )
 
+  // Map panel-local geometry into the host segment's local frame (where the
+  // trim cut prisms live). Recompose the same pose the inner mesh group is
+  // mounted with (position [x, surfaceY, z] + surfaceQuat·yaw·tilt) so the clip
+  // matches the rendered placement exactly. Computed before the early return so
+  // the hook order stays stable.
+  const localToSegment = useMemo(() => {
+    const surfaceY = surfaceFrame.point.y
+    const tiltRad = node.mountingType === 'tilted' ? (node.tiltAngle * Math.PI) / 180 : 0
+    const quat = new THREE.Quaternion()
+      .copy(surfaceQuat)
+      .multiply(new THREE.Quaternion().setFromAxisAngle(yAxis, node.rotation ?? 0))
+      .multiply(new THREE.Quaternion().setFromAxisAngle(xAxis, tiltRad))
+    return new THREE.Matrix4().compose(
+      new THREE.Vector3(node.position[0] ?? 0, surfaceY, node.position[2] ?? 0),
+      quat,
+      new THREE.Vector3(1, 1, 1),
+    )
+  }, [
+    surfaceFrame.point.y,
+    surfaceQuat,
+    node.mountingType,
+    node.tiltAngle,
+    node.rotation,
+    node.position[0],
+    node.position[2],
+  ])
+  const clippedGeometry = useSegmentTrimClippedGeometry(geometry, effectiveSegment, localToSegment)
+
   if (!effectiveSegment || !geometry) return null
 
   const surfaceY = surfaceFrame.point.y
@@ -190,7 +219,7 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
       >
         <mesh
           castShadow
-          geometry={geometry}
+          geometry={clippedGeometry ?? geometry}
           material={[frameMaterial, panelMaterial]}
           name="solar-panel-surface"
           receiveShadow

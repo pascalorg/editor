@@ -6,6 +6,7 @@ import {
   getRoofSegmentVisibleTopBounds,
   getSegmentSlopeFrame,
   MIN_ROOF_SEGMENT_TRIM_SPAN,
+  nodeRegistry,
   normalizeRoofSegmentTrim,
   type RoofNode,
   type RoofSegmentNode,
@@ -25,6 +26,7 @@ import {
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import useEditor from '../../../store/use-editor'
@@ -167,10 +169,12 @@ const trimDiagonalPreviewRailMaterial = new MeshBasicNodeMaterial({
 
 // ─── Section-cut (cutaway) feedback ──────────────────────────────────
 // The cross-section the trim removes: a thin slab at each cut line is
-// intersected with the untrimmed roof shell, so the fill shows real material
-// only (wall + deck bands) and leaves the hollow attic empty. The outline is
-// the edge silhouette of that fill. A translucent red fill + darker red outline
-// read together as a SketchUp-style section cut of what the trim removes.
+// intersected with the untrimmed roof shell AND every hosted accessory
+// (chimney, vents, skylight, dormer, …), so the fill shows real material only
+// (wall + deck bands + any accessory the cut passes through) and leaves the
+// hollow attic empty. The outline is the edge silhouette of that fill. A
+// translucent red fill + darker red outline read together as a SketchUp-style
+// section cut of what the trim removes.
 // Matches the app's destructive red (`--destructive`, oklch(0.577 0.245 27.325)
 // ≈ #dc2626 / red-600 — the delete/destructive button color). Three's
 // MeshBasicNodeMaterial color doesn't parse oklch() strings, so use the sRGB hex
@@ -318,6 +322,7 @@ function buildSectionSlabBrush(
 function buildSectionGeometries(
   segment: RoofSegmentNode,
   planes: SectionPlaneSpec[],
+  accessoryGeometries: THREE.BufferGeometry[] = [],
 ): { fill: THREE.BufferGeometry; outline: THREE.BufferGeometry } | null {
   if (planes.length === 0) return null
 
@@ -345,12 +350,17 @@ function buildSectionGeometries(
   const prevAttributes = csgEvaluator.attributes
   csgEvaluator.useGroups = false
   csgEvaluator.attributes = ['position']
-  try {
+
+  // Intersect every active section slab with a source solid (the roof shell or
+  // an accessory mesh), appending the resulting cross-section to the shared
+  // fill + outline buffers. The slab sits just inside the kept material, so the
+  // intersection yields the material face the cut exposes.
+  const sliceSourceBySlabs = (source: Brush) => {
     for (const plane of planes) {
       const slab = buildSectionSlabBrush(plane, vMin, vMax)
       if (!slab) continue
       try {
-        const result = csgEvaluator.evaluate(shell, slab, INTERSECTION) as Brush
+        const result = csgEvaluator.evaluate(source, slab, INTERSECTION) as Brush
         const geo = result.geometry as THREE.BufferGeometry
         const pos = geo.getAttribute('position') as THREE.BufferAttribute | undefined
         if (pos && pos.count > 0) {
@@ -379,10 +389,37 @@ function buildSectionGeometries(
         slab.geometry.dispose()
       }
     }
+  }
+
+  // Brushes built from accessory meshes; disposed after the slice pass.
+  const accessoryBrushes: Brush[] = []
+  try {
+    sliceSourceBySlabs(shell)
+    // Accessories that fall in the trimmed region contribute their own
+    // cross-section to the same red fill (chimney, vents, skylight, dormer, …).
+    // Each geometry arrives already in segment-local space.
+    for (const accGeo of accessoryGeometries) {
+      try {
+        // Weld coincident verts so the brush is a valid indexed solid. Most
+        // accessories are clean THREE primitives, but some (e.g. the ridge
+        // vent) are hand-wound non-indexed triangle soup; three-bvh-csg's
+        // INTERSECTION classifies inside/outside off a welded, indexed mesh and
+        // silently yields nothing for raw soup — the same `mergeVertices` step
+        // the viewer's own accessory CSG runs before any boolean op.
+        const welded = mergeVertices(accGeo, 1e-4)
+        const accBrush = new Brush(welded)
+        prepareBrushForCSG(accBrush)
+        accessoryBrushes.push(accBrush)
+        sliceSourceBySlabs(accBrush)
+      } catch (e) {
+        console.error('Roof section-cut accessory CSG failed:', e)
+      }
+    }
   } finally {
     csgEvaluator.useGroups = prevUseGroups
     csgEvaluator.attributes = prevAttributes
     shellGeometry.dispose()
+    for (const b of accessoryBrushes) b.geometry.dispose()
   }
 
   if (fillPositions.length === 0) return null
@@ -440,12 +477,77 @@ function segmentShapeKey(segment: RoofSegmentNode): string {
   ])
 }
 
+// Collect every roof-accessory mesh hosted on `segment` as a segment-local
+// geometry, so the section-cut pass can intersect each with the cut slabs and
+// show its cross-section in the red fill. Registry-driven — an accessory is any
+// child kind declaring the `roofAccessory` capability — so no kind is named
+// here. The meshes come straight from `sceneRegistry` (already live: each
+// renderer re-clips against the live trim), so the geometry reflects the
+// in-flight drag. Returned geometries are fresh clones the caller owns +
+// disposes.
+const _segWorldInverse = new THREE.Matrix4()
+const _accWorld = new THREE.Matrix4()
+function collectAccessorySectionGeometries(segment: RoofSegmentNode): THREE.BufferGeometry[] {
+  const childIds = segment.children
+  if (!childIds || childIds.length === 0) return []
+
+  const segSource = sceneRegistry.nodes.get(segment.id)
+  if (!segSource) return []
+  segSource.updateWorldMatrix(true, false)
+  _segWorldInverse.copy(segSource.matrixWorld).invert()
+
+  const nodes = useScene.getState().nodes
+  const out: THREE.BufferGeometry[] = []
+  for (const childId of childIds) {
+    const childNode = nodes[childId as AnyNodeId]
+    if (!childNode) continue
+    if (!nodeRegistry.get(childNode.type)?.capabilities?.roofAccessory) continue
+    const obj = sceneRegistry.nodes.get(childId)
+    if (!obj) continue
+    obj.updateWorldMatrix(true, true)
+    obj.traverse((child) => {
+      const mesh = child as THREE.Mesh
+      if (!mesh.isMesh || !mesh.geometry) return
+      const posAttr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+      if (!posAttr || posAttr.count === 0) return
+      // mesh-world → segment-local: segmentWorld⁻¹ · meshWorld.
+      _accWorld.multiplyMatrices(_segWorldInverse, mesh.matrixWorld)
+      const geo = mesh.geometry.clone()
+      geo.applyMatrix4(_accWorld)
+      out.push(geo)
+    })
+  }
+  return out
+}
+
+// A change key over the hosted accessories' kinds + world transforms, so the
+// section-cut memo recomputes when an accessory moves, is added/removed, or its
+// host pose shifts (mirrors how `planes` keys the trim cut). Geometry-shape
+// changes are caught by the renderer re-clipping (new mesh world matrix on
+// resize is not guaranteed, but trim drag changes `planes` every tick, which
+// already forces the recompute during the gesture we care about).
+function accessorySectionKey(segment: RoofSegmentNode): string {
+  const childIds = segment.children
+  if (!childIds || childIds.length === 0) return 'none'
+  const nodes = useScene.getState().nodes
+  const parts: string[] = []
+  for (const childId of childIds) {
+    const childNode = nodes[childId as AnyNodeId]
+    if (!childNode) continue
+    if (!nodeRegistry.get(childNode.type)?.capabilities?.roofAccessory) continue
+    const obj = sceneRegistry.nodes.get(childId)
+    if (!obj) continue
+    parts.push(`${childId}:${obj.matrixWorld.elements.map((n) => n.toFixed(3)).join(',')}`)
+  }
+  return parts.join('|')
+}
+
 // Renders the cutaway section cut (material fill + cut-edge outline) for the
 // active trim planes, in segment-local space (mounted under the
 // segment-world-matrix group). The fill is the CSG intersection of the
-// untrimmed roof shell with a thin slab at each cut line, so only real material
-// is shown and the hollow attic stays empty; the outline is the analytic
-// surface edge.
+// untrimmed roof shell (and every hosted accessory) with a thin slab at each
+// cut line, so only real material is shown and the hollow attic stays empty;
+// the outline is the analytic surface edge.
 function SectionCut({
   segment,
   planes,
@@ -454,13 +556,18 @@ function SectionCut({
   planes: SectionPlaneSpec[]
 }) {
   const shapeKey = segmentShapeKey(segment)
+  const accessoryKey = accessorySectionKey(segment)
 
   const geometries = useMemo(() => {
     if (planes.length === 0) return null
-    return buildSectionGeometries(segment, planes)
-    // Recompute when the roof shape (shapeKey) or the cut lines (planes) change.
+    const accessoryGeometries = collectAccessorySectionGeometries(segment)
+    const result = buildSectionGeometries(segment, planes, accessoryGeometries)
+    for (const g of accessoryGeometries) g.dispose()
+    return result
+    // Recompute when the roof shape (shapeKey), the cut lines (planes), or the
+    // hosted accessories (accessoryKey) change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapeKey, JSON.stringify(planes)])
+  }, [shapeKey, JSON.stringify(planes), accessoryKey])
 
   useEffect(() => {
     return () => {

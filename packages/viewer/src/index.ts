@@ -123,6 +123,7 @@ export { getRoofMaterialArray } from './systems/roof/roof-materials'
 // read these through the public surface. No kind-specific helpers
 // belong here — those live in `@pascal-app/nodes/<kind>/`.
 export {
+  clipGeometryBySegmentTrim,
   generateRoofSegmentGeometry,
   getRoofOuterSurfaceFrameAtPoint,
   getRoofSegmentBrushes,

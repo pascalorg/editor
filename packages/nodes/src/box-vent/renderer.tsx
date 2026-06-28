@@ -19,6 +19,7 @@ import {
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildBoxVentGeometry } from './geometry'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
@@ -134,6 +135,19 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
     return new THREE.Quaternion().copy(surfaceQuat).multiply(yawQuat)
   }, [surfaceQuat, node.rotation, yAxis])
 
+  // Map vent-local geometry into the host segment's local frame (the frame the
+  // trim cut prisms live in) — same pose the inner mesh group is mounted with.
+  const localToSegment = useMemo(
+    () =>
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0),
+        composedQuat,
+        new THREE.Vector3(1, 1, 1),
+      ),
+    [node.position[0], node.position[1], node.position[2], composedQuat],
+  )
+  const clippedGeometry = useSegmentTrimClippedGeometry(geometry, segment, localToSegment)
+
   if (!segment) return null
 
   // `node.position` is segment-local (the placement + move tools resolve
@@ -158,7 +172,7 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
       >
         <mesh
           castShadow
-          geometry={geometry}
+          geometry={clippedGeometry ?? geometry}
           material={material}
           name="box-vent-surface"
           receiveShadow

@@ -19,6 +19,7 @@ import {
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { computeGutterMitres, type GutterWithSegment, NO_MITRES } from './corner-mitre'
 import { computeSharedEaveY } from './eave-align'
 import { computeEaveY } from './eave-snap'
@@ -200,6 +201,22 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
       : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
   }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
 
+  // Map gutter-local geometry into the host segment's local frame (where the
+  // trim cut prisms live) — same pose the inner mesh group is mounted with
+  // (position [x, liveEaveY, z] + yaw). Computed before the early return so the
+  // hook order stays stable.
+  const liveEaveYForClip = sharedEaveY ?? (effectiveSegment ? computeEaveY(effectiveSegment) : 0)
+  const localToSegment = useMemo(
+    () =>
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(node.position[0] ?? 0, liveEaveYForClip, node.position[2] ?? 0),
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), node.rotation ?? 0),
+        new THREE.Vector3(1, 1, 1),
+      ),
+    [node.position[0], node.position[2], node.rotation, liveEaveYForClip],
+  )
+  const clippedGeometry = useSegmentTrimClippedGeometry(geometry, effectiveSegment, localToSegment)
+
   if (!segment || !effectiveSegment) return null
 
   // `node.position` is segment-local — the placement tool resolves the
@@ -232,7 +249,7 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
       >
         <mesh
           castShadow
-          geometry={geometry}
+          geometry={clippedGeometry ?? geometry}
           material={material}
           name="gutter-surface"
           receiveShadow

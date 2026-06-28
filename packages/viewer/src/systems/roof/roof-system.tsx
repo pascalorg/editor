@@ -926,7 +926,16 @@ function subtractSegmentTrimCuts(brushes: RoofSegmentBrushSet, segment: RoofSegm
   }
 }
 
-function trimAttachmentGeometryBySegment(
+/**
+ * Subtract a segment's trim cuts from an arbitrary segment-local geometry,
+ * returning the clipped result. The input geometry is consumed (disposed) on
+ * each successful CSG pass — callers that need to keep the original must pass a
+ * clone. Returns the input untouched when the segment has no trim. Used
+ * internally for rake-board / end-slope attachments and exported so roof
+ * accessories (chimney, vents, skylight, …) can clip their own meshes by the
+ * same trim, in the same segment-local frame.
+ */
+export function clipGeometryBySegmentTrim(
   geometry: THREE.BufferGeometry | null,
   segment: RoofSegmentNode,
 ): THREE.BufferGeometry | null {
@@ -1256,8 +1265,8 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
       }
       if (hasSegmentTrim(node)) {
         subtractSegmentTrimCuts(brushes, node)
-        brushes.rakeBoards = trimAttachmentGeometryBySegment(brushes.rakeBoards, node)
-        brushes.endSlopes = trimAttachmentGeometryBySegment(brushes.endSlopes, node)
+        brushes.rakeBoards = clipGeometryBySegmentTrim(brushes.rakeBoards, node)
+        brushes.endSlopes = clipGeometryBySegmentTrim(brushes.endSlopes, node)
       }
 
       return brushes
