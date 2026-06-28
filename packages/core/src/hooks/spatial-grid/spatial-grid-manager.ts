@@ -1,8 +1,10 @@
+import { nodeRegistry } from '../../registry'
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
 import useScene from '../../store/use-scene'
 import { isCurvedWall, sampleWallCenterline } from '../../systems/wall/wall-curve'
 import { DEFAULT_WALL_THICKNESS } from '../../systems/wall/wall-footprint'
+import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
 
@@ -52,6 +54,29 @@ function getItemFootprint(
     [x + (halfW * cos - halfD * sin), z + (halfW * sin + halfD * cos)],
     [x + (-halfW * cos - halfD * sin), z + (-halfW * sin + halfD * cos)],
   ]
+}
+
+/**
+ * Axis-aligned XZ extent of a footprint at `position`, rotated by `yRot`. The
+ * rotated width/depth is the same conservative bound the floor-placement draft
+ * uses, so a draft and an existing node are compared with identical math.
+ */
+function footprintBoundsXZ(
+  position: [number, number, number],
+  dimensions: [number, number, number],
+  yRot: number,
+): { minX: number; maxX: number; minZ: number; maxZ: number } {
+  const [width, , depth] = dimensions
+  const cos = Math.abs(Math.cos(yRot))
+  const sin = Math.abs(Math.sin(yRot))
+  const rotatedW = width * cos + depth * sin
+  const rotatedD = width * sin + depth * cos
+  return {
+    minX: position[0] - rotatedW / 2,
+    maxX: position[0] + rotatedW / 2,
+    minZ: position[2] - rotatedD / 2,
+    maxZ: position[2] + rotatedD / 2,
+  }
 }
 
 type ItemLocalBounds = {
@@ -647,34 +672,38 @@ export class SpatialGridManager {
   ) {
     const nodes = useScene.getState().nodes
     const ignoreSet = new Set(ignoreIds ?? [])
-    const [width, , depth] = dimensions
-    const yRot = rotation[1]
-    const cos = Math.abs(Math.cos(yRot))
-    const sin = Math.abs(Math.sin(yRot))
-    const rotatedW = width * cos + depth * sin
-    const rotatedD = width * sin + depth * cos
-    const draftBounds = {
-      minX: position[0] - rotatedW / 2,
-      maxX: position[0] + rotatedW / 2,
-      minZ: position[2] - rotatedD / 2,
-      maxZ: position[2] + rotatedD / 2,
-    }
+    const draftBounds = footprintBoundsXZ(position, dimensions, rotation[1])
 
+    // A floor placement conflicts with any other COLLIDING floor-resting node,
+    // not just items — every kind whose `floorPlaced.collides` is set (item /
+    // shelf / column) contributes its footprint(s) as an obstacle. Each
+    // candidate's XZ extent is read from the same declarative footprint the
+    // elevation + sync paths use, so adding a colliding kind needs no change here.
     const conflicts: string[] = []
     for (const node of Object.values(nodes)) {
-      if (node.type !== 'item') continue
-      const item = node as ItemNode
-      if (item.asset.attachTo) continue
-      if (isLowProfileItemSurface(item)) continue
-      if (ignoreSet.has(item.id)) continue
-      if (resolveNodeLevelId(item, nodes) !== levelId) continue
+      if (ignoreSet.has(node.id)) continue
+      const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
+      if (!floorPlaced?.collides) continue
+      if (floorPlaced.applies && !floorPlaced.applies(node)) continue
+      // Low-profile item surfaces (rugs, mats) are stack-on targets, not
+      // obstacles — keep the long-standing item-only exemption.
+      if (node.type === 'item' && isLowProfileItemSurface(node as ItemNode)) continue
+      if (resolveNodeLevelId(node, nodes) !== levelId) continue
 
-      const bounds = getItemParentAabb(item)
-      if (
-        intervalsOverlap(draftBounds.minX, draftBounds.maxX, bounds.minX, bounds.maxX) &&
-        intervalsOverlap(draftBounds.minZ, draftBounds.maxZ, bounds.minZ, bounds.maxZ)
-      ) {
-        conflicts.push(item.id)
+      for (const footprint of getFloorPlacedFootprints(floorPlaced, node, { nodes })) {
+        const fpRotation = Array.isArray(footprint.rotation) ? (footprint.rotation[1] ?? 0) : 0
+        const bounds = footprintBoundsXZ(
+          footprint.position ?? (node as { position: [number, number, number] }).position,
+          footprint.dimensions,
+          fpRotation,
+        )
+        if (
+          intervalsOverlap(draftBounds.minX, draftBounds.maxX, bounds.minX, bounds.maxX) &&
+          intervalsOverlap(draftBounds.minZ, draftBounds.maxZ, bounds.minZ, bounds.maxZ)
+        ) {
+          conflicts.push(node.id)
+          break
+        }
       }
     }
 

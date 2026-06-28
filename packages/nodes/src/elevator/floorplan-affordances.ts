@@ -4,6 +4,7 @@ import {
   type FloorplanAffordance,
   useScene,
 } from '@pascal-app/core'
+import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
 const MIN_ELEVATOR_DIM = 0.6
 
@@ -83,11 +84,13 @@ export const elevatorRotateAffordance: FloorplanAffordance<ElevatorNode> = {
 
     return {
       affectedIds: [elevatorId],
-      apply({ planPoint }) {
-        const currentAngle = Math.atan2(planPoint[1] - cz, planPoint[0] - cx)
-        let delta = currentAngle - initialAngle
-        while (delta > Math.PI) delta -= 2 * Math.PI
-        while (delta < -Math.PI) delta += 2 * Math.PI
+      apply({ planPoint, modifiers }) {
+        const delta = rotateAffordanceDelta({
+          center: [cx, cz],
+          initialAngle,
+          planPoint,
+          free: modifiers.shiftKey,
+        })
         const newRotation = initialRotation - delta
         lastRotation = newRotation
         useScene.getState().updateNode(elevatorId, { rotation: newRotation })

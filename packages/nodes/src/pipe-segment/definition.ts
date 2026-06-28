@@ -21,6 +21,10 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
   schema: PipeSegmentNode,
   category: 'utility',
   distributionRole: 'run',
+  // Directional run: like a wall, drafting sets a direction, so it takes the
+  // structural snapping context (grid / lines / angles / off) with a 45° angle
+  // lock available as a cyclable mode.
+  snapProfile: 'structural',
 
   defaults: () => ({
     object: 'node',
@@ -110,7 +114,6 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
     { key: 'Q', label: 'Waste / vent' },
     { key: '[ / ]', label: 'Pipe size down / up' },
     { key: 'Alt + drag', label: 'Vertical stack ↕, click to place' },
-    { key: 'Shift', label: 'Free angle' },
     { key: 'Esc', label: 'Cancel start point' },
   ],
 

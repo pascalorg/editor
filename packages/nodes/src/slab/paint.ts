@@ -8,6 +8,7 @@ import { createSlotPaintCapability, previewGeometrySlot } from '../shared/slot-p
  * `node.slots[slotId]` (a shared scene-material or `library:` ref) like the shelf.
  */
 export const slabPaint = createSlotPaintCapability({
+  roomScope: true,
   resolveRole: ({ hitObject }) => {
     const slotId = (hitObject?.userData as { slotId?: string } | undefined)?.slotId
     return slotId === 'side' ? 'side' : 'surface'

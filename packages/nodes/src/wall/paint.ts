@@ -104,6 +104,7 @@ function applyWallPreview(args: PaintPreviewArgs): (() => void) | null {
  * picker still shows the current value on a pre-migration scene.
  */
 export const wallPaint: PaintCapability = createSlotPaintCapability({
+  roomScope: true,
   resolveRole: ({ node, materialIndex, normal, localPosition }) =>
     resolveWallRole({ node: node as WallNode, materialIndex, normal, localPosition }),
   applyPreview: applyWallPreview,

@@ -47,6 +47,7 @@ function spawnMoveHandle(): HandleDescriptor<SpawnNodeType> {
 
 export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
   kind: 'spawn',
+  snapProfile: 'item',
   schemaVersion: 1,
   schema: SpawnNode,
   category: 'site',
@@ -100,7 +101,6 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Left click', label: 'Place spawn point' },
-    { key: 'Shift', label: 'Free place' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

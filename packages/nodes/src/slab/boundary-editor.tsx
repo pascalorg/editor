@@ -2,10 +2,12 @@
 
 import { resolveLevelId, type SlabNode, useLiveNodeOverrides, useScene } from '@pascal-app/core'
 import {
+  boundaryReshapeScope,
   clearSlabSnapFeedback,
   PolygonEditor,
   type PolygonEditorPlanPointSnapContext,
   resolveSlabPlanPointSnap,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect } from 'react'
@@ -65,6 +67,17 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
     clearSlabSnapFeedback()
   }, [])
 
+  // A vertex/edge drag is a `boundary` reshape — drive the snapping HUD (the
+  // no-angle 'polygon' set) and keep the idle select hints off-screen.
+  const handleDragStateChange = useCallback(
+    (isDragging: boolean) => {
+      const scope = useInteractionScope.getState()
+      if (isDragging) scope.begin(boundaryReshapeScope(slabId))
+      else scope.endIf((s) => s.kind === 'reshaping' && s.reshape === 'boundary')
+    },
+    [slabId],
+  )
+
   const resolvePolygonEditorPlanPoint = useCallback(
     (context: PolygonEditorPlanPointSnapContext) =>
       resolveSlabPlanPointSnap({
@@ -73,7 +86,6 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
         levelId: slabLevelId,
         excludeId: slabId,
         altKey: context.nativeEvent?.altKey === true,
-        shiftKey: context.nativeEvent?.shiftKey === true,
       }).point,
     [slabId, slabLevelId],
   )
@@ -86,6 +98,9 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
       clearSlabSnapFeedback()
       useLiveNodeOverrides.getState().clear(slabId)
       useScene.getState().markDirty(slabId)
+      useInteractionScope
+        .getState()
+        .endIf((s) => s.kind === 'reshaping' && s.reshape === 'boundary')
     }
   }, [slabId])
 
@@ -98,6 +113,7 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
       levelId={slabLevelId ?? undefined}
       minVertices={3}
       onDragCommit={handleDragCommit}
+      onDragStateChange={handleDragStateChange}
       onPolygonChange={handlePolygonChange}
       onPolygonPreview={handlePolygonPreview}
       polygon={slab.polygon}

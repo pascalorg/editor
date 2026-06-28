@@ -9,7 +9,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { type Camera, type Object3D, Vector3 } from 'three'
 import { formatLinearMeasurement } from '../../lib/measurements'
 import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
-import useEditor from '../../store/use-editor'
+import { useActiveHandleDrag } from '../../store/use-interaction-scope'
 
 type ViewportSize = {
   width: number
@@ -37,7 +37,7 @@ export function SiteEdgeLabels() {
     const node = state.nodes[firstRoot]
     return node?.type === 'site' ? (node as SiteNode) : null
   })
-  const activeHandleDrag = useEditor((state) => state.activeHandleDrag)
+  const activeHandleDrag = useActiveHandleDrag()
   const unit = useViewer((state) => state.unit)
   const cameraMode = useViewer((state) => state.cameraMode)
   const isNight = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')

@@ -20,6 +20,8 @@ import {
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  isAngleSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   type SegmentAngleReference,
   snapWallDraftPointDetailed,
@@ -28,6 +30,7 @@ import {
   useEditor,
   useSegmentDraftChain,
   useWallSnapIndicator,
+  WALL_JOIN_SNAP_RADIUS,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -40,8 +43,8 @@ import { BoxGeometry, BufferGeometry, DoubleSide, type Group, type Mesh, Vector3
  *
  * 1:1 port of the legacy `WallTool`. Two-click flow: click 1 sets the
  * start, click 2 creates the wall. Between clicks a vertical preview
- * rectangle + length/angle measurement HUD follow the pointer. Shift
- * bypasses the angle snap; Esc cancels.
+ * rectangle + length/angle measurement HUD follow the pointer. Snapping is
+ * governed by the global snapping mode (`'off'` is the bypass); Esc cancels.
  *
  * Not a `DragAction` — same reasoning as fence/slab/ceiling placement:
  * stateful sequence of grid:click events, not a single drag-up.
@@ -138,6 +141,13 @@ function distanceSquared(a: WallPlanPoint, b: WallPlanPoint) {
 
 function pointMatches(a: WallPlanPoint, b: WallPlanPoint, tolerance = 1e-5) {
   return distanceSquared(a, b) <= tolerance * tolerance
+}
+
+function isWithinWallJoinSnapRadius(point: WallPlanPoint, vertex: Vector3) {
+  const dx = point[0] - vertex.x
+  const dz = point[1] - vertex.z
+
+  return dx * dx + dz * dz <= WALL_JOIN_SNAP_RADIUS * WALL_JOIN_SNAP_RADIUS
 }
 
 function getNearestAxisAngleLabel(
@@ -485,8 +495,8 @@ export const WallTool: React.FC = () => {
   const wallPreviewRef = useRef<Mesh>(null!)
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
+  const chainFirstVertex = useRef<Vector3 | null>(null)
   const buildingState = useRef(0)
-  const shiftPressed = useRef(false)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
   const measurementColor = isDark ? '#ffffff' : '#111111'
@@ -508,13 +518,15 @@ export const WallTool: React.FC = () => {
     }
 
     // Align the drafted point onto another object's nearest real anchor and
-    // publish the guide. Alt bypasses alignment; Shift bypasses all guided
-    // snapping. Returns the possibly snapped point.
+    // publish the guide. Returns the possibly snapped point.
     const alignPoint = (
       point: WallPlanPoint,
       options: { applySnap?: boolean; bypass?: boolean },
     ): WallPlanPoint => {
-      if (options.bypass || alignmentCandidates.length === 0) {
+      // Figma alignment pulls the endpoint onto existing wall corners / edges,
+      // so it is a line snap — suppress it whenever magnetic snap is off
+      // (`'off'` / `'angles'`), matching the wall-geometry snap above.
+      if (options.bypass || !isMagneticSnapActive() || alignmentCandidates.length === 0) {
         useAlignmentGuides.getState().clear()
         return point
       }
@@ -531,6 +543,7 @@ export const WallTool: React.FC = () => {
 
     const stopDrafting = () => {
       buildingState.current = 0
+      chainFirstVertex.current = null
       if (wallPreviewRef.current) {
         wallPreviewRef.current.visible = false
       }
@@ -546,19 +559,17 @@ export const WallTool: React.FC = () => {
 
       const walls = getCurrentLevelWalls()
       const localPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
-      // Default path: grid + magnetic snap, with 15° angle lock while
-      // drafting. Shift is a hard snap bypass: no grid, magnetic, angle,
-      // or alignment snap.
-      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
-      const angleLocked = buildingState.current === 1 && !bypassSnap
-      const bypassAlign = event.nativeEvent?.altKey === true || bypassSnap
+      // Snapping is governed entirely by the snapping mode (grid / lines /
+      // angles / off). `'off'` is the bypass — there is no Shift hold-to-bypass.
+      const angleLocked = buildingState.current === 1 && isAngleSnapActive()
+      // Alignment guides follow the snapping mode (lines = magnetic on), not Alt.
+      const bypassAlign = !isMagneticSnapActive()
       const snapResult = snapWallDraftPointDetailed({
         point: localPoint,
         walls,
         start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
         angleSnap: angleLocked,
-        bypassSnap,
-        magnetic: !bypassSnap && useEditor.getState().magneticSnap,
+        magnetic: isMagneticSnapActive(),
       })
       gridPosition = alignPoint(snapResult.point, {
         applySnap: !angleLocked,
@@ -590,7 +601,6 @@ export const WallTool: React.FC = () => {
 
         const currentWallEnd: [number, number] = [snappedLocal[0], snappedLocal[1]]
         if (
-          !bypassSnap &&
           previousWallEnd &&
           (currentWallEnd[0] !== previousWallEnd[0] || currentWallEnd[1] !== previousWallEnd[1])
         ) {
@@ -633,21 +643,21 @@ export const WallTool: React.FC = () => {
       const walls = getCurrentLevelWalls()
       const localClick: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
 
-      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
-      const bypassAlign = event.nativeEvent?.altKey === true || bypassSnap
+      // Alignment guides follow the snapping mode (lines = magnetic on), not Alt.
+      const bypassAlign = !isMagneticSnapActive()
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
           snapWallDraftPointDetailed({
             point: localClick,
             walls,
-            bypassSnap,
-            magnetic: !bypassSnap && useEditor.getState().magneticSnap,
+            magnetic: isMagneticSnapActive(),
           }).point,
           { bypass: bypassAlign },
         )
         gridPosition = snappedStart
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
+        chainFirstVertex.current = startingPoint.current.clone()
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
         setAxisGuide({
@@ -665,15 +675,14 @@ export const WallTool: React.FC = () => {
         // `onGridMove` writes a real BoxGeometry skips that frame.
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
-        const angleLocked = !bypassSnap
+        const angleLocked = isAngleSnapActive()
         const snappedEnd = alignPoint(
           snapWallDraftPointDetailed({
             point: localClick,
             walls,
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
-            bypassSnap,
-            magnetic: !bypassSnap && useEditor.getState().magneticSnap,
+            magnetic: isMagneticSnapActive(),
           }).point,
           {
             applySnap: !angleLocked,
@@ -696,9 +705,15 @@ export const WallTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
         useWallSnapIndicator.getState().clear()
 
-        // Alt commits a single wall — stop drafting instead of chaining
-        // so the next click starts a fresh start point.
-        if (event.nativeEvent?.altKey === true) {
+        if (useEditor.getState().getContinuation('wall') === 'single') {
+          stopDrafting()
+          return
+        }
+
+        if (
+          chainFirstVertex.current &&
+          isWithinWallJoinSnapRadius(createdWall.end, chainFirstVertex.current)
+        ) {
           stopDrafting()
           return
         }
@@ -729,20 +744,6 @@ export const WallTool: React.FC = () => {
       }
     }
 
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = true
-    }
-
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = false
-    }
-
-    // Cmd-tabbing away mid-draft never delivers the keyup — reset so the
-    // angle lock isn't stuck off when focus returns.
-    const onBlur = () => {
-      shiftPressed.current = false
-    }
-
     const onCancel = () => {
       if (buildingState.current === 1) {
         markToolCancelConsumed()
@@ -753,17 +754,11 @@ export const WallTool: React.FC = () => {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
-    window.addEventListener('blur', onBlur)
 
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener('blur', onBlur)
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
       useSegmentDraftChain.getState().clear('wall')

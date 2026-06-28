@@ -2,11 +2,13 @@
 
 import { type CeilingNode, resolveLevelId, useLiveNodeOverrides, useScene } from '@pascal-app/core'
 import {
+  boundaryReshapeScope,
   clearCeilingSnapFeedback,
   PolygonEditor,
   type PolygonEditorPlanPointSnapContext,
   resolveCeilingPlanPointSnap,
   triggerSFX,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -95,13 +97,19 @@ export const CeilingBoundaryEditor: React.FC<{ ceilingId: CeilingNode['id'] }> =
 
   const handleDragStateChange = useCallback(
     (isDragging: boolean) => {
-      if (!isDragging) {
+      // A vertex/edge drag is a `boundary` reshape — drive the snapping HUD
+      // (no-angle 'polygon' set) and keep the idle select hints off-screen.
+      const scope = useInteractionScope.getState()
+      if (isDragging) {
+        scope.begin(boundaryReshapeScope(ceilingId))
+      } else {
+        scope.endIf((s) => s.kind === 'reshaping' && s.reshape === 'boundary')
         ownsPolygonPreviewRef.current = false
         clearCeilingSnapFeedback()
       }
       setCeilingHandleHover(isDragging)
     },
-    [setCeilingHandleHover],
+    [ceilingId, setCeilingHandleHover],
   )
 
   const handlePolygonEditorDragCommit = useCallback(() => {
@@ -126,7 +134,6 @@ export const CeilingBoundaryEditor: React.FC<{ ceilingId: CeilingNode['id'] }> =
         levelId: ceilingLevelId,
         excludeId: ceilingId,
         altKey: context.nativeEvent?.altKey === true,
-        shiftKey: context.nativeEvent?.shiftKey === true,
       }).point,
     [ceilingId, ceilingLevelId],
   )
@@ -136,6 +143,9 @@ export const CeilingBoundaryEditor: React.FC<{ ceilingId: CeilingNode['id'] }> =
       clearCeilingSnapFeedback()
       useLiveNodeOverrides.getState().clear(ceilingId)
       useScene.getState().markDirty(ceilingId)
+      useInteractionScope
+        .getState()
+        .endIf((s) => s.kind === 'reshaping' && s.reshape === 'boundary')
       ownsPolygonPreviewRef.current = false
       if (ownsCeilingHoverRef.current && useViewer.getState().hoveredId === ceilingId) {
         useViewer.getState().setHoveredId(null)

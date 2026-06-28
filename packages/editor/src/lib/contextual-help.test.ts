@@ -49,7 +49,10 @@ describe('resolveSelectModeHelpHints', () => {
       keys: ['Cmd/Ctrl', 'Right click'],
       label: 'Drag left or right to rotate selected object',
     })
-    expect(hints).toContainEqual({
+    // The Shift bypass hint is gated to the in-progress direct-move gesture
+    // (Cmd/Ctrl held); on an idle selection it must not appear (Shift there
+    // means multi-select, not bypass).
+    expect(hints).not.toContainEqual({
       keys: ['Shift'],
       label: 'Hold to bypass snaps and angle steps',
       active: false,

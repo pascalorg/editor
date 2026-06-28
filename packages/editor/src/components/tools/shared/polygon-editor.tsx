@@ -746,10 +746,9 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     const onGridMove = (event: GridEvent) => {
       const point = levelNode ? event.localPosition : event.position
       const rawPoint: [number, number] = [point[0], point[2]]
-      const bypassSnap = event.nativeEvent.shiftKey === true
-      const gridPoint: [number, number] = bypassSnap
-        ? rawPoint
-        : [snapToHalf(rawPoint[0]), snapToHalf(rawPoint[1])]
+      // Snapping follows the active mode (snapToHalf returns raw in Off / non-grid);
+      // no Shift bypass — Shift cycles the mode, Off is the bypass.
+      const gridPoint: [number, number] = [snapToHalf(rawPoint[0]), snapToHalf(rawPoint[1])]
       const newPosition =
         dragState?.isDragging && resolvePlanPoint
           ? resolvePlanPoint({
@@ -766,7 +765,6 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
       // Play snap sound when cursor moves to a new grid cell during drag
       if (
-        !bypassSnap &&
         dragState?.isDragging &&
         previousPositionRef.current &&
         (newPosition[0] !== previousPositionRef.current[0] ||

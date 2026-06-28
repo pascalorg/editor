@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/core'
 import { getSegmentGridStep } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
+import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
 const MIN_ROOF_DIM = 1
 
@@ -59,7 +60,7 @@ function resolveSegmentFrame(
  * the math survives any parent-roof rotation.
  */
 export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> = {
-  start({ node, payload, nodes, initialPlanPoint, gridSnapStep }) {
+  start({ node, payload, nodes, initialPlanPoint }) {
     const { axis, side } = payload as RoofSegmentResizePayload
     const segmentId = node.id as AnyNodeId
     const initialValue = axis === 'x' ? node.width : node.depth
@@ -79,12 +80,15 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
 
     return {
       affectedIds: [segmentId],
-      apply({ planPoint, modifiers }) {
+      apply({ planPoint }) {
         const currentLocal = projectLocalAxis(planPoint[0], planPoint[1])
         const delta = (currentLocal - initialLocal) * side
         const rawValue = initialValue + 2 * delta
-        const snappedValue =
-          !modifiers.shiftKey && gridSnapStep > 0 ? snapScalar(rawValue, gridSnapStep) : rawValue
+        // Mode-aware grid step (0 outside grid mode, so `lines` / `off` resize
+        // freely — the "smooth" behaviour that used to need a held Shift). The
+        // reshaping scope opened by the dispatcher resolves the `polygon` set.
+        const step = getSegmentGridStep()
+        const snappedValue = step > 0 ? snapScalar(rawValue, step) : rawValue
         const newValue = Math.max(MIN_ROOF_DIM, snappedValue)
         lastValue = newValue
         useScene
@@ -121,11 +125,13 @@ export const roofSegmentRotateAffordance: FloorplanAffordance<RoofSegmentNode> =
 
     return {
       affectedIds: [segmentId],
-      apply({ planPoint }) {
-        const currentAngle = Math.atan2(planPoint[1] - cz, planPoint[0] - cx)
-        let delta = currentAngle - initialAngle
-        while (delta > Math.PI) delta -= 2 * Math.PI
-        while (delta < -Math.PI) delta += 2 * Math.PI
+      apply({ planPoint, modifiers }) {
+        const delta = rotateAffordanceDelta({
+          center: [cx, cz],
+          initialAngle,
+          planPoint,
+          free: modifiers.shiftKey,
+        })
         lastRotation = initialRotation - delta
         useScene.getState().updateNode(segmentId, { rotation: lastRotation })
       },
@@ -168,9 +174,12 @@ export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ no
 
   return {
     affectedIds: [segmentId],
-    apply({ planPoint, modifiers }) {
+    apply({ planPoint }) {
+      // Mode-aware: `getSegmentGridStep()` is 0 outside grid mode (so `lines` /
+      // `off` move freely), and the `moving` scope resolves the `polygon` set
+      // via the kind's `snapProfile` — no held-Shift bypass.
       const step = getSegmentGridStep()
-      const snap = (value: number) => (modifiers.shiftKey ? value : snapScalar(value, step))
+      const snap = (value: number) => snapScalar(value, step)
       const worldPoint = resolveCursor(planPoint, { snap })
       const dx = worldPoint[0] - roofPosX
       const dz = worldPoint[1] - roofPosZ

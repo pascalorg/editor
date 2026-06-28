@@ -179,6 +179,18 @@ export function isPresettableKind(kind: string): boolean {
 }
 
 /**
+ * Resolve a kind's facing-triangle config, or `null` when it has none.
+ * `{ reversed }` says whether the triangle points along the node's local -Z
+ * (its front) instead of +Z. One reader (the editor-side `<FacingPoseIndicator>`
+ * publishers) so placement and move stay consistent.
+ */
+export function resolveFacingIndicator(kind: string): { reversed: boolean } | null {
+  const facing = nodeRegistry.get(kind)?.facingIndicator
+  if (!facing) return null
+  return { reversed: facing === true ? false : (facing.reversed ?? false) }
+}
+
+/**
  * Names of schema fields on `def` that are host references (`wallId`,
  * `wallT`, etc.). Read by host apps at preset-save time to strip these
  * from the stored payload — see `def.capabilities.hostRefFields` docs.

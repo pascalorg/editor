@@ -15,6 +15,7 @@ import {
 import {
   CursorSphere,
   consumePlacementDragRelease,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   snapFenceDraftPoint,
   triggerSFX,
@@ -201,6 +202,7 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
         fences: levelFences,
         ignoreFenceIds: [fenceId],
         bypassSnap,
+        magnetic: !bypassSnap && isMagneticSnapActive(),
       })
 
       if (

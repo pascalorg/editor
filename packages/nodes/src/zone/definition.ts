@@ -17,6 +17,7 @@ import { ZoneNode } from './schema'
  */
 export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   kind: 'zone',
+  snapProfile: 'structural',
   schemaVersion: 1,
   schema: ZoneNode,
   category: 'site',

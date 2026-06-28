@@ -15,9 +15,8 @@ import type { CloneNodesIntoOptions, Subtree } from './subtree'
 // door cutouts read parent wall — use `ctx` to resolve those references
 // without importing `useScene`. Builders stay pure and unit-testable.
 //
-// Future extension: `levelData?: { miters?: ... }` for level-scoped batch
-// data (wall mitering across an entire level). Decided alongside the wall
-// migration off its dedicated system (Phase 3+).
+// `levelData` carries level-scoped batch data (wall mitering across an
+// entire level) from registry dispatchers into pure builders.
 
 export type GeometryContext = {
   /** Look up any node by ID. Returns undefined if the node doesn't exist. */
@@ -30,18 +29,16 @@ export type GeometryContext = {
   parent: AnyNode | null
   /**
    * Pre-computed level-batch data, populated by the dispatcher when the
-   * kind declares `def.computeLevelData`. Shared across every
-   * `def.geometry(node, ctx)` call in the same level batch within a
-   * single frame, so kinds whose geometry depends on cross-sibling
-   * data (wall mitering, gradient sky uniforms across a zone, etc.)
-   * don't pay an O(N²) recomputation cost.
+   * kind declares `def.computeLevelData` (3D) or
+   * `def.computeFloorplanLevelData` (2D). Shared across every builder call
+   * in the same level batch within a single frame/render pass, so kinds
+   * whose geometry depends on cross-sibling data (wall mitering, gradient
+   * sky uniforms across a zone, etc.) don't pay an O(N²) recomputation cost.
    *
    * Typed as `unknown` at the framework boundary — kinds cast to their
-   * own `LevelData` shape inside `def.geometry` (the same kind owns
-   * both the `computeLevelData` return shape and the `geometry`
-   * consumer, so the cast is internal). Only populated for `def.
-   * geometry` calls today; not used by `def.floorplan` (which already
-   * has cheap access to siblings through `ctx.siblings`).
+   * own `LevelData` shape inside `def.geometry` / `def.floorplan` (the
+   * same kind owns both the compute hook's return shape and the builder
+   * consumer, so the cast is internal).
    */
   levelData?: unknown
   /**
@@ -224,6 +221,13 @@ export type ToolHint = {
   key: string
   /** Description of what the input does. Sentence case. */
   label: string
+  /**
+   * Only show this hint once the in-progress draft has at least this many
+   * vertices (reads `useEditor.draftVertexCount`). Lets a polygon tool's
+   * "Finish" hint appear only when finishing is actually possible (≥ 3 points),
+   * so the HUD reflects reality. Omit for always-shown hints.
+   */
+  minDraftVertices?: number
 }
 
 export type FloorplanGeometry =
@@ -713,12 +717,29 @@ export type SurfaceRole =
 /** Role a kind plays in a duct / pipe / lineset distribution system. */
 export type DistributionRole = 'run' | 'fitting' | 'terminal' | 'equipment'
 
+/**
+ * A kind's snapping profile (see `NodeDefinition.snapProfile`).
+ * - `'item'`       free object (furniture/fixtures): lines-default, no grid lattice, no angle.
+ * - `'structural'` walls / fences / slabs / ceilings / roofs / zones: grid-default, and an
+ *   angle lock while *setting direction* (drafting a run/polygon, dragging an endpoint or a
+ *   polygon vertex). A plain translate or a curve of a structural node has no angle.
+ */
+export type SnapProfile = 'item' | 'structural'
+
 export type NodeDefinition<S extends ZodObject<any>> = {
   kind: string
   schemaVersion: number
   schema: S
   category: NodeCategory
   surfaceRole?: SurfaceRole
+  /**
+   * Show a floor direction-triangle while placing/moving — the kind has a
+   * meaningful front. `true` points along the node's local +Z (forward).
+   * `{ reversed: true }` points along local -Z, for kinds whose front is the
+   * -Z side (a stair faces *out* of its run: you approach from the low end,
+   * which sits on the -Z side of the footprint).
+   */
+  facingIndicator?: boolean | { reversed?: boolean }
   /**
    * Role this kind plays in a distribution system (HVAC duct / DWV pipe /
    * refrigerant lineset). Lets the system-graph summary classify a
@@ -821,6 +842,21 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   computeLevelData?: (siblings: ReadonlyArray<z.infer<S>>) => unknown
   /**
+   * Floor-plan level-batch precompute hook. The floor-plan layer calls this
+   * once per level per render pass, de-duplicated by kind, before the
+   * per-node `def.floorplan` calls. The result lands in `ctx.levelData` for
+   * every node of this kind in the level.
+   *
+   * Used to hoist cross-sibling floor-plan work that would otherwise be
+   * O(N²) when rebuilding every node in a kind — e.g. wall mitering. `nodes`
+   * is the live-merged scene snapshot; `siblings` is every node of this kind
+   * in the level, also live-merged.
+   */
+  computeFloorplanLevelData?: (args: {
+    siblings: ReadonlyArray<z.infer<S>>
+    nodes: Record<string, AnyNode>
+  }) => unknown
+  /**
    * Pure 2D builder for floor-plan rendering. Mirrors `geometry` but emits
    * plain `FloorplanGeometry` data (SVG-renderable) rather than three.js
    * Object3D. Coordinates are level-local meters — the floor-plan panel
@@ -877,6 +913,12 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * unset and rely on the generic overlay path.
    */
   floorplanMoveTarget?: FloorplanMoveTarget<z.infer<S>>
+  /**
+   * Geometry reads sibling/parent/child nodes (e.g. wall miters, opening
+   * dimensions); the floor-plan layer must rebuild it whenever a
+   * sibling-affecting node is being dragged live.
+   */
+  floorplanDependsOnSiblings?: boolean
   /**
    * Optional hook letting a kind project the `useLiveNodeOverrides` map
    * into a fresh `nodes` snapshot before its `def.floorplan` builder
@@ -939,6 +981,29 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * its bespoke helper component instead.
    */
   toolHints?: ToolHint[]
+
+  /**
+   * Which snapping profile this kind uses, so the editor's contextual snapping
+   * HUD + snap math + force-place affordance are node-declared rather than
+   * switched on the kind name (`'item'` free object vs `'structural'` wall/slab/
+   * surface — see `SnapProfile`). The angle lock is derived from the *action*
+   * (setting direction), not declared here. Also gates the "force place" hint:
+   * structural kinds don't collision-reject, so they don't show it.
+   * Omit it for kinds whose placement/move tools haven't moved onto the unified
+   * snapping model yet — they get no snapping chip (no Shift-cycle) until they do.
+   */
+  snapProfile?: SnapProfile
+
+  /**
+   * For `structural` kinds: does drafting this kind set a DIRECTION (so the
+   * angle-lock snapping mode is meaningful)? Wall/fence/slab/ceiling drafting
+   * draws directed edges → `true` (the default). Roof/stair/elevator are placed
+   * as axis-aligned footprints, not directional draws → `false`, so their
+   * drafting uses the no-angle `polygon` snap context (grid / lines / off)
+   * instead of the angle-bearing `wall` context. Ignored for `item` kinds
+   * (their context never carries an angle lock).
+   */
+  snapDraftDirectional?: boolean
 
   /**
    * Optional translucent preview of the node — used by the move tool to
@@ -1250,6 +1315,13 @@ export type SlotDeclaration = {
 
 export type PaintCapability = {
   /**
+   * Opt this kind into the painter's `room` application scope: a paint click
+   * spreads to every same-kind node bounding the clicked node's room (walls and
+   * slabs). The room geometry is resolved by the editor from `Space.polygon`;
+   * this flag only declares that the kind participates.
+   */
+  roomScope?: boolean
+  /**
    * Resolve which logical surface the user clicked. Returns `null`
    * when the face shouldn't be painted (e.g. interior slot exposed
    * by accident, normal too oblique for an unambiguous side).
@@ -1522,6 +1594,15 @@ export type FloorPlacedConfig = {
   footprint?: FloorPlacedFootprintResolver
   footprints?: FloorPlacedFootprintsResolver
   applies?: (node: AnyNode) => boolean
+  /**
+   * Opt this kind into floor-placement collision: its footprint blocks other
+   * placements (it's an obstacle in `canPlaceOnFloor`) AND its own
+   * placement/move refuses to overlap another colliding footprint (red ghost,
+   * Alt to force). Solid furniture-like kinds (item / shelf / column) set this;
+   * markers and port-mated kinds (spawn / MEP / stair) leave it off so they
+   * neither block nor get blocked. Default off.
+   */
+  collides?: boolean
 }
 
 /**

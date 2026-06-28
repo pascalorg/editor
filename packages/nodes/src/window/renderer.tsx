@@ -1,6 +1,6 @@
 'use client'
 
-import { useRegistry, useScene, type WindowNode } from '@pascal-app/core'
+import { useLiveNodeOverrides, useRegistry, useScene, type WindowNode } from '@pascal-app/core'
 import {
   createMaterial,
   DEFAULT_WINDOW_MATERIAL,
@@ -20,6 +20,10 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
   }, [node.id])
   const handlers = useNodeEvents(node, 'window')
   const shading = useViewer((s) => s.shading)
+  const liveVisible = useLiveNodeOverrides((s) => {
+    const visible = s.get(node.id)?.visible
+    return typeof visible === 'boolean' ? visible : undefined
+  })
   const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
 
   const material = useMemo(() => {
@@ -40,7 +44,7 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
       position={node.position}
       ref={ref}
       rotation={node.rotation}
-      visible={node.visible}
+      visible={liveVisible ?? node.visible}
       {...(isTransient ? {} : handlers)}
     >
       <boxGeometry args={[0, 0, 0]} />

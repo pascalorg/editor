@@ -1,6 +1,5 @@
 import {
   type AnyNodeId,
-  collectAlignmentAnchors,
   emitter,
   type GridEvent,
   isCurvedWall,
@@ -15,19 +14,24 @@ import {
 } from '@pascal-app/core'
 import {
   calculateItemRotation,
+  clearPlacementSurface,
   consumePlacementDragRelease,
   EDITOR_LAYER,
   getSideFromNormal,
+  isGridSnapActive,
+  isMagneticSnapActive,
   isValidWallSideFace,
+  publishPlacementSurface,
   snapToHalf,
   stripPlacementMetadataFlags,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  useFacingPose,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BoxGeometry, EdgesGeometry, type Group } from 'three'
+import { BoxGeometry, EdgesGeometry, type Group, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
   clearOpeningGuides3D,
@@ -40,7 +44,10 @@ import {
   resolveRoofWallOpeningTarget,
 } from '../shared/roof-wall-opening-placement'
 import { resolveOpeningPlacement } from '../shared/wall-attach-target'
-import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
+import {
+  collectWallOpeningAlignmentCandidates,
+  resolveWallSlideAlignment,
+} from '../shared/wall-opening-alignment'
 import { WindowFloorProjection } from './floor-projection'
 import WindowPreview from './preview'
 import {
@@ -149,29 +156,45 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     let currentHostId: string | null = movingWindowNode.parentId
     let committed = false
     // Off-wall free-follow: over empty floor the window is parented to the
-    // level and tracks the cursor like an item. `freeFollowing` marks that
-    // state; `lastMeshEventTime` defers the floor handler whenever a wall/roof
-    // mesh event owns the same pointermove — that's the only thing that snaps.
+    // level and tracks the cursor like an item. `freeFollowing` marks that state.
     let freeFollowing = false
-    let lastMeshEventTime = -1
     // Last open-floor cursor point (level-local X/Z), so an R-flip while free-
     // following can re-run the ghost at the same spot with the new facing.
     let lastFloorPoint: [number, number] | null = null
-    // Live Shift state (force-place) — lets the preview tint re-evaluate when
-    // Shift is pressed/released with the pointer stationary (see `MoveDoorTool`).
-    let shiftHeld = false
-    // Movement SFX: ONE soft `sfx:grid-snap` click per grid step — identical
-    // whether free-following over floor or sliding along a wall (the user's
-    // ask). Always keyed on the RAW cursor (continuous ~0.1m cadence), never the
-    // snapped along-wall value. Guards: `lastStepKey` (cell change) +
-    // `lastTickFrame` (one tick per DOM pointermove). No separate snap cue — a
-    // distinct floor→wall sound was the "double" the user heard. See `MoveDoorTool`.
-    const STEP_M = 0.1
+    // The floor free-follow (`grid:move`, a DOM event) and the wall/roof snap
+    // (`wall:move`/`roof:move`, R3F mesh events) are INDEPENDENT event streams
+    // with different clocks, so the old `event.timeStamp` de-dup never matched —
+    // the free-follow ran during on-wall slides too, and both wrote the scene
+    // node every frame (a per-frame `nodes` churn that tanked 2D + 3D framerate).
+    // Instead, stamp one monotonic clock whenever a wall/roof hit owns the
+    // pointer; the floor handler stands down while that stamp is fresh. `wall:move`
+    // fires every frame on-wall, so the stamp stays fresh across the pointermove
+    // interval and the free-follow only re-engages once the cursor is off any wall.
+    let wallOwnedPointerAt = Number.NEGATIVE_INFINITY
+    // ~4 frames: comfortably longer than the pointermove interval (so a fast
+    // on-wall slide never lets the floor follow slip through) yet short enough
+    // that leaving a wall re-engages the free-follow without a perceptible stick.
+    const WALL_OWNS_POINTER_MS = 64
+    const markWallOwnedPointer = () => {
+      wallOwnedPointerAt = performance.now()
+    }
+    const wallOwnsPointer = () => performance.now() - wallOwnedPointerAt < WALL_OWNS_POINTER_MS
+    // Live Alt state (force-place) — lets the preview tint re-evaluate when
+    // Alt is pressed/released with the pointer stationary (see `MoveDoorTool`).
+    let altHeld = false
+    // Movement SFX: ONE soft `sfx:grid-snap` click each time the window's PLACED
+    // position crosses a step. Keyed on the SNAPPED value (passed by the caller),
+    // quantized by the live grid step in grid mode, else a gentle fixed cadence —
+    // so grid mode ticks once per cell (not on every micro mouse-move while the
+    // window sits in a cell) while lines/off still tick as the window moves.
+    // Guards: `lastStepKey` (cell change) + `lastTickFrame` (one per pointermove).
+    const FREE_STEP_M = 0.1
     let lastStepKey: string | null = null
     let lastTickFrame = -1
     const tickGridStep = (frame: number, ...coords: number[]) => {
       if (frame === lastTickFrame) return
-      const key = coords.map((c) => Math.round(c / STEP_M)).join(',')
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : FREE_STEP_M
+      const key = coords.map((c) => Math.round(c / step)).join(',')
       if (key === lastStepKey) return
       lastStepKey = key
       lastTickFrame = frame
@@ -208,7 +231,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       const now = globalThis.performance?.now?.() ?? Date.now()
       const last = lastHostDirtyAt.get(hostId) ?? 0
       // Wall rebuilds can trigger expensive CSG; throttle live previews to avoid FPS collapse.
-      if (now - last > 120) {
+      if (now - last > 60) {
         lastHostDirtyAt.set(hostId, now)
         markHostDirty(hostId)
       }
@@ -241,12 +264,14 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
       setGhostPose(null)
+      useFacingPose.getState().clear()
+      clearPlacementSurface()
     }
 
-    // Alignment candidates — anchors of every OTHER alignable object (the
-    // moving window is excluded so it never aligns to itself). Along-wall only;
-    // the floor-plane guides don't cover sill height.
-    const alignmentCandidates = collectAlignmentAnchors(
+    // Alignment candidates — only OTHER things on a wall (sibling openings +
+    // wall-mounted items), never ground objects, so the along-wall guides don't
+    // line up with furniture on the floor. The moving window is excluded.
+    const alignmentCandidates = collectWallOpeningAlignmentCandidates(
       useScene.getState().nodes,
       movingWindowNode.id,
     )
@@ -281,28 +306,23 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       const rawLocalX = event.localPosition[0]
       const rawLocalY = event.localPosition[1]
       if (!dragAnchor || dragAnchor.wallId !== event.node.id) {
-        const bypassSnap = event.nativeEvent?.shiftKey === true
         dragAnchor = {
           wallId: event.node.id,
           rawX: rawLocalX,
           rawY: rawLocalY,
           startX: event.node.id === original.parentId ? original.position[0] : rawLocalX,
           startY:
-            event.node.id === original.parentId
-              ? original.position[1]
-              : bypassSnap
-                ? rawLocalY
-                : snapToHalf(rawLocalY),
+            event.node.id === original.parentId ? original.position[1] : snapToHalf(rawLocalY),
         }
       }
       const targetLocalX = dragAnchor.startX + (rawLocalX - dragAnchor.rawX)
       const targetRawLocalY = dragAnchor.startY + (rawLocalY - dragAnchor.rawY)
-      // Vertical sill alignment (snap + guide): a sibling's sill/centre/top wins
-      // over the 0.5m grid when within threshold; Shift bypasses both.
-      const bypassY = event.nativeEvent?.shiftKey === true
-      const sillSnapped = bypassY
-        ? null
-        : resolveSillSnap({
+      // Vertical sill alignment (snap + guide) is the magnetic ("lines")
+      // component for Y: a sibling's sill/centre/top wins over the grid when
+      // within threshold, so it runs only when magnetic snap is on; otherwise
+      // the mode-aware `snapToHalf` decides Y.
+      const sillSnapped = isMagneticSnapActive()
+        ? resolveSillSnap({
             wall: event.node,
             movingId: movingWindowNode.id,
             localX: targetLocalX,
@@ -311,16 +331,16 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             height: movingWindowNode.height,
             nodes: useScene.getState().nodes,
           })
-      const targetLocalY = bypassY ? targetRawLocalY : (sillSnapped ?? snapToHalf(targetRawLocalY))
+        : null
+      const targetLocalY = sillSnapped ?? snapToHalf(targetRawLocalY)
       const localX = resolveWallSlideAlignment({
         wallNode: event.node,
         rawLocalX: targetLocalX,
         width: movingWindowNode.width,
         candidates: alignmentCandidates,
-        // Alt still hard-disables alignment (no guides). Shift = free-place:
-        // land at the raw cursor but keep showing the along-wall guides.
-        bypass: event.nativeEvent?.altKey === true,
-        freePlace: event.nativeEvent?.shiftKey === true,
+        // Along-wall alignment follows the magnetic ("lines") mode; the grid
+        // component lives in `snapToHalf` (itself mode-aware).
+        bypass: !isMagneticSnapActive(),
       })
       const { clampedX, clampedY } = clampToWall(
         event.node,
@@ -352,10 +372,12 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const applyPreview = (target: NonNullable<typeof lastTarget>) => {
-      // Same click as the off-wall ghost: one grid-snap tick per grid step,
-      // keyed on the RAW cursor along-wall position (not the snapped clampedX).
+      // One grid-snap tick per real ALONG-WALL step, keyed on the snapped
+      // `clampedX` only — NOT the sill `clampedY`, which tracks the cursor's
+      // vertical position on the wall face and so re-keys on every micro
+      // mouse-move even when the window stays in the same along-wall cell.
       // Per-frame guard collapses duplicate wall events on the same pointermove.
-      tickGridStep(target.event.nativeEvent?.timeStamp ?? -1, target.event.localPosition[0])
+      tickGridStep(target.event.nativeEvent?.timeStamp ?? -1, target.clampedX)
       // Keep the REAL node hidden and show a tinted ghost in the wall opening —
       // green when placeable, red when it collides — matching the free-follow
       // ghost so validity reads at a glance (see MoveDoorTool). The node position
@@ -388,7 +410,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       markHostDirtyThrottled(target.wallId)
 
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
-      const placement = resolveOpeningPlacement({ collides: !target.valid, forcePlace: shiftHeld })
+      const placement = resolveOpeningPlacement({ collides: !target.valid, forcePlace: altHeld })
       // Ghost world yaw must equal the committed wall-CHILD's world yaw
       // (-wallAngle + itemRotation); `cursorRotation` is π off here. See
       // `MoveDoorTool.applyPreview`.
@@ -396,19 +418,39 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         target.wallNode.end[1] - target.wallNode.start[1],
         target.wallNode.end[0] - target.wallNode.start[0],
       )
+      const ghostWorldPos = wallLocalToWorld(
+        target.wallNode,
+        target.clampedX,
+        target.clampedY,
+        getLevelYOffset(),
+        getSlabElevation(target.event),
+      )
+      const ghostYaw = target.itemRotation - wallAngle
       setGhostPose({
-        position: wallLocalToWorld(
-          target.wallNode,
-          target.clampedX,
-          target.clampedY,
-          getLevelYOffset(),
-          getSlabElevation(target.event),
-        ),
-        rotationY: target.itemRotation - wallAngle,
+        position: ghostWorldPos,
+        rotationY: ghostYaw,
         tint: placement.tint,
         floorY: getLevelYOffset() + getSlabElevation(target.event),
         side: target.side,
       })
+      // Forward-facing triangle (editor-side overlay), in the same building-local
+      // frame the ghost renders in. The window's front is its local +Z. Drop it
+      // to the floor under the wall (the ghost Y is the sill centre, up the wall).
+      useFacingPose.getState().set({
+        position: [
+          ghostWorldPos[0],
+          getLevelYOffset() + getSlabElevation(target.event),
+          ghostWorldPos[2],
+        ],
+        rotationY: ghostYaw,
+        depth: movingWindowNode.frameDepth ?? 0.07,
+      })
+      // Publish the wall surface so the snap grid tilts into the wall plane at
+      // the opening (its outward normal is the window's facing, +Z by `ghostYaw`).
+      publishPlacementSurface(
+        new Vector3(...ghostWorldPos),
+        new Vector3(Math.sin(ghostYaw), 0, Math.cos(ghostYaw)),
+      )
 
       publishOpeningGuidesForWallEvent({
         wall: target.wallNode,
@@ -424,12 +466,14 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const onWallEnter = (event: WallEvent) => {
-      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
       const target = resolveMoveTarget(event)
       if (!target) {
         onWallLeave()
         return
       }
+      // Valid wall hit owns the pointer for the next few frames; the floor
+      // free-follow stands down until the cursor genuinely leaves the wall.
+      markWallOwnedPointer()
       freeFollowing = false
       lastTarget = target
       lastRoofEvent = null
@@ -438,7 +482,6 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const onWallMove = (event: WallEvent) => {
-      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
       if (!isValidWallSideFace(event.normal)) {
         onWallLeave()
         return
@@ -458,6 +501,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         onWallLeave()
         return
       }
+      // Valid wall hit owns the pointer for the next few frames; the floor
+      // free-follow stands down until the cursor genuinely leaves the wall.
+      markWallOwnedPointer()
       freeFollowing = false
       lastTarget = target
       lastRoofEvent = null
@@ -548,11 +594,11 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       if (event.node.parentId !== getLevelId()) return
 
       const target = lastTarget?.wallId === event.node.id ? lastTarget : resolveMoveTarget(event)
-      // Shift force-places: commit even when the window overlaps another opening.
-      // The preview keeps its red invalid tint as a warning; Shift just lifts the
-      // commit block. Read shift from THIS event so it's never stale at commit.
+      // Alt force-places: commit even when the window overlaps another opening.
+      // The preview keeps its red invalid tint as a warning; Alt just lifts the
+      // commit block. Read alt from THIS event so it's never stale at commit.
       if (!target) return
-      if (!target.valid && event.nativeEvent?.shiftKey !== true) return
+      if (!target.valid && event.nativeEvent?.altKey !== true) return
       commitToWall(target)
       event.stopPropagation()
     }
@@ -574,6 +620,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     // which previews with the real mesh (the ghost-tint flow is wall-specific).
     const revealRealNode = () => {
       setGhostPose(null)
+      useFacingPose.getState().clear()
+      clearPlacementSurface()
       const live = useScene.getState().nodes[movingWindowNode.id as AnyNodeId] as
         | WindowNode
         | undefined
@@ -585,13 +633,16 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     // Free-follow: over open floor there's no wall to host the window, so hide
     // the real (pale, near-invisible-on-grid) node and float a red translucent
     // ghost at the cursor — same treatment the raw `WindowTool` build path uses.
-    const freeFollowAt = (localX: number, localZ: number, frame: number) => {
+    const freeFollowAt = (localX: number, localZ: number) => {
       freeFollowing = true
       lastTarget = null
       lastRoofEvent = null
-      // Click per grid cell as the ghost slides over open floor (X+Z) — the
-      // same `tickGridStep` the on-wall slide uses, so both feel identical.
-      tickGridStep(frame, localX, localZ)
+      // No snap SFX here: the free-follow fires off-wall (an invalid red ghost,
+      // not a placeable position) AND interleaves with the on-wall slide on the
+      // same pointer move (R3F `wall:move` and DOM `grid:move` carry different
+      // timestamps, so the de-dupe guard can't merge them). Emitting here was the
+      // source of the constant click while sliding a window along a wall — the
+      // on-wall `applyPreview` already ticks once per along-wall cell.
       hideCursor()
       useLiveTransforms.getState().clear(movingWindowNode.id)
       const levelId = getLevelId()
@@ -628,19 +679,20 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         floorY: getLevelYOffset(),
         side: sideOverride,
       })
+      // Off-wall (no host) floating ghost — no direction triangle, no wall grid.
+      useFacingPose.getState().clear()
+      clearPlacementSurface()
     }
 
     const onGridMove = (event: GridEvent) => {
       if (committed) return
       if (useViewer.getState().cameraDragging) return
-      // A wall/roof mesh handler owns this exact pointermove (shared DOM
-      // timeStamp): the cursor ray is on a wall/roof, so it snaps. Otherwise
-      // the cursor is over open floor — free-follow it. No proximity magnet:
-      // snapping engages only when the cursor ray actually hovers a wall.
-      if (event.nativeEvent?.timeStamp === lastMeshEventTime) return
+      // A wall/roof handler owns the pointer right now — the cursor ray is on a
+      // wall/roof that snaps, so skip the floor follow (see `wallOwnsPointer`).
+      if (wallOwnsPointer()) return
       const [x, , z] = event.localPosition
       lastFloorPoint = [x, z]
-      freeFollowAt(x, z, event.nativeEvent?.timeStamp ?? -1)
+      freeFollowAt(x, z)
     }
 
     // ── Roof-segment wall faces ─────────────────────────────────────
@@ -657,7 +709,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         ignoreId: movingWindowNode.id,
         vertical: {
           kind: 'free',
-          snap: event.nativeEvent?.shiftKey === true ? undefined : snapToHalf,
+          // `snapToHalf` is mode-aware (raw cursor when grid snap is off).
+          snap: snapToHalf,
         },
       })
 
@@ -667,12 +720,14 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const onRoofHover = (event: RoofEvent) => {
-      lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
       const target = resolveRoofMoveTarget(event)
       if (!target) {
         onRoofLeave()
         return
       }
+      // Valid roof hit owns the pointer for the next few frames; the floor
+      // free-follow stands down until the cursor genuinely leaves the roof.
+      markWallOwnedPointer()
       // Wall-frame drag anchor / live transform don't apply on a roof face.
       freeFollowing = false
       dragAnchor = null
@@ -710,9 +765,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     const onRoofClick = (event: RoofEvent) => {
       if (committed) return
       const target = resolveRoofMoveTarget(event)
-      // Shift force-places over a colliding roof-face target too (see onWallClick).
+      // Alt force-places over a colliding roof-face target too (see onWallClick).
       if (!target) return
-      if (!target.valid && event.nativeEvent?.shiftKey !== true) return
+      if (!target.valid && event.nativeEvent?.altKey !== true) return
       committed = true
       const segmentId = target.segment.id
 
@@ -819,10 +874,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     const onPlacementDragPointerUp = (event: PointerEvent) => {
       if (!consumePlacementDragRelease(event)) return
       // Free-following over open floor can't commit (no wall). A wall hover
-      // target commits via commitToWall; a roof face via onRoofClick. Shift
+      // target commits via commitToWall; a roof face via onRoofClick. Alt
       // force-places over a colliding wall target (tint stays red as a warning);
-      // read shift from this pointerup so it's current at commit.
-      if (lastTarget && !freeFollowing && (lastTarget.valid || event.shiftKey)) {
+      // read alt from this pointerup so it's current at commit.
+      if (lastTarget && !freeFollowing && (lastTarget.valid || event.altKey)) {
         commitToWall(lastTarget)
         return
       }
@@ -859,7 +914,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       } else if (lastFloorPoint) {
         // Free-following: re-run at the same spot so the floating ghost rebuilds
         // with the flipped side.
-        freeFollowAt(lastFloorPoint[0], lastFloorPoint[1], -1)
+        freeFollowAt(lastFloorPoint[0], lastFloorPoint[1])
       } else {
         // No preview yet (R before the first pointermove): flip the hidden node
         // so the first preview/commit already reflects the chosen side.
@@ -870,13 +925,13 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       }
     }
 
-    // Shift toggles force-place — re-run the on-wall preview so the tint flips
-    // green↔red live (pointer stationary). Commit gates still read shift fresh.
-    const onShiftToggle = (e: KeyboardEvent) => {
-      if (e.key !== 'Shift') return
+    // Alt toggles force-place — re-run the on-wall preview so the tint flips
+    // green↔red live (pointer stationary). Commit gates still read alt fresh.
+    const onAltToggle = (e: KeyboardEvent) => {
+      if (e.key !== 'Alt') return
       const held = e.type === 'keydown'
-      if (held === shiftHeld) return
-      shiftHeld = held
+      if (held === altHeld) return
+      altHeld = held
       if (!committed && lastTarget) applyPreview(lastTarget)
     }
 
@@ -892,8 +947,45 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('pointerup', onPlacementDragPointerUp)
     window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keydown', onShiftToggle)
-    window.addEventListener('keyup', onShiftToggle)
+    window.addEventListener('keydown', onAltToggle)
+    window.addEventListener('keyup', onAltToggle)
+
+    // Seed the wall snap surface on mount so the grid tilts into the wall on the
+    // FIRST frame — before any pointer move. Without it the grid briefly shows
+    // the moving node's horizontal fallback until the first `wall:move` publishes.
+    // Only applies to a window already hosted on a wall (not a fresh placement or
+    // a roof-segment host).
+    if (!isNew && movingWindowNode.wallId) {
+      const hostWall = useScene.getState().nodes[movingWindowNode.wallId as AnyNodeId]
+      if (hostWall?.type === 'wall') {
+        const wallAngle = Math.atan2(
+          hostWall.end[1] - hostWall.start[1],
+          hostWall.end[0] - hostWall.start[0],
+        )
+        const ghostYaw = movingWindowNode.rotation[1] - wallAngle
+        const seedPos = wallLocalToWorld(
+          hostWall,
+          movingWindowNode.position[0],
+          movingWindowNode.position[1],
+          getLevelYOffset(),
+          spatialGridManager.getSlabElevationForWall(
+            hostWall.parentId ?? '',
+            hostWall.start,
+            hostWall.end,
+          ),
+        )
+        publishPlacementSurface(
+          new Vector3(...seedPos),
+          new Vector3(Math.sin(ghostYaw), 0, Math.cos(ghostYaw)),
+        )
+        // Claim the pointer for the wall so the floor free-follow stands down for
+        // the first frames after grab. Otherwise the first `grid:move` (the window
+        // mesh occludes the wall under the cursor, so no `wall:move` fires yet)
+        // takes the off-wall branch and clears the seeded surface — the grid would
+        // flash back to horizontal before `wall:move` re-publishes the vertical one.
+        markWallOwnedPointer()
+      }
+    }
 
     return () => {
       // Safety cleanup: if still transient on unmount (e.g. phase switch mid-move)
@@ -928,6 +1020,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       useLiveTransforms.getState().clear(movingWindowNode.id)
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
+      useFacingPose.getState().clear()
+      clearPlacementSurface()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)
@@ -941,8 +1035,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
       window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keydown', onShiftToggle)
-      window.removeEventListener('keyup', onShiftToggle)
+      window.removeEventListener('keydown', onAltToggle)
+      window.removeEventListener('keyup', onAltToggle)
     }
   }, [movingWindowNode, exitMoveMode])
 

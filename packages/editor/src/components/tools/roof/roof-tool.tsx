@@ -23,7 +23,7 @@ import {
   resolveAlignmentForActiveBuilding,
   snapWorldXZForActiveBuilding,
 } from '../../../lib/world-grid-snap'
-import useEditor from '../../../store/use-editor'
+import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
 const DEFAULT_WALL_HEIGHT = 0.5
@@ -187,7 +187,8 @@ export const RoofTool: React.FC = () => {
     // point: resolving against the grid point would only ever catch anchors
     // that happen to sit on a grid line, so off-grid items (furniture, angled
     // walls) would never surface a guide. The matched axis locks exactly to the
-    // candidate's coordinate; the other axis keeps its grid snap. Alt bypasses.
+    // candidate's coordinate; the other axis keeps its grid snap. Alignment runs
+    // only when the magnetic (lines) snapping mode is active.
     const alignPoint = (
       gridX: number,
       gridZ: number,
@@ -241,21 +242,22 @@ export const RoofTool: React.FC = () => {
       if (!cursorRef.current) return
 
       // World-grid snap projected into building-local; rotated buildings
-      // used to drag every roof corner off the visible grid.
-      const bypassSnap = event.nativeEvent?.shiftKey === true
-      const snapped: [number, number] = bypassSnap
-        ? [event.localPosition[0], event.localPosition[2]]
-        : snapWorldXZForActiveBuilding(
+      // used to drag every roof corner off the visible grid. Snapping follows
+      // the global mode (grid quantize / lines alignment); Off keeps the raw
+      // cursor. Shift cycles the mode centrally — this tool never reads it.
+      const snapped: [number, number] = isGridSnapActive()
+        ? snapWorldXZForActiveBuilding(
             event.position[0],
             event.position[2],
             useEditor.getState().gridSnapStep,
           ).local
+        : [event.localPosition[0], event.localPosition[2]]
       const [gridX, gridZ] = alignPoint(
         snapped[0],
         snapped[1],
         event.localPosition[0],
         event.localPosition[2],
-        event.nativeEvent?.altKey === true || bypassSnap,
+        !isMagneticSnapActive(),
       )
       const y = event.localPosition[1]
 
@@ -265,7 +267,7 @@ export const RoofTool: React.FC = () => {
       cursorRef.current.position.set(gridX, gridY, gridZ)
 
       if (
-        !bypassSnap &&
+        (isGridSnapActive() || isMagneticSnapActive()) &&
         corner1Ref.current &&
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
@@ -290,21 +292,21 @@ export const RoofTool: React.FC = () => {
       if (!currentLevelId) return
 
       // World-grid snap projected into building-local; rotated buildings
-      // used to drag every roof corner off the visible grid.
-      const bypassSnap = event.nativeEvent?.shiftKey === true
-      const snapped: [number, number] = bypassSnap
-        ? [event.localPosition[0], event.localPosition[2]]
-        : snapWorldXZForActiveBuilding(
+      // used to drag every roof corner off the visible grid. Snapping follows
+      // the global mode; Off keeps the raw cursor.
+      const snapped: [number, number] = isGridSnapActive()
+        ? snapWorldXZForActiveBuilding(
             event.position[0],
             event.position[2],
             useEditor.getState().gridSnapStep,
           ).local
+        : [event.localPosition[0], event.localPosition[2]]
       const [gridX, gridZ] = alignPoint(
         snapped[0],
         snapped[1],
         event.localPosition[0],
         event.localPosition[2],
-        event.nativeEvent?.altKey === true || bypassSnap,
+        !isMagneticSnapActive(),
       )
       const y = event.localPosition[1]
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { emitter, type GridEvent, HvacEquipmentNode, useScene } from '@pascal-app/core'
-import { triggerSFX, useEditor } from '@pascal-app/editor'
+import { isGridSnapActive, isMagneticSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -53,17 +53,18 @@ const HvacEquipmentTool = () => {
     if (!activeLevelId) return
 
     const resolve = (event: GridEvent): [number, number, number] => {
-      const step = event.nativeEvent?.shiftKey === true ? 0 : useEditor.getState().gridSnapStep
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       return [snap(event.localPosition[0], step), 0, snap(event.localPosition[2], step)]
     }
 
     // Grid-snap the cursor, then layer Figma-style alignment so the unit lines
-    // up with ducts, other equipment, and items as it's placed (Shift = free,
-    // no snap + no guides).
+    // up with ducts, other equipment, and items as it's placed. Grid + lines
+    // follow the active snapping mode (the contextual HUD chip — Shift cycles
+    // it); `'off'` is the no-snap bypass.
     const resolveAligned = (event: GridEvent): [number, number, number] =>
       alignDrawPoint(resolve(event), {
         applySnap: true,
-        bypass: event.nativeEvent?.shiftKey === true,
+        bypass: !isMagneticSnapActive(),
       })
 
     const onMove = (event: GridEvent) => setCursor(resolveAligned(event))
@@ -122,10 +123,6 @@ const HvacEquipmentTool = () => {
       >
         <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
           <span className="font-medium text-foreground">R/T rotate</span>
-          <span aria-hidden className="text-muted-foreground">
-            ·
-          </span>
-          <span className="text-muted-foreground">⇧ smooth</span>
         </div>
       </Html>
     </LevelOffsetGroup>

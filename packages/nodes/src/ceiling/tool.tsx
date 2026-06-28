@@ -13,6 +13,9 @@ import {
   CursorSphere,
   clearCeilingSnapFeedback,
   EDITOR_LAYER,
+  isAngleSnapActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   resolveCeilingPlanPointSnap,
   triggerSFX,
@@ -30,7 +33,6 @@ import { CeilingNode } from './schema'
  * Multi-click polygon drawing at the ceiling height (2.52m default)
  * with a vertical TSL-gradient connector + ground-shadow lines so the
  * draft is visible against both the ceiling plane and the floor.
- * Shift defeats the 15° angle snap during drag.
  */
 
 const CEILING_HEIGHT = 2.52
@@ -65,13 +67,18 @@ export const CeilingTool: React.FC = () => {
   const [snappedCursorPosition, setSnappedCursorPosition] = useState<[number, number]>([0, 0])
   const [levelY, setLevelY] = useState(0)
   const previousSnappedPointRef = useRef<[number, number] | null>(null)
-  const shiftPressed = useRef(false)
 
   // Clear preset-seeded defaults on deactivation so a later manual ceiling
   // draw isn't built with a stale preset's parameters. Unmount-only.
   useEffect(() => () => useEditor.getState().setToolDefaults('ceiling', null), [])
 
   useEffect(() => () => clearCeilingSnapFeedback(), [])
+
+  // Publish the live vertex count so the HUD shows "Finish" only at ≥ 3 points.
+  useEffect(() => {
+    useEditor.getState().setDraftVertexCount(points.length)
+  }, [points.length])
+  useEffect(() => () => useEditor.getState().setDraftVertexCount(0), [])
 
   const verticalGeo = useMemo(
     () =>
@@ -93,38 +100,27 @@ export const CeilingTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && gridCursorRef.current)) return
       const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
-      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
-      const gridPosition: [number, number] = bypassSnap
-        ? rawPoint
-        : [...snapPointToGrid(rawPoint, useEditor.getState().gridSnapStep)]
+      // Honour the active snapping mode: grid lattice + 15° angle lock are each
+      // gated on the mode (off / lines → free), like the slab tool.
+      const gridStep = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      const gridPosition: [number, number] = [...snapPointToGrid(rawPoint, gridStep)]
       setCursorPosition(gridPosition)
       setLevelY(event.localPosition[1])
       const ceilingY = event.localPosition[1] + CEILING_HEIGHT
       const gridY = event.localPosition[1] + GRID_OFFSET
       const lastPoint = points[points.length - 1]
-      // 15° angle snap from the raw cursor (matching the 2D floorplan
-      // pipeline) with the distance snapped along the ray to the grid step.
       const orthoPoint: [number, number] =
-        bypassSnap || !lastPoint
-          ? gridPosition
-          : [
-              ...snapPointAlongAngleRay(
-                lastPoint,
-                rawPoint,
-                DEFAULT_ANGLE_STEP,
-                useEditor.getState().gridSnapStep,
-              ),
-            ]
+        isAngleSnapActive() && lastPoint
+          ? [...snapPointAlongAngleRay(lastPoint, rawPoint, DEFAULT_ANGLE_STEP, gridStep)]
+          : gridPosition
       const displayPoint = resolveCeilingPlanPointSnap({
         rawPoint,
         fallbackPoint: orthoPoint,
         levelId: currentLevelId,
-        altKey: event.nativeEvent?.altKey === true,
-        shiftKey: bypassSnap,
+        altKey: !isMagneticSnapActive(),
       }).point
       setSnappedCursorPosition(displayPoint)
       if (
-        !bypassSnap &&
         points.length > 0 &&
         previousSnappedPointRef.current &&
         (displayPoint[0] !== previousSnappedPointRef.current[0] ||
@@ -178,28 +174,12 @@ export const CeilingTool: React.FC = () => {
       clearCeilingSnapFeedback()
     }
 
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = true
-    }
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = false
-    }
-    const onWindowBlur = () => {
-      shiftPressed.current = false
-    }
-    document.addEventListener('keydown', onKeyDown)
-    document.addEventListener('keyup', onKeyUp)
-    window.addEventListener('blur', onWindowBlur)
-
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('grid:double-click', onGridDoubleClick)
     emitter.on('tool:cancel', onCancel)
 
     return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      document.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener('blur', onWindowBlur)
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('grid:double-click', onGridDoubleClick)

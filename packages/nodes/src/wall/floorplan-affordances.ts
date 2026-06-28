@@ -13,12 +13,13 @@ import {
 import {
   alignFloorplanDraftPoint,
   getSegmentGridStep,
+  isAngleSnapActive,
+  isMagneticSnapActive,
   isSegmentLongEnough,
   snapBuildingLocalToWorldGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
   useAlignmentGuides,
-  WALL_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 
@@ -42,8 +43,8 @@ import {
  *      the final state to scene in one tracked update and clears the
  *      overrides. `canCommit` still guards against collapsed walls.
  *
- * Alt-detach (drop linked walls) and SHIFT-free-place (skip angle snap)
- * are wired via the standard modifier flags on the session.
+ * Alt-detach (drop linked walls) is wired via the standard modifier
+ * flags on the session.
  */
 
 type WallEndpointPayload = { wallId: AnyNodeId; endpoint: 'start' | 'end' }
@@ -94,7 +95,7 @@ function collectLinkedWalls(
  * Wall curve sagitta drag — 1:1 port of the legacy
  * `handleWallCurvePointerDown` + commit flow. Drag projects the pointer
  * onto the chord normal to compute a `curveOffset`, snapped to the
- * grid step (Shift bypasses snap), clamped to `getMaxWallCurveOffset`,
+ * grid step, clamped to `getMaxWallCurveOffset`,
  * normalized via `normalizeWallCurveOffset`. Same single-undo dance as
  * the move-endpoint affordance — the dispatcher handles snapshot /
  * pause / resume around `apply`.
@@ -110,13 +111,11 @@ export const wallCurveAffordance: FloorplanAffordance<WallNode> = {
 
     return {
       affectedIds: [node.id],
-      apply({ planPoint, modifiers }) {
+      apply({ planPoint }) {
         const snapStep = getSegmentGridStep()
         // World-grid snap so a rotated building doesn't drag the curve
         // handle off the visible grid.
-        const [x, y] = modifiers.shiftKey
-          ? [planPoint[0], planPoint[1]]
-          : snapBuildingLocalToWorldGrid([planPoint[0], planPoint[1]], snapStep)
+        const [x, y] = snapBuildingLocalToWorldGrid([planPoint[0], planPoint[1]], snapStep)
 
         // Signed projection of (snappedPoint - chord midpoint) onto the
         // chord normal. Legacy negates because the SVG y-axis flips
@@ -128,9 +127,7 @@ export const wallCurveAffordance: FloorplanAffordance<WallNode> = {
           (x - chord.midpoint.x) * chord.normal.x +
           (y - chord.midpoint.y) * chord.normal.y
         )
-        const snappedOffset = modifiers.shiftKey
-          ? offsetFromMidpoint
-          : snapScalarToGrid(offsetFromMidpoint, snapStep)
+        const snappedOffset = snapScalarToGrid(offsetFromMidpoint, snapStep)
         const nextCurveOffset = normalizeWallCurveOffset(
           node,
           Math.max(-maxOffset, Math.min(maxOffset, snappedOffset)),
@@ -186,22 +183,28 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         // the legacy flow.
         const sceneNodes = useScene.getState().nodes
         const walls = collectLevelWalls(sceneNodes, node.id)
-        // Endpoint move = grid snap, never 45° from the fixed corner.
-        // Shift bypasses grid, magnetic, and alignment snap.
+        // The grid step follows the active snapping mode (`getSegmentGridStep()`
+        // is 0 outside grid mode), so `'lines' / 'angles' / 'off'` no longer
+        // force a grid snap the mode chip says is inactive. In `'angles'` mode
+        // the endpoint angle-locks off the fixed corner (free length), matching
+        // the draft tool — the angle path ignores the `gridSnap` override.
+        const angleLocked = isAngleSnapActive()
         const snapped = snapWallDraftPoint({
           point: planPoint as WallPlanPoint,
           walls,
           ignoreWallIds: [node.id],
-          bypassSnap: modifiers.shiftKey,
-          magnetic: !modifiers.shiftKey,
-          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, WALL_GRID_STEP),
+          start: angleLocked ? fixedPoint : undefined,
+          angleSnap: angleLocked,
+          magnetic: isMagneticSnapActive(),
+          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()),
         })
         // Figma-style alignment on the dragged corner — snaps it onto another
-        // object's edge / wall face and publishes a guide. The dragged wall
-        // and its linked siblings (which cascade with the corner) are excluded
-        // from the candidate pool. Alt is reserved for detach, NOT bypass.
+        // object's edge / wall face and publishes a guide. It is a line snap,
+        // so gate it on the magnetic (`'lines'`) mode like the draft tool does.
+        // The dragged wall and its linked siblings (which cascade with the
+        // corner) are excluded from the candidate pool. Alt is detach, NOT bypass.
         const aligned = alignFloorplanDraftPoint(snapped, {
-          bypass: modifiers.shiftKey,
+          bypass: !isMagneticSnapActive(),
           excludeIds: [node.id, ...linkedWalls.map((w) => w.id)],
         }) as WallPlanPoint
 
