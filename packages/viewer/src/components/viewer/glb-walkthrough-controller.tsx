@@ -15,6 +15,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   type Object3D,
+  type PerspectiveCamera,
   Quaternion,
   Vector3,
 } from 'three'
@@ -24,6 +25,7 @@ import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { SCENE_LAYER } from '../../lib/layers'
 import useViewer from '../../store/use-viewer'
 import BVHEcctrl, { type BVHEcctrlApi, type MovementInput } from './bvh-ecctrl'
+import { WALKTHROUGH_FOV } from './walkthrough-controls'
 
 // Eye/capsule geometry mirrors the editor's first-person controller so the
 // baked walkthrough feels identical. The capsule centre sits below the eye; the
@@ -263,6 +265,22 @@ export function GlbWalkthroughController({ url }: { url: string }) {
       if (prevMode === 'orthographic') useViewer.getState().setCameraMode('orthographic')
     }
   }, [])
+
+  // Widen FOV while walking; the baked walkthrough rides the default 50° orbit
+  // camera, which feels cramped on foot. Keyed on `camera` so it re-applies if
+  // the instance swaps (e.g. the ortho→perspective switch above), restoring the
+  // prior FOV on exit.
+  useEffect(() => {
+    const cam = camera as PerspectiveCamera
+    if (!cam.isPerspectiveCamera) return
+    const prevFov = cam.fov
+    cam.fov = WALKTHROUGH_FOV
+    cam.updateProjectionMatrix()
+    return () => {
+      cam.fov = prevFov
+      cam.updateProjectionMatrix()
+    }
+  }, [camera])
 
   useEffect(() => {
     worldRef.current = world
