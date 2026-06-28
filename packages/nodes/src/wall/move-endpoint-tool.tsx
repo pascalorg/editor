@@ -177,7 +177,6 @@ function getLinkedWallUpdates(
 }
 
 export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({ target }) => {
-  const hasDraggedRef = useRef(false)
   const previousGridPosRef = useRef<WallPlanPoint | null>(null)
   const altPressedRef = useRef(false)
   const nodeIdRef = useRef(target.wall.id)
@@ -366,7 +365,6 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         triggerSFX('sfx:grid-snap')
       }
       previousGridPosRef.current = alignedPoint
-      hasDraggedRef.current = true
 
       // Stand the magnetic beacon at the endpoint when it locked onto existing
       // wall geometry (corner / midpoint / crossing / wall body).
@@ -390,20 +388,22 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       // through to the selection manager and arms the wall MOVE tool, a mode the
       // user never asked for.
       swallowNextClick()
-      // Press-release without drag: dismiss the tool without committing.
-      if (!hasDraggedRef.current) {
-        useViewer.getState().setSelection({ selectedIds: [nodeId] })
-        setAngleLabel(null)
-        exitMoveMode()
-        return
-      }
 
       const preview = previewRef.current ?? { start: originalStart, end: originalEnd }
       const hasChanged = !(
         samePoint(preview.start, originalStart) && samePoint(preview.end, originalEnd)
       )
 
-      if (hasChanged && isSegmentLongEnough(preview.start, preview.end)) {
+      // Endpoint still at its original spot: this release is the *grab* of a
+      // click-to-move (a tap on the handle, or a press that never dragged). Stay
+      // armed so the endpoint keeps following the cursor — the next release after
+      // an actual move commits. A press-drag and a click thus engage identically;
+      // previously the no-drag branch dismissed the tool, and whether it even ran
+      // raced the window pointer-up listener mounting (hence "works once, then
+      // needs a long press").
+      if (!hasChanged) return
+
+      if (isSegmentLongEnough(preview.start, preview.end)) {
         wasCommitted = true
 
         const linkedUpdates = altPressedRef.current

@@ -1418,6 +1418,16 @@ export const SelectionManager = () => {
       // Skip if box-select just completed (drag ended over a node)
       if (boxSelectHandled) return
 
+      // node:click is synthesized on pointer-up (use-node-events). A wall/fence
+      // endpoint handle sits ON the wall body, so from a 3D angle the wall mesh
+      // is raycast-hit behind it and the SAME pointer-up also emits the wall's
+      // click — which would select + arm the wall move tool on top of the
+      // endpoint move. While an endpoint reshape owns the pointer, ignore the
+      // body click so only the reshape tool handles the release. (Scoped to
+      // `endpoint`: hole-edit relies on node clicks to exit, just below.)
+      const activeScope = useInteractionScope.getState().scope
+      if (activeScope.kind === 'reshaping' && activeScope.reshape === 'endpoint') return
+
       const node = event.node
 
       // A ceiling is selectable only through its corner handles, never via
