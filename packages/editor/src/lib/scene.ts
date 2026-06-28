@@ -359,10 +359,8 @@ function resetEditorInteractionState() {
     structureLayer: 'elements',
     catalogCategory: null,
     selectedItem: null,
-    movingNode: null,
     selectedReferenceId: null,
     spaces: {},
-    editingHole: null,
     hoveredHole: null,
     isPreviewMode: false,
   })

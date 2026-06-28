@@ -1,16 +1,19 @@
 import {
   type AnyNodeId,
   clampDoorOperationState,
+  DEFAULT_WALL_THICKNESS,
   type DoorNode,
   DoorNode as DoorNodeSchema,
   getDoorRenderOpenAmount,
   getEffectiveNode,
+  getWallThickness,
   type SceneMaterial,
   type SceneMaterialId,
   sceneRegistry,
   useInteractive,
   useLiveNodeOverrides,
   useScene,
+  type WallNode,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
@@ -26,6 +29,7 @@ import {
   resolveMaterialRef,
 } from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
+import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
@@ -185,6 +189,19 @@ export const DoorSystem = () => {
 function tagDoorSlot(mesh: THREE.Mesh): THREE.Mesh {
   mesh.userData.slotId = currentDoorSlot
   return mesh
+}
+
+const NO_RAYCAST = () => {}
+
+// An open door leaf swings perpendicular to the wall, so in a top-down view its
+// flat panel blankets the room interior and wins the selection raycast over the
+// slab/items beneath it. Drop the swung leaf out of the raycast so a click on
+// the floor falls through to what's underneath; the door stays selectable via
+// its proud invisible cutout proxy at the opening (see syncDoorCutout).
+function disableSubtreeRaycast(object: THREE.Object3D) {
+  object.traverse((child) => {
+    ;(child as unknown as { raycast: () => void }).raycast = NO_RAYCAST
+  })
 }
 
 function nodeReferencesSceneMaterial(node: { slots?: Record<string, string> }): boolean {
@@ -1312,6 +1329,14 @@ function addDoorLeaf(
       0,
     )
     addBox(mesh, hardwareMaterial, hingeW, hingeH, hingeD, hingeMarkerX, leafTop - 0.25, 0)
+  }
+
+  // When the leaf is swung open it projects into the room and would otherwise
+  // win a top-down selection click over the floor beneath it. Drop only the
+  // swung leaf out of the raycast; a closed leaf stays in the wall plane and
+  // keeps its hit-eligibility (so paint-by-slot still works on it).
+  if (Math.abs(swingRotation) > 1e-3) {
+    disableSubtreeRaycast(leafGroup)
   }
 }
 
@@ -2653,18 +2678,21 @@ function hideEmptyGeometryMeshes(root: THREE.Object3D) {
 }
 
 function syncDoorCutout(node: DoorNode, mesh: THREE.Mesh) {
-  // ── Cutout (for wall CSG) — always full door dimensions, 1m deep ──
+  // ── Cutout: invisible raycast hit target for the whole opening ──
   let cutout = mesh.getObjectByName('cutout') as THREE.Mesh | undefined
   if (!cutout) {
     cutout = new THREE.Mesh()
     cutout.name = 'cutout'
-    // The cutout (a 1m-deep CSG helper, invisible) is proud of the wall, so it
-    // wins the scene raycast over the wall in front of the recessed door body —
-    // making it the selection AND paint hit target for the whole opening. The
-    // paint capability then re-raycasts the door's parts to find the slot.
+    // The cutout (invisible) is proud of the wall on both faces, so it wins the
+    // scene raycast over the wall in front of the recessed door body — making it
+    // the selection AND paint hit target for the whole opening. The paint
+    // capability then re-raycasts the door's parts to find the slot. Its depth
+    // is snug to the wall (not 1m) so it no longer blankets the room floor in a
+    // top-down view; the wall CSG ignores this depth (see getOpeningCutoutProxyDepth).
     mesh.add(cutout)
   }
   cutout.geometry.dispose()
+  const depth = resolveOpeningCutoutProxyDepth(node)
   const openingShape = getEffectiveOpeningShape(node)
   if (openingShape === 'arch') {
     cutout.geometry = new THREE.ExtrudeGeometry(
@@ -2676,12 +2704,12 @@ function syncDoorCutout(node: DoorNode, mesh: THREE.Mesh) {
         getClampedArchHeight(node.width, node.height, node.archHeight),
       ),
       {
-        depth: 1,
+        depth,
         bevelEnabled: false,
         curveSegments: 24,
       },
     )
-    cutout.geometry.translate(0, 0, -0.5)
+    cutout.geometry.translate(0, 0, -depth / 2)
   } else if (openingShape === 'rounded') {
     cutout.geometry = new THREE.ExtrudeGeometry(
       createRoundedTopShape(
@@ -2692,16 +2720,28 @@ function syncDoorCutout(node: DoorNode, mesh: THREE.Mesh) {
         getDoorTopRadii(node, node.width, node.height),
       ),
       {
-        depth: 1,
+        depth,
         bevelEnabled: false,
         curveSegments: 24,
       },
     )
-    cutout.geometry.translate(0, 0, -0.5)
+    cutout.geometry.translate(0, 0, -depth / 2)
   } else {
-    cutout.geometry = new THREE.BoxGeometry(node.width, node.height, 1.0)
+    cutout.geometry = new THREE.BoxGeometry(node.width, node.height, depth)
   }
   cutout.visible = false
+}
+
+// Resolve the cutout proxy depth from the opening's parent wall thickness so
+// the proxy stays proud of both wall faces (front/back selection) without the
+// old 1m depth that blanketed the floor. Falls back to the default thickness
+// when the parent wall isn't a resolvable wall node.
+function resolveOpeningCutoutProxyDepth(node: DoorNode): number {
+  const parentId = node.parentId
+  const parent = parentId ? useScene.getState().nodes[parentId as AnyNodeId] : undefined
+  const wallThickness =
+    parent?.type === 'wall' ? getWallThickness(parent as WallNode) : DEFAULT_WALL_THICKNESS
+  return getOpeningCutoutProxyDepth(wallThickness)
 }
 
 /**

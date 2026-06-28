@@ -13,6 +13,8 @@ import {
 import {
   CursorSphere,
   getFloorStackPreviewPosition,
+  isGridSnapActive,
+  isMagneticSnapActive,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -256,19 +258,22 @@ const DuctTerminalTool = () => {
         hit = hitLocalPlane(nativeEvent, y)
       }
       if (!hit) return null
-      const step = nativeEvent.shiftKey ? 0 : useEditor.getState().gridSnapStep
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       // Grid-snap, then layer Figma-style alignment so a floor / ceiling
-      // register lines up with ducts, equipment, and items (Shift = free).
+      // register lines up with ducts, equipment, and items. Grid + lines
+      // follow the active snapping mode (the contextual HUD chip — Shift
+      // cycles it); `'off'` is the no-snap bypass.
       const position = alignDrawPoint([snap(hit.x, step), y, snap(hit.z, step)], {
         applySnap: true,
-        bypass: nativeEvent.shiftKey === true,
+        bypass: !isMagneticSnapActive(),
       })
       // Magnetic port snap: if a duct run end / fitting collar is in range,
       // the port's direction picks the mount (floor / ceiling / wall) and
       // hops the whole register so its collar mates exactly onto it. Takes
-      // precedence over grid / alignment and the manual M mount; Shift
-      // bypasses.
-      if (!nativeEvent.shiftKey) {
+      // precedence over grid / alignment and the manual M mount; the
+      // raw-cursor `'off'` mode bypasses it.
+      const snapEnabled = isGridSnapActive() || isMagneticSnapActive()
+      if (snapEnabled) {
         const mated = resolvePortSnap(position, yawRef.current)
         if (mated) {
           return { position: mated.position, yaw: mated.yaw, mount: mated.mount, snapped: true }
@@ -408,7 +413,7 @@ const DuctTerminalTool = () => {
       </group>
       <Html
         center
-        position={[previewPosition[0], previewPosition[1] + 0.45, previewPosition[2]]}
+        position={[previewPosition[0], previewPosition[1] + 1.45, previewPosition[2]]}
         style={{ pointerEvents: 'none', userSelect: 'none' }}
         zIndexRange={[100, 0]}
       >

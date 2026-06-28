@@ -595,43 +595,25 @@ function levelWallSnapshot(walls: WallNode[]) {
   return walls.map(wallGeometrySignature).sort().join('||')
 }
 
-function slabGeometrySignature(slab: SlabNodeType) {
-  const polygon = slab.polygon
-    .map((point) => `${point[0].toFixed(4)},${point[1].toFixed(4)}`)
-    .join(';')
-  const holes = (slab.holes ?? [])
-    .map((hole) => hole.map((point) => `${point[0].toFixed(4)},${point[1].toFixed(4)}`).join(';'))
-    .join('/')
-
-  return [slab.id, (slab.elevation ?? DEFAULT_AUTO_SLAB_ELEVATION).toFixed(4), polygon, holes].join(
-    '|',
-  )
-}
-
-function levelSlabSnapshot(slabs: SlabNodeType[]) {
-  return slabs.map(slabGeometrySignature).sort().join('||')
-}
-
+// Trigger signature is wall-only on purpose: re-detection should fire on a
+// genuine remodel (wall geometry change), never when an auto-slab is edited or
+// deleted. Hashing slabs here created a feedback loop where deleting an
+// auto-slab re-fired detection and recreated it.
 function levelStructureSnapshots(nodes: Record<string, any>) {
-  const byLevel = new Map<string, { walls: WallNode[]; slabs: SlabNodeType[] }>()
-  const getEntry = (levelId: string) => {
-    const entry = byLevel.get(levelId) ?? { walls: [], slabs: [] }
-    byLevel.set(levelId, entry)
-    return entry
-  }
+  const byLevel = new Map<string, WallNode[]>()
 
   for (const node of Object.values(nodes)) {
     if (!(node && typeof node === 'object' && 'parentId' in node && node.parentId)) continue
-    if ((node as any).type === 'wall') {
-      getEntry((node as any).parentId).walls.push(node as WallNode)
-    } else if ((node as any).type === 'slab') {
-      getEntry((node as any).parentId).slabs.push(SlabNode.parse(node))
-    }
+    if ((node as any).type !== 'wall') continue
+    const levelId = (node as any).parentId as string
+    const walls = byLevel.get(levelId) ?? []
+    walls.push(node as WallNode)
+    byLevel.set(levelId, walls)
   }
 
   const snapshots = new Map<string, string>()
-  for (const [levelId, entry] of byLevel.entries()) {
-    snapshots.set(levelId, `${levelWallSnapshot(entry.walls)}##${levelSlabSnapshot(entry.slabs)}`)
+  for (const [levelId, walls] of byLevel.entries()) {
+    snapshots.set(levelId, levelWallSnapshot(walls))
   }
 
   return snapshots
@@ -692,13 +674,15 @@ export function planAutoSlabsForLevel(
   const matchedDetectedIdx = new Set<number>()
   const updatesById = new Map<string, [number, number][]>()
 
-  const autoBySignature = new Map<string, (typeof existingAutoMeta)[number]>()
+  const autoBySignature = new Map<string, Array<(typeof existingAutoMeta)[number]>>()
   for (const entry of existingAutoMeta) {
-    autoBySignature.set(entry.sig, entry)
+    const bucket = autoBySignature.get(entry.sig) ?? []
+    bucket.push(entry)
+    autoBySignature.set(entry.sig, bucket)
   }
 
   detected.forEach((room, index) => {
-    const existing = autoBySignature.get(room.sig)
+    const existing = autoBySignature.get(room.sig)?.shift()
     if (!existing) return
 
     matchedDetectedIdx.add(index)
@@ -875,13 +859,15 @@ export function planAutoCeilingsForLevel(
   const matchedDetectedIdx = new Set<number>()
   const updatesById = new Map<string, { polygon: [number, number][]; height: number }>()
 
-  const autoBySignature = new Map<string, (typeof existingAutoMeta)[number]>()
+  const autoBySignature = new Map<string, Array<(typeof existingAutoMeta)[number]>>()
   for (const entry of existingAutoMeta) {
-    autoBySignature.set(entry.sig, entry)
+    const bucket = autoBySignature.get(entry.sig) ?? []
+    bucket.push(entry)
+    autoBySignature.set(entry.sig, bucket)
   }
 
   detected.forEach((room, index) => {
-    const existing = autoBySignature.get(room.sig)
+    const existing = autoBySignature.get(room.sig)?.shift()
     if (!existing) return
 
     matchedDetectedIdx.add(index)

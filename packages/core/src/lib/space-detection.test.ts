@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { CeilingNode, SlabNode, WallNode } from '../schema'
-import { planAutoCeilingsForLevel } from './space-detection'
+import { planAutoCeilingsForLevel, planAutoSlabsForLevel } from './space-detection'
 
 const square: Array<[number, number]> = [
   [0, 0],
@@ -88,5 +88,28 @@ describe('planAutoCeilingsForLevel', () => {
 
     expect(plan.create).toHaveLength(0)
     expect(plan.update).toHaveLength(0)
+  })
+})
+
+describe('planAutoSlabsForLevel', () => {
+  test('matches two identical rooms to their own existing auto-slabs without churn', () => {
+    // Two rooms with identical polygon signatures previously collided in a
+    // signature-keyed Map, so one detected room never matched an existing slab
+    // and churned (delete + recreate) on every pass.
+    const slabA = slab(0.05)
+    const slabB = slab(0.05)
+
+    const plan = planAutoSlabsForLevel([roomPolygon(), roomPolygon()], [slabA, slabB])
+
+    expect(plan.create).toHaveLength(0)
+    expect(plan.delete).toHaveLength(0)
+    expect(plan.update).toHaveLength(0)
+  })
+
+  test('deletes an extra auto-slab when only one identical room is detected', () => {
+    const plan = planAutoSlabsForLevel([roomPolygon()], [slab(0.05), slab(0.05)])
+
+    expect(plan.create).toHaveLength(0)
+    expect(plan.delete).toHaveLength(1)
   })
 })

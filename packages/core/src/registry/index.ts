@@ -31,6 +31,7 @@ export {
   nodeRegistry,
   type PluginDiscovery,
   registerNode,
+  resolveFacingIndicator,
   setPluginDiscovery,
 } from './registry'
 export {
@@ -109,6 +110,7 @@ export type {
   SelectableConfig,
   SlotDeclaration,
   SnapPointKind,
+  SnapProfile,
   SnappableConfig,
   SnapServicesLike,
   SurfacePoint,

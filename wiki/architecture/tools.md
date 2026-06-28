@@ -12,6 +12,8 @@ Tools are React components that capture user input (pointer, keyboard) and trans
 
 See `apps/editor/components/tools/tool-manager.tsx`.
 
+> **What the user is doing right now** is owned by the interaction state machine, not by tool-local flags. A tool that starts a placement / move / handle / reshape / box-select / paint interaction enters it through `useInteractionScope.begin(...)` and leaves through `end()` — see [interaction-scope](interaction-scope.md). Do not add a new `useEditor` flag for a new interaction.
+
 ## Tool Categories by Phase
 
 **Site**
@@ -66,27 +68,33 @@ export function MyTool() {
   - The offset must be cleared on tool unmount, cancel, *and* commit — both `mesh.position.set(0, 0, 0)` and `useLiveTransforms.clear(id)`.
   - The tool must not generate or mutate geometry in this path — only transform writes. Geometry generation still belongs in a core system.
 - **No business logic in tools** — delegate geometry/constraint rules to core systems.
-- **Guided manipulation is the default.** Placement, move, rotate, resize, endpoint drag,
-  and handle drag should behave as guided building mode: they help the user build quickly
-  with fewer mistakes through grid/object snapping, canonical angle increments,
-  alignment guides, and distance feedback. Holding Shift is the standard live bypass for
-  those constraints: while Shift is held, tools should commit the raw pointer/angle
-  proposal instead of applying sticky snap or angle corrections. Passive measurement
-  guides may remain visible only when they do not alter the proposal. If an interaction
-  cannot use Shift because of an established shortcut or topology rule, document the
-  opt-out in its manipulation policy and explain the replacement behavior.
-- **Constraints and guides can be decoupled.** When a stronger constraint owns the
-  proposal, such as a wall segment's 15° angle lock, the tool may still publish passive
-  dashed alignment/proximity guides as long as it does not apply the guide snap delta.
-  Use this for chained wall segments: users keep the fast constrained draft, but still see
-  proximity feedback for later points. Shift remains the hard bypass for both correction
-  and guide feedback.
-- **Help must mirror manipulation policy.** The shortcut dialog and floating helper panel
-  are part of the interaction contract. Static shortcut docs should describe guided
-  building as the default and Shift as the live bypass. Floating help should be contextual
-  when enough state exists: Select mode can derive direct move, direct rotate,
-  multi-select, and Shift-bypass tips from the selected nodes and active modifiers; active
-  tools can highlight the Shift bypass row while the modifier is held.
+- **Snapping is mode-driven, not a held-Shift bypass.** Placement, move, rotate, resize,
+  endpoint drag, and handle drag are guided building — grid/object snapping, canonical angle
+  increments, alignment guides, distance feedback — but the active behaviour is an explicit,
+  always-visible, **per-context** mode (the contextual HUD chip), not a hidden held key:
+  - **Shift (tap)** cycles the snapping mode for the active context (`wall` grid/lines/angles/off ·
+    `item` lines/grid/off · `polygon` grid/lines/off — one persisted mode per context).
+  - **Alt (hold)** is force / free: commit the raw cursor past snap *and* past an invalid /
+    colliding drop. It is the only momentary "bypass" key (plus the vertical-riser carve-out for MEP runs).
+  - **Ctrl (tap)** cycles the grid step.
+  - Read snapping through the single path — `isGridSnapActive()` / `isMagneticSnapActive()` /
+    `isAngleSnapActive()` (`store/use-editor`), which resolve the active mode from the interaction
+    scope via `getActiveSnapContext()`. **Never** read `event.shiftKey` / `event.nativeEvent.shiftKey` /
+    `modifiers.shiftKey` to bypass snapping, and never apply a grid step that isn't gated on
+    `isGridSnapActive()` (`const step = isGridSnapActive() ? gridSnapStep : 0`). A snappable kind declares
+    `NodeDefinition.snapProfile` (`'item' | 'structural'`) so its context, mode-set, and chip fall out
+    with no per-kind switch. The contextual HUD renders the snapping chip for **any** tool that resolves
+    to a snap context — `helper-manager` gates the generic `RegisteredToolHelper` on `snapContext` (or
+    `continuationContext`), not on the presence of hand-written `def.toolHints`, so a snappable draft tool
+    with no bespoke hints (e.g. `zone`) still advertises the Shift = cycle control it already honors. See
+    [interaction-scope](interaction-scope.md) § "Snapping mode & modifiers" and `lib/snapping-mode.ts`.
+- **Constraints and guides can be decoupled.** When a stronger constraint owns the proposal —
+  a wall segment's 45° lock while in `angles` mode — the tool may still publish passive dashed
+  alignment/proximity guides as long as it does not apply the guide snap delta. Use this for chained
+  wall segments: users keep the fast constrained draft but still see proximity feedback for later points.
+- **Help mirrors the model.** The shortcut dialog and the contextual HUD are part of the interaction
+  contract: they describe the always-visible mode chip + `Alt` = force, **not** a hidden Shift bypass.
+  The HUD is driven by the active interaction scope, so it shows only the current context's controls.
 - **Preview geometry is local** — transient meshes shown while a tool is active live in the tool component, not in the scene store.
 - **Clean up on unmount** — remove any pending/incomplete nodes *and* any live transforms/mesh offsets when the tool unmounts.
 - **Tools must not import from `@pascal-app/viewer`** — use the scene store and core hooks only. `sceneRegistry` is exported from `@pascal-app/core` and is the allowed door into the Three.js graph for the narrow purposes above.
@@ -145,6 +153,20 @@ The store name suggests a uniform contract; the writes in practice are not. Docu
 | `column` / `roof` / `elevator` / `spawn` / single-position kinds | world plan | world Y |
 
 Anything that subscribes to `useLiveTransforms` to inform 2D rendering needs to handle these frames explicitly. The `FloorplanRegistryLayer` override currently branches by kind: `item` / `shelf` / `column` are treated as world-plan (it copies `live.position` onto the effective node and forces `parentId: null` so the resolver skips the parent-chain transform), while `slab` / `ceiling` / `zone` are treated as a polygon **delta** (it translates the polygon vertices by `live.position`). Each kind added to the live-drag path grows this consumer-side switch; the preferred long-term fix is to standardise the frame at the writer so the consumer stops branching by `node.type`.
+
+## Data-driven live drag: `useLiveNodeOverrides`, never per-tick `useScene`
+
+`useLiveTransforms` (above) carries a rigid position/rotation offset — right when the renderer can preview the move by transforming the node's group. It's **wrong** when the geometry is *recomputed from data fields* (a wall re-miters from its `start`/`end`, an opening re-cuts its host wall, an endpoint drag reshapes the segment and cascades to linked walls): the shape itself changes, so there's no rigid offset to apply. Those preview via **`useLiveNodeOverrides`** (`@pascal-app/core`) — the tool publishes the changed fields per tick (`set(id, patch)` / `setMany(...)`) and the geometry systems merge them (`getEffectiveWall` in 3D, the floor-plan sibling-override merge in 2D, `getEffectiveNode` in panels). The scene store stays untouched during the drag; on commit the tool clears overrides and writes it **once** (`resumeSceneHistory → updateNodes([...]) → pauseSceneHistory`), so the gesture is a single undo step. Esc/unmount just clears overrides — cancel is free.
+
+**Writing `useScene.updateNodes`/`updateNode` per `grid:move` tick is a blocker:** it replaces the `nodes` map ref, so every `useScene(s => s.nodes)` subscriber app-wide (panels, HUD, tooltips, floor plan, catalog) re-renders each frame → FPS collapse. (`markDirty` per tick is fine — it never calls `set()`.) Reference: `packages/nodes/src/wall/{move-tool,move-endpoint-tool}.tsx`.
+
+## Floorplan registry: per-node subscriptions, stable props
+
+`FloorplanRegistryLayer` draws one `FloorplanRegistryEntry` per node. The perf invariant — a live drag must re-render only the changed node(s), not all ~150 entries — rests on three things, and breaking any of them is a re-render-flood regression that still type-checks and passes tests (see `floorplan-registry-layer.tsx`):
+
+- Each entry subscribes to **its own slice** — `useLiveTransforms(s => s.transforms.get(id))` / `useLiveNodeOverrides(s => s.overrides.get(id))`, never the whole Map. This works because the live stores write a fresh value only for the changed node (the Map is cloned but unchanged value refs are reused), so an unchanged node's selector stays identity-stable and Zustand skips it. The parent subscribes only to the stable id list.
+- `FloorplanRegistryEntry` and `InteractiveGeometry` are `memo`'d, so the parent must pass **referentially stable props** (hoisted styles, `useCallback` handlers, memoized descriptors) — a fresh inline object/handler per entry defeats the memo.
+- Sibling-dependent geometry (wall miters, opening cuts) invalidates via a **per-node sibling epoch** bumped from a store `subscribe` (`computeAffectedSiblingIds`), not a whole-layer re-render.
 
 ## Wall-attached node rotations must be wall-local
 

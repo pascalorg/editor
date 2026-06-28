@@ -267,6 +267,11 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   schema: RoofSegmentNode,
   category: 'structure',
   surfaceRole: 'roof',
+  // Mirrors the parent roof: a body-move resolves the no-angle `polygon`
+  // snap context (grid / lines / off), so dragging a segment shows the
+  // snapping chip and honours the active mode like every other structural
+  // move. Resize / rotate run through their own reshaping scope.
+  snapProfile: 'structural',
 
   defaults: () => {
     const stub = RoofSegmentNodeSchema.parse({

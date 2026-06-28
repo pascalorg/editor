@@ -4,13 +4,18 @@ import { sceneRegistry, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import type { Mesh } from 'three'
+import { resolveOverlayPolicy } from '../lib/interaction/overlay-policy'
 import useEditor from '../store/use-editor'
+import useInteractionScope from '../store/use-interaction-scope'
 
 export const ViewerZoneSystem = () => {
   useFrame(() => {
     const { levelId, zoneId } = useViewer.getState().selection
     const structureLayer = useEditor.getState().structureLayer
     const nodes = useScene.getState().nodes
+    // During any active interaction zone labels step back entirely (Sims-light).
+    const zoneLabelsHidden =
+      resolveOverlayPolicy(useInteractionScope.getState().scope).zoneLabels === 'hidden'
 
     sceneRegistry.byType.zone!.forEach((id) => {
       const obj = sceneRegistry.nodes.get(id)
@@ -35,7 +40,7 @@ export const ViewerZoneSystem = () => {
       })
 
       // Labels: always visible on the current level (regardless of mode or zone selection)
-      const showLabel = !!levelId && isOnSelectedLevel
+      const showLabel = !zoneLabelsHidden && !!levelId && isOnSelectedLevel
       const targetOpacity = showLabel ? '1' : '0'
       const labelEl = document.getElementById(`${id}-label`)
       if (labelEl && labelEl.style.opacity !== targetOpacity) {

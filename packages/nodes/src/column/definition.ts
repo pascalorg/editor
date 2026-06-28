@@ -298,20 +298,24 @@ function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[]
 /**
  * Column — Stage A registration. Wrap-export of the legacy
  * `ColumnRenderer` (no system — column geometry is computed inline in
- * the renderer). Inspector / move / floorplan still go through legacy
- * paths via panel-manager.tsx / item-move-tool.tsx / floorplan-panel.tsx
- * (their hardcoded `case 'column':` entries fire before the registry
- * fallback).
+ * the renderer). Inspector / floorplan still go through legacy paths via
+ * panel-manager.tsx / floorplan-panel.tsx (their hardcoded `case 'column':`
+ * entries fire before the registry fallback).
  *
- * Capabilities: column doesn't declare `movable` because its move is
- * bespoke (legacy MoveColumnTool snaps to slab + free placement on
- * the X/Z plane with rotation).
+ * Capabilities: column declares the generic `movable` (translate on XZ
+ * with grid snap), so its 3D move runs through the shared
+ * `MoveRegistryNodeTool` — which gives it grid/line/off snapping, alignment,
+ * R/T rotation, slab-elevation lift, and the `collides` red/green placement
+ * box for free. (2D move still routes through `floorplanMoveTarget`, which
+ * wins the 2D dispatch.)
  *
  * Defaults computed via stub-parse so we leverage every zod
  * `.default()` annotation on the schema (~60 fields).
  */
 export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   kind: 'column',
+  snapProfile: 'item',
+  facingIndicator: true,
   schemaVersion: 1,
   schema: ColumnNode,
   category: 'structure',
@@ -327,19 +331,29 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Generic 3D translate-on-XZ via `MoveRegistryNodeTool` (grid snap + the
+    // mode-driven snapping the overhaul standardised). 2D move keeps using
+    // `floorplanMoveTarget`, which wins the 2D move dispatch.
+    movable: { axes: ['x', 'z'], gridSnap: true },
     slots: (node) => columnSlots(node as ColumnNodeType),
     paint: columnPaint,
-    // Slab elevation lift via the generic `<FloorElevationSystem>`.
+    // Slab elevation lift via the generic `<FloorElevationSystem>` + the
+    // placement/collision box. Use the VISIBLE footprint (round → radius,
+    // square → width, rectangular → width/depth, plus brace spread) so the
+    // box, slab-overlap, and collision all track the real column size rather
+    // than the raw width/depth (stale for a round column resized by radius).
     floorPlaced: {
       footprint: (node) => {
         const column = node as ColumnNodeType
+        const { halfX, halfZ } = columnFootprintHalf(column)
         return {
-          dimensions: [column.width, column.height, column.depth] as [number, number, number],
+          dimensions: [halfX * 2, column.height, halfZ * 2] as [number, number, number],
           // Column stores Y rotation as a scalar; the slab-overlap query
           // expects the full Euler tuple.
           rotation: [0, column.rotation, 0] as [number, number, number],
         }
       },
+      collides: true,
     },
   },
 
@@ -350,12 +364,6 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
-  // Stage D — 3D move-tool (registry-driven). Replaces the legacy
-  // `MoveColumnTool` in editor's dispatcher. Same 0.5m grid snap +
-  // live-transform preview the legacy used.
-  affordanceTools: {
-    move: () => import('./move-tool'),
-  },
   // Registry-driven placement tool — renders a translucent `ColumnPreview`
   // ghost at the cursor (mirroring the shelf build tool) instead of the
   // bare sphere the legacy editor-side `ColumnTool` showed. `ToolManager`'s
@@ -363,7 +371,6 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Left click', label: 'Place column' },
-    { key: 'Shift', label: 'Free place' },
     { key: 'Esc', label: 'Cancel' },
   ],
   floorplan: buildColumnFloorplan,

@@ -9,6 +9,8 @@ import {
 } from '@pascal-app/core'
 import {
   getFloorStackPreviewPosition,
+  isGridSnapActive,
+  isMagneticSnapActive,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
@@ -83,8 +85,8 @@ const ShelfTool = () => {
         rawZ: event.localPosition[2],
         gridStep: useEditor.getState().gridSnapStep,
         candidates: alignmentCandidates,
-        bypassAlignment: event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
-        bypassGrid: event.nativeEvent?.shiftKey === true,
+        bypassAlignment: !isMagneticSnapActive(),
+        bypassGrid: !isGridSnapActive(),
       })
       useAlignmentGuides.getState().set(guides)
 
@@ -98,10 +100,7 @@ const ShelfTool = () => {
       lastCursorRef.current = position
 
       const prev = previousSnapRef.current
-      if (
-        event.nativeEvent?.shiftKey !== true &&
-        (!prev || prev[0] !== position[0] || prev[1] !== position[2])
-      ) {
+      if (!prev || prev[0] !== position[0] || prev[1] !== position[2]) {
         triggerSFX('sfx:grid-snap')
         previousSnapRef.current = [position[0], position[2]]
       }
@@ -118,7 +117,7 @@ const ShelfTool = () => {
           activeLevelId,
           event,
           useEditor.getState().gridSnapStep,
-          event.nativeEvent?.shiftKey === true,
+          !isGridSnapActive(),
         )
       const shelf = ShelfNode.parse({
         ...shelfDefinition.defaults(),
@@ -129,10 +128,15 @@ const ShelfTool = () => {
       useScene.getState().createNode(shelf, activeLevelId)
       useViewer.getState().setSelection({ selectedIds: [shelf.id] })
       triggerSFX('sfx:item-place')
-      // The placed shelf is now a valid alignment target for the next one;
-      // refresh the candidate pool and drop the guide from this drop.
-      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
       useAlignmentGuides.getState().clear()
+      if (useEditor.getState().getContinuation('point') === 'repeat') {
+        // The placed shelf is now a valid alignment target for the next one.
+        alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
+      } else {
+        cursorVisibleRef.current = false
+        setCursorVisible(false)
+        useEditor.getState().setTool(null)
+      }
 
       stopPlacementCommitPropagation(event)
     }

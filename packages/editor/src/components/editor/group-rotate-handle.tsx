@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrthographicCamera, Plane, Vector2, Vector3 } from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { useMovingNode } from '../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import {
   CORNER_OFFSET,
@@ -55,7 +56,7 @@ export function GroupRotateHandle() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const levelId = useViewer((s) => s.selection.levelId)
   const mode = useEditor((s) => s.mode)
-  const movingNode = useEditor((s) => s.movingNode)
+  const movingNode = useMovingNode()
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
   // Re-derive participants whenever the scene mutates (e.g. after a commit).
   // Drags only touch `useLiveNodeOverrides`, so this does not fire mid-drag.

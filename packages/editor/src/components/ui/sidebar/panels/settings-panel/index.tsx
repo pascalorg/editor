@@ -183,7 +183,6 @@ export function SettingsPanel({
   const clearScene = useScene((state) => state.clearScene)
   const resetSelection = useViewer((state) => state.resetSelection)
   const exportScene = useViewer((state) => state.exportScene)
-  const showGrid = useViewer((state) => state.showGrid)
   const shadows = useViewer((state) => state.shadows)
   const setPhase = useEditor((state) => state.setPhase)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
@@ -329,16 +328,6 @@ export function SettingsPanel({
             <Switch
               checked={projectVisibility?.showGuidesPublic ?? true}
               onCheckedChange={(checked) => handleVisibilityChange('showGuidesPublic', checked)}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium text-sm">Show Grid</div>
-              <div className="text-muted-foreground text-xs">Visible only in the editor</div>
-            </div>
-            <Switch
-              checked={showGrid}
-              onCheckedChange={(checked) => useViewer.getState().setShowGrid(checked)}
             />
           </div>
           <div className="flex items-center justify-between">

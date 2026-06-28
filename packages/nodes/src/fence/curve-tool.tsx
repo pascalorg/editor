@@ -20,7 +20,7 @@ import {
   markToolCancelConsumed,
   snapScalarToGrid,
   triggerSFX,
-  useEditor,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -29,8 +29,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * Phase 5 Stage D — fence curve tool (kind-owned).
  *
  * 1:1 port of the legacy `CurveFenceTool` (editor/components/tools/
- * fence/curve-fence-tool.tsx). Same snap pipeline, same Shift override,
- * same history dance, same activation grace. Imports adjusted to the
+ * fence/curve-fence-tool.tsx). Same snap pipeline, same history dance,
+ * same activation grace. Imports adjusted to the
  * `@pascal-app/editor` public surface (triggerSFX, markToolCancelConsumed,
  * getSegmentGridStep, snapScalarToGrid). Mounted via
  * `def.affordanceTools.curve` — ToolManager picks it up at runtime,
@@ -40,7 +40,6 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
   const activatedAtRef = useRef<number>(Date.now())
   const originalCurveOffsetRef = useRef(getClampedWallCurveOffset(node))
   const previousCurveOffsetRef = useRef<number | null>(null)
-  const shiftPressedRef = useRef(false)
   const previewOffsetRef = useRef<number>(originalCurveOffsetRef.current)
 
   const initialHandle = getWallMidpointHandlePoint(node)
@@ -51,7 +50,9 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
   ])
 
   const exitCurveMode = useCallback(() => {
-    useEditor.getState().setCurvingFence(null)
+    useInteractionScope
+      .getState()
+      .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'curve')
   }, [])
 
   useEffect(() => {
@@ -89,29 +90,21 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const bypassSnap = shiftPressedRef.current || event.nativeEvent?.shiftKey === true
       const snapStep = getSegmentGridStep()
-      const localX = bypassSnap
-        ? event.localPosition[0]
-        : snapScalarToGrid(event.localPosition[0], snapStep)
-      const localZ = bypassSnap
-        ? event.localPosition[2]
-        : snapScalarToGrid(event.localPosition[2], snapStep)
+      const localX = snapScalarToGrid(event.localPosition[0], snapStep)
+      const localZ = snapScalarToGrid(event.localPosition[2], snapStep)
 
       const offsetFromMidpoint = -(
         (localX - chord.midpoint.x) * chord.normal.x +
         (localZ - chord.midpoint.y) * chord.normal.y
       )
-      const snappedOffset = bypassSnap
-        ? offsetFromMidpoint
-        : snapScalarToGrid(offsetFromMidpoint, snapStep)
+      const snappedOffset = snapScalarToGrid(offsetFromMidpoint, snapStep)
       const nextCurveOffset = normalizeWallCurveOffset(
         node,
         Math.max(-maxCurveOffset, Math.min(maxCurveOffset, snappedOffset)),
       )
 
       if (
-        !bypassSnap &&
         previousCurveOffsetRef.current !== null &&
         nextCurveOffset !== previousCurveOffsetRef.current
       ) {
@@ -157,23 +150,9 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       exitCurveMode()
     }
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') {
-        shiftPressedRef.current = true
-      }
-    }
-
-    const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') {
-        shiftPressedRef.current = false
-      }
-    }
-
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
 
     return () => {
       if (!wasCommitted) {
@@ -183,8 +162,6 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
     }
   }, [exitCurveMode, node])
 

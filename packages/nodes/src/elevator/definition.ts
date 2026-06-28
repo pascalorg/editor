@@ -176,6 +176,16 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
   schemaVersion: 1,
   schema: ElevatorNode,
   category: 'structure',
+  snapProfile: 'structural',
+  // Placed as a footprint (R/T rotates), not a directional draw → no angle-lock
+  // mode. The toolHints presence routes it through the contextual HUD so the
+  // snapping chip shows during placement.
+  snapDraftDirectional: false,
+  toolHints: [
+    { key: 'Left click', label: 'Place elevator' },
+    { key: 'R / T', label: 'Rotate' },
+    { key: 'Esc', label: 'Cancel' },
+  ],
   surfaceRole: 'joinery',
 
   defaults: () => {

@@ -166,6 +166,8 @@ function itemWallMoveHandle(): HandleDescriptor<ItemNodeType> {
  */
 export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   kind: 'item',
+  snapProfile: 'item',
+  facingIndicator: true,
   schemaVersion: 1,
   schema: ItemNode,
   category: 'furnish',
@@ -224,6 +226,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
         return { dimensions: getScaledDimensions(item), rotation: item.rotation }
       },
       applies: (node) => !(node as ItemNodeType).asset.attachTo,
+      collides: true,
     },
     // Recessed ceiling fixtures cut a hole in their host ceiling. The viewer's
     // CeilingSystem queries this capability on each child of a ceiling so it
@@ -315,7 +318,8 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     { key: 'Left click', label: 'Place item' },
     { key: 'R', label: 'Rotate counterclockwise' },
     { key: 'T', label: 'Rotate clockwise' },
-    { key: 'Shift', label: 'Free place' },
+    { key: 'Shift', label: 'Cycle snapping mode' },
+    { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { sceneRegistry } from '@pascal-app/core'
+import { type AnyNodeId, resolveFacingIndicator, sceneRegistry, useScene } from '@pascal-app/core'
 import { useEffect, useMemo } from 'react'
 import {
   Box3,
@@ -15,6 +15,7 @@ import {
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import useFacingPose from '../../../store/use-facing-pose'
 
 const NO_RAYCAST = () => null
 
@@ -93,6 +94,9 @@ export function DragBoundingBox({
   centerY,
   color = DEFAULT_COLOR,
 }: DragBoundingBoxProps) {
+  const nodeType = useScene((state) => state.nodes[nodeId as AnyNodeId]?.type)
+  const facing = nodeType ? resolveFacingIndicator(nodeType) : null
+
   const measured = useMemo(() => {
     if (size) return null
     const obj = sceneRegistry.nodes.get(nodeId)
@@ -104,6 +108,7 @@ export function DragBoundingBox({
     ? [0, centerY ?? size[1] / 2, 0]
     : (measured?.center ?? [0, fallbackSize[1] / 2, 0])
   const minY = cy - h / 2
+  const groundY = minY + 0.01
 
   const edgeGeometry = useMemo(() => {
     const box = new BoxGeometry(w, h, d)
@@ -117,9 +122,9 @@ export function DragBoundingBox({
   const planeGeometry = useMemo(() => {
     const plane = new PlaneGeometry(w, d)
     plane.rotateX(-Math.PI / 2)
-    plane.translate(cx, minY + 0.01, cz)
+    plane.translate(cx, groundY, cz)
     return plane
-  }, [w, d, cx, minY, cz])
+  }, [w, d, cx, groundY, cz])
 
   const edgeMaterial = useMemo(
     () => new LineBasicNodeMaterial({ color, linewidth: 3, depthTest: false, depthWrite: false }),
@@ -146,6 +151,22 @@ export function DragBoundingBox({
     },
     [edgeGeometry, planeGeometry, edgeMaterial, planeMaterial],
   )
+
+  // Publish the facing pose to the editor-side overlay (the single triangle
+  // renderer) rather than drawing it here. The node origin is `position`; the
+  // footprint centre is `[cx, cz]` in the node's local frame. Runs each drag
+  // frame so the triangle follows; a separate mount/unmount effect clears it.
+  useEffect(() => {
+    if (!facing || d <= 0) return
+    useFacingPose.getState().set({
+      position: [position[0], position[1] + groundY, position[2]],
+      rotationY,
+      depth: d,
+      center: [cx, cz],
+      reversed: facing.reversed,
+    })
+  }, [facing, position, rotationY, d, cx, cz, groundY])
+  useEffect(() => () => useFacingPose.getState().clear(), [])
 
   if (w <= 0 || h <= 0 || d <= 0) return null
 

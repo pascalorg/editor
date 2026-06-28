@@ -14,6 +14,7 @@ import {
 import {
   ActionButton,
   ActionGroup,
+  curveReshapeScope,
   getLinearUnitLabel,
   linearControlValueToMeters,
   metersToLinearUnit,
@@ -21,7 +22,7 @@ import {
   PanelWrapper,
   SliderControl,
   triggerSFX,
-  useEditor,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Spline } from 'lucide-react'
@@ -31,7 +32,6 @@ export default function WallPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const unit = useViewer((s) => s.unit)
   const setSelection = useViewer((s) => s.setSelection)
-  const setCurvingWall = useEditor((s) => s.setCurvingWall)
 
   const sceneNode = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as WallNode | undefined) : undefined,
@@ -115,9 +115,9 @@ export default function WallPanel() {
   const handleCurve = useCallback(() => {
     if (!node) return
     triggerSFX('sfx:item-pick')
-    setCurvingWall(node)
+    useInteractionScope.getState().begin(curveReshapeScope(node.id))
     setSelection({ selectedIds: [] })
-  }, [node, setCurvingWall, setSelection])
+  }, [node, setSelection])
 
   if (!(node && node.type === 'wall' && selectedId)) return null
 

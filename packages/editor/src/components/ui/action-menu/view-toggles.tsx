@@ -1,6 +1,5 @@
 'use client'
 
-import { Icon } from '@iconify/react'
 import {
   type AnyNodeId,
   type BuildingNode,
@@ -16,22 +15,16 @@ import { useShallow } from 'zustand/react/shallow'
 import { getLevelDisplayName } from '@pascal-app/core'
 import { createLocalGuideImage } from '../../../lib/local-guide-image'
 import { cn } from '../../../lib/utils'
-import useEditor, { type GridSnapStep } from '../../../store/use-editor'
+import useEditor from '../../../store/use-editor'
 import { useUploadStore } from '../../../store/use-upload'
 import { SliderControl } from '../controls/slider-control'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 import { ActionButton } from './action-button'
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const ACCEPTED_FILE_TYPES = '.glb,.gltf,image/jpeg,image/png,image/webp,image/gif'
-const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
 const REFERENCES_EMPTY_TEXT =
   'Upload GLB meshes as scan references or blueprint images as guide references.'
-
-function formatGridSnapStep(step: GridSnapStep) {
-  return step.toFixed(2)
-}
 
 // ── Helper: get guide images for the current level ──────────────────────────
 
@@ -347,70 +340,6 @@ function GuidesControl() {
               {REFERENCES_EMPTY_TEXT}
             </div>
           )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-// ── Grid snap toggle ────────────────────────────────────────────────────────
-
-function GridSnapControl() {
-  const [isOpen, setIsOpen] = useState(false)
-  const gridSnapStep = useEditor((state) => state.gridSnapStep)
-  const setGridSnapStep = useEditor((state) => state.setGridSnapStep)
-
-  return (
-    <Popover onOpenChange={setIsOpen} open={isOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <button
-              aria-expanded={isOpen}
-              aria-label={`Grid snap: ${formatGridSnapStep(gridSnapStep)}`}
-              className={cn(
-                'flex h-11 w-11 flex-col items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-white/5 hover:text-foreground',
-                isOpen && 'bg-white/10 text-foreground',
-              )}
-              type="button"
-            >
-              <Icon height={16} icon="lucide:grid-2x2" width={16} />
-              <span className="mt-1 font-medium text-[9px] leading-none">
-                {formatGridSnapStep(gridSnapStep)}
-              </span>
-            </button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="top">Grid snap: {formatGridSnapStep(gridSnapStep)}</TooltipContent>
-      </Tooltip>
-
-      <PopoverContent
-        align="center"
-        className="w-36 rounded-xl border-border/45 bg-background/96 p-2 shadow-elevation-3 backdrop-blur-xl"
-        side="top"
-        sideOffset={14}
-      >
-        <div className="space-y-1">
-          {GRID_SNAP_STEPS.map((step) => {
-            const isActive = step === gridSnapStep
-            return (
-              <button
-                className={cn(
-                  'flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-white/8',
-                  isActive && 'bg-white/10 text-foreground',
-                )}
-                key={step}
-                onClick={() => {
-                  setGridSnapStep(step)
-                  setIsOpen(false)
-                }}
-                type="button"
-              >
-                <span>{formatGridSnapStep(step)}</span>
-                {isActive ? <Check className="h-3.5 w-3.5" /> : <span className="h-3.5 w-3.5" />}
-              </button>
-            )
-          })}
         </div>
       </PopoverContent>
     </Popover>
@@ -1014,8 +943,6 @@ function RiserControl() {
 
 // ── Exports ─────────────────────────────────────────────────────────────────
 
-export { GridSnapControl }
-
 export function SecondaryToggles() {
   return (
     <div className="flex items-center gap-1">
@@ -1027,7 +954,6 @@ export function SecondaryToggles() {
 export function ViewToggles() {
   return (
     <div className="flex items-center gap-1">
-      <GridSnapControl />
       <ScansControl />
       <GuidesControl />
       <ReferenceFloorControl />
