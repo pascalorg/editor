@@ -94,8 +94,9 @@ const RIGHT_CLICK_CANCEL_MAX_MS = 200
  * Expand `bounds` outward so each axis is rounded up to the active grid step.
  * The wireframe stays centered on the original bounds centre on each axis we
  * expand, so an off-centre mesh bbox stays off-centre. Wall-side items keep
- * `max.z = 0` (flush with the wall plane); the bottom (`min.y`) is preserved
- * so the box still sits on the floor / attachment plane.
+ * `min.z = 0` (the mounted face flush with the wall plane) and extend into the
+ * room along +Z — matching the body and the 2D footprint; the bottom (`min.y`)
+ * is preserved so the box still sits on the floor / attachment plane.
  *
  * Floor / ceiling / item-surface: X and Z expand; Y stays exact.
  * Wall / wall-side: X and Y expand; Z stays exact.
@@ -121,9 +122,9 @@ function expandBoundsToGrid(
   let maxZ: number
   let newCz: number
   if (attachTo === 'wall-side') {
-    maxZ = 0
-    minZ = -expandedD
-    newCz = -expandedD / 2
+    minZ = 0
+    maxZ = expandedD
+    newCz = expandedD / 2
   } else {
     minZ = cz - expandedD / 2
     maxZ = cz + expandedD / 2
@@ -145,10 +146,10 @@ function getFallbackPreviewBounds(
 ): PreviewBounds {
   const dims = item ? getScaledDimensions(item) : (asset?.dimensions ?? DEFAULT_DIMENSIONS)
   return {
-    min: [-dims[0] / 2, 0, attachTo === 'wall-side' ? -dims[2] : -dims[2] / 2],
-    max: [dims[0] / 2, dims[1], attachTo === 'wall-side' ? 0 : dims[2] / 2],
+    min: [-dims[0] / 2, 0, attachTo === 'wall-side' ? 0 : -dims[2] / 2],
+    max: [dims[0] / 2, dims[1], attachTo === 'wall-side' ? dims[2] : dims[2] / 2],
     dimensions: dims,
-    center: [0, dims[1] / 2, attachTo === 'wall-side' ? -dims[2] / 2 : 0],
+    center: [0, dims[1] / 2, attachTo === 'wall-side' ? dims[2] / 2 : 0],
   }
 }
 
@@ -690,8 +691,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const localPos = worldToBuildingLocal(worldPos.x, worldPos.y, worldPos.z)
         if (cursorGroupRef.current) {
           cursorGroupRef.current.position.copy(localPos)
-          if (draftNode.current.asset.attachTo) {
-            // Wall/ceiling items: extract world Y rotation (handles wall-parented items correctly)
+          if (
+            draftNode.current.asset.attachTo ||
+            placementState.current?.surface === 'item-surface'
+          ) {
+            // Wall/ceiling items AND items hosted on another item: the mesh is parented
+            // to a rotated host, so the box's building-local yaw must come from the mesh's
+            // world rotation, not the node's host-local `rotation[1]` (which would leave the
+            // box rotated by the host's yaw relative to the item).
             const q = new Quaternion()
             mesh.getWorldQuaternion(q)
             cursorGroupRef.current.rotation.y = new Euler().setFromQuaternion(q, 'YXZ').y
@@ -1094,10 +1101,24 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           }
         }
 
-        // Publish live transform for 2D floorplan
+        // Publish live transform for the 2D floorplan. The floorplan resolves a
+        // wall item's footprint (and its wall-side depth offset) from this
+        // rotation as a PLAN-space yaw. `cursorRotationY` is the 3D world cursor
+        // yaw, which is π off from the plan rotation on a wall face — feeding it
+        // raw flips the footprint to the far side of the wall during placement.
+        // Publish the plan rotation (wall angle + the item's wall-local yaw) so
+        // the preview matches what the committed node resolves to.
+        let liveRotation = result.cursorRotationY
+        const liveWallId = placementState.current.wallId
+        const liveWall = liveWallId ? useScene.getState().nodes[liveWallId as AnyNodeId] : undefined
+        if (liveWall?.type === 'wall') {
+          const w = liveWall as WallNode
+          const wallPlanRotation = -Math.atan2(w.end[1] - w.start[1], w.end[0] - w.start[0])
+          liveRotation = wallPlanRotation + (draft.rotation[1] ?? 0)
+        }
         useLiveTransforms.getState().set(draft.id, {
           position: result.cursorPosition,
-          rotation: result.cursorRotationY,
+          rotation: liveRotation,
         })
       }
     }
@@ -1941,8 +1962,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
               worldSnapped.y,
               worldSnapped.z,
             )
+            const surfaceQuat = new Quaternion()
+            surfaceMesh.getWorldQuaternion(surfaceQuat)
+            const surfaceWorldY = new Euler().setFromQuaternion(surfaceQuat, 'YXZ').y
             if (cursorGroupRef.current) {
               cursorGroupRef.current.position.set(localSnapped.x, localSnapped.y, localSnapped.z)
+              // The box lives in building-local space while the mesh is parented to the host
+              // item, so add the host's world yaw: the box must track the item's true
+              // orientation, not its host-local `rotation[1]`.
+              cursorGroupRef.current.rotation.y = newRotationY + surfaceWorldY
             }
             if (mesh) mesh.position.set(x, y, z)
           }
@@ -2352,7 +2380,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     ? getScaledDimensions(initialDraft)
     : (config.asset?.dimensions ?? DEFAULT_DIMENSIONS)
   const dims = getGridAlignedDimensions(rawDims, initialAttachTo, gridSnapStep)
-  const wallSideZOffset = initialAttachTo === 'wall-side' ? -dims[2] / 2 : 0
+  const wallSideZOffset = initialAttachTo === 'wall-side' ? dims[2] / 2 : 0
   const initialDimensionBounds = expandBoundsToGrid(
     getFallbackPreviewBounds(initialDraft, config.asset, initialAttachTo),
     initialAttachTo,

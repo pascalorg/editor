@@ -67,7 +67,7 @@ function resolveItemTransform(
     const wallRotation = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
     const wallLocalZ =
       item.asset.attachTo === 'wall-side'
-        ? ((wall.thickness ?? 0.1) / 2) * (item.side === 'back' ? -1 : 1)
+        ? ((wall.thickness ?? 0.1) / 2) * (item.side === 'front' ? 1 : -1)
         : item.position[2]
     const [offsetX, offsetY] = rotateVec(item.position[0], wallLocalZ, wallRotation)
     result = {
@@ -160,9 +160,12 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
   const [width, , depth] = getScaledDimensions(node)
   if (width <= 0 || depth <= 0) return null
 
-  // Wall-side items are anchored at the front face — center their footprint
-  // half-a-depth back toward the wall surface.
-  const centerLocalZ = node.asset.attachTo === 'wall-side' ? -depth / 2 : 0
+  // Wall-side items are anchored at the mounted wall face; their body extends
+  // depth-ward AWAY from the wall (into the room), so push the footprint centre
+  // a half-depth out along the item's local +Z. After the front/back π flip in
+  // `transform.rotation`, +depth/2 always points off the wall for either side;
+  // a negative offset would lay the footprint across the wall onto the far side.
+  const centerLocalZ = node.asset.attachTo === 'wall-side' ? depth / 2 : 0
   const [centerOffsetX, centerOffsetY] = rotateVec(0, centerLocalZ, transform.rotation)
   const cx = transform.x + centerOffsetX
   const cy = transform.y + centerOffsetY

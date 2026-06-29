@@ -13,7 +13,13 @@ import {
   roofFacePointToSegment,
   useScene,
 } from '@pascal-app/core'
-import { applyFloorplanAlignment, useEditor, type WallPlanPoint } from '@pascal-app/editor'
+import {
+  applyFloorplanAlignment,
+  isGridSnapActive,
+  isMagneticSnapActive,
+  useEditor,
+  type WallPlanPoint,
+} from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import { findClosestWallInPlan, snapLocalXToNeighbors } from '../shared/wall-attach-target'
 
@@ -70,7 +76,7 @@ function resolveItemPlanTransform(
     )
     const wallLocalZ =
       item.asset.attachTo === 'wall-side'
-        ? ((parent.thickness ?? 0.1) / 2) * (item.side === 'back' ? -1 : 1)
+        ? ((parent.thickness ?? 0.1) / 2) * (item.side === 'front' ? 1 : -1)
         : item.position[2]
     const [offsetX, offsetZ] = rotateVec(item.position[0], wallLocalZ, wallRotation)
     result = {
@@ -143,12 +149,11 @@ function createPlanarMovePointResolver(originalPlanPoint: [number, number], node
     metadata: node.metadata,
   })
 
-  return (planPoint: readonly [number, number], shiftKey: boolean): WallPlanPoint => {
-    const snap = (value: number) => {
-      if (shiftKey) return value
-      const step = useEditor.getState().gridSnapStep
-      return Math.round(value / step) * step
-    }
+  return (planPoint: readonly [number, number]): WallPlanPoint => {
+    // Grid snap is mode-driven (matching 3D): quantize only when grid mode is
+    // active; in lines/off mode the cursor passes through unsnapped.
+    const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+    const snap = (value: number) => (step <= 0 ? value : Math.round(value / step) * step)
     return resolveCursor(planPoint, { snap }) as WallPlanPoint
   }
 }
@@ -201,7 +206,7 @@ function buildWallItemSession(
 
   return {
     affectedIds: [node.id as AnyNodeId],
-    apply({ planPoint, modifiers }) {
+    apply({ planPoint }) {
       const nodes = useScene.getState().nodes
       const resolvedPlanPoint = resolveCursor(planPoint)
       const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)
@@ -210,21 +215,21 @@ function buildWallItemSession(
       const [width] = getScaledDimensions(node)
 
       // Figma-style along-wall alignment (edge-to-edge with other openings /
-      // wall items / wall ends), winning over the 0.5m grid snap; falls back
-      // to grid when nothing aligns. Alt bypasses alignment; Shift bypasses all snap.
-      const neighborX =
-        modifiers.altKey || modifiers.shiftKey
-          ? null
-          : snapLocalXToNeighbors({
-              wall: hit.wall,
-              localX: hit.localX,
-              width,
-              selfId: node.id as AnyNodeId,
-              nodes,
-            })
-      const step = useEditor.getState().gridSnapStep
+      // wall items / wall ends), winning over the grid snap; falls back to grid
+      // when nothing aligns. Both are mode-driven (matching 3D): alignment only in
+      // lines/magnetic mode, grid quantization only in grid mode.
+      const neighborX = isMagneticSnapActive()
+        ? snapLocalXToNeighbors({
+            wall: hit.wall,
+            localX: hit.localX,
+            width,
+            selfId: node.id as AnyNodeId,
+            nodes,
+          })
+        : null
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const snappedLocalX =
-        neighborX ?? (modifiers.shiftKey ? hit.localX : Math.round(hit.localX / step) * step)
+        neighborX ?? (step <= 0 ? hit.localX : Math.round(hit.localX / step) * step)
 
       const halfW = width / 2
       const clampedX = Math.max(halfW, Math.min(hit.wallLength - halfW, snappedLocalX))
@@ -275,9 +280,10 @@ function buildFloorItemSession(
   const candidates = collectAlignmentAnchors(nodes, node.id)
   return {
     affectedIds: [node.id as AnyNodeId],
-    apply({ planPoint, modifiers }) {
-      const gridSnapped = resolvePlanPoint(planPoint, modifiers.shiftKey)
-      // Figma-style alignment layered on the grid snap (Alt bypasses).
+    apply({ planPoint }) {
+      const gridSnapped = resolvePlanPoint(planPoint)
+      // Figma-style alignment layered on the grid snap, mode-driven (matching 3D):
+      // guides only resolve/snap when magnetic (lines) mode is active.
       const { point: snapped } = applyFloorplanAlignment(
         gridSnapped,
         movingFootprintAnchors(
@@ -287,7 +293,7 @@ function buildFloorItemSession(
           rotationY,
         ),
         candidates,
-        { bypass: modifiers.altKey || modifiers.shiftKey },
+        { bypass: !isMagneticSnapActive() },
       )
 
       const sourceY = node.position[1]
@@ -332,9 +338,9 @@ function buildSurfaceItemSession(
   )
   return {
     affectedIds: [node.id as AnyNodeId],
-    apply({ planPoint, modifiers }) {
+    apply({ planPoint }) {
       const nodes = useScene.getState().nodes
-      const snapped = resolvePlanPoint(planPoint, modifiers.shiftKey)
+      const snapped = resolvePlanPoint(planPoint)
 
       const surface = findContainingSurface(snapped, nodes, startLevelId, targetKind)
 
