@@ -211,13 +211,6 @@ export function getDutchEndSlopeFaces(input: {
     const m4 = v(-dutch.innerWaistHalfX, dutch.middleHeight, -dutch.innerWaistHalfZ)
     const r1 = v(-dutch.innerWaistHalfX, input.wh + input.rh, 0)
     const r2 = v(dutch.innerWaistHalfX, input.wh + input.rh, 0)
-    const denom = dutch.outerWaistHalfX - input.w / 2
-    const tDesired = Math.abs(denom) > 1e-9 ? (dutch.innerWaistHalfX - input.w / 2) / denom : 1
-    // Cap at the point where the two hip rulings meet (z → 0): extending past
-    // it would cross the rulings and twist the quad inside-out.
-    const zDenom = input.d / 2 - dutch.innerWaistHalfZ
-    const tConverge = zDenom > 1e-9 ? input.d / 2 / zDenom : tDesired
-    const t = Math.min(tDesired, tConverge)
     const projectWidthAxisPointToEndSlope = (
       point: RoofShapeFaceVertex,
       side: 1 | -1,
@@ -247,11 +240,6 @@ export function getDutchEndSlopeFaces(input: {
   const m4 = v(-dutch.innerWaistHalfX, dutch.middleHeight, -dutch.innerWaistHalfZ)
   const r1 = v(0, input.wh + input.rh, dutch.innerWaistHalfZ)
   const r2 = v(0, input.wh + input.rh, -dutch.innerWaistHalfZ)
-  const denom = dutch.outerWaistHalfZ - input.d / 2
-  const tDesired = Math.abs(denom) > 1e-9 ? (dutch.innerWaistHalfZ - input.d / 2) / denom : 1
-  const xDenom = input.w / 2 - dutch.innerWaistHalfX
-  const tConverge = xDenom > 1e-9 ? input.w / 2 / xDenom : tDesired
-  const t = Math.min(tDesired, tConverge)
   const projectDepthAxisPointToEndSlope = (
     point: RoofShapeFaceVertex,
     side: 1 | -1,

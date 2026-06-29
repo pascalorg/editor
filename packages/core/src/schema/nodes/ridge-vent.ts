@@ -13,6 +13,7 @@ import {
 const MIN_DEFAULT_RIDGE_VENT_LENGTH_M = 0.4
 const DEFAULT_RIDGE_VENT_GENERATOR = 'default-ridge-vent'
 const AUTO_RIDGE_VENT_METADATA_KEY = 'autoRidgeVent'
+const LEGACY_DEFAULT_RIDGE_VENT_PRESET = 'preset-white'
 const UNTRIMMED_RIDGE_VENT_BOUNDS_TRIM: RoofSegmentTrim = {
   left: 0,
   right: 0,
@@ -262,7 +263,9 @@ export function isDefaultRidgeVentNode(
     return true
   }
 
-  const hasCustomMaterial = vent.material !== undefined || vent.materialPreset !== undefined
+  const hasCustomMaterial =
+    vent.material !== undefined ||
+    (vent.materialPreset !== undefined && vent.materialPreset !== LEGACY_DEFAULT_RIDGE_VENT_PRESET)
   const hasDefaultName =
     vent.name === 'Ridge Vent' ||
     vent.name === 'Hip Ridge Vent' ||

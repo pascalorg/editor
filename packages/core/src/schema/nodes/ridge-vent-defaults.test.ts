@@ -4,6 +4,7 @@ import {
   getRidgeVentLinesForSegment,
   isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
+  RidgeVentNode,
 } from './ridge-vent'
 import {
   getDutchRoofMetrics,
@@ -137,6 +138,26 @@ describe('createDefaultRidgeVentsForSegment', () => {
         nodes,
       ),
     ).toBe(true)
+  })
+
+  test('treats legacy preset-white ridge vents as generated defaults', () => {
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_test' as never,
+      roofType: 'gable',
+      width: 8,
+      depth: 6,
+    })
+    const legacyVent = RidgeVentNode.parse({
+      id: 'rvent_legacy' as never,
+      roofSegmentId: segment.id,
+      name: 'Ridge Vent',
+      style: 'shingled',
+      materialPreset: 'preset-white',
+      position: [0, 0, 0],
+      length: 8,
+    })
+
+    expect(isDefaultRidgeVentNode(legacyVent, segment.id)).toBe(true)
   })
 
   test('creates a Z-oriented ridge plus four hip lines for depth-axis Dutch roofs', () => {

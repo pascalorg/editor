@@ -355,6 +355,28 @@ export type DutchRoofMetrics = {
   shoulderInsetAlongWidth: number
 }
 
+function getDutchUpperShellBounds(
+  node: Pick<
+    RoofSegmentNode,
+    'width' | 'depth' | 'dutchHipWidthRatio' | 'dutchWaistLengthRatio' | 'dutchGabletRake'
+  >,
+) {
+  const metrics = getDutchRoofMetrics(node)
+  const width = finitePositive(node.width, DEFAULT_ROOF_SEGMENT_WIDTH)
+  const depth = finitePositive(node.depth, DEFAULT_ROOF_SEGMENT_DEPTH)
+  const rake = node.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake
+  const rakeReach =
+    metrics.axis === 'x'
+      ? Math.min(Math.max(0, rake), Math.max(0, width / 2 - metrics.waistHalfX) * 0.98)
+      : Math.min(Math.max(0, rake), Math.max(0, depth / 2 - metrics.waistHalfZ) * 0.98)
+
+  return {
+    ...metrics,
+    upperHalfX: metrics.axis === 'x' ? metrics.waistHalfX + rakeReach : metrics.waistHalfX,
+    upperHalfZ: metrics.axis === 'x' ? metrics.waistHalfZ : metrics.waistHalfZ + rakeReach,
+  }
+}
+
 function withRatioDefaults(input: PitchInputs): PitchInputs & ShapeRatios {
   return {
     ...input,
@@ -596,11 +618,11 @@ export function getRoofSegmentSurfaceY(
 
   if (node.roofType === 'dutch') {
     const hipHeightRatio = node.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio
-    const metrics = getDutchRoofMetrics(node)
+    const metrics = getDutchUpperShellBounds(node)
     const lowerRise = activeRh * hipHeightRatio
     if (metrics.axis === 'x') {
       const waistHalfZ = Math.max(0.0001, metrics.waistHalfZ)
-      if (Math.abs(localX) <= metrics.waistHalfX && Math.abs(localZ) <= waistHalfZ) {
+      if (Math.abs(localX) <= metrics.upperHalfX && Math.abs(localZ) <= waistHalfZ) {
         const upperRise = activeRh * (1 - hipHeightRatio)
         const upperTan = upperRise / waistHalfZ
         return peakY - Math.abs(localZ) * upperTan
@@ -614,7 +636,7 @@ export function getRoofSegmentSurfaceY(
     }
 
     const waistHalfX = Math.max(0.0001, metrics.waistHalfX)
-    if (Math.abs(localX) <= waistHalfX && Math.abs(localZ) <= metrics.waistHalfZ) {
+    if (Math.abs(localX) <= waistHalfX && Math.abs(localZ) <= metrics.upperHalfZ) {
       const upperRise = activeRh * (1 - hipHeightRatio)
       const upperRun = waistHalfX
       const upperTan = upperRise / upperRun

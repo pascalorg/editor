@@ -176,6 +176,107 @@ describe('roof segment default ridge vents', () => {
     })
   })
 
+  test('regenerates default ridge vents when Dutch auto-vent fields change', () => {
+    const roof = RoofNode.parse({ id: 'roof_test' as never, children: [] })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_test' as never,
+      parentId: roof.id,
+      roofType: 'dutch',
+      width: 8,
+      depth: 6,
+      metadata: { autoRidgeVent: true },
+    })
+    const defaults = createDefaultRidgeVentsForSegment(segment)
+
+    useScene.getState().setScene(
+      {
+        [roof.id]: { ...roof, children: [segment.id] } as AnyNode,
+        [segment.id]: {
+          ...segment,
+          children: defaults.map((vent) => vent.id),
+        } as AnyNode,
+        ...Object.fromEntries(
+          defaults.map((vent) => [
+            vent.id,
+            { ...vent, parentId: segment.id, roofSegmentId: segment.id } as AnyNode,
+          ]),
+        ),
+      } as Record<AnyNodeId, AnyNode>,
+      [roof.id as AnyNodeId],
+    )
+
+    const originalDefaultIds = defaults.map((vent) => vent.id)
+    useScene.getState().updateNode(
+      segment.id as AnyNodeId,
+      {
+        pitch: 52,
+        dutchWaistLengthRatio: 0.72,
+        dutchGabletRake: 0.9,
+      } as Partial<AnyNode>,
+    )
+
+    const nextSegment = useScene.getState().nodes[segment.id as AnyNodeId] as
+      | RoofSegmentNode
+      | undefined
+    const nextChildren = nextSegment?.children ?? []
+
+    expect(nextChildren).toHaveLength(defaults.length)
+    expect(nextChildren.some((id) => originalDefaultIds.includes(id as typeof originalDefaultIds[number]))).toBe(false)
+    for (const oldId of originalDefaultIds) {
+      expect(useScene.getState().nodes[oldId as AnyNodeId]).toBeUndefined()
+    }
+  })
+
+  test('refresh replaces legacy default vents that still use preset-white', () => {
+    const roof = RoofNode.parse({ id: 'roof_test' as never, children: [] })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_test' as never,
+      parentId: roof.id,
+      roofType: 'gable',
+      width: 8,
+      depth: 6,
+      metadata: { autoRidgeVent: true },
+    })
+    const legacyDefault = RidgeVentNode.parse({
+      id: 'rvent_legacy' as never,
+      parentId: segment.id,
+      roofSegmentId: segment.id,
+      name: 'Ridge Vent',
+      style: 'shingled',
+      materialPreset: 'preset-white',
+      position: [0, 0, 0],
+      length: 8,
+    })
+
+    useScene.getState().setScene(
+      {
+        [roof.id]: { ...roof, children: [segment.id] } as AnyNode,
+        [segment.id]: {
+          ...segment,
+          children: [legacyDefault.id],
+        } as AnyNode,
+        [legacyDefault.id]: legacyDefault as AnyNode,
+      } as Record<AnyNodeId, AnyNode>,
+      [roof.id as AnyNodeId],
+    )
+
+    useScene.getState().updateNode(
+      segment.id as AnyNodeId,
+      {
+        pitch: 52,
+      } as Partial<AnyNode>,
+    )
+
+    const nextSegment = useScene.getState().nodes[segment.id as AnyNodeId] as
+      | RoofSegmentNode
+      | undefined
+    const nextChildren = nextSegment?.children ?? []
+
+    expect(nextChildren).toHaveLength(1)
+    expect(nextChildren[0]).not.toBe(legacyDefault.id)
+    expect(useScene.getState().nodes[legacyDefault.id as AnyNodeId]).toBeUndefined()
+  })
+
   test('does not create default ridge vents after a geometry change when auto ridge vent is disabled', () => {
     const roof = RoofNode.parse({ id: 'roof_test' as never, children: [] })
     const segment = RoofSegmentNode.parse({
