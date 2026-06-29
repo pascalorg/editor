@@ -254,7 +254,15 @@ export const useKeyboard = ({
             }
           }
         }
-      } else if ((e.key === 'r' || e.key === 'R') && !isVersionPreviewMode && !isPlacingOpening()) {
+      } else if (
+        (e.key === 'r' || e.key === 'R') &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !isVersionPreviewMode &&
+        !isPlacingOpening()
+      ) {
+        // `!metaKey && !ctrlKey` lets Cmd/Ctrl+R reach the browser reload instead
+        // of rotating/flipping the selected node.
         // Rotate selected node clockwise if it supports rotation (items, roofs, etc.)
         // Doors use R to flip side (front ↔ back, rotation += π); their
         // open/close toggle lives on E. Windows still use R to toggle

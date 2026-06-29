@@ -125,6 +125,10 @@ export function FloorplanRegistryMoveOverlay() {
       // to be consumed. That legacy flow is gone in the registry layer;
       // all entries use the action menu now.
       let hasMovedSinceStart = false
+      // Last resolved position of the moved node — drives the move "tick" SFX.
+      // Parity with the 3D move, which emits on any change of the resolved
+      // position (every snapping mode, not only grid).
+      let lastSnapKey: string | null = null
       // Live cursor location — updated on EVERY pointermove (even over the 3D
       // canvas) so R-key ownership can follow the pointer's CURRENT pane rather
       // than the sticky `hasMovedSinceStart`. Without this, once the user touched
@@ -155,6 +159,19 @@ export function FloorplanRegistryMoveOverlay() {
             metaKey: event.metaKey,
           },
         })
+        // Move "tick" — same feedback the 3D move gives, which fires whenever the
+        // resolved position changes (any snapping mode, not just grid), so it
+        // ticks as the item lands on each new snapped/free position.
+        const movedId = session.affectedIds[0]
+        const moved = movedId ? useScene.getState().nodes[movedId] : undefined
+        const pos = (moved as { position?: [number, number, number] } | undefined)?.position
+        if (pos) {
+          const key = `${pos[0]},${pos[2]}`
+          if (key !== lastSnapKey) {
+            lastSnapKey = key
+            sfxEmitter.emit('sfx:grid-snap')
+          }
+        }
       }
 
       const commitFinalStateOrRevert = () => {
@@ -307,6 +324,8 @@ export function FloorplanRegistryMoveOverlay() {
         // `hasMovedSinceStart`-only gate made the overlay claim R forever after
         // the first 2D move, killing the 3D flip.)
         if (event.key === 'r' || event.key === 'R') {
+          // Yield Cmd/Ctrl+R to the browser reload instead of flipping the side.
+          if (event.metaKey || event.ctrlKey) return
           if (!(session.flipSide && hasMovedSinceStart && pointerOverFloorplan)) return
           if (event.repeat) return
           const t = event.target as HTMLElement | null
