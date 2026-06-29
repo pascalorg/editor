@@ -1,8 +1,30 @@
-import { type AlignmentAnchor, resolveAlignment, type WallNode } from '@pascal-app/core'
+import {
+  type AlignmentAnchor,
+  type AnyNode,
+  collectAlignmentAnchors,
+  resolveAlignment,
+  type WallNode,
+} from '@pascal-app/core'
 import { snapToHalf, useAlignmentGuides } from '@pascal-app/editor'
 
 /** Figma-style alignment-snap threshold (meters), matching the move tools. */
 export const WALL_OPENING_ALIGNMENT_THRESHOLD_M = 0.08
+
+/**
+ * Alignment candidates for a wall opening (door / window): only OTHER things
+ * hosted ON a wall — sibling openings and wall-mounted items. Floor/ground
+ * objects are excluded so an opening's along-wall guides line up with what's on
+ * the walls, never with furniture sitting on the floor below.
+ */
+export function collectWallOpeningAlignmentCandidates(
+  nodes: Readonly<Record<string, AnyNode>>,
+  excludeId: string,
+): AlignmentAnchor[] {
+  return collectAlignmentAnchors(nodes, excludeId).filter((anchor) => {
+    const parentId = (nodes[anchor.nodeId] as { parentId?: string } | undefined)?.parentId
+    return !!parentId && nodes[parentId]?.type === 'wall'
+  })
+}
 /**
  * A wall opening (door / window) can only slide ALONG its host wall, so it can
  * only satisfy an x- or z-guide when the wall runs along that axis. Below this
@@ -16,19 +38,14 @@ const MIN_AXIS_COMPONENT = 0.5
  * Resolve a wall opening's along-wall position with Figma-style alignment to
  * other objects, publishing the matching guide as a side effect.
  *
- * The probe is the RAW cursor position on the wall (not the 0.5m snap) so
+ * The probe is the RAW cursor position on the wall (not the grid snap) so
  * off-grid anchors are caught; we then keep only the guide on an axis the wall
  * runs along and map it to the along-wall coordinate that lands the opening on
- * it. Falls back to the half-metre snap when nothing aligns, and clears the
- * guide on bypass / no-match. Returns the localX to use (X-clamped to the wall
- * given `width`). `bypass` disables alignment; `bypassSnap` also skips the
- * half-metre fallback.
- *
- * `freePlace` (Shift) is the "place anywhere, but still show me where I'd
- * align" mode: the opening lands at the EXACT raw cursor (no grid snap, no
- * jump-to-guide), yet the alignment guides are still computed and shown so the
- * user keeps the visual reference while overriding the magnetic pull. It
- * supersedes `bypass`/`bypassSnap` when set.
+ * it. Falls back to the grid snap when nothing aligns, and clears the guide on
+ * bypass / no-match. Returns the localX to use (X-clamped to the wall given
+ * `width`). `bypass` disables alignment — set by the caller when magnetic
+ * ("lines") snap is off; the grid component lives in `snapToHalf`, which is
+ * itself mode-aware (raw cursor when grid snap is off).
  */
 export function resolveWallSlideAlignment(args: {
   wallNode: WallNode
@@ -36,55 +53,9 @@ export function resolveWallSlideAlignment(args: {
   width: number
   candidates: readonly AlignmentAnchor[]
   bypass: boolean
-  bypassSnap?: boolean
-  freePlace?: boolean
 }): number {
-  const {
-    wallNode,
-    rawLocalX,
-    width,
-    candidates,
-    bypass,
-    bypassSnap = false,
-    freePlace = false,
-  } = args
-  const base = bypassSnap || freePlace ? rawLocalX : snapToHalf(rawLocalX)
-
-  const dxAxis = wallNode.end[0] - wallNode.start[0]
-  const dzAxis = wallNode.end[1] - wallNode.start[1]
-  const axisLength = Math.sqrt(dxAxis * dxAxis + dzAxis * dzAxis)
-
-  // Shift / free-place: land at the raw cursor but still publish the guides so
-  // the user sees alignment relationships without being snapped to them. The
-  // guides are re-resolved at the freely-placed point so they connect to the
-  // opening, not the snap target.
-  if (freePlace) {
-    if (candidates.length === 0 || axisLength < 1e-6) {
-      useAlignmentGuides.getState().clear()
-      return base
-    }
-    const c = dxAxis / axisLength
-    const s = dzAxis / axisLength
-    const placedX = Math.max(width / 2, Math.min(axisLength - width / 2, base))
-    const shown = resolveAlignment({
-      moving: [
-        {
-          nodeId: '__wall-opening-draft__',
-          kind: 'corner',
-          x: wallNode.start[0] + placedX * c,
-          z: wallNode.start[1] + placedX * s,
-        },
-      ],
-      candidates,
-      threshold: WALL_OPENING_ALIGNMENT_THRESHOLD_M,
-    })
-    const axisGuides = shown.guides.filter(
-      (g) => Math.abs(g.axis === 'x' ? c : s) >= MIN_AXIS_COMPONENT,
-    )
-    if (axisGuides.length === 0) useAlignmentGuides.getState().clear()
-    else useAlignmentGuides.getState().set(axisGuides)
-    return placedX
-  }
+  const { wallNode, rawLocalX, width, candidates, bypass } = args
+  const base = snapToHalf(rawLocalX)
 
   if (bypass || candidates.length === 0) {
     useAlignmentGuides.getState().clear()

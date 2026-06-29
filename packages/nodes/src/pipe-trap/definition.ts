@@ -17,6 +17,7 @@ export const pipeTrapDefinition: NodeDefinition<typeof PipeTrapNode> = {
   schema: PipeTrapNode,
   category: 'utility',
   distributionRole: 'fitting',
+  snapProfile: 'item',
   portConnectivityFollow: false, // trap is anchored; dragging a connected run stretches the arm, not the trap
 
   defaults: () => ({
@@ -52,7 +53,6 @@ export const pipeTrapDefinition: NodeDefinition<typeof PipeTrapNode> = {
   toolHints: [
     { key: 'Click', label: 'Place trap' },
     { key: 'R / T', label: 'Rotate ±45°' },
-    { key: 'Shift', label: 'Smooth (no grid snap)' },
     { key: 'Esc', label: 'Exit' },
   ],
 

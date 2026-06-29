@@ -16,7 +16,6 @@ import {
   sceneRegistry,
   snapScalar,
   type TapActionHandle,
-  type TranslateHandle,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
@@ -44,12 +43,17 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
+import { RESIZE_HANDLE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from '../../lib/contextual-help'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor from '../../store/use-editor'
+import useInteractionScope, {
+  useEndpointReshape,
+  useIsCurveReshape,
+  useMovingNode,
+} from '../../store/use-interaction-scope'
 import useOpeningGuides from '../../store/use-opening-guides'
-import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { formatAngleRadians } from '../tools/shared/segment-angle'
 import {
   ARROW_COLOR,
@@ -182,16 +186,13 @@ export function NodeArrowHandles() {
   const activeRotateNodeId = useDirectManipulationFeedback((state) => state.activeRotateNodeId)
   const mode = useEditor((state) => state.mode)
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
-  const movingNode = useEditor((state) => state.movingNode)
-  const placementDragMode = useEditor((state) => state.placementDragMode)
+  const movingNode = useMovingNode()
   // Endpoint / curve drags reshape the selected wall or fence; hide its
   // resize arrows for the duration so they don't clutter (or get blocked
   // by) the drag's own cursor + dimension overlays. Mirrors the same guard
   // on the legacy wall handles (`WallMoveSideHandles`).
-  const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
-  const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
-  const curvingWall = useEditor((state) => state.curvingWall)
-  const curvingFence = useEditor((state) => state.curvingFence)
+  const endpointReshape = useEndpointReshape()
+  const isCurveReshape = useIsCurveReshape()
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : activeRotateNodeId
   const rawNode = useScene((state) =>
@@ -209,26 +210,31 @@ export function NodeArrowHandles() {
     () => (rawNode && liveOverride ? ({ ...rawNode, ...liveOverride } as AnyNode) : rawNode),
     [rawNode, liveOverride],
   )
-  const isOwnPressDragMove =
-    placementDragMode && movingNode !== null && selectedId !== null && movingNode.id === selectedId
-
   const def = node ? nodeRegistry.get(node.type) : null
   const descriptors = useMemo(() => {
     if (!(node && def?.handles)) return null
-    return typeof def.handles === 'function'
-      ? def.handles(node as never)
-      : (def.handles as HandleDescriptor[])
+    const all =
+      typeof def.handles === 'function'
+        ? def.handles(node as never)
+        : (def.handles as HandleDescriptor[])
+    // The whole-node move-cross gizmo is gone: moving is now click-to-move on
+    // the selected node body (see selection-manager). Drop both flavours — the
+    // `translate` ground cross (column/roof/shelf/spawn) and the `tap-action`
+    // `move-cross` (item/door/window/elevator/stair) — keep rotate/resize.
+    return all.filter((d) => d.kind !== 'translate' && !('shape' in d && d.shape === 'move-cross'))
   }, [node, def])
 
   const shouldRender =
     Boolean(node && descriptors?.length) &&
     !isFloorplanHovered &&
     mode !== 'delete' &&
-    (!movingNode || isOwnPressDragMove) &&
-    !movingWallEndpoint &&
-    !movingFenceEndpoint &&
-    !curvingWall &&
-    !curvingFence
+    // Any whole-node move (placement or press-drag) hides the rig: the item is
+    // following the cursor, so its rotate/resize handles would only clutter and
+    // draw stray selection rays. The active handle-drag scope (resize/rotate)
+    // sets `activeHandleDrag`, not `movingNode`, so those are unaffected.
+    !movingNode &&
+    !endpointReshape &&
+    !isCurveReshape
 
   if (!shouldRender || !node || !descriptors) return null
   // Key by the selected node id so switching selection REMOUNTS the rig.
@@ -419,8 +425,14 @@ function NodeArrowHandlesForNode({
   // resize that re-centres the mesh) must NOT fire for the non-active arrows
   // here, or they'd lag behind the moving item.
   const activeIsTranslate = activeIndex !== null && descriptors[activeIndex]?.kind === 'translate'
+  // While a rotate gizmo is mid-drag, drop the opposite-side move cross: you
+  // can't move and rotate at once, so it only clutters the rotation.
+  const activeDescriptor = activeIndex !== null ? descriptors[activeIndex] : undefined
+  const activeIsRotate =
+    !!activeDescriptor && 'shape' in activeDescriptor && activeDescriptor.shape === 'rotate'
 
   const arrows = descriptors.map((descriptor, index) => {
+    if (activeIsRotate && 'shape' in descriptor && descriptor.shape === 'move-cross') return null
     // A `latch` cube toggles its group's visibility; render it always.
     if (descriptor.kind === 'latch') {
       return (
@@ -442,6 +454,8 @@ function NodeArrowHandlesForNode({
         descriptor={descriptor}
         dragControls={dragControls}
         handleIndex={index}
+        // Descriptors come from a per-node-kind static list, so index is a
+        // stable identity within this node's selection cycle.
         key={index}
         liveNode={node}
         preDragNode={preDragNode}
@@ -544,17 +558,6 @@ function ArrowHandle({
         freezeOffset={freezeOffset}
         handleIndex={handleIndex}
         liveNode={liveNode}
-        node={placementNode}
-        rideObject={rideObject}
-      />
-    )
-  }
-  if (descriptor.kind === 'translate') {
-    return (
-      <TranslateArrow
-        descriptor={descriptor}
-        dragControls={dragControls}
-        handleIndex={handleIndex}
         node={placementNode}
         rideObject={rideObject}
       />
@@ -712,14 +715,18 @@ function LinearArrow({
       return {
         overrideId,
         onBegin: () => {
-          if (measureLabel) {
-            useEditor.getState().setActiveHandleDrag({ nodeId, label: measureLabel })
-          }
+          // Always claim the handle-drag scope so the HUD knows a resize is the
+          // active interaction (keeps the idle select hints off-screen). The
+          // dimension-pill handles carry their `measureLabel`; plain resize
+          // arrows use the generic label.
+          useInteractionScope.getState().begin({
+            kind: 'handle-drag',
+            nodeId,
+            handle: measureLabel ?? RESIZE_HANDLE_DRAG_LABEL,
+          })
         },
         onEnd: () => {
-          if (measureLabel) {
-            useEditor.getState().setActiveHandleDrag(null)
-          }
+          useInteractionScope.getState().endIf((sc) => sc.kind === 'handle-drag')
           if (onDrag) useOpeningGuides.getState().clear()
         },
         move: ({ event: moveEvent, getPointerRay: getMovePointerRay }) => {
@@ -1190,8 +1197,23 @@ function ArcArrow({
       }
       const initialAngle = angleOf(hitWorld)
 
+      // Advertise the rotate interaction so the contextual HUD can surface the
+      // Shift = free-rotation toggle (the angle-step bypass below). Resize
+      // handles route a measurement label here; rotate gets a sentinel label so
+      // the HUD shows the rotate hint, not a dimension pill.
+      if (isRotateShape) {
+        useInteractionScope
+          .getState()
+          .begin({ kind: 'handle-drag', nodeId: node.id, handle: ROTATE_HANDLE_DRAG_LABEL })
+      }
+
       return {
-        onEnd: () => setRotationDelta(null),
+        onEnd: () => {
+          setRotationDelta(null)
+          if (isRotateShape) {
+            useInteractionScope.getState().endIf((sc) => sc.kind === 'handle-drag')
+          }
+        },
         move: ({ event: moveEvent, intersectPlane: intersectMovePlane }) => {
           const hit = new Vector3()
           if (!intersectMovePlane(moveEvent.clientX, moveEvent.clientY, plane, hit)) return null
@@ -1250,65 +1272,6 @@ function ArcArrow({
         thin
       />
     </>
-  )
-}
-
-// Free ground-plane move gizmo (the 4-way cross). Press-drag-release: raycast
-// the horizontal plane at the node's base, convert the hit into the node's
-// parent-local frame, add the delta to the node's drag-start position, grid-
-// snap via the descriptor's `snapExtents`, and publish to `useLiveNodeOverrides`
-// each move — committing one write to the store on release. The override stays
-// at base Y; `<FloorElevationSystem>` reads that effective node and owns the
-// presentation-only slab lift so the handle path shares the menu-move stacking
-// contract without storing lifted positions.
-function TranslateArrow({
-  descriptor,
-  node,
-}: {
-  descriptor: TranslateHandle<AnyNode>
-  node: AnyNode
-  handleIndex: number
-  dragControls: HandleDragControls
-  rideObject: Object3D
-}) {
-  const [isHovered, setIsHovered] = useState(false)
-  const { camera } = useThree()
-  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const baseScale = zoom * ARROW_SCALE
-
-  const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
-  const position = descriptor.placement.position(node, placementSceneApi)
-  const cursor: Cursor = 'move'
-  // 'node-normal' constrains the drag to the wall face (plane ⟂ the node's
-  // local +Z). Its cross icon stands up into that plane (tilt about X).
-  const isWallPlane = descriptor.plane === 'node-normal'
-
-  // Same function as the floating action menu's Move button
-  // (`floating-action-menu.tsx` → `handleMove`): arm the registry move tool,
-  // which owns the cursor follow, grid + alignment snap, green guide overlay,
-  // and click-to-commit. Routes both entry points through one path so the
-  // 3D translate gizmo and the floating Move button behave identically.
-  const activate = (event: ThreeEvent<PointerEvent>) => {
-    event.stopPropagation()
-    suppressBoxSelectForPointer(event)
-    sfxEmitter.emit('sfx:item-pick')
-    useEditor.getState().setMovingNode(node as never)
-    useViewer.getState().setSelection({ selectedIds: [] })
-  }
-
-  // The cross is built flat in the XZ plane. On a wall, tilt it up about X so
-  // it lies in the item-local XY plane (= the wall face).
-  const iconRotation: [number, number, number] = isWallPlane ? NODE_NORMAL_TILT : [0, 0, 0]
-
-  return (
-    <HandleArrow
-      cursor={cursor}
-      hover={isHovered}
-      onHoverChange={setIsHovered}
-      onPointerDown={activate}
-      placement={{ position, rotation: iconRotation, baseScale }}
-      shape="cross"
-    />
   )
 }
 

@@ -18,6 +18,7 @@ import {
   CursorSphere,
   consumePlacementDragRelease,
   getSegmentGridStep,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   resolveAlignmentForActiveBuilding,
   snapBuildingLocalToWorldGrid,
@@ -168,17 +169,15 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
     const onGridMove = (event: GridEvent) => {
       if (isFloorplanSourcedEvent(event)) return
       const gridStep = getSegmentGridStep()
-      const bypassSnap = event.nativeEvent?.shiftKey === true
       const [localX, localZ] = snapFenceDraftPoint({
         point: [event.localPosition[0], event.localPosition[2]],
         walls: levelWalls,
         fences: levelFences,
-        bypassSnap,
+        magnetic: isMagneticSnapActive(),
         gridSnap: (p) => snapBuildingLocalToWorldGrid(p, gridStep),
       })
 
       if (
-        !bypassSnap &&
         previousGridPosRef.current &&
         (localX !== previousGridPosRef.current[0] || localZ !== previousGridPosRef.current[1])
       ) {
@@ -194,8 +193,8 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
 
       // Figma-style alignment snap: align the slab's translated polygon
       // vertices to other objects' anchors; fold the snap into the delta and
-      // publish a guide. Alt bypasses alignment; Shift bypasses all snap.
-      const bypass = event.nativeEvent?.altKey === true || bypassSnap
+      // publish a guide. Alignment follows the global magnetic snap mode.
+      const bypass = !isMagneticSnapActive()
       if (!bypass && alignmentCandidates.length > 0) {
         const result = resolveAlignmentForActiveBuilding({
           moving: polygonAnchors(slabId, translatePolygon(originalPolygon, deltaX, deltaZ)),

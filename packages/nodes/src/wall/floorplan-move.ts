@@ -105,7 +105,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
   const session: FloorplanMoveTargetSession = {
     affectedIds: [wallId, ...linkedOriginals.map((w) => w.id as AnyNodeId)],
 
-    apply({ planPoint, modifiers }) {
+    apply({ planPoint }) {
       if (!rawAnchor) {
         rawAnchor = [planPoint[0], planPoint[1]]
         return
@@ -119,19 +119,19 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       // the original centre + raw cursor delta onto the axis, snap the
       // absolute projection to a grid multiple, then translate the wall
       // by `axis * perpDelta`. Matches `MoveWallTool` so 2D and 3D drag
-      // produce identical wall topology. Shift bypasses snap.
+      // produce identical wall topology.
       let dx: number
       let dz: number
       if (moveAxis) {
         const originalProj = originalCenter[0] * moveAxis[0] + originalCenter[1] * moveAxis[1]
         const rawProj = originalProj + rawDx * moveAxis[0] + rawDz * moveAxis[1]
-        const snappedProj = modifiers.shiftKey ? rawProj : snapScalarToGrid(rawProj, step)
+        const snappedProj = snapScalarToGrid(rawProj, step)
         const perpDelta = snappedProj - originalProj
         dx = moveAxis[0] * perpDelta
         dz = moveAxis[1] * perpDelta
       } else {
-        dx = modifiers.shiftKey ? rawDx : snapScalarToGrid(rawDx, step)
-        dz = modifiers.shiftKey ? rawDz : snapScalarToGrid(rawDz, step)
+        dx = snapScalarToGrid(rawDx, step)
+        dz = snapScalarToGrid(rawDz, step)
       }
 
       if (dx === lastDelta[0] && dz === lastDelta[1]) return

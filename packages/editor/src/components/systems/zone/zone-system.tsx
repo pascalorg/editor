@@ -3,7 +3,9 @@ import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { type Group, MathUtils, type Mesh } from 'three'
 import type { MeshBasicNodeMaterial } from 'three/webgpu'
+import { resolveOverlayPolicy } from '../../../lib/interaction/overlay-policy'
 import useEditor from '../../../store/use-editor'
+import useInteractionScope from '../../../store/use-interaction-scope'
 
 // Disable raycasting on zone geometry so clicks pass through to items underneath.
 // Zone selection in the editor is handled exclusively via the HTML label overlay.
@@ -19,6 +21,11 @@ export const ZoneSystem = () => {
     // Snapshot capture is a clean, camera-only surface — never show zone
     // geometry or the HTML zone tags in the framed shot.
     const isCaptureMode = useEditor.getState().isCaptureMode
+
+    // During any active interaction zone labels step back entirely — they are
+    // not a primary editing concern and would distract / invite misclicks.
+    const zoneLabelsHidden =
+      resolveOverlayPolicy(useInteractionScope.getState().scope).zoneLabels === 'hidden'
 
     const zoneGeometryVisible = structureLayer === 'zones'
     const zones = sceneRegistry.byType.zone || new Set()
@@ -84,7 +91,8 @@ export const ZoneSystem = () => {
 
       // Labels: visible on the current level (regardless of mode), but never
       // during snapshot capture.
-      const showLabel = !isCaptureMode && !!selectedLevelId && isOnSelectedLevel
+      const showLabel =
+        !isCaptureMode && !zoneLabelsHidden && !!selectedLevelId && isOnSelectedLevel
       const labelOpacity = showLabel ? '1' : '0'
       const labelEl = document.getElementById(`${zoneId}-label`)
       if (labelEl && labelEl.style.opacity !== labelOpacity) {

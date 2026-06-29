@@ -2,8 +2,6 @@
 
 import {
   type AnyNodeId,
-  type Control,
-  type ControlValue,
   type ItemNode,
   pointInPolygon,
   sceneRegistry,
@@ -17,6 +15,7 @@ import { useEffect, useState } from 'react'
 import { type Object3D, Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import useViewer from '../../store/use-viewer'
+import { ControlWidget } from './control-widget'
 
 const _tempVec = new Vector3()
 
@@ -145,87 +144,4 @@ const ItemControlsOverlay = ({
     </Html>,
     itemObj,
   )
-}
-
-// ---- Control widgets ----
-
-const ControlWidget = ({
-  control,
-  value,
-  onChange,
-}: {
-  control: Control
-  value: ControlValue
-  onChange: (v: ControlValue) => void
-}) => {
-  const labelStyle: React.CSSProperties = {
-    color: 'white',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 2,
-  }
-
-  if (control.kind === 'toggle') {
-    return (
-      <button
-        onClick={() => onChange(!value)}
-        style={{
-          background: value ? '#4ade80' : '#374151',
-          color: 'white',
-          border: 'none',
-          borderRadius: 4,
-          padding: '4px 8px',
-          cursor: 'pointer',
-          fontSize: 12,
-          fontFamily: 'monospace',
-          transition: 'background 0.2s',
-        }}
-      >
-        {control.label ?? (value ? 'On' : 'Off')}
-      </button>
-    )
-  }
-
-  if (control.kind === 'slider') {
-    return (
-      <label style={labelStyle}>
-        <span>
-          {control.label}: {value}
-          {control.unit ? ` ${control.unit}` : ''}
-        </span>
-        <input
-          max={control.max}
-          min={control.min}
-          onChange={(e) => onChange(Number(e.target.value))}
-          onPointerDown={(e) => e.stopPropagation()}
-          step={control.step}
-          type="range"
-          value={value as number}
-        />
-      </label>
-    )
-  }
-
-  if (control.kind === 'temperature') {
-    return (
-      <label style={labelStyle}>
-        <span>
-          {control.label}: {value}°{control.unit}
-        </span>
-        <input
-          max={control.max}
-          min={control.min}
-          onChange={(e) => onChange(Number(e.target.value))}
-          onPointerDown={(e) => e.stopPropagation()}
-          step={1}
-          type="range"
-          value={value as number}
-        />
-      </label>
-    )
-  }
-
-  return null
 }

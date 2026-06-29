@@ -182,6 +182,7 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
   })
 
   const isSelected = ctx.viewState?.selected ?? false
+  const isMoving = ctx.viewState?.moving ?? false
   const floorPlanUrl = node.asset.floorPlanUrl
   const children: FloorplanGeometry[] = [
     {
@@ -211,11 +212,17 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
       center: [cx, cy],
       width,
       height: depth,
-      rotation: transform.rotation,
+      // `rotateVec` (the footprint polygon) applies R(-angle), but the renderer
+      // draws the image with SVG `rotate(+deg)` = R(+angle). Negate so the
+      // sprite rotates the same way as its footprint box (and 3D); otherwise the
+      // two counter-rotate and diverge by 2x the item's rotation.
+      rotation: -transform.rotation,
     })
   }
-  // Move handle — orange dot at the item center. Only when selected.
-  if (isSelected) {
+  // Move handle — orange dot at the item center. Only when selected and not
+  // already moving: during a move the dot sits under the cursor, so a release
+  // over it would re-arm the move (and re-enter edit) instead of committing.
+  if (isSelected && !isMoving) {
     children.push({
       kind: 'move-handle',
       point: [cx, cy],

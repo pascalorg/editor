@@ -36,6 +36,12 @@ return <mesh ref={ref} {...events} />
 
 Events are suppressed during camera drag (`useViewer.getState().cameraDragging`).
 
+Selection/hover picking is only meaningful while the interaction scope is `idle`
+(`selectionEnabled(scope)`). During an active placement/move/etc., the pointer
+belongs to that interaction's body and the hot-set narrows which scene objects
+are raycast-eligible — see [interaction-scope](interaction-scope.md) for the
+hot-set derivation and the overlay scope matrix.
+
 ---
 
 ## Viewer Selection Manager

@@ -15,11 +15,10 @@ import {
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
   MeasurementPill,
-  type MovingFenceEndpoint,
   triggerSFX,
   useAlignmentGuides,
   useDragAction,
-  useEditor,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -40,10 +39,14 @@ import { moveFenceEndpointDragAction } from './actions/move-endpoint'
  *  - Angle label between this segment and any neighbour segment sharing
  *    the dragged endpoint — same legacy treatment.
  *
- *  Mounted by the legacy ToolManager via the `move-endpoint` affordance
- *  key. `target.fence` + `target.endpoint` come from the editor store
- *  (`useEditor.movingFenceEndpoint`).
+ *  Mounted by ToolManager via the `move-endpoint` affordance key. ToolManager
+ *  reconstructs this `target` from the reshaped node + the scope's endpoint.
  */
+export type MovingFenceEndpoint = {
+  fence: FenceNode
+  endpoint: 'start' | 'end'
+}
+
 type SegmentLike = {
   id: string
   start: FencePlanPoint
@@ -104,7 +107,9 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
   const exitMoveMode = (committed: boolean) => {
     if (committed) triggerSFX('sfx:item-place')
     useViewer.getState().setSelection({ selectedIds: [fenceId] })
-    useEditor.getState().setMovingFenceEndpoint(null)
+    useInteractionScope
+      .getState()
+      .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'endpoint')
   }
 
   useDragAction({

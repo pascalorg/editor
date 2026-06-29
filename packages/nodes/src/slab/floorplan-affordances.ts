@@ -36,8 +36,9 @@ const slabSnapOptions = {
       levelId: resolveLevelId(node, sceneNodes),
       excludeId: node.id,
       nodes: sceneNodes,
+      // Magnetic wall-snap/alignment gates on `isMagneticSnapActive()` (the
+      // `lines` mode), so no Shift bypass — Alt still force-skips alignment.
       altKey: modifiers.altKey,
-      shiftKey: modifiers.shiftKey,
     }).point
   },
 }

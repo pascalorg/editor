@@ -6,8 +6,10 @@ import { Check, Pencil } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
+import { resolveOverlayPolicy } from '../../../lib/interaction/overlay-policy'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import useInteractionScope from '../../../store/use-interaction-scope'
 
 // ─── Per-zone label editor ────────────────────────────────────────────────────
 
@@ -19,6 +21,10 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
   const selectedZoneId = useViewer((s) => s.selection.zoneId)
   const hoveredId = useViewer((s) => s.hoveredId)
   const mode = useEditor((s) => s.mode)
+  // During an active interaction the zone label is a context badge that steps
+  // back: faded + non-interactive so it can't be hovered/clicked mid-action.
+  const scope = useInteractionScope((s) => s.scope)
+  const labelStepBack = resolveOverlayPolicy(scope).contextBadges === 'faded'
   const isSelected = selectedZoneId === zoneId
   const isDeleteHovered = mode === 'delete' && hoveredId === zoneId
   const [editing, setEditing] = useState(false)
@@ -149,7 +155,8 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
     fontSize: 14,
     fontFamily: 'sans-serif',
     userSelect: 'none',
-    pointerEvents: 'auto',
+    pointerEvents: labelStepBack ? 'none' : 'auto',
+    opacity: labelStepBack ? 0.4 : undefined,
     display: 'inline-flex',
     alignItems: 'center',
     gap: 4,

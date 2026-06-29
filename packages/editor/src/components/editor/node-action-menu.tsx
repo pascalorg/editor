@@ -1,10 +1,11 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { Copy, Move, Spline, Trash2 } from 'lucide-react'
+import { Copy, Move, Search, Spline, Trash2 } from 'lucide-react'
 import type { MouseEventHandler, PointerEventHandler } from 'react'
 
 type NodeActionMenuProps = {
+  onFind?: MouseEventHandler<HTMLButtonElement>
   onAddHole?: MouseEventHandler<HTMLButtonElement>
   onDelete?: MouseEventHandler<HTMLButtonElement>
   onDuplicate?: MouseEventHandler<HTMLButtonElement>
@@ -17,6 +18,7 @@ type NodeActionMenuProps = {
 }
 
 export function NodeActionMenu({
+  onFind,
   onAddHole,
   onDelete,
   onDuplicate,
@@ -35,6 +37,17 @@ export function NodeActionMenu({
       onPointerLeave={onPointerLeave}
       onPointerUp={onPointerUp}
     >
+      {onFind && (
+        <button
+          aria-label="Find in catalog"
+          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          onClick={onFind}
+          title="Find in catalog"
+          type="button"
+        >
+          <Search className="h-4 w-4" />
+        </button>
+      )}
       {onMove && (
         <button
           aria-label="Move"

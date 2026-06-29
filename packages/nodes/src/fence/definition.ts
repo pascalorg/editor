@@ -134,6 +134,7 @@ const fenceHandles: HandleDescriptor<FenceNodeType>[] = [
  */
 export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   kind: 'fence',
+  snapProfile: 'structural',
   schemaVersion: 1,
   schema: FenceNode,
   category: 'structure',
@@ -229,7 +230,6 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Set fence start / end' },
-    { key: 'Shift', label: 'Free angle (no 15° snap)' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

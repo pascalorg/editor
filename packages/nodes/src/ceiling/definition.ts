@@ -79,6 +79,7 @@ function ceilingHandles(_node: CeilingNodeType): HandleDescriptor<CeilingNodeTyp
  */
 export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   kind: 'ceiling',
+  snapProfile: 'structural',
   schemaVersion: 1,
   schema: CeilingNode,
   category: 'structure',
@@ -155,8 +156,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Trace ceiling outline' },
-    { key: 'Enter', label: 'Finish ceiling' },
-    { key: 'Shift', label: 'Free outline' },
+    { key: 'Enter', label: 'Finish ceiling', minDraftVertices: 3 },
     { key: 'Esc', label: 'Cancel' },
   ],
 

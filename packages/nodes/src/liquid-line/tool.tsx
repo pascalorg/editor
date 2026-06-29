@@ -12,6 +12,9 @@ import {
   CursorSphere,
   DimensionPill,
   EDITOR_LAYER,
+  isAngleSnapActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
@@ -32,9 +35,10 @@ import { useLiquidLineToolOptions } from './options'
  * as the lineset tool (the line it used to be a rail of):
  *   - **First click** anchors the run start; within range of a refrigerant
  *     service port it snaps onto it so a run mates flush.
- *   - **Second click** commits a two-point line and keeps its far end anchored;
- *     the in-flight end is angle-locked to 45° (Shift frees it), Alt drags it
- *     vertical.
+ *   - **Second click** commits a two-point line and keeps its far end anchored,
+ *     so the next click continues the run; the in-flight end follows the active
+ *     snapping mode (`angles` locks it to 45°; Shift cycles the mode), Alt drags
+ *     it vertical.
  *
  * **Follow mode** (toggled by the MEP panel's Follow button or the `F` key):
  * instead of free-drawing, hover an existing lineset and click — a liquid line
@@ -330,24 +334,28 @@ const LiquidLineTool = () => {
     }
 
     const resolveSnappedPoint = (event: GridEvent): { point: Vec3; snapped: Vec3 | null } => {
+      // Port mating is the run's primary affordance; it stays on in every
+      // snapping mode except `off` (the raw-cursor bypass).
+      const snapEnabled = isGridSnapActive() || isMagneticSnapActive() || isAngleSnapActive()
       const last = draftRef.current.at(-1)
       if (!last) {
         const raw: Vec3 = [event.localPosition[0], 0, event.localPosition[2]]
-        if (event.nativeEvent?.altKey !== true) {
+        if (event.nativeEvent?.altKey !== true && snapEnabled) {
           const target = findNearbyPort(raw)
           if (target) return { point: target, snapped: target }
         }
-        const step = useEditor.getState().gridSnapStep
+        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
         return { point: [snap(raw[0], step), 0, snap(raw[2], step)], snapped: null }
       }
       const rawXZ: Vec3 = [event.localPosition[0], last[1], event.localPosition[2]]
-      const shift = event.nativeEvent?.shiftKey === true
-      const angled = shift ? rawXZ : projectToAngleLock(last, rawXZ)
-      if (event.nativeEvent?.altKey !== true && !shift) {
+      // The 45° lock is now the `angles` snapping mode (Shift cycles to it),
+      // not a held key.
+      const angled = isAngleSnapActive() ? projectToAngleLock(last, rawXZ) : rawXZ
+      if (event.nativeEvent?.altKey !== true && snapEnabled) {
         const target = findNearbyPort(rawXZ)
         if (target) return { point: target, snapped: target }
       }
-      const step = useEditor.getState().gridSnapStep
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       return { point: [snap(angled[0], step), angled[1], snap(angled[2], step)], snapped: null }
     }
 
@@ -355,7 +363,7 @@ const LiquidLineTool = () => {
       const anchor = altAnchorRef.current
       const last = draftRef.current.at(-1)
       if (!anchor || !last) return null
-      const step = useEditor.getState().gridSnapStep
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const dy = (anchor.clientY - clientY) / ALT_PIXELS_PER_METER
       const snappedDy = snap(dy, step)
       const y = Math.min(ALT_Y_MAX_M, Math.max(ALT_Y_MIN_M, anchor.baseY + snappedDy))
@@ -365,11 +373,10 @@ const LiquidLineTool = () => {
     const resolveAlignedPoint = (event: GridEvent) => {
       const r = resolveSnappedPoint(event)
       const hasStart = draftRef.current.length > 0
-      const shift = event.nativeEvent?.shiftKey === true
       const alt = event.nativeEvent?.altKey === true
       const point = alignDrawPoint(r.point, {
-        applySnap: !hasStart || shift,
-        bypass: alt || r.snapped !== null,
+        applySnap: !hasStart || !isAngleSnapActive(),
+        bypass: !isMagneticSnapActive() || alt || r.snapped !== null,
       })
       return { ...r, point }
     }
@@ -539,7 +546,7 @@ const LiquidLineTool = () => {
             <group position={cursorPos}>
               <Html
                 center
-                position={[0, 0.45, 0]}
+                position={[0, 1.45, 0]}
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
                 zIndexRange={[100, 0]}
               >
@@ -565,7 +572,7 @@ const LiquidLineTool = () => {
               <group position={cursorPos}>
                 <Html
                   center
-                  position={[0, 0.35, 0]}
+                  position={[0, 1.45, 0]}
                   style={{ pointerEvents: 'none', userSelect: 'none' }}
                   zIndexRange={[100, 0]}
                 >

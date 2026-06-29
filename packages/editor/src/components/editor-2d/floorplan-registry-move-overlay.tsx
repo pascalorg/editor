@@ -23,7 +23,8 @@ import { isFreshPlacementMetadata, stripPlacementMetadataFlags } from '../../lib
 import { resolvePlanarCursorPosition } from '../../lib/planar-cursor-placement'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useAlignmentGuides from '../../store/use-alignment-guides'
-import useEditor from '../../store/use-editor'
+import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
+import { useMovingNode } from '../../store/use-interaction-scope'
 import { useWallMoveGhosts } from '../../store/use-wall-move-ghosts'
 
 // Figma-style alignment snap threshold. Meters in world space; 8cm gives
@@ -53,7 +54,7 @@ const ALIGNMENT_THRESHOLD_M = 0.08
  * cursor → meters accounts for pan / zoom / building rotation.
  */
 export function FloorplanRegistryMoveOverlay() {
-  const movingNode = useEditor((s) => s.movingNode)
+  const movingNode = useMovingNode()
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
 
@@ -508,10 +509,12 @@ export function FloorplanRegistryMoveOverlay() {
       if (!m) return
 
       // 1) Grid snap baseline. Fresh catalog placement is absolute under
-      // the cursor; existing moves preserve the cursor's grab offset.
+      // the cursor; existing moves preserve the cursor's grab offset. Grid
+      // follows the active snapping mode (Shift cycles it); raw cursor in
+      // any non-grid mode.
       const gridStep = useEditor.getState().gridSnapStep
       const snap = (value: number) =>
-        event.shiftKey ? value : Math.round(value / gridStep) * gridStep
+        isGridSnapActive() ? Math.round(value / gridStep) * gridStep : value
       const resolved = resolvePlanarCursorPosition({
         cursor: [m[0], m[1]],
         original: [originalPosition[0], originalPosition[2]],
@@ -524,12 +527,12 @@ export function FloorplanRegistryMoveOverlay() {
 
       // 2) Alignment snap layered on top. Treat the grid-snapped point
       // as the "proposed" position so alignment competes from a stable
-      // base rather than the raw cursor jitter. Alt bypasses alignment
-      // entirely; Shift bypasses both grid and alignment
-      // hint chip.
+      // base rather than the raw cursor jitter. Alignment ("lines") follows
+      // the magnetic snapping mode — independent of grid; Alt is force-place,
+      // not a snap bypass.
       let finalX = gridX
       let finalZ = gridZ
-      if (!(event.altKey || event.shiftKey) && candidateAnchors.length > 0) {
+      if (isMagneticSnapActive() && candidateAnchors.length > 0) {
         // Translate the cached local bbox to the proposed pos to get the
         // moving anchors at that location. The entry's untransformed
         // bbox is in world meters relative to the node's origin, so a

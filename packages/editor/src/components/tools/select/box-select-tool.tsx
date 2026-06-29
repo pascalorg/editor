@@ -4,6 +4,7 @@ import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import { Box3, type Camera, type Object3D, Vector3 } from 'three'
 import useEditor from '../../../store/use-editor'
+import useInteractionScope from '../../../store/use-interaction-scope'
 import {
   clearBoxSelectHandled,
   isBoxSelectPointerSuppressed,
@@ -191,6 +192,12 @@ const ScreenRectangleSelectTool: React.FC = () => {
   const currentClientXRef = useRef(0)
   const currentClientYRef = useRef(0)
   const spaceDownRef = useRef(false)
+  // rAF throttle for the expensive marquee preview pass. pointermove can fire
+  // several times per animation frame; the per-node AABB projection in
+  // `collectNodeIdsInScreenRect` only needs to run once per frame. We stash the
+  // latest clamped rect and process it inside the rAF callback.
+  const previewRafRef = useRef<number | null>(null)
+  const pendingPreviewRectRef = useRef<ScreenRect | null>(null)
 
   const syncPreviewSelectedIds = useCallback(
     (nextIds: string[]) => {
@@ -206,6 +213,11 @@ const ScreenRectangleSelectTool: React.FC = () => {
     pointerDownRef.current = false
     isDraggingRef.current = false
     pointerIdRef.current = null
+    if (previewRafRef.current !== null) {
+      cancelAnimationFrame(previewRafRef.current)
+      previewRafRef.current = null
+    }
+    pendingPreviewRectRef.current = null
     hideScreenRectangleSelectionElement(elementRef.current)
     syncPreviewSelectedIds([])
 
@@ -213,6 +225,7 @@ const ScreenRectangleSelectTool: React.FC = () => {
       useViewer.getState().setInputDragging(false)
       ownsInputDraggingRef.current = false
     }
+    useInteractionScope.getState().endIf((s) => s.kind === 'box-select')
   }, [syncPreviewSelectedIds])
 
   useEffect(() => {
@@ -263,6 +276,14 @@ const ScreenRectangleSelectTool: React.FC = () => {
   useEffect(() => {
     const canvas = gl.domElement
 
+    const flushPreview = () => {
+      previewRafRef.current = null
+      const rect = pendingPreviewRectRef.current
+      if (!rect) return
+      pendingPreviewRectRef.current = null
+      syncPreviewSelectedIds(collectNodeIdsInScreenRect(rect, camera, canvas))
+    }
+
     const updateDrag = (event: PointerEvent) => {
       if (!pointerDownRef.current) return
       if (pointerIdRef.current !== null && event.pointerId !== pointerIdRef.current) return
@@ -291,6 +312,7 @@ const ScreenRectangleSelectTool: React.FC = () => {
         isDraggingRef.current = true
         ownsInputDraggingRef.current = true
         useViewer.getState().setInputDragging(true)
+        useInteractionScope.getState().begin({ kind: 'box-select' })
         markBoxSelectHandled()
         try {
           canvas.setPointerCapture(event.pointerId)
@@ -311,13 +333,22 @@ const ScreenRectangleSelectTool: React.FC = () => {
         screenRectFromDomRect(canvas.getBoundingClientRect()),
       )
       if (!clampedRect) {
+        if (previewRafRef.current !== null) {
+          cancelAnimationFrame(previewRafRef.current)
+          previewRafRef.current = null
+        }
+        pendingPreviewRectRef.current = null
         hideScreenRectangleSelectionElement(elementRef.current)
         syncPreviewSelectedIds([])
         return
       }
 
       updateScreenRectangleSelectionElement(elementRef.current!, clampedRect)
-      syncPreviewSelectedIds(collectNodeIdsInScreenRect(clampedRect, camera, canvas))
+      // Coalesce the per-node AABB projection to one run per animation frame.
+      pendingPreviewRectRef.current = clampedRect
+      if (previewRafRef.current === null) {
+        previewRafRef.current = requestAnimationFrame(flushPreview)
+      }
     }
 
     const finishDrag = (event: PointerEvent) => {

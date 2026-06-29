@@ -15,6 +15,9 @@ import {
   CursorSphere,
   DimensionPill,
   EDITOR_LAYER,
+  isAngleSnapActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
@@ -74,9 +77,10 @@ import { ductPortDiameterIn, rectSectionAxes, rollToContinueAcrossElbow } from '
  *     existing run (interior crossing) splits the trunk, mints a 4-way
  *     cross at the crossing, and the drawn run continues out the far
  *     branch — both fittings inherit the trunk's / branch's profile.
- *   - The in-flight end is angle-locked to the nearest 45° step in XZ
- *     from the start; Y stays at the start's height. Hold **Shift** to
- *     release the lock.
+ *   - The in-flight end follows the active snapping mode: `angles` locks
+ *     it to the nearest 45° step in XZ from the start (Y stays at the
+ *     start's height); `grid`/`lines`/`off` leave it free. Shift cycles
+ *     the snapping mode.
  *   - Hold **Alt** → vertical mode. Cursor XZ locks to the start;
  *     vertical mouse motion drives Y. Click commits the riser segment.
  *   - **[ / ]** step the duct diameter through nominal US sizes; the
@@ -628,6 +632,9 @@ const DuctSegmentTool = () => {
       port: ScenePort | null
       body: RunBodyHit | null
     } => {
+      // Port / body mating is the run's primary affordance; it stays on in
+      // every snapping mode except `off` (the raw-cursor bypass).
+      const snapEnabled = isGridSnapActive() || isMagneticSnapActive() || isAngleSnapActive()
       const last = draftRef.current.at(-1)
       // First point of the run: grid-snapped placement. Y follows the
       // ceiling under the cursor in ceiling mode (floor otherwise).
@@ -639,9 +646,8 @@ const DuctSegmentTool = () => {
           baseY,
           event.localPosition[2],
         ]
-        const step = useEditor.getState().gridSnapStep
-        const shift = event.nativeEvent?.shiftKey === true
-        if (event.nativeEvent?.altKey !== true) {
+        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+        if (event.nativeEvent?.altKey !== true && snapEnabled) {
           const target = findNearbyPort(raw)
           if (target)
             return {
@@ -652,10 +658,8 @@ const DuctSegmentTool = () => {
             }
           // No open end nearby — try the side of a run (tee tap). Probe
           // with a grid-snapped cursor so the tap steps along the duct
-          // like every other placement; Shift frees it to ride smoothly.
-          const probe: [number, number, number] = shift
-            ? raw
-            : [snap(raw[0], step), baseY, snap(raw[2], step)]
+          // like every other placement; `off` mode (step 0) rides smoothly.
+          const probe: [number, number, number] = [snap(raw[0], step), baseY, snap(raw[2], step)]
           const body = findNearestRunBodyXZ(probe, BODY_SNAP_RADIUS_M)
           if (body) return { point: body.point, snapped: body.point, port: null, body }
         }
@@ -668,23 +672,24 @@ const DuctSegmentTool = () => {
           body: null,
         }
       }
-      // Subsequent points: angle-locked to 45° from `last` (Shift releases).
-      // Y inherits `last[1]` for the angle/probe math; the free placement
-      // below re-resolves it from the ceiling under the point in ceiling
-      // mode, so a run stepping into a room with a different ceiling height
-      // tracks that change. Depth changes otherwise come from Alt risers.
+      // Subsequent points: angle-locked to 45° from `last` in `angles` mode.
+      // Y inherits `last[1]` for the angle/probe math; the free placement below
+      // re-resolves it from the ceiling under the point in ceiling mode, so a run
+      // stepping into a room with a different ceiling height tracks that change.
+      // Depth changes otherwise come from Alt-vertical risers.
       const rawXZ: [number, number, number] = [
         event.localPosition[0],
         last[1],
         event.localPosition[2],
       ]
-      const shift = event.nativeEvent?.shiftKey === true
-      const angled = shift ? rawXZ : projectToAngleLock(last, rawXZ)
-      const step = useEditor.getState().gridSnapStep
+      // The 45° lock is now the `angles` snapping mode (Shift cycles to it),
+      // not a held key.
+      const angled = isAngleSnapActive() ? projectToAngleLock(last, rawXZ) : rawXZ
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       // Port snap (Alt bypass) — checked against the RAW cursor, not the
       // angle-locked projection, so a port slightly off the 45° ray can
       // still capture the cursor. Joining beats the lock.
-      if (event.nativeEvent?.altKey !== true && !shift) {
+      if (event.nativeEvent?.altKey !== true && snapEnabled) {
         const target = findNearbyPort(rawXZ)
         if (target)
           return { point: portPoint(target), snapped: portPoint(target), port: target, body: null }
@@ -721,7 +726,7 @@ const DuctSegmentTool = () => {
       const anchor = altAnchorRef.current
       const last = draftRef.current.at(-1)
       if (!anchor || !last) return null
-      const step = useEditor.getState().gridSnapStep
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       // Screen +Y points down, so subtract to map "drag up = raise Y".
       const dy = (anchor.clientY - clientY) / ALT_PIXELS_PER_METER
       const snappedDy = snap(dy, step)
@@ -731,18 +736,17 @@ const DuctSegmentTool = () => {
 
     // Resolve the cursor point (port / body / grid / angle snap) and then
     // layer Figma-style alignment on top so a run lines up with other runs,
-    // fittings, and items as it's drawn. Snap is applied for a free point
-    // (first vertex, or Shift free-angle); an angle-locked continuation shows
-    // the guide passively without leaving its 45° ray. A port / body snap or
-    // Alt bypasses alignment entirely.
+    // fittings, and items as it's drawn. A free point (first vertex, or no
+    // angle lock) snaps; an angle-locked continuation shows the guide passively
+    // without leaving its 45° ray. Alignment follows the `lines` mode; a
+    // port / body snap or Alt-vertical bypasses it.
     const resolveAlignedPoint = (event: GridEvent) => {
       const r = resolveSnappedPoint(event)
       const hasStart = draftRef.current.length > 0
-      const shift = event.nativeEvent?.shiftKey === true
       const alt = event.nativeEvent?.altKey === true
       const point = alignDrawPoint(r.point, {
-        applySnap: !hasStart || shift,
-        bypass: alt || r.snapped !== null,
+        applySnap: !hasStart || !isAngleSnapActive(),
+        bypass: !isMagneticSnapActive() || alt || r.snapped !== null,
       })
       return { ...r, point }
     }

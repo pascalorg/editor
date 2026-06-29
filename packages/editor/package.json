@@ -8,7 +8,7 @@
     "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx"
   },
   "scripts": {
-    "check-types": "tsc --noEmit"
+    "check-types": "tsgo --noEmit"
   },
   "peerDependencies": {
     "@pascal-app/core": "^0.9.1",

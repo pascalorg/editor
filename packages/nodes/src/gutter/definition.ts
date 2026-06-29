@@ -162,6 +162,7 @@ export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
   parametrics: gutterParametrics,
   handles: gutterHandles,
   floorplan: buildGutterFloorplan,
+  floorplanDependsOnSiblings: true,
 
   renderer: {
     kind: 'parametric',
