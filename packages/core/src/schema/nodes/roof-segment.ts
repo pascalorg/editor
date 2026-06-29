@@ -356,10 +356,10 @@ export type DutchRoofMetrics = {
 }
 
 function getDutchUpperShellBounds(
-  node: Pick<
-    RoofSegmentNode,
-    'width' | 'depth' | 'dutchHipWidthRatio' | 'dutchWaistLengthRatio' | 'dutchGabletRake'
-  >,
+  node: Pick<RoofSegmentNode, 'width' | 'depth'> &
+    Partial<
+      Pick<RoofSegmentNode, 'dutchHipWidthRatio' | 'dutchWaistLengthRatio' | 'dutchGabletRake'>
+    >,
 ) {
   const metrics = getDutchRoofMetrics(node)
   const width = finitePositive(node.width, DEFAULT_ROOF_SEGMENT_WIDTH)
