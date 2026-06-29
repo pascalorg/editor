@@ -186,6 +186,7 @@ const SECTION_OUTLINE_RENDER_ORDER = 1002
 // Build the cut line just inside the kept material so the section plane never
 // sits coplanar with the mesh's own cut face.
 const SECTION_PLANE_INSET = 0.004
+const DUTCH_SECTION_FREE_END_PADDING = 0.04
 
 // A vertical cut plane defined by a horizontal line through the XZ ground
 // plane. `origin` is a point on the line, `dir` is the unit in-plane
@@ -327,7 +328,11 @@ function buildSectionGeometries(
   if (planes.length === 0) return null
 
   // Untrimmed shell — the source we intersect slabs against.
-  const shellGeometry = generateRoofSegmentGeometry({ ...segment, trim: ZERO_TRIM })
+  const sectionSourceSegment: RoofSegmentNode =
+    segment.roofType === 'dutch'
+      ? { ...segment, trim: ZERO_TRIM, dutchGabletRake: 0 }
+      : { ...segment, trim: ZERO_TRIM }
+  const shellGeometry = generateRoofSegmentGeometry(sectionSourceSegment)
   const shell = new Brush(shellGeometry)
   prepareBrushForCSG(shell)
 
@@ -1013,8 +1018,20 @@ function RoofTrimHandles() {
   const insideRef: readonly [number, number] = [0, 0]
   // A perpendicular end is "free" (extend to catch overhang) when that side
   // isn't trimmed, else clamped to the cut line (0) so the slab can't reach
-  // into the region another cut removed.
-  const freeExt = (trimmed: boolean) => (trimmed ? 0 : SECTION_FREE_END_EXTENSION)
+  // into the region another cut removed. Dutch roofs have gable/rake geometry
+  // close to those free ends; keep their overrun to the actual eave envelope
+  // instead of the broad catch-all span used by simpler roof types.
+  const { cosTheta, sinTheta } = getSegmentSlopeFrame(liveSegment)
+  const dutchFreeEndExtension =
+    liveSegment.wallThickness / 2 +
+    liveSegment.overhang * cosTheta +
+    liveSegment.shingleThickness * sinTheta +
+    DUTCH_SECTION_FREE_END_PADDING
+  const freeEndExtension =
+    liveSegment.roofType === 'dutch'
+      ? Math.max(0.02, dutchFreeEndExtension)
+      : SECTION_FREE_END_EXTENSION
+  const freeExt = (trimmed: boolean) => (trimmed ? 0 : freeEndExtension)
   if (trim.left > 0) {
     // line back→front: end A = back edge, end B = front edge.
     sectionPlanes.push(

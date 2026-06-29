@@ -680,6 +680,57 @@ function normalizeRoofMaterialIndex(materialIndex: number | undefined): number {
   return normalized
 }
 
+function remapDutchRakeBoardMaterials(geometry: THREE.BufferGeometry) {
+  const position = geometry.getAttribute('position')
+  if (!position) return
+
+  const index = geometry.getIndex()
+  const triangleCount = (index?.count ?? position.count) / 3
+  if (!Number.isFinite(triangleCount) || triangleCount <= 0) return
+
+  const a = new THREE.Vector3()
+  const b = new THREE.Vector3()
+  const c = new THREE.Vector3()
+  const ab = new THREE.Vector3()
+  const ac = new THREE.Vector3()
+  const normal = new THREE.Vector3()
+  const triangleMaterials = new Array<number>(triangleCount).fill(DUTCH_RAKE_SIDE_MATERIAL_INDEX)
+
+  for (let triangleIndex = 0; triangleIndex < triangleCount; triangleIndex += 1) {
+    const offset = triangleIndex * 3
+    const ia = index ? index.getX(offset) : offset
+    const ib = index ? index.getX(offset + 1) : offset + 1
+    const ic = index ? index.getX(offset + 2) : offset + 2
+
+    a.fromBufferAttribute(position, ia)
+    b.fromBufferAttribute(position, ib)
+    c.fromBufferAttribute(position, ic)
+    ab.subVectors(b, a)
+    ac.subVectors(c, a)
+    normal.crossVectors(ab, ac).normalize()
+
+    triangleMaterials[triangleIndex] =
+      Math.abs(normal.y) > SHINGLE_SURFACE_EPSILON
+        ? DUTCH_RAKE_TOP_MATERIAL_INDEX
+        : DUTCH_RAKE_SIDE_MATERIAL_INDEX
+  }
+
+  geometry.clearGroups()
+  let currentMaterial = triangleMaterials[0] ?? DUTCH_RAKE_SIDE_MATERIAL_INDEX
+  let groupStart = 0
+
+  for (let triangleIndex = 1; triangleIndex < triangleCount; triangleIndex += 1) {
+    const materialIndex = triangleMaterials[triangleIndex] ?? DUTCH_RAKE_SIDE_MATERIAL_INDEX
+    if (materialIndex === currentMaterial) continue
+
+    geometry.addGroup(groupStart * 3, (triangleIndex - groupStart) * 3, currentMaterial)
+    groupStart = triangleIndex
+    currentMaterial = materialIndex
+  }
+
+  geometry.addGroup(groupStart * 3, (triangleCount - groupStart) * 3, currentMaterial)
+}
+
 const SHINGLE_SURFACE_EPSILON = 0.02
 const RAKE_FACE_NORMAL_EPSILON = 0.3
 const RAKE_FACE_ALIGNMENT_EPSILON = 0.35
@@ -1237,19 +1288,12 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
       if (hasSegmentTrim(node)) {
         subtractSegmentTrimCuts(brushes, node)
         brushes.rakeBoards = clipGeometryBySegmentTrim(brushes.rakeBoards, node)
-        // The clip is a CSG subtraction: surviving rake faces keep their own
-        // slots (side=1, top=3), but the freshly-exposed cut cross-section
-        // inherits the cutter brush's offset material slot (≥4, out of the
-        // 4-material range), so the rake renders with the wrong material after
-        // a trim. Force every off-board slot back to the rake side material —
-        // the cut edge reads as the board's side. (The accessory clip path does
-        // the equivalent clamp in `useSegmentTrimClippedGeometry`.)
+        // The clip is a CSG subtraction: rake faces can come back as
+        // `slot + 4n` because the cutter contributes its own material array.
+        // Preserve top roof-material faces (slot 3) and force only cutter /
+        // side faces back to the rake side material.
         if (brushes.rakeBoards) {
-          for (const group of brushes.rakeBoards.groups) {
-            if (group.materialIndex !== DUTCH_RAKE_TOP_MATERIAL_INDEX) {
-              group.materialIndex = DUTCH_RAKE_SIDE_MATERIAL_INDEX
-            }
-          }
+          remapDutchRakeBoardMaterials(brushes.rakeBoards)
         }
       }
 
