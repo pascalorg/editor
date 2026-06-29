@@ -47,7 +47,6 @@
       "suspicious": {
         "noEmptyBlockStatements": "off",
         "noImplicitAnyLet": "off",
-        "noShadow": "off",
         "noGlobalIsNan": "off",
         "noExplicitAny": "off",
         "useAwait": "off",
