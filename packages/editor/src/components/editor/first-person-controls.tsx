@@ -1388,11 +1388,11 @@ export const FirstPersonControls = () => {
             floatSensorRadius={0.15}
             floatSpringK={1200}
             gravity={9.81}
-            jumpVel={6}
+            jumpVel={5}
             key="first-person-controller"
-            maxRunSpeed={5.5}
+            maxRunSpeed={5}
             maxSlope={1.2}
-            maxWalkSpeed={4}
+            maxWalkSpeed={2}
             paused={isElevatorRideLocked}
             position={controllerStart.position}
             ref={setControllerApi}

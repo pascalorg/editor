@@ -410,10 +410,10 @@ export function GlbWalkthroughController({ url }: { url: string }) {
         floatSensorRadius={0.15}
         floatSpringK={1200}
         gravity={9.81}
-        jumpVel={6}
-        maxRunSpeed={5.5}
+        jumpVel={5}
+        maxRunSpeed={5}
         maxSlope={1.2}
-        maxWalkSpeed={4}
+        maxWalkSpeed={2}
         position={start.position}
         ref={setControllerApi}
       />
