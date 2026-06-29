@@ -74,7 +74,7 @@ describe('createDefaultRidgeVentsForSegment', () => {
     expect(vents.every((vent) => vent.name === 'Hip Ridge Vent')).toBe(true)
   })
 
-  test('creates only the shortened top ridge vent for Dutch roofs', () => {
+  test('does not create default ridge vents for width-axis Dutch roofs', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'dutch',
       width: 8,
@@ -85,10 +85,10 @@ describe('createDefaultRidgeVentsForSegment', () => {
     })
 
     const vents = createDefaultRidgeVentsForSegment(segment)
+    const lines = getRidgeVentLinesForSegment(segment)
 
-    expect(vents).toHaveLength(1)
-    expect(vents.filter((vent) => vent.name === 'Ridge Vent')).toHaveLength(1)
-    expect(vents.find((vent) => vent.name === 'Ridge Vent')?.length).toBeCloseTo(4.9)
+    expect(vents).toEqual([])
+    expect(lines).toEqual([])
   })
 
   test('treats legacy segments with generated ridge vents as auto-enabled', () => {
@@ -113,7 +113,7 @@ describe('createDefaultRidgeVentsForSegment', () => {
     ).toBe(true)
   })
 
-  test('creates Dutch ridge lines for depth-axis Dutch roofs too', () => {
+  test('does not create ridge lines for depth-axis Dutch roofs either', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'dutch',
       width: 6,
@@ -124,13 +124,7 @@ describe('createDefaultRidgeVentsForSegment', () => {
     })
 
     const lines = getRidgeVentLinesForSegment(segment)
-    expect(lines).toHaveLength(1)
-    expect(lines.filter((line) => line.name === 'Ridge Vent')).toHaveLength(1)
-    expect(lines.find((line) => line.name === 'Ridge Vent')).toEqual({
-      name: 'Ridge Vent',
-      start: [0, 2.45],
-      end: [0, -2.45],
-    })
+    expect(lines).toEqual([])
   })
 
   test('creates top ridge plus four upper hip vents plus four lower-slope vents for mansard roofs', () => {

@@ -430,7 +430,6 @@ function updateMergedRoofGeometry(
   let totalWall: Brush | null = null
   let totalInner: Brush | null = null
   const rakeBoardGeometries: THREE.BufferGeometry[] = []
-  const endSlopeGeometries: THREE.BufferGeometry[] = []
 
   for (const child of children) {
     const brushes = withSegmentUvMatrix(
@@ -464,10 +463,6 @@ function updateMergedRoofGeometry(
     if (brushes.rakeBoards) {
       brushes.rakeBoards.applyMatrix4(_matrix)
       rakeBoardGeometries.push(brushes.rakeBoards)
-    }
-    if (brushes.endSlopes) {
-      brushes.endSlopes.applyMatrix4(_matrix)
-      endSlopeGeometries.push(brushes.endSlopes)
     }
 
     if (totalShinSlab) {
@@ -538,7 +533,6 @@ function updateMergedRoofGeometry(
         totalWall.geometry.dispose()
         totalInner.geometry.dispose()
         for (const geometry of rakeBoardGeometries) geometry.dispose()
-        for (const geometry of endSlopeGeometries) geometry.dispose()
         return
       }
 
@@ -556,17 +550,14 @@ function updateMergedRoofGeometry(
       }
 
       let finalGeo = resultGeo
-      const attachmentGeometries = [...rakeBoardGeometries, ...endSlopeGeometries]
-      if (attachmentGeometries.length > 0) {
-        const merged = mergeGeometriesPreservingGroups([finalGeo, ...attachmentGeometries])
+      if (rakeBoardGeometries.length > 0) {
+        const merged = mergeGeometriesPreservingGroups([finalGeo, ...rakeBoardGeometries])
         if (merged) {
           finalGeo.dispose()
           finalGeo = merged
         }
       }
-      for (const geometry of attachmentGeometries) geometry.dispose()
-      rakeBoardGeometries.length = 0
-      endSlopeGeometries.length = 0
+      for (const geometry of rakeBoardGeometries) geometry.dispose()
 
       finalGeo.computeVertexNormals()
       ensureRenderableGeometryAttributes(finalGeo)
@@ -584,7 +575,6 @@ function updateMergedRoofGeometry(
     totalWall.geometry.dispose()
     totalInner.geometry.dispose()
     for (const geometry of rakeBoardGeometries) geometry.dispose()
-    for (const geometry of endSlopeGeometries) geometry.dispose()
   }
 }
 
@@ -652,7 +642,6 @@ type RoofSegmentBrushSet = {
   wallBrush: Brush
   innerBrush: Brush
   rakeBoards: THREE.BufferGeometry | null
-  endSlopes: THREE.BufferGeometry | null
 }
 
 export function mapRoofGroupMaterialIndex(
@@ -1035,6 +1024,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
       baseD: depth,
       tanTheta,
       shapeRatios,
+      dutchTopRakeThickness: node.dutchTopRakeThickness,
     }).map((face) => face.map((point) => new THREE.Vector3(point.x, point.y, point.z)))
     return createGeometryFromFaces(faces, matIndex)
   }
@@ -1119,7 +1109,6 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     dutchHipWidthRatio: node.dutchHipWidthRatio,
   })
 
-  const separateDutchEndSlopes = roofType === 'dutch'
   const botFaces = getRoofModuleFaces({
     type: roofType,
     w: shinBotW,
@@ -1132,7 +1121,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     baseD: depth,
     tanTheta,
     shapeRatios,
-    excludeDutchEndSlopes: separateDutchEndSlopes,
+    dutchTopRakeThickness: node.dutchTopRakeThickness,
   }).map((face) => face.map((point) => new THREE.Vector3(point.x, point.y, point.z)))
   const topFaces = getRoofModuleFaces({
     type: roofType,
@@ -1146,11 +1135,10 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     baseD: depth,
     tanTheta,
     shapeRatios,
-    excludeDutchEndSlopes: separateDutchEndSlopes,
+    dutchTopRakeThickness: node.dutchTopRakeThickness,
   }).map((face) => face.map((point) => new THREE.Vector3(point.x, point.y, point.z)))
 
   let rakeBoards: THREE.BufferGeometry | null = null
-  let endSlopes: THREE.BufferGeometry | null = null
   if (roofType === 'dutch' && insetsTop.dutchI !== undefined) {
     rakeBoards = buildDutchRakeBoards(
       shinTopW,
@@ -1161,21 +1149,6 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
       shapeRatios,
       node.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake,
       node.dutchTopRakeThickness ?? ROOF_SHAPE_DEFAULTS.dutchTopRakeThickness,
-    )
-    endSlopes = buildDutchEndSlopes(
-      shinTopW,
-      shinTopD,
-      shinTopWh,
-      shinTopRh,
-      insetsTop,
-      shinBotW,
-      shinBotD,
-      shinBotWh,
-      shinBotRh,
-      insetsBot,
-      width,
-      depth,
-      shapeRatios,
     )
   }
 
@@ -1189,7 +1162,6 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
   if (transZ !== 0) {
     shinTopGeo.translate(0, 0, transZ)
     rakeBoards?.translate(0, 0, transZ)
-    endSlopes?.translate(0, 0, transZ)
   }
 
   const toBrush = (geo: THREE.BufferGeometry): Brush | null => {
@@ -1261,12 +1233,10 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
         wallBrush,
         innerBrush,
         rakeBoards,
-        endSlopes,
       }
       if (hasSegmentTrim(node)) {
         subtractSegmentTrimCuts(brushes, node)
         brushes.rakeBoards = clipGeometryBySegmentTrim(brushes.rakeBoards, node)
-        brushes.endSlopes = clipGeometryBySegmentTrim(brushes.endSlopes, node)
       }
 
       return brushes
@@ -1282,7 +1252,6 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
   if (wallBrush) wallBrush.geometry.dispose()
   if (innerBrush) innerBrush.geometry.dispose()
   rakeBoards?.dispose()
-  endSlopes?.dispose()
 
   return null
 }
@@ -1322,7 +1291,6 @@ export function generateRoofSegmentGeometry(
     wallBrush,
     innerBrush,
     rakeBoards,
-    endSlopes,
   } = brushes
   let resultGeo = new THREE.BufferGeometry()
 
@@ -1374,15 +1342,6 @@ export function generateRoofSegmentGeometry(
   if (rakeBoards) {
     const merged = mergeGeometriesPreservingGroups([resultGeo, rakeBoards])
     rakeBoards.dispose()
-    if (merged) {
-      resultGeo.dispose()
-      resultGeo = merged
-    }
-  }
-
-  if (endSlopes) {
-    const merged = mergeGeometriesPreservingGroups([resultGeo, endSlopes])
-    endSlopes.dispose()
     if (merged) {
       resultGeo.dispose()
       resultGeo = merged
@@ -1715,6 +1674,7 @@ function getModuleFaces(
   baseD: number,
   tanTheta: number,
   shapeRatios: ShapeWidthRatios,
+  dutchTopRakeThickness?: number,
 ): THREE.Vector3[][] {
   const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
   const { iF = 0, iB = 0, iL = 0, iR = 0 } = insets
@@ -1826,12 +1786,26 @@ function getModuleFaces(
       const o4 = v(-dutch.outerWaistHalfX, dutch.middleHeight, -dutch.innerWaistHalfZ)
       const r1 = v(-dutch.innerWaistHalfX, h, 0)
       const r2 = v(dutch.innerWaistHalfX, h, 0)
+      const endSlopes = getDutchEndSlopeFaces({
+        w,
+        d,
+        wh,
+        rh,
+        insets,
+        baseW,
+        baseD,
+        shapeRatios,
+        dutchTopRakeThickness,
+      }).map((face) => face.map((point) => v(point.x, point.y, point.z)))
       faces.push(
         [e1, e2, o2, m2, m1, o1],
-        [e2, e3, o3, o2],
         [e3, e4, o4, m4, m3, o3],
-        [e4, e1, o1, o4],
       )
+      if (endSlopes.length === 2) {
+        faces.push(...endSlopes)
+      } else {
+        faces.push([e2, e3, o3, o2], [e4, e1, o1, o4])
+      }
       faces.push([m1, m2, r2, r1], [m3, m4, r1, r2])
       faces.push([m4, m1, r1], [m2, m3, r2])
     } else {
@@ -1845,12 +1819,26 @@ function getModuleFaces(
       const o4 = v(-dutch.innerWaistHalfX, dutch.middleHeight, -dutch.outerWaistHalfZ)
       const r1 = v(0, h, dutch.innerWaistHalfZ)
       const r2 = v(0, h, -dutch.innerWaistHalfZ)
+      const endSlopes = getDutchEndSlopeFaces({
+        w,
+        d,
+        wh,
+        rh,
+        insets,
+        baseW,
+        baseD,
+        shapeRatios,
+        dutchTopRakeThickness,
+      }).map((face) => face.map((point) => v(point.x, point.y, point.z)))
       faces.push(
-        [e1, e2, o2, o1],
         [e2, e3, o3, m3, m2, o2],
-        [e3, e4, o4, o3],
         [e4, e1, o1, m1, m4, o4],
       )
+      if (endSlopes.length === 2) {
+        faces.push(...endSlopes)
+      } else {
+        faces.push([e1, e2, o2, o1], [e3, e4, o4, o3])
+      }
       faces.push([m2, m3, r2, r1], [m4, m1, r1, r2])
       faces.push([m1, m2, r1], [m3, m4, r2])
     }
@@ -2025,115 +2013,6 @@ function buildDutchRakeBoards(
   const merged = mergeGeometriesPreservingGroups(geometries)
   for (const geometry of geometries) geometry.dispose()
   return merged
-}
-
-// The Dutch hip end slopes are emitted as their own mesh (excluded from the
-// watertight shingle shell via excludeDutchEndSlopes) so they can be
-// rebuilt/relocated independently of the front/back slopes they would
-// otherwise share a brush with. The shell removes the end slope from *both*
-// the top and bottom shingle manifolds, so this rebuilds the full slab wedge
-// for each end — top shingle face, bottom face, and the connecting rim — so it
-// exactly refills the removed volume and reads as one continuous surface.
-function buildDutchEndSlopes(
-  topW: number,
-  topD: number,
-  topWh: number,
-  topRh: number,
-  topInsets: RoofShapeInsets,
-  botW: number,
-  botD: number,
-  botWh: number,
-  botRh: number,
-  botInsets: RoofShapeInsets,
-  baseW: number,
-  baseD: number,
-  shapeRatios: ShapeWidthRatios,
-): THREE.BufferGeometry | null {
-  if (!(topRh > 0.001)) return null
-
-  const topSlopeFaces = getDutchEndSlopeFaces({
-    w: topW,
-    d: topD,
-    wh: topWh,
-    rh: topRh,
-    insets: topInsets,
-    baseW,
-    baseD,
-    shapeRatios,
-  })
-  const botSlopeFaces = getDutchEndSlopeFaces({
-    w: botW,
-    d: botD,
-    wh: botWh,
-    rh: botRh,
-    insets: botInsets,
-    baseW,
-    baseD,
-    shapeRatios,
-  })
-  if (topSlopeFaces.length === 0 || botSlopeFaces.length !== topSlopeFaces.length) return null
-
-  const toVectors = (face: { x: number; y: number; z: number }[]) =>
-    face.map((point) => new THREE.Vector3(point.x, point.y, point.z))
-
-  const faces: THREE.Vector3[][] = []
-  for (let i = 0; i < topSlopeFaces.length; i += 1) {
-    const top = toVectors(topSlopeFaces[i]!)
-    const bot = toVectors(botSlopeFaces[i]!)
-    if (top.length !== bot.length) continue
-    addDutchEndSlopeSlab(top, bot, faces)
-  }
-  if (faces.length === 0) return null
-
-  return createGeometryFromFaces(faces, (normal) =>
-    normal.y > SHINGLE_SURFACE_EPSILON ? 3 : 1,
-  )
-}
-
-// Build a closed slab wedge between two corresponding end-slope polygons (the
-// outer shingle face and the inner/underside face, vertex i ↔ vertex i). Emits
-// the top face, the bottom face, and the perimeter rim, each wound so its
-// normal points outward — matching the orientation the shell's slab used.
-function addDutchEndSlopeSlab(
-  top: THREE.Vector3[],
-  bot: THREE.Vector3[],
-  out: THREE.Vector3[][],
-) {
-  out.push(orientFaceByNormalY(top.map((point) => point.clone()), 1))
-  out.push(orientFaceByNormalY(bot.map((point) => point.clone()), -1))
-
-  const centroid = new THREE.Vector3()
-  for (const point of top) centroid.add(point)
-  for (const point of bot) centroid.add(point)
-  centroid.multiplyScalar(1 / (top.length + bot.length))
-
-  for (let i = 0; i < top.length; i += 1) {
-    const next = (i + 1) % top.length
-    const quad = [top[i]!.clone(), top[next]!.clone(), bot[next]!.clone(), bot[i]!.clone()]
-    out.push(orientFaceOutward(quad, centroid))
-  }
-}
-
-function faceNormal(face: THREE.Vector3[]): THREE.Vector3 {
-  return new THREE.Vector3()
-    .crossVectors(
-      new THREE.Vector3().subVectors(face[1]!, face[0]!),
-      new THREE.Vector3().subVectors(face[2]!, face[0]!),
-    )
-    .normalize()
-}
-
-function orientFaceByNormalY(face: THREE.Vector3[], sign: number): THREE.Vector3[] {
-  if (faceNormal(face).y * sign < 0) face.reverse()
-  return face
-}
-
-function orientFaceOutward(face: THREE.Vector3[], centroid: THREE.Vector3): THREE.Vector3[] {
-  const center = new THREE.Vector3()
-  for (const point of face) center.add(point)
-  center.multiplyScalar(1 / face.length)
-  if (center.sub(centroid).dot(faceNormal(face)) < 0) face.reverse()
-  return face
 }
 
 /**
@@ -2430,6 +2309,7 @@ export function getRoofOuterSurfaceFrameAtPoint(
     depth,
     tanTheta,
     shapeRatios,
+    segment.dutchTopRakeThickness,
   )
 
   const topGeo = createGeometryFromFaces(topFaces, (normal) =>

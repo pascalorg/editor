@@ -126,19 +126,36 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
       : undefined,
   )
   const segmentGeometryKey = ridgeVentSegmentGeometryKey(segment)
+  const rotationY = node.rotation ?? 0
+  const snap = useMemo(
+    () =>
+      segment && Math.abs(rotationY) < 1e-5
+        ? resolveRidgeSnap(segment, nodePosition[0] ?? 0, nodePosition[2] ?? 0)
+        : null,
+    [segment, rotationY, nodePosition[0], nodePosition[2]],
+  )
+  const ridgeX = snap ? snap.localX : (nodePosition[0] ?? 0)
+  const ridgeZ = snap ? snap.localZ : (nodePosition[2] ?? 0)
+  const effectiveNode = useMemo<RidgeVentNode>(
+    () => ({
+      ...node,
+      position: [ridgeX, nodePosition[1] ?? 0, ridgeZ],
+    }),
+    [node, ridgeX, ridgeZ, nodePosition[1]],
+  )
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `segmentGeometryKey` captures the segment fields that affect the generated mesh; depending on the whole segment would rebuild on unrelated node changes.
   const geometry = useMemo(
-    () => buildRidgeVentGeometry(node, segment),
+    () => buildRidgeVentGeometry(effectiveNode, segment),
     [
-      node.length,
-      node.width,
-      node.height,
-      node.style,
-      node.endCaps,
-      node.rotation,
-      nodePosition[0],
-      nodePosition[2],
+      effectiveNode.length,
+      effectiveNode.width,
+      effectiveNode.height,
+      effectiveNode.style,
+      effectiveNode.endCaps,
+      effectiveNode.rotation,
+      effectiveNode.position[0],
+      effectiveNode.position[2],
       segmentGeometryKey,
     ],
   )
@@ -199,13 +216,6 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
   // hook order stays stable.
   const localToSegment = useMemo(() => {
     if (!segment) return new THREE.Matrix4()
-    const rotationY = node.rotation ?? 0
-    const snap =
-      Math.abs(rotationY) < 1e-5
-        ? resolveRidgeSnap(segment, nodePosition[0] ?? 0, nodePosition[2] ?? 0)
-        : null
-    const ridgeX = snap ? snap.localX : (nodePosition[0] ?? 0)
-    const ridgeZ = nodePosition[2] ?? snap?.localZ ?? 0
     const baseY = getRoofTopSurfaceY(ridgeX, ridgeZ, segment)
     const yOffset = Math.max(-2, Math.min(2, nodePosition[1] ?? 0))
     const ridgeY = baseY + yOffset
@@ -214,7 +224,7 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
       new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY),
       new THREE.Vector3(1, 1, 1),
     )
-  }, [segment, node.rotation, nodePosition[0], nodePosition[1], nodePosition[2]])
+  }, [segment, ridgeX, ridgeZ, rotationY, nodePosition[1]])
   const clippedGeometry = useSegmentTrimClippedGeometry(geometry, segment, localToSegment)
 
   if (!segment) return null
@@ -237,13 +247,6 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
   // after placement the inspector's Y / Z sliders nudge the vent off the
   // locked ridge without losing the slope-tracking base. X is the position
   // along the ridge — the snap re-clamps it to the segment's ridge span.
-  const rotationY = node.rotation ?? 0
-  const snap =
-    Math.abs(rotationY) < 1e-5
-      ? resolveRidgeSnap(segment, nodePosition[0] ?? 0, nodePosition[2] ?? 0)
-      : null
-  const ridgeX = snap ? snap.localX : (nodePosition[0] ?? 0)
-  const ridgeZ = nodePosition[2] ?? snap?.localZ ?? 0
   const baseY = getRoofTopSurfaceY(ridgeX, ridgeZ, segment)
   // Clamp legacy stored Y (absolute peak height from earlier versions) so the
   // vent doesn't fly off when the field was an absolute Y instead of offset.

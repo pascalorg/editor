@@ -190,6 +190,7 @@ function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
     baseD: depth,
     tanTheta,
     shapeRatios,
+    dutchTopRakeThickness: segment.dutchTopRakeThickness,
   })
     .filter((face) => faceNormalY(face) > SHINGLE_SURFACE_EPSILON)
     .map((face) => {

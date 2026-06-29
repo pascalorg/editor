@@ -174,6 +174,7 @@ export function getDutchEndSlopeFaces(input: {
   baseW: number
   baseD: number
   shapeRatios: RoofShapeRatios
+  dutchTopRakeThickness?: number
 }): RoofShapeFaceVertex[][] {
   const dutch = getDutchRoofShapeMetrics({
     w: input.w,
@@ -204,12 +205,20 @@ export function getDutchEndSlopeFaces(input: {
     t: number,
   ): RoofShapeFaceVertex =>
     v(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t)
+  const lowerAlongY = (point: RoofShapeFaceVertex): RoofShapeFaceVertex =>
+    v(point.x, point.y - Math.max(0, input.dutchTopRakeThickness ?? 0), point.z)
 
   if (dutch.axis === 'width') {
     const o1 = v(-dutch.outerWaistHalfX, dutch.middleHeight, dutch.innerWaistHalfZ)
     const o2 = v(dutch.outerWaistHalfX, dutch.middleHeight, dutch.innerWaistHalfZ)
     const o3 = v(dutch.outerWaistHalfX, dutch.middleHeight, -dutch.innerWaistHalfZ)
     const o4 = v(-dutch.outerWaistHalfX, dutch.middleHeight, -dutch.innerWaistHalfZ)
+    const m1 = v(-dutch.innerWaistHalfX, dutch.middleHeight, dutch.innerWaistHalfZ)
+    const m2 = v(dutch.innerWaistHalfX, dutch.middleHeight, dutch.innerWaistHalfZ)
+    const m3 = v(dutch.innerWaistHalfX, dutch.middleHeight, -dutch.innerWaistHalfZ)
+    const m4 = v(-dutch.innerWaistHalfX, dutch.middleHeight, -dutch.innerWaistHalfZ)
+    const r1 = v(-dutch.innerWaistHalfX, input.wh + input.rh, 0)
+    const r2 = v(dutch.innerWaistHalfX, input.wh + input.rh, 0)
     const denom = dutch.outerWaistHalfX - input.w / 2
     const tDesired = Math.abs(denom) > 1e-9 ? (dutch.innerWaistHalfX - input.w / 2) / denom : 1
     // Cap at the point where the two hip rulings meet (z → 0): extending past
@@ -217,9 +226,22 @@ export function getDutchEndSlopeFaces(input: {
     const zDenom = input.d / 2 - dutch.innerWaistHalfZ
     const tConverge = zDenom > 1e-9 ? input.d / 2 / zDenom : tDesired
     const t = Math.min(tDesired, tConverge)
+    const projectWidthAxisPointToEndSlope = (
+      point: RoofShapeFaceVertex,
+      side: 1 | -1,
+    ): RoofShapeFaceVertex => {
+      const denomY = dutch.middleHeight - input.wh
+      const tPlane = Math.abs(denomY) > 1e-9 ? (point.y - input.wh) / denomY : 0
+      const x = side * (input.w / 2 + (dutch.outerWaistHalfX - input.w / 2) * tPlane)
+      return v(x, point.y, point.z)
+    }
+    const top2 = projectWidthAxisPointToEndSlope(lowerAlongY(lerp(m2, r2, 0.5)), 1)
+    const top3 = projectWidthAxisPointToEndSlope(lowerAlongY(lerp(m3, r2, 0.5)), 1)
+    const top1 = projectWidthAxisPointToEndSlope(lowerAlongY(lerp(m1, r1, 0.5)), -1)
+    const top4 = projectWidthAxisPointToEndSlope(lowerAlongY(lerp(m4, r1, 0.5)), -1)
     return [
-      [e2, e3, lerp(e3, o3, t), lerp(e2, o2, t)],
-      [e4, e1, lerp(e1, o1, t), lerp(e4, o4, t)],
+      [e2, e3, o3, top3, top2, o2],
+      [e4, e1, o1, top1, top4, o4],
     ]
   }
 
@@ -227,14 +249,33 @@ export function getDutchEndSlopeFaces(input: {
   const o2 = v(dutch.innerWaistHalfX, dutch.middleHeight, dutch.outerWaistHalfZ)
   const o3 = v(dutch.innerWaistHalfX, dutch.middleHeight, -dutch.outerWaistHalfZ)
   const o4 = v(-dutch.innerWaistHalfX, dutch.middleHeight, -dutch.outerWaistHalfZ)
+  const m1 = v(-dutch.innerWaistHalfX, dutch.middleHeight, dutch.innerWaistHalfZ)
+  const m2 = v(dutch.innerWaistHalfX, dutch.middleHeight, dutch.innerWaistHalfZ)
+  const m3 = v(dutch.innerWaistHalfX, dutch.middleHeight, -dutch.innerWaistHalfZ)
+  const m4 = v(-dutch.innerWaistHalfX, dutch.middleHeight, -dutch.innerWaistHalfZ)
+  const r1 = v(0, input.wh + input.rh, dutch.innerWaistHalfZ)
+  const r2 = v(0, input.wh + input.rh, -dutch.innerWaistHalfZ)
   const denom = dutch.outerWaistHalfZ - input.d / 2
   const tDesired = Math.abs(denom) > 1e-9 ? (dutch.innerWaistHalfZ - input.d / 2) / denom : 1
   const xDenom = input.w / 2 - dutch.innerWaistHalfX
   const tConverge = xDenom > 1e-9 ? input.w / 2 / xDenom : tDesired
   const t = Math.min(tDesired, tConverge)
+  const projectDepthAxisPointToEndSlope = (
+    point: RoofShapeFaceVertex,
+    side: 1 | -1,
+  ): RoofShapeFaceVertex => {
+    const denomY = dutch.middleHeight - input.wh
+    const tPlane = Math.abs(denomY) > 1e-9 ? (point.y - input.wh) / denomY : 0
+    const z = side * (input.d / 2 + (dutch.outerWaistHalfZ - input.d / 2) * tPlane)
+    return v(point.x, point.y, z)
+  }
+  const top2 = projectDepthAxisPointToEndSlope(lowerAlongY(lerp(m2, r1, 0.5)), 1)
+  const top1 = projectDepthAxisPointToEndSlope(lowerAlongY(lerp(m1, r1, 0.5)), 1)
+  const top4 = projectDepthAxisPointToEndSlope(lowerAlongY(lerp(m4, r2, 0.5)), -1)
+  const top3 = projectDepthAxisPointToEndSlope(lowerAlongY(lerp(m3, r2, 0.5)), -1)
   return [
-    [e1, e2, lerp(e2, o2, t), lerp(e1, o1, t)],
-    [e3, e4, lerp(e4, o4, t), lerp(e3, o3, t)],
+    [e1, e2, o2, top2, top1, o1],
+    [e3, e4, o4, top4, top3, o3],
   ]
 }
 
@@ -251,6 +292,7 @@ export function getRoofModuleFaces(input: {
   tanTheta: number
   shapeRatios: RoofShapeRatios
   excludeDutchEndSlopes?: boolean
+  dutchTopRakeThickness?: number
 }): RoofShapeFaceVertex[][] {
   const v = (x: number, y: number, z: number): RoofShapeFaceVertex => ({ x, y, z })
   const { iF = 0, iB = 0, iL = 0, iR = 0 } = input.insets
@@ -363,8 +405,23 @@ export function getRoofModuleFaces(input: {
       const o4 = v(-dutch.outerWaistHalfX, dutch.middleHeight, -dutch.innerWaistHalfZ)
       const r1 = v(-dutch.innerWaistHalfX, h, 0)
       const r2 = v(dutch.innerWaistHalfX, h, 0)
+      const endSlopes = input.excludeDutchEndSlopes
+        ? []
+        : getDutchEndSlopeFaces({
+            w: input.w,
+            d: input.d,
+            wh: input.wh,
+            rh: input.rh,
+            insets: input.insets,
+            baseW: input.baseW,
+            baseD: input.baseD,
+            shapeRatios: input.shapeRatios,
+            dutchTopRakeThickness: input.dutchTopRakeThickness,
+          })
       faces.push([e1, e2, o2, m2, m1, o1], [e3, e4, o4, m4, m3, o3])
-      if (!input.excludeDutchEndSlopes) {
+      if (endSlopes.length === 2) {
+        faces.push(...endSlopes)
+      } else if (!input.excludeDutchEndSlopes) {
         faces.push([e2, e3, o3, o2], [e4, e1, o1, o4])
       }
       faces.push([m1, m2, r2, r1], [m3, m4, r1, r2])
@@ -376,8 +433,23 @@ export function getRoofModuleFaces(input: {
       const o4 = v(-dutch.innerWaistHalfX, dutch.middleHeight, -dutch.outerWaistHalfZ)
       const r1 = v(0, h, dutch.innerWaistHalfZ)
       const r2 = v(0, h, -dutch.innerWaistHalfZ)
+      const endSlopes = input.excludeDutchEndSlopes
+        ? []
+        : getDutchEndSlopeFaces({
+            w: input.w,
+            d: input.d,
+            wh: input.wh,
+            rh: input.rh,
+            insets: input.insets,
+            baseW: input.baseW,
+            baseD: input.baseD,
+            shapeRatios: input.shapeRatios,
+            dutchTopRakeThickness: input.dutchTopRakeThickness,
+          })
       faces.push([e2, e3, o3, m3, m2, o2], [e4, e1, o1, m1, m4, o4])
-      if (!input.excludeDutchEndSlopes) {
+      if (endSlopes.length === 2) {
+        faces.push(...endSlopes)
+      } else if (!input.excludeDutchEndSlopes) {
         faces.push([e1, e2, o2, o1], [e3, e4, o4, o3])
       }
       faces.push([m2, m3, r2, r1], [m4, m1, r1, r2])

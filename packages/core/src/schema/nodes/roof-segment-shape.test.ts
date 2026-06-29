@@ -94,7 +94,7 @@ describe('roof segment shape', () => {
     expect(ridgeOnlyOnZAxis).toBe(true)
   })
 
-  test('dutch end hip slope tops out at the outer rake line, gablet stays inner', () => {
+  test('dutch end hip slope extends inward until it meets the gable triangle', () => {
     const ratios = getRoofShapeRatios({
       dutchHipWidthRatio: 0.25,
       dutchHipHeightRatio: 0.5,
@@ -123,15 +123,35 @@ describe('roof segment shape', () => {
       baseD: 6,
       tanTheta: 1,
       shapeRatios: ratios,
+      dutchTopRakeThickness: 0.21,
     })
 
     expect(metrics?.innerWaistHalfX).toBe(2.5)
     expect(metrics?.outerWaistHalfX).toBe(3.25)
 
-    // The end hip slope reaches the outer rake line (x=3.25) so its corner sits
-    // under the rake's outer edge; the gablet triangle stays recessed at x=2.5.
-    const hipTopFace = faces.find((face) =>
-      face.some((vertex) => vertex.x === 3.25 && vertex.y === 4 && vertex.z === 1.5),
+    // The end slope now clips against the rake's lower inner edge and is
+    // reprojected back onto the end-slope plane, so the shorter top edge stays
+    // planar instead of twisting.
+    const hipTopFace = faces.find(
+      (face) =>
+        face.some(
+          (vertex) =>
+            Math.abs(vertex.x - 4) < 1e-6 &&
+            Math.abs(vertex.y - 3) < 1e-6 &&
+            Math.abs(vertex.z - 3) < 1e-6,
+        ) &&
+        face.some(
+          (vertex) =>
+            Math.abs(vertex.x - 3.0325) < 1e-6 &&
+            Math.abs(vertex.y - 4.29) < 1e-6 &&
+            Math.abs(vertex.z - 0.75) < 1e-6,
+        ) &&
+        face.some(
+          (vertex) =>
+            Math.abs(vertex.x - 3.0325) < 1e-6 &&
+            Math.abs(vertex.y - 4.29) < 1e-6 &&
+            Math.abs(vertex.z + 0.75) < 1e-6,
+        ),
     )
     const gableTriangle = faces.find(
       (face) =>
@@ -163,6 +183,7 @@ describe('roof segment shape', () => {
       baseD: 6,
       tanTheta: 1,
       shapeRatios: ratios,
+      dutchTopRakeThickness: 0.21,
     }
 
     const full = getRoofModuleFaces(args)
@@ -176,19 +197,21 @@ describe('roof segment shape', () => {
       baseW: 8,
       baseD: 6,
       shapeRatios: ratios,
+      dutchTopRakeThickness: 0.21,
     })
 
     // The two end slopes leave the shell and reappear in the standalone set.
     expect(shell).toHaveLength(full.length - 2)
     expect(endSlopes).toHaveLength(2)
 
-    // The standalone end slopes are the two end quads, each seated on an eave
-    // corner (x=4) and extended inward up the hip plane so the top edge reaches
-    // the gablet's inner waist line (x=2.5), above the outer rake line.
+    // The standalone end slopes are 6-point polygons whose shorter top edge is
+    // clipped to the rake's lower inner edge and then kept on the end-slope
+    // plane.
     const endIsEndSlope = endSlopes.every(
       (face) =>
-        face.length === 4 &&
-        face.some((vertex) => Math.abs(Math.abs(vertex.x) - 2.5) < 1e-6) &&
+        face.length === 6 &&
+        face.some((vertex) => Math.abs(Math.abs(vertex.x) - 3.25) < 1e-6) &&
+        face.some((vertex) => Math.abs(Math.abs(vertex.x) - 3.0325) < 1e-6) &&
         face.some((vertex) => Math.abs(Math.abs(vertex.x) - 4) < 1e-6),
     )
     expect(endIsEndSlope).toBe(true)
