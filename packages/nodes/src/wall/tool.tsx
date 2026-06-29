@@ -605,6 +605,14 @@ export const WallTool: React.FC = () => {
         angleSnap: angleLocked,
         magnetic: isMagneticSnapActive(),
       })
+      // TEMP DIAGNOSTIC — remove once snapping is confirmed.
+      console.log('[wall-snap]', {
+        magnetic: isMagneticSnapActive(),
+        currentWalls: walls.length,
+        belowWalls: snapWalls.length - walls.length,
+        cursor: localPoint,
+        snap: snapResult.snap,
+      })
       gridPosition = alignPoint(snapResult.point, {
         applySnap: !angleLocked,
         bypass: bypassAlign,
