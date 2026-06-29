@@ -621,6 +621,7 @@ function SectionCut({
     <group layers={EDITOR_LAYER}>
       <mesh
         geometry={geometries.fill}
+        layers={EDITOR_LAYER}
         material={sectionFillMaterial}
         raycast={() => null}
         renderOrder={SECTION_FILL_RENDER_ORDER}
@@ -628,6 +629,7 @@ function SectionCut({
       <lineSegments
         frustumCulled={false}
         geometry={geometries.outline}
+        layers={EDITOR_LAYER}
         material={sectionOutlineMaterial}
         renderOrder={SECTION_OUTLINE_RENDER_ORDER}
       />
@@ -1360,6 +1362,7 @@ function RoofTrimHandles() {
         <group key={handle.side} position={[handle.offsetX, railY, TRIM_RAIL_SURFACE_OFFSET]}>
           <mesh
             geometry={visual === 'rail' ? TRIM_UNIT_RAIL_GEOMETRY : TRIM_UNIT_RAIL_CAP_GEOMETRY}
+            layers={EDITOR_LAYER}
             material={
               visual === 'rail'
                 ? hovered
@@ -1404,6 +1407,7 @@ function RoofTrimHandles() {
         {showPlane ? (
           <mesh
             geometry={TRIM_UNIT_PLANE_GEOMETRY}
+            layers={EDITOR_LAYER}
             material={isHovered ? trimPlaneHoverMaterial : trimPlaneMaterial}
             raycast={() => null}
             renderOrder={TRIM_PLANE_RENDER_ORDER}
@@ -1530,6 +1534,7 @@ function RoofTrimHandles() {
           >
             <mesh
               geometry={TRIM_UNIT_RAIL_GEOMETRY}
+              layers={EDITOR_LAYER}
               material={trimDiagonalPreviewRailMaterial}
               position={[0, handleY / 2, TRIM_RAIL_SURFACE_OFFSET]}
               raycast={() => null}
@@ -1541,6 +1546,7 @@ function RoofTrimHandles() {
 
         <mesh
           geometry={TRIM_UNIT_RAIL_GEOMETRY}
+          layers={EDITOR_LAYER}
           material={hovered ? trimRailHoverMaterial : trimRailMaterial}
           onDoubleClick={(event) => resetDiagonalTrim(side, event)}
           onPointerDown={(event) => startDrag(side, event)}
@@ -1553,6 +1559,7 @@ function RoofTrimHandles() {
         />
         <mesh
           geometry={TRIM_UNIT_RAIL_GEOMETRY}
+          layers={EDITOR_LAYER}
           material={hovered ? trimRailHoverMaterial : trimRailMaterial}
           onDoubleClick={(event) => resetDiagonalTrim(side, event)}
           onPointerDown={(event) => startDrag(side, event)}
@@ -1566,6 +1573,7 @@ function RoofTrimHandles() {
         />
         <mesh
           geometry={TRIM_UNIT_ADD_GEOMETRY}
+          layers={EDITOR_LAYER}
           material={hovered ? trimAddHoverMaterial : trimAddMaterial}
           onDoubleClick={(event) => resetDiagonalTrim(side, event)}
           onPointerDown={(event) => startDrag(side, event)}
