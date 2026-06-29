@@ -1488,7 +1488,7 @@ function buildFloorplanEntryGeometry({
   return entry
 }
 
-function getFloorplanLevelData(
+export function getFloorplanLevelData(
   type: string,
   nodes: Record<string, AnyNode>,
   liveOverrides: Map<string, LiveNodeOverrides>,
@@ -2426,7 +2426,7 @@ function applyPositionLiveTransform(
   } as AnyNode
 }
 
-function isFloorplanNodeVisible(node: AnyNode, liveOverride?: LiveNodeOverrides): boolean {
+export function isFloorplanNodeVisible(node: AnyNode, liveOverride?: LiveNodeOverrides): boolean {
   const overrideVisible = liveOverride?.visible
   if (typeof overrideVisible === 'boolean') return overrideVisible
   return (node as { visible?: boolean }).visible !== false
@@ -2452,7 +2452,7 @@ function isFloorplanHierarchyVisible(
   return true
 }
 
-function buildContext(
+export function buildContext(
   node: AnyNode,
   nodes: Record<string, AnyNode>,
   viewState: {
@@ -2560,7 +2560,7 @@ const OVERLAY_KINDS = new Set<FloorplanGeometry['kind']>([
  * / translations apply in both passes. Empty groups collapse to `null`
  * so the caller can skip emitting an `<g>` when there's nothing to draw.
  */
-function splitFloorplanOverlay(g: FloorplanGeometry): {
+export function splitFloorplanOverlay(g: FloorplanGeometry): {
   base: FloorplanGeometry | null
   overlay: FloorplanGeometry | null
 } {
@@ -2726,7 +2726,7 @@ function depsValueEqual(a: unknown, b: unknown): boolean {
  * Sort is stable in modern JS engines, so siblings within the same
  * bucket keep their DFS order (= scene tree order).
  */
-function floorplanLayerRank(type: string): number {
+export function floorplanLayerRank(type: string): number {
   switch (type) {
     case 'zone':
       return 0
