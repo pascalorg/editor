@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 import {
+  getDutchRoofMetrics,
   getRoofSegmentVisibleTopBounds,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
@@ -144,7 +145,46 @@ export function getRidgeVentLinesForSegment(segment: RoofSegmentNode): RidgeVent
     ]
   }
 
-  if (segment.roofType === 'dutch') return []
+  if (segment.roofType === 'dutch') {
+    const { axis, inset } = getDutchRoofMetrics(segment)
+    // The rendered hip arris and waist come from the EXPANDED (overhang +
+    // shingle) rectangle — the same dims the eave corners below use — while
+    // the inset is base-derived (matches getDutchRoofMetrics / the brush
+    // builder). Deriving the waist from `getDutchRoofMetrics`' own base-dim
+    // half-spans would tilt the hip lines off the arris on any roof with
+    // overhang, sinking the vents into the slope. Mirror the mansard branch:
+    // one coordinate system (expanded bounds) for both eave and waist.
+    const waistLengthRatio =
+      segment.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
+    const waistHalfX =
+      axis === 'x' ? Math.max(0, (halfW - inset) * waistLengthRatio) : Math.max(0, halfW - inset)
+    const waistHalfZ =
+      axis === 'x' ? Math.max(0, halfD - inset) : Math.max(0, (halfD - inset) * waistLengthRatio)
+    if (!(waistHalfX > 0.001 && waistHalfZ > 0.001)) return []
+
+    // Dutch lower hip vents should terminate where the lower slope actually
+    // meets the gablet rake, not at the inner waist line of the upper gable
+    // triangle. Mirror the rendered roof shell's "outer waist" cap with the
+    // same expanded-bounds frame we use for the eave corners above.
+    const rake = segment.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake
+    const rakeReach =
+      axis === 'x'
+        ? Math.min(Math.max(0, rake), Math.max(0, halfW - waistHalfX) * 0.98)
+        : Math.min(Math.max(0, rake), Math.max(0, halfD - waistHalfZ) * 0.98)
+    const rakeEndHalfX = axis === 'x' ? waistHalfX + rakeReach : waistHalfX
+    const rakeEndHalfZ = axis === 'x' ? waistHalfZ : waistHalfZ + rakeReach
+
+    const mainRidgeVisible = axis === 'x' ? ridgeZVisible : ridgeXVisible
+    const ridgeStart: [number, number] = axis === 'x' ? [-rakeEndHalfX, 0] : [0, rakeEndHalfZ]
+    const ridgeEnd: [number, number] = axis === 'x' ? [rakeEndHalfX, 0] : [0, -rakeEndHalfZ]
+    return [
+      ...(mainRidgeVisible ? [{ name: 'Ridge Vent', start: ridgeStart, end: ridgeEnd }] : []),
+      { name: 'Hip Ridge Vent', start: [minX, maxZ], end: [-rakeEndHalfX, rakeEndHalfZ] },
+      { name: 'Hip Ridge Vent', start: [maxX, maxZ], end: [rakeEndHalfX, rakeEndHalfZ] },
+      { name: 'Hip Ridge Vent', start: [maxX, minZ], end: [rakeEndHalfX, -rakeEndHalfZ] },
+      { name: 'Hip Ridge Vent', start: [minX, minZ], end: [-rakeEndHalfX, -rakeEndHalfZ] },
+    ]
+  }
 
   if (segment.roofType !== 'hip') {
     if (!ridgeZVisible) return []

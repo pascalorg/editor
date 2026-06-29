@@ -1,4 +1,5 @@
 import {
+  getDutchRoofMetrics,
   normalizeRoofSegmentTrim,
   type RidgeVentNode,
   type RoofSegmentNode,
@@ -62,9 +63,19 @@ export function buildRidgeVentGeometry(
   const rotationY = finiteNumber(node.rotation, 0)
   const sinR = Math.sin(rotationY)
   const cosR = Math.cos(rotationY)
+  const dutchTopRidgeSupport = getDutchTopRidgeSupport(segment, centerX, centerZ, rotationY)
   const surfaceYAt = (x: number, z: number) => {
     if (!segment) return 0
-    return getRoofTopSurfaceY(centerX + x * cosR + z * sinR, centerZ - x * sinR + z * cosR, segment)
+    let sampleX = centerX + x * cosR + z * sinR
+    let sampleZ = centerZ - x * sinR + z * cosR
+    if (dutchTopRidgeSupport) {
+      if (dutchTopRidgeSupport.axis === 'x') {
+        sampleX = clamp(sampleX, -dutchTopRidgeSupport.innerHalfSpan, dutchTopRidgeSupport.innerHalfSpan)
+      } else {
+        sampleZ = clamp(sampleZ, -dutchTopRidgeSupport.innerHalfSpan, dutchTopRidgeSupport.innerHalfSpan)
+      }
+    }
+    return getRoofTopSurfaceY(sampleX, sampleZ, segment)
   }
   const ridgeY = surfaceYAt(0, 0)
   const seatYAt = (x: number, z: number) => (segment ? surfaceYAt(x, z) - ridgeY : 0)
@@ -100,6 +111,33 @@ function finiteNumber(value: unknown, fallback: number): number {
 
 function finitePositive(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function getDutchTopRidgeSupport(
+  segment: RoofSegmentNode | undefined,
+  centerX: number,
+  centerZ: number,
+  rotationY: number,
+): { axis: 'x' | 'z'; innerHalfSpan: number } | null {
+  if (!segment || segment.roofType !== 'dutch') return null
+
+  const metrics = getDutchRoofMetrics(segment)
+  const onWidthAxisTopRidge =
+    metrics.axis === 'x' && Math.abs(centerZ) <= 1e-4 && Math.abs(Math.sin(rotationY)) <= 1e-4
+  const onDepthAxisTopRidge =
+    metrics.axis === 'z' && Math.abs(centerX) <= 1e-4 && Math.abs(Math.cos(rotationY)) <= 1e-4
+
+  if (onWidthAxisTopRidge) {
+    return { axis: 'x', innerHalfSpan: metrics.waistHalfX }
+  }
+  if (onDepthAxisTopRidge) {
+    return { axis: 'z', innerHalfSpan: metrics.waistHalfZ }
+  }
+  return null
 }
 
 // ─── Top profiles (open polylines eave → peak → eave, in [z, y]) ─────────

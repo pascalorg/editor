@@ -39,7 +39,7 @@ describe('resolveRidgeSnap', () => {
     expect(center?.rotation).toBeCloseTo(Math.PI / 2)
   })
 
-  test('keeps Dutch shoulder clicks on the upper gable ridge instead of lower hip seams', () => {
+  test('snaps Dutch shoulder clicks onto the extended lower hip seam up to the rake end', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'dutch',
       width: 8,
@@ -53,9 +53,10 @@ describe('resolveRidgeSnap', () => {
     const snap = resolveRidgeSnap(segment, 3.8, 2.8)
 
     expect(snap).not.toBeNull()
-    expect(snap?.localX).toBeCloseTo(2.45)
-    expect(snap?.localZ).toBeCloseTo(0)
-    expect(snap?.rotation).toBeCloseTo(0)
+    expect(snap?.localX).toBeCloseTo(3.84, 2)
+    expect(snap?.localZ).toBeCloseTo(2.77, 2)
+    expect(Math.abs(snap?.rotation ?? 0)).toBeGreaterThan(0.1)
+    expect(Math.abs(Math.abs(snap?.rotation ?? 0) - Math.PI / 2)).toBeGreaterThan(0.1)
   })
 
   test('snaps mansard center clicks to the upper top ridge', () => {

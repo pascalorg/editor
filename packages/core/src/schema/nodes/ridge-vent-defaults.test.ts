@@ -5,7 +5,11 @@ import {
   isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
 } from './ridge-vent'
-import { RoofSegmentNode } from './roof-segment'
+import {
+  getDutchRoofMetrics,
+  getRoofSegmentVisibleTopBounds,
+  RoofSegmentNode,
+} from './roof-segment'
 
 describe('createDefaultRidgeVentsForSegment', () => {
   test('creates one shingled default ridge vent for gable roofs', () => {
@@ -74,7 +78,7 @@ describe('createDefaultRidgeVentsForSegment', () => {
     expect(vents.every((vent) => vent.name === 'Hip Ridge Vent')).toBe(true)
   })
 
-  test('does not create default ridge vents for width-axis Dutch roofs', () => {
+  test('creates a top ridge plus four hip vents for width-axis Dutch roofs', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'dutch',
       width: 8,
@@ -85,10 +89,29 @@ describe('createDefaultRidgeVentsForSegment', () => {
     })
 
     const vents = createDefaultRidgeVentsForSegment(segment)
-    const lines = getRidgeVentLinesForSegment(segment)
 
-    expect(vents).toEqual([])
-    expect(lines).toEqual([])
+    expect(vents.filter((vent) => vent.name === 'Ridge Vent')).toHaveLength(1)
+    expect(vents.filter((vent) => vent.name === 'Hip Ridge Vent')).toHaveLength(4)
+    // Width-axis Dutch ridge runs along X (constant Z = 0).
+    const metrics = getDutchRoofMetrics(segment)
+    const ridge = vents.find((vent) => vent.name === 'Ridge Vent')
+    const frontRightHip = vents.find(
+      (vent) =>
+        vent.name === 'Hip Ridge Vent' && (vent.position[0] ?? 0) > 0 && (vent.position[2] ?? 0) > 0,
+    )
+    const expectedRakeReach = Math.min(
+      segment.dutchGabletRake,
+      Math.max(0, segment.width / 2 - metrics.waistHalfX) * 0.98,
+    )
+    expect(ridge?.position[2]).toBeCloseTo(0)
+    expect(ridge?.length).toBeCloseTo((metrics.waistHalfX + expectedRakeReach) * 2, 2)
+    expect(frontRightHip?.position[0]).toBeCloseTo((4 + 2.93) / 2, 2)
+    expect(frontRightHip?.position[2]).toBeCloseTo((3 + 1.5) / 2, 2)
+    for (const vent of vents) {
+      expect(vent.style).toBe('shingled')
+      expect(vent.length).toBeGreaterThan(0.4)
+      expect(isDefaultRidgeVentNode(vent, segment.id)).toBe(true)
+    }
   })
 
   test('treats legacy segments with generated ridge vents as auto-enabled', () => {
@@ -113,7 +136,7 @@ describe('createDefaultRidgeVentsForSegment', () => {
     ).toBe(true)
   })
 
-  test('does not create ridge lines for depth-axis Dutch roofs either', () => {
+  test('creates a Z-oriented ridge plus four hip lines for depth-axis Dutch roofs', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'dutch',
       width: 6,
@@ -124,7 +147,67 @@ describe('createDefaultRidgeVentsForSegment', () => {
     })
 
     const lines = getRidgeVentLinesForSegment(segment)
-    expect(lines).toEqual([])
+    const metrics = getDutchRoofMetrics(segment)
+    const expectedRakeReach = Math.min(
+      segment.dutchGabletRake,
+      Math.max(0, segment.depth / 2 - metrics.waistHalfZ) * 0.98,
+    )
+
+    const ridges = lines.filter((line) => line.name === 'Ridge Vent')
+    const hips = lines.filter((line) => line.name === 'Hip Ridge Vent')
+    expect(ridges).toHaveLength(1)
+    expect(hips).toHaveLength(4)
+    // Depth-axis Dutch ridge runs along Z (constant X = 0).
+    expect(ridges[0]?.start[0]).toBeCloseTo(0)
+    expect(ridges[0]?.end[0]).toBeCloseTo(0)
+    expect(Math.abs(ridges[0]?.start[1] ?? 0)).toBeCloseTo(metrics.waistHalfZ + expectedRakeReach, 2)
+  })
+
+  test('keeps Dutch hip lines on the rendered arris when the roof has overhang', () => {
+    // Overhang + shingle thickness expand the rendered roof; the eave corners
+    // and the waist must share that expanded frame, otherwise the hip lines
+    // tilt off the arris and the vents sink into the slope.
+    const segment = RoofSegmentNode.parse({
+      roofType: 'dutch',
+      width: 8,
+      depth: 6,
+      overhang: 0.5,
+      wallThickness: 0.2,
+      shingleThickness: 0.05,
+    })
+
+    const lines = getRidgeVentLinesForSegment(segment)
+    const hips = lines.filter((line) => line.name === 'Hip Ridge Vent')
+    const ridge = lines.find((line) => line.name === 'Ridge Vent')
+    expect(hips).toHaveLength(4)
+    expect(ridge).toBeDefined()
+
+    const bounds = getRoofSegmentVisibleTopBounds(segment)
+    const { axis, inset } = getDutchRoofMetrics(segment)
+    const waistLengthRatio = segment.dutchWaistLengthRatio
+    // width 8 >= depth 6 -> axis 'x': the ridge runs along X (waist scaled by
+    // waistLengthRatio), and Z is the clean hipped axis (inset exactly).
+    expect(axis).toBe('x')
+    const halfWExpanded = bounds.maxX
+    const halfDExpanded = bounds.maxZ
+    const expectedWaistX = (halfWExpanded - inset) * waistLengthRatio
+    const expectedWaistZ = halfDExpanded - inset
+    const expectedRakeReach = Math.min(
+      segment.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake,
+      Math.max(0, halfWExpanded - expectedWaistX) * 0.98,
+    )
+
+    for (const hip of hips) {
+      const [ex, ez] = hip.start
+      const [wx, wz] = hip.end
+      // Eave end on an expanded-bounds corner; upper end at the rendered rake
+      // termination where the lower slope starts, derived from the SAME
+      // expanded frame (not the base-dim inner waist).
+      expect(Math.abs(ex)).toBeCloseTo(halfWExpanded)
+      expect(Math.abs(ez)).toBeCloseTo(halfDExpanded)
+      expect(Math.abs(wx)).toBeCloseTo(expectedWaistX + expectedRakeReach)
+      expect(Math.abs(wz)).toBeCloseTo(expectedWaistZ)
+    }
   })
 
   test('creates top ridge plus four upper hip vents plus four lower-slope vents for mansard roofs', () => {

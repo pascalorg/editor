@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { RoofSegmentNode } from '@pascal-app/core'
+import { getDutchRoofMetrics, RoofSegmentNode } from '@pascal-app/core'
 import type * as THREE from 'three'
 import { getRoofTopSurfaceY } from '../../shared/roof-surface'
 import { buildRidgeVentGeometry } from '../geometry'
@@ -279,5 +279,41 @@ describe('buildRidgeVentGeometry', () => {
 
     expect(rawRoofDrop).toBeLessThan(-0.05)
     expect(minYAtLocalPoint(geo, -halfLength, -halfWidth)).toBeCloseTo(rawRoofDrop)
+  })
+
+  test('keeps an extended Dutch top ridge level through the rake span instead of drooping onto the hip', () => {
+    const segment = RoofSegmentNode.parse({
+      roofType: 'dutch',
+      width: 8,
+      depth: 6,
+      wallHeight: 0.5,
+      pitch: 45,
+    })
+    const metrics = getDutchRoofMetrics(segment)
+    const rakeReach = Math.min(
+      segment.dutchGabletRake,
+      Math.max(0, segment.width / 2 - metrics.waistHalfX) * 0.98,
+    )
+    const vent = RidgeVentNode.parse({
+      name: 'Ridge Vent',
+      position: [0, 0, 0],
+      rotation: 0,
+      length: (metrics.waistHalfX + rakeReach) * 2,
+      width: 0.3,
+      height: 0.1,
+      style: 'shingled',
+      endCaps: false,
+    })
+
+    const geo = buildRidgeVentGeometry(vent, segment)
+    const halfLength = vent.length / 2
+    const halfWidth = vent.width / 2
+    const ridgeY = getRoofTopSurfaceY(0, 0, segment)
+    const rawRoofDrop = getRoofTopSurfaceY(-halfLength, -halfWidth, segment) - ridgeY
+    const supportedDrop = getRoofTopSurfaceY(-metrics.waistHalfX, -halfWidth, segment) - ridgeY
+
+    expect(rawRoofDrop).toBeLessThan(supportedDrop - 0.05)
+    expect(minYAtLocalPoint(geo, -halfLength, -halfWidth)).toBeCloseTo(supportedDrop)
+    expect(minYAtLocalPoint(geo, halfLength, -halfWidth)).toBeCloseTo(supportedDrop)
   })
 })

@@ -16,7 +16,8 @@ import {
  *   - gable / gambrel: ridge spans the full width.
  *   - mansard: top ridge, upper hip runs, plus lower-slope runs on all
  *     four steep lower faces.
- *   - dutch: no generated ridge lines yet, so snapping is disabled.
+ *   - dutch: top ridge between the gablet waists plus four hip runs down
+ *     to the eave corners (the gablet ends are vertical walls, not ridges).
  *   - hip: ridge is shortened by the hipped ends — spans width − depth.
  *     A square hip (width ≤ depth) collapses to a single apex point.
  *   - shed: no true ridge — snap to the high eave (z = -depth/2).

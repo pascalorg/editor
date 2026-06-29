@@ -1237,6 +1237,20 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
       if (hasSegmentTrim(node)) {
         subtractSegmentTrimCuts(brushes, node)
         brushes.rakeBoards = clipGeometryBySegmentTrim(brushes.rakeBoards, node)
+        // The clip is a CSG subtraction: surviving rake faces keep their own
+        // slots (side=1, top=3), but the freshly-exposed cut cross-section
+        // inherits the cutter brush's offset material slot (≥4, out of the
+        // 4-material range), so the rake renders with the wrong material after
+        // a trim. Force every off-board slot back to the rake side material —
+        // the cut edge reads as the board's side. (The accessory clip path does
+        // the equivalent clamp in `useSegmentTrimClippedGeometry`.)
+        if (brushes.rakeBoards) {
+          for (const group of brushes.rakeBoards.groups) {
+            if (group.materialIndex !== DUTCH_RAKE_TOP_MATERIAL_INDEX) {
+              group.materialIndex = DUTCH_RAKE_SIDE_MATERIAL_INDEX
+            }
+          }
+        }
       }
 
       return brushes
