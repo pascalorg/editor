@@ -1513,9 +1513,7 @@ function CornerPickerShape({
           shape="corner-picker"
         />
         <mesh material={ringMaterial} renderOrder={1002} scale={scale}>
-          <ringGeometry
-            args={[CORNER_HEX_RADIUS, CORNER_HEX_RADIUS * 1.18, round ? 32 : 6]}
-          />
+          <ringGeometry args={[CORNER_HEX_RADIUS, CORNER_HEX_RADIUS * 1.18, round ? 32 : 6]} />
         </mesh>
       </group>
     </>

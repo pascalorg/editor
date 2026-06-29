@@ -18,9 +18,9 @@ import {
   type WallSnapRadii,
 } from '../components/tools/wall/wall-drafting'
 import useAlignmentGuides from '../store/use-alignment-guides'
-import { resolveAlignmentForFloorplanView } from './world-grid-snap'
 import { isMagneticSnapActive } from '../store/use-editor'
 import useWallSnapIndicator from '../store/use-wall-snap-indicator'
+import { resolveAlignmentForFloorplanView } from './world-grid-snap'
 
 const SURFACE_SNAP_MOVING_ID = '__surface_snap__'
 export const SURFACE_ALIGNMENT_THRESHOLD_M = 0.08

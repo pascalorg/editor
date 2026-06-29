@@ -47,6 +47,7 @@
       "suspicious": {
         "noEmptyBlockStatements": "off",
         "noImplicitAnyLet": "off",
+        "noShadow": "off",
         "noGlobalIsNan": "off",
         "noExplicitAny": "off",
         "useAwait": "off",
@@ -80,9 +81,6 @@
         "noStaticElementInteractions": "off",
         "noNoninteractiveElementInteractions": "off",
         "useButtonType": "off"
-      },
-      "nursery": {
-        "noShadow": "off"
       },
       "security": {
         "noDangerouslySetInnerHtml": "info"

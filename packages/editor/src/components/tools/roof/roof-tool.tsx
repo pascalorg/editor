@@ -6,18 +6,15 @@ import {
   emitter,
   type GridEvent,
   type LevelNode,
-  resolveBuildingForLevel,
   RoofNode,
   RoofSegmentNode,
+  resolveBuildingForLevel,
   sceneRegistry,
   useScene,
   type WallNode,
   wallSegmentAnchors,
 } from '@pascal-app/core'
-import {
-  clearSurfacePlanSnapFeedback,
-  resolveSurfacePlanPointSnap,
-} from '@pascal-app/editor'
+import { clearSurfacePlanSnapFeedback, resolveSurfacePlanPointSnap } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'

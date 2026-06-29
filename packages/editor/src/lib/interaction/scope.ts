@@ -18,13 +18,7 @@ export type InteractionView = '2d' | '3d'
 // node, one in-flight reshape. Grouping them as sub-states of `reshaping`
 // (rather than four sibling scopes) keeps the union small while still making
 // "curving and hole-editing at once" unrepresentable.
-export type ReshapeKind =
-  | 'curve'
-  | 'hole'
-  | 'endpoint'
-  | 'boundary'
-  | 'control-point'
-  | 'tangent'
+export type ReshapeKind = 'curve' | 'hole' | 'endpoint' | 'boundary' | 'control-point' | 'tangent'
 
 export type InteractionScope =
   | { kind: 'idle' }
@@ -198,10 +192,7 @@ export function endpointReshapeScope(
   return { kind: 'reshaping', nodeId, reshape: 'endpoint', endpoint }
 }
 
-export function controlPointReshapeScope(
-  nodeId: string,
-  index: number,
-): ActiveInteractionScope {
+export function controlPointReshapeScope(nodeId: string, index: number): ActiveInteractionScope {
   return { kind: 'reshaping', nodeId, reshape: 'control-point', index }
 }
 

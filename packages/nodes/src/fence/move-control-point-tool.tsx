@@ -48,7 +48,9 @@ export const MoveFenceControlPointTool: React.FC<{
     const writePath = (point: [number, number]) => {
       const fence = liveFence()
       if (!fence?.path) return
-      const nextPath = fence.path.map((pathPoint, pathIndex) => (pathIndex === index ? point : pathPoint))
+      const nextPath = fence.path.map((pathPoint, pathIndex) =>
+        pathIndex === index ? point : pathPoint,
+      )
       const patch: Partial<FenceNode> = { path: nextPath }
       if (index === 0) patch.start = point
       if (index === nextPath.length - 1) patch.end = point

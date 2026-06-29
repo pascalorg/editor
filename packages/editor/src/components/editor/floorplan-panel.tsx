@@ -73,7 +73,6 @@ import { createPortal } from 'react-dom'
 import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
-import useAlignmentGuides from '../../store/use-alignment-guides'
 import {
   alignFloorplanDraftPoint,
   buildFloorplanItemEntry,
@@ -92,6 +91,7 @@ import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import { cn } from '../../lib/utils'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
+import useAlignmentGuides from '../../store/use-alignment-guides'
 import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
 import useEditor, {
   isAngleSnapActive,
@@ -9161,7 +9161,6 @@ export function FloorplanPanel({
       emitFloorplanWallLeave,
       emitFloorplanGridEvent,
       fences,
-      fenceContinuation,
       fenceDraftStart,
       floorplanOpeningLocalY,
       getPlanPointFromClientPoint,

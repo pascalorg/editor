@@ -35,8 +35,8 @@ export const MoveFenceTangentTool: React.FC<{
     pauseSceneHistory(useScene)
     let shiftPressed = false
     let committed = false
-    const originalTangents: Array<[number, number] | null> = (target.fence.tangents ?? []).map((t) =>
-      t ? [t[0], t[1]] : null,
+    const originalTangents: Array<[number, number] | null> = (target.fence.tangents ?? []).map(
+      (t) => (t ? [t[0], t[1]] : null),
     )
     let lastTangents = originalTangents
 

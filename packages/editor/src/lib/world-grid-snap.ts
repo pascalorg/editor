@@ -81,11 +81,7 @@ export function resolveAlignmentForActiveBuilding(args: {
   return resolveAlignmentInBuildingWorld({ ...args, pose: getActiveBuildingPose() })
 }
 
-function worldXZToPoseLocal(
-  x: number,
-  z: number,
-  pose: BuildingPose | null,
-): [number, number] {
+function worldXZToPoseLocal(x: number, z: number, pose: BuildingPose | null): [number, number] {
   if (!pose) return [x, z]
   const cos = Math.cos(pose.rotationY)
   const sin = Math.sin(pose.rotationY)
