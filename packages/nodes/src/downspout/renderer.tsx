@@ -19,9 +19,9 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { computeEaveY } from '../gutter/eave-snap'
 import { resolveGutterOutletById } from '../gutter/outlet-lookup'
+import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildDownspoutGeometry } from './geometry'
 import { computeDownspoutRouting } from './routing'
 

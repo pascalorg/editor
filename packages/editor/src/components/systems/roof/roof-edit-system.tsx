@@ -31,7 +31,6 @@ import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import { swallowNextClick } from '../../editor/handles/use-handle-drag'
 
@@ -282,11 +281,7 @@ const SECTION_SLAB_HALF_THICKNESS = 0.006
 // segment height. Intersecting it with the roof shell yields exactly the
 // material the cut passes through (roof slab + wall bands), leaving the hollow
 // attic empty — a true section cut.
-function buildSectionSlabBrush(
-  plane: SectionPlaneSpec,
-  vMin: number,
-  vMax: number,
-): Brush | null {
+function buildSectionSlabBrush(plane: SectionPlaneSpec, vMin: number, vMax: number): Brush | null {
   const span = plane.uMax - plane.uMin
   const height = vMax - vMin
   if (!(span > 1e-4 && height > 1e-4)) return null
@@ -343,7 +338,11 @@ function buildSectionGeometries(
   // extension clamp; clipping the wall band off here only left gaps.
   const vMin = -0.05
   const vMax =
-    segment.wallHeight + slopeFrame.activeRh + segment.deckThickness + segment.shingleThickness + 0.5
+    segment.wallHeight +
+    slopeFrame.activeRh +
+    segment.deckThickness +
+    segment.shingleThickness +
+    0.5
 
   const fillPositions: number[] = []
   const outlinePositions: number[] = []
@@ -464,15 +463,11 @@ function getTrimVisibleTopBounds(segment: RoofSegmentNode): TrimVisibleBounds {
 
   const trim = normalizeRoofSegmentTrim(segment)
   const metrics = getDutchRoofMetrics(segment)
-  const requestedRake = Math.max(
-    0,
-    segment.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake,
-  )
+  const requestedRake = Math.max(0, segment.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake)
   const rakeReach = Math.min(
     requestedRake,
-    (metrics.axis === 'x'
-      ? metrics.shoulderInsetAlongWidth
-      : metrics.shoulderInsetAlongDepth) * 0.98,
+    (metrics.axis === 'x' ? metrics.shoulderInsetAlongWidth : metrics.shoulderInsetAlongDepth) *
+      0.98,
   )
   if (!(rakeReach > 0.001)) return bounds
 
@@ -588,13 +583,7 @@ function accessorySectionKey(segment: RoofSegmentNode): string {
 // untrimmed roof shell (and every hosted accessory) with a thin slab at each
 // cut line, so only real material is shown and the hollow attic stays empty;
 // the outline is the analytic surface edge.
-function SectionCut({
-  segment,
-  planes,
-}: {
-  segment: RoofSegmentNode
-  planes: SectionPlaneSpec[]
-}) {
+function SectionCut({ segment, planes }: { segment: RoofSegmentNode; planes: SectionPlaneSpec[] }) {
   const shapeKey = segmentShapeKey(segment)
   const accessoryKey = accessorySectionKey(segment)
 
@@ -1106,50 +1095,22 @@ function RoofTrimHandles() {
   const insideRef: readonly [number, number] = [0, 0]
   if (trim.left > 0) {
     sectionPlanes.push(
-      makeSectionPlane(
-        leftX,
-        visualBackZ,
-        leftX,
-        visualFrontZ,
-        SECTION_PLANE_INSET,
-        insideRef,
-      ),
+      makeSectionPlane(leftX, visualBackZ, leftX, visualFrontZ, SECTION_PLANE_INSET, insideRef),
     )
   }
   if (trim.right > 0) {
     sectionPlanes.push(
-      makeSectionPlane(
-        rightX,
-        visualBackZ,
-        rightX,
-        visualFrontZ,
-        SECTION_PLANE_INSET,
-        insideRef,
-      ),
+      makeSectionPlane(rightX, visualBackZ, rightX, visualFrontZ, SECTION_PLANE_INSET, insideRef),
     )
   }
   if (trim.front > 0) {
     sectionPlanes.push(
-      makeSectionPlane(
-        visualLeftX,
-        frontZ,
-        visualRightX,
-        frontZ,
-        SECTION_PLANE_INSET,
-        insideRef,
-      ),
+      makeSectionPlane(visualLeftX, frontZ, visualRightX, frontZ, SECTION_PLANE_INSET, insideRef),
     )
   }
   if (trim.back > 0) {
     sectionPlanes.push(
-      makeSectionPlane(
-        visualLeftX,
-        backZ,
-        visualRightX,
-        backZ,
-        SECTION_PLANE_INSET,
-        insideRef,
-      ),
+      makeSectionPlane(visualLeftX, backZ, visualRightX, backZ, SECTION_PLANE_INSET, insideRef),
     )
   }
 
@@ -1157,9 +1118,7 @@ function RoofTrimHandles() {
   // plane through the corner cut line. The endpoints match the rail line
   // geometry in renderDiagonalTrimPlane (start/end before the visual-bounds
   // extension; only direction matters for slicing).
-  const diagonalCutLine = (
-    side: DiagonalTrimSide,
-  ): [[number, number], [number, number]] | null => {
+  const diagonalCutLine = (side: DiagonalTrimSide): [[number, number], [number, number]] | null => {
     const [xKey, zKey] = getDiagonalAxisKeys(side)
     const dx = trim[xKey]
     const dz = trim[zKey]

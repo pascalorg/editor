@@ -14,13 +14,24 @@ describe('isSplineFence', () => {
   })
 
   test('true with >= 2 points', () => {
-    expect(isSplineFence({ path: [[0, 0], [1, 0]] })).toBe(true)
+    expect(
+      isSplineFence({
+        path: [
+          [0, 0],
+          [1, 0],
+        ],
+      }),
+    ).toBe(true)
   })
 })
 
 describe('sampleFenceSpline', () => {
   test('honors the control points as on-curve anchors', () => {
-    const path: Array<[number, number]> = [[0, 0], [2, 2], [4, 0]]
+    const path: Array<[number, number]> = [
+      [0, 0],
+      [2, 2],
+      [4, 0],
+    ]
     const sampled = sampleFenceSpline(path, undefined, 8)
     // First and last sample equal the path endpoints exactly.
     expect(sampled[0]).toEqual({ x: 0, y: 0 })
@@ -31,14 +42,26 @@ describe('sampleFenceSpline', () => {
   })
 
   test('two-point path with no tangents is a straight segment', () => {
-    expect(sampleFenceSpline([[0, 0], [3, 0]], undefined, 8)).toEqual([
+    expect(
+      sampleFenceSpline(
+        [
+          [0, 0],
+          [3, 0],
+        ],
+        undefined,
+        8,
+      ),
+    ).toEqual([
       { x: 0, y: 0 },
       { x: 3, y: 0 },
     ])
   })
 
   test('a stored tangent bends an otherwise straight two-point span', () => {
-    const path: Array<[number, number]> = [[0, 0], [4, 0]]
+    const path: Array<[number, number]> = [
+      [0, 0],
+      [4, 0],
+    ]
     // Pull the first point's handle up — the span should bow off the X axis.
     const sampled = sampleFenceSpline(path, [[0, 2], null], 12)
     expect(sampled[0]).toEqual({ x: 0, y: 0 })
@@ -48,7 +71,12 @@ describe('sampleFenceSpline', () => {
   })
 
   test('produces a smooth (no-cusp) curve on uneven spacing', () => {
-    const path: Array<[number, number]> = [[0, 0], [1, 0.2], [5, 0.3], [6, 0]]
+    const path: Array<[number, number]> = [
+      [0, 0],
+      [1, 0.2],
+      [5, 0.3],
+      [6, 0],
+    ]
     const sampled = sampleFenceSpline(path, undefined, 16)
     let maxTurn = 0
     for (let i = 2; i < sampled.length; i += 1) {
@@ -67,18 +95,35 @@ describe('sampleFenceSpline', () => {
 
 describe('getFenceControlHandle', () => {
   test('returns the stored tangent when present', () => {
-    expect(getFenceControlHandle([[0, 0], [4, 0]], [[1, 2], null], 0)).toEqual({ x: 1, y: 2 })
+    expect(
+      getFenceControlHandle(
+        [
+          [0, 0],
+          [4, 0],
+        ],
+        [[1, 2], null],
+        0,
+      ),
+    ).toEqual({ x: 1, y: 2 })
   })
 
   test('falls back to the Catmull-Rom (next - prev) / 6 tangent', () => {
-    const path: Array<[number, number]> = [[0, 0], [3, 0], [6, 0]]
+    const path: Array<[number, number]> = [
+      [0, 0],
+      [3, 0],
+      [6, 0],
+    ]
     // Interior point: (next - prev) / 6 = ([6,0] - [0,0]) / 6 = [1, 0].
     expect(getFenceControlHandle(path, undefined, 1)).toEqual({ x: 1, y: 0 })
   })
 })
 
 describe('getFenceSplineFrameAt', () => {
-  const path: Array<[number, number]> = [[0, 0], [2, 0], [4, 0]]
+  const path: Array<[number, number]> = [
+    [0, 0],
+    [2, 0],
+    [4, 0],
+  ]
 
   test('t=0 / t=1 land on the endpoints', () => {
     expect(getFenceSplineFrameAt(path, 0).point).toEqual({ x: 0, y: 0 })
@@ -95,11 +140,24 @@ describe('getFenceSplineFrameAt', () => {
 
 describe('getFenceSplineLength', () => {
   test('roughly matches the straight distance for a straight path', () => {
-    expect(getFenceSplineLength([[0, 0], [3, 4]], undefined, 8)).toBeCloseTo(5, 5)
+    expect(
+      getFenceSplineLength(
+        [
+          [0, 0],
+          [3, 4],
+        ],
+        undefined,
+        8,
+      ),
+    ).toBeCloseTo(5, 5)
   })
 
   test('a curved path is longer than its endpoint chord', () => {
-    const path: Array<[number, number]> = [[0, 0], [2, 2], [4, 0]]
+    const path: Array<[number, number]> = [
+      [0, 0],
+      [2, 2],
+      [4, 0],
+    ]
     const chord = Math.hypot(4, 0)
     expect(getFenceSplineLength(path, undefined, 16)).toBeGreaterThan(chord)
   })

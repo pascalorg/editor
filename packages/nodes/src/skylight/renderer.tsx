@@ -117,12 +117,7 @@ function GlassPane({
   parentToSegment?: THREE.Matrix4
 }) {
   const geometry = useMemo(
-    () =>
-      new THREE.BoxGeometry(
-        paneSize(width),
-        paneSize(glassThickness),
-        paneSize(paneDepth),
-      ),
+    () => new THREE.BoxGeometry(paneSize(width), paneSize(glassThickness), paneSize(paneDepth)),
     [width, glassThickness, paneDepth],
   )
   useEffect(() => () => geometry.dispose(), [geometry])
@@ -445,23 +440,25 @@ function HingedGlass({
   // skylight→segment matrix so the glass clips in segment-local space.
   const hingeToSegment =
     segment && parentToSegment
-      ? new THREE.Matrix4().copy(parentToSegment).multiply(
-          new THREE.Matrix4().compose(
-            new THREE.Vector3(
-              transform.hingePosition[0],
-              curbHeight + glassThickness / 2,
-              transform.hingePosition[2],
-            ),
-            new THREE.Quaternion().setFromEuler(
-              new THREE.Euler(
-                transform.rotation[0],
-                transform.rotation[1],
-                transform.rotation[2],
+      ? new THREE.Matrix4()
+          .copy(parentToSegment)
+          .multiply(
+            new THREE.Matrix4().compose(
+              new THREE.Vector3(
+                transform.hingePosition[0],
+                curbHeight + glassThickness / 2,
+                transform.hingePosition[2],
               ),
+              new THREE.Quaternion().setFromEuler(
+                new THREE.Euler(
+                  transform.rotation[0],
+                  transform.rotation[1],
+                  transform.rotation[2],
+                ),
+              ),
+              new THREE.Vector3(1, 1, 1),
             ),
-            new THREE.Vector3(1, 1, 1),
-          ),
-        )
+          )
       : undefined
 
   return (

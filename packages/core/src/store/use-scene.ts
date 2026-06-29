@@ -631,7 +631,6 @@ function migrateNodes(nodes: Record<string, any>): {
         // 40° matches the RoofSegmentNode schema default.
         patchedNodes[id] = { ...rest, pitch: derived > 0 ? derived : 40 }
       }
-
     }
 
     if (node.type === 'door') {

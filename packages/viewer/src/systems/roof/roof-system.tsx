@@ -1,12 +1,11 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  getEffectiveNode,
   getDutchEndSlopeFaces,
   getDutchRoofShapeMetrics,
+  getEffectiveNode,
   getRoofModuleFaces,
   getRoofShapeInsets,
-  type RoofShapeInsets,
   getRoofShapeRatios,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
@@ -1343,13 +1342,7 @@ export function generateRoofSegmentGeometry(
     subtractAccessoryCuts(brushes, node, nodes)
   }
 
-  const {
-    deckSlab,
-    shinSlab,
-    wallBrush,
-    innerBrush,
-    rakeBoards,
-  } = brushes
+  const { deckSlab, shinSlab, wallBrush, innerBrush, rakeBoards } = brushes
   let resultGeo = new THREE.BufferGeometry()
 
   try {
@@ -1855,10 +1848,7 @@ function getModuleFaces(
         shapeRatios,
         dutchTopRakeThickness,
       }).map((face) => face.map((point) => v(point.x, point.y, point.z)))
-      faces.push(
-        [e1, e2, o2, m2, m1, o1],
-        [e3, e4, o4, m4, m3, o3],
-      )
+      faces.push([e1, e2, o2, m2, m1, o1], [e3, e4, o4, m4, m3, o3])
       if (endSlopes.length === 2) {
         faces.push(...endSlopes)
       } else {
@@ -1888,10 +1878,7 @@ function getModuleFaces(
         shapeRatios,
         dutchTopRakeThickness,
       }).map((face) => face.map((point) => v(point.x, point.y, point.z)))
-      faces.push(
-        [e2, e3, o3, m3, m2, o2],
-        [e4, e1, o1, m1, m4, o4],
-      )
+      faces.push([e2, e3, o3, m3, m2, o2], [e4, e1, o1, m1, m4, o4])
       if (endSlopes.length === 2) {
         faces.push(...endSlopes)
       } else {

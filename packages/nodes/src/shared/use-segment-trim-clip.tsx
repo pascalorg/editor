@@ -176,7 +176,15 @@ export function TrimClippedMesh({
     _trimMeshPos.set(position[0], position[1], position[2])
     _trimMeshLocal.compose(_trimMeshPos, _trimMeshQuat, _trimMeshScale)
     return new Matrix4().multiplyMatrices(parentToSegment, _trimMeshLocal)
-  }, [parentToSegment, position[0], position[1], position[2], rotation[0], rotation[1], rotation[2]])
+  }, [
+    parentToSegment,
+    position[0],
+    position[1],
+    position[2],
+    rotation[0],
+    rotation[1],
+    rotation[2],
+  ])
 
   const clipped = useSegmentTrimClippedGeometry(geometry, segment, localToSegment)
 

@@ -194,10 +194,6 @@ export {
   resolveElevatorServiceLevelIds,
   resolveElevatorServiceLevels,
 } from './systems/elevator/elevator-service'
-export { type StairFootprintAABB, stairFootprintAABB } from './systems/stair/stair-footprint'
-export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
-export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
-export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export {
   getFenceCenterlineFrameAt,
   getFenceCenterlineLength,
@@ -210,6 +206,10 @@ export {
   isSplineFence,
   sampleFenceSpline,
 } from './systems/fence/fence-spline'
+export { type StairFootprintAABB, stairFootprintAABB } from './systems/stair/stair-footprint'
+export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
+export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
+export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,

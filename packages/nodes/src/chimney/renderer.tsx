@@ -140,10 +140,18 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
       ),
     [node.position[0], node.position[2], node.rotation],
   )
-  const clippedBody = useSegmentTrimClippedGeometry(trimmedBody ?? geo?.body ?? null, segment, localToSegment)
+  const clippedBody = useSegmentTrimClippedGeometry(
+    trimmedBody ?? geo?.body ?? null,
+    segment,
+    localToSegment,
+  )
   const clippedCap = useSegmentTrimClippedGeometry(geo?.cap ?? null, segment, localToSegment)
   const clippedFlues = useSegmentTrimClippedGeometry(geo?.flues ?? null, segment, localToSegment)
-  const clippedCricket = useSegmentTrimClippedGeometry(geo?.cricket ?? null, segment, localToSegment)
+  const clippedCricket = useSegmentTrimClippedGeometry(
+    geo?.cricket ?? null,
+    segment,
+    localToSegment,
+  )
   const clippedBands = useSegmentTrimClippedGeometry(geo?.bands ?? null, segment, localToSegment)
 
   // Per-instance fallback materials. Were previously module-scoped

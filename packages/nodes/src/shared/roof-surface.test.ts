@@ -41,9 +41,7 @@ describe('getDownSlopeYaw', () => {
     expect(getDownSlopeYaw(0, 0, fixtureSegment({ roofType: 'flat' }))).toBe(0)
   })
   test('dutch width-axis shoulder falls toward the side eaves', () => {
-    expect(getDownSlopeYaw(3.8, 0, fixtureSegment({ roofType: 'dutch' }))).toBeCloseTo(
-      Math.PI / 2,
-    )
+    expect(getDownSlopeYaw(3.8, 0, fixtureSegment({ roofType: 'dutch' }))).toBeCloseTo(Math.PI / 2)
   })
   test('dutch width-axis front skirt yaws toward the front eave', () => {
     expect(getDownSlopeYaw(0, 1, fixtureSegment({ roofType: 'dutch' }))).toBeCloseTo(0)

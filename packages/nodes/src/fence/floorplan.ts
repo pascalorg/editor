@@ -460,9 +460,7 @@ export function buildFenceFloorplan(node: FenceNode, ctx: GeometryContext): Floo
       const lineLength = Math.hypot(dx, dz)
       if (lineLength > 1e-6) {
         const frame =
-          isSplineFence(node) || isCurvedWall(node)
-            ? getFenceCenterlineFrameAt(node, 0.5)
-            : null
+          isSplineFence(node) || isCurvedWall(node) ? getFenceCenterlineFrameAt(node, 0.5) : null
         const midX = frame ? frame.point.x : (node.start[0] + node.end[0]) / 2
         const midZ = frame ? frame.point.y : (node.start[1] + node.end[1]) / 2
         const nx = frame ? frame.normal.x : -dz / lineLength
@@ -501,9 +499,7 @@ export function buildFenceFloorplan(node: FenceNode, ctx: GeometryContext): Floo
     const length = getFloorplanFenceLength(node)
     if (length >= 0.1) {
       const labelFrame =
-        isSplineFence(node) || isCurvedWall(node)
-          ? getFenceCenterlineFrameAt(node, 0.5)
-          : null
+        isSplineFence(node) || isCurvedWall(node) ? getFenceCenterlineFrameAt(node, 0.5) : null
       const midX = labelFrame ? labelFrame.point.x : (node.start[0] + node.end[0]) / 2
       const midZ = labelFrame ? labelFrame.point.y : (node.start[1] + node.end[1]) / 2
       const angle = labelFrame

@@ -70,9 +70,17 @@ export function buildRidgeVentGeometry(
     let sampleZ = centerZ - x * sinR + z * cosR
     if (dutchTopRidgeSupport) {
       if (dutchTopRidgeSupport.axis === 'x') {
-        sampleX = clamp(sampleX, -dutchTopRidgeSupport.innerHalfSpan, dutchTopRidgeSupport.innerHalfSpan)
+        sampleX = clamp(
+          sampleX,
+          -dutchTopRidgeSupport.innerHalfSpan,
+          dutchTopRidgeSupport.innerHalfSpan,
+        )
       } else {
-        sampleZ = clamp(sampleZ, -dutchTopRidgeSupport.innerHalfSpan, dutchTopRidgeSupport.innerHalfSpan)
+        sampleZ = clamp(
+          sampleZ,
+          -dutchTopRidgeSupport.innerHalfSpan,
+          dutchTopRidgeSupport.innerHalfSpan,
+        )
       }
     }
     return getRoofTopSurfaceY(sampleX, sampleZ, segment)

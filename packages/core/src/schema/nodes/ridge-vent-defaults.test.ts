@@ -98,7 +98,9 @@ describe('createDefaultRidgeVentsForSegment', () => {
     const ridge = vents.find((vent) => vent.name === 'Ridge Vent')
     const frontRightHip = vents.find(
       (vent) =>
-        vent.name === 'Hip Ridge Vent' && (vent.position[0] ?? 0) > 0 && (vent.position[2] ?? 0) > 0,
+        vent.name === 'Hip Ridge Vent' &&
+        (vent.position[0] ?? 0) > 0 &&
+        (vent.position[2] ?? 0) > 0,
     )
     const expectedRakeReach = Math.min(
       segment.dutchGabletRake,
@@ -161,7 +163,10 @@ describe('createDefaultRidgeVentsForSegment', () => {
     // Depth-axis Dutch ridge runs along Z (constant X = 0).
     expect(ridges[0]?.start[0]).toBeCloseTo(0)
     expect(ridges[0]?.end[0]).toBeCloseTo(0)
-    expect(Math.abs(ridges[0]?.start[1] ?? 0)).toBeCloseTo(metrics.waistHalfZ + expectedRakeReach, 2)
+    expect(Math.abs(ridges[0]?.start[1] ?? 0)).toBeCloseTo(
+      metrics.waistHalfZ + expectedRakeReach,
+      2,
+    )
   })
 
   test('keeps Dutch hip lines on the rendered arris when the roof has overhang', () => {

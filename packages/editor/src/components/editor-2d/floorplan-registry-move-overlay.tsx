@@ -442,9 +442,7 @@ export function FloorplanRegistryMoveOverlay() {
     const rawPath = (movingNode as { path?: unknown }).path
     const originalPath =
       Array.isArray(rawPath) && Array.isArray(rawPath[0]) && rawPath[0].length >= 3
-        ? (rawPath as [number, number, number][]).map(
-            (p) => [...p] as [number, number, number],
-          )
+        ? (rawPath as [number, number, number][]).map((p) => [...p] as [number, number, number])
         : null
     const originalPosition: [number, number, number] = originalPath
       ? (() => {

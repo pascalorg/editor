@@ -144,11 +144,7 @@ export function getRoofShapeInsets(input: {
   let iB = 0
   let iL = 0
   let iR = 0
-  if (
-    input.roofType === 'hip' ||
-    input.roofType === 'mansard' ||
-    input.roofType === 'dutch'
-  ) {
+  if (input.roofType === 'hip' || input.roofType === 'mansard' || input.roofType === 'dutch') {
     iF = inset
     iB = inset
     iL = inset
@@ -199,11 +195,7 @@ export function getDutchEndSlopeFaces(input: {
   // gablet's inner triangle (the inner waist line), continuing each
   // eave→outer-waist ridge line so the face stays planar and the pitch is
   // unchanged — the edge climbs past middleHeight and meets the gablet face.
-  const lerp = (
-    a: RoofShapeFaceVertex,
-    b: RoofShapeFaceVertex,
-    t: number,
-  ): RoofShapeFaceVertex =>
+  const lerp = (a: RoofShapeFaceVertex, b: RoofShapeFaceVertex, t: number): RoofShapeFaceVertex =>
     v(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t)
   const lowerAlongY = (point: RoofShapeFaceVertex): RoofShapeFaceVertex =>
     v(point.x, point.y - Math.max(0, input.dutchTopRakeThickness ?? 0), point.z)

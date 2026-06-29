@@ -1,10 +1,6 @@
 import type { FenceNode } from '../../schema'
+import { getWallCurveFrameAt, getWallCurveLength, sampleWallCenterline } from '../wall/wall-curve'
 import type { Point2D } from '../wall/wall-mitering'
-import {
-  getWallCurveFrameAt,
-  getWallCurveLength,
-  sampleWallCenterline,
-} from '../wall/wall-curve'
 import {
   getFenceSplineFrameAt,
   getFenceSplineLength,

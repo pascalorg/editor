@@ -4,15 +4,7 @@ import { BaseNode, nodeType, objectId } from '../base'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
 
-export const RoofType = z.enum([
-  'hip',
-  'gable',
-  'shed',
-  'gambrel',
-  'dutch',
-  'mansard',
-  'flat',
-])
+export const RoofType = z.enum(['hip', 'gable', 'shed', 'gambrel', 'dutch', 'mansard', 'flat'])
 
 export type RoofType = z.infer<typeof RoofType>
 
@@ -378,8 +370,7 @@ function withRatioDefaults(input: PitchInputs): PitchInputs & ShapeRatios {
       input.mansardSteepHeightRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepHeightRatio,
     dutchHipWidthRatio: input.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
     dutchHipHeightRatio: input.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
-    dutchWaistLengthRatio:
-      input.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
+    dutchWaistLengthRatio: input.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
   }
 }
 
@@ -391,8 +382,7 @@ export function getDutchRoofMetrics(
   const depth = finitePositive(input.depth, DEFAULT_ROOF_SEGMENT_DEPTH)
   const inset =
     Math.min(width, depth) * (input.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio)
-  const waistLengthRatio =
-    input.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
+  const waistLengthRatio = input.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
 
   if (width >= depth) {
     const waistHalfX = Math.max(0, (width / 2 - inset) * waistLengthRatio)
@@ -599,11 +589,7 @@ export function getRoofSegmentSurfaceY(
   const peakY = node.wallHeight + activeRh
   if (activeRh === 0) return node.wallHeight
 
-  if (
-    node.roofType === 'gable' ||
-    node.roofType === 'gambrel' ||
-    node.roofType === 'mansard'
-  ) {
+  if (node.roofType === 'gable' || node.roofType === 'gambrel' || node.roofType === 'mansard') {
     const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
     return peakY - t * activeRh
   }
