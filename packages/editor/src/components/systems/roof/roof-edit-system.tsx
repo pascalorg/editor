@@ -2,12 +2,14 @@ import {
   type AnyNode,
   type AnyNodeId,
   getActiveRoofHeight,
+  getDutchRoofMetrics,
   getEffectiveNode,
   getRoofSegmentVisibleTopBounds,
   getSegmentSlopeFrame,
   MIN_ROOF_SEGMENT_TRIM_SPAN,
   nodeRegistry,
   normalizeRoofSegmentTrim,
+  ROOF_SHAPE_DEFAULTS,
   type RoofNode,
   type RoofSegmentNode,
   type RoofSegmentTrim,
@@ -186,7 +188,6 @@ const SECTION_OUTLINE_RENDER_ORDER = 1002
 // Build the cut line just inside the kept material so the section plane never
 // sits coplanar with the mesh's own cut face.
 const SECTION_PLANE_INSET = 0.004
-const DUTCH_SECTION_FREE_END_PADDING = 0.04
 
 // A vertical cut plane defined by a horizontal line through the XZ ground
 // plane. `origin` is a point on the line, `dir` is the unit in-plane
@@ -276,11 +277,6 @@ const sectionOutlineMaterial = new LineBasicNodeMaterial({
 // produces a stable, non-degenerate solid.
 const SECTION_SLAB_HALF_THICKNESS = 0.006
 
-// How far the slab overruns a FREE (untrimmed) cut-line end, so eave/overhang
-// and shingle material just past the footprint edge is still captured. Trimmed
-// ends use 0 (see `SectionPlaneSpec.extendMin/Max`).
-const SECTION_FREE_END_EXTENSION = 1
-
 // Builds a thin oriented slab brush straddling one cut line, spanning the full
 // segment height. Intersecting it with the roof shell yields exactly the
 // material the cut passes through (roof slab + wall bands), leaving the hollow
@@ -327,7 +323,9 @@ function buildSectionGeometries(
 ): { fill: THREE.BufferGeometry; outline: THREE.BufferGeometry } | null {
   if (planes.length === 0) return null
 
-  // Untrimmed shell — the source we intersect slabs against.
+  // Untrimmed shell — the source we intersect slabs against. Dutch rake boards
+  // are decorative overhang geometry; slicing them makes the red preview sprout
+  // tall phantom triangles, so the section fill uses the stable roof shell.
   const sectionSourceSegment: RoofSegmentNode =
     segment.roofType === 'dutch'
       ? { ...segment, trim: ZERO_TRIM, dutchGabletRake: 0 }
@@ -457,6 +455,40 @@ const ZERO_TRIM: RoofSegmentTrim = {
   backRightZ: 0,
 }
 
+type TrimVisibleBounds = ReturnType<typeof getRoofSegmentVisibleTopBounds>
+
+function getTrimVisibleTopBounds(segment: RoofSegmentNode): TrimVisibleBounds {
+  const bounds = getRoofSegmentVisibleTopBounds(segment)
+  if (segment.roofType !== 'dutch') return bounds
+
+  const trim = normalizeRoofSegmentTrim(segment)
+  const metrics = getDutchRoofMetrics(segment)
+  const requestedRake = Math.max(
+    0,
+    segment.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake,
+  )
+  const rakeReach = Math.min(
+    requestedRake,
+    (metrics.axis === 'x'
+      ? metrics.shoulderInsetAlongWidth
+      : metrics.shoulderInsetAlongDepth) * 0.98,
+  )
+  if (!(rakeReach > 0.001)) return bounds
+
+  const next = { ...bounds }
+  if (metrics.axis === 'x') {
+    if (!(trim.left > 0)) next.minX -= rakeReach
+    if (!(trim.right > 0)) next.maxX += rakeReach
+  } else {
+    if (!(trim.back > 0)) next.minZ -= rakeReach
+    if (!(trim.front > 0)) next.maxZ += rakeReach
+  }
+
+  next.width = Math.max(0.01, next.maxX - next.minX)
+  next.depth = Math.max(0.01, next.maxZ - next.minZ)
+  return next
+}
+
 // Shape fields that affect the segment's 3D volume. Trim is excluded — the cut
 // lines arrive via `planes`, whose endpoints already encode the trim — so the
 // memo recomputes when either the roof shape or any trim changes, and the shell
@@ -479,6 +511,8 @@ function segmentShapeKey(segment: RoofSegmentNode): string {
     segment.dutchHipWidthRatio,
     segment.dutchHipHeightRatio,
     segment.dutchWaistLengthRatio,
+    segment.dutchGabletRake,
+    segment.dutchTopRakeThickness,
   ])
 }
 
@@ -981,7 +1015,7 @@ function RoofTrimHandles() {
   const rightX = liveSegment.width / 2 - trim.right
   const frontZ = liveSegment.depth / 2 - trim.front
   const backZ = -liveSegment.depth / 2 + trim.back
-  const visibleBounds = getRoofSegmentVisibleTopBounds({
+  const visibleBounds = getTrimVisibleTopBounds({
     ...liveSegment,
     trim: {
       ...trim,
@@ -1008,150 +1042,6 @@ function RoofTrimHandles() {
   const visualFrontZ = trim.front > 0 ? frontZ : visibleBounds.maxZ
   const visualBackZ = trim.back > 0 ? backZ : visibleBounds.minZ
   const maxDiagonalTrim = Math.max(0, Math.min(keptWidth, keptDepth) - MIN_ROOF_SEGMENT_TRIM_SPAN)
-
-  // Cross-section planes the active trim cuts expose. Slice the live roof
-  // mesh just inside the kept material (the cut sits coplanar with the mesh's
-  // own face otherwise) so the cutaway shows real construction layers.
-  const sectionPlanes: SectionPlaneSpec[] = []
-  // Inside reference: the kept-region center, on the kept side of every cut so
-  // the inset always shifts the slice into solid material.
-  const insideRef: readonly [number, number] = [0, 0]
-  // A perpendicular end is "free" (extend to catch overhang) when that side
-  // isn't trimmed, else clamped to the cut line (0) so the slab can't reach
-  // into the region another cut removed. Dutch roofs have gable/rake geometry
-  // close to those free ends; keep their overrun to the actual eave envelope
-  // instead of the broad catch-all span used by simpler roof types.
-  const { cosTheta, sinTheta } = getSegmentSlopeFrame(liveSegment)
-  const dutchFreeEndExtension =
-    liveSegment.wallThickness / 2 +
-    liveSegment.overhang * cosTheta +
-    liveSegment.shingleThickness * sinTheta +
-    DUTCH_SECTION_FREE_END_PADDING
-  const freeEndExtension =
-    liveSegment.roofType === 'dutch'
-      ? Math.max(0.02, dutchFreeEndExtension)
-      : SECTION_FREE_END_EXTENSION
-  const freeExt = (trimmed: boolean) => (trimmed ? 0 : freeEndExtension)
-  if (trim.left > 0) {
-    // line back→front: end A = back edge, end B = front edge.
-    sectionPlanes.push(
-      makeSectionPlane(
-        leftX,
-        backZ,
-        leftX,
-        frontZ,
-        SECTION_PLANE_INSET,
-        insideRef,
-        freeExt(trim.back > 0),
-        freeExt(trim.front > 0),
-      ),
-    )
-  }
-  if (trim.right > 0) {
-    sectionPlanes.push(
-      makeSectionPlane(
-        rightX,
-        backZ,
-        rightX,
-        frontZ,
-        SECTION_PLANE_INSET,
-        insideRef,
-        freeExt(trim.back > 0),
-        freeExt(trim.front > 0),
-      ),
-    )
-  }
-  if (trim.front > 0) {
-    // line left→right: end A = left edge, end B = right edge.
-    sectionPlanes.push(
-      makeSectionPlane(
-        leftX,
-        frontZ,
-        rightX,
-        frontZ,
-        SECTION_PLANE_INSET,
-        insideRef,
-        freeExt(trim.left > 0),
-        freeExt(trim.right > 0),
-      ),
-    )
-  }
-  if (trim.back > 0) {
-    sectionPlanes.push(
-      makeSectionPlane(
-        leftX,
-        backZ,
-        rightX,
-        backZ,
-        SECTION_PLANE_INSET,
-        insideRef,
-        freeExt(trim.left > 0),
-        freeExt(trim.right > 0),
-      ),
-    )
-  }
-
-  // Diagonal/corner cuts run at an angle, so they need a generic vertical
-  // plane through the corner cut line. The endpoints match the rail line
-  // geometry in renderDiagonalTrimPlane (start/end before the visual-bounds
-  // extension; only direction matters for slicing).
-  const diagonalCutLine = (
-    side: DiagonalTrimSide,
-  ): [[number, number], [number, number]] | null => {
-    const [xKey, zKey] = getDiagonalAxisKeys(side)
-    const dx = trim[xKey]
-    const dz = trim[zKey]
-    if (!(dx > 0 && dz > 0)) return null
-    switch (side) {
-      case 'frontLeft':
-        return [
-          [leftX + dx, frontZ],
-          [leftX, frontZ - dz],
-        ]
-      case 'frontRight':
-        return [
-          [rightX, frontZ - dz],
-          [rightX - dx, frontZ],
-        ]
-      case 'backLeft':
-        return [
-          [leftX, backZ + dz],
-          [leftX + dx, backZ],
-        ]
-      case 'backRight':
-        return [
-          [rightX - dx, backZ],
-          [rightX, backZ + dz],
-        ]
-    }
-  }
-  // Each diagonal endpoint lands on a side edge (see `diagonalCutLine`): end A
-  // and end B touch the two sides named below. Extend only where that side is
-  // free, so the diagonal section never reaches past an adjacent trimmed edge.
-  const diagonalEndSides: Record<DiagonalTrimSide, [RoofTrimSide, RoofTrimSide]> = {
-    frontLeft: ['front', 'left'],
-    frontRight: ['right', 'front'],
-    backLeft: ['left', 'back'],
-    backRight: ['back', 'right'],
-  }
-  for (const side of ['frontLeft', 'frontRight', 'backLeft', 'backRight'] as const) {
-    const line = diagonalCutLine(side)
-    if (!line) continue
-    const [s, e] = line
-    const [sideA, sideB] = diagonalEndSides[side]
-    sectionPlanes.push(
-      makeSectionPlane(
-        s[0],
-        s[1],
-        e[0],
-        e[1],
-        SECTION_PLANE_INSET,
-        insideRef,
-        freeExt(trim[sideA] > 0),
-        freeExt(trim[sideB] > 0),
-      ),
-    )
-  }
 
   const pointOnTrimLineAtX = (
     start: readonly [number, number],
@@ -1202,6 +1092,113 @@ function RoofTrimHandles() {
           pointOnTrimLineAtX(start, end, visualRightX),
         ]
     }
+  }
+
+  // Cross-section planes the active trim cuts expose. Slice the live roof
+  // mesh just inside the kept material (the cut sits coplanar with the mesh's
+  // own face otherwise) so the cutaway shows real construction layers.
+  const sectionPlanes: SectionPlaneSpec[] = []
+  // Inside reference: the kept-region center, on the kept side of every cut so
+  // the inset always shifts the slice into solid material.
+  const insideRef: readonly [number, number] = [0, 0]
+  if (trim.left > 0) {
+    sectionPlanes.push(
+      makeSectionPlane(
+        leftX,
+        visualBackZ,
+        leftX,
+        visualFrontZ,
+        SECTION_PLANE_INSET,
+        insideRef,
+      ),
+    )
+  }
+  if (trim.right > 0) {
+    sectionPlanes.push(
+      makeSectionPlane(
+        rightX,
+        visualBackZ,
+        rightX,
+        visualFrontZ,
+        SECTION_PLANE_INSET,
+        insideRef,
+      ),
+    )
+  }
+  if (trim.front > 0) {
+    sectionPlanes.push(
+      makeSectionPlane(
+        visualLeftX,
+        frontZ,
+        visualRightX,
+        frontZ,
+        SECTION_PLANE_INSET,
+        insideRef,
+      ),
+    )
+  }
+  if (trim.back > 0) {
+    sectionPlanes.push(
+      makeSectionPlane(
+        visualLeftX,
+        backZ,
+        visualRightX,
+        backZ,
+        SECTION_PLANE_INSET,
+        insideRef,
+      ),
+    )
+  }
+
+  // Diagonal/corner cuts run at an angle, so they need a generic vertical
+  // plane through the corner cut line. The endpoints match the rail line
+  // geometry in renderDiagonalTrimPlane (start/end before the visual-bounds
+  // extension; only direction matters for slicing).
+  const diagonalCutLine = (
+    side: DiagonalTrimSide,
+  ): [[number, number], [number, number]] | null => {
+    const [xKey, zKey] = getDiagonalAxisKeys(side)
+    const dx = trim[xKey]
+    const dz = trim[zKey]
+    if (!(dx > 0 && dz > 0)) return null
+    switch (side) {
+      case 'frontLeft':
+        return [
+          [leftX + dx, frontZ],
+          [leftX, frontZ - dz],
+        ]
+      case 'frontRight':
+        return [
+          [rightX, frontZ - dz],
+          [rightX - dx, frontZ],
+        ]
+      case 'backLeft':
+        return [
+          [leftX, backZ + dz],
+          [leftX + dx, backZ],
+        ]
+      case 'backRight':
+        return [
+          [rightX - dx, backZ],
+          [rightX, backZ + dz],
+        ]
+    }
+  }
+  for (const side of ['frontLeft', 'frontRight', 'backLeft', 'backRight'] as const) {
+    const line = diagonalCutLine(side)
+    if (!line) continue
+    const [s, e] = line
+    const [railStart, railEnd] = getDiagonalRailLine(side, s, e)
+    sectionPlanes.push(
+      makeSectionPlane(
+        railStart[0],
+        railStart[1],
+        railEnd[0],
+        railEnd[1],
+        SECTION_PLANE_INSET,
+        insideRef,
+      ),
+    )
   }
 
   const resetDiagonalTrim = (side: RoofTrimSide, event: ThreeEvent<MouseEvent>) => {
