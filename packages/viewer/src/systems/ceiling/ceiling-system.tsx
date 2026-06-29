@@ -35,7 +35,7 @@ export const CeilingSystem = () => {
     // Process dirty ceilings
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
-      if (!node || node.type !== 'ceiling') return
+      if (node?.type !== 'ceiling') return
 
       const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
       if (mesh) {

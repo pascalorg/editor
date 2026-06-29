@@ -902,7 +902,7 @@ export const SelectionManager = () => {
             : node.parentId
               ? useScene.getState().nodes[node.parentId as AnyNodeId]
               : null
-        if (!roofNode || roofNode.type !== 'roof') return null
+        if (roofNode?.type !== 'roof') return null
 
         const role = resolveRoofMaterialTarget(event as RoofEvent | RoofSegmentEvent)
         const compatible = role !== null && paintEnabled

@@ -12,7 +12,8 @@ describe('getRoofSegmentSurfaceY', () => {
     })
     const activeRh = getRoofSegmentSurfaceY(segment, 0, 0) - segment.wallHeight
     const upperRise = activeRh * (1 - segment.dutchHipHeightRatio)
-    const waistHalfZ = segment.depth / 2 - Math.min(segment.width, segment.depth) * segment.dutchHipWidthRatio
+    const waistHalfZ =
+      segment.depth / 2 - Math.min(segment.width, segment.depth) * segment.dutchHipWidthRatio
     const availableRake = Math.max(
       0,
       segment.width / 2 -
@@ -45,7 +46,8 @@ describe('getRoofSegmentSurfaceY', () => {
     })
     const activeRh = getRoofSegmentSurfaceY(segment, 0, 0) - segment.wallHeight
     const upperRise = activeRh * (1 - segment.dutchHipHeightRatio)
-    const waistHalfX = segment.width / 2 - Math.min(segment.width, segment.depth) * segment.dutchHipWidthRatio
+    const waistHalfX =
+      segment.width / 2 - Math.min(segment.width, segment.depth) * segment.dutchHipWidthRatio
     const innerWaistHalfZ =
       (segment.depth / 2 - Math.min(segment.width, segment.depth) * segment.dutchHipWidthRatio) *
       segment.dutchWaistLengthRatio

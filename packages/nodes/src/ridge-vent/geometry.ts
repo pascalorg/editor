@@ -131,7 +131,7 @@ function getDutchTopRidgeSupport(
   centerZ: number,
   rotationY: number,
 ): { axis: 'x' | 'z'; innerHalfSpan: number } | null {
-  if (!segment || segment.roofType !== 'dutch') return null
+  if (segment?.roofType !== 'dutch') return null
 
   const metrics = getDutchRoofMetrics(segment)
   const onWidthAxisTopRidge =

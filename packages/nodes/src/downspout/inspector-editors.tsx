@@ -41,7 +41,7 @@ export function DownspoutPositionEditor({ node }: { node: DownspoutNode }) {
       : undefined,
   )
 
-  if (!gutter || gutter.type !== 'gutter') return null
+  if (gutter?.type !== 'gutter') return null
   const storeOutlets = gutter.outlets ?? []
   const effectiveOutlets = (override?.outlets as GutterOutlet[] | undefined) ?? storeOutlets
   const outlet = effectiveOutlets.find((o) => o.id === node.outletId)

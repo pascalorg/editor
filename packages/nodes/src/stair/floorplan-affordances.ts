@@ -57,7 +57,7 @@ export const segmentWidthAffordance: FloorplanAffordance<StairNode> = {
     const { segmentId, side, axisX } = payload as SegmentWidthPayload
     const segmentNodeId = segmentId as AnyNodeId
     const segment = nodes[segmentNodeId] as StairSegmentNode | undefined
-    if (!segment || segment.type !== 'stair-segment') return noopSession()
+    if (segment?.type !== 'stair-segment') return noopSession()
 
     const initialWidth = segment.width
     const sign = side === 'right' ? 1 : -1
@@ -96,7 +96,7 @@ export const segmentLengthAffordance: FloorplanAffordance<StairNode> = {
     const { segmentId, axisZ } = payload as SegmentLengthPayload
     const segmentNodeId = segmentId as AnyNodeId
     const segment = nodes[segmentNodeId] as StairSegmentNode | undefined
-    if (!segment || segment.type !== 'stair-segment') return noopSession()
+    if (segment?.type !== 'stair-segment') return noopSession()
 
     const initialLength = segment.length
     const az = axisZ[0]

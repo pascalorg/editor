@@ -5,10 +5,10 @@ import { useViewer } from '@pascal-app/viewer'
 function getAdjacentLevelIdForDeletion(levelId: AnyNodeId): LevelNode['id'] | null {
   const { nodes } = useScene.getState()
   const level = nodes[levelId]
-  if (!level || level.type !== 'level' || !level.parentId) return null
+  if (level?.type !== 'level' || !level.parentId) return null
 
   const building = nodes[level.parentId as AnyNodeId]
-  if (!building || building.type !== 'building') return null
+  if (building?.type !== 'building') return null
 
   const siblingLevelIds = (building as BuildingNode).children.filter(
     (childId): childId is LevelNode['id'] => nodes[childId as AnyNodeId]?.type === 'level',

@@ -80,7 +80,7 @@ export function duplicateRoofSubtree(
   const scene = useScene.getState()
   const sourceRoof = scene.nodes[sourceRoofId]
 
-  if (!sourceRoof || sourceRoof.type !== 'roof') {
+  if (sourceRoof?.type !== 'roof') {
     throw new Error(`Node "${sourceRoofId}" is not a roof`)
   }
 
@@ -105,7 +105,7 @@ export function duplicateRoofSubtree(
   const segmentClones: RoofSegmentNode[] = []
   for (const childId of sourceRoof.children ?? []) {
     const childNode = scene.nodes[childId as AnyNodeId]
-    if (!childNode || childNode.type !== 'roof-segment') {
+    if (childNode?.type !== 'roof-segment') {
       continue
     }
 
@@ -125,7 +125,7 @@ export function duplicateRoofSubtree(
 
   const nextScene = useScene.getState()
   const createdRoof = nextScene.nodes[roofClone.id as AnyNodeId]
-  if (!createdRoof || createdRoof.type !== 'roof') {
+  if (createdRoof?.type !== 'roof') {
     throw new Error(`Duplicated roof "${roofClone.id}" was not created`)
   }
 
@@ -151,7 +151,7 @@ export function duplicateRoofSubtree(
 
   const invalidSegment = segmentIds.find((segmentId) => {
     const segment = nextScene.nodes[segmentId as AnyNodeId]
-    return !segment || segment.type !== 'roof-segment' || segment.parentId !== createdRoof.id
+    return segment?.type !== 'roof-segment' || segment.parentId !== createdRoof.id
   })
   if (invalidSegment) {
     throw new Error(
@@ -179,7 +179,7 @@ export function clearRoofDuplicateMetadata(
 ) {
   const scene = useScene.getState()
   const roofNode = scene.nodes[roofId]
-  if (!roofNode || roofNode.type !== 'roof') {
+  if (roofNode?.type !== 'roof') {
     return
   }
 
@@ -198,7 +198,7 @@ export function clearRoofDuplicateMetadata(
 
   for (const childId of roofNode.children ?? []) {
     const childNode = scene.nodes[childId as AnyNodeId]
-    if (!childNode || childNode.type !== 'roof-segment') {
+    if (childNode?.type !== 'roof-segment') {
       continue
     }
 

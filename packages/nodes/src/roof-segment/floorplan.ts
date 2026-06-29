@@ -24,7 +24,7 @@ export function buildRoofSegmentFloorplan(
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
   const roof = ctx.parent as RoofNode | null
-  if (!roof || roof.type !== 'roof') return null
+  if (roof?.type !== 'roof') return null
 
   // Segment center in world coords. Floor-plan plots at `-rotation` so
   // SVG's CW-with-y-down `rotate` direction ends up matching Three.js

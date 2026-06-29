@@ -266,7 +266,7 @@ export const RoofSystem = () => {
       if (roofsProcessed >= MAX_ROOFS_PER_FRAME) break
 
       const node = nodes[id]
-      if (!node || node.type !== 'roof') {
+      if (node?.type !== 'roof') {
         pendingRoofUpdates.delete(id)
         continue
       }

@@ -86,7 +86,7 @@ export function useCeilingEvents() {
 
       for (const id of ceilingIds) {
         const node = nodes[id as AnyNodeId] as CeilingNode | undefined
-        if (!node || node.type !== 'ceiling' || node.polygon.length < 3) continue
+        if (node?.type !== 'ceiling' || node.polygon.length < 3) continue
         if (resolveLevelId(node, nodes) !== activeLevelId) continue
         const mesh = sceneRegistry.nodes.get(id)
         if (!mesh) continue

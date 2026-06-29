@@ -117,7 +117,7 @@ export function useSegmentTrimClippedGeometry(
     }
     return result
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [geometry, trimKey, matrixKey])
+  }, [geometry, localToSegment, effectiveSegment])
 
   useEffect(() => {
     return () => {

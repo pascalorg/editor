@@ -221,7 +221,11 @@ describe('roof segment default ridge vents', () => {
     const nextChildren = nextSegment?.children ?? []
 
     expect(nextChildren).toHaveLength(defaults.length)
-    expect(nextChildren.some((id) => originalDefaultIds.includes(id as typeof originalDefaultIds[number]))).toBe(false)
+    expect(
+      nextChildren.some((id) =>
+        originalDefaultIds.includes(id as (typeof originalDefaultIds)[number]),
+      ),
+    ).toBe(false)
     for (const oldId of originalDefaultIds) {
       expect(useScene.getState().nodes[oldId as AnyNodeId]).toBeUndefined()
     }

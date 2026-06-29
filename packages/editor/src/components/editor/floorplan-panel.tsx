@@ -5105,13 +5105,13 @@ export function FloorplanPanel({
   const hasAmbientBuildingLevel = useScene((state) => {
     if (levelId || !ambientBuildingId) return false
     const building = state.nodes[ambientBuildingId]
-    if (!building || building.type !== 'building') return false
+    if (building?.type !== 'building') return false
     return building.children.some((cid) => state.nodes[cid]?.type === 'level')
   })
   const elevators = useScene(
     useShallow((state) => {
       const building = currentBuildingId ? state.nodes[currentBuildingId] : null
-      if (!building || building.type !== 'building') {
+      if (building?.type !== 'building') {
         return [] as ElevatorNode[]
       }
 
@@ -6488,7 +6488,7 @@ export function FloorplanPanel({
       // hidden; a no-op while closed (the sync early-returns).
       syncFloorplanViewportToNavigationPose(pose)
     }
-  }, [isFloorplanOpen, syncFloorplanViewportToNavigationPose])
+  }, [syncFloorplanViewportToNavigationPose])
 
   useEffect(() => {
     return useEditor.subscribe((state) => {
@@ -7154,7 +7154,7 @@ export function FloorplanPanel({
       setCursorPoint(planPoint)
       return { depth: nextCabDepth, shaftDepth: nextShaftDepth } satisfies Partial<ElevatorNode>
     },
-    [],
+    [setCursorPoint],
   )
 
   const handleElevatorResizePointerDown = useCallback(
@@ -7227,7 +7227,13 @@ export function FloorplanPanel({
       setElevatorResizeDragState(null)
       setCursorPoint(null)
     },
-    [elevatorResizeDragState, getPlanPointFromClientPoint, previewElevatorResize, updateNode],
+    [
+      elevatorResizeDragState,
+      getPlanPointFromClientPoint,
+      previewElevatorResize,
+      updateNode,
+      setCursorPoint,
+    ],
   )
 
   useEffect(() => {
@@ -7504,15 +7510,15 @@ export function FloorplanPanel({
     setWallChainFirstVertex(null)
     setDraftEnd(null)
     useSegmentDraftChain.getState().clear('wall')
-  }, [])
+  }, [setDraftEnd])
   const clearFencePlacementDraft = useCallback(() => {
     setFenceDraftStart(null)
     setFenceDraftEnd(null)
-  }, [])
+  }, [setFenceDraftEnd])
   const clearRoofPlacementDraft = useCallback(() => {
     setRoofDraftStart(null)
     setRoofDraftEnd(null)
-  }, [])
+  }, [setRoofDraftEnd])
   const clearCeilingPlacementDraft = useCallback(() => {
     setCeilingDraftPoints([])
   }, [])
@@ -7585,6 +7591,7 @@ export function FloorplanPanel({
     clearWallEndpointDrag,
     clearWallPlacementDraft,
     clearZonePlacementDraft,
+    setCursorPoint,
   ])
 
   useEffect(() => {
@@ -8314,6 +8321,7 @@ export function FloorplanPanel({
     updateNode,
     wallById,
     walls,
+    setCursorPoint,
   ])
 
   useEffect(() => {
@@ -8446,6 +8454,7 @@ export function FloorplanPanel({
     siteBoundaryWorldPolygon,
     siteVertexDragState,
     updateNode,
+    setCursorPoint,
   ])
 
   useEffect(() => {
@@ -8504,7 +8513,14 @@ export function FloorplanPanel({
 
       event.currentTarget.setPointerCapture(event.pointerId)
     },
-    [fittedViewport, floorplanSceneRotationDeg, floorplanUserRotationDeg, viewport],
+    [
+      fittedViewport,
+      floorplanSceneRotationDeg,
+      floorplanUserRotationDeg,
+      viewport,
+      setFloorplanCursorPosition,
+      setCursorPoint,
+    ],
   )
 
   const handlePointerDown = useCallback(
@@ -8570,7 +8586,7 @@ export function FloorplanPanel({
     }
 
     const wallNode = useScene.getState().nodes[wallId as AnyNodeId]
-    if (!wallNode || wallNode.type !== 'wall') {
+    if (wallNode?.type !== 'wall') {
       return
     }
 
@@ -8643,7 +8659,7 @@ export function FloorplanPanel({
   const emitFloorplanCeilingLeave = useCallback((ceilingId: string | null) => {
     if (!ceilingId) return
     const ceilingNode = useScene.getState().nodes[ceilingId as AnyNodeId]
-    if (!ceilingNode || ceilingNode.type !== 'ceiling') return
+    if (ceilingNode?.type !== 'ceiling') return
 
     emitter.emit('ceiling:leave', {
       node: ceilingNode,
@@ -9178,6 +9194,10 @@ export function FloorplanPanel({
       viewBox.height,
       viewBox.width,
       walls,
+      setCursorPoint,
+      setDraftEnd,
+      setRoofDraftEnd,
+      setFenceDraftEnd,
     ],
   )
 
@@ -9206,7 +9226,7 @@ export function FloorplanPanel({
       setSlabDraftPoints((currentPoints) => [...currentPoints, point])
       setCursorPoint(point)
     },
-    [clearDraft, createSlabOnCurrentLevel, slabDraftPoints],
+    [clearDraft, createSlabOnCurrentLevel, slabDraftPoints, setCursorPoint],
   )
   const handleSlabPlacementConfirm = useCallback(
     (point?: WallPlanPoint) => {
@@ -9256,7 +9276,7 @@ export function FloorplanPanel({
       setCeilingDraftPoints((currentPoints) => [...currentPoints, point])
       setCursorPoint(point)
     },
-    [ceilingDraftPoints, clearCeilingPlacementDraft, createCeilingOnCurrentLevel],
+    [ceilingDraftPoints, clearCeilingPlacementDraft, createCeilingOnCurrentLevel, setCursorPoint],
   )
   const handleCeilingPlacementConfirm = useCallback(
     (point?: WallPlanPoint) => {
@@ -9306,7 +9326,7 @@ export function FloorplanPanel({
       setZoneDraftPoints((currentPoints) => [...currentPoints, point])
       setCursorPoint(point)
     },
-    [clearDraft, createZoneOnCurrentLevel, zoneDraftPoints],
+    [clearDraft, createZoneOnCurrentLevel, zoneDraftPoints, setCursorPoint],
   )
   const handleZonePlacementConfirm = useCallback(
     (point?: WallPlanPoint) => {
@@ -9388,7 +9408,7 @@ export function FloorplanPanel({
       setDraftEnd(nextStart)
       setCursorPoint(nextStart)
     },
-    [clearWallPlacementDraft, draftStart, wallChainFirstVertex],
+    [clearWallPlacementDraft, draftStart, wallChainFirstVertex, setDraftEnd, setCursorPoint],
   )
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({
     ceilingPolygons: displayCeilingPolygons,
@@ -9604,6 +9624,7 @@ export function FloorplanPanel({
       unit,
       visibleZonePolygons,
       emitFloorplanGridEvent,
+      setCursorPoint,
     ],
   )
   const handleSvgClick = useCallback(
@@ -10121,7 +10142,7 @@ export function FloorplanPanel({
       })
       setCursorPoint(toWallPlanPoint(vertexPoint))
     },
-    [displaySitePolygon, setSiteBoundaryLivePreview],
+    [displaySitePolygon, setSiteBoundaryLivePreview, setCursorPoint],
   )
   const handleSiteVertexDoubleClick = useCallback(
     (
@@ -10205,7 +10226,7 @@ export function FloorplanPanel({
       })
       setCursorPoint(insertedPoint)
     },
-    [displaySitePolygon, setSiteBoundaryLivePreview],
+    [displaySitePolygon, setSiteBoundaryLivePreview, setCursorPoint],
   )
 
   const handlePointerLeave = useCallback(() => {
@@ -10224,7 +10245,7 @@ export function FloorplanPanel({
       emitFloorplanWallLeave(hoveredWallIdRef.current)
       hoveredWallIdRef.current = null
     }
-  }, [emitFloorplanWallLeave, siteVertexDragState])
+  }, [emitFloorplanWallLeave, siteVertexDragState, setCursorPoint])
 
   // Lightweight flag that mirrors the conditions under which
   // FloorplanCursorIndicatorOverlay renders — used to gate cursor-position
@@ -10274,6 +10295,7 @@ export function FloorplanPanel({
       isSpacePanPressed,
       elevatorResizeDragState,
       siteVertexDragState,
+      setFloorplanCursorPosition,
     ],
   )
 
@@ -10281,7 +10303,7 @@ export function FloorplanPanel({
     setFloorplanCursorPosition(null)
     setHoveredGuideCorner(null)
     handlePointerLeave()
-  }, [handlePointerLeave])
+  }, [handlePointerLeave, setFloorplanCursorPosition])
 
   const handleMarqueePointerDown = useCallback(
     (event: ReactPointerEvent<SVGRectElement>) => {
@@ -10317,7 +10339,12 @@ export function FloorplanPanel({
 
       event.currentTarget.setPointerCapture(event.pointerId)
     },
-    [getPlanPointFromClientPoint, syncPreviewSelectedIds],
+    [
+      getPlanPointFromClientPoint,
+      syncPreviewSelectedIds,
+      setFloorplanCursorPosition,
+      setCursorPoint,
+    ],
   )
 
   const handleMarqueePointerMove = useCallback(
@@ -10370,7 +10397,13 @@ export function FloorplanPanel({
       // marquee overlay leaf, never this panel.
       useFloorplanMarquee.getState().setCurrent(snappedPoint)
     },
-    [getFloorplanSelectionIdsInBounds, getPlanPointFromClientPoint, syncPreviewSelectedIds],
+    [
+      getFloorplanSelectionIdsInBounds,
+      getPlanPointFromClientPoint,
+      syncPreviewSelectedIds,
+      setFloorplanCursorPosition,
+      setCursorPoint,
+    ],
   )
 
   const handleMarqueePointerUp = useCallback(
@@ -10441,7 +10474,7 @@ export function FloorplanPanel({
       syncPreviewSelectedIds([])
       setCursorPoint(null)
     },
-    [syncPreviewSelectedIds],
+    [syncPreviewSelectedIds, setFloorplanCursorPosition, setCursorPoint],
   )
 
   useEffect(() => {
@@ -10456,7 +10489,13 @@ export function FloorplanPanel({
     }
 
     setFloorplanCursorPosition(null)
-  }, [isMarqueeSelectionToolActive, mode, syncPreviewSelectedIds])
+  }, [
+    isMarqueeSelectionToolActive,
+    mode,
+    syncPreviewSelectedIds,
+    setFloorplanCursorPosition,
+    setCursorPoint,
+  ])
 
   useEffect(() => {
     if (mode !== 'delete') {
@@ -10554,7 +10593,7 @@ export function FloorplanPanel({
             }
 
             const buildingNode = sceneNodes[nextBuildingId]
-            if (!buildingNode || buildingNode.type !== 'building') {
+            if (buildingNode?.type !== 'building') {
               return null
             }
 
@@ -10793,7 +10832,7 @@ export function FloorplanPanel({
           </form>
         )}
 
-        {(!levelNode || levelNode.type !== 'level') && !hasAmbientBuildingLevel ? (
+        {levelNode?.type !== 'level' && !hasAmbientBuildingLevel ? (
           <div className="flex h-full items-center justify-center px-6 text-center text-muted-foreground text-sm">
             Switch to a building level to view and edit the floorplan.
           </div>

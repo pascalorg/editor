@@ -83,7 +83,7 @@ export function resolveElevatorServiceLevels(
 
 export function getElevatorLevelHeight(levelId: string, nodes: Record<string, AnyNode>): number {
   const level = nodes[levelId as AnyNodeId] as LevelNode | undefined
-  if (!level || level.type !== 'level') return DEFAULT_ELEVATOR_LEVEL_HEIGHT
+  if (level?.type !== 'level') return DEFAULT_ELEVATOR_LEVEL_HEIGHT
 
   let maxTop = 0
 

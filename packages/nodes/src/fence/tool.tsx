@@ -418,7 +418,7 @@ function getCurrentLevelElements(): { walls: WallNode[]; fences: FenceNode[] } {
   const { nodes } = useScene.getState()
   if (!currentLevelId) return { walls: [], fences: [] }
   const levelNode = nodes[currentLevelId]
-  if (!levelNode || levelNode.type !== 'level') return { walls: [], fences: [] }
+  if (levelNode?.type !== 'level') return { walls: [], fences: [] }
   const children = (levelNode as LevelNode).children.map((childId) => nodes[childId])
   return {
     walls: children.filter((n): n is WallNode => n?.type === 'wall'),

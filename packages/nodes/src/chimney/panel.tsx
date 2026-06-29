@@ -202,7 +202,7 @@ export default function ChimneyPanel() {
     const state = useScene.getState()
     const worldPt = new Vector3(wx, 0, wz)
     for (const candidate of Object.values(state.nodes)) {
-      if (!candidate || candidate.type !== 'roof-segment') continue
+      if (candidate?.type !== 'roof-segment') continue
       const seg = candidate as RoofSegmentNode
       const segObj = sceneRegistry.nodes.get(seg.id)
       if (!segObj) continue

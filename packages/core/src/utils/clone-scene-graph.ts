@@ -155,7 +155,7 @@ export function cloneLevelSubtree(
   levelId: AnyNodeId,
 ): { clonedNodes: AnyNode[]; newLevelId: AnyNodeId; idMap: Map<string, string> } {
   const levelNode = nodes[levelId]
-  if (!levelNode || levelNode.type !== 'level') {
+  if (levelNode?.type !== 'level') {
     throw new Error(`Node "${levelId}" is not a level`)
   }
 

@@ -41,7 +41,7 @@ function buildPayload(
   levelId: string,
 ): ConstraintsPayload | ConstraintsError {
   const level = bridge.getNode(levelId as never)
-  if (!level || level.type !== 'level') {
+  if (level?.type !== 'level') {
     return {
       error: 'level_not_found',
       levelId,

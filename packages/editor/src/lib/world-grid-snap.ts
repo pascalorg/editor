@@ -54,7 +54,7 @@ export function getActiveBuildingPose(): BuildingPose | null {
   }
   if (!buildingId) buildingId = sel.buildingId ?? null
   const building = buildingId ? nodes[buildingId] : null
-  if (!building || building.type !== 'building') return null
+  if (building?.type !== 'building') return null
   const live = useLiveTransforms.getState().transforms.get(buildingId as string)
   return {
     position: live?.position ?? building.position,
@@ -159,7 +159,7 @@ export function snapWorldXZForActiveBuilding(
 ): { world: [number, number]; local: [number, number] } {
   const buildingId = useViewer.getState().selection.buildingId
   const building = buildingId ? useScene.getState().nodes[buildingId] : null
-  if (!building || building.type !== 'building') {
+  if (building?.type !== 'building') {
     if (step <= 0) return { world: [worldX, worldZ], local: [worldX, worldZ] }
     const sx = Math.round(worldX / step) * step
     const sz = Math.round(worldZ / step) * step
@@ -186,7 +186,7 @@ export function snapBuildingLocalToWorldGrid(
 ): [number, number] {
   const buildingId = useViewer.getState().selection.buildingId
   const building = buildingId ? useScene.getState().nodes[buildingId] : null
-  if (!building || building.type !== 'building') {
+  if (building?.type !== 'building') {
     if (step <= 0) return [local[0], local[1]]
     return [Math.round(local[0] / step) * step, Math.round(local[1] / step) * step]
   }

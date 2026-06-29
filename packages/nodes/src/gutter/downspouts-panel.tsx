@@ -76,7 +76,7 @@ export default function DownspoutsPanel() {
     }),
   )
 
-  if (!gutter || gutter.type !== 'gutter') return null
+  if (gutter?.type !== 'gutter') return null
 
   const handleSelectDownspout = (id: AnyNodeId) => {
     setSelection({ selectedIds: [id] })

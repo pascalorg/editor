@@ -90,7 +90,7 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
     },
     canCommit() {
       const live = useScene.getState().nodes[columnId] as ColumnNode | undefined
-      if (!live || live.type !== 'column') return false
+      if (live?.type !== 'column') return false
       return !(lastPosition[0] === originalPosition[0] && lastPosition[2] === originalPosition[2])
     },
   }

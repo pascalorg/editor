@@ -596,7 +596,7 @@ function SectionCut({ segment, planes }: { segment: RoofSegmentNode; planes: Sec
     // Recompute when the roof shape (shapeKey), the cut lines (planes), or the
     // hosted accessories (accessoryKey) change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapeKey, JSON.stringify(planes), accessoryKey])
+  }, [segment, planes.length, planes])
 
   useEffect(() => {
     return () => {

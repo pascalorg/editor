@@ -236,7 +236,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
 
     canCommit() {
       const live = useScene.getState().nodes[wallId] as WallNode | undefined
-      if (!live || live.type !== 'wall') return false
+      if (live?.type !== 'wall') return false
       const [dx, dz] = lastDelta
       return dx !== 0 || dz !== 0
     },
@@ -244,7 +244,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
     commit() {
       const sceneState = useScene.getState()
       const liveWall = sceneState.nodes[wallId] as WallNode | undefined
-      if (!liveWall || liveWall.type !== 'wall') {
+      if (liveWall?.type !== 'wall') {
         // Bail without leaving stale overrides behind.
         const overrides = useLiveNodeOverrides.getState()
         overrides.clear(wallId)

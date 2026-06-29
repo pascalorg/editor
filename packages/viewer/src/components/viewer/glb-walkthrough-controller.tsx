@@ -175,11 +175,8 @@ function buildGlbColliderWorld(scene: Object3D): GlbColliderWorld | null {
     merged?.dispose()
     return null
   }
-  // biome-ignore lint/suspicious/noExplicitAny: three-mesh-bvh patches the geometry prototype
   ;(merged as any).computeBoundsTree = computeBoundsTree
-  // biome-ignore lint/suspicious/noExplicitAny: three-mesh-bvh patches the geometry prototype
   ;(merged as any).disposeBoundsTree = disposeBoundsTree
-  // biome-ignore lint/suspicious/noExplicitAny: three-mesh-bvh runtime extension
   ;(merged as any).computeBoundsTree({ maxLeafSize: 12, strategy: 0 })
   merged.computeBoundingBox()
 
@@ -199,7 +196,6 @@ function buildGlbColliderWorld(scene: Object3D): GlbColliderWorld | null {
     mesh,
     minY: merged.boundingBox?.min.y ?? 0,
     dispose: () => {
-      // biome-ignore lint/suspicious/noExplicitAny: three-mesh-bvh runtime extension
       ;(merged as any).disposeBoundsTree?.()
       merged.dispose()
     },

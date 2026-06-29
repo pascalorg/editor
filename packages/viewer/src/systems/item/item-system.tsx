@@ -29,7 +29,7 @@ export const ItemSystem = () => {
 
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
-      if (!node || node.type !== 'item') return
+      if (node?.type !== 'item') return
 
       const item = node as ItemNode
       const mesh = sceneRegistry.nodes.get(id) as THREE.Object3D

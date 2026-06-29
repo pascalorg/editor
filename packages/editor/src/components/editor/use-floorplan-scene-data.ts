@@ -36,7 +36,7 @@ function useLevelChildren<TNode extends AnyNode>(
       }
 
       const levelNode = state.nodes[levelId]
-      if (!levelNode || levelNode.type !== 'level') {
+      if (levelNode?.type !== 'level') {
         return [] as TNode[]
       }
 
@@ -105,7 +105,7 @@ export function useFloorplanSceneData({
       }
 
       const buildingNode = state.nodes[currentBuildingId]
-      if (!buildingNode || buildingNode.type !== 'building') {
+      if (buildingNode?.type !== 'building') {
         return [] as LevelNode[]
       }
 
@@ -133,7 +133,7 @@ export function useFloorplanSceneData({
       }
 
       const nextLevelNode = state.nodes[levelId]
-      if (!nextLevelNode || nextLevelNode.type !== 'level') {
+      if (nextLevelNode?.type !== 'level') {
         return [] as RoofNode[]
       }
 
@@ -149,7 +149,7 @@ export function useFloorplanSceneData({
       }
 
       const nextLevelNode = state.nodes[levelId]
-      if (!nextLevelNode || nextLevelNode.type !== 'level') {
+      if (nextLevelNode?.type !== 'level') {
         return [] as OpeningNode[]
       }
 
@@ -171,7 +171,7 @@ export function useFloorplanSceneData({
       }
 
       const nextLevelNode = state.nodes[levelId]
-      if (!nextLevelNode || nextLevelNode.type !== 'level') {
+      if (nextLevelNode?.type !== 'level') {
         return [] as AnyNode[]
       }
 
