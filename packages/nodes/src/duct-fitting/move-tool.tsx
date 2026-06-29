@@ -14,6 +14,8 @@ import {
   consumePlacementDragRelease,
   DragBoundingBox,
   EDITOR_LAYER,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   stripPlacementMetadataFlags,
   triggerSFX,
@@ -192,18 +194,17 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     let lastDetached = false
 
     const onMove = (event: GridEvent) => {
-      const bypass = event.nativeEvent?.shiftKey === true
       // Alt = detach: drop the connected-duct follow so the fitting moves on
       // its own, leaving every mated run where it sits.
       const detached = event.nativeEvent?.altKey === true
-      const snap = bypass ? (v: number) => v : snapToGridStep
-
+      const snap = isGridSnapActive() ? snapToGridStep : (v: number) => v
       let x = snap(event.localPosition[0])
       let z = snap(event.localPosition[2])
 
-      // Alignment: snap the footprint box edges onto nearby geometry and
-      // publish guides (Alt / Shift bypass).
-      if (!bypass) {
+      // Magnetic alignment: snap the footprint box edges onto nearby geometry
+      // and publish guides. Grid follows the snapping mode; lines follow
+      // magnetic alignment — the two are independent.
+      if (isMagneticSnapActive()) {
         const proposed: Aabb2D = {
           minX: x + ox - hx,
           maxX: x + ox + hx,
@@ -219,9 +220,11 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       }
       const next: Vec3 = [x, lastPos[1], z]
 
-      if (next[0] !== lastPos[0] || next[1] !== lastPos[1] || next[2] !== lastPos[2]) {
+      if (
+        (isGridSnapActive() || isMagneticSnapActive()) &&
+        (next[0] !== lastPos[0] || next[2] !== lastPos[2])
+      )
         triggerSFX('sfx:grid-snap')
-      }
       lastPos = next
       lastDetached = detached
       hasMoved = true

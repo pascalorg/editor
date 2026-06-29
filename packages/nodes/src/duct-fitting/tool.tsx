@@ -1,7 +1,13 @@
 'use client'
 
 import { DuctFittingNode, emitter, type GridEvent, useScene } from '@pascal-app/core'
-import { CursorSphere, EDITOR_LAYER, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  EDITOR_LAYER,
+  isGridSnapActive,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -139,7 +145,7 @@ const DuctFittingTool = () => {
         resolvePlacement(
           raw,
           previewNode,
-          useEditor.getState().gridSnapStep,
+          isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
           manualQuatRef.current,
         ),
       )
@@ -155,7 +161,7 @@ const DuctFittingTool = () => {
       const { position, rotation } = resolvePlacement(
         lastRawRef.current,
         previewNode,
-        useEditor.getState().gridSnapStep,
+        isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
         manualQuatRef.current,
       )
       const fitting = DuctFittingNode.parse({
@@ -218,7 +224,7 @@ const DuctFittingTool = () => {
       {/* Rotation HUD — active axis + key hints, pinned above the ghost. */}
       <Html
         center
-        position={[placement.position[0], placement.position[1] + 0.5, placement.position[2]]}
+        position={[placement.position[0], placement.position[1] + 1.45, placement.position[2]]}
         style={{ pointerEvents: 'none', userSelect: 'none' }}
         zIndexRange={[100, 0]}
       >

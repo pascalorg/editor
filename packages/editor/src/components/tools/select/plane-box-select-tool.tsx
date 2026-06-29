@@ -10,7 +10,6 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import type { ThreeElements } from '@react-three/fiber'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import {
@@ -33,12 +32,6 @@ import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { isBoxSelectPointerSuppressed, markBoxSelectHandled } from './box-select-state'
 import { collectSelectableCandidateIds } from './select-candidates'
-
-declare module 'react/jsx-runtime' {
-  namespace JSX {
-    interface IntrinsicElements extends ThreeElements {}
-  }
-}
 
 type Bounds = { minX: number; maxX: number; minZ: number; maxZ: number }
 

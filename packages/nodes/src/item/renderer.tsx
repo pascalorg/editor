@@ -8,6 +8,7 @@ import {
   type Interactive,
   type ItemNode,
   isSlotMaterialName,
+  itemClipRegistry,
   LIBRARY_MATERIAL_REF_PREFIX,
   type LightEffect,
   SCENE_MATERIAL_REF_PREFIX,
@@ -386,6 +387,20 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
     interactive?.effects.find((e): e is AnimationEffect => e.kind === 'animation') ?? null
   const lightEffects =
     interactive?.effects.filter((e): e is LightEffect => e.kind === 'light') ?? []
+
+  // Expose this item's ambient clip (e.g. a fan's spin) to the GLB bake. The
+  // catalog GLB owns the clip; it isn't in the scene graph, so the export can't
+  // find it without this registry. The bake retargets it onto the baked subtree.
+  useEffect(() => {
+    if (!animEffect) return
+    const clipName = animEffect.clips.on ?? animEffect.clips.loop
+    const clip = clipName ? animations.find((c) => c.name === clipName) : undefined
+    if (!clip) return
+    itemClipRegistry.set(node.id, { clip, loop: true })
+    return () => {
+      itemClipRegistry.delete(node.id)
+    }
+  }, [node.id, animEffect, animations])
 
   // useGLTF caches scenes, and Clone shares child geometry/material references.
   // Undo can unmount one item while another clone of the same asset still needs them.

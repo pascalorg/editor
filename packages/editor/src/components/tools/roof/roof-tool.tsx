@@ -1,28 +1,17 @@
 import {
-  type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
   collectAlignmentAnchors,
-  createDefaultRidgeVentsForSegment,
   emitter,
   type GridEvent,
-  getActiveRoofHeight,
   type LevelNode,
   RoofNode,
   RoofSegmentNode,
-  resolveBuildingForLevel,
   sceneRegistry,
   snapScalar,
   useScene,
-  type WallNode,
-  wallSegmentAnchors,
 } from '@pascal-app/core'
-import {
-  snapWallDraftPointDetailed,
-  useAlignmentGuides,
-  useWallSnapIndicator,
-  type WallPlanPoint,
-} from '@pascal-app/editor'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -32,9 +21,9 @@ import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
   resolveAlignmentForActiveBuilding,
-  snapBuildingLocalToWorldGrid,
+  snapWorldXZForActiveBuilding,
 } from '../../../lib/world-grid-snap'
-import useEditor from '../../../store/use-editor'
+import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
 const DEFAULT_WALL_HEIGHT = 0.5
@@ -42,234 +31,9 @@ const DEFAULT_PITCH_DEG = 40
 const GRID_OFFSET = 0.02
 /** Figma-style alignment-snap threshold (meters), matching the move tools. */
 const ALIGNMENT_THRESHOLD_M = 0.08
-const ROOF_GHOST_COLOR = '#818cf8'
 
 function snapToActiveGrid(value: number): number {
   return snapScalar(value, useEditor.getState().gridSnapStep)
-}
-
-type RoofDraftGeometry = {
-  solid: BufferGeometry
-  lines: BufferGeometry
-}
-
-function createRoofDraftGeometry(node: RoofSegmentNode): RoofDraftGeometry {
-  const faces = getRoofDraftFaces(node)
-  const positions: number[] = []
-  const indices: number[] = []
-  const linePoints: Vector3[] = []
-  let vertexIndex = 0
-
-  for (const face of faces) {
-    if (face.length < 3) continue
-
-    const faceStart = vertexIndex
-    for (const point of face) {
-      positions.push(point.x, point.y, point.z)
-      vertexIndex++
-    }
-
-    for (let i = 1; i < face.length - 1; i++) {
-      indices.push(faceStart, faceStart + i, faceStart + i + 1)
-    }
-
-    for (let i = 0; i < face.length; i++) {
-      linePoints.push(face[i]!, face[(i + 1) % face.length]!)
-    }
-  }
-
-  const solid = new BufferGeometry()
-  solid.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  solid.setIndex(indices)
-  solid.computeVertexNormals()
-
-  const lines = new BufferGeometry().setFromPoints(linePoints)
-  return { solid, lines }
-}
-
-function getRoofDraftFaces(node: RoofSegmentNode): Vector3[][] {
-  const width = Math.max(0.01, node.width)
-  const depth = Math.max(0.01, node.depth)
-  const halfWidth = width / 2
-  const halfDepth = depth / 2
-  const wallHeight = Math.max(0.01, node.wallHeight)
-  const peakY = wallHeight + getActiveRoofHeight(node)
-  const v = (x: number, y: number, z: number) => new Vector3(x, y, z)
-
-  const b1 = v(-halfWidth, 0, halfDepth)
-  const b2 = v(halfWidth, 0, halfDepth)
-  const b3 = v(halfWidth, 0, -halfDepth)
-  const b4 = v(-halfWidth, 0, -halfDepth)
-  const e1 = v(-halfWidth, wallHeight, halfDepth)
-  const e2 = v(halfWidth, wallHeight, halfDepth)
-  const e3 = v(halfWidth, wallHeight, -halfDepth)
-  const e4 = v(-halfWidth, wallHeight, -halfDepth)
-
-  const faces: Vector3[][] = [
-    [b1, b2, e2, e1],
-    [b2, b3, e3, e2],
-    [b3, b4, e4, e3],
-    [b4, b1, e1, e4],
-  ]
-
-  const pushHip = () => {
-    if (Math.abs(width - depth) < 0.01) {
-      const peak = v(0, peakY, 0)
-      faces.push([e4, e1, peak], [e1, e2, peak], [e2, e3, peak], [e3, e4, peak])
-    } else if (width >= depth) {
-      const r1 = v(-halfWidth + halfDepth, peakY, 0)
-      const r2 = v(halfWidth - halfDepth, peakY, 0)
-      faces.push([e4, e1, r1], [e2, e3, r2], [e1, e2, r2, r1], [e3, e4, r1, r2])
-    } else {
-      const r1 = v(0, peakY, halfDepth - halfWidth)
-      const r2 = v(0, peakY, -halfDepth + halfWidth)
-      faces.push([e1, e2, r1], [e3, e4, r2], [e2, e3, r2, r1], [e4, e1, r1, r2])
-    }
-  }
-
-  if (node.roofType === 'flat' || peakY <= wallHeight) {
-    faces.push([e1, e2, e3, e4])
-    return faces
-  }
-
-  switch (node.roofType) {
-    case 'gable': {
-      const r1 = v(-halfWidth, peakY, 0)
-      const r2 = v(halfWidth, peakY, 0)
-      faces.push([e4, e1, r1], [e2, e3, r2], [e1, e2, r2, r1], [e3, e4, r1, r2])
-      break
-    }
-    case 'shed': {
-      const t1 = v(-halfWidth, peakY, -halfDepth)
-      const t2 = v(halfWidth, peakY, -halfDepth)
-      faces.push([e1, e2, t2, t1], [e2, e3, t2], [e3, e4, t1, t2], [e4, e1, t1])
-      break
-    }
-    case 'hip':
-      pushHip()
-      break
-    case 'gambrel': {
-      const midZ = halfDepth * node.gambrelLowerWidthRatio
-      const midY = wallHeight + (peakY - wallHeight) * node.gambrelLowerHeightRatio
-      const m1 = v(-halfWidth, midY, midZ)
-      const m2 = v(halfWidth, midY, midZ)
-      const m3 = v(halfWidth, midY, -midZ)
-      const m4 = v(-halfWidth, midY, -midZ)
-      const r1 = v(-halfWidth, peakY, 0)
-      const r2 = v(halfWidth, peakY, 0)
-      faces.push(
-        [e4, e1, m1, r1, m4],
-        [e2, e3, m3, r2, m2],
-        [e1, e2, m2, m1],
-        [m1, m2, r2, r1],
-        [e3, e4, m4, m3],
-        [m3, m4, r1, r2],
-      )
-      break
-    }
-    case 'mansard': {
-      const inset = Math.min(width, depth) * node.mansardSteepWidthRatio
-      if (halfWidth - inset <= 0.02 || halfDepth - inset <= 0.02) {
-        pushHip()
-        break
-      }
-      const midY = wallHeight + (peakY - wallHeight) * node.mansardSteepHeightRatio
-      const w1 = v(-halfWidth + inset, midY, halfDepth - inset)
-      const w2 = v(halfWidth - inset, midY, halfDepth - inset)
-      const w3 = v(halfWidth - inset, midY, -halfDepth + inset)
-      const w4 = v(-halfWidth + inset, midY, -halfDepth + inset)
-      faces.push([e1, e2, w2, w1], [e2, e3, w3, w2], [e3, e4, w4, w3], [e4, e1, w1, w4])
-      if (width >= depth) {
-        const r1 = v(-halfWidth + halfDepth, peakY, 0)
-        const r2 = v(halfWidth - halfDepth, peakY, 0)
-        faces.push([w4, w1, r1], [w2, w3, r2], [w1, w2, r2, r1], [w3, w4, r1, r2])
-      } else {
-        const r1 = v(0, peakY, halfDepth - halfWidth)
-        const r2 = v(0, peakY, -halfDepth + halfWidth)
-        faces.push([w1, w2, r1], [w3, w4, r2], [w2, w3, r2, r1], [w4, w1, r1, r2])
-      }
-      break
-    }
-    case 'dutch': {
-      const inset = Math.min(width, depth) * node.dutchHipWidthRatio
-      if (halfWidth - inset <= 0.02 || halfDepth - inset <= 0.02) {
-        pushHip()
-        break
-      }
-      const midY = wallHeight + (peakY - wallHeight) * node.dutchHipHeightRatio
-      const w1 = v(-halfWidth + inset, midY, halfDepth - inset)
-      const w2 = v(halfWidth - inset, midY, halfDepth - inset)
-      const w3 = v(halfWidth - inset, midY, -halfDepth + inset)
-      const w4 = v(-halfWidth + inset, midY, -halfDepth + inset)
-      faces.push([e1, e2, w2, w1], [e2, e3, w3, w2], [e3, e4, w4, w3], [e4, e1, w1, w4])
-      break
-    }
-    default:
-      pushHip()
-      break
-  }
-
-  return faces
-}
-
-function getLevelWalls(
-  levelId: string | null,
-  nodes: Readonly<Record<string, AnyNode>>,
-): WallNode[] {
-  if (!levelId) return []
-  const levelNode = nodes[levelId]
-  if (!levelNode || levelNode.type !== 'level') return []
-  return (levelNode as LevelNode).children
-    .map((childId) => nodes[childId])
-    .filter((node): node is WallNode => node?.type === 'wall')
-}
-
-// Walls on the level directly beneath the active one. Levels share the same
-// local XZ origin (they only differ in world Y), so these walls live in the
-// identical coordinate frame and can be fed straight into both the alignment
-// pool and the magnetic wall-snap pipeline — letting a roof drawn on the upper
-// floor snap to the wall corners of the floor below. Mirrors the wall tool's
-// `getBelowLevelWalls`.
-function getBelowLevelWalls(
-  currentLevelId: string | null,
-  nodes: Readonly<Record<string, AnyNode>>,
-): WallNode[] {
-  if (!currentLevelId) return []
-  const currentLevel = nodes[currentLevelId]
-  if (!currentLevel || currentLevel.type !== 'level') return []
-  const buildingId = resolveBuildingForLevel(currentLevel.id, nodes)
-  if (!buildingId) return []
-  const building = nodes[buildingId]
-  if (!building || building.type !== 'building') return []
-  const currentIndex = (currentLevel as LevelNode).level
-  const belowLevel = (building.children ?? [])
-    .map((childId) => nodes[childId])
-    .filter((node): node is LevelNode => node?.type === 'level' && node.level < currentIndex)
-    .sort((a, b) => b.level - a.level)[0]
-  return getLevelWalls(belowLevel?.id ?? null, nodes)
-}
-
-// Current-level + floor-below walls — the magnetic snap targets the roof draft
-// locks onto (corners, midpoints, crossings, wall bodies), matching the wall
-// tool. Same coordinate frame, so no transform is needed.
-function getRoofSnapWalls(
-  currentLevelId: string | null,
-  nodes: Readonly<Record<string, AnyNode>>,
-): WallNode[] {
-  return [...getLevelWalls(currentLevelId, nodes), ...getBelowLevelWalls(currentLevelId, nodes)]
-}
-
-// Current-level alignment anchors plus the floor-below wall corners.
-function collectRoofAlignmentAnchors(
-  nodes: Readonly<Record<string, AnyNode>>,
-  currentLevelId: string | null,
-): AlignmentAnchor[] {
-  return [
-    ...collectAlignmentAnchors(nodes, '', currentLevelId),
-    ...getBelowLevelWalls(currentLevelId, nodes).flatMap((wall) =>
-      wallSegmentAnchors(wall.id, wall.start, wall.end, wall.thickness),
-    ),
-  ]
 }
 
 /**
@@ -281,7 +45,7 @@ const commitRoofPlacement = (
   corner2: [number, number, number],
   selectedIds: string[],
 ): AnyNode['id'] => {
-  const { createNodes, nodes } = useScene.getState()
+  const { createNode, createNodes, nodes } = useScene.getState()
 
   // A placed roof preset seeds `toolDefaults.roof` with the flattened
   // subtree params (roofType, pitch, wallHeight, overhang, materials, …)
@@ -338,15 +102,8 @@ const commitRoofPlacement = (
       depth,
       position: [localX, 0, localZ],
     })
-    const ridgeVents = createDefaultRidgeVentsForSegment(segment)
 
-    createNodes([
-      { node: segment, parentId: targetRoofId as AnyNode['id'] },
-      ...ridgeVents.map((ridgeVent) => ({
-        node: ridgeVent,
-        parentId: segment.id as AnyNode['id'],
-      })),
-    ])
+    createNode(segment, targetRoofId as AnyNode['id'])
     sfxEmitter.emit('sfx:structure-build')
     return segment.id // Returns segment ID so it can be selected immediately
   }
@@ -365,7 +122,6 @@ const commitRoofPlacement = (
     depth,
     position: [0, 0, 0],
   })
-  const ridgeVents = createDefaultRidgeVentsForSegment(segment)
 
   // Create the roof container. Segment-shaped params (roofType, pitch, …) are
   // dropped by the RoofNode schema; surface materials in `defaults` carry over.
@@ -380,10 +136,6 @@ const commitRoofPlacement = (
   createNodes([
     { node: roof, parentId: levelId },
     { node: segment, parentId: roof.id },
-    ...ridgeVents.map((ridgeVent) => ({
-      node: ridgeVent,
-      parentId: segment.id as AnyNode['id'],
-    })),
   ])
 
   sfxEmitter.emit('sfx:structure-build')
@@ -404,7 +156,6 @@ export const RoofTool: React.FC = () => {
   const setSelection = useViewer((state) => state.setSelection)
   const setTool = useEditor((state) => state.setTool)
   const setMode = useEditor((state) => state.setMode)
-  const roofDefaults = useEditor((state) => state.toolDefaults.roof)
 
   const selectedIdsRef = useRef(selectedIds)
   useEffect(() => {
@@ -428,17 +179,16 @@ export const RoofTool: React.FC = () => {
 
     outlineRef.current.geometry = new BufferGeometry()
 
-    // Alignment candidates — anchors of every alignable object on the active
-    // level plus the wall corners of the floor directly below, so a roof drawn
-    // on the upper floor snaps onto the walls beneath it. Refreshed after each
-    // roof commits. Both corners of the rectangle align.
-    let alignmentCandidates = collectRoofAlignmentAnchors(useScene.getState().nodes, currentLevelId)
+    // Alignment candidates — anchors of every alignable object; refreshed
+    // after each roof commits. Both corners of the rectangle align.
+    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
     // Snap the drafted corner onto another object's nearest real anchor and
     // publish the guide. The probe is the RAW cursor, NOT the 0.5m-grid-snapped
     // point: resolving against the grid point would only ever catch anchors
     // that happen to sit on a grid line, so off-grid items (furniture, angled
     // walls) would never surface a guide. The matched axis locks exactly to the
-    // candidate's coordinate; the other axis keeps its grid snap. Alt bypasses.
+    // candidate's coordinate; the other axis keeps its grid snap. Alignment runs
+    // only when the magnetic (lines) snapping mode is active.
     const alignPoint = (
       gridX: number,
       gridZ: number,
@@ -491,31 +241,24 @@ export const RoofTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
 
-      const bypassSnap = event.nativeEvent?.shiftKey === true
-      const localRaw: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
-      // Magnetic snap to wall corners / midpoints / crossings / bodies on the
-      // active level and the floor below, then world-grid snap (projected into
-      // building-local so rotated buildings stay on the visible grid). Same
-      // pipeline the wall tool uses, so the beacon + coloring match.
-      const snapResult = snapWallDraftPointDetailed({
-        point: localRaw,
-        walls: getRoofSnapWalls(currentLevelId, useScene.getState().nodes),
-        bypassSnap,
-        magnetic: !bypassSnap && useEditor.getState().magneticSnap,
-        gridSnap: (point) => snapBuildingLocalToWorldGrid(point, useEditor.getState().gridSnapStep),
-      })
+      // World-grid snap projected into building-local; rotated buildings
+      // used to drag every roof corner off the visible grid. Snapping follows
+      // the global mode (grid quantize / lines alignment); Off keeps the raw
+      // cursor. Shift cycles the mode centrally — this tool never reads it.
+      const snapped: [number, number] = isGridSnapActive()
+        ? snapWorldXZForActiveBuilding(
+            event.position[0],
+            event.position[2],
+            useEditor.getState().gridSnapStep,
+          ).local
+        : [event.localPosition[0], event.localPosition[2]]
       const [gridX, gridZ] = alignPoint(
-        snapResult.point[0],
-        snapResult.point[1],
-        localRaw[0],
-        localRaw[1],
-        event.nativeEvent?.altKey === true || bypassSnap,
+        snapped[0],
+        snapped[1],
+        event.localPosition[0],
+        event.localPosition[2],
+        !isMagneticSnapActive(),
       )
-      // Stand the magnetic beacon at the snapped corner when the draft locked
-      // onto wall geometry; clear it for plain grid/alignment moves.
-      useWallSnapIndicator
-        .getState()
-        .set(snapResult.snap ? { x: gridX, z: gridZ, kind: snapResult.snap } : null)
       const y = event.localPosition[1]
 
       const cursorPosition: [number, number, number] = [gridX, y, gridZ]
@@ -524,7 +267,7 @@ export const RoofTool: React.FC = () => {
       cursorRef.current.position.set(gridX, gridY, gridZ)
 
       if (
-        !bypassSnap &&
+        (isGridSnapActive() || isMagneticSnapActive()) &&
         corner1Ref.current &&
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
@@ -548,21 +291,22 @@ export const RoofTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!currentLevelId) return
 
-      const bypassSnap = event.nativeEvent?.shiftKey === true
-      const localRaw: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
-      const snapResult = snapWallDraftPointDetailed({
-        point: localRaw,
-        walls: getRoofSnapWalls(currentLevelId, useScene.getState().nodes),
-        bypassSnap,
-        magnetic: !bypassSnap && useEditor.getState().magneticSnap,
-        gridSnap: (point) => snapBuildingLocalToWorldGrid(point, useEditor.getState().gridSnapStep),
-      })
+      // World-grid snap projected into building-local; rotated buildings
+      // used to drag every roof corner off the visible grid. Snapping follows
+      // the global mode; Off keeps the raw cursor.
+      const snapped: [number, number] = isGridSnapActive()
+        ? snapWorldXZForActiveBuilding(
+            event.position[0],
+            event.position[2],
+            useEditor.getState().gridSnapStep,
+          ).local
+        : [event.localPosition[0], event.localPosition[2]]
       const [gridX, gridZ] = alignPoint(
-        snapResult.point[0],
-        snapResult.point[1],
-        localRaw[0],
-        localRaw[1],
-        event.nativeEvent?.altKey === true || bypassSnap,
+        snapped[0],
+        snapped[1],
+        event.localPosition[0],
+        event.localPosition[2],
+        !isMagneticSnapActive(),
       )
       const y = event.localPosition[1]
 
@@ -578,9 +322,8 @@ export const RoofTool: React.FC = () => {
 
         corner1Ref.current = null
         outlineRef.current.visible = false
-        alignmentCandidates = collectRoofAlignmentAnchors(useScene.getState().nodes, currentLevelId)
+        alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
         useAlignmentGuides.getState().clear()
-        useWallSnapIndicator.getState().clear()
       } else {
         corner1Ref.current = [gridX, y, gridZ]
         sfxEmitter.emit('sfx:structure-build-start')
@@ -599,7 +342,6 @@ export const RoofTool: React.FC = () => {
         setPreview((prev) => ({ ...prev, corner1: null }))
       }
       useAlignmentGuides.getState().clear()
-      useWallSnapIndicator.getState().clear()
     }
 
     emitter.on('grid:move', onGridMove)
@@ -611,7 +353,6 @@ export const RoofTool: React.FC = () => {
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
       useAlignmentGuides.getState().clear()
-      useWallSnapIndicator.getState().clear()
 
       corner1Ref.current = null
     }
@@ -627,31 +368,6 @@ export const RoofTool: React.FC = () => {
     const centerZ = (corner1[2] + cursorPosition[2]) / 2
     return { length, width, centerX, centerZ }
   }, [corner1, cursorPosition])
-
-  const previewGeometry = useMemo(() => {
-    if (!(previewDimensions && previewDimensions.length > 0.1 && previewDimensions.width > 0.1)) {
-      return null
-    }
-
-    const segment = RoofSegmentNode.parse({
-      wallHeight: DEFAULT_WALL_HEIGHT,
-      pitch: DEFAULT_PITCH_DEG,
-      roofType: 'gable',
-      ...roofDefaults,
-      width: previewDimensions.length,
-      depth: previewDimensions.width,
-      position: [0, 0, 0],
-    })
-
-    return createRoofDraftGeometry(segment)
-  }, [previewDimensions, roofDefaults])
-
-  useEffect(() => {
-    return () => {
-      previewGeometry?.solid.dispose()
-      previewGeometry?.lines.dispose()
-    }
-  }, [previewGeometry])
 
   return (
     <group>
@@ -685,41 +401,22 @@ export const RoofTool: React.FC = () => {
         />
       )}
 
-      {previewDimensions && previewGeometry && (
-        <group
+      {previewDimensions && previewDimensions.length > 0.1 && previewDimensions.width > 0.1 && (
+        <mesh
+          layers={EDITOR_LAYER}
           position={[previewDimensions.centerX, levelY + GRID_OFFSET, previewDimensions.centerZ]}
+          rotation={[-Math.PI / 2, 0, 0]}
         >
-          <mesh
-            geometry={previewGeometry.solid}
-            layers={EDITOR_LAYER}
-            raycast={() => {}}
-            renderOrder={2}
-          >
-            <meshBasicMaterial
-              color={ROOF_GHOST_COLOR}
-              depthTest={false}
-              depthWrite={false}
-              opacity={0.15}
-              side={DoubleSide}
-              transparent
-            />
-          </mesh>
-          <lineSegments
-            frustumCulled={false}
-            geometry={previewGeometry.lines}
-            layers={EDITOR_LAYER}
-            raycast={() => {}}
-            renderOrder={3}
-          >
-            <lineBasicNodeMaterial
-              color={ROOF_GHOST_COLOR}
-              depthTest={false}
-              depthWrite={false}
-              opacity={0.5}
-              transparent
-            />
-          </lineSegments>
-        </group>
+          <planeGeometry args={[previewDimensions.length, previewDimensions.width]} />
+          <meshBasicMaterial
+            color="#818cf8"
+            depthTest={false}
+            depthWrite={false}
+            opacity={0.1}
+            side={DoubleSide}
+            transparent
+          />
+        </mesh>
       )}
     </group>
   )

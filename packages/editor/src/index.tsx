@@ -11,6 +11,7 @@ export { default as Editor } from './components/editor'
 // they're referenced throughout the editor's own internals; the public
 // surface uses the shorter, shell-friendly names from the unified
 // preset-system spec.
+export { BakeExporter } from './components/editor/bake-exporter'
 export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
 // Embed surface — the editor's real in-canvas affordances, so a host can mount
 // authentic selection handles, interactive build tools, and the mover on top
@@ -79,7 +80,6 @@ export {
 // shared/segment-angle.ts) once every Stage D port is in.
 export {
   createFenceOnCurrentLevel,
-  createSplineFenceOnCurrentLevel,
   type FencePlanPoint,
   snapFenceDraftPoint,
 } from './components/tools/fence/fence-drafting'
@@ -155,6 +155,7 @@ export {
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   WALL_GRID_STEP,
+  WALL_JOIN_SNAP_RADIUS,
   type WallDraftSnapKind,
   type WallDraftSnapResult,
   type WallPlanPoint,
@@ -231,6 +232,12 @@ export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 export { markToolCancelConsumed } from './hooks/use-keyboard'
 export { type Selection, useSelection } from './hooks/use-selection'
 export {
+  clearPlacementSurface,
+  getPlacementSurface,
+  type PlacementSurface,
+  publishPlacementSurface,
+} from './lib/active-placement-surface'
+export {
   CEILING_ALIGNMENT_THRESHOLD_M,
   type CeilingPlanSnapInput,
   type CeilingPlanSnapResult,
@@ -239,6 +246,13 @@ export {
 } from './lib/ceiling-plan-snap'
 export { EDITOR_LAYER } from './lib/constants'
 // Helper libs used by the kind-owned roof / stair / elevator panels.
+export {
+  CONTINUATION_PROFILES,
+  type ContinuationContext,
+  type ContinuationMode,
+  continuationContextOf,
+  nextContinuation,
+} from './lib/continuation'
 export {
   resolveCurrentBuildingId,
   resolveElevatorNodeSupportY,
@@ -266,6 +280,14 @@ export {
   getFloorplanWallThickness,
 } from './lib/floorplan'
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
+export { exportSceneToGlb } from './lib/glb-export'
+export {
+  boundaryReshapeScope,
+  curveReshapeScope,
+  endpointReshapeScope,
+  holeEditScope,
+  movingNodeOf,
+} from './lib/interaction/scope'
 export {
   buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
@@ -340,17 +362,33 @@ export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type {
   FloorplanSelectionTool,
-  MovingFenceControlPoint,
-  MovingFenceEndpoint,
-  MovingFenceTangent,
-  MovingWallEndpoint,
   SplitOrientation,
   Tool,
   ToolDefaults,
   ViewMode,
   WorkspaceMode,
 } from './store/use-editor'
-export { default as useEditor } from './store/use-editor'
+export {
+  default as useEditor,
+  getActiveContinuationContext,
+  getContinuation,
+  isAngleSnapActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
+} from './store/use-editor'
+export { default as useFacingPose, type FacingPose } from './store/use-facing-pose'
+export {
+  default as useInteractionScope,
+  getEditingHole,
+  getIsCurveReshape,
+  getMovingNode,
+  useActiveHandleDrag,
+  useEditingHole,
+  useEndpointReshape,
+  useIsCurveReshape,
+  useMovingNode,
+  useReshapingNode,
+} from './store/use-interaction-scope'
 export {
   default as useOpeningGuides,
   type OpeningGuide3D,

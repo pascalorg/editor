@@ -163,6 +163,8 @@ const windowHandles: HandleDescriptor<WindowNodeType>[] = [
  */
 export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   kind: 'window',
+  snapProfile: 'item',
+  facingIndicator: true,
   schemaVersion: 1,
   schema: WindowNode,
   category: 'structure',
@@ -212,6 +214,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   // Stage C: floor-plan polygon. ctx.parent gives the wall for direction
   // + thickness — same shape as door.
   floorplan: buildWindowFloorplan,
+  floorplanDependsOnSiblings: true,
   // Stage D — placement + move-on-wall. Same recipe as door. See
   // `nodes/src/window/{tool,move-tool,window-math}.ts`.
   tool: () => import('./tool'),
@@ -231,7 +234,8 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place window on wall' },
-    { key: 'Shift', label: 'Free place' },
+    { key: 'R', label: 'Flip side' },
+    { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

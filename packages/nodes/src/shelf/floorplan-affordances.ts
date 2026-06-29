@@ -4,6 +4,7 @@ import {
   type ShelfNode,
   useScene,
 } from '@pascal-app/core'
+import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
 // Mirror the 3D handles in `shelf/definition.ts` so a drag can't push a
 // value past what the renderer / geometry builder accepts.
@@ -82,11 +83,13 @@ export const shelfRotateAffordance: FloorplanAffordance<ShelfNode> = {
 
     return {
       affectedIds: [shelfId],
-      apply({ planPoint }) {
-        const currentAngle = Math.atan2(planPoint[1] - cz, planPoint[0] - cx)
-        let delta = currentAngle - initialAngle
-        while (delta > Math.PI) delta -= 2 * Math.PI
-        while (delta < -Math.PI) delta += 2 * Math.PI
+      apply({ planPoint, modifiers }) {
+        const delta = rotateAffordanceDelta({
+          center: [cx, cz],
+          initialAngle,
+          planPoint,
+          free: modifiers.shiftKey,
+        })
         const newRotationY = initialRotationY - delta
         lastRotation = [r[0], newRotationY, r[2]]
         useScene.getState().updateNode(shelfId, { rotation: lastRotation })

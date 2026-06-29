@@ -1,6 +1,5 @@
 import {
   type AnyNodeId,
-  collectAlignmentAnchors,
   DoorNode,
   emitter,
   type GridEvent,
@@ -18,9 +17,12 @@ import {
   calculateItemRotation,
   EDITOR_LAYER,
   getSideFromNormal,
+  isMagneticSnapActive,
   isValidWallSideFace,
   triggerSFX,
   useAlignmentGuides,
+  useEditor,
+  useFacingPose,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -36,7 +38,10 @@ import {
   resolveRoofWallOpeningTarget,
   worldToSelectedBuildingLocal,
 } from '../shared/roof-wall-opening-placement'
-import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
+import {
+  collectWallOpeningAlignmentCandidates,
+  resolveWallSlideAlignment,
+} from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
 import DoorPreview from './preview'
 
@@ -93,6 +98,10 @@ const DoorTool: React.FC = () => {
       }),
     [fallbackPose?.side],
   )
+  // The frame depth is a fixed parse default (the `side` flip doesn't change
+  // it); a ref lets the facing-pose publish inside the setup effect read it
+  // without re-subscribing every event listener.
+  const frameDepthRef = useRef(ghostStub.frameDepth)
 
   useEffect(() => {
     useScene.temporal.getState().pause()
@@ -139,11 +148,12 @@ const DoorTool: React.FC = () => {
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
       setFallbackPose(null)
+      useFacingPose.getState().clear()
     }
 
     // Alignment candidates — anchors of every alignable object; refreshed
     // after each placement. A door aligns by the plan position of its centre.
-    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+    let alignmentCandidates = collectWallOpeningAlignmentCandidates(useScene.getState().nodes, '')
 
     // On-host cursor: the green/red wireframe outline tracks a live draft.
     // Showing it always clears the off-host floating ghost (they never
@@ -152,6 +162,7 @@ const DoorTool: React.FC = () => {
       worldPosition: [number, number, number],
       cursorRotationY: number,
       valid: boolean,
+      indicatorYOffset: number,
     ) => {
       setFallbackPose(null)
       const group = cursorGroupRef.current
@@ -160,6 +171,14 @@ const DoorTool: React.FC = () => {
       group.position.set(...worldPosition)
       group.rotation.y = cursorRotationY
       edgeMaterial.color.setHex(valid ? 0x22_c5_5e : 0xef_44_44)
+      // Forward-facing triangle (editor-side overlay). The cursor group is
+      // already yawed so +Z faces out of the wall, so the door's front is +Z.
+      // The indicator rides at the sill (`indicatorYOffset`, the door's base).
+      useFacingPose.getState().set({
+        position: [worldPosition[0], worldPosition[1] + indicatorYOffset, worldPosition[2]],
+        rotationY: cursorRotationY,
+        depth: frameDepthRef.current,
+      })
     }
 
     // Off-host fallback: hide the wireframe outline and float the real door
@@ -175,6 +194,8 @@ const DoorTool: React.FC = () => {
       })
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
+      // Off-host (invalid) floating ghost — no direction triangle.
+      useFacingPose.getState().clear()
     }
 
     const showRoofFallbackCursor = (event: RoofEvent) => {
@@ -194,19 +215,17 @@ const DoorTool: React.FC = () => {
       width: number,
       height: number,
       bypass: boolean,
-      bypassSnap: boolean,
       ignoreId?: string,
     ) => {
-      // bypassSnap is set by Shift (see callers). Shift = free-place: land at the
-      // raw cursor but keep the along-wall guides visible. bypass (Alt) still
-      // hard-disables alignment.
+      // `bypass` disables along-wall alignment — set when magnetic ("lines")
+      // snap is off. The grid component lives in `snapToHalf`, which is itself
+      // mode-aware (raw cursor when grid is off).
       const localX = resolveWallSlideAlignment({
         wallNode: wall,
         rawLocalX,
         width,
         candidates: alignmentCandidates,
-        bypass: bypass && !bypassSnap,
-        freePlace: bypassSnap,
+        bypass,
       })
       const { clampedX, clampedY } = clampToWall(wall, localX, width, height)
       const valid = !hasWallChildOverlap(wall.id, clampedX, clampedY, width, height, ignoreId)
@@ -224,9 +243,8 @@ const DoorTool: React.FC = () => {
       itemRotation: number
       cursorRotationY: number
       bypass: boolean
-      bypassSnap: boolean
     }) => {
-      const { wall, rawLocalX, side, itemRotation, cursorRotationY, bypass, bypassSnap } = args
+      const { wall, rawLocalX, side, itemRotation, cursorRotationY, bypass } = args
       const width = draftRef.current?.width ?? 0.9
       const height = draftRef.current?.height ?? 2.1
 
@@ -249,7 +267,6 @@ const DoorTool: React.FC = () => {
         width,
         height,
         bypass,
-        bypassSnap,
         draftRef.current.id,
       )
 
@@ -283,6 +300,7 @@ const DoorTool: React.FC = () => {
         ),
         cursorRotationY,
         valid,
+        -clampedY,
       )
 
       if (draftRef.current) {
@@ -359,11 +377,16 @@ const DoorTool: React.FC = () => {
 
       useScene.getState().createNode(node, wall.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
-      useScene.temporal.getState().pause()
       triggerSFX('sfx:structure-build')
-      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
+      if (useEditor.getState().getContinuation('point') === 'repeat') {
+        useScene.temporal.getState().pause()
+        alignmentCandidates = collectWallOpeningAlignmentCandidates(useScene.getState().nodes, '')
+      } else {
+        hideCursor()
+        useEditor.getState().setTool(null)
+      }
     }
 
     // ── Direct wall-mesh hover ──────────────────────────────────────
@@ -387,17 +410,13 @@ const DoorTool: React.FC = () => {
       const itemRotation = calculateItemRotation(event.normal) + flipOffset
       const cursorRotation =
         calculateCursorRotation(event.normal, event.node.start, event.node.end) + flipOffset
-      const bypassSnap = event.nativeEvent?.shiftKey === true
-      const bypass = event.nativeEvent?.altKey === true || bypassSnap
-
       applyWallTarget({
         wall: event.node,
         rawLocalX: event.localPosition[0],
         side,
         itemRotation,
         cursorRotationY: cursorRotation,
-        bypass,
-        bypassSnap,
+        bypass: !isMagneticSnapActive(),
       })
       event.stopPropagation()
     }
@@ -415,20 +434,16 @@ const DoorTool: React.FC = () => {
       const faceSide = getSideFromNormal(event.normal)
       const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
       const itemRotation = calculateItemRotation(event.normal) + (sideFlip ? Math.PI : 0)
-      const bypassSnap = event.nativeEvent?.shiftKey === true
-      const bypass = event.nativeEvent?.altKey === true || bypassSnap
-
       const { clampedX, clampedY, valid } = resolveWallPlacement(
         event.node,
         event.localPosition[0],
         draftRef.current.width,
         draftRef.current.height,
-        bypass,
-        bypassSnap,
+        !isMagneticSnapActive(),
         draftRef.current.id,
       )
-      // Shift force-places over a collision (the draft stays red as a warning).
-      if (!valid && !bypassSnap) return
+      // Alt force-places over a collision (the draft stays red as a warning).
+      if (!valid && event.nativeEvent?.altKey !== true) return
 
       commitDoorAtWall(event.node, clampedX, clampedY, side, itemRotation)
       event.stopPropagation()
@@ -448,9 +463,9 @@ const DoorTool: React.FC = () => {
     // actually hovers a wall (onWallHover) or roof face (onRoofHover).
     const onGridFreeFollow = (event: GridEvent) => {
       if (useViewer.getState().cameraDragging) return
-      // A wall/roof mesh handler processed this exact pointermove (R3F + the
-      // grid raycast share the source DOM event's timeStamp) — it owns the
-      // frame and has snapped the draft, so skip the floor follow this tick.
+      // A wall/roof mesh handler processed this pointermove (shared DOM
+      // timeStamp) — it owns the frame and has snapped the draft, so skip the
+      // floor follow this tick.
       const ts = event.nativeEvent?.timeStamp ?? -1
       if (ts === lastMeshEventTime) return
       // Fresh floor-only frame: the cursor is off any wall/roof. Drop any draft
@@ -478,7 +493,7 @@ const DoorTool: React.FC = () => {
 
     const updateRoofCursor = (target: RoofWallOpeningTarget, roof: RoofNode) => {
       const pose = getRoofWallOpeningCursorPose(target, roof)
-      if (pose) updateCursor(pose.position, pose.rotationY, target.valid)
+      if (pose) updateCursor(pose.position, pose.rotationY, target.valid, -target.position[1])
     }
 
     const onRoofHover = (event: RoofEvent) => {
@@ -523,9 +538,9 @@ const DoorTool: React.FC = () => {
     const onRoofClick = (event: RoofEvent) => {
       if (!draftRef.current?.roofSegmentId) return
       const target = resolveRoofTarget(event)
-      // Shift force-places over a colliding roof-face target (see onWallClick).
+      // Alt force-places over a colliding roof-face target (see onWallClick).
       if (!target) return
-      if (!target.valid && event.nativeEvent?.shiftKey !== true) return
+      if (!target.valid && event.nativeEvent?.altKey !== true) return
       const { segment, face, position } = target
 
       const draft = draftRef.current
@@ -577,8 +592,13 @@ const DoorTool: React.FC = () => {
       // picks up the new opening cut.
       useScene.getState().dirtyNodes.add(segment.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
-      useScene.temporal.getState().pause()
       triggerSFX('sfx:structure-build')
+      if (useEditor.getState().getContinuation('point') === 'repeat') {
+        useScene.temporal.getState().pause()
+      } else {
+        hideCursor()
+        useEditor.getState().setTool(null)
+      }
       event.stopPropagation()
     }
 

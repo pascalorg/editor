@@ -2,13 +2,22 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  type FenceNode,
   nodeRegistry,
   type SlabNode,
   useScene,
+  type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { type ComponentType, lazy, Suspense } from 'react'
+import { type ComponentType, lazy, Suspense, useMemo } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
+import {
+  useEditingHole,
+  useEndpointReshape,
+  useIsCurveReshape,
+  useMovingNode,
+  useReshapingNode,
+} from '../../store/use-interaction-scope'
 import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
 import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
@@ -16,6 +25,7 @@ import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
 import { RoofTool } from './roof/roof-tool'
 import { getRegistryAffordanceTool } from './shared/affordance-dispatch'
+import { FacingPoseIndicator } from './shared/facing-pose-indicator'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
 import { StairTool } from './stair/stair-tool'
 import { ZoneBoundaryEditor } from './zone/zone-boundary-editor'
@@ -55,14 +65,23 @@ export const ToolManager: React.FC = () => {
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
-  const movingNode = useEditor((state) => state.movingNode)
-  const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
-  const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
-  const movingFenceControlPoint = useEditor((state) => state.movingFenceControlPoint)
-  const movingFenceTangent = useEditor((state) => state.movingFenceTangent)
-  const curvingWall = useEditor((state) => state.curvingWall)
-  const curvingFence = useEditor((state) => state.curvingFence)
-  const editingHole = useEditor((state) => state.editingHole)
+  const movingNode = useMovingNode()
+  const movingNodeOrigin = useEditor((state) => state.movingNodeOrigin)
+  const endpointReshape = useEndpointReshape()
+  const isCurveReshape = useIsCurveReshape()
+  const reshapingNode = useReshapingNode()
+  // The endpoint affordance tool's `target` is kind-specific
+  // (`{ wall | fence, endpoint }`); rebuild it from the (frozen) reshaped node +
+  // the scope's endpoint. Memoised so it stays referentially stable across the
+  // scene-write re-renders during the drag — otherwise a fresh object each frame
+  // re-fires the tool's setup effect (endpoint drag would loop / freeze).
+  const endpointTarget = useMemo(() => {
+    if (!(endpointReshape && reshapingNode)) return null
+    return reshapingNode.type === 'fence'
+      ? { fence: reshapingNode as FenceNode, endpoint: endpointReshape.endpoint }
+      : { wall: reshapingNode as WallNode, endpoint: endpointReshape.endpoint }
+  }, [endpointReshape, reshapingNode])
+  const editingHole = useEditingHole()
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const buildingId = useViewer((state) => state.selection.buildingId)
@@ -136,6 +155,16 @@ export const ToolManager: React.FC = () => {
   // Show build tools when in build mode
   const showBuildTool = mode === 'build' && tool !== null
 
+  // A move initiated from the 2D floor-plan (orange move-dot) is owned end-to-
+  // end by `FloorplanRegistryMoveOverlay`, which marks the origin `'2d'` at
+  // dot-down. Mounting the 3D affordance mover alongside it would adopt the
+  // same node and, on its unmount, restore the adopt-time position — snapping
+  // the committed 2D move back to its start. Gate the 3D mover off for 2D moves
+  // (the scene writes the overlay makes still mirror into the 3D view). A
+  // 3D-initiated move leaves the origin null until its own commit, so this only
+  // suppresses the 3D tool for genuinely 2D-owned moves.
+  const showMover = movingNode != null && movingNodeOrigin !== '2d'
+
   // Registry-first: if the active tool's kind has a NodeDefinition with a
   // tool contribution, the registry-driven tool takes over.
   const RegistryToolComponent = showBuildTool ? getRegistryTool(tool) : null
@@ -165,7 +194,7 @@ export const ToolManager: React.FC = () => {
     <>
       {/* World-space tools: site boundary and building movement operate in world coordinates */}
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
-      {movingNode?.type === 'building' && (
+      {showMover && movingNode?.type === 'building' && (
         <MoveTool onNodeMoved={handlePlacedNodeSelected} onSpawnMoved={handlePlacedNodeSelected} />
       )}
 
@@ -219,73 +248,30 @@ export const ToolManager: React.FC = () => {
               </Suspense>
             ) : null
           })()}
-        {movingWallEndpoint &&
+        {endpointTarget &&
+          reshapingNode &&
           (() => {
             const RegistryAffordance = getRegistryAffordanceTool(
-              movingWallEndpoint.wall.type,
+              reshapingNode.type,
               'move-endpoint',
             )
             return RegistryAffordance ? (
               <Suspense fallback={null}>
-                <RegistryAffordance target={movingWallEndpoint} />
+                <RegistryAffordance target={endpointTarget} />
               </Suspense>
             ) : null
           })()}
-        {movingFenceEndpoint &&
+        {isCurveReshape &&
+          reshapingNode &&
           (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(
-              movingFenceEndpoint.fence.type,
-              'move-endpoint',
-            )
+            const RegistryAffordance = getRegistryAffordanceTool(reshapingNode.type, 'curve')
             return RegistryAffordance ? (
               <Suspense fallback={null}>
-                <RegistryAffordance target={movingFenceEndpoint} />
+                <RegistryAffordance node={reshapingNode} />
               </Suspense>
             ) : null
           })()}
-        {movingFenceControlPoint &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(
-              movingFenceControlPoint.fence.type,
-              'move-control-point',
-            )
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance target={movingFenceControlPoint} />
-              </Suspense>
-            ) : null
-          })()}
-        {movingFenceTangent &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(
-              movingFenceTangent.fence.type,
-              'move-tangent',
-            )
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance target={movingFenceTangent} />
-              </Suspense>
-            ) : null
-          })()}
-        {curvingWall &&
-          (() => {
-            const Registry = getRegistryAffordanceTool(curvingWall.type, 'curve')
-            return Registry ? (
-              <Suspense fallback={null}>
-                <Registry node={curvingWall} />
-              </Suspense>
-            ) : null
-          })()}
-        {curvingFence &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(curvingFence.type, 'curve')
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance node={curvingFence} />
-              </Suspense>
-            ) : null
-          })()}
-        {movingNode && movingNode.type !== 'building' && (
+        {showMover && movingNode.type !== 'building' && (
           <MoveTool
             onNodeMoved={handlePlacedNodeSelected}
             onSpawnMoved={handlePlacedNodeSelected}
@@ -310,6 +296,10 @@ export const ToolManager: React.FC = () => {
             tools above. Lives inside the building-local group so the
             building-local guide coords render at the right world position. */}
         <Alignment3DGuideLayer />
+        {/* The one forward-facing triangle renderer. Placement/move tools
+            publish their ghost pose to `useFacingPose`; this draws it. Mounted
+            here so it shares the building-local frame the tools publish in. */}
+        <FacingPoseIndicator />
         {/* Wall-plane proximity / sill / equal-spacing guides for openings,
             published by the door/window move tools in the same world frame. */}
         <OpeningGuides3DLayer />

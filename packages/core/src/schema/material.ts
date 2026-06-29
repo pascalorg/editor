@@ -27,7 +27,8 @@ export type MaterialProperties = z.infer<typeof MaterialProperties>
 
 export const MaterialSchema = z.object({
   id: z.string().optional(),
-  preset: MaterialPreset.optional(),
+  // Coerce unknown presets (legacy/AI-generated data) to 'custom' instead of throwing.
+  preset: MaterialPreset.catch('custom').optional(),
   properties: MaterialProperties.optional(),
   texture: z
     .object({

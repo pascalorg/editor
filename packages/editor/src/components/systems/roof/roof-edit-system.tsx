@@ -32,6 +32,7 @@ import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import useEditor from '../../../store/use-editor'
+import useInteractionScope from '../../../store/use-interaction-scope'
 import { swallowNextClick } from '../../editor/handles/use-handle-drag'
 
 // Empty placeholder geometry used when we reveal segments-wrapper for
@@ -1259,7 +1260,9 @@ function RoofTrimHandles() {
 
     document.body.style.cursor = getTrimCursor(side)
     setDraggingSide(side)
-    useEditor.getState().setActiveHandleDrag({ nodeId: segmentId, label: getTrimLabel(side) })
+    useInteractionScope
+      .getState()
+      .begin({ kind: 'handle-drag', nodeId: segmentId, handle: getTrimLabel(side) })
     useViewer.getState().setInputDragging(true)
     useScene.temporal.getState().pause()
 
@@ -1295,7 +1298,9 @@ function RoofTrimHandles() {
         document.body.style.cursor = ''
       }
       useScene.temporal.getState().resume()
-      useEditor.getState().setActiveHandleDrag(null)
+      useInteractionScope
+        .getState()
+        .endIf((scope) => scope.kind === 'handle-drag' && scope.nodeId === segmentId)
       useViewer.getState().setInputDragging(false)
       setDraggingSide(null)
       dragCleanupRef.current = null

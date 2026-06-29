@@ -4,6 +4,7 @@ import {
   type FloorplanAffordance,
   useScene,
 } from '@pascal-app/core'
+import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
 // Floor minimums — mirror the 3D handles in `column/definition.ts` so a
 // drag can't push a value past what the renderer accepts.
@@ -146,11 +147,13 @@ export const columnRotateAffordance: FloorplanAffordance<ColumnNode> = {
 
     return {
       affectedIds: [columnId],
-      apply({ planPoint }) {
-        const currentAngle = Math.atan2(planPoint[1] - cz, planPoint[0] - cx)
-        let delta = currentAngle - initialAngle
-        while (delta > Math.PI) delta -= 2 * Math.PI
-        while (delta < -Math.PI) delta += 2 * Math.PI
+      apply({ planPoint, modifiers }) {
+        const delta = rotateAffordanceDelta({
+          center: [cx, cz],
+          initialAngle,
+          planPoint,
+          free: modifiers.shiftKey,
+        })
         const newRotation = initialRotation - delta
         lastRotation = newRotation
         useScene.getState().updateNode(columnId, { rotation: newRotation })

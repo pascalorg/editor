@@ -10,15 +10,42 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useIsMobile } from '../../../hooks/use-mobile'
-import { resolveSelectModeHelpHints } from '../../../lib/contextual-help'
+import {
+  type ContextualShortcutHint,
+  ROTATE_HANDLE_DRAG_LABEL,
+  resolveRotateHandleHelpHints,
+  resolveSelectModeHelpHints,
+} from '../../../lib/contextual-help'
+import { continuationContextOf } from '../../../lib/continuation'
 import { canDirectMoveNode, canDirectRotateNode } from '../../../lib/direct-manipulation'
-import useEditor from '../../../store/use-editor'
+import type { ReshapeKind } from '../../../lib/interaction/scope'
+import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
+import { snapContextOf } from '../../../lib/snapping-mode'
+import useEditor, { getActiveContinuationContext } from '../../../store/use-editor'
+import useInteractionScope, {
+  useActiveHandleDrag,
+  useMovingNode,
+} from '../../../store/use-interaction-scope'
 import { BuildingHelper } from './building-helper'
 import { ContextualHelperPanel } from './contextual-helper-panel'
-import { FenceHelper } from './fence-helper'
 import { ItemHelper } from './item-helper'
 import { RegisteredToolHelper } from './registered-tool-helper'
 import { RoofHelper } from './roof-helper'
+
+// Reshaping a selected node's geometry (endpoint / curve / polygon corner). The
+// snapping chip is the main control; these just name the gesture + Esc.
+function reshapingHints(reshape: ReshapeKind): ContextualShortcutHint[] {
+  const action =
+    reshape === 'curve'
+      ? 'Curve'
+      : reshape === 'endpoint'
+        ? 'Move endpoint'
+        : 'Move corner'
+  return [
+    { keys: ['Drag'], label: action },
+    { keys: ['Esc'], label: 'Cancel' },
+  ]
+}
 
 type ActiveModifierKeys = {
   command: boolean
@@ -62,7 +89,9 @@ function useActiveModifierKeys(): ActiveModifierKeys {
 export function HelperManager() {
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
-  const movingNode = useEditor((state) => state.movingNode)
+  const scope = useInteractionScope((s) => s.scope)
+  const movingNode = useMovingNode()
+  const activeHandleDrag = useActiveHandleDrag()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const isMobile = useIsMobile()
   const modifiers = useActiveModifierKeys()
@@ -72,6 +101,23 @@ export function HelperManager() {
         .map((id) => s.nodes[id as AnyNodeId])
         .filter((node): node is AnyNode => node !== undefined),
     ),
+  )
+  // The snapping context for whatever's active (wall / item / polygon) — drives
+  // which snapping chips the HUD shows, derived once and shared by every branch.
+  const snapContext = useMemo(
+    () =>
+      snapContextOf({
+        scope,
+        mode,
+        tool,
+        profileOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapProfile,
+        draftDirectionalOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapDraftDirectional ?? true,
+      }),
+    [scope, mode, tool],
+  )
+  const continuationContext = useMemo(
+    () => getActiveContinuationContext(),
+    [scope, mode, tool],
   )
   const selectModeHints = useMemo(() => {
     const single = selectedNodes.length === 1 ? selectedNodes[0] : null
@@ -94,36 +140,78 @@ export function HelperManager() {
   // Helpers are keyboard-driven hints (Esc, R, etc.) — irrelevant on touch.
   if (isMobile) return null
 
+  // Rotating a node via its in-world gizmo: advertise Shift = free rotation,
+  // the same angle-step bypass wall drafting exposes. Takes priority over the
+  // idle select-mode hints since a handle drag is the active interaction.
+  if (activeHandleDrag?.label === ROTATE_HANDLE_DRAG_LABEL) {
+    return <ContextualHelperPanel hints={resolveRotateHandleHelpHints(modifiers.shift)} />
+  }
+
+  // Reshaping a node's geometry (endpoint / curve / polygon corner). Checked
+  // before the select branch so the idle "drag selected / add objects" hints
+  // never leak over an in-progress reshape — and it gets its own snapping chip.
+  if (scope.kind === 'reshaping') {
+    return <ContextualHelperPanel hints={reshapingHints(scope.reshape)} snapContext={snapContext} />
+  }
+
   if (movingNode) {
     if (movingNode.type === 'building') return <BuildingHelper showRotate />
-    return <ItemHelper shiftPressed={modifiers.shift} showEsc />
+    // A fresh placement (e.g. a positioned preset like a shelf) advertises its
+    // once/repeat continuation, exactly like the GLB item tool — but an existing
+    // node being *moved* is not a placement, so it gets no continuation chip.
+    const movingContinuationContext = isFreshPlacementMetadata(movingNode.metadata)
+      ? continuationContextOf(movingNode.type)
+      : null
+    // Force-place only makes sense for kinds that collision-validate their drop;
+    // structural kinds (wall/slab/…) never reject, so don't advertise Alt.
+    return (
+      <ItemHelper
+        continuationContext={movingContinuationContext}
+        showEsc
+        showForce={nodeRegistry.get(movingNode.type)?.snapProfile !== 'structural'}
+        snapContext={snapContext}
+      />
+    )
   }
 
+  // Paint mode advertises (and cycles, via Shift) the application scope — the
+  // only contextual control here. The chip hides itself for targets that only
+  // paint one surface, so this renders nothing until a scoped target is active.
   if (mode === 'material-paint') {
-    return null
+    return <ContextualHelperPanel hints={[]} showPaintScope />
   }
 
-  if (mode === 'select') {
+  // Idle select only — an active scope (handle-drag, box-select, …) must not show
+  // the idle selection hints.
+  if (mode === 'select' && scope.kind === 'idle') {
     return <ContextualHelperPanel hints={selectModeHints} />
   }
 
-  // Registry-first: kinds with `def.toolHints` render through the generic
-  // `RegisteredToolHelper`. Today that covers ceiling / door / fence /
-  // item / shelf / slab / spawn / wall / window.
+  // Legacy fallback — only `roof` remains because it hasn't migrated to
+  // `def.tool` / `def.toolHints` yet (no Stage D port). Checked before the
+  // generic tool branch so the snap-context fallback below doesn't capture it
+  // and drop its bespoke `RoofHelper` hints. When roof migrates, this deletes.
+  if (tool === 'roof') return <RoofHelper snapContext={snapContext} />
+
+  // Registry-first: a kind renders the generic `RegisteredToolHelper` when it
+  // declares `def.toolHints`, OR whenever its draft resolves to a snap /
+  // continuation context — so a snappable tool with NO hand-written hints (e.g.
+  // `zone`) still advertises the snapping chip it already honors (Shift = cycle).
+  // `RegisteredToolHelper` self-hides when there's genuinely nothing to show.
   if (tool) {
     const def = nodeRegistry.get(tool)
-    if (def?.toolHints && def.toolHints.length > 0) {
-      // Fence adds a Straight / Curved mode toggle above the standard hints.
-      if (tool === 'fence') {
-        return <FenceHelper hints={def.toolHints} shiftPressed={modifiers.shift} />
-      }
-      return <RegisteredToolHelper hints={def.toolHints} shiftPressed={modifiers.shift} />
+    const hints = def?.toolHints ?? []
+    if (hints.length > 0 || snapContext || continuationContext) {
+      return (
+        <RegisteredToolHelper
+          continuationContext={continuationContext}
+          hints={hints}
+          shiftPressed={modifiers.shift}
+          snapContext={snapContext}
+        />
+      )
     }
   }
 
-  // Legacy fallback — only `roof` remains because it hasn't migrated to
-  // `def.tool` / `def.toolHints` yet (no Stage D port). When roof
-  // migrates, this switch deletes outright.
-  if (tool === 'roof') return <RoofHelper shiftPressed={modifiers.shift} />
   return null
 }

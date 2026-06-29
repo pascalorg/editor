@@ -133,6 +133,7 @@ function slabHandles(_node: SlabNodeType): HandleDescriptor<SlabNodeType>[] {
  */
 export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   kind: 'slab',
+  snapProfile: 'structural',
   schemaVersion: 1,
   schema: SlabNode,
   category: 'structure',
@@ -206,8 +207,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Trace slab outline' },
-    { key: 'Enter', label: 'Finish slab' },
-    { key: 'Shift', label: 'Free outline' },
+    { key: 'Enter', label: 'Finish slab', minDraftVertices: 3 },
     { key: 'Esc', label: 'Cancel' },
   ],
 

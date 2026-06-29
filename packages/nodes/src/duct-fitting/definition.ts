@@ -21,6 +21,7 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
   schema: DuctFittingNode,
   category: 'utility',
   distributionRole: 'fitting',
+  snapProfile: 'item',
 
   defaults: () => ({
     object: 'node',

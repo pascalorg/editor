@@ -281,15 +281,27 @@ export function createArrowHitAreaGeometry() {
   return geometry
 }
 
+// The move cross is a plus, not a disk. A disk-shaped hit area fills the four
+// corner gaps between the arms, so a neighbouring node sitting next to the
+// selected node (a lamp by a door, a slab beside a wall) gets swallowed by the
+// invisible grip and can't be picked. Wrap the visible arms instead: two flat
+// arm boxes (length/width + margin) merged into a plus, leaving the corners
+// empty so co-located neighbours stay selectable while the grip stays grabbable.
 function createMoveCrossHitAreaGeometry() {
-  const geometry = new CylinderGeometry(
-    MOVE_CROSS_HALF_LENGTH + HIT_AREA_MARGIN,
-    MOVE_CROSS_HALF_LENGTH + HIT_AREA_MARGIN,
-    HIT_AREA_THICKNESS,
-    32,
-  )
-  geometry.computeBoundingSphere()
-  return geometry
+  const armLength = (MOVE_CROSS_HALF_LENGTH + HIT_AREA_MARGIN) * 2
+  const armWidth = (MOVE_CROSS_HEAD_HALF_WIDTH + HIT_AREA_MARGIN) * 2
+  const armX = new BoxGeometry(armLength, HIT_AREA_THICKNESS, armWidth)
+  const armZ = new BoxGeometry(armWidth, HIT_AREA_THICKNESS, armLength)
+  const merged = mergeGeometries([armX, armZ], false)
+  if (!merged) {
+    armZ.dispose()
+    armX.computeBoundingSphere()
+    return armX
+  }
+  armX.dispose()
+  armZ.dispose()
+  merged.computeBoundingSphere()
+  return merged
 }
 
 export function createRotateArrowHitAreaGeometry() {

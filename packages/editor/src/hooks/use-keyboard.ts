@@ -1,6 +1,7 @@
 import { type AnyNodeId, emitter, nodeRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
+import { steppedRotation } from '../components/tools/item/placement-math'
 import { toggleDoorOpenState } from '../lib/door-interaction'
 import { runRedo, runUndo } from '../lib/history'
 import {
@@ -9,7 +10,8 @@ import {
 } from '../lib/scene-clipboard'
 import { emitDeleteSFX, sfxEmitter } from '../lib/sfx-bus'
 import { toggleWindowOpenState } from '../lib/window-interaction'
-import useEditor from '../store/use-editor'
+import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
+import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
 
 // Tools call this in their onCancel handler when they have an active mid-action to cancel,
 // so that the global Escape handler knows not to also switch to select mode.
@@ -36,14 +38,75 @@ export const useKeyboard = ({
     // global selection-based R/T handler must stand down to avoid double-firing.
     const isPlacingOpening = () => {
       const ed = useEditor.getState()
-      if (ed.movingNode?.type === 'door' || ed.movingNode?.type === 'window') return true
+      const moving = getMovingNode()
+      if (moving?.type === 'door' || moving?.type === 'window') return true
       return ed.mode === 'build' && (ed.tool === 'door' || ed.tool === 'window')
     }
 
+    // Shift cycles the snapping mode (and a clean-tap Ctrl the grid step)
+    // whenever there's an active snapping context — i.e. exactly when the HUD
+    // shows a snapping chip. That single source covers wall/fence/item drafting,
+    // every node move (including wall-hosted items + door/window openings, which
+    // now declare `snapProfile`), and endpoint/polygon reshaping, so the keys
+    // never silently stop working. Force-place lives on Alt where a tool supports it.
+    const isSnappingCycleContext = () => getActiveSnapContext() != null
+    // A "clean tap" of Ctrl/Meta (pressed and released with NO other key in
+    // between) cycles the grid step — same context as the Shift snapping-mode
+    // cycle. `ctrlTapClean` starts true the moment Ctrl/Meta goes down alone
+    // and is cleared the instant any other key fires, so chords like Ctrl+Z /
+    // Ctrl+C never cycle.
+    let ctrlTapClean = false
+
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Control' || e.key === 'Meta') {
+        // Only a fresh, modifier-free press starts a clean-tap candidate;
+        // ignore key-repeat and presses already part of a combo.
+        ctrlTapClean = !e.repeat && !e.shiftKey && !e.altKey
+      } else {
+        // Any non-modifier key (or a modifier combined with Ctrl/Meta) breaks
+        // the clean tap.
+        ctrlTapClean = false
+      }
+
       // Don't handle shortcuts if user is typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
+      }
+
+      if (e.key === 'Shift' && !e.repeat && useEditor.getState().mode === 'material-paint') {
+        // In paint mode Shift cycles the application scope (this surface →
+        // whole item / all matching / room) — the paint-mode analogue of the
+        // snapping-mode cycle below. The scope chip mirrors this key.
+        e.preventDefault()
+        useEditor.getState().cyclePaintScope()
+        sfxEmitter.emit('sfx:grid-snap')
+        return
+      }
+
+      if (e.key === 'Shift' && !e.repeat && isSnappingCycleContext()) {
+        // Cycle the global snapping mode (grid → lines → angles → off).
+        // `'off'` is the snap bypass now, so Shift no longer holds-to-bypass.
+        e.preventDefault()
+        useEditor.getState().cycleSnappingMode()
+        sfxEmitter.emit('sfx:grid-snap')
+        return
+      }
+
+      if (
+        (e.key === 'c' || e.key === 'C') &&
+        !e.repeat &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.shiftKey &&
+        !e.altKey
+      ) {
+        const context = getActiveContinuationContext()
+        if (context) {
+          e.preventDefault()
+          useEditor.getState().cycleContinuation(context)
+          sfxEmitter.emit('sfx:grid-snap')
+          return
+        }
       }
 
       if (e.key === 'Escape') {
@@ -57,7 +120,9 @@ export const useKeyboard = ({
           const currentPhase = useEditor.getState().phase
           const currentStructureLayer = useEditor.getState().structureLayer
 
-          useEditor.getState().setEditingHole(null)
+          useInteractionScope
+            .getState()
+            .endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
 
           // From zone mode, return to structure select
           if (currentPhase === 'structure' && currentStructureLayer === 'zones') {
@@ -91,6 +156,9 @@ export const useKeyboard = ({
         e.preventDefault()
         useEditor.getState().setPhase('furnish')
         useEditor.getState().setMode('build')
+        // Set the item tool explicitly so the active tool never inherits a
+        // stale tool from a prior build session.
+        useEditor.getState().setTool('item')
         useEditor.getState().setActiveSidebarPanel('items')
       } else if (e.key === 'z' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
@@ -98,6 +166,8 @@ export const useKeyboard = ({
         useEditor.getState().setPhase('structure')
         useEditor.getState().setStructureLayer('zones')
         useEditor.getState().setMode('build')
+        // Set the zone tool explicitly so it never inherits a stale tool.
+        useEditor.getState().setTool('zone')
       }
       if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
@@ -109,6 +179,9 @@ export const useKeyboard = ({
         useEditor.getState().setPhase('structure')
         useEditor.getState().setStructureLayer('elements')
         useEditor.getState().setMode('build')
+        // Set the wall tool explicitly so B never inherits a stale tool
+        // (e.g. fence) left over from a prior build session.
+        useEditor.getState().setTool('wall')
       } else if (e.key === 'x' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
@@ -227,14 +300,18 @@ export const useKeyboard = ({
             sfxEmitter.emit('sfx:item-rotate')
           } else if (node && 'rotation' in node) {
             e.preventDefault()
-            const ROTATION_STEP = Math.PI / 4
-
-            // Handle different rotation types (number for roof, array for items/windows/doors)
+            // Round to the nearest 45° then step one increment (not a blind +45°).
             if (typeof node.rotation === 'number') {
-              useScene.getState().updateNode(node.id, { rotation: node.rotation + ROTATION_STEP })
+              useScene
+                .getState()
+                .updateNode(node.id, { rotation: steppedRotation(node.rotation, 1) })
             } else if (Array.isArray(node.rotation)) {
               useScene.getState().updateNode(node.id, {
-                rotation: [node.rotation[0], node.rotation[1] + ROTATION_STEP, node.rotation[2]],
+                rotation: [
+                  node.rotation[0],
+                  steppedRotation(node.rotation[1], 1),
+                  node.rotation[2],
+                ],
               })
             }
             sfxEmitter.emit('sfx:item-rotate')
@@ -260,13 +337,18 @@ export const useKeyboard = ({
             sfxEmitter.emit('sfx:item-rotate')
           } else if (node && 'rotation' in node) {
             e.preventDefault()
-            const ROTATION_STEP = Math.PI / 4
-
+            // Round to the nearest 45° then step one increment back.
             if (typeof node.rotation === 'number') {
-              useScene.getState().updateNode(node.id, { rotation: node.rotation - ROTATION_STEP })
+              useScene
+                .getState()
+                .updateNode(node.id, { rotation: steppedRotation(node.rotation, -1) })
             } else if (Array.isArray(node.rotation)) {
               useScene.getState().updateNode(node.id, {
-                rotation: [node.rotation[0], node.rotation[1] - ROTATION_STEP, node.rotation[2]],
+                rotation: [
+                  node.rotation[0],
+                  steppedRotation(node.rotation[1], -1),
+                  node.rotation[2],
+                ],
               })
             }
             sfxEmitter.emit('sfx:item-rotate')
@@ -346,8 +428,30 @@ export const useKeyboard = ({
         }
       }
     }
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control' || e.key === 'Meta') {
+        const wasClean = ctrlTapClean
+        ctrlTapClean = false
+        if (!wasClean) return
+        // Same scope as the Shift snapping-mode cycle, and never while typing
+        // in an input.
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+          return
+        }
+        if (!isSnappingCycleContext()) return
+        // Cycle the grid / measurement step (0.5 → 0.25 → 0.1 → 0.05).
+        useEditor.getState().cycleGridSnapStep()
+        sfxEmitter.emit('sfx:grid-snap')
+        return
+      }
+    }
+
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
   }, [disabled, isVersionPreviewMode])
 
   return null

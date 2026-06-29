@@ -1,5 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
-import { buildWallFloorplan } from './floorplan'
+import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
 import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
 import { wallFloorplanMoveTarget } from './floorplan-move'
 import { wallFloorplanSiblingOverrides } from './floorplan-overrides'
@@ -18,12 +18,14 @@ import { wallSlots } from './slots'
  *   `renderer` + `system` keep wrap-exporting legacy WallRenderer +
  *   WallSystem + WallCutout.
  * Stage C: `def.floorplan` builder produces the mitered plan footprint
- *   polygon using `ctx.siblings` to assemble miter context.
+ *   polygon from shared floor-plan level data, with `ctx.siblings` as the
+ *   direct-caller fallback.
  *   floorplan-panel.tsx's `wallPolygons` short-circuits to [] when
  *   wall is registered.
  */
 export const wallDefinition: NodeDefinition<typeof WallNode> = {
   kind: 'wall',
+  snapProfile: 'structural',
   schemaVersion: 1,
   schema: WallNode,
   category: 'structure',
@@ -98,9 +100,11 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     // Priority 4 mirrors the legacy WallSystem's useFrame priority.
     priority: 4,
   },
-  // Stage C: floor-plan rendering. ctx.siblings provides other walls in
-  // the level so `calculateLevelMiters` can compute correct corner joins.
+  // Stage C: floor-plan rendering. Precomputes the level miter graph once
+  // per render pass, then the builder reads its own junctions by wall id.
+  computeFloorplanLevelData: computeWallFloorplanLevelData,
   floorplan: buildWallFloorplan,
+  floorplanDependsOnSiblings: true,
   // 2D drag affordances triggered by `endpoint-handle` primitives in
   // `def.floorplan`'s output. Sister to `affordanceTools` (3D) — the
   // same legacy `MoveWallEndpointTool` flow, reachable from both the
@@ -114,7 +118,6 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Set wall start / end' },
-    { key: 'Shift', label: 'Free angle (no 15° snap)' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

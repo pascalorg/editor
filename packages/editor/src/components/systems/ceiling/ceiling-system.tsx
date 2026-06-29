@@ -3,6 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { Color, type Material, type Mesh } from 'three'
 import useEditor from '../../../store/use-editor'
+import { useMovingNode } from '../../../store/use-interaction-scope'
 
 const CEILING_GRID_HIGHLIGHT_COLOR = '#ffffff'
 const CEILING_GRID_BASE_MATERIAL_KEY = '__pascalCeilingGridBaseMaterial'
@@ -75,7 +76,7 @@ function setCeilingGridHighlighted(ceilingGrid: Mesh, highlighted: boolean) {
 export const CeilingSystem = () => {
   const tool = useEditor((state) => state.tool)
   const selectedItem = useEditor((state) => state.selectedItem)
-  const movingNode = useEditor((state) => state.movingNode)
+  const movingNode = useMovingNode()
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const hoveredId = useViewer((state) => state.hoveredId)

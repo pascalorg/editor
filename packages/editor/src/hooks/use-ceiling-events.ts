@@ -12,6 +12,7 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import useEditor from '../store/use-editor'
+import { getMovingNode } from '../store/use-interaction-scope'
 
 const UP = new Vector3(0, 1, 0)
 
@@ -59,7 +60,7 @@ export function useCeilingEvents() {
     const isActive = (): boolean => {
       const ed = useEditor.getState()
       if (ed.selectedItem?.attachTo === 'ceiling') return true
-      const moving = ed.movingNode
+      const moving = getMovingNode()
       return moving?.type === 'item' && moving.asset?.attachTo === 'ceiling'
     }
 

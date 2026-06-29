@@ -1,7 +1,7 @@
 import type { AnyNodeId, ElevatorNode, SpawnNode } from '@pascal-app/core'
 import { nodeRegistry } from '@pascal-app/core'
 import { Suspense } from 'react'
-import useEditor from '../../../store/use-editor'
+import { useMovingNode } from '../../../store/use-interaction-scope'
 import { MoveElevatorTool } from '../elevator/move-elevator-tool'
 import { MoveRegistryNodeTool } from '../registry/move-registry-node-tool'
 import { getRegistryAffordanceTool } from '../shared/affordance-dispatch'
@@ -27,7 +27,7 @@ export const MoveTool: React.FC<{
   onNodeMoved?: (nodeId: AnyNodeId) => void
   onSpawnMoved?: (nodeId: SpawnNode['id']) => void
 }> = ({ onNodeMoved }) => {
-  const movingNode = useEditor((state) => state.movingNode)
+  const movingNode = useMovingNode()
 
   if (!movingNode) return null
 

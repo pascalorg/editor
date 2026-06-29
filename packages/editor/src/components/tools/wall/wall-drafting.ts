@@ -13,7 +13,8 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
+import { resolveSnapFlags } from '../../../lib/snapping-mode'
+import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
 import {
   distanceSquared,
   findWallSnapTarget,
@@ -51,10 +52,15 @@ type WallSplitIntersection = {
 }
 
 export function getSegmentGridStep(): number {
-  return useEditor.getState().gridSnapStep
+  // A 0 step means "no grid lattice" — every grid-snap consumer guards on
+  // `step <= 0` and returns the raw value, so disabling grid here suppresses
+  // the lattice for walls, fences, and every node move/affordance that reads
+  // this choke point, without retuning their snap math.
+  return resolveSnapFlags(getActiveSnappingMode()).grid ? useEditor.getState().gridSnapStep : 0
 }
 
 export function snapScalarToGrid(value: number, step = WALL_GRID_STEP): number {
+  if (step <= 0) return value
   return Math.round(value / step) * step
 }
 
@@ -404,32 +410,38 @@ export function createWallOnCurrentLevel(
   let resolvedStart = start
   let resolvedEnd = end
 
-  const endIntersection = findWallIntersection(resolvedEnd, workingWalls)
-  const splitEnd = splitWallIfNeeded(
-    endIntersection,
-    workingWalls,
-    nodes,
-    createNodes,
-    updateNodes,
-    deleteNode,
-  )
-  if (splitEnd) {
-    workingWalls = splitEnd.walls
-    resolvedEnd = splitEnd.point
-  }
+  // The corner-join / wall-split snap on commit is a magnetic (line) snap, so
+  // it must be gated by the snapping mode like the draft preview is. Without
+  // this gate `'off'` (and `'angles'`) still snapped the committed endpoint to
+  // existing wall geometry — the residual snap the draft path no longer does.
+  if (isMagneticSnapActive()) {
+    const endIntersection = findWallIntersection(resolvedEnd, workingWalls)
+    const splitEnd = splitWallIfNeeded(
+      endIntersection,
+      workingWalls,
+      nodes,
+      createNodes,
+      updateNodes,
+      deleteNode,
+    )
+    if (splitEnd) {
+      workingWalls = splitEnd.walls
+      resolvedEnd = splitEnd.point
+    }
 
-  const startIntersection = findWallIntersection(resolvedStart, workingWalls)
-  const splitStart = splitWallIfNeeded(
-    startIntersection,
-    workingWalls,
-    nodes,
-    createNodes,
-    updateNodes,
-    deleteNode,
-  )
-  if (splitStart) {
-    workingWalls = splitStart.walls
-    resolvedStart = splitStart.point
+    const startIntersection = findWallIntersection(resolvedStart, workingWalls)
+    const splitStart = splitWallIfNeeded(
+      startIntersection,
+      workingWalls,
+      nodes,
+      createNodes,
+      updateNodes,
+      deleteNode,
+    )
+    if (splitStart) {
+      workingWalls = splitStart.walls
+      resolvedStart = splitStart.point
+    }
   }
 
   if (!isSegmentLongEnough(resolvedStart, resolvedEnd) || pointsEqual(resolvedStart, resolvedEnd)) {

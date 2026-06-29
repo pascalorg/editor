@@ -11,6 +11,8 @@ import {
 } from '@pascal-app/core'
 import {
   type FencePlanPoint,
+  isAngleSnapActive,
+  isMagneticSnapActive,
   isSegmentLongEnough,
   snapFenceDraftPoint,
   useAlignmentGuides,
@@ -163,14 +165,18 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
 
     preview: (ctx, point, modifiers) => {
       const planPoint: FencePlanPoint = [point[0], point[1]]
-      // Endpoint move = grid snap only; the 45°-from-start angle snap
-      // is draft-only. Shift is a hard snap bypass.
+      // Endpoint move honours the active snapping mode (HUD chip): grid → lattice;
+      // lines → magnetic corner/alignment; angles → lock to 15° rays from the
+      // fixed corner; off → raw. No Shift bypass — Shift cycles the mode; Off is
+      // the bypass.
       const snapped = snapFenceDraftPoint({
         point: planPoint,
         walls: ctx.levelWalls,
         fences: ctx.levelFences,
         ignoreFenceIds: [ctx.fenceId as string],
-        bypassSnap: modifiers.shift,
+        start: ctx.fixedPoint,
+        angleSnap: isAngleSnapActive(),
+        magnetic: isMagneticSnapActive(),
       })
 
       // Figma-style alignment: nudge the dragged endpoint onto another wall /
@@ -178,7 +184,7 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
       // guide. The resolver connects to the NEAREST real anchor, so the dot
       // always sits on an actual point. Alt is reserved for detach.
       let aligned = snapped
-      if (!modifiers.shift && ctx.alignCandidates.length > 0) {
+      if (isMagneticSnapActive() && ctx.alignCandidates.length > 0) {
         const ar = resolveAlignment({
           moving: [{ nodeId: ctx.fenceId as string, kind: 'corner', x: snapped[0], z: snapped[1] }],
           candidates: ctx.alignCandidates,

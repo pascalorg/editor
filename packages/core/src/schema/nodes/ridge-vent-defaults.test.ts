@@ -8,6 +8,7 @@ import {
 import {
   getDutchRoofMetrics,
   getRoofSegmentVisibleTopBounds,
+  ROOF_SHAPE_DEFAULTS,
   RoofSegmentNode,
 } from './roof-segment'
 

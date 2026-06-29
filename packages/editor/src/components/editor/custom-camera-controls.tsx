@@ -22,6 +22,11 @@ import {
 } from 'three'
 import { EDITOR_LAYER } from '../../lib/constants'
 import useEditor from '../../store/use-editor'
+import {
+  useActiveHandleDrag,
+  useEndpointReshape,
+  useMovingNode,
+} from '../../store/use-interaction-scope'
 
 const currentTarget = new Vector3()
 const tempBox = new Box3()
@@ -611,18 +616,12 @@ export const CustomCameraControls = () => {
   const tool = useEditor((s) => s.tool)
   const mode = useEditor((s) => s.mode)
   const selectionTool = useEditor((s) => s.floorplanSelectionTool)
-  const movingNode = useEditor((s) => s.movingNode)
-  const movingWallEndpoint = useEditor((s) => s.movingWallEndpoint)
-  const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
-  const activeHandleDrag = useEditor((s) => s.activeHandleDrag)
+  const movingNode = useMovingNode()
+  const endpointReshape = useEndpointReshape()
+  const activeHandleDrag = useActiveHandleDrag()
   const isBoxSelectActive = mode === 'select' && selectionTool === 'marquee'
   const isInteracting = Boolean(
-    tool ||
-      movingNode ||
-      movingWallEndpoint ||
-      movingFenceEndpoint ||
-      activeHandleDrag ||
-      isBoxSelectActive,
+    tool || movingNode || endpointReshape || activeHandleDrag || isBoxSelectActive,
   )
   const touches = useMemo(() => {
     const twoFingerAction =
@@ -1154,12 +1153,12 @@ export const CustomCameraControls = () => {
   }, [])
 
   // Preset capture mode frames a single subtree (often a 0.3–2m preset),
-  // so the default 6m minDistance prevents the user from getting close
+  // so the default 2m minDistance prevents the user from getting close
   // enough to compose a good thumbnail. Relax the clamp to 0.5m while
   // capturing presets; reset on exit so general editing keeps the looser
   // navigation guardrails.
   const isPresetCapture = captureMode.mode === 'preset'
-  const minDistance = isPresetCapture ? 0.5 : 6
+  const minDistance = isPresetCapture ? 0.5 : 2
 
   if (isFirstPersonMode) {
     return null

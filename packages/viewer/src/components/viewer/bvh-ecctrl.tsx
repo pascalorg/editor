@@ -1,4 +1,5 @@
-import '../../../three-types'
+// R3F JSX type augmentations (mesh, group, box3Helper, …) for the debug overlay.
+import '@react-three/fiber'
 import { TransformControls, useKeyboardControls } from '@react-three/drei'
 import { type ThreeElements, useFrame, useThree } from '@react-three/fiber'
 import type { ReactNode } from 'react'

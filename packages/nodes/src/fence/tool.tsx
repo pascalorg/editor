@@ -10,7 +10,6 @@ import {
   type LevelNode,
   type Point2D,
   resolveAlignment,
-  sampleFenceSpline,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -18,7 +17,6 @@ import {
 import {
   CursorSphere,
   createFenceOnCurrentLevel,
-  createSplineFenceOnCurrentLevel,
   EDITOR_LAYER,
   type FencePlanPoint,
   formatAngleRadians,
@@ -26,6 +24,8 @@ import {
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  isAngleSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   type SegmentAngleReference,
   snapFenceDraftPoint,
@@ -427,14 +427,6 @@ function getCurrentLevelElements(): { walls: WallNode[]; fences: FenceNode[] } {
 }
 
 export const FenceTool: React.FC = () => {
-  const drawMode = useEditor((s) => s.fenceDrawMode)
-  if (drawMode === 'spline') {
-    return <SplineFenceDraft />
-  }
-  return <StraightFenceTool />
-}
-
-const StraightFenceTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   // A placed preset seeds `toolDefaults.fence` before the tool mounts, so
@@ -455,7 +447,6 @@ const StraightFenceTool: React.FC = () => {
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const buildingState = useRef(0)
-  const shiftPressed = useRef(false)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
@@ -476,10 +467,12 @@ const StraightFenceTool: React.FC = () => {
     }
 
     // Align the drafted point onto another object's nearest real anchor and
-    // publish the guide. Alt bypasses alignment; Shift bypasses all guided
-    // snapping. Returns the possibly snapped point.
+    // publish the guide. Returns the possibly snapped point.
     const alignPoint = (point: FencePlanPoint, bypass: boolean): FencePlanPoint => {
-      if (bypass || alignmentCandidates.length === 0) {
+      // Figma alignment pulls the endpoint onto existing corners / edges, so it
+      // is a line snap — suppress it whenever magnetic snap is off (`'off'` /
+      // `'angles'`), matching the fence-geometry snap.
+      if (bypass || !isMagneticSnapActive() || alignmentCandidates.length === 0) {
         useAlignmentGuides.getState().clear()
         return point
       }
@@ -504,13 +497,14 @@ const StraightFenceTool: React.FC = () => {
       if (!(cursorRef.current && previewRef.current)) return
       const { walls, fences } = getCurrentLevelElements()
       const localPoint: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
-      // While drafting, the segment locks to 15° rays from its start
-      // unless Shift is held. Shift also bypasses grid and magnetic snap.
-      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
-      const bypassAlign = event.nativeEvent?.altKey === true || bypassSnap
+      // While drafting, the segment locks to 15° rays from its start.
+      // Snapping is governed by the snapping mode (`'off'` is the bypass);
+      // there is no Shift hold-to-bypass. Alignment follows the magnetic snap
+      // mode, not Alt (continuation is cycled through the HUD / C).
+      const bypassAlign = !isMagneticSnapActive()
 
       if (buildingState.current === 1) {
-        const angleLocked = !bypassSnap
+        const angleLocked = isAngleSnapActive()
         const snappedLocal = alignPoint(
           snapFenceDraftPoint({
             point: localPoint,
@@ -518,7 +512,7 @@ const StraightFenceTool: React.FC = () => {
             fences,
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
-            bypassSnap,
+            magnetic: isMagneticSnapActive(),
           }),
           bypassAlign || angleLocked,
         )
@@ -526,7 +520,6 @@ const StraightFenceTool: React.FC = () => {
         cursorRef.current.position.copy(endingPoint.current)
         const currentFenceEnd: FencePlanPoint = [snappedLocal[0], snappedLocal[1]]
         if (
-          !bypassSnap &&
           previousFenceEnd &&
           (currentFenceEnd[0] !== previousFenceEnd[0] || currentFenceEnd[1] !== previousFenceEnd[1])
         ) {
@@ -553,7 +546,12 @@ const StraightFenceTool: React.FC = () => {
         )
       } else {
         const snappedPoint = alignPoint(
-          snapFenceDraftPoint({ point: localPoint, walls, fences, bypassSnap }),
+          snapFenceDraftPoint({
+            point: localPoint,
+            walls,
+            fences,
+            magnetic: isMagneticSnapActive(),
+          }),
           bypassAlign,
         )
         cursorRef.current.position.set(snappedPoint[0], event.localPosition[1], snappedPoint[1])
@@ -562,6 +560,7 @@ const StraightFenceTool: React.FC = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (!previewRef.current) return
       if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
         stopDrafting()
         return
@@ -569,12 +568,16 @@ const StraightFenceTool: React.FC = () => {
 
       const { walls, fences } = getCurrentLevelElements()
       const localClick: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
-      const bypassSnap = shiftPressed.current || event.nativeEvent?.shiftKey === true
-      const bypassAlign = event.nativeEvent?.altKey === true || bypassSnap
+      const bypassAlign = !isMagneticSnapActive()
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
-          snapFenceDraftPoint({ point: localClick, walls, fences, bypassSnap }),
+          snapFenceDraftPoint({
+            point: localClick,
+            walls,
+            fences,
+            magnetic: isMagneticSnapActive(),
+          }),
           bypassAlign,
         )
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
@@ -584,7 +587,7 @@ const StraightFenceTool: React.FC = () => {
         previewRef.current.visible = true
         setDraftMeasurement(null)
       } else {
-        const angleLocked = !bypassSnap
+        const angleLocked = isAngleSnapActive()
         const snappedEnd = alignPoint(
           snapFenceDraftPoint({
             point: localClick,
@@ -592,7 +595,7 @@ const StraightFenceTool: React.FC = () => {
             fences,
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
-            bypassSnap,
+            magnetic: isMagneticSnapActive(),
           }),
           bypassAlign || angleLocked,
         )
@@ -610,6 +613,13 @@ const StraightFenceTool: React.FC = () => {
         refreshAlignmentCandidates()
         useAlignmentGuides.getState().clear()
 
+        // Single mode commits one segment per click: stop drafting so the next
+        // click starts a fresh segment instead of chaining off this endpoint.
+        if (useEditor.getState().getContinuation('fence') === 'single') {
+          stopDrafting()
+          return
+        }
+
         const nextStart = createdFence.end
         // Publish the resolved chain start so the 2D floor-plan draft
         // chains its next segment from the same point (its own snap
@@ -624,20 +634,6 @@ const StraightFenceTool: React.FC = () => {
       }
     }
 
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = true
-    }
-
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = false
-    }
-
-    // Cmd-tabbing away mid-draft never delivers the keyup — reset so the
-    // angle lock isn't stuck off when focus returns.
-    const onBlur = () => {
-      shiftPressed.current = false
-    }
-
     const onCancel = () => {
       if (buildingState.current === 1) {
         markToolCancelConsumed()
@@ -648,17 +644,11 @@ const StraightFenceTool: React.FC = () => {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
-    window.addEventListener('blur', onBlur)
 
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener('blur', onBlur)
       useSegmentDraftChain.getState().clear('fence')
       useAlignmentGuides.getState().clear()
     }
@@ -698,138 +688,6 @@ const StraightFenceTool: React.FC = () => {
             </group>
           ))}
         </>
-      )}
-    </group>
-  )
-}
-
-const SPLINE_PREVIEW_COLOR = '#8381ed'
-/** Catmull-Rom smoothness between control points for the live ghost. */
-const SPLINE_PREVIEW_SEGMENTS = 14
-
-/**
- * Spline ("flying path") fence drafting. Multi-click flow modeled on the
- * lineset tool: each click drops a control point, the live preview renders the
- * smooth Catmull-Rom curve through the dropped points + the cursor, and a
- * double-click / Enter commits ONE fence whose `path` is the control points.
- * Esc removes the last point (or cancels when empty). Grid snap applies to
- * every dropped point; Shift bypasses it.
- */
-const SplineFenceDraft: React.FC = () => {
-  const previewHeight =
-    typeof useEditor.getState().toolDefaults.fence?.height === 'number'
-      ? (useEditor.getState().toolDefaults.fence?.height as number)
-      : FENCE_PREVIEW_HEIGHT
-  const [draftPoints, setDraftPoints] = useState<FencePlanPoint[]>([])
-  const [cursor, setCursor] = useState<FencePlanPoint | null>(null)
-  const draftRef = useRef(draftPoints)
-  draftRef.current = draftPoints
-  const shiftPressed = useRef(false)
-
-  // Clear seeded preset defaults when the tool unmounts (mirror of the
-  // straight tool) so a later manual draw isn't drawn with stale params.
-  useEffect(() => () => useEditor.getState().setToolDefaults('fence', null), [])
-
-  useEffect(() => {
-    const snapPoint = (local: FencePlanPoint): FencePlanPoint => {
-      if (shiftPressed.current) return local
-      const step = useEditor.getState().gridSnapStep
-      if (step <= 0) return local
-      return [Math.round(local[0] / step) * step, Math.round(local[1] / step) * step]
-    }
-
-    const commit = () => {
-      const points = draftRef.current
-      if (points.length >= 2) {
-        const created = createSplineFenceOnCurrentLevel(points)
-        if (created) {
-          triggerSFX('sfx:item-place')
-          useViewer.getState().setSelection({ selectedIds: [created.id] })
-        }
-      }
-      setDraftPoints([])
-      setCursor(null)
-    }
-
-    const onMove = (event: GridEvent) => {
-      setCursor(snapPoint([event.localPosition[0], event.localPosition[2]]))
-    }
-
-    const onClick = (event: GridEvent) => {
-      // Double-click commits the run (matches the straight tool's stop gesture).
-      if (event.nativeEvent.detail >= 2) {
-        commit()
-        return
-      }
-      const point = snapPoint([event.localPosition[0], event.localPosition[2]])
-      triggerSFX('sfx:grid-snap')
-      setDraftPoints((prev) => [...prev, point])
-    }
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = true
-      if (e.key === 'Enter') commit()
-    }
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = false
-    }
-    const onBlur = () => {
-      shiftPressed.current = false
-    }
-    const onCancel = () => {
-      if (draftRef.current.length === 0) return
-      markToolCancelConsumed()
-      // Esc peels off the last point; cancels the whole draft when none left.
-      setDraftPoints((prev) => prev.slice(0, -1))
-    }
-
-    emitter.on('grid:move', onMove)
-    emitter.on('grid:click', onClick)
-    emitter.on('tool:cancel', onCancel)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
-    window.addEventListener('blur', onBlur)
-    return () => {
-      emitter.off('grid:move', onMove)
-      emitter.off('grid:click', onClick)
-      emitter.off('tool:cancel', onCancel)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener('blur', onBlur)
-    }
-  }, [])
-
-  // Sample the smooth curve through the committed points plus the live cursor.
-  const previewPoints = cursor ? [...draftPoints, cursor] : draftPoints
-  const curveGeometry = useMemo(() => {
-    if (previewPoints.length < 2) return null
-    const sampled = sampleFenceSpline(previewPoints, undefined, SPLINE_PREVIEW_SEGMENTS)
-    return new BufferGeometry().setFromPoints(
-      sampled.map((p) => new Vector3(p.x, previewHeight, p.y)),
-    )
-  }, [previewPoints, previewHeight])
-
-  return (
-    <group>
-      {cursor && <CursorSphere height={previewHeight} position={[cursor[0], 0, cursor[1]]} />}
-      {draftPoints.map((p, i) => (
-        <mesh key={`fence-spline-pt-${i}`} layers={EDITOR_LAYER} position={[p[0], previewHeight, p[1]]}>
-          <sphereGeometry args={[0.07, 16, 12]} />
-          <meshBasicMaterial color={SPLINE_PREVIEW_COLOR} depthTest={false} />
-        </mesh>
-      ))}
-      {curveGeometry && (
-        // @ts-expect-error - R3F accepts Three line primitives (same as the draft angle arc).
-        <line frustumCulled={false} geometry={curveGeometry} layers={EDITOR_LAYER} renderOrder={2}>
-          <lineBasicNodeMaterial
-            color={SPLINE_PREVIEW_COLOR}
-            depthTest={false}
-            depthWrite={false}
-            linewidth={2}
-            opacity={0.95}
-            transparent
-          />
-        </line>
       )}
     </group>
   )

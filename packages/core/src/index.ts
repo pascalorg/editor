@@ -35,6 +35,7 @@ export type {
   ZoneEvent,
 } from './events/bus'
 export { emitter, eventSuffixes } from './events/bus'
+export { type ItemClipEntry, itemClipRegistry } from './hooks/scene-registry/item-clip-registry'
 export {
   sceneRegistry,
   useRegistry,

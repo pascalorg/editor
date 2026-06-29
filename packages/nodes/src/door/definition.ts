@@ -166,6 +166,8 @@ const doorHandles: HandleDescriptor<DoorNodeType>[] = [
  */
 export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   kind: 'door',
+  snapProfile: 'item',
+  facingIndicator: true,
   schemaVersion: 1,
   schema: DoorNode,
   category: 'structure',
@@ -223,6 +225,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // Stage C: floor-plan polygon. Needs ctx.parent (the wall) to compute
   // direction + perpendicular for the cutout footprint.
   floorplan: buildDoorFloorplan,
+  floorplanDependsOnSiblings: true,
   // Stage D — placement (`def.tool`) + move-on-wall (`def.
   // affordanceTools.move`). Both ports of the legacy tools at
   // `editor/components/tools/door/`, relocated into the kind folder and
@@ -250,7 +253,8 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place door on wall' },
-    { key: 'Shift', label: 'Free place' },
+    { key: 'R', label: 'Flip side' },
+    { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },
   ],
 
