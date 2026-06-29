@@ -1,17 +1,23 @@
 import {
+  type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
   type LevelNode,
+  resolveBuildingForLevel,
   RoofNode,
   RoofSegmentNode,
   sceneRegistry,
-  snapScalar,
   useScene,
+  type WallNode,
+  wallSegmentAnchors,
 } from '@pascal-app/core'
-import { useAlignmentGuides } from '@pascal-app/editor'
+import {
+  clearSurfacePlanSnapFeedback,
+  resolveSurfacePlanPointSnap,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -19,21 +25,72 @@ import { BufferGeometry, DoubleSide, type Group, type Line, Vector3 } from 'thre
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import {
-  resolveAlignmentForActiveBuilding,
-  snapWorldXZForActiveBuilding,
-} from '../../../lib/world-grid-snap'
+import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
 const DEFAULT_WALL_HEIGHT = 0.5
 const DEFAULT_PITCH_DEG = 40
 const GRID_OFFSET = 0.02
-/** Figma-style alignment-snap threshold (meters), matching the move tools. */
-const ALIGNMENT_THRESHOLD_M = 0.08
 
-function snapToActiveGrid(value: number): number {
-  return snapScalar(value, useEditor.getState().gridSnapStep)
+// Walls that are direct children of a level.
+function getLevelWalls(
+  levelId: string | null,
+  nodes: Readonly<Record<string, AnyNode>>,
+): WallNode[] {
+  if (!levelId) return []
+  const levelNode = nodes[levelId]
+  if (levelNode?.type !== 'level') return []
+  return (levelNode as LevelNode).children
+    .map((childId) => nodes[childId])
+    .filter((node): node is WallNode => node?.type === 'wall')
+}
+
+// Walls on the level directly beneath the active one. Levels share the same
+// local XZ origin (they only differ in world Y), so these walls live in the
+// identical coordinate frame and feed straight into both the alignment pool
+// and the magnetic wall-snap pipeline — letting a roof drawn on the upper
+// floor snap onto the wall corners of the floor below.
+function getBelowLevelWalls(
+  currentLevelId: string | null,
+  nodes: Readonly<Record<string, AnyNode>>,
+): WallNode[] {
+  if (!currentLevelId) return []
+  const currentLevel = nodes[currentLevelId]
+  if (currentLevel?.type !== 'level') return []
+  const buildingId = resolveBuildingForLevel(currentLevel.id, nodes)
+  if (!buildingId) return []
+  const building = nodes[buildingId]
+  if (building?.type !== 'building') return []
+  const currentIndex = (currentLevel as LevelNode).level
+  const belowLevel = (building.children ?? [])
+    .map((childId) => nodes[childId])
+    .filter((node): node is LevelNode => node?.type === 'level' && node.level < currentIndex)
+    .sort((a, b) => b.level - a.level)[0]
+  return getLevelWalls(belowLevel?.id ?? null, nodes)
+}
+
+// Current-level + floor-below walls — the magnetic snap targets the roof draft
+// locks onto (corners, midpoints, crossings, wall bodies), matching the wall
+// tool. Same coordinate frame, so no transform is needed.
+function getRoofSnapWalls(
+  currentLevelId: string | null,
+  nodes: Readonly<Record<string, AnyNode>>,
+): WallNode[] {
+  return [...getLevelWalls(currentLevelId, nodes), ...getBelowLevelWalls(currentLevelId, nodes)]
+}
+
+// Current-level alignment anchors plus the floor-below wall corners.
+function collectRoofAlignmentAnchors(
+  nodes: Readonly<Record<string, AnyNode>>,
+  currentLevelId: string | null,
+): AlignmentAnchor[] {
+  return [
+    ...collectAlignmentAnchors(nodes, '', currentLevelId),
+    ...getBelowLevelWalls(currentLevelId, nodes).flatMap((wall) =>
+      wallSegmentAnchors(wall.id, wall.start, wall.end, wall.thickness),
+    ),
+  ]
 }
 
 /**
@@ -179,44 +236,40 @@ export const RoofTool: React.FC = () => {
 
     outlineRef.current.geometry = new BufferGeometry()
 
-    // Alignment candidates — anchors of every alignable object; refreshed
-    // after each roof commits. Both corners of the rectangle align.
-    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
-    // Snap the drafted corner onto another object's nearest real anchor and
-    // publish the guide. The probe is the RAW cursor, NOT the 0.5m-grid-snapped
-    // point: resolving against the grid point would only ever catch anchors
-    // that happen to sit on a grid line, so off-grid items (furniture, angled
-    // walls) would never surface a guide. The matched axis locks exactly to the
-    // candidate's coordinate; the other axis keeps its grid snap. Alignment runs
-    // only when the magnetic (lines) snapping mode is active.
-    const alignPoint = (
-      gridX: number,
-      gridZ: number,
-      rawX: number,
-      rawZ: number,
-      bypass: boolean,
-    ): [number, number] => {
-      if (bypass || alignmentCandidates.length === 0) {
-        useAlignmentGuides.getState().clear()
-        return [gridX, gridZ]
-      }
-      const ar = resolveAlignmentForActiveBuilding({
-        moving: [{ nodeId: '__roof-draft__', kind: 'corner', x: rawX, z: rawZ }],
+    // Alignment candidates — anchors of every alignable object on the active
+    // level plus the wall corners of the floor directly below, so a roof drawn
+    // on the upper floor aligns to the walls beneath it. Refreshed after each
+    // roof commits. Both corners of the rectangle align.
+    let alignmentCandidates = collectRoofAlignmentAnchors(useScene.getState().nodes, currentLevelId)
+
+    // Resolve a grid:move/click into the drafted corner via the shared surface
+    // snap pipeline: magnetic lock onto wall corners / midpoints / crossings /
+    // bodies on the active level + floor below (raising the green beacon),
+    // falling back to alignment guides, then to the world-grid snap. The same
+    // path the slab/ceiling tools use, so the beacon and coloring match. The
+    // pipeline reads the snapping mode itself (Shift bypass, magnetic on/off),
+    // so this tool never inspects the flags. `levelId` is intentionally omitted
+    // so the explicit floor-below `walls` aren't filtered back out.
+    const resolveDraftPoint = (event: GridEvent): [number, number] => {
+      const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
+      const gridFallback: [number, number] = isGridSnapActive()
+        ? snapWorldXZForActiveBuilding(
+            event.position[0],
+            event.position[2],
+            useEditor.getState().gridSnapStep,
+          ).local
+        : rawPoint
+      const nodes = useScene.getState().nodes
+      return resolveSurfacePlanPointSnap({
+        rawPoint,
+        fallbackPoint: gridFallback,
+        walls: getRoofSnapWalls(currentLevelId, nodes),
         candidates: alignmentCandidates,
-        threshold: ALIGNMENT_THRESHOLD_M,
-      })
-      if (ar.guides.length === 0) {
-        useAlignmentGuides.getState().clear()
-        return [gridX, gridZ]
-      }
-      useAlignmentGuides.getState().set(ar.guides)
-      let x = gridX
-      let z = gridZ
-      for (const guide of ar.guides) {
-        if (guide.axis === 'x') x = guide.coord
-        else z = guide.coord
-      }
-      return [x, z]
+        movingId: '__roof-draft__',
+        shiftKey: event.nativeEvent?.shiftKey === true,
+        altKey: event.nativeEvent?.altKey === true,
+        highlightWalls: true,
+      }).point
     }
 
     const updateOutline = (
@@ -241,24 +294,7 @@ export const RoofTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
 
-      // World-grid snap projected into building-local; rotated buildings
-      // used to drag every roof corner off the visible grid. Snapping follows
-      // the global mode (grid quantize / lines alignment); Off keeps the raw
-      // cursor. Shift cycles the mode centrally — this tool never reads it.
-      const snapped: [number, number] = isGridSnapActive()
-        ? snapWorldXZForActiveBuilding(
-            event.position[0],
-            event.position[2],
-            useEditor.getState().gridSnapStep,
-          ).local
-        : [event.localPosition[0], event.localPosition[2]]
-      const [gridX, gridZ] = alignPoint(
-        snapped[0],
-        snapped[1],
-        event.localPosition[0],
-        event.localPosition[2],
-        !isMagneticSnapActive(),
-      )
+      const [gridX, gridZ] = resolveDraftPoint(event)
       const y = event.localPosition[1]
 
       const cursorPosition: [number, number, number] = [gridX, y, gridZ]
@@ -291,23 +327,7 @@ export const RoofTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!currentLevelId) return
 
-      // World-grid snap projected into building-local; rotated buildings
-      // used to drag every roof corner off the visible grid. Snapping follows
-      // the global mode; Off keeps the raw cursor.
-      const snapped: [number, number] = isGridSnapActive()
-        ? snapWorldXZForActiveBuilding(
-            event.position[0],
-            event.position[2],
-            useEditor.getState().gridSnapStep,
-          ).local
-        : [event.localPosition[0], event.localPosition[2]]
-      const [gridX, gridZ] = alignPoint(
-        snapped[0],
-        snapped[1],
-        event.localPosition[0],
-        event.localPosition[2],
-        !isMagneticSnapActive(),
-      )
+      const [gridX, gridZ] = resolveDraftPoint(event)
       const y = event.localPosition[1]
 
       if (corner1Ref.current) {
@@ -322,8 +342,8 @@ export const RoofTool: React.FC = () => {
 
         corner1Ref.current = null
         outlineRef.current.visible = false
-        alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
-        useAlignmentGuides.getState().clear()
+        alignmentCandidates = collectRoofAlignmentAnchors(useScene.getState().nodes, currentLevelId)
+        clearSurfacePlanSnapFeedback()
       } else {
         corner1Ref.current = [gridX, y, gridZ]
         sfxEmitter.emit('sfx:structure-build-start')
@@ -341,7 +361,7 @@ export const RoofTool: React.FC = () => {
         outlineRef.current.visible = false
         setPreview((prev) => ({ ...prev, corner1: null }))
       }
-      useAlignmentGuides.getState().clear()
+      clearSurfacePlanSnapFeedback()
     }
 
     emitter.on('grid:move', onGridMove)
@@ -352,7 +372,7 @@ export const RoofTool: React.FC = () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
-      useAlignmentGuides.getState().clear()
+      clearSurfacePlanSnapFeedback()
 
       corner1Ref.current = null
     }

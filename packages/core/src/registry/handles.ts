@@ -55,6 +55,17 @@ export type EditorApi = {
    * fences). No-ops for kinds without endpoints.
    */
   engageEndpointMove: (node: AnyNode, endpoint: 'start' | 'end') => void
+  /**
+   * Engage drag of a spline control point (`path[index]`). Used by spline
+   * fences to reshape their centerline. No-ops for kinds without a path.
+   */
+  engageControlPointMove: (node: AnyNode, index: number) => void
+  /**
+   * Engage drag of a spline tangent handle (`path[index]`, which end). Used by
+   * spline fences to bend the curve through one control point. No-ops for kinds
+   * without tangents.
+   */
+  engageTangentMove: (node: AnyNode, index: number, side: 'in' | 'out') => void
 }
 
 export type HandlePortal = 'self' | 'parent' | 'grandparent'
@@ -323,6 +334,11 @@ export type TapActionHandle<N = any> = {
    * drag, so the move tool's own preview / ticker feedback shows up.
    */
   shape?: 'arrow' | 'corner-picker' | 'move-cross'
+  /**
+   * `shape: 'corner-picker'` only — render the disc and its outer ring as a
+   * circle instead of the default hexagon.
+   */
+  round?: boolean
   /**
    * Required when `shape: 'corner-picker'` — controls the dashed leader's
    * vertical extent. Pure callback so the descriptor doesn't need to

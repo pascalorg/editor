@@ -14,7 +14,6 @@ import {
   syncAutoStairOpenings,
   useScene,
 } from '@pascal-app/core'
-import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -23,6 +22,7 @@ import {
   resolveStairDestinationLevel,
   resolveStairPlacementLevelId,
 } from '../../../lib/stair-levels'
+import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
 import useFacingPose from '../../../store/use-facing-pose'
 import { CursorSphere } from '../shared/cursor-sphere'

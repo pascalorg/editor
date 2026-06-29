@@ -23,7 +23,6 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
@@ -32,6 +31,7 @@ import { stripPlacementMetadataFlags } from '../../../lib/placement-metadata'
 import { resolvePlanarCursorPosition } from '../../../lib/planar-cursor-placement'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
+import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
 import useFacingPose from '../../../store/use-facing-pose'
 import { swallowNextClick } from '../../editor/node-arrow-handles'

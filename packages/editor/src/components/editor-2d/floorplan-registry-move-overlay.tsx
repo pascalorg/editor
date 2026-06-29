@@ -10,7 +10,6 @@ import {
   type FloorplanMoveTargetSession,
   nodeRegistry,
   pauseSceneHistory,
-  resolveAlignment,
   resumeSceneHistory,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -22,6 +21,7 @@ import { commitFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
 import { isFreshPlacementMetadata, stripPlacementMetadataFlags } from '../../lib/placement-metadata'
 import { resolvePlanarCursorPosition } from '../../lib/planar-cursor-placement'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { resolveAlignmentForFloorplanView } from '../../lib/world-grid-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
 import { useMovingNode } from '../../store/use-interaction-scope'
@@ -557,7 +557,7 @@ export function FloorplanRegistryMoveOverlay() {
         // store, which the 2D FloorplanAlignmentGuideLayer renders
         // inside the rotated scene <g>. The 3D pipeline uses a
         // separate store, so frames stay isolated per surface.
-        const result = resolveAlignment({
+        const result = resolveAlignmentForFloorplanView({
           moving: movingAnchors,
           candidates: candidateAnchors,
           threshold: ALIGNMENT_THRESHOLD_M,

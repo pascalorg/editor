@@ -1,7 +1,6 @@
 'use client'
 
 import { type AlignmentGuide, sceneRegistry } from '@pascal-app/core'
-import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
@@ -9,6 +8,7 @@ import { memo, useMemo, useRef } from 'react'
 import { BoxGeometry, CircleGeometry, type Group, Vector3 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
+import useAlignmentGuides from '../../store/use-alignment-guides'
 import { formatMeasurement } from './measurement-pill'
 
 /**

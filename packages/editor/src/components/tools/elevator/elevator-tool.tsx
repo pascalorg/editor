@@ -9,11 +9,11 @@ import {
   resolveAlignment,
   useScene,
 } from '@pascal-app/core'
-import { useAlignmentGuides } from '@pascal-app/editor'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { resolveCurrentBuildingId, resolveElevatorSupportY } from '../../../lib/elevator-support'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
 import usePlacementPreview from '../../../store/use-placement-preview'
 import { CursorSphere } from '../shared/cursor-sphere'

@@ -80,6 +80,7 @@ export {
 // shared/segment-angle.ts) once every Stage D port is in.
 export {
   createFenceOnCurrentLevel,
+  createSplineFenceOnCurrentLevel,
   type FencePlanPoint,
   snapFenceDraftPoint,
 } from './components/tools/fence/fence-drafting'
@@ -353,7 +354,9 @@ export {
 export { cn } from './lib/utils'
 export {
   getActiveBuildingPose,
+  projectAlignmentGuidesWorldToActiveBuildingLocal,
   resolveAlignmentForActiveBuilding,
+  resolveAlignmentForFloorplanView,
   snapBuildingLocalToWorldGrid,
   snapWorldXZForActiveBuilding,
 } from './lib/world-grid-snap'

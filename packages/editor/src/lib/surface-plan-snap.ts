@@ -6,7 +6,6 @@ import {
   getWallCurveFrameAt,
   getWallCurveLength,
   isCurvedWall,
-  resolveAlignment,
   resolveLevelId,
   useScene,
   type WallNode,
@@ -19,6 +18,7 @@ import {
   type WallSnapRadii,
 } from '../components/tools/wall/wall-drafting'
 import useAlignmentGuides from '../store/use-alignment-guides'
+import { resolveAlignmentForFloorplanView } from './world-grid-snap'
 import { isMagneticSnapActive } from '../store/use-editor'
 import useWallSnapIndicator from '../store/use-wall-snap-indicator'
 
@@ -228,7 +228,7 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
     return { point: basePoint, wallSnap: null, guides: [], wallIds: [] }
   }
 
-  const alignment = resolveAlignment({
+  const alignment = resolveAlignmentForFloorplanView({
     moving: [{ nodeId: movingId, kind: 'corner', x: basePoint[0], z: basePoint[1] }],
     candidates,
     threshold: input.threshold ?? SURFACE_ALIGNMENT_THRESHOLD_M,

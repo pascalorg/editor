@@ -17,10 +17,18 @@ export const CONTINUATION_PROFILES: Record<
     icons: { room: 'lucide:square', single: 'lucide:minus' },
   },
   fence: {
-    options: ['continuous', 'single'],
+    options: ['single', 'continuous', 'curved'],
     default: 'continuous',
-    labels: { continuous: 'Continuous', single: 'Single fence' },
-    icons: { continuous: 'lucide:waypoints', single: 'lucide:minus' },
+    labels: {
+      continuous: 'Continuous',
+      single: 'Single fence',
+      curved: 'Curved fence',
+    },
+    icons: {
+      continuous: 'lucide:waypoints',
+      single: 'lucide:minus',
+      curved: 'lucide:spline',
+    },
   },
   point: {
     options: ['once', 'repeat'],

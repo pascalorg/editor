@@ -44,9 +44,11 @@ import { createEditorApi } from '../../../lib/editor-api'
 import {
   type ActiveInteractionScope,
   boundaryReshapeScope,
+  controlPointReshapeScope,
   curveReshapeScope,
   endpointReshapeScope,
   holeEditScope,
+  tangentReshapeScope,
 } from '../../../lib/interaction/scope'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
@@ -150,6 +152,14 @@ function affordanceReshapeScope(
   }
   if (affordance.includes('curve')) {
     return curveReshapeScope(nodeId)
+  }
+  if (affordance.includes('control-point')) {
+    const index = (payload as { index?: number } | undefined)?.index ?? 0
+    return controlPointReshapeScope(nodeId, index)
+  }
+  if (affordance.includes('tangent')) {
+    const target = payload as { index?: number; side?: 'in' | 'out' } | undefined
+    return tangentReshapeScope(nodeId, target?.index ?? 0, target?.side ?? 'out')
   }
   if (affordance.includes('endpoint')) {
     const endpoint = (payload as { endpoint?: 'start' | 'end' } | undefined)?.endpoint ?? 'end'

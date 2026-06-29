@@ -54,7 +54,7 @@ import {
   ZoneNode as ZoneNodeSchema,
   type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
-import { useAlignmentGuides, useSegmentDraftChain, useWallSnapIndicator } from '@pascal-app/editor'
+import { useSegmentDraftChain, useWallSnapIndicator } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Command, Ruler } from 'lucide-react'
 import {
@@ -73,6 +73,7 @@ import { createPortal } from 'react-dom'
 import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
+import useAlignmentGuides from '../../store/use-alignment-guides'
 import {
   alignFloorplanDraftPoint,
   buildFloorplanItemEntry,
@@ -5889,6 +5890,7 @@ export function FloorplanPanel({
   const isOpeningMoveActive = movingOpeningType !== null
   const isOpeningPlacementActive = isOpeningBuildActive || isOpeningMoveActive
   const isFenceBuildActive = phase === 'structure' && mode === 'build' && tool === 'fence'
+  const fenceContinuation = useEditor((state) => state.continuationByContext.fence)
   const isRoofBuildActive = phase === 'structure' && mode === 'build' && tool === 'roof'
   const isStairBuildActive = phase === 'structure' && mode === 'build' && tool === 'stair'
   const isStairMoveActive = movingNode?.type === 'stair'
@@ -9159,6 +9161,7 @@ export function FloorplanPanel({
       emitFloorplanWallLeave,
       emitFloorplanGridEvent,
       fences,
+      fenceContinuation,
       fenceDraftStart,
       floorplanOpeningLocalY,
       getPlanPointFromClientPoint,

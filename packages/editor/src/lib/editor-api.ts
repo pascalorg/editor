@@ -1,7 +1,11 @@
 import type { AnyNode, EditorApi } from '@pascal-app/core'
 import useEditor from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
-import { endpointReshapeScope } from './interaction/scope'
+import {
+  controlPointReshapeScope,
+  endpointReshapeScope,
+  tangentReshapeScope,
+} from './interaction/scope'
 
 /**
  * Concrete {@link EditorApi} backed by `useEditor` + the interaction scope.
@@ -35,6 +39,12 @@ export function createEditorApi(): EditorApi {
       // endpoint, and consumers recover the node from the scene. Adding a new
       // endpoint-draggable kind needs no entry here.
       useInteractionScope.getState().begin(endpointReshapeScope(node.id, endpoint))
+    },
+    engageControlPointMove(node: AnyNode, index: number) {
+      useInteractionScope.getState().begin(controlPointReshapeScope(node.id, index))
+    },
+    engageTangentMove(node: AnyNode, index: number, side: 'in' | 'out') {
+      useInteractionScope.getState().begin(tangentReshapeScope(node.id, index, side))
     },
   }
 }

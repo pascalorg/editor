@@ -10,6 +10,7 @@
  */
 import {
   type AlignmentAnchor,
+  type AlignmentGuide,
   type AnyNodeId,
   type BuildingPose,
   type ResolveAlignmentInBuildingResult,
@@ -78,6 +79,41 @@ export function resolveAlignmentForActiveBuilding(args: {
   threshold: number
 }): ResolveAlignmentInBuildingResult {
   return resolveAlignmentInBuildingWorld({ ...args, pose: getActiveBuildingPose() })
+}
+
+function worldXZToPoseLocal(
+  x: number,
+  z: number,
+  pose: BuildingPose | null,
+): [number, number] {
+  if (!pose) return [x, z]
+  const cos = Math.cos(pose.rotationY)
+  const sin = Math.sin(pose.rotationY)
+  const dx = x - pose.position[0]
+  const dz = z - pose.position[2]
+  return [dx * cos - dz * sin, dx * sin + dz * cos]
+}
+
+/**
+ * Project WORLD-frame alignment guides into the active building's LOCAL frame.
+ *
+ * The 3D alignment layer is still mounted inside the building-local tool group,
+ * so tools that resolve alignment on the world axes (item placement, slab move)
+ * need their guides converted before publishing to `useAlignmentGuides`.
+ */
+export function projectAlignmentGuidesWorldToActiveBuildingLocal(
+  guides: readonly AlignmentGuide[],
+): AlignmentGuide[] {
+  const pose = getActiveBuildingPose()
+  return guides.map((guide) => {
+    const [fromX, fromZ] = worldXZToPoseLocal(guide.from.x, guide.from.z, pose)
+    const [toX, toZ] = worldXZToPoseLocal(guide.to.x, guide.to.z, pose)
+    return {
+      ...guide,
+      from: { x: fromX, z: fromZ },
+      to: { x: toX, z: toZ },
+    }
+  })
 }
 
 /**
