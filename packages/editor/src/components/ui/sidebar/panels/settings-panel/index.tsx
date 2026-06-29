@@ -1,7 +1,7 @@
 import { emitter, useScene, validateBuildJson } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
-import { Camera, Download, Save, Trash2, Upload } from 'lucide-react'
+import { Camera, Download, Map as MapIcon, Save, Trash2, Upload } from 'lucide-react'
 import {
   type KeyboardEvent,
   type SyntheticEvent,
@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { exportFloorplanPdf } from '../../../../../lib/floorplan/floorplan-export'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
   Dialog,
@@ -344,32 +345,56 @@ export function SettingsPanel({
       )}
 
       {/* Export Section */}
-      <div className="space-y-2">
+      <div className="space-y-4">
         <label className="font-medium text-muted-foreground text-xs uppercase">Export</label>
-        <Button
-          className="w-full justify-start gap-2"
-          onClick={() => exportScene?.('glb')}
-          variant="outline"
-        >
-          <Download className="size-4" />
-          Export GLB
-        </Button>
-        <Button
-          className="w-full justify-start gap-2"
-          onClick={() => exportScene?.('stl')}
-          variant="outline"
-        >
-          <Download className="size-4" />
-          Export STL
-        </Button>
-        <Button
-          className="w-full justify-start gap-2"
-          onClick={() => exportScene?.('obj')}
-          variant="outline"
-        >
-          <Download className="size-4" />
-          Export OBJ
-        </Button>
+
+        <div className="space-y-2">
+          <div className="font-medium text-muted-foreground text-xs">3D model</div>
+          <Button
+            className="w-full justify-start gap-2"
+            onClick={() => exportScene?.('glb')}
+            variant="outline"
+          >
+            <Download className="size-4" />
+            Export GLB
+          </Button>
+          <Button
+            className="w-full justify-start gap-2"
+            onClick={() => exportScene?.('stl')}
+            variant="outline"
+          >
+            <Download className="size-4" />
+            Export STL
+          </Button>
+          <Button
+            className="w-full justify-start gap-2"
+            onClick={() => exportScene?.('obj')}
+            variant="outline"
+          >
+            <Download className="size-4" />
+            Export OBJ
+          </Button>
+        </div>
+
+        <div className="space-y-2">
+          <div className="font-medium text-muted-foreground text-xs">Floorplan</div>
+          <Button
+            className="w-full justify-start gap-2"
+            onClick={() => exportFloorplanPdf('full')}
+            variant="outline"
+          >
+            <MapIcon className="size-4" />
+            Full floorplan
+          </Button>
+          <Button
+            className="w-full justify-start gap-2"
+            onClick={() => exportFloorplanPdf('structure')}
+            variant="outline"
+          >
+            <MapIcon className="size-4" />
+            Structure only
+          </Button>
+        </div>
       </div>
 
       {/* Thumbnail Section (only for cloud projects) */}
