@@ -14,6 +14,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useAuditLogger } from '@/hooks/use-audit-logger'
 import { BuildTab } from './build-tab'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
@@ -92,6 +93,7 @@ function sceneGraphSignature(graph: SceneGraphWithCollections): string {
 }
 
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
+  useAuditLogger(meta.id)
   const router = useRouter()
   const versionRef = useRef(meta.version)
   const lastRemoteGraphJsonRef = useRef<string | null>(null)
