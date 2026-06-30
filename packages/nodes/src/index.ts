@@ -21,9 +21,12 @@ import { itemDefinition } from './item'
 import { levelDefinition } from './level'
 import { linesetDefinition } from './lineset'
 import { liquidLineDefinition } from './liquid-line'
+import { electricalConduitDefinition } from './electrical-conduit'
+import { electricalDeviceDefinition } from './electrical-device'
 import { pipeFittingDefinition } from './pipe-fitting'
 import { pipeSegmentDefinition } from './pipe-segment'
 import { pipeTrapDefinition } from './pipe-trap'
+import { waterLineDefinition } from './water-line'
 import { ridgeVentDefinition } from './ridge-vent'
 import { roofDefinition } from './roof'
 import { roofSegmentDefinition } from './roof-segment'
@@ -108,6 +111,10 @@ export const builtinPlugin: Plugin = {
     pipeSegmentDefinition as unknown as AnyNodeDefinition,
     pipeFittingDefinition as unknown as AnyNodeDefinition,
     pipeTrapDefinition as unknown as AnyNodeDefinition,
+    // MEP — pressurized water supply and electrical systems.
+    waterLineDefinition as unknown as AnyNodeDefinition,
+    electricalConduitDefinition as unknown as AnyNodeDefinition,
+    electricalDeviceDefinition as unknown as AnyNodeDefinition,
   ],
 }
 
@@ -133,9 +140,12 @@ export { itemDefinition } from './item'
 export { levelDefinition } from './level'
 export { linesetDefinition } from './lineset'
 export { liquidLineDefinition, useLiquidLineToolOptions } from './liquid-line'
+export { electricalConduitDefinition } from './electrical-conduit'
+export { electricalDeviceDefinition } from './electrical-device'
 export { pipeFittingDefinition } from './pipe-fitting'
 export { pipeSegmentDefinition } from './pipe-segment'
 export { pipeTrapDefinition } from './pipe-trap'
+export { waterLineDefinition } from './water-line'
 export { ridgeVentDefinition } from './ridge-vent'
 export { roofDefinition } from './roof'
 export { roofSegmentDefinition } from './roof-segment'
