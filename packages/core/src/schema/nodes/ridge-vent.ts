@@ -263,15 +263,17 @@ export function isDefaultRidgeVentNode(
     return true
   }
 
-  const hasCustomMaterial =
-    vent.material !== undefined ||
-    (vent.materialPreset !== undefined && vent.materialPreset !== LEGACY_DEFAULT_RIDGE_VENT_PRESET)
   const hasDefaultName =
     vent.name === 'Ridge Vent' ||
     vent.name === 'Hip Ridge Vent' ||
     vent.name === 'Shoulder Ridge Vent' ||
     vent.name === 'Slope Ridge Vent'
-  return hasDefaultName && vent.style === 'shingled' && !hasCustomMaterial
+  return (
+    hasDefaultName &&
+    vent.style === 'shingled' &&
+    vent.material === undefined &&
+    vent.materialPreset === LEGACY_DEFAULT_RIDGE_VENT_PRESET
+  )
 }
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {

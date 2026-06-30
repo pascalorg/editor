@@ -281,6 +281,60 @@ describe('roof segment default ridge vents', () => {
     expect(useScene.getState().nodes[legacyDefault.id as AnyNodeId]).toBeUndefined()
   })
 
+  test('refresh preserves user-created default-looking ridge vents without legacy preset metadata', () => {
+    const roof = RoofNode.parse({ id: 'roof_test' as never, children: [] })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_test' as never,
+      parentId: roof.id,
+      roofType: 'gable',
+      width: 8,
+      depth: 6,
+      metadata: { autoRidgeVent: true },
+    })
+    const userVent = RidgeVentNode.parse({
+      id: 'rvent_user' as never,
+      parentId: segment.id,
+      roofSegmentId: segment.id,
+      name: 'Ridge Vent',
+      style: 'shingled',
+      position: [0, 0, 0],
+      length: 8,
+    })
+
+    useScene.getState().setScene(
+      {
+        [roof.id]: { ...roof, children: [segment.id] } as AnyNode,
+        [segment.id]: {
+          ...segment,
+          children: [userVent.id],
+        } as AnyNode,
+        [userVent.id]: userVent as AnyNode,
+      } as Record<AnyNodeId, AnyNode>,
+      [roof.id as AnyNodeId],
+    )
+
+    useScene.getState().updateNode(
+      segment.id as AnyNodeId,
+      {
+        pitch: 52,
+      } as Partial<AnyNode>,
+    )
+
+    const nextSegment = useScene.getState().nodes[segment.id as AnyNodeId] as
+      | RoofSegmentNode
+      | undefined
+    const nextChildren = nextSegment?.children ?? []
+
+    expect(nextChildren).toContain(userVent.id)
+    expect(useScene.getState().nodes[userVent.id as AnyNodeId]).toMatchObject({
+      id: userVent.id,
+      roofSegmentId: segment.id,
+      name: 'Ridge Vent',
+      style: 'shingled',
+      length: 8,
+    })
+  })
+
   test('does not create default ridge vents after a geometry change when auto ridge vent is disabled', () => {
     const roof = RoofNode.parse({ id: 'roof_test' as never, children: [] })
     const segment = RoofSegmentNode.parse({

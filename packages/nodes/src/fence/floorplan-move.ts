@@ -6,7 +6,12 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { getSegmentGridStep, isSegmentLongEnough, snapPointToGrid } from '@pascal-app/editor'
+import {
+  getSegmentGridStep,
+  isGridSnapActive,
+  isSegmentLongEnough,
+  snapPointToGrid,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 
 type PlanPoint = [number, number]
@@ -55,18 +60,6 @@ function translatePath(
   return path?.map((point) => [point[0] + dx, point[1] + dz])
 }
 
-function projectLinkedPath(
-  path: PlanPoint[] | undefined,
-  start: PlanPoint,
-  end: PlanPoint,
-): PlanPoint[] | undefined {
-  if (!path || path.length === 0) return path
-  const nextPath = path.map((point) => [point[0], point[1]] as PlanPoint)
-  nextPath[0] = start
-  nextPath[nextPath.length - 1] = end
-  return nextPath
-}
-
 /**
  * 2D floor-plan body move for fence. Mirrors `wallFloorplanMoveTarget`
  * but without bridge-wall planning: fence corners cascade through
@@ -103,6 +96,8 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
     snapshot: LinkedFenceSnapshot,
     nextStart: PlanPoint,
     nextEnd: PlanPoint,
+    dx: number,
+    dz: number,
   ): { start: PlanPoint; end: PlanPoint; path?: PlanPoint[] } => {
     const start = pointsEqual(snapshot.start, originalStart)
       ? nextStart
@@ -118,7 +113,7 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
     return {
       start,
       end,
-      path: projectLinkedPath(snapshot.path, start, end),
+      path: translatePath(snapshot.path, dx, dz),
     }
   }
 
@@ -132,10 +127,8 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
       }
       const rawDx = planPoint[0] - rawAnchor[0]
       const rawDz = planPoint[1] - rawAnchor[1]
-      const step = getSegmentGridStep()
-      const nextStart: PlanPoint = modifiers.shiftKey
-        ? [originalStart[0] + rawDx, originalStart[1] + rawDz]
-        : snapPointToGrid([originalStart[0] + rawDx, originalStart[1] + rawDz], step)
+      const step = isGridSnapActive() ? getSegmentGridStep() : 0
+      const nextStart = snapPointToGrid([originalStart[0] + rawDx, originalStart[1] + rawDz], step)
       const dx = nextStart[0] - originalStart[0]
       const dz = nextStart[1] - originalStart[1]
       if (dx === lastDelta[0] && dz === lastDelta[1]) return
@@ -151,7 +144,10 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
 
       const linkedUpdates = modifiers.altKey
         ? []
-        : linkedOriginals.map((l) => ({ id: l.id, ...projectLinked(l, nextStart, nextEnd) }))
+        : linkedOriginals.map((l) => ({
+            id: l.id,
+            ...projectLinked(l, nextStart, nextEnd, dx, dz),
+          }))
 
       useLiveNodeOverrides
         .getState()
@@ -196,7 +192,7 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
         : { id: fenceId, data: { start: lastNextStart, end: lastNextEnd, path: lastNextPath } }
       const linkedUpdates = linkedOriginals.map((l) => ({
         id: l.id,
-        ...projectLinked(l, lastNextStart, lastNextEnd),
+        ...projectLinked(l, lastNextStart, lastNextEnd, lastDelta[0], lastDelta[1]),
       }))
       useScene.getState().updateNodes([
         fenceUpdate,
