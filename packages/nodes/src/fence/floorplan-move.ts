@@ -15,7 +15,7 @@ function pointsEqual(a: PlanPoint, b: PlanPoint): boolean {
   return a[0] === b[0] && a[1] === b[1]
 }
 
-type LinkedFenceSnapshot = { id: AnyNodeId; start: PlanPoint; end: PlanPoint }
+type LinkedFenceSnapshot = { id: AnyNodeId; start: PlanPoint; end: PlanPoint; path?: PlanPoint[] }
 
 function getLinkedFenceSnapshots(args: {
   fenceId: AnyNodeId
@@ -40,10 +40,31 @@ function getLinkedFenceSnapshots(args: {
         id: fence.id as AnyNodeId,
         start: [fence.start[0], fence.start[1]],
         end: [fence.end[0], fence.end[1]],
+        path: fence.path?.map((point) => [point[0], point[1]]),
       })
     }
   }
   return snapshots
+}
+
+function translatePath(
+  path: PlanPoint[] | undefined,
+  dx: number,
+  dz: number,
+): PlanPoint[] | undefined {
+  return path?.map((point) => [point[0] + dx, point[1] + dz])
+}
+
+function projectLinkedPath(
+  path: PlanPoint[] | undefined,
+  start: PlanPoint,
+  end: PlanPoint,
+): PlanPoint[] | undefined {
+  if (!path || path.length === 0) return path
+  const nextPath = path.map((point) => [point[0], point[1]] as PlanPoint)
+  nextPath[0] = start
+  nextPath[nextPath.length - 1] = end
+  return nextPath
 }
 
 /**
@@ -76,23 +97,30 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
   let lastDelta: PlanPoint = [0, 0]
   let lastNextStart: PlanPoint = originalStart
   let lastNextEnd: PlanPoint = originalEnd
+  let lastNextPath: PlanPoint[] | undefined = node.path?.map((point) => [point[0], point[1]])
 
   const projectLinked = (
     snapshot: LinkedFenceSnapshot,
     nextStart: PlanPoint,
     nextEnd: PlanPoint,
-  ): { start: PlanPoint; end: PlanPoint } => ({
-    start: pointsEqual(snapshot.start, originalStart)
+  ): { start: PlanPoint; end: PlanPoint; path?: PlanPoint[] } => {
+    const start = pointsEqual(snapshot.start, originalStart)
       ? nextStart
       : pointsEqual(snapshot.start, originalEnd)
         ? nextEnd
-        : snapshot.start,
-    end: pointsEqual(snapshot.end, originalStart)
+        : snapshot.start
+    const end = pointsEqual(snapshot.end, originalStart)
       ? nextStart
       : pointsEqual(snapshot.end, originalEnd)
         ? nextEnd
-        : snapshot.end,
-  })
+        : snapshot.end
+
+    return {
+      start,
+      end,
+      path: projectLinkedPath(snapshot.path, start, end),
+    }
+  }
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: [fenceId, ...linkedOriginals.map((l) => l.id)],
@@ -115,6 +143,11 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
       const nextEnd: PlanPoint = [originalEnd[0] + dx, originalEnd[1] + dz]
       lastNextStart = nextStart
       lastNextEnd = nextEnd
+      lastNextPath = translatePath(
+        node.path?.map((point) => [point[0], point[1]]),
+        dx,
+        dz,
+      )
 
       const linkedUpdates = modifiers.altKey
         ? []
@@ -123,9 +156,13 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
       useLiveNodeOverrides
         .getState()
         .setMany([
-          [fenceId, { start: nextStart, end: nextEnd }],
+          [fenceId, { start: nextStart, end: nextEnd, path: lastNextPath }],
           ...linkedUpdates.map(
-            (u) => [u.id, { start: u.start, end: u.end }] as [string, Record<string, unknown>],
+            (u) =>
+              [u.id, { start: u.start, end: u.end, path: u.path }] as [
+                string,
+                Record<string, unknown>,
+              ],
           ),
         ])
       const sceneState = useScene.getState()
@@ -152,20 +189,22 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
             data: {
               start: lastNextStart,
               end: lastNextEnd,
+              path: lastNextPath,
               metadata: { ...originalMetadata, isNew: false },
             } as Partial<FenceNode>,
           }
-        : { id: fenceId, data: { start: lastNextStart, end: lastNextEnd } }
+        : { id: fenceId, data: { start: lastNextStart, end: lastNextEnd, path: lastNextPath } }
       const linkedUpdates = linkedOriginals.map((l) => ({
         id: l.id,
         ...projectLinked(l, lastNextStart, lastNextEnd),
       }))
-      useScene
-        .getState()
-        .updateNodes([
-          fenceUpdate,
-          ...linkedUpdates.map((u) => ({ id: u.id, data: { start: u.start, end: u.end } })),
-        ])
+      useScene.getState().updateNodes([
+        fenceUpdate,
+        ...linkedUpdates.map((u) => ({
+          id: u.id,
+          data: { start: u.start, end: u.end, path: u.path },
+        })),
+      ])
       const overrides = useLiveNodeOverrides.getState()
       overrides.clear(fenceId)
       for (const l of linkedOriginals) overrides.clear(l.id)

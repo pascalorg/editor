@@ -13,6 +13,7 @@ import {
   type StairNode,
   type StairSegmentNode,
   sceneRegistry,
+  useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
   type WallNode,
@@ -56,6 +57,22 @@ function disableRaycastDuringDrag(root: THREE.Object3D | undefined): () => void 
   }
 }
 
+function resolvePreviewRotationY(
+  node: RoofNode | RoofSegmentNode | StairNode | StairSegmentNode,
+  localRotation: number,
+): number {
+  if ((node.type === 'roof-segment' || node.type === 'stair-segment') && node.parentId) {
+    const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
+    const parentRotation =
+      parentNode && 'rotation' in parentNode && typeof parentNode.rotation === 'number'
+        ? parentNode.rotation
+        : 0
+    return parentRotation + localRotation
+  }
+
+  return localRotation
+}
+
 export const MoveRoofTool: React.FC<{
   node: RoofNode | RoofSegmentNode | StairNode | StairSegmentNode
 }> = ({ node: movingNode }) => {
@@ -75,7 +92,9 @@ export const MoveRoofTool: React.FC<{
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const dragAnchorRef = useRef<[number, number] | null>(null)
 
-  const [previewRotation, setPreviewRotation] = useState<number>(movingNode.rotation as number)
+  const [previewRotation, setPreviewRotation] = useState<number>(() =>
+    resolvePreviewRotationY(movingNode, movingNode.rotation as number),
+  )
   const [cursorWorldPos, setCursorWorldPos] = useState<[number, number, number]>(() => {
     const obj = sceneRegistry.nodes.get(movingNode.id)
     if (obj) {
@@ -143,23 +162,16 @@ export const MoveRoofTool: React.FC<{
     const movingObject = sceneRegistry.nodes.get(movingNode.id)
     const restoreRaycasts = disableRaycastDuringDrag(movingObject)
 
-    // For roof-segment moves: the selection was cleared before entering move mode,
-    // so isSelected=false on the parent roof, hiding individual segment meshes and
-    // showing only the merged mesh. We directly flip Three.js visibility so the
-    // user sees the individual segment tracking the cursor.
-    let segmentWrapperGroup: THREE.Object3D | null = null
-    let mergedRoofMesh: THREE.Object3D | null = null
-    if (movingNode.type === 'roof-segment' || movingNode.type === 'stair-segment') {
-      const segmentMesh = sceneRegistry.nodes.get(movingNode.id)
-      if (segmentMesh?.parent) {
-        // segmentMesh.parent = <group visible={isSelected}> wrapper in Roof/StairRenderer
-        // segmentMesh.parent.parent = the registered roof/stair group
-        segmentWrapperGroup = segmentMesh.parent
-        const mergedName = movingNode.type === 'stair-segment' ? 'merged-stair' : 'merged-roof'
-        mergedRoofMesh = segmentMesh.parent.parent?.getObjectByName(mergedName) ?? null
-        segmentWrapperGroup.visible = true
-        if (mergedRoofMesh) mergedRoofMesh.visible = false
-      }
+    const syncHostedPreview = (
+      patch: Pick<RoofSegmentNode | StairSegmentNode, 'position' | 'rotation'>,
+    ) => {
+      if (movingNode.type !== 'roof-segment' && movingNode.type !== 'stair-segment') return
+      useLiveNodeOverrides.getState().set(movingNode.id, patch as Record<string, unknown>)
+    }
+
+    const clearHostedPreview = () => {
+      if (movingNode.type !== 'roof-segment' && movingNode.type !== 'stair-segment') return
+      useLiveNodeOverrides.getState().clear(movingNode.id)
     }
 
     const resolveLevelId = () => {
@@ -378,6 +390,10 @@ export const MoveRoofTool: React.FC<{
         position: lastLocalPosition,
         rotation: pendingRotation,
       })
+      syncHostedPreview({
+        position: lastLocalPosition,
+        rotation: pendingRotation,
+      })
     }
 
     const onGridClick = (event: GridEvent) => {
@@ -411,6 +427,7 @@ export const MoveRoofTool: React.FC<{
 
       triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [committedId] })
+      clearHostedPreview()
       useLiveTransforms.getState().clear(movingNode.id)
       useEditor.getState().setMovingNodeOrigin('3d')
       exitMoveMode()
@@ -424,6 +441,7 @@ export const MoveRoofTool: React.FC<{
 
     const onCancel = () => {
       wasCancelled = true
+      clearHostedPreview()
       useLiveTransforms.getState().clear(movingNode.id)
       useAlignmentGuides.getState().clear()
       if (isNew) {
@@ -454,7 +472,7 @@ export const MoveRoofTool: React.FC<{
         triggerSFX('sfx:item-rotate')
 
         pendingRotation += rotationDelta
-        setPreviewRotation(pendingRotation)
+        setPreviewRotation(resolvePreviewRotationY(movingNode, pendingRotation))
 
         // Directly update the Three.js mesh — no store update during drag
         const mesh = sceneRegistry.nodes.get(movingNode.id)
@@ -475,6 +493,10 @@ export const MoveRoofTool: React.FC<{
             rotation: pendingRotation,
           })
         }
+        syncHostedPreview({
+          position: lastLocalPosition,
+          rotation: pendingRotation,
+        })
       }
     }
 
@@ -487,11 +509,8 @@ export const MoveRoofTool: React.FC<{
     return () => {
       restoreRaycasts()
 
-      // Restore segment wrapper visibility (React will re-sync on next render)
-      if (segmentWrapperGroup) segmentWrapperGroup.visible = false
-      if (mergedRoofMesh) mergedRoofMesh.visible = true
-
       // Clear ephemeral live transform + any alignment guides
+      clearHostedPreview()
       useLiveTransforms.getState().clear(movingNode.id)
       useAlignmentGuides.getState().clear()
 
@@ -520,10 +539,14 @@ export const MoveRoofTool: React.FC<{
     }
   }, [movingNode, exitMoveMode, isFreshPlacement, revealFreshPlacement, useAbsoluteCursorPlacement])
 
-  // Green footprint box during whole-stair / whole-roof moves. Skipped for
-  // segments — their cursor lives in parent-local space and the bounding box
-  // would render in the wrong frame.
-  const showBoundingBox = movingNode.type === 'stair' || movingNode.type === 'roof'
+  // Show the same green drag box for both top-level roofs/stairs and their
+  // segments. Segment cursor positions are converted into the tool's
+  // building-local frame above, so the box can now ride the cursor correctly.
+  const showBoundingBox =
+    movingNode.type === 'stair' ||
+    movingNode.type === 'roof' ||
+    movingNode.type === 'roof-segment' ||
+    movingNode.type === 'stair-segment'
 
   return (
     <group visible={cursorVisible}>

@@ -19,7 +19,7 @@ import {
  * math in `wall-curve.ts` is untouched — walls never carry a `path`.
  */
 
-const DEFAULT_SAMPLE_SEGMENTS = 24
+const DEFAULT_SAMPLE_SEGMENTS = 96
 
 type CurveFrame = {
   point: Point2D

@@ -1,6 +1,7 @@
 import {
   DEFAULT_ANGLE_STEP,
   FenceNode,
+  getTwoPointFenceCurveTangents,
   getWallCurveFrameAt,
   getWallCurveLength,
   isCurvedWall,
@@ -221,7 +222,10 @@ export function createFenceOnCurrentLevel(
  * pinned to the first/last point so endpoint handles, bbox, and miter
  * references stay valid. Requires >= 2 points spanning a usable distance.
  */
-export function createSplineFenceOnCurrentLevel(path: FencePlanPoint[]): FenceNode | null {
+export function createSplineFenceOnCurrentLevel(
+  path: FencePlanPoint[],
+  tangents = getTwoPointFenceCurveTangents(path),
+): FenceNode | null {
   const currentLevelId = useViewer.getState().selection.levelId
   const { createNode, nodes } = useScene.getState()
 
@@ -244,6 +248,7 @@ export function createSplineFenceOnCurrentLevel(path: FencePlanPoint[]): FenceNo
     start,
     end,
     path,
+    tangents,
   })
 
   createNode(fence, currentLevelId)

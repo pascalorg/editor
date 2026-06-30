@@ -18,7 +18,14 @@ import { clearSurfacePlanSnapFeedback, resolveSurfacePlanPointSnap } from '@pasc
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { BufferGeometry, DoubleSide, type Group, type Line, Vector3 } from 'three'
+import {
+  BufferGeometry,
+  DoubleSide,
+  Float32BufferAttribute,
+  type Group,
+  type Line,
+  Vector3,
+} from 'three'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -202,14 +209,168 @@ type PreviewState = {
   levelY: number
 }
 
+function buildRoofGhostGeometry(
+  width: number,
+  depth: number,
+  wallHeight: number,
+  pitchDeg: number,
+) {
+  const safeWidth = Math.max(width, 0.1)
+  const safeDepth = Math.max(depth, 0.1)
+  const halfWidth = safeWidth / 2
+  const halfDepth = safeDepth / 2
+  const ridgeHeight = wallHeight + Math.tan((pitchDeg * Math.PI) / 180) * halfDepth
+
+  const vertices = [
+    // Front slope
+    -halfWidth,
+    wallHeight,
+    -halfDepth,
+    halfWidth,
+    wallHeight,
+    -halfDepth,
+    halfWidth,
+    ridgeHeight,
+    0,
+
+    -halfWidth,
+    wallHeight,
+    -halfDepth,
+    halfWidth,
+    ridgeHeight,
+    0,
+    -halfWidth,
+    ridgeHeight,
+    0,
+
+    // Back slope
+    -halfWidth,
+    ridgeHeight,
+    0,
+    halfWidth,
+    ridgeHeight,
+    0,
+    halfWidth,
+    wallHeight,
+    halfDepth,
+
+    -halfWidth,
+    ridgeHeight,
+    0,
+    halfWidth,
+    wallHeight,
+    halfDepth,
+    -halfWidth,
+    wallHeight,
+    halfDepth,
+
+    // Left gable
+    -halfWidth,
+    wallHeight,
+    -halfDepth,
+    -halfWidth,
+    ridgeHeight,
+    0,
+    -halfWidth,
+    wallHeight,
+    halfDepth,
+
+    // Right gable
+    halfWidth,
+    wallHeight,
+    -halfDepth,
+    halfWidth,
+    wallHeight,
+    halfDepth,
+    halfWidth,
+    ridgeHeight,
+    0,
+  ]
+
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3))
+  geometry.computeVertexNormals()
+  return geometry
+}
+
+function buildRoofGhostEdges(width: number, depth: number, wallHeight: number, pitchDeg: number) {
+  const safeWidth = Math.max(width, 0.1)
+  const safeDepth = Math.max(depth, 0.1)
+  const halfWidth = safeWidth / 2
+  const halfDepth = safeDepth / 2
+  const ridgeHeight = wallHeight + Math.tan((pitchDeg * Math.PI) / 180) * halfDepth
+
+  const vertices = [
+    // Base rectangle
+    -halfWidth,
+    wallHeight,
+    -halfDepth,
+    halfWidth,
+    wallHeight,
+    -halfDepth,
+    halfWidth,
+    wallHeight,
+    -halfDepth,
+    halfWidth,
+    wallHeight,
+    halfDepth,
+    halfWidth,
+    wallHeight,
+    halfDepth,
+    -halfWidth,
+    wallHeight,
+    halfDepth,
+    -halfWidth,
+    wallHeight,
+    halfDepth,
+    -halfWidth,
+    wallHeight,
+    -halfDepth,
+
+    // Ridge + gable edges
+    -halfWidth,
+    ridgeHeight,
+    0,
+    halfWidth,
+    ridgeHeight,
+    0,
+    -halfWidth,
+    wallHeight,
+    -halfDepth,
+    -halfWidth,
+    ridgeHeight,
+    0,
+    -halfWidth,
+    ridgeHeight,
+    0,
+    -halfWidth,
+    wallHeight,
+    halfDepth,
+    halfWidth,
+    wallHeight,
+    -halfDepth,
+    halfWidth,
+    ridgeHeight,
+    0,
+    halfWidth,
+    ridgeHeight,
+    0,
+    halfWidth,
+    wallHeight,
+    halfDepth,
+  ]
+
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3))
+  return geometry
+}
+
 export const RoofTool: React.FC = () => {
   const cursorRef = useRef<Group>(null)
   const outlineRef = useRef<Line>(null!)
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const setSelection = useViewer((state) => state.setSelection)
-  const setTool = useEditor((state) => state.setTool)
-  const setMode = useEditor((state) => state.setMode)
 
   const selectedIdsRef = useRef(selectedIds)
   useEffect(() => {
@@ -263,8 +424,6 @@ export const RoofTool: React.FC = () => {
         walls: getRoofSnapWalls(currentLevelId, nodes),
         candidates: alignmentCandidates,
         movingId: '__roof-draft__',
-        shiftKey: event.nativeEvent?.shiftKey === true,
-        altKey: event.nativeEvent?.altKey === true,
         highlightWalls: true,
       }).point
     }
@@ -386,6 +545,34 @@ export const RoofTool: React.FC = () => {
     return { length, width, centerX, centerZ }
   }, [corner1, cursorPosition])
 
+  const roofGhostGeometry = useMemo(() => {
+    if (!previewDimensions) return null
+    return buildRoofGhostGeometry(
+      previewDimensions.length,
+      previewDimensions.width,
+      DEFAULT_WALL_HEIGHT,
+      DEFAULT_PITCH_DEG,
+    )
+  }, [previewDimensions])
+
+  const roofGhostEdges = useMemo(() => {
+    if (!previewDimensions) return null
+    return buildRoofGhostEdges(
+      previewDimensions.length,
+      previewDimensions.width,
+      DEFAULT_WALL_HEIGHT,
+      DEFAULT_PITCH_DEG,
+    )
+  }, [previewDimensions])
+
+  useEffect(
+    () => () => {
+      roofGhostGeometry?.dispose()
+      roofGhostEdges?.dispose()
+    },
+    [roofGhostEdges, roofGhostGeometry],
+  )
+
   return (
     <group>
       <CursorSphere ref={cursorRef} />
@@ -419,21 +606,34 @@ export const RoofTool: React.FC = () => {
       )}
 
       {previewDimensions && previewDimensions.length > 0.1 && previewDimensions.width > 0.1 && (
-        <mesh
+        <group
           layers={EDITOR_LAYER}
           position={[previewDimensions.centerX, levelY + GRID_OFFSET, previewDimensions.centerZ]}
-          rotation={[-Math.PI / 2, 0, 0]}
         >
-          <planeGeometry args={[previewDimensions.length, previewDimensions.width]} />
-          <meshBasicMaterial
-            color="#818cf8"
-            depthTest={false}
-            depthWrite={false}
-            opacity={0.1}
-            side={DoubleSide}
-            transparent
-          />
-        </mesh>
+          {roofGhostGeometry && (
+            <mesh geometry={roofGhostGeometry} layers={EDITOR_LAYER} renderOrder={1}>
+              <meshBasicMaterial
+                color="#818cf8"
+                depthTest={false}
+                depthWrite={false}
+                opacity={0.16}
+                side={DoubleSide}
+                transparent
+              />
+            </mesh>
+          )}
+          {roofGhostEdges && (
+            <lineSegments geometry={roofGhostEdges} layers={EDITOR_LAYER} renderOrder={2}>
+              <lineBasicMaterial
+                color="#818cf8"
+                depthTest={false}
+                depthWrite={false}
+                opacity={0.5}
+                transparent
+              />
+            </lineSegments>
+          )}
+        </group>
       )}
     </group>
   )

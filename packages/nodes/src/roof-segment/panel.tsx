@@ -65,6 +65,7 @@ export default function RoofSegmentPanel() {
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const setRoofHostDragArmedId = useEditor((s) => s.setRoofHostDragArmedId)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined) : undefined,
@@ -112,9 +113,10 @@ export default function RoofSegmentPanel() {
 
   const handleBack = useCallback(() => {
     if (node?.parentId) {
+      setRoofHostDragArmedId(node.parentId as AnyNodeId)
       setSelection({ selectedIds: [node.parentId] })
     }
-  }, [node?.parentId, setSelection])
+  }, [node?.parentId, setRoofHostDragArmedId, setSelection])
 
   const handleDuplicate = useCallback(() => {
     if (!node?.parentId) return

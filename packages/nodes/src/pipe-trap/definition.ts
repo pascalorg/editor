@@ -59,7 +59,7 @@ export const pipeTrapDefinition: NodeDefinition<typeof PipeTrapNode> = {
   presentation: {
     label: 'Trap',
     description: 'DWV P-trap — water seal on the waste line. The trap arm runs to the vent.',
-    icon: { kind: 'iconify', name: 'lucide:spline' },
+    icon: { kind: 'url', src: '/icons/dwv-pipes.webp' },
     paletteSection: 'structure',
     paletteOrder: 98,
   },

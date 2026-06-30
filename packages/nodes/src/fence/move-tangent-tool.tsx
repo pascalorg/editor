@@ -7,11 +7,13 @@ import {
   type GridEvent,
   pauseSceneHistory,
   resumeSceneHistory,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import {
   CursorSphere,
   getSegmentGridStep,
+  isGridSnapActive,
   markToolCancelConsumed,
   snapScalarToGrid,
   triggerSFX,
@@ -33,33 +35,26 @@ export const MoveFenceTangentTool: React.FC<{
 
   useEffect(() => {
     pauseSceneHistory(useScene)
-    let shiftPressed = false
     let committed = false
     const originalTangents: Array<[number, number] | null> = (target.fence.tangents ?? []).map(
       (t) => (t ? [t[0], t[1]] : null),
     )
     let lastTangents = originalTangents
 
-    const liveFence = (): FenceNode | null => {
-      const node = useScene.getState().nodes[fenceId]
-      return node?.type === 'fence' ? (node as FenceNode) : null
-    }
-
     const writeTangent = (vector: [number, number]) => {
-      const fence = liveFence()
-      const pathLength = fence?.path?.length ?? originalTangents.length
+      const pathLength = target.fence.path?.length ?? originalTangents.length
       const next: Array<[number, number] | null> = Array.from(
         { length: pathLength },
         (_, tangentIndex) => lastTangents[tangentIndex] ?? null,
       )
       next[index] = vector
       lastTangents = next
-      useScene.getState().updateNode(fenceId, { tangents: next })
+      useLiveNodeOverrides.getState().set(fenceId, { tangents: next })
       useScene.getState().markDirty(fenceId)
     }
 
     const restore = () => {
-      useScene.getState().updateNode(fenceId, { tangents: originalTangents })
+      useLiveNodeOverrides.getState().clear(fenceId)
       useScene.getState().markDirty(fenceId)
       lastTangents = originalTangents
     }
@@ -80,10 +75,9 @@ export const MoveFenceTangentTool: React.FC<{
     }
 
     const onGridMove = (event: GridEvent) => {
-      const bypass = shiftPressed || event.nativeEvent?.shiftKey === true
-      const step = getSegmentGridStep()
-      const px = bypass ? event.localPosition[0] : snapScalarToGrid(event.localPosition[0], step)
-      const pz = bypass ? event.localPosition[2] : snapScalarToGrid(event.localPosition[2], step)
+      const step = isGridSnapActive() ? getSegmentGridStep() : 0
+      const px = step > 0 ? snapScalarToGrid(event.localPosition[0], step) : event.localPosition[0]
+      const pz = step > 0 ? snapScalarToGrid(event.localPosition[2], step) : event.localPosition[2]
       setCursor([px, 0, pz])
       let armX = px - anchor[0]
       let armZ = pz - anchor[1]
@@ -97,11 +91,10 @@ export const MoveFenceTangentTool: React.FC<{
     const onGridClick = (event: GridEvent) => {
       committed = true
       const finalTangents = lastTangents
-      restore()
       resumeSceneHistory(useScene)
       useScene.getState().updateNode(fenceId, { tangents: finalTangents })
+      useLiveNodeOverrides.getState().clear(fenceId)
       useScene.getState().markDirty(fenceId)
-      pauseSceneHistory(useScene)
       lastTangents = finalTangents
       exit(true)
       event.nativeEvent?.stopPropagation?.()
@@ -114,18 +107,9 @@ export const MoveFenceTangentTool: React.FC<{
       exit(false)
     }
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') shiftPressed = true
-    }
-    const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') shiftPressed = false
-    }
-
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
 
     return () => {
       if (!committed) {
@@ -135,8 +119,6 @@ export const MoveFenceTangentTool: React.FC<{
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
     }
   }, [anchor[0], anchor[1], fenceId, index, side, target.fence])
 

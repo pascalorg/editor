@@ -22,7 +22,7 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { resolveRidgeSnap } from '../shared/ridge-snap'
+import { RIDGE_LIFT, resolveRidgeSnap } from '../shared/ridge-snap'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildRidgeVentGeometry } from './geometry'
@@ -218,7 +218,7 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
     if (!segment) return new THREE.Matrix4()
     const baseY = getRoofTopSurfaceY(ridgeX, ridgeZ, segment)
     const yOffset = Math.max(-2, Math.min(2, nodePosition[1] ?? 0))
-    const ridgeY = baseY + yOffset
+    const ridgeY = baseY + RIDGE_LIFT + yOffset
     return new THREE.Matrix4().compose(
       new THREE.Vector3(ridgeX, ridgeY, ridgeZ),
       new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY),
@@ -251,7 +251,7 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
   // Clamp legacy stored Y (absolute peak height from earlier versions) so the
   // vent doesn't fly off when the field was an absolute Y instead of offset.
   const yOffset = Math.max(-2, Math.min(2, nodePosition[1] ?? 0))
-  const ridgeY = baseY + yOffset
+  const ridgeY = baseY + RIDGE_LIFT + yOffset
 
   return (
     <group position={segPos} rotation-y={segRotY}>

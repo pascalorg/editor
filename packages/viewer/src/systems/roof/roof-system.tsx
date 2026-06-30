@@ -150,6 +150,10 @@ export const RoofSystem = () => {
     if (rootNodeIds.length === 0) {
       pendingRoofUpdates.clear()
       warnedMergedRoofNaNIds.clear()
+      for (const cached of mergedRoofSegmentGeometryCache.values()) {
+        disposeCachedMergedRoofSegmentGeometrySet(cached)
+      }
+      mergedRoofSegmentGeometryCache.clear()
       return
     }
 
@@ -393,6 +397,80 @@ function subtractAccessoryCuts(
   brushes.wallBrush = workingWall
 }
 
+function getMergedRoofSegmentBrushes(
+  roofNode: RoofNode,
+  segment: RoofSegmentNode,
+  nodes: Record<string, AnyNode>,
+): RoofSegmentBrushSet | null {
+  const segmentId = segment.id as AnyNodeId
+  const cacheKey = getMergedRoofSegmentCacheKey(roofNode, segment, nodes)
+  const cached = mergedRoofSegmentGeometryCache.get(segmentId)
+  if (cached?.key === cacheKey) {
+    return cloneCachedMergedRoofSegmentBrushes(cached)
+  }
+
+  const brushes = withSegmentUvMatrix(
+    composeSegmentWorldMatrix(
+      roofNode.position,
+      roofNode.rotation ?? 0,
+      segment.position,
+      segment.rotation ?? 0,
+    ),
+    () => getRoofSegmentBrushes(segment),
+  )
+  if (!brushes) {
+    disposeCachedMergedRoofSegmentGeometrySet(cached)
+    mergedRoofSegmentGeometryCache.delete(segmentId)
+    return null
+  }
+
+  subtractAccessoryCuts(brushes, segment, nodes)
+
+  _matrix.compose(
+    _position.set(segment.position[0], segment.position[1], segment.position[2]),
+    _quaternion.setFromAxisAngle(_yAxis, segment.rotation),
+    _scale,
+  )
+
+  const applyTransform = (brush: Brush) => {
+    csgGeometry(brush).applyMatrix4(_matrix)
+    brush.updateMatrixWorld()
+  }
+
+  applyTransform(brushes.shinSlab)
+  applyTransform(brushes.deckSlab)
+  applyTransform(brushes.wallBrush)
+  applyTransform(brushes.innerBrush)
+  brushes.rakeBoards?.applyMatrix4(_matrix)
+
+  const nextCached: CachedMergedRoofSegmentGeometrySet = {
+    key: cacheKey,
+    deckSlab: {
+      geometry: csgGeometry(brushes.deckSlab).clone(),
+      materials: csgMaterials(brushes.deckSlab),
+    },
+    shinSlab: {
+      geometry: csgGeometry(brushes.shinSlab).clone(),
+      materials: csgMaterials(brushes.shinSlab),
+    },
+    wallBrush: {
+      geometry: csgGeometry(brushes.wallBrush).clone(),
+      materials: csgMaterials(brushes.wallBrush),
+    },
+    innerBrush: {
+      geometry: csgGeometry(brushes.innerBrush).clone(),
+      materials: csgMaterials(brushes.innerBrush),
+    },
+    rakeBoards: brushes.rakeBoards?.clone() ?? null,
+  }
+  disposeCachedMergedRoofSegmentGeometrySet(cached)
+  mergedRoofSegmentGeometryCache.set(segmentId, nextCached)
+
+  const cloned = cloneCachedMergedRoofSegmentBrushes(nextCached)
+  disposeRoofSegmentBrushSet(brushes)
+  return cloned
+}
+
 function updateMergedRoofGeometry(
   roofNode: RoofNode,
   group: THREE.Group,
@@ -431,36 +509,9 @@ function updateMergedRoofGeometry(
   const rakeBoardGeometries: THREE.BufferGeometry[] = []
 
   for (const child of children) {
-    const brushes = withSegmentUvMatrix(
-      composeSegmentWorldMatrix(
-        roofNode.position,
-        roofNode.rotation ?? 0,
-        child.position,
-        child.rotation ?? 0,
-      ),
-      () => getRoofSegmentBrushes(child),
-    )
+    const brushes = getMergedRoofSegmentBrushes(roofNode, child, nodes)
     if (!brushes) continue
-
-    subtractAccessoryCuts(brushes, child, nodes)
-
-    _matrix.compose(
-      _position.set(child.position[0], child.position[1], child.position[2]),
-      _quaternion.setFromAxisAngle(_yAxis, child.rotation),
-      _scale,
-    )
-
-    const applyTransform = (brush: Brush) => {
-      csgGeometry(brush).applyMatrix4(_matrix)
-      brush.updateMatrixWorld()
-    }
-
-    applyTransform(brushes.shinSlab)
-    applyTransform(brushes.deckSlab)
-    applyTransform(brushes.wallBrush)
-    applyTransform(brushes.innerBrush)
     if (brushes.rakeBoards) {
-      brushes.rakeBoards.applyMatrix4(_matrix)
       rakeBoardGeometries.push(brushes.rakeBoards)
     }
 
@@ -641,6 +692,94 @@ type RoofSegmentBrushSet = {
   wallBrush: Brush
   innerBrush: Brush
   rakeBoards: THREE.BufferGeometry | null
+}
+
+type CachedMergedRoofSegmentGeometrySet = {
+  key: string
+  deckSlab: CachedMergedRoofSegmentBrush
+  shinSlab: CachedMergedRoofSegmentBrush
+  wallBrush: CachedMergedRoofSegmentBrush
+  innerBrush: CachedMergedRoofSegmentBrush
+  rakeBoards: THREE.BufferGeometry | null
+}
+
+type CachedMergedRoofSegmentBrush = {
+  geometry: THREE.BufferGeometry
+  materials: THREE.Material[]
+}
+
+const mergedRoofSegmentGeometryCache = new Map<AnyNodeId, CachedMergedRoofSegmentGeometrySet>()
+
+function disposeCachedMergedRoofSegmentGeometrySet(
+  cached: CachedMergedRoofSegmentGeometrySet | undefined,
+) {
+  if (!cached) return
+  cached.deckSlab.geometry.dispose()
+  cached.shinSlab.geometry.dispose()
+  cached.wallBrush.geometry.dispose()
+  cached.innerBrush.geometry.dispose()
+  cached.rakeBoards?.dispose()
+}
+
+function disposeRoofSegmentBrushSet(brushes: RoofSegmentBrushSet) {
+  brushes.deckSlab.geometry.dispose()
+  brushes.shinSlab.geometry.dispose()
+  brushes.wallBrush.geometry.dispose()
+  brushes.innerBrush.geometry.dispose()
+  brushes.rakeBoards?.dispose()
+}
+
+function cloneCachedBrush(cached: CachedMergedRoofSegmentBrush): Brush {
+  const brush = new Brush(cached.geometry.clone(), cached.materials)
+  prepareBrushForCSG(brush)
+  return brush
+}
+
+function cloneCachedMergedRoofSegmentBrushes(
+  cached: CachedMergedRoofSegmentGeometrySet,
+): RoofSegmentBrushSet {
+  return {
+    deckSlab: cloneCachedBrush(cached.deckSlab),
+    shinSlab: cloneCachedBrush(cached.shinSlab),
+    wallBrush: cloneCachedBrush(cached.wallBrush),
+    innerBrush: cloneCachedBrush(cached.innerBrush),
+    rakeBoards: cached.rakeBoards?.clone() ?? null,
+  }
+}
+
+function getMergedRoofAccessoryCachePayload(
+  segment: RoofSegmentNode,
+  nodes: Record<string, AnyNode>,
+): unknown[] {
+  const payload: unknown[] = []
+  for (const childElemId of segment.children ?? []) {
+    const storedChild = nodes[childElemId as AnyNodeId]
+    if (!storedChild) continue
+    const childElem = getEffectiveNode(storedChild)
+    const meta =
+      typeof childElem.metadata === 'object' && childElem.metadata !== null
+        ? (childElem.metadata as Record<string, unknown>)
+        : undefined
+    if (meta?.isTransient) continue
+
+    const childDef = nodeRegistry.get(childElem.type)
+    if (!childDef?.capabilities?.roofAccessory?.buildCut) continue
+    payload.push(childElem)
+  }
+  return payload
+}
+
+function getMergedRoofSegmentCacheKey(
+  roofNode: RoofNode,
+  segment: RoofSegmentNode,
+  nodes: Record<string, AnyNode>,
+): string {
+  return JSON.stringify({
+    roofPosition: roofNode.position ?? [0, 0, 0],
+    roofRotation: roofNode.rotation ?? 0,
+    segment,
+    accessories: getMergedRoofAccessoryCachePayload(segment, nodes),
+  })
 }
 
 export function mapRoofGroupMaterialIndex(

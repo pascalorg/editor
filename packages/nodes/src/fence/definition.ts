@@ -68,7 +68,9 @@ function fenceSideMoveHandle(side: 'front' | 'back'): HandleDescriptor<FenceNode
         return Math.atan2(-sign * normalZ, sign * normalX)
       },
     },
-    cursor: 'move',
+    // The move itself is constrained by `MoveFenceTool`; keep the visual as a
+    // one-direction chevron instead of the generic four-way move cross.
+    cursor: 'ew-resize',
   }
 }
 

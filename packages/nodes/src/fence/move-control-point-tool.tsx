@@ -7,11 +7,13 @@ import {
   type GridEvent,
   pauseSceneHistory,
   resumeSceneHistory,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import {
   CursorSphere,
   getSegmentGridStep,
+  isGridSnapActive,
   markToolCancelConsumed,
   snapScalarToGrid,
   triggerSFX,
@@ -36,30 +38,27 @@ export const MoveFenceControlPointTool: React.FC<{
 
   useEffect(() => {
     pauseSceneHistory(useScene)
-    let shiftPressed = false
     let committed = false
     let lastPoint: [number, number] = [originalPoint[0], originalPoint[1]]
 
-    const liveFence = (): FenceNode | null => {
-      const node = useScene.getState().nodes[fenceId]
-      return node?.type === 'fence' ? (node as FenceNode) : null
-    }
-
-    const writePath = (point: [number, number]) => {
-      const fence = liveFence()
-      if (!fence?.path) return
-      const nextPath = fence.path.map((pathPoint, pathIndex) =>
+    const buildPatch = (point: [number, number]): Partial<FenceNode> => {
+      const nextPath = originalPath.map((pathPoint, pathIndex) =>
         pathIndex === index ? point : pathPoint,
       )
       const patch: Partial<FenceNode> = { path: nextPath }
       if (index === 0) patch.start = point
       if (index === nextPath.length - 1) patch.end = point
-      useScene.getState().updateNode(fenceId, patch)
+      return patch
+    }
+
+    const previewPath = (point: [number, number]) => {
+      useLiveNodeOverrides.getState().set(fenceId, buildPatch(point))
       useScene.getState().markDirty(fenceId)
     }
 
     const restore = () => {
-      writePath([originalPoint[0], originalPoint[1]])
+      useLiveNodeOverrides.getState().clear(fenceId)
+      useScene.getState().markDirty(fenceId)
     }
 
     const exit = (didCommit: boolean) => {
@@ -77,24 +76,23 @@ export const MoveFenceControlPointTool: React.FC<{
     }
 
     const onGridMove = (event: GridEvent) => {
-      const bypass = shiftPressed || event.nativeEvent?.shiftKey === true
-      const step = getSegmentGridStep()
-      const x = bypass ? event.localPosition[0] : snapScalarToGrid(event.localPosition[0], step)
-      const z = bypass ? event.localPosition[2] : snapScalarToGrid(event.localPosition[2], step)
+      const step = isGridSnapActive() ? getSegmentGridStep() : 0
+      const x = step > 0 ? snapScalarToGrid(event.localPosition[0], step) : event.localPosition[0]
+      const z = step > 0 ? snapScalarToGrid(event.localPosition[2], step) : event.localPosition[2]
       if (x !== lastPoint[0] || z !== lastPoint[1]) {
-        if (!bypass) triggerSFX('sfx:grid-snap')
+        if (step > 0) triggerSFX('sfx:grid-snap')
         lastPoint = [x, z]
         setCursor([x, 0, z])
-        writePath([x, z])
+        previewPath([x, z])
       }
     }
 
     const onGridClick = (event: GridEvent) => {
       committed = true
-      restore()
       resumeSceneHistory(useScene)
-      writePath(lastPoint)
-      pauseSceneHistory(useScene)
+      useScene.getState().updateNode(fenceId, buildPatch(lastPoint))
+      useLiveNodeOverrides.getState().clear(fenceId)
+      useScene.getState().markDirty(fenceId)
       exit(true)
       event.nativeEvent?.stopPropagation?.()
     }
@@ -106,18 +104,9 @@ export const MoveFenceControlPointTool: React.FC<{
       exit(false)
     }
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') shiftPressed = true
-    }
-    const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') shiftPressed = false
-    }
-
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
 
     return () => {
       if (!committed) {
@@ -127,10 +116,8 @@ export const MoveFenceControlPointTool: React.FC<{
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
     }
-  }, [fenceId, index, originalPoint[0], originalPoint[1]])
+  }, [fenceId, index, originalPath, originalPoint, originalPoint[0], originalPoint[1]])
 
   return (
     <group>

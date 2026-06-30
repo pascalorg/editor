@@ -5947,18 +5947,16 @@ export function FloorplanPanel({
     isRegistryToolBuildActive
   const floorplanOpeningLocalY = useMemo(() => {
     if (movingNode?.type === 'door' || movingNode?.type === 'window') {
-      return shiftPressed ? movingNode.position[1] : snapToHalf(movingNode.position[1])
+      return snapToHalf(movingNode.position[1])
     }
 
     if (isWindowBuildActive) {
       // Floorplan is top-down, so new windows need an explicit wall-local height.
-      return shiftPressed
-        ? FLOORPLAN_DEFAULT_WINDOW_LOCAL_Y
-        : snapToHalf(FLOORPLAN_DEFAULT_WINDOW_LOCAL_Y)
+      return snapToHalf(FLOORPLAN_DEFAULT_WINDOW_LOCAL_Y)
     }
 
     return 0
-  }, [isWindowBuildActive, movingNode, shiftPressed])
+  }, [isWindowBuildActive, movingNode])
   // Float the faithful door/window symbol at the cursor while it isn't over a
   // wall (the off-wall placement ghost), by publishing a transient opening on a
   // synthetic wall to `usePlacementPreview` — `FloorplanPlacementPreviewLayer`
@@ -8029,14 +8027,13 @@ export function FloorplanPanel({
           return
         }
 
-        // Wall endpoint move: grid snap only. Shift bypasses all snap.
-        const bypassSnap = shiftPressed || event.shiftKey
+        // Wall endpoint move: snapping follows the active mode; there is no
+        // held-key bypass.
         const snapResult = snapWallDraftPointDetailed({
           point: planPoint,
           walls,
           ignoreWallIds: [dragState.wallId],
-          bypassSnap,
-          magnetic: !bypassSnap && isMagneticSnapActive(),
+          magnetic: isMagneticSnapActive(),
         })
         const snappedPoint = snapResult.point
         // Magnetic beacon at the endpoint when it locked onto existing geometry.
@@ -8077,7 +8074,6 @@ export function FloorplanPanel({
           )
 
           if (
-            !bypassSnap &&
             !(
               previousDraft &&
               pointsEqual(previousDraft.start, nextDraft.start) &&
@@ -8106,18 +8102,12 @@ export function FloorplanPanel({
       }
 
       const chord = getWallChordFrame(wall)
-      const bypassSnap = shiftPressed || event.shiftKey
-      const snappedPoint: WallPlanPoint = bypassSnap
-        ? planPoint
-        : [snapToHalf(planPoint[0]), snapToHalf(planPoint[1])]
+      const snappedPoint: WallPlanPoint = [snapToHalf(planPoint[0]), snapToHalf(planPoint[1])]
       const rawCurveOffset = -(
         (snappedPoint[0] - chord.midpoint.x) * chord.normal.x +
         (snappedPoint[1] - chord.midpoint.y) * chord.normal.y
       )
-      const nextCurveOffset = normalizeWallCurveOffset(
-        wall,
-        bypassSnap ? rawCurveOffset : snapToHalf(rawCurveOffset),
-      )
+      const nextCurveOffset = normalizeWallCurveOffset(wall, snapToHalf(rawCurveOffset))
 
       if (curveDragState.currentCurveOffset === nextCurveOffset) {
         return
@@ -8126,9 +8116,7 @@ export function FloorplanPanel({
       curveDragState.currentCurveOffset = nextCurveOffset
       setWallCurveDraft({ wallId: wall.id, curveOffset: nextCurveOffset })
       setCursorPoint(snappedPoint)
-      if (!bypassSnap) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
+      sfxEmitter.emit('sfx:grid-snap')
     }
 
     const commitGuideInteraction = (event: PointerEvent) => {
@@ -8358,10 +8346,7 @@ export function FloorplanPanel({
         return
       }
 
-      const bypassSnap = shiftPressed || event.shiftKey
-      const snappedPoint: WallPlanPoint = bypassSnap
-        ? planPoint
-        : [snapToHalf(planPoint[0]), snapToHalf(planPoint[1])]
+      const snappedPoint: WallPlanPoint = [snapToHalf(planPoint[0]), snapToHalf(planPoint[1])]
       setCursorPoint(snappedPoint)
 
       const currentDraft = siteBoundaryDraftRef.current
@@ -8374,9 +8359,7 @@ export function FloorplanPanel({
         return
       }
 
-      if (!bypassSnap) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
+      sfxEmitter.emit('sfx:grid-snap')
 
       const nextPolygon = [...currentDraft.polygon]
       nextPolygon[dragState.vertexIndex] = snappedPoint
@@ -8451,7 +8434,6 @@ export function FloorplanPanel({
     exitSiteEditingToSelect,
     getPlanPointFromClientPoint,
     setSiteBoundaryLivePreview,
-    shiftPressed,
     site,
     siteBoundaryWorldPolygon,
     siteVertexDragState,
@@ -8852,8 +8834,7 @@ export function FloorplanPanel({
         // chip on the right): `grid` quantizes via `snapToHalf` (whose step is
         // 0 — i.e. off — in any non-grid mode), `angles` locks to 15° rays from
         // the previous vertex, `lines` pulls onto wall corners / alignment
-        // guides, `off` is free. No Shift hold-to-bypass; Alt forces (skips
-        // alignment).
+        // guides, `off` is free. Alignment follows the magnetic snap mode.
         const angleSnap = ceilingDraftPoints.length > 0 && isAngleSnapActive()
         const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
@@ -8864,7 +8845,6 @@ export function FloorplanPanel({
           rawPoint: planPoint,
           fallbackPoint,
           levelId,
-          altKey: event.altKey,
           align: !angleSnap,
         }).point
 
@@ -8879,9 +8859,9 @@ export function FloorplanPanel({
         // Roof is placed as a footprint (no directional draw → polygon context:
         // grid / lines / off, no angle lock). Mode-driven, matching the chip:
         // `grid` quantizes via `getSnappedFloorplanPoint` (step 0 in non-grid
-        // modes), `lines` pulls onto alignment, `off` is free. Alt forces.
+        // modes), `lines` pulls onto alignment, `off` is free.
         const snappedPoint = alignFloorplanDraftPoint(getSnappedFloorplanPoint(planPoint), {
-          bypass: event.altKey || !isMagneticSnapActive(),
+          bypass: !isMagneticSnapActive(),
         })
         emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
@@ -8948,7 +8928,7 @@ export function FloorplanPanel({
         // Mode-driven (matches the chip): `grid` quantizes (`snapToHalf`'s step
         // is 0 in non-grid modes), `angles` locks 15° rays from the previous
         // vertex, `lines` snaps onto wall corners / alignment guides, `off` is
-        // free. No Shift bypass; Alt forces (skips alignment).
+        // free. Alignment follows the magnetic snap mode.
         const angleSnap = activePolygonDraftPoints.length > 0 && isAngleSnapActive()
         const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
@@ -8961,14 +8941,13 @@ export function FloorplanPanel({
             rawPoint: planPoint,
             fallbackPoint,
             levelId,
-            altKey: event.altKey,
             align: !angleSnap,
           }).point
         } else if (angleSnap) {
           useAlignmentGuides.getState().clear()
         } else {
           snappedPoint = alignFloorplanDraftPoint(fallbackPoint, {
-            bypass: event.altKey || !isMagneticSnapActive(),
+            bypass: !isMagneticSnapActive(),
           })
         }
 
@@ -9043,9 +9022,8 @@ export function FloorplanPanel({
           // builder needs a wall for `ctx.parent`, so we publish the opening on
           // a SYNTHETIC wall segment centred at the cursor (plan-X aligned) to
           // `usePlacementPreview`; `FloorplanPlacementPreviewLayer` renders it
-          // through the real `def.floorplan` builder. Shift bypasses grid snap.
-          const snappedPoint =
-            shiftPressed || event.shiftKey ? planPoint : getSnappedFloorplanPoint(planPoint)
+          // through the real `def.floorplan` builder.
+          const snappedPoint = getSnappedFloorplanPoint(planPoint)
           showOpeningGhost(snappedPoint)
         }
         return
@@ -9057,8 +9035,7 @@ export function FloorplanPanel({
       // routing through `grid:move`, which would otherwise be processed
       // by the floor strategy and drop the item to floor height.
       if (isCeilingItemPlacementActive) {
-        const bypassSnap = shiftPressed || event.shiftKey
-        const snappedPoint = bypassSnap ? planPoint : getSnappedFloorplanPoint(planPoint)
+        const snappedPoint = getSnappedFloorplanPoint(planPoint)
         setCursorPoint((previousPoint) =>
           previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
         )
@@ -9078,7 +9055,7 @@ export function FloorplanPanel({
       // this exclusion the catch-all would emit `grid:move` and re-drive the
       // 3D MoveDoorTool's free-follow, fighting the overlay again.
       if (!isWallBuildActive && !isOpeningMoveActive && isFloorplanGridInteractionActive) {
-        const snappedPoint = event.shiftKey ? planPoint : getSnappedFloorplanPoint(planPoint)
+        const snappedPoint = getSnappedFloorplanPoint(planPoint)
         emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
           previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
@@ -9190,7 +9167,6 @@ export function FloorplanPanel({
       roofDraftStart,
       elevatorResizeDragState,
       siteVertexDragState,
-      shiftPressed,
       surfaceSize.height,
       surfaceSize.width,
       viewBox.height,
@@ -9665,7 +9641,6 @@ export function FloorplanPanel({
           rawPoint: planPoint,
           fallbackPoint,
           levelId,
-          altKey: event.altKey,
           align: !angleSnap,
         }).point
         emitFloorplanGridEvent('double-click', snappedPoint, event)
@@ -9680,7 +9655,6 @@ export function FloorplanPanel({
           rawPoint: planPoint,
           fallbackPoint,
           levelId,
-          altKey: event.altKey,
           align: !angleSnap,
         }).point
         // Slab is registry-driven: forward the double-click so the 3D tool

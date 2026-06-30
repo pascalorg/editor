@@ -1,5 +1,6 @@
 import {
   getDutchRoofMetrics,
+  getRidgeVentLinesForSegment,
   normalizeRoofSegmentTrim,
   type RidgeVentNode,
   type RoofSegmentNode,
@@ -25,6 +26,20 @@ type RidgeVentGeometryVertex = {
 }
 type SegmentTrimClipPlane = {
   signedDistance: (segmentX: number, segmentZ: number) => number
+}
+
+type RidgeVentSupportLine = {
+  startX: number
+  endX: number
+  name: string
+  taperAtStart: boolean
+  taperAtEnd: boolean
+}
+type RidgeVentEndTaper = {
+  taperAtStart: boolean
+  taperAtEnd: boolean
+  taperLength: number
+  tipHalfWidth: number
 }
 
 /**
@@ -94,15 +109,17 @@ export function buildRidgeVentGeometry(
       : node.style === 'shingled'
         ? shingledTop(halfW, h, t)
         : standardTop(halfW, h, t)
+  const supportLine = segment ? getSupportLineForVent(segment, node) : null
+  const endTaper = getRidgeVentEndTaper(supportLine, width, h)
 
   const positions: number[] = []
   const normals: number[] = []
   const uvs: number[] = []
 
-  buildBand(positions, normals, uvs, top, seatYAt, -halfLen, halfLen, node.endCaps)
+  buildBand(positions, normals, uvs, top, seatYAt, -halfLen, halfLen, node.endCaps, endTaper)
 
   if (node.style === 'shingled') {
-    addShingledTabs(positions, normals, uvs, -halfLen, halfLen, top, h, seatYAt)
+    addShingledTabs(positions, normals, uvs, -halfLen, halfLen, top, h, seatYAt, endTaper)
   }
 
   const geometry = buildBufferGeometry(positions, normals, uvs)
@@ -123,6 +140,33 @@ function finitePositive(value: unknown, fallback: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
+}
+
+function getRidgeVentEndTaper(
+  supportLine: RidgeVentSupportLine | null,
+  width: number,
+  height: number,
+): RidgeVentEndTaper | null {
+  if (
+    !supportLine ||
+    (supportLine.name !== 'Hip Ridge Vent' && supportLine.name !== 'Slope Ridge Vent')
+  ) {
+    return null
+  }
+
+  const lineLength = supportLine.endX - supportLine.startX
+  const taperLength = Math.min(
+    Math.max(0.07, width * 0.45, height * 0.9),
+    Math.max(0, lineLength / 2 - 0.02),
+  )
+  if (!(taperLength > 0.001)) return null
+
+  return {
+    taperAtStart: supportLine.taperAtStart,
+    taperAtEnd: supportLine.taperAtEnd,
+    taperLength,
+    tipHalfWidth: Math.min(width * 0.34, Math.max(0.04, width * 0.26)),
+  }
 }
 
 function getDutchTopRidgeSupport(
@@ -200,51 +244,70 @@ function buildBand(
   startX: number,
   endX: number,
   withCaps: boolean,
+  endTaper: RidgeVentEndTaper | null = null,
 ): void {
   const n = top.length
-  const seatAt = (x: number, z: number): number => seatYAt(x, z)
+  const halfWidth = getProfileHalfWidth(top)
+  const stations = getRidgeVentSweepStations(startX, endX, endTaper)
+  const scaledZAt = (x: number, z: number): number =>
+    z * getProfileScaleAtX(x, startX, endX, halfWidth, endTaper)
+  const seatAt = (x: number, z: number): number => seatYAt(x, scaledZAt(x, z))
   const topAt = (x: number, z: number, capY: number): number => seatAt(x, z) + capY
 
   // Top surface + underside, swept along the ridge length.
-  for (let i = 0; i < n - 1; i++) {
-    const [z0, capY0] = top[i]!
-    const [z1, capY1] = top[i + 1]!
-    pushQuad(
-      positions,
-      normals,
-      uvs,
-      [startX, topAt(startX, z0, capY0), z0],
-      [endX, topAt(endX, z0, capY0), z0],
-      [endX, topAt(endX, z1, capY1), z1],
-      [startX, topAt(startX, z1, capY1), z1],
-      [0, 1, 0],
-    )
-    pushQuad(
-      positions,
-      normals,
-      uvs,
-      [startX, seatAt(startX, z0), z0],
-      [endX, seatAt(endX, z0), z0],
-      [endX, seatAt(endX, z1), z1],
-      [startX, seatAt(startX, z1), z1],
-      [0, -1, 0],
-    )
+  for (let station = 0; station < stations.length - 1; station += 1) {
+    const x0 = stations[station]!
+    const x1 = stations[station + 1]!
+    for (let i = 0; i < n - 1; i++) {
+      const [z0, capY0] = top[i]!
+      const [z1, capY1] = top[i + 1]!
+      const x0z0 = scaledZAt(x0, z0)
+      const x1z0 = scaledZAt(x1, z0)
+      const x1z1 = scaledZAt(x1, z1)
+      const x0z1 = scaledZAt(x0, z1)
+      pushQuad(
+        positions,
+        normals,
+        uvs,
+        [x0, topAt(x0, z0, capY0), x0z0],
+        [x1, topAt(x1, z0, capY0), x1z0],
+        [x1, topAt(x1, z1, capY1), x1z1],
+        [x0, topAt(x0, z1, capY1), x0z1],
+        [0, 1, 0],
+      )
+      pushQuad(
+        positions,
+        normals,
+        uvs,
+        [x0, seatAt(x0, z0), x0z0],
+        [x1, seatAt(x1, z0), x1z0],
+        [x1, seatAt(x1, z1), x1z1],
+        [x0, seatAt(x0, z1), x0z1],
+        [0, -1, 0],
+      )
+    }
   }
 
   // Eave thickness faces (the visible depth along each long edge).
-  for (const idx of [0, n - 1]) {
-    const [z, capY] = top[idx]!
-    const hint: [number, number, number] = [0, 0, z < 0 ? -1 : 1]
-    pushQuad(
-      positions,
-      normals,
-      uvs,
-      [startX, seatAt(startX, z), z],
-      [endX, seatAt(endX, z), z],
-      [endX, topAt(endX, z, capY), z],
-      [startX, topAt(startX, z, capY), z],
-      hint,
-    )
+  for (let station = 0; station < stations.length - 1; station += 1) {
+    const x0 = stations[station]!
+    const x1 = stations[station + 1]!
+    for (const idx of [0, n - 1]) {
+      const [z, capY] = top[idx]!
+      const x0z = scaledZAt(x0, z)
+      const x1z = scaledZAt(x1, z)
+      const hint: [number, number, number] = [0, 0, z < 0 ? -1 : 1]
+      pushQuad(
+        positions,
+        normals,
+        uvs,
+        [x0, seatAt(x0, z), x0z],
+        [x1, seatAt(x1, z), x1z],
+        [x1, topAt(x1, z, capY), x1z],
+        [x0, topAt(x0, z, capY), x0z],
+        hint,
+      )
+    }
   }
 
   // End caps: the band's cross-section ring at each end.
@@ -257,19 +320,60 @@ function buildBand(
       for (let i = 0; i < n - 1; i++) {
         const [z0, capY0] = top[i]!
         const [z1, capY1] = top[i + 1]!
+        const scaledZ0 = scaledZAt(x, z0)
+        const scaledZ1 = scaledZAt(x, z1)
         pushQuad(
           positions,
           normals,
           uvs,
-          [x, topAt(x, z0, capY0), z0],
-          [x, topAt(x, z1, capY1), z1],
-          [x, seatAt(x, z1), z1],
-          [x, seatAt(x, z0), z0],
+          [x, topAt(x, z0, capY0), scaledZ0],
+          [x, topAt(x, z1, capY1), scaledZ1],
+          [x, seatAt(x, z1), scaledZ1],
+          [x, seatAt(x, z0), scaledZ0],
           hint,
         )
       }
     }
   }
+}
+
+function getProfileHalfWidth(top: ProfilePoint[]): number {
+  return top.reduce((halfWidth, [z]) => Math.max(halfWidth, Math.abs(z)), 0)
+}
+
+function getRidgeVentSweepStations(
+  startX: number,
+  endX: number,
+  endTaper: RidgeVentEndTaper | null,
+): number[] {
+  const stations = [startX, endX]
+  if (endTaper?.taperAtStart) stations.push(startX + endTaper.taperLength)
+  if (endTaper?.taperAtEnd) stations.push(endX - endTaper.taperLength)
+  return stations
+    .filter((x) => x >= startX && x <= endX)
+    .sort((a, b) => a - b)
+    .filter((x, index, sorted) => index === 0 || Math.abs(x - sorted[index - 1]!) > 1e-5)
+}
+
+function getProfileScaleAtX(
+  x: number,
+  startX: number,
+  endX: number,
+  halfWidth: number,
+  endTaper: RidgeVentEndTaper | null,
+): number {
+  if (!endTaper || !(halfWidth > 0.0001)) return 1
+
+  const tipScale = clamp(endTaper.tipHalfWidth / halfWidth, 0, 1)
+  if (endTaper.taperAtStart && x <= startX + endTaper.taperLength) {
+    const progress = clamp((x - startX) / endTaper.taperLength, 0, 1)
+    return lerp(tipScale, 1, progress)
+  }
+  if (endTaper.taperAtEnd && x >= endX - endTaper.taperLength) {
+    const progress = clamp((endX - x) / endTaper.taperLength, 0, 1)
+    return lerp(tipScale, 1, progress)
+  }
+  return 1
 }
 
 // ─── Shingled course ridges ──────────────────────────────────────────────
@@ -285,6 +389,7 @@ function addShingledTabs(
   top: ProfilePoint[],
   h: number,
   seatYAt: (x: number, z: number) => number,
+  endTaper: RidgeVentEndTaper | null = null,
 ): void {
   const totalLen = endX - startX
   const numTabs = Math.max(2, Math.round(totalLen / SHINGLED_TAB_SIZE))
@@ -294,6 +399,7 @@ function addShingledTabs(
 
   for (let tab = 1; tab < numTabs; tab++) {
     const x = startX + tab * tabLen
+    if (isInsideEndTaper(x, startX, endX, endTaper)) continue
     for (let i = 0; i < top.length - 1; i++) {
       const [z0, capY0] = top[i]!
       const [z1, capY1] = top[i + 1]!
@@ -335,6 +441,19 @@ function addShingledTabs(
       )
     }
   }
+}
+
+function isInsideEndTaper(
+  x: number,
+  startX: number,
+  endX: number,
+  endTaper: RidgeVentEndTaper | null,
+): boolean {
+  if (!endTaper) return false
+  return (
+    (endTaper.taperAtStart && x <= startX + endTaper.taperLength) ||
+    (endTaper.taperAtEnd && x >= endX - endTaper.taperLength)
+  )
 }
 
 // ─── Geometry plumbing ───────────────────────────────────────────────────
@@ -397,6 +516,62 @@ function clipRidgeVentGeometryToSegmentTrim(
   }
 
   return buildBufferGeometry(positions, normals, uvs)
+}
+
+function getSupportLineForVent(
+  segment: RoofSegmentNode,
+  node: RidgeVentNode,
+): RidgeVentSupportLine | null {
+  const lines = getRidgeVentLinesForSegment(segment)
+  if (lines.length === 0) return null
+
+  const centerX = finiteNumber(node.position?.[0], 0)
+  const centerZ = finiteNumber(node.position?.[2], 0)
+  const rotationY = finiteNumber(node.rotation, 0)
+  const dirX = Math.cos(rotationY)
+  const dirZ = -Math.sin(rotationY)
+
+  let best: RidgeVentSupportLine | null = null
+  let bestScore = Number.POSITIVE_INFINITY
+
+  for (const line of lines) {
+    const [sx, sz] = line.start
+    const [ex, ez] = line.end
+    const lineDx = ex - sx
+    const lineDz = ez - sz
+    const lineLength = Math.hypot(lineDx, lineDz)
+    if (!(lineLength > 1e-4)) continue
+
+    const unitX = lineDx / lineLength
+    const unitZ = lineDz / lineLength
+    const yawPenalty = 1 - Math.abs(unitX * dirX + unitZ * dirZ)
+    const centerOffsetX = centerX - sx
+    const centerOffsetZ = centerZ - sz
+    const t = Math.max(0, Math.min(lineLength, centerOffsetX * unitX + centerOffsetZ * unitZ))
+    const nearestX = sx + unitX * t
+    const nearestZ = sz + unitZ * t
+    const distanceSq = (centerX - nearestX) ** 2 + (centerZ - nearestZ) ** 2
+    const score = distanceSq + yawPenalty * 6
+
+    if (score < bestScore) {
+      bestScore = score
+      const startLocalX = (sx - centerX) * dirX + (sz - centerZ) * dirZ
+      const endLocalX = (ex - centerX) * dirX + (ez - centerZ) * dirZ
+      const startRadiusSq = sx * sx + sz * sz
+      const endRadiusSq = ex * ex + ez * ez
+      const outerIsStart = startRadiusSq > endRadiusSq
+      const minIsStart = startLocalX <= endLocalX
+      best = {
+        startX: Math.min(startLocalX, endLocalX),
+        endX: Math.max(startLocalX, endLocalX),
+        name: line.name,
+        taperAtStart: minIsStart ? outerIsStart : !outerIsStart,
+        taperAtEnd: minIsStart ? !outerIsStart : outerIsStart,
+      }
+    }
+  }
+
+  return best
 }
 
 function readGeometryVertex(

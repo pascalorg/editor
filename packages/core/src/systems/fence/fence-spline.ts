@@ -6,12 +6,13 @@ import type { Point2D } from '../wall/wall-mitering'
  * of control points (the "flying path" curved fence).
  *
  * Each control point carries an OUT-handle offset vector. When the user has
- * not adjusted it, the handle defaults to the Catmull-Rom tangent
- * `(next - prev) / 6`, which reproduces a smooth Catmull-Rom curve. When the
- * user drags a tangent handle (stored in `tangents[i]`), that point's handle
- * becomes the stored vector and the IN handle is its mirror, so the curve
- * stays smooth (C1) through the point but bends to taste. Each span is then a
- * cubic Bézier between consecutive points using their handles.
+ * not adjusted it, the handle defaults to a distance-aware Catmull-Rom-style
+ * tangent: direction comes from neighbouring points, while length is capped by
+ * the shorter adjacent span. When the user drags a tangent handle (stored in
+ * `tangents[i]`), that point's handle becomes the stored vector and the IN
+ * handle is its mirror, so the curve stays smooth (C1) through the point but
+ * bends to taste. Each span is then a cubic Bézier between consecutive points
+ * using their handles.
  *
  * Lives in `@pascal-app/core` and imports NO Three.js — the same `CurveFrame`
  * shape that `wall-curve.ts` returns (point / tangent / normal) is produced
@@ -19,7 +20,10 @@ import type { Point2D } from '../wall/wall-mitering'
  */
 
 const EPSILON = 1e-6
-const DEFAULT_SEGMENTS_PER_SPAN = 12
+const DEFAULT_SEGMENTS_PER_SPAN = 32
+const TWO_POINT_CURVE_SAGITTA_RATIO = 0.18
+const TWO_POINT_CURVE_MIN_SAGITTA = 0.18
+const TWO_POINT_CURVE_MAX_SAGITTA = 1.2
 
 type FenceSplineLike = Pick<FenceNode, 'path'>
 type TangentList = ReadonlyArray<readonly [number, number] | null> | undefined
@@ -46,11 +50,15 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
 /**
  * OUT-handle offset vector for control point `index` — the stored tangent if
- * the user has adjusted it, otherwise the automatic Catmull-Rom tangent
- * `(next - prev) / 6` (endpoints duplicate the neighbour so the ends stay
- * tangent to their single span). The IN handle is the negation of this.
+ * the user has adjusted it, otherwise the automatic distance-aware tangent
+ * (endpoints duplicate the neighbour so the ends stay tangent to their single
+ * span). The IN handle is the negation of this.
  *
  * Exported so the editing UI can draw the tangent line / handle dots at the
  * right place even before the user has dragged them.
@@ -66,10 +74,61 @@ export function getFenceControlHandle(
   }
   const prev = path[index - 1] ?? path[index]!
   const next = path[index + 1] ?? path[index]!
-  return {
-    x: (next[0] - prev[0]) / 6,
-    y: (next[1] - prev[1]) / 6,
+  const prevDistance = distance(
+    { x: path[index]![0], y: path[index]![1] },
+    {
+      x: prev[0],
+      y: prev[1],
+    },
+  )
+  const nextDistance = distance(
+    { x: path[index]![0], y: path[index]![1] },
+    {
+      x: next[0],
+      y: next[1],
+    },
+  )
+  const handleLength = Math.min(prevDistance || nextDistance, nextDistance || prevDistance) / 3
+  const vx = next[0] - prev[0]
+  const vy = next[1] - prev[1]
+  const len = Math.hypot(vx, vy)
+  if (len < EPSILON || handleLength < EPSILON) {
+    return { x: 0, y: 0 }
   }
+
+  return {
+    x: (vx / len) * handleLength,
+    y: (vy / len) * handleLength,
+  }
+}
+
+export function getTwoPointFenceCurveTangents(
+  path: ReadonlyArray<readonly [number, number]>,
+): Array<[number, number] | null> | undefined {
+  if (path.length !== 2) return undefined
+  const start = path[0]!
+  const end = path[1]!
+  const dx = end[0] - start[0]
+  const dy = end[1] - start[1]
+  const chordLength = Math.hypot(dx, dy)
+  if (chordLength < EPSILON) return undefined
+
+  const tangentX = dx / 3
+  const tangentY = dy / 3
+  const normalX = -dy / chordLength
+  const normalY = dx / chordLength
+  const sagitta = clamp(
+    chordLength * TWO_POINT_CURVE_SAGITTA_RATIO,
+    TWO_POINT_CURVE_MIN_SAGITTA,
+    TWO_POINT_CURVE_MAX_SAGITTA,
+  )
+  const bendX = normalX * sagitta * (4 / 3)
+  const bendY = normalY * sagitta * (4 / 3)
+
+  return [
+    [tangentX + bendX, tangentY + bendY],
+    [tangentX - bendX, tangentY - bendY],
+  ]
 }
 
 function cubicBezier(p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D, u: number): Point2D {

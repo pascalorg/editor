@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getDutchRoofMetrics, RoofSegmentNode } from '@pascal-app/core'
+import { getDutchRoofMetrics, getRidgeVentLinesForSegment, RoofSegmentNode } from '@pascal-app/core'
 import type * as THREE from 'three'
 import { getRoofTopSurfaceY } from '../../shared/roof-surface'
 import { buildRidgeVentGeometry } from '../geometry'
@@ -25,6 +25,17 @@ function xBounds(geo: THREE.BufferGeometry): { minX: number; maxX: number } {
     maxX = Math.max(maxX, pos[i]!)
   }
   return { minX, maxX }
+}
+
+function maxAbsZNearX(geo: THREE.BufferGeometry, targetX: number, tolerance = 0.03): number {
+  const pos = geo.getAttribute('position').array as Float32Array
+  let maxAbsZ = 0
+  for (let i = 0; i < pos.length; i += 3) {
+    if (Math.abs(pos[i]! - targetX) <= tolerance) {
+      maxAbsZ = Math.max(maxAbsZ, Math.abs(pos[i + 2]!))
+    }
+  }
+  return maxAbsZ
 }
 
 function expectFinitePositions(geo: THREE.BufferGeometry): void {
@@ -206,14 +217,15 @@ describe('buildRidgeVentGeometry', () => {
 
     const geo = buildRidgeVentGeometry(vent, segment)
     const halfLength = vent.length / 2
-    const halfWidth = vent.width / 2
+    const startHalfWidth = maxAbsZNearX(geo, -halfLength, 1e-5)
     const ridgeY = rotatedSurfaceYAt(segment, centerX, centerZ, rotation, 0, 0)
 
-    expect(minYAtLocalPoint(geo, -halfLength, -halfWidth)).toBeCloseTo(
-      rotatedSurfaceYAt(segment, centerX, centerZ, rotation, -halfLength, -halfWidth) - ridgeY,
+    expect(startHalfWidth).toBeGreaterThan(0)
+    expect(minYAtLocalPoint(geo, -halfLength, -startHalfWidth)).toBeCloseTo(
+      rotatedSurfaceYAt(segment, centerX, centerZ, rotation, -halfLength, -startHalfWidth) - ridgeY,
     )
-    expect(minYAtLocalPoint(geo, -halfLength, halfWidth)).toBeCloseTo(
-      rotatedSurfaceYAt(segment, centerX, centerZ, rotation, -halfLength, halfWidth) - ridgeY,
+    expect(minYAtLocalPoint(geo, -halfLength, startHalfWidth)).toBeCloseTo(
+      rotatedSurfaceYAt(segment, centerX, centerZ, rotation, -halfLength, startHalfWidth) - ridgeY,
     )
   })
 
@@ -240,16 +252,19 @@ describe('buildRidgeVentGeometry', () => {
 
     const geo = buildRidgeVentGeometry(vent, segment)
     const halfLength = vent.length / 2
-    const halfWidth = vent.width / 2
+    const startHalfWidth = maxAbsZNearX(geo, -halfLength, 1e-5)
+    const endHalfWidth = maxAbsZNearX(geo, halfLength, 1e-5)
     const ridgeY = rotatedSurfaceYAt(segment, centerX, centerZ, rotation, 0, 0)
     const leftEndY =
-      rotatedSurfaceYAt(segment, centerX, centerZ, rotation, -halfLength, -halfWidth) - ridgeY
+      rotatedSurfaceYAt(segment, centerX, centerZ, rotation, -halfLength, -startHalfWidth) - ridgeY
     const rightEndY =
-      rotatedSurfaceYAt(segment, centerX, centerZ, rotation, halfLength, -halfWidth) - ridgeY
+      rotatedSurfaceYAt(segment, centerX, centerZ, rotation, halfLength, -endHalfWidth) - ridgeY
 
+    expect(startHalfWidth).toBeGreaterThan(0)
+    expect(endHalfWidth).toBeGreaterThan(0)
     expect(leftEndY).not.toBeCloseTo(rightEndY)
-    expect(minYAtLocalPoint(geo, -halfLength, -halfWidth)).toBeCloseTo(leftEndY)
-    expect(minYAtLocalPoint(geo, halfLength, -halfWidth)).toBeCloseTo(rightEndY)
+    expect(minYAtLocalPoint(geo, -halfLength, -startHalfWidth)).toBeCloseTo(leftEndY)
+    expect(minYAtLocalPoint(geo, halfLength, -endHalfWidth)).toBeCloseTo(rightEndY)
   })
 
   test('seats the dutch top ridge with the same sloped cap profile as other ridge vents', () => {
@@ -315,5 +330,48 @@ describe('buildRidgeVentGeometry', () => {
     expect(rawRoofDrop).toBeLessThan(supportedDrop - 0.05)
     expect(minYAtLocalPoint(geo, -halfLength, -halfWidth)).toBeCloseTo(supportedDrop)
     expect(minYAtLocalPoint(geo, halfLength, -halfWidth)).toBeCloseTo(supportedDrop)
+  })
+
+  test('tapers Dutch hip ridge vent ends to a small capped nose without shortening the support-line length', () => {
+    const segment = RoofSegmentNode.parse({
+      roofType: 'dutch',
+      width: 8,
+      depth: 6,
+      wallHeight: 0.5,
+      pitch: 45,
+      overhang: 0,
+      wallThickness: 0,
+      shingleThickness: 0,
+    })
+    const hipLine = getRidgeVentLinesForSegment(segment).find(
+      (line) => line.name === 'Hip Ridge Vent' && line.start[0] < 0 && line.start[1] < 0,
+    )
+    expect(hipLine).toBeDefined()
+    const line = hipLine!
+    const rotation = Math.atan2(-(line.end[1] - line.start[1]), line.end[0] - line.start[0])
+    const vent = RidgeVentNode.parse({
+      name: 'Hip Ridge Vent',
+      position: [(line.start[0] + line.end[0]) / 2, 0, (line.start[1] + line.end[1]) / 2],
+      rotation,
+      length: Math.hypot(line.end[0] - line.start[0], line.end[1] - line.start[1]),
+      width: 0.3,
+      height: 0.1,
+      style: 'shingled',
+      endCaps: true,
+    })
+
+    const geo = buildRidgeVentGeometry(vent, segment)
+    const bounds = xBounds(geo)
+    const fullHalfLength = vent.length / 2
+    const startWidth = maxAbsZNearX(geo, bounds.minX)
+    const endWidth = maxAbsZNearX(geo, bounds.maxX)
+    const bodyWidth = maxAbsZNearX(geo, 0, 0.08)
+
+    expect(bounds.minX).toBeLessThanOrEqual(-fullHalfLength + 0.02)
+    expect(bounds.maxX).toBeGreaterThan(fullHalfLength - 0.15)
+    expect(startWidth).toBeGreaterThan(0.03)
+    expect(startWidth).toBeLessThan(0.09)
+    expect(endWidth).toBeGreaterThan(0.1)
+    expect(bodyWidth).toBeGreaterThan(startWidth + 0.015)
   })
 })

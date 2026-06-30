@@ -6,6 +6,7 @@ import {
   emitter,
   type FenceNode,
   type GridEvent,
+  getTwoPointFenceCurveTangents,
   getWallMiterBoundaryPoints,
   type LevelNode,
   type Point2D,
@@ -28,6 +29,7 @@ import {
   getSegmentAngleReferenceAtPoint,
   getSegmentGridStep,
   isAngleSnapActive,
+  isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
   type SegmentAngleReference,
@@ -706,7 +708,7 @@ const StraightFenceTool: React.FC = () => {
 }
 
 const SPLINE_PREVIEW_COLOR = '#8381ed'
-const SPLINE_PREVIEW_SEGMENTS = 14
+const SPLINE_PREVIEW_SEGMENTS = 40
 
 const SplineFenceDraft: React.FC = () => {
   const previewHeight =
@@ -716,7 +718,6 @@ const SplineFenceDraft: React.FC = () => {
   const [draftPoints, setDraftPoints] = useState<FencePlanPoint[]>([])
   const [cursor, setCursor] = useState<FencePlanPoint | null>(null)
   const draftRef = useRef(draftPoints)
-  const shiftPressed = useRef(false)
 
   draftRef.current = draftPoints
 
@@ -724,8 +725,7 @@ const SplineFenceDraft: React.FC = () => {
 
   useEffect(() => {
     const snapPoint = (local: FencePlanPoint): FencePlanPoint => {
-      if (shiftPressed.current) return local
-      const step = getSegmentGridStep()
+      const step = isGridSnapActive() ? getSegmentGridStep() : 0
       if (step <= 0) return local
       return [snapScalarToGrid(local[0], step), snapScalarToGrid(local[1], step)]
     }
@@ -736,7 +736,11 @@ const SplineFenceDraft: React.FC = () => {
         const created = createSplineFenceOnCurrentLevel(points)
         if (created) {
           triggerSFX('sfx:item-place')
+          // Once the new curve fence is selected for direct editing, leave
+          // placement mode so the toolbar matches the active interaction.
           useViewer.getState().setSelection({ selectedIds: [created.id] })
+          useEditor.getState().setTool(null)
+          useEditor.getState().setMode('select')
         }
       }
       setDraftPoints([])
@@ -758,14 +762,7 @@ const SplineFenceDraft: React.FC = () => {
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') shiftPressed.current = true
       if (event.key === 'Enter') commit()
-    }
-    const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') shiftPressed.current = false
-    }
-    const onBlur = () => {
-      shiftPressed.current = false
     }
     const onCancel = () => {
       if (draftRef.current.length === 0) return
@@ -777,23 +774,23 @@ const SplineFenceDraft: React.FC = () => {
     emitter.on('grid:click', onClick)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
-    window.addEventListener('blur', onBlur)
 
     return () => {
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', onClick)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener('blur', onBlur)
     }
   }, [])
 
   const previewPoints = cursor ? [...draftPoints, cursor] : draftPoints
   const curveGeometry = useMemo(() => {
     if (previewPoints.length < 2) return null
-    const sampled = sampleFenceSpline(previewPoints, undefined, SPLINE_PREVIEW_SEGMENTS)
+    const sampled = sampleFenceSpline(
+      previewPoints,
+      getTwoPointFenceCurveTangents(previewPoints),
+      SPLINE_PREVIEW_SEGMENTS,
+    )
     return new BufferGeometry().setFromPoints(
       sampled.map((point) => new Vector3(point.x, previewHeight, point.y)),
     )

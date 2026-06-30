@@ -203,6 +203,7 @@ export {
   getFenceControlHandle,
   getFenceSplineFrameAt,
   getFenceSplineLength,
+  getTwoPointFenceCurveTangents,
   isSplineFence,
   sampleFenceSpline,
 } from './systems/fence/fence-spline'

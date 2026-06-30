@@ -3,6 +3,7 @@ import {
   getFenceControlHandle,
   getFenceSplineFrameAt,
   getFenceSplineLength,
+  getTwoPointFenceCurveTangents,
   isSplineFence,
   sampleFenceSpline,
 } from './fence-spline'
@@ -70,6 +71,18 @@ describe('sampleFenceSpline', () => {
     expect(maxY).toBeGreaterThan(0.1)
   })
 
+  test('generated two-point curve tangents create a gentle arc', () => {
+    const path: Array<[number, number]> = [
+      [0, 0],
+      [4, 0],
+    ]
+    const sampled = sampleFenceSpline(path, getTwoPointFenceCurveTangents(path), 16)
+    expect(sampled[0]).toEqual({ x: 0, y: 0 })
+    expect(sampled[sampled.length - 1]).toEqual({ x: 4, y: 0 })
+    const maxY = Math.max(...sampled.map((p) => p.y))
+    expect(maxY).toBeGreaterThan(0.4)
+  })
+
   test('produces a smooth (no-cusp) curve on uneven spacing', () => {
     const path: Array<[number, number]> = [
       [0, 0],
@@ -107,13 +120,12 @@ describe('getFenceControlHandle', () => {
     ).toEqual({ x: 1, y: 2 })
   })
 
-  test('falls back to the Catmull-Rom (next - prev) / 6 tangent', () => {
+  test('falls back to the automatic distance-aware tangent', () => {
     const path: Array<[number, number]> = [
       [0, 0],
       [3, 0],
       [6, 0],
     ]
-    // Interior point: (next - prev) / 6 = ([6,0] - [0,0]) / 6 = [1, 0].
     expect(getFenceControlHandle(path, undefined, 1)).toEqual({ x: 1, y: 0 })
   })
 })

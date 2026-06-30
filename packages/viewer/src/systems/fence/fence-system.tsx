@@ -11,6 +11,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 type FencePart = {
+  geometry?: THREE.BufferGeometry
   position: [number, number, number]
   rotationY?: number
   scale: [number, number, number]
@@ -20,8 +21,12 @@ type FencePart = {
 }
 
 const MIN_CURVE_SEGMENT_LENGTH = 0.18
+const HORIZONTAL_FENCE_CURVE_SEGMENT_LENGTH = 0.2
 
 function createFencePartGeometry(part: FencePart) {
+  if (part.geometry) {
+    return part.geometry
+  }
   const geometry =
     part.shape === 'pyramid'
       ? new THREE.ConeGeometry(0.5, 1, 4, 1, false, Math.PI / 4)
@@ -43,58 +48,157 @@ function getFencePointAt(fence: FenceNode, t: number) {
   }
 }
 
-function createStraightFenceSpanPart(
-  start: [number, number],
-  end: [number, number],
-  centerY: number,
-  height: number,
-  depth: number,
-): FencePart | null {
-  const dx = end[0] - start[0]
-  const dz = end[1] - start[1]
-  const length = Math.hypot(dx, dz)
-  if (length <= 1e-4) {
-    return null
-  }
-
-  return {
-    position: [(start[0] + end[0]) / 2, centerY, (start[1] + end[1]) / 2],
-    rotationY: -Math.atan2(dz, dx),
-    scale: [length, height, depth],
-  }
-}
-
-function createFenceCurveSpanParts(
+function createFenceCurveBlockPart(
   fence: FenceNode,
   startT: number,
   endT: number,
   centerY: number,
   height: number,
   depth: number,
-): FencePart[] {
-  const parts: FencePart[] = []
-  const frameCount = Math.max(
-    1,
-    Math.ceil(
-      (getFenceCenterlineLength(fence) * Math.max(1e-4, endT - startT)) / MIN_CURVE_SEGMENT_LENGTH,
-    ),
-  )
+): FencePart | null {
+  if (endT - startT <= 1e-5) return null
+  const halfHeight = height / 2
+  const halfDepth = depth / 2
+  const centerlineLength = getFenceCenterlineLength(fence)
+  const startDistance = startT * centerlineLength
+  const endDistance = endT * centerlineLength
+  const bottomY = centerY - halfHeight
+  const topY = centerY + halfHeight
+  const corners: Array<[number, number, number]> = []
 
-  let previous = getFencePointAt(fence, startT)
-  for (let index = 1; index <= frameCount; index += 1) {
-    const t = startT + (endT - startT) * (index / frameCount)
-    const current = getFencePointAt(fence, t)
-    const segment = createStraightFenceSpanPart(
-      [previous.point.x, previous.point.y],
-      [current.point.x, current.point.y],
+  for (const t of [startT, endT]) {
+    const frame = getFencePointAt(fence, t)
+    const normalX = -Math.sin(frame.tangentAngle)
+    const normalZ = Math.cos(frame.tangentAngle)
+
+    const outerX = frame.point.x + normalX * halfDepth
+    const outerZ = frame.point.y + normalZ * halfDepth
+    const innerX = frame.point.x - normalX * halfDepth
+    const innerZ = frame.point.y - normalZ * halfDepth
+
+    corners.push(
+      [outerX, bottomY, outerZ],
+      [innerX, bottomY, innerZ],
+      [outerX, topY, outerZ],
+      [innerX, topY, innerZ],
+    )
+  }
+
+  const positions: number[] = []
+  const uvs: number[] = []
+  const pushVertex = (index: number, uv: [number, number]) => {
+    positions.push(...corners[index]!)
+    uvs.push(...uv)
+  }
+
+  const pushQuad = (
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    uvA: [number, number],
+    uvB: [number, number],
+    uvC: [number, number],
+    uvD: [number, number],
+  ) => {
+    pushVertex(a, uvA)
+    pushVertex(b, uvB)
+    pushVertex(c, uvC)
+    pushVertex(a, uvA)
+    pushVertex(c, uvC)
+    pushVertex(d, uvD)
+  }
+
+  const topOuterV = topY
+  const topInnerV = topY + depth
+  const innerTopV = topInnerV
+  const innerBottomV = topInnerV + height
+  const bottomInnerV = bottomY - depth
+
+  pushQuad(
+    0,
+    4,
+    6,
+    2,
+    [startDistance, bottomY],
+    [endDistance, bottomY],
+    [endDistance, topY],
+    [startDistance, topY],
+  )
+  pushQuad(
+    1,
+    3,
+    7,
+    5,
+    [startDistance, innerBottomV],
+    [startDistance, innerTopV],
+    [endDistance, innerTopV],
+    [endDistance, innerBottomV],
+  )
+  pushQuad(
+    2,
+    6,
+    7,
+    3,
+    [startDistance, topOuterV],
+    [endDistance, topOuterV],
+    [endDistance, topInnerV],
+    [startDistance, topInnerV],
+  )
+  pushQuad(
+    0,
+    1,
+    5,
+    4,
+    [startDistance, bottomY],
+    [startDistance, bottomInnerV],
+    [endDistance, bottomInnerV],
+    [endDistance, bottomY],
+  )
+  pushQuad(0, 2, 3, 1, [0, bottomY], [0, topY], [depth, innerTopV], [depth, innerBottomV])
+  pushQuad(4, 5, 7, 6, [0, bottomY], [depth, innerBottomV], [depth, innerTopV], [0, topY])
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute(new Float32Array(positions), 3),
+  )
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(uvs), 2))
+  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(new Float32Array(uvs), 2))
+  geometry.computeVertexNormals()
+
+  return {
+    geometry,
+    position: [0, 0, 0],
+    scale: [1, 1, 1],
+  }
+}
+
+function createFenceCurveBlockParts(
+  fence: FenceNode,
+  startT: number,
+  endT: number,
+  centerY: number,
+  height: number,
+  depth: number,
+  maxSegmentLength = MIN_CURVE_SEGMENT_LENGTH,
+): FencePart[] {
+  const length = getFenceCenterlineLength(fence) * Math.max(1e-4, endT - startT)
+  const segmentCount = Math.max(1, Math.ceil(length / Math.max(1e-4, maxSegmentLength)))
+  const parts: FencePart[] = []
+
+  for (let index = 0; index < segmentCount; index += 1) {
+    const segmentStartT = startT + (endT - startT) * (index / segmentCount)
+    const segmentEndT = startT + (endT - startT) * ((index + 1) / segmentCount)
+    const part = createFenceCurveBlockPart(
+      fence,
+      segmentStartT,
+      segmentEndT,
       centerY,
       height,
       depth,
     )
-    if (segment) {
-      parts.push(segment)
-    }
-    previous = current
+    if (part) parts.push(part)
   }
 
   return parts
@@ -191,17 +295,25 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
   const postWidth = Math.max(fence.postSize * 1.4, 0.04)
   const postDepth = postWidth
   const boardDepth = Math.min(panelDepth, postDepth - 0.012)
+  // Stop the horizontal boards / base / rail at the inner faces of the
+  // end posts. Letting curved spans run all the way to t=0/1 makes them
+  // overlap the terminal post mesh and creates the broken seam/notch seen
+  // at curve ends.
+  const edgeInset = Math.max(fence.edgeInset ?? 0.015, postWidth * 0.5)
+  const startInsetT = Math.min(0.499, edgeInset / length)
+  const endInsetT = Math.max(0.501, 1 - edgeInset / length)
 
   // Grounded fences get a kickboard along the bottom; floating ones don't.
   if (!isFloating) {
     base.push(
-      ...createFenceCurveSpanParts(
+      ...createFenceCurveBlockParts(
         fence,
-        0,
-        1,
+        startInsetT,
+        endInsetT,
         baseY + baseHeight / 2,
         baseHeight,
         postDepth * 0.92,
+        HORIZONTAL_FENCE_CURVE_SEGMENT_LENGTH,
       ),
     )
   }
@@ -216,13 +328,14 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
       // No reveal → one flush panel, so the stacked-board edge seams don't
       // read as faint lines where the user asked for a smooth surface.
       infill.push(
-        ...createFenceCurveSpanParts(
+        ...createFenceCurveBlockParts(
           fence,
-          0,
-          1,
+          startInsetT,
+          endInsetT,
           infillBottom + verticalHeight / 2,
           verticalHeight,
           boardDepth,
+          HORIZONTAL_FENCE_CURVE_SEGMENT_LENGTH,
         ),
       )
     } else {
@@ -230,20 +343,31 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
       const slabHeight = Math.max((verticalHeight - reveal * (boardCount - 1)) / boardCount, 0.02)
       for (let index = 0; index < boardCount; index += 1) {
         const centerY = infillBottom + slabHeight / 2 + index * (slabHeight + reveal)
-        infill.push(...createFenceCurveSpanParts(fence, 0, 1, centerY, slabHeight, boardDepth))
+        infill.push(
+          ...createFenceCurveBlockParts(
+            fence,
+            startInsetT,
+            endInsetT,
+            centerY,
+            slabHeight,
+            boardDepth,
+            HORIZONTAL_FENCE_CURVE_SEGMENT_LENGTH,
+          ),
+        )
       }
     }
   }
 
   // Top rail caps the boards.
   rail.push(
-    ...createFenceCurveSpanParts(
+    ...createFenceCurveBlockParts(
       fence,
-      0,
-      1,
+      startInsetT,
+      endInsetT,
       baseY + baseHeight + verticalHeight + topRailHeight / 2,
       topRailHeight,
       Math.max(postDepth * 0.78, 0.02),
+      HORIZONTAL_FENCE_CURVE_SEGMENT_LENGTH,
     ),
   )
 
@@ -306,7 +430,7 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
 
   if (!isFloating) {
     base.push(
-      ...createFenceCurveSpanParts(
+      ...createFenceCurveBlockParts(
         fence,
         0,
         1,
@@ -315,8 +439,9 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
         panelDepth * 1.05,
       ),
     )
+
     base.push(
-      ...createFenceCurveSpanParts(
+      ...createFenceCurveBlockParts(
         fence,
         0,
         1,
@@ -332,7 +457,6 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
 
   for (let index = 0; index < count; index += 1) {
     const t = count === 1 ? 0.5 : startInsetT + (endInsetT - startInsetT) * (index / (count - 1))
-    const frame = getFencePointAt(fence, t)
     const isEdgePost = index === 0 || index === count - 1
     const fullHeightPost = !showInfill || (isFloating && isEdgePost)
     const postHeight = fullHeightPost
@@ -342,17 +466,24 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
 
     // End posts are the structural `posts` slot; the intermediate verticals are
     // the `infill` slats (only present when showInfill adds them).
-    // Depth is 0.001 m shy of the accent rail's `panelDepth * 0.35` so the two
-    // never share a coplanar face where they cross (kills the rail z-fighting).
-    ;(isEdgePost ? posts : infill).push({
-      position: [frame.point.x, postY, frame.point.y],
-      rotationY: -frame.tangentAngle,
-      scale: [postWidth, postHeight, Math.max(panelDepth * 0.35 - 0.001, 0.011)],
-    })
+    const slatHalfT = Math.max(0.0005, postWidth / (2 * length))
+    const slatStartT = Math.max(0, t - slatHalfT)
+    const slatEndT = Math.min(1, t + slatHalfT)
+    const slat = createFenceCurveBlockPart(
+      fence,
+      slatStartT,
+      slatEndT,
+      postY,
+      postHeight,
+      Math.max(panelDepth * 0.35 - 0.001, 0.011),
+    )
+    if (slat) {
+      ;(isEdgePost ? posts : infill).push(slat)
+    }
   }
 
   rail.push(
-    ...createFenceCurveSpanParts(
+    ...createFenceCurveBlockParts(
       fence,
       0,
       1,
@@ -364,7 +495,7 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
 
   if (isFloating) {
     rail.push(
-      ...createFenceCurveSpanParts(
+      ...createFenceCurveBlockParts(
         fence,
         0,
         1,

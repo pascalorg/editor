@@ -16,6 +16,7 @@ import {
   type FencePlanPoint,
   getSegmentGridStep,
   isAngleSnapActive,
+  isGridSnapActive,
   isMagneticSnapActive,
   isSegmentLongEnough,
   snapBuildingLocalToWorldGrid,
@@ -95,7 +96,7 @@ function collectLinkedFences(
 /**
  * Fence curve sagitta drag — 1:1 mirror of `wallCurveAffordance`. Drag
  * projects the pointer onto the chord normal to compute `curveOffset`,
- * snaps to grid (Shift bypasses), clamps to `getMaxWallCurveOffset`,
+ * snaps to grid when that mode is active, clamps to `getMaxWallCurveOffset`,
  * normalizes via `normalizeWallCurveOffset`. Same single-undo dance — the
  * dispatcher handles snapshot / pause / resume around `apply`. Lives in
  * the same file as the endpoint affordance to keep the two fence
@@ -112,17 +113,16 @@ export const fenceCurveAffordance: FloorplanAffordance<FenceNode> = {
     return {
       affectedIds: [node.id],
       apply({ planPoint, modifiers }) {
-        const snapStep = getSegmentGridStep()
-        const x = modifiers.shiftKey ? planPoint[0] : snapScalarToGrid(planPoint[0], snapStep)
-        const y = modifiers.shiftKey ? planPoint[1] : snapScalarToGrid(planPoint[1], snapStep)
+        const snapStep = isGridSnapActive() ? getSegmentGridStep() : 0
+        const x = snapStep > 0 ? snapScalarToGrid(planPoint[0], snapStep) : planPoint[0]
+        const y = snapStep > 0 ? snapScalarToGrid(planPoint[1], snapStep) : planPoint[1]
 
         const offsetFromMidpoint = -(
           (x - chord.midpoint.x) * chord.normal.x +
           (y - chord.midpoint.y) * chord.normal.y
         )
-        const snappedOffset = modifiers.shiftKey
-          ? offsetFromMidpoint
-          : snapScalarToGrid(offsetFromMidpoint, snapStep)
+        const snappedOffset =
+          snapStep > 0 ? snapScalarToGrid(offsetFromMidpoint, snapStep) : offsetFromMidpoint
         const nextCurveOffset = normalizeWallCurveOffset(
           node,
           Math.max(-maxOffset, Math.min(maxOffset, snappedOffset)),
@@ -145,7 +145,7 @@ export const fenceCurveAffordance: FloorplanAffordance<FenceNode> = {
 
 /**
  * Spline control-point drag — reshapes one point of the fence `path`. Grid
- * snap (Shift bypasses); start/end stay pinned to the path ends so endpoint-
+ * snap follows the active mode; start/end stay pinned to the path ends so endpoint-
  * dependent code stays valid. Publishes a live override per tick, commits the
  * final path as one tracked change. No linked-fence cascade: a spline's shape
  * is self-contained.
@@ -169,9 +169,9 @@ export const fenceControlPointAffordance: FloorplanAffordance<FenceNode> = {
     return {
       affectedIds: [fenceId],
       apply({ planPoint, modifiers }) {
-        const snapStep = getSegmentGridStep()
-        const x = modifiers.shiftKey ? planPoint[0] : snapScalarToGrid(planPoint[0], snapStep)
-        const y = modifiers.shiftKey ? planPoint[1] : snapScalarToGrid(planPoint[1], snapStep)
+        const snapStep = isGridSnapActive() ? getSegmentGridStep() : 0
+        const x = snapStep > 0 ? snapScalarToGrid(planPoint[0], snapStep) : planPoint[0]
+        const y = snapStep > 0 ? snapScalarToGrid(planPoint[1], snapStep) : planPoint[1]
         useLiveNodeOverrides.getState().set(fenceId, buildPatch([x, y]))
         useScene.getState().markDirty(fenceId)
       },
@@ -220,9 +220,9 @@ export const fenceTangentAffordance: FloorplanAffordance<FenceNode> = {
     return {
       affectedIds: [fenceId],
       apply({ planPoint, modifiers }) {
-        const snapStep = getSegmentGridStep()
-        const px = modifiers.shiftKey ? planPoint[0] : snapScalarToGrid(planPoint[0], snapStep)
-        const py = modifiers.shiftKey ? planPoint[1] : snapScalarToGrid(planPoint[1], snapStep)
+        const snapStep = isGridSnapActive() ? getSegmentGridStep() : 0
+        const px = snapStep > 0 ? snapScalarToGrid(planPoint[0], snapStep) : planPoint[0]
+        const py = snapStep > 0 ? snapScalarToGrid(planPoint[1], snapStep) : planPoint[1]
         // Arm vector from the anchor to the dragged handle, in plan meters.
         let armX = px - anchor[0]
         let armY = py - anchor[1]

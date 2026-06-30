@@ -25,13 +25,14 @@ import {
   prepareBrushForCSG,
   useViewer,
 } from '@pascal-app/viewer'
-import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
+import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import useInteractionScope from '../../../store/use-interaction-scope'
+import { getHoveredRoofSegmentOutlineProxyName } from '../../../lib/roof-hover-outline-proxy'
+import useInteractionScope, { useMovingNode } from '../../../store/use-interaction-scope'
 import { swallowNextClick } from '../../editor/handles/use-handle-drag'
 
 // Empty placeholder geometry used when we reveal segments-wrapper for
@@ -105,6 +106,7 @@ const TRIM_RAIL_SURFACE_OFFSET = 0
 const TRIM_RAIL_HIT_HEIGHT = 0.18
 const TRIM_RAIL_HIT_DEPTH = 0.16
 const TRIM_CAP_HIT_SIZE = 0.22
+const TRIM_LIVE_REBUILD_INTERVAL_MS = 80
 
 const TRIM_UNIT_PLANE_GEOMETRY = new THREE.PlaneGeometry(1, 1)
 const TRIM_UNIT_RAIL_GEOMETRY = new THREE.BoxGeometry(1, 1, 1)
@@ -270,6 +272,14 @@ const sectionOutlineMaterial = new LineBasicNodeMaterial({
   depthTest: false,
   depthWrite: false,
   linewidth: 2,
+})
+
+const hoverOutlineProxyMaterial = new THREE.MeshBasicMaterial({
+  colorWrite: false,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+  transparent: true,
+  opacity: 0,
 })
 
 // Half-thickness of the slab brush intersected with the roof shell. The wafer
@@ -624,6 +634,58 @@ function SectionCut({ segment, planes }: { segment: RoofSegmentNode; planes: Sec
         renderOrder={SECTION_OUTLINE_RENDER_ORDER}
       />
     </group>
+  )
+}
+
+function HoveredRoofSegmentOutlineProxy() {
+  const hoveredId = useViewer((s) => s.hoveredId)
+  const segment = useScene((s) => {
+    if (!hoveredId) return null
+    const node = s.nodes[hoveredId as AnyNodeId]
+    return node?.type === 'roof-segment' ? (node as RoofSegmentNode) : null
+  })
+  const nodes = useScene((s) => s.nodes)
+  const ref = useRef<THREE.Mesh>(null)
+
+  const geometry = useMemo(() => {
+    if (!segment) return null
+    return generateRoofSegmentGeometry(segment, nodes)
+  }, [nodes, segment])
+  const source = segment ? (sceneRegistry.nodes.get(segment.id) ?? null) : null
+  const roofRoot =
+    segment?.parentId && nodes[segment.parentId as AnyNodeId]?.type === 'roof'
+      ? (sceneRegistry.nodes.get(segment.parentId) ?? null)
+      : null
+
+  useEffect(() => {
+    return () => {
+      geometry?.dispose()
+    }
+  }, [geometry])
+
+  useFrame(() => {
+    const mesh = ref.current
+    if (!(mesh && source && roofRoot)) return
+    source.updateWorldMatrix(true, false)
+    roofRoot.updateWorldMatrix(true, false)
+    mesh.matrix.copy(roofRoot.matrixWorld).invert().multiply(source.matrixWorld)
+    mesh.matrixAutoUpdate = false
+  })
+
+  if (!(source && geometry && roofRoot && segment)) return null
+
+  return createPortal(
+    <mesh
+      frustumCulled={false}
+      geometry={geometry}
+      layers={EDITOR_LAYER}
+      material={hoverOutlineProxyMaterial}
+      matrixAutoUpdate={false}
+      name={getHoveredRoofSegmentOutlineProxyName(segment.id)}
+      raycast={() => null}
+      ref={ref}
+    />,
+    roofRoot,
   )
 }
 
@@ -1201,6 +1263,35 @@ function RoofTrimHandles() {
     const baseTrim = normalizeRoofSegmentTrim(baseSegment)
     const segmentId = segment.id as AnyNodeId
     let pendingTrim = baseTrim
+    let lastDirtyMarkAt = 0
+    let pendingDirtyTimeout: number | null = null
+
+    const clearPendingDirtyTimeout = () => {
+      if (pendingDirtyTimeout === null) return
+      window.clearTimeout(pendingDirtyTimeout)
+      pendingDirtyTimeout = null
+    }
+
+    const flushDirtyMark = () => {
+      clearPendingDirtyTimeout()
+      lastDirtyMarkAt = performance.now()
+      useScene.getState().markDirty(segmentId)
+    }
+
+    const scheduleDirtyMark = () => {
+      const now = performance.now()
+      if (now - lastDirtyMarkAt >= TRIM_LIVE_REBUILD_INTERVAL_MS) {
+        flushDirtyMark()
+        return
+      }
+      if (pendingDirtyTimeout !== null) return
+      pendingDirtyTimeout = window.setTimeout(
+        () => {
+          flushDirtyMark()
+        },
+        Math.max(0, TRIM_LIVE_REBUILD_INTERVAL_MS - (now - lastDirtyMarkAt)),
+      )
+    }
 
     const getPointerTrimValue = (clientX: number, clientY: number): number | null => {
       const rect = gl.domElement.getBoundingClientRect()
@@ -1235,15 +1326,17 @@ function RoofTrimHandles() {
         pointerValue - initialPointerValue,
       )
       useLiveNodeOverrides.getState().set(segmentId, { trim: pendingTrim })
-      // Re-trim the clean merged shell live: marking the segment dirty queues
-      // its parent roof for a merged rebuild (RoofSystem reads the live trim
-      // override via getEffectiveNode), so the dragged cut matches the commit.
-      useScene.getState().markDirty(segmentId)
+      // Coalesce live merged-shell rebuilds during trim drag. The override
+      // still updates every pointer move for local trim affordances, but the
+      // full roof CSG only refreshes at a capped cadence instead of at raw
+      // pointer-event frequency.
+      scheduleDirtyMark()
     }
 
     updateFromPointer(event.clientX, event.clientY)
 
     const cleanup = () => {
+      clearPendingDirtyTimeout()
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
@@ -1275,13 +1368,13 @@ function RoofTrimHandles() {
         commitSegmentTrim(baseSegment, pendingTrim)
       }
       useLiveNodeOverrides.getState().clear(segmentId)
-      useScene.getState().markDirty(segmentId)
+      flushDirtyMark()
       cleanup()
     }
 
     const onCancel = () => {
       useLiveNodeOverrides.getState().clear(segmentId)
-      useScene.getState().markDirty(segmentId)
+      flushDirtyMark()
       cleanup()
     }
 
@@ -1673,7 +1766,9 @@ function RoofTrimHandles() {
  */
 export const RoofEditSystem = () => {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const movingNode = useMovingNode()
   const prevActiveRoofIds = useRef(new Set<string>())
+  const prevMovingRoofIds = useRef(new Set<string>())
   const prevRevealRoofIds = useRef(new Set<string>())
 
   useEffect(() => {
@@ -1686,6 +1781,10 @@ export const RoofEditSystem = () => {
     // reveal the wrapper so handle portals into the segment mesh become
     // visible. Merged stays on.
     const revealRoofIds = new Set<string>()
+    // Roofs whose selected segment is currently being moved in 3D. During this
+    // transient state we reveal the wrapper so the moving segment mesh is
+    // visible and hide the merged roof to avoid the duplicate shell fighting it.
+    const movingRoofIds = new Set<string>()
 
     for (const id of selectedIds) {
       const node = nodes[id as AnyNodeId]
@@ -1705,11 +1804,17 @@ export const RoofEditSystem = () => {
       }
     }
 
+    if (movingNode?.type === 'roof-segment' && movingNode.parentId) {
+      movingRoofIds.add(movingNode.parentId)
+    }
+
     // Union of roofs that need ANY state change this tick.
     const roofIdsToUpdate = new Set([
       ...activeRoofIds,
+      ...movingRoofIds,
       ...revealRoofIds,
       ...prevActiveRoofIds.current,
+      ...prevMovingRoofIds.current,
       ...prevRevealRoofIds.current,
     ])
 
@@ -1720,6 +1825,7 @@ export const RoofEditSystem = () => {
       const mergedMesh = group.getObjectByName('merged-roof')
       const segmentsWrapper = group.getObjectByName('segments-wrapper')
       const isActive = activeRoofIds.has(roofId)
+      const isMoving = movingRoofIds.has(roofId)
       const isReveal = revealRoofIds.has(roofId)
 
       // Keep the clean merged shell visible during trim editing too (not just
@@ -1728,17 +1834,19 @@ export const RoofEditSystem = () => {
       // cutaway matches the commit. Showing the individual per-segment meshes
       // instead would expose their abutting end-cap faces (the white planes the
       // merged union removes) — exactly what the commit doesn't show.
-      if (mergedMesh) mergedMesh.visible = true
-      if (segmentsWrapper) segmentsWrapper.visible = isReveal
+      if (mergedMesh) mergedMesh.visible = !isMoving
+      if (segmentsWrapper) segmentsWrapper.visible = isReveal || isMoving
 
       const roofNode = nodes[roofId as AnyNodeId] as RoofNode | undefined
       if (roofNode?.children?.length) {
         const wasActive = prevActiveRoofIds.current.has(roofId)
+        const wasMoving = prevMovingRoofIds.current.has(roofId)
         const wasReveal = prevRevealRoofIds.current.has(roofId)
-        if (isActive !== wasActive) {
+        if (isActive !== wasActive || isMoving !== wasMoving) {
           // Entering / exiting full edit mode: rebuild segment / merged
-          // geometries. Accessory-reveal doesn't need this — segments
-          // keep their placeholder; only their visibility flips.
+          // geometries. Segment-move reveal uses the same rebuild so any
+          // wrapper mesh previously stripped to an empty placeholder is
+          // restored before the drag begins.
           const { markDirty } = useScene.getState()
           for (const childId of roofNode.children) {
             markDirty(childId as AnyNodeId)
@@ -1763,8 +1871,14 @@ export const RoofEditSystem = () => {
     }
 
     prevActiveRoofIds.current = activeRoofIds
+    prevMovingRoofIds.current = movingRoofIds
     prevRevealRoofIds.current = revealRoofIds
-  }, [selectedIds])
+  }, [movingNode, selectedIds])
 
-  return <RoofTrimHandles />
+  return (
+    <>
+      <HoveredRoofSegmentOutlineProxy />
+      <RoofTrimHandles />
+    </>
+  )
 }

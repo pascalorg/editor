@@ -56,6 +56,7 @@ function ShortcutSequence({ keys }: { keys: string[] }) {
 // `pointer-events-none`, so clickable chips opt back in.
 function ChipRow({
   ariaLabel,
+  disabled = false,
   icon,
   label,
   onClick,
@@ -63,6 +64,7 @@ function ChipRow({
   tooltip,
 }: {
   ariaLabel?: string
+  disabled?: boolean
   icon?: string
   label: string
   onClick?: () => void
@@ -82,7 +84,9 @@ function ChipRow({
   )
 
   if (!onClick) {
-    return <div className={cn(ROW_CLASS, 'items-center')}>{body}</div>
+    return (
+      <div className={cn(ROW_CLASS, 'items-center', disabled && 'opacity-45 saturate-0')}>{body}</div>
+    )
   }
 
   const button = (
@@ -91,6 +95,7 @@ function ChipRow({
       className={cn(
         ROW_CLASS,
         'pointer-events-auto cursor-pointer items-center rounded-md text-left transition-colors hover:bg-muted/60',
+        disabled && 'opacity-45 saturate-0',
       )}
       onClick={onClick}
       type="button"
@@ -181,6 +186,48 @@ function ContinuationChip({ context }: { context: ContinuationContext }) {
   )
 }
 
+function FenceContinuationChips() {
+  const mode = useEditor((s) => s.getContinuation('fence'))
+  const setContinuation = useEditor((s) => s.setContinuation)
+
+  const isCurved = mode === 'curved'
+  const straightMode = isCurved ? 'continuous' : mode
+  const straightLabel = straightMode === 'single' ? 'Straight: Single' : 'Straight: Continuous'
+  const straightIcon = straightMode === 'single' ? 'lucide:minus' : 'lucide:waypoints'
+  const typeLabel = isCurved ? 'Type: Curved' : 'Type: Straight'
+  const typeIcon = isCurved ? 'lucide:spline' : 'lucide:minus'
+
+  return (
+    <>
+      <ChipRow
+        ariaLabel={`Fence type: ${isCurved ? 'Curved' : 'Straight'}`}
+        icon={typeIcon}
+        label={typeLabel}
+        onClick={() => setContinuation('fence', isCurved ? 'continuous' : 'curved')}
+        shortcut="T"
+        tooltip="Fence type — click or press T to switch between straight and curved"
+      />
+      <ChipRow
+        ariaLabel={`Fence continuation: ${straightLabel}`}
+        disabled={isCurved}
+        icon={straightIcon}
+        label={straightLabel}
+        onClick={
+          isCurved
+            ? undefined
+            : () => setContinuation('fence', straightMode === 'single' ? 'continuous' : 'single')
+        }
+        shortcut="C"
+        tooltip={
+          isCurved
+            ? 'Straight continuation is unavailable while curved fence type is active'
+            : 'Straight fence continuation — click or press C to toggle'
+        }
+      />
+    </>
+  )
+}
+
 const PAINT_SCOPE_ICONS: Record<PaintScope, string> = {
   single: 'lucide:square',
   object: 'lucide:box',
@@ -260,7 +307,10 @@ export function ContextualHelperPanel({
   return (
     <div className={CONTAINER_CLASS}>
       {snapContext ? <SnappingChips context={snapContext} /> : null}
-      {continuationContext ? <ContinuationChip context={continuationContext} /> : null}
+      {continuationContext === 'fence' ? <FenceContinuationChips /> : null}
+      {continuationContext && continuationContext !== 'fence' ? (
+        <ContinuationChip context={continuationContext} />
+      ) : null}
       {showPaintScope ? <PaintScopeChip /> : null}
       {hints.map((hint) => (
         <div

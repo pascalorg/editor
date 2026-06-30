@@ -172,12 +172,6 @@ export function clearSurfacePlanSnapFeedback() {
 }
 
 export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): SurfacePlanSnapResult {
-  if (input.shiftKey) {
-    useWallSnapIndicator.getState().clear()
-    useAlignmentGuides.getState().clear()
-    return { point: input.rawPoint, wallSnap: null, guides: [], wallIds: [] }
-  }
-
   const nodes = input.nodes ?? useScene.getState().nodes
   const walls = getLevelWalls(nodes, input.levelId, input.walls)
   const fallbackPoint = input.fallbackPoint
@@ -213,7 +207,7 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
   // only when magnetic snap is on — `grid`/`angles`/`off` keep the grid/raw
   // `fallbackPoint` instead of being pulled onto an alignment axis.
   const basePoint = fallbackPoint ?? wallSnap.point
-  if (input.align === false || input.altKey || !magnetic) {
+  if (input.align === false || !magnetic) {
     useAlignmentGuides.getState().clear()
     return { point: basePoint, wallSnap: null, guides: [], wallIds: [] }
   }

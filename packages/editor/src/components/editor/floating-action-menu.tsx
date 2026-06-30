@@ -16,8 +16,10 @@ import {
   getWallCurveLength,
   getWallThickness,
   ItemNode,
+  isCurvedWall,
   isRegistryMovable,
   isRegistrySelectable,
+  isSplineFence,
   nodeRegistry,
   RoofSegmentNode,
   type SlabNode,
@@ -691,7 +693,8 @@ export function FloatingActionMenu() {
               onFind={node && canFindNode ? handleFind : undefined}
               onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
               onCurve={
-                node?.type === 'fence' || (node?.type === 'wall' && canCurveSelectedWall)
+                (node?.type === 'fence' && !isSplineFence(node) && !isCurvedWall(node)) ||
+                (node?.type === 'wall' && canCurveSelectedWall)
                   ? handleCurve
                   : undefined
               }
