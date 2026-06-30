@@ -58,7 +58,7 @@ export default function TreesPanel() {
               <span
                 aria-hidden
                 className="h-8 w-8 rounded-full"
-                style={{ backgroundColor: spec.foliageColor }}
+                style={{ backgroundColor: spec.swatch }}
               />
               <span className="text-xs">{spec.label}</span>
             </button>

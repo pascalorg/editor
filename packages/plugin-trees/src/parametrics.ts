@@ -1,4 +1,5 @@
 import { type AnyNodeId, type ParametricDescriptor, useScene } from '@pascal-app/core'
+import { TREE_SEED_POOL } from './presets'
 import type { TreeNode } from './schema'
 
 /**
@@ -13,7 +14,7 @@ export const treeParametrics: ParametricDescriptor<TreeNode> = {
     {
       label: 'Tree',
       fields: [
-        { key: 'preset', kind: 'enum', options: ['oak', 'pine', 'birch', 'palm'] },
+        { key: 'preset', kind: 'enum', options: ['oak', 'pine', 'aspen', 'ash', 'bush'] },
         { key: 'height', kind: 'number', unit: 'm', min: 1, max: 15, step: 0.5 },
         { key: 'seed', kind: 'number', min: 0, max: 9999, step: 1 },
       ],
@@ -26,13 +27,14 @@ export const treeParametrics: ParametricDescriptor<TreeNode> = {
   actions: [
     {
       label: 'Randomize',
-      // The action receives the live node; writing a new seed re-runs the
-      // geometry builder (seed is part of the definition's geometryKey).
+      // The action receives the live node; writing a new seed re-generates the
+      // tree. Pick from the bounded pool so the result stays an instancing
+      // variant shared with other trees, not a one-off mesh.
       onClick: (n) =>
         useScene.getState().updateNode(
           n.id as AnyNodeId,
           {
-            seed: Math.floor(Math.random() * 10000),
+            seed: TREE_SEED_POOL[Math.floor(Math.random() * TREE_SEED_POOL.length)] ?? 1,
           } as Partial<TreeNode> as never,
         ),
     },

@@ -1,13 +1,14 @@
 import type { NodeDefinition } from '@pascal-app/core'
-import { buildTreeGeometry } from './geometry'
 import { treeParametrics } from './parametrics'
 import { TreeNode } from './schema'
 
 /**
- * The tree node definition. Three-checkbox composition like the built-ins:
- * `geometry` for 3D, `parametrics` for the inspector, `tool`/`preview` for
- * placement — all pure/lazy, no host dispatch code. The host renders, inspects,
- * moves, and persists trees purely from this descriptor.
+ * The tree node definition. Rendering uses the instanced path rather than the
+ * per-node `def.geometry`: a collective `def.system` batches every tree into
+ * `InstancedMesh`es (forest-scale draw calls), while a featherweight
+ * `def.renderer` mounts an invisible per-node proxy so the host's selection /
+ * outline / zone machinery works unchanged. `parametrics` gives the inspector
+ * for free; `tool`/`preview` drive placement. No host dispatch code per kind.
  */
 export const treeDefinition: NodeDefinition<typeof TreeNode> = {
   kind: 'trees:tree',
@@ -24,7 +25,7 @@ export const treeDefinition: NodeDefinition<typeof TreeNode> = {
     position: [0, 0, 0],
     rotation: [0, 0, 0],
     preset: 'oak',
-    height: 5,
+    height: 7,
     seed: 1,
   }),
 
@@ -53,10 +54,10 @@ export const treeDefinition: NodeDefinition<typeof TreeNode> = {
 
   parametrics: treeParametrics,
 
-  // Pure builder + a cache key over only the geometry-relevant fields, so a
-  // move or reparent never rebuilds the mesh.
-  geometry: (node) => buildTreeGeometry(node),
-  geometryKey: (n) => JSON.stringify([n.preset, n.height, n.seed]),
+  // Instanced rendering: an invisible per-node proxy for selection/outline...
+  renderer: { kind: 'parametric', module: () => import('./proxy-renderer') },
+  // ...and a collective system that batches every tree into InstancedMeshes.
+  system: { module: () => import('./system'), priority: 3 },
 
   preview: () => import('./preview'),
   tool: () => import('./tool'),

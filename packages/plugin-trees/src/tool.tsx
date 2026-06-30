@@ -6,13 +6,14 @@ import {
   emitter,
   type GridEvent,
   sceneRegistry,
+  snapPointToGrid,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX } from '@pascal-app/editor'
+import { isGridSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
-import { TREE_PRESETS } from './presets'
+import { TREE_PRESETS, TREE_SEED_POOL } from './presets'
 import TreePreview from './preview'
 import { TreeNode, type TreePreset } from './schema'
 import { useTreesStore } from './store'
@@ -23,6 +24,14 @@ const worldVec = new Vector3()
  * `| undefined` on the record lookup. */
 function presetHeight(preset: TreePreset): number {
   return (TREE_PRESETS[preset] ?? TREE_PRESETS.oak).defaultHeight
+}
+
+/** Snap a planar position to the grid when grid snapping is the active mode —
+ * reading the same `isGridSnapActive()` toggle and `gridSnapStep` the built-in
+ * item/shelf tools use, so trees honour the snap mode like every other item. */
+function snapXZ(x: number, z: number): readonly [number, number] {
+  if (!isGridSnapActive()) return [x, z]
+  return snapPointToGrid([x, z], useEditor.getState().gridSnapStep)
 }
 
 /**
@@ -77,19 +86,23 @@ export default function TreeTool() {
       // The tool mounts inside the host's building-local group, so positioning
       // the ghost with the building-local hit keeps it under the cursor.
       const [lx, , lz] = event.localPosition
-      cursorRef.current?.position.set(lx, 0, lz)
+      const [sx, sz] = snapXZ(lx, lz)
+      cursorRef.current?.position.set(sx, 0, sz)
       lastWorld = event.position
     }
 
     const onGridClick = (event: GridEvent) => {
       const world = lastWorld ?? event.position
-      const position = toLevelLocal(activeLevelId, world)
+      const [lx, , lz] = toLevelLocal(activeLevelId, world)
+      const [sx, sz] = snapXZ(lx, lz)
       const tree = TreeNode.parse({
         preset,
         height: presetHeight(preset),
-        seed: Math.floor(Math.random() * 10000),
-        position,
-        rotation: [0, 0, 0],
+        // Pick from the bounded pool so placed trees share instancing variants;
+        // a small random Y rotation keeps a planted row from looking cloned.
+        seed: TREE_SEED_POOL[Math.floor(Math.random() * TREE_SEED_POOL.length)] ?? 1,
+        position: [sx, 0, sz],
+        rotation: [0, Math.random() * Math.PI * 2, 0],
       })
       useScene.getState().createNode(tree as unknown as AnyNode, activeLevelId as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [tree.id as AnyNodeId] })

@@ -23,5 +23,5 @@ export const treesPlugin: Plugin = {
 }
 
 export { treeDefinition } from './definition'
-export { buildTreeGeometry } from './geometry'
+export { generateTree } from './geometry'
 export { TreeNode, TreePreset } from './schema'

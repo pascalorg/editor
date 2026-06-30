@@ -261,11 +261,15 @@
     "packages/plugin-trees": {
       "name": "@pascal-app/plugin-trees",
       "version": "0.1.0",
+      "dependencies": {
+        "@dgreenheck/ez-tree": "^1.1.0",
+      },
       "devDependencies": {
         "@pascal-app/core": "*",
         "@pascal-app/editor": "*",
         "@pascal-app/viewer": "*",
         "@pascal/typescript-config": "*",
+        "@react-three/fiber": "^9",
         "@types/node": "^22.19.12",
         "@types/react": "^19.2.2",
         "@types/three": "^0.184.0",
@@ -279,6 +283,7 @@
         "@pascal-app/core": "*",
         "@pascal-app/editor": "*",
         "@pascal-app/viewer": "*",
+        "@react-three/fiber": "^9",
         "react": "^18 || ^19",
         "three": "^0.184",
         "zod": "^4",
@@ -398,6 +403,8 @@
     "@clack/core": ["@clack/core@1.4.1", "", { "dependencies": { "fast-wrap-ansi": "^0.2.0", "sisteransi": "^1.0.5" } }, "sha512-FILJa1gGKEFTGZAJE9RpVhrjKz3c3h4ar60dSv6cGuDqufQ84YEIS3GAGvZiN+H6yaLbbvTFNejjCC4tXpZEuw=="],
 
     "@clack/prompts": ["@clack/prompts@1.5.1", "", { "dependencies": { "@clack/core": "1.4.1", "fast-string-width": "^3.0.2", "fast-wrap-ansi": "^0.2.0", "sisteransi": "^1.0.5" } }, "sha512-zccHj2z2oCCO4yrDiRSlFOxWerGqRiysP7a5jPK6uoI9URKAquwY42Dd/iUP8JWHxEzdRe4TlbvZCo8z1/mhrw=="],
+
+    "@dgreenheck/ez-tree": ["@dgreenheck/ez-tree@1.1.0", "", { "peerDependencies": { "three": ">=0.167" } }, "sha512-6pvS6hD6B6h00dm0SnkgYeT4ABU5Y1Z9M44p1tXiV5C0eKrQy2sKECXshoaUv0qAOqYVL68w/PwadUxDFDiHUg=="],
 
     "@dimforge/rapier3d-compat": ["@dimforge/rapier3d-compat@0.12.0", "", {}, "sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow=="],
 

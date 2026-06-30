@@ -1,8 +1,9 @@
 import { BaseNode, nodeType, objectId } from '@pascal-app/core'
 import { z } from 'zod'
 
-/** Tree silhouettes the plugin can place. The string persists in scene JSON. */
-export const TreePreset = z.enum(['oak', 'pine', 'birch', 'palm'])
+/** Tree silhouettes the plugin can place, each backed by an ez-tree preset.
+ * The string persists in scene JSON. */
+export const TreePreset = z.enum(['oak', 'pine', 'aspen', 'ash', 'bush'])
 export type TreePreset = z.infer<typeof TreePreset>
 
 /**
