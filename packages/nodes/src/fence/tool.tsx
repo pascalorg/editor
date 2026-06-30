@@ -38,6 +38,7 @@ import {
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  useFenceCurveDraft,
   useSegmentDraftChain,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -720,6 +721,13 @@ const SplineFenceDraft: React.FC = () => {
   const draftRef = useRef(draftPoints)
 
   draftRef.current = draftPoints
+
+  // Mirror the draft length into the HUD store so the "finish curve" hint only
+  // shows once drafting has started; always clear it when the tool unmounts.
+  useEffect(() => {
+    useFenceCurveDraft.getState().setPointCount(draftPoints.length)
+  }, [draftPoints])
+  useEffect(() => () => useFenceCurveDraft.getState().reset(), [])
 
   useEffect(() => () => useEditor.getState().setToolDefaults('fence', null), [])
 

@@ -14,6 +14,7 @@ import {
 } from '../../../lib/snapping-mode'
 import { cn } from '../../../lib/utils'
 import useEditor, { type GridSnapStep } from '../../../store/use-editor'
+import useFenceCurveDraft from '../../../store/use-fence-curve-draft'
 import { ShortcutToken } from '../primitives/shortcut-token'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 
@@ -189,6 +190,7 @@ function ContinuationChip({ context }: { context: ContinuationContext }) {
 function FenceContinuationChips() {
   const mode = useEditor((s) => s.getContinuation('fence'))
   const setContinuation = useEditor((s) => s.setContinuation)
+  const curveStarted = useFenceCurveDraft((s) => s.pointCount > 0)
 
   const isCurved = mode === 'curved'
   const straightMode = isCurved ? 'continuous' : mode
@@ -224,6 +226,16 @@ function FenceContinuationChips() {
             : 'Straight fence continuation — click or press C to toggle'
         }
       />
+      {/* Curved fences are committed by a closing gesture rather than per-click,
+          so the finish keys aren't discoverable on their own — surface them, but
+          only once the user has placed a point and a curve is actually in flight. */}
+      {isCurved && curveStarted ? (
+        <ChipRow
+          icon="lucide:circle-check"
+          label="Finish curve (or double-click)"
+          shortcut="Enter"
+        />
+      ) : null}
     </>
   )
 }
