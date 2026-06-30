@@ -695,10 +695,27 @@ export type FloorplanMoveTarget<N> = (args: {
 
 // ─── Plugin manifest ─────────────────────────────────────────────────
 
+/**
+ * A left-rail panel contributed by a plugin. The host adds `icon` to the
+ * sidebar icon rail; clicking it mounts `component` (lazy-loaded, behind a
+ * per-panel error boundary) in the sidebar content area. `id` is namespaced
+ * by the owning plugin id at load time, so two plugins may each declare a
+ * panel id of `'main'` without colliding. `icon` reuses {@link IconRef} so a
+ * plugin contributes a mark the same way a node's presentation does, with no
+ * React rendering in core.
+ */
+export type PluginPanel = {
+  id: string
+  label: string
+  icon: IconRef
+  component: LazyComponent
+}
+
 export type Plugin = {
   id: string
   apiVersion: 1
   nodes?: AnyNodeDefinition[]
+  panels?: PluginPanel[]
 }
 
 // ─── NodeDefinition ──────────────────────────────────────────────────

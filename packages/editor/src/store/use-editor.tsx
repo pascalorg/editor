@@ -172,8 +172,14 @@ export type NavigationSyncPose = {
 
 export type NavigationSyncPoseInput = Omit<NavigationSyncPose, 'revision'>
 
-// Combined tool type
-export type Tool = SiteTool | StructureTool | FurnishTool
+// Combined tool type. Known literals keep autocomplete; the `(string & {})`
+// arm lets plugin-contributed tool ids (e.g. `'trees:tree'`) typecheck without
+// the host enumerating every plugin kind. The runtime dispatch is already
+// registry-first — `tool-manager` resolves `nodeRegistry.get(tool)?.tool` — so
+// an unknown-to-the-host tool string flows straight through to the plugin's
+// placement component.
+export type KnownTool = SiteTool | StructureTool | FurnishTool
+export type Tool = KnownTool | (string & {})
 
 /**
  * Starting parameters seeded into a draw tool before it mints a node.

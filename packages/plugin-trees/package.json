@@ -1,0 +1,51 @@
+{
+  "name": "@pascal-app/plugin-trees",
+  "version": "0.1.0",
+  "description": "First-party example Pascal editor plugin — a procedural trees node with a presets rail panel. Structurally identical to a third-party plugin (peer-deps on @pascal-app/*).",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "check-types": "tsgo --noEmit"
+  },
+  "peerDependencies": {
+    "@pascal-app/core": "*",
+    "@pascal-app/editor": "*",
+    "@pascal-app/viewer": "*",
+    "react": "^18 || ^19",
+    "three": "^0.184",
+    "zod": "^4",
+    "zustand": "^5"
+  },
+  "devDependencies": {
+    "@pascal-app/core": "*",
+    "@pascal-app/editor": "*",
+    "@pascal-app/viewer": "*",
+    "@pascal/typescript-config": "*",
+    "@types/node": "^22.19.12",
+    "@types/react": "^19.2.2",
+    "@types/three": "^0.184.0",
+    "react": "^19",
+    "three": "^0.184",
+    "typescript": "6.0.3",
+    "zod": "^4",
+    "zustand": "^5"
+  },
+  "keywords": [
+    "pascal",
+    "3d",
+    "editor",
+    "plugin"
+  ],
+  "license": "MIT"
+}

@@ -33,6 +33,7 @@
         "@pascal-app/editor": "*",
         "@pascal-app/mcp": "*",
         "@pascal-app/nodes": "*",
+        "@pascal-app/plugin-trees": "*",
         "@pascal-app/viewer": "*",
         "@radix-ui/react-tooltip": "^1.2.8",
         "@react-three/drei": "^10.7.7",
@@ -254,6 +255,33 @@
         "lucide-react": "^1",
         "react": "^18 || ^19",
         "three": "^0.184",
+        "zustand": "^5",
+      },
+    },
+    "packages/plugin-trees": {
+      "name": "@pascal-app/plugin-trees",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@pascal-app/core": "*",
+        "@pascal-app/editor": "*",
+        "@pascal-app/viewer": "*",
+        "@pascal/typescript-config": "*",
+        "@types/node": "^22.19.12",
+        "@types/react": "^19.2.2",
+        "@types/three": "^0.184.0",
+        "react": "^19",
+        "three": "^0.184",
+        "typescript": "6.0.3",
+        "zod": "^4",
+        "zustand": "^5",
+      },
+      "peerDependencies": {
+        "@pascal-app/core": "*",
+        "@pascal-app/editor": "*",
+        "@pascal-app/viewer": "*",
+        "react": "^18 || ^19",
+        "three": "^0.184",
+        "zod": "^4",
         "zustand": "^5",
       },
     },
@@ -682,6 +710,8 @@
     "@pascal-app/mcp": ["@pascal-app/mcp@workspace:packages/mcp"],
 
     "@pascal-app/nodes": ["@pascal-app/nodes@workspace:packages/nodes"],
+
+    "@pascal-app/plugin-trees": ["@pascal-app/plugin-trees@workspace:packages/plugin-trees"],
 
     "@pascal-app/viewer": ["@pascal-app/viewer@workspace:packages/viewer"],
 
