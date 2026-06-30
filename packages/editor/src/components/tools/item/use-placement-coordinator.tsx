@@ -20,7 +20,6 @@ import {
   type WallEvent,
   type WallNode,
 } from '@pascal-app/core'
-import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -47,7 +46,11 @@ import {
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { formatLinearMeasurement } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import { resolveAlignmentForActiveBuilding } from '../../../lib/world-grid-snap'
+import {
+  projectAlignmentGuidesWorldToActiveBuildingLocal,
+  resolveAlignmentForActiveBuilding,
+} from '../../../lib/world-grid-snap'
+import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, { isMagneticSnapActive } from '../../../store/use-editor'
 import useFacingPose from '../../../store/use-facing-pose'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
@@ -856,7 +859,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           alignX = ar.snap.dx
           alignZ = ar.snap.dz
         }
-        useAlignmentGuides.getState().set(ar.guides)
+        useAlignmentGuides
+          .getState()
+          .set(projectAlignmentGuidesWorldToActiveBuildingLocal(ar.guides))
       } else {
         useAlignmentGuides.getState().clear()
       }

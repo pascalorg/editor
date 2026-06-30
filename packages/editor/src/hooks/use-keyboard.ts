@@ -93,6 +93,26 @@ export const useKeyboard = ({
       }
 
       if (
+        (e.key === 't' || e.key === 'T') &&
+        !e.repeat &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.shiftKey &&
+        !e.altKey
+      ) {
+        const context = getActiveContinuationContext()
+        if (context === 'fence') {
+          e.preventDefault()
+          const current = useEditor.getState().getContinuation('fence')
+          useEditor
+            .getState()
+            .setContinuation('fence', current === 'curved' ? 'continuous' : 'curved')
+          sfxEmitter.emit('sfx:grid-snap')
+          return
+        }
+      }
+
+      if (
         (e.key === 'c' || e.key === 'C') &&
         !e.repeat &&
         !e.metaKey &&
@@ -103,6 +123,16 @@ export const useKeyboard = ({
         const context = getActiveContinuationContext()
         if (context) {
           e.preventDefault()
+          if (context === 'fence') {
+            const current = useEditor.getState().getContinuation('fence')
+            if (current !== 'curved') {
+              useEditor
+                .getState()
+                .setContinuation('fence', current === 'single' ? 'continuous' : 'single')
+              sfxEmitter.emit('sfx:grid-snap')
+            }
+            return
+          }
           useEditor.getState().cycleContinuation(context)
           sfxEmitter.emit('sfx:grid-snap')
           return

@@ -508,4 +508,48 @@ describe('syncAutoStairOpenings', () => {
     expect(landingUpdate?.data.holes).toEqual([manualOpening])
     expect(landingUpdate?.data.holeMetadata).toEqual([{ source: 'manual' }])
   })
+
+  test('does not add a separate rectangular hole for an integrated spiral top landing', () => {
+    const building = BuildingNode.parse({ name: 'Building' })
+    const ground = LevelNode.parse({ name: 'Ground', level: 0, parentId: building.id })
+    const upper = LevelNode.parse({ name: 'Upper', level: 1, parentId: building.id })
+    const landingSlab = SlabNode.parse({
+      name: 'Landing Slab',
+      parentId: upper.id,
+      polygon: [
+        [-4, -4],
+        [4, -4],
+        [4, 4],
+        [-4, 4],
+      ],
+    })
+    const stair = StairNode.parse({
+      id: 'stair_spiral_landing',
+      name: 'Spiral Landing Stair',
+      parentId: ground.id,
+      position: [0, 0, 0],
+      rotation: Math.PI / 2,
+      stairType: 'spiral',
+      fromLevelId: ground.id,
+      toLevelId: upper.id,
+      slabOpeningMode: 'destination',
+      innerRadius: 0.35,
+      width: 1.2,
+      sweepAngle: Math.PI * 1.6,
+      topLandingMode: 'integrated',
+      topLandingDepth: 1.1,
+    })
+    const nodes = Object.fromEntries(
+      [building, ground, upper, landingSlab, stair].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    const updates = syncAutoStairOpenings(nodes)
+    const landingUpdate = updates.find((update) => update.id === landingSlab.id)
+    const holes = landingUpdate?.data.holes ?? []
+    const rectangularHoles = holes.filter((hole) => hole.length === 4)
+
+    expect(holes).toHaveLength(1)
+    expect(rectangularHoles).toHaveLength(0)
+    expect(landingUpdate?.data.holeMetadata).toEqual([{ source: 'stair', stairId: stair.id }])
+  })
 })

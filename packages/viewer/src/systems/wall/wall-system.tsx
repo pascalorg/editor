@@ -366,7 +366,7 @@ export const WallSystem = () => {
     if (hasDirty) {
       dirtyNodes.forEach((id) => {
         const node = nodes[id]
-        if (!node || node.type !== 'wall') return
+        if (node?.type !== 'wall') return
 
         const levelId = node.parentId
         if (!levelId) return
@@ -515,7 +515,7 @@ function getLevelWalls(levelId: string): WallNode[] {
   const { nodes } = useScene.getState()
   const level = nodes[levelId as AnyNodeId]
 
-  if (!level || level.type !== 'level') return []
+  if (level?.type !== 'level') return []
 
   const walls: WallNode[] = []
   for (const childId of level.children) {
@@ -536,7 +536,7 @@ function getLevelWalls(levelId: string): WallNode[] {
 function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   const nodes = useScene.getState().nodes
   const sceneNode = nodes[wallId as WallNode['id']]
-  if (!sceneNode || sceneNode.type !== 'wall') return
+  if (sceneNode?.type !== 'wall') return
   const node = getEffectiveWall(sceneNode as WallNode)
 
   const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh

@@ -33,7 +33,7 @@ export function buildOpeningPlacementDimensions(
   ctx: GeometryContext,
 ): FloorplanGeometry[] {
   const wall = ctx.parent as WallNode | null
-  if (!wall || wall.type !== 'wall') return []
+  if (wall?.type !== 'wall') return []
   if (isCurvedWall(wall)) return []
 
   const [x1, z1] = wall.start
@@ -161,7 +161,7 @@ function computeOutwardNormal(
   let count = 0
   for (const childId of levelChildren) {
     const child = ctx.resolve(childId) as AnyNode | undefined
-    if (!child || child.type !== 'wall') continue
+    if (child?.type !== 'wall') continue
     const w = child as WallNode
     sumX += w.start[0] + w.end[0]
     sumZ += w.start[1] + w.end[1]

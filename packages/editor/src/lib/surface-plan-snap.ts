@@ -6,7 +6,6 @@ import {
   getWallCurveFrameAt,
   getWallCurveLength,
   isCurvedWall,
-  resolveAlignment,
   resolveLevelId,
   useScene,
   type WallNode,
@@ -21,6 +20,7 @@ import {
 import useAlignmentGuides from '../store/use-alignment-guides'
 import { isMagneticSnapActive } from '../store/use-editor'
 import useWallSnapIndicator from '../store/use-wall-snap-indicator'
+import { resolveAlignmentForFloorplanView } from './world-grid-snap'
 
 const SURFACE_SNAP_MOVING_ID = '__surface_snap__'
 export const SURFACE_ALIGNMENT_THRESHOLD_M = 0.08
@@ -172,12 +172,6 @@ export function clearSurfacePlanSnapFeedback() {
 }
 
 export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): SurfacePlanSnapResult {
-  if (input.shiftKey) {
-    useWallSnapIndicator.getState().clear()
-    useAlignmentGuides.getState().clear()
-    return { point: input.rawPoint, wallSnap: null, guides: [], wallIds: [] }
-  }
-
   const nodes = input.nodes ?? useScene.getState().nodes
   const walls = getLevelWalls(nodes, input.levelId, input.walls)
   const fallbackPoint = input.fallbackPoint
@@ -213,7 +207,7 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
   // only when magnetic snap is on — `grid`/`angles`/`off` keep the grid/raw
   // `fallbackPoint` instead of being pulled onto an alignment axis.
   const basePoint = fallbackPoint ?? wallSnap.point
-  if (input.align === false || input.altKey || !magnetic) {
+  if (input.align === false || !magnetic) {
     useAlignmentGuides.getState().clear()
     return { point: basePoint, wallSnap: null, guides: [], wallIds: [] }
   }
@@ -228,7 +222,7 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
     return { point: basePoint, wallSnap: null, guides: [], wallIds: [] }
   }
 
-  const alignment = resolveAlignment({
+  const alignment = resolveAlignmentForFloorplanView({
     moving: [{ nodeId: movingId, kind: 'corner', x: basePoint[0], z: basePoint[1] }],
     candidates,
     threshold: input.threshold ?? SURFACE_ALIGNMENT_THRESHOLD_M,

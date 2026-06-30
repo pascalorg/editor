@@ -28,10 +28,10 @@ export function buildChimneyFloorplan(
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
   const segment = ctx.parent as RoofSegmentNode | null
-  if (!segment || segment.type !== 'roof-segment') return null
+  if (segment?.type !== 'roof-segment') return null
   const roofId = segment.parentId as AnyNodeId | null
   const roof = roofId ? (ctx.resolve(roofId) as RoofNode | undefined) : undefined
-  if (!roof || roof.type !== 'roof') return null
+  if (roof?.type !== 'roof') return null
 
   // Compose roof → segment → chimney in plan coords. Each rotation is
   // negated so SVG's y-down CW matches Three.js' top-down CCW.

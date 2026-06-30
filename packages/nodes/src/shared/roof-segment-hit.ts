@@ -9,6 +9,7 @@ import {
 import * as THREE from 'three'
 
 const worldPoint = new THREE.Vector3()
+const localPoint = new THREE.Vector3()
 
 export type RoofSegmentHit = {
   segment: RoofSegmentNode
@@ -59,7 +60,7 @@ export function resolveRoofSegmentHit(
     const segObj = sceneRegistry.nodes.get(seg.id)
     if (!segObj) continue
     segObj.updateWorldMatrix(true, false)
-    const local = segObj.worldToLocal(worldPoint.clone())
+    const local = segObj.worldToLocal(localPoint.copy(worldPoint))
 
     if (!firstSegment) firstSegment = { seg, segObj }
 
@@ -81,7 +82,7 @@ export function resolveRoofSegmentHit(
   if (best) return best.hit
 
   if (firstSegment) {
-    const local = firstSegment.segObj.worldToLocal(worldPoint.clone())
+    const local = firstSegment.segObj.worldToLocal(localPoint.copy(worldPoint))
     return {
       segment: firstSegment.seg,
       localX: local.x,

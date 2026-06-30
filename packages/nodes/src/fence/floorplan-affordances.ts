@@ -16,6 +16,7 @@ import {
   type FencePlanPoint,
   getSegmentGridStep,
   isAngleSnapActive,
+  isGridSnapActive,
   isMagneticSnapActive,
   isSegmentLongEnough,
   snapBuildingLocalToWorldGrid,
@@ -43,6 +44,13 @@ import {
 const LINKED_FENCE_ENDPOINT_EPSILON = 0.025
 
 type FenceEndpointPayload = { fenceId: AnyNodeId; endpoint: 'start' | 'end' }
+type FenceControlPointPayload = { fenceId: AnyNodeId; index: number }
+type FenceTangentPayload = { fenceId: AnyNodeId; index: number; side: 'in' | 'out' }
+
+// Must match the floorplan builder's TANGENT_HANDLE_ARM_SCALE: the on-screen
+// arm is this many times the raw tangent vector, so dividing the dragged
+// offset back out recovers the stored tangent.
+const TANGENT_HANDLE_ARM_SCALE = 3
 
 function pointsNearlyEqual(a: FencePlanPoint, b: FencePlanPoint): boolean {
   return (
@@ -88,7 +96,7 @@ function collectLinkedFences(
 /**
  * Fence curve sagitta drag — 1:1 mirror of `wallCurveAffordance`. Drag
  * projects the pointer onto the chord normal to compute `curveOffset`,
- * snaps to grid (Shift bypasses), clamps to `getMaxWallCurveOffset`,
+ * snaps to grid when that mode is active, clamps to `getMaxWallCurveOffset`,
  * normalizes via `normalizeWallCurveOffset`. Same single-undo dance — the
  * dispatcher handles snapshot / pause / resume around `apply`. Lives in
  * the same file as the endpoint affordance to keep the two fence
@@ -105,17 +113,16 @@ export const fenceCurveAffordance: FloorplanAffordance<FenceNode> = {
     return {
       affectedIds: [node.id],
       apply({ planPoint, modifiers }) {
-        const snapStep = getSegmentGridStep()
-        const x = modifiers.shiftKey ? planPoint[0] : snapScalarToGrid(planPoint[0], snapStep)
-        const y = modifiers.shiftKey ? planPoint[1] : snapScalarToGrid(planPoint[1], snapStep)
+        const snapStep = isGridSnapActive() ? getSegmentGridStep() : 0
+        const x = snapStep > 0 ? snapScalarToGrid(planPoint[0], snapStep) : planPoint[0]
+        const y = snapStep > 0 ? snapScalarToGrid(planPoint[1], snapStep) : planPoint[1]
 
         const offsetFromMidpoint = -(
           (x - chord.midpoint.x) * chord.normal.x +
           (y - chord.midpoint.y) * chord.normal.y
         )
-        const snappedOffset = modifiers.shiftKey
-          ? offsetFromMidpoint
-          : snapScalarToGrid(offsetFromMidpoint, snapStep)
+        const snappedOffset =
+          snapStep > 0 ? snapScalarToGrid(offsetFromMidpoint, snapStep) : offsetFromMidpoint
         const nextCurveOffset = normalizeWallCurveOffset(
           node,
           Math.max(-maxOffset, Math.min(maxOffset, snappedOffset)),
@@ -130,6 +137,114 @@ export const fenceCurveAffordance: FloorplanAffordance<FenceNode> = {
       },
       commit() {
         useScene.getState().updateNodes([{ id: fenceId, data: { curveOffset: lastCurveOffset } }])
+        useLiveNodeOverrides.getState().clear(fenceId)
+      },
+    }
+  },
+}
+
+/**
+ * Spline control-point drag — reshapes one point of the fence `path`. Grid
+ * snap follows the active mode; start/end stay pinned to the path ends so endpoint-
+ * dependent code stays valid. Publishes a live override per tick, commits the
+ * final path as one tracked change. No linked-fence cascade: a spline's shape
+ * is self-contained.
+ */
+export const fenceControlPointAffordance: FloorplanAffordance<FenceNode> = {
+  start({ node, payload }): FloorplanAffordanceSession {
+    const { index } = payload as FenceControlPointPayload
+    const fenceId = node.id as AnyNodeId
+    const originalPath: FencePlanPoint[] = (node.path ?? []).map((p) => [p[0], p[1]])
+    let lastPath = originalPath
+
+    const buildPatch = (point: FencePlanPoint): Record<string, unknown> => {
+      const nextPath = originalPath.map((p, i): FencePlanPoint => (i === index ? point : p))
+      lastPath = nextPath
+      const patch: Record<string, unknown> = { path: nextPath }
+      if (index === 0) patch.start = point
+      if (index === nextPath.length - 1) patch.end = point
+      return patch
+    }
+
+    return {
+      affectedIds: [fenceId],
+      apply({ planPoint, modifiers }) {
+        const snapStep = isGridSnapActive() ? getSegmentGridStep() : 0
+        const x = snapStep > 0 ? snapScalarToGrid(planPoint[0], snapStep) : planPoint[0]
+        const y = snapStep > 0 ? snapScalarToGrid(planPoint[1], snapStep) : planPoint[1]
+        useLiveNodeOverrides.getState().set(fenceId, buildPatch([x, y]))
+        useScene.getState().markDirty(fenceId)
+      },
+      canCommit() {
+        return lastPath.length >= 2
+      },
+      commit() {
+        const data: Partial<FenceNode> = { path: lastPath }
+        data.start = lastPath[0]
+        data.end = lastPath[lastPath.length - 1]
+        useScene.getState().updateNodes([{ id: fenceId, data }])
+        useLiveNodeOverrides.getState().clear(fenceId)
+      },
+    }
+  },
+}
+
+/**
+ * Spline tangent-handle drag — bends the curve through one control point. The
+ * dragged end (in / out) gives the OUT-handle vector (negated for the IN end);
+ * the IN handle is always the mirror so the curve stays smooth (symmetric).
+ * The visual arm is `TANGENT_HANDLE_ARM_SCALE`× the stored vector, so we divide
+ * that factor out before storing. Writes `tangents[index]`, padding the array
+ * to the path length with nulls so untouched points keep their auto tangent.
+ */
+export const fenceTangentAffordance: FloorplanAffordance<FenceNode> = {
+  start({ node, payload }): FloorplanAffordanceSession {
+    const { index, side } = payload as FenceTangentPayload
+    const fenceId = node.id as AnyNodeId
+    const path = node.path ?? []
+    const anchor = path[index] ?? node.start
+    let lastTangents: Array<[number, number] | null> = (node.tangents ?? []).map((t) =>
+      t ? [t[0], t[1]] : null,
+    )
+
+    const buildTangents = (vec: [number, number]): Array<[number, number] | null> => {
+      const next: Array<[number, number] | null> = Array.from(
+        { length: path.length },
+        (_, i) => lastTangents[i] ?? null,
+      )
+      next[index] = vec
+      lastTangents = next
+      return next
+    }
+
+    return {
+      affectedIds: [fenceId],
+      apply({ planPoint, modifiers }) {
+        const snapStep = isGridSnapActive() ? getSegmentGridStep() : 0
+        const px = snapStep > 0 ? snapScalarToGrid(planPoint[0], snapStep) : planPoint[0]
+        const py = snapStep > 0 ? snapScalarToGrid(planPoint[1], snapStep) : planPoint[1]
+        // Arm vector from the anchor to the dragged handle, in plan meters.
+        let armX = px - anchor[0]
+        let armY = py - anchor[1]
+        // The IN end is the mirror, so its drag describes the negated OUT vector.
+        if (side === 'in') {
+          armX = -armX
+          armY = -armY
+        }
+        const vec: [number, number] = [
+          armX / TANGENT_HANDLE_ARM_SCALE,
+          armY / TANGENT_HANDLE_ARM_SCALE,
+        ]
+        useLiveNodeOverrides.getState().set(fenceId, { tangents: buildTangents(vec) })
+        useScene.getState().markDirty(fenceId)
+      },
+      canCommit() {
+        return true
+      },
+      commit() {
+        useScene
+          .getState()
+          .updateNodes([{ id: fenceId, data: { tangents: lastTangents } as Partial<FenceNode> }])
         useLiveNodeOverrides.getState().clear(fenceId)
       },
     }

@@ -1131,7 +1131,7 @@ function resolveLandingChainNextStair(
   index: number,
 ): LandingChainNextStair {
   const layout = layouts[index]
-  if (!layout || layout.segment.segmentType !== 'landing') {
+  if (layout?.segment.segmentType !== 'landing') {
     return { isTerminalLandingBeforeStair: false }
   }
 

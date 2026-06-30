@@ -18,7 +18,7 @@ export type InteractionView = '2d' | '3d'
 // node, one in-flight reshape. Grouping them as sub-states of `reshaping`
 // (rather than four sibling scopes) keeps the union small while still making
 // "curving and hole-editing at once" unrepresentable.
-export type ReshapeKind = 'curve' | 'hole' | 'endpoint' | 'boundary'
+export type ReshapeKind = 'curve' | 'hole' | 'endpoint' | 'boundary' | 'control-point' | 'tangent'
 
 export type InteractionScope =
   | { kind: 'idle' }
@@ -49,6 +49,8 @@ export type InteractionScope =
       reshape: ReshapeKind
       holeIndex?: number
       endpoint?: 'start' | 'end'
+      index?: number
+      side?: 'in' | 'out'
     }
   // Marquee selection drag.
   | { kind: 'box-select' }
@@ -151,6 +153,27 @@ export function endpointReshapeInfo(
     : null
 }
 
+export function controlPointReshapeInfo(
+  scope: InteractionScope,
+): { nodeId: string; index: number } | null {
+  return scope.kind === 'reshaping' &&
+    scope.reshape === 'control-point' &&
+    scope.index !== undefined
+    ? { nodeId: scope.nodeId, index: scope.index }
+    : null
+}
+
+export function tangentReshapeInfo(
+  scope: InteractionScope,
+): { nodeId: string; index: number; side: 'in' | 'out' } | null {
+  return scope.kind === 'reshaping' &&
+    scope.reshape === 'tangent' &&
+    scope.index !== undefined &&
+    scope.side !== undefined
+    ? { nodeId: scope.nodeId, index: scope.index, side: scope.side }
+    : null
+}
+
 // The id of the node being reshaped (any reshape kind), for the scene lookup
 // that recovers the full node payload a few consumers still need.
 export function reshapingNodeId(scope: InteractionScope): string | null {
@@ -167,6 +190,18 @@ export function endpointReshapeScope(
   endpoint: 'start' | 'end',
 ): ActiveInteractionScope {
   return { kind: 'reshaping', nodeId, reshape: 'endpoint', endpoint }
+}
+
+export function controlPointReshapeScope(nodeId: string, index: number): ActiveInteractionScope {
+  return { kind: 'reshaping', nodeId, reshape: 'control-point', index }
+}
+
+export function tangentReshapeScope(
+  nodeId: string,
+  index: number,
+  side: 'in' | 'out',
+): ActiveInteractionScope {
+  return { kind: 'reshaping', nodeId, reshape: 'tangent', index, side }
 }
 
 // Dragging a polygon vertex/edge (slab / ceiling boundary). Drives the snapping

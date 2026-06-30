@@ -23,7 +23,8 @@ import {
   roofSegmentLocalToBuildingLocal,
   snapRelativeRoofDragTarget,
 } from '../shared/relative-roof-drag'
-import { getSurfaceY } from '../shared/roof-surface'
+import { resolveRidgeSnap } from '../shared/ridge-snap'
+import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
   publishRoofSurfaceNodePlacementGuides,
@@ -32,7 +33,8 @@ import RidgeVentPreview from './preview'
 
 type RidgeVentDragTarget = Pick<RelativeRoofDragTarget, 'segment' | 'localX'> & {
   localY: number
-  localZ: 0
+  localZ: number
+  rotation: number
 }
 
 /**
@@ -85,11 +87,15 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
       const target = snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true)
+      const snap = resolveRidgeSnap(target.segment, target.localX, target.localZ)
+      if (!snap) return null
+      const yOffset = original.position[1] ?? 0
       return {
         segment: target.segment,
-        localX: target.localX,
-        localY: getSurfaceY(target.localX, 0, target.segment),
-        localZ: 0,
+        localX: snap.localX,
+        localY: getRoofTopSurfaceY(snap.localX, snap.localZ, target.segment) + yOffset,
+        localZ: snap.localZ,
+        rotation: snap.rotation,
       }
     }
 
@@ -111,7 +117,7 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
         lastSnap = [sx, sz]
       }
 
-      setPreviewYaw((event.node.rotation ?? 0) + (target.segment.rotation ?? 0))
+      setPreviewYaw((event.node.rotation ?? 0) + (target.segment.rotation ?? 0) + target.rotation)
       setPreviewPos(
         roofSegmentLocalToBuildingLocal(target.segment.id, [
           target.localX,
@@ -158,8 +164,8 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
       st.updateNode(node.id as AnyNodeId, {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
-        position: [target.localX, target.localY, target.localZ],
-        rotation: original.rotation,
+        position: [target.localX, original.position[1] ?? 0, target.localZ],
+        rotation: target.rotation,
         visible: true,
         metadata: {},
       })

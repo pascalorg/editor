@@ -6,6 +6,7 @@ import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import {
   type ActiveInteractionScope,
+  controlPointReshapeInfo,
   editingHoleInfo,
   endpointReshapeInfo,
   handleDragInfo,
@@ -14,6 +15,7 @@ import {
   isCurveReshape,
   movingNodeOf,
   reshapingNodeId,
+  tangentReshapeInfo,
 } from '../lib/interaction/scope'
 
 // The authoritative interaction state machine. A single owner holds exactly one
@@ -86,6 +88,12 @@ export const useIsCurveReshape = (): boolean => useInteractionScope((s) => isCur
 // minus the node (fetch it from `useReshapingNode`).
 export const useEndpointReshape = (): { nodeId: string; endpoint: 'start' | 'end' } | null =>
   useInteractionScope(useShallow((s) => endpointReshapeInfo(s.scope)))
+
+export const useControlPointReshape = (): { nodeId: string; index: number } | null =>
+  useInteractionScope(useShallow((s) => controlPointReshapeInfo(s.scope)))
+
+export const useTangentReshape = (): { nodeId: string; index: number; side: 'in' | 'out' } | null =>
+  useInteractionScope(useShallow((s) => tangentReshapeInfo(s.scope)))
 
 // The node currently being reshaped (curve / endpoint / hole), looked up live
 // from the scene by the scope's `nodeId`. During a reshape the scene node holds

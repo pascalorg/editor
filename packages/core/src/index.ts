@@ -194,6 +194,19 @@ export {
   resolveElevatorServiceLevelIds,
   resolveElevatorServiceLevels,
 } from './systems/elevator/elevator-service'
+export {
+  getFenceCenterlineFrameAt,
+  getFenceCenterlineLength,
+  sampleFenceCenterline,
+} from './systems/fence/fence-centerline'
+export {
+  getFenceControlHandle,
+  getFenceSplineFrameAt,
+  getFenceSplineLength,
+  getTwoPointFenceCurveTangents,
+  isSplineFence,
+  sampleFenceSpline,
+} from './systems/fence/fence-spline'
 export { type StairFootprintAABB, stairFootprintAABB } from './systems/stair/stair-footprint'
 export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'

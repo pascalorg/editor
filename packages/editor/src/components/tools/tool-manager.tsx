@@ -12,11 +12,13 @@ import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import {
+  useControlPointReshape,
   useEditingHole,
   useEndpointReshape,
   useIsCurveReshape,
   useMovingNode,
   useReshapingNode,
+  useTangentReshape,
 } from '../../store/use-interaction-scope'
 import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
 import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
@@ -68,6 +70,8 @@ export const ToolManager: React.FC = () => {
   const movingNode = useMovingNode()
   const movingNodeOrigin = useEditor((state) => state.movingNodeOrigin)
   const endpointReshape = useEndpointReshape()
+  const controlPointReshape = useControlPointReshape()
+  const tangentReshape = useTangentReshape()
   const isCurveReshape = useIsCurveReshape()
   const reshapingNode = useReshapingNode()
   // The endpoint affordance tool's `target` is kind-specific
@@ -81,6 +85,18 @@ export const ToolManager: React.FC = () => {
       ? { fence: reshapingNode as FenceNode, endpoint: endpointReshape.endpoint }
       : { wall: reshapingNode as WallNode, endpoint: endpointReshape.endpoint }
   }, [endpointReshape, reshapingNode])
+  const controlPointTarget = useMemo(() => {
+    if (!(controlPointReshape && reshapingNode?.type === 'fence')) return null
+    return { fence: reshapingNode as FenceNode, index: controlPointReshape.index }
+  }, [controlPointReshape, reshapingNode])
+  const tangentTarget = useMemo(() => {
+    if (!(tangentReshape && reshapingNode?.type === 'fence')) return null
+    return {
+      fence: reshapingNode as FenceNode,
+      index: tangentReshape.index,
+      side: tangentReshape.side,
+    }
+  }, [reshapingNode, tangentReshape])
   const editingHole = useEditingHole()
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
@@ -268,6 +284,24 @@ export const ToolManager: React.FC = () => {
             return RegistryAffordance ? (
               <Suspense fallback={null}>
                 <RegistryAffordance node={reshapingNode} />
+              </Suspense>
+            ) : null
+          })()}
+        {controlPointTarget &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool('fence', 'move-control-point')
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance target={controlPointTarget} />
+              </Suspense>
+            ) : null
+          })()}
+        {tangentTarget &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool('fence', 'move-tangent')
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance target={tangentTarget} />
               </Suspense>
             ) : null
           })()}

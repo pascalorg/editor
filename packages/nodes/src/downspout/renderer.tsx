@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { computeEaveY } from '../gutter/eave-snap'
 import { resolveGutterOutletById } from '../gutter/outlet-lookup'
+import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildDownspoutGeometry } from './geometry'
 import { computeDownspoutRouting } from './routing'
 
@@ -143,6 +144,31 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
       : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
   }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
 
+  // Map downspout-local geometry into the host segment's local frame (where the
+  // trim cut prisms live). Recompose the same outlet pose the inner mesh group
+  // is mounted with (gutter offset + rotation → outlet → eave Y). Computed
+  // before the early returns so the hook order stays stable.
+  const localToSegment = useMemo(() => {
+    if (!effectiveGutter || !effectiveSegment) return new THREE.Matrix4()
+    const outlet = resolveGutterOutletById(effectiveGutter, node.outletId)
+    if (!outlet) return new THREE.Matrix4()
+    const liveEaveY = computeEaveY(effectiveSegment)
+    const gutterRotY = effectiveGutter.rotation ?? 0
+    const gutterX = effectiveGutter.position[0] ?? 0
+    const gutterZ = effectiveGutter.position[2] ?? 0
+    const cos = Math.cos(gutterRotY)
+    const sin = Math.sin(gutterRotY)
+    const outletSegX = gutterX + (outlet.x * cos + outlet.z * sin)
+    const outletSegZ = gutterZ + (-outlet.x * sin + outlet.z * cos)
+    const outletSegY = liveEaveY + outlet.y
+    return new THREE.Matrix4().compose(
+      new THREE.Vector3(outletSegX, outletSegY, outletSegZ),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), gutterRotY),
+      new THREE.Vector3(1, 1, 1),
+    )
+  }, [effectiveGutter, effectiveSegment, node.outletId])
+  const clippedGeometry = useSegmentTrimClippedGeometry(geometry, effectiveSegment, localToSegment)
+
   if (!effectiveGutter || !effectiveSegment) return null
   const outlet = resolveGutterOutletById(effectiveGutter, node.outletId)
   if (!outlet) return null
@@ -177,7 +203,7 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
       >
         <mesh
           castShadow
-          geometry={geometry}
+          geometry={clippedGeometry ?? geometry}
           material={material}
           name="downspout-surface"
           receiveShadow

@@ -454,22 +454,6 @@ function getSpiralOpeningPolygon(stair: StairNode, offset: number = 0): Point2D[
   })
 }
 
-function getSpiralLandingPolygon(stair: StairNode, offset: number = 0): Point2D[] {
-  const width = Math.max(stair.width ?? 1, 0.4)
-  const outerRadius = Math.max(0.05, (stair.innerRadius ?? 0.9) + width)
-  const depth = Math.max(stair.topLandingDepth ?? 0.9, 0.1)
-  const halfWidth = width / 2
-
-  const localPoints: Point2D[] = [
-    [outerRadius - offset, -halfWidth - offset],
-    [outerRadius + depth + offset, -halfWidth - offset],
-    [outerRadius + depth + offset, halfWidth + offset],
-    [outerRadius - offset, halfWidth + offset],
-  ]
-
-  return localPoints.map(([x, z]) => toWorldPlanPoint(stair, x, z))
-}
-
 function getStraightOpeningPolygonsForSurface(
   stair: StairNode,
   nodes: Record<string, AnyNode>,
@@ -575,11 +559,7 @@ function getStairOpeningPolygons(
 
   if (stair.stairType === 'spiral') {
     const offset = Math.max(openingOffset - STAIR_SLAB_OPENING_TIGHTENING, 0)
-    const polygons = [getSpiralOpeningPolygon(stair, offset)]
-    if (stair.topLandingMode === 'integrated') {
-      polygons.push(getSpiralLandingPolygon(stair, offset))
-    }
-    return polygons
+    return [getSpiralOpeningPolygon(stair, offset)]
   }
 
   if (typeof targetElevation === 'number') {

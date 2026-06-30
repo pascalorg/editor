@@ -225,7 +225,7 @@ const DuctTerminalTool = () => {
       const nodes = useScene.getState().nodes
       let best: { hit: Vector3; height: number } | null = null
       for (const node of Object.values(nodes)) {
-        if (!node || node.type !== 'ceiling') continue
+        if (node?.type !== 'ceiling') continue
         if (resolveLevelId(node, nodes) !== activeLevelId) continue
         const ceiling = node as {
           height?: number

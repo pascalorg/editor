@@ -152,8 +152,8 @@ const ridgeVentHandles: HandleDescriptor<RidgeVentNodeType>[] = [
  * geometry builder shared with the placement preview + future tests,
  * no animation or per-frame system.
  *
- * The placement tool snaps to the ridge (segment-local Z=0) wherever
- * the cursor lands on a segment.
+ * The placement tool snaps to the nearest ridge/break line wherever the
+ * cursor lands on a segment.
  */
 export const ridgeVentDefinition: NodeDefinition<typeof RidgeVentNode> = {
   kind: 'ridge-vent',

@@ -50,7 +50,7 @@ export default function StairSegmentPanel() {
   const isFirstSegment = useScene((s) => {
     if (!node?.parentId) return true
     const parent = s.nodes[node.parentId as AnyNodeId]
-    if (!parent || parent.type !== 'stair') return true
+    if (parent?.type !== 'stair') return true
     const children = (parent as any).children ?? []
     return children[0] === node.id
   })

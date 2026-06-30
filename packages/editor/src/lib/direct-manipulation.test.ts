@@ -71,6 +71,19 @@ describe('canDirectMoveNode', () => {
     expect(canDirectMoveNode({ id: 'node_1', type: kind } as unknown as AnyNode)).toBe(false)
   })
 
+  test('rejects MEP kinds that own move through bespoke selection affordances', () => {
+    for (const kind of [
+      'duct-segment',
+      'duct-fitting',
+      'pipe-segment',
+      'pipe-fitting',
+      'lineset',
+      'liquid-line',
+    ]) {
+      expect(canDirectMoveNode({ id: 'node_1', type: kind } as unknown as AnyNode)).toBe(false)
+    }
+  })
+
   test('accepts kinds with a bespoke move tool', () => {
     const kind = 'direct-move-bespoke-tool-test'
     registerTestDefinition(kind, {

@@ -1111,7 +1111,7 @@ export async function convertIfcToPascal(
     const wallNodeId = expressIdToNodeId.get(wallExpressID)
     if (!wallNodeId) continue
     const wallNode = nodes[wallNodeId] as WallNode
-    if (!wallNode || wallNode.type !== 'wall') continue
+    if (wallNode?.type !== 'wall') continue
 
     const wallDx = wallNode.end[0] - wallNode.start[0]
     const wallDy = wallNode.end[1] - wallNode.start[1]
@@ -1288,7 +1288,7 @@ export async function convertIfcToPascal(
   const wallInfos: WallInfo[] = []
   for (const [wallExpressId, wallNodeId] of expressIdToNodeId) {
     const node = nodes[wallNodeId]
-    if (!node || node.type !== 'wall') continue
+    if (node?.type !== 'wall') continue
     const w = node as WallNode
     const length = Math.hypot(w.end[0] - w.start[0], w.end[1] - w.start[1])
     if (length < 1e-6) continue

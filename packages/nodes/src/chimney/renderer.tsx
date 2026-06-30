@@ -19,6 +19,7 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildChimneyGeometry } from './geometry'
 import { carveChimneyHoles } from './holes'
 import { trimChimneyBodyAgainstRoof } from './roof-trim'
@@ -123,6 +124,35 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
     },
     [geo, trimmedBody],
   )
+
+  // Map chimney-local geometry into the host segment's local frame (where the
+  // trim cut prisms live) — same pose the inner mesh group is mounted with
+  // (node.position x/z, y=0 — chimneys anchor to the surface, not position[1]).
+  // Every chimney part (body, cap, flues, cricket, bands) shares this pose, so
+  // each is clipped by the segment trim independently. The body chains AFTER
+  // the through-roof self-trim, so both CSG passes compose.
+  const localToSegment = useMemo(
+    () =>
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(node.position[0] ?? 0, 0, node.position[2] ?? 0),
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), node.rotation ?? 0),
+        new THREE.Vector3(1, 1, 1),
+      ),
+    [node.position[0], node.position[2], node.rotation],
+  )
+  const clippedBody = useSegmentTrimClippedGeometry(
+    trimmedBody ?? geo?.body ?? null,
+    segment,
+    localToSegment,
+  )
+  const clippedCap = useSegmentTrimClippedGeometry(geo?.cap ?? null, segment, localToSegment)
+  const clippedFlues = useSegmentTrimClippedGeometry(geo?.flues ?? null, segment, localToSegment)
+  const clippedCricket = useSegmentTrimClippedGeometry(
+    geo?.cricket ?? null,
+    segment,
+    localToSegment,
+  )
+  const clippedBands = useSegmentTrimClippedGeometry(geo?.bands ?? null, segment, localToSegment)
 
   // Per-instance fallback materials. Were previously module-scoped
   // singletons shared across every chimney — a paint-mode or debug
@@ -238,7 +268,7 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
       >
         <mesh
           castShadow
-          geometry={trimmedBody ?? geo.body}
+          geometry={clippedBody ?? trimmedBody ?? geo.body}
           material={surfaceArray}
           name="chimney-body"
           receiveShadow
@@ -246,7 +276,7 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
         {geo.cap && (
           <mesh
             castShadow
-            geometry={geo.cap}
+            geometry={clippedCap ?? geo.cap}
             material={surfaceArray}
             name="chimney-cap"
             receiveShadow
@@ -255,7 +285,7 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
         {geo.flues && (
           <mesh
             castShadow
-            geometry={geo.flues}
+            geometry={clippedFlues ?? geo.flues}
             material={surfaceArray}
             name="chimney-flues"
             receiveShadow
@@ -264,7 +294,7 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
         {geo.cricket && (
           <mesh
             castShadow
-            geometry={geo.cricket}
+            geometry={clippedCricket ?? geo.cricket}
             material={surfaceMaterial}
             name="chimney-cricket"
             receiveShadow
@@ -273,7 +303,7 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
         {geo.bands && (
           <mesh
             castShadow
-            geometry={geo.bands}
+            geometry={clippedBands ?? geo.bands}
             material={surfaceMaterial}
             name="chimney-bands"
             receiveShadow

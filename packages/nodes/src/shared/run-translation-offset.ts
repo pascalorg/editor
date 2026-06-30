@@ -166,7 +166,7 @@ export function planRunTranslationOffsets(args: {
     }
 
     const partner = nodesById[conn.nodeId]
-    if (!partner || partner.type !== 'duct-fitting') return null
+    if (partner?.type !== 'duct-fitting') return null
     const elbow = {
       ...(partner as DuctFittingNode),
       ...elbowProfilePatch(profile),

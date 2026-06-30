@@ -57,11 +57,13 @@ import {
   resolvePaintScopeTargets,
   slotDisplayLabel,
 } from '../../lib/paint-scope'
+import { getHoveredRoofSegmentOutlineProxy } from '../../lib/roof-hover-outline-proxy'
 import {
   resolveNodeSelectionTarget,
   resolveSelectedIdsForNodeClick,
   type SelectionModifierKeys,
   selectionModifiersFromEvent,
+  shouldPreserveSelectedRoofHostTarget,
 } from '../../lib/selection-routing'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
@@ -300,18 +302,21 @@ function resolveRoofSegmentSelectionTarget(event: NodeEvent): RoofSegmentNode | 
   return bestSegment?.node ?? firstSegment
 }
 
-function isInActiveRoofContext(
-  segment: RoofSegmentNode,
-  selectedIds: readonly string[],
-  nodes: Record<string, AnyNode>,
-): boolean {
-  if (!segment.parentId) return false
-  if (selectedIds.includes(segment.id) || selectedIds.includes(segment.parentId)) return true
+function resolveSelectModeNodeTarget(event: NodeEvent): AnyNode {
+  if (event.node.type === 'roof') {
+    if (
+      shouldPreserveSelectedRoofHostTarget({
+        node: event.node,
+        selectedIds: useViewer.getState().selection.selectedIds,
+        armedRoofId: useEditor.getState().roofHostDragArmedId,
+      })
+    ) {
+      return event.node
+    }
+    return resolveRoofSegmentSelectionTarget(event) ?? event.node
+  }
 
-  return selectedIds.some((selectedId) => {
-    const selectedNode = nodes[selectedId]
-    return selectedNode?.type === 'roof-segment' && selectedNode.parentId === segment.parentId
-  })
+  return event.node
 }
 
 function previewMeshMaterial(mesh: Mesh, material: Material | Material[]): PaintPreviewCleanup {
@@ -902,7 +907,7 @@ export const SelectionManager = () => {
             : node.parentId
               ? useScene.getState().nodes[node.parentId as AnyNodeId]
               : null
-        if (!roofNode || roofNode.type !== 'roof') return null
+        if (roofNode?.type !== 'roof') return null
 
         const role = resolveRoofMaterialTarget(event as RoofEvent | RoofSegmentEvent)
         const compatible = role !== null && paintEnabled
@@ -1428,7 +1433,7 @@ export const SelectionManager = () => {
       const activeScope = useInteractionScope.getState().scope
       if (activeScope.kind === 'reshaping' && activeScope.reshape === 'endpoint') return
 
-      const node = event.node
+      const node = resolveSelectModeNodeTarget(event)
 
       // A ceiling is selectable only through its corner handles, never via
       // the `ceiling-grid` body mesh. When the grid is revealed (ceiling
@@ -1481,18 +1486,6 @@ export const SelectionManager = () => {
         }, 50)
 
         let nodeToSelect = node
-        if (node.type === 'roof-segment' && node.parentId) {
-          const nodes = useScene.getState().nodes
-          const parentNode = nodes[node.parentId as AnyNodeId]
-          const selectedIds = useViewer.getState().selection.selectedIds
-          if (
-            parentNode &&
-            parentNode.type === 'roof' &&
-            !isInActiveRoofContext(node, selectedIds, nodes)
-          ) {
-            nodeToSelect = parentNode
-          }
-        }
         if (node.type === 'stair-segment' && node.parentId) {
           const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
           if (parentNode && parentNode.type === 'stair') {
@@ -1670,7 +1663,7 @@ export const SelectionManager = () => {
       // surface move tools keep tracking — but the select-hover outline must
       // stay put, so don't repaint under the cursor mid-drag.
       if (useViewer.getState().inputDragging) return
-      const node = event.node
+      const node = resolveSelectModeNodeTarget(event)
       const currentPhase = useEditor.getState().phase
 
       // Ignore site/building if we are already inside a building
@@ -1698,17 +1691,14 @@ export const SelectionManager = () => {
 
     const onLeave = (event: NodeEvent) => {
       if (useViewer.getState().inputDragging) return
-      const nodeId = event?.node?.id
+      const nodeId = resolveSelectModeNodeTarget(event)?.id
       if (nodeId && useViewer.getState().hoveredId === nodeId) {
         useViewer.setState({ hoveredId: null })
       }
     }
 
     const onDoubleClick = (event: NodeEvent) => {
-      let node = event.node
-      if (node.type === 'roof') {
-        node = resolveRoofSegmentSelectionTarget(event) ?? node
-      }
+      let node = resolveSelectModeNodeTarget(event)
 
       const currentPhase = useEditor.getState().phase
 
@@ -1893,6 +1883,8 @@ export const SelectionManager = () => {
 const SelectionStateSync = () => {
   const selectedMaterialTarget = useEditor((s) => s.selectedMaterialTarget)
   const setSelectedMaterialTarget = useEditor((s) => s.setSelectedMaterialTarget)
+  const roofHostDragArmedId = useEditor((s) => s.roofHostDragArmedId)
+  const setRoofHostDragArmedId = useEditor((s) => s.setRoofHostDragArmedId)
   const singleSelectedId = useViewer((s) =>
     s.selection.selectedIds.length === 1 ? s.selection.selectedIds[0] : null,
   )
@@ -1924,6 +1916,12 @@ const SelectionStateSync = () => {
       }
     })
   }, [])
+
+  useEffect(() => {
+    if (!roofHostDragArmedId) return
+    if (singleSelectedId === roofHostDragArmedId) return
+    setRoofHostDragArmedId(null)
+  }, [roofHostDragArmedId, setRoofHostDragArmedId, singleSelectedId])
 
   useEffect(() => {
     if (!selectedMaterialTarget) return
@@ -2152,7 +2150,11 @@ const EditorOutlinerSync = () => {
       if (!nodes[hoveredId as AnyNodeId]) {
         useViewer.setState({ hoveredId: null })
       } else {
-        const obj = sceneRegistry.nodes.get(hoveredId)
+        const hoveredNode = nodes[hoveredId as AnyNodeId]
+        const obj =
+          hoveredNode?.type === 'roof-segment'
+            ? (getHoveredRoofSegmentOutlineProxy(hoveredId) ?? sceneRegistry.nodes.get(hoveredId))
+            : sceneRegistry.nodes.get(hoveredId)
         if (obj?.parent) outliner.hoveredObjects.push(obj)
       }
     }

@@ -3,6 +3,10 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  createDefaultRidgeVentsForSegment,
+  isAutoRidgeVentEnabled,
+  isDefaultRidgeVentNode,
+  ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
   type RoofType,
@@ -15,6 +19,7 @@ import {
   PanelWrapper,
   SegmentedControl,
   SliderControl,
+  ToggleControl,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -26,10 +31,10 @@ const ROOF_TYPE_OPTIONS: { label: string; value: RoofType }[] = [
   { label: 'Hip', value: 'hip' },
   { label: 'Gable', value: 'gable' },
   { label: 'Shed', value: 'shed' },
-  { label: 'Flat', value: 'flat' },
 ]
 
 const ROOF_TYPE_OPTIONS_2: { label: string; value: RoofType }[] = [
+  { label: 'Flat', value: 'flat' },
   { label: 'Gambrel', value: 'gambrel' },
   { label: 'Dutch', value: 'dutch' },
   { label: 'Mansard', value: 'mansard' },
@@ -44,15 +49,34 @@ const PITCH_PRESETS: { label: string; deg: number }[] = [
   { label: '12/12', deg: 45 },
 ]
 
+function shouldShowTrimPlanes(metadata: unknown): boolean {
+  return metadataRecord(metadata).showTrimPlanes === true
+}
+
+function metadataRecord(metadata: unknown): Record<string, unknown> {
+  if (typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)) {
+    return metadata as Record<string, unknown>
+  }
+  return {}
+}
+
 export default function RoofSegmentPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const setRoofHostDragArmedId = useEditor((s) => s.setRoofHostDragArmedId)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined) : undefined,
   )
+  const autoRidgeVentEnabled = useScene((s) => {
+    const current = selectedId
+      ? (s.nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined)
+      : undefined
+    if (current?.type !== 'roof-segment') return false
+    return isAutoRidgeVentEnabled(current, s.nodes)
+  })
 
   const handleUpdate = useCallback(
     (updates: Partial<RoofSegmentNode>) => {
@@ -62,15 +86,37 @@ export default function RoofSegmentPanel() {
     [selectedId, updateNode],
   )
 
+  const handleRoofTypeChange = useCallback(
+    (roofType: RoofType) => {
+      // Switching to Dutch resets the shape parameters to their defaults so the
+      // gablet is well-formed regardless of the leftover values from the
+      // previous roof type.
+      handleUpdate(
+        roofType === 'dutch'
+          ? {
+              roofType,
+              dutchHipWidthRatio: ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
+              dutchHipHeightRatio: ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
+              dutchWaistLengthRatio: ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
+              dutchGabletRake: ROOF_SHAPE_DEFAULTS.dutchGabletRake,
+              dutchTopRakeThickness: ROOF_SHAPE_DEFAULTS.dutchTopRakeThickness,
+            }
+          : { roofType },
+      )
+    },
+    [handleUpdate],
+  )
+
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
 
   const handleBack = useCallback(() => {
     if (node?.parentId) {
+      setRoofHostDragArmedId(node.parentId as AnyNodeId)
       setSelection({ selectedIds: [node.parentId] })
     }
-  }, [node?.parentId, setSelection])
+  }, [node?.parentId, setRoofHostDragArmedId, setSelection])
 
   const handleDuplicate = useCallback(() => {
     if (!node?.parentId) return
@@ -117,7 +163,51 @@ export default function RoofSegmentPanel() {
     }
   }, [selectedId, node, setSelection])
 
+  const handleAutoRidgeVentToggle = useCallback(
+    (checked: boolean) => {
+      if (!selectedId) return
+      const scene = useScene.getState()
+      const current = scene.nodes[selectedId as AnyNodeId] as RoofSegmentNode | undefined
+      if (current?.type !== 'roof-segment') return
+
+      scene.updateNode(selectedId as AnyNodeId, {
+        metadata: { ...metadataRecord(current.metadata), autoRidgeVent: checked },
+      })
+
+      const latest = useScene.getState().nodes[selectedId as AnyNodeId] as
+        | RoofSegmentNode
+        | undefined
+      if (latest?.type !== 'roof-segment') return
+
+      const defaultVentIds = (latest.children ?? []).filter((childId) =>
+        isDefaultRidgeVentNode(useScene.getState().nodes[childId as AnyNodeId], latest.id),
+      ) as AnyNodeId[]
+
+      if (!checked) {
+        if (defaultVentIds.length > 0) {
+          useScene.getState().deleteNodes(defaultVentIds)
+        }
+        return
+      }
+
+      if (defaultVentIds.length > 0) return
+
+      const ridgeVents = createDefaultRidgeVentsForSegment(latest)
+      if (ridgeVents.length === 0) return
+
+      scene.createNodes(
+        ridgeVents.map((ridgeVent) => ({
+          node: ridgeVent,
+          parentId: latest.id as AnyNodeId,
+        })),
+      )
+    },
+    [selectedId],
+  )
+
   if (!(node && node.type === 'roof-segment' && selectedId)) return null
+
+  const showTrimPlanes = shouldShowTrimPlanes(node.metadata)
 
   return (
     <PanelWrapper
@@ -129,15 +219,34 @@ export default function RoofSegmentPanel() {
     >
       <PanelSection title="Roof Type">
         <SegmentedControl
-          onChange={(v) => handleUpdate({ roofType: v })}
+          onChange={(v) => handleRoofTypeChange(v)}
           options={ROOF_TYPE_OPTIONS}
           value={node.roofType}
         />
         <SegmentedControl
-          onChange={(v) => handleUpdate({ roofType: v })}
+          onChange={(v) => handleRoofTypeChange(v)}
           options={ROOF_TYPE_OPTIONS_2}
           value={node.roofType}
         />
+      </PanelSection>
+
+      <PanelSection title="Trim">
+        <ToggleControl
+          checked={showTrimPlanes}
+          label="Show trim planes"
+          onChange={(checked) =>
+            handleUpdate({
+              metadata: { ...metadataRecord(node.metadata), showTrimPlanes: checked },
+            })
+          }
+        />
+        {node.roofType !== 'shed' && node.roofType !== 'flat' && (
+          <ToggleControl
+            checked={autoRidgeVentEnabled}
+            label="Auto ridge vent"
+            onChange={handleAutoRidgeVentToggle}
+          />
+        )}
       </PanelSection>
 
       <PanelSection title="Footprint">
@@ -251,7 +360,7 @@ export default function RoofSegmentPanel() {
       {node.roofType === 'dutch' && (
         <PanelSection title="Shape">
           <SliderControl
-            label="Hip Width"
+            label="Waist Width"
             max={0.45}
             min={0.05}
             onChange={(v) => handleUpdate({ dutchHipWidthRatio: v })}
@@ -261,7 +370,7 @@ export default function RoofSegmentPanel() {
             value={Math.round(node.dutchHipWidthRatio * 100) / 100}
           />
           <SliderControl
-            label="Hip Height"
+            label="Waist Height"
             max={0.9}
             min={0.1}
             onChange={(v) => handleUpdate({ dutchHipHeightRatio: v })}
@@ -269,6 +378,46 @@ export default function RoofSegmentPanel() {
             step={0.01}
             unit=""
             value={Math.round(node.dutchHipHeightRatio * 100) / 100}
+          />
+          <SliderControl
+            label="Waist Length"
+            max={1}
+            min={0.1}
+            onChange={(v) => handleUpdate({ dutchWaistLengthRatio: v })}
+            precision={2}
+            step={0.01}
+            unit=""
+            value={
+              Math.round(
+                (node.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio) * 100,
+              ) / 100
+            }
+          />
+          <SliderControl
+            label="Top Rake Thick."
+            max={0.5}
+            min={0.01}
+            onChange={(v) => handleUpdate({ dutchTopRakeThickness: v })}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={
+              Math.round(
+                (node.dutchTopRakeThickness ?? ROOF_SHAPE_DEFAULTS.dutchTopRakeThickness) * 100,
+              ) / 100
+            }
+          />
+          <SliderControl
+            label="Top Rake Length"
+            max={3}
+            min={0}
+            onChange={(v) => handleUpdate({ dutchGabletRake: v })}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={
+              Math.round((node.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake) * 100) / 100
+            }
           />
         </PanelSection>
       )}

@@ -50,7 +50,7 @@ export function collectSelectableCandidateIds(): string[] {
 
   if (!levelId) return []
   const levelNode = nodes[levelId as AnyNodeId] as LevelNode | undefined
-  if (!levelNode || levelNode.type !== 'level') return []
+  if (levelNode?.type !== 'level') return []
 
   if (phase === 'structure' && structureLayer === 'zones') {
     for (const childId of levelNode.children) {

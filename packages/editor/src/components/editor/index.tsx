@@ -58,6 +58,7 @@ import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { CustomCameraControls } from './custom-camera-controls'
 import { EditorLayoutV2 } from './editor-layout-v2'
 import { ExportManager } from './export-manager'
+import { FenceTangentLines3D } from './fence-tangent-lines-3d'
 import { FirstPersonControls, FirstPersonOverlay } from './first-person-controls'
 import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
@@ -725,6 +726,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!noEditing && <WallOpeningHighlights />}
       {!noEditing && <SlabHoleHighlights />}
       {!noEditing && <WallMoveSideHandles />}
+      {!noEditing && <FenceTangentLines3D />}
       {!noEditing && <FloatingActionMenu />}
       {!noEditing && <FloatingBuildingActionMenu />}
       {!isFirstPersonMode && <WallMeasurementLabel />}

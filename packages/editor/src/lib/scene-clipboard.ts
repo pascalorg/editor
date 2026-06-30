@@ -114,7 +114,7 @@ function getNextLevelId(level: LevelNode, nodes: Record<AnyNodeId, AnyNode>) {
   if (!parentId) return null
 
   const building = nodes[parentId]
-  if (!building || building.type !== 'building') return null
+  if (building?.type !== 'building') return null
 
   const siblingLevels = building.children
     .map((childId) => nodes[childId as AnyNodeId])

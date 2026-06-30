@@ -6,10 +6,12 @@ import {
   emitter,
   type FenceNode,
   type GridEvent,
+  getTwoPointFenceCurveTangents,
   getWallMiterBoundaryPoints,
   type LevelNode,
   type Point2D,
   resolveAlignment,
+  sampleFenceSpline,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -17,6 +19,7 @@ import {
 import {
   CursorSphere,
   createFenceOnCurrentLevel,
+  createSplineFenceOnCurrentLevel,
   EDITOR_LAYER,
   type FencePlanPoint,
   formatAngleRadians,
@@ -24,14 +27,18 @@ import {
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  getSegmentGridStep,
   isAngleSnapActive,
+  isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
   type SegmentAngleReference,
   snapFenceDraftPoint,
+  snapScalarToGrid,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  useFenceCurveDraft,
   useSegmentDraftChain,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -418,7 +425,7 @@ function getCurrentLevelElements(): { walls: WallNode[]; fences: FenceNode[] } {
   const { nodes } = useScene.getState()
   if (!currentLevelId) return { walls: [], fences: [] }
   const levelNode = nodes[currentLevelId]
-  if (!levelNode || levelNode.type !== 'level') return { walls: [], fences: [] }
+  if (levelNode?.type !== 'level') return { walls: [], fences: [] }
   const children = (levelNode as LevelNode).children.map((childId) => nodes[childId])
   return {
     walls: children.filter((n): n is WallNode => n?.type === 'wall'),
@@ -427,6 +434,14 @@ function getCurrentLevelElements(): { walls: WallNode[]; fences: FenceNode[] } {
 }
 
 export const FenceTool: React.FC = () => {
+  const fenceMode = useEditor((s) => s.continuationByContext.fence)
+  if (fenceMode === 'curved') {
+    return <SplineFenceDraft />
+  }
+  return <StraightFenceTool />
+}
+
+const StraightFenceTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   // A placed preset seeds `toolDefaults.fence` before the tool mounts, so
@@ -688,6 +703,132 @@ export const FenceTool: React.FC = () => {
             </group>
           ))}
         </>
+      )}
+    </group>
+  )
+}
+
+const SPLINE_PREVIEW_COLOR = '#8381ed'
+const SPLINE_PREVIEW_SEGMENTS = 40
+
+const SplineFenceDraft: React.FC = () => {
+  const previewHeight =
+    typeof useEditor.getState().toolDefaults.fence?.height === 'number'
+      ? (useEditor.getState().toolDefaults.fence?.height as number)
+      : FENCE_PREVIEW_HEIGHT
+  const [draftPoints, setDraftPoints] = useState<FencePlanPoint[]>([])
+  const [cursor, setCursor] = useState<FencePlanPoint | null>(null)
+  const draftRef = useRef(draftPoints)
+
+  draftRef.current = draftPoints
+
+  // Mirror the draft length into the HUD store so the "finish curve" hint only
+  // shows once drafting has started; always clear it when the tool unmounts.
+  useEffect(() => {
+    useFenceCurveDraft.getState().setPointCount(draftPoints.length)
+  }, [draftPoints])
+  useEffect(() => () => useFenceCurveDraft.getState().reset(), [])
+
+  useEffect(() => () => useEditor.getState().setToolDefaults('fence', null), [])
+
+  useEffect(() => {
+    const snapPoint = (local: FencePlanPoint): FencePlanPoint => {
+      const step = isGridSnapActive() ? getSegmentGridStep() : 0
+      if (step <= 0) return local
+      return [snapScalarToGrid(local[0], step), snapScalarToGrid(local[1], step)]
+    }
+
+    const commit = () => {
+      const points = draftRef.current
+      if (points.length >= 2) {
+        const created = createSplineFenceOnCurrentLevel(points)
+        if (created) {
+          triggerSFX('sfx:item-place')
+          // Once the new curve fence is selected for direct editing, leave
+          // placement mode so the toolbar matches the active interaction.
+          useViewer.getState().setSelection({ selectedIds: [created.id] })
+          useEditor.getState().setTool(null)
+          useEditor.getState().setMode('select')
+        }
+      }
+      setDraftPoints([])
+      setCursor(null)
+    }
+
+    const onMove = (event: GridEvent) => {
+      setCursor(snapPoint([event.localPosition[0], event.localPosition[2]]))
+    }
+
+    const onClick = (event: GridEvent) => {
+      if (event.nativeEvent.detail >= 2) {
+        commit()
+        return
+      }
+      const point = snapPoint([event.localPosition[0], event.localPosition[2]])
+      triggerSFX('sfx:grid-snap')
+      setDraftPoints((prev) => [...prev, point])
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter') commit()
+    }
+    const onCancel = () => {
+      if (draftRef.current.length === 0) return
+      markToolCancelConsumed()
+      setDraftPoints((prev) => prev.slice(0, -1))
+    }
+
+    emitter.on('grid:move', onMove)
+    emitter.on('grid:click', onClick)
+    emitter.on('tool:cancel', onCancel)
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      emitter.off('grid:move', onMove)
+      emitter.off('grid:click', onClick)
+      emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [])
+
+  const previewPoints = cursor ? [...draftPoints, cursor] : draftPoints
+  const curveGeometry = useMemo(() => {
+    if (previewPoints.length < 2) return null
+    const sampled = sampleFenceSpline(
+      previewPoints,
+      getTwoPointFenceCurveTangents(previewPoints),
+      SPLINE_PREVIEW_SEGMENTS,
+    )
+    return new BufferGeometry().setFromPoints(
+      sampled.map((point) => new Vector3(point.x, previewHeight, point.y)),
+    )
+  }, [previewHeight, previewPoints])
+
+  return (
+    <group>
+      {cursor && <CursorSphere height={previewHeight} position={[cursor[0], 0, cursor[1]]} />}
+      {draftPoints.map((point, index) => (
+        <mesh
+          key={`fence-spline-pt-${index}`}
+          layers={EDITOR_LAYER}
+          position={[point[0], previewHeight, point[1]]}
+        >
+          <sphereGeometry args={[0.07, 16, 12]} />
+          <meshBasicMaterial color={SPLINE_PREVIEW_COLOR} depthTest={false} />
+        </mesh>
+      ))}
+      {curveGeometry && (
+        // @ts-expect-error - R3F accepts Three line primitives here.
+        <line frustumCulled={false} geometry={curveGeometry} layers={EDITOR_LAYER} renderOrder={2}>
+          <lineBasicNodeMaterial
+            color={SPLINE_PREVIEW_COLOR}
+            depthTest={false}
+            depthWrite={false}
+            linewidth={2}
+            opacity={0.95}
+            transparent
+          />
+        </line>
       )}
     </group>
   )

@@ -111,6 +111,6 @@ export function prepareBrushForCSG(brush: Brush) {
   brush.updateMatrixWorld()
 }
 
-// Re-export Brush + SUBTRACTION + ADDITION so kinds don't need a direct
-// `three-bvh-csg` dependency.
-export { ADDITION, Brush, SUBTRACTION } from 'three-bvh-csg'
+// Re-export Brush + SUBTRACTION + ADDITION + INTERSECTION so kinds don't need a
+// direct `three-bvh-csg` dependency.
+export { ADDITION, Brush, INTERSECTION, SUBTRACTION } from 'three-bvh-csg'

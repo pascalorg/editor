@@ -43,7 +43,7 @@ import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dim
  */
 export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): FloorplanGeometry | null {
   const wall = ctx.parent as WallNode | null
-  if (!wall || wall.type !== 'wall') return null
+  if (wall?.type !== 'wall') return null
 
   const [x1, z1] = wall.start
   const [x2, z2] = wall.end

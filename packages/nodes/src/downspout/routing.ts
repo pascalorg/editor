@@ -80,7 +80,7 @@ export function resolveDownspoutRouting(
 ): DownspoutRouting | null {
   if (!node.gutterId) return null
   const gutter = sceneApi.get<GutterNode>(node.gutterId as AnyNodeId)
-  if (!gutter || gutter.type !== 'gutter') return null
+  if (gutter?.type !== 'gutter') return null
   const segment = gutter.roofSegmentId
     ? sceneApi.get<RoofSegmentNode>(gutter.roofSegmentId as AnyNodeId)
     : undefined

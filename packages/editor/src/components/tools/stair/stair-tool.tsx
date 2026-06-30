@@ -14,7 +14,6 @@ import {
   syncAutoStairOpenings,
   useScene,
 } from '@pascal-app/core'
-import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -23,6 +22,7 @@ import {
   resolveStairDestinationLevel,
   resolveStairPlacementLevelId,
 } from '../../../lib/stair-levels'
+import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
 import useFacingPose from '../../../store/use-facing-pose'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -38,6 +38,7 @@ import {
   DEFAULT_STAIR_FILL_TO_FLOOR,
   DEFAULT_STAIR_HEIGHT,
   DEFAULT_STAIR_LENGTH,
+  DEFAULT_STAIR_OPENING_OFFSET,
   DEFAULT_STAIR_RAILING_HEIGHT,
   DEFAULT_STAIR_RAILING_MODE,
   DEFAULT_STAIR_STEP_COUNT,
@@ -140,7 +141,7 @@ function createDefaultStairNode({
     fromLevelId: levelId,
     toLevelId: nextLevelId,
     slabOpeningMode: 'destination',
-    openingOffset: 0.08,
+    openingOffset: DEFAULT_STAIR_OPENING_OFFSET,
     width: DEFAULT_STAIR_WIDTH,
     totalRise: DEFAULT_STAIR_HEIGHT,
     stepCount: DEFAULT_STAIR_STEP_COUNT,

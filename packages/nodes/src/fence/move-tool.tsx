@@ -7,7 +7,10 @@ import {
   type FenceNode,
   type GridEvent,
   getPerpendicularWallMoveAxis,
+  isCurvedWall,
+  isSplineFence,
   type LevelNode,
+  useLiveNodeOverrides,
   useScene,
   type WallMoveAxis,
   type WallNode,
@@ -15,6 +18,8 @@ import {
 import {
   CursorSphere,
   consumePlacementDragRelease,
+  getSegmentGridStep,
+  isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
   snapFenceDraftPoint,
@@ -27,10 +32,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 /**
  * Phase 5 Stage D — fence whole-move tool.
  *
- * Live-drag pattern: translate the fence via direct scene updates while
- * temporal history is paused. On commit we restore the original, resume
- * history, apply the final position (single undo step), then re-pause.
- * `constrainWallMoveDeltaToAxis` keeps moves axis-aligned.
+ * Live-drag pattern: preview data-driven reshapes through live node
+ * overrides. On commit we write the final position once for a single undo
+ * step.
+ * Straight fences use `constrainWallMoveDeltaToAxis` to keep side-moves
+ * perpendicular; curved fences translate freely because their path shape
+ * already carries direction.
  *
  * Wired via `def.affordanceTools.move`. The editor's `MoveTool`
  * dispatcher picks this up before its legacy chain.
@@ -43,6 +50,7 @@ type LinkedFenceSnapshot = {
   id: FenceNode['id']
   start: [number, number]
   end: [number, number]
+  path?: [number, number][]
 }
 
 function getLinkedFenceSnapshots(args: {
@@ -70,9 +78,30 @@ function getLinkedFenceSnapshots(args: {
       id: node.id,
       start: [...node.start] as [number, number],
       end: [...node.end] as [number, number],
+      path: node.path?.map((point) => [...point] as [number, number]),
     })
   }
   return snapshots
+}
+
+function translatePath(
+  path: [number, number][] | undefined,
+  deltaX: number,
+  deltaZ: number,
+): [number, number][] | undefined {
+  return path?.map((point) => [point[0] + deltaX, point[1] + deltaZ])
+}
+
+function projectLinkedPath(
+  path: [number, number][] | undefined,
+  start: [number, number],
+  end: [number, number],
+): [number, number][] | undefined {
+  if (!path || path.length === 0) return path
+  const nextPath = path.map((point) => [...point] as [number, number])
+  nextPath[0] = start
+  nextPath[nextPath.length - 1] = end
+  return nextPath
 }
 
 function getLinkedFenceUpdates(
@@ -82,19 +111,25 @@ function getLinkedFenceUpdates(
   nextStart: [number, number],
   nextEnd: [number, number],
 ) {
-  return linkedFences.map((fence) => ({
-    id: fence.id,
-    start: samePoint(fence.start, originalStart)
+  return linkedFences.map((fence) => {
+    const start = samePoint(fence.start, originalStart)
       ? nextStart
       : samePoint(fence.start, originalEnd)
         ? nextEnd
-        : fence.start,
-    end: samePoint(fence.end, originalStart)
+        : fence.start
+    const end = samePoint(fence.end, originalStart)
       ? nextStart
       : samePoint(fence.end, originalEnd)
         ? nextEnd
-        : fence.end,
-  }))
+        : fence.end
+
+    return {
+      id: fence.id,
+      start,
+      end,
+      path: projectLinkedPath(fence.path, start, end),
+    }
+  })
 }
 
 export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
@@ -102,6 +137,7 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const originalStartRef = useRef<[number, number]>([...node.start] as [number, number])
   const originalEndRef = useRef<[number, number]>([...node.end] as [number, number])
+  const originalPathRef = useRef(node.path?.map((point) => [...point] as [number, number]))
   const meta =
     typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)
       ? (node.metadata as Record<string, unknown>)
@@ -119,9 +155,14 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
         }),
   )
   const dragAnchorRef = useRef<[number, number] | null>(null)
-  const previewRef = useRef<{ start: [number, number]; end: [number, number] } | null>(null)
+  const previewRef = useRef<{
+    start: [number, number]
+    end: [number, number]
+    path?: [number, number][]
+  } | null>(null)
+  const canMoveFreely = isSplineFence(node) || isCurvedWall(node)
   const moveAxisRef = useRef<WallMoveAxis | null>(
-    getPerpendicularWallMoveAxis(node.start, node.end),
+    canMoveFreely ? null : getPerpendicularWallMoveAxis(node.start, node.end),
   )
 
   const [cursorLocalPos, setCursorLocalPos] = useState<[number, number, number]>(() => {
@@ -155,12 +196,38 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     let wasCommitted = false
 
     const applyNodePreview = (
-      updates: Array<{ id: FenceNode['id']; start: [number, number]; end: [number, number] }>,
+      updates: Array<{
+        id: FenceNode['id']
+        start: [number, number]
+        end: [number, number]
+        path?: [number, number][]
+      }>,
+    ) => {
+      useLiveNodeOverrides
+        .getState()
+        .setMany(
+          updates.map((entry) => [
+            entry.id as AnyNodeId,
+            { start: entry.start, end: entry.end, path: entry.path },
+          ]),
+        )
+      for (const entry of updates) {
+        useScene.getState().markDirty(entry.id as AnyNodeId)
+      }
+    }
+
+    const applyCommittedUpdates = (
+      updates: Array<{
+        id: FenceNode['id']
+        start: [number, number]
+        end: [number, number]
+        path?: [number, number][]
+      }>,
     ) => {
       useScene.getState().updateNodes(
         updates.map((entry) => ({
           id: entry.id as AnyNodeId,
-          data: { start: entry.start, end: entry.end },
+          data: { start: entry.start, end: entry.end, path: entry.path },
         })),
       )
       for (const entry of updates) {
@@ -169,19 +236,27 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const restoreOriginal = () => {
-      applyNodePreview([
-        { id: fenceId, start: originalStart, end: originalEnd },
-        ...linkedOriginalsRef.current,
-      ])
+      const overrides = useLiveNodeOverrides.getState()
+      overrides.clear(fenceId)
+      for (const linkedFence of linkedOriginalsRef.current) {
+        overrides.clear(linkedFence.id)
+      }
+      useScene.getState().markDirty(fenceId)
+      for (const linkedFence of linkedOriginalsRef.current) {
+        useScene.getState().markDirty(linkedFence.id as AnyNodeId)
+      }
     }
 
     const applyPreview = (nextStart: [number, number], nextEnd: [number, number]) => {
-      previewRef.current = { start: nextStart, end: nextEnd }
+      const deltaX = nextStart[0] - originalStart[0]
+      const deltaZ = nextStart[1] - originalStart[1]
+      const nextPath = translatePath(originalPathRef.current, deltaX, deltaZ)
+      previewRef.current = { start: nextStart, end: nextEnd, path: nextPath }
       const centerX = (nextStart[0] + nextEnd[0]) / 2
       const centerZ = (nextStart[1] + nextEnd[1]) / 2
       setCursorLocalPos([centerX, 0, centerZ])
       const previewUpdates = [
-        { id: fenceId, start: nextStart, end: nextEnd },
+        { id: fenceId, start: nextStart, end: nextEnd, path: nextPath },
         ...getLinkedFenceUpdates(
           linkedOriginalsRef.current,
           originalStart,
@@ -195,18 +270,19 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const bypassSnap = event.nativeEvent?.shiftKey === true
+      const gridSnapActive = isGridSnapActive()
+      const magneticSnapActive = isMagneticSnapActive()
       const [localX, localZ] = snapFenceDraftPoint({
         point: [event.localPosition[0], event.localPosition[2]],
         walls: levelWalls,
         fences: levelFences,
         ignoreFenceIds: [fenceId],
-        bypassSnap,
-        magnetic: !bypassSnap && isMagneticSnapActive(),
+        magnetic: magneticSnapActive,
+        step: gridSnapActive ? getSegmentGridStep() : 0,
       })
 
       if (
-        !bypassSnap &&
+        (gridSnapActive || magneticSnapActive) &&
         previousGridPosRef.current &&
         (localX !== previousGridPosRef.current[0] || localZ !== previousGridPosRef.current[1])
       ) {
@@ -217,11 +293,11 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       const anchor = dragAnchorRef.current ?? [localX, localZ]
       dragAnchorRef.current = anchor
 
-      const [deltaX, deltaZ] = constrainWallMoveDeltaToAxis(
-        localX - anchor[0],
-        localZ - anchor[1],
-        moveAxisRef.current,
-      )
+      const rawDeltaX = localX - anchor[0]
+      const rawDeltaZ = localZ - anchor[1]
+      const [deltaX, deltaZ] = canMoveFreely
+        ? [rawDeltaX, rawDeltaZ]
+        : constrainWallMoveDeltaToAxis(rawDeltaX, rawDeltaZ, moveAxisRef.current)
 
       const nextStart: [number, number] = [originalStart[0] + deltaX, originalStart[1] + deltaZ]
       const nextEnd: [number, number] = [originalEnd[0] + deltaX, originalEnd[1] + deltaZ]
@@ -245,13 +321,9 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
         return
       }
 
-      // Restore original baseline while paused so the next resume+update
-      // registers as a single tracked change (undo reverts to original).
-      restoreOriginal()
-
       useScene.temporal.getState().resume()
-      applyNodePreview([
-        { id: fenceId, start: preview.start, end: preview.end },
+      applyCommittedUpdates([
+        { id: fenceId, start: preview.start, end: preview.end, path: preview.path },
         ...getLinkedFenceUpdates(
           linkedOriginalsRef.current,
           originalStart,
@@ -260,6 +332,7 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
           preview.end,
         ),
       ])
+      restoreOriginal()
       useScene.temporal.getState().pause()
 
       triggerSFX('sfx:item-place')
@@ -316,7 +389,7 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
-  }, [exitMoveMode, node])
+  }, [exitMoveMode, node, canMoveFreely])
 
   return (
     <group>

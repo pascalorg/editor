@@ -158,7 +158,7 @@ export function planPipeRunTranslationOffsets(args: {
     }
 
     const partner = nodesById[conn.nodeId]
-    if (!partner || partner.type !== 'pipe-fitting') return null
+    if (partner?.type !== 'pipe-fitting') return null
     const elbow = {
       ...(partner as PipeFittingNode),
       ...pipeElbowProfilePatch(profile),

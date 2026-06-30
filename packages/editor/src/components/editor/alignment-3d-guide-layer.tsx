@@ -1,7 +1,6 @@
 'use client'
 
 import { type AlignmentGuide, sceneRegistry } from '@pascal-app/core'
-import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
@@ -9,6 +8,7 @@ import { memo, useMemo, useRef } from 'react'
 import { BoxGeometry, CircleGeometry, type Group, Vector3 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
+import useAlignmentGuides from '../../store/use-alignment-guides'
 import { formatMeasurement } from './measurement-pill'
 
 /**
@@ -44,6 +44,14 @@ const MAX_DASHES = 80 // cap so a very long guide can't spawn thousands of quads
 // instance, so guide churn during a drag doesn't rebuild GPU buffers.
 const guideMaterial = new MeshBasicNodeMaterial({
   color: LINE_COLOR,
+  depthTest: false,
+  depthWrite: false,
+  toneMapped: false,
+  transparent: true,
+})
+const DOT_COLOR = 0x22_c5_5e // green-500 — matches the wall-snap marker
+const dotMaterial = new MeshBasicNodeMaterial({
+  color: DOT_COLOR,
   depthTest: false,
   depthWrite: false,
   toneMapped: false,
@@ -150,7 +158,7 @@ function Dot({ position }: { position: Vec3 }) {
     <mesh
       geometry={DOT_GEOMETRY}
       layers={EDITOR_LAYER}
-      material={guideMaterial}
+      material={dotMaterial}
       position={position}
       renderOrder={1001}
       rotation={[-Math.PI / 2, 0, 0]}

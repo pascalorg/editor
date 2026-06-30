@@ -226,7 +226,7 @@ function findFollowTarget(point: Vec3, levelId: AnyNodeId): FollowTarget | null 
   const scene = useScene.getState()
   const linesets: LinesetNode[] = []
   for (const n of Object.values(scene.nodes)) {
-    if (!n || n.type !== 'lineset') continue
+    if (n?.type !== 'lineset') continue
     if ((n.parentId as AnyNodeId | null) !== levelId) continue
     const ls = n as LinesetNode
     if (ls.path.length >= 2) linesets.push(ls)
