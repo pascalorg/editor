@@ -20,6 +20,21 @@ export const treeParametrics: ParametricDescriptor<TreeNode> = {
       ],
     },
     {
+      label: 'Foliage',
+      fields: [
+        { key: 'leafless', kind: 'boolean' },
+        {
+          key: 'foliageDensity',
+          kind: 'number',
+          min: 0,
+          max: 1.5,
+          step: 0.1,
+          visibleIf: (n) => !n.leafless,
+        },
+        { key: 'trunkThickness', kind: 'number', min: 0.3, max: 2.5, step: 0.1 },
+      ],
+    },
+    {
       label: 'Position',
       fields: [{ key: 'position', kind: 'vec3' }],
     },

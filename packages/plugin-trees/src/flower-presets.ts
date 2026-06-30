@@ -1,0 +1,48 @@
+import type { FlowerPreset } from './flower-schema'
+
+/** Per-flower colours + default height (metres). Pure data shared by the
+ * geometry builder and the panel swatches. */
+export type FlowerPresetSpec = {
+  id: FlowerPreset
+  label: string
+  petalColor: string
+  centerColor: string
+  stemColor: string
+  defaultHeight: number
+  swatch: string
+}
+
+export const FLOWER_PRESETS: Record<FlowerPreset, FlowerPresetSpec> = {
+  daisy: {
+    id: 'daisy',
+    label: 'Daisy',
+    petalColor: '#fcfcf2',
+    centerColor: '#f4c430',
+    stemColor: '#4f7942',
+    defaultHeight: 0.5,
+    swatch: '#f4c430',
+  },
+  tulip: {
+    id: 'tulip',
+    label: 'Tulip',
+    petalColor: '#e0457b',
+    centerColor: '#c43160',
+    stemColor: '#3f7a3a',
+    defaultHeight: 0.45,
+    swatch: '#e0457b',
+  },
+  lavender: {
+    id: 'lavender',
+    label: 'Lavender',
+    petalColor: '#9b6fd4',
+    centerColor: '#7d52b8',
+    stemColor: '#5a7a4a',
+    defaultHeight: 0.6,
+    swatch: '#9b6fd4',
+  },
+}
+
+export const FLOWER_PRESET_LIST: FlowerPresetSpec[] = Object.values(FLOWER_PRESETS)
+
+/** Bounded seed pool so flowers share instancing variants (see trees). */
+export const FLOWER_SEED_POOL = [1, 7, 13, 21, 34, 55]

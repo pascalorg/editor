@@ -22,8 +22,15 @@ export const TreeNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   preset: TreePreset.default('oak'),
-  height: z.number().positive().default(4),
+  height: z.number().positive().default(7),
   seed: z.number().int().default(1),
+  // Curated geometry params (folded into the instancing variant key):
+  /** Leaf-count multiplier vs the preset (1 = preset default). */
+  foliageDensity: z.number().min(0).max(1.5).default(1),
+  /** Branch-radius multiplier (1 = preset default). */
+  trunkThickness: z.number().min(0.3).max(2.5).default(1),
+  /** Strip all leaves — a bare winter silhouette. */
+  leafless: z.boolean().default(false),
 })
 
 export type TreeNode = z.infer<typeof TreeNode>

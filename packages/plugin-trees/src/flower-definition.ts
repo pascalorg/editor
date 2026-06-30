@@ -1,0 +1,75 @@
+import type { NodeDefinition } from '@pascal-app/core'
+import { flowerParametrics } from './flower-parametrics'
+import { FlowerNode } from './flower-schema'
+
+/**
+ * The flower node definition — a sibling instanced kind to the tree. Same
+ * composition: a `def.system` batches every flower into InstancedMeshes, a
+ * featherweight `def.renderer` proxy keeps selection working, `parametrics`
+ * gives the inspector, `tool`/`preview` drive placement.
+ */
+export const flowerDefinition: NodeDefinition<typeof FlowerNode> = {
+  kind: 'trees:flower',
+  schemaVersion: 1,
+  schema: FlowerNode,
+  category: 'furnish',
+  snapProfile: 'item',
+
+  defaults: () => ({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    preset: 'daisy',
+    height: 0.5,
+    seed: 1,
+  }),
+
+  capabilities: {
+    movable: { axes: ['x', 'z'], gridSnap: true },
+    rotatable: { axes: ['y'], snapAngles: [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2] },
+    selectable: { hitVolume: 'bbox' },
+    duplicable: true,
+    deletable: true,
+    groupable: true,
+    snappable: {},
+    floorPlaced: {
+      footprint: (node) => {
+        const flower = node as unknown as FlowerNode
+        const radius = Math.max(0.1, flower.height * 0.25)
+        return {
+          dimensions: [radius * 2, flower.height, radius * 2] as [number, number, number],
+          rotation: flower.rotation,
+        }
+      },
+      collides: false,
+    },
+  },
+
+  parametrics: flowerParametrics,
+
+  renderer: { kind: 'parametric', module: () => import('./flower-proxy-renderer') },
+  system: { module: () => import('./flower-system'), priority: 3 },
+
+  preview: () => import('./flower-preview'),
+  tool: () => import('./flower-tool'),
+  toolHints: [
+    { key: 'Left click', label: 'Plant flower' },
+    { key: 'Esc', label: 'Stop' },
+  ],
+
+  presentation: {
+    label: 'Flower',
+    description: 'A procedural flower. Daisy, tulip, or lavender.',
+    icon: { kind: 'iconify', name: 'lucide:flower-2' },
+    paletteSection: 'furnish',
+    hidden: true,
+  },
+
+  mcp: {
+    description:
+      'A procedural flower (example plugin node) — daisy, tulip, or lavender, instanced like the trees.',
+  },
+}

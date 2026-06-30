@@ -1,118 +1,59 @@
 'use client'
 
-import {
-  type AnyNode,
-  type AnyNodeId,
-  emitter,
-  type GridEvent,
-  sceneRegistry,
-  snapPointToGrid,
-  useScene,
-} from '@pascal-app/core'
-import { isGridSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
+import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
+import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { type Group, Vector3 } from 'three'
+import { useMemo } from 'react'
+import { usePlacement } from './placement'
 import { TREE_SEED_POOL } from './presets'
 import TreePreview from './preview'
 import { TreeNode } from './schema'
 import { useTreesStore } from './store'
 
-const worldVec = new Vector3()
-
-/** Snap a planar position to the grid when grid snapping is the active mode —
- * reading the same `isGridSnapActive()` toggle and `gridSnapStep` the built-in
- * item/shelf tools use, so trees honour the snap mode like every other item. */
-function snapXZ(x: number, z: number): readonly [number, number] {
-  if (!isGridSnapActive()) return [x, z]
-  return snapPointToGrid([x, z], useEditor.getState().gridSnapStep)
-}
-
-/**
- * Convert a world-space grid hit into the active level's local frame, the way
- * the host stores node positions. Re-derived here from the public
- * `sceneRegistry` because the built-in `floor-placement` helpers aren't part of
- * the public `@pascal-app/*` surface yet — a candidate for the future
- * `@pascal-app/plugin-api` package.
- */
-function toLevelLocal(levelId: string, world: [number, number, number]): [number, number, number] {
-  const levelObject = sceneRegistry.nodes.get(levelId)
-  if (!levelObject) return [world[0], 0, world[2]]
-  worldVec.set(world[0], world[1], world[2])
-  levelObject.updateWorldMatrix(true, false)
-  levelObject.worldToLocal(worldVec)
-  return [worldVec.x, 0, worldVec.z]
-}
-
 /**
  * The trees placement tool. Mounted by the host's registry-first `ToolManager`
- * whenever `tool === 'trees:tree'` — no host edit per kind. Reads the chosen
- * preset from the plugin's own store, ghosts a preview at the cursor on
- * `grid:move`, and commits a tree on `grid:click`. This is the third leg of the
- * plugin surface: 3D rendering + placement from `def.geometry`/`def.tool`.
+ * whenever `tool === 'trees:tree'` — no host edit per kind. Reads the panel
+ * brush from the plugin store, ghosts a preview at the snapped cursor, and
+ * commits a tree on click. Snapping + level conversion live in `usePlacement`.
  */
 export default function TreeTool() {
   const activeLevelId = useViewer((s) => s.selection.levelId)
-  const preset = useTreesStore((s) => s.preset)
-  const height = useTreesStore((s) => s.height)
-  const cursorRef = useRef<Group>(null)
-  const [cursorVisible, setCursorVisible] = useState(false)
+  const brush = useTreesStore()
 
-  // Preview tree shaped by the currently-selected preset + panel height.
   const previewNode = useMemo(
     () =>
       TreeNode.parse({
-        preset,
-        height,
+        preset: brush.preset,
+        height: brush.height,
+        foliageDensity: brush.foliageDensity,
+        trunkThickness: brush.trunkThickness,
+        leafless: brush.leafless,
         seed: 1,
         position: [0, 0, 0],
         rotation: [0, 0, 0],
       }),
-    [preset, height],
+    [brush.preset, brush.height, brush.foliageDensity, brush.trunkThickness, brush.leafless],
   )
 
-  useEffect(() => {
+  const { cursorRef, cursorVisible } = usePlacement(activeLevelId, (position) => {
     if (!activeLevelId) return
-    setCursorVisible(false)
-    let lastWorld: [number, number, number] | null = null
-
-    const onGridMove = (event: GridEvent) => {
-      setCursorVisible(true)
-      // The tool mounts inside the host's building-local group, so positioning
-      // the ghost with the building-local hit keeps it under the cursor.
-      const [lx, , lz] = event.localPosition
-      const [sx, sz] = snapXZ(lx, lz)
-      cursorRef.current?.position.set(sx, 0, sz)
-      lastWorld = event.position
-    }
-
-    const onGridClick = (event: GridEvent) => {
-      const world = lastWorld ?? event.position
-      const [lx, , lz] = toLevelLocal(activeLevelId, world)
-      const [sx, sz] = snapXZ(lx, lz)
-      const tree = TreeNode.parse({
-        preset,
-        // Read height fresh so the slider applies without re-subscribing here.
-        height: useTreesStore.getState().height,
-        // Pick from the bounded pool so placed trees share instancing variants;
-        // a small random Y rotation keeps a planted row from looking cloned.
-        seed: TREE_SEED_POOL[Math.floor(Math.random() * TREE_SEED_POOL.length)] ?? 1,
-        position: [sx, 0, sz],
-        rotation: [0, Math.random() * Math.PI * 2, 0],
-      })
-      useScene.getState().createNode(tree as unknown as AnyNode, activeLevelId as AnyNodeId)
-      useViewer.getState().setSelection({ selectedIds: [tree.id as AnyNodeId] })
-      triggerSFX('sfx:item-place')
-      // Stay active for rapid planting; Esc / a tool switch unmounts us.
-    }
-
-    emitter.on('grid:move', onGridMove)
-    emitter.on('grid:click', onGridClick)
-    return () => {
-      emitter.off('grid:move', onGridMove)
-      emitter.off('grid:click', onGridClick)
-    }
-  }, [activeLevelId, preset])
+    const s = useTreesStore.getState()
+    const tree = TreeNode.parse({
+      preset: s.preset,
+      height: s.height,
+      foliageDensity: s.foliageDensity,
+      trunkThickness: s.trunkThickness,
+      leafless: s.leafless,
+      // Bounded pool so placed trees share instancing variants; random Y
+      // rotation keeps a planted row from looking cloned.
+      seed: TREE_SEED_POOL[Math.floor(Math.random() * TREE_SEED_POOL.length)] ?? 1,
+      position,
+      rotation: [0, Math.random() * Math.PI * 2, 0],
+    })
+    useScene.getState().createNode(tree as unknown as AnyNode, activeLevelId as AnyNodeId)
+    useViewer.getState().setSelection({ selectedIds: [tree.id as AnyNodeId] })
+    triggerSFX('sfx:item-place')
+  })
 
   if (!activeLevelId) return null
 

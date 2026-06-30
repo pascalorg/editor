@@ -27,6 +27,9 @@ export const treeDefinition: NodeDefinition<typeof TreeNode> = {
     preset: 'oak',
     height: 7,
     seed: 1,
+    foliageDensity: 1,
+    trunkThickness: 1,
+    leafless: false,
   }),
 
   capabilities: {

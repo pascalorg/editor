@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react'
 import type { Material } from 'three'
-import { generateTree, naturalHeight } from './geometry'
+import { generateTree, naturalHeight, treeSpecOf } from './geometry'
 import type { TreeNode } from './schema'
 
 /**
@@ -13,10 +13,10 @@ import type { TreeNode } from './schema'
  */
 export default function TreePreview({ node }: { node: TreeNode }) {
   const built = useMemo(() => {
-    const tree = generateTree(node.preset, node.seed)
+    const tree = generateTree(treeSpecOf(node))
     tree.scale.setScalar(node.height / naturalHeight(tree))
     return tree
-  }, [node.preset, node.seed, node.height])
+  }, [node])
 
   useEffect(() => {
     const cloned: Material[] = []

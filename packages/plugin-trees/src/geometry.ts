@@ -1,22 +1,55 @@
 import { Tree } from '@dgreenheck/ez-tree'
 import { Box3, type BufferGeometry, type Material, type Mesh, type Object3D } from 'three'
 import { TREE_PRESETS } from './presets'
-import type { TreePreset } from './schema'
+import type { TreeNode } from './schema'
+
+/** The geometry-affecting fields of a tree. Two trees with the same spec share
+ * one generated variant (and thus one InstancedMesh set). Per-instance fields
+ * (position/rotation/height) are deliberately NOT here — they're cheap matrix
+ * work, not geometry. */
+export type TreeSpec = Pick<
+  TreeNode,
+  'preset' | 'seed' | 'foliageDensity' | 'trunkThickness' | 'leafless'
+>
+
+export function treeSpecOf(node: TreeNode): TreeSpec {
+  return {
+    preset: node.preset,
+    seed: node.seed,
+    foliageDensity: node.foliageDensity,
+    trunkThickness: node.trunkThickness,
+    leafless: node.leafless,
+  }
+}
+
+/** Stable variant id. Trees with the same key share one set of InstancedMeshes. */
+export function treeVariantKey(spec: TreeSpec): string {
+  return `${spec.preset}:${spec.seed}:${spec.foliageDensity}:${spec.trunkThickness}:${spec.leafless}`
+}
 
 /**
- * Generate an ez-tree for a (preset, seed). ez-tree's `Tree` is a `THREE.Group`
- * whose children are the bark + leaf meshes; textures are inlined in the
- * library (no asset hosting). Pure given its inputs — same (preset, seed) ⇒ the
- * same tree — which is what lets the renderer cache one generation per variant
- * and instance it across every placed tree.
+ * Generate an ez-tree for a spec. ez-tree's `Tree` is a `THREE.Group`; textures
+ * are inlined in the library (no asset hosting). The curated inspector params
+ * map onto ez-tree options after the preset loads: trunk thickness scales every
+ * branch radius, foliage density scales the leaf count, and `leafless` zeroes
+ * it. Pure given its inputs — same spec ⇒ same tree — which is what lets the
+ * renderer cache one generation per variant and instance it everywhere.
  */
-export function generateTree(preset: TreePreset, seed: number): Tree {
-  const spec = TREE_PRESETS[preset] ?? TREE_PRESETS.oak
+export function generateTree(spec: TreeSpec): Tree {
+  const preset = TREE_PRESETS[spec.preset] ?? TREE_PRESETS.oak
   const tree = new Tree()
-  tree.loadPreset(spec.ezPreset)
-  // Set the seed AFTER the preset (the preset carries its own seed) and
-  // regenerate — ez-tree requires generate() after any option change.
-  tree.options.seed = seed
+  tree.loadPreset(preset.ezPreset)
+  tree.options.seed = spec.seed
+
+  const radius = tree.options.branch.radius as unknown as Record<string, number>
+  for (const level of Object.keys(radius)) {
+    const value = radius[level]
+    if (value !== undefined) radius[level] = value * spec.trunkThickness
+  }
+
+  const leaves = tree.options.leaves as { count: number }
+  leaves.count = spec.leafless ? 0 : Math.round(leaves.count * spec.foliageDensity)
+
   tree.generate()
   return tree
 }
@@ -27,27 +60,22 @@ export function generateTree(preset: TreePreset, seed: number): Tree {
 export type TreeSubMesh = { geometry: BufferGeometry; material: Material | Material[] }
 
 /** Geometry + height for one tree variant, generated once and shared across
- * every instance of that (preset, seed). */
+ * every instance of that spec. */
 export type TreeVariantData = { subMeshes: TreeSubMesh[]; naturalHeight: number }
-
-/** Stable variant id. Trees with the same key share one set of InstancedMeshes. */
-export function variantKey(preset: TreePreset, seed: number): string {
-  return `${preset}:${seed}`
-}
 
 const variantCache = new Map<string, TreeVariantData>()
 
 /**
- * Cached geometry for a variant. ez-tree's `generate()` is heavy, so it runs
- * once per (preset, seed); the resulting geometries/materials are retained here
- * and shared by every instance. The renderer must NOT dispose them (it sets
- * `dispose={null}` on the InstancedMesh).
+ * Cached geometry for a spec. ez-tree's `generate()` is heavy, so it runs once
+ * per variant; the resulting geometries/materials are retained here and shared
+ * by every instance. The renderer must NOT dispose them (it sets `dispose={null}`
+ * on the InstancedMesh).
  */
-export function getVariantData(preset: TreePreset, seed: number): TreeVariantData {
-  const key = variantKey(preset, seed)
+export function getVariantData(spec: TreeSpec): TreeVariantData {
+  const key = treeVariantKey(spec)
   const cached = variantCache.get(key)
   if (cached) return cached
-  const tree = generateTree(preset, seed)
+  const tree = generateTree(spec)
   const data: TreeVariantData = {
     subMeshes: extractSubMeshes(tree),
     naturalHeight: naturalHeight(tree),
