@@ -13,18 +13,12 @@ import { isGridSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
-import { TREE_PRESETS, TREE_SEED_POOL } from './presets'
+import { TREE_SEED_POOL } from './presets'
 import TreePreview from './preview'
-import { TreeNode, type TreePreset } from './schema'
+import { TreeNode } from './schema'
 import { useTreesStore } from './store'
 
 const worldVec = new Vector3()
-
-/** Default height for a preset, guarded against the noUncheckedIndexedAccess
- * `| undefined` on the record lookup. */
-function presetHeight(preset: TreePreset): number {
-  return (TREE_PRESETS[preset] ?? TREE_PRESETS.oak).defaultHeight
-}
 
 /** Snap a planar position to the grid when grid snapping is the active mode —
  * reading the same `isGridSnapActive()` toggle and `gridSnapStep` the built-in
@@ -60,20 +54,21 @@ function toLevelLocal(levelId: string, world: [number, number, number]): [number
 export default function TreeTool() {
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const preset = useTreesStore((s) => s.preset)
+  const height = useTreesStore((s) => s.height)
   const cursorRef = useRef<Group>(null)
   const [cursorVisible, setCursorVisible] = useState(false)
 
-  // Preview tree shaped by the currently-selected preset.
+  // Preview tree shaped by the currently-selected preset + panel height.
   const previewNode = useMemo(
     () =>
       TreeNode.parse({
         preset,
-        height: presetHeight(preset),
+        height,
         seed: 1,
         position: [0, 0, 0],
         rotation: [0, 0, 0],
       }),
-    [preset],
+    [preset, height],
   )
 
   useEffect(() => {
@@ -97,7 +92,8 @@ export default function TreeTool() {
       const [sx, sz] = snapXZ(lx, lz)
       const tree = TreeNode.parse({
         preset,
-        height: presetHeight(preset),
+        // Read height fresh so the slider applies without re-subscribing here.
+        height: useTreesStore.getState().height,
         // Pick from the bounded pool so placed trees share instancing variants;
         // a small random Y rotation keeps a planted row from looking cloned.
         seed: TREE_SEED_POOL[Math.floor(Math.random() * TREE_SEED_POOL.length)] ?? 1,
