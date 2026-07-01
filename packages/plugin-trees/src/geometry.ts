@@ -21,16 +21,18 @@ export type TreeSpec = Pick<
 >
 
 export function treeSpecOf(node: TreeNode): TreeSpec {
+  // Default every field — nodes persisted before a field existed load without
+  // it, so the renderer must tolerate partial trees (no runtime schema re-parse).
   return {
-    preset: node.preset,
-    size: node.size,
-    treeType: node.treeType,
-    seed: node.seed,
-    foliageDensity: node.foliageDensity,
-    trunkThickness: node.trunkThickness,
-    leafless: node.leafless,
-    leafColor: node.leafColor,
-    branchColor: node.branchColor,
+    preset: node.preset ?? 'oak',
+    size: node.size ?? 'medium',
+    treeType: node.treeType ?? 'deciduous',
+    seed: node.seed ?? 1,
+    foliageDensity: node.foliageDensity ?? 1,
+    trunkThickness: node.trunkThickness ?? 1,
+    leafless: node.leafless ?? false,
+    leafColor: node.leafColor ?? '#ffffff',
+    branchColor: node.branchColor ?? '#ffffff',
   }
 }
 
@@ -49,9 +51,9 @@ export function treeVariantKey(spec: TreeSpec): string {
   ].join(':')
 }
 
-/** `#rrggbb` → 0xrrggbb, defaulting to white on anything unparseable. */
-function hexToInt(hex: string): number {
-  const n = Number.parseInt(hex.replace('#', ''), 16)
+/** `#rrggbb` → 0xrrggbb, defaulting to white on anything missing/unparseable. */
+function hexToInt(hex: string | undefined): number {
+  const n = Number.parseInt((hex ?? '').replace('#', ''), 16)
   return Number.isFinite(n) ? n : 0xffffff
 }
 

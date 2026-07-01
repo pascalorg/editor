@@ -17,16 +17,23 @@ export function flowerVariantKey(preset: FlowerPreset, seed: number, petalColor:
   return `${preset}:${seed}:${petalColor}`
 }
 
+/** Petal colour with fallbacks — nodes persisted before the field existed load
+ * without it, so fall back to the preset colour rather than crash/blank. */
+export function flowerPetalColor(node: FlowerNode): string {
+  return node.petalColor ?? FLOWER_PRESETS[node.preset]?.petalColor ?? '#fcfcf2'
+}
+
 const variantCache = new Map<string, VariantData>()
 
 /** Cached procedural flower geometry for a (preset, seed, petalColor). Like the
  * trees, one generation per variant is shared across every instance. Built
  * merged per material so each variant is ~3 InstancedMeshes (stem/petals/center). */
 export function getFlowerVariant(node: FlowerNode): VariantData {
-  const key = flowerVariantKey(node.preset, node.seed, node.petalColor)
+  const petalColor = flowerPetalColor(node)
+  const key = flowerVariantKey(node.preset, node.seed, petalColor)
   const cached = variantCache.get(key)
   if (cached) return cached
-  const group = buildFlower(node.preset, node.seed, node.petalColor)
+  const group = buildFlower(node.preset, node.seed, petalColor)
   const subMeshes: SubMesh[] = group.children
     .filter((c): c is Mesh => (c as Mesh).isMesh)
     .map((mesh) => ({ geometry: mesh.geometry, material: mesh.material }))
