@@ -237,6 +237,12 @@ export function KindProxy<N extends Placeable & { id: string }>({
  * baked parent level) to re-render a `bake: 'replace'` kind live: the submeshes
  * carry the same wind node materials as the instanced path, so wind runs in the
  * node's real coordinate space instead of the bake's quantized one.
+ *
+ * The meshes are `NO_RAYCAST`: the baked scene's `<primitive>` has pointer
+ * handlers, so R3F recursively raycasts every descendant on each pointer move
+ * (incl. orbit drags). Dense ez-tree geometry × a forest would make hover
+ * cost dozens of ms/frame — and these live nodes carry no `pascalId`, so a hit
+ * would resolve to the level, not the tree. Scenery, not a pick target.
  */
 export function KindStatic<N extends Placeable>({
   node,
@@ -256,7 +262,13 @@ export function KindStatic<N extends Placeable>({
     >
       <group scale={scale}>
         {variant.subMeshes.map((subMesh, i) => (
-          <mesh dispose={null} geometry={subMesh.geometry} key={i} material={subMesh.material} />
+          <mesh
+            dispose={null}
+            geometry={subMesh.geometry}
+            key={i}
+            material={subMesh.material}
+            raycast={NO_RAYCAST}
+          />
         ))}
       </group>
     </group>
