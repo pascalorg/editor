@@ -264,17 +264,18 @@ const WindowTool: React.FC = () => {
       rawLocalY: number,
       width: number,
       height: number,
-      bypass: boolean,
+      applySnap: boolean,
       ignoreId?: string,
     ) => {
-      // `bypass` disables along-wall alignment — set when magnetic ("lines")
-      // snap is off. The grid component lives in `snapToHalf` (mode-aware).
+      // Along-wall alignment guides are DISPLAYED in every snapping mode; the
+      // magnetic pull onto them is applied only when `applySnap` (magnetic
+      // "lines" mode). The grid component lives in `snapToHalf` (mode-aware).
       const localX = resolveWallSlideAlignment({
         wallNode: wall,
         rawLocalX,
         width,
         candidates: alignmentCandidates,
-        bypass,
+        applySnap,
       })
       const localY = resolvePlacementY({
         wall,
@@ -300,9 +301,9 @@ const WindowTool: React.FC = () => {
       side: 'front' | 'back'
       itemRotation: number
       cursorRotationY: number
-      bypass: boolean
+      applySnap: boolean
     }) => {
-      const { wall, rawLocalX, rawLocalY, side, itemRotation, cursorRotationY, bypass } = args
+      const { wall, rawLocalX, rawLocalY, side, itemRotation, cursorRotationY, applySnap } = args
       const width = draftRef.current?.width ?? 1.5
       const height = draftRef.current?.height ?? 1.5
 
@@ -325,7 +326,7 @@ const WindowTool: React.FC = () => {
         rawLocalY,
         width,
         height,
-        bypass,
+        applySnap,
         draftRef.current.id,
       )
 
@@ -471,7 +472,7 @@ const WindowTool: React.FC = () => {
         side,
         itemRotation,
         cursorRotationY: cursorRotation,
-        bypass: !isMagneticSnapActive(),
+        applySnap: isMagneticSnapActive(),
       })
       event.stopPropagation()
     }
@@ -496,7 +497,7 @@ const WindowTool: React.FC = () => {
         event.localPosition[1],
         draftRef.current.width,
         draftRef.current.height,
-        !isMagneticSnapActive(),
+        isMagneticSnapActive(),
         draftRef.current.id,
       )
       // Alt force-places over a collision (the draft stays red as a warning).

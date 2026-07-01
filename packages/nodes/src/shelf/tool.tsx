@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/core'
 import {
   getFloorStackPreviewPosition,
+  isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
   triggerSFX,
@@ -85,7 +86,8 @@ const ShelfTool = () => {
         rawZ: event.localPosition[2],
         gridStep: useEditor.getState().gridSnapStep,
         candidates: alignmentCandidates,
-        bypassAlignment: !isMagneticSnapActive(),
+        showAlignment: isAlignmentGuideActive(),
+        applyAlignmentSnap: isMagneticSnapActive(),
         bypassGrid: !isGridSnapActive(),
       })
       useAlignmentGuides.getState().set(guides)

@@ -21,6 +21,7 @@ import {
   isFloorplanNodeVisible,
   splitFloorplanOverlay,
 } from '../../components/editor-2d/renderers/floorplan-registry-layer'
+import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
 
 /**
  * Floorplan PDF export.
@@ -82,7 +83,15 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
       const geometries = collectFloorplanGeometry(nodes, level.id, scope)
       if (geometries.length === 0) continue
 
-      const mounted = await mountFloorplanSvg(host, geometries)
+      // Rotate the exported plan to the same north-up orientation the on-screen
+      // 2D view uses when aligned to north (user rotation offset = 0), so a PDF
+      // points north instead of drawing raw plan-local axes.
+      const buildingId = resolveBuildingForLevel(level.id, nodes as Record<AnyNodeId, AnyNode>)
+      const building = buildingId ? nodes[buildingId] : undefined
+      const buildingRotationY = building?.type === 'building' ? (building.rotation[1] ?? 0) : 0
+      const rotationDeg = FLOORPLAN_VIEW_ROTATION_DEG - (buildingRotationY * 180) / Math.PI
+
+      const mounted = await mountFloorplanSvg(host, geometries, rotationDeg)
       if (!mounted) continue
 
       try {
@@ -144,6 +153,7 @@ type MountedFloorplan = {
 async function mountFloorplanSvg(
   parent: HTMLElement,
   geometries: { id: AnyNodeId; base: FloorplanGeometry }[],
+  rotationDeg: number,
 ): Promise<MountedFloorplan | null> {
   const container = document.createElement('div')
   parent.appendChild(container)
@@ -164,8 +174,12 @@ async function mountFloorplanSvg(
         createElement(
           'g',
           { 'data-floorplan-content': '' },
-          geometries.map(({ id, base }) =>
-            createElement(FloorplanGeometryRenderer, { key: id, geometry: base }),
+          createElement(
+            'g',
+            { transform: `rotate(${rotationDeg})` },
+            geometries.map(({ id, base }) =>
+              createElement(FloorplanGeometryRenderer, { key: id, geometry: base }),
+            ),
           ),
         ),
       ),

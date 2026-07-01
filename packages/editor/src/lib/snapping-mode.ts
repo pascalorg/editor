@@ -81,9 +81,9 @@ type SnapModeSet = { modes: SnappingMode[]; default: SnappingMode }
 const SNAP_PROFILES: Record<SnapContext, SnapModeSet> = {
   // Wall / fence drafting + endpoint reshape: direction matters → angle lock.
   wall: { modes: ['grid', 'lines', 'angles', 'off'], default: 'grid' },
-  // Item placement / move: free by default (lines = magnetic alignment only, no
-  // grid lattice), grid opt-in, no angle lock (meaningless for a footprint).
-  item: { modes: ['lines', 'grid', 'off'], default: 'lines' },
+  // Item placement / move: grid by default; lines = magnetic alignment only (no
+  // grid lattice), no angle lock (meaningless for a footprint).
+  item: { modes: ['lines', 'grid', 'off'], default: 'grid' },
   // Structural / surface, no direction to set: slab / ceiling / roof draft+move,
   // whole wall/fence translate, curve reshape, polygon boundary edit. Grid by
   // default, NO angle lock.

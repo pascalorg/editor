@@ -20,6 +20,7 @@ import {
   formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
   isSegmentLongEnough,
@@ -340,16 +341,17 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       // candidate, so the dot always sits on an actual point (endpoint /
       // midpoint), never an empty-space bbox corner. Layered on top of the
       // grid + corner snap above; Alt is reserved for corner-detach here.
-      // Alignment axes are the "Lines" snap, so gate them on the magnetic flag —
-      // Off / Grid / Angles must not pull the endpoint onto other elements' lines.
+      // Alignment lines are DISPLAYED in every mode except Off
+      // (isAlignmentGuideActive); the magnetic pull onto them is applied only in
+      // 'lines' mode (isMagneticSnapActive).
       let alignedPoint = snappedPoint
-      if (isMagneticSnapActive() && wallAlignmentCandidates.length > 0) {
+      if (isAlignmentGuideActive() && wallAlignmentCandidates.length > 0) {
         const ar = resolveAlignment({
           moving: [{ nodeId, kind: 'corner', x: snappedPoint[0], z: snappedPoint[1] }],
           candidates: wallAlignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,
         })
-        if (ar.snap) {
+        if (ar.snap && isMagneticSnapActive()) {
           alignedPoint = [snappedPoint[0] + ar.snap.dx, snappedPoint[1] + ar.snap.dz]
         }
         useAlignmentGuides.getState().set(ar.guides)

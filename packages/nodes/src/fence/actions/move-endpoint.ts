@@ -11,6 +11,7 @@ import {
 } from '@pascal-app/core'
 import {
   type FencePlanPoint,
+  isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
   isSegmentLongEnough,
@@ -182,15 +183,18 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
       // Figma-style alignment: nudge the dragged endpoint onto another wall /
       // fence endpoint or midpoint axis when within threshold, and publish a
       // guide. The resolver connects to the NEAREST real anchor, so the dot
-      // always sits on an actual point. Alt is reserved for detach.
+      // always sits on an actual point. Alt is reserved for detach. The guide is
+      // DISPLAYED in every mode except Off (isAlignmentGuideActive); the
+      // magnetic pull onto it is applied only in 'lines' mode
+      // (isMagneticSnapActive).
       let aligned = snapped
-      if (isMagneticSnapActive() && ctx.alignCandidates.length > 0) {
+      if (isAlignmentGuideActive() && ctx.alignCandidates.length > 0) {
         const ar = resolveAlignment({
           moving: [{ nodeId: ctx.fenceId as string, kind: 'corner', x: snapped[0], z: snapped[1] }],
           candidates: ctx.alignCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,
         })
-        if (ar.snap) {
+        if (ar.snap && isMagneticSnapActive()) {
           aligned = [snapped[0] + ar.snap.dx, snapped[1] + ar.snap.dz]
         }
         useAlignmentGuides.getState().set(ar.guides)

@@ -13,6 +13,8 @@ import {
 import {
   DragBoundingBox,
   EDITOR_LAYER,
+  isAlignmentGuideActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   stripPlacementMetadataFlags,
   triggerSFX,
@@ -234,8 +236,10 @@ export const MovePipeFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         let z = snap(event.localPosition[2])
 
         // Alignment: snap the footprint box edges onto nearby geometry and
-        // publish guides (Alt / Shift bypass).
-        if (!bypass) {
+        // publish guides (Alt / Shift bypass). Guides are DISPLAYED in every
+        // snapping mode (isAlignmentGuideActive); the magnetic pull toward them
+        // applies only in 'lines' mode (isMagneticSnapActive).
+        if (!bypass && isAlignmentGuideActive()) {
           const proposed: Aabb2D = {
             minX: x + ox - hx,
             maxX: x + ox + hx,
@@ -243,8 +247,10 @@ export const MovePipeFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
             maxZ: z + oz + hz,
           }
           const { dx, dz, guides } = resolveGhostAlignment(nodeId, proposed, candidates)
-          x += dx
-          z += dz
+          if (isMagneticSnapActive()) {
+            x += dx
+            z += dz
+          }
           useAlignmentGuides.getState().set(guides)
         } else {
           useAlignmentGuides.getState().clear()

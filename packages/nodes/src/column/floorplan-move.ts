@@ -63,7 +63,7 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
           rotationY,
         ),
         candidates,
-        { bypass: !isMagneticSnapActive() },
+        { applySnap: isMagneticSnapActive() },
       )
       const next: [number, number, number] = [snapped[0], originalPosition[1], snapped[1]]
       lastPosition = next

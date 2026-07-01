@@ -290,9 +290,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         rawLocalX: targetLocalX,
         width: movingDoorNode.width,
         candidates: alignmentCandidates,
-        // Along-wall alignment follows the magnetic ("lines") mode; the grid
+        // Along-wall alignment guides display in every snapping mode; the
+        // magnetic pull onto them lands only in "lines" mode. The grid
         // component lives in `snapToHalf` (itself mode-aware).
-        bypass: !isMagneticSnapActive(),
+        applySnap: isMagneticSnapActive(),
       })
       const { clampedX, clampedY } = clampToWall(
         event.node,

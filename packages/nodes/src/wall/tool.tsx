@@ -22,6 +22,7 @@ import {
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
@@ -549,14 +550,11 @@ export const WallTool: React.FC = () => {
 
     // Align the drafted point onto another object's nearest real anchor and
     // publish the guide. Returns the possibly snapped point.
-    const alignPoint = (
-      point: WallPlanPoint,
-      options: { applySnap?: boolean; bypass?: boolean },
-    ): WallPlanPoint => {
-      // Figma alignment pulls the endpoint onto existing wall corners / edges,
-      // so it is a line snap — suppress it whenever magnetic snap is off
-      // (`'off'` / `'angles'`), matching the wall-geometry snap above.
-      if (options.bypass || !isMagneticSnapActive() || alignmentCandidates.length === 0) {
+    const alignPoint = (point: WallPlanPoint, options?: { applySnap?: boolean }): WallPlanPoint => {
+      // Figma alignment lines onto existing wall corners / edges are DISPLAYED
+      // in every mode except Off (isAlignmentGuideActive); the magnetic pull
+      // onto them is applied only in 'lines' mode (isMagneticSnapActive).
+      if (!isAlignmentGuideActive() || alignmentCandidates.length === 0) {
         useAlignmentGuides.getState().clear()
         return point
       }
@@ -566,7 +564,7 @@ export const WallTool: React.FC = () => {
         threshold: ALIGNMENT_THRESHOLD_M,
       })
       useAlignmentGuides.getState().set(ar.guides)
-      return ar.snap && options.applySnap !== false
+      return ar.snap && options?.applySnap !== false && isMagneticSnapActive()
         ? [point[0] + ar.snap.dx, point[1] + ar.snap.dz]
         : point
     }
@@ -596,8 +594,6 @@ export const WallTool: React.FC = () => {
       // Snapping is governed entirely by the snapping mode (grid / lines /
       // angles / off). `'off'` is the bypass — there is no Shift hold-to-bypass.
       const angleLocked = buildingState.current === 1 && isAngleSnapActive()
-      // Alignment guides follow the snapping mode (lines = magnetic on), not Alt.
-      const bypassAlign = !isMagneticSnapActive()
       const snapResult = snapWallDraftPointDetailed({
         point: localPoint,
         walls: snapWalls,
@@ -605,10 +601,7 @@ export const WallTool: React.FC = () => {
         angleSnap: angleLocked,
         magnetic: isMagneticSnapActive(),
       })
-      gridPosition = alignPoint(snapResult.point, {
-        applySnap: !angleLocked,
-        bypass: bypassAlign,
-      })
+      gridPosition = alignPoint(snapResult.point, { applySnap: !angleLocked })
       // Stand the magnetic beacon at the endpoint when it locked onto an
       // existing wall corner / wall point; clear it for plain grid/angle moves.
       useWallSnapIndicator
@@ -678,9 +671,6 @@ export const WallTool: React.FC = () => {
       const snapWalls = [...walls, ...getBelowLevelWalls()]
       const localClick: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
 
-      // Alignment guides follow the snapping mode (lines = magnetic on), not Alt.
-      const bypassAlign = !isMagneticSnapActive()
-
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
           snapWallDraftPointDetailed({
@@ -688,7 +678,6 @@ export const WallTool: React.FC = () => {
             walls: snapWalls,
             magnetic: isMagneticSnapActive(),
           }).point,
-          { bypass: bypassAlign },
         )
         gridPosition = snappedStart
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
@@ -719,10 +708,7 @@ export const WallTool: React.FC = () => {
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),
           }).point,
-          {
-            applySnap: !angleLocked,
-            bypass: bypassAlign,
-          },
+          { applySnap: !angleLocked },
         )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z

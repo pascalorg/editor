@@ -13,6 +13,7 @@ import {
 import {
   alignFloorplanDraftPoint,
   getSegmentGridStep,
+  isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
   isSegmentLongEnough,
@@ -199,12 +200,15 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()),
         })
         // Figma-style alignment on the dragged corner — snaps it onto another
-        // object's edge / wall face and publishes a guide. It is a line snap,
-        // so gate it on the magnetic (`'lines'`) mode like the draft tool does.
-        // The dragged wall and its linked siblings (which cascade with the
-        // corner) are excluded from the candidate pool. Alt is detach, NOT bypass.
+        // object's edge / wall face and publishes a guide. The guide is
+        // DISPLAYED in every mode except Off (isAlignmentGuideActive); the
+        // magnetic pull onto it is applied only in 'lines' mode
+        // (isMagneticSnapActive), like the draft tool does. The dragged wall and
+        // its linked siblings (which cascade with the corner) are excluded from
+        // the candidate pool. Alt is detach, NOT bypass.
         const aligned = alignFloorplanDraftPoint(snapped, {
-          bypass: !isMagneticSnapActive(),
+          applySnap: isMagneticSnapActive(),
+          bypass: !isAlignmentGuideActive(),
           excludeIds: [node.id, ...linkedWalls.map((w) => w.id)],
         }) as WallPlanPoint
 

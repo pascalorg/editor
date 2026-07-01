@@ -31,8 +31,14 @@ import { stripPlacementMetadataFlags } from '../../../lib/placement-metadata'
 import { resolvePlanarCursorPosition } from '../../../lib/planar-cursor-placement'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
+
 import useAlignmentGuides from '../../../store/use-alignment-guides'
-import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
+import useEditor, {
+  getActiveSnappingMode,
+  isAlignmentGuideActive,
+  isMagneticSnapActive,
+} from '../../../store/use-editor'
+
 import useFacingPose from '../../../store/use-facing-pose'
 import { swallowNextClick } from '../../editor/node-arrow-handles'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -430,18 +436,19 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
       // Figma-style alignment snap layered on top of grid snap: when the
       // moving item's edge lines up (on X or Z) with another item's edge,
-      // snap and publish a guide. The guide connects to the nearest real
-      // corner of the candidate (resolver tie-break), so the dot always sits
-      // on an actual point. Alignment ("lines") follows the snapping mode only —
-      // Alt is force-place (forces a valid drop), it does not bypass snapping.
-      const bypass = !isMagneticSnapActive()
-      if (!bypass && alignmentCandidates.length > 0) {
+      // publish a guide. The guide connects to the nearest real corner of the
+      // candidate (resolver tie-break), so the dot always sits on an actual
+      // point. Alignment "lines" are DISPLAYED in every mode except Off
+      // (isAlignmentGuideActive); the magnetic pull toward them applies only in
+      // 'lines' mode (magnetic). Alt is force-place, not a snap bypass.
+      const magnetic = isMagneticSnapActive()
+      if (isAlignmentGuideActive() && alignmentCandidates.length > 0) {
         const result = resolveAlignment({
           moving: movingFootprintAnchors(node, x, z, rotationRef.current),
           candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,
         })
-        if (result.snap) {
+        if (result.snap && magnetic) {
           x += result.snap.dx
           z += result.snap.dz
         }
@@ -453,7 +460,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // Magnetic port snap (duct terminals): mate a collar onto a nearby
       // duct run end. Takes precedence over grid / alignment snap; Alt
       // bypasses. Only kinds that opted in via `movable.portSnap`.
-      if (!bypass && portSnapConfig) {
+      if (magnetic && portSnapConfig) {
         // Build the preview node at the ORIGINAL position but with the LIVE
         // rotation so `def.ports` reflects any mid-drag R/T rotation. Without
         // this the snap solver mates the pre-rotation collar and commit then

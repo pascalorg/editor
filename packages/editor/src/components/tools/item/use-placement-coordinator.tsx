@@ -46,12 +46,14 @@ import {
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { formatLinearMeasurement } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+
 import {
   projectAlignmentGuidesWorldToActiveBuildingLocal,
   resolveAlignmentForActiveBuilding,
 } from '../../../lib/world-grid-snap'
 import useAlignmentGuides from '../../../store/use-alignment-guides'
-import useEditor, { isMagneticSnapActive } from '../../../store/use-editor'
+import useEditor, { isAlignmentGuideActive, isMagneticSnapActive } from '../../../store/use-editor'
+
 import useFacingPose from '../../../store/use-facing-pose'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
@@ -836,10 +838,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const draft = draftNode.current
       let alignX = 0
       let alignZ = 0
-      // Alignment ("lines") follows the snapping mode only — Alt is force-place,
-      // it does NOT bypass snapping (Off mode is the no-snap bypass).
-      const bypassAlign = !isMagneticSnapActive()
-      if (!bypassAlign && draft) {
+      // Alignment "lines" are DISPLAYED in every snapping mode except Off
+      // (isAlignmentGuideActive); the magnetic pull toward them is applied only
+      // in 'lines' mode (isMagneticSnapActive). Alt is force-place, not a snap
+      // bypass.
+      if (isAlignmentGuideActive() && draft) {
         alignmentCandidates ??= collectAlignmentAnchors(
           useScene.getState().nodes,
           draft.id,
@@ -855,7 +858,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,
         })
-        if (ar.snap) {
+        if (ar.snap && isMagneticSnapActive()) {
           alignX = ar.snap.dx
           alignZ = ar.snap.dz
         }

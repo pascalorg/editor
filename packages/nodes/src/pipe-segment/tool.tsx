@@ -472,8 +472,8 @@ const PipeSegmentTool = () => {
       const hasStart = !!startRef.current
       const alt = event.nativeEvent?.altKey === true
       const point = alignDrawPoint(r.point, {
-        applySnap: !hasStart || !isAngleSnapActive(),
-        bypass: !isMagneticSnapActive() || alt || r.snapped !== null,
+        applySnap: isMagneticSnapActive() && (!hasStart || !isAngleSnapActive()),
+        bypass: alt || r.snapped !== null,
       })
       return { ...r, point }
     }

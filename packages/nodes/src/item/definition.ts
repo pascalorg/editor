@@ -316,8 +316,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place item' },
-    { key: 'R', label: 'Rotate counterclockwise' },
-    { key: 'T', label: 'Rotate clockwise' },
+    { key: 'R / T', label: 'Rotate' },
     { key: 'Shift', label: 'Cycle snapping mode' },
     { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },

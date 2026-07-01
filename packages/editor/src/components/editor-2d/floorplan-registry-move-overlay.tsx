@@ -23,7 +23,11 @@ import { resolvePlanarCursorPosition } from '../../lib/planar-cursor-placement'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { resolveAlignmentForFloorplanView } from '../../lib/world-grid-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
-import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
+import useEditor, {
+  isAlignmentGuideActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
+} from '../../store/use-editor'
 import { useMovingNode } from '../../store/use-interaction-scope'
 import { useWallMoveGhosts } from '../../store/use-wall-move-ghosts'
 
@@ -548,12 +552,13 @@ export function FloorplanRegistryMoveOverlay() {
 
       // 2) Alignment snap layered on top. Treat the grid-snapped point
       // as the "proposed" position so alignment competes from a stable
-      // base rather than the raw cursor jitter. Alignment ("lines") follows
-      // the magnetic snapping mode — independent of grid; Alt is force-place,
-      // not a snap bypass.
+      // base rather than the raw cursor jitter. Alignment "lines" are
+      // DISPLAYED in every mode except Off (isAlignmentGuideActive); the
+      // magnetic pull toward them applies only in 'lines' mode. Alt is
+      // force-place, not a snap bypass.
       let finalX = gridX
       let finalZ = gridZ
-      if (isMagneticSnapActive() && candidateAnchors.length > 0) {
+      if (isAlignmentGuideActive() && candidateAnchors.length > 0) {
         // Translate the cached local bbox to the proposed pos to get the
         // moving anchors at that location. The entry's untransformed
         // bbox is in world meters relative to the node's origin, so a
@@ -581,7 +586,7 @@ export function FloorplanRegistryMoveOverlay() {
           candidates: candidateAnchors,
           threshold: ALIGNMENT_THRESHOLD_M,
         })
-        if (result.snap) {
+        if (result.snap && isMagneticSnapActive()) {
           finalX += result.snap.dx
           finalZ += result.snap.dz
         }

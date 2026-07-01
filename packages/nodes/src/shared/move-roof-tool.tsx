@@ -247,7 +247,7 @@ export const MoveRoofTool: React.FC<{
         threshold: ALIGNMENT_THRESHOLD_M,
       })
       useAlignmentGuides.getState().set(ar.guides)
-      return ar.snap ? [lx + ar.snap.dx, lz + ar.snap.dz] : [lx, lz]
+      return ar.snap && isMagneticSnapActive() ? [lx + ar.snap.dx, lz + ar.snap.dz] : [lx, lz]
     }
 
     const localToWorldPoint = (localPoint: WallPlanPoint, y: number): [number, number, number] => {

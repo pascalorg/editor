@@ -338,9 +338,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         rawLocalX: targetLocalX,
         width: movingWindowNode.width,
         candidates: alignmentCandidates,
-        // Along-wall alignment follows the magnetic ("lines") mode; the grid
+        // Along-wall alignment guides display in every snapping mode; the
+        // magnetic pull onto them lands only in "lines" mode. The grid
         // component lives in `snapToHalf` (itself mode-aware).
-        bypass: !isMagneticSnapActive(),
+        applySnap: isMagneticSnapActive(),
       })
       const { clampedX, clampedY } = clampToWall(
         event.node,

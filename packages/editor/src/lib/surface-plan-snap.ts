@@ -203,11 +203,11 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
 
   useWallSnapIndicator.getState().clear()
 
-  // Alignment is the magnetic ("lines") guide. Modes are exclusive, so it runs
-  // only when magnetic snap is on — `grid`/`angles`/`off` keep the grid/raw
-  // `fallbackPoint` instead of being pulled onto an alignment axis.
+  // Alignment "lines" are DISPLAYED in every mode (grid / lines / angles /
+  // off); the magnetic pull onto an axis is applied only when magnetic
+  // ('lines'). Shift / Alt / `align: false` fully bypass (no guides).
   const basePoint = fallbackPoint ?? wallSnap.point
-  if (input.align === false || !magnetic) {
+  if (input.align === false || input.altKey) {
     useAlignmentGuides.getState().clear()
     return { point: basePoint, wallSnap: null, guides: [], wallIds: [] }
   }
@@ -230,7 +230,7 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
 
   useAlignmentGuides.getState().set(alignment.guides)
 
-  if (!alignment.snap) {
+  if (!alignment.snap || !magnetic) {
     return { point: basePoint, wallSnap: null, guides: alignment.guides, wallIds: [] }
   }
 

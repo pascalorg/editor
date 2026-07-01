@@ -375,6 +375,7 @@ export {
   default as useEditor,
   getActiveContinuationContext,
   getContinuation,
+  isAlignmentGuideActive,
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
