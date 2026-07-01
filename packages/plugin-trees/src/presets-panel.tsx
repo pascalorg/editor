@@ -66,7 +66,7 @@ export default function TreesPanel() {
       {mode === 'flowers' && <FlowersSection arming={arming} />}
       {mode === 'grass' && <GrassSection arming={arming} />}
 
-      <footer className="mt-1 border-sidebar-border/50 border-t pt-3 text-[11px] text-sidebar-foreground/40 leading-relaxed">
+      <footer className="-mx-4 -mb-4 sticky bottom-0 mt-1 border-sidebar-border/50 border-t bg-sidebar px-4 py-3 text-[11px] text-sidebar-foreground/50 leading-relaxed">
         Trees generated with{' '}
         <a
           className="underline decoration-dotted underline-offset-2 hover:text-sidebar-foreground/70"

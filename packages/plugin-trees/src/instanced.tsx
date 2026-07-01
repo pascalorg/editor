@@ -2,6 +2,7 @@
 
 import { type AnyNodeId, sceneRegistry, useRegistry, useScene } from '@pascal-app/core'
 import { useNodeEvents, useViewer } from '@pascal-app/viewer'
+import { useFrame } from '@react-three/fiber'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import {
   type BufferGeometry,
@@ -11,6 +12,7 @@ import {
   MeshBasicMaterial,
   Object3D,
 } from 'three'
+import { WIND } from './wind'
 
 /**
  * Generic instanced-rendering core shared by every plant kind (trees, flowers,
@@ -50,6 +52,12 @@ export function InstancedKindSystem<N extends Placeable>({
   getVariant: (node: N) => VariantData
 }) {
   const nodes = useScene((s) => s.nodes)
+
+  // Advance the shared wind clock. Mounted once per active kind — all writes set
+  // the same shared uniform to elapsed time, so it stays idempotent.
+  useFrame((state) => {
+    WIND.uTime.value = state.clock.elapsedTime
+  })
 
   const buckets = useMemo(() => {
     const map = new Map<string, { sample: N; nodes: N[] }>()
