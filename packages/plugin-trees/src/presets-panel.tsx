@@ -41,7 +41,7 @@ export default function TreesPanel() {
     <div className="flex flex-col gap-4 p-4 text-sidebar-foreground">
       <header className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-base">Plant</h2>
+          <h2 className="font-semibold text-base">Nature</h2>
           <span className="rounded-full bg-sidebar-accent px-2 py-0.5 text-sidebar-foreground/70 text-xs">
             {count} planted
           </span>
