@@ -38,9 +38,8 @@ const DUMMY = new Object3D()
 const INSTANCE_MATRIX = new Matrix4()
 const NO_RAYCAST = () => {}
 
-// Wind is a TSL vertex bend the plugin's onSceneLoad hook attaches to the variant
-// materials by name (see `scene-hook.ts` / `wind-node.ts`) — animated on the GPU,
-// so the instance matrices here stay static.
+// Wind is a TSL vertex bend baked into the variant materials (see `wind-node.ts`)
+// — animated on the GPU, so the instance matrices here stay static.
 
 // ── Collective instanced renderer (a `def.system`) ───────────────────────────
 

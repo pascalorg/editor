@@ -1,23 +1,22 @@
 import type { Color, Material, Side, Texture } from 'three'
-import { cos, Fn, float, instanceIndex, modelScale, positionLocal, sin, time, uv } from 'three/tsl'
+import { cos, Fn, float, instanceIndex, positionLocal, sin, time, uv } from 'three/tsl'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 
 /**
- * Plant wind as reusable TSL vertex effects, decoupled from the materials.
+ * Always-on wind for the plant kinds, done in TSL so it runs on the editor's
+ * WebGPU renderer (which ignores WebGL's `onBeforeCompile`). Two motions:
  *
- * `LEAF_FLUTTER` / `STEM_BEND` are exported and attached at load by the plugin's
- * `onSceneLoad` hook (`scene-hook.ts`), which matches meshes by material name and
- * sets `material.positionNode`. Doing it there — not here at construction — means
- * the SAME effect re-applies to the baked GLB in the viewer, not just the live
- * editor. The material builders below therefore stay wind-free and only carry
- * ez-tree's texture/tint + name (WebGPU ignores WebGL `onBeforeCompile`, so the
- * ez-tree materials are re-created as node materials regardless).
+ * - **Leaf flutter** (`LEAF_FLUTTER`) — ez-tree's own approach: the sway scales
+ *   with the leaf card's `uv.y`, so each leaf swings from its attachment while
+ *   the trunk and branches stay put. A whole-tree height-based bend, by contrast,
+ *   is a rigid rotation about the base and reads as the tree spinning in place.
+ *   Multi-frequency for a natural gust; phased per instance + per leaf.
+ * - **Stem bend** (`STEM_BEND`) — for the small procedural kinds (flowers,
+ *   grass), a gentle whole-plant lean proportional to height reads fine.
  *
- * - **Leaf flutter** — ez-tree's approach: sway scales with the leaf card's
- *   `uv.y`, so each leaf swings from its attachment while trunk/branches stay put
- *   (a whole-tree height bend reads as a rigid rotation about the base).
- * - **Stem bend** — the small procedural kinds (flowers, grass): a gentle
- *   whole-plant lean proportional to height.
+ * ez-tree isn't touched: its generated materials are re-created as node materials
+ * carrying the texture/tint (`toWindMaterial`) — only the `leaves` material gets
+ * the flutter node; bark stays static. `time` is advanced by the renderer.
  */
 
 // ── Leaf flutter (tree leaves) ───────────────────────────────────────────────
@@ -32,17 +31,12 @@ const leafFlutter = Fn(() => {
     .mul(0.5)
     .add(sin(t.mul(2).add(offset.mul(1.3))).mul(0.3))
     .add(sin(t.mul(5).add(offset.mul(1.5))).mul(0.2))
-  // Divide by the model's world scale so the sway is a constant WORLD amount,
-  // identical whether positions are in editor-local metres (scale 1) or the
-  // baked GLB's quantiser-normalised [-1,1] space, where the mesh's real size
-  // lives in a large node scale (~3 on trees) that would otherwise multiply
-  // this offset and blow the flutter up.
-  const sway = uv().y.mul(LEAF_STRENGTH).mul(wave).div(modelScale.x)
+  const sway = uv().y.mul(LEAF_STRENGTH).mul(wave)
   p.x.addAssign(sway)
   p.z.addAssign(sway)
   return p
 })
-export const LEAF_FLUTTER = leafFlutter()
+const LEAF_FLUTTER = leafFlutter()
 
 // ── Stem bend (flowers, grass) ───────────────────────────────────────────────
 const STEM_FREQUENCY = 1.3
@@ -57,7 +51,7 @@ const stemBend = Fn(() => {
   p.z.addAssign(h.mul(STEM_STRENGTH).mul(cos(t.mul(1.1))))
   return p
 })
-export const STEM_BEND = stemBend()
+const STEM_BEND = stemBend()
 
 /** The classic-material fields we carry over — enough to reproduce ez-tree's
  * bark/leaf look (textured, tinted, alpha-cut billboards). */
@@ -75,15 +69,14 @@ type ClassicMaterial = Material & {
 const cache = new WeakMap<Material, MeshStandardNodeMaterial>()
 
 /** Re-create a generated (ez-tree) material as a `MeshStandardNodeMaterial`,
- * transferring its texture/tint and **name** (the wind hook matches on the name,
- * so `leaves` must survive the conversion). No wind attached here — see the
- * module doc. Cached per source so shared variant materials convert once. */
-export function toNodeMaterial(material: Material): MeshStandardNodeMaterial {
+ * transferring its texture/tint explicitly (node materials don't pick these up
+ * via `Material.copy()`). Only the `leaves` material flutters; bark stays static.
+ * Cached per source so shared variant materials convert once. */
+export function toWindMaterial(material: Material): MeshStandardNodeMaterial {
   const cached = cache.get(material)
   if (cached) return cached
   const src = material as ClassicMaterial
   const node = new MeshStandardNodeMaterial({
-    name: material.name,
     map: src.map ?? null,
     alphaMap: src.alphaMap ?? null,
     color: src.color,
@@ -95,15 +88,16 @@ export function toNodeMaterial(material: Material): MeshStandardNodeMaterial {
     roughness: 1,
     metalness: 0,
   })
+  if (material.name === 'leaves') node.positionNode = LEAF_FLUTTER
   cache.set(material, node)
   return node
 }
 
-/** Build a node material for the procedural kinds (flowers/grass). Pass a `name`
- * so the wind hook can match it; no wind is attached here. Centralises the
- * `three/webgpu` import so the geometry builders stay renderer-material-free. */
-export function standardNodeMaterial(
+/** Build a swaying node material for the procedural kinds (flowers/grass). */
+export function windStandardMaterial(
   params: ConstructorParameters<typeof MeshStandardNodeMaterial>[0],
 ): MeshStandardNodeMaterial {
-  return new MeshStandardNodeMaterial(params)
+  const material = new MeshStandardNodeMaterial(params)
+  material.positionNode = STEM_BEND
+  return material
 }

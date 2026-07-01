@@ -26,7 +26,6 @@ import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
-import PluginSceneHooksSystem from '../../systems/plugin-scene-hooks/plugin-scene-hooks-system'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import FrameLimiter from './frame-limiter'
@@ -550,10 +549,6 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
             kind's `def.system` is loaded via lazy() and rendered here,
             ordered by `system.priority`. */}
         <RegisteredSystems />
-        {/* Runs plugin `onSceneLoad` hooks over the live scene (after the
-            per-kind systems above have mounted their meshes). The baked
-            `/viewer` decorates loaded GLBs from `GlbScene` instead. */}
-        <PluginSceneHooksSystem />
         <PostProcessing hoverStyles={hoverStyles} />
         {selectionManager === 'default' && <SelectionManager />}
         {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}

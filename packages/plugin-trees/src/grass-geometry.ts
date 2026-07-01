@@ -4,7 +4,7 @@ import { mulberry32, naturalHeight } from './geometry'
 import { GRASS_PRESETS } from './grass-presets'
 import type { GrassNode, GrassPreset } from './grass-schema'
 import type { SubMesh, VariantData } from './instanced'
-import { standardNodeMaterial } from './wind-node'
+import { windStandardMaterial } from './wind-node'
 
 export function grassVariantKey(preset: GrassPreset, seed: number, bladeColor: string): string {
   return `${preset}:${seed}:${bladeColor}`
@@ -34,12 +34,7 @@ function buildGrass(preset: GrassPreset, seed: number, bladeColor: string): Grou
   const spec = GRASS_PRESETS[preset] ?? GRASS_PRESETS.meadow
   const rng = mulberry32(seed >>> 0)
   const group = new Group()
-  const mat = standardNodeMaterial({
-    name: 'grass-blade',
-    color: bladeColor,
-    roughness: 0.9,
-    side: DoubleSide,
-  })
+  const mat = windStandardMaterial({ color: bladeColor, roughness: 0.9, side: DoubleSide })
   const h = spec.defaultHeight
 
   const blades: BufferGeometry[] = []

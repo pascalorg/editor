@@ -711,37 +711,11 @@ export type PluginPanel = {
   component: LazyComponent
 }
 
-/**
- * Context handed to a plugin's {@link Plugin.onSceneLoad} hook so it can tell
- * where it is running and back off when appropriate:
- * - `phase` — `'live'` for the editable scene, `'baked'` for a loaded/exported GLB.
- * - `isExporting` — true while the GLB exporter is capturing; skip runtime-only
- *   decoration (e.g. shader wind) so the bake stays a clean rest-pose snapshot.
- */
-export type SceneLoadContext = {
-  phase: 'live' | 'baked'
-  isExporting: boolean
-}
-
-/**
- * A plugin's post-load scene decorator, loaded lazily (viewer-side) the first
- * time a scene is decorated. The default export receives the three.js scene root
- * and mutates it in place — attach shader nodes, retarget materials, add helpers.
- * Deliberately broad (curated first-party only; no sandbox yet). Core holds it as
- * an opaque module thunk, so it imports no three runtime (`Object3D` is type-only).
- * MUST be idempotent: the host re-runs it as scene content changes and per loaded
- * GLB, guarding its own work (e.g. a `WeakSet` of already-decorated materials).
- */
-export type SceneLoadHook = () => Promise<{
-  default: (root: Object3D, ctx: SceneLoadContext) => void
-}>
-
 export type Plugin = {
   id: string
   apiVersion: 1
   nodes?: AnyNodeDefinition[]
   panels?: PluginPanel[]
-  onSceneLoad?: SceneLoadHook
 }
 
 // ─── NodeDefinition ──────────────────────────────────────────────────
