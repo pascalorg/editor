@@ -8,6 +8,7 @@ import * as THREE from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
 import { color, float, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { ZONE_LAYER } from '../../lib/layers'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
@@ -337,6 +338,45 @@ export function GlbScene({
       })
     })
   }, [gltf.scene, textures, sceneTheme])
+
+  // The baked scene isn't wrapped in <SceneBvh> (the community viewer runs with
+  // useBvh={false}), so hover/pick raycasts against the baked building were
+  // brute-force triangle tests — dozens of ms per pointer move on a dense scene,
+  // and far worse once a `replace` forest is portaled in. Give each baked mesh a
+  // BVH so those raycasts are accelerated. `replace` instances are NO_RAYCAST, so
+  // the `raycast === Mesh.prototype.raycast` guard skips them (mirrors SceneBvh).
+  useEffect(() => {
+    const accelerated = new Set<THREE.Mesh>()
+    const computed = new Set<THREE.BufferGeometry>()
+    gltf.scene.traverse((child) => {
+      const mesh = child as THREE.Mesh
+      if (!mesh.isMesh || mesh.raycast !== THREE.Mesh.prototype.raycast) return
+      mesh.raycast = acceleratedRaycast
+      accelerated.add(mesh)
+      const geometry = mesh.geometry
+      if (geometry.boundsTree || !geometry.getAttribute('position')) return
+      try {
+        // three-mesh-bvh + @types/three disagree on the helper signatures; cast
+        // through unknown like SceneBvh does — the runtime call is correct.
+        ;(geometry as { computeBoundsTree?: unknown }).computeBoundsTree =
+          computeBoundsTree as unknown as typeof geometry.computeBoundsTree
+        ;(geometry as { disposeBoundsTree?: unknown }).disposeBoundsTree =
+          disposeBoundsTree as unknown as typeof geometry.disposeBoundsTree
+        geometry.computeBoundsTree()
+        computed.add(geometry)
+      } catch (error) {
+        console.warn('[viewer] skipping BVH for baked mesh geometry', error)
+      }
+    })
+    return () => {
+      for (const geometry of computed) {
+        if (geometry.boundsTree) geometry.disposeBoundsTree()
+      }
+      for (const mesh of accelerated) {
+        if (mesh.raycast === acceleratedRaycast) mesh.raycast = THREE.Mesh.prototype.raycast
+      }
+    }
+  }, [gltf.scene])
 
   // One pass over the artifact: identity objects (id → Object3D), ordered floors,
   // and zone polygons. Levels stay out of `sceneRegistry` so the parametric
