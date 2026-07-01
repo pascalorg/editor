@@ -1,11 +1,6 @@
-import type { Material } from 'three'
+import type { Color, Material, Side, Texture } from 'three'
 import { cos, Fn, float, instanceIndex, positionLocal, sin, time } from 'three/tsl'
-import {
-  MeshLambertNodeMaterial,
-  MeshPhongNodeMaterial,
-  MeshStandardNodeMaterial,
-  type NodeMaterial,
-} from 'three/webgpu'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
 
 /**
  * A shared, always-on wind for every plant kind — done in TSL so it runs on the
@@ -15,11 +10,12 @@ import {
  * de-synced per instance (`instanceIndex`) and per vertex (local xz) so a forest
  * doesn't sway in lockstep. `time` is advanced by the renderer each frame.
  *
- * ez-tree isn't touched — its generated materials are copied into the *matching*
- * node material (ez-tree bark/leaves are `MeshPhongMaterial`, so Phong→Phong;
- * copying into a Standard node material would swap the shading model and render
- * black) and given this `positionNode`. The procedural flower/grass kinds build
- * node materials directly (`windStandardMaterial`).
+ * ez-tree isn't touched — every plant renders through a `MeshStandardNodeMaterial`
+ * carrying this `positionNode`. For ez-tree's generated materials that means
+ * re-creating a node material from the source's texture/tint (`toWindMaterial`)
+ * rather than `Material.copy()`, which doesn't transfer the classic `map`/`color`
+ * onto a node material and left the textured trees black. The procedural
+ * flower/grass kinds build node materials directly (`windStandardMaterial`).
  */
 const STRENGTH = 0.06
 const FREQUENCY = 1.3
@@ -38,24 +34,41 @@ const windPosition = Fn(() => {
 // every material.
 const WIND_POSITION = windPosition()
 
-const cache = new WeakMap<Material, NodeMaterial>()
-
-/** The node-material class that mirrors a classic material's shading model, so
- * copying preserves appearance (map/color/specular/alphaTest/side/…). */
-function nodeMaterialFor(type: string): NodeMaterial {
-  if (type === 'MeshPhongMaterial') return new MeshPhongNodeMaterial()
-  if (type === 'MeshLambertMaterial') return new MeshLambertNodeMaterial()
-  return new MeshStandardNodeMaterial()
+/** The classic-material fields we carry over — enough to reproduce ez-tree's
+ * bark/leaf look (textured, tinted, alpha-cut billboards). */
+type ClassicMaterial = Material & {
+  map?: Texture | null
+  alphaMap?: Texture | null
+  color?: Color
+  side?: Side
+  alphaTest?: number
+  opacity?: number
+  transparent?: boolean
+  depthWrite?: boolean
 }
 
-/** Copy a generated (ez-tree) material into a swaying node material of the
- * matching shading model. Cached per source material so shared variant materials
- * convert once. */
-export function toWindMaterial(material: Material): NodeMaterial {
+const cache = new WeakMap<Material, MeshStandardNodeMaterial>()
+
+/** Re-create a generated (ez-tree) material as a swaying `MeshStandardNodeMaterial`,
+ * transferring its texture/tint explicitly (node materials don't pick these up
+ * via `Material.copy()`). Cached per source so shared variant materials convert
+ * once. */
+export function toWindMaterial(material: Material): MeshStandardNodeMaterial {
   const cached = cache.get(material)
   if (cached) return cached
-  const node = nodeMaterialFor(material.type)
-  node.copy(material as unknown as NodeMaterial)
+  const src = material as ClassicMaterial
+  const node = new MeshStandardNodeMaterial({
+    map: src.map ?? null,
+    alphaMap: src.alphaMap ?? null,
+    color: src.color,
+    side: src.side,
+    alphaTest: src.alphaTest ?? 0,
+    transparent: src.transparent ?? false,
+    opacity: src.opacity ?? 1,
+    depthWrite: src.depthWrite ?? true,
+    roughness: 1,
+    metalness: 0,
+  })
   node.positionNode = WIND_POSITION
   cache.set(material, node)
   return node
