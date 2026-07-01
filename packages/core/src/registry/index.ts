@@ -33,6 +33,8 @@ export {
   panelRegistry,
   registerNode,
   resolveFacingIndicator,
+  type SceneHookEntry,
+  sceneHookRegistry,
   setPluginDiscovery,
 } from './registry'
 export {
@@ -109,6 +111,8 @@ export type {
   RotatableConfig,
   ScalableConfig,
   SceneApi,
+  SceneLoadContext,
+  SceneLoadHook,
   SelectableConfig,
   SlotDeclaration,
   SnapPointKind,

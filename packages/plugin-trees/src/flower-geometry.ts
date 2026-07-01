@@ -11,7 +11,7 @@ import { FLOWER_PRESETS } from './flower-presets'
 import type { FlowerNode, FlowerPreset } from './flower-schema'
 import { mulberry32, naturalHeight } from './geometry'
 import type { SubMesh, VariantData } from './instanced'
-import { windStandardMaterial } from './wind-node'
+import { standardNodeMaterial } from './wind-node'
 
 export function flowerVariantKey(preset: FlowerPreset, seed: number, petalColor: string): string {
   return `${preset}:${seed}:${petalColor}`
@@ -46,9 +46,17 @@ function buildFlower(preset: FlowerPreset, seed: number, petalColor: string): Gr
   const spec = FLOWER_PRESETS[preset] ?? FLOWER_PRESETS.daisy
   const rng = mulberry32(seed >>> 0)
   const group = new Group()
-  const stemMat = windStandardMaterial({ color: spec.stemColor, roughness: 0.85 })
-  const petalMat = windStandardMaterial({ color: petalColor, roughness: 0.7 })
-  const centerMat = windStandardMaterial({ color: spec.centerColor, roughness: 0.6 })
+  const stemMat = standardNodeMaterial({
+    name: 'flower-stem',
+    color: spec.stemColor,
+    roughness: 0.85,
+  })
+  const petalMat = standardNodeMaterial({ name: 'flower-petal', color: petalColor, roughness: 0.7 })
+  const centerMat = standardNodeMaterial({
+    name: 'flower-center',
+    color: spec.centerColor,
+    roughness: 0.6,
+  })
   const stemH = spec.defaultHeight
 
   const stem = new CylinderGeometry(0.008, 0.015, stemH, 5)

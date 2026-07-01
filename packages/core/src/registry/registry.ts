@@ -1,5 +1,5 @@
 import type { ZodObject } from 'zod'
-import type { AnyNodeDefinition, NodeRegistry, Plugin, PluginPanel } from './types'
+import type { AnyNodeDefinition, NodeRegistry, Plugin, PluginPanel, SceneLoadHook } from './types'
 
 const HOST_API_VERSION = 1 as const
 
@@ -143,6 +143,55 @@ export const panelRegistry: {
   _register: (panel: PluginPanel) => void
   _reset: () => void
 } = new PanelRegistryImpl()
+
+export type SceneHookEntry = { pluginId: string; hook: SceneLoadHook }
+
+/**
+ * Registry of post-load scene hooks contributed by plugins (see
+ * {@link Plugin.onSceneLoad}). Observable like {@link panelRegistry} because
+ * plugin discovery runs after the first render: the viewer's scene-hook system
+ * subscribes (`useSyncExternalStore`) and re-runs hooks when one lands. Keyed by
+ * plugin id — one hook per plugin, last registration wins under HMR.
+ */
+class SceneHookRegistryImpl {
+  private readonly hooks = new Map<string, SceneHookEntry>()
+  private readonly listeners = new Set<() => void>()
+  private cached: SceneHookEntry[] = []
+
+  subscribe = (onChange: () => void): (() => void) => {
+    this.listeners.add(onChange)
+    return () => {
+      this.listeners.delete(onChange)
+    }
+  }
+
+  getSnapshot = (): SceneHookEntry[] => this.cached
+
+  _register(entry: SceneHookEntry): void {
+    if (typeof entry.pluginId !== 'string' || entry.pluginId.length === 0) {
+      throw new Error('[registry] SceneHookEntry.pluginId must be a non-empty string')
+    }
+    this.hooks.set(entry.pluginId, entry)
+    this.emit()
+  }
+
+  _reset(): void {
+    this.hooks.clear()
+    this.emit()
+  }
+
+  private emit(): void {
+    this.cached = Array.from(this.hooks.values())
+    for (const fn of this.listeners) fn()
+  }
+}
+
+export const sceneHookRegistry: {
+  subscribe: (onChange: () => void) => () => void
+  getSnapshot: () => SceneHookEntry[]
+  _register: (entry: SceneHookEntry) => void
+  _reset: () => void
+} = new SceneHookRegistryImpl()
 
 /**
  * Returns the set of registered kinds whose definition declares the
@@ -288,6 +337,9 @@ export async function loadPlugin(plugin: Plugin): Promise<void> {
     // ship a panel id of `'main'`. The namespaced id is what the sidebar
     // uses as `activeSidebarPanel`.
     panelRegistry._register({ ...panel, id: `${plugin.id}:${panel.id}` })
+  }
+  if (plugin.onSceneLoad) {
+    sceneHookRegistry._register({ pluginId: plugin.id, hook: plugin.onSceneLoad })
   }
 }
 

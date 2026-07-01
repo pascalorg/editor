@@ -11,6 +11,7 @@ import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { ZONE_LAYER } from '../../lib/layers'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
+import { applyPluginSceneHooks } from '../../lib/plugin-scene-hooks'
 import useViewer from '../../store/use-viewer'
 import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
 import { GlbReferenceNodes } from './glb-reference-nodes'
@@ -332,6 +333,13 @@ export function GlbScene({
       })
     })
   }, [gltf.scene, textures, sceneTheme])
+
+  // Let loaded plugins decorate the baked artifact — e.g. the trees plugin
+  // re-attaches its TSL wind by matching material names / node `extras.kind`
+  // (see `Plugin.onSceneLoad`). Idempotent, so re-running on remount is safe.
+  useEffect(() => {
+    void applyPluginSceneHooks(gltf.scene, { phase: 'baked', isExporting: false })
+  }, [gltf.scene])
 
   // One pass over the artifact: identity objects (id → Object3D), ordered floors,
   // and zone polygons. Levels stay out of `sceneRegistry` so the parametric

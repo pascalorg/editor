@@ -26,6 +26,10 @@ export const treesPlugin: Plugin = {
       component: () => import('./presets-panel'),
     },
   ],
+  // Re-attach the TSL wind at load (live scene + baked GLB), matched by material
+  // name — the effect thus survives GLB export instead of being welded into the
+  // materials. See wind-node.ts / scene-hook.ts.
+  onSceneLoad: () => import('./scene-hook'),
 }
 
 export { treeDefinition } from './definition'
