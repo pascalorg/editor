@@ -54,7 +54,7 @@ export const flowerDefinition: NodeDefinition<typeof FlowerNode> = {
 
   renderer: { kind: 'parametric', module: () => import('./flower-proxy-renderer') },
   system: { module: () => import('./flower-system'), priority: 3 },
-  bakeReplaceRenderer: { kind: 'parametric', module: () => import('./flower-static-renderer') },
+  bakeReplaceRenderer: { module: () => import('./flower-static-renderer') },
 
   preview: () => import('./flower-preview'),
   tool: () => import('./flower-tool'),

@@ -52,20 +52,49 @@ export function InstancedKindSystem<N extends Placeable>({
   variantKeyOf: (node: N) => string
   getVariant: (node: N) => VariantData
 }) {
-  const nodes = useScene((s) => s.nodes)
+  const scene = useScene((s) => s.nodes)
+  const nodes = useMemo(
+    () => Object.values(scene).filter((n) => (n.type as string) === kind) as unknown as N[],
+    [scene, kind],
+  )
+  return <InstancedNodes getVariant={getVariant} nodes={nodes} variantKeyOf={variantKeyOf} />
+}
 
+/**
+ * Instance a given set of nodes, bucketed by geometry variant. Two callers:
+ * - `InstancedKindSystem` (editor `def.system`) passes every node of a kind with
+ *   `localSpace={false}` — instances live at the scene root, so each matrix folds
+ *   in the parent level's world matrix (positions are stored level-local).
+ * - the baked `/viewer` (`bakeReplaceRenderer`) passes one level's nodes with
+ *   `localSpace` — the meshes are portaled into that baked level (which supplies
+ *   the level transform), so instance matrices stay level-local, and the meshes
+ *   are `NO_RAYCAST` (scenery; a pick would resolve to the level anyway).
+ *
+ * Instancing carries the per-tree wind phase for free via `instanceIndex`; a
+ * per-node render (one mesh each) would give every tree phase 0 → a whole
+ * variant sways in unison.
+ */
+export function InstancedNodes<N extends Placeable>({
+  nodes,
+  variantKeyOf,
+  getVariant,
+  localSpace = false,
+}: {
+  nodes: N[]
+  variantKeyOf: (node: N) => string
+  getVariant: (node: N) => VariantData
+  localSpace?: boolean
+}) {
   const buckets = useMemo(() => {
     const map = new Map<string, { sample: N; nodes: N[] }>()
-    for (const raw of Object.values(nodes)) {
-      if ((raw.type as string) !== kind) continue
-      const node = raw as unknown as N
+    for (const node of nodes) {
       const key = variantKeyOf(node)
       const bucket = map.get(key)
       if (bucket) bucket.nodes.push(node)
       else map.set(key, { sample: node, nodes: [node] })
     }
     return Array.from(map, ([key, value]) => ({ key, ...value }))
-  }, [nodes, kind, variantKeyOf])
+  }, [nodes, variantKeyOf])
 
   return (
     <>
@@ -73,6 +102,7 @@ export function InstancedKindSystem<N extends Placeable>({
         <Variant
           getVariant={getVariant}
           key={bucket.key}
+          localSpace={localSpace}
           nodes={bucket.nodes}
           sample={bucket.sample}
         />
@@ -85,10 +115,12 @@ function Variant<N extends Placeable>({
   sample,
   nodes,
   getVariant,
+  localSpace,
 }: {
   sample: N
   nodes: N[]
   getVariant: (node: N) => VariantData
+  localSpace: boolean
 }) {
   const data = useMemo(() => getVariant(sample), [sample, getVariant])
   return (
@@ -96,6 +128,7 @@ function Variant<N extends Placeable>({
       {data.subMeshes.map((subMesh, i) => (
         <InstancedSubMesh
           key={i}
+          localSpace={localSpace}
           naturalHeight={data.naturalHeight}
           nodes={nodes}
           subMesh={subMesh}
@@ -109,10 +142,12 @@ function InstancedSubMesh<N extends Placeable>({
   subMesh,
   nodes,
   naturalHeight,
+  localSpace,
 }: {
   subMesh: SubMesh
   nodes: N[]
   naturalHeight: number
+  localSpace: boolean
 }) {
   const ref = useRef<InstancedMesh>(null)
   // Round capacity up so the InstancedMesh isn't recreated on every placement —
@@ -131,9 +166,11 @@ function InstancedSubMesh<N extends Placeable>({
       DUMMY.rotation.set(node.rotation[0], node.rotation[1], node.rotation[2])
       DUMMY.scale.set(scale, scale, scale)
       DUMMY.updateMatrix()
-      // Instances live at the scene root, so fold in the parent level's world
-      // matrix — node positions are stored level-local.
-      const parent = node.parentId ? sceneRegistry.nodes.get(node.parentId) : undefined
+      // `localSpace`: portaled into the parent level, which supplies the level
+      // transform — matrices stay level-local. Otherwise instances live at the
+      // scene root, so fold in the parent level's world matrix.
+      const parent =
+        !localSpace && node.parentId ? sceneRegistry.nodes.get(node.parentId) : undefined
       if (parent) {
         parent.updateWorldMatrix(true, false)
         INSTANCE_MATRIX.multiplyMatrices(parent.matrixWorld, DUMMY.matrix)
@@ -145,7 +182,7 @@ function InstancedSubMesh<N extends Placeable>({
     mesh.count = nodes.length
     mesh.instanceMatrix.needsUpdate = true
     mesh.computeBoundingSphere()
-  }, [nodes, naturalHeight])
+  }, [nodes, naturalHeight, localSpace])
 
   return (
     <instancedMesh
@@ -153,6 +190,7 @@ function InstancedSubMesh<N extends Placeable>({
       castShadow
       dispose={null}
       frustumCulled={false}
+      raycast={localSpace ? NO_RAYCAST : undefined}
       ref={ref}
     />
   )
@@ -224,52 +262,6 @@ export function KindProxy<N extends Placeable & { id: string }>({
             ))}
           </group>
         )}
-      </group>
-    </group>
-  )
-}
-
-// ── Static per-node renderer (a `def.bakeReplaceRenderer`) ────────────────────
-
-/**
- * The real geometry of one node, standalone — no collider, no selection wiring,
- * no editor stores. The baked `/viewer` mounts this (portaled into the node's
- * baked parent level) to re-render a `bake: 'replace'` kind live: the submeshes
- * carry the same wind node materials as the instanced path, so wind runs in the
- * node's real coordinate space instead of the bake's quantized one.
- *
- * The meshes are `NO_RAYCAST`: the baked scene's `<primitive>` has pointer
- * handlers, so R3F recursively raycasts every descendant on each pointer move
- * (incl. orbit drags). Dense ez-tree geometry × a forest would make hover
- * cost dozens of ms/frame — and these live nodes carry no `pascalId`, so a hit
- * would resolve to the level, not the tree. Scenery, not a pick target.
- */
-export function KindStatic<N extends Placeable>({
-  node,
-  getVariant,
-}: {
-  node: N
-  getVariant: (node: N) => VariantData
-}) {
-  const variant = useMemo(() => getVariant(node), [node, getVariant])
-  const height = Math.max(0.2, node.height ?? 1)
-  const scale = height / variant.naturalHeight
-  return (
-    <group
-      position={node.position ?? [0, 0, 0]}
-      rotation={node.rotation ?? [0, 0, 0]}
-      visible={node.visible !== false}
-    >
-      <group scale={scale}>
-        {variant.subMeshes.map((subMesh, i) => (
-          <mesh
-            dispose={null}
-            geometry={subMesh.geometry}
-            key={i}
-            material={subMesh.material}
-            raycast={NO_RAYCAST}
-          />
-        ))}
       </group>
     </group>
   )

@@ -14,6 +14,7 @@ import { createSurfaceRoleMaterial } from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
 import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
 import { GlbReferenceNodes } from './glb-reference-nodes'
+import { GlbReplaceInstances } from './glb-replace-instances'
 
 /** Vertical gap added per floor in `exploded` level mode (matches LevelSystem). */
 const EXPLODED_GAP = 5
@@ -1021,8 +1022,10 @@ export function GlbScene({
         <GlbReferenceNodes identity={identity} nodes={referenceNodes} />
       ) : null}
       {/* `bake: 'replace'` nodes (plugin trees): baked meshes hidden above, the
-          live render portaled into the same baked level via bakeReplaceRenderer. */}
-      {replaceNodes?.length ? <GlbReferenceNodes identity={identity} nodes={replaceNodes} /> : null}
+          live instanced render portaled per level via each kind's bakeReplaceRenderer. */}
+      {replaceNodes?.length ? (
+        <GlbReplaceInstances identity={identity} nodes={replaceNodes} />
+      ) : null}
       {/* Floating room labels. Each group's matrix is synced to its zone node
           every frame (above) so the label rides level stacking; the div fades
           with the room fill via a CSS transition. */}

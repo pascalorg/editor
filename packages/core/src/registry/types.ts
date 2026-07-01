@@ -831,16 +831,16 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   renderer?: RendererSource<z.infer<S>>
   /**
-   * Renderer the baked `/viewer` uses to re-render this kind live when
-   * `bake === 'replace'` — it strips the static baked meshes and mounts this
-   * instead (portaled into the kind's baked parent level). Needed when the
-   * normal `renderer` can't stand alone in a baked scene (e.g. an instanced
-   * kind whose `renderer` is an invisible selection proxy and whose real
-   * geometry comes from a `system`). Defaults to `renderer` when unset, so
-   * `strip` kinds whose `renderer` already draws (scans, guides) need nothing.
-   * See plans/editor-plugin-trees-example.md → Part D.
+   * Collective renderer the baked `/viewer` uses to re-render this kind live when
+   * `bake === 'replace'`. It receives every node of this kind under one baked
+   * level and is portaled into that level's `Object3D`, so an instanced kind can
+   * draw them as instanced meshes in level-local space (riding level stacking for
+   * free) instead of the frozen baked meshes (which the viewer hides). Needed when
+   * the normal per-node `renderer` can't stand alone in a baked scene (e.g. an
+   * instanced kind whose `renderer` is an invisible selection proxy and whose real
+   * geometry comes from a `system`). See plans/editor-plugin-trees-example.md → Part D.
    */
-  bakeReplaceRenderer?: RendererSource<z.infer<S>>
+  bakeReplaceRenderer?: BakeReplaceRenderer<z.infer<S>>
   /**
    * Pure geometry builder. When set, the framework's generic
    * `<GeometrySystem>` calls this on every dirty mark — `nodes` keyed by
@@ -1179,6 +1179,15 @@ export type RendererSource<N> =
     }
   | { kind: 'glb'; getAsset: (n: N) => AssetRef }
   | { kind: 'instanced-glb'; getAsset: (n: N) => AssetRef }
+
+/**
+ * A collective renderer for the baked `/viewer` (see `NodeDefinition.bakeReplaceRenderer`):
+ * a lazy module whose default export takes all of one level's `replace` nodes and
+ * is portaled into that baked level. Three-free indirection, same as `system`.
+ */
+export type BakeReplaceRenderer<N> = {
+  module: () => Promise<{ default: ComponentType<{ nodes: N[] }> }>
+}
 
 export type AssetRef = {
   id: string

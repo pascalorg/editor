@@ -68,8 +68,8 @@ export const treeDefinition: NodeDefinition<typeof TreeNode> = {
   renderer: { kind: 'parametric', module: () => import('./proxy-renderer') },
   // ...and a collective system that batches every tree into InstancedMeshes.
   system: { module: () => import('./system'), priority: 3 },
-  // Baked `/viewer` re-render for `bake: 'replace'` (real geometry + wind).
-  bakeReplaceRenderer: { kind: 'parametric', module: () => import('./static-renderer') },
+  // Baked `/viewer` re-render for `bake: 'replace'` — collective, instanced.
+  bakeReplaceRenderer: { module: () => import('./static-renderer') },
 
   preview: () => import('./preview'),
   tool: () => import('./tool'),

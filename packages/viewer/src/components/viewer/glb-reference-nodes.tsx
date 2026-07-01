@@ -80,13 +80,11 @@ export const GlbReferenceNodes = memo(function GlbReferenceNodes({
   )
 })
 
-/** Render one rebuilt node via its registry renderer, portaled into its parent
- *  level's baked Object3D (so the node's level-local transform resolves to the
- *  same world pose as the parametric scene). `replace` kinds prefer their
- *  `bakeReplaceRenderer` (real geometry) over the plain `renderer` (which may be
- *  an invisible selection proxy); `strip` kinds fall through to `renderer`.
- *  Memoized so an unchanged `(node, anchor)` skips the whole subtree (incl. the
- *  plugin renderer) when the parent re-renders on camera move. */
+/** Render one `strip` node (scan/guide) via its registry `renderer`, portaled
+ *  into its parent level's baked Object3D (so the node's level-local transform
+ *  resolves to the same world pose as the parametric scene). Memoized so an
+ *  unchanged `(node, anchor)` skips the subtree when the parent re-renders on
+ *  camera move. (`replace` kinds use the collective `GlbReplaceInstances` path.) */
 const GlbReferenceNode = memo(function GlbReferenceNode({
   node,
   anchor,
@@ -94,8 +92,7 @@ const GlbReferenceNode = memo(function GlbReferenceNode({
   node: AnyNode
   anchor: Object3D
 }) {
-  const def = nodeRegistry.get(node.type)
-  const source = def?.bakeReplaceRenderer ?? def?.renderer
+  const source = nodeRegistry.get(node.type)?.renderer
   const Renderer = source ? getRegistryRenderer(source as RendererSource<AnyNode>) : null
   if (!Renderer) return null
   return createPortal(

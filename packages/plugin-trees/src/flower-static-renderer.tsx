@@ -1,12 +1,16 @@
 'use client'
 
-import { getFlowerVariant } from './flower-geometry'
+import { flowerPetalColor, flowerVariantKey, getFlowerVariant } from './flower-geometry'
 import type { FlowerNode } from './flower-schema'
-import { KindStatic } from './instanced'
+import { InstancedNodes } from './instanced'
 
+const variantKeyOf = (node: FlowerNode) =>
+  flowerVariantKey(node.preset, node.seed, flowerPetalColor(node))
 const getVariant = (node: FlowerNode) => getFlowerVariant(node)
 
-/** Live static flower for the baked `/viewer` (`def.bakeReplaceRenderer`). */
-export default function FlowerStaticRenderer({ node }: { node: FlowerNode }) {
-  return <KindStatic getVariant={getVariant} node={node} />
+/** Collective baked-`/viewer` renderer for one level's flowers (`bakeReplaceRenderer`). */
+export default function FlowerReplaceInstances({ nodes }: { nodes: FlowerNode[] }) {
+  return (
+    <InstancedNodes getVariant={getVariant} localSpace nodes={nodes} variantKeyOf={variantKeyOf} />
+  )
 }

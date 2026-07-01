@@ -59,6 +59,7 @@ export type {
   AnyNodeDefinition,
   AssetRef,
   BakePolicy,
+  BakeReplaceRenderer,
   Capabilities,
   CapabilityCtx,
   CuttableConfig,
