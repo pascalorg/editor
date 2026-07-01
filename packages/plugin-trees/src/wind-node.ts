@@ -1,38 +1,57 @@
 import type { Color, Material, Side, Texture } from 'three'
-import { cos, Fn, float, instanceIndex, positionLocal, sin, time } from 'three/tsl'
+import { cos, Fn, float, instanceIndex, positionLocal, sin, time, uv } from 'three/tsl'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 
 /**
- * A shared, always-on wind for every plant kind — done in TSL so it runs on the
- * editor's WebGPU renderer (which ignores WebGL's `onBeforeCompile`). It's a
- * per-vertex bend, not a rigid tilt: the offset grows with height above the base
- * (`positionLocal.y`), so roots stay planted and tips travel most. The phase is
- * de-synced per instance (`instanceIndex`) and per vertex (local xz) so a forest
- * doesn't sway in lockstep. `time` is advanced by the renderer each frame.
+ * Always-on wind for the plant kinds, done in TSL so it runs on the editor's
+ * WebGPU renderer (which ignores WebGL's `onBeforeCompile`). Two motions:
  *
- * ez-tree isn't touched — every plant renders through a `MeshStandardNodeMaterial`
- * carrying this `positionNode`. For ez-tree's generated materials that means
- * re-creating a node material from the source's texture/tint (`toWindMaterial`)
- * rather than `Material.copy()`, which doesn't transfer the classic `map`/`color`
- * onto a node material and left the textured trees black. The procedural
- * flower/grass kinds build node materials directly (`windStandardMaterial`).
+ * - **Leaf flutter** (`LEAF_FLUTTER`) — ez-tree's own approach: the sway scales
+ *   with the leaf card's `uv.y`, so each leaf swings from its attachment while
+ *   the trunk and branches stay put. A whole-tree height-based bend, by contrast,
+ *   is a rigid rotation about the base and reads as the tree spinning in place.
+ *   Multi-frequency for a natural gust; phased per instance + per leaf.
+ * - **Stem bend** (`STEM_BEND`) — for the small procedural kinds (flowers,
+ *   grass), a gentle whole-plant lean proportional to height reads fine.
+ *
+ * ez-tree isn't touched: its generated materials are re-created as node materials
+ * carrying the texture/tint (`toWindMaterial`) — only the `leaves` material gets
+ * the flutter node; bark stays static. `time` is advanced by the renderer.
  */
-const STRENGTH = 0.06
-const FREQUENCY = 1.3
 
-const windPosition = Fn(() => {
+// ── Leaf flutter (tree leaves) ───────────────────────────────────────────────
+const LEAF_FREQUENCY = 1.2
+const LEAF_STRENGTH = 0.3
+
+const leafFlutter = Fn(() => {
   const p = positionLocal.toVar()
-  const h = p.y.max(0)
-  const phase = float(instanceIndex).mul(0.618).add(p.x.add(p.z).mul(0.4))
-  const t = time.mul(FREQUENCY).add(phase)
-  p.x.addAssign(h.mul(STRENGTH).mul(sin(t)))
-  p.z.addAssign(h.mul(STRENGTH).mul(cos(t.mul(1.15))))
+  const offset = float(instanceIndex).mul(0.7).add(p.x.add(p.z).mul(0.3))
+  const t = time.mul(LEAF_FREQUENCY)
+  const wave = sin(t.add(offset))
+    .mul(0.5)
+    .add(sin(t.mul(2).add(offset.mul(1.3))).mul(0.3))
+    .add(sin(t.mul(5).add(offset.mul(1.5))).mul(0.2))
+  const sway = uv().y.mul(LEAF_STRENGTH).mul(wave)
+  p.x.addAssign(sway)
+  p.z.addAssign(sway)
   return p
 })
+const LEAF_FLUTTER = leafFlutter()
 
-// One shared node instance — nodes are stateless templates, safe to reuse across
-// every material.
-const WIND_POSITION = windPosition()
+// ── Stem bend (flowers, grass) ───────────────────────────────────────────────
+const STEM_FREQUENCY = 1.3
+const STEM_STRENGTH = 0.05
+
+const stemBend = Fn(() => {
+  const p = positionLocal.toVar()
+  const h = p.y.max(0)
+  const phase = float(instanceIndex).mul(0.618)
+  const t = time.mul(STEM_FREQUENCY).add(phase)
+  p.x.addAssign(h.mul(STEM_STRENGTH).mul(sin(t)))
+  p.z.addAssign(h.mul(STEM_STRENGTH).mul(cos(t.mul(1.1))))
+  return p
+})
+const STEM_BEND = stemBend()
 
 /** The classic-material fields we carry over — enough to reproduce ez-tree's
  * bark/leaf look (textured, tinted, alpha-cut billboards). */
@@ -49,10 +68,10 @@ type ClassicMaterial = Material & {
 
 const cache = new WeakMap<Material, MeshStandardNodeMaterial>()
 
-/** Re-create a generated (ez-tree) material as a swaying `MeshStandardNodeMaterial`,
+/** Re-create a generated (ez-tree) material as a `MeshStandardNodeMaterial`,
  * transferring its texture/tint explicitly (node materials don't pick these up
- * via `Material.copy()`). Cached per source so shared variant materials convert
- * once. */
+ * via `Material.copy()`). Only the `leaves` material flutters; bark stays static.
+ * Cached per source so shared variant materials convert once. */
 export function toWindMaterial(material: Material): MeshStandardNodeMaterial {
   const cached = cache.get(material)
   if (cached) return cached
@@ -69,7 +88,7 @@ export function toWindMaterial(material: Material): MeshStandardNodeMaterial {
     roughness: 1,
     metalness: 0,
   })
-  node.positionNode = WIND_POSITION
+  if (material.name === 'leaves') node.positionNode = LEAF_FLUTTER
   cache.set(material, node)
   return node
 }
@@ -79,6 +98,6 @@ export function windStandardMaterial(
   params: ConstructorParameters<typeof MeshStandardNodeMaterial>[0],
 ): MeshStandardNodeMaterial {
   const material = new MeshStandardNodeMaterial(params)
-  material.positionNode = WIND_POSITION
+  material.positionNode = STEM_BEND
   return material
 }
