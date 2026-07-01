@@ -2,6 +2,7 @@ import { Tree } from '@dgreenheck/ez-tree'
 import { Box3, type BufferGeometry, type Material, type Mesh, type Object3D } from 'three'
 import { ezPresetOf } from './presets'
 import type { TreeNode } from './schema'
+import { toWindMaterial } from './wind-node'
 
 /** The geometry-affecting fields of a tree. Two trees with the same spec share
  * one generated variant (and thus one InstancedMesh set). Per-instance fields
@@ -127,7 +128,11 @@ export function extractSubMeshes(tree: Object3D): TreeSubMesh[] {
       const geometry = mesh.geometry.clone()
       ;(child as Mesh).updateMatrix()
       geometry.applyMatrix4((child as Mesh).matrix)
-      out.push({ geometry, material: mesh.material })
+      // Swap ez-tree's plain materials for swaying node materials (WebGPU/TSL).
+      const material = Array.isArray(mesh.material)
+        ? mesh.material.map(toWindMaterial)
+        : toWindMaterial(mesh.material)
+      out.push({ geometry, material })
     }
   })
   return out

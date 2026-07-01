@@ -2,8 +2,7 @@
 
 import { type AnyNodeId, sceneRegistry, useRegistry, useScene } from '@pascal-app/core'
 import { useNodeEvents, useViewer } from '@pascal-app/viewer'
-import { useFrame } from '@react-three/fiber'
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import {
   type BufferGeometry,
   type InstancedMesh,
@@ -39,12 +38,8 @@ const DUMMY = new Object3D()
 const INSTANCE_MATRIX = new Matrix4()
 const NO_RAYCAST = () => {}
 
-// Renderer-agnostic wind: every instance rocks about its base with a small,
-// per-instance-phased tilt. A vertex-bend (like ez-tree's demo) would need a
-// WebGL shader hook the editor's WebGPU renderer ignores; a CPU base-pivot tilt
-// reads as wind and works under any renderer. Amplitude in radians (~2.9° peak).
-const WIND_AMPLITUDE = 0.05
-const WIND_FREQUENCY = 1.1
+// Wind is a TSL vertex bend baked into the variant materials (see `wind-node.ts`)
+// — animated on the GPU, so the instance matrices here stay static.
 
 // ── Collective instanced renderer (a `def.system`) ───────────────────────────
 
@@ -110,14 +105,6 @@ function Variant<N extends Placeable>({
   )
 }
 
-type InstanceBase = {
-  position: [number, number, number]
-  rotation: [number, number, number]
-  scale: number
-  parentWorld: Matrix4 | null
-  phase: number
-}
-
 function InstancedSubMesh<N extends Placeable>({
   subMesh,
   nodes,
@@ -128,68 +115,37 @@ function InstancedSubMesh<N extends Placeable>({
   naturalHeight: number
 }) {
   const ref = useRef<InstancedMesh>(null)
-  const time = useRef(0)
   // Round capacity up so the InstancedMesh isn't recreated on every placement —
   // only when crossing a 32-instance boundary. `dispose={null}` keeps the shared
   // (cached) geometry/material alive across any recreation.
   const capacity = Math.max(16, Math.ceil(nodes.length / 32) * 32)
 
-  // Per-instance transform data, resolved once when the node set changes. The
-  // parent level's world matrix is folded in (positions are stored level-local);
-  // `phase` de-syncs the wind so a planted row doesn't sway in lockstep.
-  const bases = useMemo<InstanceBase[]>(
-    () =>
-      nodes.map((node) => {
-        const parent = node.parentId ? sceneRegistry.nodes.get(node.parentId) : undefined
-        let parentWorld: Matrix4 | null = null
-        if (parent) {
-          parent.updateWorldMatrix(true, false)
-          parentWorld = parent.matrixWorld.clone()
-        }
-        return {
-          position: node.position,
-          rotation: node.rotation,
-          scale: node.height / naturalHeight,
-          parentWorld,
-          phase: node.position[0] * 12.9898 + node.position[2] * 78.233,
-        }
-      }),
-    [nodes, naturalHeight],
-  )
-
-  const writeMatrices = useCallback(
-    (t: number) => {
-      const mesh = ref.current
-      if (!mesh) return
-      for (let i = 0; i < bases.length; i += 1) {
-        const b = bases[i]
-        if (!b) continue
-        // Tilt about the base (geometry is baked with its root at y=0, so the
-        // instance origin is the root).
-        const tiltX = WIND_AMPLITUDE * Math.sin(t * WIND_FREQUENCY + b.phase)
-        const tiltZ = WIND_AMPLITUDE * Math.cos(t * WIND_FREQUENCY * 1.15 + b.phase)
-        DUMMY.position.set(b.position[0], b.position[1], b.position[2])
-        DUMMY.rotation.set(b.rotation[0] + tiltX, b.rotation[1], b.rotation[2] + tiltZ)
-        DUMMY.scale.set(b.scale, b.scale, b.scale)
-        DUMMY.updateMatrix()
-        if (b.parentWorld) {
-          INSTANCE_MATRIX.multiplyMatrices(b.parentWorld, DUMMY.matrix)
-          mesh.setMatrixAt(i, INSTANCE_MATRIX)
-        } else {
-          mesh.setMatrixAt(i, DUMMY.matrix)
-        }
+  useLayoutEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    for (let i = 0; i < nodes.length; i += 1) {
+      const node = nodes[i]
+      if (!node) continue
+      const scale = node.height / naturalHeight
+      DUMMY.position.set(node.position[0], node.position[1], node.position[2])
+      DUMMY.rotation.set(node.rotation[0], node.rotation[1], node.rotation[2])
+      DUMMY.scale.set(scale, scale, scale)
+      DUMMY.updateMatrix()
+      // Instances live at the scene root, so fold in the parent level's world
+      // matrix — node positions are stored level-local.
+      const parent = node.parentId ? sceneRegistry.nodes.get(node.parentId) : undefined
+      if (parent) {
+        parent.updateWorldMatrix(true, false)
+        INSTANCE_MATRIX.multiplyMatrices(parent.matrixWorld, DUMMY.matrix)
+        mesh.setMatrixAt(i, INSTANCE_MATRIX)
+      } else {
+        mesh.setMatrixAt(i, DUMMY.matrix)
       }
-      mesh.count = bases.length
-      mesh.instanceMatrix.needsUpdate = true
-    },
-    [bases],
-  )
-
-  useLayoutEffect(() => writeMatrices(time.current), [writeMatrices])
-  useFrame((_, delta) => {
-    time.current += delta
-    writeMatrices(time.current)
-  })
+    }
+    mesh.count = nodes.length
+    mesh.instanceMatrix.needsUpdate = true
+    mesh.computeBoundingSphere()
+  }, [nodes, naturalHeight])
 
   return (
     <instancedMesh

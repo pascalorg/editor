@@ -4,7 +4,6 @@ import {
   CylinderGeometry,
   Group,
   Mesh,
-  MeshStandardMaterial,
   SphereGeometry,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -12,6 +11,7 @@ import { FLOWER_PRESETS } from './flower-presets'
 import type { FlowerNode, FlowerPreset } from './flower-schema'
 import { mulberry32, naturalHeight } from './geometry'
 import type { SubMesh, VariantData } from './instanced'
+import { windStandardMaterial } from './wind-node'
 
 export function flowerVariantKey(preset: FlowerPreset, seed: number, petalColor: string): string {
   return `${preset}:${seed}:${petalColor}`
@@ -46,9 +46,9 @@ function buildFlower(preset: FlowerPreset, seed: number, petalColor: string): Gr
   const spec = FLOWER_PRESETS[preset] ?? FLOWER_PRESETS.daisy
   const rng = mulberry32(seed >>> 0)
   const group = new Group()
-  const stemMat = new MeshStandardMaterial({ color: spec.stemColor, roughness: 0.85 })
-  const petalMat = new MeshStandardMaterial({ color: petalColor, roughness: 0.7 })
-  const centerMat = new MeshStandardMaterial({ color: spec.centerColor, roughness: 0.6 })
+  const stemMat = windStandardMaterial({ color: spec.stemColor, roughness: 0.85 })
+  const petalMat = windStandardMaterial({ color: petalColor, roughness: 0.7 })
+  const centerMat = windStandardMaterial({ color: spec.centerColor, roughness: 0.6 })
   const stemH = spec.defaultHeight
 
   const stem = new CylinderGeometry(0.008, 0.015, stemH, 5)
