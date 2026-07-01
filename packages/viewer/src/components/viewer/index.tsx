@@ -93,9 +93,26 @@ function canCreateWebGLContext() {
   }
 }
 
+// Sentry MONOREPO-EDITOR-59: `TypeError: Cannot read properties of null
+// (reading 'getSupportedExtensions')` — 5282 events / 0 users, i.e. headless
+// bots and GPU-blocklisted browsers crawling the public /viewer/:id route.
+//
+// The old check treated `'gpu' in navigator` as sufficient to mount. But that
+// flag being present does NOT guarantee WebGPU can produce a device: on
+// headless/blocklisted browsers the adapter request fails and three.js
+// transparently falls back to a WebGL backend. If a real WebGL context can't be
+// created either, three calls `gl.getSupportedExtensions()` on the null context
+// deep inside `renderer.init()` and throws.
+//
+// Because the WebGPURenderer's fallback path always needs WebGL, an obtainable
+// WebGL context is the true, verifiable precondition for mounting. Requiring it
+// unconditionally turns the flaky "gpu-in-navigator" optimism into a hard gate
+// that headless bots fail cleanly — they get the fallback UI instead of the
+// null-context crash. Real browsers with WebGPU always expose WebGL too, so no
+// capable device is newly excluded.
 function canMountGpuViewer() {
   if (typeof window === 'undefined') return false
-  if (!('gpu' in navigator) && !canCreateWebGLContext()) return false
+  if (!canCreateWebGLContext()) return false
 
   return true
 }
