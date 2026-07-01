@@ -12,6 +12,9 @@ import { TreeNode } from './schema'
  */
 export const treeDefinition: NodeDefinition<typeof TreeNode> = {
   kind: 'trees:tree',
+  // Static in the bake for portability; our viewer removes the baked meshes and
+  // re-renders live (wind, LODs) via this def's own path. See plans → Part D.
+  bake: 'replace',
   schemaVersion: 1,
   schema: TreeNode,
   category: 'furnish',

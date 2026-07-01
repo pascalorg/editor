@@ -10,6 +10,7 @@ import { FlowerNode } from './flower-schema'
  */
 export const flowerDefinition: NodeDefinition<typeof FlowerNode> = {
   kind: 'trees:flower',
+  bake: 'replace', // static in bake, live-rebuilt in our viewer — see plans → Part D
   schemaVersion: 1,
   schema: FlowerNode,
   category: 'furnish',

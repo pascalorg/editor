@@ -16,6 +16,7 @@ export type {
   TranslateHandle,
 } from './handles'
 export {
+  bakePolicyOf,
   discoverPlugins,
   getHostRefFields,
   getSelectableKinds,
@@ -26,6 +27,7 @@ export {
   isPresettableKind,
   isRegistryMovable,
   isRegistrySelectable,
+  kindsWithBakePolicy,
   kindsWithFloorplanScope,
   loadPlugin,
   nodeRegistry,
@@ -56,6 +58,7 @@ export type {
   AlignmentFootprintConfig,
   AnyNodeDefinition,
   AssetRef,
+  BakePolicy,
   Capabilities,
   CapabilityCtx,
   CuttableConfig,

@@ -1,5 +1,6 @@
 import {
   type AnyNode,
+  bakePolicyOf,
   type DoorNode,
   emitter,
   getLevelDisplayName,
@@ -104,14 +105,16 @@ export function prepareSceneForExport(
   const scene = source.clone(true)
   const cloneByOriginal = pairClones(source, scene)
 
-  // Scans (LiDAR meshes) and guides (floorplan images) are heavy reference
-  // assets stored elsewhere and aren't part of the compiled building. Drop them
-  // from the artifact entirely — `/viewer` re-adds them from the scene graph,
-  // gated by the project's public-visibility flags, so they never bloat the
-  // shared GLB nor slip past those flags into a static public file.
+  // Kinds with `def.bake === 'strip'` (scans/LiDAR, guides/floorplan) are heavy
+  // reference assets stored elsewhere and aren't part of the compiled building.
+  // Drop them from the artifact entirely — `/viewer` re-adds them from the scene
+  // graph, gated by the project's public-visibility flags, so they never bloat
+  // the shared GLB nor slip past those flags into a static public file.
+  // (`'replace'` kinds are *kept*: static for portability, the viewer swaps them
+  // for a live render.)
   for (const [id, original] of sceneRegistry.nodes) {
     const node = nodes[id]
-    if (node?.type === 'scan' || node?.type === 'guide') {
+    if (node && bakePolicyOf(node.type) === 'strip') {
       cloneByOriginal.get(original)?.removeFromParent()
     }
   }

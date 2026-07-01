@@ -743,6 +743,19 @@ export type DistributionRole = 'run' | 'fitting' | 'terminal' | 'equipment'
  */
 export type SnapProfile = 'item' | 'structural'
 
+/**
+ * How a kind is treated by the GLB bake and the baked `/viewer`. See
+ * plans/editor-plugin-trees-example.md → Part D.
+ * - `'static'` (default) — baked as geometry; the viewer shows the baked mesh.
+ * - `'strip'` — excluded from the bake; the viewer rebuilds it live from
+ *   `scene_graph` via the registry renderer (heavy reference assets: scans, guides).
+ * - `'replace'` — baked as *static* geometry (a plain glTF viewer still shows it),
+ *   but our viewer removes the baked meshes for this kind and re-renders the node
+ *   live from `scene_graph` — for dynamic content whose runtime look differs from a
+ *   frozen snapshot (shader wind, interactivity), rendered through its own path.
+ */
+export type BakePolicy = 'static' | 'strip' | 'replace'
+
 export type NodeDefinition<S extends ZodObject<any>> = {
   kind: string
   schemaVersion: number
@@ -801,6 +814,9 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * If a kind later gains a dirty consumer, delete the flag.
    */
   dirtyTracking?: boolean
+
+  /** GLB bake treatment for this kind (default `'static'`). See {@link BakePolicy}. */
+  bake?: BakePolicy
 
   /**
    * Renderer for this kind. Optional under the three-checkbox composition

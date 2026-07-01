@@ -1,19 +1,25 @@
 'use client'
 
-import { type AnyNode, nodeRegistry, type RendererSource, type SceneGraph } from '@pascal-app/core'
+import {
+  type AnyNode,
+  bakePolicyOf,
+  nodeRegistry,
+  type RendererSource,
+  type SceneGraph,
+} from '@pascal-app/core'
 import { createPortal } from '@react-three/fiber'
 import { Suspense } from 'react'
 import type { Object3D } from 'three'
 import { getRegistryRenderer } from '../renderers/node-renderer'
 
 /**
- * Scans (LiDAR meshes) and guides (floorplan images) are stripped from the
- * baked GLB — they're heavy reference assets stored elsewhere. The GLB viewer
- * re-adds them at runtime from the scene graph, portaled into their parent
+ * Kinds with `def.bake === 'strip'` (scans/LiDAR, guides/floorplan images) are
+ * excluded from the baked GLB — heavy reference assets stored elsewhere. The GLB
+ * viewer re-adds them at runtime from the scene graph, portaled into their parent
  * level's baked node so they ride level stacking, using the same registry
- * renderers as the parametric viewer. Privacy is enforced upstream: the page
- * only includes nodes whose `show_*_public` flag (or owner/admin) allows it, so
- * a disallowed asset is never even fetched.
+ * renderers as the parametric viewer. Selection is registry-driven; scan/guide
+ * privacy is enforced upstream (`show_*_public`), so a disallowed asset is never
+ * even fetched — we still honour the flags here as a second gate.
  */
 export function buildGlbReferenceNodes(
   sceneGraph: SceneGraph | null | undefined,
@@ -24,8 +30,10 @@ export function buildGlbReferenceNodes(
   const out: AnyNode[] = []
   for (const raw of Object.values(nodes)) {
     const node = raw as AnyNode
-    if (node.type === 'scan' && allow.scans) out.push(node)
-    else if (node.type === 'guide' && allow.guides) out.push(node)
+    if (bakePolicyOf(node.type) !== 'strip') continue
+    if (node.type === 'scan' && !allow.scans) continue
+    if (node.type === 'guide' && !allow.guides) continue
+    out.push(node)
   }
   return out
 }

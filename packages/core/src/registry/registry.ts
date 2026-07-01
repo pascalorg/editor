@@ -1,5 +1,5 @@
 import type { ZodObject } from 'zod'
-import type { AnyNodeDefinition, NodeRegistry, Plugin, PluginPanel } from './types'
+import type { AnyNodeDefinition, BakePolicy, NodeRegistry, Plugin, PluginPanel } from './types'
 
 const HOST_API_VERSION = 1 as const
 
@@ -184,6 +184,26 @@ export function kindsWithFloorplanScope(scope: 'level' | 'building'): string[] {
   for (const [kind, def] of nodeRegistry.entries()) {
     const declared = def.floorplanScope ?? 'level'
     if (declared === scope) result.push(kind)
+  }
+  return result
+}
+
+/**
+ * A kind's {@link BakePolicy} from the registry, defaulting to `'static'` for
+ * kinds that don't declare one (or aren't registered). The bake and the baked
+ * `/viewer` consult this instead of hardcoding kind names — see
+ * plans/editor-plugin-trees-example.md → Part D.
+ */
+export function bakePolicyOf(kind: string): BakePolicy {
+  return nodeRegistry.get(kind)?.bake ?? 'static'
+}
+
+/** Registered kinds whose {@link BakePolicy} matches `policy`. `'static'` is the
+ *  default, so `kindsWithBakePolicy('static')` includes kinds that didn't set it. */
+export function kindsWithBakePolicy(policy: BakePolicy): string[] {
+  const result: string[] = []
+  for (const [kind, def] of nodeRegistry.entries()) {
+    if ((def.bake ?? 'static') === policy) result.push(kind)
   }
   return result
 }

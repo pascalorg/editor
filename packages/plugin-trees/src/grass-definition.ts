@@ -10,6 +10,7 @@ import { GrassNode } from './grass-schema'
  */
 export const grassDefinition: NodeDefinition<typeof GrassNode> = {
   kind: 'trees:grass',
+  bake: 'replace', // static in bake, live-rebuilt in our viewer — see plans → Part D
   schemaVersion: 1,
   schema: GrassNode,
   category: 'furnish',
