@@ -8,7 +8,7 @@ import {
   type SceneGraph,
 } from '@pascal-app/core'
 import { createPortal } from '@react-three/fiber'
-import { Suspense } from 'react'
+import { memo, Suspense } from 'react'
 import type { Object3D } from 'three'
 import { getRegistryRenderer } from '../renderers/node-renderer'
 
@@ -57,7 +57,13 @@ export function buildGlbReplaceNodes(sceneGraph: SceneGraph | null | undefined):
   return out
 }
 
-export function GlbReferenceNodes({
+// Memoized: `GlbScene` re-renders every frame during camera movement (hover
+// raycast, walkthrough HUD). Without memo, all rebuilt nodes reconcile each
+// frame — negligible for one or two scans/guides, but a `replace` kind can put
+// dozens of nodes here (e.g. a forest), so each frame reconciles dozens of
+// portals + submeshes. `nodes` and `identity` are stable references (page-level
+// `useState` / `useMemo([gltf.scene])`), so memo short-circuits cleanly.
+export const GlbReferenceNodes = memo(function GlbReferenceNodes({
   nodes,
   identity,
 }: {
@@ -72,14 +78,22 @@ export function GlbReferenceNodes({
       })}
     </>
   )
-}
+})
 
 /** Render one rebuilt node via its registry renderer, portaled into its parent
  *  level's baked Object3D (so the node's level-local transform resolves to the
  *  same world pose as the parametric scene). `replace` kinds prefer their
  *  `bakeReplaceRenderer` (real geometry) over the plain `renderer` (which may be
- *  an invisible selection proxy); `strip` kinds fall through to `renderer`. */
-function GlbReferenceNode({ node, anchor }: { node: AnyNode; anchor: Object3D }) {
+ *  an invisible selection proxy); `strip` kinds fall through to `renderer`.
+ *  Memoized so an unchanged `(node, anchor)` skips the whole subtree (incl. the
+ *  plugin renderer) when the parent re-renders on camera move. */
+const GlbReferenceNode = memo(function GlbReferenceNode({
+  node,
+  anchor,
+}: {
+  node: AnyNode
+  anchor: Object3D
+}) {
   const def = nodeRegistry.get(node.type)
   const source = def?.bakeReplaceRenderer ?? def?.renderer
   const Renderer = source ? getRegistryRenderer(source as RendererSource<AnyNode>) : null
@@ -90,4 +104,4 @@ function GlbReferenceNode({ node, anchor }: { node: AnyNode; anchor: Object3D })
     </Suspense>,
     anchor,
   )
-}
+})
