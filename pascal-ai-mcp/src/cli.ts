@@ -18,8 +18,18 @@ try {
   while (true) {
     const message = await rl.question('> ')
     if (message.trim().toLowerCase() === 'exit') break
-    const result = await agent.chat({ sessionId, message })
+    const normalized = message.trim().toLowerCase()
+    const result = await agent.chat(
+      normalized === 'confirm'
+        ? { sessionId, action: 'confirm' }
+        : normalized === 'cancel'
+          ? { sessionId, action: 'cancel' }
+          : { sessionId, message },
+    )
     console.log(result.reply)
+    if (result.session.phase === 'awaiting_confirmation') {
+      console.log('Type "confirm" to generate, or continue with a correction.')
+    }
   }
 } finally {
   rl.close()

@@ -52,6 +52,7 @@
   "workspaces": [
     "apps/*",
     "packages/*",
+    "pascal-ai-mcp",
     "tooling/*"
   ]
 }

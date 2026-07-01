@@ -25,7 +25,7 @@ function EditorItemsPanel() {
 
 const SIDEBAR_TABS = [
   {
-    id: 'ai-assistant',
+    id: 'ai',
     label: 'AI',
     component: AiAssistantPanel,
     mobileDefaultSnap: 0.8,

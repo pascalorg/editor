@@ -38,7 +38,7 @@ export interface SceneMeta {
 
 const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
   {
-    id: 'ai-assistant',
+    id: 'ai',
     label: 'AI',
     component: AiAssistantPanel,
     mobileDefaultSnap: 0.8,
@@ -168,6 +168,9 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const sidebarTabs = useMemo(
     () =>
       SIDEBAR_TABS.map((tab) => {
+        if (tab.id === 'ai') {
+          return { ...tab, component: () => <AiAssistantPanel sceneId={meta.id} /> }
+        }
         if (tab.id === 'panorama') {
           return { ...tab, component: () => <PanoramaPhotoPanel sceneId={meta.id} /> }
         }

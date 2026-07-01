@@ -1084,7 +1084,8 @@ export default function Editor({
     return () => window.clearTimeout(timer)
   }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
 
-  const showLoader = isLoading || isSceneLoading || !hasLoadedInitialScene || !isViewerSceneReady
+  const showLoader = isLoading || isSceneLoading
+  const viewerIsPreparing = showLoader || !hasLoadedInitialScene || !isViewerSceneReady
 
   const firstPersonPreviousLevelRef = useRef(useViewer.getState().selection.levelId)
   const wasFirstPersonModeRef = useRef(isFirstPersonMode)
@@ -1150,7 +1151,7 @@ export default function Editor({
       onSceneReadyChange={handleSceneReadyChange}
       onThumbnailCapture={onThumbnailCapture}
       sceneReadyKey={sceneReadyKey}
-      showLoader={showLoader}
+      showLoader={viewerIsPreparing}
     />
   )
 

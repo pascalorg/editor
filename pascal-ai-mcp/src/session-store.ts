@@ -1,30 +1,37 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import type { ChatMessage } from './types'
+import { existsSync, readFileSync } from 'node:fs'
+import { rename, writeFile } from 'node:fs/promises'
+import type { WorkflowSession } from './types'
 
 type SessionDb = {
-  sessions: Record<string, ChatMessage[]>
+  sessions: Record<string, WorkflowSession>
 }
 
 export class SessionStore {
   private db: SessionDb
+  // Serializes disk writes so they never interleave, without making callers
+  // await them. In-memory state (this.db) is updated synchronously in
+  // set()/delete(), so get() always reflects the latest data even while a
+  // previous write is still flushing to disk.
+  private writeQueue: Promise<void> = Promise.resolve()
 
   constructor(private readonly filePath: string) {
     this.db = this.read()
   }
 
-  get(sessionId: string): ChatMessage[] {
-    return [...(this.db.sessions[sessionId] ?? [])]
+  get(sessionId: string): WorkflowSession | undefined {
+    const value = this.db.sessions[sessionId]
+    return value ? structuredClone(value) : undefined
   }
 
-  set(sessionId: string, messages: ChatMessage[]): void {
-    this.db.sessions[sessionId] = messages
-    this.write()
+  set(sessionId: string, session: WorkflowSession): void {
+    this.db.sessions[sessionId] = structuredClone(session)
+    this.scheduleWrite()
   }
 
   delete(sessionId: string): boolean {
     const existed = sessionId in this.db.sessions
     delete this.db.sessions[sessionId]
-    this.write()
+    this.scheduleWrite()
     return existed
   }
 
@@ -32,10 +39,35 @@ export class SessionStore {
     if (!existsSync(this.filePath)) return { sessions: {} }
     const raw = readFileSync(this.filePath, 'utf8')
     if (!raw.trim()) return { sessions: {} }
-    return JSON.parse(raw) as SessionDb
+    const parsed = JSON.parse(raw) as { sessions?: Record<string, unknown> }
+    const sessions = Object.fromEntries(
+      Object.entries(parsed.sessions ?? {}).filter(
+        (entry): entry is [string, WorkflowSession] => isWorkflowSession(entry[1]),
+      ),
+    )
+    return { sessions }
   }
 
-  private write(): void {
-    writeFileSync(this.filePath, `${JSON.stringify(this.db, null, 2)}\n`)
+  // Every chat turn used to synchronously serialize and write the *entire*
+  // session DB to disk, blocking the single-threaded event loop (and every
+  // other in-flight request) for the duration. This snapshots synchronously
+  // (cheap, in-memory) but performs the actual disk write asynchronously.
+  private scheduleWrite(): void {
+    const snapshot = `${JSON.stringify(this.db, null, 2)}\n`
+    this.writeQueue = this.writeQueue.catch(() => undefined).then(() => this.flush(snapshot))
   }
+
+  private async flush(snapshot: string): Promise<void> {
+    const temporary = `${this.filePath}.tmp`
+    try {
+      await writeFile(temporary, snapshot)
+      await rename(temporary, this.filePath)
+    } catch (error) {
+      console.error(`Failed to persist session store to ${this.filePath}:`, error)
+    }
+  }
+}
+
+function isWorkflowSession(value: unknown): value is WorkflowSession {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) && 'phase' in value
 }

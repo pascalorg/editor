@@ -1,97 +1,104 @@
-# Pascal AI MCP Client
+# Pascal AI LangGraph Service
 
-Standalone chat bridge for calling Pascal MCP tools from OpenRouter.
-
-This directory does not change `packages/mcp` or the Pascal MCP server configuration. It runs as a separate process:
+LangGraph-based requirement intake and floor-plan generation service for the Pascal editor.
 
 ```text
-chat UI / curl
-  -> pascal-ai-mcp /chat
-    -> OpenAI-compatible /v1/chat/completions
-    -> Pascal MCP client
-    -> existing Pascal MCP server tools
+Pascal editor AI panel
+  -> /api/ai (Next.js same-origin proxy)
+  -> pascal-ai-mcp :8788
+  -> LangGraph requirement workflow
+  -> Azure OpenAI or another OpenAI-compatible model
+  -> Pascal MCP over stdio or HTTP
+  -> Pascal SceneStore + editor SSE
 ```
 
-## Setup
+## Workflow
 
-```bash
-cd pascal-ai-mcp
-bun install
-cp .env.example .env
+1. Accept text or one JPG/PNG floor-plan image with optional text.
+2. Extract existing conditions, design goals, hard constraints, assumptions, uncertainties, and conflicts.
+3. Classify the input as usable, partially usable, or unusable.
+4. Ask up to three structural clarification questions per round.
+5. Present a provenance-aware structured summary.
+6. Wait for explicit confirmation before changing a scene.
+7. Generate a starter scene, refine it through bounded MCP tool calls, validate it, and run bounded repair rounds.
+8. Treat later user messages as incremental MCP edits to the generated scene, then re-run checks.
+
+CAD/DXF/DWG input is intentionally outside this AI workflow. The editor's existing DXF importer remains separate.
+
+## Configuration
+
+The service loads environment values in this order without overriding existing process values:
+
+1. repository `.env.local`
+2. repository `.env`
+3. `pascal-ai-mcp/.env`
+
+For Azure OpenAI, configure:
+
+```env
+AI_PROVIDER=azure-openai
+AZURE_OPENAI_ENDPOINT=https://your-resource.cognitiveservices.azure.com
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_DEPLOYMENT=your-deployment
+AZURE_OPENAI_API_VERSION=2024-10-21
 ```
 
-Fill `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` in `.env`.
+OpenRouter-compatible endpoints remain supported when `AI_PROVIDER` is omitted:
 
-The model endpoint defaults to:
-
-```text
-https://openrouter.ai/api/v1/chat/completions
+```env
+OPENROUTER_FALLBACK_API_KEY=...
+OPENROUTER_FALLBACK_MODEL=...
 ```
 
-Requests include OpenRouter app attribution headers:
+By default the service starts Pascal MCP as a stdio child process. To connect to an already-running HTTP MCP server instead:
 
-```text
-HTTP-Referer: OPENROUTER_HTTP_REFERER
-X-OpenRouter-Title: OPENROUTER_APP_TITLE
+```env
+PASCAL_MCP_MODE=http
+PASCAL_MCP_URL=http://127.0.0.1:3917/mcp
 ```
 
-The bridge also sends `session_id` to OpenRouter using your `/chat` `sessionId`. That is for OpenRouter routing/observability; the actual chat history is still stored locally in `.data/sessions.json`.
+Use the same `PASCAL_DATA_DIR` or `PASCAL_DB_PATH` as the editor so generated scenes and live events share storage.
 
-## Run with an existing Pascal MCP HTTP server
+## Run
 
-Terminal 1, from the repo root:
-
-```bash
-bun packages/mcp/src/bin/pascal-mcp.ts --http --port 3917
-```
-
-Terminal 2:
+From the repository root, `bun dev` includes this workspace. To run only the AI service:
 
 ```bash
 cd pascal-ai-mcp
 bun run start
 ```
 
-Send a chat request:
-
-```bash
-curl -X POST http://127.0.0.1:8788/chat \
-  -H "Content-Type: application/json" \
-  -d "{\"sessionId\":\"demo\",\"message\":\"创建一个 8 米乘 6 米的两居室平面布局，并保存场景\"}"
-```
-
-## Run by spawning Pascal MCP over stdio
-
-Set this in `.env`:
-
-```bash
-PASCAL_MCP_MODE=stdio
-PASCAL_MCP_COMMAND=bun
-PASCAL_MCP_ARGS=../packages/mcp/src/bin/pascal-mcp.ts --stdio
-```
-
-Then:
-
-```bash
-bun run start
-```
+The service starts even when no model key is configured. `/health` then reports `configured: false`, and chat requests return a recoverable configuration error.
 
 ## Endpoints
 
-- `GET /health` checks bridge status.
-- `GET /tools` lists tools exposed by the Pascal MCP server.
-- `POST /chat` sends a user message and lets the model call MCP tools.
-- `GET /sessions/:id` returns stored messages for a chat session.
-- `DELETE /sessions/:id` clears one chat session.
+- `GET /health`
+- `GET /tools`
+- `POST /chat`
+- `GET /sessions/:id`
+- `DELETE /sessions/:id`
 
-`POST /chat` body:
+`POST /chat` accepts:
 
 ```json
 {
   "sessionId": "demo",
-  "message": "创建一个简单的一室一厅",
-  "system": "Optional extra system instruction"
+  "sceneId": "optional-active-scene-id",
+  "message": "设计一个85平方米的两居室"
 }
 ```
 
-The model API is stateless, so this bridge stores messages per `sessionId` in `.data/sessions.json` by default and resends the conversation on every model call.
+Image input adds `imageDataUrl`. Confirmation and cancellation use:
+
+```json
+{ "sessionId": "demo", "action": "confirm" }
+```
+
+The service stores workflow sessions in `.data/sessions.json`. LangGraph also checkpoints node execution by `sessionId` for the running process.
+
+## Verify
+
+```bash
+bun run check-types
+bun test
+```

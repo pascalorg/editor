@@ -160,6 +160,57 @@ describe('create_from_template', () => {
     expect(parsed.nodeCount as number).toBeGreaterThan(0)
     expect(parsed.nextStep as string).toContain('get_project_status')
   })
+
+  test('create_house_from_brief applies exact single-room dimensions', async () => {
+    const result = await client.callTool({
+      name: 'create_house_from_brief',
+      arguments: {
+        brief: 'Create one 4 by 5 metre bedroom with an area of 20 square metres.',
+        bedroomCount: 1,
+        rooms: ['Bedroom'],
+        widthM: 4,
+        depthM: 5,
+        floorAreaM2: 20,
+      },
+    })
+
+    expect(result.isError).toBeFalsy()
+    const nodes = Object.values(bridge.getNodes()) as Array<Record<string, unknown>>
+    const walls = nodes.filter((node) => node.type === 'wall')
+    const points = walls.flatMap((wall) => [
+      wall.start as [number, number],
+      wall.end as [number, number],
+    ])
+    const xs = points.map((point) => point[0])
+    const zs = points.map((point) => point[1])
+    expect(Math.max(...xs) - Math.min(...xs)).toBe(4)
+    expect(Math.max(...zs) - Math.min(...zs)).toBe(5)
+    const zone = nodes.find((node) => node.type === 'zone')
+    expect(zone?.name).toBe('Bedroom')
+  })
+
+  test('create_house_from_brief safely replaces an existing project version', async () => {
+    const initial = await client.callTool({
+      name: 'create_house_from_brief',
+      arguments: { brief: 'Initial studio', projectName: 'Replace me', bedroomCount: 1 },
+    })
+    const first = parseToolText(initial.content as StoredTextContent[])
+
+    const replacement = await client.callTool({
+      name: 'create_house_from_brief',
+      arguments: {
+        brief: 'Replace with a two-bedroom home',
+        projectId: first.projectId,
+        expectedVersion: first.version,
+        bedroomCount: 2,
+      },
+    })
+
+    expect(replacement.isError).toBeFalsy()
+    const second = parseToolText(replacement.content as StoredTextContent[])
+    expect(second.projectId).toBe(first.projectId)
+    expect(second.version).toBe(2)
+  })
 })
 
 describe('create_from_template without a store', () => {

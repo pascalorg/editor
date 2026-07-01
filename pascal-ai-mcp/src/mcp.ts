@@ -28,7 +28,7 @@ export class PascalMcpClient {
         : new StdioClientTransport({
             command: this.config.mcpCommand,
             args: this.config.mcpArgs,
-            cwd: '..',
+            cwd: process.cwd(),
             env: this.config.pascalDataDir
               ? { ...cleanEnv(process.env), PASCAL_DATA_DIR: this.config.pascalDataDir }
               : cleanEnv(process.env),
@@ -62,13 +62,29 @@ export class PascalMcpClient {
 
   async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
     const client = this.requireClient()
-    return await client.callTool({ name, arguments: args })
+    const result = await client.callTool({ name, arguments: args })
+    if (result.isError) {
+      throw new Error(`MCP tool ${name} failed: ${mcpErrorMessage(result)}`)
+    }
+    return result
   }
 
   private requireClient(): Client {
     if (!this.client) throw new Error('Pascal MCP client is not connected')
     return this.client
   }
+}
+
+export function mcpErrorMessage(result: unknown): string {
+  if (!result || typeof result !== 'object') return 'unknown error'
+  const content = (result as { content?: unknown }).content
+  if (!Array.isArray(content)) return 'unknown error'
+  const messages = content.flatMap((item) => {
+    if (!item || typeof item !== 'object') return []
+    const text = (item as { text?: unknown }).text
+    return typeof text === 'string' && text.trim() ? [text.trim()] : []
+  })
+  return messages.join('; ') || 'unknown error'
 }
 
 function cleanEnv(env: NodeJS.ProcessEnv): Record<string, string> {

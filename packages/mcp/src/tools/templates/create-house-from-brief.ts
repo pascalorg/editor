@@ -12,9 +12,13 @@ import { currentLevelContext, sceneMetaPayload } from '../scene-lifecycle/metada
 export const createHouseFromBriefInput = {
   brief: z.string().min(1),
   projectId: z.string().optional(),
+  expectedVersion: z.number().int().positive().optional(),
   projectName: z.string().min(1).max(200).optional(),
   bedroomCount: z.number().int().min(0).max(12).optional(),
   rooms: z.array(z.string().min(1)).optional(),
+  widthM: z.number().positive().max(1000).optional(),
+  depthM: z.number().positive().max(1000).optional(),
+  floorAreaM2: z.number().positive().max(1_000_000).optional(),
   style: z.string().optional(),
   landscaping: z.boolean().optional(),
   constraints: z.string().optional(),
@@ -74,6 +78,59 @@ function countNodeTypes(nodes: Record<AnyNodeId, AnyNode>): {
   }
 }
 
+function resolveDimensions(args: {
+  widthM?: number
+  depthM?: number
+  floorAreaM2?: number
+}): { widthM: number; depthM: number } | null {
+  if (args.widthM && args.depthM) return { widthM: args.widthM, depthM: args.depthM }
+  if (args.floorAreaM2 && args.widthM) {
+    return { widthM: args.widthM, depthM: args.floorAreaM2 / args.widthM }
+  }
+  if (args.floorAreaM2 && args.depthM) {
+    return { widthM: args.floorAreaM2 / args.depthM, depthM: args.depthM }
+  }
+  return null
+}
+
+function applySingleRoomDimensions(
+  nodes: Record<AnyNodeId, AnyNode>,
+  dimensions: { widthM: number; depthM: number },
+  roomName: string,
+): void {
+  const halfWidth = dimensions.widthM / 2
+  const halfDepth = dimensions.depthM / 2
+  const walls = Object.values(nodes).filter((node) => node.type === 'wall')
+  if (walls.length !== 4) return
+
+  const endpoints: Array<[[number, number], [number, number]]> = [
+    [[-halfWidth, -halfDepth], [halfWidth, -halfDepth]],
+    [[halfWidth, -halfDepth], [halfWidth, halfDepth]],
+    [[halfWidth, halfDepth], [-halfWidth, halfDepth]],
+    [[-halfWidth, halfDepth], [-halfWidth, -halfDepth]],
+  ]
+  for (let index = 0; index < walls.length; index++) {
+    const wall = walls[index] as AnyNode & { start: [number, number]; end: [number, number] }
+    const endpoint = endpoints[index]
+    if (!endpoint) continue
+    wall.start = endpoint[0]
+    wall.end = endpoint[1]
+  }
+
+  const zone = Object.values(nodes).find((node) => node.type === 'zone') as
+    | (AnyNode & { name: string; polygon: Array<[number, number]> })
+    | undefined
+  if (zone) {
+    zone.name = roomName
+    zone.polygon = [
+      [-halfWidth, -halfDepth],
+      [halfWidth, -halfDepth],
+      [halfWidth, halfDepth],
+      [-halfWidth, halfDepth],
+    ]
+  }
+}
+
 export function registerCreateHouseFromBrief(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'create_house_from_brief',
@@ -87,9 +144,13 @@ export function registerCreateHouseFromBrief(server: McpServer, bridge: SceneOpe
     async ({
       brief,
       projectId,
+      expectedVersion,
       projectName,
       bedroomCount,
       rooms,
+      widthM,
+      depthM,
+      floorAreaM2,
       style,
       landscaping,
       constraints,
@@ -107,6 +168,10 @@ export function registerCreateHouseFromBrief(server: McpServer, bridge: SceneOpe
       const cloned = rehydrateSiteChildren(cloneSceneGraph(entry.template))
       const nodes = cloned.nodes as Record<AnyNodeId, AnyNode>
       const rootNodeIds = cloned.rootNodeIds as AnyNodeId[]
+      const dimensions = resolveDimensions({ widthM, depthM, floorAreaM2 })
+      if (templateId === 'empty-studio' && dimensions) {
+        applySingleRoomDimensions(nodes, dimensions, rooms?.[0] ?? 'Bedroom')
+      }
       const counts = countNodeTypes(nodes)
 
       try {
@@ -132,6 +197,14 @@ export function registerCreateHouseFromBrief(server: McpServer, bridge: SceneOpe
       if (style || constraints) {
         limitations.push(
           'Style and constraints are recorded in the summary but not yet fully synthesized into custom geometry.',
+        )
+      }
+      if (
+        floorAreaM2 && dimensions &&
+        Math.abs(dimensions.widthM * dimensions.depthM - floorAreaM2) > 0.01
+      ) {
+        limitations.push(
+          `Requested dimensions produce ${(dimensions.widthM * dimensions.depthM).toFixed(2)} m², not ${floorAreaM2} m²; explicit width and depth were used.`,
         )
       }
 
@@ -170,6 +243,7 @@ export function registerCreateHouseFromBrief(server: McpServer, bridge: SceneOpe
           ...(saveProjectId !== undefined ? { id: saveProjectId, projectId: saveProjectId } : {}),
           name: projectName ?? entry.name,
           graph: { nodes, rootNodeIds },
+          ...(expectedVersion !== undefined ? { expectedVersion } : {}),
           saveMode: 'draft',
           publish: false,
           operation: 'create_house_from_brief',

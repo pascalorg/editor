@@ -7,10 +7,14 @@
     "dev": "bun --watch src/server.ts",
     "start": "bun src/server.ts",
     "chat": "bun src/cli.ts",
+    "test": "bun test",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "@langchain/core": "^1.2.1",
+    "@langchain/langgraph": "^1.4.7",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bun": "^1.3.0",
