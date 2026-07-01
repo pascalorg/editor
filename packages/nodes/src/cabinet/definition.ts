@@ -5,8 +5,10 @@ import type {
 } from '@pascal-app/core'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { buildCabinetGeometry } from './geometry'
+import { cabinetPaint } from './paint'
 import { cabinetModuleParametrics, cabinetParametrics } from './parametrics'
 import { CabinetModuleNode, CabinetNode } from './schema'
+import { cabinetSlots } from './slots'
 
 export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   kind: 'cabinet',
@@ -39,9 +41,12 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     frontGap: 0.003,
     doorStyle: 'double',
     handleStyle: 'bar',
+    handlePosition: 'auto',
+    frontOverlay: 'full',
     withBottomPanel: true,
     showPlinth: true,
     withCountertop: true,
+    // material / materialPreset left undefined — paint mode writes slot refs.
   }),
 
   capabilities: {
@@ -74,6 +79,8 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       },
       collides: true,
     },
+    paint: cabinetPaint,
+    slots: () => cabinetSlots(),
   },
 
   parametrics: cabinetParametrics,
@@ -94,9 +101,14 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       n.frontGap,
       n.doorStyle,
       n.handleStyle,
+      n.handlePosition,
+      n.frontOverlay,
       n.withBottomPanel,
       n.showPlinth,
       n.withCountertop,
+      JSON.stringify(n.material ?? null),
+      JSON.stringify(n.materialPreset ?? null),
+      JSON.stringify(n.slots ?? null),
       JSON.stringify(n.children ?? []),
       JSON.stringify(n.stack ?? null),
     ]),
@@ -153,9 +165,12 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     frontGap: 0.003,
     doorStyle: 'double',
     handleStyle: 'bar',
+    handlePosition: 'auto',
+    frontOverlay: 'full',
     withBottomPanel: true,
     showPlinth: false,
     withCountertop: false,
+    // material / materialPreset left undefined — paint mode writes slot refs.
   }),
 
   capabilities: {
@@ -180,6 +195,8 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       },
       collides: true,
     },
+    paint: cabinetPaint,
+    slots: () => cabinetSlots(),
   },
 
   parametrics: cabinetModuleParametrics,
@@ -200,9 +217,14 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       n.frontGap,
       n.doorStyle,
       n.handleStyle,
+      n.handlePosition,
+      n.frontOverlay,
       n.withBottomPanel,
       n.showPlinth,
       n.withCountertop,
+      JSON.stringify(n.material ?? null),
+      JSON.stringify(n.materialPreset ?? null),
+      JSON.stringify(n.slots ?? null),
       JSON.stringify(n.children ?? []),
       JSON.stringify(n.stack ?? null),
     ]),

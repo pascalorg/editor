@@ -4,38 +4,47 @@ import {
   CylinderGeometry,
   DoubleSide,
   ExtrudeGeometry,
+  FrontSide,
   Group,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   Shape,
+  SphereGeometry,
+  type Material,
 } from 'three'
 import {
+  getMaterialPresetByRef,
+  type GeometryContext,
+  type MaterialSchema,
+  type CabinetModuleNode,
+  type CabinetNode,
+} from '@pascal-app/core'
+import {
+  applyMaterialPresetToMaterials,
   Brush,
   csgEvaluator,
   csgGeometry,
+  createDefaultMaterial,
+  createMaterial,
+  createSurfaceRoleMaterial,
   prepareBrushForCSG,
+  resolveMaterialRef,
+  resolveSlotDefaultMaterial,
+  type ColorPreset,
+  type RenderShading,
   SUBTRACTION,
 } from '@pascal-app/viewer'
-import type { CabinetModuleNode, CabinetNode, GeometryContext } from '@pascal-app/core'
 import {
   compartmentDoorType,
   compartmentDrawerCount,
   compartmentShelfCount,
   normalizeCabinetStack,
 } from './stack'
+import { cabinetSlots, type CabinetSlotId } from './slots'
 
-const CARCASS_COLOR = '#f0ede6'
-const FRONT_COLOR = '#e4ded2'
-const PLINTH_COLOR = '#a8a29a'
-const COUNTERTOP_COLOR = '#d6d0c4'
-const HANDLE_COLOR = '#7d7d7d'
-const BACK_COLOR = '#ebe5d8'
-const DRAWER_BOX_COLOR = '#ddd6c8'
 const DRAWER_MIN_OPEN = 0.32
-const GLASS_COLOR = '#b9d7e8'
-const HANDLE_RECESS_COLOR = '#5f5f5f'
 const HANDLE_EDGE_INSET = 0.045
 const HANDLE_TOP_INSET = 0.05
 const HANDLE_SLOT_LONG = 0.09
@@ -43,6 +52,9 @@ const HANDLE_SLOT_SHORT = 0.016
 const HANDLE_CUTOUT_WIDTH = 0.13
 const HANDLE_CUTOUT_DIP = 0.014
 const holeDummyMaterial = new MeshBasicMaterial()
+const CABINET_SLOT_DEFAULTS = Object.fromEntries(
+  cabinetSlots().map((slot) => [slot.slotId, slot.default]),
+) as Record<CabinetSlotId, string>
 
 function prepareCsgGeometry(geometry: BufferGeometry) {
   const indexCount = geometry.getIndex()?.count ?? 0
@@ -177,6 +189,7 @@ function buildHoleFrontGeometry(
 }
 
 type CabinetGeometryNode = CabinetNode | CabinetModuleNode
+type CabinetSlotMaterials = Record<CabinetSlotId, Material>
 
 function cabinetTotalHeight(node: Pick<CabinetGeometryNode, 'carcassHeight' | 'countertopThickness' | 'plinthHeight' | 'showPlinth' | 'withCountertop'>) {
   return (
@@ -184,6 +197,117 @@ function cabinetTotalHeight(node: Pick<CabinetGeometryNode, 'carcassHeight' | 'c
     node.carcassHeight +
     (node.withCountertop ? node.countertopThickness : 0)
   )
+}
+
+function getLegacyCabinetMaterial(node: CabinetGeometryNode, shading: RenderShading): Material | null {
+  if (node.materialPreset) {
+    const preset = getMaterialPresetByRef(node.materialPreset)
+    if (preset) {
+      const base = createDefaultMaterial('#ffffff', 0.6, shading)
+      applyMaterialPresetToMaterials(base, preset)
+      return base
+    }
+  }
+  if (node.material) return createMaterial(node.material as MaterialSchema, shading)
+  return null
+}
+
+function getCabinetSlotMaterial(
+  node: CabinetGeometryNode,
+  slotId: CabinetSlotId,
+  materials: GeometryContext['materials'],
+  shading: RenderShading,
+  textures: boolean,
+  colorPreset: ColorPreset,
+  sceneTheme: string | undefined,
+): Material {
+  if (!textures) {
+    return createSurfaceRoleMaterial('joinery', colorPreset, FrontSide, sceneTheme)
+  }
+
+  const slotRef = node.slots?.[slotId]
+  if (slotRef) {
+    const resolved = resolveMaterialRef(slotRef, materials, shading)
+    if (resolved) return resolved
+  }
+
+  if (
+    slotId === 'front' ||
+    slotId === 'carcass' ||
+    slotId === 'countertop' ||
+    slotId === 'plinth'
+  ) {
+    const legacy = getLegacyCabinetMaterial(node, shading)
+    if (legacy) return legacy
+  }
+
+  return resolveSlotDefaultMaterial(
+    CABINET_SLOT_DEFAULTS[slotId],
+    shading,
+    slotId === 'hardware' ? 0.45 : 0.8,
+  )
+}
+
+function getCabinetSlotMaterials(
+  node: CabinetGeometryNode,
+  ctx: GeometryContext | undefined,
+  shading: RenderShading,
+  textures: boolean,
+  colorPreset: ColorPreset,
+  sceneTheme: string | undefined,
+): CabinetSlotMaterials {
+  return {
+    front: getCabinetSlotMaterial(
+      node,
+      'front',
+      ctx?.materials,
+      shading,
+      textures,
+      colorPreset,
+      sceneTheme,
+    ),
+    carcass: getCabinetSlotMaterial(
+      node,
+      'carcass',
+      ctx?.materials,
+      shading,
+      textures,
+      colorPreset,
+      sceneTheme,
+    ),
+    countertop: getCabinetSlotMaterial(
+      node,
+      'countertop',
+      ctx?.materials,
+      shading,
+      textures,
+      colorPreset,
+      sceneTheme,
+    ),
+    plinth: getCabinetSlotMaterial(
+      node,
+      'plinth',
+      ctx?.materials,
+      shading,
+      textures,
+      colorPreset,
+      sceneTheme,
+    ),
+    hardware: getCabinetSlotMaterial(
+      node,
+      'hardware',
+      ctx?.materials,
+      shading,
+      textures,
+      colorPreset,
+      sceneTheme,
+    ),
+  }
+}
+
+function stampSlot<T extends Mesh>(mesh: T, slotId: CabinetSlotId): T {
+  mesh.userData.slotId = slotId
+  return mesh
 }
 
 function getRunModules(ctx?: GeometryContext): CabinetModuleNode[] {
@@ -238,11 +362,19 @@ function getRunSpans(modules: CabinetModuleNode[]) {
   return spans
 }
 
-function buildCabinetRunGeometry(node: CabinetNode, ctx?: GeometryContext): Group | null {
+function buildCabinetRunGeometry(
+  node: CabinetNode,
+  ctx: GeometryContext | undefined,
+  shading: RenderShading,
+  textures: boolean,
+  colorPreset: ColorPreset,
+  sceneTheme: string | undefined,
+): Group | null {
   const modules = getRunModules(ctx)
   if (modules.length === 0) return null
 
   const group = new Group()
+  const materials = getCabinetSlotMaterials(node, ctx, shading, textures, colorPreset, sceneTheme)
   const plinth = node.showPlinth ? node.plinthHeight : 0
   const spans = getRunSpans(modules)
 
@@ -255,8 +387,9 @@ function buildCabinetRunGeometry(node: CabinetNode, ctx?: GeometryContext): Grou
         group,
         [span.width, plinth, Math.max(node.boardThickness, span.depth - toeKickDepth)],
         [span.centerX, plinth / 2, -(toeKickDepth / 2)],
-        PLINTH_COLOR,
+        materials.plinth,
         'cabinet-run-plinth',
+        'plinth',
       )
     }
 
@@ -269,8 +402,9 @@ function buildCabinetRunGeometry(node: CabinetNode, ctx?: GeometryContext): Grou
           span.depth + node.countertopOverhang,
         ],
         [span.centerX, span.topY + node.countertopThickness / 2, 0.01],
-        COUNTERTOP_COLOR,
+        materials.countertop,
         'cabinet-run-countertop',
+        'countertop',
       )
     }
   }
@@ -282,13 +416,15 @@ function addBox(
   group: Group,
   size: [number, number, number],
   position: [number, number, number],
-  color: string,
+  materialOrColor: Material | string,
   name: string,
+  slotId: CabinetSlotId = 'carcass',
 ) {
-  const mesh = new Mesh(
-    new BoxGeometry(size[0], size[1], size[2]),
-    new MeshStandardMaterial({ color, metalness: 0.08, roughness: 0.72 }),
-  )
+  const material =
+    typeof materialOrColor === 'string'
+      ? new MeshStandardMaterial({ color: materialOrColor, metalness: 0.08, roughness: 0.72 })
+      : materialOrColor
+  const mesh = stampSlot(new Mesh(new BoxGeometry(size[0], size[1], size[2]), material), slotId)
   mesh.name = name
   mesh.position.set(position[0], position[1], position[2])
   mesh.castShadow = true
@@ -303,16 +439,9 @@ function addBarHandle(
   length: number,
   vertical: boolean,
   name: string,
+  material: Material,
 ) {
-  const handleMaterial = new MeshStandardMaterial({
-    color: HANDLE_COLOR,
-    metalness: 0.55,
-    roughness: 0.3,
-  })
-  const mesh = new Mesh(
-    new CylinderGeometry(0.006, 0.006, length, 16),
-    handleMaterial,
-  )
+  const mesh = stampSlot(new Mesh(new CylinderGeometry(0.006, 0.006, length, 16), material), 'hardware')
   mesh.name = name
   mesh.position.set(position[0], position[1], position[2] + 0.028)
   if (!vertical) mesh.rotation.z = Math.PI / 2
@@ -321,7 +450,10 @@ function addBarHandle(
 
   const standOffDistance = length * 0.38
   for (const offset of [-standOffDistance, standOffDistance]) {
-    const standoff = new Mesh(new CylinderGeometry(0.004, 0.004, 0.026, 10), handleMaterial)
+    const standoff = stampSlot(
+      new Mesh(new CylinderGeometry(0.004, 0.004, 0.026, 10), material),
+      'hardware',
+    )
     standoff.name = `${name}-standoff`
     standoff.position.set(
       position[0] + (vertical ? 0 : offset),
@@ -334,9 +466,41 @@ function addBarHandle(
   }
 }
 
+function addKnobHandle(
+  group: Object3D,
+  position: [number, number, number],
+  name: string,
+  material: Material,
+) {
+  const stem = stampSlot(new Mesh(new CylinderGeometry(0.005, 0.005, 0.02, 12), material), 'hardware')
+  stem.name = `${name}-stem`
+  stem.position.set(position[0], position[1], position[2] + 0.01)
+  stem.rotation.x = Math.PI / 2
+  stem.castShadow = true
+  group.add(stem)
+
+  const knob = stampSlot(new Mesh(new SphereGeometry(0.011, 16, 12), material), 'hardware')
+  knob.name = name
+  knob.position.set(position[0], position[1], position[2] + 0.022)
+  knob.castShadow = true
+  group.add(knob)
+}
+
+function resolveHandleY(node: CabinetGeometryNode, height: number, drawer: boolean): number {
+  const position = node.handlePosition ?? 'auto'
+  const topY = drawer
+    ? height / 2 - HANDLE_TOP_INSET
+    : height / 2 - HANDLE_TOP_INSET - HANDLE_SLOT_LONG / 2
+  if (position === 'center') return 0
+  if (position === 'top') return topY
+  // 'auto' | 'edge': drawers pull from the top, doors from mid-height.
+  return drawer ? topY : 0
+}
+
 function addHandleFeature(
   group: Object3D,
   node: CabinetGeometryNode,
+  materials: CabinetSlotMaterials,
   width: number,
   height: number,
   hinge: 'left' | 'right' | null,
@@ -348,15 +512,24 @@ function addHandleFeature(
   const style = node.handleStyle ?? 'bar'
   if (style === 'none') return
 
+  const edgeX =
+    hinge == null
+      ? 0
+      : (hinge === 'right' ? -1 : 1) * (width / 2 - HANDLE_EDGE_INSET - HANDLE_SLOT_SHORT / 2)
+
   if (style === 'bar') {
-    const x =
-      placement?.x ??
-      (hinge == null
-        ? 0
-        : (hinge === 'right' ? -1 : 1) * (width / 2 - HANDLE_EDGE_INSET - HANDLE_SLOT_SHORT / 2))
-    const y = placement?.y ?? (drawer ? height / 2 - HANDLE_TOP_INSET : 0)
+    const x = placement?.x ?? edgeX
+    const y = placement?.y ?? resolveHandleY(node, height, drawer)
     const z = node.frontThickness / 2
-    addBarHandle(group, [x, y, z], drawer ? 0.12 : 0.18, vertical, name)
+    addBarHandle(group, [x, y, z], drawer ? 0.12 : 0.18, vertical, name, materials.hardware)
+    return
+  }
+
+  if (style === 'knob') {
+    const x = placement?.x ?? edgeX
+    const y = placement?.y ?? resolveHandleY(node, height, drawer)
+    const z = node.frontThickness / 2
+    addKnobHandle(group, [x, y, z], name, materials.hardware)
     return
   }
 
@@ -384,9 +557,9 @@ function addHandleFeature(
   const size: [number, number, number] = vertical
     ? [slotThickness, slotLength, Math.max(0.004, node.frontThickness * 0.4)]
     : [slotLength, slotThickness, Math.max(0.004, node.frontThickness * 0.4)]
-  const mesh = new Mesh(
-    new BoxGeometry(size[0], size[1], size[2]),
-    new MeshStandardMaterial({ color: HANDLE_RECESS_COLOR, metalness: 0.2, roughness: 0.65 }),
+  const mesh = stampSlot(
+    new Mesh(new BoxGeometry(size[0], size[1], size[2]), materials.hardware),
+    'hardware',
   )
   mesh.name = name
   mesh.position.set(x, y, z - node.frontThickness * 0.18)
@@ -396,6 +569,7 @@ function addHandleFeature(
 function addDoorLeaf(
   group: Group,
   node: CabinetGeometryNode,
+  materials: CabinetSlotMaterials,
   width: number,
   height: number,
   hinge: 'left' | 'right',
@@ -405,7 +579,6 @@ function addDoorLeaf(
   name: string,
   glass = false,
 ) {
-  const material = new MeshStandardMaterial({ color: FRONT_COLOR, metalness: 0.08, roughness: 0.72 })
   const hingeGroup = new Group()
   hingeGroup.name = `${name}-hinge`
   hingeGroup.position.set(
@@ -426,20 +599,11 @@ function addDoorLeaf(
     const glassWidth = Math.max(0.01, width - frame * 2)
     const glassHeight = Math.max(0.01, height - frame * 2)
     const glassDepth = Math.max(0.003, node.frontThickness * 0.25)
-    addBox(leafGroup, [width, frame, node.frontThickness], [0, height / 2 - frame / 2, 0], FRONT_COLOR, `${name}-frame-top`)
-    addBox(leafGroup, [width, frame, node.frontThickness], [0, -height / 2 + frame / 2, 0], FRONT_COLOR, `${name}-frame-bottom`)
-    addBox(leafGroup, [frame, glassHeight, node.frontThickness], [-width / 2 + frame / 2, 0, 0], FRONT_COLOR, `${name}-frame-left`)
-    addBox(leafGroup, [frame, glassHeight, node.frontThickness], [width / 2 - frame / 2, 0, 0], FRONT_COLOR, `${name}-frame-right`)
-    const glassMesh = new Mesh(
-      new BoxGeometry(glassWidth, glassHeight, glassDepth),
-      new MeshBasicMaterial({
-        color: GLASS_COLOR,
-        transparent: true,
-        opacity: 0.32,
-        side: DoubleSide,
-        depthWrite: false,
-      }),
-    )
+    addBox(leafGroup, [width, frame, node.frontThickness], [0, height / 2 - frame / 2, 0], materials.front, `${name}-frame-top`, 'front')
+    addBox(leafGroup, [width, frame, node.frontThickness], [0, -height / 2 + frame / 2, 0], materials.front, `${name}-frame-bottom`, 'front')
+    addBox(leafGroup, [frame, glassHeight, node.frontThickness], [-width / 2 + frame / 2, 0, 0], materials.front, `${name}-frame-left`, 'front')
+    addBox(leafGroup, [frame, glassHeight, node.frontThickness], [width / 2 - frame / 2, 0, 0], materials.front, `${name}-frame-right`, 'front')
+    const glassMesh = stampSlot(new Mesh(new BoxGeometry(glassWidth, glassHeight, glassDepth), materials.front), 'front')
     glassMesh.name = `${name}-glass`
     glassMesh.position.set(0, 0, node.frontThickness / 2 + glassDepth / 2 + 0.001)
     glassMesh.renderOrder = 2
@@ -447,6 +611,7 @@ function addDoorLeaf(
     addHandleFeature(
       leafGroup,
       { ...node, handleStyle: 'bar' },
+      materials,
       width,
       height,
       hinge,
@@ -461,19 +626,20 @@ function addDoorLeaf(
     return
   }
 
-  const mesh = new Mesh(buildFrontGeometry(node, width, height, false, hinge), material)
+  const mesh = stampSlot(new Mesh(buildFrontGeometry(node, width, height, false, hinge), materials.front), 'front')
   mesh.name = name
   mesh.position.set(hinge === 'left' ? width / 2 : -width / 2, 0, 0)
   mesh.castShadow = true
   mesh.receiveShadow = true
   hingeGroup.add(mesh)
 
-  addHandleFeature(mesh, node, width, height, hinge, true, false, `${name}-handle`)
+  addHandleFeature(mesh, node, materials, width, height, hinge, true, false, `${name}-handle`)
 }
 
 function addDoorFronts(
   group: Group,
   node: CabinetGeometryNode,
+  materials: CabinetSlotMaterials,
   openingWidth: number,
   openingHeight: number,
   centerX: number,
@@ -488,6 +654,7 @@ function addDoorFronts(
     addDoorLeaf(
       group,
       node,
+      materials,
       leafWidth,
       frontHeight,
       'left',
@@ -500,6 +667,7 @@ function addDoorFronts(
     addDoorLeaf(
       group,
       node,
+      materials,
       leafWidth,
       frontHeight,
       'right',
@@ -514,6 +682,7 @@ function addDoorFronts(
   addDoorLeaf(
     group,
     node,
+    materials,
     openingWidth - 2 * node.frontGap,
     frontHeight,
     doorType === 'single-left' ? 'left' : 'right',
@@ -526,6 +695,7 @@ function addDoorFronts(
 
 function addShelfBoards(
   group: Group,
+  materials: CabinetSlotMaterials,
   openingWidth: number,
   openingDepth: number,
   board: number,
@@ -540,8 +710,9 @@ function addShelfBoards(
       group,
       [openingWidth, board, openingDepth],
       [0, y, board / 2],
-      CARCASS_COLOR,
+      materials.carcass,
       `cabinet-shelf-${y.toFixed(3)}-${i}`,
+      'carcass',
     )
   }
 }
@@ -554,19 +725,21 @@ function drawerOpenScale(index: number, count: number) {
 function addDrawerFronts(
   group: Group,
   node: CabinetGeometryNode,
-  openingWidth: number,
-  openingHeight: number,
+  materials: CabinetSlotMaterials,
+  faceWidth: number,
+  faceHeight: number,
   centerY: number,
   y0: number,
+  boxOpeningWidth: number,
   frontZ: number,
   count: number,
   boxBackZ: number,
   boxDepth: number,
 ) {
-  const usableHeight = Math.max(0.01, openingHeight - 2 * node.frontGap)
+  const usableHeight = Math.max(0.01, faceHeight - 2 * node.frontGap)
   const drawerHeight = Math.max(0.01, (usableHeight - (count - 1) * node.frontGap) / count)
   const drawerSideThickness = Math.min(0.012, node.boardThickness * 0.7)
-  const boxWidth = Math.max(0.01, openingWidth - 0.026)
+  const boxWidth = Math.max(0.01, boxOpeningWidth - 0.026)
   const boxHeight = Math.max(0.02, drawerHeight - 0.012)
   const boxCenterZ = boxBackZ + boxDepth / 2
   for (let i = 0; i < count; i++) {
@@ -577,10 +750,10 @@ function addDrawerFronts(
       node.frontGap +
       drawerHeight / 2 +
       i * (drawerHeight + node.frontGap)
-    const frontWidth = openingWidth - 2 * node.frontGap
-    const frontMesh = new Mesh(
-      buildFrontGeometry(node, frontWidth, drawerHeight, true),
-      new MeshStandardMaterial({ color: FRONT_COLOR, metalness: 0.08, roughness: 0.72 }),
+    const frontWidth = faceWidth - 2 * node.frontGap
+    const frontMesh = stampSlot(
+      new Mesh(buildFrontGeometry(node, frontWidth, drawerHeight, true), materials.front),
+      'front',
     )
     frontMesh.name = `cabinet-drawer-front-${centerY.toFixed(3)}-${i}`
     frontMesh.position.set(0, y, frontZ + openOffset)
@@ -595,6 +768,7 @@ function addDrawerFronts(
       addHandleFeature(
         handleGroup,
         node,
+        materials,
         frontWidth,
         drawerHeight,
         null,
@@ -609,40 +783,52 @@ function addDrawerFronts(
       group,
       [drawerSideThickness, boxHeight, boxDepth],
       [-(boxWidth / 2) + drawerSideThickness / 2, y, boxCenterZ + openOffset],
-      DRAWER_BOX_COLOR,
+      materials.carcass,
       `cabinet-drawer-side-left-${centerY.toFixed(3)}-${i}`,
+      'carcass',
     )
     addBox(
       group,
       [drawerSideThickness, boxHeight, boxDepth],
       [(boxWidth / 2) - drawerSideThickness / 2, y, boxCenterZ + openOffset],
-      DRAWER_BOX_COLOR,
+      materials.carcass,
       `cabinet-drawer-side-right-${centerY.toFixed(3)}-${i}`,
+      'carcass',
     )
     addBox(
       group,
       [boxWidth - 2 * drawerSideThickness, boxHeight, drawerSideThickness],
       [0, y, boxBackZ + drawerSideThickness / 2 + openOffset],
-      DRAWER_BOX_COLOR,
+      materials.carcass,
       `cabinet-drawer-back-${centerY.toFixed(3)}-${i}`,
+      'carcass',
     )
     addBox(
       group,
       [boxWidth - 2 * drawerSideThickness, drawerSideThickness, boxDepth - drawerSideThickness],
       [0, y - boxHeight / 2 + drawerSideThickness / 2, boxCenterZ + openOffset],
-      DRAWER_BOX_COLOR,
+      materials.carcass,
       `cabinet-drawer-bottom-${centerY.toFixed(3)}-${i}`,
+      'carcass',
     )
   }
 }
 
-export function buildCabinetGeometry(node: CabinetGeometryNode, ctx?: GeometryContext): Group {
+export function buildCabinetGeometry(
+  node: CabinetGeometryNode,
+  ctx?: GeometryContext,
+  shading: RenderShading = 'rendered',
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+  sceneTheme?: string,
+): Group {
   if (node.type === 'cabinet') {
-    const run = buildCabinetRunGeometry(node, ctx)
+    const run = buildCabinetRunGeometry(node, ctx, shading, textures, colorPreset, sceneTheme)
     if (run) return run
   }
 
   const group = new Group()
+  const materials = getCabinetSlotMaterials(node, ctx, shading, textures, colorPreset, sceneTheme)
   const width = node.width
   const depth = node.depth
   const board = node.boardThickness
@@ -660,7 +846,11 @@ export function buildCabinetGeometry(node: CabinetGeometryNode, ctx?: GeometryCo
   const backThickness = Math.min(0.006, board / 2)
   const backInset = Math.min(0.012, depth * 0.08)
   const frontRecess = 0.0015
-  const frontZ = depth / 2 - frontThickness / 2 - frontRecess
+  const inset = node.frontOverlay === 'inset'
+  // Overlay fronts sit proud on the carcass face; inset fronts sit flush within the opening.
+  const frontZ = inset
+    ? depth / 2 - frontThickness / 2 - frontRecess
+    : depth / 2 + frontThickness / 2 - frontRecess
   const openingWidth = Math.max(0.01, width - 2 * board)
   const openingDepth = Math.max(0.01, depth - backInset - 0.02)
   const drawerBoxBackZ = -depth / 2 + backInset + 0.02
@@ -671,33 +861,37 @@ export function buildCabinetGeometry(node: CabinetGeometryNode, ctx?: GeometryCo
     group,
     [board, carcassHeight, depth],
     [-width / 2 + board / 2, bodyCenterY, 0],
-    CARCASS_COLOR,
+    materials.carcass,
     'cabinet-side-left',
+    'carcass',
   )
   addBox(
     group,
     [board, carcassHeight, depth],
     [width / 2 - board / 2, bodyCenterY, 0],
-    CARCASS_COLOR,
+    materials.carcass,
     'cabinet-side-right',
+    'carcass',
   )
   if (node.withBottomPanel) {
     addBox(
       group,
       [innerWidth, board, depth - backInset],
       [0, plinth + board / 2, backInset / 2],
-      CARCASS_COLOR,
+      materials.carcass,
       'cabinet-bottom',
+      'carcass',
     )
   }
-  addBox(group, [innerWidth, board, depth], [0, topY - board / 2, 0], CARCASS_COLOR, 'cabinet-top')
+  addBox(group, [innerWidth, board, depth], [0, topY - board / 2, 0], materials.carcass, 'cabinet-top', 'carcass')
   if (node.showPlinth && plinth > 0) {
     addBox(
       group,
       [width - board * 2, plinth, Math.max(board, depth - toeKickDepth)],
       [0, plinth / 2, -(toeKickDepth / 2)],
-      PLINTH_COLOR,
+      materials.plinth,
       'cabinet-plinth',
+      'plinth',
     )
   }
 
@@ -706,8 +900,9 @@ export function buildCabinetGeometry(node: CabinetGeometryNode, ctx?: GeometryCo
       group,
       [width + countertopOverhang * 2, countertopThickness, depth + countertopOverhang],
       [0, topY + countertopThickness / 2, 0.01],
-      COUNTERTOP_COLOR,
+      materials.countertop,
       'cabinet-countertop',
+      'countertop',
     )
   }
   const rows = normalizeCabinetStack(node)
@@ -725,8 +920,9 @@ export function buildCabinetGeometry(node: CabinetGeometryNode, ctx?: GeometryCo
       group,
       [openingWidth, Math.max(0.001, row.height - board), backThickness],
       [0, subCellBottomY + row.height / 2, -depth / 2 + backInset + backThickness / 2],
-      BACK_COLOR,
+      materials.carcass,
       `cabinet-back-${index}`,
+      'carcass',
     )
 
     if (index < rows.length - 1) {
@@ -735,25 +931,32 @@ export function buildCabinetGeometry(node: CabinetGeometryNode, ctx?: GeometryCo
         group,
         [openingWidth, board, openingDepth],
         [0, deckY, board / 2],
-        CARCASS_COLOR,
+        materials.carcass,
         `cabinet-deck-${index}`,
+        'carcass',
       )
     }
+
+    const faceWidth = inset ? openingWidth : Math.max(0.01, width - frontGap)
+    const faceHeight = inset ? openingHeight : Math.max(0.01, row.height)
+    const faceCenterY = inset ? openingCenterY : subCellBottomY + row.height / 2
 
     if (row.compartment.type === 'door') {
       addDoorFronts(
         group,
         node,
-        openingWidth,
-        openingHeight,
+        materials,
+        faceWidth,
+        faceHeight,
         0,
-        openingCenterY,
+        faceCenterY,
         frontZ,
         compartmentDoorType(row.compartment, node.width),
       )
       if ((row.compartment.shelfCount ?? 0) > 0) {
         addShelfBoards(
           group,
+          materials,
           openingWidth,
           openingDepth,
           board,
@@ -768,6 +971,7 @@ export function buildCabinetGeometry(node: CabinetGeometryNode, ctx?: GeometryCo
     if (row.compartment.type === 'shelf') {
       addShelfBoards(
         group,
+        materials,
         openingWidth,
         openingDepth,
         board,
@@ -782,10 +986,12 @@ export function buildCabinetGeometry(node: CabinetGeometryNode, ctx?: GeometryCo
       addDrawerFronts(
         group,
         node,
+        materials,
+        faceWidth,
+        faceHeight,
+        faceCenterY,
+        inset ? openingBottomY : subCellBottomY,
         openingWidth,
-        openingHeight,
-        openingCenterY,
-        openingBottomY,
         frontZ,
         compartmentDrawerCount(row.compartment),
         drawerBoxBackZ,

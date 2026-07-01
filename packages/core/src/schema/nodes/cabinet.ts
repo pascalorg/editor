@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { MaterialSchema } from '../material'
 
 const CabinetCompartment = z.object({
   id: z.string(),
@@ -29,10 +30,15 @@ export const CabinetNode = BaseNode.extend({
   frontThickness: z.number().min(0.01).max(0.05).default(0.018),
   frontGap: z.number().min(0.001).max(0.02).default(0.003),
   doorStyle: z.enum(['single-left', 'single-right', 'double', 'glass']).default('double'),
-  handleStyle: z.enum(['none', 'bar', 'cutout', 'hole']).default('bar'),
+  handleStyle: z.enum(['none', 'bar', 'cutout', 'hole', 'knob']).default('bar'),
+  handlePosition: z.enum(['auto', 'top', 'center', 'edge']).default('auto'),
+  frontOverlay: z.enum(['full', 'inset']).default('full'),
   withBottomPanel: z.boolean().default(true),
   showPlinth: z.boolean().default(true),
   withCountertop: z.boolean().default(true),
+  material: MaterialSchema.optional(),
+  materialPreset: z.string().optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   stack: z.array(CabinetCompartment).optional(),
 }).describe('Parametric modular cabinet run node')
 
@@ -55,10 +61,15 @@ export const CabinetModuleNode = BaseNode.extend({
   frontThickness: z.number().min(0.01).max(0.05).default(0.018),
   frontGap: z.number().min(0.001).max(0.02).default(0.003),
   doorStyle: z.enum(['single-left', 'single-right', 'double', 'glass']).default('double'),
-  handleStyle: z.enum(['none', 'bar', 'cutout', 'hole']).default('bar'),
+  handleStyle: z.enum(['none', 'bar', 'cutout', 'hole', 'knob']).default('bar'),
+  handlePosition: z.enum(['auto', 'top', 'center', 'edge']).default('auto'),
+  frontOverlay: z.enum(['full', 'inset']).default('full'),
   withBottomPanel: z.boolean().default(true),
   showPlinth: z.boolean().default(true),
   withCountertop: z.boolean().default(true),
+  material: MaterialSchema.optional(),
+  materialPreset: z.string().optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   stack: z.array(CabinetCompartment).optional(),
 }).describe('Parametric module inside a modular cabinet run')
 

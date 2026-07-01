@@ -44,9 +44,21 @@ const DOOR_TYPE_OPTIONS = [
 
 const HANDLE_STYLE_OPTIONS = [
   { value: 'bar', label: 'Bar' },
+  { value: 'knob', label: 'Knob' },
   { value: 'cutout', label: 'Cutout' },
   { value: 'hole', label: 'Hole' },
   { value: 'none', label: 'None' },
+] as const
+
+const HANDLE_POSITION_OPTIONS = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'top', label: 'Top' },
+  { value: 'center', label: 'Center' },
+] as const
+
+const FRONT_OVERLAY_OPTIONS = [
+  { value: 'full', label: 'Overlay' },
+  { value: 'inset', label: 'Inset' },
 ] as const
 
 const CABINET_TIER_OPTIONS = [
@@ -909,6 +921,26 @@ export default function CabinetPanel() {
         </div>
       </PanelSection>
 
+      <PanelSection title="Fronts">
+        <div className="space-y-2 px-1 pb-2">
+          <div>
+            <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Mounting
+            </div>
+            <SegmentedControl
+              onChange={(value) =>
+                updateNode({ frontOverlay: value as CabinetNodeType['frontOverlay'] })
+              }
+              options={FRONT_OVERLAY_OPTIONS.map((option) => ({
+                value: option.value,
+                label: option.label,
+              }))}
+              value={node.frontOverlay ?? 'full'}
+            />
+          </div>
+        </div>
+      </PanelSection>
+
       <PanelSection title="Handles">
         <div className="space-y-2 px-1 pb-2">
           <div>
@@ -926,6 +958,23 @@ export default function CabinetPanel() {
               value={node.handleStyle}
             />
           </div>
+          {(node.handleStyle === 'bar' || node.handleStyle === 'knob') && (
+            <div>
+              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Position
+              </div>
+              <SegmentedControl
+                onChange={(value) =>
+                  updateNode({ handlePosition: value as CabinetNodeType['handlePosition'] })
+                }
+                options={HANDLE_POSITION_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+                value={node.handlePosition ?? 'auto'}
+              />
+            </div>
+          )}
         </div>
       </PanelSection>
     </PanelWrapper>

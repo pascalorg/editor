@@ -39,6 +39,7 @@ export type PaintableMaterialTarget =
       | 'slab'
       | 'ceiling'
       | 'shelf'
+      | 'cabinet'
       | 'chimney'
       | 'dormer'
       | 'box-vent'
@@ -47,6 +48,7 @@ export type PaintableMaterialTarget =
       | 'cupola'
       | 'eyebrow-vent'
     >
+  | 'cabinet'
   | 'item'
 
 export type SingleSurfaceMaterialRole = 'surface'
@@ -352,14 +354,17 @@ export function resolveActivePaintMaterialFromSelection(params: {
   // at the top of this function.
 
   if (
-    (selectedNode.type === 'fence' ||
+    ((selectedNode.type === 'fence' ||
       selectedNode.type === 'column' ||
-      selectedNode.type === 'shelf') &&
-    selectedMaterialTarget.role === 'surface'
+      selectedNode.type === 'shelf' ||
+      selectedNode.type === 'cabinet' ||
+      selectedNode.type === 'cabinet-module') &&
+      selectedMaterialTarget.role === 'surface')
   ) {
     // Roof vents previously lived here too; they now resolve via the
     // registry-driven `getEffectiveMaterial` path at the top of this function.
-    const target = selectedNode.type
+    const target =
+      selectedNode.type === 'cabinet-module' ? 'cabinet' : selectedNode.type
     return hasActivePaintMaterial({
       material: selectedNode.material,
       materialPreset: selectedNode.materialPreset,
@@ -416,6 +421,10 @@ export function resolvePaintTargetFromSelection(params: {
 
   if (selectedNode.type === 'shelf') {
     return 'shelf'
+  }
+
+  if (selectedNode.type === 'cabinet' || selectedNode.type === 'cabinet-module') {
+    return 'cabinet'
   }
 
   if (selectedNode.type === 'item') {
