@@ -103,6 +103,14 @@ export {
 export { mergedOutline } from './lib/merged-outline-node'
 export { unionPolygons } from './lib/polygon-union'
 export {
+  detectRendererCapability,
+  initializeGpuRenderer,
+  type RendererBackendParameters,
+  type RendererCapability,
+  type RendererCapabilityCanvas,
+  type RendererInitializationResult,
+} from './lib/renderer-capability'
+export {
   getSceneTheme,
   SCENE_THEME_IDS,
   SCENE_THEMES,
