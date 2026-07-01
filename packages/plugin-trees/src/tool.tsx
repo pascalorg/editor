@@ -24,6 +24,8 @@ export default function TreeTool() {
     () =>
       TreeNode.parse({
         preset: brush.preset,
+        size: brush.size,
+        treeType: brush.treeType,
         height: brush.height,
         foliageDensity: brush.foliageDensity,
         trunkThickness: brush.trunkThickness,
@@ -32,7 +34,15 @@ export default function TreeTool() {
         position: [0, 0, 0],
         rotation: [0, 0, 0],
       }),
-    [brush.preset, brush.height, brush.foliageDensity, brush.trunkThickness, brush.leafless],
+    [
+      brush.preset,
+      brush.size,
+      brush.treeType,
+      brush.height,
+      brush.foliageDensity,
+      brush.trunkThickness,
+      brush.leafless,
+    ],
   )
 
   const { cursorRef, cursorVisible } = usePlacement(activeLevelId, (position) => {
@@ -40,6 +50,8 @@ export default function TreeTool() {
     const s = useTreesStore.getState()
     const tree = TreeNode.parse({
       preset: s.preset,
+      size: s.size,
+      treeType: s.treeType,
       height: s.height,
       foliageDensity: s.foliageDensity,
       trunkThickness: s.trunkThickness,

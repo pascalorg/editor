@@ -35,15 +35,22 @@ The contribution paths a plugin has:
      stays on the box, and selection / outline / zone machinery works unchanged
      with no instanceId bookkeeping.
 
-### Two kinds
+### Three kinds
 
-- **`trees:tree`** — ez-tree geometry (`geometry.ts`); presets Oak / Pine /
-  Aspen / Ash / Bush; curated inspector params (foliage density, trunk
-  thickness, leafless) folded into the variant key.
+- **`trees:tree`** — ez-tree geometry (`geometry.ts`); species presets Oak /
+  Pine / Aspen / Ash / Bush / Trellis × a Small/Medium/Large **size** (all of
+  ez-tree's built-in presets), a Deciduous/Evergreen **type**, curated params
+  (foliage density, trunk thickness, leafless), and leaf/branch **colour tints** —
+  all folded into the variant key. Colours are edit-only (inspector), not on the
+  placement brush.
 - **`trees:flower`** — simple procedural geometry (`flower-geometry.ts`, merged
-  per material); presets daisy / tulip / lavender. A sibling kind that reuses the
-  exact same instanced core + placement helper (`placement.tsx`) — the template
-  for adding more plant kinds.
+  per material); presets daisy / tulip / lavender, with a per-flower petal colour.
+- **`trees:grass`** — procedural blade tufts (`grass-geometry.ts`); presets
+  meadow / fescue / reed, with a per-tuft blade colour.
+
+Flowers and grass are sibling kinds that reuse the exact same instanced core +
+placement helper (`instanced.tsx` / `placement.tsx`) and the shared procedural
+RNG (`mulberry32` in `geometry.ts`) — the template for adding more plant kinds.
 
 It also shows the communication triangle: `presets-panel` → plugin store
 (`store.ts`) → `def.tool` → `SceneApi` → scene → reactive `useScene` read-back
@@ -62,8 +69,9 @@ import { treesPlugin } from '@pascal-app/plugin-trees'
 setPluginDiscovery(async () => [treesPlugin])
 ```
 
-`treesPlugin` exports one node kind (`trees:tree`) and one panel (`Trees`),
-loaded through the same `loadPlugin` path as the built-ins.
+`treesPlugin` exports three node kinds (`trees:tree`, `trees:flower`,
+`trees:grass`) and one panel (`Trees`), loaded through the same `loadPlugin`
+path as the built-ins.
 
 ## Notes / known gaps
 

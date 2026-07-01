@@ -15,6 +15,9 @@ export const FlowerNode = BaseNode.extend({
   preset: FlowerPreset.default('daisy'),
   height: z.number().positive().default(0.5),
   seed: z.number().int().default(1),
+  /** Petal colour (hex). Baked from the preset at placement; recolour per-flower
+   * in the inspector (the flower analog of the tree's leaf tint). */
+  petalColor: z.string().default('#fcfcf2'),
 })
 
 export type FlowerNode = z.infer<typeof FlowerNode>

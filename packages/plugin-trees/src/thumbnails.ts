@@ -55,3 +55,31 @@ export function flowerThumbnail(petal: string, center: string, stem: string): st
       `</svg>`,
   )
 }
+
+/** Stylised grass card: a tuft of leaning blades in the preset colour. */
+export function grassThumbnail(blade: string): string {
+  const spec: Array<[number, number]> = [
+    [42, -18],
+    [50, -8],
+    [58, 2],
+    [66, -6],
+    [74, 12],
+    [82, -14],
+  ]
+  const blades = spec
+    .map(
+      ([x, lean]) =>
+        `<path d="M${x} 74 Q${x + lean} 52 ${x + lean * 1.4} 34" stroke="${blade}" stroke-width="4" stroke-linecap="round" fill="none"/>`,
+    )
+    .join('')
+  return dataUri(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="88" viewBox="0 0 120 88">` +
+      `<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">` +
+      `<stop offset="0" stop-color="#eef4f7"/><stop offset="1" stop-color="#d3e0e6"/>` +
+      `</linearGradient></defs>` +
+      `<rect width="120" height="88" fill="url(#s)"/>` +
+      `<rect y="70" width="120" height="18" fill="#b9cbaa"/>` +
+      blades +
+      `</svg>`,
+  )
+}

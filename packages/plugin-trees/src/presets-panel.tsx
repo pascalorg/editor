@@ -5,16 +5,25 @@ import { SegmentedControl, SliderControl, ToggleControl, useEditor } from '@pasc
 import { useState } from 'react'
 import { FLOWER_PRESET_LIST } from './flower-presets'
 import type { FlowerPreset } from './flower-schema'
+import { GRASS_PRESET_LIST } from './grass-presets'
+import type { GrassPreset } from './grass-schema'
 import { TREE_PRESET_LIST } from './presets'
 import type { TreePreset } from './schema'
 import { useTreesStore } from './store'
 
-type Mode = 'trees' | 'flowers'
+type Mode = 'trees' | 'flowers' | 'grass'
+
+const KIND: Record<Mode, string> = {
+  trees: 'trees:tree',
+  flowers: 'trees:flower',
+  grass: 'trees:grass',
+}
+const NOUN: Record<Mode, string> = { trees: 'tree', flowers: 'flower', grass: 'grass' }
 
 /**
- * The plugin's left-rail panel. A Trees / Flowers segmented control switches the
- * brush; picking a preset arms placement for that kind (`setTool('trees:tree' |
- * 'trees:flower')` + build mode). The count chip reads the scene reactively,
+ * The plugin's left-rail panel. A Trees / Flowers / Grass segmented control
+ * switches the brush; picking a preset arms placement for that kind
+ * (`setTool('trees:*')` + build mode). The count chip reads the scene reactively,
  * closing the triangle: panel → store → tool → scene → panel. It composes the
  * host's exported controls (`SegmentedControl`/`SliderControl`/`ToggleControl`)
  * so the brush matches the right-hand inspector pixel-for-pixel.
@@ -22,15 +31,11 @@ type Mode = 'trees' | 'flowers'
 export default function TreesPanel() {
   const [mode, setMode] = useState<Mode>('trees')
   const activeTool = useEditor((s) => s.tool)
-  const treeCount = useScene(
-    (s) => Object.values(s.nodes).filter((n) => (n.type as string) === 'trees:tree').length,
-  )
-  const flowerCount = useScene(
-    (s) => Object.values(s.nodes).filter((n) => (n.type as string) === 'trees:flower').length,
+  const count = useScene(
+    (s) => Object.values(s.nodes).filter((n) => (n.type as string) === KIND[mode]).length,
   )
 
-  const arming = mode === 'trees' ? activeTool === 'trees:tree' : activeTool === 'trees:flower'
-  const count = mode === 'trees' ? treeCount : flowerCount
+  const arming = activeTool === KIND[mode]
 
   return (
     <div className="flex flex-col gap-4 p-4 text-sidebar-foreground">
@@ -46,17 +51,20 @@ export default function TreesPanel() {
           options={[
             { label: 'Trees', value: 'trees' },
             { label: 'Flowers', value: 'flowers' },
+            { label: 'Grass', value: 'grass' },
           ]}
           value={mode}
         />
         <p className="text-sidebar-foreground/50 text-xs">
           {arming
             ? 'Click the ground to plant. Press Esc to stop.'
-            : `Pick a ${mode === 'trees' ? 'tree' : 'flower'}, then click the ground.`}
+            : `Pick ${mode === 'grass' ? 'a grass' : `a ${NOUN[mode]}`}, then click the ground.`}
         </p>
       </header>
 
-      {mode === 'trees' ? <TreesSection arming={arming} /> : <FlowersSection arming={arming} />}
+      {mode === 'trees' && <TreesSection arming={arming} />}
+      {mode === 'flowers' && <FlowersSection arming={arming} />}
+      {mode === 'grass' && <GrassSection arming={arming} />}
 
       <footer className="mt-1 border-sidebar-border/50 border-t pt-3 text-[11px] text-sidebar-foreground/40 leading-relaxed">
         Trees generated with{' '}
@@ -68,7 +76,16 @@ export default function TreesPanel() {
         >
           ez-tree
         </a>{' '}
-        by Daniel Greenheck (MIT).
+        by{' '}
+        <a
+          className="underline decoration-dotted underline-offset-2 hover:text-sidebar-foreground/70"
+          href="https://x.com/dangreenheck"
+          rel="noreferrer"
+          target="_blank"
+        >
+          Daniel Greenheck
+        </a>{' '}
+        (MIT).
       </footer>
     </div>
   )
@@ -76,6 +93,8 @@ export default function TreesPanel() {
 
 function TreesSection({ arming }: { arming: boolean }) {
   const selected = useTreesStore((s) => s.preset)
+  const size = useTreesStore((s) => s.size)
+  const treeType = useTreesStore((s) => s.treeType)
   const height = useTreesStore((s) => s.height)
   const foliageDensity = useTreesStore((s) => s.foliageDensity)
   const trunkThickness = useTreesStore((s) => s.trunkThickness)
@@ -90,6 +109,27 @@ function TreesSection({ arming }: { arming: boolean }) {
   return (
     <>
       <PresetGrid items={TREE_PRESET_LIST} onPick={activate} selected={arming ? selected : null} />
+      <div className="flex flex-col gap-2">
+        {selected !== 'trellis' && (
+          <SegmentedControl
+            onChange={useTreesStore.getState().setSize}
+            options={[
+              { label: 'S', value: 'small' },
+              { label: 'M', value: 'medium' },
+              { label: 'L', value: 'large' },
+            ]}
+            value={size}
+          />
+        )}
+        <SegmentedControl
+          onChange={useTreesStore.getState().setTreeType}
+          options={[
+            { label: 'Deciduous', value: 'deciduous' },
+            { label: 'Evergreen', value: 'evergreen' },
+          ]}
+          value={treeType}
+        />
+      </div>
       <div className="flex flex-col gap-0.5">
         <SliderControl
           label="Height"
@@ -156,6 +196,34 @@ function FlowersSection({ arming }: { arming: boolean }) {
         max={2}
         min={0.2}
         onChange={useTreesStore.getState().setFlowerHeight}
+        precision={2}
+        restoreOnCommit={false}
+        step={0.05}
+        unit="m"
+        value={height}
+      />
+    </>
+  )
+}
+
+function GrassSection({ arming }: { arming: boolean }) {
+  const selected = useTreesStore((s) => s.grassPreset)
+  const height = useTreesStore((s) => s.grassHeight)
+
+  const activate = (preset: GrassPreset) => {
+    useTreesStore.getState().setGrassPreset(preset)
+    useEditor.getState().setTool('trees:grass')
+    useEditor.getState().setMode('build')
+  }
+
+  return (
+    <>
+      <PresetGrid items={GRASS_PRESET_LIST} onPick={activate} selected={arming ? selected : null} />
+      <SliderControl
+        label="Height"
+        max={2}
+        min={0.1}
+        onChange={useTreesStore.getState().setGrassHeight}
         precision={2}
         restoreOnCommit={false}
         step={0.05}

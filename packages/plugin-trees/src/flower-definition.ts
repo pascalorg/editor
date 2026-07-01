@@ -25,6 +25,7 @@ export const flowerDefinition: NodeDefinition<typeof FlowerNode> = {
     preset: 'daisy',
     height: 0.5,
     seed: 1,
+    petalColor: '#fcfcf2',
   }),
 
   capabilities: {

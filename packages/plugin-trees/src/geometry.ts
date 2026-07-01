@@ -1,6 +1,6 @@
 import { Tree } from '@dgreenheck/ez-tree'
 import { Box3, type BufferGeometry, type Material, type Mesh, type Object3D } from 'three'
-import { TREE_PRESETS } from './presets'
+import { ezPresetOf } from './presets'
 import type { TreeNode } from './schema'
 
 /** The geometry-affecting fields of a tree. Two trees with the same spec share
@@ -9,37 +9,66 @@ import type { TreeNode } from './schema'
  * work, not geometry. */
 export type TreeSpec = Pick<
   TreeNode,
-  'preset' | 'seed' | 'foliageDensity' | 'trunkThickness' | 'leafless'
+  | 'preset'
+  | 'size'
+  | 'treeType'
+  | 'seed'
+  | 'foliageDensity'
+  | 'trunkThickness'
+  | 'leafless'
+  | 'leafColor'
+  | 'branchColor'
 >
 
 export function treeSpecOf(node: TreeNode): TreeSpec {
   return {
     preset: node.preset,
+    size: node.size,
+    treeType: node.treeType,
     seed: node.seed,
     foliageDensity: node.foliageDensity,
     trunkThickness: node.trunkThickness,
     leafless: node.leafless,
+    leafColor: node.leafColor,
+    branchColor: node.branchColor,
   }
 }
 
 /** Stable variant id. Trees with the same key share one set of InstancedMeshes. */
 export function treeVariantKey(spec: TreeSpec): string {
-  return `${spec.preset}:${spec.seed}:${spec.foliageDensity}:${spec.trunkThickness}:${spec.leafless}`
+  return [
+    spec.preset,
+    spec.size,
+    spec.treeType,
+    spec.seed,
+    spec.foliageDensity,
+    spec.trunkThickness,
+    spec.leafless,
+    spec.leafColor,
+    spec.branchColor,
+  ].join(':')
+}
+
+/** `#rrggbb` → 0xrrggbb, defaulting to white on anything unparseable. */
+function hexToInt(hex: string): number {
+  const n = Number.parseInt(hex.replace('#', ''), 16)
+  return Number.isFinite(n) ? n : 0xffffff
 }
 
 /**
  * Generate an ez-tree for a spec. ez-tree's `Tree` is a `THREE.Group`; textures
  * are inlined in the library (no asset hosting). The curated inspector params
- * map onto ez-tree options after the preset loads: trunk thickness scales every
- * branch radius, foliage density scales the leaf count, and `leafless` zeroes
- * it. Pure given its inputs — same spec ⇒ same tree — which is what lets the
- * renderer cache one generation per variant and instance it everywhere.
+ * map onto ez-tree options after the preset loads: size picks the preset family
+ * member, `treeType` swaps the growth model, trunk thickness scales every branch
+ * radius, foliage density scales the leaf count (`leafless` zeroes it), and the
+ * colours drive the bark/leaf tints. Pure given its inputs — same spec ⇒ same
+ * tree — which is what lets the renderer cache one generation per variant.
  */
 export function generateTree(spec: TreeSpec): Tree {
-  const preset = TREE_PRESETS[spec.preset] ?? TREE_PRESETS.oak
   const tree = new Tree()
-  tree.loadPreset(preset.ezPreset)
+  tree.loadPreset(ezPresetOf(spec.preset, spec.size))
   tree.options.seed = spec.seed
+  ;(tree.options as { type: string }).type = spec.treeType
 
   const radius = tree.options.branch.radius as unknown as Record<string, number>
   for (const level of Object.keys(radius)) {
@@ -47,8 +76,10 @@ export function generateTree(spec: TreeSpec): Tree {
     if (value !== undefined) radius[level] = value * spec.trunkThickness
   }
 
-  const leaves = tree.options.leaves as { count: number }
+  const leaves = tree.options.leaves as { count: number; tint: number }
   leaves.count = spec.leafless ? 0 : Math.round(leaves.count * spec.foliageDensity)
+  leaves.tint = hexToInt(spec.leafColor)
+  ;(tree.options.bark as { tint: number }).tint = hexToInt(spec.branchColor)
 
   tree.generate()
   return tree
@@ -105,4 +136,17 @@ export function extractSubMeshes(tree: Object3D): TreeSubMesh[] {
 export function naturalHeight(obj: Object3D): number {
   const box = new Box3().setFromObject(obj)
   return Math.max(0.001, box.max.y - box.min.y)
+}
+
+/** Deterministic 32-bit RNG (mulberry32) — same seed ⇒ same geometry. Shared by
+ * the procedural flower/grass builders so a variant is stable across instances. */
+export function mulberry32(seed: number): () => number {
+  let a = seed || 1
+  return () => {
+    a |= 0
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
 }

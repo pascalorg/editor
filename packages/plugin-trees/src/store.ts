@@ -1,17 +1,22 @@
 import { create } from 'zustand'
 import { FLOWER_PRESETS } from './flower-presets'
 import type { FlowerPreset } from './flower-schema'
-import { TREE_PRESETS } from './presets'
-import type { TreePreset } from './schema'
+import { GRASS_PRESETS } from './grass-presets'
+import type { GrassPreset } from './grass-schema'
+import { defaultHeightOf, TREE_PRESETS } from './presets'
+import type { TreePreset, TreeSize, TreeType } from './schema'
 
 /**
  * The plugin's own module-level state — the example of "plugins self-manage
  * runtime state with module-level stores" from the plugin-authoring contract.
- * It holds the placement "brush": what the next planted tree looks like. The
- * presets panel writes it; the placement tool reads it. No host lifecycle slot.
+ * It holds the placement "brush": what the next planted tree/flower looks like.
+ * The presets panel writes it; the placement tool reads it. No host lifecycle
+ * slot. Colours are intentionally absent — they're edit-only (inspector).
  */
 type TreesStore = {
   preset: TreePreset
+  size: TreeSize
+  treeType: TreeType
   /** Height (m) of the next tree — a per-instance scale, never affects placed trees. */
   height: number
   /** Leaf-count multiplier vs the preset (folded into the instancing variant). */
@@ -21,6 +26,8 @@ type TreesStore = {
   /** Plant bare (leafless) trees. */
   leafless: boolean
   setPreset: (preset: TreePreset) => void
+  setSize: (size: TreeSize) => void
+  setTreeType: (treeType: TreeType) => void
   setHeight: (height: number) => void
   setFoliageDensity: (value: number) => void
   setTrunkThickness: (value: number) => void
@@ -30,17 +37,26 @@ type TreesStore = {
   flowerHeight: number
   setFlowerPreset: (preset: FlowerPreset) => void
   setFlowerHeight: (height: number) => void
+  // Grass brush (sibling kind).
+  grassPreset: GrassPreset
+  grassHeight: number
+  setGrassPreset: (preset: GrassPreset) => void
+  setGrassHeight: (height: number) => void
 }
 
-export const useTreesStore = create<TreesStore>((set) => ({
+export const useTreesStore = create<TreesStore>((set, get) => ({
   preset: 'oak',
-  height: TREE_PRESETS.oak.defaultHeight,
+  size: 'medium',
+  treeType: 'deciduous',
+  height: TREE_PRESETS.oak.height.medium,
   foliageDensity: 1,
   trunkThickness: 1,
   leafless: false,
-  // Switching preset re-seeds the height to that preset's natural default; the
-  // foliage/trunk brush settings carry over.
-  setPreset: (preset) => set({ preset, height: TREE_PRESETS[preset].defaultHeight }),
+  // Switching preset/size re-seeds the height to that combo's natural default;
+  // the foliage/trunk/type brush settings carry over.
+  setPreset: (preset) => set({ preset, height: defaultHeightOf(preset, get().size) }),
+  setSize: (size) => set({ size, height: defaultHeightOf(get().preset, size) }),
+  setTreeType: (treeType) => set({ treeType }),
   setHeight: (height) => set({ height }),
   setFoliageDensity: (foliageDensity) => set({ foliageDensity }),
   setTrunkThickness: (trunkThickness) => set({ trunkThickness }),
@@ -50,4 +66,9 @@ export const useTreesStore = create<TreesStore>((set) => ({
   setFlowerPreset: (flowerPreset) =>
     set({ flowerPreset, flowerHeight: FLOWER_PRESETS[flowerPreset].defaultHeight }),
   setFlowerHeight: (flowerHeight) => set({ flowerHeight }),
+  grassPreset: 'meadow',
+  grassHeight: GRASS_PRESETS.meadow.defaultHeight,
+  setGrassPreset: (grassPreset) =>
+    set({ grassPreset, grassHeight: GRASS_PRESETS[grassPreset].defaultHeight }),
+  setGrassHeight: (grassHeight) => set({ grassHeight }),
 }))

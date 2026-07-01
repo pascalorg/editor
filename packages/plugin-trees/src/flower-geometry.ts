@@ -10,23 +10,23 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { FLOWER_PRESETS } from './flower-presets'
 import type { FlowerNode, FlowerPreset } from './flower-schema'
-import { naturalHeight } from './geometry'
+import { mulberry32, naturalHeight } from './geometry'
 import type { SubMesh, VariantData } from './instanced'
 
-export function flowerVariantKey(preset: FlowerPreset, seed: number): string {
-  return `${preset}:${seed}`
+export function flowerVariantKey(preset: FlowerPreset, seed: number, petalColor: string): string {
+  return `${preset}:${seed}:${petalColor}`
 }
 
 const variantCache = new Map<string, VariantData>()
 
-/** Cached procedural flower geometry for a (preset, seed). Like the trees, one
- * generation per variant is shared across every instance. Built merged per
- * material so each variant is ~3 InstancedMeshes (stem / petals / center). */
+/** Cached procedural flower geometry for a (preset, seed, petalColor). Like the
+ * trees, one generation per variant is shared across every instance. Built
+ * merged per material so each variant is ~3 InstancedMeshes (stem/petals/center). */
 export function getFlowerVariant(node: FlowerNode): VariantData {
-  const key = flowerVariantKey(node.preset, node.seed)
+  const key = flowerVariantKey(node.preset, node.seed, node.petalColor)
   const cached = variantCache.get(key)
   if (cached) return cached
-  const group = buildFlower(node.preset, node.seed)
+  const group = buildFlower(node.preset, node.seed, node.petalColor)
   const subMeshes: SubMesh[] = group.children
     .filter((c): c is Mesh => (c as Mesh).isMesh)
     .map((mesh) => ({ geometry: mesh.geometry, material: mesh.material }))
@@ -35,12 +35,12 @@ export function getFlowerVariant(node: FlowerNode): VariantData {
   return data
 }
 
-function buildFlower(preset: FlowerPreset, seed: number): Group {
+function buildFlower(preset: FlowerPreset, seed: number, petalColor: string): Group {
   const spec = FLOWER_PRESETS[preset] ?? FLOWER_PRESETS.daisy
   const rng = mulberry32(seed >>> 0)
   const group = new Group()
   const stemMat = new MeshStandardMaterial({ color: spec.stemColor, roughness: 0.85 })
-  const petalMat = new MeshStandardMaterial({ color: spec.petalColor, roughness: 0.7 })
+  const petalMat = new MeshStandardMaterial({ color: petalColor, roughness: 0.7 })
   const centerMat = new MeshStandardMaterial({ color: spec.centerColor, roughness: 0.6 })
   const stemH = spec.defaultHeight
 
@@ -105,16 +105,4 @@ function buildFlower(preset: FlowerPreset, seed: number): Group {
   }
   group.add(new Mesh(mergeGeometries(petals, false) ?? petals[0], petalMat))
   return group
-}
-
-/** Deterministic 32-bit RNG (mulberry32) — same seed ⇒ same flower. */
-function mulberry32(seed: number): () => number {
-  let a = seed || 1
-  return () => {
-    a |= 0
-    a = (a + 0x6d2b79f5) | 0
-    let t = Math.imul(a ^ (a >>> 15), 1 | a)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
 }

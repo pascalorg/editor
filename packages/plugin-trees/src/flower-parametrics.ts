@@ -10,6 +10,7 @@ export const flowerParametrics: ParametricDescriptor<FlowerNode> = {
       fields: [
         { key: 'preset', kind: 'enum', options: ['daisy', 'tulip', 'lavender'] },
         { key: 'height', kind: 'number', unit: 'm', min: 0.2, max: 2, step: 0.05 },
+        { key: 'petalColor', kind: 'color' },
         { key: 'seed', kind: 'number', min: 0, max: 9999, step: 1 },
       ],
     },

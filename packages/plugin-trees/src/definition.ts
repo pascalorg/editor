@@ -25,11 +25,15 @@ export const treeDefinition: NodeDefinition<typeof TreeNode> = {
     position: [0, 0, 0],
     rotation: [0, 0, 0],
     preset: 'oak',
+    size: 'medium',
+    treeType: 'deciduous',
     height: 7,
     seed: 1,
     foliageDensity: 1,
     trunkThickness: 1,
     leafless: false,
+    leafColor: '#ffffff',
+    branchColor: '#ffffff',
   }),
 
   capabilities: {
@@ -71,7 +75,7 @@ export const treeDefinition: NodeDefinition<typeof TreeNode> = {
 
   presentation: {
     label: 'Tree',
-    description: 'A procedural low-poly tree. Oak, pine, birch, or palm.',
+    description: 'A procedural ez-tree. Oak, pine, aspen, ash, bush, or trellis.',
     icon: { kind: 'iconify', name: 'lucide:trees' },
     paletteSection: 'furnish',
     hidden: true,
@@ -79,6 +83,6 @@ export const treeDefinition: NodeDefinition<typeof TreeNode> = {
 
   mcp: {
     description:
-      'A procedural tree (example plugin node). Four presets — oak, pine, birch, palm — with adjustable height and a seed for canopy variation.',
+      'A procedural ez-tree (example plugin node). Species presets (oak/pine/aspen/ash/bush/trellis) × size, deciduous/evergreen type, adjustable height, foliage/trunk, leaf & branch tint, and a seed for variation.',
   },
 }
