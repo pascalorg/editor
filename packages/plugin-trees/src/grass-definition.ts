@@ -54,6 +54,7 @@ export const grassDefinition: NodeDefinition<typeof GrassNode> = {
 
   renderer: { kind: 'parametric', module: () => import('./grass-proxy-renderer') },
   system: { module: () => import('./grass-system'), priority: 3 },
+  bakeReplaceRenderer: { kind: 'parametric', module: () => import('./grass-static-renderer') },
 
   preview: () => import('./grass-preview'),
   tool: () => import('./grass-tool'),

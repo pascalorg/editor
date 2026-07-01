@@ -831,6 +831,17 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   renderer?: RendererSource<z.infer<S>>
   /**
+   * Renderer the baked `/viewer` uses to re-render this kind live when
+   * `bake === 'replace'` — it strips the static baked meshes and mounts this
+   * instead (portaled into the kind's baked parent level). Needed when the
+   * normal `renderer` can't stand alone in a baked scene (e.g. an instanced
+   * kind whose `renderer` is an invisible selection proxy and whose real
+   * geometry comes from a `system`). Defaults to `renderer` when unset, so
+   * `strip` kinds whose `renderer` already draws (scans, guides) need nothing.
+   * See plans/editor-plugin-trees-example.md → Part D.
+   */
+  bakeReplaceRenderer?: RendererSource<z.infer<S>>
+  /**
    * Pure geometry builder. When set, the framework's generic
    * `<GeometrySystem>` calls this on every dirty mark — `nodes` keyed by
    * `def.geometry`'s presence are picked up; the returned `Object3D`'s

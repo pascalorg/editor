@@ -228,3 +228,37 @@ export function KindProxy<N extends Placeable & { id: string }>({
     </group>
   )
 }
+
+// ── Static per-node renderer (a `def.bakeReplaceRenderer`) ────────────────────
+
+/**
+ * The real geometry of one node, standalone — no collider, no selection wiring,
+ * no editor stores. The baked `/viewer` mounts this (portaled into the node's
+ * baked parent level) to re-render a `bake: 'replace'` kind live: the submeshes
+ * carry the same wind node materials as the instanced path, so wind runs in the
+ * node's real coordinate space instead of the bake's quantized one.
+ */
+export function KindStatic<N extends Placeable>({
+  node,
+  getVariant,
+}: {
+  node: N
+  getVariant: (node: N) => VariantData
+}) {
+  const variant = useMemo(() => getVariant(node), [node, getVariant])
+  const height = Math.max(0.2, node.height ?? 1)
+  const scale = height / variant.naturalHeight
+  return (
+    <group
+      position={node.position ?? [0, 0, 0]}
+      rotation={node.rotation ?? [0, 0, 0]}
+      visible={node.visible !== false}
+    >
+      <group scale={scale}>
+        {variant.subMeshes.map((subMesh, i) => (
+          <mesh dispose={null} geometry={subMesh.geometry} key={i} material={subMesh.material} />
+        ))}
+      </group>
+    </group>
+  )
+}

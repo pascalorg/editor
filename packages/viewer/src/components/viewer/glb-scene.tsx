@@ -1,6 +1,6 @@
 'use client'
 
-import type { AnyNode, SurfaceRole } from '@pascal-app/core'
+import { type AnyNode, bakePolicyOf, type SurfaceRole } from '@pascal-app/core'
 import { Html, useAnimations } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -283,6 +283,7 @@ export function GlbScene({
   url,
   interactiveItems,
   referenceNodes,
+  replaceNodes,
   onLevelsChange,
   onIdentityChange,
   onHoverChange,
@@ -295,6 +296,9 @@ export function GlbScene({
   /** Scan / guide nodes from the scene graph, re-added at runtime (they're
    *  stripped from the bake). Already filtered by the privacy flags upstream. */
   referenceNodes?: AnyNode[]
+  /** `bake: 'replace'` nodes (e.g. plugin trees): baked static but re-rendered
+   *  live here via their `bakeReplaceRenderer`; the baked meshes are hidden. */
+  replaceNodes?: AnyNode[]
   onLevelsChange?: (levels: GlbLevel[]) => void
   onIdentityChange?: (identity: GlbIdentity) => void
   onHoverChange?: (hover: GlbHover) => void
@@ -357,6 +361,11 @@ export function GlbScene({
       }
       if (!extras.pascalId) return
       objects.set(extras.pascalId, object)
+      // `bake: 'replace'` kinds are baked as static geometry (portable), but a
+      // loaded plugin re-renders them live from the scene graph — hide the frozen
+      // baked mesh so only the live one shows. Gated on the registry, so with no
+      // plugin loaded the policy is `'static'` and the baked mesh stays.
+      if (bakePolicyOf(extras.kind ?? '') === 'replace') object.visible = false
       if (extras.kind === 'building') buildingNode = object
       else if (extras.kind === 'site') siteNode = object
       if (extras.kind === 'ceiling' || extras.kind === 'roof') occluderNodes.push(object)
@@ -1011,6 +1020,9 @@ export function GlbScene({
       {referenceNodes?.length ? (
         <GlbReferenceNodes identity={identity} nodes={referenceNodes} />
       ) : null}
+      {/* `bake: 'replace'` nodes (plugin trees): baked meshes hidden above, the
+          live render portaled into the same baked level via bakeReplaceRenderer. */}
+      {replaceNodes?.length ? <GlbReferenceNodes identity={identity} nodes={replaceNodes} /> : null}
       {/* Floating room labels. Each group's matrix is synced to its zone node
           every frame (above) so the label rides level stacking; the div fades
           with the room fill via a CSS transition. */}

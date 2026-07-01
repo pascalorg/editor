@@ -23,7 +23,10 @@ export {
   GlbInteractive,
   type GlbInteractiveItem,
 } from './components/viewer/glb-interactive'
-export { buildGlbReferenceNodes } from './components/viewer/glb-reference-nodes'
+export {
+  buildGlbReferenceNodes,
+  buildGlbReplaceNodes,
+} from './components/viewer/glb-reference-nodes'
 export {
   type GlbHover,
   type GlbIdentity,

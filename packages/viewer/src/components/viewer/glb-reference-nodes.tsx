@@ -38,6 +38,25 @@ export function buildGlbReferenceNodes(
   return out
 }
 
+/**
+ * Kinds with `def.bake === 'replace'` — baked as static geometry (so plain glTF
+ * viewers still show them) but re-rendered live here, since their runtime look
+ * differs from a frozen snapshot (shader wind, interactivity). `GlbScene` hides
+ * the baked meshes for these kinds; this feeds them back through the same
+ * portal-into-level path as reference nodes. Registry-driven; no privacy gate
+ * (dynamic scene content, not user uploads).
+ */
+export function buildGlbReplaceNodes(sceneGraph: SceneGraph | null | undefined): AnyNode[] {
+  const nodes = sceneGraph?.nodes
+  if (!nodes) return []
+  const out: AnyNode[] = []
+  for (const raw of Object.values(nodes)) {
+    const node = raw as AnyNode
+    if (bakePolicyOf(node.type) === 'replace') out.push(node)
+  }
+  return out
+}
+
 export function GlbReferenceNodes({
   nodes,
   identity,
@@ -55,11 +74,14 @@ export function GlbReferenceNodes({
   )
 }
 
-/** Render one scan/guide via its registry renderer, portaled into its parent
+/** Render one rebuilt node via its registry renderer, portaled into its parent
  *  level's baked Object3D (so the node's level-local transform resolves to the
- *  same world pose as the parametric scene). */
+ *  same world pose as the parametric scene). `replace` kinds prefer their
+ *  `bakeReplaceRenderer` (real geometry) over the plain `renderer` (which may be
+ *  an invisible selection proxy); `strip` kinds fall through to `renderer`. */
 function GlbReferenceNode({ node, anchor }: { node: AnyNode; anchor: Object3D }) {
-  const source = nodeRegistry.get(node.type)?.renderer
+  const def = nodeRegistry.get(node.type)
+  const source = def?.bakeReplaceRenderer ?? def?.renderer
   const Renderer = source ? getRegistryRenderer(source as RendererSource<AnyNode>) : null
   if (!Renderer) return null
   return createPortal(
