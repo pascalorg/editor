@@ -1,0 +1,1 @@
+export { cabinetDefinition } from './definition'

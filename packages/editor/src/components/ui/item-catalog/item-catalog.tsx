@@ -80,7 +80,7 @@ export function ItemCatalog({
               // the selected node.
               useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
               setSelectedItem(item)
-              setTool('item')
+              setTool(item.id === 'cabinet' ? 'cabinet' : 'item')
               setMode('build')
             }}
             onMouseEnter={() => triggerSFX('sfx:menu-hover')}

@@ -32,6 +32,7 @@ export {
   TextureWrapMode,
 } from './material'
 export { BoxVentNode } from './nodes/box-vent'
+export { CabinetNode } from './nodes/cabinet'
 export { BuildingNode } from './nodes/building'
 export { CeilingNode } from './nodes/ceiling'
 export { ChimneyMaterialRole, ChimneyNode } from './nodes/chimney'

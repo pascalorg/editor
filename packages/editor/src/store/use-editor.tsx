@@ -140,7 +140,7 @@ export type StructureTool =
   | 'pipe-trap'
 
 // Furnish mode tools (items and decoration)
-export type FurnishTool = 'item'
+export type FurnishTool = 'item' | 'cabinet'
 
 // Site mode tools
 export type SiteTool = 'property-line'

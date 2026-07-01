@@ -3,6 +3,7 @@ import mitt from 'mitt'
 import type { Object3D } from 'three'
 import type {
   BoxVentNode,
+  CabinetNode,
   BuildingNode,
   CeilingNode,
   ChimneyNode,
@@ -89,6 +90,7 @@ export type FenceEvent = NodeEvent<FenceNode>
 export type ItemEvent = NodeEvent<ItemNode>
 export type SiteEvent = NodeEvent<SiteNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
+export type CabinetEvent = NodeEvent<CabinetNode>
 export type LevelEvent = NodeEvent<LevelNode>
 export type ZoneEvent = NodeEvent<ZoneNode>
 export type ShelfEvent = NodeEvent<ShelfNode>
@@ -249,6 +251,7 @@ type RoomPresetEvents = {
 type EditorEvents = GridEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
+  NodeEvents<'cabinet', CabinetEvent> &
   NodeEvents<'item', ItemEvent> &
   NodeEvents<'site', SiteEvent> &
   NodeEvents<'building', BuildingEvent> &
