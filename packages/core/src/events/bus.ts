@@ -14,6 +14,8 @@ import type {
   DuctFittingNode,
   DuctSegmentNode,
   DuctTerminalNode,
+  ElectricalConduitNode,
+  ElectricalDeviceNode,
   ElevatorNode,
   EyebrowVentNode,
   FenceNode,
@@ -41,6 +43,7 @@ import type {
   StairSegmentNode,
   TurbineVentNode,
   WallNode,
+  WaterLineNode,
   WindowNode,
   ZoneNode,
 } from '../schema'
@@ -125,6 +128,9 @@ export type PipeFittingEvent = NodeEvent<PipeFittingNode>
 export type PipeTrapEvent = NodeEvent<PipeTrapNode>
 export type LinesetEvent = NodeEvent<LinesetNode>
 export type LiquidLineEvent = NodeEvent<LiquidLineNode>
+export type WaterLineEvent = NodeEvent<WaterLineNode>
+export type ElectricalConduitEvent = NodeEvent<ElectricalConduitNode>
+export type ElectricalDeviceEvent = NodeEvent<ElectricalDeviceNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -288,6 +294,9 @@ type EditorEvents = GridEvents &
   NodeEvents<'pipe-trap', PipeTrapEvent> &
   NodeEvents<'lineset', LinesetEvent> &
   NodeEvents<'liquid-line', LiquidLineEvent> &
+  NodeEvents<'water-line', WaterLineEvent> &
+  NodeEvents<'electrical-conduit', ElectricalConduitEvent> &
+  NodeEvents<'electrical-device', ElectricalDeviceEvent> &
   CameraControlEvents &
   ToolEvents &
   GuideEvents &

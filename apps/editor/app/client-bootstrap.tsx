@@ -10,6 +10,9 @@
 // idempotent under HMR.
 import '../lib/bootstrap'
 import { type ReactNode, useEffect } from 'react'
+import { useAuth } from '@/store/use-auth'
+import { usePermissions } from '@/store/use-permissions'
+import { getSupabaseClient } from '@/lib/supabase'
 
 export function ClientBootstrap({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -19,5 +22,27 @@ export function ClientBootstrap({ children }: { children: ReactNode }) {
     // is already a direct dep, so we don't need the CDN auto-global.
     import('react-scan').then(({ scan }) => scan({ enabled: true }))
   }, [])
+
+  useEffect(() => {
+    // Initialize auth session and subscribe to changes.
+    useAuth.getState().init()
+
+    // When auth state changes, reload permissions for the user's groups.
+    const sb = getSupabaseClient()
+    const { data: { subscription } } = sb.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const { data: memberRows } = await sb
+          .from('group_members')
+          .select('group_id')
+          .eq('user_id', session.user.id)
+        const groupIds = (memberRows ?? []).map((r) => r.group_id)
+        await usePermissions.getState().loadForGroups(groupIds)
+      } else {
+        usePermissions.getState().clear()
+      }
+    })
+    return () => { subscription.unsubscribe() }
+  }, [])
+
   return children
 }

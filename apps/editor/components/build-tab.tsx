@@ -45,6 +45,9 @@ type MepToolKind =
   | 'pipe-segment'
   | 'pipe-fitting'
   | 'pipe-trap'
+  | 'water-line'
+  | 'electrical-conduit'
+  | 'electrical-device'
 
 type BuildType = {
   /** Selection id — equals `kind` for tool types, `'painting'` for paint mode, `'mep'` for the MEP group. */
@@ -85,9 +88,8 @@ const BUILD_TYPES: BuildType[] = [
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.webp', mode: 'material-paint' },
 ]
 
-// MEP sub-grid surfaced under the "MEP" tile — same icons + ordering the MEP
-// tools had in the community Build sidebar.
-const MEP_ITEMS: MepItem[] = [
+// MEP sub-grid items grouped by discipline.
+const MEP_HVAC_ITEMS: MepItem[] = [
   { id: 'duct-segment', label: 'Duct', iconSrc: '/icons/duct.webp', kind: 'duct-segment' },
   {
     id: 'duct-terminal',
@@ -98,7 +100,29 @@ const MEP_ITEMS: MepItem[] = [
   { id: 'hvac-equipment', label: 'HVAC Unit', iconSrc: '/icons/HVAC.webp', kind: 'hvac-equipment' },
   { id: 'lineset', label: 'Lineset', iconSrc: '/icons/lineset.webp', kind: 'lineset' },
   { id: 'liquid-line', label: 'Liquid Line', iconSrc: '/icons/lineset.webp', kind: 'liquid-line' },
+]
+const MEP_PLUMBING_ITEMS: MepItem[] = [
+  { id: 'water-line', label: 'Water Line', iconSrc: '/icons/dwv-pipes.webp', kind: 'water-line' },
   { id: 'pipe-segment', label: 'DWV Pipe', iconSrc: '/icons/dwv-pipes.webp', kind: 'pipe-segment' },
+]
+const MEP_ELECTRICAL_ITEMS: MepItem[] = [
+  {
+    id: 'electrical-conduit',
+    label: 'Conduit',
+    iconSrc: '/icons/HVAC.webp',
+    kind: 'electrical-conduit',
+  },
+  {
+    id: 'electrical-device',
+    label: 'Device',
+    iconSrc: '/icons/HVAC.webp',
+    kind: 'electrical-device',
+  },
+]
+const MEP_ITEMS: MepItem[] = [
+  ...MEP_HVAC_ITEMS,
+  ...MEP_PLUMBING_ITEMS,
+  ...MEP_ELECTRICAL_ITEMS,
 ]
 
 /**
@@ -345,49 +369,59 @@ export function BuildTab() {
           </TooltipProvider>
         </div>
       ) : isMepActive ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-          <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">MEP</div>
-          <TooltipProvider delayDuration={0} disableHoverableContent>
-            <div
-              className="grid gap-1.5 px-0.5"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
-            >
-              {MEP_ITEMS.map((item) => {
-                const active = isMepItemActive(item)
-                return (
-                  <Tooltip key={item.id}>
-                    <TooltipTrigger asChild>
-                      <button
-                        className={cn(
-                          'group relative flex aspect-square items-center justify-center rounded-xl transition-all duration-200',
-                          active
-                            ? 'bg-primary/10 ring-1 ring-primary/50'
-                            : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
-                        )}
-                        onClick={() => {
-                          triggerSFX('sfx:menu-click')
-                          activateBuildTool(item.kind)
-                        }}
-                        onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                        type="button"
-                      >
-                        <Image
-                          alt={item.label}
-                          className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
-                          height={48}
-                          src={item.iconSrc}
-                          width={48}
-                        />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent className="pointer-events-none" side="top">
-                      {item.label}
-                    </TooltipContent>
-                  </Tooltip>
-                )
-              })}
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+          {(
+            [
+              { label: 'HVAC', items: MEP_HVAC_ITEMS },
+              { label: 'Plumbing', items: MEP_PLUMBING_ITEMS },
+              { label: 'Electrical', items: MEP_ELECTRICAL_ITEMS },
+            ] as const
+          ).map(({ label, items }) => (
+            <div key={label} className="flex flex-col gap-1.5">
+              <div className="px-0.5 font-medium text-muted-foreground text-xs">{label}</div>
+              <TooltipProvider delayDuration={0} disableHoverableContent>
+                <div
+                  className="grid gap-1.5 px-0.5"
+                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+                >
+                  {items.map((item) => {
+                    const active = isMepItemActive(item)
+                    return (
+                      <Tooltip key={item.id}>
+                        <TooltipTrigger asChild>
+                          <button
+                            className={cn(
+                              'group relative flex aspect-square items-center justify-center rounded-xl transition-all duration-200',
+                              active
+                                ? 'bg-primary/10 ring-1 ring-primary/50'
+                                : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
+                            )}
+                            onClick={() => {
+                              triggerSFX('sfx:menu-click')
+                              activateBuildTool(item.kind)
+                            }}
+                            onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                            type="button"
+                          >
+                            <Image
+                              alt={item.label}
+                              className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                              height={48}
+                              src={item.iconSrc}
+                              width={48}
+                            />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent className="pointer-events-none" side="top">
+                          {item.label}
+                        </TooltipContent>
+                      </Tooltip>
+                    )
+                  })}
+                </div>
+              </TooltipProvider>
             </div>
-          </TooltipProvider>
+          ))}
 
           {ductContext ? (
             <div className="flex flex-col gap-1.5">

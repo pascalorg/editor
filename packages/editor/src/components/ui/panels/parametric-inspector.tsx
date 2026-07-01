@@ -44,7 +44,13 @@ export function ParametricInspector({
   footer,
   nodeId,
   onClose,
-}: { footer?: React.ReactNode; nodeId?: AnyNodeId; onClose?: () => void } = {}) {
+  canEditField,
+}: {
+  footer?: React.ReactNode
+  nodeId?: AnyNodeId
+  onClose?: () => void
+  canEditField?: (fieldKey: string) => boolean
+} = {}) {
   const selectedIdFromSelection = useViewer((s) => s.selection.selectedIds[0]) as
     | AnyNodeId
     | undefined
@@ -158,14 +164,19 @@ export function ParametricInspector({
     >
       {parametrics.groups.map((group, gi) => (
         <PanelSection key={`group-${gi}`} title={group.label}>
-          {group.fields.map((field, fi) => (
-            <FieldRenderer
-              key={`field-${gi}-${fi}-${String(field.key)}`}
-              field={field as ParamField<AnyNode>}
-              nodeId={selectedId}
-              onUpdate={handleUpdate}
-            />
-          ))}
+          {group.fields.map((field, fi) => {
+            const fKey = String(field.key)
+            const readOnly = canEditField ? !canEditField(fKey) : false
+            return (
+              <FieldRenderer
+                key={`field-${gi}-${fi}-${fKey}`}
+                field={field as ParamField<AnyNode>}
+                nodeId={selectedId}
+                onUpdate={readOnly ? () => {} : handleUpdate}
+                readOnly={readOnly}
+              />
+            )
+          })}
         </PanelSection>
       ))}
       {TrailingSection && (
@@ -286,9 +297,10 @@ interface FieldRendererProps {
   field: ParamField<AnyNode>
   nodeId: AnyNodeId
   onUpdate: (patch: Partial<AnyNode>) => void
+  readOnly?: boolean
 }
 
-function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
+function FieldRenderer({ field, nodeId, onUpdate, readOnly }: FieldRendererProps) {
   const key = String(field.key)
   // Subscribe only to this field's value. Zustand compares with ===, so when
   // another field on the same node changes (which produces a new node object
@@ -309,33 +321,39 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
   })
   if (!visible) return null
 
+  const roClass = readOnly ? 'pointer-events-none opacity-50' : ''
+
   switch (field.kind) {
     case 'number': {
       const num = typeof value === 'number' ? value : 0
       const step = field.step ?? 0.01
       const precision = precisionForStep(step)
       return (
-        <SliderControl
-          label={prettifyKey(key)}
-          max={field.max}
-          min={field.min}
-          onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
-          precision={precision}
-          step={step}
-          unit={field.unit ?? ''}
-          value={num}
-        />
+        <div className={roClass}>
+          <SliderControl
+            label={prettifyKey(key)}
+            max={field.max}
+            min={field.min}
+            onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
+            precision={precision}
+            step={step}
+            unit={field.unit ?? ''}
+            value={num}
+          />
+        </div>
       )
     }
 
     case 'boolean': {
       const checked = value === true
       return (
-        <ToggleControl
-          checked={checked}
-          label={prettifyKey(key)}
-          onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
-        />
+        <div className={roClass}>
+          <ToggleControl
+            checked={checked}
+            label={prettifyKey(key)}
+            onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
+          />
+        </div>
       )
     }
 
@@ -343,15 +361,17 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
       const str = typeof value === 'string' ? value : (field.options[0] ?? '')
       if (field.display === 'segmented') {
         return (
-          <SegmentedControl
-            onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
-            options={field.options.map((opt) => ({ label: prettifyEnumValue(opt), value: opt }))}
-            value={str}
-          />
+          <div className={roClass}>
+            <SegmentedControl
+              onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
+              options={field.options.map((opt) => ({ label: prettifyEnumValue(opt), value: opt }))}
+              value={str}
+            />
+          </div>
         )
       }
       return (
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className={`flex items-center justify-between px-3 py-2 ${roClass}`}>
           <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
           <select
             className="rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
@@ -371,7 +391,7 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
     case 'color': {
       const str = typeof value === 'string' ? value : '#888888'
       return (
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className={`flex items-center justify-between px-3 py-2 ${roClass}`}>
           <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
           <div className="flex items-center gap-2">
             <input

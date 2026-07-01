@@ -62,6 +62,10 @@ export { DownspoutNode } from './nodes/downspout'
 export { DuctFittingNode } from './nodes/duct-fitting'
 export { DuctSegmentNode } from './nodes/duct-segment'
 export { DuctTerminalNode } from './nodes/duct-terminal'
+export { ElectricalConduitNode } from './nodes/electrical-conduit'
+export type { ElectricalConduitNodeId } from './nodes/electrical-conduit'
+export { ElectricalDeviceNode } from './nodes/electrical-device'
+export type { ElectricalDeviceNodeId } from './nodes/electrical-device'
 export {
   ElevatorDoorPanelStyle,
   ElevatorDoorStyle,
@@ -194,6 +198,8 @@ export {
   WALL_SLOT_DEFAULT,
   WallNode,
 } from './nodes/wall'
+export { WaterLineNode } from './nodes/water-line'
+export type { WaterLineNodeId } from './nodes/water-line'
 export { WindowNode, WindowType } from './nodes/window'
 export { ZoneNode } from './nodes/zone'
 export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
