@@ -1,5 +1,5 @@
 import type { Color, Material, Side, Texture } from 'three'
-import { cos, Fn, float, instanceIndex, positionLocal, sin, time, uv } from 'three/tsl'
+import { cos, Fn, float, instanceIndex, modelScale, positionLocal, sin, time, uv } from 'three/tsl'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 
 /**
@@ -32,7 +32,12 @@ const leafFlutter = Fn(() => {
     .mul(0.5)
     .add(sin(t.mul(2).add(offset.mul(1.3))).mul(0.3))
     .add(sin(t.mul(5).add(offset.mul(1.5))).mul(0.2))
-  const sway = uv().y.mul(LEAF_STRENGTH).mul(wave)
+  // Divide by the model's world scale so the sway is a constant WORLD amount,
+  // identical whether positions are in editor-local metres (scale 1) or the
+  // baked GLB's quantiser-normalised [-1,1] space, where the mesh's real size
+  // lives in a large node scale (~3 on trees) that would otherwise multiply
+  // this offset and blow the flutter up.
+  const sway = uv().y.mul(LEAF_STRENGTH).mul(wave).div(modelScale.x)
   p.x.addAssign(sway)
   p.z.addAssign(sway)
   return p
