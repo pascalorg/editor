@@ -102,6 +102,7 @@ export { CameraActions as ViewerToolbarRight } from './components/ui/action-menu
 export { ViewToggles as ViewerToolbarLeft } from './components/ui/action-menu/view-toggles'
 export { useCommandPalette } from './components/ui/command-palette'
 export { ActionButton, ActionGroup } from './components/ui/controls/action-button'
+export { ColorAlphaField } from './components/ui/controls/color-alpha-field'
 export { MaterialPicker } from './components/ui/controls/material-picker'
 export { MaterialSwatchField } from './components/ui/controls/material-swatch-field'
 export { MetricControl } from './components/ui/controls/metric-control'
@@ -167,6 +168,13 @@ export {
   resolveElevatorSupportY,
 } from './lib/elevator-support'
 export { floorItemDragSuppressClickRef } from './lib/floor-item-drag'
+export {
+  clearRegistryHtmlDragOrigin,
+  getRegistryHtmlDragOrigin,
+  registryHtmlDragOriginRef,
+  setRegistryHtmlDragOrigin,
+  type RegistryHtmlDragOrigin,
+} from './lib/registry-html-drag-origin'
 // Floor-plan stair helpers — the cumulative-transform walk
 // (`computeFloorplanStairSegmentTransforms`) and the rich segment-entry
 // builder (`buildFloorplanStairEntry`) used by the kind-owned stair

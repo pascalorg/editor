@@ -1,3 +1,5 @@
+import type { MaterialGradient } from '../schema/material'
+
 export type Vec3 = [number, number, number]
 
 export type PrimitiveShapeKind =
@@ -23,6 +25,7 @@ export type PrimitiveAxis = 'x' | 'y' | 'z'
 export interface PrimitiveMaterialInput {
   id?: string
   preset?: string
+  gradient?: MaterialGradient
   properties?: {
     color?: string
     roughness?: number

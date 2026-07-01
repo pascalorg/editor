@@ -35,6 +35,7 @@ import {
   applyProfileEditablePatchToArgs,
   resolveProfileEditablePatch,
 } from './profile-editable-patches'
+import { resolveProfileResourceCandidates } from './resource-profile-resolver'
 import { appendRunEvent, isTerminalStatus, loadRun, updateRun } from './run-store'
 
 type ApiMessage = {
@@ -1711,11 +1712,11 @@ function stage3LiftingAnchorFrame(artifact: GeneratedGeometryArtifact, kind: Sta
   )
   const mainSpan = findStage3MainSpan(artifact)
   const counterSpan = findStage3ShapeWithIndex(artifact, /counter_jib|counter_boom|balance_arm/)
-  const supportPosition = support
+  const supportPosition: [number, number, number] = support
     ? stage3ShapePosition(artifact, support.shape, support.index)
     : [0, 0, 0]
   const supportTop = stage3SupportTop(artifact, support)
-  const mainPosition = mainSpan
+  const mainPosition: [number, number, number] = mainSpan
     ? stage3ShapePosition(artifact, mainSpan.shape, mainSpan.index)
     : [supportPosition[0] + 2.8, supportTop + 0.75, supportPosition[2]]
   const mainLength = mainSpan
@@ -2905,11 +2906,13 @@ function shouldUseDeterministicProfileRoute(input: {
   profile: DeviceProfileDefinition | undefined
   userPrompt: string
   revisionTarget: GeneratedGeometryArtifact | null
+  resourceResolved?: boolean
 }) {
   if (!input.profile) return false
   if (input.revisionTarget) return false
   if (isLikelyGeometryRevisionRequest(input.userPrompt, input.revisionTarget)) return false
-  if (!isSafeDeterministicProfileMatch(input.profile, input.userPrompt)) return false
+  if (!input.resourceResolved && !isSafeDeterministicProfileMatch(input.profile, input.userPrompt))
+    return false
   return input.profile.status === 'stable'
 }
 
@@ -3046,6 +3049,52 @@ function summarizeToolCalls(toolCalls: ToolCall[]) {
       ].join('\n'),
     )
     .join('\n\n')
+}
+
+function shouldPersistDeviceProfileCandidate(params: Record<string, unknown> | undefined) {
+  return params?.allowDeviceProfileCandidatePersist === true
+}
+
+function resourceCandidateUsageHint(candidate: {
+  profileId: string
+  matchedLabel: string
+  description?: string
+}) {
+  const compactIdentity = `${candidate.profileId} ${candidate.matchedLabel}`
+    .toLowerCase()
+    .replace(/\s+/g, '')
+  if (compactIdentity.includes('减压') || compactIdentity.includes('vacuum')) {
+    return '适合明确要减压塔、真空蒸馏或处理常压渣油的场景。'
+  }
+  if (compactIdentity.includes('常压') || compactIdentity.includes('atmospheric')) {
+    return '默认推荐：常规炼油/原油蒸馏入口，用户只说“蒸馏塔”时通常先选这个。'
+  }
+  return candidate.description || '适合该行业包中同名或近义设备场景。'
+}
+
+function recommendedResourceCandidateId(
+  prompt: string,
+  candidates: readonly { profileId: string; matchedLabel: string; description?: string }[],
+) {
+  const compactPrompt = prompt.toLowerCase().replace(/\s+/g, '')
+  if (compactPrompt.includes('减压') || compactPrompt.includes('vacuum')) {
+    return candidates.find((candidate) =>
+      `${candidate.profileId} ${candidate.matchedLabel}`.toLowerCase().includes('vacuum') ||
+      candidate.matchedLabel.includes('减压'),
+    )?.profileId
+  }
+  if (compactPrompt.includes('常压') || compactPrompt.includes('atmospheric')) {
+    return candidates.find((candidate) =>
+      `${candidate.profileId} ${candidate.matchedLabel}`.toLowerCase().includes('atmospheric') ||
+      candidate.matchedLabel.includes('常压'),
+    )?.profileId
+  }
+  return (
+    candidates.find((candidate) =>
+      `${candidate.profileId} ${candidate.matchedLabel}`.toLowerCase().includes('atmospheric') ||
+      candidate.matchedLabel.includes('常压'),
+    )?.profileId ?? candidates[0]?.profileId
+  )
 }
 
 export function ensurePrimitiveRunRunning(runId: string) {
@@ -3330,14 +3379,134 @@ async function runPrimitiveRun(runId: string) {
       }
     }
 
-    const selectedProfile = inferDeviceProfileDefinition(
+    const resourceResolution = resolveProfileResourceCandidates(
+      userPrompt,
+      loadedDeviceProfiles.profiles,
+    )
+    if (resourceResolution.candidates.length > 0) {
+      const rawResourceCandidates = resourceResolution.candidates.map((candidate) => ({
+        profileId: candidate.profile.id,
+        name: candidate.profile.name,
+        aliases: candidate.profile.aliases,
+        score: candidate.score,
+        matchedLabel: candidate.matchedLabel,
+        matchKind: candidate.matchKind,
+        reason: candidate.reason,
+        source: candidate.profile.source,
+        sourcePack: candidate.profile.sourcePack,
+        industry: candidate.profile.industry,
+        family: candidate.profile.family,
+        layoutFamily: candidate.profile.layoutFamily,
+        description: candidate.profile.description,
+      }))
+      const recommendedCandidateId = recommendedResourceCandidateId(userPrompt, rawResourceCandidates)
+      const resourceCandidates = rawResourceCandidates.map((candidate) => ({
+        ...candidate,
+        usageHint: resourceCandidateUsageHint(candidate),
+        recommended: candidate.profileId === recommendedCandidateId,
+      }))
+      await appendRunEvent(runId, {
+        type: 'message',
+        message: resourceResolution.selectedCandidate
+          ? `Resource resolver selected "${resourceResolution.selectedCandidate.profile.id}".`
+          : 'Resource resolver found multiple candidates but no high-confidence auto-selection.',
+        data: {
+          stage: 'resource-resolver',
+          selectedProfile: resourceResolution.selectedProfile?.id,
+          candidates: resourceCandidates,
+        },
+      })
+
+      if (!resourceResolution.selectedProfile && resourceResolution.candidates.length > 1) {
+        const recommendedCandidate = resourceCandidates.find((candidate) => candidate.recommended)
+        const optionLines = resourceCandidates.map((candidate, index) => {
+          const sourceLabel = candidate.sourcePack
+            ? `${candidate.sourcePack.id}@${candidate.sourcePack.version}`
+            : candidate.source
+          return [
+            `${index + 1}. ${candidate.recommended ? '推荐：' : ''}${candidate.matchedLabel || candidate.name} (${candidate.profileId})`,
+            `   适用：${candidate.usageHint}`,
+            `   来源：${sourceLabel}`,
+          ].join('\n')
+        })
+        const selectionMessage = [
+          '找到了多个可能的行业资源，需要先选设备类型再生成。',
+          recommendedCandidate
+            ? `建议默认选择：${recommendedCandidate.matchedLabel || recommendedCandidate.name}。${recommendedCandidate.usageHint}`
+            : undefined,
+          '如果你只是说“蒸馏塔”，通常选常压蒸馏塔；如果你要减压/真空/渣油处理，再选减压蒸馏塔。',
+          '',
+          ...optionLines,
+        ]
+          .filter(Boolean)
+          .join('\n')
+        const analysis = [
+          'Resource resolver found multiple matching device profiles.',
+          'No geometry was created because the request is ambiguous at the resource-selection step.',
+        ].join('\n')
+        const result = {
+          contextDecision,
+          analysis,
+          results: [selectionMessage],
+          lastContent: selectionMessage,
+          needsResourceSelection: true,
+          resourceSelection: {
+            status: 'needs_selection',
+            prompt: userPrompt,
+            recommendedProfileId: recommendedCandidateId,
+            candidates: resourceCandidates,
+          },
+          shapeCount: 0,
+          metrics: {
+            primitiveRoute: {
+              route: 'resource-selection',
+              deterministicIntent: false,
+              deterministicAttempted: false,
+              deterministicSucceeded: false,
+              stage2Called: false,
+              stage2ToolCallCount: 0,
+              repairCallCount: 0,
+            },
+            deviceProfiles: {
+              count: loadedDeviceProfiles.profiles.length,
+              warnings: loadedDeviceProfiles.warnings,
+            },
+          },
+          profileSources: {
+            count: loadedDeviceProfiles.profiles.length,
+            warnings: loadedDeviceProfiles.warnings,
+          },
+        }
+        await appendRunEvent(runId, {
+          type: 'message',
+          message: selectionMessage,
+          data: { stage: 'resource-selection', candidates: resourceCandidates },
+        })
+        await appendRunEvent(runId, { type: 'result', data: result })
+        await updateRun(runId, {
+          status: 'succeeded',
+          completedAt: new Date().toISOString(),
+          result,
+        })
+        await appendRunEvent(runId, {
+          type: 'status',
+          message: 'succeeded',
+          data: { status: 'succeeded' },
+        })
+        return
+      }
+    }
+
+    const inferredProfile = inferDeviceProfileDefinition(
       { prompt: userPrompt, name: userPrompt, object: userPrompt },
       loadedDeviceProfiles.profiles,
     )
+    const selectedProfile = resourceResolution.selectedProfile ?? inferredProfile
     const safeSelectedProfile =
-      selectedProfile && isSafeDeterministicProfileMatch(selectedProfile, userPrompt)
+      resourceResolution.selectedProfile ??
+      (selectedProfile && isSafeDeterministicProfileMatch(selectedProfile, userPrompt)
         ? selectedProfile
-        : undefined
+        : undefined)
     if (selectedProfile && !safeSelectedProfile) {
       await appendRunEvent(runId, {
         type: 'message',
@@ -3355,6 +3524,7 @@ async function runPrimitiveRun(runId: string) {
         profile: safeSelectedProfile,
         userPrompt,
         revisionTarget,
+        resourceResolved: resourceResolution.selectedProfile?.id === safeSelectedProfile?.id,
       })
     ) {
       const profile = selectedProfile!
@@ -3829,6 +3999,7 @@ async function runPrimitiveRun(runId: string) {
           const candidatePersist = await persistDeviceProfileCandidateFromArtifact(
             userPrompt,
             directResult.artifact,
+            { enabled: shouldPersistDeviceProfileCandidate(run.params) },
           )
           await appendRunEvent(runId, {
             type: 'message',
@@ -4099,7 +4270,9 @@ async function runPrimitiveRun(runId: string) {
     }
 
     if (await shouldStopRun(runId, signal)) return
-    const candidatePersist = await persistDeviceProfileCandidateFromArtifact(userPrompt, artifact)
+    const candidatePersist = await persistDeviceProfileCandidateFromArtifact(userPrompt, artifact, {
+      enabled: shouldPersistDeviceProfileCandidate(run.params),
+    })
     await appendRunEvent(runId, {
       type: 'message',
       message: candidatePersist.saved

@@ -41,6 +41,7 @@ Factory-capable pack: supports whole-factory/process creation through process te
 - Cement silo (`cement.cement_silo`)
 - Cement packer (`cement.cement_packer`)
 - WHR boiler (`cement.whr_boiler`)
+- Central control room (`cement.control_room`)
 
 ## Validation
 

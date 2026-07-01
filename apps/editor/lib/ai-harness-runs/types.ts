@@ -17,6 +17,7 @@ export type AiHarnessRun = {
   status: AiHarnessRunStatus
   prompt: string
   articraftMode?: 'articulated' | 'static'
+  maxTurns?: number
   params?: Record<string, unknown>
   context?: unknown
   image?: AiHarnessRunImage

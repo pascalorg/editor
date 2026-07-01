@@ -2,6 +2,9 @@ import { createHash, createHmac } from 'node:crypto'
 import type { GenerateImageTo3DInput, GenerateImageTo3DResult, ProviderFile } from './types'
 
 const DEFAULT_BASE_URL = 'https://hunyuan.intl.tencentcloudapi.com'
+const DEFAULT_CLOUD_BASE_URL = 'https://api.ai3d.cloud.tencent.com'
+const DEFAULT_CLOUD_SUBMIT_PATH = '/v1/ai3d/submit'
+const DEFAULT_CLOUD_QUERY_PATH = '/v1/ai3d/query'
 const DEFAULT_GLOBAL_SERVICE = 'hunyuan'
 const DEFAULT_GLOBAL_VERSION = '2023-09-01'
 const DEFAULT_CN_SERVICE = 'ai3d'
@@ -10,6 +13,10 @@ const DEFAULT_CN_VERSION = '2025-05-13'
 type TencentHunyuanCredentials = {
   secretId: string
   secretKey: string
+}
+
+type HunyuanCloudCredentials = {
+  apiKey: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -28,7 +35,7 @@ function hmacHex(key: Buffer, value: string) {
   return createHmac('sha256', key).update(value, 'utf8').digest('hex')
 }
 
-function getCredentials(): TencentHunyuanCredentials {
+function getTencentCredentials(): TencentHunyuanCredentials {
   const secretId = process.env.TENCENTCLOUD_SECRET_ID
   const secretKey = process.env.TENCENTCLOUD_SECRET_KEY
   if (!secretId || !secretKey) {
@@ -39,9 +46,45 @@ function getCredentials(): TencentHunyuanCredentials {
   return { secretId, secretKey }
 }
 
-function endpoint() {
-  const raw = process.env.HUNYUAN3D_BASE_URL || DEFAULT_BASE_URL
+function normalizeUrl(raw: string) {
   return raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`
+}
+
+function tencentEndpoint() {
+  return normalizeUrl(
+    process.env.HUNYUAN3D_TENCENT_BASE_URL || process.env.HUNYUAN3D_BASE_URL || DEFAULT_BASE_URL,
+  )
+}
+
+function cloudBaseUrl() {
+  return normalizeUrl(process.env.HUNYUAN3D_BASE_URL || DEFAULT_CLOUD_BASE_URL)
+}
+
+function cloudSubmitUrl() {
+  return new URL(
+    process.env.HUNYUAN3D_SUBMIT_PATH || DEFAULT_CLOUD_SUBMIT_PATH,
+    cloudBaseUrl(),
+  ).toString()
+}
+
+function cloudQueryUrl() {
+  return new URL(
+    process.env.HUNYUAN3D_QUERY_PATH || DEFAULT_CLOUD_QUERY_PATH,
+    cloudBaseUrl(),
+  ).toString()
+}
+
+function normalizeApiKey(value: string | undefined) {
+  return value?.trim().replace(/^bearer\s+/i, '') || undefined
+}
+
+function getCloudCredentials(): HunyuanCloudCredentials | null {
+  const apiKey = normalizeApiKey(process.env.HUNYUAN3D_API_KEY)
+  return apiKey ? { apiKey } : null
+}
+
+function shouldUseCloudApi() {
+  return Boolean(getCloudCredentials())
 }
 
 function isChinaAi3DEndpoint(url: URL) {
@@ -71,8 +114,8 @@ function model() {
 }
 
 function faceCount() {
-  const value = Number(process.env.HUNYUAN3D_FACE_COUNT ?? 500000)
-  if (!Number.isFinite(value)) return 500000
+  const value = Number(process.env.HUNYUAN3D_FACE_COUNT ?? 50000)
+  if (!Number.isFinite(value)) return 50000
   return Math.max(3000, Math.min(1500000, Math.trunc(value)))
 }
 
@@ -108,7 +151,7 @@ function authorization(
   return `TC3-HMAC-SHA256 Credential=${credentials.secretId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
 }
 
-async function readTencentJson(res: Response) {
+async function readJson(res: Response) {
   const text = await res.text()
   try {
     return text ? JSON.parse(text) : {}
@@ -118,8 +161,8 @@ async function readTencentJson(res: Response) {
 }
 
 async function callTencent(action: string, body: Record<string, unknown>) {
-  const credentials = getCredentials()
-  const url = new URL(endpoint())
+  const credentials = getTencentCredentials()
+  const url = new URL(tencentEndpoint())
   const payload = JSON.stringify(body)
   const timestamp = Math.floor(Date.now() / 1000)
   const requestService = service(url)
@@ -136,7 +179,7 @@ async function callTencent(action: string, body: Record<string, unknown>) {
     },
     body: payload,
   })
-  const raw = await readTencentJson(res)
+  const raw = await readJson(res)
   const response = isRecord(raw) && isRecord(raw.Response) ? raw.Response : raw
   if (!res.ok || (isRecord(response) && isRecord(response.Error))) {
     const error = isRecord(response) && isRecord(response.Error) ? response.Error : {}
@@ -155,7 +198,22 @@ function imageBase64FromDataUri(dataUri: string) {
   return index >= 0 ? dataUri.slice(index + marker.length) : dataUri
 }
 
-async function submit(input: GenerateImageTo3DInput) {
+function buildCloudSubmitBody(input: GenerateImageTo3DInput) {
+  const type = generateType()
+  const body: Record<string, unknown> = {
+    Model: model(),
+    ImageBase64: imageBase64FromDataUri(input.imageDataUri),
+    EnablePBR: enablePbr(),
+    FaceCount: faceCount(),
+    GenerateType: type,
+  }
+  if (type === 'Sketch' && input.prompt?.trim()) {
+    body.Prompt = input.prompt.trim()
+  }
+  return body
+}
+
+function buildTencentSubmitBody(input: GenerateImageTo3DInput) {
   const body: Record<string, unknown> = {
     Model: model(),
     ImageBase64: imageBase64FromDataUri(input.imageDataUri),
@@ -166,13 +224,59 @@ async function submit(input: GenerateImageTo3DInput) {
   if (generateType() === 'Sketch' && input.prompt?.trim()) {
     body.Prompt = input.prompt.trim()
   }
-  const response = await callTencent('SubmitHunyuanTo3DProJob', body)
-  if (!isRecord(response) || typeof response.JobId !== 'string' || !response.JobId) {
+  return body
+}
+
+function responseData(raw: unknown) {
+  return isRecord(raw) && isRecord(raw.Response) ? raw.Response : raw
+}
+
+async function callCloud(url: string, body: Record<string, unknown>) {
+  const credentials = getCloudCredentials()
+  if (!credentials) throw new Error('HUNYUAN3D_API_KEY is not configured on the server')
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: credentials.apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  const raw = await readJson(res)
+  const data = responseData(raw)
+  if (!res.ok || (isRecord(data) && isRecord(data.Error))) {
+    const error = isRecord(data) && isRecord(data.Error) ? data.Error : data
+    const message =
+      (isRecord(error) && typeof error.Message === 'string' && error.Message) ||
+      (isRecord(error) && typeof error.message === 'string' && error.message) ||
+      (isRecord(error) && typeof error.Code === 'string' && error.Code) ||
+      res.statusText
+    throw new Error(`Tencent Hunyuan3D cloud request failed (${res.status}): ${message}`)
+  }
+  return data
+}
+
+function extractJobId(response: unknown) {
+  if (!isRecord(response)) return null
+  if (typeof response.JobId === 'string' && response.JobId) return response.JobId
+  if (typeof response.job_id === 'string' && response.job_id) return response.job_id
+  if (typeof response.task_id === 'string' && response.task_id) return response.task_id
+  return null
+}
+
+async function submit(input: GenerateImageTo3DInput) {
+  const response = shouldUseCloudApi()
+    ? await callCloud(cloudSubmitUrl(), buildCloudSubmitBody(input))
+    : await callTencent('SubmitHunyuanTo3DProJob', buildTencentSubmitBody(input))
+  const jobId = extractJobId(response)
+  if (!jobId) {
     throw new Error('Tencent Hunyuan3D submit response did not include JobId')
   }
   return {
-    jobId: response.JobId,
-    requestId: typeof response.RequestId === 'string' ? response.RequestId : undefined,
+    jobId,
+    requestId:
+      isRecord(response) && typeof response.RequestId === 'string' ? response.RequestId : undefined,
     raw: response,
   }
 }
@@ -214,7 +318,7 @@ function firstPreview(files: unknown) {
 export function normalizeHunyuan3DResponse(
   raw: unknown,
 ): Omit<GenerateImageTo3DResult, 'provider' | 'requestId' | 'raw'> {
-  const data = isRecord(raw) && isRecord(raw.Response) ? raw.Response : raw
+  const data = responseData(raw)
   if (!isRecord(data)) {
     throw new Error('Tencent Hunyuan3D returned an invalid response')
   }
@@ -237,7 +341,9 @@ async function waitForCompletion(jobId: string, timeoutMs: number, pollIntervalM
   const deadline = Date.now() + timeoutMs
   let lastResponse: unknown
   while (Date.now() < deadline) {
-    const response = await callTencent('QueryHunyuanTo3DProJob', { JobId: jobId })
+    const response = shouldUseCloudApi()
+      ? await callCloud(cloudQueryUrl(), { JobId: jobId })
+      : await callTencent('QueryHunyuanTo3DProJob', { JobId: jobId })
     lastResponse = response
     if (isRecord(response)) {
       if (response.Status === 'DONE') return response

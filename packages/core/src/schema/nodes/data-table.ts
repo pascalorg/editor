@@ -23,6 +23,7 @@ export const DataTableNode = BaseNode.extend({
     ]),
   foreground: z.string().default('#ffffff'),
   background: z.string().default('#111827'),
+  backgroundOpacity: z.number().min(0).max(1).default(1),
   accent: z.string().default('#38bdf8'),
   fontSize: z.number().min(10).max(24).default(12),
 }).describe('Data table widget - compact tabular display for multiple live data values.')

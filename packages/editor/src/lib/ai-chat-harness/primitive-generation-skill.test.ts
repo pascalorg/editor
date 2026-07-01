@@ -13,6 +13,7 @@ describe('primitive generation skill prompt', () => {
     expect(prompt).toContain('Do not create/use a recipe')
     expect(prompt).toContain('connectTo')
     expect(prompt).toContain('same horizontal level')
+    expect(prompt).toContain('hemisphere')
     expect(prompt).toContain('ellipsoid_shell')
     expect(prompt).toContain('curved_panel')
     expect(prompt).toContain('lofted_shell')

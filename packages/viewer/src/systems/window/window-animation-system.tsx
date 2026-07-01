@@ -7,6 +7,7 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import type { Object3D } from 'three'
 import {
   AWNING_WINDOW_SASH_NAME,
   CASEMENT_WINDOW_SASH_NAME,
@@ -28,12 +29,11 @@ function markWindowDirty(windowId: AnyNodeId) {
   scene.dirtyNodes.add(windowId)
 }
 
-function applyDirectWindowAnimation(windowId: AnyNodeId, value: number) {
-  const node = useScene.getState().nodes[windowId]
-  if (node?.type !== 'window') return false
-
-  const mesh = sceneRegistry.nodes.get(windowId)
-
+export function poseWindowMovingParts(
+  node: WindowNode,
+  mesh: Object3D | undefined,
+  value: number,
+): boolean {
   if (node.windowType === 'sliding') {
     const activePanel = mesh?.getObjectByName(SLIDING_WINDOW_ACTIVE_PANEL_NAME)
     if (!activePanel) return false
@@ -118,6 +118,12 @@ function applyDirectWindowAnimation(windowId: AnyNodeId, value: number) {
   }
 
   return false
+}
+
+function applyDirectWindowAnimation(windowId: AnyNodeId, value: number) {
+  const node = useScene.getState().nodes[windowId]
+  if (node?.type !== 'window') return false
+  return poseWindowMovingParts(node, sceneRegistry.nodes.get(windowId), value)
 }
 
 export const WindowAnimationSystem = () => {

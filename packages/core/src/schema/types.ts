@@ -40,6 +40,7 @@ import { SphereNode } from './nodes/sphere'
 import { StairNode } from './nodes/stair'
 import { StairSegmentNode } from './nodes/stair-segment'
 import { SteelBeamNode } from './nodes/steel-beam'
+import { SteelFrameNode } from './nodes/steel-frame'
 import { SweepNode } from './nodes/sweep'
 import { TankNode } from './nodes/tank'
 import { TorusNode } from './nodes/torus'
@@ -92,6 +93,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   RoofSegmentNode,
   ShelfNode,
   SteelBeamNode,
+  SteelFrameNode,
   StairNode,
   StairSegmentNode,
   ScanNode,

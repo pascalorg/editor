@@ -6,6 +6,7 @@ import useViewer from '../../store/use-viewer'
 type FrameLimiterProps = {
   fps?: number
   idleFps?: number
+  active?: boolean
 }
 
 const WARMUP_MS = 5_000
@@ -21,7 +22,7 @@ const DIRTY_BUILD_KINDS = new Set([
   'window',
 ])
 
-const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, idleFps = 4 }) => {
+const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, idleFps = 4, active = false }) => {
   const { advance, set, frameloop: initFrameloop } = useThree()
 
   useLayoutEffect(() => {
@@ -33,7 +34,7 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, idleFps = 4 }) =>
     function tick(t: DOMHighResTimeStamp) {
       raf = requestAnimationFrame(tick)
       elapsed = t - then
-      const interval = 1000 / getTargetFps(t, mountedAt, fps, idleFps)
+      const interval = 1000 / getTargetFps(t, mountedAt, fps, idleFps, active)
       if (elapsed > interval) {
         advance(i)
         i += elapsed / 1000 - (elapsed % interval) / 1000
@@ -51,7 +52,7 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, idleFps = 4 }) =>
       }
       set({ frameloop: initFrameloop })
     }
-  }, [fps, idleFps, advance, set, initFrameloop])
+  }, [fps, idleFps, active, advance, set, initFrameloop])
 
   return null
 }
@@ -61,9 +62,11 @@ function getTargetFps(
   mountedAt: DOMHighResTimeStamp,
   activeFps: number,
   idleFps: number,
+  active: boolean,
 ) {
   if (typeof document !== 'undefined' && document.hidden) return 1
   if (now - mountedAt < WARMUP_MS) return activeFps
+  if (active) return activeFps
 
   const viewer = useViewer.getState()
   if (viewer.cameraDragging || viewer.inputDragging) return activeFps

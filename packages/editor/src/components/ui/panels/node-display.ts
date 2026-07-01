@@ -24,7 +24,8 @@ const TYPE_DEFAULTS: Record<string, NodeDisplay> = {
   'cable-tray': { icon: '/icons/pipe.svg', label: 'Cable tray' },
   ladder: { icon: '/icons/stairs.webp', label: 'Ladder' },
   'steel-beam': { icon: '/icons/column.webp', label: 'Steel beam' },
-  'data-widget': { icon: '/icons/data-widget.svg', label: 'Data widget' },
+  'steel-frame': { icon: '/icons/column.webp', label: '\u94a2\u67b6' },
+  'data-widget': { icon: '/icons/data-widget.svg', label: '\u5355\u6807\u7b7e' },
   'data-chart': { icon: '/icons/data-chart.svg', label: 'Chart widget' },
   'data-table': { icon: '/icons/data-table.svg', label: 'Table widget' },
 }

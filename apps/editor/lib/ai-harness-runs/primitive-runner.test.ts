@@ -4,6 +4,12 @@ import type {
   GeneratedGeometryShapeSpec,
 } from '../../../../packages/editor/src/lib/ai-generated-geometry-core'
 import {
+  applyDeviceProfileToPartInput,
+  inferDeviceProfileDefinition,
+} from '../../../../packages/core/src/lib/device-profile-registry'
+import { executeGeometryToolCall } from '../../../../packages/editor/src/lib/ai-geometry-tool-executor'
+import { loadDeviceProfiles } from '../device-profiles'
+import {
   ensurePromptInPrimitiveContext,
   isSafeDeterministicProfileMatch,
   polishStage3SemanticArtifact,
@@ -12,6 +18,7 @@ import {
   stage3QualityReview,
   stripNegatedTargetClauses,
 } from './primitive-runner'
+import { resolveProfileResourceCandidates } from './resource-profile-resolver'
 
 function shape(
   semanticRole: string,
@@ -59,6 +66,94 @@ function profileForMatchTest(
 }
 
 describe('Stage3 primitive quality gate', () => {
+  test('resolves refinery utility boiler from resource profiles before free primitive generation', async () => {
+    const prompt =
+      '\u751f\u6210\u4e00\u4e2a\u516c\u7528\u5de5\u7a0b\u9505\u7089'
+    const loaded = await loadDeviceProfiles({
+      extraPackDirs: ['apps/editor/data/profile-pack-cloud/industry.refinery.basic-0.1.0'],
+    })
+    const resolution = resolveProfileResourceCandidates(prompt, loaded.profiles)
+
+    expect(resolution.selectedProfile).toMatchObject({
+      id: 'refinery.utility_boiler',
+      sourcePack: {
+        id: 'industry.refinery.basic',
+      },
+    })
+    expect(resolution.selectedCandidate).toMatchObject({
+      matchedLabel: '\u516c\u7528\u5de5\u7a0b\u9505\u7089',
+      matchKind: 'alias',
+    })
+
+    const profile = resolution.selectedProfile
+    expect(profile).toBeDefined()
+    expect(
+      inferDeviceProfileDefinition({ prompt, name: prompt, object: prompt }, loaded.profiles)?.id,
+    ).toBe('refinery.utility_boiler')
+
+    const args = applyDeviceProfileToPartInput(profile!, {
+      prompt,
+      name: profile!.name,
+      object: profile!.name,
+      category: profile!.id,
+      deviceProfile: profile!.id,
+      profile: profile!.id,
+      forceProfile: true,
+    })
+    const result = executeGeometryToolCall('compose_parts', args, {
+      prompt,
+      deviceProfiles: loaded.profiles,
+    })
+
+    expect(result.content).not.toContain('Invalid geometry tool call')
+    expect(result.artifact?.sourceArgs.deviceProfile).toBe('refinery.utility_boiler')
+    expect(result.artifact?.shapes.map((shape) => shape.semanticRole)).toEqual(
+      expect.arrayContaining([
+        'boiler_body',
+        'boiler_stack',
+        'steam_header',
+        'boiler_control_box',
+      ]),
+    )
+  })
+
+  test('returns refinery distillation candidates for a generic distillation tower request', async () => {
+    const prompt = '\u751f\u6210\u4e00\u4e2a\u84b8\u998f\u5854'
+    const loaded = await loadDeviceProfiles({
+      extraPackDirs: ['apps/editor/data/profile-pack-cloud/industry.refinery.basic-0.1.0'],
+    })
+    const resolution = resolveProfileResourceCandidates(prompt, loaded.profiles)
+
+    expect(resolution.selectedProfile).toBeUndefined()
+    expect(resolution.candidates.slice(0, 2).map((candidate) => candidate.profile.id)).toEqual([
+      'refinery.atmospheric_distillation_unit',
+      'refinery.vacuum_distillation_unit',
+    ])
+    expect(resolution.candidates.slice(0, 2).map((candidate) => candidate.matchedLabel)).toEqual([
+      '\u5e38\u538b\u84b8\u998f\u5854',
+      '\u51cf\u538b\u84b8\u998f\u5854',
+    ])
+  })
+
+  test('prefers the specific refinery distillation profile when the prompt names it', async () => {
+    const prompt = '\u751f\u6210\u4e00\u4e2a\u5e38\u538b\u84b8\u998f\u5854'
+    const loaded = await loadDeviceProfiles({
+      extraPackDirs: ['apps/editor/data/profile-pack-cloud/industry.refinery.basic-0.1.0'],
+    })
+    const resolution = resolveProfileResourceCandidates(prompt, loaded.profiles)
+
+    expect(resolution.selectedProfile).toMatchObject({
+      id: 'refinery.atmospheric_distillation_unit',
+      sourcePack: {
+        id: 'industry.refinery.basic',
+      },
+    })
+    expect(resolution.candidates[0]).toMatchObject({
+      matchedLabel: '\u5e38\u538b\u84b8\u998f\u5854',
+      matchKind: 'alias',
+    })
+  })
+
   test('keeps the target prompt when callers provide only meta context', () => {
     const context = ensurePromptInPrimitiveContext(
       '生成一个建筑工地塔吊',
@@ -330,7 +425,7 @@ describe('Stage3 primitive quality gate', () => {
       requiredRoles: ['tower_body', 'jib_arm', 'trolley_hook'],
     }
 
-    const review = stage3QualityReview('??????????', towerArtifact)
+    const review = stage3QualityReview('生成一个塔吊吊钩', towerArtifact)
 
     expect(review.issues).not.toContain('Stage3 lifting hook must hang below the trolley/carriage.')
   })
@@ -343,7 +438,7 @@ describe('Stage3 primitive quality gate', () => {
     ])
     towerArtifact.geometryBrief = { category: 'tower_crane' }
 
-    const review = stage3QualityReview('??????', towerArtifact)
+    const review = stage3QualityReview('生成塔吊', towerArtifact)
 
     expect(review.passed).toBe(false)
     expect(review.requiresModelRepair).toBe(true)
@@ -361,7 +456,7 @@ describe('Stage3 primitive quality gate', () => {
     ])
     acArtifact.geometryBrief = { category: 'outdoor_ac_unit' }
 
-    const review = stage3QualityReview('????????', acArtifact)
+    const review = stage3QualityReview('生成室外空调机', acArtifact)
 
     expect(review.passed).toBe(false)
     expect(review.requiresModelRepair).toBe(true)
@@ -384,8 +479,8 @@ describe('Stage3 primitive quality gate', () => {
       requiredRoles: ['tower_mast', 'jib_boom', 'trolley', 'hook_block'],
     }
 
-    const repaired = repairStage3SemanticArtifact('??????', craneArtifact)
-    const review = repaired ? stage3QualityReview('??????', repaired.artifact) : undefined
+    const repaired = repairStage3SemanticArtifact('生成塔吊', craneArtifact)
+    const review = repaired ? stage3QualityReview('生成塔吊', repaired.artifact) : undefined
 
     expect(repaired?.label).toBe('generic semantic topology repair')
     expect(repaired?.artifact.shapes.some((item) => item.semanticRole === 'aircraft_wing')).toBe(
@@ -470,8 +565,8 @@ describe('Stage3 primitive quality gate', () => {
     ])
     acArtifact.geometryBrief = { category: 'outdoor_ac_unit' }
 
-    const repaired = repairStage3SemanticArtifact('????????', acArtifact)
-    const review = repaired ? stage3QualityReview('????????', repaired.artifact) : undefined
+    const repaired = repairStage3SemanticArtifact('生成室外空调机', acArtifact)
+    const review = repaired ? stage3QualityReview('生成室外空调机', repaired.artifact) : undefined
 
     expect(repaired?.artifact.shapes.some((item) => item.semanticRole === 'fan_pole')).toBe(false)
     expect(review?.passed).toBe(true)

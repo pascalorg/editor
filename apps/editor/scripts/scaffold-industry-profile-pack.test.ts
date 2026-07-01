@@ -3,7 +3,10 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { auditProfilePackValidation, validateProfilePackDir } from '../lib/profile-packs'
-import { normalizeIndustryPackSpec, scaffoldIndustryProfilePack } from './scaffold-industry-profile-pack'
+import {
+  normalizeIndustryPackSpec,
+  scaffoldIndustryProfilePack,
+} from './scaffold-industry-profile-pack'
 
 const tempRoots: string[] = []
 
@@ -205,5 +208,64 @@ describe('scaffold-industry-profile-pack', () => {
         ],
       }),
     ).toThrow(/countParam is not supported/)
+  })
+
+  test('reports authoring warnings for building and boiler profiles that are too generic', async () => {
+    const root = await tempDir()
+    const specPath = path.join(root, 'spec.json')
+    await fs.writeFile(
+      specPath,
+      JSON.stringify(
+        {
+          industry: 'test-refinery',
+          devices: [
+            {
+              id: 'control_room',
+              name: 'Control room and MCC',
+              aliases: ['control room', 'MCC'],
+              preferredResolver: 'catalog-item',
+              primarySemanticRole: 'control_room_body',
+              parts: [
+                { kind: 'generic_body', semanticRole: 'control_room_body' },
+                { kind: 'control_box', semanticRole: 'mcc_panel' },
+              ],
+            },
+            {
+              id: 'utility_boiler',
+              name: 'Utility boiler',
+              aliases: ['steam boiler'],
+              preferredResolver: 'profile-parts',
+              primarySemanticRole: 'boiler_body',
+              parts: [
+                { kind: 'generic_body', semanticRole: 'boiler_body' },
+                { kind: 'chimney_stack', semanticRole: 'boiler_stack' },
+                { kind: 'pipe_manifold', semanticRole: 'steam_header' },
+                { kind: 'control_box', semanticRole: 'boiler_control_box' },
+              ],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    )
+
+    const result = await scaffoldIndustryProfilePack({
+      specPath,
+      outputRoot: path.join(root, 'cloud'),
+      force: true,
+    })
+
+    expect(result.authoringWarnings.map((warning) => warning.code)).toEqual(
+      expect.arrayContaining([
+        'control_building_catalog_resolver',
+        'control_building_missing_shell_details',
+        'boiler_missing_process_features',
+      ]),
+    )
+    expect(await fs.readFile(path.join(result.packDir, 'README.md'), 'utf8')).toContain(
+      '## Authoring Review',
+    )
   })
 })

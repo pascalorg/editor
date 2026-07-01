@@ -37,6 +37,7 @@ import {
   type StairSegmentNode,
   type StairSurfaceMaterialRole,
   type SteelBeamNode,
+  type SteelFrameNode,
   type SweepNode,
   type TankNode,
   useScene,
@@ -77,6 +78,7 @@ export type StructureTool =
   | 'cable-tray'
   | 'ladder'
   | 'steel-beam'
+  | 'steel-frame'
   | 'road'
   | 'room'
   | 'custom-room'
@@ -233,6 +235,7 @@ export type MovingNode =
   | DataWidgetNode
   | LadderNode
   | SteelBeamNode
+  | SteelFrameNode
 
 type MaterialPaintSelectionSnapshot = {
   selectedId: string | null
@@ -507,7 +510,9 @@ export function normalizePersistedEditorUiState(
         industrialTool === 'pipe-fitting' ||
         industrialTool === 'tank' ||
         industrialTool === 'cable-tray' ||
-        industrialTool === 'steel-beam'
+        industrialTool === 'steel-beam' ||
+        industrialTool === 'steel-frame' ||
+        industrialTool === 'shelf'
           ? industrialTool
           : 'tank',
       structureLayer,

@@ -43,6 +43,7 @@ import { validateFactoryScenePatches } from '../../../../../lib/factory-scene-pa
 import { computeSceneBoundsXZ, pickSceneCameraFocusBounds } from '../../../../../lib/scene-bounds'
 import { useViewer } from '@pascal-app/viewer'
 import { Icon } from '@iconify/react'
+import { Box, Factory } from 'lucide-react'
 import { OrbitControls, useGLTF } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -305,7 +306,7 @@ const COMPOSE_PRIMITIVE_TOOL = {
               material: {
                 type: 'object',
                 description:
-                  'Optional material. Prefer {properties:{color:"#C4956A", roughness:0.6, metalness:0}}. Also accepted: {color:"#C4956A"} or {preset:"wood"}.',
+                  'Optional material. Prefer {properties:{color:"#C4956A", roughness:0.6, metalness:0, opacity:0.8, transparent:true}}. For gradients use {properties:{color:"#ef4444", opacity:0.8, transparent:true}, gradient:{type:"linear", space:"uv", axis:"y", stops:[{offset:0,color:"#ef4444",opacity:1},{offset:1,color:"#111827",opacity:1}]}}. Also accepted: {color:"#C4956A"} or {preset:"wood"}.',
               },
               materialPreset: { type: 'string', description: 'Optional material preset id.' },
               name: { type: 'string', description: 'Shape name.' },
@@ -1001,7 +1002,8 @@ const COMPOSE_PARTS_TOOL = {
               },
               material: {
                 type: 'object',
-                description: 'Optional part material, same shape as primitive material.',
+                description:
+                  'Optional part material, same shape as primitive material, including properties.opacity/transparent and optional gradient stops.',
               },
               materialPreset: { type: 'string', description: 'Optional material preset id.' },
               color: { type: 'string', description: 'Optional CSS color shortcut.' },
@@ -1179,7 +1181,8 @@ const REVISION_SHAPE_SCHEMA = {
     },
     material: {
       type: 'object',
-      description: 'Optional material, e.g. {properties:{color:"#1e3a8a", opacity:0.75, transparent:true}}.',
+      description:
+        'Optional material, e.g. {properties:{color:"#1e3a8a", opacity:0.75, transparent:true}}. For gradients use {properties:{color:"#ef4444", opacity:0.8, transparent:true}, gradient:{type:"linear", space:"uv", axis:"y", stops:[{offset:0,color:"#ef4444",opacity:1},{offset:1,color:"#111827",opacity:1}]}}.',
     },
     materialPreset: { type: 'string' },
   },
@@ -1293,7 +1296,7 @@ const REVISE_GEOMETRY_TOOL = {
               material: {
                 type: 'object',
                 description:
-                  'Full PrimitiveMaterialInput for setMaterial. Prefer color for simple recoloring.',
+                  'Full PrimitiveMaterialInput for setMaterial. Prefer color for simple recoloring. For gradients use material.gradient with 2-8 stops and material.properties.opacity for whole-material transparency.',
               },
               shapes: { type: 'array', items: REVISION_SHAPE_SCHEMA },
             },
@@ -1436,6 +1439,406 @@ function formatFactoryRunResult(data: unknown) {
     .join('\n')
 }
 
+type FactoryRunSummary = {
+  title: string
+  icon?: string
+  status: 'running' | 'succeeded' | 'failed' | 'cancelled' | 'needs_input'
+  description: string
+  steps: Array<{ label: string; status: 'done' | 'running' | 'pending' | 'failed' }>
+  metrics: Array<{ label: string; value: string }>
+  resourceOptions?: Array<{
+    id: string
+    label: string
+    description: string
+    recommended?: boolean
+    prompt: string
+  }>
+  details?: string
+}
+
+type DeviceGenerationRoute = 'primitive' | 'image-to-3d' | 'articraft'
+
+function deviceRouteLabel(mode: DeviceGenerationRoute) {
+  if (mode === 'primitive') return '几何搭建'
+  if (mode === 'image-to-3d') return '图生建模'
+  return '关节资产'
+}
+
+function deviceRunIcon(mode: DeviceGenerationRoute) {
+  if (mode === 'primitive') return 'mdi:shape-plus'
+  if (mode === 'image-to-3d') return 'mdi:image-sync-outline'
+  return 'mdi:axis-arrow'
+}
+
+function deviceResultTitle(mode: DeviceGenerationRoute) {
+  if (mode === 'primitive') return '设备几何已生成'
+  if (mode === 'image-to-3d') return '设备模型已生成'
+  return '关节设备已生成'
+}
+
+function buildDeviceProgressSummary(input: {
+  mode: DeviceGenerationRoute
+  message?: string
+  detailLines?: string[]
+  analysis?: string
+}): FactoryRunSummary {
+  const details = [
+    ...(input.analysis ? [`Analysis: ${input.analysis}`] : []),
+    ...(input.detailLines ?? []),
+  ]
+    .filter(Boolean)
+    .slice(-6)
+    .join('\n')
+  const routeLabel = deviceRouteLabel(input.mode)
+  const description =
+    input.message?.trim() ||
+    `正在按“${routeLabel}”路线创建设备，生成过程会先拆解需求，再输出可应用到画布的资产。`
+
+  if (input.mode === 'image-to-3d') {
+    return {
+      title: '正在创建设备',
+      icon: deviceRunIcon(input.mode),
+      status: 'running',
+      description,
+      steps: [
+        { label: '理解设备需求', status: 'done' },
+        { label: '图像理解', status: 'done' },
+        { label: '图生建模', status: 'running' },
+        { label: '资产检查', status: 'pending' },
+        { label: '应用到画布', status: 'pending' },
+      ],
+      metrics: [{ label: '路线', value: routeLabel }],
+      ...(details ? { details } : {}),
+    }
+  }
+
+  if (input.mode === 'articraft') {
+    return {
+      title: '正在创建设备',
+      icon: deviceRunIcon(input.mode),
+      status: 'running',
+      description,
+      steps: [
+        { label: '理解设备需求', status: 'done' },
+        { label: '结构拆解/连杆拓扑', status: 'done' },
+        { label: '关节资产', status: 'running' },
+        { label: '姿态/关节检查', status: 'pending' },
+        { label: '应用到画布', status: 'pending' },
+      ],
+      metrics: [{ label: '路线', value: routeLabel }],
+      ...(details ? { details } : {}),
+    }
+  }
+
+  return {
+    title: '正在创建设备',
+    icon: deviceRunIcon(input.mode),
+    status: 'running',
+    description,
+    steps: [
+      { label: '理解设备需求', status: 'done' },
+      { label: '设备画像/Profile 匹配', status: 'done' },
+      { label: '结构拆解/部件拓扑', status: input.analysis ? 'done' : 'running' },
+      { label: '几何搭建', status: 'running' },
+      { label: '质量检查', status: 'pending' },
+      { label: '应用到画布', status: 'pending' },
+    ],
+    metrics: [{ label: '路线', value: routeLabel }],
+    ...(details ? { details } : {}),
+  }
+}
+
+function buildPrimitiveResultSummary(artifact: GeneratedGeometryArtifact | undefined): FactoryRunSummary {
+  const quality = artifact?.profileQuality
+  const qualityScore = typeof quality?.overallScore === 'number' ? Math.round(quality.overallScore * 100) : undefined
+  const hasIssues = Boolean(quality?.issues?.length)
+  const shapeCount = artifact?.shapes.length ?? 0
+  const createdCount = artifact?.createdNames.length ?? 0
+  const sourceArgs = artifact?.sourceArgs ?? {}
+  const profileId =
+    typeof sourceArgs.deviceProfile === 'string'
+      ? sourceArgs.deviceProfile
+      : typeof sourceArgs.profile === 'string'
+        ? sourceArgs.profile
+        : undefined
+  const metrics: FactoryRunSummary['metrics'] = [
+    { label: '几何体', value: `${shapeCount}` },
+    { label: '部件', value: `${createdCount}` },
+  ]
+  if (profileId) metrics.push({ label: 'Profile', value: profileId })
+  if (qualityScore != null) metrics.push({ label: '质量', value: `${qualityScore}/100` })
+
+  return {
+    title: artifact ? deviceResultTitle('primitive') : '设备几何需要检查',
+    icon: deviceRunIcon('primitive'),
+    status: artifact && !hasIssues ? 'succeeded' : artifact ? 'failed' : 'failed',
+    description: artifact
+      ? '已生成可编辑的设备几何，可继续修改、保存到资料库，或应用到当前画布。'
+      : '这次几何生成没有返回可用设备资产。',
+    steps: [
+      { label: '理解设备需求', status: 'done' },
+      { label: profileId ? `设备画像/Profile ${profileId}` : '设备画像/Profile 匹配', status: 'done' },
+      { label: '结构拆解/部件拓扑', status: 'done' },
+      { label: '几何搭建', status: artifact ? 'done' : 'failed' },
+      {
+        label: `质量检查 ${hasIssues ? '需复核' : '通过'}`,
+        status: hasIssues ? 'failed' : 'done',
+      },
+      { label: '应用到画布', status: artifact?.placedAt ? 'done' : 'pending' },
+    ],
+    metrics,
+  }
+}
+
+function buildPrimitiveResourceSelectionSummary(resourceSelection: unknown): FactoryRunSummary {
+  const candidates =
+    isRecord(resourceSelection) && Array.isArray(resourceSelection.candidates)
+      ? resourceSelection.candidates
+      : []
+  const resourceOptions = candidates
+    .map((candidate) => {
+      if (!isRecord(candidate)) return null
+      const id = typeof candidate.profileId === 'string' ? candidate.profileId : ''
+      const label =
+        typeof candidate.matchedLabel === 'string' && candidate.matchedLabel.trim()
+          ? candidate.matchedLabel
+          : typeof candidate.name === 'string'
+            ? candidate.name
+            : id
+      const description =
+        typeof candidate.usageHint === 'string'
+          ? candidate.usageHint
+          : typeof candidate.description === 'string'
+            ? candidate.description
+            : '适合该行业包中同名或近义设备场景。'
+      return id
+        ? {
+            id,
+            label,
+            description,
+            recommended: candidate.recommended === true,
+            prompt: `生成一个${label}（${id}）`,
+          }
+        : null
+    })
+    .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+  return {
+    title: '需要选择设备资源',
+    icon: deviceRunIcon('primitive'),
+    status: 'needs_input',
+    description:
+      '已从行业资源包找到多个可能设备。默认建议选带“推荐”的设备；如果你的工艺语义更具体，再选择对应设备。',
+    steps: [
+      { label: '理解设备需求', status: 'done' },
+      { label: '行业资源匹配', status: 'done' },
+      { label: '等待选择设备', status: 'pending' },
+      { label: '几何搭建', status: 'pending' },
+      { label: '应用到画布', status: 'pending' },
+    ],
+    metrics: [
+      { label: '候选', value: `${candidates.length}` },
+      { label: '路线', value: deviceRouteLabel('primitive') },
+    ],
+    resourceOptions,
+  }
+}
+
+function buildImageTo3DResultSummary(artifact: GeneratedModelArtifact): FactoryRunSummary {
+  return {
+    title: deviceResultTitle('image-to-3d'),
+    icon: deviceRunIcon('image-to-3d'),
+    status: 'succeeded',
+    description: '图生建模已生成设备外观资产，可应用到画布或保存到资料库。',
+    steps: [
+      { label: '理解设备需求', status: 'done' },
+      { label: '图像理解', status: 'done' },
+      { label: '图生建模', status: 'done' },
+      { label: '资产检查 通过', status: 'done' },
+      { label: '应用到画布', status: artifact.placedAt ? 'done' : 'pending' },
+    ],
+    metrics: [
+      { label: '路线', value: deviceRouteLabel('image-to-3d') },
+      { label: 'Provider', value: artifact.provider },
+      { label: '资产', value: artifact.asset.id },
+    ],
+  }
+}
+
+function buildArticraftResultSummary(result: ArticraftResult): FactoryRunSummary {
+  return {
+    title: deviceResultTitle('articraft'),
+    icon: deviceRunIcon('articraft'),
+    status: 'succeeded',
+    description: '已生成带 links/joints 的设备资产，可查看源记录、导入画布并应用姿态。',
+    steps: [
+      { label: '理解设备需求', status: 'done' },
+      { label: '结构拆解/连杆拓扑', status: 'done' },
+      { label: '关节资产', status: result.jointCount > 0 ? 'done' : 'failed' },
+      { label: `姿态/关节检查 ${result.jointCount > 0 ? '通过' : '需复核'}`, status: result.jointCount > 0 ? 'done' : 'failed' },
+      { label: '应用到画布', status: result.status === 'imported' ? 'done' : 'pending' },
+    ],
+    metrics: [
+      { label: '路线', value: deviceRouteLabel('articraft') },
+      { label: 'Parts', value: `${result.partCount}` },
+      { label: 'Joints', value: `${result.jointCount}` },
+    ],
+  }
+}
+
+function factoryPlanKindLabel(value: unknown) {
+  if (value === 'layout') return '工厂/建筑布局'
+  if (value === 'process_line') return '工艺产线'
+  if (value === 'catalog_item') return '固定资产'
+  if (value === 'geometry') return '设备几何'
+  if (value === 'missing') return '未匹配需求'
+  return '工厂任务'
+}
+
+function factoryStageLabel(value: unknown) {
+  if (value === 'factory-plan') return '规划工厂方案'
+  if (value === 'selection-edit') return '修改已选对象'
+  if (value === 'patch-plan') return '生成场景变更'
+  return '处理工厂请求'
+}
+
+function hasReadableHanText(value: string | undefined) {
+  return typeof value === 'string' && /[\u4e00-\u9fff]/.test(value)
+}
+
+function buildFactoryProgressSummary(input: {
+  stage?: unknown
+  planKind?: unknown
+  message?: string
+  patchCount?: number
+  missingAssetCount?: number
+  detailLines?: string[]
+}): FactoryRunSummary {
+  const stageLabel = factoryStageLabel(input.stage)
+  const planLabel = factoryPlanKindLabel(input.planKind)
+  const details = input.detailLines?.filter(Boolean).slice(-6).join('\n')
+  const description = hasReadableHanText(input.message)
+    ? input.message!.trim()
+    : input.stage === 'patch-plan'
+      ? '场景变更已经生成，正在等待最终结果。'
+      : `${stageLabel}中，系统会把机器数据隐藏在后台。`
+  const metrics: FactoryRunSummary['metrics'] = []
+  if (input.patchCount != null) metrics.push({ label: '场景变更', value: `${input.patchCount}` })
+  if (input.missingAssetCount != null) {
+    metrics.push({ label: '未解析资产', value: `${input.missingAssetCount}` })
+  }
+  return {
+    title: '正在创建工厂',
+    status: 'running',
+    description,
+    steps: [
+      { label: '理解需求', status: 'done' },
+      {
+        label: planLabel === '工厂任务' ? stageLabel : planLabel,
+        status: input.stage === 'patch-plan' ? 'done' : 'running',
+      },
+      { label: '生成场景变更', status: input.stage === 'patch-plan' ? 'running' : 'pending' },
+      { label: '应用到画布', status: 'pending' },
+    ],
+    metrics,
+    ...(details ? { details } : {}),
+  }
+}
+
+function buildFactoryResultSummary(data: unknown): FactoryRunSummary {
+  const result = isRecord(data) ? data : {}
+  const patches = Array.isArray(result.patches) ? result.patches : []
+  const createPatchCount = patches.filter((patch) => isRecord(patch) && patch.op === 'create').length
+  const updatePatchCount = patches.filter((patch) => isRecord(patch) && patch.op === 'update').length
+  const deletePatchCount = patches.filter((patch) => isRecord(patch) && patch.op === 'delete').length
+  const nodeIds = Array.isArray(result.nodeIds)
+    ? result.nodeIds.map((id) => String(id)).filter(Boolean)
+    : []
+  const created = Array.isArray(result.created)
+    ? result.created.map((item) => String(item)).filter(Boolean)
+    : []
+  const missingAssets = Array.isArray(result.missingAssets) ? result.missingAssets : []
+  const requiredMissingAssets = missingAssets.some((item) => isRecord(item) && item.required === true)
+  const qualityReport = isRecord(result.qualityReport) ? result.qualityReport : undefined
+  const qualityScore =
+    typeof qualityReport?.score === 'number' ? Math.round(qualityReport.score) : undefined
+  const qualityPassed =
+    typeof qualityReport?.passed === 'boolean' ? qualityReport.passed : undefined
+  const qualityIssues = Array.isArray(qualityReport?.issues) ? qualityReport.issues : []
+  const layoutDiagnostics = isRecord(result.layoutDiagnostics)
+    ? result.layoutDiagnostics
+    : undefined
+  const layoutFits = typeof layoutDiagnostics?.fits === 'boolean' ? layoutDiagnostics.fits : undefined
+  const artifact = isRecord(result.artifact) ? result.artifact : undefined
+  const artifactTitle =
+    typeof artifact?.title === 'string'
+      ? artifact.title
+      : typeof artifact?.id === 'string'
+        ? artifact.id
+        : undefined
+  const intent = isRecord(result.intent) ? result.intent : undefined
+  const action = typeof intent?.action === 'string' ? intent.action : undefined
+  const succeeded = action !== 'missing' && !requiredMissingAssets
+  const applied = result.applied === true
+  const details = formatFactoryRunResult(result)
+
+  const readableCreated = created.slice(0, 4).join('、')
+  const description = succeeded
+    ? applied
+      ? `已生成并应用到画布${readableCreated ? `：${readableCreated}` : ''}。`
+      : '已生成场景变更，等待应用到画布。'
+    : '这次请求没有完全生成，可查看缺失项或质量提示。'
+
+  const metrics: FactoryRunSummary['metrics'] = [
+    { label: '新增', value: `${createPatchCount}` },
+    { label: '修改', value: `${updatePatchCount}` },
+    { label: '删除', value: `${deletePatchCount}` },
+    { label: '节点', value: `${nodeIds.length}` },
+  ]
+  if (qualityScore != null) metrics.push({ label: '质量', value: `${qualityScore}/100` })
+  if (missingAssets.length > 0) metrics.push({ label: '缺失', value: `${missingAssets.length}` })
+
+  return {
+    title: succeeded ? '工厂已创建' : '工厂创建需要检查',
+    status: succeeded ? 'succeeded' : 'failed',
+    description,
+    steps: [
+      { label: '理解需求', status: 'done' },
+      { label: factoryPlanKindLabel(isRecord(result.plan) ? result.plan.kind : undefined), status: 'done' },
+      {
+        label: artifactTitle ? `生成 ${artifactTitle}` : '生成场景变更',
+        status: patches.length > 0 ? 'done' : succeeded ? 'done' : 'failed',
+      },
+      { label: '应用到画布', status: applied ? 'done' : succeeded ? 'pending' : 'failed' },
+      ...(qualityScore == null
+        ? []
+        : [
+            {
+              label: `质量检查 ${qualityPassed ? '通过' : '需复核'}`,
+              status: qualityPassed ? ('done' as const) : ('failed' as const),
+            },
+          ]),
+      ...(layoutFits == null
+        ? []
+        : [
+            {
+              label: `布局检查 ${layoutFits ? '通过' : '需复核'}`,
+              status: layoutFits ? ('done' as const) : ('failed' as const),
+            },
+          ]),
+      ...(qualityIssues.length > 0
+        ? [
+            {
+              label: `质量提示 ${qualityIssues.length} 条`,
+              status: qualityPassed ? ('done' as const) : ('failed' as const),
+            },
+          ]
+        : []),
+    ],
+    metrics,
+    details,
+  }
+}
+
 function buildFactorySelectionSnapshot() {
   const scene = useScene.getState()
   const selectedIds = useViewer.getState().selection.selectedIds.map(String).filter(Boolean)
@@ -1484,12 +1887,85 @@ function buildFactorySelectionSnapshot() {
   return nodes.length ? { selectedIds, nodes } : undefined
 }
 
+function finiteSitePoint(value: unknown): [number, number] | null {
+  if (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    typeof value[0] === 'number' &&
+    typeof value[1] === 'number' &&
+    Number.isFinite(value[0]) &&
+    Number.isFinite(value[1])
+  ) {
+    return [value[0], value[1]]
+  }
+  return null
+}
+
+function boundsFromSitePoints(points: unknown[]) {
+  let minX = Number.POSITIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  let hasPoint = false
+  for (const point of points) {
+    const parsed = finiteSitePoint(point)
+    if (!parsed) continue
+    minX = Math.min(minX, parsed[0])
+    maxX = Math.max(maxX, parsed[0])
+    minZ = Math.min(minZ, parsed[1])
+    maxZ = Math.max(maxZ, parsed[1])
+    hasPoint = true
+  }
+  if (!hasPoint) return null
+  return {
+    min: [minX, minZ],
+    max: [maxX, maxZ],
+    center: [(minX + maxX) / 2, (minZ + maxZ) / 2],
+    size: [maxX - minX, maxZ - minZ],
+  }
+}
+
+function isDefaultSitePoints(points: unknown[]) {
+  const expected = [
+    [-15, -15],
+    [15, -15],
+    [15, 15],
+    [-15, 15],
+  ]
+  return (
+    points.length === expected.length &&
+    points.every((point, index) => {
+      const parsed = finiteSitePoint(point)
+      const expectedPoint = expected[index]
+      return Boolean(
+        parsed && expectedPoint && parsed[0] === expectedPoint[0] && parsed[1] === expectedPoint[1],
+      )
+    })
+  )
+}
+
+function buildFactorySiteContext(nodes: Record<AnyNodeId, AnyNode>) {
+  const site = Object.values(nodes).find((node) => node?.type === 'site')
+  const polygon = (site as unknown as { polygon?: { points?: unknown } } | undefined)?.polygon
+  const points = Array.isArray(polygon?.points) ? polygon.points : null
+  if (!site || !points) return null
+  const bounds = boundsFromSitePoints(points)
+  if (!bounds) return null
+  return {
+    id: site.id,
+    bounds,
+    isDefault: isDefaultSitePoints(points),
+  }
+}
+
 function buildFactorySceneContext() {
   const scene = useScene.getState()
   const bounds = computeSceneBoundsXZ(scene.nodes as Parameters<typeof computeSceneBoundsXZ>[0])
-  if (!bounds) return undefined
+  const site = buildFactorySiteContext(scene.nodes)
+  if (!bounds && !site) return undefined
   return {
-    bounds,
+    ...(bounds ? { bounds } : {}),
+    ...(site ? { site } : {}),
     nodeCount: Object.keys(scene.nodes).length,
   }
 }
@@ -1634,6 +2110,7 @@ interface ChatMessage {
   }
   articraftResult?: ArticraftResult
   imageTo3dResult?: ImageTo3DResult
+  factoryRunSummary?: FactoryRunSummary
   geometryArtifact?: GeneratedGeometryArtifact
   modelArtifact?: GeneratedModelArtifact
   toolCalls?: Array<{
@@ -1761,6 +2238,9 @@ const AI_IMAGE_MAX_BYTES = 8 * 1024 * 1024
 const AI_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 const AI_CHAT_DEFAULT_CONVERSATION_ID = 'default'
 const AI_CHAT_STORAGE_KEY = 'pascal-ai-chat-panel-state:v1'
+const AI_CHAT_STORAGE_MESSAGE_LIMIT = 40
+const AI_CHAT_STORAGE_FALLBACK_MESSAGE_LIMIT = 12
+const AI_CHAT_STORAGE_CONTENT_MAX_LENGTH = 20_000
 const CONVERSATION_HISTORY_PAGE_SIZE = 15
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -2711,6 +3191,152 @@ function GeneratedModelCard({
   )
 }
 
+function FactoryRunSummaryCard({
+  disabled,
+  onResourceOptionSelect,
+  summary,
+}: {
+  disabled?: boolean
+  onResourceOptionSelect?: (option: NonNullable<FactoryRunSummary['resourceOptions']>[number]) => void
+  summary: FactoryRunSummary
+}) {
+  const statusClass =
+    summary.status === 'succeeded'
+      ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'
+      : summary.status === 'failed'
+        ? 'border-amber-400/40 bg-amber-400/10 text-amber-200'
+        : summary.status === 'cancelled'
+          ? 'border-border/60 bg-accent/30 text-muted-foreground'
+          : 'border-sky-400/40 bg-sky-400/10 text-sky-200'
+  const statusIcon =
+    summary.status === 'succeeded'
+      ? 'mdi:check-circle-outline'
+      : summary.status === 'failed'
+        ? 'mdi:alert-circle-outline'
+        : summary.status === 'cancelled'
+          ? 'mdi:cancel'
+          : summary.status === 'needs_input'
+            ? 'mdi:cursor-default-click-outline'
+          : 'mdi:progress-clock'
+  const statusLabel =
+    summary.status === 'running'
+      ? '进行中'
+      : summary.status === 'succeeded'
+        ? '完成'
+        : summary.status === 'cancelled'
+          ? '已取消'
+          : summary.status === 'needs_input'
+            ? '待选择'
+            : '需检查'
+  return (
+    <div className="space-y-2 rounded-xl border border-border/70 bg-background/60 p-2 text-foreground shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-xs font-medium">
+            <Icon className="size-3.5 text-[#a684ff]" icon={summary.icon ?? 'mdi:factory'} />
+            <span className="truncate">{summary.title}</span>
+          </div>
+          <div className="mt-1 text-[11px] leading-snug text-muted-foreground">
+            {summary.description}
+          </div>
+        </div>
+        <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px]', statusClass)}>
+          <Icon className={cn('size-3', summary.status === 'running' && 'animate-spin')} icon={statusIcon} />
+          {statusLabel}
+        </span>
+      </div>
+
+      <div className="space-y-1">
+        {summary.steps.map((step, index) => {
+          const stepClass =
+            step.status === 'done'
+              ? 'text-emerald-300'
+              : step.status === 'failed'
+                ? 'text-amber-300'
+                : step.status === 'running'
+                  ? 'text-sky-300'
+                  : 'text-muted-foreground'
+          const icon =
+            step.status === 'done'
+              ? 'mdi:check'
+              : step.status === 'failed'
+                ? 'mdi:alert'
+                : step.status === 'running'
+                  ? 'mdi:loading'
+                  : 'mdi:circle-outline'
+          return (
+            <div className={cn('flex items-center gap-1.5 text-[11px]', stepClass)} key={`${step.label}-${index}`}>
+              <Icon className={cn('size-3.5 shrink-0', step.status === 'running' && 'animate-spin')} icon={icon} />
+              <span className="min-w-0 flex-1 truncate">{step.label}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      {summary.metrics.length > 0 ? (
+        <div className="grid grid-cols-2 gap-1.5">
+          {summary.metrics.map((metric) => (
+            <div className="rounded-lg border border-border/50 bg-accent/20 px-2 py-1" key={metric.label}>
+              <div className="text-[9px] text-muted-foreground">{metric.label}</div>
+              <div className="truncate text-[11px] font-medium text-foreground">{metric.value}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {summary.resourceOptions?.length ? (
+        <div className="space-y-1.5">
+          {summary.resourceOptions.map((option) => (
+            <div
+              className={cn(
+                'rounded-lg border px-2 py-1.5',
+                option.recommended
+                  ? 'border-sky-400/40 bg-sky-400/10'
+                  : 'border-border/50 bg-accent/15',
+              )}
+              key={option.id}
+            >
+              <div className="flex items-center gap-1.5 text-[11px] font-medium text-foreground">
+                <span className="truncate">{option.label}</span>
+                {option.recommended ? (
+                  <span className="shrink-0 rounded border border-sky-400/40 px-1 py-0.5 text-[9px] text-sky-200">
+                    推荐
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                {option.description}
+              </div>
+              {onResourceOptionSelect ? (
+                <button
+                  className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-md border border-sky-400/35 bg-sky-400/10 px-2 py-1 text-[10px] font-medium text-sky-100 transition-colors hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={disabled}
+                  onClick={() => onResourceOptionSelect(option)}
+                  type="button"
+                >
+                  <Icon className="size-3" icon="mdi:cube-send" />
+                  生成{option.label}
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {summary.details ? (
+        <details className="rounded-lg border border-border/50 bg-accent/15 px-2 py-1 text-[10px] text-muted-foreground">
+          <summary className="cursor-pointer select-none text-[10px] text-muted-foreground">
+            调试详情
+          </summary>
+          <div className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[9px] leading-relaxed">
+            {summary.details}
+          </div>
+        </details>
+      ) : null}
+    </div>
+  )
+}
+
 function getArticraftMetadata(result: ArticraftResult, nodeName: string) {
   const linkName = nodeName.replace(/_v\d+$/, '')
   const joint = result.joints.find((candidate) => candidate.child === linkName)
@@ -2749,6 +3375,62 @@ type AiChatPanelStateSnapshot = {
   imageAttachment?: ChatImageAttachment
 }
 
+function truncateAiChatStorageText(value: string) {
+  if (value.length <= AI_CHAT_STORAGE_CONTENT_MAX_LENGTH) return value
+  return `${value.slice(0, AI_CHAT_STORAGE_CONTENT_MAX_LENGTH)}\u2026`
+}
+
+function compactAiChatMessageForLocalStorage(message: ChatMessage): ChatMessage {
+  const compact: ChatMessage = {
+    ...message,
+    content: truncateAiChatStorageText(message.content),
+  }
+  delete compact.image
+  return compact
+}
+
+function minimalAiChatMessageForLocalStorage(message: ChatMessage): ChatMessage {
+  return {
+    role: message.role,
+    content: truncateAiChatStorageText(message.content),
+    ...(message.generationRun ? { generationRun: message.generationRun } : {}),
+  }
+}
+
+function isStorageQuotaExceeded(error: unknown) {
+  return (
+    error instanceof DOMException &&
+    (error.name === 'QuotaExceededError' ||
+      error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+      error.code === 22 ||
+      error.code === 1014)
+  )
+}
+
+function writeAiChatPanelStateSnapshot(snapshot: AiChatPanelStateSnapshot & { updatedAt: string }) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(snapshot))
+    return
+  } catch (error) {
+    if (!isStorageQuotaExceeded(error)) return
+  }
+
+  const fallbackSnapshot: AiChatPanelStateSnapshot & { updatedAt: string } = {
+    ...snapshot,
+    messages: snapshot.messages
+      .slice(-AI_CHAT_STORAGE_FALLBACK_MESSAGE_LIMIT)
+      .map(minimalAiChatMessageForLocalStorage),
+    imageAttachment: undefined,
+  }
+
+  try {
+    window.localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(fallbackSnapshot))
+  } catch {
+    window.localStorage.removeItem(AI_CHAT_STORAGE_KEY)
+  }
+}
+
 function readPersistedAiChatPanelState(): AiChatPanelStateSnapshot | null {
   if (typeof window === 'undefined') return null
   try {
@@ -2759,9 +3441,7 @@ function readPersistedAiChatPanelState(): AiChatPanelStateSnapshot | null {
     const conversationPurpose =
       parsed.conversationPurpose === 'factory' || parsed.conversationPurpose === 'asset'
         ? parsed.conversationPurpose
-        : messages.length > 0
-          ? 'asset'
-          : undefined
+        : inferConversationPurposeFromMessages(messages)
     return {
       conversationId:
         typeof parsed.conversationId === 'string'
@@ -2800,6 +3480,28 @@ function inferConversationPurposeFromMessages(
 ): AiConversationPurpose | undefined {
   if (messages.some((message) => message.generationRun?.mode === 'factory')) return 'factory'
   return messages.length > 0 ? 'asset' : undefined
+}
+
+function conversationHistoryIcon(conversation: AiConversationSummary) {
+  if (conversation.conversationPurpose === 'factory') {
+    return {
+      icon: 'mdi:factory',
+      label: t('aiChat.factoryConversation', 'Factory conversation'),
+      className: 'border-[#a684ff]/20 bg-[#a684ff]/5 text-[#a684ff]/70',
+    }
+  }
+  if (conversation.conversationPurpose === 'asset') {
+    return {
+      icon: 'mdi:robot-industrial-outline',
+      label: t('aiChat.assetConversation', 'Equipment conversation'),
+      className: 'border-sky-400/20 bg-sky-400/5 text-sky-300/70',
+    }
+  }
+  return {
+    icon: 'mdi:chat-outline',
+    label: t('aiChat.conversation', 'Conversation'),
+    className: 'border-border/60 bg-accent/35 text-muted-foreground',
+  }
 }
 
 function buildArticraftResultFromJobData(prompt: string, resultData: Record<string, unknown>) {
@@ -2973,15 +3675,15 @@ export function AiChatPanel() {
     if (typeof window === 'undefined') return
     const snapshot: AiChatPanelStateSnapshot & { updatedAt: string } = {
       conversationId,
-      messages,
+      messages: messages.slice(-AI_CHAT_STORAGE_MESSAGE_LIMIT).map(compactAiChatMessageForLocalStorage),
       input,
       generationMode,
       conversationPurpose,
       inputExpanded,
-      imageAttachment,
+      imageAttachment: undefined,
       updatedAt: new Date().toISOString(),
     }
-    window.localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(snapshot))
+    writeAiChatPanelStateSnapshot(snapshot)
   }, [
     conversationId,
     conversationPurpose,
@@ -3203,7 +3905,18 @@ export function AiChatPanel() {
         stoppedActiveRun = true
         return {
           ...message,
-          content,
+          content: message.factoryRunSummary ? '' : content,
+          factoryRunSummary: message.factoryRunSummary
+            ? {
+                ...message.factoryRunSummary,
+                status: 'cancelled' as const,
+                title: message.factoryRunSummary.icon ? '生成已取消' : '工厂创建已取消',
+                description: content,
+                steps: message.factoryRunSummary.steps.map((step) =>
+                  step.status === 'running' ? { ...step, status: 'failed' as const } : step,
+                ),
+              }
+            : message.factoryRunSummary,
           generationRun: { ...message.generationRun!, status: 'cancelled' as const },
         }
       })
@@ -3315,7 +4028,7 @@ export function AiChatPanel() {
         ...prev,
         {
           role: 'assistant',
-          content: `瀛樺叆绱犳潗澶辫触锛?{error instanceof Error ? error.message : String(error)}`,
+          content: `保存到素材库失败：${error instanceof Error ? error.message : String(error)}`,
         },
       ])
     }
@@ -3422,7 +4135,7 @@ export function AiChatPanel() {
         ...prev,
         {
           role: 'assistant',
-          content: `璇诲彇鍥剧墖澶辫触锛?{error instanceof Error ? error.message : String(error)}`,
+          content: `读取图片失败：${error instanceof Error ? error.message : String(error)}`,
         },
       ])
     }
@@ -3679,6 +4392,7 @@ export function AiChatPanel() {
           role: 'assistant',
           content: t('aiChat.articraftReady', 'Articraft result is ready.'),
           generationRun: { id: runId, mode: 'articraft', status: 'succeeded' },
+          factoryRunSummary: buildArticraftResultSummary(result),
           articraftResult: result,
         }
         if (jobMessageIndex >= 0) {
@@ -3719,6 +4433,7 @@ export function AiChatPanel() {
           content: `\u56fe\u751f\u5efa\u6a21\u5b8c\u6210\uff1a${asset.name ?? asset.id}`,
           image,
           generationRun: { id: runId, mode: 'image-to-3d', status: 'succeeded' },
+          factoryRunSummary: buildImageTo3DResultSummary(artifact),
           modelArtifact: artifact,
         }
         if (runMessageIndex >= 0) {
@@ -3742,12 +4457,25 @@ export function AiChatPanel() {
     setMessages((prev) =>
       prev.map((messageItem) =>
         messageItem.generationRun?.id === runId
-          ? {
-              ...messageItem,
-              content,
-              generationRun: { ...messageItem.generationRun!, status: 'cancelled' as const },
-            }
-          : messageItem,
+            ? {
+                ...messageItem,
+                content: messageItem.factoryRunSummary ? '' : content,
+                factoryRunSummary: messageItem.factoryRunSummary
+                  ? {
+                      ...messageItem.factoryRunSummary,
+                      status: 'cancelled' as const,
+                      title: messageItem.factoryRunSummary.icon ? '生成已取消' : '工厂创建已取消',
+                      description: content,
+                      steps: messageItem.factoryRunSummary.steps.map((step) =>
+                        step.status === 'running'
+                          ? { ...step, status: 'failed' as const }
+                          : step,
+                      ),
+                    }
+                  : messageItem.factoryRunSummary,
+                generationRun: { ...messageItem.generationRun!, status: 'cancelled' as const },
+              }
+            : messageItem,
       ),
     )
   }, [closeRunEventSource])
@@ -3766,6 +4494,10 @@ export function AiChatPanel() {
             role: 'assistant',
             content: progressHeader,
             image: run.image,
+            factoryRunSummary: buildDeviceProgressSummary({
+              mode: 'image-to-3d',
+              message: '正在恢复图生建模任务进度。',
+            }),
             generationRun: {
               id: run.id,
               mode: 'image-to-3d',
@@ -3794,6 +4526,11 @@ export function AiChatPanel() {
               ? {
                   ...messageItem,
                   content: formatArticraftProgressMessage(progressHeader, progressLines),
+                  factoryRunSummary: buildDeviceProgressSummary({
+                    mode: 'image-to-3d',
+                    message: message || '正在生成设备外观资产。',
+                    detailLines: progressLines,
+                  }),
                   generationRun: { id: run.id, mode: 'image-to-3d', status: 'running' },
                 }
               : messageItem,
@@ -3813,7 +4550,7 @@ export function AiChatPanel() {
               messageItem.generationRun?.id === run.id
                 ? {
                     role: 'assistant',
-                    content: `鍥剧敓寤烘ā澶辫触锛?{message}`,
+                    content: `图生建模失败：${message}`,
                     generationRun: { id: run.id, mode: 'image-to-3d', status: 'failed' },
                   }
                 : messageItem,
@@ -3832,7 +4569,7 @@ export function AiChatPanel() {
             messageItem.generationRun?.id === run.id
               ? {
                   role: 'assistant',
-                  content: `鍥剧敓寤烘ā澶辫触锛?{String(parsed.message)}`,
+                  content: `图生建模失败：${String(parsed.message)}`,
                   generationRun: { id: run.id, mode: 'image-to-3d', status: 'failed' },
                 }
               : messageItem,
@@ -3869,6 +4606,10 @@ export function AiChatPanel() {
               t('aiChat.articraftGenerating', '正在使用 Articraft 生成...'),
               ['已恢复后台生成任务，正在继续读取进度...'],
             ),
+            factoryRunSummary: buildDeviceProgressSummary({
+              mode: 'articraft',
+              message: '正在恢复关节资产生成进度。',
+            }),
             generationRun: {
               id: job.id,
               mode: 'articraft',
@@ -3878,7 +4619,7 @@ export function AiChatPanel() {
         ]
       })
 
-      const progressHeader = t('aiChat.articraftGenerating', '正在使用 Articraft 生成...')
+      const progressHeader = '正在使用图生建模生成 3D 模型，完成后会保存到物品库...'
       const progressLines: string[] = []
       const source = new EventSource(`/api/ai-harness/runs/${encodeURIComponent(job.id)}/events`)
       activeRunEventSourcesRef.current.set(job.id, source)
@@ -3898,6 +4639,11 @@ export function AiChatPanel() {
               ? {
                   ...messageItem,
                   content: formatArticraftProgressMessage(progressHeader, progressLines),
+                  factoryRunSummary: buildDeviceProgressSummary({
+                    mode: 'articraft',
+                    message: message || '正在生成设备几何和关节资产。',
+                    detailLines: progressLines,
+                  }),
                   generationRun: { id: job.id, mode: 'articraft', status: 'running' },
                 }
               : messageItem,
@@ -3957,6 +4703,7 @@ export function AiChatPanel() {
         ? data.results.map((item) => String(item)).filter(Boolean)
         : []
       const lastContent = typeof data.lastContent === 'string' ? data.lastContent : ''
+      const needsResourceSelection = data.needsResourceSelection === true
       const analysis =
         typeof data.analysis === 'string' ? data.analysis : primitiveRunAnalysisRef.current.get(runId)
 
@@ -3972,6 +4719,9 @@ export function AiChatPanel() {
           role: 'assistant',
           content,
           generationRun: { id: runId, mode: 'primitive', status: 'succeeded' },
+          factoryRunSummary: needsResourceSelection
+            ? buildPrimitiveResourceSelectionSummary(data.resourceSelection)
+            : buildPrimitiveResultSummary(artifact),
           ...(artifact ? { geometryArtifact: artifact } : {}),
         }
         if (runMessageIndex >= 0) {
@@ -4016,6 +4766,10 @@ export function AiChatPanel() {
           const next = [...prev]
           next[pendingIndex] = {
             ...next[pendingIndex]!,
+            factoryRunSummary: buildDeviceProgressSummary({
+              mode: 'primitive',
+              message: '正在恢复几何搭建设备任务。',
+            }),
             generationRun: {
               id: run.id,
               mode: 'primitive',
@@ -4029,6 +4783,10 @@ export function AiChatPanel() {
           {
             role: 'assistant',
             content: '**Generate:**\n_恢复后台几何体生成任务，正在读取进度..._',
+            factoryRunSummary: buildDeviceProgressSummary({
+              mode: 'primitive',
+              message: '正在恢复几何搭建设备任务。',
+            }),
             generationRun: {
               id: run.id,
               mode: 'primitive',
@@ -4059,6 +4817,12 @@ export function AiChatPanel() {
                     primitiveRunAnalysisRef.current.get(run.id),
                     formatArticraftProgressMessage('', progressLines).trim(),
                   ),
+                  factoryRunSummary: buildDeviceProgressSummary({
+                    mode: 'primitive',
+                    message: message || '正在搭建设备几何。',
+                    detailLines: progressLines,
+                    analysis: primitiveRunAnalysisRef.current.get(run.id),
+                  }),
                   generationRun: { id: run.id, mode: 'primitive', status: 'running' },
                 }
               : messageItem,
@@ -4077,6 +4841,12 @@ export function AiChatPanel() {
               ? {
                   ...messageItem,
                   content: formatPrimitiveRunMessage(analysis, '_Generating..._'),
+                  factoryRunSummary: buildDeviceProgressSummary({
+                    mode: 'primitive',
+                    message: '已完成需求理解，正在生成设备几何。',
+                    detailLines: progressLines,
+                    analysis,
+                  }),
                   generationRun: { id: run.id, mode: 'primitive', status: 'running' },
                 }
               : messageItem,
@@ -4098,6 +4868,12 @@ export function AiChatPanel() {
                     primitiveRunAnalysisRef.current.get(run.id),
                     message,
                   ),
+                  factoryRunSummary: buildDeviceProgressSummary({
+                    mode: 'primitive',
+                    message: '几何工具已返回结果，正在整理设备资产。',
+                    detailLines: [message],
+                    analysis: primitiveRunAnalysisRef.current.get(run.id),
+                  }),
                   generationRun: { id: run.id, mode: 'primitive', status: 'running' },
                 }
               : messageItem,
@@ -4222,7 +4998,8 @@ export function AiChatPanel() {
         !requiredMissingAssets
       const resultMessage: ChatMessage = {
         role: 'assistant',
-        content: formatFactoryRunResult(displayData),
+        content: '',
+        factoryRunSummary: buildFactoryResultSummary(displayData),
         generationRun: { id: runId, mode: 'factory', status: succeeded ? 'succeeded' : 'failed' },
       }
       if (runMessageIndex >= 0) {
@@ -4246,7 +5023,10 @@ export function AiChatPanel() {
           ...prev,
           {
             role: 'assistant',
-            content: '**Factory draft:**\nPreparing factory patch plan...',
+            content: '',
+            factoryRunSummary: buildFactoryProgressSummary({
+              message: '我正在理解需求并准备工厂场景变更。',
+            }),
             generationRun: {
               id: run.id,
               mode: 'factory',
@@ -4262,6 +5042,8 @@ export function AiChatPanel() {
       source.addEventListener('progress', (event) => {
         const parsed = safeParseJson(event.data)
         const message = isRecord(parsed) && typeof parsed.message === 'string' ? parsed.message : ''
+        const eventData = isRecord(parsed) && isRecord(parsed.data) ? parsed.data : {}
+        const plan = isRecord(eventData.plan) ? eventData.plan : undefined
         if (message.trim()) {
           progressLines.push(message.trim())
           if (progressLines.length > ARTICRAFT_PROGRESS_LINE_LIMIT) {
@@ -4273,10 +5055,13 @@ export function AiChatPanel() {
             messageItem.generationRun?.id === run.id
               ? {
                   ...messageItem,
-                  content: formatArticraftProgressMessage(
-                    '**Factory draft:**\nGenerating equipment and patch plan...',
-                    progressLines,
-                  ),
+                  content: '',
+                  factoryRunSummary: buildFactoryProgressSummary({
+                    stage: eventData.stage,
+                    planKind: plan?.kind,
+                    message: message.trim() || undefined,
+                    detailLines: progressLines,
+                  }),
                   generationRun: { id: run.id, mode: 'factory', status: 'running' },
                 }
               : messageItem,
@@ -4286,23 +5071,32 @@ export function AiChatPanel() {
 
       source.addEventListener('message', (event) => {
         const parsed = safeParseJson(event.data)
-        if (!isRecord(parsed) || !isRecord(parsed.data) || parsed.data.stage !== 'patch-plan') return
+        if (!isRecord(parsed) || !isRecord(parsed.data)) return
+        const eventData = parsed.data
+        if (eventData.stage !== 'patch-plan' && eventData.stage !== 'selection-edit') return
         const patchCount =
-          typeof parsed.data.patchCount === 'number' ? parsed.data.patchCount : undefined
-        const missingAssets = Array.isArray(parsed.data.missingAssets)
-          ? parsed.data.missingAssets.length
+          typeof eventData.patchCount === 'number' ? eventData.patchCount : undefined
+        const missingAssets = Array.isArray(eventData.missingAssets)
+          ? eventData.missingAssets.length
           : 0
+        const plan = isRecord(eventData.plan) ? eventData.plan : undefined
         setMessages((prev) =>
           prev.map((messageItem) =>
             messageItem.generationRun?.id === run.id
               ? {
                   ...messageItem,
-                  content: [
-                    '**Factory draft:**',
-                    patchCount == null ? '- Patch plan ready.' : `- Scene patches: ${patchCount}`,
-                    `- Missing assets: ${missingAssets}`,
-                    '- Waiting for final run result...',
-                  ].join('\n'),
+                  content: '',
+                  factoryRunSummary: buildFactoryProgressSummary({
+                    stage: eventData.stage,
+                    planKind: plan?.kind,
+                    message:
+                      typeof parsed.message === 'string'
+                        ? parsed.message
+                        : '场景变更已经生成，正在等待最终结果。',
+                    patchCount,
+                    missingAssetCount: missingAssets,
+                    detailLines: progressLines,
+                  }),
                   generationRun: { id: run.id, mode: 'factory', status: 'running' },
                 }
               : messageItem,
@@ -4724,6 +5518,10 @@ export function AiChatPanel() {
     const progressMsg: ChatMessage = {
       role: 'assistant',
       content: '\u6b63\u5728\u4f7f\u7528\u56fe\u751f\u5efa\u6a21\u751f\u6210 3D \u6a21\u578b\uff0c\u5b8c\u6210\u540e\u4f1a\u4fdd\u5b58\u5230\u7269\u54c1\u5e93...',
+      factoryRunSummary: buildDeviceProgressSummary({
+        mode: 'image-to-3d',
+        message: '正在根据图片创建设备外观资产。',
+      }),
     }
     setMessages((prev) => [...prev, userMsg, progressMsg])
     setLoading(true)
@@ -4766,6 +5564,10 @@ export function AiChatPanel() {
           updated[lastIdx] = {
             ...updated[lastIdx]!,
             content: formatArticraftProgressMessage(progressMsg.content, ['后台任务已创建，正在等待生成日志...']),
+            factoryRunSummary: buildDeviceProgressSummary({
+              mode: 'image-to-3d',
+              message: '后台任务已创建，正在等待图生建模结果。',
+            }),
             generationRun: { id: runId, mode: 'image-to-3d', status: 'queued' },
           }
           return updated
@@ -4808,10 +5610,14 @@ export function AiChatPanel() {
     setImageAttachment(undefined)
     const prompt = text.trim() || '\u8bf7\u6839\u636e\u56fe\u7247\u751f\u6210\u4e00\u4e2a\u53ef\u52a8\u7684\u00203D\u0020\u6a21\u578b'
     const userMsg: ChatMessage = { role: 'user', content: prompt, image }
-    const progressHeader = t('aiChat.articraftGenerating', '\u6b63\u5728\u751f\u6210\u0020Articraft\u0020\u6a21\u578b...')
+      const progressHeader = '正在使用图生建模生成 3D 模型，完成后会保存到物品库...'
     const progressMsg: ChatMessage = {
       role: 'assistant',
       content: progressHeader,
+      factoryRunSummary: buildDeviceProgressSummary({
+        mode: 'articraft',
+        message: '正在生成带 links/joints 的可动设备资产。',
+      }),
     }
     setMessages((prev) => [...prev, userMsg, progressMsg])
     setLoading(true)
@@ -4845,6 +5651,10 @@ export function AiChatPanel() {
           updated[lastIdx] = {
             ...updated[lastIdx]!,
             content: formatArticraftProgressMessage(progressHeader, ['\u4efb\u52a1\u5df2\u63d0\u4ea4\uff0c\u6b63\u5728\u6392\u961f...']),
+            factoryRunSummary: buildDeviceProgressSummary({
+              mode: 'articraft',
+              message: '任务已提交，正在排队生成关节资产。',
+            }),
             generationRun: { id: runId, mode: 'articraft', status: 'queued' },
           }
         }
@@ -5082,8 +5892,8 @@ export function AiChatPanel() {
     [callApi, executeToolCall],
   )
 
-  const sendMessage = useCallback(async () => {
-    const text = input.trim()
+  const sendMessage = useCallback(async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim()
     const attachedImage = generationMode === 'primitive' ? undefined : imageAttachment
     if (loading) return
     if (generationMode === 'image-to-3d' && !attachedImage) {
@@ -5138,6 +5948,10 @@ export function AiChatPanel() {
     const progressMsg: ChatMessage = {
       role: 'assistant',
       content: '**Generate:**\n_后台几何体生成任务已创建，正在等待分析..._',
+      factoryRunSummary: buildDeviceProgressSummary({
+        mode: 'primitive',
+        message: '正在理解设备需求并准备可编辑几何。',
+      }),
     }
     setMessages((prev) => [...prev, userMsg, progressMsg])
     setLoading(true)
@@ -5179,6 +5993,10 @@ export function AiChatPanel() {
         if (targetIndex >= 0) {
           updated[targetIndex] = {
             ...updated[targetIndex]!,
+            factoryRunSummary: buildDeviceProgressSummary({
+              mode: 'primitive',
+              message: '后台几何搭建任务已创建，正在等待分析结果。',
+            }),
             generationRun: { id: runId, mode: 'primitive', status: 'queued' },
           }
         }
@@ -5231,7 +6049,10 @@ export function AiChatPanel() {
       { role: 'user', content: text },
       {
         role: 'assistant',
-        content: '**Factory draft:**\nPreparing factory patch plan...',
+        content: '',
+        factoryRunSummary: buildFactoryProgressSummary({
+          message: '我正在理解需求并准备工厂场景变更。',
+        }),
       },
     ])
     setLoading(true)
@@ -5440,6 +6261,7 @@ export function AiChatPanel() {
               >
                 {conversationHistory.map((conversation) => {
                   const active = conversation.id === conversationId
+                  const icon = conversationHistoryIcon(conversation)
                   return (
                     <div
                       className={cn(
@@ -5453,17 +6275,27 @@ export function AiChatPanel() {
                         onClick={() => switchConversation(conversation)}
                         type="button"
                       >
-                        <Icon
-                          className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-                          icon={conversation.activeRunCount > 0 ? 'mdi:progress-clock' : 'mdi:chat-outline'}
-                        />
+                        <span
+                          className={cn(
+                            'mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md border',
+                            icon.className,
+                          )}
+                          title={icon.label}
+                        >
+                          <Icon className="size-3.5" icon={icon.icon} />
+                        </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[11px] font-medium">
                             {conversation.title || t('aiChat.newConversation', 'New conversation')}
                           </span>
-                          <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
-                            {conversation.messageCount} {t('aiChat.messageCountLabel', 'messages')} ?{' '}
-                            {new Date(conversation.updatedAt).toLocaleString()}
+                          <span className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-[10px] text-muted-foreground">
+                            {conversation.activeRunCount > 0 ? (
+                              <Icon className="size-3 shrink-0" icon="mdi:progress-clock" />
+                            ) : null}
+                            <span className="truncate">
+                              {conversation.messageCount} {t('aiChat.messageCountLabel', 'messages')} ?{' '}
+                              {new Date(conversation.updatedAt).toLocaleString()}
+                            </span>
                           </span>
                         </span>
                       </button>
@@ -5497,64 +6329,59 @@ export function AiChatPanel() {
         className="flex-1 space-y-2 overflow-y-auto px-3 py-2 [scrollbar-color:#3a3a3d_#050505] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-button]:hidden [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3d] [&::-webkit-scrollbar-track]:bg-[#050505]"
       >
         {showConversationPicker && (
-          <div className="flex min-h-full items-center justify-center py-8">
-            <div className="w-full max-w-sm space-y-3 text-center">
-              <div>
-                <Icon className="mx-auto mb-2 size-8 text-[#a684ff]" icon="mdi:robot-industrial-outline" />
-                <h3 className="font-medium text-foreground text-sm">开始新的 AI 会话</h3>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  选择你要让 AI 帮你完成的任务类型。
+          <div className="flex min-h-full items-start justify-center px-2 pt-30 pb-8">
+            <div className="w-full max-w-[22rem] space-y-6 text-center">
+              <div className="space-y-1.5">
+                <h3 className="font-medium text-base text-foreground">
+                  开始新的 <span className="font-semibold text-xl">AI</span> 会话
+                </h3>
+                <p className="text-xs leading-relaxed text-muted-foreground/75">
+                  选择任务类型，AI 会沿着对应流程工作。
                 </p>
               </div>
               <button
-                className="group w-full rounded-2xl border border-border/70 bg-accent/25 p-3 text-left transition-colors hover:border-[#a684ff]/60 hover:bg-[#a684ff]/10"
+                className="group w-full rounded-lg border border-border/70 border-l-2 border-l-[#a684ff]/70 bg-background/40 p-4 text-left shadow-sm shadow-black/10 transition-colors hover:border-[#a684ff]/60 hover:bg-[#a684ff]/10"
                 data-testid="ai-chat-factory-purpose"
                 onClick={() => selectConversationPurpose('factory')}
                 type="button"
               >
-                <div className="flex items-start gap-3">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-[#a684ff]/40 bg-[#a684ff]/10 text-[#a684ff]">
-                    <Icon className="size-5" icon="mdi:factory" />
+                <div className="flex items-start gap-3.5">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-[#a684ff]/20 bg-[#a684ff]/5 text-[#a684ff]/60">
+                    <Factory aria-hidden className="size-5 opacity-80" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-medium text-foreground text-sm">
+                    <span className="block font-medium text-[15px] text-foreground">
                       创建与修改工厂
                     </span>
-                    <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">
+                    <span className="mt-1.5 block text-xs leading-relaxed text-muted-foreground/75">
                       创建厂房、车间、房间、区域布局，并持续修改当前画布内容。
-                    </span>
-                    <span className="mt-2 block text-[10px] text-muted-foreground/80">
-                      例：创建一个化工车间 / 把刚才房间改成 4m × 4m
                     </span>
                   </span>
                   <Icon
-                    className="mt-1 size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-[#a684ff]"
+                    className="mt-1 size-4 shrink-0 text-muted-foreground transition-colors group-hover:translate-x-0.5 group-hover:text-[#a684ff]"
                     icon="mdi:chevron-right"
                   />
                 </div>
               </button>
               <button
-                className="group w-full rounded-2xl border border-border/70 bg-accent/25 p-3 text-left transition-colors hover:border-[#a684ff]/60 hover:bg-[#a684ff]/10"
+                className="group w-full rounded-lg border border-border/70 border-l-2 border-l-sky-400/70 bg-background/40 p-4 text-left shadow-sm shadow-black/10 transition-colors hover:border-sky-400/55 hover:bg-sky-400/10"
                 onClick={() => selectConversationPurpose('asset')}
                 type="button"
               >
-                <div className="flex items-start gap-3">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-violet-400/40 bg-violet-400/10 text-violet-300">
-                    <Icon className="size-5" icon="mdi:cube-scan" />
+                <div className="flex items-start gap-3.5">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-sky-400/20 bg-sky-400/5 text-sky-300/60">
+                    <Box aria-hidden className="size-5 opacity-80" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-medium text-foreground text-sm">
-                      生成工厂品件与设备
+                    <span className="block font-medium text-[15px] text-foreground">
+                      工厂设备与品件
                     </span>
-                    <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">
+                    <span className="mt-1.5 block text-xs leading-relaxed text-muted-foreground/75">
                       生成单个设备、机器、部件或图生模型，可放到画布或保存为品件。
-                    </span>
-                    <span className="mt-2 block text-[10px] text-muted-foreground/80">
-                      例：生成一个水泵 / 生成一个反应釜 / 上传图片生成设备模型
                     </span>
                   </span>
                   <Icon
-                    className="mt-1 size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-[#a684ff]"
+                    className="mt-1 size-4 shrink-0 text-muted-foreground transition-colors group-hover:translate-x-0.5 group-hover:text-sky-300"
                     icon="mdi:chevron-right"
                   />
                 </div>
@@ -5563,37 +6390,25 @@ export function AiChatPanel() {
           </div>
         )}
         {isAssetConversation && messages.length === 0 && (
-          <div className="py-8 text-center text-xs text-muted-foreground">
-            <Icon className="mx-auto mb-2 size-8 opacity-30" icon="mdi:cube-scan" />
-            <p>{t('aiChat.placeholder', 'Describe the object you want to create.')}</p>
-            <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-              {['Industrial pump', 'Control cabinet', 'Pipe system', 'Conveyor'].map((hint) => (
-                <button
-                  className="rounded-full border border-border/60 px-2.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
-                  key={hint}
-                  onClick={() => setInput(hint)}
-                  type="button"
-                >
-                  {hint}
-                </button>
-              ))}
-            </div>
+          <div className="flex min-h-[15rem] flex-col items-center justify-center px-4 py-8 text-center">
+            <span className="mb-3 flex size-10 items-center justify-center rounded-lg border border-sky-400/25 bg-sky-400/10 text-sky-300">
+              <Box aria-hidden className="size-5" />
+            </span>
+            <p className="text-xs font-medium text-foreground">准备生成设备</p>
+            <p className="mt-1 max-w-[15rem] text-[11px] leading-relaxed text-muted-foreground">
+              在底部输入需求，AI 会生成可放置或保存的设备模型。
+            </p>
           </div>
         )}
         {isFactoryConversation && messages.length === 0 && (
-          <div className="space-y-3 py-5">
-            <div className="grid gap-1.5 text-[11px] text-muted-foreground">
-              {['创建一个 20m × 30m 的车间', '把刚才房间改成 4m × 4m', '加一个仓储区和设备区'].map((hint) => (
-                <button
-                  className="rounded-lg border border-border/60 px-2.5 py-1.5 text-left transition-colors hover:bg-accent hover:text-foreground"
-                  key={hint}
-                  onClick={() => setInput(hint)}
-                  type="button"
-                >
-                  {hint}
-                </button>
-              ))}
-            </div>
+          <div className="flex min-h-[15rem] flex-col items-center justify-center px-4 py-8 text-center">
+            <span className="mb-3 flex size-10 items-center justify-center rounded-lg border border-[#a684ff]/25 bg-[#a684ff]/10 text-[#a684ff]">
+              <Factory aria-hidden className="size-5" />
+            </span>
+            <p className="text-xs font-medium text-foreground">准备构建工厂布局</p>
+            <p className="mt-1 max-w-[15rem] text-[11px] leading-relaxed text-muted-foreground">
+              在底部描述厂房、车间或当前画布修改需求。
+            </p>
           </div>
         )}
         {messages.map((msg, i) => (
@@ -5619,22 +6434,40 @@ export function AiChatPanel() {
                 ) : null}
                 <div className="whitespace-pre-wrap">{msg.content}</div>
               </div>
+            ) : msg.factoryRunSummary &&
+              !msg.modelArtifact &&
+              !msg.geometryArtifact &&
+              !msg.imageTo3dResult &&
+              !msg.articraftResult ? (
+              <FactoryRunSummaryCard
+                disabled={loading}
+                onResourceOptionSelect={(option) => {
+                  void sendMessage(option.prompt)
+                }}
+                summary={msg.factoryRunSummary}
+              />
             ) : msg.modelArtifact ? (
-              <GeneratedModelCard
-                artifact={msg.modelArtifact}
-                disabled={loading}
-                onPlace={handlePlaceModelArtifact}
-                onSave={handleSaveModelArtifact}
-              />
+              <div className="space-y-2">
+                {msg.factoryRunSummary ? <FactoryRunSummaryCard summary={msg.factoryRunSummary} /> : null}
+                <GeneratedModelCard
+                  artifact={msg.modelArtifact}
+                  disabled={loading}
+                  onPlace={handlePlaceModelArtifact}
+                  onSave={handleSaveModelArtifact}
+                />
+              </div>
             ) : msg.geometryArtifact ? (
-              <GeneratedGeometryCard
-                artifact={msg.geometryArtifact}
-                disabled={loading}
-                interactivePreview={msg.geometryArtifact.id === latestVisibleGeometryArtifactId}
-                onPlace={handlePlaceGeometryArtifact}
-                onReplace={handleReplaceGeometryArtifact}
-                onSave={handleSaveGeometryArtifact}
-              />
+              <div className="space-y-2">
+                {msg.factoryRunSummary ? <FactoryRunSummaryCard summary={msg.factoryRunSummary} /> : null}
+                <GeneratedGeometryCard
+                  artifact={msg.geometryArtifact}
+                  disabled={loading}
+                  interactivePreview={msg.geometryArtifact.id === latestVisibleGeometryArtifactId}
+                  onPlace={handlePlaceGeometryArtifact}
+                  onReplace={handleReplaceGeometryArtifact}
+                  onSave={handleSaveGeometryArtifact}
+                />
+              </div>
             ) : msg.toolCalls ? (
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Icon className="size-3.5 shrink-0" icon="mdi:tools" />
@@ -5643,49 +6476,54 @@ export function AiChatPanel() {
                 </span>
               </div>
             ) : msg.imageTo3dResult ? (
-              <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2 text-foreground">
-                <div className="flex items-start gap-2">
-                  <img
-                    alt={msg.imageTo3dResult.asset.name ?? msg.imageTo3dResult.asset.id}
-                    className="size-14 shrink-0 rounded-md border border-border/50 object-cover"
-                    src={msg.imageTo3dResult.asset.thumbnail}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium">{msg.imageTo3dResult.asset.name ?? msg.imageTo3dResult.asset.id}</div>
-                    <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
-                      {msg.imageTo3dResult.asset.id}
+              <div className="space-y-2">
+                {msg.factoryRunSummary ? <FactoryRunSummaryCard summary={msg.factoryRunSummary} /> : null}
+                <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2 text-foreground">
+                  <div className="flex items-start gap-2">
+                    <img
+                      alt={msg.imageTo3dResult.asset.name ?? msg.imageTo3dResult.asset.id}
+                      className="size-14 shrink-0 rounded-md border border-border/50 object-cover"
+                      src={msg.imageTo3dResult.asset.thumbnail}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">{msg.imageTo3dResult.asset.name ?? msg.imageTo3dResult.asset.id}</div>
+                      <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
+                        {msg.imageTo3dResult.asset.id}
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-muted-foreground">
+                        {msg.imageTo3dResult.saved ? '\u5df2\u4fdd\u5b58\u5230\u7269\u54c1\u5e93' : '\u672a\u4fdd\u5b58'} {'\u00b7'} {msg.imageTo3dResult.asset.category ?? 'equipment'}
+                      </div>
                     </div>
-                    <div className="mt-0.5 text-[10px] text-muted-foreground">
-                      {msg.imageTo3dResult.saved ? '\u5df2\u4fdd\u5b58\u5230\u7269\u54c1\u5e93' : '\u672a\u4fdd\u5b58'} {'\u00b7'} {msg.imageTo3dResult.asset.category ?? 'equipment'}
-                    </div>
+                    <span className="shrink-0 rounded-full border border-violet-400/40 bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-300">
+                      {'\u56fe\u751f\u5efa\u6a21'}
+                    </span>
                   </div>
-                  <span className="shrink-0 rounded-full border border-violet-400/40 bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-300">
-                    {'\u56fe\u751f\u5efa\u6a21'}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={() => handleSelectImageTo3DAsset(msg.imageTo3dResult!.asset)}
-                    type="button"
-                  >
-                    <Icon className="size-3.5" icon="mdi:package-variant-closed" />
-                    {'\u5728\u7269\u54c1\u5e93\u4e2d\u4f7f\u7528'}
-                  </button>
-                  <button
-                    className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={loading}
-                    onClick={() => sendImageTo3DMessage(msg.imageTo3dResult!.prompt, msg.image)}
-                    type="button"
-                  >
-                    <Icon className="size-3.5" icon="mdi:refresh" />
-                    {'\u91cd\u65b0\u751f\u6210'}
-                  </button>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => handleSelectImageTo3DAsset(msg.imageTo3dResult!.asset)}
+                      type="button"
+                    >
+                      <Icon className="size-3.5" icon="mdi:package-variant-closed" />
+                      {'\u5728\u7269\u54c1\u5e93\u4e2d\u4f7f\u7528'}
+                    </button>
+                    <button
+                      className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={loading}
+                      onClick={() => sendImageTo3DMessage(msg.imageTo3dResult!.prompt, msg.image)}
+                      type="button"
+                    >
+                      <Icon className="size-3.5" icon="mdi:refresh" />
+                      {'\u91cd\u65b0\u751f\u6210'}
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : msg.articraftResult ? (
-              <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2 text-foreground">
-                <div className="flex items-start justify-between gap-2">
+              <div className="space-y-2">
+                {msg.factoryRunSummary ? <FactoryRunSummaryCard summary={msg.factoryRunSummary} /> : null}
+                <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2 text-foreground">
+                  <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate font-medium">{msg.articraftResult.name}</div>
                     <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
@@ -5741,6 +6579,21 @@ export function AiChatPanel() {
                   )
                 })()}
                 <div className="flex flex-wrap gap-1.5">
+                  {(() => {
+                    const isPlaced = msg.articraftResult!.status === 'imported'
+                    const canPlaceArticraft = Boolean(msg.articraftResult!.data)
+                    return (
+                      <button
+                        className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-emerald-400/50 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={loading || !canPlaceArticraft}
+                        onClick={() => handleImportArticraftResult(msg.articraftResult!)}
+                        type="button"
+                      >
+                        <Icon className="size-3.5" icon="mdi:import" />
+                        {isPlaced ? 'Place again' : 'Place on canvas'}
+                      </button>
+                    )
+                  })()}
                   <button
                     className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!msg.articraftResult.recordId}
@@ -5759,15 +6612,6 @@ export function AiChatPanel() {
                   >
                     <Icon className="size-3.5" icon="mdi:file-document-outline" />
                     View source record
-                  </button>
-                  <button
-                    className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-emerald-400/50 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={msg.articraftResult.status === 'imported'}
-                    onClick={() => handleImportArticraftResult(msg.articraftResult!)}
-                    type="button"
-                  >
-                    <Icon className="size-3.5" icon="mdi:import" />
-                    {msg.articraftResult.asset ? 'Place on canvas' : 'Place on canvas (available after import)'}
                   </button>
                   <button
                     className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-amber-400/50 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
@@ -5807,6 +6651,7 @@ export function AiChatPanel() {
                     Regenerate
                   </button>
                 </div>
+              </div>
               </div>
             ) : (
               <div className="whitespace-pre-wrap">{msg.content}</div>
@@ -5969,7 +6814,9 @@ export function AiChatPanel() {
                   : 'hover:bg-accent hover:text-[#a684ff]',
             )}
             disabled={!loading && !canSend}
-            onClick={loading ? handleStopGeneration : sendMessage}
+            onClick={loading ? handleStopGeneration : () => {
+              void sendMessage()
+            }}
             title={loading ? 'Stop generation' : 'Send'}
             type="button"
           >

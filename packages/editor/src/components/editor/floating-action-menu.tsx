@@ -32,7 +32,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { Move } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -43,6 +43,7 @@ import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import { duplicateNodeSubtree } from '../../lib/subtree-duplication'
 import useEditor from '../../store/use-editor'
+import { ACTION_MENU_DISTANCE_FACTOR, getActionMenuAnchor } from './action-menu-placement'
 import { NodeActionMenu } from './node-action-menu'
 
 const ALLOWED_TYPES = [
@@ -133,6 +134,7 @@ function getEndpointMoveLabel(
 }
 
 export function FloatingActionMenu() {
+  const { camera } = useThree()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const updateNode = useScene((s) => s.updateNode)
   const mode = useEditor((s) => s.mode)
@@ -167,16 +169,15 @@ export function FloatingActionMenu() {
   const setSelection = useViewer((s) => s.setSelection)
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
-  const groupRef = useRef<THREE.Group>(null)
   const startEndpointGroupRef = useRef<THREE.Group>(null)
   const endEndpointGroupRef = useRef<THREE.Group>(null)
+  const menuGroupRef = useRef<THREE.Group>(null)
   const boxRef = useRef(new THREE.Box3())
-  const centerRef = useRef(new THREE.Vector3())
-  const lastPlacementRef = useRef<{
-    id: string | null
-    matrixWorld: number[]
-  }>({ id: null, matrixWorld: [] })
+  const sizeRef = useRef(new THREE.Vector3())
+  const menuAnchorRef = useRef(new THREE.Vector3())
+  const projectedAnchorRef = useRef(new THREE.Vector3())
   const [altPressed, setAltPressed] = useState(false)
+  const [menuVisible, setMenuVisible] = useState(false)
 
   // Only show for single selection of specific types
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
@@ -242,31 +243,24 @@ export function FloatingActionMenu() {
   }, [])
 
   useFrame(() => {
-    if (!(selectedId && isValidType && groupRef.current)) return
+    if (!(selectedId && isValidType)) {
+      if (menuVisible) setMenuVisible(false)
+      return
+    }
 
     const obj = sceneRegistry.nodes.get(selectedId)
     if (obj) {
-      const lastPlacement = lastPlacementRef.current
       obj.updateWorldMatrix(true, false)
-      const matrixElements = obj.matrixWorld.elements
-      const matrixChanged =
-        lastPlacement.matrixWorld.length !== matrixElements.length ||
-        matrixElements.some((value, index) => value !== lastPlacement.matrixWorld[index])
-      const shouldMeasureBounds = selectedId !== lastPlacement.id || matrixChanged
 
-      if (shouldMeasureBounds) {
-        const box = boxRef.current.setFromObject(obj)
-        if (!box.isEmpty()) {
-          const center = box.getCenter(centerRef.current)
-          // Position above the object, with extra offset for walls/slabs to avoid covering measurement labels
-          const isStructural = node && [...DELETE_ONLY_TYPES, ...HOLE_TYPES].includes(node.type)
-          const yOffset = isStructural ? 0.8 : 0.3
-          groupRef.current.position.set(center.x, box.max.y + yOffset, center.z)
-        }
-        lastPlacementRef.current = {
-          id: selectedId,
-          matrixWorld: Array.from(matrixElements),
-        }
+      const box = boxRef.current.setFromObject(obj)
+      if (!box.isEmpty() && node) {
+        const anchor = getActionMenuAnchor(node, box, menuAnchorRef.current, sizeRef.current)
+        menuGroupRef.current?.position.copy(anchor)
+        const projected = projectedAnchorRef.current.copy(anchor).project(camera)
+        const nextVisible = projected.z >= -1 && projected.z <= 1
+        if (menuVisible !== nextVisible) setMenuVisible(nextVisible)
+      } else if (menuVisible) {
+        setMenuVisible(false)
       }
 
       if (
@@ -347,6 +341,8 @@ export function FloatingActionMenu() {
           endEndpointGroupRef.current.position.set(endWorld.x, endY, endWorld.z)
         }
       }
+    } else if (menuVisible) {
+      setMenuVisible(false)
     }
   })
 
@@ -709,20 +705,13 @@ export function FloatingActionMenu() {
   )
     return null
 
-  // Items + stairs: no center Html menu (blocks mesh drag / showed move icon).
-  if (node.type === 'item' || node.type === 'stair') {
-    return null
-  }
-
   return (
     <group>
-      <group ref={groupRef}>
+      <group ref={menuGroupRef} visible={menuVisible}>
         <Html
           center
-          style={{
-            pointerEvents: 'auto',
-            touchAction: 'none',
-          }}
+          distanceFactor={ACTION_MENU_DISTANCE_FACTOR}
+          style={{ pointerEvents: 'auto', touchAction: 'none' }}
           zIndexRange={[100, 0]}
         >
           <NodeActionMenu
@@ -772,6 +761,7 @@ export function FloatingActionMenu() {
           <group ref={startEndpointGroupRef}>
             <Html
               center
+              distanceFactor={ACTION_MENU_DISTANCE_FACTOR}
               style={{ pointerEvents: 'auto', touchAction: 'none' }}
               zIndexRange={[100, 0]}
             >
@@ -790,6 +780,7 @@ export function FloatingActionMenu() {
           <group ref={endEndpointGroupRef}>
             <Html
               center
+              distanceFactor={ACTION_MENU_DISTANCE_FACTOR}
               style={{ pointerEvents: 'auto', touchAction: 'none' }}
               zIndexRange={[100, 0]}
             >

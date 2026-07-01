@@ -1,21 +1,19 @@
 'use client'
 
 import useEditor from '../../../store/use-editor'
+import {
+  DEFAULT_CUSTOM_MATERIAL_PROPERTIES,
+  materialHasTransparency,
+  resolveMaterialProperties,
+} from '../../../lib/material-appearance'
+import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
-import { Input } from '../primitives/input'
 import { PanelWrapper } from './panel-wrapper'
 
 function buildDefaultCustomMaterial() {
   return {
     preset: 'custom' as const,
-    properties: {
-      color: '#ffffff',
-      roughness: 0.5,
-      metalness: 0,
-      opacity: 1,
-      transparent: false,
-      side: 'front' as const,
-    },
+    properties: DEFAULT_CUSTOM_MATERIAL_PROPERTIES,
   }
 }
 
@@ -26,27 +24,26 @@ export function PaintPanel() {
   const setPaintPanelOpen = useEditor((state) => state.setPaintPanelOpen)
 
   const customMaterial =
-    activePaintMaterial?.material?.properties && !activePaintMaterial.materialPreset
+    activePaintMaterial?.material && !activePaintMaterial.materialPreset
       ? activePaintMaterial.material
       : null
 
   if (!customMaterial) return null
 
-  const currentProps = customMaterial.properties ?? buildDefaultCustomMaterial().properties
+  const currentProps = resolveMaterialProperties(customMaterial)
 
-  const updateCustomMaterial = (
-    updates: Partial<typeof currentProps>,
-    nextTransparent = currentProps.transparent,
-  ) => {
-    setActivePaintMaterial({
-      material: {
-        preset: 'custom',
-        properties: {
-          ...currentProps,
-          ...updates,
-          transparent: nextTransparent,
-        },
+  const updateCustomMaterial = (updates: Partial<typeof currentProps>) => {
+    const material = {
+      ...customMaterial,
+      preset: 'custom' as const,
+      properties: {
+        ...currentProps,
+        ...updates,
       },
+    }
+    material.properties.transparent = materialHasTransparency(material)
+    setActivePaintMaterial({
+      material,
       sourceTarget: activePaintMaterial?.sourceTarget ?? activePaintTarget,
     })
   }
@@ -55,23 +52,15 @@ export function PaintPanel() {
     <PanelWrapper onClose={() => setPaintPanelOpen(false)} title="Material" width={320}>
       <PanelSection title="Custom Material">
         <div className="space-y-3">
-          <div className="space-y-2">
-            <label className="block font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
-              Color
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                className="h-10 w-14 cursor-pointer rounded-md border border-input bg-transparent"
-                onChange={(e) => updateCustomMaterial({ color: e.target.value })}
-                type="color"
-                value={currentProps.color}
-              />
-              <Input
-                onChange={(e) => updateCustomMaterial({ color: e.target.value })}
-                value={currentProps.color}
-              />
-            </div>
-          </div>
+          <MaterialPicker
+            value={customMaterial ?? buildDefaultCustomMaterial()}
+            onChange={(material) =>
+              setActivePaintMaterial({
+                material,
+                sourceTarget: activePaintMaterial?.sourceTarget ?? activePaintTarget,
+              })
+            }
+          />
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -114,29 +103,6 @@ export function PaintPanel() {
               step={0.01}
               type="range"
               value={currentProps.metalness}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
-                Opacity
-              </label>
-              <span className="font-mono text-muted-foreground text-xs">
-                {currentProps.opacity.toFixed(2)}
-              </span>
-            </div>
-            <input
-              className="h-2 w-full cursor-pointer appearance-none rounded-full bg-accent"
-              max={1}
-              min={0}
-              onChange={(e) => {
-                const opacity = Number.parseFloat(e.target.value)
-                updateCustomMaterial({ opacity }, opacity < 1 || currentProps.transparent)
-              }}
-              step={0.01}
-              type="range"
-              value={currentProps.opacity}
             />
           </div>
 

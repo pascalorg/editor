@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode } from '../schema/types'
-import { getDynamicTypesForNode, getNodeSemanticType } from './capabilities'
+import {
+  getDynamicTypesForNode,
+  getNodeSemanticType,
+  getRecommendedDynamicTypeForNode,
+  isDynamicTypeSupportedByNode,
+} from './capabilities'
 
 function node(metadata: Record<string, unknown>, type = 'box'): AnyNode {
   return {
@@ -64,7 +69,95 @@ describe('dynamic capability semantic inference', () => {
     ).toContain('flow')
   })
 
+  test('classifies catalog tank items as tanks even when geometry mentions pipe ports', () => {
+    const tankItem = {
+      ...node(
+        {
+          family: 'tank',
+          sourceArgs: { family: 'tank', object: 'storage_tank' },
+          geometryBrief: 'storage tank with inlet outlet nozzles and pipe flange details',
+        },
+        'item',
+      ),
+      asset: {
+        id: 'storage_tank',
+        category: 'tank',
+        name: 'Storage Tank',
+        thumbnail: '/tank.png',
+        src: '/tank.glb',
+        dimensions: [1, 1, 1],
+        offset: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        source: 'library',
+      },
+    } as AnyNode
 
+    expect(getNodeSemanticType(tankItem)).toBe('tank')
+    expect(getDynamicTypesForNode(tankItem)).toContain('level')
+    expect(getDynamicTypesForNode(tankItem)).not.toContain('flow')
+    expect(getRecommendedDynamicTypeForNode(tankItem)).toBe('fill')
+  })
+
+  test('uses factory equipment contracts before port wording for catalog tank items', () => {
+    const refineryCatalogTank = {
+      ...node(
+        {
+          equipmentRole: 'crude_storage_tank',
+          catalogItemId: 'factory-barrel',
+          equipmentContract: {
+            profileId: 'refinery.crude_storage_tank',
+            equipmentFamily: 'tank',
+            primarySemanticRole: 'vessel_shell',
+            ports: [
+              { id: 'feed_inlet', medium: 'material', side: 'west' },
+              { id: 'product_outlet', medium: 'material', side: 'east' },
+            ],
+          },
+        },
+        'item',
+      ),
+      asset: {
+        id: 'factory-barrel',
+        category: 'equipment',
+        name: 'Factory Barrel',
+        thumbnail: '/icons/shelf.webp',
+        src: '/items/factory-barrel/model.glb',
+        dimensions: [0.6, 0.9, 0.6],
+        offset: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        source: 'library',
+      },
+    } as AnyNode
+
+    expect(getNodeSemanticType(refineryCatalogTank)).toBe('tank')
+    expect(getDynamicTypesForNode(refineryCatalogTank)).toContain('level')
+    expect(getDynamicTypesForNode(refineryCatalogTank)).not.toContain('flow')
+    expect(getRecommendedDynamicTypeForNode(refineryCatalogTank)).toBe('fill')
+  })
+
+  test('keeps native tank dynamic types aligned with the toolbar tank', () => {
+    const tank = node(
+      {
+        dynamicCapabilities: {
+          semanticType: 'tank',
+          supportedTypes: ['flow', 'level'],
+          recommendedTypes: ['flow'],
+          source: 'generated-geometry',
+        },
+      },
+      'tank',
+    )
+
+    expect(getNodeSemanticType(tank)).toBe('tank')
+    expect(getDynamicTypesForNode(tank)).toContain('fill')
+    expect(getDynamicTypesForNode(tank)).toContain('level')
+    expect(getDynamicTypesForNode(tank)).not.toContain('flow')
+    expect(getRecommendedDynamicTypeForNode(tank)).toBe('fill')
+    expect(isDynamicTypeSupportedByNode(tank, 'flow')).toBe(false)
+    expect(isDynamicTypeSupportedByNode(tank, 'level')).toBe(true)
+  })
 
   test('keeps loading dynamics only on container-like semantics', () => {
     const wheel = node({ semanticRole: 'wheel', sourcePartKind: 'wheel' })

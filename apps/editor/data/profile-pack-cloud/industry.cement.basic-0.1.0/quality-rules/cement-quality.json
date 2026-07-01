@@ -440,5 +440,25 @@
       "min": 6,
       "max": 48
     }
+  },
+  {
+    "id": "quality.cement.control_room",
+    "requiredRoles": [
+      "control_room_body",
+      "control_room_roof_cap",
+      "control_room_door",
+      "kiln_line_observation_window",
+      "mcc_panel_row",
+      "cable_tray_entry"
+    ],
+    "shapeCount": {
+      "min": 7,
+      "max": 64
+    },
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "vehicle_tire",
+      "belt_surface"
+    ]
   }
 ]

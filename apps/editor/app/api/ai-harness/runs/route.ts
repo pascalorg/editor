@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { resolveArticraftMaxTurns } from '@/lib/ai-harness-runs/articraft-turn-budget'
 import { createRun, listRecentRuns } from '@/lib/ai-harness-runs/run-store'
 import type { AiHarnessRun, AiHarnessRunMode } from '@/lib/ai-harness-runs/types'
 
@@ -82,6 +83,10 @@ export async function POST(request: Request) {
       mode: mode as AiHarnessRunMode,
       prompt: prompt || 'Generate a 3D model from the reference image',
       articraftMode: body.articraftMode === 'static' ? 'static' : 'articulated',
+      maxTurns:
+        mode === 'articraft'
+          ? resolveArticraftMaxTurns(prompt, body.maxTurns)
+          : undefined,
       params: isRecord(body.params) ? body.params : undefined,
       context: body.context,
       image,

@@ -1,5 +1,7 @@
 import {
   getMaterialPresetByRef,
+  type MaterialGradient,
+  type MaterialGradientStop,
   type MaterialMapProperties,
   type MaterialPresetPayload,
   type MaterialProperties,
@@ -7,6 +9,7 @@ import {
   resolveMaterial,
 } from '@pascal-app/core'
 import * as THREE from 'three'
+import { color, float, mix, modelRadius, positionLocal, positionWorld, uv } from 'three/tsl'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 
 import { resolveCdnUrl } from './asset-url'
@@ -163,6 +166,10 @@ function getCacheKey(props: MaterialProperties, shading: RenderShading): string 
   return `${shading}-${props.color}-${props.roughness}-${props.metalness}-${props.opacity}-${props.transparent}-${props.side}`
 }
 
+function getGradientKey(material?: MaterialSchema): string {
+  return material?.gradient ? JSON.stringify(material.gradient) : 'none'
+}
+
 function getTextureKey(material?: MaterialSchema): string {
   const texture = material?.texture
   if (!texture) return 'none'
@@ -191,6 +198,57 @@ function getTexture(material?: MaterialSchema): THREE.Texture | undefined {
 
   textureCache.set(cacheKey, texture)
   return texture
+}
+
+function getSortedGradientStops(gradient: MaterialGradient): MaterialGradientStop[] {
+  return [...gradient.stops].sort((a, b) => a.offset - b.offset)
+}
+
+function hasGradientTransparency(gradient?: MaterialGradient): boolean {
+  return Boolean(gradient?.stops.some((stop) => stop.opacity < 1))
+}
+
+function getGradientAxisNode(gradient: MaterialGradient) {
+  if (gradient.space === 'uv') {
+    const textureUv = uv()
+    return gradient.axis === 'x' ? textureUv.x : textureUv.y
+  }
+
+  const position = gradient.space === 'world' ? positionWorld : positionLocal
+  const axisPosition =
+    gradient.axis === 'x' ? position.x : gradient.axis === 'z' ? position.z : position.y
+  return axisPosition.div(modelRadius.mul(2).max(0.0001)).add(0.5).clamp()
+}
+
+function applyGradientNodes(
+  material: MeshLambertNodeMaterial | MeshStandardNodeMaterial,
+  gradient: MaterialGradient | undefined,
+  baseOpacity: number,
+) {
+  if (!gradient) return
+
+  const stops = getSortedGradientStops(gradient)
+  const firstStop = stops[0]
+  if (!firstStop) return
+
+  const t = getGradientAxisNode(gradient)
+  let gradientColor: any = color(new THREE.Color(firstStop.color))
+  let gradientOpacity: any = float(firstStop.opacity)
+
+  for (let index = 1; index < stops.length; index += 1) {
+    const stop = stops[index]!
+    const previousStop = stops[index - 1] ?? firstStop
+    const span = Math.max(0.0001, stop.offset - previousStop.offset)
+    const blend = t.sub(previousStop.offset).div(span).clamp()
+    gradientColor = mix(gradientColor, color(new THREE.Color(stop.color)), blend)
+    gradientOpacity = mix(gradientOpacity, float(stop.opacity), blend)
+  }
+
+  material.colorNode = gradientColor
+  material.opacityNode = gradientOpacity.mul(baseOpacity)
+  material.transparent =
+    material.transparent || baseOpacity < 1 || hasGradientTransparency(gradient)
+  material.needsUpdate = true
 }
 
 function isStandardMaterial(material: THREE.Material): material is StandardMaterial {
@@ -450,7 +508,7 @@ export function createMaterial(
   shading: RenderShading = 'rendered',
 ): THREE.Material {
   const props = resolveMaterial(material)
-  const cacheKey = `${getCacheKey(props, shading)}-${getTextureKey(material)}`
+  const cacheKey = `${getCacheKey(props, shading)}-${getTextureKey(material)}-${getGradientKey(material)}`
 
   if (materialCache.has(cacheKey)) {
     return materialCache.get(cacheKey)!
@@ -466,7 +524,8 @@ export function createMaterial(
   } = {
     color: props.color,
     opacity: props.opacity,
-    transparent: props.transparent,
+    transparent:
+      props.transparent || props.opacity < 1 || hasGradientTransparency(material?.gradient),
     side: sideMap[props.side],
   }
 
@@ -480,6 +539,8 @@ export function createMaterial(
           roughness: props.roughness,
           metalness: props.metalness,
         })
+
+  applyGradientNodes(threeMaterial, material?.gradient, props.opacity)
 
   materialCache.set(cacheKey, threeMaterial)
   return threeMaterial

@@ -132,7 +132,7 @@ async function isHttpReady(url) {
 
   try {
     const response = await fetch(url, { signal: controller.signal })
-    return response.status >= 200 && response.status < 500
+    return response.status >= 200 && response.status < 400
   } catch {
     return false
   } finally {
@@ -209,6 +209,10 @@ async function main() {
           NEXT_PUBLIC_ARTICRAFT_VIEWER_URL: `http://${articraftHost}:${articraftPort}`,
           NEXT_PUBLIC_ASSETS_CDN_URL: assetsCdnUrl,
         },
+      )
+    } else {
+      console.log(
+        `[editor] Existing editor keeps the environment it was started with. If the Articraft modal still points at the wrong port, restart the editor so NEXT_PUBLIC_ARTICRAFT_VIEWER_URL=http://${articraftHost}:${articraftPort} is applied.`,
       )
     }
   } else {

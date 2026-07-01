@@ -16,9 +16,12 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { lastGridMoveRef } from '../../../hooks/use-grid-events'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
+import { getRegistryHtmlDragOrigin } from '../../../lib/registry-html-drag-origin'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -107,6 +110,15 @@ const BASE_CLICK_TRIGGER_KINDS = [
 ] as const
 
 export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
+  const { camera, gl } = useThree()
+  const dragPlaneRef = useRef(new Plane(new Vector3(0, 1, 0), 0))
+  const dragPlaneNormalRef = useRef(new Vector3(0, 1, 0))
+  const dragPointerRef = useRef(new Vector2())
+  const dragRaycasterRef = useRef(new Raycaster())
+  const dragWorldPointRef = useRef(new Vector3())
+  const dragLocalPointRef = useRef(new Vector3())
+  const smoothPlanMove =
+    node.type === 'data-widget' || node.type === 'data-chart' || node.type === 'data-table'
   const originalPosition: [number, number, number] = useMemo(
     () =>
       'position' in node && Array.isArray((node as { position?: unknown }).position)
@@ -150,10 +162,13 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   }, [])
 
   useEffect(() => {
+    const previousInputDragging = useViewer.getState().inputDragging
+    useViewer.getState().setInputDragging(true)
     useScene.temporal.getState().pause()
     previousSnapRef.current = null
     currentRotationYRef.current = originalRotationY
     let committed = false
+    const handledWindowMoves = new WeakSet<Event>()
     const isNewPlacement = isNewPlacementNode(node)
 
     // Disable raycast on the moved node's meshes for the duration of
@@ -176,9 +191,81 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       })
     }
 
-    const onGridMove = (event: GridEvent) => {
-      const x = roundToHalf(event.localPosition[0])
-      const z = roundToHalf(event.localPosition[2])
+    const originalWorldPosition = new Vector3(...originalPosition)
+    if (mesh) {
+      mesh.getWorldPosition(originalWorldPosition)
+    } else if (node.parentId) {
+      const parentMesh = sceneRegistry.nodes.get(node.parentId as AnyNodeId)
+      parentMesh?.localToWorld(originalWorldPosition)
+    }
+    const getPointerParentLocalPosition = (
+      clientX: number,
+      clientY: number,
+      fallback: [number, number, number],
+    ): [number, number, number] => {
+      const rect = gl.domElement.getBoundingClientRect()
+      const pointer = dragPointerRef.current
+      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1
+      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1
+
+      const worldPoint = dragWorldPointRef.current
+      dragPlaneRef.current.set(dragPlaneNormalRef.current, -originalWorldPosition.y)
+      dragRaycasterRef.current.setFromCamera(pointer, camera)
+      if (!dragRaycasterRef.current.ray.intersectPlane(dragPlaneRef.current, worldPoint)) {
+        return fallback
+      }
+
+      const parentMesh = node.parentId ? sceneRegistry.nodes.get(node.parentId as AnyNodeId) : null
+      const local = parentMesh
+        ? parentMesh.worldToLocal(dragLocalPointRef.current.copy(worldPoint))
+        : worldPoint
+      return [local.x, local.y, local.z]
+    }
+
+    const getCursorParentLocalPosition = (event: GridEvent): [number, number, number] => {
+      if (!smoothPlanMove) return event.localPosition
+
+      const nativeEvent = event.nativeEvent as unknown as PointerEvent | MouseEvent | undefined
+      if (
+        !nativeEvent ||
+        typeof nativeEvent.clientX !== 'number' ||
+        typeof nativeEvent.clientY !== 'number'
+      ) {
+        return event.localPosition
+      }
+
+      return getPointerParentLocalPosition(
+        nativeEvent.clientX,
+        nativeEvent.clientY,
+        event.localPosition,
+      )
+    }
+
+    const htmlDragOrigin = smoothPlanMove ? getRegistryHtmlDragOrigin(node.id) : null
+    const htmlDragOriginPosition = htmlDragOrigin
+      ? getPointerParentLocalPosition(
+          htmlDragOrigin.clientX,
+          htmlDragOrigin.clientY,
+          originalPosition,
+        )
+      : null
+    let dragAnchor: [number, number] | null = htmlDragOriginPosition
+      ? [htmlDragOriginPosition[0], htmlDragOriginPosition[2]]
+      : null
+
+    const applyMove = (event: GridEvent) => {
+      const cursorLocalPosition = getCursorParentLocalPosition(event)
+      if (smoothPlanMove) {
+        dragAnchor ??= [cursorLocalPosition[0], cursorLocalPosition[2]]
+      }
+      const x =
+        smoothPlanMove && dragAnchor
+          ? originalPosition[0] + cursorLocalPosition[0] - dragAnchor[0]
+          : roundToHalf(cursorLocalPosition[0])
+      const z =
+        smoothPlanMove && dragAnchor
+          ? originalPosition[2] + cursorLocalPosition[2] - dragAnchor[1]
+          : roundToHalf(cursorLocalPosition[2])
       const y = originalPosition[1]
       setCursorPosition([x, y, z])
       lastCursorRef.current = [x, y, z]
@@ -201,10 +288,16 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       })
 
       const prev = previousSnapRef.current
-      if (!prev || prev[0] !== x || prev[1] !== z) {
+      if (!smoothPlanMove && (!prev || prev[0] !== x || prev[1] !== z)) {
         sfxEmitter.emit('sfx:grid-snap')
         previousSnapRef.current = [x, z]
       }
+    }
+
+    const onGridMove = (event: GridEvent) => {
+      const nativeEvent = event.nativeEvent as unknown
+      if (nativeEvent instanceof Event && handledWindowMoves.has(nativeEvent)) return
+      applyMove(event)
     }
 
     /** Commit the move at the latest cursor position. Shared by every
@@ -280,8 +373,18 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       if (typeof direct === 'function') direct.call(event)
     }
 
-    if (lastGridMoveRef.localPosition) {
+    if (!smoothPlanMove && lastGridMoveRef.localPosition) {
       onGridMove({ localPosition: lastGridMoveRef.localPosition } as GridEvent)
+    }
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (!smoothPlanMove) return
+      handledWindowMoves.add(event)
+      applyMove({
+        position: [originalWorldPosition.x, originalWorldPosition.y, originalWorldPosition.z],
+        localPosition: [...lastCursorRef.current],
+        nativeEvent: event as never,
+      } as GridEvent)
     }
 
     const onPointerUp = (event: PointerEvent) => {
@@ -315,6 +418,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', commitAtCursor)
+    window.addEventListener('pointermove', onPointerMove, { capture: true })
     window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('keydown', onKeyDown)
 
@@ -346,8 +450,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', commitAtCursor)
+      window.removeEventListener('pointermove', onPointerMove, { capture: true })
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('keydown', onKeyDown)
+      useViewer.getState().setInputDragging(previousInputDragging)
       for (const kind of clickTriggerKinds) {
         const key = `${kind}:click` as `${string}:${EventSuffix}`
         emitter.off(key as never, commitAtCursor as never)
@@ -364,7 +470,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         useScene.temporal.getState().resume()
       }
     }
-  }, [exitMoveMode, node, originalPosition, originalRotationY])
+  }, [camera, exitMoveMode, gl, node, originalPosition, originalRotationY, smoothPlanMove])
 
   return <CursorSphere color="#a78bfa" height={2.5} position={cursorPosition} />
 }

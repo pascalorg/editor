@@ -104,7 +104,7 @@ export const DYNAMIC_TYPE_LABELS: Record<DynamicType, string> = {
   openClose: '开关',
   running: '运行',
   brightness: '亮度',
-  valueDisplay: '数值显示',
+  valueDisplay: '数值反馈',
 }
 
 

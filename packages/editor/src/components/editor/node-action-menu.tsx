@@ -36,7 +36,7 @@ export function NodeActionMenu({
 
   return (
     <div
-      className="pointer-events-auto flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-xl backdrop-blur-md"
+      className="pointer-events-auto flex items-center gap-0.5 rounded-md border border-border bg-background/95 p-0.5 shadow-lg backdrop-blur-md"
       onPointerDown={onPointerDown}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
@@ -50,7 +50,7 @@ export function NodeActionMenu({
           title={moveLabel}
           type="button"
         >
-          <Move className="h-4 w-4" />
+          <Move className="h-3 w-3" />
         </button>
       )}
       {onCurve && (
@@ -61,7 +61,7 @@ export function NodeActionMenu({
           title={curveLabel}
           type="button"
         >
-          <Spline className="h-4 w-4" />
+          <Spline className="h-3 w-3" />
         </button>
       )}
       {onDuplicate && (
@@ -72,7 +72,7 @@ export function NodeActionMenu({
           title={duplicateLabel}
           type="button"
         >
-          <Copy className="h-4 w-4" />
+          <Copy className="h-3 w-3" />
         </button>
       )}
       {onAddHole && (
@@ -83,7 +83,7 @@ export function NodeActionMenu({
           title={cutOutLabel}
           type="button"
         >
-          <Icon height={16} icon="carbon:cut-out" width={16} />
+          <Icon height={12} icon="carbon:cut-out" width={12} />
         </button>
       )}
       {onDelete && (
@@ -94,7 +94,7 @@ export function NodeActionMenu({
           title={deleteLabel}
           type="button"
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-3 w-3" />
         </button>
       )}
     </div>

@@ -39,7 +39,7 @@ const createWallGradientMaterial = (zoneColor: string) => {
     opacityNode: finalOpacity,
     side: DoubleSide,
     depthWrite: true,
-    depthTest: false,
+    depthTest: true,
     userData: {
       uOpacity: opacity,
     },
@@ -58,7 +58,7 @@ const createFloorMaterial = (zoneColor: string) => {
     opacityNode: float(0.25).mul(opacity),
     side: DoubleSide,
     depthWrite: false,
-    depthTest: false,
+    depthTest: true,
     userData: { uOpacity: opacity },
   })
 }

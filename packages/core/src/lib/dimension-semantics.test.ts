@@ -56,6 +56,14 @@ describe('dimension semantics', () => {
     expect(dimensions.height).toBeCloseTo(1.2)
   })
 
+  test('parses value-before-label Chinese dimensions', () => {
+    const dimensions = parseDimensionSemantics(
+      '\u751f\u6210\u4e00\u4e2a5\u7c73\u9ad8\u7684\u8def\u706f',
+    )
+
+    expect(dimensions.height).toBeCloseTo(5)
+  })
+
   test('maps desk length and width to real table footprint', () => {
     const input = applyDimensionSemanticsToObjectInput(
       { category: 'table' as const },

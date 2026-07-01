@@ -64,6 +64,7 @@ async function runArticraftRun(runId: string) {
     const result = await generateModel({
       prompt: run.prompt,
       mode: run.articraftMode === 'static' ? 'static' : 'articulated',
+      maxTurns: run.maxTurns,
       imagePath: run.image?.path,
       signal: controller.signal,
       onProgress: (message) => {

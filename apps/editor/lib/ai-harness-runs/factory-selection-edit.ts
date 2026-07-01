@@ -116,12 +116,30 @@ const COLOR_KEYWORDS: Array<{ pattern: RegExp; color: string; label: string }> =
   { pattern: /\bsilver\b|银色?/, color: '#cbd5e1', label: 'silver' },
 ]
 
+const GRADIENT_COLOR_KEYWORDS: Array<{ pattern: RegExp; color: string; label: string }> = [
+  { pattern: /\bred\b|\u7ea2(?:\u8272)?|\u8d64(?:\u8272)?/i, color: '#ef4444', label: 'red' },
+  { pattern: /\bblack\b|\u9ed1(?:\u8272)?/i, color: '#111827', label: 'black' },
+  { pattern: /\bblue\b|\u84dd(?:\u8272)?/i, color: '#3b82f6', label: 'blue' },
+  { pattern: /\bgreen\b|\u7eff(?:\u8272)?/i, color: '#22c55e', label: 'green' },
+  { pattern: /\byellow\b|\u9ec4(?:\u8272)?/i, color: '#facc15', label: 'yellow' },
+  { pattern: /\borange\b|\u6a59(?:\u8272)?/i, color: '#f97316', label: 'orange' },
+  { pattern: /\bpurple\b|\u7d2b(?:\u8272)?/i, color: '#8b5cf6', label: 'purple' },
+  { pattern: /\bpink\b|\u7c89(?:\u8272)?/i, color: '#ec4899', label: 'pink' },
+  { pattern: /\bwhite\b|\u767d(?:\u8272)?/i, color: '#f8fafc', label: 'white' },
+  { pattern: /\bgr[ae]y\b|\u7070(?:\u8272)?/i, color: '#64748b', label: 'gray' },
+  { pattern: /\bsilver\b|\u94f6(?:\u8272)?/i, color: '#cbd5e1', label: 'silver' },
+]
+
 const DIFFERENT_COLOR_CANDIDATES = ['#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ef4444']
 
 export function looksLikeSelectionColorEdit(prompt: string) {
   return /改.*色|换.*色|变.*色|上色|染色|不同颜色|别的颜色|另一个颜色|change.*colou?r|different colou?r|another colou?r|recolou?r|paint|(?:make|set).*(?:red|blue|green|yellow|orange|purple|pink|black|white|gr[ae]y|silver|colou?r)/i.test(
     prompt,
   )
+}
+
+export function looksLikeSelectionGradientEdit(prompt: string) {
+  return /\u6e10\u53d8|gradient/i.test(prompt)
 }
 
 export function resolveSelectionTankKind(prompt: string) {
@@ -214,6 +232,9 @@ function summarizeSelectionPatches(
   patches: FactorySceneEditPatch[],
 ) {
   return patches.map((patch) => {
+    if (patch.op === 'create') {
+      return `${nodeLabel(patch.node as unknown as FactorySelectionNodeSnapshot, patch.node.id)}: created`
+    }
     const node = snapshot.nodes.find((item) => item.id === patch.id)
     const label = nodeLabel(node, patch.id)
     if (patch.op === 'delete') return `${label}: deleted`
@@ -251,17 +272,61 @@ export function resolveSelectionEditColor(
   return DIFFERENT_COLOR_CANDIDATES.find((color) => color !== current) ?? '#f97316'
 }
 
-function customMaterial(color: string): MaterialSchema {
+export function resolveSelectionGradientColors(prompt: string): [string, string] | undefined {
+  const matches: Array<{ index: number; color: string }> = []
+
+  for (const match of prompt.matchAll(/#[0-9a-f]{6}\b/gi)) {
+    if (typeof match.index === 'number') {
+      matches.push({ index: match.index, color: match[0].toLowerCase() })
+    }
+  }
+
+  for (const keyword of GRADIENT_COLOR_KEYWORDS) {
+    const index = prompt.search(keyword.pattern)
+    if (index >= 0) matches.push({ index, color: keyword.color })
+  }
+
+  const orderedUnique = matches
+    .sort((left, right) => left.index - right.index)
+    .map((match) => match.color)
+    .filter((color, index, colors) => colors.indexOf(color) === index)
+
+  return orderedUnique.length >= 2
+    ? ([orderedUnique[0]!, orderedUnique[1]!] as [string, string])
+    : undefined
+}
+
+function customMaterial(
+  color: string,
+  options: {
+    gradientColors?: [string, string]
+    opacity?: number
+  } = {},
+): MaterialSchema {
+  const opacity = options.opacity ?? 1
+  const gradient = options.gradientColors
+    ? ({
+        type: 'linear' as const,
+        space: 'uv' as const,
+        axis: 'y' as const,
+        angle: 0,
+        stops: [
+          { offset: 0, color: options.gradientColors[0], opacity: 1 },
+          { offset: 1, color: options.gradientColors[1], opacity: 1 },
+        ],
+      } satisfies NonNullable<MaterialSchema['gradient']>)
+    : undefined
   return {
     preset: 'custom',
     properties: {
       color,
       roughness: 0.55,
       metalness: 0,
-      opacity: 1,
-      transparent: false,
+      opacity,
+      transparent: opacity < 1,
       side: 'front',
     },
+    ...(gradient ? { gradient } : {}),
   }
 }
 
@@ -270,6 +335,56 @@ function materialPatch(color: string) {
     material: customMaterial(color),
     materialPreset: null,
   }
+}
+
+function materialPatchForNode(
+  node: FactorySelectionNodeSnapshot,
+  material: MaterialSchema,
+  fallbackColor: string,
+) {
+  if (node.type === 'wall') {
+    return {
+      interiorMaterial: material,
+      interiorMaterialPreset: null,
+      exteriorMaterial: material,
+      exteriorMaterialPreset: null,
+      material: null,
+      materialPreset: null,
+    }
+  }
+  if (node.type === 'roof') {
+    return {
+      topMaterial: material,
+      topMaterialPreset: null,
+      edgeMaterial: material,
+      edgeMaterialPreset: null,
+      wallMaterial: material,
+      wallMaterialPreset: null,
+      material: null,
+      materialPreset: null,
+    }
+  }
+  if (node.type === 'stair') {
+    return {
+      railingMaterial: material,
+      railingMaterialPreset: null,
+      treadMaterial: material,
+      treadMaterialPreset: null,
+      sideMaterial: material,
+      sideMaterialPreset: null,
+      material: null,
+      materialPreset: null,
+    }
+  }
+  if (MATERIAL_NODE_TYPES.has(node.type)) {
+    return {
+      material,
+      materialPreset: null,
+    }
+  }
+  const colorField = COLOR_FIELD_BY_NODE_TYPE[node.type]
+  if (colorField) return { [colorField]: fallbackColor }
+  return null
 }
 
 function updateDataForNode(node: FactorySelectionNodeSnapshot, color: string) {
@@ -1197,6 +1312,60 @@ export function composeSelectionColorEdit(input: {
   }
 }
 
+export function composeSelectionGradientEdit(input: {
+  prompt: string
+  context?: unknown
+}): FactorySelectionEditResult | null {
+  if (!looksLikeSelectionGradientEdit(input.prompt)) return null
+  const snapshot = selectionSnapshotFromContext(input.context)
+  if (!snapshot?.selectedIds.length) {
+    return {
+      patches: [],
+      nodeIds: [],
+      changed: [],
+      missingReason:
+        'No canvas object is selected. Select an object or assembly before asking for a gradient material edit.',
+    }
+  }
+
+  const gradientColors = resolveSelectionGradientColors(input.prompt)
+  if (!gradientColors) {
+    return {
+      patches: [],
+      nodeIds: [],
+      changed: [],
+      missingReason:
+        'Could not determine two gradient colors. Try "red black gradient" or "红黑渐变".',
+    }
+  }
+
+  const opacity = resolveOpacityValue(input.prompt) ?? 1
+  const material = customMaterial(gradientColors[0], { gradientColors, opacity })
+  const candidates = expandedEditableNodes(snapshot)
+  const patches = candidates.flatMap((node) => {
+    const data = materialPatchForNode(node, material, gradientColors[0])
+    return data ? [{ op: 'update' as const, id: node.id, data }] : []
+  })
+
+  if (!patches.length) {
+    return {
+      patches: [],
+      nodeIds: [],
+      changed: [],
+      missingReason: 'The selected object has no editable material surface for gradients.',
+    }
+  }
+
+  return {
+    patches,
+    nodeIds: patches.map((patch) => patch.id),
+    changed: patches.map(
+      (patch) => snapshot.nodes.find((node) => node.id === patch.id)?.name ?? patch.id,
+    ),
+    summary: summarizeSelectionPatches(snapshot, patches),
+  }
+}
+
 export function composeSelectionTankKindEdit(input: {
   prompt: string
   context?: unknown
@@ -1255,20 +1424,34 @@ export function composeSelectionTankKindEdit(input: {
 const OPACITY_DIRECT_FIELD_TYPES = new Set(['pipe', 'cable-tray', 'pipe-fitting', 'steel-beam', 'tank', 'zone'])
 
 export function looksLikeSelectionOpacityEdit(prompt: string) {
-  return /透明度?|不透明度?|半透明|opacity|transparent(?:cy)?|alpha|\d+%.*透|透.*\d+%/i.test(prompt)
+  return /\u900f\u660e\u5ea6?|\u4e0d\u900f\u660e\u5ea6?|\u534a\u900f\u660e|opacity|opaque|transparent(?:cy)?|alpha|\d+%.*\u900f|\u900f.*\d+%/i.test(
+    prompt,
+  )
 }
 
 export function resolveOpacityValue(prompt: string): number | undefined {
-  // "80%" or "80％"
-  const pctMatch = prompt.match(/(\d+(?:\.\d+)?)\s*[%％]/)
-  if (pctMatch) return Math.min(1, Math.max(0, Number(pctMatch[1]) / 100))
-  // "0.8" or "0.5" decimal
+  if (/\u5b8c\u5168\u900f\u660e|\u5168\u900f\u660e|invisible|fully.?transparent/i.test(prompt))
+    return 0
+  if (/\u5b8c\u5168\u4e0d\u900f\u660e|fully.?opaque/i.test(prompt)) return 1
+  if (/\u534a\u900f\u660e|semi.?transparent/i.test(prompt)) return 0.5
+
+  const usesTransparencyRatio = /\u900f\u660e\u5ea6?|transparency|transparent(?:cy)?/i.test(
+    prompt,
+  )
+  const usesOpacityRatio = /\u4e0d\u900f\u660e\u5ea6?|opacity|opaque|alpha/i.test(prompt)
+
+  const pctMatch = prompt.match(/(\d+(?:\.\d+)?)\s*[%?]/)
+  if (pctMatch) {
+    const ratio = Math.min(1, Math.max(0, Number(pctMatch[1]) / 100))
+    return usesTransparencyRatio && !usesOpacityRatio ? 1 - ratio : ratio
+  }
+
   const decMatch = prompt.match(/\b0\.\d+\b/)
-  if (decMatch) return Math.min(1, Math.max(0, Number(decMatch[0])))
-  // keywords
-  if (/完全透明|全透明|invisible|fully.?transparent/i.test(prompt)) return 0
-  if (/完全不透明|fully.?opaque/i.test(prompt)) return 1
-  if (/半透明|semi.?transparent/i.test(prompt)) return 0.5
+  if (decMatch) {
+    const ratio = Math.min(1, Math.max(0, Number(decMatch[0])))
+    return usesTransparencyRatio && !usesOpacityRatio ? 1 - ratio : ratio
+  }
+
   return undefined
 }
 
@@ -1357,8 +1540,11 @@ export function composeSelectionOpacityEdit(input: {
 
   return {
     patches,
-    nodeIds: patches.map((p) => p.id),
-    changed: patches.map((p) => snapshot.nodes.find((n) => n.id === p.id)?.name ?? p.id),
+    nodeIds: patches.flatMap((p) => (p.op === 'create' ? [p.node.id] : [p.id])),
+    changed: patches.map((p) => {
+      const id = p.op === 'create' ? p.node.id : p.id
+      return snapshot.nodes.find((n) => n.id === id)?.name ?? id
+    }),
     summary: [`Set opacity to ${Math.round(opacity * 100)}% on ${patches.length} object(s).`],
   }
 }
@@ -1371,6 +1557,7 @@ export function composeSelectionEdit(input: {
     composeSelectionDeleteEdit(input) ??
     composeSelectionMoveEdit(input) ??
     composeSelectionRotateEdit(input) ??
+    composeSelectionGradientEdit(input) ??
     composeSelectionOpacityEdit(input) ??
     composeSelectionColorEdit(input) ??
     composeSelectionTankKindEdit(input) ??

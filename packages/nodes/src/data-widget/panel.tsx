@@ -1,25 +1,20 @@
 'use client'
 
-import {
-  type AnyNode,
-  type DataWidgetNode,
-  formatStaticLiveDataValue,
-  STATIC_LIVE_DATA_OPTIONS,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNode, type DataWidgetNode, useLiveData, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  ColorAlphaField,
   MetricControl,
   PanelSection,
   PanelWrapper,
-  SegmentedControl,
   SliderControl,
   triggerSFX,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { formatLiveDataPathOption } from '../shared/live-data-format'
 
 export default function DataWidgetPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -27,6 +22,8 @@ export default function DataWidgetPanel() {
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
+  const paths = useLiveData((s) => s.paths)
+  const values = useLiveData((s) => s.values)
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as DataWidgetNode | undefined) : undefined,
   )
@@ -47,56 +44,47 @@ export default function DataWidgetPanel() {
   }, [deleteNode, selectedId, setSelection])
 
   if (!(node && node.type === 'data-widget' && selectedId && selectedCount === 1)) return null
+  const pathOptions = paths.some((path) => path.path === node.dataKey)
+    ? paths
+    : [{ path: node.dataKey, label: node.dataKey, valueType: 'string' as const }, ...paths]
 
   return (
     <PanelWrapper
       icon="/icons/data-widget.svg"
       onClose={() => setSelection({ selectedIds: [] })}
-      title={node.name || '数据组件'}
+      title={node.name || '\u5355\u6807\u7b7e'}
       width={300}
     >
-      <PanelSection title="组件">
-        <SegmentedControl
-          onChange={(widgetType) => handleUpdate({ widgetType })}
-          options={[
-            { label: '标签', value: 'label' },
-            { label: '徽章', value: 'badge' },
-            { label: '卡片', value: 'card' },
-          ]}
-          value={node.widgetType}
-        />
-        <label className="flex flex-col gap-1 text-muted-foreground text-xs">
-          数据字段
-          <select
-            className="h-9 rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-foreground"
-            onChange={(event) => handleUpdate({ dataKey: event.target.value })}
-            value={node.dataKey}
-          >
-            {STATIC_LIVE_DATA_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label} ({formatStaticLiveDataValue(option.value)})
-              </option>
-            ))}
-          </select>
-        </label>
+      <PanelSection title={'\u5355\u6807\u7b7e'}>
         <label className="flex flex-col gap-1 text-muted-foreground text-xs">
           模板
           <input
-            className="h-9 rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-foreground"
+            className="h-10 w-full min-w-0 flex-1 rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-foreground text-xs"
             onChange={(event) => handleUpdate({ template: event.target.value })}
             value={node.template}
           />
         </label>
-        {node.widgetType === 'card' ? (
-          <label className="flex flex-col gap-1 text-muted-foreground text-xs">
-            标题
-            <input
-              className="h-9 rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-foreground"
-              onChange={(event) => handleUpdate({ title: event.target.value })}
-              value={node.title}
-            />
-          </label>
-        ) : null}
+      </PanelSection>
+
+      <PanelSection title={'\u6570\u636e'}>
+        <label className="flex flex-col gap-1 text-muted-foreground text-xs">
+          {'\u6570\u636e\u8def\u5f84'}
+          <select
+            className="h-9 w-full min-w-0 cursor-pointer rounded-md border border-border/60 bg-[#2C2C2E] px-3 pr-8 text-foreground text-xs leading-none outline-none focus:ring-1 focus:ring-foreground/30"
+            data-testid="data-widget-path-select"
+            onChange={(event) => handleUpdate({ dataKey: event.target.value })}
+            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            value={node.dataKey}
+          >
+            {pathOptions.map((option) => (
+              <option key={option.path} value={option.path}>
+                {formatLiveDataPathOption(paths, values, option.path)}
+              </option>
+            ))}
+          </select>
+        </label>
       </PanelSection>
 
       <PanelSection title="样式">
@@ -110,21 +98,20 @@ export default function DataWidgetPanel() {
           unit="px"
           value={node.fontSize}
         />
+        <ColorAlphaField
+          label={'\u80cc\u666f'}
+          opacity={node.backgroundOpacity ?? 1}
+          value={node.background ?? '#111827'}
+          onColorChange={(background) => handleUpdate({ background })}
+          onOpacityChange={(backgroundOpacity) => handleUpdate({ backgroundOpacity })}
+        />
         <div className="grid grid-cols-2 gap-2">
           <label className="flex flex-col gap-1 text-muted-foreground text-xs">
-            文字
+            {'\u6587\u5b57'}
             <input
               type="color"
               value={node.foreground}
               onChange={(e) => handleUpdate({ foreground: e.target.value })}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-muted-foreground text-xs">
-            背景
-            <input
-              type="color"
-              value={node.background}
-              onChange={(e) => handleUpdate({ background: e.target.value })}
             />
           </label>
         </div>

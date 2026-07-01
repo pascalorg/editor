@@ -34,6 +34,10 @@ const VALID_DYNAMIC_TYPES = new Set<DynamicType>([
 
 const SEMANTIC_ONLY_DYNAMIC_TYPES = new Set<DynamicType>(['fill', 'level', 'conveyorFlow'])
 
+const NATIVE_NODE_DYNAMIC_TYPES: Partial<Record<AnyNodeType, readonly DynamicType[]>> = {
+  tank: [...COMMON_DYNAMIC_TYPES, 'fill', 'level'],
+}
+
 function semanticAllowsDynamicType(semanticType: string, type: DynamicType) {
   if (!SEMANTIC_ONLY_DYNAMIC_TYPES.has(type)) return true
   return (SEMANTIC_DYNAMIC_TYPES[semanticType] ?? []).includes(type)
@@ -131,41 +135,78 @@ function hasSemanticToken(tokens: string[], values: readonly string[]) {
 
 function inferStructuredPartSemanticType(node: AnyNode): string | undefined {
   const metadata = readMetadata(node)
-  const roleTokens = [metadata.semanticRole, metadata.primarySemanticRole].map(normalizeSemanticToken)
+  const asset = readRecord((node as unknown as Record<string, unknown>).asset)
+  const sourceArgs = readRecord(metadata.sourceArgs)
+  const equipmentContract = readRecord(metadata.equipmentContract)
+  const roleTokens = [metadata.semanticRole, metadata.primarySemanticRole].map(
+    normalizeSemanticToken,
+  )
   const partTokens = [metadata.sourcePartKind, metadata.sourcePartId].map(normalizeSemanticToken)
   const groupTokens = [metadata.semanticGroup].map(normalizeSemanticToken)
+  const equipmentTokens = [
+    node.type,
+    metadata.semanticType,
+    metadata.family,
+    metadata.archetypeFamily,
+    metadata.layoutFamily,
+    metadata.category,
+    metadata.catalogItemId,
+    sourceArgs.family,
+    sourceArgs.object,
+    equipmentContract.equipmentFamily,
+    equipmentContract.profileId,
+    equipmentContract.primarySemanticRole,
+    asset.id,
+    asset.category,
+    asset.name,
+  ].map(normalizeSemanticToken)
+
+  const tankTokens = [
+    'tank',
+    'storage_tank',
+    'vertical_tank',
+    'horizontal_tank',
+    'pressure_vessel',
+    'vessel',
+    'reactor',
+    'reactor_vessel',
+    'factory-barrel',
+    'factory barrel',
+  ]
+
+  if (hasSemanticToken(equipmentTokens, tankTokens)) return 'tank'
 
   const conveyorTokens = [
-      'conveyor',
-      'conveyor_frame',
-      'belt_surface',
-      'conveyor_belt',
-      'rubber_belt',
-      'moving_belt_surface',
-      'covered_conveyor_belt',
-      'chip_belt',
-      'packaging_conveyor',
-      'chip_conveyor_frame',
-      'casting_conveyor_frame',
-      'infeed_conveyor',
-      'cargo_platform',
-    ]
+    'conveyor',
+    'conveyor_frame',
+    'belt_surface',
+    'conveyor_belt',
+    'rubber_belt',
+    'moving_belt_surface',
+    'covered_conveyor_belt',
+    'chip_belt',
+    'packaging_conveyor',
+    'chip_conveyor_frame',
+    'casting_conveyor_frame',
+    'infeed_conveyor',
+    'cargo_platform',
+  ]
   const rollerTokens = [
-      'roller',
-      'roller_array',
-      'support_rollers',
-      'drive_roller',
-      'idler_roller',
-      'drum',
-    ]
+    'roller',
+    'roller_array',
+    'support_rollers',
+    'drive_roller',
+    'idler_roller',
+    'drum',
+  ]
   const motorTokens = [
-      'motor',
-      'drive_motor',
-      'conveyor_drive_motor',
-      'conveyor_drive',
-      'conveyor_drive_unit',
-      'ribbed_motor_body',
-    ]
+    'motor',
+    'drive_motor',
+    'conveyor_drive_motor',
+    'conveyor_drive',
+    'conveyor_drive_unit',
+    'ribbed_motor_body',
+  ]
 
   if (hasSemanticToken(roleTokens, conveyorTokens)) return 'conveyor'
   if (hasSemanticToken(roleTokens, rollerTokens)) return 'roller'
@@ -268,13 +309,25 @@ export function getDynamicTypesForNode(node: AnyNode | null | undefined): Dynami
   const declaredTypes = (declared?.supportedTypes ?? []).filter((type) =>
     semanticAllowsDynamicType(semanticType, type),
   )
-  return Array.from(new Set([...semanticTypes, ...declaredTypes]))
+  const merged = Array.from(new Set([...semanticTypes, ...declaredTypes]))
+  const nativeTypes = node ? NATIVE_NODE_DYNAMIC_TYPES[node.type] : undefined
+  if (!nativeTypes) return merged
+  return merged.filter((type) => nativeTypes.includes(type))
 }
 
 export function getRecommendedDynamicTypeForNode(node: AnyNode | null | undefined): DynamicType {
   const declared = readDynamicCapabilities(node)
-  return (
-    declared?.recommendedTypes?.[0] ??
-    getRecommendedDynamicTypeForSemanticType(getNodeSemanticType(node))
-  )
+  const allowedTypes = getDynamicTypesForNode(node)
+  const declaredType = declared?.recommendedTypes?.find((type) => allowedTypes.includes(type))
+  const semanticType = getRecommendedDynamicTypeForSemanticType(getNodeSemanticType(node))
+  if (declaredType) return declaredType
+  if (allowedTypes.includes(semanticType)) return semanticType
+  return allowedTypes[0] ?? 'visible'
+}
+
+export function isDynamicTypeSupportedByNode(
+  node: AnyNode | null | undefined,
+  type: DynamicType,
+): boolean {
+  return getDynamicTypesForNode(node).includes(type)
 }

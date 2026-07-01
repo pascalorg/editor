@@ -35,10 +35,27 @@ export const MaterialProperties = z.object({
 })
 export type MaterialProperties = z.infer<typeof MaterialProperties>
 
+export const MaterialGradientStop = z.object({
+  offset: z.number().min(0).max(1),
+  color: z.string().default('#ffffff'),
+  opacity: z.number().min(0).max(1).default(1),
+})
+export type MaterialGradientStop = z.infer<typeof MaterialGradientStop>
+
+export const MaterialGradient = z.object({
+  type: z.enum(['linear']).default('linear'),
+  space: z.enum(['uv', 'local', 'world']).default('uv'),
+  axis: z.enum(['x', 'y', 'z']).default('y'),
+  angle: z.number().default(0),
+  stops: z.array(MaterialGradientStop).min(2).max(8),
+})
+export type MaterialGradient = z.infer<typeof MaterialGradient>
+
 export const MaterialSchema = z.object({
   id: z.string().optional(),
   preset: MaterialPreset.optional(),
   properties: MaterialProperties.optional(),
+  gradient: MaterialGradient.optional(),
   texture: z
     .object({
       url: AssetUrl,
@@ -63,6 +80,7 @@ export const MaterialTarget = z.enum([
   'door',
   'window',
   'shelf',
+  'item',
   'box',
   'cylinder',
   'cone',

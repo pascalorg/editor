@@ -14,6 +14,7 @@ export const DataWidgetNode = BaseNode.extend({
   title: z.string().default('Live Data'),
   foreground: z.string().default('#ffffff'),
   background: z.string().default('#111827'),
+  backgroundOpacity: z.number().min(0).max(1).default(1),
   fontSize: z.number().min(10).max(48).default(14),
 }).describe('Data widget — static/live data label, badge, card, or chart placed on the canvas.')
 

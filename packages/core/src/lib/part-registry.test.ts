@@ -131,6 +131,7 @@ describe('part registry', () => {
     const pipeManifold = metadata.find((part) => part.kind === 'pipe_manifold')
     const hopperBody = metadata.find((part) => part.kind === 'hopper_body')
     const servicePlatform = metadata.find((part) => part.kind === 'service_platform')
+    const hemisphere = metadata.find((part) => part.kind === 'hemisphere')
 
     expect(chassis).toEqual(
       expect.objectContaining({
@@ -215,6 +216,14 @@ describe('part registry', () => {
         detailProperties: expect.arrayContaining(['detailLevel']),
       }),
     )
+    expect(hemisphere).toEqual(
+      expect.objectContaining({
+        id: 'generic.hemisphere',
+        semanticRole: 'hemisphere',
+        dimensionProperties: expect.arrayContaining(['radius', 'diameter', 'height']),
+        quantityProperties: expect.arrayContaining(['widthSegments', 'heightSegments']),
+      }),
+    )
   })
 
   test('exposes reusable process-vessel detail parts for industry packs', () => {
@@ -294,6 +303,14 @@ describe('part registry', () => {
         semanticRole: 'service_platform',
         dimensionProperties: expect.arrayContaining(['length', 'width', 'height']),
         quantityProperties: expect.arrayContaining(['rungCount']),
+      }),
+    )
+    expect(details.get('helical_stair')).toEqual(
+      expect.objectContaining({
+        semanticRole: 'external_spiral_stair',
+        dimensionProperties: expect.arrayContaining(['height', 'innerRadius', 'outerRadius']),
+        quantityProperties: expect.arrayContaining(['stepCount', 'ringCount']),
+        placementProperties: expect.arrayContaining(['startAngle']),
       }),
     )
   })

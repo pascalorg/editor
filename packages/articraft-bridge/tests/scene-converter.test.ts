@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+﻿import { describe, expect, test } from 'bun:test'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { convertToSceneNodes, createModelNodes } from '../src/scene-converter'
 import type { ArticraftModelData } from '../src/types'
@@ -17,6 +17,7 @@ const model: ArticraftModelData = {
         {
           geometry: { type: 'sphere', params: { radius: 0.1 } },
           origin: { xyz: [1, 0, 1], rpy: [0, 0, 0] },
+          material: { name: 'warning_yellow', rgba: [1, 0.8, 0, 1] },
         },
       ],
     },
@@ -24,8 +25,9 @@ const model: ArticraftModelData = {
       name: 'arm',
       visuals: [
         {
-          geometry: { type: 'box', params: { length: 0.2, width: 0.2, height: 1 } },
+          geometry: { type: 'box', params: { sx: 0.2, sy: 0.3, sz: 1 } },
           origin: { xyz: [0.5, 0, 0.5], rpy: [0, 0, 0] },
+          material: { name: 'paint_red', rgba: [0.8, 0.1, 0.05, 1] },
         },
       ],
     },
@@ -35,6 +37,7 @@ const model: ArticraftModelData = {
         {
           geometry: { type: 'cylinder', params: { radius: 0.3, length: 0.2 } },
           origin: { xyz: [0, 0, 0], rpy: [0, 0, 0] },
+          material: { name: 'dark_steel', rgba: [0.2, 0.22, 0.24, 1] },
         },
       ],
     },
@@ -60,8 +63,12 @@ const model: ArticraftModelData = {
   ],
 }
 
+function createdByName(created: Map<AnyNodeId, { node: AnyNode; parentId?: AnyNodeId }>, name: string) {
+  return [...created.values()].find(({ node }) => node.name === name)
+}
+
 describe('Articraft scene converter', () => {
-  test('keeps joint metadata when child links appear before parents', () => {
+  test('keeps joint metadata on link frames when child links appear before parents', () => {
     const converted = convertToSceneNodes(model, { articulationMode: true })
     const armId = converted.nodeIdByLink.get('arm')
     const clawId = converted.nodeIdByLink.get('claw')
@@ -72,7 +79,7 @@ describe('Articraft scene converter', () => {
     expect(converted.jointMetadata[clawId!]?.jointName).toBe('arm_to_claw')
   })
 
-  test('creates parents before children and reports the asset root node', () => {
+  test('creates articulated link frames before visual children', () => {
     const created = new Map<AnyNodeId, { node: AnyNode; parentId?: AnyNodeId }>()
     const externalParentId = 'level-1' as AnyNodeId
 
@@ -88,17 +95,23 @@ describe('Articraft scene converter', () => {
       { articulationMode: true, parentId: externalParentId },
     )
 
-    const base = [...created.values()].find(({ node }) => node.name === 'base')
-    const arm = [...created.values()].find(({ node }) => node.name === 'arm')
-    const claw = [...created.values()].find(({ node }) => node.name === 'claw')
+    const base = createdByName(created, 'base')
+    const arm = createdByName(created, 'arm')
+    const claw = createdByName(created, 'claw')
+    const baseVisual = createdByName(created, 'base_visual')
+    const armVisual = createdByName(created, 'arm_visual')
+    const clawVisual = createdByName(created, 'claw_visual')
 
     expect(base?.parentId).toBe(externalParentId)
     expect(arm?.parentId).toBe(base?.node.id)
     expect(claw?.parentId).toBe(arm?.node.id)
+    expect(baseVisual?.parentId).toBe(base?.node.id)
+    expect(armVisual?.parentId).toBe(arm?.node.id)
+    expect(clawVisual?.parentId).toBe(claw?.node.id)
     expect(result.rootNodeIds).toEqual([base?.node.id])
   })
 
-  test('applies rootPosition to converted root nodes only', () => {
+  test('applies joint origin to child link frames and rootPosition to root frames only', () => {
     const created = new Map<AnyNodeId, { node: AnyNode; parentId?: AnyNodeId }>()
 
     createModelNodes(
@@ -110,11 +123,27 @@ describe('Articraft scene converter', () => {
       { articulationMode: true, parentId: 'level-1' as AnyNodeId, rootPosition: [10, 2, -3] },
     )
 
-    const base = [...created.values()].find(({ node }) => node.name === 'base')
-    const arm = [...created.values()].find(({ node }) => node.name === 'arm')
+    const base = createdByName(created, 'base')
+    const arm = createdByName(created, 'arm')
+    const armVisual = createdByName(created, 'arm_visual')
 
     expect(base?.node.position).toEqual([10, 2, -3])
-    expect(arm?.node.position).toEqual([0.5, 0.5, -0])
+    expect(arm?.node.position).toEqual([0, 0.2, -0])
+    expect(armVisual?.node.position).toEqual([0.5, 0.5, -0])
   })
 
+  test('preserves visual colors and maps URDF box dimensions into editor axes', () => {
+    const converted = convertToSceneNodes(model, { articulationMode: true })
+    const armVisual = converted.nodes.find((node) => node.name === 'arm_visual') as AnyNode & {
+      length?: number
+      width?: number
+      height?: number
+      material?: { properties?: { color?: string } }
+    }
+
+    expect(armVisual.length).toBe(0.2)
+    expect(armVisual.width).toBe(0.3)
+    expect(armVisual.height).toBe(1)
+    expect(armVisual.material?.properties?.color).toBe('#cc1a0d')
+  })
 })

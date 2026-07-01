@@ -5,14 +5,21 @@ import {
   getLibraryMaterialIdFromRef,
   getMaterialsForCategory,
   MATERIAL_CATEGORIES,
+  type MaterialGradient,
   type MaterialCatalogItem,
   type MaterialSchema,
   type MaterialTarget,
   toLibraryMaterialRef,
 } from '@pascal-app/core'
 import { useEffect, useState } from 'react'
+import {
+  buildGradientPreview,
+  getMaterialGradient,
+  resolveMaterialProperties,
+} from '../../../lib/material-appearance'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
+import { ColorAlphaField, THIN_RANGE_INPUT_CLASS } from './color-alpha-field'
 
 type MaterialPickerProps = {
   value?: MaterialSchema
@@ -31,7 +38,7 @@ function getCategoryLabel(category: (typeof MATERIAL_CATEGORIES)[number]) {
   return category
 }
 
-type MaterialPickerTab = 'color' | 'fill'
+type MaterialPickerTab = 'color' | 'gradient' | 'fill'
 const FILL_CATEGORIES = MATERIAL_CATEGORIES.filter((category) => category !== 'other')
 const METAL_SWATCHES = [
   {
@@ -112,15 +119,31 @@ export function MaterialPicker({
   const writeCustomColor = (color: string) => {
     if (disabled) return
     setPaintPanelOpen(false)
+    const properties = {
+      ...resolveMaterialProperties(value),
+      color,
+    }
     onChange?.({
       preset: 'custom',
       properties: {
-        color,
-        roughness: value?.properties?.roughness ?? 0.5,
-        metalness: value?.properties?.metalness ?? 0,
-        opacity: value?.properties?.opacity ?? 1,
-        transparent: value?.properties?.transparent ?? false,
-        side: value?.properties?.side ?? 'front',
+        ...properties,
+        transparent: properties.opacity < 1,
+      },
+    })
+  }
+
+  const writeCustomOpacity = (opacity: number) => {
+    if (disabled) return
+    setPaintPanelOpen(false)
+    const properties = {
+      ...resolveMaterialProperties(value),
+      opacity,
+    }
+    onChange?.({
+      preset: 'custom',
+      properties: {
+        ...properties,
+        transparent: opacity < 1,
       },
     })
   }
@@ -135,13 +158,35 @@ export function MaterialPicker({
         roughness: swatch.roughness,
         metalness: swatch.metalness,
         opacity: value?.properties?.opacity ?? 1,
-        transparent: value?.properties?.transparent ?? false,
+        transparent: (value?.properties?.opacity ?? 1) < 1,
         side: value?.properties?.side ?? 'front',
       },
     })
   }
 
-  const customColor = value?.properties?.color ?? '#ffffff'
+  const writeGradient = (gradient: MaterialGradient) => {
+    if (disabled) return
+    setPaintPanelOpen(false)
+    const properties = resolveMaterialProperties(value)
+    const sortedStops = [...gradient.stops].sort((a, b) => a.offset - b.offset)
+    onChange?.({
+      preset: 'custom',
+      properties: {
+        ...properties,
+        color: sortedStops[0]?.color ?? properties.color,
+        transparent: properties.opacity < 1 || sortedStops.some((stop) => stop.opacity < 1),
+      },
+      gradient: {
+        ...gradient,
+        stops: sortedStops,
+      },
+    })
+  }
+
+  const currentProperties = resolveMaterialProperties(value)
+  const customColor = currentProperties.color
+  const customOpacity = currentProperties.opacity
+  const gradient = getMaterialGradient(value)
   const colorPresets = [
     '#ffffff',
     '#f4f0e6',
@@ -157,7 +202,10 @@ export function MaterialPicker({
     '#111827',
   ]
   const selectedMetalSwatchId =
-    !selectedMaterialPreset && value?.properties?.metalness && value.properties.metalness > 0.75
+    !value?.gradient &&
+    !selectedMaterialPreset &&
+    value?.properties?.metalness &&
+    value.properties.metalness > 0.75
       ? METAL_SWATCHES.find(
           (swatch) => swatch.color.toLowerCase() === value.properties?.color?.toLowerCase(),
         )?.id
@@ -165,9 +213,10 @@ export function MaterialPicker({
 
   return (
     <div className={`min-w-0 space-y-3 ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
-      <div className="grid grid-cols-2 rounded-lg border border-border/50 bg-[#202124] p-1">
+      <div className="grid grid-cols-3 rounded-lg border border-border/50 bg-[#202124] p-1">
         {[
           ['color', '\u989c\u8272'],
+          ['gradient', '\u6e10\u53d8'],
           ['fill', '\u586b\u5145'],
         ].map(([tab, label]) => (
           <button
@@ -188,30 +237,22 @@ export function MaterialPicker({
 
       {activeTab === 'color' && onChange ? (
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <div className="font-medium text-foreground/80 text-xs">{'\u57fa\u7840\u989c\u8272'}</div>
-            <div className="flex items-center gap-2">
-              <input
-                className="h-9 w-11 cursor-pointer rounded border border-border/50 bg-transparent p-0.5"
-                onChange={(event) => writeCustomColor(event.target.value)}
-                type="color"
-                value={customColor}
-              />
-              <input
-                className="h-9 flex-1 rounded-md border border-border/50 bg-[#2C2C2E] px-2 font-mono text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
-                onChange={(event) => writeCustomColor(event.target.value)}
-                type="text"
-                value={customColor}
-              />
-            </div>
-          </div>
+          <ColorAlphaField
+            label={'\u57fa\u7840\u989c\u8272'}
+            opacity={customOpacity}
+            value={customColor}
+            onColorChange={writeCustomColor}
+            onOpacityChange={writeCustomOpacity}
+          />
           <div className="grid grid-cols-6 gap-1.5">
             {colorPresets.map((color) => (
               <button
                 aria-label={color}
                 className={cn(
                   'h-7 rounded-md border border-white/10 transition-transform hover:scale-105',
-                  customColor.toLowerCase() === color && 'ring-2 ring-blue-500/50',
+                  !value?.gradient &&
+                    customColor.toLowerCase() === color &&
+                    'ring-2 ring-blue-500/50',
                 )}
                 key={color}
                 onClick={() => writeCustomColor(color)}
@@ -221,6 +262,10 @@ export function MaterialPicker({
             ))}
           </div>
         </div>
+      ) : null}
+
+      {activeTab === 'gradient' && onChange ? (
+        <GradientEditor gradient={gradient} onChange={writeGradient} />
       ) : null}
 
       {activeTab === 'fill' ? (
@@ -267,6 +312,110 @@ export function MaterialPicker({
           </div>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function GradientEditor({
+  gradient,
+  onChange,
+}: {
+  gradient: MaterialGradient
+  onChange: (gradient: MaterialGradient) => void
+}) {
+  const updateStop = (
+    index: number,
+    updates: Partial<MaterialGradient['stops'][number]>,
+  ) => {
+    const nextStops = gradient.stops.map((stop, stopIndex) =>
+      stopIndex === index ? { ...stop, ...updates } : stop,
+    )
+    onChange({ ...gradient, stops: nextStops })
+  }
+
+  const addStop = () => {
+    if (gradient.stops.length >= 8) return
+    const nextStops = [
+      ...gradient.stops,
+      { offset: 0.5, color: '#8b5cf6', opacity: 1 },
+    ].sort((a, b) => a.offset - b.offset)
+    onChange({ ...gradient, stops: nextStops })
+  }
+
+  const removeStop = (index: number) => {
+    if (gradient.stops.length <= 2) return
+    onChange({ ...gradient, stops: gradient.stops.filter((_, stopIndex) => stopIndex !== index) })
+  }
+
+  return (
+    <div className="space-y-3">
+      <div
+        className="h-10 rounded-lg border border-white/10 shadow-inner"
+        style={{ background: buildGradientPreview(gradient) }}
+      />
+      <div className="flex items-center justify-between gap-2 px-1">
+        <span className="text-foreground/80 text-xs">{'\u65b9\u5411'}</span>
+        <select
+          className="rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
+          onChange={(event) =>
+            onChange({ ...gradient, axis: event.target.value as MaterialGradient['axis'] })
+          }
+          value={gradient.axis}
+        >
+          <option value="y">上下</option>
+          <option value="x">左右</option>
+          <option value="z">斜向</option>
+        </select>
+      </div>
+      <div className="space-y-2">
+        {gradient.stops.map((stop, index) => (
+          <div className="rounded-lg border border-white/10 bg-[#202124]/70 py-1" key={index}>
+            <div className="flex items-center justify-between px-3 pt-1">
+              <span className="text-muted-foreground text-[11px]">
+                {`色标 ${index + 1}`}
+              </span>
+              <button
+                className="text-muted-foreground text-[11px] transition-colors hover:text-foreground disabled:opacity-30"
+                disabled={gradient.stops.length <= 2}
+                onClick={() => removeStop(index)}
+                type="button"
+              >
+                删除
+              </button>
+            </div>
+            <ColorAlphaField
+              label={'\u989c\u8272'}
+              opacity={stop.opacity}
+              value={stop.color}
+              onColorChange={(color) => updateStop(index, { color })}
+              onOpacityChange={(opacity) => updateStop(index, { opacity })}
+            />
+            <div className="flex items-center gap-2 px-3 pb-2">
+              <span className="w-12 shrink-0 text-muted-foreground text-[11px]">位置</span>
+              <input
+                className={THIN_RANGE_INPUT_CLASS}
+                max={1}
+                min={0}
+                onChange={(event) => updateStop(index, { offset: Number(event.target.value) })}
+                step={0.01}
+                type="range"
+                value={stop.offset}
+              />
+              <span className="w-9 text-right text-muted-foreground text-[11px]">
+                {Math.round(stop.offset * 100)}%
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <button
+        className="w-full rounded-lg border border-dashed border-white/15 px-2 py-2 text-muted-foreground text-xs transition-colors hover:border-white/30 hover:text-foreground disabled:opacity-40"
+        disabled={gradient.stops.length >= 8}
+        onClick={addStop}
+        type="button"
+      >
+        添加渐变色标
+      </button>
     </div>
   )
 }

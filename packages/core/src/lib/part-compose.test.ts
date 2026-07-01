@@ -745,6 +745,42 @@ describe('composePartPrimitives', () => {
     expect(shapes.filter((shape) => shape.semanticRole === 'ladder_rung')).toHaveLength(6)
   })
 
+  test('composes helical stair parts as wraparound tower access', () => {
+    const shapes = composePartPrimitives({
+      name: 'Tower access',
+      detail: 'low',
+      parts: [
+        {
+          kind: 'helical_stair',
+          height: 6,
+          innerRadius: 0.9,
+          outerRadius: 1.2,
+          stepCount: 12,
+          ringCount: 8,
+          sweepAngle: Math.PI * 3,
+        },
+      ],
+    })
+
+    expect(
+      shapes.filter((shape) => shape.semanticRole === 'helical_stair_tread').length,
+    ).toBeGreaterThan(12)
+    expect(
+      shapes.filter((shape) => shape.semanticRole === 'helical_stair_guard_rail'),
+    ).toHaveLength(1)
+    expect(shapes.filter((shape) => shape.semanticRole === 'helical_stair_mid_rail')).toHaveLength(
+      1,
+    )
+    expect(shapes.filter((shape) => shape.semanticRole === 'helical_stair_stringer')).toHaveLength(
+      2,
+    )
+    expect(shapes.filter((shape) => shape.semanticRole === 'helical_stair_landing')).toHaveLength(
+      2,
+    )
+    expect(shapes.some((shape) => shape.semanticRole === 'helical_stair_post')).toBe(true)
+    expect(shapes.every((shape) => shape.sourcePartKind === 'helical_stair')).toBe(true)
+  })
+
   test('composes preheater tower frame and cyclone separator units', () => {
     const shapes = composePartPrimitives({
       name: 'Cement preheater',
@@ -847,6 +883,30 @@ describe('composePartPrimitives', () => {
     expect(shapes[0]?.scale).toEqual([1, 1, 0.6])
     expect(shapes[1]?.kind).toBe('frustum')
     expect(shapes[1]?.radiusTop).toBeCloseTo(0.25)
+  })
+
+  test('composes hemisphere parts as native hemisphere shapes', () => {
+    const shapes = composePartPrimitives({
+      name: 'Half sphere marker',
+      parts: [
+        {
+          kind: 'hemisphere',
+          semanticRole: 'marker_hemisphere',
+          diameter: 2,
+          height: 0.75,
+        },
+      ],
+    })
+
+    expect(shapes).toHaveLength(1)
+    expect(shapes[0]).toMatchObject({
+      kind: 'hemisphere',
+      semanticRole: 'marker_hemisphere',
+      sourcePartKind: 'hemisphere',
+      position: [0, 0.375, 0],
+      radius: 1,
+      scale: [1, 0.75, 1],
+    })
   })
 
   test('normalizes mixer propeller part blueprints without duplicating or adding fan details', () => {

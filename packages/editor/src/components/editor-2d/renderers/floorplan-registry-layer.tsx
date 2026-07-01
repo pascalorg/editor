@@ -8,6 +8,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPalette,
   type GeometryContext,
+  type LiveTransform,
   nodeRegistry,
   pauseSceneHistory,
   resumeSceneHistory,
@@ -26,8 +27,8 @@ import {
   useRef,
   useState,
 } from 'react'
-import { sfxEmitter } from '../../../lib/sfx-bus'
 import { isPlanDragMovableNode, PLAN_DRAG_THRESHOLD_PX } from '../../../lib/plan-drag'
+import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
@@ -86,6 +87,15 @@ type ActiveDrag = {
   historyPaused: boolean
 }
 
+type FloorplanEntry = {
+  id: AnyNodeId
+  node: AnyNode
+  base: FloorplanGeometry | null
+  overlay: FloorplanGeometry | null
+  selected: boolean
+  highlighted: boolean
+}
+
 function snapshotNode(node: AnyNode): NodeSnapshot {
   // Shallow-clone every non-id, non-type field. Arrays / vec tuples are
   // deep-cloned to detach from the live store reference.
@@ -101,6 +111,95 @@ function snapshotsToUpdates(snapshots: NodeSnapshot[]) {
   return snapshots.map((s) => ({ id: s.id, data: s.data }))
 }
 
+function applyFloorplanLiveTransform(node: AnyNode, live: LiveTransform): AnyNode {
+  if (node.type === 'item' || node.type === 'shelf') {
+    return {
+      ...node,
+      position: live.position,
+      rotation: [0, live.rotation, 0] as [number, number, number],
+      parentId: null,
+    } as AnyNode
+  }
+
+  if (node.type === 'stair') {
+    return {
+      ...node,
+      position: live.position,
+    } as AnyNode
+  }
+
+  if (node.type === 'slab' || node.type === 'ceiling') {
+    const dx = live.position[0]
+    const dz = live.position[2]
+    if (dx === 0 && dz === 0) return node
+
+    const surface = node as {
+      polygon: Array<[number, number]>
+      holes?: Array<Array<[number, number]>>
+    }
+    return {
+      ...node,
+      polygon: surface.polygon.map(([x, z]) => [x + dx, z + dz] as [number, number]),
+      holes: (surface.holes ?? []).map((h) =>
+        h.map(([x, z]) => [x + dx, z + dz] as [number, number]),
+      ),
+    } as AnyNode
+  }
+
+  return node
+}
+
+function buildFloorplanEntry(
+  node: AnyNode,
+  nodes: Record<string, AnyNode>,
+  viewState: {
+    selected: boolean
+    highlighted: boolean
+    hovered: boolean
+    moving: boolean
+    palette: FloorplanPalette | undefined
+  },
+): FloorplanEntry | null {
+  const def = nodeRegistry.get(node.type)
+  const builder = def?.floorplan
+  if (!builder) return null
+
+  const ctx = buildContext(node, nodes, viewState)
+  const geometry = (builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null)(
+    node,
+    ctx,
+  )
+  if (!geometry) return null
+
+  const { base, overlay } = splitFloorplanOverlay(geometry)
+  return {
+    id: node.id,
+    node,
+    base,
+    overlay,
+    selected: viewState.selected,
+    highlighted: viewState.highlighted,
+  }
+}
+
+function mergeMovingEntry(entries: FloorplanEntry[], movingEntry: FloorplanEntry | null) {
+  if (!movingEntry) return entries
+
+  const movingRank = floorplanLayerRank(movingEntry.node.type)
+  const next: FloorplanEntry[] = []
+  let inserted = false
+  for (const entry of entries) {
+    if (entry.id === movingEntry.id) continue
+    if (!inserted && floorplanLayerRank(entry.node.type) > movingRank) {
+      next.push(movingEntry)
+      inserted = true
+    }
+    next.push(entry)
+  }
+  if (!inserted) next.push(movingEntry)
+  return next
+}
+
 export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const levelId = useViewer((s) => s.selection.levelId)
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -112,11 +211,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const renderCtx = useFloorplanRender()
   const movingNode = useEditor((s) => s.movingNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
-  // Subscribe to the live-transforms map ref so the layer re-renders
-  // whenever a 3D mover publishes a per-frame position (see
-  // `usePlacementCoordinator`). Without this the 2D floor plan only
-  // updates after 3D commit — the 3D drag would look frozen in 2D.
-  const liveTransforms = useLiveTransforms((s) => s.transforms)
+  // Subscribe only to the active moving node's live transform. Subscribing
+  // to the full map makes every drag frame rebuild the whole floorplan.
+  const movingNodeId = movingNode?.id as AnyNodeId | undefined
+  const movingLiveTransform = useLiveTransforms((s) =>
+    movingNodeId ? s.transforms.get(movingNodeId) : undefined,
+  )
   // Same reactivity hook for elevator runtime state — `useInteractive`
   // tracks the current / fallback level + cab travel, `useLiveNode
   // Overrides` carries live-edit overrides from the inspector. Builders
@@ -215,14 +315,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // partition.
   const entries = useMemo(() => {
     if (!levelId) return []
-    const out: {
-      id: AnyNodeId
-      node: AnyNode
-      base: FloorplanGeometry | null
-      overlay: FloorplanGeometry | null
-      selected: boolean
-      highlighted: boolean
-    }[] = []
+    const out: FloorplanEntry[] = []
 
     const visit = (id: AnyNodeId) => {
       const node = nodes[id]
@@ -233,61 +326,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         const selected = selectedIdSet.has(id)
         const highlighted = highlightedIdSet.has(id)
         const hovered = hoveredId === id
-        const moving = movingNode?.id === id
-        // Live-transform override — when a mover is publishing per-frame
-        // position/rotation, render that here instead of the committed
-        // scene state. Without this the 2D floor plan would only update
-        // after commit, making the drag look frozen.
-        //
-        // The live-transform contract varies per kind (see
-        // wiki/architecture/tools.md "useLiveTransforms contract is
-        // per-kind, not generic"); we narrow per kind here:
-        //   - item: world-plan position frame. Override `position` +
-        //     `rotation` and force `parentId: null` so the resolver
-        //     treats them as world coords directly.
-        //   - slab / ceiling: position is a translation **delta**
-        //     (`[Δx, 0, Δz]`). Translate the polygon + holes by the
-        //     delta — the floor-plan builder draws the polygon at its
-        //     new location, mirroring the 3D `<group position={delta}>`
-        //     visual without forcing per-tick CSG scene writes.
-        const live = liveTransforms.get(id)
-        let effectiveNode: AnyNode = node
-        if (live) {
-          if (node.type === 'item' || node.type === 'shelf') {
-            // World-plan position kinds: the live transform carries the
-            // node's intended position/rotation in level-local coords.
-            // Override both and force `parentId: null` so the floor-plan
-            // resolver treats `position` as world plan coords directly
-            // (skipping the parent-chain transform composition).
-            effectiveNode = {
-              ...node,
-              position: live.position,
-              rotation: [0, live.rotation, 0] as [number, number, number],
-              parentId: null,
-            } as AnyNode
-          } else if (node.type === 'stair') {
-            effectiveNode = {
-              ...node,
-              position: live.position,
-            } as AnyNode
-          } else if (node.type === 'slab' || node.type === 'ceiling') {
-            const dx = live.position[0]
-            const dz = live.position[2]
-            if (dx !== 0 || dz !== 0) {
-              const surface = node as {
-                polygon: Array<[number, number]>
-                holes?: Array<Array<[number, number]>>
-              }
-              effectiveNode = {
-                ...node,
-                polygon: surface.polygon.map(([x, z]) => [x + dx, z + dz] as [number, number]),
-                holes: (surface.holes ?? []).map((h) =>
-                  h.map(([x, z]) => [x + dx, z + dz] as [number, number]),
-                ),
-              } as AnyNode
-            }
-          }
-        }
+        const moving = movingNodeId === id
+        // Live-transform frames are handled by movingEntry below.
+        const effectiveNode: AnyNode = node
         const ctx = buildContext(effectiveNode, nodes, {
           selected,
           highlighted,
@@ -321,16 +362,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     // priority.
     out.sort((a, b) => floorplanLayerRank(a.node.type) - floorplanLayerRank(b.node.type))
     return out
-  }, [
-    levelId,
-    nodes,
-    liveTransforms,
-    selectedIdSet,
-    highlightedIdSet,
-    hoveredId,
-    movingNode?.id,
-    renderCtx?.palette,
-  ])
+  }, [levelId, nodes, selectedIdSet, highlightedIdSet, hoveredId, movingNodeId, renderCtx?.palette])
 
   // ── Generic 2D affordance dispatch ─────────────────────────────────
   //
@@ -339,6 +371,33 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // dispatcher then owns: history pause/resume, snapshot capture,
   // pointer-move/up/cancel routing, and the single-undo dance on
   // commit. Each kind owns the actual mutation logic inside `apply`.
+  const movingEntry = useMemo(() => {
+    if (!movingNodeId || !movingLiveTransform) return null
+    const node = nodes[movingNodeId]
+    if (!node) return null
+
+    return buildFloorplanEntry(applyFloorplanLiveTransform(node, movingLiveTransform), nodes, {
+      selected: selectedIdSet.has(movingNodeId),
+      highlighted: highlightedIdSet.has(movingNodeId),
+      hovered: hoveredId === movingNodeId,
+      moving: true,
+      palette: renderCtx?.palette,
+    })
+  }, [
+    movingNodeId,
+    movingLiveTransform,
+    nodes,
+    selectedIdSet,
+    highlightedIdSet,
+    hoveredId,
+    renderCtx?.palette,
+  ])
+
+  const displayEntries = useMemo(
+    () => mergeMovingEntry(entries, movingEntry),
+    [entries, movingEntry],
+  )
+
   const startAffordanceDrag = useCallback(
     (
       nodeId: AnyNodeId,
@@ -498,7 +557,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     }
   }, [])
 
-  if (entries.length === 0) return null
+  if (displayEntries.length === 0) return null
 
   const unitsPerPixel = renderCtx?.unitsPerPixel ?? 1
   const palette = renderCtx?.palette
@@ -572,7 +631,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           higher-rank kinds (slabs, then walls / items / shelves) layer
           on top in the expected document-order z-stack. */}
       <g className="floorplan-registry-base">
-        {entries.map(({ id, base }) => (base ? renderEntry(id, base, `base-${id}`) : null))}
+        {displayEntries.map(({ id, base }) => (base ? renderEntry(id, base, `base-${id}`) : null))}
       </g>
       {/* Overlay pass — interactive handles (vertex / midpoint / edge /
           move) and labels (text / dimensions). Painted after every base
@@ -582,7 +641,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           still routes through the same selection-handling `<g>` so a
           click on a zone's name selects the zone. */}
       <g className="floorplan-registry-overlay">
-        {entries.map(({ id, overlay }) =>
+        {displayEntries.map(({ id, overlay }) =>
           overlay ? renderEntry(id, overlay, `overlay-${id}`) : null,
         )}
       </g>

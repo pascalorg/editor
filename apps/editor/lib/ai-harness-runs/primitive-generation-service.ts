@@ -43,6 +43,9 @@ export type PrimitiveGeometryGenerationPayload = {
   lastContent?: string
   artifact?: GeneratedGeometryArtifact
   deviceProfileCandidate?: unknown
+  needsResourceSelection?: boolean
+  resourceSelection?: unknown
+  selectedProfile?: unknown
   metrics: Record<string, unknown>
   profileSources?: unknown
   sourceTool?: string
@@ -320,6 +323,9 @@ export function extractPrimitiveGeometryGenerationPayload(
     lastContent: typeof value.lastContent === 'string' ? value.lastContent : undefined,
     artifact,
     deviceProfileCandidate: value.deviceProfileCandidate,
+    needsResourceSelection: value.needsResourceSelection === true,
+    resourceSelection: value.resourceSelection,
+    selectedProfile: value.selectedProfile,
     metrics,
     profileSources: value.profileSources,
     sourceTool: typeof value.sourceTool === 'string' ? value.sourceTool : artifact?.sourceTool,

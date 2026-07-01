@@ -11,6 +11,9 @@ type ColorAlphaFieldProps = {
   opacityStep?: number
 }
 
+export const THIN_RANGE_INPUT_CLASS =
+  'h-3 min-w-0 flex-1 cursor-pointer appearance-none bg-transparent accent-violet-400 [&::-moz-range-progress]:h-0.5 [&::-moz-range-progress]:rounded-full [&::-moz-range-progress]:bg-violet-400 [&::-moz-range-thumb]:h-2.5 [&::-moz-range-thumb]:w-2.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-violet-400 [&::-moz-range-track]:h-0.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-white/20 [&::-webkit-slider-runnable-track]:h-0.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white/20 [&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-violet-400'
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
@@ -57,7 +60,7 @@ export function ColorAlphaField({
         <div className="mt-2 flex items-center gap-2">
           <span className="w-12 shrink-0 text-muted-foreground text-[11px]">{'\u900f\u660e\u5ea6'}</span>
           <input
-            className="h-1.5 min-w-0 flex-1 accent-violet-400"
+            className={THIN_RANGE_INPUT_CLASS}
             max={opacityMax}
             min={opacityMin}
             onChange={(event) => {

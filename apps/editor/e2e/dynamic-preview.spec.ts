@@ -1140,10 +1140,11 @@ test('data widget renders websocket values from the shared live data store', asy
                 __pascalFactoryE2e?: FactoryE2eBridge
               }
             ).__pascalFactoryE2e
+            const nodes = bridge?.sceneNodes() as Record<string, SceneNode> | undefined
             return {
-              badge: bridge?.sceneNodes()[nodeIds.dataWidget]?.dataKey,
-              card: bridge?.sceneNodes()[nodeIds.dataWidgetCard]?.dataKey,
-              chart: bridge?.sceneNodes()[nodeIds.dataWidgetChart]?.dataKey,
+              badge: nodes?.[nodeIds.dataWidget]?.dataKey,
+              card: nodes?.[nodeIds.dataWidgetCard]?.dataKey,
+              chart: nodes?.[nodeIds.dataWidgetChart]?.dataKey,
             }
           }, ids),
         { timeout: 10_000 },
@@ -1956,6 +1957,15 @@ test('industrial specialty dynamics expose scoped options and run in preview', a
               materialColors?: Array<{ color: string | null }>
               flowArrowCount?: number
               flowArrowPositions?: Array<[number, number, number]>
+              flowFill?: {
+                position: [number, number, number]
+                scale: [number, number, number]
+                visible: boolean
+                bounds?: {
+                  min: [number, number, number]
+                  max: [number, number, number]
+                }
+              } | null
               levelFill?: {
                 position: [number, number, number]
                 scale: [number, number, number]

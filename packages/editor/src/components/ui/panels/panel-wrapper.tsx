@@ -25,6 +25,7 @@ interface PanelWrapperProps {
   onBack?: () => void
   children: React.ReactNode
   className?: string
+  showDynamicTab?: boolean
   width?: number | string
 }
 
@@ -36,6 +37,7 @@ export function PanelWrapper({
   onBack,
   children,
   className,
+  showDynamicTab = true,
   width = 320, // default width
 }: PanelWrapperProps) {
   const isMobile = useIsMobile()
@@ -58,6 +60,12 @@ export function PanelWrapper({
     setInspectorTab('basic')
   }, [resetKey])
 
+  useEffect(() => {
+    if (!showDynamicTab && inspectorTab === 'dynamic') {
+      setInspectorTab('basic')
+    }
+  }, [inspectorTab, showDynamicTab])
+
   const toggleInspectorSectionsPinned = () => {
     setInspectorSectionsPinned((current) => {
       const next = !current
@@ -65,7 +73,6 @@ export function PanelWrapper({
       return next
     })
   }
-
   return (
     <div
       className={cn(
@@ -160,11 +167,14 @@ export function PanelWrapper({
       )}
 
       <div className="bg-sidebar/70">
-        <div className="grid w-full grid-cols-2 bg-[#1F1F21]">
+        <div
+          className={cn('grid w-full bg-[#1F1F21]', showDynamicTab ? 'grid-cols-2' : 'grid-cols-1')}
+        >
           {[
             { key: 'basic' as const, label: '基础' },
             { key: 'dynamic' as const, label: '动态' },
           ].map((tab) => {
+            if (!showDynamicTab && tab.key === 'dynamic') return null
             const active = inspectorTab === tab.key
             return (
               <button

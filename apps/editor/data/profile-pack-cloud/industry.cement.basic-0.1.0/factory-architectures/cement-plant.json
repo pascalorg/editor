@@ -150,7 +150,7 @@
       "displayLabel": "辅助系统",
       "order": 90,
       "stationIds": [
-        "mcc_control"
+        "control_room"
       ]
     }
   ],
@@ -166,7 +166,7 @@
       "process_stack",
       "sp_boiler",
       "aqc_boiler",
-      "mcc_control"
+      "control_room"
     ],
     "omitPerimeterWalls": true,
     "scale": "conceptual",

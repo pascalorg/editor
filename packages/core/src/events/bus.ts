@@ -43,6 +43,7 @@ import type {
   StairNode,
   StairSegmentNode,
   SteelBeamNode,
+  SteelFrameNode,
   SweepNode,
   TankNode,
   TorusNode,
@@ -136,6 +137,7 @@ export type LadderEvent = NodeEvent<LadderNode>
 export type ScanEvent = NodeEvent<ScanNode>
 export type GuideEvent = NodeEvent<GuideNode>
 export type SteelBeamEvent = NodeEvent<SteelBeamNode>
+export type SteelFrameEvent = NodeEvent<SteelFrameNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -294,6 +296,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'stair', StairEvent> &
   NodeEvents<'stair-segment', StairSegmentEvent> &
   NodeEvents<'steel-beam', SteelBeamEvent> &
+  NodeEvents<'steel-frame', SteelFrameEvent> &
   NodeEvents<'window', WindowEvent> &
   NodeEvents<'door', DoorEvent> &
   NodeEvents<'scan', ScanEvent> &

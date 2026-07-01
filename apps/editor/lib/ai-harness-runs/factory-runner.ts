@@ -159,6 +159,113 @@ function sceneBoundsFromContext(context: Record<string, unknown>) {
   return undefined
 }
 
+function sitePlacementFromContext(context: Record<string, unknown>) {
+  const scene = isRecord(context.scene) ? context.scene : undefined
+  const candidates = [context.site, scene?.site]
+  for (const candidate of candidates) {
+    if (!isRecord(candidate)) continue
+    const bounds = sceneBoundsFromContext({ sceneBounds: candidate.bounds })
+    if (!bounds) continue
+    const siteId = stringValue(candidate.id)
+    return {
+      ...(siteId ? { siteId } : {}),
+      siteBounds: bounds,
+      siteIsDefault: candidate.isDefault === true,
+    }
+  }
+  return undefined
+}
+
+function polygonBounds(points: unknown) {
+  if (!Array.isArray(points)) return undefined
+  let minX = Number.POSITIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  let hasPoint = false
+  for (const point of points) {
+    const parsed = finiteVec2(point)
+    if (!parsed) continue
+    minX = Math.min(minX, parsed[0])
+    maxX = Math.max(maxX, parsed[0])
+    minZ = Math.min(minZ, parsed[1])
+    maxZ = Math.max(maxZ, parsed[1])
+    hasPoint = true
+  }
+  if (!hasPoint) return undefined
+  return { minX, minZ, maxX, maxZ }
+}
+
+function containsBounds(
+  outer: { min: [number, number]; max: [number, number] },
+  inner: { minX: number; minZ: number; maxX: number; maxZ: number },
+) {
+  return (
+    outer.min[0] <= inner.minX &&
+    outer.min[1] <= inner.minZ &&
+    outer.max[0] >= inner.maxX &&
+    outer.max[1] >= inner.maxZ
+  )
+}
+
+function defaultSiteExpansionPatch(
+  patches: FactoryScenePatch[],
+  placement: GeneratedGeometryPlacementSpec,
+): FactorySceneEditPatch | undefined {
+  const metadata = placement.metadata ?? {}
+  if (metadata.siteIsDefault !== true || typeof metadata.siteId !== 'string') return undefined
+  const layoutZone = patches.find(
+    (patch) =>
+      patch.op === 'create' &&
+      patch.node.type === 'zone' &&
+      isRecord(patch.node.metadata) &&
+      patch.node.metadata.role === 'layout-zone' &&
+      'polygon' in patch.node,
+  )
+  const bounds =
+    layoutZone?.op === 'create' && 'polygon' in layoutZone.node
+      ? polygonBounds(layoutZone.node.polygon)
+      : undefined
+  if (!bounds) return undefined
+  const margin = 4
+  const expanded = {
+    minX: bounds.minX - margin,
+    minZ: bounds.minZ - margin,
+    maxX: bounds.maxX + margin,
+    maxZ: bounds.maxZ + margin,
+  }
+  const siteBounds = isRecord(metadata.siteBounds)
+    ? sceneBoundsFromContext({ sceneBounds: metadata.siteBounds })
+    : undefined
+  if (siteBounds && containsBounds(siteBounds, expanded)) return undefined
+  return {
+    op: 'update',
+    id: metadata.siteId,
+    data: {
+      polygon: {
+        type: 'polygon',
+        points: [
+          [expanded.minX, expanded.minZ],
+          [expanded.maxX, expanded.minZ],
+          [expanded.maxX, expanded.maxZ],
+          [expanded.minX, expanded.maxZ],
+        ],
+      },
+    },
+  }
+}
+
+function withDefaultSiteExpansion(result: FactoryRunResult): FactoryRunResult {
+  const patch = defaultSiteExpansionPatch(result.patches, result.placement)
+  if (!patch) return result
+  return {
+    ...result,
+    patches: [...result.patches, patch],
+    nodeIds: [...result.nodeIds, patch.op === 'create' ? patch.node.id : patch.id],
+    created: [...result.created, 'Site boundary expanded'],
+  }
+}
+
 export function buildFactoryGeometryPrompt(prompt: string, params?: Record<string, unknown>) {
   const equipmentName = stringValue(params?.equipmentName)
   const lineRole = stringValue(params?.lineRole)
@@ -185,6 +292,7 @@ export function buildFactoryPlacementSpec(input: {
   const lineRole = stringValue(params.lineRole) ?? stringValue(context.lineRole)
   const equipmentRole = stringValue(params.equipmentRole) ?? stringValue(context.equipmentRole)
   const sceneBounds = sceneBoundsFromContext(context)
+  const sitePlacement = sitePlacementFromContext(context)
   return {
     ...(parentId ? { parentId } : {}),
     position: vec3Value(params.position) ?? vec3Value(context.position),
@@ -196,6 +304,7 @@ export function buildFactoryPlacementSpec(input: {
       ...(equipmentRole ? { equipmentRole } : {}),
       ...(buildingId ? { buildingId } : {}),
       ...(sceneBounds ? { sceneBounds } : {}),
+      ...(sitePlacement ?? {}),
     },
   }
 }
@@ -264,17 +373,19 @@ export function buildFactoryRunResultFromPlan(input: {
       placement,
       params: input.params,
     })
-    return withFactoryQuality({
-      intent: { action: 'layout_plan', prompt },
-      applied: false,
-      plan,
-      plannerSource,
-      patches: layoutPatchPlan.patches,
-      nodeIds: layoutPatchPlan.nodeIds,
-      created: layoutPatchPlan.created,
-      missingAssets: layoutPatchPlan.missingAssets,
-      placement,
-    })
+    return withFactoryQuality(
+      withDefaultSiteExpansion({
+        intent: { action: 'layout_plan', prompt },
+        applied: false,
+        plan,
+        plannerSource,
+        patches: layoutPatchPlan.patches,
+        nodeIds: layoutPatchPlan.nodeIds,
+        created: layoutPatchPlan.created,
+        missingAssets: layoutPatchPlan.missingAssets,
+        placement,
+      }),
+    )
   }
 
   if (plan.kind === 'process_line') {
@@ -284,18 +395,20 @@ export function buildFactoryRunResultFromPlan(input: {
       placement,
       params: input.params,
     })
-    return withFactoryQuality({
-      intent: { action: 'process_line_plan', prompt },
-      applied: false,
-      plan,
-      plannerSource,
-      patches: processPlan.patches,
-      nodeIds: processPlan.nodeIds,
-      created: processPlan.created,
-      missingAssets: processPlan.missingAssets,
-      focusBounds: processPlan.focusBounds,
-      placement,
-    })
+    return withFactoryQuality(
+      withDefaultSiteExpansion({
+        intent: { action: 'process_line_plan', prompt },
+        applied: false,
+        plan,
+        plannerSource,
+        patches: processPlan.patches,
+        nodeIds: processPlan.nodeIds,
+        created: processPlan.created,
+        missingAssets: processPlan.missingAssets,
+        focusBounds: processPlan.focusBounds,
+        placement,
+      }),
+    )
   }
 
   if (plan.kind === 'catalog_item') {
@@ -811,22 +924,24 @@ export async function buildFactoryRunResultFromProcessLine(input: {
     required: false,
   }))
 
-  return withFactoryQuality({
-    intent: { action: 'process_line_plan', prompt: input.prompt },
-    applied: false,
-    plan: input.plan,
-    plannerSource: input.plannerSource,
-    patches: [...processPlan.patches, ...primitivePatches, ...connectionPlan.patches],
-    nodeIds: [...processPlan.nodeIds, ...primitiveNodeIds, ...connectionPlan.nodeIds],
-    created: [...processPlan.created, ...primitiveCreated, ...connectionPlan.created],
-    missingAssets,
-    focusBounds: processPlan.focusBounds,
-    layoutDiagnostics: processPlan.layoutDiagnostics,
-    layoutStrategy: processPlan.layoutStrategy,
-    geometryRunId: lastGeometryRunId,
-    geometryStatus: lastGeometryStatus,
-    placement: input.placement,
-  })
+  return withFactoryQuality(
+    withDefaultSiteExpansion({
+      intent: { action: 'process_line_plan', prompt: input.prompt },
+      applied: false,
+      plan: input.plan,
+      plannerSource: input.plannerSource,
+      patches: [...processPlan.patches, ...primitivePatches, ...connectionPlan.patches],
+      nodeIds: [...processPlan.nodeIds, ...primitiveNodeIds, ...connectionPlan.nodeIds],
+      created: [...processPlan.created, ...primitiveCreated, ...connectionPlan.created],
+      missingAssets,
+      focusBounds: processPlan.focusBounds,
+      layoutDiagnostics: processPlan.layoutDiagnostics,
+      layoutStrategy: processPlan.layoutStrategy,
+      geometryRunId: lastGeometryRunId,
+      geometryStatus: lastGeometryStatus,
+      placement: input.placement,
+    }),
+  )
 }
 
 async function markRunCancelled(runId: string, message = 'cancelled') {

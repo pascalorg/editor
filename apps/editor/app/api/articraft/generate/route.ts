@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { type NextRequest, NextResponse } from 'next/server'
+import { resolveArticraftMaxTurns } from '@/lib/ai-harness-runs/articraft-turn-budget'
 import { generateModel } from '../../../../../../packages/articraft-bridge/src/cli'
 
 export const runtime = 'nodejs'
@@ -10,14 +11,6 @@ export const dynamic = 'force-dynamic'
 
 function compactLogMessage(message: string) {
   return message.replace(/\s+/g, ' ').trim().slice(0, 700)
-}
-
-function positiveIntEnv(...names: string[]) {
-  for (const name of names) {
-    const value = Number.parseInt(process.env[name] ?? '', 10)
-    if (Number.isFinite(value) && value > 0) return value
-  }
-  return undefined
 }
 
 function parseReferenceImage(value: unknown): { buffer: Buffer; ext: string } | null {
@@ -43,7 +36,7 @@ async function writeReferenceImage(value: unknown) {
 }
 
 export async function POST(req: NextRequest) {
-  let body: { prompt?: string; mode?: 'articulated' | 'static'; image?: unknown }
+  let body: { prompt?: string; mode?: 'articulated' | 'static'; image?: unknown; maxTurns?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -62,7 +55,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Invalid reference image' }, { status: 400 })
   }
-  const maxTurns = positiveIntEnv('ARTICRAFT_AI_MAX_TURNS', 'ARTICRAFT_MAX_TURNS')
+  const maxTurns = resolveArticraftMaxTurns(prompt, body.maxTurns)
   const startedAt = Date.now()
   console.log(
     `[articraft/generate] start mode=${mode} image=${imagePath ? 'yes' : 'no'} max_turns=${maxTurns ?? 'default'} prompt="${compactLogMessage(prompt).slice(0, 120)}"`,

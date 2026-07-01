@@ -1837,14 +1837,25 @@
         "kind": "pipe_manifold",
         "semanticRole": "main_pipe_header",
         "length": 10,
-        "count": 6
+        "radius": 0.065,
+        "count": 6,
+        "position": [
+          0,
+          2.15,
+          0.28
+        ]
       },
       {
         "kind": "pipe_run",
         "semanticRole": "parallel_pipe_run",
         "length": 10,
         "radius": 0.055,
-        "axis": "x"
+        "axis": "x",
+        "position": [
+          0,
+          1.35,
+          -0.28
+        ]
       },
       {
         "kind": "structural_tower_frame",
@@ -1857,7 +1868,12 @@
     "qualityRules": "quality.refinery.pipe_rack",
     "status": "stable",
     "source": "imported_pack",
-    "description": "炼油厂主流程侧边管廊。"
+    "description": "炼油厂主流程侧边管廊，主管线布置在管廊中层和上层，而不是贴地穿过支架底部。",
+    "visualCues": [
+      "elevated main pipe header on the upper rack tier",
+      "parallel process pipe run on the middle rack tier",
+      "open steel support frame keeps the ground bay clear"
+    ]
   },
   {
     "id": "refinery.utility_boiler",
@@ -1873,40 +1889,164 @@
     "preferredResolver": "profile-parts",
     "family": "generic",
     "defaultDimensions": {
-      "length": 4.6,
-      "width": 2.6,
-      "height": 4.2
+      "length": 4.2,
+      "width": 2.3,
+      "height": 3.6
     },
     "parts": [
       {
         "kind": "generic_body",
-        "semanticRole": "boiler_body"
+        "semanticRole": "boiler_body",
+        "length": 3.8,
+        "width": 1.35,
+        "height": 1.55,
+        "position": [
+          0,
+          0.78,
+          0
+        ],
+        "primaryColor": "#9ca3af",
+        "cornerRadius": 0.08
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "steam_drum",
+        "length": 3.25,
+        "radius": 0.26,
+        "axis": "x",
+        "position": [
+          0,
+          1.9,
+          0
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "mud_drum",
+        "length": 3.05,
+        "radius": 0.16,
+        "axis": "x",
+        "position": [
+          0,
+          0.52,
+          -0.08
+        ],
+        "primaryColor": "#94a3b8"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "boiler_tube_bank",
+        "length": 3.15,
+        "radius": 0.048,
+        "count": 7,
+        "position": [
+          0,
+          1.18,
+          0.78
+        ]
       },
       {
         "kind": "chimney_stack",
         "semanticRole": "boiler_stack",
-        "height": 4.2,
-        "radius": 0.22,
+        "height": 3.6,
+        "radius": 0.18,
         "position": [
-          0,
-          2.1,
-          0
-        ]
+          1.55,
+          1.8,
+          -0.88
+        ],
+        "warningStripes": true
       },
       {
         "kind": "pipe_manifold",
-        "semanticRole": "steam_header"
+        "semanticRole": "steam_header",
+        "length": 3.5,
+        "radius": 0.055,
+        "count": 3,
+        "position": [
+          0,
+          2.24,
+          0.1
+        ]
+      },
+      {
+        "kind": "generic_opening",
+        "semanticRole": "burner_front",
+        "length": 0.9,
+        "height": 0.58,
+        "position": [
+          -1.15,
+          0.82,
+          0.72
+        ],
+        "color": "#111827"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "burner_windbox",
+        "length": 0.95,
+        "width": 0.42,
+        "height": 0.62,
+        "position": [
+          -1.15,
+          0.82,
+          1.02
+        ],
+        "primaryColor": "#475569",
+        "cornerRadius": 0.04
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "fuel_gas_train",
+        "length": 1.3,
+        "radius": 0.045,
+        "axis": "x",
+        "position": [
+          -1.15,
+          0.86,
+          1.34
+        ]
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "boiler_access_platform",
+        "length": 3.1,
+        "width": 0.68,
+        "height": 1.55,
+        "overallHeight": 0.65,
+        "position": [
+          0.2,
+          1.55,
+          -1
+        ]
       },
       {
         "kind": "control_box",
-        "semanticRole": "boiler_control_box"
+        "semanticRole": "boiler_control_box",
+        "length": 0.64,
+        "width": 0.24,
+        "height": 0.86,
+        "position": [
+          1.55,
+          0.62,
+          0.95
+        ]
       }
     ],
     "primarySemanticRole": "boiler_body",
     "qualityRules": "quality.refinery.utility_boiler",
     "status": "stable",
     "source": "imported_pack",
-    "description": "炼油厂公用工程锅炉和蒸汽总管。"
+    "description": "炼油厂公用工程锅炉和蒸汽总管。",
+    "visualCues": [
+      "packaged rectangular furnace casing",
+      "visible horizontal steam drum",
+      "lower mud drum below the tube bank",
+      "front tube bank and burner opening",
+      "striped stack",
+      "service platform and control box"
+    ]
   },
   {
     "id": "refinery.control_room",
@@ -1918,8 +2058,8 @@
       "control room"
     ],
     "industry": "refinery",
-    "layoutFamily": "generic_industrial_layout",
-    "preferredResolver": "catalog-item",
+    "layoutFamily": "box_enclosure_layout",
+    "preferredResolver": "profile-parts",
     "family": "generic",
     "defaultDimensions": {
       "length": 4.6,
@@ -1928,19 +2068,179 @@
     },
     "parts": [
       {
-        "kind": "generic_body",
-        "semanticRole": "control_room_body"
+        "kind": "generic_base",
+        "semanticRole": "control_room_floor_slab",
+        "length": 4,
+        "width": 2.4,
+        "height": 0.12,
+        "position": [
+          0,
+          0.06,
+          0
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "control_room_front_wall",
+        "length": 3.8,
+        "height": 1.8,
+        "thickness": 0.08,
+        "position": [
+          0,
+          1,
+          1.12
+        ],
+        "accentColor": "#d1d5db",
+        "cornerRadius": 0.02
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "control_room_back_wall",
+        "length": 3.8,
+        "height": 1.8,
+        "thickness": 0.08,
+        "position": [
+          0,
+          1,
+          -1.12
+        ],
+        "accentColor": "#d1d5db",
+        "cornerRadius": 0.02
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "control_room_left_wall",
+        "length": 2.2,
+        "height": 1.8,
+        "thickness": 0.08,
+        "position": [
+          -1.92,
+          1,
+          0
+        ],
+        "rotation": [
+          0,
+          1.5707963267948966,
+          0
+        ],
+        "accentColor": "#d1d5db",
+        "cornerRadius": 0.02
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "control_room_right_wall",
+        "length": 2.2,
+        "height": 1.8,
+        "thickness": 0.08,
+        "position": [
+          1.92,
+          1,
+          0
+        ],
+        "rotation": [
+          0,
+          1.5707963267948966,
+          0
+        ],
+        "accentColor": "#d1d5db",
+        "cornerRadius": 0.02
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "control_room_flat_roof",
+        "length": 4,
+        "height": 2.5,
+        "thickness": 0.14,
+        "position": [
+          0,
+          1.94,
+          0
+        ],
+        "rotation": [
+          1.5707963267948966,
+          0,
+          0
+        ],
+        "accentColor": "#94a3b8",
+        "cornerRadius": 0.03
+      },
+      {
+        "kind": "generic_opening",
+        "semanticRole": "blast_door",
+        "length": 0.78,
+        "height": 1.35,
+        "position": [
+          -1.15,
+          0.78,
+          1.17
+        ]
+      },
+      {
+        "kind": "generic_detail_accent",
+        "semanticRole": "control_room_window",
+        "length": 0.92,
+        "height": 0.42,
+        "position": [
+          0.45,
+          1.28,
+          1.17
+        ],
+        "accentColor": "#88c0d0",
+        "opacity": 0.42
+      },
+      {
+        "kind": "generic_detail_accent",
+        "semanticRole": "side_observation_window",
+        "length": 0.72,
+        "height": 0.38,
+        "position": [
+          1.97,
+          1.24,
+          0.3
+        ],
+        "rotation": [
+          0,
+          1.5707963267948966,
+          0
+        ],
+        "accentColor": "#88c0d0",
+        "opacity": 0.38
       },
       {
         "kind": "control_box",
-        "semanticRole": "mcc_panel"
+        "semanticRole": "mcc_panel",
+        "position": [
+          1.2,
+          0.75,
+          -0.95
+        ]
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "cable_tray_entry",
+        "length": 1.8,
+        "radius": 0.035,
+        "axis": "x",
+        "position": [
+          0,
+          0.42,
+          -1.35
+        ]
       }
     ],
-    "primarySemanticRole": "control_room_body",
+    "primarySemanticRole": "control_room_front_wall",
     "qualityRules": "quality.refinery.control_room",
     "status": "stable",
     "source": "imported_pack",
-    "description": "炼油厂中控室和电气控制柜区域。"
+    "description": "炼油厂中控室和电气控制柜区域。",
+    "visualCues": [
+      "small control-room building assembled from separate wall panels and a flat roof",
+      "front wall with blast door and blue observation window",
+      "side observation window facing process units",
+      "floor slab, four walls, and roof read as a small house rather than one equipment box",
+      "MCC panel and cable-tray entry remain visible"
+    ]
   },
   {
     "id": "refinery.gas_fractionation_unit",

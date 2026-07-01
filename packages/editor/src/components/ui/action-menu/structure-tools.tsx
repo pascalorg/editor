@@ -28,11 +28,10 @@ export const tools: ToolConfig[] = [
   { id: 'ceiling', iconSrc: '/icons/ceiling.webp', label: 'Ceiling' },
   { id: 'zone', iconSrc: '/icons/zone.webp', label: 'Zone' },
   { id: 'spawn', iconSrc: '/icons/site.webp', label: 'Spawn Point' },
-  { id: 'shelf', iconSrc: '/icons/shelf.webp', label: 'Shelf' },
 ]
 
 export const dataTools: ToolConfig[] = [
-  { id: 'data-widget', iconSrc: '/icons/data-widget.svg', label: 'Data Widget' },
+  { id: 'data-widget', iconSrc: '/icons/data-widget.svg', label: '\u5355\u6807\u7b7e' },
   { id: 'data-chart', iconSrc: '/icons/data-chart.svg', label: '图表' },
   { id: 'data-table', iconSrc: '/icons/data-table.svg', label: '列表' },
 ]
@@ -44,6 +43,8 @@ export const industrialTools: ToolConfig[] = [
   { id: 'pipe-fitting', iconSrc: '/icons/pipe-fitting.svg', label: 'Pipe fitting' },
   { id: 'cable-tray', iconSrc: '/icons/pipe.svg', label: 'Cable tray' },
   { id: 'steel-beam', iconSrc: '/icons/column.webp', label: 'Steel beam' },
+  { id: 'steel-frame', iconSrc: '/icons/column.webp', label: '\u94a2\u67b6' },
+  { id: 'shelf', iconSrc: '/icons/shelf.webp', label: '\u8d27\u67b6' },
 ]
 
 
@@ -62,6 +63,7 @@ const STRUCTURE_TOOL_KEYS: Partial<Record<StructureTool, string>> = {
   'cable-tray': 'cableTray',
   ladder: 'ladder',
   'steel-beam': 'steelBeam',
+  'steel-frame': 'steelFrame',
   column: 'column',
   elevator: 'elevator',
   slab: 'slab',

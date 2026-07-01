@@ -1,15 +1,10 @@
 'use client'
 
-import {
-  type AnyNode,
-  type DataChartNode,
-  formatStaticLiveDataValue,
-  STATIC_LIVE_DATA_OPTIONS,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNode, type DataChartNode, useLiveData, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  ColorAlphaField,
   MetricControl,
   PanelSection,
   PanelWrapper,
@@ -20,17 +15,28 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Plus, Trash2, X } from 'lucide-react'
 import { useCallback } from 'react'
+import { formatLiveDataPathOption } from '../shared/live-data-format'
 
-function DataKeySelect({ onChange, value }: { onChange: (value: string) => void; value: string }) {
+function DataKeySelect({
+  onChange,
+  options,
+  value,
+  values,
+}: {
+  onChange: (value: string) => void
+  options: ReturnType<typeof useLiveData.getState>['paths']
+  value: string
+  values: ReturnType<typeof useLiveData.getState>['values']
+}) {
   return (
     <select
-      className="h-8 min-w-0 flex-1 rounded-md border border-border/50 bg-[#2C2C2E] px-2 text-foreground"
+      className="h-9 w-full min-w-0 flex-1 rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-foreground text-xs"
       onChange={(event) => onChange(event.target.value)}
       value={value}
     >
-      {STATIC_LIVE_DATA_OPTIONS.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label} ({formatStaticLiveDataValue(option.value)})
+      {options.map((option) => (
+        <option key={option.path} value={option.path}>
+          {formatLiveDataPathOption(options, values, option.path)}
         </option>
       ))}
     </select>
@@ -43,6 +49,8 @@ export default function DataChartPanel() {
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
+  const paths = useLiveData((s) => s.paths)
+  const values = useLiveData((s) => s.values)
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as DataChartNode | undefined) : undefined,
   )
@@ -70,11 +78,11 @@ export default function DataChartPanel() {
   const handleAddKey = useCallback(() => {
     if (!node) return
     const nextKey =
-      STATIC_LIVE_DATA_OPTIONS.find((option) => !node.dataKeys.includes(option.value))?.value ??
-      STATIC_LIVE_DATA_OPTIONS[0]?.value ??
+      paths.find((option) => !node.dataKeys.includes(option.path))?.path ??
+      paths[0]?.path ??
       'machine.temperature'
     handleUpdate({ dataKeys: [...node.dataKeys, nextKey].slice(0, 8) })
-  }, [handleUpdate, node])
+  }, [handleUpdate, node, paths])
 
   const handleRemoveKey = useCallback(
     (index: number) => {
@@ -92,6 +100,12 @@ export default function DataChartPanel() {
   }, [deleteNode, selectedId, setSelection])
 
   if (!(node && node.type === 'data-chart' && selectedId && selectedCount === 1)) return null
+  const pathOptions = [
+    ...node.dataKeys
+      .filter((dataKey) => !paths.some((path) => path.path === dataKey))
+      .map((dataKey) => ({ path: dataKey, label: dataKey, valueType: 'string' as const })),
+    ...paths,
+  ]
 
   return (
     <PanelWrapper
@@ -125,11 +139,13 @@ export default function DataChartPanel() {
             <div className="flex items-center gap-2" key={`${index}:${dataKey}`}>
               <DataKeySelect
                 value={dataKey}
+                options={pathOptions}
+                values={values}
                 onChange={(value) => handleDataKeyChange(index, value)}
               />
               <button
                 aria-label="移除数据"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-white/10 hover:text-foreground disabled:opacity-40"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground disabled:opacity-40"
                 disabled={node.dataKeys.length <= 1}
                 onClick={() => handleRemoveKey(index)}
                 type="button"
@@ -158,9 +174,16 @@ export default function DataChartPanel() {
           unit="px"
           value={node.fontSize}
         />
-        <div className="grid grid-cols-3 gap-2">
+        <ColorAlphaField
+          label={'\u80cc\u666f'}
+          opacity={node.backgroundOpacity ?? 1}
+          value={node.background ?? '#111827'}
+          onColorChange={(background) => handleUpdate({ background })}
+          onOpacityChange={(backgroundOpacity) => handleUpdate({ backgroundOpacity })}
+        />
+        <div className="grid grid-cols-2 gap-2">
           <label className="flex flex-col gap-1 text-muted-foreground text-xs">
-            文字
+            {'\u6587\u5b57'}
             <input
               type="color"
               value={node.foreground}
@@ -168,15 +191,7 @@ export default function DataChartPanel() {
             />
           </label>
           <label className="flex flex-col gap-1 text-muted-foreground text-xs">
-            背景
-            <input
-              type="color"
-              value={node.background}
-              onChange={(event) => handleUpdate({ background: event.target.value })}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-muted-foreground text-xs">
-            强调
+            {'\u5f3a\u8c03'}
             <input
               type="color"
               value={node.accent}

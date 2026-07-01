@@ -4,15 +4,15 @@ import '../../../three-types'
 
 import {
   type AnyNodeId,
-  type ItemNode,
-  type WallNode,
   emitter,
   getScaledDimensions,
+  type ItemNode,
   isCurvedWall,
   resolveLevelId,
   sceneRegistry,
   spatialGridManager,
   useScene,
+  type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -65,6 +65,29 @@ function buildingLocalToParentLocal(
   return parentMesh.worldToLocal(world)
 }
 
+function parentLocalToBuildingLocal(
+  parentId: AnyNodeId | null | undefined,
+  parentLocal: [number, number, number],
+): Vector3 {
+  const buildingId = useViewer.getState().selection.buildingId
+  const buildingMesh = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
+  const local = new Vector3(...parentLocal)
+  const parentMesh = parentId ? sceneRegistry.nodes.get(parentId) : null
+  const world = parentMesh ? parentMesh.localToWorld(local) : local
+  return buildingMesh ? buildingMesh.worldToLocal(world) : world
+}
+
+function applyDragOffset(
+  localPosition: [number, number, number],
+  offset: [number, number, number],
+): [number, number, number] {
+  return [
+    localPosition[0] + offset[0],
+    localPosition[1] + offset[1],
+    localPosition[2] + offset[2],
+  ]
+}
+
 function computeWallLocalPosition(
   wall: WallNode,
   node: ItemNode,
@@ -108,7 +131,13 @@ function computeDragPosition(
 
   if (attachTo === 'wall' || attachTo === 'wall-side') {
     if (parent?.type === 'wall') {
-      return computeWallLocalPosition(parent as WallNode, node, buildingLocal[0], buildingLocal[2], preserveY)
+      return computeWallLocalPosition(
+        parent as WallNode,
+        node,
+        buildingLocal[0],
+        buildingLocal[2],
+        preserveY,
+      )
     }
     return [node.position[0], preserveY, node.position[2]]
   }
@@ -184,10 +213,7 @@ function restoreMeshPreview(node: ItemNode, position: [number, number, number]) 
  * the inspector panel. Does not reparent or switch attach surfaces.
  */
 export function MovePlanItemTool({ node }: { node: ItemNode }) {
-  const originalPosition = useMemo(
-    () => [...node.position] as [number, number, number],
-    [node],
-  )
+  const originalPosition = useMemo(() => [...node.position] as [number, number, number], [node])
   const originalRotationY = node.rotation[1]
   const lastPositionRef = useRef<[number, number, number]>(originalPosition)
 
@@ -198,6 +224,8 @@ export function MovePlanItemTool({ node }: { node: ItemNode }) {
   useEffect(() => {
     if (useEditor.getState().isFloorplanHovered) return
 
+    const previousInputDragging = useViewer.getState().inputDragging
+    useViewer.getState().setInputDragging(true)
     useScene.temporal.getState().pause()
     let committed = false
     const meshYCache = new Map<string, number>()
@@ -227,8 +255,25 @@ export function MovePlanItemTool({ node }: { node: ItemNode }) {
       applyMeshPreview(node, position, originalRotationY, resolveMeshY)
     }
 
+    const initialCursor = lastGridMoveRef.localPosition
+    const originalBuildingLocal = parentLocalToBuildingLocal(
+      node.parentId as AnyNodeId | null | undefined,
+      originalPosition,
+    )
+    const dragOffset: [number, number, number] = initialCursor
+      ? [
+          originalBuildingLocal.x - initialCursor[0],
+          originalBuildingLocal.y - initialCursor[1],
+          originalBuildingLocal.z - initialCursor[2],
+        ]
+      : [0, 0, 0]
+
     const onGridMove = (event: { localPosition: [number, number, number] }) => {
-      const position = computeDragPosition(node, event.localPosition, originalPosition[1])
+      const position = computeDragPosition(
+        node,
+        applyDragOffset(event.localPosition, dragOffset),
+        originalPosition[1],
+      )
       applyPosition(position)
     }
 
@@ -282,6 +327,7 @@ export function MovePlanItemTool({ node }: { node: ItemNode }) {
       emitter.off('grid:move', onGridMove)
       window.removeEventListener('pointerup', onPointerUp)
       emitter.off('tool:cancel', onCancel)
+      useViewer.getState().setInputDragging(previousInputDragging)
       for (const restore of restoreRaycasts) restore()
       if (!committed) {
         restoreMeshPreview(node, originalPosition)

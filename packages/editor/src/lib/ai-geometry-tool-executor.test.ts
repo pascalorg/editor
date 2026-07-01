@@ -1004,6 +1004,455 @@ describe('AI geometry tool executor', () => {
     expect(sphere).toMatchObject({ kind: 'sphere', radius: 0.5, position: [0, 0.5, 0] })
   })
 
+  test('repairs LLM primitive curve attachments and lathe object profiles', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        requiredRoles: ['straight_pole', 'curved_pole_top', 'circular_lampshade'],
+        shapes: [
+          {
+            id: 'base_pole',
+            kind: 'cylinder',
+            radius: 0.08,
+            height: 3.5,
+            axis: 'y',
+            semanticRole: 'straight_pole',
+          },
+          {
+            id: 'curved_top',
+            kind: 'sweep',
+            semanticRole: 'curved_pole_top',
+            path: {
+              points: [
+                { x: 0, y: 0, z: 0 },
+                { x: 0.6, y: 0.5, z: 0 },
+                { x: 1, y: 1.1, z: 0 },
+              ],
+            },
+            radius: 0.07,
+            attachTo: 'base_pole',
+            anchor: 'top',
+            childAnchor: 'start',
+          },
+          {
+            id: 'lampshade',
+            kind: 'lathe',
+            semanticRole: 'circular_lampshade',
+            profile: [
+              { radius: 0.05, y: -0.15 },
+              { radius: 0.28, y: -0.05 },
+              { radius: 0.3, y: 0 },
+              { radius: 0.08, y: 0.22 },
+            ],
+            attachTo: 'curved_top',
+            anchor: 'end',
+            childAnchor: 'center',
+          },
+        ],
+      },
+      {
+        prompt:
+          'generate a 5 meter street lamp with a straight lower pole, curved upper pole, and circular lampshade',
+      },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).not.toContain('Invalid geometry tool call')
+    const shapes = result.artifact?.shapes ?? []
+    expect(shapes.find((shape) => shape.semanticRole === 'curved_pole_top')).toMatchObject({
+      kind: 'sweep',
+      position: [0.5, 4.05, 0],
+      path: [
+        [0, 0, 0],
+        [0.6, 0.5, 0],
+        [1, 1.1, 0],
+      ],
+    })
+    const lampshade = shapes.find((shape) => shape.semanticRole === 'circular_lampshade')
+    expect(lampshade?.position).toEqual([1, expect.closeTo(4.6), 0])
+    expect(lampshade).toMatchObject({
+      kind: 'lathe',
+      profile: [
+        [0.05, -0.15],
+        [0.28, -0.05],
+        [0.3, 0],
+        [0.08, 0.22],
+      ],
+    })
+  })
+
+  test('normalizes world-coordinate sweep paths when attaching a curve endpoint', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        shapes: [
+          {
+            id: 'pole',
+            kind: 'cylinder',
+            radius: 0.08,
+            height: 3.3,
+            axis: 'y',
+            semanticRole: 'straight_pole',
+          },
+          {
+            id: 'neck',
+            kind: 'sweep',
+            semanticRole: 'curved_neck',
+            path: [
+              { x: 0, y: 3.3, z: 0 },
+              { x: 0.12, y: 3.9, z: 0 },
+              { x: 0.32, y: 4.3, z: 0 },
+              { x: 0.55, y: 4.55, z: 0 },
+            ],
+            radius: 0.055,
+            attachTo: 'pole',
+            anchor: 'top',
+            childAnchor: 'start',
+          },
+          {
+            id: 'hood',
+            kind: 'box',
+            semanticRole: 'lamp_housing',
+            length: 0.7,
+            width: 0.35,
+            height: 0.22,
+            attachTo: 'neck',
+            anchor: 'end',
+            childAnchor: 'top',
+          },
+        ],
+      },
+      { prompt: 'generate a 5 meter street lamp with a curved upper pole' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).not.toContain('Invalid geometry tool call')
+    const shapes = result.artifact?.shapes ?? []
+    expect(shapes.find((shape) => shape.semanticRole === 'curved_neck')).toMatchObject({
+      kind: 'sweep',
+      position: [0.275, 3.925, 0],
+      path: [
+        [0, 0, 0],
+        [0.12, 0.6000000000000001, 0],
+        [0.32, 1, 0],
+        [0.55, 1.25, 0],
+      ],
+    })
+    const hood = shapes.find((shape) => shape.semanticRole === 'lamp_housing')
+    expect(hood?.position[1]).toBeLessThan(5)
+    expect(hood).toMatchObject({ kind: 'box', position: [0.55, 4.4399999999999995, 0] })
+  })
+
+  test('maps compose-parts connection fields onto sweep endpoint attachments', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        parts: [
+          {
+            id: 'lower_pole',
+            kind: 'cylinder',
+            semanticRole: 'lower_straight_pole',
+            params: { radius: 0.06, height: 3, axis: 'y' },
+          },
+          {
+            id: 'curved_arm',
+            kind: 'sweep',
+            semanticRole: 'upper_curved_arm',
+            params: {
+              path: {
+                points: [
+                  { x: 0, y: 3, z: 0 },
+                  { x: 0, y: 4.2, z: 0 },
+                  { x: 0.8, y: 4.8, z: 0 },
+                  { x: 1.2, y: 5, z: 0 },
+                ],
+              },
+              radius: 0.05,
+            },
+            connectTo: 'lower_pole',
+            connectPoint: 'top',
+            childPoint: 'start',
+          },
+          {
+            id: 'lamp_shade',
+            kind: 'hemisphere',
+            semanticRole: 'round_lamp_housing',
+            params: { radius: 0.35, axis: 'y' },
+            connectTo: 'curved_arm',
+            connectPoint: 'end',
+            childPoint: 'top',
+          },
+        ],
+      },
+      { prompt: 'generate a street lamp' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).not.toContain('Invalid geometry tool call')
+    const shapes = result.artifact?.shapes ?? []
+    expect(shapes.find((shape) => shape.semanticRole === 'upper_curved_arm')).toMatchObject({
+      kind: 'sweep',
+      position: [0.6, 4, 0],
+      path: [
+        [0, 0, 0],
+        [0, 1.2000000000000002, 0],
+        [0.8, 1.7999999999999998, 0],
+        [1.2, 2, 0],
+      ],
+    })
+    const lampHousing = shapes.find((shape) => shape.semanticRole === 'round_lamp_housing')
+    expect(lampHousing?.position).toEqual([expect.closeTo(1.2), 4.65, 0])
+    expect(lampHousing).toMatchObject({
+      kind: 'hemisphere',
+    })
+  })
+
+  test('routes standalone half-sphere requests to native hemisphere geometry', () => {
+    const emptyPartsResult = executeGeometryToolCall(
+      'compose_parts',
+      {},
+      { prompt: '\u751f\u6210\u4e00\u4e2a\u534a\u7403' },
+    )
+    const emptyPrimitiveResult = executeGeometryToolCall(
+      'compose_primitive',
+      {},
+      { prompt: '\u751f\u6210\u4e00\u4e2a\u534a\u7403' },
+    )
+    const explicitPartResult = executeGeometryToolCall(
+      'compose_parts',
+      {
+        parts: [{ kind: 'hemisphere', semanticRole: 'marker_hemisphere', diameter: 2 }],
+      },
+      { prompt: 'generate a half sphere' },
+    )
+
+    for (const result of [emptyPartsResult, emptyPrimitiveResult, explicitPartResult]) {
+      expect(result.artifact).toBeDefined()
+      const shapes = result.artifact?.shapes ?? []
+      expect(shapes.some((shape) => shape.kind === 'hemisphere')).toBe(true)
+      expect(shapes.some((shape) => shape.sourcePartKind === 'generic_body')).toBe(false)
+      expect(shapes.some((shape) => shape.kind === 'box')).toBe(false)
+    }
+  })
+
+  test('normalizes path endpoint anchor aliases from primitive tool calls', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        geometryBrief:
+          '5m street lamp with one vertical pole, one curved tube, and a downward hemisphere shade.',
+        shapes: [
+          {
+            id: 'straight_pole',
+            kind: 'cylinder',
+            semanticRole: 'straight_pole',
+            radius: 0.04,
+            height: 3.5,
+            axis: 'y',
+          },
+          {
+            id: 'curved_pole',
+            kind: 'sweep',
+            semanticRole: 'curved_pole',
+            radius: 0.04,
+            path: [
+              { x: 0, y: 0, z: 0 },
+              { x: 0.18, y: 0.4, z: 0 },
+              { x: 0.42, y: 0.8, z: 0 },
+              { x: 0.68, y: 1.2, z: 0 },
+              { x: 0.88, y: 1.5, z: 0 },
+            ],
+            attachTo: 0,
+            anchor: 'top',
+            childAnchor: 'path_start',
+          },
+          {
+            id: 'hemisphere_lampshade',
+            kind: 'hemisphere',
+            semanticRole: 'hemisphere_lampshade',
+            radius: 0.28,
+            axis: '-y',
+            attachTo: 1,
+            anchor: 'path_end',
+            childAnchor: 'top',
+          },
+        ],
+      },
+      { prompt: '生成一个5米高的路灯，不要底座，不要圆环' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    const shapes = result.artifact?.shapes ?? []
+    const curvedPole = shapes.find((shape) => shape.semanticRole === 'curved_pole')
+    const lampshade = shapes.find((shape) => shape.semanticRole === 'hemisphere_lampshade')
+
+    expect(curvedPole).toMatchObject({
+      kind: 'sweep',
+      position: [expect.closeTo(0.44), expect.closeTo(4.25), 0],
+    })
+    expect(lampshade).toMatchObject({
+      kind: 'hemisphere',
+      position: [expect.closeTo(0.88), expect.closeTo(4.72), 0],
+    })
+  })
+
+  test('centers standalone world-coordinate sweep paths into local geometry', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        shapes: [
+          {
+            kind: 'sweep',
+            semanticRole: 'upper_curved_arm',
+            path: [
+              { x: 0, y: 3, z: 0 },
+              { x: 0.8, y: 5, z: 0 },
+            ],
+            radius: 0.05,
+          },
+        ],
+      },
+      { prompt: 'generate a curved pole' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.artifact?.shapes[0]).toMatchObject({
+      kind: 'sweep',
+      position: [0.4, 4, 0],
+      path: [
+        [-0.4, -1, 0],
+        [0.4, 1, 0],
+      ],
+    })
+  })
+
+  test('normalizes generated primitive height when the prompt gives an explicit total height', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        shapes: [
+          {
+            kind: 'cylinder',
+            radius: 0.08,
+            height: 2,
+            axis: 'y',
+            semanticRole: 'straight_pole',
+          },
+        ],
+      },
+      { prompt: 'generate a pole height 5m' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    const [shape] = result.artifact?.shapes ?? []
+    expect(shape).toMatchObject({
+      kind: 'cylinder',
+      height: 5,
+      position: [0, 2.5, 0],
+    })
+    expect(result.artifact?.sourceArgs.dimensionNormalization).toMatchObject({
+      axis: 'y',
+      targetHeight: 5,
+      previousHeight: 2,
+      scale: 2.5,
+    })
+  })
+
+  test('keeps street lamp shade rim attached above the curved pole', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        geometryBrief:
+          '\u0035\u7c73\u9ad8\u8def\u706f\uff1a\u4e0b\u534a\u6bb5\u76f4\u67463.2\u7c73\uff0c\u4e0a\u534a\u6bb5\u5f2f\u66f2\u5ef6\u4f38\uff0c\u9876\u7aef\u5706\u5f62\u706f\u7f69\u76f4\u5f840.9\u7c73\u3002',
+        shapes: [
+          {
+            id: 'straight_pole',
+            kind: 'sweep',
+            semanticRole: 'pole_lower_straight',
+            path: [
+              { x: 0, y: 0, z: 0 },
+              { x: 0, y: 3.2, z: 0 },
+            ],
+            radius: 0.08,
+          },
+          {
+            id: 'curved_pole',
+            kind: 'sweep',
+            semanticRole: 'pole_upper_curved',
+            path: [
+              { x: 0, y: 3.2, z: 0 },
+              { x: 0.15, y: 3.5, z: 0 },
+              { x: 0.45, y: 3.8, z: 0 },
+              { x: 0.7, y: 3.95, z: 0 },
+            ],
+            radius: 0.08,
+            attachTo: 0,
+            anchor: 'top',
+            childAnchor: 'bottom',
+          },
+          {
+            id: 'shade_body',
+            kind: 'cylinder',
+            semanticRole: 'lamp_shade_outer',
+            radius: 0.45,
+            height: 0.18,
+            axis: 'y',
+            attachTo: 1,
+            anchor: 'top',
+            childAnchor: 'bottom',
+          },
+          {
+            id: 'shade_rim',
+            kind: 'torus',
+            semanticRole: 'lamp_shade_rim',
+            majorRadius: 0.45,
+            tubeRadius: 0.015,
+            attachTo: 2,
+            anchor: 'top',
+            childAnchor: 'center',
+          },
+          {
+            id: 'shade_under_rim',
+            kind: 'torus',
+            semanticRole: 'lamp_shade_under_rim',
+            majorRadius: 0.4,
+            tubeRadius: 0.015,
+            attachTo: 2,
+            anchor: 'bottom',
+            childAnchor: 'center',
+          },
+        ],
+      },
+      {
+        prompt:
+          '\u751f\u6210\u4e00\u4e2a5\u7c73\u9ad8\u7684\u8def\u706f\uff0c\u8def\u706f\u6746\u5b50\u4e0b\u90e8\u5206\u662f\u76f4\u7684\uff0c\u4e0a\u534a\u90e8\u5206\u662f\u5f2f\u66f2\u7684\uff0c\u7136\u540e\u5f2f\u66f2\u70b9\u4e0a\u662f\u4e00\u4e2a\u5706\u5f62\u7684\u706f\u7f69\u3002',
+      },
+    )
+
+    expect(result.artifact).toBeDefined()
+    const shapes = result.artifact?.shapes ?? []
+    const lowerPole = shapes.find((shape) => shape.semanticRole === 'pole_lower_straight')
+    const curvedPole = shapes.find((shape) => shape.semanticRole === 'pole_upper_curved')
+    const shadeBody = shapes.find((shape) => shape.semanticRole === 'lamp_shade_outer')
+    const shadeRim = shapes.find((shape) => shape.semanticRole === 'lamp_shade_rim')
+    const shadeUnderRim = shapes.find((shape) => shape.semanticRole === 'lamp_shade_under_rim')
+
+    expect(lowerPole).toMatchObject({ kind: 'sweep', position: [0, expect.closeTo(1.79), 0] })
+    expect(curvedPole?.position[1]).toBeGreaterThan(3.8)
+    expect(shadeBody?.position[1]).toBeGreaterThan(4.2)
+    expect(shadeRim?.position[1]).toBeGreaterThan(4.4)
+    expect(shadeRim?.position[1]).toBeGreaterThan(shadeBody?.position[1] ?? 0)
+    expect(shadeRim?.position[0]).toBeCloseTo(shadeBody?.position[0] ?? Number.NaN)
+    expect(shadeRim?.position[2]).toBeCloseTo(shadeBody?.position[2] ?? Number.NaN)
+    expect(shadeUnderRim?.position[1]).toBeLessThan(shadeBody?.position[1] ?? 0)
+    expect(shadeUnderRim?.position[0]).toBeCloseTo(shadeBody?.position[0] ?? Number.NaN)
+    expect(shadeUnderRim?.position[2]).toBeCloseTo(shadeBody?.position[2] ?? Number.NaN)
+    expect(result.artifact?.sourceArgs.dimensionNormalization).toMatchObject({
+      axis: 'y',
+      targetHeight: 5,
+    })
+  })
+
   test('grounds standalone primitives when position is omitted', () => {
     const [cone, horizontalCone, explicitCone] = normalizeGeometryToolShapes([
       { kind: 'cone', radius: 0.5, height: 2 },

@@ -126,12 +126,12 @@ export class SpatialGrid {
   // Query: is this placement valid?
   // Uses cells as broad-phase, then checks actual AABB overlap (narrow-phase)
   // to avoid false positives when adjacent items share a cell but don't overlap.
-  canPlace(
+  queryOverlaps(
     position: [number, number, number],
     dimensions: [number, number, number],
     rotation: [number, number, number],
     ignoreIds: string[] = [],
-  ): { valid: boolean; conflictIds: string[] } {
+  ): string[] {
     const bounds = this.getAABB(position, dimensions, rotation)
     const cellKeys = this.getItemCells(bounds)
     const ignoreSet = new Set(ignoreIds)
@@ -166,6 +166,16 @@ export class SpatialGrid {
       }
     }
 
+    return conflicts
+  }
+
+  canPlace(
+    position: [number, number, number],
+    dimensions: [number, number, number],
+    rotation: [number, number, number],
+    ignoreIds: string[] = [],
+  ): { valid: boolean; conflictIds: string[] } {
+    const conflicts = this.queryOverlaps(position, dimensions, rotation, ignoreIds)
     return {
       valid: conflicts.length === 0,
       conflictIds: conflicts,

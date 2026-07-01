@@ -46,6 +46,12 @@ export type IndustryPackSpec = {
   processTemplates?: JsonRecord[]
 }
 
+export type IndustryPackAuthoringWarning = {
+  deviceId: string
+  code: string
+  message: string
+}
+
 export type ScaffoldIndustryPackOptions = {
   specPath: string
   outputRoot?: string
@@ -265,6 +271,99 @@ function uniqueRoles(device: IndustryPackDeviceSpec) {
   ]
 }
 
+function deviceAuthoringText(device: IndustryPackDeviceSpec) {
+  return [
+    device.id,
+    device.name,
+    device.description,
+    device.primarySemanticRole,
+    device.layoutFamily,
+    device.family,
+    device.preferredResolver,
+    ...device.aliases,
+    ...device.parts.flatMap((part) => [part.kind, part.semanticRole]),
+    ...(device.visualCues ?? []),
+    ...(device.qualityRequiredRoles ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ')
+    .toLowerCase()
+}
+
+function hasPartKind(device: IndustryPackDeviceSpec, kind: string) {
+  return device.parts.some((part) => part.kind === kind)
+}
+
+function hasRoleMatch(device: IndustryPackDeviceSpec, pattern: RegExp) {
+  return [
+    device.primarySemanticRole,
+    ...device.parts.map((part) => part.semanticRole),
+    ...(device.qualityRequiredRoles ?? []),
+  ].some((role) => pattern.test(role.toLowerCase().replace(/[_-]/g, ' ')))
+}
+
+function collectAuthoringWarningsForDevice(
+  device: IndustryPackDeviceSpec,
+): IndustryPackAuthoringWarning[] {
+  const warnings: IndustryPackAuthoringWarning[] = []
+  const text = deviceAuthoringText(device)
+  const isControlBuilding =
+    /\bcontrol[_\s-]?room\b/.test(text) ||
+    /\bcontrol[_\s-]?building\b/.test(text) ||
+    /\boccupied[_\s-]?building\b/.test(text) ||
+    /\bmcc\b/.test(text) ||
+    text.includes('中控') ||
+    text.includes('控制室')
+  const isBoiler = /\bboiler\b/.test(text) || text.includes('锅炉')
+
+  if (isControlBuilding && device.preferredResolver === 'catalog-item') {
+    warnings.push({
+      deviceId: device.id,
+      code: 'control_building_catalog_resolver',
+      message:
+        'Control rooms and occupied buildings should use profile-parts with body, roof, door, window, and panel roles instead of catalog-item fallback.',
+    })
+  }
+
+  if (isControlBuilding) {
+    const hasBuildingOpenings =
+      hasPartKind(device, 'generic_opening') ||
+      hasPartKind(device, 'generic_detail_accent') ||
+      hasRoleMatch(device, /\b(door|window|opening|roof|parapet|wall|building)\b/)
+    if (!hasBuildingOpenings) {
+      warnings.push({
+        deviceId: device.id,
+        code: 'control_building_missing_shell_details',
+        message:
+          'Control-room-like profiles should include visible building details such as a roof cap/parapet, door, and blast-resistant windows.',
+      })
+    }
+  }
+
+  if (isBoiler) {
+    const hasStack =
+      hasPartKind(device, 'chimney_stack') || hasRoleMatch(device, /\b(stack|chimney)\b/)
+    const hasVisibleSteamBody =
+      hasPartKind(device, 'cylindrical_tank') || hasRoleMatch(device, /\b(drum|tube|tube_bank)\b/)
+    const hasSteamHeader =
+      hasPartKind(device, 'pipe_manifold') || hasRoleMatch(device, /\b(header|manifold|steam)\b/)
+    if (!hasStack || !hasVisibleSteamBody || !hasSteamHeader) {
+      warnings.push({
+        deviceId: device.id,
+        code: 'boiler_missing_process_features',
+        message:
+          'Boiler profiles should show more than a plain box: include a stack, visible steam drum or tube bank, steam header, and control/service details.',
+      })
+    }
+  }
+
+  return warnings
+}
+
+function collectAuthoringWarnings(spec: IndustryPackSpec) {
+  return spec.devices.flatMap((device) => collectAuthoringWarningsForDevice(device))
+}
+
 function profileFromDevice(device: IndustryPackDeviceSpec, industry: string) {
   const ruleId = qualityRuleId(device.id, device.qualityRuleId)
   return {
@@ -305,7 +404,11 @@ async function writeJson(file: string, value: unknown) {
   await fs.writeFile(file, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
 }
 
-async function writeReadme(file: string, spec: IndustryPackSpec) {
+async function writeReadme(
+  file: string,
+  spec: IndustryPackSpec,
+  authoringWarnings: IndustryPackAuthoringWarning[],
+) {
   const title = spec.name ?? `${spec.industry} Profile Pack`
   const factoryCapable = spec.capabilities?.includes('factory_creation') === true
   const lines = [
@@ -377,6 +480,14 @@ async function writeReadme(file: string, spec: IndustryPackSpec) {
         ]
       : []),
     '',
+    '## Authoring Review',
+    '',
+    ...(authoringWarnings.length
+      ? authoringWarnings.map(
+          (warning) => `- ${warning.deviceId}: ${warning.code} - ${warning.message}`,
+        )
+      : ['- No scaffold authoring warnings.']),
+    '',
     '## Validation',
     '',
     'Run:',
@@ -392,6 +503,7 @@ async function writeReadme(file: string, spec: IndustryPackSpec) {
 export async function scaffoldIndustryProfilePack(options: ScaffoldIndustryPackOptions) {
   const raw = JSON.parse((await fs.readFile(options.specPath, 'utf8')).replace(/^\uFEFF/, ''))
   const spec = normalizeIndustryPackSpec(raw)
+  const authoringWarnings = collectAuthoringWarnings(spec)
   const repoRoot = await findRepoRoot()
   const id = packId(spec.industry, spec.id)
   const version = spec.version ?? '0.1.0'
@@ -449,7 +561,7 @@ export async function scaffoldIndustryProfilePack(options: ScaffoldIndustryPackO
   if (processTemplateFile) {
     await writeJson(path.join(packDir, processTemplateFile), spec.processTemplates)
   }
-  await writeReadme(path.join(packDir, 'README.md'), spec)
+  await writeReadme(path.join(packDir, 'README.md'), spec, authoringWarnings)
 
   const validation = options.validate === false ? undefined : await validateProfilePackDir(packDir)
   const audit = validation ? auditProfilePackValidation(validation) : undefined
@@ -460,6 +572,7 @@ export async function scaffoldIndustryProfilePack(options: ScaffoldIndustryPackO
     packDir,
     manifest,
     audit,
+    authoringWarnings,
   }
 }
 
@@ -499,6 +612,7 @@ async function main() {
               summary: result.audit.summary,
             }
           : undefined,
+        authoringWarnings: result.authoringWarnings,
       },
       null,
       2,

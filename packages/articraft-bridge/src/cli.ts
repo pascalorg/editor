@@ -3,13 +3,27 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
-import type { ArticraftLink, ArticraftModelData, ArticraftVisual, GenerateOptions } from './types'
+import type {
+  ArticraftLink,
+  ArticraftModelData,
+  ArticraftOrigin,
+  ArticraftVisual,
+  ArticraftVisualGeometry,
+  GenerateOptions,
+  Vec3,
+  Vec4,
+} from './types'
 
 const _dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const DEFAULT_REPO_ROOT = path.resolve(_dirname, '..', '..', '..', 'articraft')
 const BRIDGE_SCRIPT_RELATIVE_PATH = path.join('python', 'bridge.py')
 const MODERN_CLI_RELATIVE_PATH = path.join('cli', 'main.py')
+
+type CommandInvocation = {
+  command: string
+  args: string[]
+}
 
 function bridgeScriptPath(repoRoot: string): string {
   return path.join(repoRoot, BRIDGE_SCRIPT_RELATIVE_PATH)
@@ -56,6 +70,30 @@ export function resolveRepoRoot(repoRoot?: string): string {
 
 function hasLegacyBridge(repoRoot: string): boolean {
   return existsSync(bridgeScriptPath(repoRoot))
+}
+
+function venvPythonPath(repoRoot: string): string {
+  return path.join(
+    repoRoot,
+    '.venv',
+    process.platform === 'win32' ? 'Scripts' : 'bin',
+    process.platform === 'win32' ? 'python.exe' : 'python',
+  )
+}
+
+export function modernCliInvocation(repoRoot: string, args: string[]): CommandInvocation {
+  const python = venvPythonPath(repoRoot)
+  const cliEntry = path.join(repoRoot, MODERN_CLI_RELATIVE_PATH)
+  if (existsSync(python) && existsSync(cliEntry)) {
+    return {
+      command: python,
+      args: [cliEntry, ...args],
+    }
+  }
+  return {
+    command: 'uv',
+    args: ['run', '--directory', repoRoot, 'articraft', ...args],
+  }
 }
 
 function parseBridgeLine(line: string) {
@@ -329,6 +367,11 @@ function vec3(value: string | undefined): [number, number, number] {
   return [parsed[0] ?? 0, parsed[1] ?? 0, parsed[2] ?? 0]
 }
 
+function vec4(value: string | undefined): Vec4 {
+  const parsed = numbers(value, [1, 1, 1, 1])
+  return [parsed[0] ?? 1, parsed[1] ?? 1, parsed[2] ?? 1, parsed[3] ?? 1]
+}
+
 function origin(xml: string) {
   const match = /<origin\b[^>]*\/?>/s.exec(xml)
   const tag = match?.[0] ?? ''
@@ -341,9 +384,145 @@ function tagBlocks(xml: string, tag: string): string[] {
   )
 }
 
-function parseUrdf(urdfPath: string): Pick<ArticraftModelData, 'links' | 'joints' | 'name'> {
+function parseUrdfMaterials(xml: string): Map<string, Vec4> {
+  const materials = new Map<string, Vec4>()
+  for (const materialXml of tagBlocks(xml, 'material')) {
+    const materialTag = /<material\b[^>]*>/s.exec(materialXml)?.[0] ?? ''
+    const name = attr(materialTag, 'name')
+    const colorTag = /<color\b[^>]*\/?>/s.exec(materialXml)?.[0]
+    if (name && colorTag) materials.set(name, vec4(attr(colorTag, 'rgba')))
+  }
+  return materials
+}
+
+function visualMaterial(
+  visualXml: string,
+  materialByName: Map<string, Vec4>,
+): ArticraftVisual['material'] | undefined {
+  const materialTag = /<material\b[^>]*(?:\/>|>[\s\S]*?<\/material>)/s.exec(visualXml)?.[0]
+  if (!materialTag) return undefined
+  const name = attr(materialTag, 'name') ?? 'material'
+  const colorTag = /<color\b[^>]*\/?>/s.exec(materialTag)?.[0]
+  return {
+    name,
+    rgba: colorTag ? vec4(attr(colorTag, 'rgba')) : (materialByName.get(name) ?? vec4(undefined)),
+  }
+}
+
+function addVec3(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+function scaleVec3(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
+}
+
+function rotateRpyVector(vector: Vec3, rpy: Vec3): Vec3 {
+  const [roll, pitch, yaw] = rpy
+  const cr = Math.cos(roll)
+  const sr = Math.sin(roll)
+  const cp = Math.cos(pitch)
+  const sp = Math.sin(pitch)
+  const cy = Math.cos(yaw)
+  const sy = Math.sin(yaw)
+
+  const x1 = vector[0]
+  const y1 = cr * vector[1] - sr * vector[2]
+  const z1 = sr * vector[1] + cr * vector[2]
+
+  const x2 = cp * x1 + sp * z1
+  const y2 = y1
+  const z2 = -sp * x1 + cp * z1
+
+  return [cy * x2 - sy * y2, sy * x2 + cy * y2, z2]
+}
+
+function readObjBounds(objPath: string): { center: Vec3; size: Vec3 } | null {
+  let min: Vec3 = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY]
+  let max: Vec3 = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY]
+  let vertexCount = 0
+
+  try {
+    const text = readFileSync(objPath, 'utf8')
+    for (const line of text.split(/\r?\n/)) {
+      const match =
+        /^v\s+([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s+([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s+([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)/i.exec(
+          line.trim(),
+        )
+      if (!match) continue
+      const vertex: Vec3 = [Number(match[1]), Number(match[2]), Number(match[3])]
+      if (!vertex.every(Number.isFinite)) continue
+      vertexCount += 1
+      min = [Math.min(min[0], vertex[0]), Math.min(min[1], vertex[1]), Math.min(min[2], vertex[2])]
+      max = [Math.max(max[0], vertex[0]), Math.max(max[1], vertex[1]), Math.max(max[2], vertex[2])]
+    }
+  } catch {
+    return null
+  }
+
+  if (vertexCount === 0) return null
+  const center: Vec3 = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2]
+  const size: Vec3 = [
+    Math.max(0.01, max[0] - min[0]),
+    Math.max(0.01, max[1] - min[1]),
+    Math.max(0.01, max[2] - min[2]),
+  ]
+  return { center, size }
+}
+
+function meshGeometryFromTag(
+  meshTag: string | undefined,
+  urdfDir: string,
+  parsedOrigin: ReturnType<typeof origin>,
+): { origin: ArticraftOrigin; geometry: ArticraftVisualGeometry } {
+  const meshPath = attr(meshTag ?? '', 'filename')
+  const meshScale = vec3(attr(meshTag ?? '', 'scale') ?? '1 1 1')
+  const resolvedMeshPath = meshPath
+    ? path.resolve(urdfDir, path.normalize(meshPath.replace(/\\/g, path.sep)))
+    : null
+  const bounds =
+    resolvedMeshPath && existsSync(resolvedMeshPath) ? readObjBounds(resolvedMeshPath) : null
+  if (!bounds) {
+    return {
+      origin: parsedOrigin,
+      geometry: {
+        type: 'mesh' as const,
+        params: {},
+        meshPath,
+      },
+    }
+  }
+
+  const center = scaleVec3(bounds.center, meshScale)
+  const size = scaleVec3(bounds.size, [
+    Math.abs(meshScale[0]),
+    Math.abs(meshScale[1]),
+    Math.abs(meshScale[2]),
+  ])
+  return {
+    origin: {
+      xyz: addVec3(parsedOrigin.xyz, rotateRpyVector(center, parsedOrigin.rpy)),
+      rpy: parsedOrigin.rpy,
+    },
+    geometry: {
+      type: 'mesh' as const,
+      params: {
+        sx: size[0],
+        sy: size[1],
+        sz: size[2],
+      },
+      meshPath,
+    },
+  }
+}
+
+export function buildModelDataFromUrdf(
+  urdfPath: string,
+): Pick<ArticraftModelData, 'links' | 'joints' | 'name'> {
   const xml = readFileSync(urdfPath, 'utf8')
+  const urdfDir = path.dirname(urdfPath)
   const robotTag = /<robot\b[^>]*>/s.exec(xml)?.[0] ?? ''
+  const materialByName = parseUrdfMaterials(xml)
   const links: ArticraftLink[] = tagBlocks(xml, 'link').map((linkXml) => {
     const linkTag = /<link\b[^>]*>/s.exec(linkXml)?.[0] ?? ''
     const name = attr(linkTag, 'name') ?? 'link'
@@ -355,10 +534,9 @@ function parseUrdf(urdfPath: string): Pick<ArticraftModelData, 'links' | 'joints
         const cylinderTag = /<cylinder\b[^>]*\/?>/s.exec(geometryXml)?.[0]
         const sphereTag = /<sphere\b[^>]*\/?>/s.exec(geometryXml)?.[0]
         const meshTag = /<mesh\b[^>]*\/?>/s.exec(geometryXml)?.[0]
-        const materialTag = /<material\b[^>]*>/s.exec(visualXml)?.[0]
-        const colorTag = /<color\b[^>]*\/?>/s.exec(visualXml)?.[0]
         const visualTag = /<visual\b[^>]*>/s.exec(visualXml)?.[0] ?? ''
         const parsedOrigin = origin(visualXml)
+        const material = visualMaterial(visualXml, materialByName)
         if (boxTag) {
           const size = numbers(attr(boxTag, 'size'), [1, 1, 1])
           return {
@@ -368,12 +546,7 @@ function parseUrdf(urdfPath: string): Pick<ArticraftModelData, 'links' | 'joints
               type: 'box' as const,
               params: { length: size[0] ?? 1, width: size[1] ?? 1, height: size[2] ?? 1 },
             },
-            material: materialTag
-              ? {
-                  name: attr(materialTag, 'name') ?? 'material',
-                  rgba: vec4(attr(colorTag ?? '', 'rgba')),
-                }
-              : undefined,
+            material,
           }
         }
         if (cylinderTag) {
@@ -387,12 +560,7 @@ function parseUrdf(urdfPath: string): Pick<ArticraftModelData, 'links' | 'joints
                 length: Number(attr(cylinderTag, 'length') ?? 1),
               },
             },
-            material: materialTag
-              ? {
-                  name: attr(materialTag, 'name') ?? 'material',
-                  rgba: vec4(attr(colorTag ?? '', 'rgba')),
-                }
-              : undefined,
+            material,
           }
         }
         if (sphereTag) {
@@ -403,28 +571,15 @@ function parseUrdf(urdfPath: string): Pick<ArticraftModelData, 'links' | 'joints
               type: 'sphere' as const,
               params: { radius: Number(attr(sphereTag, 'radius') ?? 0.5) },
             },
-            material: materialTag
-              ? {
-                  name: attr(materialTag, 'name') ?? 'material',
-                  rgba: vec4(attr(colorTag ?? '', 'rgba')),
-                }
-              : undefined,
+            material,
           }
         }
+        const mesh = meshGeometryFromTag(meshTag, urdfDir, parsedOrigin)
         return {
           name: attr(visualTag, 'name') ?? `${name}_visual_${index}`,
-          origin: parsedOrigin,
-          geometry: {
-            type: 'mesh' as const,
-            params: {},
-            meshPath: attr(meshTag ?? '', 'filename'),
-          },
-          material: materialTag
-            ? {
-                name: attr(materialTag, 'name') ?? 'material',
-                rgba: vec4(attr(colorTag ?? '', 'rgba')),
-              }
-            : undefined,
+          origin: mesh.origin,
+          geometry: mesh.geometry,
+          material,
         }
       }),
     }
@@ -462,11 +617,6 @@ function parseUrdf(urdfPath: string): Pick<ArticraftModelData, 'links' | 'joints
   return { name: attr(robotTag, 'name') ?? 'Articraft model', links, joints }
 }
 
-function vec4(value: string | undefined): [number, number, number, number] {
-  const parsed = numbers(value, [1, 1, 1, 1])
-  return [parsed[0] ?? 1, parsed[1] ?? 1, parsed[2] ?? 1, parsed[3] ?? 1]
-}
-
 function buildModelDataFromRecord(repoRoot: string, recordId: string): ArticraftModelData {
   const recordPath = path.join(repoRoot, 'data', 'records', recordId)
   const record = asRecord(jsonFile(path.join(recordPath, 'record.json')))
@@ -481,7 +631,7 @@ function buildModelDataFromRecord(repoRoot: string, recordId: string): Articraft
   )
   const urdfPath = path.join(materializationPath, 'model.urdf')
   const compileReportPath = path.join(materializationPath, 'compile_report.json')
-  const parsed = parseUrdf(urdfPath)
+  const parsed = buildModelDataFromUrdf(urdfPath)
   const display = asRecord(record.display)
   const compileReport = existsSync(compileReportPath) ? asRecord(jsonFile(compileReportPath)) : {}
   const warnings = Array.isArray(compileReport.warnings)
@@ -534,21 +684,14 @@ async function generateModelWithModernCli(
 
   const before = listRecordIds(repoRoot)
   const startedAtMs = Date.now()
-  const args = [
-    'run',
-    '--directory',
-    repoRoot,
-    'articraft',
-    'generate',
-    '--repo-root',
-    repoRoot,
-    options.prompt,
-  ]
+  const args = ['generate', '--repo-root', repoRoot, options.prompt]
   if (options.model) args.push('--model', options.model)
   if (options.provider) args.push('--provider', options.provider)
+  if (options.maxTurns !== undefined) args.push('--max-turns', String(options.maxTurns))
   if (options.imagePath) args.push('--image', options.imagePath)
 
-  const output = await spawnAndCollect('uv', args, {
+  const generateCommand = modernCliInvocation(repoRoot, args)
+  const output = await spawnAndCollect(generateCommand.command, generateCommand.args, {
     cwd: repoRoot,
     env,
     signal: options.signal,
@@ -572,27 +715,20 @@ async function generateModelWithModernCli(
     'model.urdf',
   )
   if (!existsSync(urdfPath)) {
-    await spawnAndCollect(
-      'uv',
-      [
-        'run',
-        '--directory',
-        repoRoot,
-        'articraft',
-        'compile',
-        '--repo-root',
-        repoRoot,
-        recordId,
-        '--target',
-        'full',
-      ],
-      {
-        cwd: repoRoot,
-        env,
-        signal: options.signal,
-        onProgress: options.onProgress,
-      },
-    )
+    const compileCommand = modernCliInvocation(repoRoot, [
+      'compile',
+      '--repo-root',
+      repoRoot,
+      recordId,
+      '--target',
+      'full',
+    ])
+    await spawnAndCollect(compileCommand.command, compileCommand.args, {
+      cwd: repoRoot,
+      env,
+      signal: options.signal,
+      onProgress: options.onProgress,
+    })
   }
   return buildModelDataFromRecord(repoRoot, recordId)
 }

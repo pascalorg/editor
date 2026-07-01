@@ -40,6 +40,8 @@ export type ProcessStationEquipmentResolver =
   | 'profile-parts'
   | 'primitive'
 
+type ArtifactShape = GeneratedGeometryArtifact['shapes'][number]
+
 export type ProcessStationEquipmentResolution = {
   patches: GeneratedGeometryCreatePatch[]
   primitiveRequest: ProcessPrimitiveRequest | null
@@ -74,6 +76,120 @@ function equipmentContractMetadata(equipmentContract: ProcessEquipmentContract |
 
 function rounded(value: number) {
   return Math.round(value * 1000) / 1000
+}
+
+function shapeVerticalHalfExtent(shape: PrimitiveShapeInput) {
+  const radius = typeof shape.radius === 'number' ? shape.radius : 0.5
+  const height = typeof shape.height === 'number' ? shape.height : 1
+  const width = typeof shape.width === 'number' ? shape.width : 1
+  const length = typeof shape.length === 'number' ? shape.length : 1
+  const thickness =
+    typeof shape.thickness === 'number'
+      ? shape.thickness
+      : typeof shape.height === 'number'
+        ? shape.height
+        : 0.04
+
+  switch (shape.kind) {
+    case 'box':
+    case 'wedge':
+    case 'trapezoid-prism':
+      return height / 2
+    case 'cylinder':
+    case 'hollow-cylinder':
+    case 'cone':
+    case 'frustum':
+    case 'capsule':
+    case 'half-cylinder':
+      return shape.axis === 'x' || shape.axis === 'z' ? radius : height / 2
+    case 'sphere':
+      return radius * (shape.scale?.[1] ?? 1)
+    case 'hemisphere':
+      return shape.axis === 'x' || shape.axis === 'z'
+        ? radius * (shape.scale?.[1] ?? 1)
+        : radius / 2
+    case 'torus':
+      return shape.axis === 'y'
+        ? (shape.tubeRadius ?? 0.08)
+        : (shape.majorRadius ?? radius) + (shape.tubeRadius ?? 0.08)
+    case 'rounded-panel':
+      return thickness / 2
+    case 'conformal-strip':
+      return (shape.surfaceRadiusY ?? 0.25) + (shape.thickness ?? 0.003)
+    case 'extrude': {
+      const profile = shape.profile ?? [
+        [-0.5, -0.25],
+        [0.5, -0.25],
+        [0.5, 0.25],
+        [-0.5, 0.25],
+      ]
+      const ys = profile.map((point) => point[1])
+      return (Math.max(...ys) - Math.min(...ys)) / 2
+    }
+    case 'lathe': {
+      const profile = shape.profile ?? [
+        [0, 0],
+        [0.5, 1],
+      ]
+      const ys = profile.map((point) => point[1])
+      return (Math.max(...ys) - Math.min(...ys)) / 2
+    }
+    case 'sweep': {
+      const ys = (shape.path ?? []).map((point) => point[1])
+      if (!ys.length) return radius
+      return (Math.max(...ys) - Math.min(...ys)) / 2 + radius
+    }
+    default:
+      return Math.max(height, width, length) / 2
+  }
+}
+
+function profilePartGroundLift(input: {
+  shapes: PrimitiveShapeInput[]
+  transforms: Array<{ position?: [number, number, number] } | undefined>
+}) {
+  let minY = Number.POSITIVE_INFINITY
+  input.shapes.forEach((shape, index) => {
+    const position = input.transforms[index]?.position ?? shape.position ?? [0, 0, 0]
+    minY = Math.min(minY, position[1] - shapeVerticalHalfExtent(shape))
+  })
+  return Number.isFinite(minY) && minY < 0 ? -minY : 0
+}
+
+function translateVec3Y(value: [number, number, number], offset: number): [number, number, number]
+function translateVec3Y(
+  value: [number, number, number] | undefined,
+  offset: number,
+): [number, number, number] | undefined
+function translateVec3Y(value: [number, number, number] | undefined, offset: number) {
+  return value ? [value[0], value[1] + offset, value[2]] : value
+}
+
+function translateShapeY(shape: ArtifactShape, offset: number): ArtifactShape {
+  if (offset === 0) return shape
+  return {
+    ...shape,
+    position: translateVec3Y(shape.position, offset),
+    path: shape.path?.map((point) => translateVec3Y(point, offset) ?? point),
+    ports: shape.ports?.map((port) => ({
+      ...port,
+      position: translateVec3Y(port.position, offset),
+    })),
+    cutouts: shape.cutouts?.map((cutout) => ({
+      ...cutout,
+      position: translateVec3Y(cutout.position, offset),
+    })),
+  }
+}
+
+function translateTransformsY<T extends Array<{ position?: [number, number, number] } | undefined>>(
+  transforms: T,
+  offset: number,
+): T {
+  if (offset === 0) return transforms
+  return transforms.map((transform) =>
+    transform ? { ...transform, position: translateVec3Y(transform.position, offset) } : transform,
+  ) as T
 }
 
 function routeObstacleForStation(input: {
@@ -456,16 +572,22 @@ function createProfilePartsPatch(input: {
     accentColor: '#f59e0b',
   } as PartComposeInput
   const shapes = composePartPrimitives(sourceArgs) as PrimitiveShapeInput[]
-  const artifactShapes: GeneratedGeometryArtifact['shapes'] = shapes.map((shape) => ({
+  const rawArtifactShapes: GeneratedGeometryArtifact['shapes'] = shapes.map((shape) => ({
     ...shape,
     position: shape.position ?? [0, 0, 0],
     rotation: shape.rotation ?? [0, 0, 0],
   }))
-  if (!artifactShapes.length) return null
+  if (!rawArtifactShapes.length) return null
 
-  const transforms = resolvePrimitiveWorldTransforms(artifactShapes, {
+  const rawTransforms = resolvePrimitiveWorldTransforms(rawArtifactShapes, {
     positionMode: 'world-center',
   })
+  const groundLift = profilePartGroundLift({
+    shapes: rawArtifactShapes,
+    transforms: rawTransforms,
+  })
+  const artifactShapes = rawArtifactShapes.map((shape) => translateShapeY(shape, groundLift))
+  const transforms = translateTransformsY(rawTransforms, groundLift)
   const assemblyPosition = computeGeneratedAssemblyPosition(transforms)
   const artifact: GeneratedGeometryArtifact = {
     id: createGeneratedGeometryId(),

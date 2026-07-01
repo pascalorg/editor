@@ -8,6 +8,9 @@ import {
 
 const BESPOKE_PLAN_DRAG_3D_KINDS = [
   'assembly',
+  'data-widget',
+  'data-chart',
+  'data-table',
   'item',
   'stair',
   'stair-segment',
@@ -16,6 +19,7 @@ const BESPOKE_PLAN_DRAG_3D_KINDS = [
   'cable-tray',
   'road',
   'steel-beam',
+  'steel-frame',
   'wall',
   'fence',
   'column',

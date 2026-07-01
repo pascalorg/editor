@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { constants } from 'node:fs'
+import { constants, existsSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -60,7 +60,9 @@ function sanitizeSegment(value: string, fallback: string) {
 }
 
 function isSafeAssetId(assetId: string) {
-  return sanitizeSegment(assetId, '') === assetId && !assetId.includes('/') && !assetId.includes('\\')
+  return (
+    sanitizeSegment(assetId, '') === assetId && !assetId.includes('/') && !assetId.includes('\\')
+  )
 }
 
 function positiveDimensions(value: unknown): [number, number, number] {
@@ -94,6 +96,20 @@ async function writeManifest(manifestPath: string, assets: SavedAsset[]) {
   await fs.rename(tmp, manifestPath)
 }
 
+function articraftCliInvocation(repoRoot: string, args: string[]) {
+  const python = path.join(
+    repoRoot,
+    '.venv',
+    process.platform === 'win32' ? 'Scripts' : 'bin',
+    process.platform === 'win32' ? 'python.exe' : 'python',
+  )
+  const cliEntry = path.join(repoRoot, 'cli', 'main.py')
+  if (existsSync(python) && existsSync(cliEntry)) {
+    return { command: python, args: [cliEntry, ...args] }
+  }
+  return { command: 'uv', args: ['run', '--directory', repoRoot, 'articraft', ...args] }
+}
+
 async function exportModelGlb(
   repoRoot: string,
   recordId: string,
@@ -102,35 +118,30 @@ async function exportModelGlb(
   floorPlanPath: string,
 ) {
   const articraftRoot = path.join(repoRoot, 'articraft')
-  const exportScript = path.join(articraftRoot, 'python', 'export_pascal_asset.py')
-  if (!(await exists(exportScript))) {
+  const modernCli = path.join(articraftRoot, 'cli', 'main.py')
+  if (!(await exists(modernCli))) {
     throw new Error(
-      `Articraft checkout not found at ${articraftRoot}. Clone or link it locally before saving generated assets.`,
+      `Articraft checkout not found at ${articraftRoot}. Expected cli/main.py in the modern checkout.`,
     )
   }
-  const { stdout, stderr } = await execFileAsync(
-    'uv',
-    [
-      'run',
-      'python',
-      'python/export_pascal_asset.py',
-      recordId,
-      outputPath,
-      '--repo-root',
-      articraftRoot,
-      '--thumbnail-path',
-      thumbnailPath,
-      '--floor-plan-path',
-      floorPlanPath,
-    ],
-    {
-      cwd: articraftRoot,
-      encoding: 'utf8',
-      maxBuffer: 1024 * 1024 * 8,
-      shell: process.platform === 'win32',
-      windowsHide: true,
-    },
-  )
+  const invocation = articraftCliInvocation(articraftRoot, [
+    'export-pascal-asset',
+    '--repo-root',
+    articraftRoot,
+    recordId,
+    outputPath,
+    '--thumbnail-path',
+    thumbnailPath,
+    '--floor-plan-path',
+    floorPlanPath,
+  ])
+  const { stdout, stderr } = await execFileAsync(invocation.command, invocation.args, {
+    cwd: articraftRoot,
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024 * 8,
+    shell: process.platform === 'win32',
+    windowsHide: true,
+  })
   const lastLine = stdout.trim().split(/\r?\n/).filter(Boolean).at(-1)
   if (!lastLine) {
     throw new Error(stderr.trim() || 'Articraft export produced no output')
@@ -202,7 +213,6 @@ export async function POST(req: NextRequest) {
   const modelPath = path.join(assetDir, 'model.glb')
   const thumbnailPath = path.join(assetDir, 'thumbnail.png')
   const floorPlanPath = path.join(assetDir, 'floor-plan.png')
-
   await fs.mkdir(assetDir, { recursive: true })
 
   let exportInfo: Record<string, unknown>

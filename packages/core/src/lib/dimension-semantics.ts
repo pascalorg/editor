@@ -107,7 +107,7 @@ function assignIfMissing(
 }
 
 function labeledMatches(text: string): DimensionMatch[] {
-  const patterns: Array<[keyof DimensionSemantics, RegExp]> = [
+  const prefixPatterns: Array<[keyof DimensionSemantics, RegExp]> = [
     [
       'length',
       new RegExp(
@@ -158,9 +158,60 @@ function labeledMatches(text: string): DimensionMatch[] {
       ),
     ],
   ]
+  const suffixPatterns: Array<[keyof DimensionSemantics, RegExp]> = [
+    [
+      'length',
+      new RegExp(
+        `${NUMBER_PATTERN}\\s*${UNIT_PATTERN}\\s*(?:\u957f\u5ea6|\u957f|length|long)`,
+        'gi',
+      ),
+    ],
+    [
+      'width',
+      new RegExp(
+        `${NUMBER_PATTERN}\\s*${UNIT_PATTERN}\\s*(?:\u5bbd\u5ea6|\u5bbd|width|wide)`,
+        'gi',
+      ),
+    ],
+    [
+      'depth',
+      new RegExp(
+        `${NUMBER_PATTERN}\\s*${UNIT_PATTERN}\\s*(?:\u6df1\u5ea6|\u6df1|depth|deep)`,
+        'gi',
+      ),
+    ],
+    [
+      'height',
+      new RegExp(
+        `${NUMBER_PATTERN}\\s*${UNIT_PATTERN}\\s*(?:\u9ad8\u5ea6|\u9ad8|height|tall)`,
+        'gi',
+      ),
+    ],
+    [
+      'diameter',
+      new RegExp(
+        `${NUMBER_PATTERN}\\s*${UNIT_PATTERN}\\s*(?:\u76f4\u5f84|\u76f4\u5f91|diameter|dia)`,
+        'gi',
+      ),
+    ],
+    [
+      'radius',
+      new RegExp(
+        `${NUMBER_PATTERN}\\s*${UNIT_PATTERN}\\s*(?:\u534a\u5f84|\u534a\u5f91|radius)`,
+        'gi',
+      ),
+    ],
+    [
+      'thickness',
+      new RegExp(
+        `${NUMBER_PATTERN}\\s*${UNIT_PATTERN}\\s*(?:\u539a\u5ea6|\u539a|thickness)`,
+        'gi',
+      ),
+    ],
+  ]
   const matches: DimensionMatch[] = []
 
-  for (const [key, pattern] of patterns) {
+  for (const [key, pattern] of [...prefixPatterns, ...suffixPatterns]) {
     for (const match of text.matchAll(pattern)) {
       const rawValue = match[1]
       if (!rawValue) continue

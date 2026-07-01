@@ -7,6 +7,7 @@ import { POST, replaceAssetDir } from './route'
 const originalFalKey = process.env.FAL_KEY
 const originalMaxImageMb = process.env.IMAGE_TO_3D_MAX_IMAGE_MB
 const originalProvider = process.env.IMAGE_TO_3D_PROVIDER
+const originalHunyuan3DApiKey = process.env.HUNYUAN3D_API_KEY
 const originalTripo3DKey = process.env.TRIPO3D_API_KEY
 const originalApiKey = process.env.APIKEY
 const originalTencentSecretId = process.env.TENCENTCLOUD_SECRET_ID
@@ -16,6 +17,7 @@ afterEach(() => {
   process.env.FAL_KEY = originalFalKey
   process.env.IMAGE_TO_3D_MAX_IMAGE_MB = originalMaxImageMb
   process.env.IMAGE_TO_3D_PROVIDER = originalProvider
+  process.env.HUNYUAN3D_API_KEY = originalHunyuan3DApiKey
   process.env.TRIPO3D_API_KEY = originalTripo3DKey
   process.env.APIKEY = originalApiKey
   process.env.TENCENTCLOUD_SECRET_ID = originalTencentSecretId
@@ -48,6 +50,7 @@ describe('POST /api/image-to-3d/generate', () => {
   })
 
   test('rejects missing Tencent credentials for Hunyuan3D requests', async () => {
+    delete process.env.HUNYUAN3D_API_KEY
     delete process.env.TENCENTCLOUD_SECRET_ID
     delete process.env.TENCENTCLOUD_SECRET_KEY
     const form = new FormData()
@@ -56,7 +59,8 @@ describe('POST /api/image-to-3d/generate', () => {
     const res = await POST(requestWithForm(form))
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({
-      error: 'TENCENTCLOUD_SECRET_ID and TENCENTCLOUD_SECRET_KEY are not configured on the server',
+      error:
+        'HUNYUAN3D_API_KEY or TENCENTCLOUD_SECRET_ID/TENCENTCLOUD_SECRET_KEY is not configured on the server',
     })
   })
 
@@ -105,6 +109,7 @@ describe('POST /api/image-to-3d/generate', () => {
 
   test('rejects Hunyuan3D images over provider limit', async () => {
     process.env.FAL_KEY = 'test'
+    process.env.HUNYUAN3D_API_KEY = 'sk-test'
     process.env.TENCENTCLOUD_SECRET_ID = 'test'
     process.env.TENCENTCLOUD_SECRET_KEY = 'test'
     process.env.IMAGE_TO_3D_MAX_IMAGE_MB = '10'

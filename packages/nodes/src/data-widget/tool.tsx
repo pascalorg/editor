@@ -41,7 +41,7 @@ export default function DataWidgetTool() {
 
     const onGridClick = (event: GridEvent) => {
       const widget = DataWidgetNode.parse({
-        name: 'Data Widget',
+        name: '\u5355\u6807\u7b7e',
         position: getLevelLocalPosition(activeLevelId, event),
         widgetType: 'label',
         dataKey: 'machine.temperature',

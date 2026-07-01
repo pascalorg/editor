@@ -40,6 +40,7 @@ import { sphereDefinition } from './sphere'
 import { stairDefinition } from './stair'
 import { stairSegmentDefinition } from './stair-segment'
 import { steelBeamDefinition } from './steel-beam'
+import { steelFrameDefinition } from './steel-frame'
 import { sweepDefinition } from './sweep'
 import { tankDefinition } from './tank'
 import { torusDefinition } from './torus'
@@ -84,6 +85,7 @@ export const builtinPlugin: Plugin = {
     cableTrayDefinition as unknown as AnyNodeDefinition,
     ladderDefinition as unknown as AnyNodeDefinition,
     steelBeamDefinition as unknown as AnyNodeDefinition,
+    steelFrameDefinition as unknown as AnyNodeDefinition,
     roadDefinition as unknown as AnyNodeDefinition,
     slabDefinition as unknown as AnyNodeDefinition,
     ceilingDefinition as unknown as AnyNodeDefinition,
@@ -165,6 +167,7 @@ export { sphereDefinition } from './sphere'
 export { stairDefinition } from './stair'
 export { stairSegmentDefinition } from './stair-segment'
 export { steelBeamDefinition } from './steel-beam'
+export { steelFrameDefinition } from './steel-frame'
 export { sweepDefinition } from './sweep'
 export { tankDefinition } from './tank'
 export { torusDefinition } from './torus'

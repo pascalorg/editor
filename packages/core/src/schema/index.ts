@@ -14,6 +14,8 @@ export type {
 // Material
 export {
   DEFAULT_MATERIALS,
+  MaterialGradient,
+  MaterialGradientStop,
   MaterialMapPropertiesSchema,
   MaterialMapsSchema,
   MaterialPreset,
@@ -119,6 +121,7 @@ export {
 } from './nodes/stair'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
 export { SteelBeamNode, SteelBeamProfile } from './nodes/steel-beam'
+export { SteelFrameBraceStyle, SteelFrameNode, SteelFrameStyle } from './nodes/steel-frame'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { SweepNode } from './nodes/sweep'
 export { TankKind, TankNode } from './nodes/tank'

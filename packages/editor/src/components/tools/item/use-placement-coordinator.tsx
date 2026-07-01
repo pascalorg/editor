@@ -35,6 +35,10 @@ import {
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import {
+  clearPlanDragLiveTransform,
+  schedulePlanDragLiveTransform,
+} from '../../../lib/plan-drag-live'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { getGridAlignedDimensions, snapToGrid, snapUpToGridStep } from './placement-math'
@@ -642,7 +646,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       // Publish live transform for 2D floorplan
       if (draft) {
-        useLiveTransforms.getState().set(draft.id, {
+        schedulePlanDragLiveTransform(draft.id, {
           position: result.gridPosition,
           rotation: getCursorRotationY(),
         })
@@ -657,15 +661,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       // Preserve cursor rotation for the next draft
-      const currentRotation: [number, number, number] = [
-        0,
-        getCursorRotationY(),
-        0,
-      ]
+      const currentRotation: [number, number, number] = [0, getCursorRotationY(), 0]
 
       // Clear live transform before commit
       if (draftNode.current) {
-        useLiveTransforms.getState().clear(draftNode.current.id)
+        clearPlanDragLiveTransform(draftNode.current.id)
       }
 
       draftNode.commit(result.nodeUpdate)
@@ -811,7 +811,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         }
 
         // Publish live transform for 2D floorplan
-        useLiveTransforms.getState().set(draft.id, {
+        schedulePlanDragLiveTransform(draft.id, {
           position: result.cursorPosition,
           rotation: result.cursorRotationY,
         })
@@ -825,7 +825,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       event.stopPropagation()
       // Clear live transform before commit
       if (draftNode.current) {
-        useLiveTransforms.getState().clear(draftNode.current.id)
+        clearPlanDragLiveTransform(draftNode.current.id)
       }
       draftNode.commit(result.nodeUpdate)
       if (result.dirtyNodeId) {
@@ -990,7 +990,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         if (mesh) mesh.position.set(...result.gridPosition)
 
         // Publish live transform for 2D floorplan
-        useLiveTransforms.getState().set(draft.id, {
+        schedulePlanDragLiveTransform(draft.id, {
           position: result.cursorPosition,
           rotation: result.cursorRotationY,
         })
@@ -1031,7 +1031,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             if (result) {
               event.stopPropagation()
               if (draftNode.current) {
-                useLiveTransforms.getState().clear(draftNode.current.id)
+                clearPlanDragLiveTransform(draftNode.current.id)
               }
               draftNode.commit(result.nodeUpdate)
               if (configRef.current.onCommitted()) {
@@ -1057,7 +1057,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             if (result) {
               event.stopPropagation()
               if (draftNode.current) {
-                useLiveTransforms.getState().clear(draftNode.current.id)
+                clearPlanDragLiveTransform(draftNode.current.id)
               }
               draftNode.commit(result.nodeUpdate)
               if (configRef.current.onCommitted()) {
@@ -1086,7 +1086,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             if (result) {
               event.stopPropagation()
               if (draftNode.current) {
-                useLiveTransforms.getState().clear(draftNode.current.id)
+                clearPlanDragLiveTransform(draftNode.current.id)
               }
               draftNode.commit(result.nodeUpdate)
               if (configRef.current.onCommitted()) {
@@ -1116,7 +1116,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       event.stopPropagation()
       // Clear live transform before commit
       if (draftNode.current) {
-        useLiveTransforms.getState().clear(draftNode.current.id)
+        clearPlanDragLiveTransform(draftNode.current.id)
       }
       draftNode.commit(result.nodeUpdate)
 
@@ -1198,7 +1198,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         if (mesh) mesh.position.copy(gridPosition.current)
 
         // Publish live transform for 2D floorplan
-        useLiveTransforms.getState().set(draft.id, {
+        schedulePlanDragLiveTransform(draft.id, {
           position: result.cursorPosition,
           rotation: getCursorRotationY(),
         })
@@ -1212,7 +1212,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       event.stopPropagation()
       // Clear live transform before commit
       if (draftNode.current) {
-        useLiveTransforms.getState().clear(draftNode.current.id)
+        clearPlanDragLiveTransform(draftNode.current.id)
       }
       draftNode.commit(result.nodeUpdate)
 
@@ -1314,7 +1314,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         draft.position = result.gridPosition
         const mesh = sceneRegistry.nodes.get(draft.id)
         if (mesh) mesh.position.set(...result.gridPosition)
-        useLiveTransforms.getState().set(draft.id, {
+        schedulePlanDragLiveTransform(draft.id, {
           position: result.cursorPosition,
           rotation: result.cursorRotationY,
         })
@@ -1339,7 +1339,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       event.stopPropagation()
       if (draftNode.current) {
-        useLiveTransforms.getState().clear(draftNode.current.id)
+        clearPlanDragLiveTransform(draftNode.current.id)
       }
       draftNode.commit(result.nodeUpdate)
 
@@ -1438,7 +1438,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         // Update live transform for 2D floorplan with post-snap position
         const currentLive = useLiveTransforms.getState().get(draft.id)
         if (currentLive) {
-          useLiveTransforms.getState().set(draft.id, {
+          schedulePlanDragLiveTransform(draft.id, {
             ...currentLive,
             position: cursorGroupRef.current
               ? ([
@@ -1553,7 +1553,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       unsubDraftWatch()
       // Clear live transform for any remaining draft
       if (draftNode.current) {
-        useLiveTransforms.getState().clear(draftNode.current.id)
+        clearPlanDragLiveTransform(draftNode.current.id)
       }
       draftNode.destroy()
       useScene.temporal.getState().resume()

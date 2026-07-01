@@ -1502,5 +1502,164 @@
       "detailLevel": "low",
       "maxShapes": 72
     }
+  },
+  {
+    "id": "cement.control_room",
+    "name": "Central control room",
+    "aliases": [
+      "central control room",
+      "cement control room",
+      "cement plant control room",
+      "process control room",
+      "MCC room",
+      "MCC control",
+      "mcc_control",
+      "control cabinet room",
+      "水泥厂中控室",
+      "中控室",
+      "控制室",
+      "MCC控制室",
+      "MCC控制柜"
+    ],
+    "industry": "cement",
+    "family": "generic",
+    "layoutFamily": "box_enclosure_layout",
+    "archetypeFamily": "occupied_building",
+    "preferredResolver": "profile-parts",
+    "defaultDimensions": {
+      "length": 5.2,
+      "width": 2.8,
+      "height": 2.6
+    },
+    "primarySemanticRole": "control_room_body",
+    "parts": [
+      {
+        "kind": "generic_body",
+        "semanticRole": "control_room_body",
+        "required": true,
+        "length": 5.2,
+        "width": 2.8,
+        "height": 2.25,
+        "primaryColor": "#d1d5db",
+        "cornerRadius": 0.04
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "control_room_roof_cap",
+        "required": true,
+        "length": 5.45,
+        "width": 3.05,
+        "height": 0.18,
+        "alignAbove": "control_room_body",
+        "primaryColor": "#94a3b8"
+      },
+      {
+        "kind": "generic_opening",
+        "semanticRole": "control_room_door",
+        "required": true,
+        "length": 0.82,
+        "height": 1.6,
+        "attachToRole": "control_room_body",
+        "anchor": "front",
+        "offset": [
+          -1.7,
+          -0.12,
+          0
+        ]
+      },
+      {
+        "kind": "generic_detail_accent",
+        "semanticRole": "kiln_line_observation_window",
+        "required": true,
+        "length": 1.1,
+        "height": 0.42,
+        "attachToRole": "control_room_body",
+        "anchor": "front",
+        "offset": [
+          0.7,
+          0.28,
+          0
+        ],
+        "accentColor": "#88c0d0",
+        "opacity": 0.42
+      },
+      {
+        "kind": "generic_detail_accent",
+        "semanticRole": "grinding_line_observation_window",
+        "length": 0.9,
+        "height": 0.38,
+        "attachToRole": "control_room_body",
+        "anchor": "right",
+        "offset": [
+          0,
+          0.24,
+          0.25
+        ],
+        "accentColor": "#88c0d0",
+        "opacity": 0.38
+      },
+      {
+        "kind": "control_box",
+        "semanticRole": "mcc_panel_row",
+        "required": true,
+        "attachToRole": "control_room_body",
+        "anchor": "service_side"
+      },
+      {
+        "kind": "generic_detail_accent",
+        "semanticRole": "scada_display_panel",
+        "length": 1.2,
+        "height": 0.38,
+        "attachToRole": "control_room_body",
+        "anchor": "front",
+        "offset": [
+          1.65,
+          0.2,
+          0
+        ],
+        "accentColor": "#0f172a"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "cable_tray_entry",
+        "required": true,
+        "length": 2.0,
+        "radius": 0.035,
+        "axis": "x",
+        "attachToRole": "control_room_body",
+        "anchor": "back"
+      }
+    ],
+    "visualCues": [
+      "single-storey cement plant central control building",
+      "flat roof cap and concrete wall body",
+      "entrance door and blue-tinted observation windows toward kiln and grinding lines",
+      "MCC cabinet row and SCADA display panel",
+      "cable-tray entry for power and control connections"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Cement plant occupied central control room and MCC room profile, modeled as a small building instead of a cabinet row.",
+    "qualityRules": "quality.cement.control_room",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 64
+    },
+    "processPorts": [
+      {
+        "id": "power_out",
+        "medium": "power",
+        "side": "back",
+        "height": 0.45,
+        "offset": 0
+      },
+      {
+        "id": "control_network_out",
+        "medium": "signal",
+        "side": "back",
+        "height": 0.55,
+        "offset": 0.2
+      }
+    ]
   }
 ]

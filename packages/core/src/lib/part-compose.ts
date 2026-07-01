@@ -23,6 +23,7 @@ export type PartComposeKind =
   | 'radial_blades'
   | 'protective_grill'
   | 'pyramid'
+  | 'hemisphere'
   | 'wheel'
   | 'wheel_set'
   | 'window_panel'
@@ -124,6 +125,7 @@ export type PartComposeKind =
   | 'bearing_block'
   | 'support_roller_pair'
   | 'structural_tower_frame'
+  | 'helical_stair'
   | 'cyclone_separator_unit'
   | 'coupling_guard'
   | 'motor_gearbox_unit'
@@ -203,6 +205,7 @@ export interface PartComposePartInput {
   outletAngle?: number
   radius?: number
   diameter?: number
+  scale?: Vec3
   radiusTop?: number
   radiusBottom?: number
   outletRadius?: number
@@ -228,13 +231,21 @@ export interface PartComposePartInput {
   rungCount?: number
   rollerLength?: number
   radialSegments?: number
+  widthSegments?: number
+  heightSegments?: number
   levelCount?: number
   bayCount?: number
   stageCount?: number
+  stepCount?: number
   stairFlights?: number
   stairSide?: PartSide | string
   stairPlacement?: 'inside' | 'outside' | string
   externalStairs?: boolean
+  innerRadius?: number
+  outerRadius?: number
+  sweepAngle?: number
+  startAngle?: number
+  railingHeight?: number
   includeDiagonalBraces?: boolean
   spokeCount?: number
   wireRadius?: number
@@ -802,6 +813,16 @@ function normalizePartKind(kind: unknown): PartComposeKind | null {
     case 'four_sided_pyramid':
     case 'tetra_pyramid':
       return 'pyramid'
+    case 'hemisphere':
+    case 'half_sphere':
+    case 'semi_sphere':
+    case 'dome':
+    case 'half_dome':
+    case '\u534a\u7403':
+    case '\u534a\u7403\u4f53':
+    case '\u534a\u5706\u7403':
+    case '\u534a\u5706\u5f62\u7403':
+      return 'hemisphere'
     case 'bracket':
     case 'yoke':
     case 'support_bracket':
@@ -1292,6 +1313,17 @@ function normalizePartKind(kind: unknown): PartComposeKind | null {
     case 'preheater_tower_frame':
     case 'multi_level_tower_frame':
       return 'structural_tower_frame'
+    case 'helical_stair':
+    case 'helical_stairs':
+    case 'spiral_stair':
+    case 'spiral_stairs':
+    case 'external_spiral_stair':
+    case 'tower_spiral_stair':
+    case 'wraparound_stair':
+    case 'wraparound_stairs':
+    case 'ring_stair':
+    case 'annular_stair':
+      return 'helical_stair'
     case 'cyclone_separator_unit':
     case 'cyclone_unit':
     case 'preheater_cyclone':
@@ -2608,6 +2640,44 @@ function composePyramid(
       material: partMaterial(part, material(input.primaryColor ?? '#c08457', 0.56, 0.18)),
     },
   ]
+}
+
+function composeHemisphere(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const diameter = part.diameter ?? (part.radius != null ? part.radius * 2 : undefined)
+  const length = clamp(part.length ?? diameter, 1, 0.02, 20)
+  const width = clamp(part.width ?? part.depth ?? diameter, length, 0.02, 20)
+  const radius = clamp(
+    part.radius ?? (part.diameter != null ? part.diameter / 2 : undefined),
+    0.5,
+    0.01,
+    10,
+  )
+  const height = clamp(part.height, radius, 0.01, 10)
+  const center = add(origin, part.position ?? [0, height / 2, 0])
+  const scale: Vec3 = part.scale ?? [length / (radius * 2), height / radius, width / (radius * 2)]
+
+  return applyPartRotation(
+    [
+      {
+        kind: 'hemisphere',
+        name: `${part.name ?? input.name ?? 'object'} hemisphere`,
+        semanticRole: part.semanticRole ?? 'hemisphere',
+        sourcePartKind: part.sourcePartKind ?? 'hemisphere',
+        position: center,
+        radius,
+        scale,
+        widthSegments: clampInt(part.widthSegments, input.detail === 'high' ? 48 : 32, 8, 64),
+        heightSegments: clampInt(part.heightSegments, input.detail === 'high' ? 20 : 16, 4, 32),
+        material: partMaterial(part, material(input.primaryColor ?? '#94a3b8', 0.42, 0.2)),
+      },
+    ],
+    center,
+    part.rotation,
+  )
 }
 
 function pyramidTopScale(
@@ -8093,6 +8163,200 @@ function composeStructuralTowerFrame(
   return applyPartRotation(shapes, center, part.rotation)
 }
 
+function composeHelicalStair(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const height = clamp(part.height ?? part.overallHeight, 6, 0.8, 18)
+  const treadWidth = clamp(part.width, 0.32, 0.12, 1.2)
+  const innerRadius = clamp(part.innerRadius ?? part.radius, 0.9, 0.08, 6)
+  const outerRadius = clamp(part.outerRadius, innerRadius + treadWidth, innerRadius + 0.08, 7)
+  const stairWidth = outerRadius - innerRadius
+  const centerRadius = innerRadius + stairWidth / 2
+  const detail = partDetailLevel(input, part)
+  const defaultTurns = clamp(height / 3.2, 2, 1.15, 4.5)
+  const sweepAngle = clamp(
+    part.sweepAngle,
+    defaultTurns * Math.PI * 2,
+    Math.PI * 0.75,
+    Math.PI * 10,
+  )
+  const minimumStepCount = clampInt(
+    undefined,
+    Math.max(
+      Math.ceil(height / (detail === 'high' ? 0.24 : detail === 'medium' ? 0.28 : 0.32)),
+      Math.ceil((Math.abs(sweepAngle) * centerRadius) / 0.58),
+      8,
+    ),
+    8,
+    72,
+  )
+  const defaultStepCount =
+    detail === 'high'
+      ? Math.max(28, Math.round(height * 3.2))
+      : detail === 'medium'
+        ? Math.max(22, Math.round(height * 2.4))
+        : Math.max(16, Math.round(height * 1.6))
+  const stepCount = clampInt(
+    part.stepCount ?? part.count,
+    Math.max(defaultStepCount, minimumStepCount),
+    minimumStepCount,
+    96,
+  )
+  const startAngle = part.startAngle ?? part.aroundStartAngle ?? 0
+  const treadArc = Math.abs(sweepAngle / stepCount) * centerRadius
+  const treadDepth = clamp(part.depth, Math.min(0.72, treadArc * 0.82), 0.04, 0.9)
+  const treadThickness = clamp(part.thickness, 0.035, 0.012, 0.16)
+  const railHeight = clamp(part.railingHeight, 0.42, 0.18, 1.1)
+  const wireRadius = clamp(part.wireRadius, 0.018, 0.004, 0.08)
+  const center = add(origin, part.position ?? [0, height / 2, 0])
+  const bottomY = center[1] - height / 2
+  const steel = partMaterial(
+    part,
+    material(part.metalColor ?? input.metalColor ?? '#64748b', 0.4, 0.66),
+  )
+  const treadMat = material(
+    part.color ?? part.metalColor ?? input.metalColor ?? '#94a3b8',
+    0.48,
+    0.5,
+  )
+  const sourcePartKind = part.sourcePartKind ?? 'helical_stair'
+  const shapes: PrimitiveShapeInput[] = []
+  const pointAt = (radius: number, angle: number, y: number): Vec3 => [
+    center[0] + Math.cos(angle) * radius,
+    y,
+    center[2] + Math.sin(angle) * radius,
+  ]
+  const localHelixPath = (radius: number, pointCount: number): Vec3[] =>
+    Array.from({ length: pointCount + 1 }, (_, i) => {
+      const t = i / pointCount
+      const angle = startAngle + sweepAngle * t
+      return [Math.cos(angle) * radius, -height / 2 + height * t, Math.sin(angle) * radius]
+    })
+
+  for (let i = 0; i < stepCount; i += 1) {
+    const t = (i + 0.5) / stepCount
+    const angle = startAngle + sweepAngle * t
+    const y = bottomY + height * t
+    shapes.push({
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'tower'} helical stair tread ${i + 1}`,
+      semanticRole: part.semanticRole ?? 'helical_stair_tread',
+      sourcePartKind,
+      position: pointAt(centerRadius, angle, y),
+      rotation: [0, -angle, 0],
+      length: stairWidth,
+      width: treadDepth,
+      height: treadThickness,
+      material: treadMat,
+    })
+  }
+
+  const railPathPointCount = clampInt(
+    part.ringCount,
+    Math.max(
+      detail === 'high' ? 32 : detail === 'medium' ? 24 : 18,
+      Math.ceil(stepCount / 2),
+    ),
+    8,
+    72,
+  )
+  const innerStringerRadius = innerRadius + wireRadius * 1.5
+  const outerStringerRadius = outerRadius - wireRadius * 1.5
+  const helixPath = localHelixPath(outerStringerRadius, railPathPointCount)
+  const innerHelixPath = localHelixPath(innerStringerRadius, railPathPointCount)
+  const railSegments = Math.max(24, railPathPointCount * 4)
+  shapes.push(
+    {
+      kind: 'sweep',
+      name: `${part.name ?? input.name ?? 'tower'} continuous outer guard rail`,
+      semanticRole: 'helical_stair_guard_rail',
+      sourcePartKind,
+      position: [center[0], center[1] + railHeight, center[2]],
+      path: helixPath,
+      radius: wireRadius,
+      tubularSegments: railSegments,
+      radialSegments: 8,
+      material: steel,
+    },
+    {
+      kind: 'sweep',
+      name: `${part.name ?? input.name ?? 'tower'} continuous outer mid rail`,
+      semanticRole: 'helical_stair_mid_rail',
+      sourcePartKind,
+      position: [center[0], center[1] + railHeight * 0.55, center[2]],
+      path: helixPath,
+      radius: wireRadius * 0.78,
+      tubularSegments: railSegments,
+      radialSegments: 8,
+      material: steel,
+    },
+    {
+      kind: 'sweep',
+      name: `${part.name ?? input.name ?? 'tower'} outer tread stringer`,
+      semanticRole: 'helical_stair_stringer',
+      sourcePartKind,
+      position: [center[0], center[1] - treadThickness * 0.4, center[2]],
+      path: helixPath,
+      radius: wireRadius * 0.92,
+      tubularSegments: railSegments,
+      radialSegments: 8,
+      material: steel,
+    },
+    {
+      kind: 'sweep',
+      name: `${part.name ?? input.name ?? 'tower'} inner tread stringer`,
+      semanticRole: 'helical_stair_stringer',
+      sourcePartKind,
+      position: [center[0], center[1] - treadThickness * 0.4, center[2]],
+      path: innerHelixPath,
+      radius: wireRadius * 0.92,
+      tubularSegments: railSegments,
+      radialSegments: 8,
+      material: steel,
+    },
+  )
+
+  const landingWidth = Math.min(0.95, treadDepth * 1.65)
+  for (const [index, t] of [0, 1].entries()) {
+    const angle = startAngle + sweepAngle * t
+    const y = bottomY + height * t
+    shapes.push({
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'tower'} helical stair ${index === 0 ? 'bottom' : 'top'} landing`,
+      semanticRole: 'helical_stair_landing',
+      sourcePartKind,
+      position: pointAt(centerRadius, angle, y),
+      rotation: [0, -angle, 0],
+      length: stairWidth * 1.18,
+      width: landingWidth,
+      height: treadThickness * 1.15,
+      material: treadMat,
+    })
+  }
+
+  const postEvery = detail === 'high' ? 3 : detail === 'medium' ? 4 : 5
+  for (let i = 0; i <= stepCount; i += postEvery) {
+    const t = i / stepCount
+    const angle = startAngle + sweepAngle * t
+    const y = bottomY + height * t
+    shapes.push({
+      ...tubeBetween(
+        `${part.name ?? input.name ?? 'tower'} helical stair post ${i + 1}`,
+        pointAt(outerStringerRadius, angle, y),
+        pointAt(outerStringerRadius, angle, y + railHeight),
+        wireRadius,
+        steel,
+      ),
+      semanticRole: 'helical_stair_post',
+      sourcePartKind,
+    })
+  }
+
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
 function composeCycloneSeparatorUnit(
   input: PartComposeInput,
   part: PartComposePartInput,
@@ -10060,6 +10324,16 @@ function partCenter(part: PartComposePartInput, kind: PartComposeKind | null): V
       return [0, 0.4, 0]
     case 'ellipsoid_shell':
       return [0, clamp(part.height, 0.18, 0.02, 3) * 0.56, 0]
+    case 'hemisphere': {
+      const radius = clamp(
+        part.radius ?? (part.diameter != null ? part.diameter / 2 : undefined),
+        0.5,
+        0.01,
+        10,
+      )
+      const height = clamp(part.height, radius, 0.01, 10)
+      return [0, height / 2, 0]
+    }
     case 'curved_lens_panel':
       return [0, 0.45, 0]
     case 'ergonomic_shell':
@@ -10078,6 +10352,8 @@ function partCenter(part: PartComposePartInput, kind: PartComposeKind | null): V
       return [0, 0.22, 0]
     case 'structural_tower_frame':
       return [0, clamp(part.height, 5, 1, 16) / 2, 0]
+    case 'helical_stair':
+      return [0, clamp(part.height ?? part.overallHeight, 6, 0.8, 18) / 2, 0]
     case 'cyclone_separator_unit':
       return [0, clamp(part.height, 1.2, 0.3, 4) / 2, 0]
     case 'rounded_machine_body':
@@ -10218,6 +10494,19 @@ function partHalfExtents(part: PartComposePartInput, kind: PartComposeKind | nul
         clamp(part.height, 0.18, 0.02, 3) / 2,
         clamp(part.width ?? part.depth, 0.28, 0.025, 4) / 2,
       ]
+    case 'hemisphere': {
+      const diameter = part.diameter ?? (part.radius != null ? part.radius * 2 : undefined)
+      const length = clamp(part.length ?? diameter, 1, 0.02, 20)
+      const width = clamp(part.width ?? part.depth ?? diameter, length, 0.02, 20)
+      const radius = clamp(
+        part.radius ?? (part.diameter != null ? part.diameter / 2 : undefined),
+        0.5,
+        0.01,
+        10,
+      )
+      const height = clamp(part.height, radius, 0.01, 10)
+      return [length / 2, height / 2, width / 2]
+    }
     case 'curved_lens_panel':
       return [
         clamp(part.width ?? part.length, 0.32, 0.04, 2) / 2,
@@ -12307,6 +12596,8 @@ function semanticRoleForPartShape(kind: PartComposeKind, shape: PrimitiveShapeIn
       return 'headlight'
     case 'pyramid':
       return 'pyramid'
+    case 'hemisphere':
+      return 'hemisphere'
     case 'chimney_stack':
       if (name.includes('base')) return 'chimney_base'
       if (name.includes('rim')) return 'chimney_top_rim'
@@ -12733,6 +13024,9 @@ export function composePartPrimitives(input: PartComposeInput = {}): PrimitiveSh
       case 'pyramid':
         shapes.push(...composePyramid(input, part, origin))
         break
+      case 'hemisphere':
+        shapes.push(...composeHemisphere(input, part, origin))
+        break
       case 'support_bracket':
         shapes.push(...composeSupportBracket(input, part, origin))
         break
@@ -12845,6 +13139,9 @@ export function composePartPrimitives(input: PartComposeInput = {}): PrimitiveSh
         break
       case 'structural_tower_frame':
         shapes.push(...composeStructuralTowerFrame(input, part, origin))
+        break
+      case 'helical_stair':
+        shapes.push(...composeHelicalStair(input, part, origin))
         break
       case 'cyclone_separator_unit':
         shapes.push(...composeCycloneSeparatorUnit(input, part, origin))

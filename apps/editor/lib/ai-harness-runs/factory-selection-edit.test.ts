@@ -4,12 +4,15 @@ import {
   composeSelectionDeleteEdit,
   composeSelectionEdit,
   composeSelectionGeometryEdit,
+  composeSelectionGradientEdit,
   composeSelectionMoveEdit,
   composeSelectionReplaceEdit,
   composeSelectionRotateEdit,
+  resolveOpacityValue,
   resolveSelectionEditColor,
   resolveSelectionGeometryDimension,
   resolveSelectionGeometryFactor,
+  resolveSelectionGradientColors,
   resolveSelectionReplacement,
   resolveSelectionTankKind,
 } from './factory-selection-edit'
@@ -19,6 +22,43 @@ describe('factory selection edit composer', () => {
     expect(
       resolveSelectionEditColor('\u628a\u8fd9\u4e2a\u7269\u54c1\u6539\u6210\u7ea2\u8272'),
     ).toBe('#ef4444')
+  })
+
+  test('resolves gradient color pairs and Chinese transparency ratio', () => {
+    expect(resolveSelectionGradientColors('改成红黑色渐变')).toEqual(['#ef4444', '#111827'])
+    expect(resolveOpacityValue('透明度80%')).toBeCloseTo(0.2)
+    expect(resolveOpacityValue('不透明度80%')).toBeCloseTo(0.8)
+    expect(resolveOpacityValue('opacity 80%')).toBeCloseTo(0.8)
+  })
+
+  test('applies gradient material with transparency to selected material nodes', () => {
+    const result = composeSelectionGradientEdit({
+      prompt: '把选中的物品改成红黑色渐变，透明度80%',
+      context: {
+        selection: {
+          selectedIds: ['item_1'],
+          nodes: [
+            {
+              id: 'item_1',
+              type: 'item',
+              name: 'Imported GLB item',
+              material: { properties: { color: '#ffffff' } },
+            },
+          ],
+        },
+      },
+    })
+
+    expect(result?.nodeIds).toEqual(['item_1'])
+    const patch = result?.patches[0]
+    expect(patch?.op).toBe('update')
+    const material = patch?.op === 'update' ? (patch.data.material as any) : undefined
+    expect(material?.properties.opacity).toBeCloseTo(0.2)
+    expect(material?.properties.transparent).toBe(true)
+    expect(material?.gradient?.stops).toEqual([
+      { offset: 0, color: '#ef4444', opacity: 1 },
+      { offset: 1, color: '#111827', opacity: 1 },
+    ])
   })
 
   test('recolors editable descendants when an assembly is selected', () => {

@@ -7,6 +7,7 @@ import {
   type MaterialSchema,
 } from '@pascal-app/core'
 import { ChevronDown } from 'lucide-react'
+import { getMaterialPreviewBackground } from '../../../lib/material-appearance'
 import { cn } from '../../../lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { MaterialPicker } from './material-picker'
@@ -38,8 +39,11 @@ export function MaterialSwatchField({
     catalogItem?.previewColor ??
     preset?.mapProperties.color ??
     '#ffffff'
+  const previewBackground = getMaterialPreviewBackground(value, color)
   const name =
-    value?.properties?.color && !selectedMaterialPreset
+    value?.gradient && !selectedMaterialPreset
+      ? '\u81ea\u5b9a\u4e49\u6e10\u53d8'
+      : value?.properties?.color && !selectedMaterialPreset
       ? value.properties.color
       : catalogItem?.label ?? description ?? '\u81ea\u5b9a\u4e49'
 
@@ -59,7 +63,9 @@ export function MaterialSwatchField({
               'h-6 w-6 shrink-0 overflow-hidden rounded-md border border-white/15',
               !catalogItem?.previewThumbnailUrl && 'shadow-inner',
             )}
-            style={catalogItem?.previewThumbnailUrl ? undefined : { backgroundColor: color }}
+            style={
+              catalogItem?.previewThumbnailUrl ? undefined : { background: previewBackground }
+            }
           >
             {catalogItem?.previewThumbnailUrl ? (
               <img

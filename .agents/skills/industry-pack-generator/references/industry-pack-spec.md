@@ -112,6 +112,12 @@ If the pack only provides equipment profiles, omit `factory_creation`; QA will c
 - `qualityRequiredRoles` can add roles beyond required parts.
 - `forbiddenRoles` should prevent common wrong-domain details.
 - `shapeCount` controls QA expectations.
+- Control rooms, MCC rooms, labs, substations, and other occupied-building stations should use
+  `preferredResolver: "profile-parts"` instead of `catalog-item`, with roles for the building body,
+  roof cap/parapet, door/opening, windows, panels, and service entries.
+- Packaged boilers can use a rectangular casing, but should also include boiler-specific process
+  features such as a stack, steam drum or tube bank, steam header/manifold, burner opening, platform,
+  and control box. Avoid profiles that are only `generic_body` plus one accessory.
 
 ## Generated Files
 

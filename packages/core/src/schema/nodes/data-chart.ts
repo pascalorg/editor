@@ -17,6 +17,7 @@ export const DataChartNode = BaseNode.extend({
     .default(['machine.temperature', 'fan.speed', 'alarm.count']),
   foreground: z.string().default('#ffffff'),
   background: z.string().default('#111827'),
+  backgroundOpacity: z.number().min(0).max(1).default(1),
   accent: z.string().default('#38bdf8'),
   fontSize: z.number().min(10).max(32).default(13),
 }).describe('Data chart widget - bar or line chart backed by static/live data.')

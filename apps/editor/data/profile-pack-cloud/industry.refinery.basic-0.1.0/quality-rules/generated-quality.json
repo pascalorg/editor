@@ -212,24 +212,40 @@
     "id": "quality.refinery.utility_boiler",
     "requiredRoles": [
       "boiler_body",
+      "steam_drum",
+      "mud_drum",
+      "boiler_tube_bank",
       "boiler_stack",
       "steam_header",
+      "burner_front",
+      "burner_windbox",
+      "fuel_gas_train",
+      "boiler_access_platform",
       "boiler_control_box"
     ],
     "shapeCount": {
-      "min": 3,
-      "max": 32
+      "min": 10,
+      "max": 88
     }
   },
   {
     "id": "quality.refinery.control_room",
     "requiredRoles": [
-      "control_room_body",
-      "mcc_panel"
+      "control_room_floor_slab",
+      "control_room_front_wall",
+      "control_room_back_wall",
+      "control_room_left_wall",
+      "control_room_right_wall",
+      "control_room_flat_roof",
+      "blast_door",
+      "control_room_window",
+      "side_observation_window",
+      "mcc_panel",
+      "cable_tray_entry"
     ],
     "shapeCount": {
-      "min": 1,
-      "max": 24
+      "min": 10,
+      "max": 64
     }
   },
   {

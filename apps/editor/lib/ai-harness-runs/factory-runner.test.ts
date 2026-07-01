@@ -185,6 +185,36 @@ describe('factory runner helpers', () => {
     })
   })
 
+  test('carries site bounds from context into placement metadata', () => {
+    const placement = buildFactoryPlacementSpec({
+      context: {
+        scene: {
+          site: {
+            id: 'site_default',
+            isDefault: true,
+            bounds: {
+              min: [-15, -15],
+              max: [15, 15],
+              center: [0, 0],
+              size: [30, 30],
+            },
+          },
+        },
+      },
+    })
+
+    expect(placement.metadata).toMatchObject({
+      siteId: 'site_default',
+      siteIsDefault: true,
+      siteBounds: {
+        min: [-15, -15],
+        max: [15, 15],
+        center: [0, 0],
+        size: [30, 30],
+      },
+    })
+  })
+
   test('carries building id from context into layout placement metadata', () => {
     const placement = buildFactoryPlacementSpec({
       context: { parentId: 'level_context', buildingId: 'building_context' },
@@ -259,6 +289,85 @@ describe('factory runner helpers', () => {
     expect(
       result?.patches.some((patch) => patch.op === 'create' && patch.node.type === 'door'),
     ).toBe(true)
+  })
+
+  test('expands the default site when a generated factory shell exceeds it', () => {
+    const result = buildFactoryRunResultFromPlan({
+      prompt: 'generate a refinery',
+      plannerSource: 'fallback',
+      placement: {
+        parentId: 'level_factory',
+        generatedBy: 'factory-agent',
+        metadata: {
+          siteId: 'site_default',
+          siteIsDefault: true,
+          siteBounds: {
+            min: [-15, -15],
+            max: [15, 15],
+            center: [0, 0],
+            size: [30, 30],
+          },
+        },
+      },
+      params: { length: 60, width: 42, omitPerimeterWalls: true },
+      plan: {
+        kind: 'layout',
+        reason: 'factory workshop',
+        layoutType: 'factory',
+        suggestedOperations: ['create_room'],
+      },
+    })
+
+    const sitePatch = result?.patches.find(
+      (patch) => patch.op === 'update' && patch.id === 'site_default',
+    )
+    expect(sitePatch).toMatchObject({
+      op: 'update',
+      id: 'site_default',
+      data: {
+        polygon: {
+          type: 'polygon',
+          points: [
+            [-34, -25],
+            [34, -25],
+            [34, 25],
+            [-34, 25],
+          ],
+        },
+      },
+    })
+  })
+
+  test('does not expand a user-defined site automatically', () => {
+    const result = buildFactoryRunResultFromPlan({
+      prompt: 'generate a refinery',
+      plannerSource: 'fallback',
+      placement: {
+        parentId: 'level_factory',
+        generatedBy: 'factory-agent',
+        metadata: {
+          siteId: 'site_custom',
+          siteIsDefault: false,
+          siteBounds: {
+            min: [-15, -15],
+            max: [15, 15],
+            center: [0, 0],
+            size: [30, 30],
+          },
+        },
+      },
+      params: { length: 60, width: 42, omitPerimeterWalls: true },
+      plan: {
+        kind: 'layout',
+        reason: 'factory workshop',
+        layoutType: 'factory',
+        suggestedOperations: ['create_room'],
+      },
+    })
+
+    expect(
+      result?.patches.some((patch) => patch.op === 'update' && patch.id === 'site_custom'),
+    ).toBe(false)
   })
 
   test('returns catalog item patches without applying them', () => {

@@ -138,7 +138,17 @@ const MATERIAL_PRESETS = new Set([
   'custom',
 ])
 
-const PRIMITIVE_ANCHORS = new Set(['top', 'bottom', 'center', 'front', 'back', 'left', 'right'])
+const PRIMITIVE_ANCHORS = new Set([
+  'top',
+  'bottom',
+  'center',
+  'front',
+  'back',
+  'left',
+  'right',
+  'start',
+  'end',
+])
 
 function readGeometryIntentArgument(args: Record<string, unknown>) {
   return (
@@ -515,6 +525,7 @@ function normalizePrimitiveMaterial(
     const rawOpacity = rawMaterial.opacity ?? rawProperties.opacity
     const rawTransparent = rawMaterial.transparent ?? rawProperties.transparent
     const rawSide = rawMaterial.side ?? rawProperties.side
+    const gradient = normalizePrimitiveMaterialGradient(rawMaterial.gradient)
     const properties: NonNullable<PrimitiveMaterialInput['properties']> = {}
 
     if (typeof rawColor === 'string') properties.color = rawColor
@@ -536,7 +547,8 @@ function normalizePrimitiveMaterial(
       material.preset = rawMaterial.preset
     }
     if (Object.keys(properties).length > 0) material.properties = properties
-    if (material.id || material.preset || material.properties) return material
+    if (gradient) material.gradient = gradient
+    if (material.id || material.preset || material.properties || material.gradient) return material
   }
 
   if (typeof materialColor === 'string') return { properties: { color: materialColor } }
@@ -551,6 +563,40 @@ function normalizePrimitiveMaterial(
   }
 
   return undefined
+}
+
+function normalizePrimitiveMaterialGradient(
+  value: unknown,
+): PrimitiveMaterialInput['gradient'] | undefined {
+  if (!isRecord(value)) return undefined
+  const rawStops = Array.isArray(value.stops) ? value.stops : []
+  const stops = rawStops.flatMap((rawStop) => {
+    if (!isRecord(rawStop)) return []
+    const offset =
+      typeof rawStop.offset === 'number' && Number.isFinite(rawStop.offset)
+        ? Math.max(0, Math.min(1, rawStop.offset))
+        : undefined
+    const color = typeof rawStop.color === 'string' ? rawStop.color : undefined
+    const opacity =
+      typeof rawStop.opacity === 'number' && Number.isFinite(rawStop.opacity)
+        ? Math.max(0, Math.min(1, rawStop.opacity))
+        : 1
+    return offset != null && color ? [{ offset, color, opacity }] : []
+  })
+
+  if (stops.length < 2) return undefined
+
+  const space =
+    value.space === 'local' || value.space === 'world' || value.space === 'uv' ? value.space : 'uv'
+  const axis = value.axis === 'x' || value.axis === 'y' || value.axis === 'z' ? value.axis : 'y'
+
+  return {
+    type: 'linear',
+    space,
+    axis,
+    angle: typeof value.angle === 'number' && Number.isFinite(value.angle) ? value.angle : 0,
+    stops: stops.slice(0, 8).sort((a, b) => a.offset - b.offset),
+  }
 }
 
 function containsGlassText(value: unknown): boolean {
@@ -610,16 +656,28 @@ function getExpectedAttachmentSide(
 ): { axis: 0 | 1 | 2; sign: -1 | 1; label: string } | undefined {
   if (anchor === 'top' && childAnchor === 'bottom')
     return { axis: 1, sign: 1, label: 'above the parent' }
+  if (anchor === 'top' && childAnchor === 'center')
+    return { axis: 1, sign: 1, label: 'at the parent top' }
   if (anchor === 'bottom' && childAnchor === 'top')
     return { axis: 1, sign: -1, label: 'below the parent' }
+  if (anchor === 'bottom' && childAnchor === 'center')
+    return { axis: 1, sign: -1, label: 'at the parent bottom' }
   if (anchor === 'right' && childAnchor === 'left')
     return { axis: 0, sign: 1, label: 'right of the parent' }
+  if (anchor === 'right' && childAnchor === 'center')
+    return { axis: 0, sign: 1, label: 'at the parent right side' }
   if (anchor === 'left' && childAnchor === 'right')
     return { axis: 0, sign: -1, label: 'left of the parent' }
+  if (anchor === 'left' && childAnchor === 'center')
+    return { axis: 0, sign: -1, label: 'at the parent left side' }
   if (anchor === 'front' && childAnchor === 'back')
     return { axis: 2, sign: 1, label: 'in front of the parent' }
+  if (anchor === 'front' && childAnchor === 'center')
+    return { axis: 2, sign: 1, label: 'at the parent front side' }
   if (anchor === 'back' && childAnchor === 'front')
     return { axis: 2, sign: -1, label: 'behind the parent' }
+  if (anchor === 'back' && childAnchor === 'center')
+    return { axis: 2, sign: -1, label: 'at the parent back side' }
   return undefined
 }
 
@@ -728,6 +786,91 @@ function simpleBoxPrimitiveFallbackShapes(
       material: isRecord(part.material) ? (part.material as PrimitiveMaterialInput) : undefined,
     },
   ]
+  return targetArgs.shapes as RawShape[]
+}
+
+function hemispherePrimitiveFallbackShapes(
+  targetArgs: Record<string, unknown>,
+  sourceArgs: Record<string, unknown>,
+  prompt: string,
+): RawShape[] | undefined {
+  const explicitParts = Array.isArray(sourceArgs.parts) ? sourceArgs.parts : []
+  if (explicitParts.length > 1) return undefined
+  const explicitPart =
+    explicitParts.length === 1 && isRecord(explicitParts[0]) ? explicitParts[0] : undefined
+  if (explicitPart) {
+    const explicitKind = String(
+      explicitPart.kind ?? explicitPart.partType ?? explicitPart.type ?? '',
+    ).toLowerCase()
+    if (
+      explicitKind &&
+      !/^(hemisphere|half[\s_-]?sphere|semi[\s_-]?sphere|dome|generic_body|\u534a\u7403|\u534a\u7403\u4f53|\u534a\u5706\u7403|\u534a\u5706\u5f62\u7403)$/.test(
+        explicitKind,
+      )
+    ) {
+      return undefined
+    }
+  }
+
+  const text = genericFallbackText(sourceArgs, prompt).toLowerCase()
+  if (
+    !/(\u534a\u7403|\u534a\u7403\u4f53|\u534a\u5706\u7403|\u534a\u5706\u5f62\u7403|hemisphere|half[\s_-]?sphere|semi[\s_-]?sphere|\bdome\b)/i.test(
+      text,
+    )
+  ) {
+    return undefined
+  }
+
+  const dimensionSource = explicitPart ? { ...sourceArgs, ...explicitPart } : sourceArgs
+  const diameter = firstNumber(readNestedNumber(dimensionSource, 'diameter'))
+  const radius = firstNumber(
+    readNestedNumber(dimensionSource, 'radius'),
+    diameter != null ? diameter / 2 : undefined,
+    readNestedNumber(dimensionSource, 'length') != null
+      ? readNestedNumber(dimensionSource, 'length')! / 2
+      : undefined,
+    0.5,
+  )
+  if (radius == null) return undefined
+
+  const length =
+    firstNumber(readNestedNumber(dimensionSource, 'length'), diameter, radius * 2) ?? radius * 2
+  const width =
+    firstNumber(
+      readNestedNumber(dimensionSource, 'width'),
+      readNestedNumber(dimensionSource, 'depth'),
+      diameter,
+      length,
+    ) ?? length
+  const height = firstNumber(readNestedNumber(dimensionSource, 'height'), radius) ?? radius
+  const shape: RawShape = {
+    kind: 'hemisphere',
+    semanticRole: 'hemisphere',
+    sourcePartKind: 'hemisphere',
+    position: [0, height / 2, 0],
+    radius,
+    scale: [length / (radius * 2), height / radius, width / (radius * 2)],
+    widthSegments: 32,
+    heightSegments: 16,
+    material: materialColor(sourceArgs, '#94a3b8'),
+  }
+
+  targetArgs.family = 'generic'
+  targetArgs.parts = [
+    {
+      kind: 'hemisphere',
+      semanticRole: 'hemisphere',
+      radius,
+      length,
+      width,
+      height,
+    },
+  ]
+  targetArgs.geometryBrief =
+    typeof targetArgs.geometryBrief === 'string'
+      ? targetArgs.geometryBrief
+      : `hemisphere ${length}x${width}x${height}m`
+  targetArgs.shapes = [shape]
   return targetArgs.shapes as RawShape[]
 }
 
@@ -899,6 +1042,8 @@ function getRawShapes(
   }
   if (name === 'compose_parts') {
     const dimensionAwarePartArgs = applyPromptDimensionSemanticsToPartInput(args, prompt)
+    const hemisphereShapes = hemispherePrimitiveFallbackShapes(args, dimensionAwarePartArgs, prompt)
+    if (hemisphereShapes?.length) return hemisphereShapes
     const simpleBoxShapes = simpleBoxPrimitiveFallbackShapes(args, dimensionAwarePartArgs, prompt)
     if (simpleBoxShapes?.length) return simpleBoxShapes
     const robotShapes = robotArmWorkstationFallbackShapes(
@@ -1086,6 +1231,15 @@ function getRawShapes(
   }
   if (name === 'compose_primitive') {
     const hasExplicitShapes = Array.isArray(args.shapes) && args.shapes.length > 0
+    if (!hasExplicitShapes) {
+      const dimensionAwarePrimitiveArgs = applyPromptDimensionSemanticsToPartInput(args, prompt)
+      const hemisphereShapes = hemispherePrimitiveFallbackShapes(
+        args,
+        dimensionAwarePrimitiveArgs,
+        prompt,
+      )
+      if (hemisphereShapes?.length) return hemisphereShapes
+    }
     if (!hasExplicitShapes && isOpenAssemblyRequest(args, prompt)) {
       return composeAssemblyPrimitives(openAssemblyFallbackInput(args, prompt))
     }
@@ -3375,10 +3529,7 @@ function isMixerPartComposerRequest(sourceArgs: Record<string, unknown>, prompt:
   if (parts.length === 0) return false
   const text =
     `${prompt} ${sourceArgs.name ?? ''} ${sourceArgs.category ?? ''} ${sourceArgs.geometryBrief ?? ''} ${JSON.stringify(parts)}`.toLowerCase()
-  const mixerIntent =
-    /mixer|stirrer|agitator|impeller|paddle|\u6405\u62cc|\u6868\u53f6|\u53f6\u7247|\u53f6\u8f6e|鎼呮|悈鎷|妗ㄥ彾|鍙剁墖|鐗囨|〃鍙/.test(
-      text,
-    )
+  const mixerIntent = /mixer|stirrer|agitator|impeller|paddle|搅拌|桨叶|叶片|叶轮|搅拌桨/.test(text)
   if (!mixerIntent) return false
   const partText = parts
     .map((part) =>
@@ -3389,7 +3540,7 @@ function isMixerPartComposerRequest(sourceArgs: Record<string, unknown>, prompt:
     .join(' ')
     .toLowerCase()
   return (
-    /(vertical_pole|shaft|rod|pole|mixer_shaft|潌瀛|鏉)/.test(partText) &&
+    /(vertical_pole|shaft|rod|pole|mixer_shaft|转轴|轴|杆|立杆)/.test(partText) &&
     /(mixer_blades|propeller_blade_set|fan_blade|radial_blades|mixer_blade|agitator_blade)/.test(
       partText,
     )
@@ -4838,19 +4989,32 @@ function normalizeVec3Object(value: unknown): Vec3 | undefined {
   return undefined
 }
 
+function finiteNumberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
 function normalizePoint2Array(value: unknown): [number, number][] | undefined {
   if (!Array.isArray(value)) return undefined
   const points = value
-    .filter(
-      (point): point is [number, number] =>
-        Array.isArray(point) &&
-        point.length >= 2 &&
-        typeof point[0] === 'number' &&
-        Number.isFinite(point[0]) &&
-        typeof point[1] === 'number' &&
-        Number.isFinite(point[1]),
-    )
-    .map(([x, y]) => [x, y] as [number, number])
+    .map((point): [number, number] | undefined => {
+      if (Array.isArray(point) && point.length >= 2) {
+        const [x, y] = point
+        return typeof x === 'number' &&
+          Number.isFinite(x) &&
+          typeof y === 'number' &&
+          Number.isFinite(y)
+          ? [x, y]
+          : undefined
+      }
+      if (isRecord(point)) {
+        const x =
+          finiteNumberValue(point.x) ?? finiteNumberValue(point.radius) ?? finiteNumberValue(point.r)
+        const y = finiteNumberValue(point.y) ?? finiteNumberValue(point.height)
+        return x != null && y != null ? [x, y] : undefined
+      }
+      return undefined
+    })
+    .filter((point): point is [number, number] => Array.isArray(point))
   return points.length > 0 ? points : undefined
 }
 
@@ -4863,8 +5027,9 @@ function normalizePoint2Holes(value: unknown): [number, number][][] | undefined 
 }
 
 function normalizeVec3Array(value: unknown): Vec3[] | undefined {
-  if (!Array.isArray(value)) return undefined
-  const points = value
+  const rawPoints = isRecord(value) && Array.isArray(value.points) ? value.points : value
+  if (!Array.isArray(rawPoints)) return undefined
+  const points = rawPoints
     .map(normalizeVec3Object)
     .filter((point): point is Vec3 => Array.isArray(point))
   return points.length > 0 ? points : undefined
@@ -4957,6 +5122,38 @@ function childAnchorForSide(anchor: unknown): string | undefined {
   }
 }
 
+function normalizePrimitiveAnchorAlias(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_')
+  if (
+    normalized === 'path_start' ||
+    normalized === 'pathstart' ||
+    normalized === 'curve_start' ||
+    normalized === 'sweep_start' ||
+    normalized === 'start_point' ||
+    normalized === 'endpoint_start'
+  ) {
+    return 'start'
+  }
+  if (
+    normalized === 'path_end' ||
+    normalized === 'pathend' ||
+    normalized === 'curve_end' ||
+    normalized === 'sweep_end' ||
+    normalized === 'end_point' ||
+    normalized === 'endpoint_end'
+  ) {
+    return 'end'
+  }
+  if (normalized === 'top_rim' || normalized === 'upper_rim' || normalized === 'rim_top') {
+    return 'top'
+  }
+  if (normalized === 'bottom_rim' || normalized === 'lower_rim' || normalized === 'rim_bottom') {
+    return 'bottom'
+  }
+  return normalized
+}
+
 function normalizeSemanticPrimitiveAnchors(
   shape: RawShape,
   anchor: string | undefined,
@@ -4976,6 +5173,217 @@ function normalizeSemanticPrimitiveAnchors(
   return { anchor, childAnchor }
 }
 
+function childAnchorOppositeAnchor(anchor: string | undefined): string | undefined {
+  if (!anchor) return undefined
+  if (anchor === 'top') return 'bottom'
+  if (anchor === 'bottom') return 'top'
+  if (anchor === 'center') return 'center'
+  return childAnchorForSide(anchor)
+}
+
+function pathCenter(path: readonly Vec3[]): Vec3 {
+  let minX = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  for (const [x, y, z] of path) {
+    minX = Math.min(minX, x)
+    maxX = Math.max(maxX, x)
+    minY = Math.min(minY, y)
+    maxY = Math.max(maxY, y)
+    minZ = Math.min(minZ, z)
+    maxZ = Math.max(maxZ, z)
+  }
+  return [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2]
+}
+
+function pathEndpoint(shape: ShapeSpec | undefined, endpoint: unknown): Vec3 | undefined {
+  if (!shape || !Array.isArray(shape.path) || shape.path.length === 0) return undefined
+  const point =
+    endpoint === 'start'
+      ? shape.path[0]
+      : endpoint === 'end'
+        ? shape.path.at(-1)
+        : endpoint === 'top'
+          ? shape.path.reduce((best, point) => (point[1] > best[1] ? point : best), shape.path[0]!)
+          : endpoint === 'bottom'
+            ? shape.path.reduce((best, point) => (point[1] < best[1] ? point : best), shape.path[0]!)
+            : endpoint === 'right'
+              ? shape.path.reduce((best, point) => (point[0] > best[0] ? point : best), shape.path[0]!)
+              : endpoint === 'left'
+                ? shape.path.reduce((best, point) => (point[0] < best[0] ? point : best), shape.path[0]!)
+                : endpoint === 'front'
+                  ? shape.path.reduce((best, point) => (point[2] > best[2] ? point : best), shape.path[0]!)
+                  : endpoint === 'back'
+                    ? shape.path.reduce((best, point) => (point[2] < best[2] ? point : best), shape.path[0]!)
+                    : undefined
+  if (!point) return undefined
+  const center = pathCenter(shape.path)
+  return [
+    (shape.position?.[0] ?? 0) + point[0] - center[0],
+    (shape.position?.[1] ?? 0) + point[1] - center[1],
+    (shape.position?.[2] ?? 0) + point[2] - center[2],
+  ]
+}
+
+function primitiveAnchorWorldPosition(shape: ShapeSpec | undefined, anchor: unknown): Vec3 | undefined {
+  if (!shape || !isPrimitiveAnchor(anchor)) return undefined
+  const pathAnchor = pathEndpoint(shape, anchor)
+  if (pathAnchor) return pathAnchor
+  const position = shape.position ?? [0, 0, 0]
+  if (anchor === 'center') return [position[0], position[1], position[2]]
+  const next: Vec3 = [position[0], position[1], position[2]]
+  if (anchor === 'top' || anchor === 'bottom') {
+    next[1] += (anchor === 'top' ? 1 : -1) * primitiveHalfExtent(shape, 1)
+    return next
+  }
+  if (anchor === 'right' || anchor === 'left') {
+    next[0] += (anchor === 'right' ? 1 : -1) * primitiveHalfExtent(shape, 0)
+    return next
+  }
+  next[2] += (anchor === 'front' ? 1 : -1) * primitiveHalfExtent(shape, 2)
+  return next
+}
+
+function normalizeSweepEndpointAttachment(
+  kind: string,
+  path: Vec3[] | undefined,
+  relation: {
+    attachTo?: number | string
+    anchor?: string
+    childAnchor?: string
+    fromLayoutField?: boolean
+  },
+  normalizedShapes: readonly ShapeSpec[],
+): { path: Vec3[]; position: Vec3; relation: typeof relation } | undefined {
+  if (kind !== 'sweep' || !path || path.length === 0) return undefined
+  if (typeof relation.attachTo !== 'number') return undefined
+  if (
+    relation.childAnchor !== 'start' &&
+    relation.childAnchor !== 'end' &&
+    relation.childAnchor !== 'bottom' &&
+    relation.childAnchor !== 'top'
+  )
+    return undefined
+  const parentAnchorPosition = primitiveAnchorWorldPosition(
+    normalizedShapes[relation.attachTo],
+    relation.anchor,
+  )
+  if (!parentAnchorPosition) return undefined
+
+  const childEndpoint =
+    relation.childAnchor === 'start'
+      ? path[0]
+      : relation.childAnchor === 'end'
+        ? path.at(-1)
+        : relation.childAnchor === 'bottom'
+          ? path.reduce((best, point) => (point[1] < best[1] ? point : best), path[0]!)
+          : path.reduce((best, point) => (point[1] > best[1] ? point : best), path[0]!)
+  if (!childEndpoint) return undefined
+  const localPath = path.map(
+    ([x, y, z]) =>
+      [x - childEndpoint[0], y - childEndpoint[1], z - childEndpoint[2]] as Vec3,
+  )
+  const center = pathCenter(localPath)
+  return {
+    path: localPath,
+    position: [
+      parentAnchorPosition[0] + center[0],
+      parentAnchorPosition[1] + center[1],
+      parentAnchorPosition[2] + center[2],
+    ],
+    relation: {},
+  }
+}
+
+function normalizeStandaloneSweepWorldPath(
+  kind: string,
+  path: Vec3[] | undefined,
+  relation: {
+    attachTo?: number | string
+    anchor?: string
+    childAnchor?: string
+    fromLayoutField?: boolean
+  },
+): { path: Vec3[]; position: Vec3 } | undefined {
+  if (kind !== 'sweep' || !path || path.length === 0 || relation.attachTo != null) return undefined
+  const center = pathCenter(path)
+  if (!Number.isFinite(center[0]) || !Number.isFinite(center[1]) || !Number.isFinite(center[2])) {
+    return undefined
+  }
+  return {
+    path: path.map(([x, y, z]) => [x - center[0], y - center[1], z - center[2]] as Vec3),
+    position: center,
+  }
+}
+
+function repairPrimitiveRelationAnchors(
+  relation: {
+    attachTo?: number | string
+    anchor?: string
+    childAnchor?: string
+    fromLayoutField?: boolean
+  },
+  normalizedShapes: readonly ShapeSpec[],
+  childValues: {
+    kind: string
+    height?: unknown
+    length?: unknown
+    width?: unknown
+    depth?: unknown
+    radius?: unknown
+    majorRadius?: unknown
+    tubeRadius?: unknown
+    axis?: unknown
+  },
+): {
+  relation: typeof relation
+  position?: Vec3
+} {
+  if (typeof relation.attachTo !== 'number') return { relation }
+  const anchorIsValid = isPrimitiveAnchor(relation.anchor)
+  const childAnchorIsValid = isPrimitiveAnchor(relation.childAnchor)
+  const parent = normalizedShapes[relation.attachTo]
+  const pathAnchorPosition = pathEndpoint(parent, relation.anchor)
+  if (pathAnchorPosition) {
+    return {
+      relation: {},
+      position: positionForChildAnchorAtPoint(
+        pathAnchorPosition,
+        relation.childAnchor,
+        childValues,
+      ),
+    }
+  }
+  if (anchorIsValid && childAnchorIsValid) return { relation }
+  if (relation.anchor == null && relation.childAnchor == null) return { relation }
+
+  const endpointPosition = pathEndpoint(parent, relation.anchor)
+  if (endpointPosition) {
+    return {
+      relation: {},
+      position: positionForChildAnchorAtPoint(endpointPosition, relation.childAnchor, childValues),
+    }
+  }
+
+  if (anchorIsValid && !childAnchorIsValid) {
+    const repairedChildAnchor = childAnchorOppositeAnchor(relation.anchor)
+    if (repairedChildAnchor) {
+      return {
+        relation: {
+          ...relation,
+          childAnchor: repairedChildAnchor,
+          fromLayoutField: true,
+        },
+      }
+    }
+  }
+
+  return { relation: {} }
+}
+
 function normalizePrimitiveRelation(
   shape: RawShape,
   shapes: readonly RawShape[],
@@ -4991,8 +5399,8 @@ function normalizePrimitiveRelation(
   const explicitChildAnchor = rawShapeRead(shape, 'childAnchor')
   const resolvedExplicitAttachTo = resolvePrimitiveShapeReference(explicitAttachTo, shapes, index)
   if (resolvedExplicitAttachTo != null) {
-    const rawAnchor = typeof explicitAnchor === 'string' ? explicitAnchor : undefined
-    const rawChildAnchor = typeof explicitChildAnchor === 'string' ? explicitChildAnchor : undefined
+    const rawAnchor = normalizePrimitiveAnchorAlias(explicitAnchor)
+    const rawChildAnchor = normalizePrimitiveAnchorAlias(explicitChildAnchor)
     const semanticAnchors = normalizeSemanticPrimitiveAnchors(shape, rawAnchor, rawChildAnchor)
     return {
       attachTo: resolvedExplicitAttachTo,
@@ -5003,8 +5411,8 @@ function normalizePrimitiveRelation(
     }
   }
   if (explicitAttachTo != null) {
-    const rawAnchor = typeof explicitAnchor === 'string' ? explicitAnchor : undefined
-    const rawChildAnchor = typeof explicitChildAnchor === 'string' ? explicitChildAnchor : undefined
+    const rawAnchor = normalizePrimitiveAnchorAlias(explicitAnchor)
+    const rawChildAnchor = normalizePrimitiveAnchorAlias(explicitChildAnchor)
     const semanticAnchors = normalizeSemanticPrimitiveAnchors(shape, rawAnchor, rawChildAnchor)
     return {
       attachTo: explicitAttachTo as number | string,
@@ -5040,6 +5448,17 @@ function normalizePrimitiveRelation(
       : { attachTo: centeredIndex, anchor: 'center', childAnchor: 'center', fromLayoutField: true }
   }
 
+  const connectTo = rawShapeRead(shape, 'connectTo')
+  const connectIndex = resolvePrimitiveShapeReference(connectTo, shapes, index)
+  if (connectIndex != null) {
+    return {
+      attachTo: connectIndex,
+      anchor: normalizePrimitiveAnchorAlias(rawShapeRead(shape, 'connectPoint')),
+      childAnchor: normalizePrimitiveAnchorAlias(rawShapeRead(shape, 'childPoint')),
+      fromLayoutField: true,
+    }
+  }
+
   return {
     anchor: typeof explicitAnchor === 'string' ? explicitAnchor : undefined,
     childAnchor: typeof explicitChildAnchor === 'string' ? explicitChildAnchor : undefined,
@@ -5065,13 +5484,14 @@ function normalizePrimitiveLayoutPosition(
 ): Vec3 {
   if (!relation.fromLayoutField || typeof relation.attachTo !== 'number') return position
   if (!relation.anchor || !relation.childAnchor) return position
-  const expectedSide = getExpectedAttachmentSide(relation.anchor, relation.childAnchor)
-  if (!expectedSide) return position
   const parent = normalizedShapes[relation.attachTo]
   if (!parent) return position
-  const delta = position[expectedSide.axis] - parent.position[expectedSide.axis]
-  if (!Number.isFinite(delta) || delta * expectedSide.sign >= -0.02) return position
-  const next: Vec3 = [position[0], position[1], position[2]]
+  if (relation.anchor === 'center' && relation.childAnchor === 'center') {
+    return [parent.position[0], parent.position[1], parent.position[2]]
+  }
+  const expectedSide = getExpectedAttachmentSide(relation.anchor, relation.childAnchor)
+  if (!expectedSide) return position
+  const next: Vec3 = [parent.position[0], parent.position[1], parent.position[2]]
   next[expectedSide.axis] =
     parent.position[expectedSide.axis] +
     expectedSide.sign * (primitiveHalfExtent(parent, expectedSide.axis) + childHalfExtent)
@@ -5134,6 +5554,57 @@ function primitiveHalfExtentFromRawValues(
   if (height != null && !radius) return height / 2
   if (majorRadius != null || tubeRadius != null) return (majorRadius ?? 0) + (tubeRadius ?? 0)
   return radius ?? 0
+}
+
+function primitiveChildAnchorHalfExtent(
+  childAnchor: string | undefined,
+  axis: 0 | 1 | 2,
+  values: {
+    kind: string
+    height?: unknown
+    length?: unknown
+    width?: unknown
+    depth?: unknown
+    radius?: unknown
+    majorRadius?: unknown
+    tubeRadius?: unknown
+    axis?: unknown
+  },
+): number {
+  if (childAnchor === 'center') return 0
+  return primitiveHalfExtentFromRawValues(axis, values)
+}
+
+function positionForChildAnchorAtPoint(
+  point: Vec3,
+  childAnchor: string | undefined,
+  values: {
+    kind: string
+    height?: unknown
+    length?: unknown
+    width?: unknown
+    depth?: unknown
+    radius?: unknown
+    majorRadius?: unknown
+    tubeRadius?: unknown
+    axis?: unknown
+  },
+): Vec3 {
+  const next: Vec3 = [point[0], point[1], point[2]]
+  if (childAnchor === 'top' || childAnchor === 'bottom') {
+    next[1] +=
+      (childAnchor === 'top' ? -1 : 1) *
+      primitiveChildAnchorHalfExtent(childAnchor, 1, values)
+  } else if (childAnchor === 'right' || childAnchor === 'left') {
+    next[0] +=
+      (childAnchor === 'right' ? -1 : 1) *
+      primitiveChildAnchorHalfExtent(childAnchor, 0, values)
+  } else if (childAnchor === 'front' || childAnchor === 'back') {
+    next[2] +=
+      (childAnchor === 'front' ? -1 : 1) *
+      primitiveChildAnchorHalfExtent(childAnchor, 2, values)
+  }
+  return next
 }
 
 function normalizePrimitiveExplicitPositionRelation(
@@ -5313,12 +5784,13 @@ export function normalizeGeometryToolShapes(
     const tubeRadius = read('tubeRadius') as number | undefined
     const axis = read('axis') as string | undefined
     const explicitPosition = normalizeVec3Object(read('position'))
-    const relation = normalizePrimitiveExplicitPositionRelation(
+    let normalizedPath = normalizeVec3Array(read('path'))
+    let relation = normalizePrimitiveExplicitPositionRelation(
       explicitPosition,
       initialRelation,
       normalizedShapes,
     )
-    const rawPosition =
+    let rawPosition =
       explicitPosition ??
       defaultGroundedPosition(kind, {
         height: normalizedHeight,
@@ -5330,6 +5802,40 @@ export function normalizeGeometryToolShapes(
         thickness: normalizedThickness,
         axis,
       })
+    const sweepEndpointAttachment = normalizeSweepEndpointAttachment(
+      kind,
+      normalizedPath,
+      relation,
+      normalizedShapes,
+    )
+    let sweepWasEndpointAttached = false
+    if (!explicitPosition && sweepEndpointAttachment) {
+      normalizedPath = sweepEndpointAttachment.path
+      rawPosition = sweepEndpointAttachment.position
+      relation = sweepEndpointAttachment.relation
+      sweepWasEndpointAttached = true
+    }
+    const standaloneSweepPath = sweepWasEndpointAttached
+      ? undefined
+      : normalizeStandaloneSweepWorldPath(kind, normalizedPath, relation)
+    if (!explicitPosition && standaloneSweepPath) {
+      normalizedPath = standaloneSweepPath.path
+      rawPosition = standaloneSweepPath.position
+    }
+    const childValues = {
+      kind,
+      height: normalizedHeight,
+      length: normalizedLength,
+      width: normalizedWidth,
+      depth: normalizedDepth,
+      radius,
+      majorRadius,
+      tubeRadius,
+      axis,
+    }
+    const repairedRelation = repairPrimitiveRelationAnchors(relation, normalizedShapes, childValues)
+    relation = repairedRelation.relation
+    if (!explicitPosition && repairedRelation.position) rawPosition = repairedRelation.position
     const layoutRelation =
       explicitPosition || relation.fromLayoutField
         ? relation
@@ -5340,19 +5846,10 @@ export function normalizeGeometryToolShapes(
       typeof layoutRelation.attachTo === 'number' &&
       layoutRelation.anchor &&
       layoutRelation.childAnchor
-        ? primitiveHalfExtentFromRawValues(
+        ? primitiveChildAnchorHalfExtent(
+            layoutRelation.childAnchor,
             getExpectedAttachmentSide(layoutRelation.anchor, layoutRelation.childAnchor)?.axis ?? 1,
-            {
-              kind,
-              height: normalizedHeight,
-              length: normalizedLength,
-              width: normalizedWidth,
-              depth: normalizedDepth,
-              radius,
-              majorRadius,
-              tubeRadius,
-              axis,
-            },
+            childValues,
           )
         : 0
     const position = normalizePrimitiveLayoutPosition(
@@ -5409,7 +5906,7 @@ export function normalizeGeometryToolShapes(
       endTaper: read('endTaper') as number | undefined,
       profile: normalizePoint2Array(read('profile')),
       holes: normalizePoint2Holes(read('holes')),
-      path: normalizeVec3Array(read('path')),
+      path: normalizedPath,
       segments: read('segments') as number | undefined,
       arc: normalizePrimitiveArc(read('arc')),
       bevelSize: read('bevelSize') as number | undefined,
@@ -5734,6 +6231,141 @@ function profileShapeLimit(args: Record<string, unknown>): number | undefined {
   return Math.max(1, Math.min(...candidates))
 }
 
+function primitiveShapeYBounds(
+  shape: ShapeSpec,
+  transform: { position?: Vec3 } | undefined,
+): { min: number; max: number } {
+  const position = transform?.position ?? shape.position ?? [0, 0, 0]
+  if (shape.kind === 'sweep' && Array.isArray(shape.path) && shape.path.length > 0) {
+    const center = pathCenter(shape.path)
+    const radius = typeof shape.radius === 'number' && Number.isFinite(shape.radius) ? shape.radius : 0
+    const values = shape.path.map((point) => position[1] + point[1] - center[1])
+    return { min: Math.min(...values) - radius, max: Math.max(...values) + radius }
+  }
+  const halfExtent = primitiveHalfExtent(shape, 1)
+  return { min: position[1] - halfExtent, max: position[1] + halfExtent }
+}
+
+function primitiveShapesYBounds(
+  shapes: readonly ShapeSpec[],
+  transforms: readonly { position?: Vec3 }[],
+): { min: number; max: number; height: number } | undefined {
+  if (shapes.length === 0) return undefined
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
+  shapes.forEach((shape, index) => {
+    const bounds = primitiveShapeYBounds(shape, transforms[index])
+    min = Math.min(min, bounds.min)
+    max = Math.max(max, bounds.max)
+  })
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return undefined
+  return { min, max, height: max - min }
+}
+
+function scalePoint2Y(points: [number, number][] | undefined, scale: number) {
+  return points?.map(([x, y]) => [x, y * scale] as [number, number])
+}
+
+function scalePoint3Y(points: Vec3[] | undefined, scale: number) {
+  return points?.map(([x, y, z]) => [x, y * scale, z] as Vec3)
+}
+
+function scalePrimitiveShapeY(shape: ShapeSpec, originY: number, scale: number): ShapeSpec {
+  const next: ShapeSpec = {
+    ...shape,
+    position: [
+      shape.position[0],
+      originY + (shape.position[1] - originY) * scale,
+      shape.position[2],
+    ],
+    path: scalePoint3Y(shape.path, scale),
+    profile: scalePoint2Y(shape.profile, scale),
+  }
+  const axis = shape.axis === 'x' || shape.axis === 'z' ? shape.axis : 'y'
+  if (axis === 'y' && typeof shape.height === 'number' && Number.isFinite(shape.height)) {
+    next.height = shape.height * scale
+  }
+  if (
+    (shape.kind === 'box' || shape.kind === 'rounded-panel' || shape.kind === 'wedge' || shape.kind === 'trapezoid-prism') &&
+    typeof shape.height === 'number' &&
+    Number.isFinite(shape.height)
+  ) {
+    next.height = shape.height * scale
+  }
+  if (
+    shape.kind === 'rounded-panel' &&
+    typeof shape.thickness === 'number' &&
+    Number.isFinite(shape.thickness)
+  ) {
+    next.thickness = shape.thickness * scale
+  }
+  if (
+    (shape.kind === 'sphere' || shape.kind === 'hemisphere') &&
+    typeof shape.radius === 'number' &&
+    Number.isFinite(shape.radius)
+  ) {
+    const currentScale = shape.scale ?? [1, 1, 1]
+    next.scale = [currentScale[0], currentScale[1] * scale, currentScale[2]]
+  }
+  return next
+}
+
+function expectedHeightForGeneration(
+  args: Record<string, unknown>,
+  prompt: string,
+  geometryBrief: PrimitiveGeometryBrief | undefined,
+) {
+  const briefDimensions = isRecord(geometryBrief?.expectedDimensions)
+    ? geometryBrief?.expectedDimensions
+    : undefined
+  const promptDimensions = parseDimensionSemantics(prompt)
+  return firstNumber(args.height, briefDimensions?.height, promptDimensions.height)
+}
+
+function normalizeGeneratedHeightToPrompt(
+  shapes: ShapeSpec[],
+  transforms: ReturnType<typeof resolvePrimitiveWorldTransforms>,
+  args: Record<string, unknown>,
+  prompt: string,
+  geometryBrief: PrimitiveGeometryBrief | undefined,
+): {
+  shapes: ShapeSpec[]
+  transforms: ReturnType<typeof resolvePrimitiveWorldTransforms>
+  changed: boolean
+} {
+  const targetHeight = expectedHeightForGeneration(args, prompt, geometryBrief)
+  if (!targetHeight) return { shapes, transforms, changed: false }
+  const bounds = primitiveShapesYBounds(shapes, transforms)
+  if (!bounds || bounds.height <= 0) return { shapes, transforms, changed: false }
+  const scale = targetHeight / bounds.height
+  if (!Number.isFinite(scale) || scale <= 0 || (scale > 0.95 && scale < 1.05)) {
+    return { shapes, transforms, changed: false }
+  }
+  let scaledShapes = shapes.map((shape) => scalePrimitiveShapeY(shape, bounds.min, scale))
+  let scaledTransforms = resolvePrimitiveWorldTransforms(scaledShapes as PrimitiveShapeInput[], {
+    positionMode: 'world-center',
+  })
+  const scaledBounds = primitiveShapesYBounds(scaledShapes, scaledTransforms)
+  const groundOffset = scaledBounds && Number.isFinite(scaledBounds.min) ? scaledBounds.min : 0
+  if (Math.abs(groundOffset) > 0.001) {
+    scaledShapes = scaledShapes.map((shape) => ({
+      ...shape,
+      position: [shape.position[0], shape.position[1] - groundOffset, shape.position[2]],
+    }))
+    scaledTransforms = resolvePrimitiveWorldTransforms(scaledShapes as PrimitiveShapeInput[], {
+      positionMode: 'world-center',
+    })
+  }
+  args.dimensionNormalization = {
+    axis: 'y',
+    targetHeight,
+    previousHeight: bounds.height,
+    scale,
+    groundOffset,
+  }
+  return { shapes: scaledShapes, transforms: scaledTransforms, changed: true }
+}
+
 export function executeGeometryToolCall(
   name: string,
   args: Record<string, unknown>,
@@ -5861,10 +6493,22 @@ export function executeGeometryToolCall(
     }
   }
 
+  let geometryBrief = readExecutionGeometryBrief(name, args, context)
   let transforms = resolvePrimitiveWorldTransforms(shapes as PrimitiveShapeInput[], {
     positionMode: 'world-center',
   })
-  let geometryBrief = readExecutionGeometryBrief(name, args, context)
+  const heightNormalization = normalizeGeneratedHeightToPrompt(
+    shapes,
+    transforms,
+    args,
+    context.prompt,
+    geometryBrief,
+  )
+  if (heightNormalization.changed) {
+    shapes = heightNormalization.shapes
+    transforms = heightNormalization.transforms
+    geometryBrief = readExecutionGeometryBrief(name, args, context)
+  }
   let semanticValidation = validatePrimitiveSemantics(shapes as PrimitiveShapeInput[], transforms, {
     toolName: name,
     prompt: context.prompt,

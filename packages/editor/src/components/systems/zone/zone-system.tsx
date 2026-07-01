@@ -33,17 +33,19 @@ export const ZoneSystem = () => {
       const isOnSelectedLevel = zone?.parentId === selectedLevelId
       const isSelected = zoneId === selectedZoneId
       const isDeleteHovered = editorMode === 'delete' && hoveredId === zoneId
+      const showLayerGeometry = zoneGeometryVisible && !!selectedLevelId && isOnSelectedLevel
+      const backgroundZoneOpacity = selectedZoneId ? 0.25 : 0.45
 
       // Keep group visible (so <Html> labels stay active), hide/show meshes only.
       // Show meshes when: in zone mode, selected, or delete-hovered.
       if (!obj.visible) obj.visible = true
-      const meshVisible = !isCaptureMode && (zoneGeometryVisible || isSelected || isDeleteHovered)
+      const meshVisible = !isCaptureMode && (showLayerGeometry || isSelected || isDeleteHovered)
       const targetOpacity = isCaptureMode
         ? 0
         : isSelected || isDeleteHovered
           ? 1
-          : zoneGeometryVisible
-            ? 1
+          : showLayerGeometry
+            ? backgroundZoneOpacity
             : 0
 
       const walls = (obj as Group).getObjectByName('walls') as Mesh | undefined

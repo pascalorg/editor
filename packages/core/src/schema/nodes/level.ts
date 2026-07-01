@@ -11,6 +11,8 @@ import { ConeNode } from './cone'
 import { ConformalStripNode } from './conformal-strip'
 import { ConveyorBeltNode } from './conveyor-belt'
 import { CylinderNode } from './cylinder'
+import { DataChartNode } from './data-chart'
+import { DataTableNode } from './data-table'
 import { DataWidgetNode } from './data-widget'
 import { ExtrudeNode } from './extrude'
 import { FenceNode } from './fence'
@@ -33,6 +35,7 @@ import { SpawnNode } from './spawn'
 import { SphereNode } from './sphere'
 import { StairNode } from './stair'
 import { SteelBeamNode } from './steel-beam'
+import { SteelFrameNode } from './steel-frame'
 import { SweepNode } from './sweep'
 import { TankNode } from './tank'
 import { TorusNode } from './torus'
@@ -57,6 +60,8 @@ export const LevelNode = BaseNode.extend({
         ConeNode.shape.id,
         ConformalStripNode.shape.id,
         CylinderNode.shape.id,
+        DataChartNode.shape.id,
+        DataTableNode.shape.id,
         DataWidgetNode.shape.id,
         ExtrudeNode.shape.id,
         FrustumNode.shape.id,
@@ -66,6 +71,7 @@ export const LevelNode = BaseNode.extend({
         PipeNode.shape.id,
         RoadNode.shape.id,
         SteelBeamNode.shape.id,
+        SteelFrameNode.shape.id,
         ColumnNode.shape.id,
         ItemNode.shape.id,
         LadderNode.shape.id,

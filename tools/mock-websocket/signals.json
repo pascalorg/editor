@@ -1,0 +1,173 @@
+[
+  {
+    "path": "factory.conveyor.speed",
+    "label": "输送带速度",
+    "type": "number",
+    "unit": "m/s",
+    "min": 0,
+    "max": 2,
+    "category": "conveyor",
+    "wave": "sine",
+    "periodMs": 8000
+  },
+  {
+    "path": "factory.pipe.flow",
+    "label": "管道流量",
+    "type": "number",
+    "unit": "m³/h",
+    "min": 0,
+    "max": 100,
+    "category": "pipe",
+    "wave": "sine",
+    "periodMs": 6500
+  },
+  {
+    "path": "factory.fan.speed",
+    "label": "风机转速",
+    "type": "number",
+    "unit": "%",
+    "min": 0,
+    "max": 100,
+    "category": "fan",
+    "wave": "sine",
+    "periodMs": 4200
+  },
+  {
+    "path": "factory.fan.running",
+    "label": "风机运行",
+    "type": "boolean",
+    "category": "fan",
+    "wave": "toggle",
+    "periodMs": 10000
+  },
+  {
+    "path": "factory.machine.temperature",
+    "label": "设备温度",
+    "type": "number",
+    "unit": "°C",
+    "min": 20,
+    "max": 95,
+    "category": "machine",
+    "wave": "sine",
+    "periodMs": 11000
+  },
+  {
+    "path": "factory.machine.alarmLevel",
+    "label": "设备告警等级",
+    "type": "string",
+    "values": ["normal", "warning", "error"],
+    "category": "alarm",
+    "wave": "cycle",
+    "periodMs": 9000
+  },
+  {
+    "path": "factory.tank.level",
+    "label": "储罐液位",
+    "type": "number",
+    "unit": "%",
+    "min": 10,
+    "max": 95,
+    "category": "tank",
+    "wave": "sine",
+    "periodMs": 7200
+  },
+  {
+    "path": "factory.valve.open",
+    "label": "阀门开度",
+    "type": "number",
+    "unit": "%",
+    "min": 0,
+    "max": 100,
+    "category": "valve",
+    "wave": "sine",
+    "periodMs": 5600
+  },
+  {
+    "path": "factory.light.brightness",
+    "label": "指示灯亮度",
+    "type": "number",
+    "unit": "%",
+    "min": 10,
+    "max": 100,
+    "category": "light",
+    "wave": "sine",
+    "periodMs": 4800
+  },
+  {
+    "path": "factory.display.value",
+    "label": "仪表数值",
+    "type": "number",
+    "unit": "%",
+    "min": 0,
+    "max": 100,
+    "category": "display",
+    "wave": "sine",
+    "periodMs": 6800
+  },
+  {
+    "path": "factory.robot.joint1",
+    "label": "六轴机械臂 J1 回转腰部",
+    "type": "number",
+    "unit": "%",
+    "min": 0,
+    "max": 100,
+    "category": "robot",
+    "wave": "sine",
+    "periodMs": 5200
+  },
+  {
+    "path": "factory.robot.joint2",
+    "label": "六轴机械臂 J2 肩部",
+    "type": "number",
+    "unit": "%",
+    "min": 0,
+    "max": 100,
+    "category": "robot",
+    "wave": "sine",
+    "periodMs": 6500
+  },
+  {
+    "path": "factory.robot.joint3",
+    "label": "六轴机械臂 J3 肘部",
+    "type": "number",
+    "unit": "%",
+    "min": 0,
+    "max": 100,
+    "category": "robot",
+    "wave": "sine",
+    "periodMs": 7800
+  },
+  {
+    "path": "factory.robot.joint4",
+    "label": "六轴机械臂 J4 腕部滚转",
+    "type": "number",
+    "unit": "%",
+    "min": 0,
+    "max": 100,
+    "category": "robot",
+    "wave": "sine",
+    "periodMs": 4400
+  },
+  {
+    "path": "factory.robot.joint5",
+    "label": "六轴机械臂 J5 腕部俯仰",
+    "type": "number",
+    "unit": "%",
+    "min": 0,
+    "max": 100,
+    "category": "robot",
+    "wave": "sine",
+    "periodMs": 5900
+  },
+  {
+    "path": "factory.robot.joint6",
+    "label": "六轴机械臂 J6 工具法兰",
+    "type": "number",
+    "unit": "%",
+    "min": 0,
+    "max": 100,
+    "category": "robot",
+    "wave": "sine",
+    "periodMs": 3600
+  }
+]

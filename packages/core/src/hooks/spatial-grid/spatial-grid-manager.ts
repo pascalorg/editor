@@ -1,6 +1,5 @@
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
-import useScene from '../../store/use-scene'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
 
@@ -51,6 +50,11 @@ function getItemFootprint(
     [x + (-halfW * cos - halfD * sin), z + (-halfW * sin + halfD * cos)],
   ]
 }
+
+type ItemPlacementIndex =
+  | { surface: 'floor'; levelId: string }
+  | { surface: 'wall'; levelId: string; wallId: string }
+  | { surface: 'ceiling'; ceilingId: string }
 
 type ItemLocalBounds = {
   min: [number, number, number]
@@ -118,18 +122,6 @@ function getItemParentAabb(item: ItemNode): ItemParentAabb {
 
 function intervalsOverlap(minA: number, maxA: number, minB: number, maxB: number, epsilon = 1e-4) {
   return minA < maxB - epsilon && maxA > minB + epsilon
-}
-
-function resolveNodeLevelId(node: AnyNode, nodes: Record<string, AnyNode>): string {
-  if (node.type === 'level') return node.id
-
-  let current: AnyNode | undefined = node
-  while (current) {
-    if (current.type === 'level') return current.id
-    current = current.parentId ? nodes[current.parentId] : undefined
-  }
-
-  return 'default'
 }
 
 /**
@@ -361,6 +353,10 @@ export class SpatialGridManager {
   private readonly ceilingGrids = new Map<string, SpatialGrid>() // ceilingId -> grid
   private readonly ceilings = new Map<string, CeilingNode>() // ceilingId -> ceiling data
   private readonly itemCeilingMap = new Map<string, string>() // itemId -> ceilingId (reverse lookup)
+  private readonly floorItemsByLevel = new Map<string, Map<string, ItemNode>>()
+  private readonly wallItemsByWall = new Map<string, Map<string, ItemNode>>()
+  private readonly ceilingItemsByCeiling = new Map<string, Map<string, ItemNode>>()
+  private readonly itemPlacementIndex = new Map<string, ItemPlacementIndex>()
 
   private readonly cellSize: number
 
@@ -409,6 +405,108 @@ export class SpatialGridManager {
     return this.slabsByLevel.get(levelId)!
   }
 
+  private getFloorItemMap(levelId: string): Map<string, ItemNode> {
+    if (!this.floorItemsByLevel.has(levelId)) {
+      this.floorItemsByLevel.set(levelId, new Map())
+    }
+    return this.floorItemsByLevel.get(levelId)!
+  }
+
+  private getWallItemMap(wallId: string): Map<string, ItemNode> {
+    if (!this.wallItemsByWall.has(wallId)) {
+      this.wallItemsByWall.set(wallId, new Map())
+    }
+    return this.wallItemsByWall.get(wallId)!
+  }
+
+  private getCeilingItemMap(ceilingId: string): Map<string, ItemNode> {
+    if (!this.ceilingItemsByCeiling.has(ceilingId)) {
+      this.ceilingItemsByCeiling.set(ceilingId, new Map())
+    }
+    return this.ceilingItemsByCeiling.get(ceilingId)!
+  }
+
+  private removeIndexedItem(itemId: string) {
+    const placement = this.itemPlacementIndex.get(itemId)
+    if (!placement) return
+
+    if (placement.surface === 'floor') {
+      this.getFloorGrid(placement.levelId).remove(itemId)
+      const items = this.floorItemsByLevel.get(placement.levelId)
+      items?.delete(itemId)
+      if (items?.size === 0) this.floorItemsByLevel.delete(placement.levelId)
+    } else if (placement.surface === 'wall') {
+      this.getWallGrid(placement.levelId).removeByItemId(itemId)
+      const items = this.wallItemsByWall.get(placement.wallId)
+      items?.delete(itemId)
+      if (items?.size === 0) this.wallItemsByWall.delete(placement.wallId)
+    } else {
+      this.getCeilingGrid(placement.ceilingId).remove(itemId)
+      this.itemCeilingMap.delete(itemId)
+      const items = this.ceilingItemsByCeiling.get(placement.ceilingId)
+      items?.delete(itemId)
+      if (items?.size === 0) this.ceilingItemsByCeiling.delete(placement.ceilingId)
+    }
+
+    this.itemPlacementIndex.delete(itemId)
+  }
+
+  private indexItem(item: ItemNode, levelId: string) {
+    this.removeIndexedItem(item.id)
+
+    if (item.asset.attachTo === 'wall' || item.asset.attachTo === 'wall-side') {
+      const wallId = item.parentId
+      if (!(wallId && this.walls.has(wallId))) return
+
+      const wallLength = this.getWallLength(wallId)
+      if (wallLength <= 0) return
+
+      const [width, height] = getScaledDimensions(item)
+      const halfW = width / wallLength / 2
+      const t = item.position[0] / wallLength
+      this.getWallGrid(levelId).insert({
+        itemId: item.id,
+        wallId,
+        tStart: t - halfW,
+        tEnd: t + halfW,
+        yStart: item.position[1],
+        yEnd: item.position[1] + height,
+        attachType: item.asset.attachTo as 'wall' | 'wall-side',
+        side: item.side,
+      })
+      this.getWallItemMap(wallId).set(item.id, item)
+      this.itemPlacementIndex.set(item.id, { surface: 'wall', levelId, wallId })
+      return
+    }
+
+    if (item.asset.attachTo === 'ceiling') {
+      const ceilingId = item.parentId
+      if (!(ceilingId && this.ceilings.has(ceilingId))) return
+
+      this.getCeilingGrid(ceilingId).insert(
+        item.id,
+        item.position,
+        getScaledDimensions(item),
+        item.rotation,
+      )
+      this.itemCeilingMap.set(item.id, ceilingId)
+      this.getCeilingItemMap(ceilingId).set(item.id, item)
+      this.itemPlacementIndex.set(item.id, { surface: 'ceiling', ceilingId })
+      return
+    }
+
+    if (!item.asset.attachTo) {
+      this.getFloorGrid(levelId).insert(
+        item.id,
+        item.position,
+        getScaledDimensions(item),
+        item.rotation,
+      )
+      this.getFloorItemMap(levelId).set(item.id, item)
+      this.itemPlacementIndex.set(item.id, { surface: 'floor', levelId })
+    }
+  }
+
   // Called when nodes change
   handleNodeCreated(node: AnyNode, levelId: string) {
     if (node.type === 'slab') {
@@ -420,50 +518,7 @@ export class SpatialGridManager {
       this.walls.set(wall.id, wall)
     } else if (node.type === 'item') {
       const item = node as ItemNode
-      if (item.asset.attachTo === 'wall' || item.asset.attachTo === 'wall-side') {
-        // Wall-attached item - use parentId as the wall ID
-        const wallId = item.parentId
-        if (wallId && this.walls.has(wallId)) {
-          const wallLength = this.getWallLength(wallId)
-          if (wallLength > 0) {
-            const [width, height] = getScaledDimensions(item)
-            const halfW = width / wallLength / 2
-            // Calculate t from local X position (position[0] is distance along wall)
-            const t = item.position[0] / wallLength
-            // position[1] is the bottom of the item
-            this.getWallGrid(levelId).insert({
-              itemId: item.id,
-              wallId,
-              tStart: t - halfW,
-              tEnd: t + halfW,
-              yStart: item.position[1],
-              yEnd: item.position[1] + height,
-              attachType: item.asset.attachTo as 'wall' | 'wall-side',
-              side: item.side,
-            })
-          }
-        }
-      } else if (item.asset.attachTo === 'ceiling') {
-        // Ceiling item - use parentId as the ceiling ID
-        const ceilingId = item.parentId
-        if (ceilingId && this.ceilings.has(ceilingId)) {
-          this.getCeilingGrid(ceilingId).insert(
-            item.id,
-            item.position,
-            getScaledDimensions(item),
-            item.rotation,
-          )
-          this.itemCeilingMap.set(item.id, ceilingId)
-        }
-      } else if (!item.asset.attachTo) {
-        // Floor item
-        this.getFloorGrid(levelId).insert(
-          item.id,
-          item.position,
-          getScaledDimensions(item),
-          item.rotation,
-        )
-      }
+      this.indexItem(item, levelId)
     }
   }
 
@@ -477,56 +532,7 @@ export class SpatialGridManager {
       this.walls.set(wall.id, wall)
     } else if (node.type === 'item') {
       const item = node as ItemNode
-      if (item.asset.attachTo === 'wall' || item.asset.attachTo === 'wall-side') {
-        // Remove old placement and re-insert
-        this.getWallGrid(levelId).removeByItemId(item.id)
-        const wallId = item.parentId
-        if (wallId && this.walls.has(wallId)) {
-          const wallLength = this.getWallLength(wallId)
-          if (wallLength > 0) {
-            const [width, height] = getScaledDimensions(item)
-            const halfW = width / wallLength / 2
-            // Calculate t from local X position (position[0] is distance along wall)
-            const t = item.position[0] / wallLength
-            // position[1] is the bottom of the item
-            this.getWallGrid(levelId).insert({
-              itemId: item.id,
-              wallId,
-              tStart: t - halfW,
-              tEnd: t + halfW,
-              yStart: item.position[1],
-              yEnd: item.position[1] + height,
-              attachType: item.asset.attachTo as 'wall' | 'wall-side',
-              side: item.side,
-            })
-          }
-        }
-      } else if (item.asset.attachTo === 'ceiling') {
-        // Remove from old ceiling grid
-        const oldCeilingId = this.itemCeilingMap.get(item.id)
-        if (oldCeilingId) {
-          this.getCeilingGrid(oldCeilingId).remove(item.id)
-          this.itemCeilingMap.delete(item.id)
-        }
-        // Insert into new ceiling grid
-        const ceilingId = item.parentId
-        if (ceilingId && this.ceilings.has(ceilingId)) {
-          this.getCeilingGrid(ceilingId).insert(
-            item.id,
-            item.position,
-            getScaledDimensions(item),
-            item.rotation,
-          )
-          this.itemCeilingMap.set(item.id, ceilingId)
-        }
-      } else if (!item.asset.attachTo) {
-        this.getFloorGrid(levelId).update(
-          item.id,
-          item.position,
-          getScaledDimensions(item),
-          item.rotation,
-        )
-      }
+      this.indexItem(item, levelId)
     }
   }
 
@@ -536,20 +542,25 @@ export class SpatialGridManager {
     } else if (nodeType === 'ceiling') {
       this.ceilings.delete(nodeId)
       this.ceilingGrids.delete(nodeId)
+      const removedItems = this.ceilingItemsByCeiling.get(nodeId)
+      if (removedItems) {
+        for (const itemId of removedItems.keys()) {
+          this.itemCeilingMap.delete(itemId)
+          this.itemPlacementIndex.delete(itemId)
+        }
+        this.ceilingItemsByCeiling.delete(nodeId)
+      }
     } else if (nodeType === 'wall') {
       this.walls.delete(nodeId)
       // Remove all items attached to this wall from the spatial grid
       const removedItemIds = this.getWallGrid(levelId).removeWall(nodeId)
+      this.wallItemsByWall.delete(nodeId)
+      for (const itemId of removedItemIds) {
+        this.itemPlacementIndex.delete(itemId)
+      }
       return removedItemIds // Caller can use this to delete the items from scene
     } else if (nodeType === 'item') {
-      this.getFloorGrid(levelId).remove(nodeId)
-      this.getWallGrid(levelId).removeByItemId(nodeId)
-      // Also clean up ceiling grid
-      const oldCeilingId = this.itemCeilingMap.get(nodeId)
-      if (oldCeilingId) {
-        this.getCeilingGrid(oldCeilingId).remove(nodeId)
-        this.itemCeilingMap.delete(nodeId)
-      }
+      this.removeIndexedItem(nodeId)
     }
     return []
   }
@@ -562,37 +573,22 @@ export class SpatialGridManager {
     rotation: [number, number, number],
     ignoreIds?: string[],
   ) {
-    const nodes = useScene.getState().nodes
     const ignoreSet = new Set(ignoreIds ?? [])
-    const [width, , depth] = dimensions
-    const yRot = rotation[1]
-    const cos = Math.abs(Math.cos(yRot))
-    const sin = Math.abs(Math.sin(yRot))
-    const rotatedW = width * cos + depth * sin
-    const rotatedD = width * sin + depth * cos
-    const draftBounds = {
-      minX: position[0] - rotatedW / 2,
-      maxX: position[0] + rotatedW / 2,
-      minZ: position[2] - rotatedD / 2,
-      maxZ: position[2] + rotatedD / 2,
-    }
+    const candidateIds = this.getFloorGrid(levelId).queryOverlaps(
+      position,
+      dimensions,
+      rotation,
+      ignoreIds,
+    )
+    const indexedItems = this.floorItemsByLevel.get(levelId)
 
     const conflicts: string[] = []
-    for (const node of Object.values(nodes)) {
-      if (node.type !== 'item') continue
-      const item = node as ItemNode
-      if (item.asset.attachTo) continue
+    for (const itemId of candidateIds) {
+      if (ignoreSet.has(itemId)) continue
+      const item = indexedItems?.get(itemId)
+      if (!item) continue
       if (isLowProfileItemSurface(item)) continue
-      if (ignoreSet.has(item.id)) continue
-      if (resolveNodeLevelId(item, nodes) !== levelId) continue
-
-      const bounds = getItemParentAabb(item)
-      if (
-        intervalsOverlap(draftBounds.minX, draftBounds.maxX, bounds.minX, bounds.maxX) &&
-        intervalsOverlap(draftBounds.minZ, draftBounds.maxZ, bounds.minZ, bounds.maxZ)
-      ) {
-        conflicts.push(item.id)
-      }
+      conflicts.push(item.id)
     }
 
     return { valid: conflicts.length === 0, conflictIds: conflicts }
@@ -642,7 +638,6 @@ export class SpatialGridManager {
 
     if (!baseResult.valid) return baseResult
 
-    const nodes = useScene.getState().nodes
     const ignoreSet = new Set(ignoreIds ?? [])
     const draftBounds = {
       minX: localX - itemWidth / 2,
@@ -652,12 +647,9 @@ export class SpatialGridManager {
     }
 
     const conflicts: string[] = []
-    for (const node of Object.values(nodes)) {
-      if (node.type !== 'item') continue
-      const item = node as ItemNode
-      if (!(item.asset.attachTo === 'wall' || item.asset.attachTo === 'wall-side')) continue
+    const indexedItems = this.wallItemsByWall.get(wallId)
+    for (const item of indexedItems?.values() ?? []) {
       if (ignoreSet.has(item.id)) continue
-      if (item.parentId !== wallId) continue
 
       if (attachType === 'wall-side' && item.asset.attachTo === 'wall-side' && side && item.side) {
         if (side !== item.side) continue
@@ -843,36 +835,21 @@ export class SpatialGridManager {
       }
     }
 
-    const nodes = useScene.getState().nodes
     const ignoreSet = new Set(ignoreIds ?? [])
-    const [width, , depth] = dimensions
-    const yRot = rotation[1]
-    const cos = Math.abs(Math.cos(yRot))
-    const sin = Math.abs(Math.sin(yRot))
-    const rotatedW = width * cos + depth * sin
-    const rotatedD = width * sin + depth * cos
-    const draftBounds = {
-      minX: position[0] - rotatedW / 2,
-      maxX: position[0] + rotatedW / 2,
-      minZ: position[2] - rotatedD / 2,
-      maxZ: position[2] + rotatedD / 2,
-    }
+    const candidateIds = this.getCeilingGrid(ceilingId).queryOverlaps(
+      position,
+      dimensions,
+      rotation,
+      ignoreIds,
+    )
+    const indexedItems = this.ceilingItemsByCeiling.get(ceilingId)
 
     const conflicts: string[] = []
-    for (const node of Object.values(nodes)) {
-      if (node.type !== 'item') continue
-      const item = node as ItemNode
-      if (item.asset.attachTo !== 'ceiling') continue
-      if (ignoreSet.has(item.id)) continue
-      if (item.parentId !== ceilingId) continue
-
-      const bounds = getItemParentAabb(item)
-      if (
-        intervalsOverlap(draftBounds.minX, draftBounds.maxX, bounds.minX, bounds.maxX) &&
-        intervalsOverlap(draftBounds.minZ, draftBounds.maxZ, bounds.minZ, bounds.maxZ)
-      ) {
-        conflicts.push(item.id)
-      }
+    for (const itemId of candidateIds) {
+      if (ignoreSet.has(itemId)) continue
+      const item = indexedItems?.get(itemId)
+      if (!item) continue
+      conflicts.push(item.id)
     }
 
     return { valid: conflicts.length === 0, conflictIds: conflicts }
@@ -882,6 +859,17 @@ export class SpatialGridManager {
     this.floorGrids.delete(levelId)
     this.wallGrids.delete(levelId)
     this.slabsByLevel.delete(levelId)
+    this.floorItemsByLevel.delete(levelId)
+    for (const [itemId, placement] of [...this.itemPlacementIndex]) {
+      if (placement.surface === 'floor' && placement.levelId === levelId) {
+        this.itemPlacementIndex.delete(itemId)
+      } else if (placement.surface === 'wall' && placement.levelId === levelId) {
+        this.itemPlacementIndex.delete(itemId)
+        const items = this.wallItemsByWall.get(placement.wallId)
+        items?.delete(itemId)
+        if (items?.size === 0) this.wallItemsByWall.delete(placement.wallId)
+      }
+    }
   }
 
   clear() {
@@ -892,6 +880,10 @@ export class SpatialGridManager {
     this.ceilingGrids.clear()
     this.ceilings.clear()
     this.itemCeilingMap.clear()
+    this.floorItemsByLevel.clear()
+    this.wallItemsByWall.clear()
+    this.ceilingItemsByCeiling.clear()
+    this.itemPlacementIndex.clear()
   }
 }
 

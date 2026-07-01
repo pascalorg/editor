@@ -251,6 +251,7 @@ interface ViewerProps {
   children?: React.ReactNode
   hoverStyles?: HoverStyles
   selectionManager?: 'default' | 'custom'
+  activeFrameLoop?: boolean
   perf?: boolean
   useBvh?: boolean
   renderContext?: RenderContext
@@ -295,6 +296,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     children,
     hoverStyles = DEFAULT_HOVER_STYLES,
     selectionManager = 'default',
+    activeFrameLoop = false,
     perf = false,
     useBvh = true,
     renderContext = 'editor',
@@ -428,7 +430,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
         enabled: true,
       }}
     >
-      <FrameLimiter fps={50} />
+      <FrameLimiter active={activeFrameLoop} fps={50} />
       <ViewerCamera />
       <GPUDeviceWatcher />
       <ToneMappingExposure />

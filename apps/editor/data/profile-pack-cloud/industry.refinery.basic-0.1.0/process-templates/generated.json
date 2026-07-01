@@ -220,7 +220,7 @@
         "label": "Utility boiler",
         "displayLabel": "公用工程锅炉",
         "role": "utility_boiler",
-        "equipmentHint": "refinery.utility_boiler utility boiler and steam header with boiler body, stack, steam manifold and control box serving process units.",
+        "equipmentHint": "refinery.utility_boiler packaged utility boiler with rectangular furnace casing, steam drum, tube bank, steam header, stack, access platform, and control box",
         "footprintHint": "medium",
         "safetyTags": [
           "steam",
@@ -232,7 +232,7 @@
         "label": "Control room",
         "displayLabel": "中控室",
         "role": "control_room",
-        "equipmentHint": "refinery.control_room blast-separated control room and MCC cabinets placed away from flare/high temperature units, with cable tray connection to pipe rack.",
+        "equipmentHint": "refinery.control_room single-storey blast-resistant control building with walls, flat roof, blast door, windows, MCC cabinets, and cable-tray entry; place away from flare and high temperature units",
         "footprintHint": "medium",
         "safetyTags": [
           "control",

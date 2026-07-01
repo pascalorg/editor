@@ -1,42 +1,31 @@
-import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
-import { BoxNode, CylinderNode, SphereNode } from '@pascal-app/core/schema'
+﻿import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
+import { AssemblyNode, BoxNode, CylinderNode, SphereNode } from '@pascal-app/core/schema'
 import type {
   ArticraftJoint,
   ArticraftModelData,
   ArticraftVisual,
   SceneNodeResult,
   Vec3,
+  Vec4,
 } from './types'
 
-// ─── URDF → Editor coordinate helpers ──────────────────────────────────
+type BridgeNodeRole = 'link' | 'visual'
 
-/**
- * URDF uses x-forward, y-left, z-up (right-handed).
- * The editor uses x-right, y-up, z-forward (right-handed).
- *
- * Conversion: URDF (x, y, z) → Editor (x, y, z)
- *   editor.x =  urdf.x
- *   editor.y =  urdf.z
- *   editor.z = -urdf.y
- */
+type BridgeNodeInfo = {
+  role?: BridgeNodeRole
+  linkName?: string
+  parentLink?: string | null
+}
+
+type BridgeNodeMetadata = Record<string, unknown> & {
+  articraftBridge?: BridgeNodeInfo
+}
+
 function urdfPosToEditor(pos: Vec3): Vec3 {
   return [pos[0], pos[2], -pos[1]]
 }
 
-/**
- * URDF RPY to editor Euler rotation.
- * URDF RPY: roll = x-axis, pitch = y-axis, yaw = z-axis
- * Editor: rotation[0] = pitch (x), rotation[1] = yaw (y), rotation[2] = roll (z)
- *
- * With coordinate conversion: editor pitch = urdf roll, editor yaw = urdf pitch, editor roll = urdf yaw
- * Actually, after swapping axes, the rotation conversion is complex.
- * For initial implementation, we approximate: the URDF RPY is "close" to editor Euler.
- */
 function urdfRpyToEditorRotation(rpy: Vec3): Vec3 {
-  // For first pass, apply the same axis remapping
-  // Editor pitch = URDF roll (about editor X = URDF X)
-  // Editor yaw = -URDF yaw (about editor Y = URDF Z, but negated)
-  // Editor roll = URDF pitch (about editor Z = -URDF Y)
   return [rpy[0], rpy[2], -rpy[1]]
 }
 
@@ -44,70 +33,128 @@ function urdfAxisToEditor(axis: Vec3): Vec3 {
   return urdfPosToEditor(axis)
 }
 
-// ─── Visual → Editor node converters ───────────────────────────────────
+function toByte(value: number) {
+  const normalized = value <= 1 ? value * 255 : value
+  return Math.max(0, Math.min(255, Math.round(normalized)))
+}
+
+function rgbaToHex(rgba: Vec4): string {
+  return `#${[rgba[0], rgba[1], rgba[2]]
+    .map((value) => toByte(value).toString(16).padStart(2, '0'))
+    .join('')}`
+}
+
+function materialFromVisual(visual: ArticraftVisual) {
+  if (!visual.material) return undefined
+  const opacity = Number.isFinite(visual.material.rgba[3]) ? visual.material.rgba[3] : 1
+  return {
+    preset: 'custom' as const,
+    properties: {
+      color: rgbaToHex(visual.material.rgba),
+      roughness: 0.45,
+      metalness: /metal|steel|iron|aluminum|aluminium|chrome/i.test(visual.material.name)
+        ? 0.75
+        : 0,
+      opacity,
+      transparent: opacity < 1,
+      side: 'front' as const,
+    },
+  }
+}
+
+function bridgeMetadata(
+  role: BridgeNodeRole,
+  linkName: string,
+  parentLink?: string | null,
+): BridgeNodeMetadata {
+  return {
+    articraftBridge: {
+      role,
+      linkName,
+      parentLink: parentLink ?? null,
+    },
+  }
+}
+
+function readBridgeInfo(node: AnyNode): BridgeNodeInfo | null {
+  const metadata = (node.metadata ?? {}) as BridgeNodeMetadata
+  const bridge = metadata.articraftBridge
+  if (!bridge || typeof bridge.linkName !== 'string') return null
+  return bridge
+}
 
 function visualToBoxNode(
   visual: ArticraftVisual,
-  linkName: string,
+  nodeName: string,
+  metadata: BridgeNodeMetadata,
   materialPreset?: string,
 ): ReturnType<typeof BoxNode.parse> {
   const size = visual.geometry.params
   return BoxNode.parse({
-    name: visual.name ?? linkName,
+    name: nodeName,
     position: urdfPosToEditor(visual.origin.xyz),
     rotation: urdfRpyToEditorRotation(visual.origin.rpy),
     length: size.length ?? size.sx ?? 1.0,
-    width: size.width ?? size.sz ?? 1.0,
-    height: size.height ?? size.sy ?? 1.0,
+    width: size.width ?? size.sy ?? 1.0,
+    height: size.height ?? size.sz ?? 1.0,
+    material: materialFromVisual(visual),
     materialPreset,
+    metadata,
   })
 }
 
 function visualToCylinderNode(
   visual: ArticraftVisual,
-  linkName: string,
+  nodeName: string,
+  metadata: BridgeNodeMetadata,
   materialPreset?: string,
 ): ReturnType<typeof CylinderNode.parse> {
   const size = visual.geometry.params
   return CylinderNode.parse({
-    name: visual.name ?? linkName,
+    name: nodeName,
     position: urdfPosToEditor(visual.origin.xyz),
     rotation: urdfRpyToEditorRotation(visual.origin.rpy),
     radius: size.radius ?? 0.5,
     height: size.length ?? size.height ?? 1.0,
+    material: materialFromVisual(visual),
     materialPreset,
+    metadata,
   })
 }
 
 function visualToSphereNode(
   visual: ArticraftVisual,
-  linkName: string,
+  nodeName: string,
+  metadata: BridgeNodeMetadata,
   materialPreset?: string,
 ): ReturnType<typeof SphereNode.parse> {
   const size = visual.geometry.params
   return SphereNode.parse({
-    name: visual.name ?? linkName,
+    name: nodeName,
     position: urdfPosToEditor(visual.origin.xyz),
     rotation: urdfRpyToEditorRotation(visual.origin.rpy),
     radius: size.radius ?? 0.5,
+    material: materialFromVisual(visual),
     materialPreset,
+    metadata,
   })
 }
 
 function visualToPrimitiveNode(
   visual: ArticraftVisual,
-  linkName: string,
+  nodeName: string,
+  metadata: BridgeNodeMetadata,
   materialPreset?: string,
 ): AnyNode | null {
   const geomType = visual.geometry.type
   try {
     switch (geomType) {
       case 'box':
-        return visualToBoxNode(visual, linkName, materialPreset)
+        return visualToBoxNode(visual, nodeName, metadata, materialPreset)
       case 'cylinder':
-        return visualToCylinderNode(visual, linkName, materialPreset)
+        return visualToCylinderNode(visual, nodeName, metadata, materialPreset)
       case 'sphere':
-        return visualToSphereNode(visual, linkName, materialPreset)
+        return visualToSphereNode(visual, nodeName, metadata, materialPreset)
       default:
         return null
     }
@@ -115,8 +162,6 @@ function visualToPrimitiveNode(
     return null
   }
 }
-
-// ─── Joint metadata ────────────────────────────────────────────────────
 
 function buildJointMetadata(joint: ArticraftJoint): SceneNodeResult['jointMetadata'][string] {
   return {
@@ -135,8 +180,6 @@ function buildJointMetadata(joint: ArticraftJoint): SceneNodeResult['jointMetada
   }
 }
 
-// ─── Main converter ────────────────────────────────────────────────────
-
 interface ConvertOptions {
   /** Create joint metadata on nodes (for property panel controls) */
   articulationMode: boolean
@@ -148,22 +191,6 @@ interface ConvertOptions {
   rootPosition?: Vec3
 }
 
-/**
- * Convert Articraft model data into editor scene node specs.
- *
- * Strategy:
- * - Each link becomes a "link group" represented by one or more nodes.
- * - Primitives (box/cylinder/sphere) are converted to editor primitive nodes.
- * - Mesh visuals are converted as best-effort primitive approximations; unsupported
- *   mesh visuals still use tiny placeholders until per-link mesh import exists.
- * - Joint metadata is attached to the child link's nodes when articulationMode is true.
- * - Links without a parent joint become "root" nodes.
- * - Parent-child relationships are stored via parentId.
- *
- * Returns node specs ready to be created via the SceneBridge.
- * The caller is responsible for creating the nodes and can then update
- * their metadata with the jointMetadata map.
- */
 export function convertToSceneNodes(
   data: ArticraftModelData,
   options: ConvertOptions,
@@ -178,79 +205,72 @@ export function convertToSceneNodes(
   const jointMetadata: SceneNodeResult['jointMetadata'] = {}
   const rootLinks: string[] = []
 
-  // Build child → parent map from joints
-  const parentLinkByChild = new Map<string, string>()
+  const jointByChild = new Map<string, ArticraftJoint>()
   for (const joint of data.joints) {
-    parentLinkByChild.set(joint.child, joint.parent)
+    jointByChild.set(joint.child, joint)
   }
 
-  // Create nodes for each link
   for (const link of data.links) {
-    const parentLink = parentLinkByChild.get(link.name)
-    if (!parentLink) {
-      rootLinks.push(link.name)
-    }
+    const parentJoint = jointByChild.get(link.name)
+    const parentLink = parentJoint?.parent ?? null
+    if (!parentLink) rootLinks.push(link.name)
 
-    // Convert each visual to a node
+    const linkFrame = AssemblyNode.parse({
+      name: link.name,
+      position: parentJoint ? urdfPosToEditor(parentJoint.origin.xyz) : [0, 0, 0],
+      rotation: parentJoint ? urdfRpyToEditorRotation(parentJoint.origin.rpy) : [0, 0, 0],
+      metadata: bridgeMetadata('link', link.name, parentLink),
+    })
+    nodes.push(linkFrame)
+    nodeIdByLink.set(link.name, linkFrame.id)
+
     for (let vi = 0; vi < link.visuals.length; vi++) {
       const visual = link.visuals[vi]!
-      const nodeName = link.visuals.length > 1 ? `${link.name}_v${vi}` : link.name
-
+      const nodeName = link.visuals.length > 1 ? `${link.name}_v${vi}` : `${link.name}_visual`
       const materialPreset = visual.material?.name ?? options.materialPreset
+      const metadata = bridgeMetadata('visual', link.name, parentLink)
 
       let node: AnyNode | null = null
-
       if (visual.geometry.type === 'mesh') {
         const p = visual.geometry.params
         if (p.radius !== undefined && (p.length !== undefined || p.height !== undefined)) {
           node = visualToPrimitiveNode(
             { ...visual, geometry: { ...visual.geometry, type: 'cylinder' } },
             nodeName,
+            metadata,
             materialPreset,
           )
         } else if (p.size !== undefined || p.length !== undefined || p.sx !== undefined) {
           node = visualToPrimitiveNode(
             { ...visual, geometry: { ...visual.geometry, type: 'box' } },
             nodeName,
+            metadata,
             materialPreset,
           )
-        } else {
+        } else if (!visual.geometry.meshPath) {
           node = visualToPrimitiveNode(
-            { ...visual, geometry: { ...visual.geometry, type: 'sphere', params: { radius: 0.05 } } },
+            {
+              ...visual,
+              geometry: { ...visual.geometry, type: 'sphere', params: { radius: 0.05 } },
+            },
             nodeName,
+            metadata,
             materialPreset,
           )
         }
       } else {
-        node = visualToPrimitiveNode(visual, nodeName, materialPreset)
+        node = visualToPrimitiveNode(visual, nodeName, metadata, materialPreset)
       }
 
       if (node) {
-        // Store mesh reference in metadata for future GLB import
         if (visual.geometry.meshPath) {
           node.metadata = {
-            ...(node.metadata as Record<string, unknown>),
+            ...((node.metadata as Record<string, unknown>) ?? {}),
             articraftMeshPath: visual.geometry.meshPath,
           }
         }
         nodes.push(node)
-        // Map first visual node as the canonical link representative
-        if (!nodeIdByLink.has(link.name)) {
-          nodeIdByLink.set(link.name, node.id)
-        }
       }
-    }
-
-    // If no visuals produced a valid node, create a small placeholder so joint metadata can still attach.
-    if (!nodeIdByLink.has(link.name)) {
-      const placeholder = SphereNode.parse({
-        name: link.name,
-        position: [0, 0, 0],
-        radius: 0.05,
-        materialPreset: options.materialPreset,
-      })
-      nodes.push(placeholder)
-      nodeIdByLink.set(link.name, placeholder.id)
     }
   }
 
@@ -266,16 +286,6 @@ export function convertToSceneNodes(
   return { nodes, nodeIdByLink, jointMetadata, rootLinks }
 }
 
-/**
- * Create all nodes from the converted articraft data via the scene bridge.
- *
- * This is the main entry point for placing an articraft-generated model
- * onto the editor canvas. It handles:
- * 1. Converting articraft data to editor nodes
- * 2. Resolving parent-child relationships
- * 3. Creating all nodes through the scene bridge
- * 4. Returning the result with node IDs and joint metadata
- */
 export function createModelNodes(
   data: ArticraftModelData,
   createNode: (node: AnyNode, parentId?: AnyNodeId) => AnyNodeId,
@@ -286,8 +296,6 @@ export function createModelNodes(
   const createdIds: string[] = []
   const rootNodeIds: string[] = []
   const createdNodeIdByLink = new Map<string, string>()
-  const rootLinkIds = new Set<string>()
-  const pending: Array<{ linkName: string; node: AnyNode }> = []
 
   const rememberCreatedLinkNode = (linkName: string, node: AnyNode, id: AnyNodeId) => {
     if (nodeIdByLink.get(linkName) === node.id) {
@@ -309,93 +317,63 @@ export function createModelNodes(
     } as AnyNode
   }
 
-  // First pass: create nodes for links that have no parent or whose parent is a root
-  for (const node of nodes) {
-    const linkName = inferLinkName(node, data)
-    if (!linkName) {
-      // Can't determine link → create as standalone
-      const id = createNode(node, options.parentId as AnyNodeId | undefined)
-      createdIds.push(id as string)
-      continue
-    }
+  const linkNodes = nodes.filter((node) => readBridgeInfo(node)?.role === 'link')
+  const visualNodes = nodes.filter((node) => readBridgeInfo(node)?.role === 'visual')
+  const otherNodes = nodes.filter((node) => !readBridgeInfo(node))
 
-    const parentJoint = data.joints.find((j) => j.child === linkName)
-    if (!parentJoint) {
-      // Root link → create directly
-      const nodeWithOffset = withRootOffset(node)
-      const id = createNode(nodeWithOffset, options.parentId as AnyNodeId | undefined)
-      createdIds.push(id as string)
-      rememberCreatedLinkNode(linkName, nodeWithOffset, id)
-      if (!rootLinkIds.has(linkName)) {
-        rootNodeIds.push(id as string)
-        rootLinkIds.add(linkName)
-      }
-    } else {
-      // Child link → defer creation until parent is created
-      pending.push({ linkName, node })
-    }
-  }
-
-  // Second pass: create deferred nodes with their parent IDs
-  // Repeat until all created (handles chains of arbitrary depth)
-  let remaining = pending
+  let remaining = linkNodes
   let iterations = 0
   const maxIterations = data.links.length + 1
 
   while (remaining.length > 0 && iterations < maxIterations) {
     iterations++
-    const stillPending: typeof pending = []
+    const stillPending: AnyNode[] = []
 
-    for (const { linkName, node } of remaining) {
-      const parentJoint = data.joints.find((j) => j.child === linkName)
-      if (!parentJoint) {
-        // Shouldn't happen, but handle gracefully
-        const id = createNode(node, options.parentId as AnyNodeId | undefined)
-        createdIds.push(id as string)
-        continue
-      }
+    for (const node of remaining) {
+      const bridge = readBridgeInfo(node)
+      if (!bridge?.linkName) continue
 
-      const parentNodeId = createdNodeIdByLink.get(parentJoint.parent)
-      if (parentNodeId) {
-        const id = createNode(node, parentNodeId as AnyNodeId)
+      const parentLink = typeof bridge.parentLink === 'string' ? bridge.parentLink : null
+      const parentNodeId = parentLink ? createdNodeIdByLink.get(parentLink) : null
+      if (!parentLink || parentNodeId) {
+        const nodeToCreate = parentLink ? node : withRootOffset(node)
+        const id = createNode(
+          nodeToCreate,
+          (parentNodeId ?? options.parentId) as AnyNodeId | undefined,
+        )
         createdIds.push(id as string)
-        rememberCreatedLinkNode(linkName, node, id)
+        rememberCreatedLinkNode(bridge.linkName, nodeToCreate, id)
+        if (!parentLink) rootNodeIds.push(id as string)
       } else {
-        stillPending.push({ linkName, node })
+        stillPending.push(node)
       }
     }
 
     if (stillPending.length === remaining.length) {
-      // No progress — create remaining as roots to avoid infinite loop
-      for (const { linkName, node } of stillPending) {
+      for (const node of stillPending) {
+        const bridge = readBridgeInfo(node)
+        if (!bridge?.linkName) continue
         const id = createNode(node, options.parentId as AnyNodeId | undefined)
         createdIds.push(id as string)
-        rememberCreatedLinkNode(linkName, node, id)
-        if (!rootLinkIds.has(linkName)) {
-          rootNodeIds.push(id as string)
-          rootLinkIds.add(linkName)
-        }
+        rememberCreatedLinkNode(bridge.linkName, node, id)
+        rootNodeIds.push(id as string)
       }
       break
     }
     remaining = stillPending
   }
 
-  return { nodeIds: createdIds, rootNodeIds, jointMetadata }
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────────
-
-function inferLinkName(node: AnyNode, data: ArticraftModelData): string | null {
-  const nodeName = node.name
-  if (!nodeName) return null
-
-  for (const link of data.links) {
-    if (link.name === nodeName) return link.name
-    // Check if node name starts with link name (for multi-visual links)
-    for (let vi = 0; vi < link.visuals.length; vi++) {
-      if (nodeName === `${link.name}_v${vi}`) return link.name
-    }
+  for (const node of visualNodes) {
+    const bridge = readBridgeInfo(node)
+    const parentNodeId = bridge?.linkName ? createdNodeIdByLink.get(bridge.linkName) : null
+    const id = createNode(node, parentNodeId as AnyNodeId | undefined)
+    createdIds.push(id as string)
   }
-  return null
+
+  for (const node of otherNodes) {
+    const id = createNode(node, options.parentId as AnyNodeId | undefined)
+    createdIds.push(id as string)
+  }
+
+  return { nodeIds: createdIds, rootNodeIds, jointMetadata }
 }

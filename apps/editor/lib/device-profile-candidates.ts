@@ -13,6 +13,10 @@ export type DeviceProfileCandidatePersistResult =
   | { saved: true; file: string; qualityScore: number; profileId: string }
   | { saved: false; reason: string; qualityScore?: number; profileId?: string }
 
+export type DeviceProfileCandidatePersistOptions = {
+  enabled?: boolean
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -52,7 +56,9 @@ async function existingCandidateQuality(file: string): Promise<number | undefine
 export async function persistDeviceProfileCandidateFromArtifact(
   prompt: string,
   artifact: GeneratedGeometryArtifact | null | undefined,
+  options: DeviceProfileCandidatePersistOptions = {},
 ): Promise<DeviceProfileCandidatePersistResult> {
+  if (options.enabled !== true) return { saved: false, reason: 'disabled' }
   if (!artifact) return { saved: false, reason: 'missing_artifact' }
   const profile = profileFromArtifact(artifact)
   if (!profile) return { saved: false, reason: 'not_runtime_draft' }

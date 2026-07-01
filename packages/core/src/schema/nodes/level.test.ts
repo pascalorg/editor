@@ -3,8 +3,11 @@ import { AnyNode } from '../types'
 import { BoxNode } from './box'
 import { CableTrayNode } from './cable-tray'
 import { ConveyorBeltNode } from './conveyor-belt'
+import { DataChartNode } from './data-chart'
+import { DataTableNode } from './data-table'
 import { LevelNode } from './level'
 import { SteelBeamNode } from './steel-beam'
+import { SteelFrameNode } from './steel-frame'
 
 describe('LevelNode', () => {
   test('accepts industrial route children', () => {
@@ -16,6 +19,10 @@ describe('LevelNode', () => {
       start: [0, 1],
       end: [1, 1],
     })
+    const steelFrame = SteelFrameNode.parse({
+      levels: 3,
+      columns: 5,
+    })
     const conveyorBelt = ConveyorBeltNode.parse({
       points: [
         [0, 0, 2],
@@ -24,10 +31,10 @@ describe('LevelNode', () => {
     })
 
     const level = LevelNode.parse({
-      children: [cableTray.id, steelBeam.id, conveyorBelt.id],
+      children: [cableTray.id, steelBeam.id, steelFrame.id, conveyorBelt.id],
     })
 
-    expect(level.children).toEqual([cableTray.id, steelBeam.id, conveyorBelt.id])
+    expect(level.children).toEqual([cableTray.id, steelBeam.id, steelFrame.id, conveyorBelt.id])
     expect(AnyNode.safeParse(level).success).toBe(true)
   })
 
@@ -39,6 +46,18 @@ describe('LevelNode', () => {
     })
 
     expect(level.children).toEqual(['assembly_generated', 'box_generated'])
+    expect(AnyNode.safeParse(level).success).toBe(true)
+  })
+
+  test('accepts data display children', () => {
+    const chart = DataChartNode.parse({})
+    const table = DataTableNode.parse({})
+
+    const level = LevelNode.parse({
+      children: [chart.id, table.id],
+    })
+
+    expect(level.children).toEqual([chart.id, table.id])
     expect(AnyNode.safeParse(level).success).toBe(true)
   })
 })

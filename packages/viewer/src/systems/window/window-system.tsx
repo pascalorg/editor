@@ -3460,3 +3460,9 @@ function syncWindowCutout(node: WindowNode, mesh: THREE.Mesh) {
   }
   cutout.visible = false
 }
+
+export function buildWindowPreviewMesh(node: WindowNode): THREE.Mesh {
+  const mesh = new THREE.Mesh()
+  updateWindowMesh(node, mesh)
+  return mesh
+}

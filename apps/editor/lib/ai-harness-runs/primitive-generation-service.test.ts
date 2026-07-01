@@ -98,6 +98,41 @@ describe('primitive generation service', () => {
     expect(payload?.results).toEqual(['Created draft with 1 shapes'])
   })
 
+  test('extracts primitive resource selection payloads without requiring geometry', () => {
+    const payload = extractPrimitiveGeometryGenerationPayload({
+      analysis: 'resource candidates',
+      results: ['pick one resource'],
+      needsResourceSelection: true,
+      resourceSelection: {
+        status: 'needs_selection',
+        recommendedProfileId: 'refinery.atmospheric_distillation_unit',
+        candidates: [
+          {
+            profileId: 'refinery.atmospheric_distillation_unit',
+            recommended: true,
+            usageHint: '默认推荐',
+          },
+        ],
+      },
+      metrics: { primitiveRoute: { route: 'resource-selection' } },
+    })
+
+    expect(payload?.artifact).toBeUndefined()
+    expect(payload?.needsResourceSelection).toBe(true)
+    expect(payload?.resourceSelection).toMatchObject({
+      status: 'needs_selection',
+      recommendedProfileId: 'refinery.atmospheric_distillation_unit',
+      candidates: [
+        {
+          profileId: 'refinery.atmospheric_distillation_unit',
+          recommended: true,
+          usageHint: '默认推荐',
+        },
+      ],
+    })
+    expect(payload?.shapeCount).toBeUndefined()
+  })
+
   test('uses cloud industry profiles for strong equipment prompts without explicit pack context', async () => {
     const result = await generatePrimitiveGeometryDraft({
       prompt: '\u751f\u4ea7\u4e00\u4e2a\u56de\u8f6c\u7a91',

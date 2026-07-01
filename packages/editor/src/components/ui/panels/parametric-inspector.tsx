@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getMaterialPresetByRef,
   type IconRef,
   type ItemNode,
   nodeRegistry,
@@ -32,6 +33,7 @@ import { isPlanDragMovableNode } from '../../../lib/plan-drag'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
+import { MaterialSwatchField } from '../controls/material-swatch-field'
 import { NodeMaterialSection } from '../controls/node-material-section'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
@@ -128,7 +130,13 @@ export function ParametricInspector() {
   const canDelete = def.capabilities.deletable !== false
 
   return (
-    <PanelWrapper icon={iconNode} onClose={handleClose} title={title} width={320}>
+    <PanelWrapper
+      icon={iconNode}
+      onClose={handleClose}
+      showDynamicTab={nodeType !== 'zone'}
+      title={title}
+      width={320}
+    >
       {parametrics?.groups.map((group, gi) => (
         <PanelSection key={`group-${gi}`} title={translatePanelGroupLabel(group.label)}>
           {group.fields.map((field, fi) => (
@@ -168,9 +176,6 @@ export function ParametricInspector() {
     </PanelWrapper>
   )
 }
-
-type ZoneMetadataValue = string | boolean | number | null
-type ZoneMetadata = Record<string, ZoneMetadataValue>
 
 type TransformableNode = AnyNode & {
   position: [number, number, number]
@@ -259,28 +264,6 @@ function AssemblyPartTransformSection({
   )
 }
 
-const ZONE_TYPE_OPTIONS = [
-  { value: 'production', label: 'Production', color: '#2563eb' },
-  { value: 'warehouse', label: 'Warehouse', color: '#f59e0b' },
-  { value: 'logistics', label: 'Logistics', color: '#0ea5e9' },
-  { value: 'equipment', label: 'Equipment', color: '#8b5cf6' },
-  { value: 'safety', label: 'Safety', color: '#22c55e' },
-  { value: 'restricted', label: 'Restricted', color: '#ef4444' },
-] as const
-
-const ZONE_SAFETY_OPTIONS = [
-  { value: 'normal', label: 'Normal' },
-  { value: 'caution', label: 'Caution' },
-  { value: 'danger', label: 'Danger' },
-  { value: 'restricted', label: 'Restricted' },
-] as const
-
-function readZoneMetadata(metadata: ZoneNode['metadata']): ZoneMetadata {
-  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
-    ? (metadata as ZoneMetadata)
-    : {}
-}
-
 function polygonArea(polygon: Array<[number, number]>): number {
   if (polygon.length < 3) return 0
   let area = 0
@@ -304,143 +287,41 @@ function ZonePropertiesSection({ nodeId }: { nodeId: AnyNodeId }) {
 
   if (!zone || zone.type !== 'zone') return null
 
-  const metadata = readZoneMetadata(zone.metadata)
-  const zoneType = typeof metadata.zoneType === 'string' ? metadata.zoneType : ''
-  const safetyLevel =
-    typeof metadata.safetyLevel === 'string' ? metadata.safetyLevel : 'normal'
-  const notes = typeof metadata.notes === 'string' ? metadata.notes : ''
-  const responsibleTeam =
-    typeof metadata.responsibleTeam === 'string' ? metadata.responsibleTeam : ''
-  const allowPeople =
-    typeof metadata.allowPeople === 'boolean' ? metadata.allowPeople : true
-  const allowForklift =
-    typeof metadata.allowForklift === 'boolean' ? metadata.allowForklift : false
-  const allowRobot = typeof metadata.allowRobot === 'boolean' ? metadata.allowRobot : false
-  const noStorage = typeof metadata.noStorage === 'boolean' ? metadata.noStorage : false
-
-  const updateMetadata = (patch: ZoneMetadata) => {
-    updateZone({ metadata: { ...metadata, ...patch } as ZoneNode['metadata'] })
-  }
-
-  const handleZoneTypeChange = (value: string) => {
-    const option = ZONE_TYPE_OPTIONS.find((item) => item.value === value)
-    updateZone({
-      color: option?.color ?? zone.color,
-      metadata: { ...metadata, zoneType: value } as ZoneNode['metadata'],
-    })
-  }
-
   return (
-    <>
-      <PanelSection title="区域">
-        <div className="space-y-3 px-3 py-2 text-xs">
-          <label className="grid gap-1.5">
-            <span className="text-muted-foreground">名称</span>
-            <input
-              className="h-8 rounded-md border border-border/50 bg-[#2C2C2E] px-2 text-foreground outline-none focus:ring-1 focus:ring-foreground/30"
-              onChange={(event) => updateZone({ name: event.target.value })}
-              type="text"
-              value={zone.name ?? ''}
-            />
-          </label>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-muted-foreground">面积</span>
-            <span className="font-mono text-foreground">{polygonArea(zone.polygon).toFixed(1)} m²</span>
-          </div>
-          <label className="flex items-center justify-between gap-2">
-            <span className="text-muted-foreground">颜色</span>
-            <div className="flex items-center gap-2">
-              <input
-                className="h-7 w-9 cursor-pointer rounded border border-border/50 bg-transparent"
-                onChange={(event) => updateZone({ color: event.target.value })}
-                type="color"
-                value={zone.color}
-              />
-              <input
-                className="w-20 rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs outline-none focus:ring-1 focus:ring-foreground/30"
-                onChange={(event) => updateZone({ color: event.target.value })}
-                type="text"
-                value={zone.color}
-              />
-            </div>
-          </label>
+    <PanelSection title="区域">
+      <div className="space-y-3 px-3 py-2 text-xs">
+        <label className="grid gap-1.5">
+          <span className="text-muted-foreground">名称</span>
+          <input
+            className="h-8 rounded-md border border-border/50 bg-[#2C2C2E] px-2 text-foreground outline-none focus:ring-1 focus:ring-foreground/30"
+            onChange={(event) => updateZone({ name: event.target.value })}
+            type="text"
+            value={zone.name ?? ''}
+          />
+        </label>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground">面积</span>
+          <span className="font-mono text-foreground">{polygonArea(zone.polygon).toFixed(1)} m²</span>
         </div>
-      </PanelSection>
-      <PanelSection title="工业属性">
-        <div className="space-y-3 px-3 py-2 text-xs">
-          <label className="grid gap-1.5">
-            <span className="text-muted-foreground">类型</span>
-            <select
-              className="h-8 rounded-md border border-border/50 bg-[#2C2C2E] px-2 text-foreground outline-none focus:ring-1 focus:ring-foreground/30"
-              onChange={(event) => handleZoneTypeChange(event.target.value)}
-              value={zoneType}
-            >
-              <option value="">未指定</option>
-              {ZONE_TYPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1.5">
-            <span className="text-muted-foreground">安全等级</span>
-            <select
-              className="h-8 rounded-md border border-border/50 bg-[#2C2C2E] px-2 text-foreground outline-none focus:ring-1 focus:ring-foreground/30"
-              onChange={(event) => updateMetadata({ safetyLevel: event.target.value })}
-              value={safetyLevel}
-            >
-              {ZONE_SAFETY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1.5">
-            <span className="text-muted-foreground">负责团队</span>
+        <label className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground">颜色</span>
+          <div className="flex items-center gap-2">
             <input
-              className="h-8 rounded-md border border-border/50 bg-[#2C2C2E] px-2 text-foreground outline-none focus:ring-1 focus:ring-foreground/30"
-              onChange={(event) => updateMetadata({ responsibleTeam: event.target.value })}
-              placeholder="EHS / 生产 / 仓储"
+              className="h-7 w-9 cursor-pointer rounded border border-border/50 bg-transparent"
+              onChange={(event) => updateZone({ color: event.target.value })}
+              type="color"
+              value={zone.color}
+            />
+            <input
+              className="w-20 rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs outline-none focus:ring-1 focus:ring-foreground/30"
+              onChange={(event) => updateZone({ color: event.target.value })}
               type="text"
-              value={responsibleTeam}
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <ToggleControl
-              checked={allowPeople}
-              label="人员"
-              onChange={(next) => updateMetadata({ allowPeople: next })}
-            />
-            <ToggleControl
-              checked={allowForklift}
-              label="叉车"
-              onChange={(next) => updateMetadata({ allowForklift: next })}
-            />
-            <ToggleControl
-              checked={allowRobot}
-              label="机器人"
-              onChange={(next) => updateMetadata({ allowRobot: next })}
-            />
-            <ToggleControl
-              checked={noStorage}
-              label="禁止存储"
-              onChange={(next) => updateMetadata({ noStorage: next })}
+              value={zone.color}
             />
           </div>
-          <label className="grid gap-1.5">
-            <span className="text-muted-foreground">备注</span>
-            <textarea
-              className="min-h-20 resize-y rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1.5 text-foreground outline-none focus:ring-1 focus:ring-foreground/30"
-              onChange={(event) => updateMetadata({ notes: event.target.value })}
-              placeholder="规则、风险、运行限制…"
-              value={notes}
-            />
-          </label>
-        </div>
-      </PanelSection>
-    </>
+        </label>
+      </div>
+    </PanelSection>
   )
 }
 
@@ -477,7 +358,16 @@ function isArticraftModelData(value: unknown): value is ArticraftModelData {
 function canConvertArticraftModel(modelData: ArticraftModelData): boolean {
   if (modelData.joints.length === 0 || modelData.links.length === 0) return false
   return modelData.links.every((link) =>
-    link.visuals.some((visual) => visual.geometry.type !== 'mesh'),
+    link.visuals.some((visual) => {
+      if (visual.geometry.type !== 'mesh') return true
+      const params = visual.geometry.params
+      return (
+        params.sx !== undefined ||
+        params.size !== undefined ||
+        params.length !== undefined ||
+        params.radius !== undefined
+      )
+    }),
   )
 }
 
@@ -1045,22 +935,29 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
     case 'color': {
       const str = typeof value === 'string' ? value : '#888888'
       return (
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
-          <div className="flex items-center gap-2">
-            <input
-              className="h-6 w-8 cursor-pointer rounded border border-border/50 bg-transparent"
-              onChange={(e) => onUpdate({ [key]: e.target.value } as Partial<AnyNode>)}
-              type="color"
-              value={str}
-            />
-            <input
-              className="w-20 rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
-              onChange={(e) => onUpdate({ [key]: e.target.value } as Partial<AnyNode>)}
-              type="text"
-              value={str}
-            />
-          </div>
+        <div className="px-3 py-2">
+          <MaterialSwatchField
+            label={prettifyKey(key)}
+            value={{
+              preset: 'custom',
+              properties: {
+                color: str,
+                roughness: 0.5,
+                metalness: 0,
+                opacity: 1,
+                transparent: false,
+                side: 'front',
+              },
+            }}
+            onChange={(material) => {
+              const color = material.properties?.color
+              if (color) onUpdate({ [key]: color } as Partial<AnyNode>)
+            }}
+            onSelectMaterialPreset={(materialPreset) => {
+              const color = getMaterialPresetByRef(materialPreset)?.mapProperties.color
+              if (color) onUpdate({ [key]: color } as Partial<AnyNode>)
+            }}
+          />
         </div>
       )
     }
@@ -1146,14 +1043,15 @@ const NODE_LABELS: Record<string, string> = {
   'Pipe fitting': '管件',
   'Steel Beam': '钢梁',
   Tank: '储罐',
-  'Data Widget': '数据组件',
+  'Data Widget': '\u5355\u6807\u7b7e',
   Shelf: '货架',
   'cable-tray': '桥架',
   'pipe-fitting': '管件',
   'steel-beam': '钢梁',
   tank: '储罐',
-  'data-widget': '数据组件',
+  'data-widget': '\u5355\u6807\u7b7e',
   shelf: '货架',
+  'steel-frame': '\u94a2\u67b6',
 }
 
 const PANEL_GROUP_LABELS: Record<string, string> = {
@@ -1169,6 +1067,7 @@ const PANEL_GROUP_LABELS: Record<string, string> = {
   Position: '位置',
   Actions: '操作',
   Topology: '结构',
+  Frame: '\u6846\u67b6',
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -1212,9 +1111,18 @@ const FIELD_LABELS: Record<string, string> = {
   shellColor: '罐体颜色',
   liquidColor: '液体颜色',
   shellOpacity: '罐体透明度',
+  braceStyle: '\u8f85\u52a9\u67b6',
+  deckColor: '\u5e73\u53f0\u989c\u8272',
 }
 
 const ENUM_LABELS: Record<string, string> = {
+  'pipe-rack': '\u7ba1\u5eca\u67b6',
+  'equipment-platform': '\u8bbe\u5907\u5e73\u53f0',
+  'portal-frame': '\u95e8\u5f0f\u94a2\u67b6',
+  'tower-frame': '\u5854\u5f0f\u94a2\u67b6',
+  'single-diagonal': '\u5355\u659c\u6491',
+  knee: '\u89d2\u6491',
+  none: '\u65e0\u8f85\u52a9\u67b6',
   elbow: '弯头',
   tee: '三通',
   cross: '四通',

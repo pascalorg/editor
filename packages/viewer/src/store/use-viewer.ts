@@ -416,7 +416,7 @@ const useViewer = create<ViewerState>()(
 
 export function isViewerSpatialInputSuppressed() {
   const state = useViewer.getState()
-  return state.cameraDragging || state.spacePanning
+  return state.cameraDragging || state.inputDragging || state.spacePanning
 }
 
 export function isViewerSelectionInputSuppressed() {

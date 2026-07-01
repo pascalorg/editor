@@ -8,6 +8,7 @@ import {
   type DynamicJointBinding,
   type DynamicJointChannel,
   type DynamicType,
+  getDynamicTypesForNode,
   getLiveDataValue,
   getNodeSemanticType,
   getTransferConnections,
@@ -27,6 +28,7 @@ import {
   Color,
   ConeGeometry,
   CylinderGeometry,
+  DoubleSide,
   Float32BufferAttribute,
   Group,
   Line,
@@ -472,6 +474,49 @@ function createHorizontalPipeFillGeometry(radius: number, length: number, level:
   return geometry
 }
 
+function createHorizontalTankLevelFillGeometry(radius: number, length: number, level: number) {
+  const clamped = Math.min(1, Math.max(0, level))
+  if (clamped <= 0) return null
+  if (clamped >= 1) {
+    const full = new CylinderGeometry(radius * 0.92, radius * 0.92, length * 0.96, 48)
+    full.rotateZ(Math.PI / 2)
+    return full
+  }
+
+  const yLevel = -radius + radius * 2 * clamped
+  const alpha = Math.asin(Math.min(1, Math.max(-1, yLevel / radius)))
+  const start = Math.PI - alpha
+  const end = Math.PI * 2 + alpha
+  const steps = 36
+  const cross: Array<[number, number]> = []
+  for (let index = 0; index <= steps; index += 1) {
+    const theta = start + ((end - start) * index) / steps
+    cross.push([radius * Math.sin(theta), radius * Math.cos(theta)])
+  }
+
+  const half = (length * 0.96) / 2
+  const vertices: number[] = []
+  for (const x of [-half, half]) {
+    for (const [y, z] of cross) vertices.push(x, y, z)
+  }
+
+  const indices: number[] = []
+  const count = cross.length
+  for (let index = 1; index < count - 1; index += 1) indices.push(0, index, index + 1)
+  for (let index = 1; index < count - 1; index += 1)
+    indices.push(count, count + index + 1, count + index)
+  for (let index = 0; index < count; index += 1) {
+    const next = (index + 1) % count
+    indices.push(index, next, count + next, index, count + next, count + index)
+  }
+
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3))
+  geometry.setIndex(indices)
+  geometry.computeVertexNormals()
+  return geometry
+}
+
 function createPipeFlowCoreGeometry(radius: number, length: number) {
   const geometry = new CylinderGeometry(radius, radius, length, 24)
   geometry.rotateZ(Math.PI / 2)
@@ -523,7 +568,7 @@ function ensureFlowFill(
           transparent: true,
           opacity: 0.86,
           depthWrite: false,
-          depthTest: false,
+          depthTest: true,
         }),
       )
       entry.flowFill.name = `dynamic-flow-fill-${entry.node.id}`
@@ -991,10 +1036,64 @@ type TankLikeNode = AnyNode & {
   liquidOpacity?: number
 }
 
+type TankLevelShape = {
+  diameter?: number
+  height?: number
+  length?: number
+  kind?: 'vertical' | 'horizontal' | 'spherical'
+}
+
+type GeneratedTankLevelGeometrySpec = {
+  kind: 'vertical' | 'horizontal' | 'spherical'
+  diameter: number
+  height?: number
+  length?: number
+  position: [number, number, number]
+  rotation?: [number, number, number]
+}
+
 type TankWaveData = {
   baseTopY: number
   topCenterIndex: number
   topRingIndices: number[]
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function readFiniteNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function readVec3(value: unknown): [number, number, number] | undefined {
+  return Array.isArray(value) &&
+    value.length === 3 &&
+    value.every((entry) => typeof entry === 'number' && Number.isFinite(entry))
+    ? (value as [number, number, number])
+    : undefined
+}
+
+function readGeneratedTankLevelGeometry(node: AnyNode): GeneratedTankLevelGeometrySpec | undefined {
+  const metadata = readRecord(node.metadata)
+  const spec = readRecord(metadata.dynamicLevelGeometry)
+  const kind =
+    spec.kind === 'horizontal' || spec.kind === 'spherical' || spec.kind === 'vertical'
+      ? spec.kind
+      : undefined
+  const diameter = readFiniteNumber(spec.diameter)
+  const position = readVec3(spec.position)
+  if (!kind || !diameter || !position) return undefined
+  return {
+    kind,
+    diameter,
+    height: readFiniteNumber(spec.height),
+    length: readFiniteNumber(spec.length),
+    position,
+    rotation: readVec3(spec.rotation),
+  }
 }
 
 function materialHasColor(material: Material | Material[], color: string) {
@@ -1063,8 +1162,8 @@ function createVerticalTankLevelFillGeometry(radius: number, height: number) {
   }
 }
 
-function createTankLevelFill(node: TankLikeNode, ratio: number) {
-  const radius = Math.max(0.05, (node.diameter ?? 1.6) / 2) * 0.92
+function createTankLevelFill(node: TankLevelShape, ratio: number) {
+  const radius = Math.max(0.05, (node.diameter ?? 1.6) / 2)
   const kind = node.kind ?? 'vertical'
   const clamped = Math.min(1, Math.max(0, ratio))
   if (clamped <= 0.001) return null
@@ -1075,7 +1174,7 @@ function createTankLevelFill(node: TankLikeNode, ratio: number) {
     return { geometry }
   }
   if (kind === 'horizontal') {
-    const geometry = createHorizontalPipeFillGeometry(
+    const geometry = createHorizontalTankLevelFillGeometry(
       radius,
       Math.max(0.1, node.length ?? 3),
       clamped,
@@ -1083,7 +1182,7 @@ function createTankLevelFill(node: TankLikeNode, ratio: number) {
     return geometry ? { geometry } : null
   }
   const fillHeight = Math.max(0.001, (node.height ?? 3) * clamped)
-  return createVerticalTankLevelFillGeometry(radius, fillHeight)
+  return createVerticalTankLevelFillGeometry(radius * 0.92, fillHeight)
 }
 
 function animateTankLevelWave(entry: RuntimeEntry, elapsedSeconds: number) {
@@ -1136,6 +1235,7 @@ function ensureTankLevelFill(
           transparent: true,
           opacity,
           depthWrite: false,
+          side: DoubleSide,
         }),
       )
       entry.levelFill.name = `dynamic-level-fill-${entry.node.id}`
@@ -1159,12 +1259,81 @@ function ensureTankLevelFill(
   animateTankLevelWave(entry, elapsedSeconds)
 }
 
+function ensureGeneratedTankLevelFill(
+  entry: RuntimeEntry,
+  binding: DynamicBinding,
+  spec: GeneratedTankLevelGeometrySpec,
+  ratio: number,
+  elapsedSeconds: number,
+) {
+  const color = binding.color ?? '#38bdf8'
+  const opacity = 0.72
+  const ratioBucket = Math.round(Math.min(1, Math.max(0, ratio)) * 100) / 100
+  const key = [
+    'generated-tank',
+    spec.kind,
+    color,
+    opacity,
+    spec.diameter,
+    spec.height ?? 3,
+    spec.length ?? 3,
+    spec.position.join(','),
+    spec.rotation?.join(',') ?? '0,0,0',
+    ratioBucket,
+  ].join(':')
+  if (entry.levelFillKey !== key) {
+    if (entry.levelFill) disposeObject(entry.levelFill)
+    entry.levelFill = null
+    entry.levelFillKey = key
+    const built = createTankLevelFill(spec, ratioBucket)
+    if (built) {
+      entry.levelFill = new Mesh(
+        built.geometry,
+        new MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity,
+          depthWrite: false,
+          side: DoubleSide,
+        }),
+      )
+      entry.levelFill.name = `dynamic-level-fill-${entry.node.id}`
+      entry.levelFill.castShadow = true
+      entry.levelFill.receiveShadow = true
+      entry.levelFill.userData.dynamicLevelFill = true
+      if ('wave' in built) entry.levelFill.userData.tankWave = built.wave
+      entry.object.add(entry.levelFill)
+    }
+  }
+
+  if (!entry.levelFill) return
+  entry.levelFill.position.set(spec.position[0], spec.position[1], spec.position[2])
+  entry.levelFill.rotation.set(
+    spec.rotation?.[0] ?? 0,
+    spec.rotation?.[1] ?? 0,
+    spec.rotation?.[2] ?? 0,
+  )
+  entry.levelFill.visible = ratioBucket > 0.001
+  animateTankLevelWave(entry, elapsedSeconds)
+}
+
 function applyLevel(entry: RuntimeEntry, binding: DynamicBinding, elapsedSeconds: number) {
   const value = numericValue(getBindingValue(binding))
   const fill = mapRange(value, binding.inputRange ?? [0, 100], binding.outputRange ?? [0, 1])
   const clamped = Math.min(1, Math.max(0, fill))
   if (entry.node.type === 'tank') {
     ensureTankLevelFill(entry, binding, clamped, elapsedSeconds)
+    return
+  }
+  const generatedTankLevelGeometry = readGeneratedTankLevelGeometry(entry.node)
+  if (generatedTankLevelGeometry) {
+    ensureGeneratedTankLevelFill(
+      entry,
+      binding,
+      generatedTankLevelGeometry,
+      clamped,
+      elapsedSeconds,
+    )
     return
   }
   ensureLevelFill(entry, binding)
@@ -1681,10 +1850,12 @@ function syncRuntimeEntries(nodes: Record<string, AnyNode>, entries: Map<string,
 
   for (const node of Object.values(nodes)) {
     const semanticType = getNodeSemanticType(node)
+    const dynamicTypes = getDynamicTypesForNode(node)
     const dynamicMetadata = readDynamicMetadata(node)
     const bindings = dynamicMetadata.dynamicBindings?.filter(
       (binding) =>
         SUPPORTED_PREVIEW_DYNAMIC_TYPES.has(binding.type) &&
+        dynamicTypes.includes(binding.type) &&
         (binding.type !== 'conveyorFlow' || isConveyorSemanticType(semanticType)),
     )
     const jointChannels = dynamicMetadata.jointChannels ?? []

@@ -446,4 +446,69 @@ describe('geometry intent planner', () => {
       expect(plan.operations.some((entry) => entry.op === expectedOp)).toBe(true)
     }
   })
+
+  test('preserves gradient material through primitive create and revision setMaterial', () => {
+    const gradientMaterial = {
+      properties: { color: '#ef4444', opacity: 0.2, transparent: true },
+      gradient: {
+        type: 'linear',
+        space: 'uv',
+        axis: 'y',
+        stops: [
+          { offset: 0, color: '#ef4444', opacity: 1 },
+          { offset: 1, color: '#111827', opacity: 1 },
+        ],
+      },
+    }
+    const created = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        shapes: [
+          {
+            kind: 'box',
+            semanticRole: 'test_body',
+            position: [0, 0.5, 0],
+            length: 1,
+            width: 1,
+            height: 1,
+            material: gradientMaterial,
+          },
+        ],
+      },
+      { prompt: 'create red black gradient test box' },
+    )
+
+    expect(created.artifact?.shapes[0]?.material?.gradient?.stops[1]?.color).toBe('#111827')
+
+    const revised = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: created.artifact?.id,
+        feedback: 'make it blue green gradient',
+        intent: 'set gradient material',
+        operations: [
+          {
+            op: 'setMaterial',
+            selector: { semanticRole: 'test_body' },
+            material: {
+              properties: { color: '#3b82f6', opacity: 0.5, transparent: true },
+              gradient: {
+                type: 'linear',
+                space: 'uv',
+                axis: 'y',
+                stops: [
+                  { offset: 0, color: '#3b82f6', opacity: 1 },
+                  { offset: 1, color: '#22c55e', opacity: 1 },
+                ],
+              },
+            },
+          },
+        ],
+      },
+      { prompt: 'revise gradient', revisionTarget: created.artifact },
+    )
+
+    expect(revised.artifact?.shapes[0]?.material?.properties?.opacity).toBe(0.5)
+    expect(revised.artifact?.shapes[0]?.material?.gradient?.stops[1]?.color).toBe('#22c55e')
+  })
 })

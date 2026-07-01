@@ -48,6 +48,16 @@ This is the important invariant. A surface is "textured" only if its node has an
 
 So picking the Mediterranean theme gives a blue roof + warm walls without touching the textures toggle. There is no "all white" mode — untextured always means "themed role colour".
 
+## Custom material colour, opacity, and gradients
+
+Explicit `MaterialSchema` is the only place for editable surface appearance:
+
+- `properties.color` + `properties.opacity` define a solid colour, including transparent colour.
+- `gradient` defines a custom linear gradient with 2-8 stops. Each stop owns `{ offset, color, opacity }`, so alpha is edited with the colour stop rather than as a separate inspector field.
+- `texture` / catalog presets remain the fill/material-library path. A custom gradient is stored on `material`, not on `materialPreset`.
+
+The editor must expose colour opacity through the material/colour picker, not as a separate generic property slider. The viewer must render custom materials through `packages/viewer/src/lib/materials.ts#createMaterial`; do not add per-node gradient shader forks unless a kind has genuinely different geometry semantics.
+
 ### Where it's wired per kind
 
 | Kind | Where the role colour is applied |

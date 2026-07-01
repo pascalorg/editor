@@ -33,19 +33,19 @@ export const dataWidgetDefinition: NodeDefinition<typeof DataWidgetNode> = {
 
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Left click', label: '放置数据组件' },
+    { key: 'Left click', label: '\u653e\u7f6e\u5355\u6807\u7b7e' },
     { key: 'Esc', label: '取消' },
   ],
 
   presentation: {
-    label: 'Data Widget',
-    description: 'A canvas label, badge, or card backed by static/live data.',
+    label: '\u5355\u6807\u7b7e',
+    description: 'A single-value data label backed by a live data path.',
     icon: { kind: 'url', src: '/icons/data-widget.svg' },
     paletteSection: 'structure',
     paletteOrder: 140,
   },
 
   mcp: {
-    description: 'A canvas data widget for showing static or live values.',
+    description: 'A single-value label for showing a live data path.',
   },
 }

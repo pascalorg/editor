@@ -245,6 +245,8 @@ function finiteVec2(value: unknown): Vec2 | undefined {
 
 function sceneBoundsFromMetadata(metadata: Record<string, unknown>): SceneBoundsLike | undefined {
   const candidates = [
+    metadata.siteBounds,
+    isRecord(metadata.site) ? metadata.site.bounds : undefined,
     metadata.sceneBounds,
     isRecord(metadata.scene) ? metadata.scene.bounds : undefined,
   ]
@@ -280,7 +282,7 @@ function layoutPlacementIntent(prompt: string) {
   return { horizontal, vertical }
 }
 
-function resolveLayoutCenter(input: {
+export function resolveFactoryLayoutCenter(input: {
   prompt: string
   dimensions: { length: number; width: number }
   metadata: Record<string, unknown>
@@ -297,6 +299,7 @@ function resolveLayoutCenter(input: {
   }
 
   const bounds = sceneBoundsFromMetadata(input.metadata)
+  const hasSiteBounds = isRecord(input.metadata.siteBounds)
   const intent = layoutPlacementIntent(input.prompt)
   if (!bounds) {
     return { centerX: 0, centerZ: 0, placementIntent: 'default-origin' }
@@ -304,6 +307,13 @@ function resolveLayoutCenter(input: {
 
   const defaultCenterX = bounds.center?.[0] ?? (bounds.min[0] + bounds.max[0]) / 2
   const defaultCenterZ = bounds.center?.[1] ?? (bounds.min[1] + bounds.max[1]) / 2
+  if (hasSiteBounds && !intent.horizontal && !intent.vertical) {
+    return {
+      centerX: defaultCenterX,
+      centerZ: defaultCenterZ,
+      placementIntent: 'center-in-site',
+    }
+  }
   if (!intent.horizontal && !intent.vertical) {
     return {
       centerX: bounds.max[0] + AUTO_PLACE_GAP + input.dimensions.length / 2,
@@ -565,7 +575,7 @@ export function buildFactoryLayoutCreatePatches(input: {
     hasRoof: spec.hasRoof,
     ...input.placement.metadata,
   }
-  const center = resolveLayoutCenter({
+  const center = resolveFactoryLayoutCenter({
     prompt: input.prompt,
     dimensions,
     metadata: baseMetadata,

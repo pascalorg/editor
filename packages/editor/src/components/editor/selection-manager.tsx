@@ -370,7 +370,14 @@ function getSingleSurfacePreviewMaterial(material: ActivePaintMaterial): Materia
   if (material.material) {
     if (shading === 'solid' || !textures) {
       const properties = resolveMaterial(material.material)
-      return createMaterial({ preset: 'custom', properties }, 'solid')
+      return createMaterial(
+        {
+          preset: 'custom',
+          properties,
+          gradient: material.material.gradient,
+        },
+        'solid',
+      )
     }
     return createMaterial(material.material, shading)
   }
@@ -2253,16 +2260,24 @@ const EditorOutlinerSync = () => {
     // 2. Sync with the imperative outliner arrays (mutate in place to keep references)
     outliner.selectedObjects.length = 0
     for (const id of idsToHighlight) {
-      if (!nodes[id as AnyNodeId]) continue
+      const node = nodes[id as AnyNodeId]
+      if (!node) continue
+      if (node.type === 'data-widget' || node.type === 'data-chart' || node.type === 'data-table')
+        continue
       const obj = sceneRegistry.nodes.get(id)
       if (obj?.parent) outliner.selectedObjects.push(obj)
     }
 
     outliner.hoveredObjects.length = 0
     if (hoveredId) {
-      if (!nodes[hoveredId as AnyNodeId]) {
+      const hoveredNode = nodes[hoveredId as AnyNodeId]
+      if (!hoveredNode) {
         useViewer.setState({ hoveredId: null })
-      } else {
+      } else if (
+        hoveredNode.type !== 'data-widget' &&
+        hoveredNode.type !== 'data-chart' &&
+        hoveredNode.type !== 'data-table'
+      ) {
         const obj = sceneRegistry.nodes.get(hoveredId)
         if (obj?.parent) outliner.hoveredObjects.push(obj)
       }

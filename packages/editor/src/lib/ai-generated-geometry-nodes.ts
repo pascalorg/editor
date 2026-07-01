@@ -27,6 +27,17 @@ import type {
 
 type ShapeSpec = GeneratedGeometryShapeSpec
 
+type DynamicLevelGeometrySpec = {
+  kind: 'vertical' | 'horizontal' | 'spherical'
+  diameter: number
+  height?: number
+  length?: number
+  position: Vec3
+  rotation?: Vec3
+  source: 'generated-geometry'
+  shellShapeIndex: number
+}
+
 export const clampD = (v: unknown, fallback: number, min = 0.01, max = 50) =>
   Math.max(min, Math.min(max, typeof v === 'number' && !Number.isNaN(v) ? v : fallback))
 export const clampR = (v: unknown, fallback: number) => clampD(v, fallback, 0.01, 10)
@@ -65,6 +76,83 @@ function shapeWorldPosition(input: {
   shapeIndex: number
 }) {
   return input.artifact.transforms[input.shapeIndex]?.position ?? input.shape.position
+}
+
+function shapeRotation(input: {
+  artifact: GeneratedGeometryArtifact
+  shape: ShapeSpec
+  shapeIndex: number
+}) {
+  return input.artifact.transforms[input.shapeIndex]?.rotation ?? input.shape.rotation
+}
+
+function isTankShellShape(shape: ShapeSpec) {
+  if (shape.kind !== 'cylinder' && shape.kind !== 'hollow-cylinder') return false
+  const sourcePartKind = shape.sourcePartKind?.toLowerCase()
+  const semanticRole = shape.semanticRole?.toLowerCase()
+  const tankSource =
+    sourcePartKind === 'cylindrical_tank' ||
+    sourcePartKind === 'agitator_tank' ||
+    sourcePartKind === 'vertical_storage_tank'
+  const shellRole =
+    semanticRole === 'vessel_shell' ||
+    semanticRole === 'tank_body' ||
+    semanticRole === 'reactor_vessel_shell' ||
+    semanticRole === 'distillation_column_shell'
+  return tankSource && shellRole
+}
+
+function generatedTankLevelGeometry(
+  artifact: GeneratedGeometryArtifact,
+): DynamicLevelGeometrySpec | undefined {
+  const ranked = artifact.shapes
+    .map((shape, shapeIndex) => ({ shape, shapeIndex }))
+    .filter(({ shape }) => isTankShellShape(shape))
+    .sort((left, right) => {
+      const leftVolume = (left.shape.radius ?? 0) ** 2 * (left.shape.height ?? 0)
+      const rightVolume = (right.shape.radius ?? 0) ** 2 * (right.shape.height ?? 0)
+      return rightVolume - leftVolume
+    })
+  const shell = ranked[0]
+  if (!shell) return undefined
+
+  const radius = clampR(shell.shape.radius, 0.5)
+  const length = clampD(shell.shape.height, 1, 0.01, 40)
+  const center = shapeWorldPosition({
+    artifact,
+    shape: shell.shape,
+    shapeIndex: shell.shapeIndex,
+  })
+  const origin = artifact.assemblyPosition
+  const axis = shell.shape.axis === 'x' || shell.shape.axis === 'z' ? shell.shape.axis : 'y'
+  const localCenter = subtractVec3(center, origin) ?? [0, 0, 0]
+  const rotation = shapeRotation({
+    artifact,
+    shape: shell.shape,
+    shapeIndex: shell.shapeIndex,
+  })
+
+  if (axis === 'y') {
+    return {
+      kind: 'vertical',
+      diameter: radius * 2,
+      height: length,
+      position: [localCenter[0], localCenter[1] - length / 2, localCenter[2]],
+      rotation,
+      source: 'generated-geometry',
+      shellShapeIndex: shell.shapeIndex,
+    }
+  }
+
+  return {
+    kind: 'horizontal',
+    diameter: radius * 2,
+    length,
+    position: localCenter,
+    rotation: shell.shape.rotation,
+    source: 'generated-geometry',
+    shellShapeIndex: shell.shapeIndex,
+  }
 }
 
 function localPrimitiveContract(input: {
@@ -186,7 +274,6 @@ function generatedShapeMetadata(input: {
 }
 
 export function buildGeneratedGeometryNodes(artifact: GeneratedGeometryArtifact) {
-  const shouldCreateAssembly = artifact.shapes.length > 1
   const created: string[] = []
   const createdNodes: AnyNode[] = []
   const patternInstancesByLead = new Map<number, ReturnType<typeof generatedPatternInstances>>()
@@ -207,9 +294,7 @@ export function buildGeneratedGeometryNodes(artifact: GeneratedGeometryArtifact)
 
     const worldPosition = transform?.position ?? shape.position
     const rotation = transform?.rotation ?? shape.rotation ?? [0, 0, 0]
-    const position = shouldCreateAssembly
-      ? toAssemblyLocalPosition(worldPosition, artifact.assemblyPosition)
-      : worldPosition
+    const position = toAssemblyLocalPosition(worldPosition, artifact.assemblyPosition)
     const displayName = shape.name ?? shape.kind
 
     try {
@@ -574,22 +659,12 @@ function withNodeMetadata<T extends AnyNode>(node: T, metadata: Record<string, u
   }
 }
 
-function withNodePlacement<T extends AnyNode>(
-  node: T,
-  placement: Pick<GeneratedGeometryPlacementSpec, 'position' | 'rotation'>,
-): T {
-  return {
-    ...node,
-    ...(placement.position ? { position: placement.position } : {}),
-    ...(placement.rotation ? { rotation: placement.rotation } : {}),
-  } as T
-}
-
 function generatedRootMetadata(
   artifact: GeneratedGeometryArtifact,
   options: GeneratedGeometryPlacementSpec,
   partCount: number,
 ) {
+  const dynamicLevelGeometry = generatedTankLevelGeometry(artifact)
   return {
     generatedBy: options.generatedBy ?? 'ai-chat',
     sourceTool: artifact.sourceTool,
@@ -597,6 +672,12 @@ function generatedRootMetadata(
     sourcePrompt: artifact.userPrompt,
     artifactId: artifact.id,
     partCount,
+    ...(dynamicLevelGeometry
+      ? {
+          semanticType: 'tank',
+          dynamicLevelGeometry,
+        }
+      : {}),
     ...options.metadata,
   }
 }
@@ -609,37 +690,25 @@ export function buildGeneratedGeometryCreatePatches(
   if (!createdNodes.length) return { created, nodeIds: [], childNodes: [], patches: [] }
 
   const parentId = options.parentId == null ? undefined : (options.parentId as AnyNodeId)
-  const shouldCreateAssembly = Boolean(artifact.assemblyName) || createdNodes.length > 1
-  if (shouldCreateAssembly) {
-    const rootNode = AssemblyNode.parse({
-      name: artifact.assemblyName ?? artifact.title,
-      position: options.position ?? artifact.assemblyPosition,
-      rotation: options.rotation,
-      metadata: generatedRootMetadata(artifact, options, createdNodes.length),
-    })
-    const patches: GeneratedGeometryCreatePatch[] = [
-      { op: 'create', node: rootNode, ...(parentId ? { parentId } : {}) },
-      ...createdNodes.map((node) => ({
-        op: 'create' as const,
-        node,
-        parentId: rootNode.id as AnyNodeId,
-      })),
-    ]
-    return {
-      created,
-      nodeIds: [rootNode.id, ...createdNodes.map((node) => node.id)],
-      rootNode,
-      childNodes: createdNodes,
-      patches,
-    }
-  }
-
-  const rootNode = withNodeMetadata(
-    withNodePlacement(createdNodes[0]!, options),
-    generatedRootMetadata(artifact, options, 1),
-  )
+  const rootNode = AssemblyNode.parse({
+    name: artifact.assemblyName ?? artifact.title,
+    position: options.position ?? artifact.assemblyPosition,
+    rotation: options.rotation,
+    metadata: generatedRootMetadata(artifact, options, createdNodes.length),
+  })
   const patches: GeneratedGeometryCreatePatch[] = [
     { op: 'create', node: rootNode, ...(parentId ? { parentId } : {}) },
+    ...createdNodes.map((node) => ({
+      op: 'create' as const,
+      node,
+      parentId: rootNode.id as AnyNodeId,
+    })),
   ]
-  return { created, nodeIds: [rootNode.id], rootNode, childNodes: [], patches }
+  return {
+    created,
+    nodeIds: [rootNode.id, ...createdNodes.map((node) => node.id)],
+    rootNode,
+    childNodes: createdNodes,
+    patches,
+  }
 }

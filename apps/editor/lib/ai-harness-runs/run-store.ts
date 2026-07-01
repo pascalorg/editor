@@ -157,6 +157,7 @@ export async function createRun(input: {
   mode: AiHarnessRunMode
   prompt: string
   articraftMode?: 'articulated' | 'static'
+  maxTurns?: number
   params?: Record<string, unknown>
   context?: unknown
   image?: { name: string; type: string; dataUrl: string }
@@ -182,6 +183,7 @@ export async function createRun(input: {
     status: 'queued',
     prompt: input.prompt,
     articraftMode: input.articraftMode,
+    maxTurns: input.maxTurns,
     params: input.params,
     context: input.context,
     image,
@@ -292,10 +294,13 @@ export async function saveConversation(conversation: AiConversation) {
   await withFileLock(filePath, async () => {
     const existing = await readJson<AiConversation | null>(filePath, null)
     const title = resolveConversationTitle(conversation.title, conversation.messages)
+    const conversationPurpose =
+      conversation.conversationPurpose ?? inferConversationPurpose(conversation.messages)
     saved = {
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       ...conversation,
       activeRunIds: Array.from(new Set(conversation.activeRunIds)),
+      ...(conversationPurpose ? { conversationPurpose } : {}),
       title,
       updatedAt: new Date().toISOString(),
     }
@@ -324,6 +329,32 @@ function resolveConversationTitle(title: string | undefined, messages: unknown[]
   return inferConversationTitle(messages)
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function inferConversationPurpose(messages: unknown[]): AiConversationPurpose | undefined {
+  let hasAssetGeneration = false
+  for (const message of messages) {
+    if (!isRecord(message)) continue
+    const generationRun = isRecord(message.generationRun) ? message.generationRun : null
+    const mode = generationRun?.mode
+    if (mode === 'factory') return 'factory'
+    if (mode === 'primitive' || mode === 'image-to-3d' || mode === 'articraft') {
+      hasAssetGeneration = true
+    }
+    if (
+      message.geometryArtifact ||
+      message.modelArtifact ||
+      message.imageTo3dResult ||
+      message.articraftResult
+    ) {
+      hasAssetGeneration = true
+    }
+  }
+  return hasAssetGeneration || messages.length > 0 ? 'asset' : undefined
+}
+
 function inferConversationTitle(messages: unknown[]) {
   const firstUserMessage = messages.find((message) => {
     if (typeof message !== 'object' || message === null || Array.isArray(message)) return false
@@ -346,7 +377,8 @@ function toConversationSummary(conversation: AiConversation): AiConversationSumm
     title: resolveConversationTitle(conversation.title, conversation.messages),
     messageCount: conversation.messages.length,
     activeRunCount: conversation.activeRunIds.length,
-    conversationPurpose: conversation.conversationPurpose,
+    conversationPurpose:
+      conversation.conversationPurpose ?? inferConversationPurpose(conversation.messages),
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
   }

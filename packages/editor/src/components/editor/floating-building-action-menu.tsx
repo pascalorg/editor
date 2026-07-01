@@ -8,6 +8,7 @@ import { useCallback, useRef } from 'react'
 import * as THREE from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { ACTION_MENU_DISTANCE_FACTOR, getActionMenuAnchor } from './action-menu-placement'
 import { NodeActionMenu } from './node-action-menu'
 
 export function FloatingBuildingActionMenu() {
@@ -18,7 +19,8 @@ export function FloatingBuildingActionMenu() {
 
   const groupRef = useRef<THREE.Group>(null)
   const boxRef = useRef(new THREE.Box3())
-  const centerRef = useRef(new THREE.Vector3())
+  const anchorRef = useRef(new THREE.Vector3())
+  const sizeRef = useRef(new THREE.Vector3())
   const lastPlacementRef = useRef<{
     id: string | null
     matrixWorld: number[]
@@ -39,8 +41,12 @@ export function FloatingBuildingActionMenu() {
 
       const box = boxRef.current.setFromObject(obj)
       if (!box.isEmpty()) {
-        const center = box.getCenter(centerRef.current)
-        groupRef.current.position.set(center.x, 1.5, center.z)
+        const node = useScene.getState().nodes[buildingId]
+        if (node) {
+          groupRef.current.position.copy(
+            getActionMenuAnchor(node, box, anchorRef.current, sizeRef.current),
+          )
+        }
       }
       lastPlacementRef.current = {
         id: buildingId,
@@ -71,6 +77,7 @@ export function FloatingBuildingActionMenu() {
     <group ref={groupRef}>
       <Html
         center
+        distanceFactor={ACTION_MENU_DISTANCE_FACTOR}
         style={{
           pointerEvents: 'auto',
           touchAction: 'none',

@@ -14,10 +14,10 @@ import {
   getMaterialTargetKindForNode,
   getMaterialTargetsForNode,
 } from '../../../lib/material-targets'
+import { DEFAULT_CUSTOM_MATERIAL_PROPERTIES } from '../../../lib/material-appearance'
 import useEditor from '../../../store/use-editor'
 import { MaterialSwatchField } from './material-swatch-field'
 import { PanelSection } from './panel-section'
-import { SliderControl } from './slider-control'
 
 type NodeMaterialSectionProps = {
   nodeId?: AnyNodeId
@@ -26,15 +26,6 @@ type NodeMaterialSectionProps = {
 type MaterialTargetValues = {
   material?: MaterialSchema
   materialPreset?: string
-}
-
-const defaultMaterialProperties = {
-  color: '#ffffff',
-  roughness: 0.5,
-  metalness: 0,
-  opacity: 1,
-  transparent: false,
-  side: 'front' as const,
 }
 
 export function NodeMaterialSection({ nodeId: explicitNodeId }: NodeMaterialSectionProps) {
@@ -103,7 +94,6 @@ export function NodeMaterialSection({ nodeId: explicitNodeId }: NodeMaterialSect
         {targets.map((target) => {
           const values = readTargetValues(node, target)
           const properties = resolveEditableProperties(values)
-          const transparencyPercent = Math.round((1 - properties.opacity) * 100)
           return (
             <div className="space-y-1" key={target.key}>
               <MaterialSwatchField
@@ -113,13 +103,15 @@ export function NodeMaterialSection({ nodeId: explicitNodeId }: NodeMaterialSect
                 onChange={(material) =>
                   writeMaterial(target, {
                     material: {
+                      ...material,
                       preset: 'custom',
                       properties: {
                         ...properties,
                         ...material.properties,
                         transparent:
                           (material.properties?.opacity ?? properties.opacity) < 1 ||
-                          (material.properties?.transparent ?? properties.transparent),
+                          (material.properties?.transparent ?? properties.transparent) ||
+                          material.gradient?.stops.some((stop) => stop.opacity < 1) === true,
                       },
                     },
                     materialPreset: undefined,
@@ -133,30 +125,6 @@ export function NodeMaterialSection({ nodeId: explicitNodeId }: NodeMaterialSect
                 onSelectMaterialPreset={(materialPreset) =>
                   writeMaterial(target, { material: undefined, materialPreset })
                 }
-              />
-              <SliderControl
-                label={'\u900f\u660e\u5ea6'}
-                max={100}
-                min={0}
-                precision={0}
-                step={1}
-                unit="%"
-                value={transparencyPercent}
-                onChange={(nextTransparencyPercent) => {
-                  const transparency = Math.min(1, Math.max(0, nextTransparencyPercent / 100))
-                  const opacity = 1 - transparency
-                  writeMaterial(target, {
-                    material: {
-                      preset: 'custom',
-                      properties: {
-                        ...properties,
-                        opacity,
-                        transparent: transparency > 0,
-                      },
-                    },
-                    materialPreset: undefined,
-                  })
-                }}
               />
             </div>
           )
@@ -216,7 +184,7 @@ function readTargetValues(node: AnyNode, target: MaterialTargetDescriptor): Mate
       material: {
         preset: 'custom',
         properties: {
-          ...defaultMaterialProperties,
+          ...DEFAULT_CUSTOM_MATERIAL_PROPERTIES,
           color: typeof record.asphaltColor === 'string' ? record.asphaltColor : '#2f3338',
           roughness: 0.88,
           metalness: 0.02,
@@ -236,22 +204,25 @@ function resolveEditableProperties(values: MaterialTargetValues) {
   const currentProperties = values.material?.properties
 
   return {
-    ...defaultMaterialProperties,
-    color: currentProperties?.color ?? presetProperties?.color ?? defaultMaterialProperties.color,
+    ...DEFAULT_CUSTOM_MATERIAL_PROPERTIES,
+    color:
+      currentProperties?.color ?? presetProperties?.color ?? DEFAULT_CUSTOM_MATERIAL_PROPERTIES.color,
     roughness:
       currentProperties?.roughness ??
       presetProperties?.roughness ??
-      defaultMaterialProperties.roughness,
+      DEFAULT_CUSTOM_MATERIAL_PROPERTIES.roughness,
     metalness:
       currentProperties?.metalness ??
       presetProperties?.metalness ??
-      defaultMaterialProperties.metalness,
+      DEFAULT_CUSTOM_MATERIAL_PROPERTIES.metalness,
     opacity:
-      currentProperties?.opacity ?? presetProperties?.opacity ?? defaultMaterialProperties.opacity,
+      currentProperties?.opacity ??
+      presetProperties?.opacity ??
+      DEFAULT_CUSTOM_MATERIAL_PROPERTIES.opacity,
     transparent:
       currentProperties?.transparent ??
       presetProperties?.transparent ??
-      defaultMaterialProperties.transparent,
-    side: currentProperties?.side ?? defaultMaterialProperties.side,
+      DEFAULT_CUSTOM_MATERIAL_PROPERTIES.transparent,
+    side: currentProperties?.side ?? DEFAULT_CUSTOM_MATERIAL_PROPERTIES.side,
   }
 }

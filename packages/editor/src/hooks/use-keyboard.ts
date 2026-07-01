@@ -44,6 +44,7 @@ const INDUSTRIAL_VERTICAL_NUDGE_TYPES = new Set([
   'pipe-fitting',
   'cable-tray',
   'steel-beam',
+  'steel-frame',
 ])
 
 function getPlanNudgeDelta(key: string, step: number): [number, number, number] | null {

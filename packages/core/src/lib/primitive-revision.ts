@@ -104,6 +104,12 @@ function cloneShape(shape: PrimitiveShapeInput): PrimitiveShapeInput {
     material: shape.material
       ? {
           ...shape.material,
+          gradient: shape.material.gradient
+            ? {
+                ...shape.material.gradient,
+                stops: shape.material.gradient.stops.map((stop) => ({ ...stop })),
+              }
+            : undefined,
           properties: shape.material.properties ? { ...shape.material.properties } : undefined,
         }
       : undefined,
@@ -170,6 +176,12 @@ function cloneMaterial(
   if (!material) return undefined
   return {
     ...material,
+    gradient: material.gradient
+      ? {
+          ...material.gradient,
+          stops: material.gradient.stops.map((stop) => ({ ...stop })),
+        }
+      : undefined,
     properties: material.properties ? { ...material.properties } : undefined,
   }
 }

@@ -37,6 +37,17 @@ function stationCenter(result: ReturnType<typeof composeProcessLine>, stationId:
   return [placement.position[0], placement.position[2]]
 }
 
+function polygonBounds(polygon: Array<[number, number]>) {
+  const xs = polygon.map((point) => point[0])
+  const zs = polygon.map((point) => point[1])
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minZ: Math.min(...zs),
+    maxZ: Math.max(...zs),
+  }
+}
+
 describe('process line composer', () => {
   test('composes water electrolysis workshop with native tanks and connections', () => {
     const result = composeProcessLine({
@@ -390,7 +401,7 @@ describe('process line composer', () => {
     expect(focusStationIds as string[]).not.toContain('limestone_crusher')
     expect(focusStationIds as string[]).not.toContain('coal_mill')
     expect(focusStationIds as string[]).not.toContain('whr_boiler')
-    expect(focusStationIds as string[]).not.toContain('mcc_control')
+    expect(focusStationIds as string[]).not.toContain('control_room')
     expect(focusStationIds as string[]).not.toContain('cement_mill')
     expect(focusStationIds as string[]).not.toContain('cement_packer')
     expect(
@@ -400,9 +411,17 @@ describe('process line composer', () => {
           Array.isArray(patch.node.metadata?.factoryCameraFocus?.bounds?.center),
       ),
     ).toBe(true)
-    expect(result.patches.some((patch) => patch.node.type === 'wall')).toBe(false)
-    expect(result.patches.some((patch) => patch.node.type === 'door')).toBe(false)
-    expect(result.patches.some((patch) => patch.node.type === 'window')).toBe(false)
+    const controlRoomNativeTypes = result.patches
+      .filter((patch) => patch.node.metadata?.stationId === 'control_room')
+      .map((patch) => patch.node.type)
+    expect(controlRoomNativeTypes).toEqual(
+      expect.arrayContaining(['slab', 'wall', 'door', 'window', 'roof', 'roof-segment']),
+    )
+    expect(
+      result.patches
+        .filter((patch) => patch.node.type === 'wall')
+        .every((patch) => patch.node.metadata?.stationId === 'control_room'),
+    ).toBe(true)
     expect(result.primitiveRequests.map((request) => request.equipmentContract?.profileId)).toEqual(
       expect.arrayContaining([
         'cement.limestone_crusher',
@@ -418,14 +437,14 @@ describe('process line composer', () => {
     expect(
       result.primitiveRequests.map((request) => request.equipmentContract?.profileId),
     ).not.toContain('cement.tertiary_air_duct')
+    expect(result.primitiveRequests.map((request) => request.station.id)).not.toContain(
+      'control_room',
+    )
     expect(
       result.patches.some(
-        (patch) =>
-          patch.node.type === 'item' &&
-          patch.node.metadata?.stationId === 'mcc_control' &&
-          patch.node.metadata?.resolver === 'catalog-item',
+        (patch) => patch.node.type === 'item' && patch.node.metadata?.stationId === 'control_room',
       ),
-    ).toBe(true)
+    ).toBe(false)
     expect(
       result.patches.some(
         (patch) =>
@@ -648,5 +667,151 @@ describe('process line composer', () => {
           patch.node.metadata?.toStationId === 'flare_system',
       ),
     ).toBe(false)
+
+    const controlRoomTypes = result.patches
+      .filter((patch) => patch.node.metadata?.stationId === 'control_room')
+      .map((patch) => patch.node.type)
+    expect(controlRoomTypes).toEqual(
+      expect.arrayContaining(['slab', 'wall', 'door', 'window', 'roof', 'roof-segment']),
+    )
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.type === 'assembly' &&
+          patch.node.metadata?.stationId === 'control_room' &&
+          patch.node.metadata?.resolver === 'profile-parts',
+      ),
+    ).toBe(false)
+    expect(result.primitiveRequests.map((request) => request.station.id)).not.toContain(
+      'control_room',
+    )
+    const controlRoomWalls = result.patches.filter(
+      (patch) => patch.node.type === 'wall' && patch.node.metadata?.stationId === 'control_room',
+    )
+    expect(controlRoomWalls).toHaveLength(4)
+    for (const wall of controlRoomWalls) {
+      if (wall.node.type !== 'wall') throw new Error('expected control room wall')
+      expect(wall.node.height).toBe(2.5)
+    }
+    const controlRoomFloor = result.patches.find(
+      (patch) =>
+        patch.node.type === 'slab' &&
+        patch.node.metadata?.stationId === 'control_room' &&
+        patch.node.metadata?.role === 'layout-floor',
+    )
+    if (!controlRoomFloor || controlRoomFloor.node.type !== 'slab') {
+      throw new Error('expected control room floor slab')
+    }
+    const controlRoomFloorBounds = polygonBounds(controlRoomFloor.node.polygon)
+    expect(controlRoomFloorBounds.maxX - controlRoomFloorBounds.minX).toBe(5)
+    expect(controlRoomFloorBounds.maxZ - controlRoomFloorBounds.minZ).toBe(4)
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.type === 'roof-segment' &&
+          patch.node.metadata?.stationId === 'control_room' &&
+          patch.node.roofType === 'flat',
+      ),
+    ).toBe(true)
+    const boilerAssembly = result.patches.find(
+      (patch) =>
+        patch.node.type === 'assembly' && patch.node.metadata?.stationId === 'utility_boiler',
+    )
+    if (!boilerAssembly) throw new Error('expected utility boiler assembly')
+    const boilerChildren = result.patches.filter(
+      (patch) => patch.parentId === boilerAssembly.node.id,
+    )
+    const boilerBody = boilerChildren.find(
+      (patch) => patch.node.type === 'box' && patch.node.metadata?.semanticRole === 'boiler_body',
+    )
+    if (!boilerBody || boilerBody.node.type !== 'box') throw new Error('expected boiler body')
+    expect(boilerBody.node.height).toBeLessThan(2.5)
+    const steamDrum = boilerChildren.find(
+      (patch) =>
+        patch.node.type === 'cylinder' && patch.node.metadata?.semanticRole === 'steam_drum',
+    )
+    if (!steamDrum || steamDrum.node.type !== 'cylinder') throw new Error('expected steam drum')
+    expect(steamDrum.node.position[1] + steamDrum.node.radius).toBeLessThan(2.5)
+    const boilerStack = boilerChildren.find(
+      (patch) =>
+        patch.node.type === 'frustum' && patch.node.metadata?.semanticRole === 'boiler_stack',
+    )
+    if (!boilerStack || boilerStack.node.type !== 'frustum')
+      throw new Error('expected boiler stack')
+    expect(boilerStack.node.position[1] + boilerStack.node.height / 2).toBeGreaterThan(2.5)
+
+    const pipeRackAssembly = result.patches.find(
+      (patch) => patch.node.type === 'assembly' && patch.node.metadata?.stationId === 'pipe_rack',
+    )
+    if (!pipeRackAssembly) throw new Error('expected pipe rack assembly')
+    const pipeRackChildren = result.patches.filter(
+      (patch) => patch.parentId === pipeRackAssembly.node.id,
+    )
+    const mainHeader = pipeRackChildren.find(
+      (patch) =>
+        patch.node.type === 'cylinder' && patch.node.metadata?.semanticRole === 'main_pipe_header',
+    )
+    if (!mainHeader || mainHeader.node.type !== 'cylinder')
+      throw new Error('expected elevated pipe rack main header')
+    expect(mainHeader.node.position[1]).toBeGreaterThanOrEqual(2)
+    const parallelRun = pipeRackChildren.find(
+      (patch) =>
+        patch.node.type === 'cylinder' && patch.node.metadata?.semanticRole === 'parallel_pipe_run',
+    )
+    if (!parallelRun || parallelRun.node.type !== 'cylinder')
+      throw new Error('expected elevated pipe rack parallel pipe run')
+    expect(parallelRun.node.position[1]).toBeGreaterThanOrEqual(1.2)
+
+    const distillationAssemblies = result.patches.filter(
+      (patch) =>
+        patch.node.type === 'assembly' &&
+        ['atmospheric_distillation_unit', 'vacuum_distillation_unit'].includes(
+          String(patch.node.metadata?.stationId),
+        ),
+    )
+    expect(distillationAssemblies.length).toBeGreaterThanOrEqual(2)
+    for (const assembly of distillationAssemblies) {
+      const children = result.patches.filter((patch) => patch.parentId === assembly.node.id)
+      expect(children.length).toBeGreaterThan(0)
+      expect(
+        children.every((patch) => {
+          const position = 'position' in patch.node ? patch.node.position : undefined
+          return !Array.isArray(position) || position[1] >= -0.001
+        }),
+      ).toBe(true)
+    }
+  }, 10000)
+
+  test('keeps auto-placed refinery floor aligned with station placements', () => {
+    const result = composeProcessLine({
+      prompt: '\u751f\u6210\u4e00\u4e2a\u70bc\u6cb9\u5382',
+      plan: refineryPlan(),
+      placement: {
+        parentId: 'level_factory',
+        generatedBy: 'factory-agent',
+        metadata: {
+          sceneBounds: {
+            min: [-20, -10],
+            max: [20, 10],
+            center: [0, 0],
+            size: [40, 20],
+          },
+        },
+      },
+    })
+
+    const floor = result.patches.find(
+      (patch) => patch.node.type === 'slab' && patch.node.metadata?.role === 'layout-floor',
+    )
+    if (!floor || floor.node.type !== 'slab') throw new Error('expected refinery floor slab')
+    const bounds = polygonBounds(floor.node.polygon)
+
+    expect(bounds.minX).toBeGreaterThan(20)
+    for (const placement of result.stationPlacements) {
+      expect(placement.clearanceBox.minX).toBeGreaterThanOrEqual(bounds.minX - 0.001)
+      expect(placement.clearanceBox.maxX).toBeLessThanOrEqual(bounds.maxX + 0.001)
+      expect(placement.clearanceBox.minZ).toBeGreaterThanOrEqual(bounds.minZ - 0.001)
+      expect(placement.clearanceBox.maxZ).toBeLessThanOrEqual(bounds.maxZ + 0.001)
+    }
   }, 10000)
 })

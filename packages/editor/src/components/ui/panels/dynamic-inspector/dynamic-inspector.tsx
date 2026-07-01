@@ -348,7 +348,13 @@ export function DynamicInspector() {
       }),
     [livePaths, values],
   )
-  const bindings = dynamicMetadata.dynamicBindings ?? []
+  const bindings = useMemo(
+    () =>
+      (dynamicMetadata.dynamicBindings ?? []).filter((binding) =>
+        dynamicTypes.includes(binding.type),
+      ),
+    [dynamicMetadata.dynamicBindings, dynamicTypes],
+  )
   const articraftRecordId = useMemo(
     () => getArticraftRecordIdForSelection(node, sceneNodes),
     [node, sceneNodes],

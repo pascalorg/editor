@@ -903,6 +903,10 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
   const setFloorplanPaneRatio = useEditor((s) => s.setFloorplanPaneRatio)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const mode = useEditor((s) => s.mode)
+  const tool = useEditor((s) => s.tool)
+  const selectedItem = useEditor((s) => s.selectedItem)
+  const movingNode = useEditor((s) => s.movingNode)
 
   const [isCameraControlsHintVisible, setIsCameraControlsHintVisible] = useState<boolean | null>(
     null,
@@ -951,6 +955,12 @@ const ViewerCanvas = memo(function ViewerCanvas({
 
   const show2d = viewMode === '2d' || viewMode === 'split'
   const show3d = viewMode === '3d' || viewMode === 'split'
+  const activeFrameLoop =
+    show3d &&
+    !showLoader &&
+    !isFirstPersonMode &&
+    !isPreviewMode &&
+    (movingNode !== null || (mode === 'build' && tool === 'item' && selectedItem !== null))
 
   return (
     <ErrorBoundary fallback={<EditorSceneCrashFallback />}>
@@ -998,6 +1008,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           ) : null}
           <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
           <Viewer
+            activeFrameLoop={activeFrameLoop}
             hoverStyles={EDITOR_HOVER_STYLES}
             selectionManager={isFirstPersonMode || isPreviewMode ? 'default' : 'custom'}
           >

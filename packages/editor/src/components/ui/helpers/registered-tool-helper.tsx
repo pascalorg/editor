@@ -15,7 +15,7 @@ export function RegisteredToolHelper({ hints }: { hints: ToolHint[] }) {
   return (
     <div className="pointer-events-none fixed top-1/2 right-4 z-40 flex -translate-y-1/2 flex-col gap-2 rounded-lg border border-white/10 bg-neutral-950/90 px-4 py-3 text-white shadow-2xl backdrop-blur-md">
       {hints.map((hint) => (
-        <div className="flex items-center gap-2 text-sm" key={`${hint.key}:${hint.label}`}>
+        <div className="flex items-center gap-2 text-xs" key={`${hint.key}:${hint.label}`}>
           <ShortcutToken
             className="h-6 min-w-8 justify-center border-white/10 bg-white/5 px-2 text-neutral-300"
             value={hint.key}

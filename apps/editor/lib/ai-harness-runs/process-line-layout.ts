@@ -152,7 +152,7 @@ function requiredBoundaryForParallelBays(input: {
 function expandedBoundaryForPlan(input: {
   plan: ProcessLinePlan
   boundary: LayoutBoundary
-  style: ProcessLayoutStyle
+  style: ProcessLineLayoutStyle
 }): LayoutBoundary | undefined {
   if (!input.plan.sourcePack && !input.plan.architecture) return undefined
   const required =

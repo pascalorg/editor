@@ -74,6 +74,20 @@ Rules:
 - Natural-language editability should be expressed through `editableSchemaRef` and
   `editableOverrides`.
 
+### Occupied Buildings and Boxed Utilities
+
+Some process stations are not ordinary equipment. Control rooms, MCC rooms, boiler houses, labs,
+substations, and other occupied buildings must not fall back to a catalog cabinet or a lone
+`generic_body`. When the station should read as a small building, use `profile-parts` and include
+building shell semantics such as body/walls, roof cap or parapet, door/opening, windows, and
+service/electrical entry roles. Keep the profile lightweight, but make the visible building intent
+explicit through `visualCues` and `qualityRequiredRoles`.
+
+Packaged industrial boilers may have a rectangular casing, but they should not be authored as only
+a square box. Include a casing/body, stack, visible steam drum or tube bank, steam header/manifold,
+burner/service opening, and control/service details so the generated result reads as a boiler rather
+than a generic enclosure.
+
 ## Layout Templates
 
 Layout templates describe spatial relationships and proportions for complex equipment.

@@ -3,11 +3,12 @@
 import { PointerLockControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
-import { Vector3 } from 'three'
+import { type PerspectiveCamera, Vector3 } from 'three'
 import useViewer from '../../store/use-viewer'
 
 const MOVE_SPEED = 5
 const EYE_HEIGHT = 1.6
+export const WALKTHROUGH_FOV = 60
 
 const _direction = new Vector3()
 const _forward = new Vector3()
@@ -23,6 +24,19 @@ export const WalkthroughControls = () => {
   useEffect(() => {
     if (walkthroughMode) {
       camera.position.y = EYE_HEIGHT
+    }
+  }, [walkthroughMode, camera])
+
+  useEffect(() => {
+    if (!walkthroughMode) return
+    const cam = camera as PerspectiveCamera
+    if (!cam.isPerspectiveCamera) return
+    const prevFov = cam.fov
+    cam.fov = WALKTHROUGH_FOV
+    cam.updateProjectionMatrix()
+    return () => {
+      cam.fov = prevFov
+      cam.updateProjectionMatrix()
     }
   }, [walkthroughMode, camera])
 

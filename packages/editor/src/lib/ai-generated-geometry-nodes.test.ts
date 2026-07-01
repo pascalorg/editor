@@ -212,7 +212,7 @@ describe('ai generated geometry nodes', () => {
     expect(contract?.pattern?.instances?.[1]?.position?.[0]).toBeCloseTo(0.4, 6)
   })
 
-  test('creates a single-node patch with placement override metadata', () => {
+  test('wraps a single generated shape so placement moves the ground origin', () => {
     const single = artifact({
       assemblyName: null,
       shapes: [
@@ -227,28 +227,88 @@ describe('ai generated geometry nodes', () => {
         },
       ],
       transforms: [{ position: [0, 1, 0], rotation: [0, 0, 0] }],
-      assemblyPosition: [0, 1, 0],
+      assemblyPosition: [0, 0, 0],
       createdNames: ['control cabinet'],
     })
 
     const plan = buildGeneratedGeometryCreatePatches(single, {
       parentId: 'level_factory',
-      position: [4, 1, 5],
+      position: [4, 0, 5],
       generatedBy: 'factory-agent',
       metadata: { equipmentRole: 'control' },
     })
 
-    expect(plan.patches).toHaveLength(1)
+    expect(plan.patches).toHaveLength(2)
     expect(plan.rootNode).toMatchObject({
-      type: 'box',
-      position: [4, 1, 5],
+      type: 'assembly',
+      position: [4, 0, 5],
       metadata: {
         generatedBy: 'factory-agent',
         artifactId: 'ai_geometry_patch_test',
+        partCount: 1,
         equipmentRole: 'control',
       },
     })
     expect(plan.patches[0]?.parentId).toBe('level_factory')
+    expect(plan.patches[1]?.parentId).toBe(plan.rootNode?.id)
+    expect(plan.childNodes[0]).toMatchObject({
+      type: 'box',
+      position: [0, 1, 0],
+      height: 2,
+    })
+  })
+
+  test('adds dynamic level geometry metadata for generated cylindrical tanks', () => {
+    const plan = buildGeneratedGeometryCreatePatches(
+      artifact({
+        title: 'Generated storage tank',
+        sourceArgs: { family: 'tank', object: 'storage_tank' },
+        shapes: [
+          {
+            kind: 'hollow-cylinder',
+            name: 'storage tank shell',
+            semanticRole: 'vessel_shell',
+            sourcePartKind: 'cylindrical_tank',
+            position: [10, 3, 20],
+            rotation: [0, 0, 0],
+            axis: 'y',
+            radius: 1.2,
+            height: 6,
+            wallThickness: 0.08,
+          },
+          {
+            kind: 'box',
+            name: 'access platform',
+            semanticRole: 'access_platform',
+            sourcePartKind: 'platform_ladder',
+            position: [11.6, 4, 20],
+            rotation: [0, 0, 0],
+            length: 1,
+            width: 0.5,
+            height: 0.12,
+          },
+        ],
+        transforms: [
+          { position: [10, 3, 20], rotation: [0, 0, 0] },
+          { position: [11.6, 4, 20], rotation: [0, 0, 0] },
+        ],
+        assemblyName: 'Generated storage tank',
+        assemblyPosition: [10, 0, 20],
+        createdNames: ['storage tank shell', 'access platform'],
+      }),
+    )
+
+    expect(plan.rootNode?.metadata).toMatchObject({
+      semanticType: 'tank',
+      dynamicLevelGeometry: {
+        kind: 'vertical',
+        diameter: 2.4,
+        height: 6,
+        position: [0, 0, 0],
+        source: 'generated-geometry',
+        shellShapeIndex: 0,
+      },
+    })
   })
 
   test('keeps rounded glass panels editable after placement', () => {
@@ -281,10 +341,18 @@ describe('ai generated geometry nodes', () => {
       createdNames: ['rounded blue glass'],
     })
 
-    const { rootNode } = buildGeneratedGeometryCreatePatches(single)
+    const { childNodes, rootNode } = buildGeneratedGeometryCreatePatches(single)
 
     expect(rootNode).toMatchObject({
+      type: 'assembly',
+      position: [0, 0.01, 0],
+      metadata: {
+        partCount: 1,
+      },
+    })
+    expect(childNodes[0]).toMatchObject({
       type: 'rounded-panel',
+      position: [0, 0, 0],
       length: 1,
       width: 2,
       thickness: 0.012,

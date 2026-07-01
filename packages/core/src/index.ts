@@ -36,6 +36,7 @@ export type {
   StairEvent,
   StairSegmentEvent,
   SteelBeamEvent,
+  SteelFrameEvent,
   SweepEvent,
   TankEvent,
   WallEvent,

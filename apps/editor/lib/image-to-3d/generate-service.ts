@@ -135,9 +135,18 @@ function dimensionsFromMetadata(metadata: unknown): [number, number, number] {
 
 type Vec3 = [number, number, number]
 
+type GlbAssetStats = {
+  meshCount: number
+  vertexCount: number
+  triangleCount: number
+  materialCount: number
+  drawCallCount: number
+}
+
 type GlbAssetTransform = {
   dimensions: Vec3
   offset: Vec3
+  stats: GlbAssetStats
 }
 
 function finitePositiveDimension(value: number) {
@@ -162,7 +171,19 @@ async function readGlbAssetTransform(modelPath: string): Promise<GlbAssetTransfo
     const gltf = await new Promise<{ scene: unknown }>((resolve, reject) => {
       loader.parse(arrayBuffer, '', resolve, reject)
     })
-    const box = new Box3().setFromObject(gltf.scene)
+    const scene = gltf.scene as {
+      traverse: (
+        visitor: (object: {
+          isMesh?: boolean
+          geometry?: {
+            index?: { count: number } | null
+            getAttribute?: (name: string) => { count: number } | undefined
+          }
+          material?: { uuid?: string } | Array<{ uuid?: string }> | null
+        }) => void,
+      ) => void
+    }
+    const box = new Box3().setFromObject(scene)
     const size = new Vector3()
     box.getSize(size)
     const width = finitePositiveDimension(size.x)
@@ -170,9 +191,38 @@ async function readGlbAssetTransform(modelPath: string): Promise<GlbAssetTransfo
     const depth = finitePositiveDimension(size.z)
     if (!width || !height || !depth || !Number.isFinite(box.min.y)) return null
 
+    let meshCount = 0
+    let vertexCount = 0
+    let triangleCount = 0
+    let drawCallCount = 0
+    const materialIds = new Set<string>()
+    scene.traverse((object) => {
+      if (!object.isMesh || !object.geometry) return
+      meshCount += 1
+      drawCallCount += 1
+      const position = object.geometry.getAttribute?.('position')
+      if (position) vertexCount += position.count
+      triangleCount += object.geometry.index
+        ? object.geometry.index.count / 3
+        : position
+          ? position.count / 3
+          : 0
+      const materials = Array.isArray(object.material) ? object.material : [object.material]
+      for (const material of materials) {
+        if (material?.uuid) materialIds.add(material.uuid)
+      }
+    })
+
     return {
       dimensions: [width, height, depth],
       offset: [0, -box.min.y, 0],
+      stats: {
+        meshCount,
+        vertexCount,
+        triangleCount: Math.round(triangleCount),
+        materialCount: materialIds.size,
+        drawCallCount,
+      },
     }
   } catch (error) {
     console.warn('[image-to-3d] Failed to read GLB bounds for asset placement', error)
@@ -204,10 +254,11 @@ function resolveProviderConfig(providerRaw: string | undefined) {
   }
   if (
     provider === 'hunyuan3d' &&
+    !process.env.HUNYUAN3D_API_KEY &&
     (!process.env.TENCENTCLOUD_SECRET_ID || !process.env.TENCENTCLOUD_SECRET_KEY)
   ) {
     throw new ImageTo3DGenerateError(
-      'TENCENTCLOUD_SECRET_ID and TENCENTCLOUD_SECRET_KEY are not configured on the server',
+      'HUNYUAN3D_API_KEY or TENCENTCLOUD_SECRET_ID/TENCENTCLOUD_SECRET_KEY is not configured on the server',
       500,
     )
   }

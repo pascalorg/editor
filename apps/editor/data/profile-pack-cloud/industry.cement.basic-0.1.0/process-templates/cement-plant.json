@@ -45,7 +45,7 @@
     "cement_separator",
     "cement_silo",
     "cement_packer",
-    "mcc_control"
+    "control_room"
   ],
   "defaultLayoutStyle": "parallel_bays",
   "defaultDimensions": {
@@ -389,15 +389,16 @@
       ]
     },
     {
-      "id": "mcc_control",
-      "label": "MCC and control cabinet",
-      "displayLabel": "MCC控制柜",
-      "role": "mcc_control",
-      "equipmentHint": "industrial MCC motor control center and process control cabinet row for cement plant: row of upright electrical cabinets (4.2m long total, 0.9m deep, 2.2m tall) containing motor starters, VFD drives, PLC racks, and SCADA interface panels, cable entry from below through cable trench, indicator lights and operator interface on front faces",
+      "id": "control_room",
+      "label": "Central control room",
+      "displayLabel": "水泥厂中控室",
+      "role": "control_room",
+      "equipmentHint": "cement.control_room cement plant central control room building: single-storey enclosed control building with concrete wall body, flat roof cap, entrance door, observation windows facing the kiln/grinding line, MCC cabinet row, cable-tray entry, and SCADA/process-control panels; place as occupied building near utilities, not as a loose cabinet row",
       "footprintHint": "large",
       "safetyTags": [
         "power",
-        "control"
+        "control",
+        "occupied_building"
       ]
     }
   ],
@@ -651,7 +652,7 @@
       "toPortId": "hot_gas_in"
     },
     {
-      "fromStationId": "mcc_control",
+      "fromStationId": "control_room",
       "toStationId": "raw_mill",
       "medium": "power",
       "visualKind": "cable_tray",
@@ -659,7 +660,7 @@
       "toPortId": "power_in"
     },
     {
-      "fromStationId": "mcc_control",
+      "fromStationId": "control_room",
       "toStationId": "rotary_kiln",
       "medium": "power",
       "visualKind": "cable_tray",
@@ -667,7 +668,7 @@
       "toPortId": "power_in"
     },
     {
-      "fromStationId": "mcc_control",
+      "fromStationId": "control_room",
       "toStationId": "cement_mill",
       "medium": "power",
       "visualKind": "cable_tray",

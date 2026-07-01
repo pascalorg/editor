@@ -188,6 +188,17 @@ function getEditorUiStateForRestoredSelection(
   }
 }
 
+function showStructurePhaseWithStaticSiteBoundary() {
+  useViewer.getState().setLevelMode('stacked')
+  useEditor.setState({
+    phase: 'structure',
+    mode: 'select',
+    tool: null,
+    structureLayer: 'elements',
+    catalogCategory: null,
+  })
+}
+
 function getValidatedSelectionForScene(
   sceneNodes: Record<string, any>,
   selection: PersistedSelectionPath,
@@ -272,9 +283,8 @@ export function syncEditorSelectionFromCurrentScene() {
   if (firstBuilding && firstLevel) {
     const isEmptyLevel = !firstLevel.children || firstLevel.children.length === 0
 
-    // For empty projects (new/blank), start in the selected level but keep the
-    // pointer in Select. A persisted build tool from another project should not
-    // make a refresh immediately arm wall drawing.
+    // For empty projects (new/blank), start in ordinary select mode with the
+    // non-editable site boundary visible.
     if (isEmptyLevel) {
       useViewer.getState().setSelection({
         buildingId: firstBuilding.id,
@@ -282,9 +292,7 @@ export function syncEditorSelectionFromCurrentScene() {
         selectedIds: [],
         zoneId: null,
       })
-      useEditor.getState().setPhase('structure')
-      useEditor.getState().setStructureLayer('elements')
-      useEditor.getState().setMode('select')
+      showStructurePhaseWithStaticSiteBoundary()
       return
     }
 
@@ -301,8 +309,13 @@ export function syncEditorSelectionFromCurrentScene() {
             : restoredEditorUiStateWithSelectTool,
         )
       } else if (restoredEditorUiState.phase === 'site') {
-        useViewer.getState().resetSelection()
-        useEditor.setState(restoredEditorUiStateWithSelectTool)
+        useViewer.getState().setSelection({
+          buildingId: firstBuilding.id,
+          levelId: firstLevel.id,
+          selectedIds: [],
+          zoneId: null,
+        })
+        showStructurePhaseWithStaticSiteBoundary()
       } else {
         useViewer.getState().setSelection({
           buildingId: firstBuilding.id,
@@ -329,8 +342,7 @@ export function syncEditorSelectionFromCurrentScene() {
       selectedIds: [],
       zoneId: null,
     })
-    useEditor.getState().setPhase('structure')
-    useEditor.getState().setStructureLayer('elements')
+    showStructurePhaseWithStaticSiteBoundary()
   } else {
     useEditor.getState().setPhase('site')
     useViewer.getState().setSelection({

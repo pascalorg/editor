@@ -459,6 +459,12 @@ const OutlinerSync = () => {
     for (const id of selection.selectedIds) {
       const node = nodes[id as AnyNodeId]
       if (node?.type === 'slab') continue
+      if (
+        node?.type === 'data-widget' ||
+        node?.type === 'data-chart' ||
+        node?.type === 'data-table'
+      )
+        continue
       const obj = sceneRegistry.nodes.get(id)
       if (obj) outliner.selectedObjects.push(obj)
     }
@@ -468,6 +474,12 @@ const OutlinerSync = () => {
     if (hoveredId) {
       const hoveredNode = nodes[hoveredId as AnyNodeId]
       if (hoveredNode?.type === 'slab') return
+      if (
+        hoveredNode?.type === 'data-widget' ||
+        hoveredNode?.type === 'data-chart' ||
+        hoveredNode?.type === 'data-table'
+      )
+        return
       const obj = sceneRegistry.nodes.get(hoveredId)
       if (obj) outliner.hoveredObjects.push(obj)
     }

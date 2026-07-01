@@ -40,6 +40,37 @@ type NodeSqliteModule = {
   DatabaseSync: new (filename: string) => NodeDatabaseSync
 }
 
+function isNodeSqliteExperimentalWarning(warning: unknown, args: unknown[]) {
+  const message =
+    typeof warning === 'string'
+      ? warning
+      : warning instanceof Error
+        ? warning.message
+        : String(warning)
+  const warningType =
+    warning instanceof Error && typeof warning.name === 'string'
+      ? warning.name
+      : typeof args[0] === 'string'
+        ? args[0]
+        : undefined
+
+  return warningType === 'ExperimentalWarning' && message.includes('SQLite')
+}
+
+async function importNodeSqlite(): Promise<NodeSqliteModule> {
+  const originalEmitWarning = process.emitWarning.bind(process)
+  process.emitWarning = ((warning: string | Error, ...args: unknown[]) => {
+    if (isNodeSqliteExperimentalWarning(warning, args)) return
+    return originalEmitWarning(warning as never, ...(args as never[]))
+  }) as typeof process.emitWarning
+
+  try {
+    return (await import('node:sqlite')) as NodeSqliteModule
+  } finally {
+    process.emitWarning = originalEmitWarning
+  }
+}
+
 export async function openSqliteDatabase(filename: string): Promise<SqliteDatabase> {
   if ('Bun' in globalThis) {
     const mod = (await import('bun:sqlite')) as BunSqliteModule
@@ -47,7 +78,7 @@ export async function openSqliteDatabase(filename: string): Promise<SqliteDataba
   }
 
   try {
-    const mod = (await import('node:sqlite')) as NodeSqliteModule
+    const mod = await importNodeSqlite()
     return adaptNodeDatabase(new mod.DatabaseSync(filename))
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)

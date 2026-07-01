@@ -10,7 +10,10 @@ import type {
   GeneratedGeometryCreatePatch,
   GeneratedGeometryPlacementSpec,
 } from '../../../../packages/editor/src/lib/ai-generated-geometry-nodes'
-import { buildFactoryLayoutCreatePatches } from './factory-layout-patches'
+import {
+  buildFactoryLayoutCreatePatches,
+  resolveFactoryLayoutCenter,
+} from './factory-layout-patches'
 import type { FactoryMissingAsset } from './factory-runner'
 import { resolveProcessStationEquipment } from './process-equipment-resolver'
 import { resolveProcessLineLayout } from './process-line-layout'
@@ -208,7 +211,7 @@ function patchParentId(placement: GeneratedGeometryPlacementSpec) {
 function parentPatch(
   node: GeneratedGeometryCreatePatch['node'],
   placement: GeneratedGeometryPlacementSpec,
-) {
+): GeneratedGeometryCreatePatch {
   const parentId = patchParentId(placement)
   return { op: 'create' as const, node, ...(parentId ? { parentId } : {}) }
 }
@@ -396,7 +399,7 @@ function createConnectionPatch(input: {
   segmentCount: number
   sourcePrompt: string
   placement: GeneratedGeometryPlacementSpec
-}) {
+}): GeneratedGeometryCreatePatch {
   const metadata = connectionMetadata(input)
   const medium = normalizeConnectionMedium(input.connection.medium)
   const spec = connectionRenderSpec(input.connection.visualKind, medium)
@@ -446,7 +449,7 @@ function createRouteSupportPatch(input: {
   height: number
   metadata: Record<string, unknown>
   placement: GeneratedGeometryPlacementSpec
-}) {
+}): GeneratedGeometryCreatePatch {
   const node = BoxNode.parse({
     name: input.name,
     position: input.position,
@@ -524,7 +527,7 @@ function createConnectionPatches(input: {
   route: ProcessConnectionRoute
   sourcePrompt: string
   placement: GeneratedGeometryPlacementSpec
-}) {
+}): GeneratedGeometryCreatePatch[] {
   const segmentCount = input.route.segments.length
   const segments = input.route.segments.map((segment, segmentIndex) =>
     createConnectionPatch({
@@ -635,6 +638,96 @@ function isCementTertiaryAirConnection(plan: ProcessLinePlan, connection: Proces
   )
 }
 
+const OCCUPIED_BUILDING_DIMENSIONS = {
+  length: 5,
+  width: 4,
+  storyHeight: 2.5,
+}
+
+function roundedMetric(value: number) {
+  return Math.round(value * 1000) / 1000
+}
+
+function isOccupiedBuildingStation(station: ProcessStationPlan) {
+  return (
+    station.id === 'control_room' ||
+    station.role === 'control_room' ||
+    station.safetyTags?.includes('occupied_building') === true
+  )
+}
+
+function createOccupiedBuildingPatches(input: {
+  plan: ProcessLinePlan
+  station: ProcessStationPlan
+  stationIndex: number
+  stationPlacement: StationPlacement
+  sourcePrompt: string
+  placement: GeneratedGeometryPlacementSpec
+}): {
+  patches: GeneratedGeometryCreatePatch[]
+  routeObstacle: ProcessRouteObstacle
+} {
+  const centerX = input.stationPlacement.position[0]
+  const centerZ = input.stationPlacement.position[2]
+  const { length, width, storyHeight } = OCCUPIED_BUILDING_DIMENSIONS
+  const metadata = stationMetadata({
+    plan: input.plan,
+    station: input.station,
+    stationIndex: input.stationIndex,
+    sourcePrompt: input.sourcePrompt,
+    placement: input.placement,
+  })
+  const patchPlan = buildFactoryLayoutCreatePatches({
+    prompt: `${stationDisplayLabel(input.station)} 5m x 4m x 2.5m flat roof control room`,
+    plan: {
+      kind: 'layout',
+      reason: 'Occupied process station should be represented by native architectural nodes.',
+      layoutType: 'room',
+      suggestedOperations: ['create_room', 'add_door', 'add_window', 'create_roof'],
+      stories: 1,
+      storyHeight,
+      hasRoof: true,
+      roofType: 'flat',
+    },
+    placement: {
+      ...input.placement,
+      position: [centerX, 0, centerZ],
+      rotation: input.stationPlacement.rotation,
+      metadata: {
+        ...metadata,
+        parentProcessDisplayLabel: metadata.processDisplayLabel,
+        processDisplayLabel: stationDisplayLabel(input.station),
+        equipmentRole: input.station.role,
+        resolver: 'native-occupied-building',
+        resolverReason: 'occupied building station uses native wall/slab/roof nodes',
+        nativeBuildingDimensions: { length, width, height: storyHeight },
+      },
+    },
+    params: {
+      length,
+      width,
+      storyHeight,
+      hasRoof: true,
+      roofType: 'flat',
+    },
+  })
+  return {
+    patches: patchPlan.patches,
+    routeObstacle: {
+      stationId: input.stationPlacement.stationId,
+      source: 'layout',
+      minHeight: 0,
+      maxHeight: roundedMetric(storyHeight + 0.2),
+      box: {
+        minX: roundedMetric(centerX - length / 2),
+        maxX: roundedMetric(centerX + length / 2),
+        minZ: roundedMetric(centerZ - width / 2),
+        maxZ: roundedMetric(centerZ + width / 2),
+      },
+    },
+  }
+}
+
 function pathCenter(points: Array<[number, number, number]>): [number, number, number] {
   const xs = points.map((point) => point[0])
   const ys = points.map((point) => point[1])
@@ -655,7 +748,7 @@ function createCementTertiaryAirDuctPatch(input: {
   portOverrides?: ProcessRoutePortOverrides
   sourcePrompt: string
   placement: GeneratedGeometryPlacementSpec
-}) {
+}): GeneratedGeometryCreatePatch[] {
   if (input.plan.processId !== 'cement_plant_full') return []
   const coolerConnection = input.plan.connections.find(
     (connection) =>
@@ -766,11 +859,12 @@ function createCementTertiaryAirDuctPatch(input: {
       },
     },
   })
-  const supports = path
-    .map((point, supportIndex) => {
-      const supportHeight = Math.max(0.05, point[1] - ROUTE_SUPPORT_SECTION / 2)
-      if (supportHeight < ROUTE_SUPPORT_MIN_ELEVATION) return undefined
-      return createRouteSupportPatch({
+  const supports: GeneratedGeometryCreatePatch[] = []
+  path.forEach((point, supportIndex) => {
+    const supportHeight = Math.max(0.05, point[1] - ROUTE_SUPPORT_SECTION / 2)
+    if (supportHeight < ROUTE_SUPPORT_MIN_ELEVATION) return
+    supports.push(
+      createRouteSupportPatch({
         name: `\u4e09\u6b21\u98ce\u7ba1\u652f\u6491 ${supportIndex + 1}`,
         position: [point[0], supportHeight / 2, point[2]],
         height: supportHeight,
@@ -795,9 +889,9 @@ function createCementTertiaryAirDuctPatch(input: {
           resolver: 'native-route-support',
         },
         placement: input.placement,
-      })
-    })
-    .filter((patch): patch is GeneratedGeometryCreatePatch => Boolean(patch))
+      }),
+    )
+  })
   return [parentPatch(node, input.placement), ...supports]
 }
 
@@ -814,6 +908,26 @@ const CEMENT_KEY_PROCESS_STATIONS = [
   'kiln_tail_esp',
   'process_stack',
 ]
+
+function processLineCenter(input: {
+  prompt: string
+  plan: ProcessLinePlan
+  placement: GeneratedGeometryPlacementSpec
+  dimensions: { length: number; width: number }
+  focusBounds?: ProcessLineFocusBounds
+}) {
+  return resolveFactoryLayoutCenter({
+    prompt: input.prompt,
+    dimensions: input.dimensions,
+    metadata: processMetadata({
+      plan: input.plan,
+      sourcePrompt: input.prompt,
+      placement: input.placement,
+      focusBounds: input.focusBounds,
+    }),
+    placement: input.placement,
+  })
+}
 
 function focusBoundsFromPlacements(input: {
   plan: ProcessLinePlan
@@ -878,16 +992,43 @@ export function composeProcessLine(input: {
   }
   const length = plan.dimensions?.length ?? 24
   const width = plan.dimensions?.width ?? 9
+  const initialCenter = processLineCenter({
+    prompt: input.prompt,
+    plan,
+    placement: input.placement,
+    dimensions: { length, width },
+  })
   const layoutBoundary = {
     length,
     width,
-    centerX: input.placement.position?.[0] ?? 0,
-    centerZ: input.placement.position?.[2] ?? 0,
+    centerX: initialCenter.centerX,
+    centerZ: initialCenter.centerZ,
   }
-  const resolvedLayout = resolveProcessLineLayout({
+  const initialLayout = resolveProcessLineLayout({
     plan,
     boundary: layoutBoundary,
   })
+  const finalCenter = processLineCenter({
+    prompt: input.prompt,
+    plan,
+    placement: input.placement,
+    dimensions: {
+      length: initialLayout.boundary.length,
+      width: initialLayout.boundary.width,
+    },
+  })
+  const resolvedLayout =
+    finalCenter.centerX !== initialLayout.boundary.centerX ||
+    finalCenter.centerZ !== initialLayout.boundary.centerZ
+      ? resolveProcessLineLayout({
+          plan,
+          boundary: {
+            ...initialLayout.boundary,
+            centerX: finalCenter.centerX,
+            centerZ: finalCenter.centerZ,
+          },
+        })
+      : initialLayout
   const resolvedBoundary = resolvedLayout.boundary
   const omitPerimeterWalls = processLineOmitPerimeterWalls(plan)
   const { layoutDiagnostics, layoutStrategy, stationPlacements } = resolvedLayout
@@ -934,6 +1075,32 @@ export function composeProcessLine(input: {
       const stationPlacement = stationPlacements[stationIndex]
       if (!stationPlacement) return
       if (isCementTertiaryAirStation(plan, station.id)) return
+      const occupiedBuilding = isOccupiedBuildingStation(station)
+        ? createOccupiedBuildingPatches({
+            plan,
+            station,
+            stationIndex,
+            stationPlacement,
+            sourcePrompt: input.prompt,
+            placement: input.placement,
+          })
+        : null
+      if (occupiedBuilding) {
+        zonePatches.push(
+          createStationZone({
+            plan,
+            station,
+            stationIndex,
+            stationPlacement,
+            sourcePrompt: input.prompt,
+            placement: input.placement,
+            resolved: true,
+          }),
+        )
+        equipmentPatches.push(...occupiedBuilding.patches)
+        stationRouteObstacles.push(occupiedBuilding.routeObstacle)
+        return
+      }
       const resolved = resolveProcessStationEquipment({
         plan,
         station,

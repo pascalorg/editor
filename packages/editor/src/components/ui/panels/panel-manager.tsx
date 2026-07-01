@@ -18,6 +18,7 @@ import {
   type StairNode,
   type StairSegmentNode,
   type SteelBeamNode,
+  type SteelFrameNode,
   useScene,
   type WallNode,
   type WindowNode,
@@ -52,6 +53,7 @@ type MovableNode =
   | StairSegmentNode
   | LadderNode
   | SteelBeamNode
+  | SteelFrameNode
   | BuildingNode
 
 const MOVABLE_TYPES = new Set<string>([
@@ -71,6 +73,7 @@ const MOVABLE_TYPES = new Set<string>([
   'stair-segment',
   'ladder',
   'steel-beam',
+  'steel-frame',
   'building',
 ])
 
