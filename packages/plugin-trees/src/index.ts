@@ -21,8 +21,8 @@ export const treesPlugin: Plugin = {
   panels: [
     {
       id: 'trees',
-      label: 'Trees',
-      icon: { kind: 'iconify', name: 'lucide:trees' },
+      label: 'Nature',
+      icon: { kind: 'iconify', name: 'lucide:leaf' },
       component: () => import('./presets-panel'),
     },
   ],
