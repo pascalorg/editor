@@ -5,6 +5,7 @@ import '../../../three-types'
 import {
   type AnyNode,
   type AnyNodeId,
+  type CabinetModuleNode,
   analyzePortConnectivity,
   collectAlignmentAnchors,
   type EventSuffix,
@@ -54,6 +55,31 @@ const ROTATION_STEP = Math.PI / 4
 
 /** Default magnetic radius (meters, XZ) for `movable.portSnap`. */
 const PORT_SNAP_RADIUS_M = 0.5
+const VALID_COLOR = 0x22_c5_5e
+const INVALID_COLOR = 0xef_44_44
+
+function resolveCabinetRunFootprint(
+  node: AnyNode,
+  nodes: ReturnType<typeof useScene.getState>['nodes'],
+): [number, number, number] | null {
+  if (node.type !== 'cabinet') return null
+  const modules = (node.children ?? [])
+    .map((childId) => nodes[childId as AnyNodeId] as CabinetModuleNode | undefined)
+    .filter((child): child is CabinetModuleNode => child?.type === 'cabinet-module')
+
+  if (modules.length === 0) return null
+
+  const minX = Math.min(...modules.map((module) => module.position[0] - module.width / 2))
+  const maxX = Math.max(...modules.map((module) => module.position[0] + module.width / 2))
+  const depth = Math.max(...modules.map((module) => module.depth), node.depth)
+  const topY = Math.max(
+    ...modules.map((module) => module.position[1] + module.carcassHeight),
+    (node.showPlinth ? node.plinthHeight : 0) + node.carcassHeight,
+  )
+  const totalHeight = topY + (node.withCountertop ? node.countertopThickness : 0)
+
+  return [Math.max(0.01, maxX - minX), Math.max(0.01, totalHeight), Math.max(0.01, depth)]
+}
 
 /**
  * Magnetic port snap for a dragged node: if one of the node's own ports
@@ -228,13 +254,14 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // from the kind's declarative `floorPlaced` capability, so opting a new kind
   // in is just `collides: true` — no change here.
   const collides = nodeRegistry.get(node.type)?.capabilities?.floorPlaced?.collides === true
+  const resolvedFootprint = useMemo(() => {
+    const cabinetFootprint = resolveCabinetRunFootprint(node, useScene.getState().nodes)
+    if (cabinetFootprint) return cabinetFootprint
+    return nodeRegistry.get(node.type)?.capabilities?.floorPlaced?.footprint?.(node)?.dimensions ?? null
+  }, [node])
   const boxDimensions = useMemo(
-    () =>
-      collides
-        ? (nodeRegistry.get(node.type)?.capabilities?.floorPlaced?.footprint?.(node)?.dimensions ??
-          null)
-        : null,
-    [collides, node],
+    () => (collides ? resolvedFootprint : null),
+    [collides, resolvedFootprint],
   )
   const [valid, setValid] = useState(true)
   const [cursorRotationY, setCursorRotationY] = useState(originalRotationY)
@@ -794,7 +821,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
   if (!previewVisible) return null
 
-  if (boxDimensions) {
+  if (boxDimensions && node.type !== 'cabinet') {
     return (
       <PlacementBox
         dimensions={boxDimensions}
@@ -810,6 +837,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       <CursorSphere color="#a78bfa" height={2.5} position={cursorPosition} />
       <DragBoundingBox
         centerY={dragBounds?.centerY}
+        color={boxDimensions ? (valid ? VALID_COLOR : INVALID_COLOR) : undefined}
         nodeId={node.id}
         position={cursorPosition}
         rotationY={cursorRotationY}

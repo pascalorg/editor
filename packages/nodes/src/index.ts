@@ -1,6 +1,6 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
 import { boxVentDefinition } from './box-vent'
-import { cabinetDefinition } from './cabinet'
+import { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
 import { buildingDefinition } from './building'
 import { ceilingDefinition } from './ceiling'
 import { chimneyDefinition } from './chimney'
@@ -72,6 +72,7 @@ export const builtinPlugin: Plugin = {
     doorDefinition as unknown as AnyNodeDefinition,
     windowDefinition as unknown as AnyNodeDefinition,
     cabinetDefinition as unknown as AnyNodeDefinition,
+    cabinetModuleDefinition as unknown as AnyNodeDefinition,
     itemDefinition as unknown as AnyNodeDefinition,
     // Stage A — wrap-exports the legacy renderer + system. Legacy
     // panels / move tools / floorplan branches still serve these.
@@ -114,7 +115,7 @@ export const builtinPlugin: Plugin = {
 }
 
 export { boxVentDefinition } from './box-vent'
-export { cabinetDefinition } from './cabinet'
+export { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
 export { buildingDefinition } from './building'
 export { ceilingDefinition } from './ceiling'
 export { chimneyDefinition } from './chimney'

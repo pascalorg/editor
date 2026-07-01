@@ -1,1 +1,1 @@
-export { cabinetDefinition } from './definition'
+export { cabinetDefinition, cabinetModuleDefinition } from './definition'

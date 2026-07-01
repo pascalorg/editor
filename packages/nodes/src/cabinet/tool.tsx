@@ -1,17 +1,21 @@
 'use client'
 
-import { CabinetNode, emitter, type GridEvent, useScene } from '@pascal-app/core'
+import { CabinetModuleNode, CabinetNode, emitter, type GridEvent, useScene } from '@pascal-app/core'
 import { isGridSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Group, Mesh } from 'three'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
-import { cabinetDefinition } from './definition'
+import { cabinetDefinition, cabinetModuleDefinition } from './definition'
 import { buildCabinetGeometry } from './geometry'
 
 const PREVIEW_OPACITY = 0.55
 const ROTATE_STEP_RAD = Math.PI / 4
+
+function runModuleBaseY(plinthHeight: number, showPlinth: boolean) {
+  return showPlinth ? plinthHeight : 0
+}
 
 function snap(value: number, step: number): number {
   if (step <= 0) return value
@@ -25,7 +29,7 @@ const CabinetTool = () => {
   const yawRef = useRef(0)
 
   const previewNode = useMemo(
-    () => CabinetNode.parse({ ...cabinetDefinition.defaults(), name: 'Modular Cabinet' }),
+    () => CabinetModuleNode.parse({ ...cabinetModuleDefinition.defaults(), name: 'Base Cabinet' }),
     [],
   )
   const ghost = useMemo(() => {
@@ -58,8 +62,23 @@ const CabinetTool = () => {
         position,
         rotation: yawRef.current,
       })
-      useScene.getState().createNode(cabinet, activeLevelId)
-      useViewer.getState().setSelection({ selectedIds: [cabinet.id] })
+      const module = CabinetModuleNode.parse({
+        ...cabinetModuleDefinition.defaults(),
+        name: 'Base Cabinet',
+        parentId: cabinet.id,
+        position: [0, runModuleBaseY(cabinet.plinthHeight, cabinet.showPlinth), 0],
+        depth: cabinet.depth,
+        carcassHeight: cabinet.carcassHeight,
+        plinthHeight: cabinet.plinthHeight,
+        toeKickDepth: cabinet.toeKickDepth,
+        countertopThickness: cabinet.countertopThickness,
+        countertopOverhang: cabinet.countertopOverhang,
+      })
+      useScene.getState().createNodes([
+        { node: cabinet, parentId: activeLevelId },
+        { node: module, parentId: cabinet.id },
+      ])
+      useViewer.getState().setSelection({ selectedIds: [module.id] })
       triggerSFX('sfx:item-place')
     }
 

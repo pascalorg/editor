@@ -5,6 +5,8 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  type CabinetModuleNode,
+  type CabinetNode,
   type CeilingNode,
   type ChimneyMaterialRole,
   type ChimneyNode,
@@ -68,6 +70,36 @@ const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'ai'
 const DEFAULT_FLOORPLAN_PANE_RATIO = 0.5
 const MIN_FLOORPLAN_PANE_RATIO = 0.15
 const MAX_FLOORPLAN_PANE_RATIO = 0.85
+
+function resolveMovingNodeTarget(
+  node:
+    | ItemNode
+    | WindowNode
+    | DoorNode
+    | ElevatorNode
+    | CeilingNode
+    | ChimneyNode
+    | ColumnNode
+    | DormerNode
+    | SlabNode
+    | WallNode
+    | FenceNode
+    | RoofNode
+    | RoofSegmentNode
+    | SpawnNode
+    | StairNode
+    | StairSegmentNode
+    | BuildingNode
+    | CabinetNode
+    | CabinetModuleNode,
+) {
+  if (node.type === 'cabinet-module' && node.parentId) {
+    const parent = useScene.getState().nodes[node.parentId as AnyNodeId]
+    if (parent?.type === 'cabinet') return parent as CabinetNode
+  }
+
+  return node
+}
 
 export type ViewMode = '3d' | '2d' | 'split'
 export type SplitOrientation = 'horizontal' | 'vertical'
@@ -260,6 +292,8 @@ type EditorState = {
       | StairNode
       | StairSegmentNode
       | BuildingNode
+      | CabinetNode
+      | CabinetModuleNode
       | null,
   ) => void
   /**
@@ -890,18 +924,25 @@ const useEditor = create<EditorState>()(
           set({ placementDragMode: false })
           return
         }
-        const isNew = Boolean((node as { metadata?: { isNew?: boolean } }).metadata?.isNew)
+        const targetNode = resolveMovingNodeTarget(node)
+        const isNew = Boolean((targetNode as { metadata?: { isNew?: boolean } }).metadata?.isNew)
         if (isNew) {
           scope.begin({
             kind: 'placing',
-            node,
-            nodeId: node.id,
-            nodeType: node.type,
+            node: targetNode,
+            nodeId: targetNode.id,
+            nodeType: targetNode.type,
             view: '3d',
             pressDrag: get().placementDragMode,
           })
         } else {
-          scope.begin({ kind: 'moving', node, nodeId: node.id, nodeType: node.type, view: '3d' })
+          scope.begin({
+            kind: 'moving',
+            node: targetNode,
+            nodeId: targetNode.id,
+            nodeType: targetNode.type,
+            view: '3d',
+          })
         }
         set({ movingNodeOrigin: null })
       },

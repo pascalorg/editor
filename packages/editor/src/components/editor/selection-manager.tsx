@@ -1492,6 +1492,12 @@ export const SelectionManager = () => {
             nodeToSelect = parentNode
           }
         }
+        if (node.type === 'cabinet-module' && node.parentId) {
+          const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
+          if (parentNode && parentNode.type === 'cabinet') {
+            nodeToSelect = parentNode
+          }
+        }
 
         // Clicking any node (e.g. the slab surface outside a hole) exits slab
         // hole-edit mode. The hole handles + hit mesh stopPropagation, so a

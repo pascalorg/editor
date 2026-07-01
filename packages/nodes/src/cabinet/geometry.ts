@@ -18,7 +18,7 @@ import {
   prepareBrushForCSG,
   SUBTRACTION,
 } from '@pascal-app/viewer'
-import type { CabinetNode } from '@pascal-app/core'
+import type { CabinetModuleNode, CabinetNode, GeometryContext } from '@pascal-app/core'
 import {
   compartmentDoorType,
   compartmentDrawerCount,
@@ -99,7 +99,7 @@ function subtractFrontCutters(
 }
 
 function buildCutoutFrontGeometry(
-  node: CabinetNode,
+  node: CabinetGeometryNode,
   width: number,
   height: number,
   drawer: boolean,
@@ -139,7 +139,7 @@ function buildCutoutFrontGeometry(
 }
 
 function buildFrontGeometry(
-  node: CabinetNode,
+  node: CabinetGeometryNode,
   width: number,
   height: number,
   drawer: boolean,
@@ -151,7 +151,7 @@ function buildFrontGeometry(
 }
 
 function buildHoleFrontGeometry(
-  node: CabinetNode,
+  node: CabinetGeometryNode,
   width: number,
   height: number,
   drawer: boolean,
@@ -174,6 +174,108 @@ function buildHoleFrontGeometry(
     return cutter
   })
   return subtractFrontCutters(base, cutters, 'hole handle')
+}
+
+type CabinetGeometryNode = CabinetNode | CabinetModuleNode
+
+function cabinetTotalHeight(node: Pick<CabinetGeometryNode, 'carcassHeight' | 'countertopThickness' | 'plinthHeight' | 'showPlinth' | 'withCountertop'>) {
+  return (
+    (node.showPlinth ? node.plinthHeight : 0) +
+    node.carcassHeight +
+    (node.withCountertop ? node.countertopThickness : 0)
+  )
+}
+
+function getRunModules(ctx?: GeometryContext): CabinetModuleNode[] {
+  return (ctx?.children ?? []).filter(
+    (child): child is CabinetModuleNode => child.type === 'cabinet-module',
+  )
+}
+
+function getRunSpans(modules: CabinetModuleNode[]) {
+  const sorted = [...modules].sort((a, b) => a.position[0] - b.position[0])
+  const spans: Array<{
+    minX: number
+    maxX: number
+    centerX: number
+    width: number
+    depth: number
+    topY: number
+    hasCountertop: boolean
+  }> = []
+
+  for (const module of sorted) {
+    const minX = module.position[0] - module.width / 2
+    const maxX = module.position[0] + module.width / 2
+    const topY = module.position[1] + module.carcassHeight
+    const hasCountertop = (module.cabinetType ?? 'base') !== 'tall'
+    const current = spans.at(-1)
+    if (
+      !current ||
+      minX - current.maxX > 1e-4 ||
+      current.hasCountertop !== hasCountertop ||
+      Math.abs(current.topY - topY) > 1e-4
+    ) {
+      spans.push({
+        minX,
+        maxX,
+        centerX: module.position[0],
+        width: module.width,
+        depth: module.depth,
+        topY,
+        hasCountertop,
+      })
+      continue
+    }
+
+    current.maxX = Math.max(current.maxX, maxX)
+    current.width = Math.max(0.01, current.maxX - current.minX)
+    current.centerX = (current.minX + current.maxX) / 2
+    current.depth = Math.max(current.depth, module.depth)
+    current.topY = Math.max(current.topY, topY)
+  }
+
+  return spans
+}
+
+function buildCabinetRunGeometry(node: CabinetNode, ctx?: GeometryContext): Group | null {
+  const modules = getRunModules(ctx)
+  if (modules.length === 0) return null
+
+  const group = new Group()
+  const plinth = node.showPlinth ? node.plinthHeight : 0
+  const spans = getRunSpans(modules)
+
+  for (const span of spans) {
+    const toeKickDepth = node.showPlinth
+      ? Math.min(node.toeKickDepth, span.depth - node.boardThickness * 2)
+      : 0
+    if (node.showPlinth && plinth > 0) {
+      addBox(
+        group,
+        [span.width, plinth, Math.max(node.boardThickness, span.depth - toeKickDepth)],
+        [span.centerX, plinth / 2, -(toeKickDepth / 2)],
+        PLINTH_COLOR,
+        'cabinet-run-plinth',
+      )
+    }
+
+    if (node.withCountertop && span.hasCountertop && node.countertopThickness > 0) {
+      addBox(
+        group,
+        [
+          span.width + node.countertopOverhang * 2,
+          node.countertopThickness,
+          span.depth + node.countertopOverhang,
+        ],
+        [span.centerX, span.topY + node.countertopThickness / 2, 0.01],
+        COUNTERTOP_COLOR,
+        'cabinet-run-countertop',
+      )
+    }
+  }
+
+  return group
 }
 
 function addBox(
@@ -234,7 +336,7 @@ function addBarHandle(
 
 function addHandleFeature(
   group: Object3D,
-  node: CabinetNode,
+  node: CabinetGeometryNode,
   width: number,
   height: number,
   hinge: 'left' | 'right' | null,
@@ -293,7 +395,7 @@ function addHandleFeature(
 
 function addDoorLeaf(
   group: Group,
-  node: CabinetNode,
+  node: CabinetGeometryNode,
   width: number,
   height: number,
   hinge: 'left' | 'right',
@@ -371,7 +473,7 @@ function addDoorLeaf(
 
 function addDoorFronts(
   group: Group,
-  node: CabinetNode,
+  node: CabinetGeometryNode,
   openingWidth: number,
   openingHeight: number,
   centerX: number,
@@ -451,7 +553,7 @@ function drawerOpenScale(index: number, count: number) {
 
 function addDrawerFronts(
   group: Group,
-  node: CabinetNode,
+  node: CabinetGeometryNode,
   openingWidth: number,
   openingHeight: number,
   centerY: number,
@@ -534,7 +636,12 @@ function addDrawerFronts(
   }
 }
 
-export function buildCabinetGeometry(node: CabinetNode): Group {
+export function buildCabinetGeometry(node: CabinetGeometryNode, ctx?: GeometryContext): Group {
+  if (node.type === 'cabinet') {
+    const run = buildCabinetRunGeometry(node, ctx)
+    if (run) return run
+  }
+
   const group = new Group()
   const width = node.width
   const depth = node.depth

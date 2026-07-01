@@ -1,4 +1,6 @@
-import type { CabinetNode } from '@pascal-app/core'
+import type { CabinetModuleNode, CabinetNode } from '@pascal-app/core'
+
+type CabinetStackOwner = CabinetNode | CabinetModuleNode
 
 export const CABINET_COMPARTMENT_TYPES = ['shelf', 'drawer', 'door'] as const
 export type CabinetCompartmentType = (typeof CABINET_COMPARTMENT_TYPES)[number]
@@ -6,7 +8,7 @@ export type CabinetCompartmentType = (typeof CABINET_COMPARTMENT_TYPES)[number]
 export const CABINET_DOOR_TYPES = ['single-left', 'single-right', 'double', 'glass'] as const
 export type CabinetDoorType = (typeof CABINET_DOOR_TYPES)[number]
 
-export type CabinetCompartment = NonNullable<CabinetNode['stack']>[number]
+export type CabinetCompartment = NonNullable<CabinetStackOwner['stack']>[number]
 
 let compartmentIdCounter = 0
 const DEFAULT_SHELF_COUNT = 2
@@ -28,7 +30,7 @@ export function newCabinetCompartment(type: CabinetCompartmentType): CabinetComp
   return { id: makeId(), type: 'door' }
 }
 
-export function defaultCabinetStack(node: Pick<CabinetNode, 'width'>): CabinetCompartment[] {
+export function defaultCabinetStack(node: Pick<CabinetStackOwner, 'width'>): CabinetCompartment[] {
   return [
     {
       id: makeId(),
@@ -39,7 +41,7 @@ export function defaultCabinetStack(node: Pick<CabinetNode, 'width'>): CabinetCo
   ]
 }
 
-export function stackForCabinet(node: Pick<CabinetNode, 'width' | 'stack'>): CabinetCompartment[] {
+export function stackForCabinet(node: Pick<CabinetStackOwner, 'width' | 'stack'>): CabinetCompartment[] {
   if (Array.isArray(node.stack) && node.stack.length > 0) return node.stack
   return defaultCabinetStack(node)
 }
@@ -64,7 +66,7 @@ export function compartmentDoorType(
 }
 
 export function normalizeCabinetStack(
-  node: Pick<CabinetNode, 'carcassHeight' | 'stack' | 'width'>,
+  node: Pick<CabinetStackOwner, 'carcassHeight' | 'stack' | 'width'>,
 ): Array<{ compartment: CabinetCompartment; index: number; height: number; y0: number; y1: number }> {
   const stack = stackForCabinet(node)
   if (stack.length === 0) return []

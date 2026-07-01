@@ -83,6 +83,7 @@ export function routeTreeSelectionToNode(node: AnyNode | null | undefined) {
 
 import { cn } from '../../../../../lib/utils'
 import { BuildingTreeNode } from './building-tree-node'
+import { CabinetTreeNode } from './cabinet-tree-node'
 import { CeilingTreeNode } from './ceiling-tree-node'
 import { ChimneyTreeNode } from './chimney-tree-node'
 import { ColumnTreeNode } from './column-tree-node'
@@ -126,6 +127,8 @@ const treeNodeByType: Record<
     isLast?: boolean
     nodeId: AnyNodeId
   }>,
+  cabinet: CabinetTreeNode,
+  'cabinet-module': CabinetTreeNode,
   'box-vent': RegistryTreeNode,
   ceiling: CeilingTreeNode,
   chimney: ChimneyTreeNode,

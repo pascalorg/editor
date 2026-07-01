@@ -1,5 +1,6 @@
 export type {
   BoxVentEvent,
+  CabinetModuleEvent,
   CabinetEvent,
   BuildingEvent,
   CameraControlEvent,
