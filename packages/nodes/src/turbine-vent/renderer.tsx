@@ -20,6 +20,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildTurbineVentBase, buildTurbineVentHead } from './geometry'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
@@ -114,6 +115,34 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
     return new THREE.Quaternion().copy(surfaceQuat).multiply(yawQuat)
   }, [surfaceQuat, node.rotation, yAxis])
 
+  const neckHForClip = Math.max(
+    0.02,
+    Math.min(node.neckHeight ?? 0.09, Math.max(0.12, node.height) * 0.5),
+  )
+  // Map vent-local geometry into the host segment's local frame (where the trim
+  // cut prisms live). The base sits at the inner group's pose; the head is
+  // nested one level deeper at [0, neckH, 0], so its clip matrix composes that
+  // offset. (When the head is spinning — opt-in, default paused — the cut edge
+  // rotates with it, which is acceptable for the animation.)
+  const baseLocalToSegment = useMemo(
+    () =>
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0),
+        composedQuat,
+        new THREE.Vector3(1, 1, 1),
+      ),
+    [node.position[0], node.position[1], node.position[2], composedQuat],
+  )
+  const headLocalToSegment = useMemo(
+    () =>
+      new THREE.Matrix4()
+        .copy(baseLocalToSegment)
+        .multiply(new THREE.Matrix4().makeTranslation(0, neckHForClip, 0)),
+    [baseLocalToSegment, neckHForClip],
+  )
+  const clippedBase = useSegmentTrimClippedGeometry(baseGeometry, segment, baseLocalToSegment)
+  const clippedHead = useSegmentTrimClippedGeometry(headGeometry, segment, headLocalToSegment)
+
   if (!segment) return null
 
   // Replicate the parent segment's roof-local transform — see the long
@@ -133,7 +162,7 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
       >
         <mesh
           castShadow
-          geometry={baseGeometry}
+          geometry={clippedBase ?? baseGeometry}
           material={material}
           name="turbine-vent-base"
           receiveShadow
@@ -142,7 +171,7 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
         <group position={[0, neckH, 0]} ref={headRef}>
           <mesh
             castShadow
-            geometry={headGeometry}
+            geometry={clippedHead ?? headGeometry}
             material={material}
             name="turbine-vent-head"
             receiveShadow

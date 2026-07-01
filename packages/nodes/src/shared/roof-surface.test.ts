@@ -40,6 +40,17 @@ describe('getDownSlopeYaw', () => {
   test('flat segment has no down-slope direction (yaw 0)', () => {
     expect(getDownSlopeYaw(0, 0, fixtureSegment({ roofType: 'flat' }))).toBe(0)
   })
+  test('dutch width-axis shoulder falls toward the side eaves', () => {
+    expect(getDownSlopeYaw(3.8, 0, fixtureSegment({ roofType: 'dutch' }))).toBeCloseTo(Math.PI / 2)
+  })
+  test('dutch width-axis front skirt yaws toward the front eave', () => {
+    expect(getDownSlopeYaw(0, 1, fixtureSegment({ roofType: 'dutch' }))).toBeCloseTo(0)
+  })
+  test('dutch depth-axis top gable falls toward the side eaves', () => {
+    expect(
+      getDownSlopeYaw(1, 0, fixtureSegment({ roofType: 'dutch', width: 6, depth: 8 })),
+    ).toBeCloseTo(Math.PI / 2)
+  })
 })
 
 describe('getRoofSurfaceFaceBoundsAt', () => {
@@ -62,5 +73,31 @@ describe('getRoofSurfaceFaceBoundsAt', () => {
 
     expect(ridgeInterval?.[0]).toBeGreaterThan(-2)
     expect(ridgeInterval?.[1]).toBeLessThan(2)
+  })
+
+  test('mansard top surface rises to a center ridge instead of staying flat', () => {
+    const segment = fixtureSegment({
+      roofType: 'mansard',
+      mansardSteepWidthRatio: 0.15,
+      mansardSteepHeightRatio: 0.7,
+    })
+
+    const center = getRoofSurfaceFaceBoundsAt(segment, 0, 0).surfaceYAt(0, 0)
+    const offRidge = getRoofSurfaceFaceBoundsAt(segment, 0, 0.5).surfaceYAt(0, 0.5)
+
+    expect(center).toBeGreaterThan(offRidge)
+  })
+
+  test('dutch top surface rises from the waist to the center ridge', () => {
+    const segment = fixtureSegment({
+      roofType: 'dutch',
+      dutchHipWidthRatio: 0.2,
+      dutchHipHeightRatio: 0.6,
+    })
+
+    const center = getRoofSurfaceFaceBoundsAt(segment, 0, 0).surfaceYAt(0, 0)
+    const waist = getRoofSurfaceFaceBoundsAt(segment, 0, 1.2).surfaceYAt(0, 1.2)
+
+    expect(center).toBeGreaterThan(waist)
   })
 })

@@ -1,5 +1,5 @@
 import type { RoofSegmentNode } from './roof-segment'
-import { getSegmentSlopeFrame } from './roof-segment'
+import { getDutchRoofMetrics, getSegmentSlopeFrame } from './roof-segment'
 
 /**
  * Wall-face math for roof segments — the vertical surfaces a wall-mounted
@@ -53,6 +53,7 @@ type SegmentWallInputs = Pick<
       | 'mansardSteepHeightRatio'
       | 'dutchHipWidthRatio'
       | 'dutchHipHeightRatio'
+      | 'dutchWaistLengthRatio'
     >
   >
 
@@ -173,8 +174,31 @@ function buildFaceProfile(
         [0, peakY],
       ]
     }
-    // hip / mansard / dutch slope on every side (dutch gablets are
-    // recessed from the wall plane), so only the base rect is placeable.
+    case 'dutch': {
+      const metrics = getDutchRoofMetrics(node)
+      const isDutchGableFace =
+        (metrics.axis === 'x' && isEnd) ||
+        (metrics.axis === 'z' && (id === 'front' || id === 'back'))
+      if (!isDutchGableFace) return rectProfile(length, eaveY)
+
+      const shoulderInset =
+        metrics.axis === 'x' ? metrics.shoulderInsetAlongDepth : metrics.shoulderInsetAlongWidth
+      if (!(shoulderInset > 0.001)) return rectProfile(length, eaveY)
+
+      const shoulderLo = Math.max(0, shoulderInset)
+      const shoulderHi = Math.min(length, length - shoulderInset)
+      if (!(shoulderHi - shoulderLo > 0.02)) return rectProfile(length, eaveY)
+
+      return [
+        [0, 0],
+        [length, 0],
+        [length, eaveY],
+        [shoulderHi, eaveY],
+        [length / 2, peakY],
+        [shoulderLo, eaveY],
+        [0, eaveY],
+      ]
+    }
     default:
       return rectProfile(length, eaveY)
   }

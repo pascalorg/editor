@@ -570,7 +570,7 @@ function bakeSwingDoorClip(
 
   doorObject.traverse((object) => {
     const marker = object.userData.pascalSwingLeaf as SwingLeafMarker | undefined
-    if (!marker || marker.axis !== 'y') return
+    if (marker?.axis !== 'y') return
 
     object.rotation.y = 0
     const closed = object.quaternion.clone()

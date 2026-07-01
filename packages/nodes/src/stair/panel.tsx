@@ -309,6 +309,33 @@ export default function StairPanel() {
               value={Math.round((node.openingOffset ?? 0) * 100) / 100}
             />
           ) : null}
+
+          {node.stairType === 'spiral' && (
+            <>
+              <div className="space-y-1.5">
+                <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
+                  Landing
+                </div>
+                <SegmentedControl
+                  onChange={(value) => handleUpdate({ topLandingMode: value })}
+                  options={TOP_LANDING_MODE_OPTIONS}
+                  value={node.topLandingMode ?? 'none'}
+                />
+              </div>
+              {(node.topLandingMode ?? 'none') === 'integrated' && (
+                <MetricControl
+                  label="Top Landing"
+                  max={5}
+                  min={0.3}
+                  onChange={(value) => handleUpdate({ topLandingDepth: value })}
+                  precision={2}
+                  step={0.05}
+                  unit="m"
+                  value={Math.round((node.topLandingDepth ?? 0.9) * 100) / 100}
+                />
+              )}
+            </>
+          )}
         </div>
       </PanelSection>
 
@@ -415,23 +442,6 @@ export default function StairPanel() {
           />
           {node.stairType === 'spiral' && (
             <>
-              <SegmentedControl
-                onChange={(value) => handleUpdate({ topLandingMode: value })}
-                options={TOP_LANDING_MODE_OPTIONS}
-                value={node.topLandingMode ?? 'none'}
-              />
-              {(node.topLandingMode ?? 'none') === 'integrated' && (
-                <MetricControl
-                  label="Top Landing"
-                  max={5}
-                  min={0.3}
-                  onChange={(value) => handleUpdate({ topLandingDepth: value })}
-                  precision={2}
-                  step={0.05}
-                  unit="m"
-                  value={Math.round((node.topLandingDepth ?? 0.9) * 100) / 100}
-                />
-              )}
               <ToggleControl
                 checked={node.showCenterColumn ?? true}
                 label="Center Column"

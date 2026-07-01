@@ -2,10 +2,10 @@ import {
   type AlignmentAnchor,
   type AlignmentGuide,
   collectAlignmentAnchors,
-  resolveAlignment,
   useScene,
 } from '@pascal-app/core'
-import { useAlignmentGuides } from '@pascal-app/editor'
+import useAlignmentGuides from '../../store/use-alignment-guides'
+import { resolveAlignmentForFloorplanView } from '../world-grid-snap'
 
 /**
  * Fixed Figma-style alignment threshold (meters) for floor-plan placement /
@@ -49,7 +49,7 @@ export function applyFloorplanAlignment(
     return { point: [point[0], point[1]], snapped: false, guides: [] }
   }
 
-  const result = resolveAlignment({
+  const result = resolveAlignmentForFloorplanView({
     moving: movingAnchors,
     candidates,
     threshold: opts?.threshold ?? FLOORPLAN_ALIGNMENT_THRESHOLD_M,

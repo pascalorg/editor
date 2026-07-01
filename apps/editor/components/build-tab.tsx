@@ -99,7 +99,6 @@ const MEP_ITEMS: MepItem[] = [
   { id: 'lineset', label: 'Lineset', iconSrc: '/icons/lineset.webp', kind: 'lineset' },
   { id: 'liquid-line', label: 'Liquid Line', iconSrc: '/icons/lineset.webp', kind: 'liquid-line' },
   { id: 'pipe-segment', label: 'DWV Pipe', iconSrc: '/icons/dwv-pipes.webp', kind: 'pipe-segment' },
-  { id: 'pipe-trap', label: 'Trap', iconSrc: '/icons/dwv-pipes.webp', kind: 'pipe-trap' },
 ]
 
 /**
@@ -158,6 +157,7 @@ const MEP_TOOL_KINDS = new Set<string>([
   ...MEP_ITEMS.map((item) => item.kind),
   'duct-fitting',
   'pipe-fitting',
+  'pipe-trap',
 ])
 
 export function BuildTab() {
@@ -465,7 +465,7 @@ export function BuildTab() {
                   aria-hidden
                   className="size-4 object-contain"
                   height={16}
-                  src="/icons/dwv-pipes.png"
+                  src="/icons/dwv-pipes.webp"
                   width={16}
                 />
                 Add Trap

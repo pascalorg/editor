@@ -590,7 +590,7 @@ function directRiserCollapseAction(args: {
   )
   if (!farPort) return null
   const lower = nodesById[farPort.nodeId]
-  if (!lower || lower.type !== 'duct-fitting') return null
+  if (lower?.type !== 'duct-fitting') return null
   const lowerElbow = { ...(lower as DuctFittingNode), ...profilePatch } as DuctFittingNode
   if (lowerElbow.fittingType !== 'elbow') return null
 
@@ -687,7 +687,7 @@ function fittingRiserAction(args: {
         continue
       }
       const lower = nodesById[farPort.nodeId]
-      if (!lower || lower.type !== 'duct-fitting') {
+      if (lower?.type !== 'duct-fitting') {
         if (stretch === 'stretch') return { status: 'stretch' }
         continue
       }
@@ -828,7 +828,7 @@ function planVerticalOffsetsAtDy(
     // shows a red preview rather than dragging the network up to absorb it).
     if (conn.kind !== 'run') {
       const partner = nodesById[conn.nodeId]
-      if (!partner || partner.type !== 'duct-fitting') return { status: 'invalid' }
+      if (partner?.type !== 'duct-fitting') return { status: 'invalid' }
       const elbow = partner as DuctFittingNode
       const profilePatch = elbowProfilePatch(profile)
       const profiledElbow = { ...elbow, ...profilePatch } as DuctFittingNode

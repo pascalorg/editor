@@ -40,7 +40,7 @@ export function RoofFaceHostFrame({
     [storeSegment, liveOverride],
   )
 
-  if (!segment || segment.type !== 'roof-segment' || !roofFace) return null
+  if (segment?.type !== 'roof-segment' || !roofFace) return null
   const frame = getRoofWallFaceFrame(segment, roofFace)
 
   return (

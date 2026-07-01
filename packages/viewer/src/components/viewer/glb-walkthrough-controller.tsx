@@ -175,11 +175,8 @@ function buildGlbColliderWorld(scene: Object3D): GlbColliderWorld | null {
     merged?.dispose()
     return null
   }
-  // biome-ignore lint/suspicious/noExplicitAny: three-mesh-bvh patches the geometry prototype
   ;(merged as any).computeBoundsTree = computeBoundsTree
-  // biome-ignore lint/suspicious/noExplicitAny: three-mesh-bvh patches the geometry prototype
   ;(merged as any).disposeBoundsTree = disposeBoundsTree
-  // biome-ignore lint/suspicious/noExplicitAny: three-mesh-bvh runtime extension
   ;(merged as any).computeBoundsTree({ maxLeafSize: 12, strategy: 0 })
   merged.computeBoundingBox()
 
@@ -199,7 +196,6 @@ function buildGlbColliderWorld(scene: Object3D): GlbColliderWorld | null {
     mesh,
     minY: merged.boundingBox?.min.y ?? 0,
     dispose: () => {
-      // biome-ignore lint/suspicious/noExplicitAny: three-mesh-bvh runtime extension
       ;(merged as any).disposeBoundsTree?.()
       merged.dispose()
     },
@@ -410,10 +406,10 @@ export function GlbWalkthroughController({ url }: { url: string }) {
         floatSensorRadius={0.15}
         floatSpringK={1200}
         gravity={9.81}
-        jumpVel={6}
-        maxRunSpeed={5.5}
+        jumpVel={5}
+        maxRunSpeed={5}
         maxSlope={1.2}
-        maxWalkSpeed={4}
+        maxWalkSpeed={2}
         position={start.position}
         ref={setControllerApi}
       />

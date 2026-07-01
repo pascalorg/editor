@@ -97,7 +97,7 @@ function snapshotLinked(
   const { nodes } = useScene.getState()
   const out: LinkedFenceSnapshot[] = []
   for (const node of Object.values(nodes)) {
-    if (!node || node.type !== 'fence') continue
+    if (node?.type !== 'fence') continue
     if (node.id === fenceId) continue
     if ((node.parentId ?? null) !== parentId) continue
     if (!samePoint(node.start, linkedPoint) && !samePoint(node.end, linkedPoint)) continue

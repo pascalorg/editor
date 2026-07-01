@@ -107,7 +107,7 @@ function commitNewSceneMaterialAndSlots(
   useScene.setState((state) => {
     if (state.readOnly) return state
     const currentNode = state.nodes[nodeId]
-    if (!currentNode || currentNode.type !== 'item') return state
+    if (currentNode?.type !== 'item') return state
     return {
       materials: { ...state.materials, [sceneMaterial.id as SceneMaterialId]: sceneMaterial },
       nodes: {

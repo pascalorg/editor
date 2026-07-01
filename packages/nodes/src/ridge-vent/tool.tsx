@@ -16,6 +16,7 @@ import * as THREE from 'three'
 import { resolveRidgeSnap } from '../shared/ridge-snap'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
   publishRoofSurfacePlacementGuides,
@@ -27,11 +28,9 @@ import RidgeVentPreview from './preview'
 const worldPoint = new THREE.Vector3()
 
 /**
- * Ridge vent placement tool. The cursor preview snaps to the ridge
- * (Z=0 in segment-local space) of whichever segment is under the
- * cursor, since the ridge vent's whole purpose is to sit on the peak.
- * Click anywhere on a segment commits the vent at the ridge directly
- * above that hit (X stays where the cursor was, Z snaps to 0).
+ * Ridge vent placement tool. The cursor preview snaps to the nearest
+ * ridge/break line of whichever segment is under the cursor, since the
+ * cap needs to straddle a real roof crease.
  */
 const RidgeVentTool = () => {
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
@@ -72,9 +71,9 @@ const RidgeVentTool = () => {
       )
       if (!hit) return
 
-      // Project the cursor onto the segment's ridge line (clamped to the
-      // segment's ridge span). The preview then moves ALONG the ridge as the
-      // cursor moves — never off it. Flat segments have no ridge: hide.
+      // Project the cursor onto the nearest segment ridge/break line.
+      // The preview then moves along that line as the cursor moves — never
+      // off it. Flat segments have no ridge: hide.
       const snap = resolveRidgeSnap(hit.segment, hit.localX, hit.localZ)
       if (!snap) {
         setPreviewPos(null)
@@ -84,7 +83,11 @@ const RidgeVentTool = () => {
       const segObj = sceneRegistry.nodes.get(hit.segment.id)
       let ridgeWorld: [number, number, number]
       if (segObj) {
-        const ridgeLocal = new THREE.Vector3(snap.localX, hit.localY, snap.localZ)
+        const ridgeLocal = new THREE.Vector3(
+          snap.localX,
+          getRoofTopSurfaceY(snap.localX, snap.localZ, hit.segment),
+          snap.localZ,
+        )
         segObj.updateWorldMatrix(true, false)
         ridgeLocal.applyMatrix4(segObj.matrixWorld)
         ridgeWorld = [ridgeLocal.x, ridgeLocal.y, ridgeLocal.z]
@@ -100,12 +103,16 @@ const RidgeVentTool = () => {
         lastSnapRef.current = [sx, sz]
       }
 
-      setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
+      setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0) + snap.rotation)
       setPreviewPos(worldToBuildingLocal(ridgeWorld[0], ridgeWorld[1], ridgeWorld[2]))
       publishRoofSurfacePlacementGuides({
         roof: event.node as RoofNode,
         segment: hit.segment,
-        center: [snap.localX, hit.localY, snap.localZ],
+        center: [
+          snap.localX,
+          getRoofTopSurfaceY(snap.localX, snap.localZ, hit.segment),
+          snap.localZ,
+        ],
         footprint: roofSurfaceFootprintFromNode(previewNode),
         mode: 'linear-edge',
       })
@@ -129,7 +136,7 @@ const RidgeVentTool = () => {
         name: 'Ridge Vent',
         roofSegmentId: hit.segment.id,
         position: [snap.localX, 0, snap.localZ],
-        rotation: 0,
+        rotation: snap.rotation,
       })
       state.createNode(vent, hit.segment.id as AnyNodeId)
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)

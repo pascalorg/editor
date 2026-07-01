@@ -37,7 +37,7 @@ function stripDuplicateFlags(metadata: unknown) {
 
 function moveStairWhenRegistered(stairId: StairNode['id'], attempt = 0) {
   const latestStair = useScene.getState().nodes[stairId as AnyNodeId]
-  if (!latestStair || latestStair.type !== 'stair') {
+  if (latestStair?.type !== 'stair') {
     return
   }
 
@@ -64,7 +64,7 @@ export function duplicateStairSubtree(
   const scene = useScene.getState()
   const sourceStair = scene.nodes[sourceStairId]
 
-  if (!sourceStair || sourceStair.type !== 'stair') {
+  if (sourceStair?.type !== 'stair') {
     throw new Error(`Node "${sourceStairId}" is not a stair`)
   }
 
@@ -89,7 +89,7 @@ export function duplicateStairSubtree(
   const segmentClones: StairSegmentNode[] = []
   for (const childId of sourceStair.children ?? []) {
     const childNode = scene.nodes[childId as AnyNodeId]
-    if (!childNode || childNode.type !== 'stair-segment') {
+    if (childNode?.type !== 'stair-segment') {
       continue
     }
 
@@ -108,7 +108,7 @@ export function duplicateStairSubtree(
   ])
 
   const createdStair = useScene.getState().nodes[stairClone.id as AnyNodeId]
-  if (!createdStair || createdStair.type !== 'stair') {
+  if (createdStair?.type !== 'stair') {
     throw new Error(`Duplicated stair "${stairClone.id}" was not created`)
   }
 

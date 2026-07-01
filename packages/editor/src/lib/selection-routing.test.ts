@@ -4,6 +4,7 @@ import {
   resolveNodeSelectionTarget,
   resolveSelectedIdsForNodeClick,
   selectionModifiersFromEvent,
+  shouldPreserveSelectedRoofHostTarget,
 } from './selection-routing'
 
 describe('resolveSelectedIdsForNodeClick', () => {
@@ -75,5 +76,43 @@ describe('resolveNodeSelectionTarget', () => {
       phase: 'structure',
       structureLayer: 'elements',
     })
+  })
+})
+
+describe('shouldPreserveSelectedRoofHostTarget', () => {
+  test('keeps the roof host target while that roof is the sole armed selection', () => {
+    const node = { id: 'roof_1', type: 'roof' } as unknown as AnyNode
+
+    expect(
+      shouldPreserveSelectedRoofHostTarget({
+        node,
+        selectedIds: ['roof_1'],
+        armedRoofId: 'roof_1',
+      }),
+    ).toBe(true)
+  })
+
+  test('falls back to segment targeting when the roof host is not armed', () => {
+    const node = { id: 'roof_1', type: 'roof' } as unknown as AnyNode
+
+    expect(
+      shouldPreserveSelectedRoofHostTarget({
+        node,
+        selectedIds: ['roof_1'],
+        armedRoofId: null,
+      }),
+    ).toBe(false)
+  })
+
+  test('falls back to segment targeting when the roof is no longer the sole selection', () => {
+    const node = { id: 'roof_1', type: 'roof' } as unknown as AnyNode
+
+    expect(
+      shouldPreserveSelectedRoofHostTarget({
+        node,
+        selectedIds: ['roof_1', 'wall_1'],
+        armedRoofId: 'roof_1',
+      }),
+    ).toBe(false)
   })
 })

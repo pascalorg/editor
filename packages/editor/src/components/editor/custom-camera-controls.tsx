@@ -457,12 +457,7 @@ export const CustomCameraControls = () => {
 
     return useEditor.subscribe((state) => {
       const pose = state.navigationSyncPose
-      if (
-        !pose ||
-        pose.source !== '2d' ||
-        pose.revision === lastApplied2dNavigationRevision.current
-      )
-        return
+      if (pose?.source !== '2d' || pose.revision === lastApplied2dNavigationRevision.current) return
 
       const control = controls.current
       if (!control) return

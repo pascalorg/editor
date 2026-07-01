@@ -23,6 +23,7 @@ import {
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { surfaceQuatFromNormal } from '../shared/roof-surface'
+import { TrimClippedMesh, useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildFrameGeometry } from './frame-csg'
 import { buildLanternGlassGeometry, clamp01, paneSize } from './geometry'
 
@@ -99,6 +100,8 @@ function GlassPane({
   position = [0, 0, 0],
   rotation,
   width,
+  segment,
+  parentToSegment,
 }: {
   glassThickness: number
   material: THREE.Material | THREE.Material[]
@@ -107,11 +110,42 @@ function GlassPane({
   position?: [number, number, number]
   rotation?: [number, number, number]
   width: number
+  // Trim-clip context: when provided, the glass pane is sliced by the host
+  // segment's trim (so the glazing matches the roof cutaway). Absent in
+  // contexts with no host segment frame.
+  segment?: RoofSegmentNode
+  parentToSegment?: THREE.Matrix4
 }) {
+  const geometry = useMemo(
+    () => new THREE.BoxGeometry(paneSize(width), paneSize(glassThickness), paneSize(paneDepth)),
+    [width, glassThickness, paneDepth],
+  )
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  if (segment && parentToSegment) {
+    return (
+      <TrimClippedMesh
+        geometry={geometry}
+        material={material}
+        name={name}
+        parentToSegment={parentToSegment}
+        position={position}
+        receiveShadow
+        rotation={rotation}
+        segment={segment}
+      />
+    )
+  }
+
   return (
-    <mesh material={material} name={name} position={position} receiveShadow rotation={rotation}>
-      <boxGeometry args={[paneSize(width), paneSize(glassThickness), paneSize(paneDepth)]} />
-    </mesh>
+    <mesh
+      geometry={geometry}
+      material={material}
+      name={name}
+      position={position}
+      receiveShadow
+      rotation={rotation}
+    />
   )
 }
 
@@ -181,11 +215,15 @@ function LanternGlass({
   frameMaterial,
   glassMaterial,
   node,
+  segment,
+  parentToSegment,
 }: {
   curbHeight: number
   frameMaterial: THREE.Material | THREE.Material[]
   glassMaterial: THREE.Material | THREE.Material[]
   node: SkylightNode
+  segment?: RoofSegmentNode
+  parentToSegment?: THREE.Matrix4
 }) {
   const preset = SKYLIGHT_TYPE_PRESETS.lantern
   const width = node.width - 0.01
@@ -228,9 +266,27 @@ function LanternGlass({
     }
   }, [geometry])
 
+  const glassParentToSegment =
+    segment && parentToSegment
+      ? new THREE.Matrix4()
+          .copy(parentToSegment)
+          .multiply(new THREE.Matrix4().makeTranslation(0, curbHeight, 0))
+      : undefined
+
   return (
     <group position={[0, curbHeight, 0]}>
-      <mesh geometry={geometry} material={glassMaterial} name="skylight-glass" receiveShadow />
+      {segment && glassParentToSegment ? (
+        <TrimClippedMesh
+          geometry={geometry}
+          material={glassMaterial}
+          name="skylight-glass"
+          parentToSegment={glassParentToSegment}
+          receiveShadow
+          segment={segment}
+        />
+      ) : (
+        <mesh geometry={geometry} material={glassMaterial} name="skylight-glass" receiveShadow />
+      )}
       {baseCorners.map((corner, index) => (
         <FrameBar
           end={baseCorners[(index + 1) % baseCorners.length] ?? corner}
@@ -351,6 +407,8 @@ function HingedGlass({
   hasMotorHousing,
   node,
   openAmount,
+  segment,
+  parentToSegment,
 }: {
   curbHeight: number
   frameMaterial: THREE.Material | THREE.Material[]
@@ -359,6 +417,8 @@ function HingedGlass({
   hasMotorHousing: boolean
   node: SkylightNode
   openAmount: number
+  segment?: RoofSegmentNode
+  parentToSegment?: THREE.Matrix4
 }) {
   const preset = SKYLIGHT_TYPE_PRESETS.opening
   const side = node.openingSide ?? preset.openingSide
@@ -376,6 +436,31 @@ function HingedGlass({
   const supportEndY = curbHeight + glassThickness + Math.sin(openingAngle) * supportTravel
   const supportEndZ = depth / 2 - Math.cos(openingAngle) * supportTravel
 
+  // The hinge group offsets + rotates the pane; compose that onto the
+  // skylight→segment matrix so the glass clips in segment-local space.
+  const hingeToSegment =
+    segment && parentToSegment
+      ? new THREE.Matrix4()
+          .copy(parentToSegment)
+          .multiply(
+            new THREE.Matrix4().compose(
+              new THREE.Vector3(
+                transform.hingePosition[0],
+                curbHeight + glassThickness / 2,
+                transform.hingePosition[2],
+              ),
+              new THREE.Quaternion().setFromEuler(
+                new THREE.Euler(
+                  transform.rotation[0],
+                  transform.rotation[1],
+                  transform.rotation[2],
+                ),
+              ),
+              new THREE.Vector3(1, 1, 1),
+            ),
+          )
+      : undefined
+
   return (
     <>
       <group
@@ -390,7 +475,9 @@ function HingedGlass({
           glassThickness={glassThickness}
           material={glassMaterial}
           paneDepth={depth}
+          parentToSegment={hingeToSegment}
           position={transform.panePosition}
+          segment={segment}
           width={width}
         />
         <PaneFrame
@@ -438,6 +525,8 @@ function SlidingGlass({
   glassThickness,
   node,
   openAmount,
+  segment,
+  parentToSegment,
 }: {
   curbHeight: number
   frameMaterial: THREE.Material | THREE.Material[]
@@ -445,6 +534,8 @@ function SlidingGlass({
   glassThickness: number
   node: SkylightNode
   openAmount: number
+  segment?: RoofSegmentNode
+  parentToSegment?: THREE.Matrix4
 }) {
   const preset = SKYLIGHT_TYPE_PRESETS.sliding
   const slideDirection = node.slideDirection ?? preset.slideDirection
@@ -467,7 +558,9 @@ function SlidingGlass({
           glassThickness={glassThickness}
           material={glassMaterial}
           paneDepth={node.height - 0.01}
+          parentToSegment={parentToSegment}
           position={fixedPanePosition}
+          segment={segment}
           width={paneWidth}
         />
         <PaneFrame
@@ -482,7 +575,9 @@ function SlidingGlass({
           glassThickness={glassThickness}
           material={glassMaterial}
           paneDepth={node.height - 0.01}
+          parentToSegment={parentToSegment}
           position={movingPanePosition}
+          segment={segment}
           width={paneWidth}
         />
         <PaneFrame
@@ -524,7 +619,9 @@ function SlidingGlass({
         glassThickness={glassThickness}
         material={glassMaterial}
         paneDepth={paneDepth}
+        parentToSegment={parentToSegment}
         position={fixedPanePosition}
+        segment={segment}
         width={node.width - 0.01}
       />
       <PaneFrame
@@ -539,7 +636,9 @@ function SlidingGlass({
         glassThickness={glassThickness}
         material={glassMaterial}
         paneDepth={paneDepth}
+        parentToSegment={parentToSegment}
         position={movingPanePosition}
+        segment={segment}
         width={node.width - 0.01}
       />
       <PaneFrame
@@ -679,6 +778,23 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
   const hasCurb = node.curb ?? false
   const curbH = hasCurb ? Math.max(0, node.curbHeight ?? 0.1) : 0
 
+  // Map skylight-local geometry into the host segment's local frame (where the
+  // trim cut prisms live) — the same pose the inner registered group is mounted
+  // with (position [x, surfaceY, z] + surfaceQuat·yaw). Only the structural
+  // frame is clipped; the thin glass panes live inside animated sub-components
+  // (sliding / hinged) with their own internal transforms and ride with the
+  // frame. Computed before the early return so the hook order stays stable.
+  const localToSegment = useMemo(
+    () =>
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(node.position[0] ?? 0, surfaceFrame.point.y, node.position[2] ?? 0),
+        composedQuat,
+        new THREE.Vector3(1, 1, 1),
+      ),
+    [node.position[0], node.position[2], surfaceFrame.point.y, composedQuat],
+  )
+  const clippedFrame = useSegmentTrimClippedGeometry(frameGeo, segment, localToSegment)
+
   if (!segment || !frameGeo) return null
 
   const surfaceY = surfaceFrame.point.y
@@ -707,7 +823,7 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
       >
         <mesh
           castShadow
-          geometry={frameGeo}
+          geometry={clippedFrame ?? frameGeo}
           material={frameMaterial}
           name="skylight-surface"
           receiveShadow
@@ -718,6 +834,8 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
             frameMaterial={frameMaterial}
             glassMaterial={glassMaterial}
             node={node}
+            parentToSegment={localToSegment}
+            segment={segment}
           />
         )}
         {activeType === 'sliding' && (
@@ -728,6 +846,8 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
             glassThickness={glassThickness}
             node={node}
             openAmount={openAmount}
+            parentToSegment={localToSegment}
+            segment={segment}
           />
         )}
         {activeType === 'opening' && (
@@ -739,6 +859,8 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
             hasMotorHousing={node.motorHousing ?? false}
             node={node}
             openAmount={openAmount}
+            parentToSegment={localToSegment}
+            segment={segment}
           />
         )}
         {(activeType === 'flat' || activeType === 'walk-on') && (
@@ -746,7 +868,9 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
             glassThickness={glassThickness}
             material={glassMaterial}
             paneDepth={node.height + 0.004}
+            parentToSegment={localToSegment}
             position={[0, curbH + glassThickness / 2, 0]}
+            segment={segment}
             width={node.width + 0.004}
           />
         )}

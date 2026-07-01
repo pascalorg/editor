@@ -48,7 +48,7 @@ export const SlabSystem = () => {
     // Process dirty slabs
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
-      if (!node || node.type !== 'slab') return
+      if (node?.type !== 'slab') return
 
       const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
       if (mesh) {

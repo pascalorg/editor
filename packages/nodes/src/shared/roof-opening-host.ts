@@ -33,7 +33,7 @@ type SceneReader = { get: (id: AnyNodeId) => unknown }
 function resolveHostFace(node: RoofHostedOpening, scene: SceneReader) {
   if (!(node.roofSegmentId && node.roofFace)) return null
   const segment = scene.get(node.roofSegmentId as AnyNodeId) as RoofSegmentNode | undefined
-  if (!segment || segment.type !== 'roof-segment') return null
+  if (segment?.type !== 'roof-segment') return null
   return { segment, face: getRoofSegmentWallFace(segment, node.roofFace) }
 }
 

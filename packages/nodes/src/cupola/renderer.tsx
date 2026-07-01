@@ -19,6 +19,7 @@ import {
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildCupolaGeometry } from './geometry'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
@@ -81,6 +82,19 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
     return new THREE.Quaternion().copy(surfaceQuat).multiply(yawQuat)
   }, [surfaceQuat, node.rotation, yAxis])
 
+  // Map cupola-local geometry into the host segment's local frame (where the
+  // trim cut prisms live) — same pose the inner mesh group is mounted with.
+  const localToSegment = useMemo(
+    () =>
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0),
+        composedQuat,
+        new THREE.Vector3(1, 1, 1),
+      ),
+    [node.position[0], node.position[1], node.position[2], composedQuat],
+  )
+  const clippedGeometry = useSegmentTrimClippedGeometry(geometry, segment, localToSegment)
+
   if (!segment) return null
 
   const segPos = segment.position ?? [0, 0, 0]
@@ -96,7 +110,7 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
       >
         <mesh
           castShadow
-          geometry={geometry}
+          geometry={clippedGeometry ?? geometry}
           material={material}
           name="cupola-surface"
           receiveShadow

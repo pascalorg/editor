@@ -3,6 +3,7 @@
 import type { DormerNode, RoofSegmentNode } from '@pascal-app/core'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { TrimClippedMesh } from '../shared/use-segment-trim-clip'
 import { getDormerExposedFaces, getDormerSkirtWindowDims } from './csg-geometry'
 import { buildDormerWindowGeometries, type DormerWindowShape } from './window-frame'
 
@@ -22,11 +23,16 @@ const DormerWindowAssembly = ({
   segment,
   frameMaterial,
   glassMaterial,
+  dormerToSegment,
 }: {
   node: DormerNode
   segment: RoofSegmentNode
   frameMaterial: THREE.Material
   glassMaterial: THREE.Material
+  // Maps dormer-mesh-local space into the host segment-local frame (where the
+  // trim cut prisms live). Threaded from the renderer so the window glass /
+  // frame / sill slice at the trim plane like the dormer body.
+  dormerToSegment: THREE.Matrix4
 }) => {
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const skirtWin = useMemo(
@@ -140,39 +146,58 @@ const DormerWindowAssembly = ({
   // FrontSide points outward (-Z in segment frame). With the rotation,
   // the sill always extrudes along the group's local +Z, so its position
   // no longer needs to flip per-face.
-  const renderFace = (zPos: number, yRot: number, keyPrefix: string) => (
-    <group name={`dormer-window-${keyPrefix}`} position={[winX, winY, zPos]} rotation-y={yRot}>
-      {winGeo.glassPanes.map((pane, i) => (
-        <mesh
-          geometry={pane.geo}
-          key={`${keyPrefix}-glass-${i}`}
-          material={glassMaterial}
-          name={`dormer-glass-${keyPrefix}-${i}`}
-          position={pane.pos}
-        />
-      ))}
-      {winGeo.frameBars.map((bar, i) => (
-        <mesh
-          castShadow
-          geometry={bar.geo}
-          key={`${keyPrefix}-bar-${i}`}
-          material={frameMaterial}
-          name={`dormer-frame-${keyPrefix}-${i}`}
-          position={bar.pos}
-        />
-      ))}
-      {sillGeo && (
-        <mesh
-          castShadow
-          geometry={sillGeo}
-          material={frameMaterial}
-          name={`dormer-sill-${keyPrefix}`}
-          position={[0, -winH / 2 - sillT / 2, sillD / 2]}
-          receiveShadow
-        />
-      )}
-    </group>
-  )
+  const renderFace = (zPos: number, yRot: number, keyPrefix: string) => {
+    // Compose this face group's transform onto the dormer→segment matrix, so
+    // each window part can be clipped by the trim in segment-local space.
+    const faceToSegment = new THREE.Matrix4()
+      .copy(dormerToSegment)
+      .multiply(
+        new THREE.Matrix4().compose(
+          new THREE.Vector3(winX, winY, zPos),
+          new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yRot),
+          new THREE.Vector3(1, 1, 1),
+        ),
+      )
+    return (
+      <group name={`dormer-window-${keyPrefix}`} position={[winX, winY, zPos]} rotation-y={yRot}>
+        {winGeo.glassPanes.map((pane, i) => (
+          <TrimClippedMesh
+            geometry={pane.geo}
+            key={`${keyPrefix}-glass-${i}`}
+            material={glassMaterial}
+            name={`dormer-glass-${keyPrefix}-${i}`}
+            parentToSegment={faceToSegment}
+            position={pane.pos}
+            segment={segment}
+          />
+        ))}
+        {winGeo.frameBars.map((bar, i) => (
+          <TrimClippedMesh
+            castShadow
+            geometry={bar.geo}
+            key={`${keyPrefix}-bar-${i}`}
+            material={frameMaterial}
+            name={`dormer-frame-${keyPrefix}-${i}`}
+            parentToSegment={faceToSegment}
+            position={bar.pos}
+            segment={segment}
+          />
+        ))}
+        {sillGeo && (
+          <TrimClippedMesh
+            castShadow
+            geometry={sillGeo}
+            material={frameMaterial}
+            name={`dormer-sill-${keyPrefix}`}
+            parentToSegment={faceToSegment}
+            position={[0, -winH / 2 - sillT / 2, sillD / 2]}
+            receiveShadow
+            segment={segment}
+          />
+        )}
+      </group>
+    )
+  }
 
   return (
     <>

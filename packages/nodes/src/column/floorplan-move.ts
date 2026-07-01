@@ -6,10 +6,15 @@ import {
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
   movingFootprintAnchors,
+  sceneRegistry,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import {
   applyFloorplanAlignment,
+  getFloorStackPreviewPosition,
+  isGridSnapActive,
+  isMagneticSnapActive,
   triggerSFX,
   useEditor,
   type WallPlanPoint,
@@ -17,25 +22,10 @@ import {
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 
 /**
- * 2D floor-plan move handler for column — mirrors `itemFloorplanMoveTarget`:
- * each pointermove writes the absolute world-plan position straight to
- * `useScene` (history paused by the overlay). The 2D SVG and the 3D group
- * transform both read `node.position` reactively, so they stay in lockstep;
- * the overlay's snapshot-diff makes the drag one undoable step. `canCommit`
- * only validates.
- *
- * Columns previously fell through to the overlay's generic free-translate
- * path, which aligned a column by its bbox *centre* and gathered candidates
- * from SVG bounding boxes only (missing wall faces / diagonal walls). Routing
- * through a kind-specific target gives column the same footprint-edge
- * alignment as shelf / item — including snapping flush to wall faces (the
- * pillar↔wall case this whole feature targets).
- *
- * Earlier this used the `useLiveTransforms` + imperative-mesh pattern; for a
- * `position`-field kind that leaves the 3D group stuck at the old spot on
- * commit (nothing reconciles it off the cleared live transform, since the
- * geometry doesn't rebuild on a position-only change). See the shelf handler
- * for the full rationale.
+ * 2D floor-plan move handler for column. Columns need the same footprint-edge
+ * alignment as shelf / item, but they must preview through live transforms and
+ * commit once on release so the overlay does not churn the scene store on
+ * every pointermove.
  *
  * Column stores rotation as a scalar (not a tuple); position is `[x, y, z]`.
  */
@@ -56,14 +46,14 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: [columnId],
-    apply({ planPoint, modifiers }) {
+    apply({ planPoint }) {
       const snap = (value: number) => {
-        if (modifiers.shiftKey) return value
+        if (!isGridSnapActive()) return value
         const step = useEditor.getState().gridSnapStep
         return Math.round(value / step) * step
       }
       const gridSnapped = resolveCursor(planPoint, { snap }) as WallPlanPoint
-      // Figma-style alignment layered on the grid snap (Alt bypasses alignment; Shift all snap).
+      // Figma-style alignment layered on the active snap mode.
       const { point: snapped } = applyFloorplanAlignment(
         gridSnapped,
         movingFootprintAnchors(
@@ -73,25 +63,35 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
           rotationY,
         ),
         candidates,
-        { bypass: modifiers.altKey || modifiers.shiftKey },
+        { bypass: !isMagneticSnapActive() },
       )
       const next: [number, number, number] = [snapped[0], originalPosition[1], snapped[1]]
       lastPosition = next
 
       const snapKey = `${snapped[0]},${snapped[1]}`
-      if (!modifiers.shiftKey && snapKey !== lastSnapKey) {
+      if (snapKey !== lastSnapKey) {
         triggerSFX('sfx:grid-snap')
         lastSnapKey = snapKey
       }
-      // Single source of truth — write the absolute position straight to the
-      // scene (history paused by the overlay). 2D SVG and 3D group transform
-      // both follow `node.position` reactively, so they can't diverge.
-      useScene.getState().updateNodes([{ id: columnId, data: { position: next } }])
+      const visualPosition = getFloorStackPreviewPosition({
+        node,
+        position: next,
+        rotation: rotationY,
+        levelId: node.parentId ?? null,
+      })
+      sceneRegistry.nodes.get(columnId)?.position.set(...visualPosition)
+      useLiveTransforms.getState().set(columnId, {
+        position: next,
+        rotation: rotationY,
+      })
     },
     canCommit() {
       const live = useScene.getState().nodes[columnId] as ColumnNode | undefined
-      if (!live || live.type !== 'column') return false
+      if (live?.type !== 'column') return false
       return !(lastPosition[0] === originalPosition[0] && lastPosition[2] === originalPosition[2])
+    },
+    commit() {
+      useScene.getState().updateNodes([{ id: columnId, data: { position: lastPosition } }])
     },
   }
   return session

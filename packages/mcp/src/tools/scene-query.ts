@@ -396,7 +396,7 @@ function parentListsChild(parent: AnyNode, childId: string): boolean {
 
 function levelSummary(bridge: SceneOperations, levelId: AnyNodeId) {
   const level = bridge.getNode(levelId)
-  if (!level || level.type !== 'level') {
+  if (level?.type !== 'level') {
     throw new Error(`Level not found: ${levelId}`)
   }
   const nodes = nodesOnLevel(bridge, levelId)
@@ -680,7 +680,7 @@ export function registerVerifyScene(server: McpServer, bridge: SceneOperations):
       for (const node of Object.values(bridge.getNodes())) {
         if (node.type === 'door' || node.type === 'window') {
           const parent = node.parentId ? bridge.getNode(node.parentId as AnyNodeId) : null
-          if (!parent || parent.type !== 'wall') {
+          if (parent?.type !== 'wall') {
             issues.push(`${node.type} ${node.id} is not parented to a wall`)
             continue
           }

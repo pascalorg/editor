@@ -25,7 +25,7 @@ export function wallFloorplanSiblingOverrides(args: {
   let out: Record<AnyNodeId, AnyNode> | null = null
   for (const [id, override] of liveOverrides) {
     const existing = nodes[id as AnyNodeId]
-    if (!existing || existing.type !== 'wall') continue
+    if (existing?.type !== 'wall') continue
     if (Object.keys(override).length === 0) continue
     if (!out) out = { ...nodes }
     out[id as AnyNodeId] = { ...existing, ...override } as AnyNode

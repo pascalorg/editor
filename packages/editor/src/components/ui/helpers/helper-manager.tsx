@@ -38,6 +38,10 @@ function reshapingHints(reshape: ReshapeKind): ContextualShortcutHint[] {
   const action =
     reshape === 'curve'
       ? 'Curve'
+      : reshape === 'control-point'
+        ? 'Move control point'
+        : reshape === 'tangent'
+          ? 'Move tangent'
       : reshape === 'endpoint'
         ? 'Move endpoint'
         : 'Move corner'

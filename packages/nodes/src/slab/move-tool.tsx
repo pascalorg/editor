@@ -20,6 +20,7 @@ import {
   getSegmentGridStep,
   isMagneticSnapActive,
   markToolCancelConsumed,
+  projectAlignmentGuidesWorldToActiveBuildingLocal,
   resolveAlignmentForActiveBuilding,
   snapBuildingLocalToWorldGrid,
   snapFenceDraftPoint,
@@ -205,7 +206,9 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
           deltaX += result.snap.dx
           deltaZ += result.snap.dz
         }
-        useAlignmentGuides.getState().set(result.guides)
+        useAlignmentGuides
+          .getState()
+          .set(projectAlignmentGuidesWorldToActiveBuildingLocal(result.guides))
       } else {
         useAlignmentGuides.getState().clear()
       }

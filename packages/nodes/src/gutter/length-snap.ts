@@ -104,7 +104,7 @@ export function snapLengthToCorner(
   const roofChildren = (roof as { children?: readonly string[] } | undefined)?.children
   for (const sid of roofChildren ?? []) {
     const s = sceneApi.get<RoofSegmentNode>(sid as AnyNodeId)
-    if (!s || s.type !== 'roof-segment') continue
+    if (s?.type !== 'roof-segment') continue
     const tf = segmentTransform(s)
     for (const gid of s.children ?? []) {
       const g = sceneApi.get(gid as AnyNodeId)

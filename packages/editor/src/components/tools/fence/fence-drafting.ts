@@ -1,6 +1,7 @@
 import {
   DEFAULT_ANGLE_STEP,
   FenceNode,
+  getTwoPointFenceCurveTangents,
   getWallCurveFrameAt,
   getWallCurveLength,
   isCurvedWall,
@@ -207,6 +208,47 @@ export function createFenceOnCurrentLevel(
     name: `Fence ${fenceCount + 1}`,
     start,
     end,
+  })
+
+  createNode(fence, currentLevelId)
+  sfxEmitter.emit('sfx:structure-build')
+
+  return fence
+}
+
+/**
+ * Commit a smooth spline fence from a list of drawn control points. The
+ * centerline becomes a Catmull-Rom curve through `path`; `start`/`end` are
+ * pinned to the first/last point so endpoint handles, bbox, and miter
+ * references stay valid. Requires >= 2 points spanning a usable distance.
+ */
+export function createSplineFenceOnCurrentLevel(
+  path: FencePlanPoint[],
+  tangents = getTwoPointFenceCurveTangents(path),
+): FenceNode | null {
+  const currentLevelId = useViewer.getState().selection.levelId
+  const { createNode, nodes } = useScene.getState()
+
+  if (!currentLevelId || path.length < 2) {
+    return null
+  }
+  const start = path[0]!
+  const end = path[path.length - 1]!
+  // A degenerate single-point-ish path (all clicks on one spot) is rejected
+  // the same way a too-short straight segment is.
+  if (!isSegmentLongEnough(start, end) && path.length < 3) {
+    return null
+  }
+
+  const fenceCount = Object.values(nodes).filter((node) => node.type === 'fence').length
+  const defaults = useEditor.getState().toolDefaults.fence ?? {}
+  const fence = FenceNode.parse({
+    ...defaults,
+    name: `Fence ${fenceCount + 1}`,
+    start,
+    end,
+    path,
+    tangents,
   })
 
   createNode(fence, currentLevelId)

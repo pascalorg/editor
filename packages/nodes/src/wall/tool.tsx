@@ -1,4 +1,5 @@
 import {
+  type AnyNode,
   calculateLevelMiters,
   collectAlignmentAnchors,
   emitter,
@@ -7,6 +8,7 @@ import {
   type LevelNode,
   type Point2D,
   resolveAlignment,
+  resolveBuildingForLevel,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -464,15 +466,43 @@ function updateWallPreview(
   mesh.geometry = geometry
 }
 
-function getCurrentLevelWalls(): WallNode[] {
-  const currentLevelId = useViewer.getState().selection.levelId
-  const { nodes } = useScene.getState()
-  if (!currentLevelId) return []
-  const levelNode = nodes[currentLevelId]
-  if (!levelNode || levelNode.type !== 'level') return []
+function getLevelWalls(levelId: string | null, nodes: Record<string, AnyNode>): WallNode[] {
+  if (!levelId) return []
+  const levelNode = nodes[levelId]
+  if (levelNode?.type !== 'level') return []
   return (levelNode as LevelNode).children
     .map((childId) => nodes[childId])
     .filter((node): node is WallNode => node?.type === 'wall')
+}
+
+function getCurrentLevelWalls(): WallNode[] {
+  const currentLevelId = useViewer.getState().selection.levelId
+  const { nodes } = useScene.getState()
+  return getLevelWalls(currentLevelId ?? null, nodes)
+}
+
+// Walls on the level directly beneath the active one. Levels share the same
+// local XZ origin (they only differ in world Y), so these walls live in the
+// identical coordinate frame and can be fed straight into the snap pipeline —
+// letting the user draw a new wall aligned with the floor below. They are
+// snap references only; `createWallOnCurrentLevel` re-derives its own
+// current-level wall list, so the floor below is never split or mutated.
+function getBelowLevelWalls(): WallNode[] {
+  const currentLevelId = useViewer.getState().selection.levelId
+  const { nodes } = useScene.getState()
+  if (!currentLevelId) return []
+  const currentLevel = nodes[currentLevelId]
+  if (currentLevel?.type !== 'level') return []
+  const buildingId = resolveBuildingForLevel(currentLevelId, nodes)
+  if (!buildingId) return []
+  const building = nodes[buildingId]
+  if (building?.type !== 'building') return []
+  const currentIndex = (currentLevel as LevelNode).level
+  const belowLevel = (building.children ?? [])
+    .map((childId) => nodes[childId])
+    .filter((node): node is LevelNode => node?.type === 'level' && node.level < currentIndex)
+    .sort((a, b) => b.level - a.level)[0]
+  return getLevelWalls(belowLevel?.id ?? null, nodes)
 }
 
 export const WallTool: React.FC = () => {
@@ -558,6 +588,10 @@ export const WallTool: React.FC = () => {
       if (!(cursorRef.current && wallPreviewRef.current)) return
 
       const walls = getCurrentLevelWalls()
+      // Add walls on the floor below as extra snap references so the new wall
+      // can align with the level beneath it. Kept separate from `walls` so the
+      // measurement HUD only reports against the active level.
+      const snapWalls = [...walls, ...getBelowLevelWalls()]
       const localPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
       // Snapping is governed entirely by the snapping mode (grid / lines /
       // angles / off). `'off'` is the bypass — there is no Shift hold-to-bypass.
@@ -566,7 +600,7 @@ export const WallTool: React.FC = () => {
       const bypassAlign = !isMagneticSnapActive()
       const snapResult = snapWallDraftPointDetailed({
         point: localPoint,
-        walls,
+        walls: snapWalls,
         start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
         angleSnap: angleLocked,
         magnetic: isMagneticSnapActive(),
@@ -641,6 +675,7 @@ export const WallTool: React.FC = () => {
       }
 
       const walls = getCurrentLevelWalls()
+      const snapWalls = [...walls, ...getBelowLevelWalls()]
       const localClick: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
 
       // Alignment guides follow the snapping mode (lines = magnetic on), not Alt.
@@ -650,7 +685,7 @@ export const WallTool: React.FC = () => {
         const snappedStart = alignPoint(
           snapWallDraftPointDetailed({
             point: localClick,
-            walls,
+            walls: snapWalls,
             magnetic: isMagneticSnapActive(),
           }).point,
           { bypass: bypassAlign },
@@ -679,7 +714,7 @@ export const WallTool: React.FC = () => {
         const snappedEnd = alignPoint(
           snapWallDraftPointDetailed({
             point: localClick,
-            walls,
+            walls: snapWalls,
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),

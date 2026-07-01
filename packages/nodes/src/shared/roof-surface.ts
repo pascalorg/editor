@@ -1,9 +1,11 @@
 import {
+  getRoofModuleFaces,
   getRoofSegmentSurfaceY,
+  getRoofShapeInsets,
+  getRoofShapeRatios,
   getSegmentSlopeFrame,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
-  type RoofType,
 } from '@pascal-app/core'
 import * as THREE from 'three'
 
@@ -15,6 +17,10 @@ import * as THREE from 'three'
 
 export function getSurfaceY(lx: number, lz: number, seg: RoofSegmentNode): number {
   return getRoofSegmentSurfaceY(seg, lx, lz)
+}
+
+export function getRoofTopSurfaceY(lx: number, lz: number, seg: RoofSegmentNode): number {
+  return getRoofSurfaceFaceBoundsAt(seg, lx, lz).surfaceYAt(lx, lz)
 }
 
 export type RoofSurfacePoint2D = [number, number]
@@ -36,9 +42,7 @@ export function getRoofSurfaceFaceBoundsAt(
   lz: number,
 ): RoofSurfaceFaceBounds {
   const faces = getRoofSurfaceFaces(segment)
-  const face =
-    faces.find((candidate) => pointInPolygon([lx, lz], candidate.polygon)) ??
-    nearestFaceToPoint(faces, [lx, lz])
+  const face = topmostFaceAtPoint(faces, lx, lz) ?? nearestFaceToPoint(faces, [lx, lz])
   const { polygon } = face
 
   const xs = polygon.map((point) => point[0])
@@ -61,23 +65,52 @@ type RoofSurfaceFace = {
   vertices: FaceVertex[]
 }
 type FaceVertex = { x: number; y: number; z: number }
-type FaceInsets = {
-  iF?: number
-  iB?: number
-  iL?: number
-  iR?: number
-  dutchI?: number
-}
-type FaceShapeRatios = {
-  gambrelLowerWidthRatio: number
-  mansardSteepWidthRatio: number
-  dutchHipWidthRatio: number
-}
 
 const SHINGLE_SURFACE_EPSILON = 0.02
 const FACE_TOLERANCE = 1e-6
+const ROOF_SURFACE_FACE_CACHE_MAX = 128
+const roofSurfaceFaceCache = new Map<string, RoofSurfaceFace[]>()
+const _downSlopeYawNormal = new THREE.Vector3()
+const _surfaceQuatRight = new THREE.Vector3()
+const _surfaceQuatForward = new THREE.Vector3()
+const _surfaceQuatMatrix = new THREE.Matrix4()
 
 function getRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
+  const key = roofSurfaceFaceCacheKey(segment)
+  const cached = roofSurfaceFaceCache.get(key)
+  if (cached) return cached
+
+  const faces = buildRoofSurfaceFaces(segment)
+  roofSurfaceFaceCache.set(key, faces)
+  if (roofSurfaceFaceCache.size > ROOF_SURFACE_FACE_CACHE_MAX) {
+    const oldestKey = roofSurfaceFaceCache.keys().next().value
+    if (oldestKey) roofSurfaceFaceCache.delete(oldestKey)
+  }
+  return faces
+}
+
+function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
+  return [
+    segment.roofType,
+    segment.width,
+    segment.depth,
+    segment.wallHeight,
+    segment.wallThickness,
+    segment.deckThickness,
+    segment.overhang,
+    segment.shingleThickness,
+    segment.pitch,
+    segment.gambrelLowerWidthRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerWidthRatio,
+    segment.gambrelLowerHeightRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerHeightRatio,
+    segment.mansardSteepWidthRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepWidthRatio,
+    segment.mansardSteepHeightRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepHeightRatio,
+    segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
+    segment.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
+    segment.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
+  ].join('|')
+}
+
+function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
   const { roofType, width, depth, wallHeight, wallThickness, deckThickness, overhang } = segment
   const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(segment)
 
@@ -122,39 +155,43 @@ function getRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
   const dropTop = Math.min(1, maxDrop * 0.4)
   const topBaseY = shinBotWh - dropTop
 
-  const insetsTop = getRoofFaceInsets(
+  const dutchHipWidthRatio = segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio
+  const insetsTop = getRoofShapeInsets({
     roofType,
     width,
     depth,
-    shinTopWh,
-    topBaseY,
-    false,
-    shinTopW,
-    shinTopD,
+    wh: shinTopWh,
+    baseY: topBaseY,
+    isVoid: false,
+    brushW: shinTopW,
+    brushD: shinTopD,
     tanTheta,
     shingleThickness,
-  )
-  const shapeRatios = {
-    gambrelLowerWidthRatio:
-      segment.gambrelLowerWidthRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerWidthRatio,
-    mansardSteepWidthRatio:
-      segment.mansardSteepWidthRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepWidthRatio,
-    dutchHipWidthRatio: segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
-  }
+    dutchHipWidthRatio,
+  })
+  const shapeRatios = getRoofShapeRatios({
+    gambrelLowerWidthRatio: segment.gambrelLowerWidthRatio,
+    mansardSteepWidthRatio: segment.mansardSteepWidthRatio,
+    dutchHipWidthRatio,
+    dutchHipHeightRatio: segment.dutchHipHeightRatio,
+    dutchWaistLengthRatio: segment.dutchWaistLengthRatio,
+    dutchGabletRake: segment.dutchGabletRake,
+  })
 
-  return getRoofModuleFaces(
-    roofType,
-    shinTopW,
-    shinTopD,
-    shinTopWh,
-    shinTopRh,
-    topBaseY,
-    insetsTop,
-    width,
-    depth,
+  return getRoofModuleFaces({
+    type: roofType,
+    w: shinTopW,
+    d: shinTopD,
+    wh: shinTopWh,
+    rh: shinTopRh,
+    baseY: topBaseY,
+    insets: insetsTop,
+    baseW: width,
+    baseD: depth,
     tanTheta,
     shapeRatios,
-  )
+    dutchTopRakeThickness: segment.dutchTopRakeThickness,
+  })
     .filter((face) => faceNormalY(face) > SHINGLE_SURFACE_EPSILON)
     .map((face) => {
       const vertices = face.map((point) => ({ ...point, z: point.z + transZ }))
@@ -166,199 +203,23 @@ function getRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
     .filter((face) => face.polygon.length >= 3)
 }
 
-function getRoofFaceInsets(
-  roofType: RoofType,
-  width: number,
-  depth: number,
-  wh: number,
-  baseY: number,
-  isVoid: boolean,
-  brushW: number,
-  brushD: number,
-  tanTheta: number,
-  shingleThickness: number,
-): FaceInsets {
-  let inset = (wh - baseY) * tanTheta
-  const maxSafeInset = Math.min(brushW, brushD) / 2 - 0.005
-  if (inset > maxSafeInset) inset = maxSafeInset
+function topmostFaceAtPoint(
+  faces: RoofSurfaceFace[],
+  lx: number,
+  lz: number,
+): RoofSurfaceFace | null {
+  let best: RoofSurfaceFace | null = null
+  let bestY = Number.NEGATIVE_INFINITY
 
-  let iF = 0
-  let iB = 0
-  let iL = 0
-  let iR = 0
-  if (roofType === 'hip' || roofType === 'mansard' || roofType === 'dutch') {
-    iF = inset
-    iB = inset
-    iL = inset
-    iR = inset
-  } else if (roofType === 'gable' || roofType === 'gambrel') {
-    iF = inset
-    iB = inset
-  } else if (roofType === 'shed') {
-    iF = inset
+  for (const face of faces) {
+    if (!pointInPolygon([lx, lz], face.polygon)) continue
+    const y = surfaceYOnFace(face.vertices, lx, lz)
+    if (y === null || y <= bestY) continue
+    best = face
+    bestY = y
   }
 
-  let dutchI = Math.min(width, depth) * 0.25
-  if (isVoid) dutchI += shingleThickness
-  return { iF, iB, iL, iR, dutchI }
-}
-
-function getRoofModuleFaces(
-  type: RoofType,
-  w: number,
-  d: number,
-  wh: number,
-  rh: number,
-  baseY: number,
-  insets: FaceInsets,
-  baseW: number,
-  baseD: number,
-  tanTheta: number,
-  shapeRatios: FaceShapeRatios,
-): FaceVertex[][] {
-  const v = (x: number, y: number, z: number): FaceVertex => ({ x, y, z })
-  const { iF = 0, iB = 0, iL = 0, iR = 0 } = insets
-
-  const b1 = v(-w / 2 + iL, baseY, d / 2 - iF)
-  const b2 = v(w / 2 - iR, baseY, d / 2 - iF)
-  const b3 = v(w / 2 - iR, baseY, -d / 2 + iB)
-  const b4 = v(-w / 2 + iL, baseY, -d / 2 + iB)
-  const bottom = [b4, b3, b2, b1]
-
-  const e1 = v(-w / 2, wh, d / 2)
-  const e2 = v(w / 2, wh, d / 2)
-  const e3 = v(w / 2, wh, -d / 2)
-  const e4 = v(-w / 2, wh, -d / 2)
-
-  const faces: FaceVertex[][] = []
-  faces.push([b1, b2, e2, e1], [b2, b3, e3, e2], [b3, b4, e4, e3], [b4, b1, e1, e4], bottom)
-
-  const h = wh + Math.max(0.001, rh)
-
-  if (type === 'flat' || rh === 0) {
-    faces.push([e1, e2, e3, e4])
-  } else if (type === 'gable') {
-    const r1 = v(-w / 2, h, 0)
-    const r2 = v(w / 2, h, 0)
-    faces.push([e4, e1, r1], [e2, e3, r2], [e1, e2, r2, r1], [e3, e4, r1, r2])
-  } else if (type === 'hip') {
-    if (Math.abs(w - d) < 0.01) {
-      const r = v(0, h, 0)
-      faces.push([e4, e1, r], [e1, e2, r], [e2, e3, r], [e3, e4, r])
-    } else if (w >= d) {
-      const r1 = v(-w / 2 + d / 2, h, 0)
-      const r2 = v(w / 2 - d / 2, h, 0)
-      faces.push([e4, e1, r1], [e2, e3, r2], [e1, e2, r2, r1], [e3, e4, r1, r2])
-    } else {
-      const r1 = v(0, h, d / 2 - w / 2)
-      const r2 = v(0, h, -d / 2 + w / 2)
-      faces.push([e1, e2, r1], [e3, e4, r2], [e2, e3, r2, r1], [e4, e1, r1, r2])
-    }
-  } else if (type === 'shed') {
-    const t1 = v(-w / 2, h, -d / 2)
-    const t2 = v(w / 2, h, -d / 2)
-    faces.push([e1, e2, t2, t1], [e2, e3, t2], [e3, e4, t1, t2], [e4, e1, t1])
-  } else if (type === 'gambrel') {
-    const mz = (baseD / 2) * shapeRatios.gambrelLowerWidthRatio
-    const dist = d / 2 - mz
-    const mh = wh + dist * (tanTheta || 0)
-
-    const m1 = v(-w / 2, mh, mz)
-    const m2 = v(w / 2, mh, mz)
-    const m3 = v(w / 2, mh, -mz)
-    const m4 = v(-w / 2, mh, -mz)
-    const r1 = v(-w / 2, h, 0)
-    const r2 = v(w / 2, h, 0)
-    faces.push(
-      [e4, e1, m1, r1, m4],
-      [e2, e3, m3, r2, m2],
-      [e1, e2, m2, m1],
-      [m1, m2, r2, r1],
-      [e3, e4, m4, m3],
-      [m3, m4, r1, r2],
-    )
-  } else if (type === 'mansard') {
-    const i = Math.min(baseW, baseD) * shapeRatios.mansardSteepWidthRatio
-    const mh = wh + i * (tanTheta || 0)
-
-    const m1 = v(-w / 2 + i, mh, d / 2 - i)
-    const m2 = v(w / 2 - i, mh, d / 2 - i)
-    const m3 = v(w / 2 - i, mh, -d / 2 + i)
-    const m4 = v(-w / 2 + i, mh, -d / 2 + i)
-    const t1 = v(-w / 2 + i * 2, h, d / 2 - i * 2)
-    const t2 = v(w / 2 - i * 2, h, d / 2 - i * 2)
-    const t3 = v(w / 2 - i * 2, h, -d / 2 + i * 2)
-    const t4 = v(-w / 2 + i * 2, h, -d / 2 + i * 2)
-    if (w - i * 4 <= 0.01 || d - i * 4 <= 0.01) {
-      if (w >= d) {
-        const r1 = v(-w / 2 + d / 2, h, 0)
-        const r2 = v(w / 2 - d / 2, h, 0)
-        faces.push([e4, e1, r1], [e2, e3, r2], [e1, e2, r2, r1], [e3, e4, r1, r2])
-      } else {
-        const r1 = v(0, h, d / 2 - w / 2)
-        const r2 = v(0, h, -d / 2 + w / 2)
-        faces.push([e1, e2, r1], [e3, e4, r2], [e2, e3, r2, r1], [e4, e1, r1, r2])
-      }
-    } else {
-      faces.push(
-        [t1, t2, t3, t4],
-        [e1, e2, m2, m1],
-        [e2, e3, m3, m2],
-        [e3, e4, m4, m3],
-        [e4, e1, m1, m4],
-        [m1, m2, t2, t1],
-        [m2, m3, t3, t2],
-        [m3, m4, t4, t3],
-        [m4, m1, t1, t4],
-      )
-    }
-  } else if (type === 'dutch') {
-    const i =
-      insets.dutchI !== undefined
-        ? insets.dutchI
-        : Math.min(baseW, baseD) * shapeRatios.dutchHipWidthRatio
-    const mh = wh + i * (tanTheta || 0)
-
-    if (w >= d) {
-      const m1 = v(-w / 2 + i, mh, d / 2 - i)
-      const m2 = v(w / 2 - i, mh, d / 2 - i)
-      const m3 = v(w / 2 - i, mh, -d / 2 + i)
-      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
-      const r1 = v(-w / 2 + i, h, 0)
-      const r2 = v(w / 2 - i, h, 0)
-
-      faces.push(
-        [e1, e2, m2, m1],
-        [e2, e3, m3, m2],
-        [e3, e4, m4, m3],
-        [e4, e1, m1, m4],
-        [m4, m1, r1],
-        [m2, m3, r2],
-        [m1, m2, r2, r1],
-        [m3, m4, r1, r2],
-      )
-    } else {
-      const m1 = v(-w / 2 + i, mh, d / 2 - i)
-      const m2 = v(w / 2 - i, mh, d / 2 - i)
-      const m3 = v(w / 2 - i, mh, -d / 2 + i)
-      const m4 = v(-w / 2 + i, mh, -d / 2 + i)
-      const r1 = v(0, h, d / 2 - i)
-      const r2 = v(0, h, -d / 2 + i)
-
-      faces.push(
-        [e1, e2, m2, m1],
-        [e2, e3, m3, m2],
-        [e3, e4, m4, m3],
-        [e4, e1, m1, m4],
-        [m1, m2, r1],
-        [m3, m4, r2],
-        [m2, m3, r2, r1],
-        [m4, m1, r1, r2],
-      )
-    }
-  }
-
-  return faces
+  return best
 }
 
 function faceNormalY(face: FaceVertex[]): number {
@@ -527,15 +388,20 @@ function lineInterval(
 // down-slope direction (cos θ horizontal + −sin θ vertical). Crossing
 // them gives the outward normal ∝ (sin θ · dx, cos θ, sin θ · dz),
 // equivalently (dx · tan θ, 1, dz · tan θ) un-normalised.
-function buildSlopeNormal(dx: number, dz: number, tan: number): THREE.Vector3 {
-  return new THREE.Vector3(dx * tan, 1, dz * tan).normalize()
+function buildSlopeNormal(dx: number, dz: number, tan: number, out: THREE.Vector3): THREE.Vector3 {
+  return out.set(dx * tan, 1, dz * tan).normalize()
 }
 
-export function getAnalyticalNormal(lx: number, lz: number, seg: RoofSegmentNode): THREE.Vector3 {
+export function getAnalyticalNormal(
+  lx: number,
+  lz: number,
+  seg: RoofSegmentNode,
+  out = new THREE.Vector3(),
+): THREE.Vector3 {
   const { roofType, depth, width } = seg
   const slope = getSegmentSlopeFrame(seg)
   if (slope.activeRh === 0 || slope.tanTheta === 0) {
-    return new THREE.Vector3(0, 1, 0)
+    return out.set(0, 1, 0)
   }
   const primaryTan = slope.tanTheta
   const halfW = width / 2
@@ -557,15 +423,15 @@ export function getAnalyticalNormal(lx: number, lz: number, seg: RoofSegmentNode
         const upperRise = slope.activeRh * (1 - lowerHeightRatio)
         const upperRun = mz
         const upperTan = upperRun > 0 ? upperRise / upperRun : 0
-        return buildSlopeNormal(0, lz >= 0 ? 1 : -1, upperTan)
+        return buildSlopeNormal(0, lz >= 0 ? 1 : -1, upperTan, out)
       }
     }
-    return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan)
+    return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan, out)
   }
 
   // Single slope falling toward +Z (ridge at -Z, eave at +Z).
   if (roofType === 'shed') {
-    return buildSlopeNormal(0, 1, primaryTan)
+    return buildSlopeNormal(0, 1, primaryTan, out)
   }
 
   // 4-sided slopes: the dominant axis chooses which face the point sits
@@ -574,10 +440,9 @@ export function getAnalyticalNormal(lx: number, lz: number, seg: RoofSegmentNode
   // ends and gable sides — both share the same primaryTan from the
   // slope frame, so directional dispatch is enough.
   if (roofType === 'hip') {
-    const fx = halfW > 0 ? Math.abs(lx) / halfW : 0
-    const fz = halfD > 0 ? Math.abs(lz) / halfD : 0
-    if (fz >= fx) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan)
-    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, primaryTan)
+    const onZ = (halfD > 0 ? Math.abs(lz) / halfD : 0) >= (halfW > 0 ? Math.abs(lx) / halfW : 0)
+    if (onZ) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan, out)
+    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, primaryTan, out)
   }
 
   if (roofType === 'mansard') {
@@ -597,21 +462,49 @@ export function getAnalyticalNormal(lx: number, lz: number, seg: RoofSegmentNode
       const topRun = Math.max(0, Math.min(halfW, halfD) - inset)
       tan = topRun > 0 ? topRise / topRun : 0
     }
-    if (onZ) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, tan)
-    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, tan)
+    if (onZ) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, tan, out)
+    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, tan, out)
   }
 
   if (roofType === 'dutch') {
-    // Hip on the short-axis ends, gable on the long-axis sides. Both
-    // share the primary pitch on their primary (eave-band) face, so the
-    // approximation collapses to "pick the dominant axis."
-    const fx = halfW > 0 ? Math.abs(lx) / halfW : 0
-    const fz = halfD > 0 ? Math.abs(lz) / halfD : 0
-    if (fz >= fx) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan)
-    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, primaryTan)
+    const inset =
+      Math.min(width, depth) * (seg.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio)
+    const heightRatio = seg.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio
+    const lengthRatio = seg.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
+    const lowerRise = slope.activeRh * heightRatio
+
+    if (width >= depth) {
+      const waistHalfX = Math.max(0, (halfW - inset) * lengthRatio)
+      const waistHalfZ = Math.max(0, halfD - inset)
+      if (Math.abs(lx) <= waistHalfX && Math.abs(lz) <= waistHalfZ) {
+        const topRise = slope.activeRh * (1 - heightRatio)
+        const topTan = waistHalfZ > 0 ? topRise / waistHalfZ : 0
+        return buildSlopeNormal(0, lz >= 0 ? 1 : -1, topTan, out)
+      }
+
+      const xRun = Math.max(0.0001, halfW - waistHalfX)
+      const zRun = Math.max(0.0001, halfD - waistHalfZ)
+      const xTan = Math.abs(lx) > waistHalfX ? lowerRise / xRun : 0
+      const zTan = Math.abs(lz) > waistHalfZ ? lowerRise / zRun : 0
+      return out.set((lx >= 0 ? 1 : -1) * xTan, 1, (lz >= 0 ? 1 : -1) * zTan).normalize()
+    }
+
+    const waistHalfX = Math.max(0, halfW - inset)
+    const waistHalfZ = Math.max(0, (halfD - inset) * lengthRatio)
+    if (Math.abs(lx) <= waistHalfX && Math.abs(lz) <= waistHalfZ) {
+      const topRise = slope.activeRh * (1 - heightRatio)
+      const topTan = waistHalfX > 0 ? topRise / waistHalfX : 0
+      return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, topTan, out)
+    }
+
+    const xRun = Math.max(0.0001, halfW - waistHalfX)
+    const zRun = Math.max(0.0001, halfD - waistHalfZ)
+    const xTan = Math.abs(lx) > waistHalfX ? lowerRise / xRun : 0
+    const zTan = Math.abs(lz) > waistHalfZ ? lowerRise / zRun : 0
+    return out.set((lx >= 0 ? 1 : -1) * xTan, 1, (lz >= 0 ? 1 : -1) * zTan).normalize()
   }
 
-  return new THREE.Vector3(0, 1, 0)
+  return out.set(0, 1, 0)
 }
 
 // ─── Quaternion helper ───────────────────────────────────────────────
@@ -628,8 +521,7 @@ export function surfaceQuatFromNormal(normal: THREE.Vector3, out: THREE.Quaterni
   // depending on which slope they sit on, and registry chevrons end up
   // anchored to the wrong edge. Projecting +X keeps the basis stable
   // across slope-flips that share the same X axis.
-  const wx = new THREE.Vector3(1, 0, 0)
-  const right = wx.sub(normal.clone().multiplyScalar(new THREE.Vector3(1, 0, 0).dot(normal)))
+  const right = _surfaceQuatRight.set(1, 0, 0).addScaledVector(normal, -normal.x)
   if (right.lengthSq() < 1e-6) {
     // Degenerate: normal is parallel to ±X. Fall back to +Z so the basis
     // is still well-defined; this is the wall-like edge case (vertical
@@ -638,9 +530,9 @@ export function surfaceQuatFromNormal(normal: THREE.Vector3, out: THREE.Quaterni
   } else {
     right.normalize()
   }
-  const forward = new THREE.Vector3().crossVectors(right, normal).normalize()
-  const m = new THREE.Matrix4().makeBasis(right, normal, forward)
-  return out.setFromRotationMatrix(m)
+  _surfaceQuatForward.crossVectors(right, normal).normalize()
+  _surfaceQuatMatrix.makeBasis(right, normal, _surfaceQuatForward)
+  return out.setFromRotationMatrix(_surfaceQuatMatrix)
 }
 
 // Yaw (about the surface normal, composed AFTER `surfaceQuatFromNormal`)
@@ -650,7 +542,7 @@ export function surfaceQuatFromNormal(normal: THREE.Vector3, out: THREE.Quaterni
 // → 0, −Z → π, +X → +π/2, −X → −π/2. Kept next to `surfaceQuatFromNormal`
 // so the two stay in lockstep — the formula is only valid for its basis.
 export function getDownSlopeYaw(lx: number, lz: number, seg: RoofSegmentNode): number {
-  const n = getAnalyticalNormal(lx, lz, seg)
+  const n = getAnalyticalNormal(lx, lz, seg, _downSlopeYawNormal)
   if (n.x === 0 && n.z === 0) return 0
   return Math.atan2(n.x * n.y, n.z)
 }

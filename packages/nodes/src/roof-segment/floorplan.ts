@@ -1,9 +1,10 @@
-import type {
-  FloorplanGeometry,
-  FloorplanPoint,
-  GeometryContext,
-  RoofNode,
-  RoofSegmentNode,
+import {
+  type FloorplanGeometry,
+  type FloorplanPoint,
+  type GeometryContext,
+  getDutchRoofMetrics,
+  type RoofNode,
+  type RoofSegmentNode,
 } from '@pascal-app/core'
 
 /**
@@ -23,7 +24,7 @@ export function buildRoofSegmentFloorplan(
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
   const roof = ctx.parent as RoofNode | null
-  if (!roof || roof.type !== 'roof') return null
+  if (roof?.type !== 'roof') return null
 
   // Segment center in world coords. Floor-plan plots at `-rotation` so
   // SVG's CW-with-y-down `rotate` direction ends up matching Three.js
@@ -285,30 +286,19 @@ export function getRoofSegmentPlanLinework(node: RoofSegmentNode): {
       break
     }
     case 'dutch': {
-      // Hipped lower skirt (eave corners → waist corners) + the gablet
-      // fold, then a gable-style ridge on top of the waist.
-      const i = Math.min(node.width, node.depth) * node.dutchHipWidthRatio
-      if (hw - i > 0.02 && hd - i > 0.02) {
-        const w1: PlanPt = [-hw + i, hd - i]
-        const w2: PlanPt = [hw - i, hd - i]
-        const w3: PlanPt = [hw - i, -hd + i]
-        const w4: PlanPt = [-hw + i, -hd + i]
-        hips.push([e1, w1], [e2, w2], [e3, w3], [e4, w4])
-        breaks.push([w1, w2], [w2, w3], [w3, w4], [w4, w1])
-        if (node.width >= node.depth) {
-          const r1: PlanPt = [-hw + i, 0]
-          const r2: PlanPt = [hw - i, 0]
-          ridges.push([r1, r2])
-          hips.push([w1, r1], [w4, r1], [w2, r2], [w3, r2])
-        } else {
-          const r1: PlanPt = [0, hd - i]
-          const r2: PlanPt = [0, -hd + i]
-          ridges.push([r1, r2])
-          hips.push([w1, r1], [w2, r1], [w3, r2], [w4, r2])
-        }
-      } else {
+      const metrics = getDutchRoofMetrics(node)
+      if (!(metrics.waistHalfX > 0.02 && metrics.waistHalfZ > 0.02)) {
         pushHip()
+        break
       }
+
+      const w1: PlanPt = [-metrics.waistHalfX, metrics.waistHalfZ]
+      const w2: PlanPt = [metrics.waistHalfX, metrics.waistHalfZ]
+      const w3: PlanPt = [metrics.waistHalfX, -metrics.waistHalfZ]
+      const w4: PlanPt = [-metrics.waistHalfX, -metrics.waistHalfZ]
+      hips.push([e1, w1], [e2, w2], [e3, w3], [e4, w4])
+      breaks.push([w1, w2], [w2, w3], [w3, w4], [w4, w1])
+      ridges.push([metrics.ridgeStart, metrics.ridgeEnd])
       break
     }
   }

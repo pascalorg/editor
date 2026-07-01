@@ -28,6 +28,7 @@ export const RoofTreeNode = memo(function RoofTreeNode({
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
+  const setRoofHostDragArmedId = useEditor((state) => state.setRoofHostDragArmedId)
   const { drag, dropTarget } = useTreeNodeDrag()
 
   const segments = useScene(
@@ -57,8 +58,11 @@ export const RoofTreeNode = memo(function RoofTreeNode({
       if (!handled && useEditor.getState().phase === 'furnish') {
         useEditor.getState().setPhase('structure')
       }
+      if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
+        setRoofHostDragArmedId(nodeId)
+      }
     },
-    [nodeId, setSelection],
+    [nodeId, setRoofHostDragArmedId, setSelection],
   )
 
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
