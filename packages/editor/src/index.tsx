@@ -155,6 +155,7 @@ export {
   snapScalarToGrid,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
+  WALL_CONNECT_SNAP_RADIUS,
   WALL_GRID_STEP,
   WALL_JOIN_SNAP_RADIUS,
   type WallDraftSnapKind,

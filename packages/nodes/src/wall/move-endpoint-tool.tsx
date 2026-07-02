@@ -31,6 +31,7 @@ import {
   useAlignmentGuides,
   useInteractionScope,
   useWallSnapIndicator,
+  WALL_CONNECT_SNAP_RADIUS,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -351,10 +352,26 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           candidates: wallAlignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,
         })
-        if (ar.snap && isMagneticSnapActive()) {
+        const magnetic = isMagneticSnapActive()
+        if (ar.snap && magnetic) {
           alignedPoint = [snappedPoint[0] + ar.snap.dx, snappedPoint[1] + ar.snap.dz]
         }
-        useAlignmentGuides.getState().set(ar.guides)
+        // Non-magnetic modes don't pull onto a guide, so only surface guides
+        // whose anchor is within connect distance — a corner shouldn't magnetise
+        // the dot from farther than any other point on the wall. See wall draft.
+        useAlignmentGuides
+          .getState()
+          .set(
+            magnetic
+              ? ar.guides
+              : ar.guides.filter(
+                  (guide) =>
+                    Math.hypot(
+                      snappedPoint[0] - guide.anchor.x,
+                      snappedPoint[1] - guide.anchor.z,
+                    ) <= WALL_CONNECT_SNAP_RADIUS,
+                ),
+          )
       } else {
         useAlignmentGuides.getState().clear()
       }

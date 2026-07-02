@@ -12,6 +12,7 @@ import {
   useScene,
   type WallMiterData,
   type WallNode,
+  wallClosesRoom,
 } from '@pascal-app/core'
 import {
   CursorSphere,
@@ -33,6 +34,7 @@ import {
   useEditor,
   useSegmentDraftChain,
   useWallSnapIndicator,
+  WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
   type WallPlanPoint,
 } from '@pascal-app/editor'
@@ -563,8 +565,22 @@ export const WallTool: React.FC = () => {
         candidates: alignmentCandidates,
         threshold: ALIGNMENT_THRESHOLD_M,
       })
-      useAlignmentGuides.getState().set(ar.guides)
-      return ar.snap && options?.applySnap !== false && isMagneticSnapActive()
+      const magnetic = isMagneticSnapActive()
+      // In non-magnetic modes nothing pulls the point onto a guide, so an
+      // axis-alignment dot on a far corner reads as a false "connect here" cue.
+      // Only surface guides whose anchor is within connect distance — the same
+      // tight range the wall-body connect uses — so a corner is no more
+      // magnetic-looking than any other point on the wall. 'lines' keeps the
+      // wider guides since its magnetic snap closes the gap.
+      const guides = magnetic
+        ? ar.guides
+        : ar.guides.filter(
+            (guide) =>
+              Math.hypot(point[0] - guide.anchor.x, point[1] - guide.anchor.z) <=
+              WALL_CONNECT_SNAP_RADIUS,
+          )
+      useAlignmentGuides.getState().set(guides)
+      return ar.snap && options?.applySnap !== false && magnetic
         ? [point[0] + ar.snap.dx, point[1] + ar.snap.dz]
         : point
     }
@@ -731,10 +747,15 @@ export const WallTool: React.FC = () => {
           return
         }
 
-        if (
+        const closedToChainStart =
           chainFirstVertex.current &&
           isWithinWallJoinSnapRadius(createdWall.end, chainFirstVertex.current)
-        ) {
+
+        // Auto-close also fires when the segment seals a room against the
+        // existing wall network (e.g. a bay closed onto the middle of another
+        // wall), not just when the chain loops back to its own start. Shares the
+        // room graph with auto slab/ceiling detection so the two never disagree.
+        if (closedToChainStart || wallClosesRoom(getCurrentLevelWalls(), createdWall)) {
           stopDrafting()
           return
         }

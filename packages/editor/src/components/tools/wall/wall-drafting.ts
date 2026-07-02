@@ -20,6 +20,7 @@ import {
   findWallSnapTarget,
   findWallSpecialPointSnap,
   projectPointOntoWall,
+  WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
   type WallDraftSnapResult,
   type WallPlanPoint,
@@ -30,6 +31,7 @@ import {
 // existing importers (fence drafting, the editor barrel) keep their paths.
 export {
   findWallSnapTarget,
+  WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
   type WallDraftSnapKind,
   type WallDraftSnapResult,
@@ -378,7 +380,27 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
       radius: snapRadii?.wall,
     })
     if (wallSnap) return { point: wallSnap, snap: 'wall' }
+    return { point: basePoint, snap: null }
   }
+
+  // Non-magnetic modes (grid / off / angles): connectivity still sticks so a
+  // room can close, but only within a tight radius — placement elsewhere is left
+  // to the mode (grid quantise / angle lock / free). Snap from the already
+  // positioned `basePoint` so the mode's placement is respected right up to the
+  // wall, then the last few cm stick onto it (and the beacon shows).
+  const connectRadii: WallSnapRadii = {
+    endpoint: WALL_CONNECT_SNAP_RADIUS,
+    midpoint: WALL_CONNECT_SNAP_RADIUS,
+    intersection: WALL_CONNECT_SNAP_RADIUS,
+    wall: WALL_CONNECT_SNAP_RADIUS,
+  }
+  const connectSpecial = findWallSpecialPointSnap(basePoint, walls, ignoreWallIds, connectRadii)
+  if (connectSpecial) return connectSpecial
+  const connectWall = findWallSnapTarget(basePoint, walls, {
+    ignoreWallIds,
+    radius: WALL_CONNECT_SNAP_RADIUS,
+  })
+  if (connectWall) return { point: connectWall, snap: 'wall' }
 
   return { point: basePoint, snap: null }
 }

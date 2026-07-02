@@ -7,6 +7,8 @@ import {
   WallNode as WallSchema,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import useEditor from '../../../store/use-editor'
+import useInteractionScope from '../../../store/use-interaction-scope'
 import { createWallOnCurrentLevel, snapWallDraftPointDetailed } from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'
 
@@ -60,6 +62,14 @@ describe('createWallOnCurrentLevel', () => {
         selectedIds: [],
       },
     } as never)
+    // The commit-time corner-join / wall-split is a magnetic ('lines') snap, so
+    // these cases only apply in a magnetic context. A reshaping-endpoint scope
+    // resolves to the 'wall' context without needing the node registry (which
+    // isn't loaded in this package's tests).
+    useEditor.getState().setSnappingMode('wall', 'lines')
+    useInteractionScope
+      .getState()
+      .begin({ kind: 'reshaping', nodeId: 'wall_a', reshape: 'endpoint' })
     seedLevel([makeWall([0, 0], [4, 0], 'wall_a')])
   })
 
