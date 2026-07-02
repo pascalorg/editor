@@ -1,4 +1,5 @@
 import type { SnapProfile } from '@pascal-app/core'
+import { GROUP_MOVE_DRAG_LABEL } from './contextual-help'
 
 /**
  * Snapping mode is a single global, user-cyclable control that maps onto the
@@ -133,7 +134,14 @@ function contextForProfile(
  * Returns null when nothing snappable is active → no chip, safe-default snap.
  */
 export function snapContextOf(args: {
-  scope: { kind: string; nodeType?: string; reshape?: string; nodeId?: string; tool?: string }
+  scope: {
+    kind: string
+    nodeType?: string
+    reshape?: string
+    nodeId?: string
+    tool?: string
+    handle?: string
+  }
   mode: string
   tool: string | null
   profileOf: (typeOrTool: string) => SnapProfile | undefined
@@ -143,6 +151,12 @@ export function snapContextOf(args: {
   draftDirectionalOf?: (typeOrTool: string) => boolean
 }): SnapContext | null {
   const { scope, mode, tool, profileOf, draftDirectionalOf } = args
+  // The group-move gizmo translates the whole selection — same no-angle
+  // treatment as a single-node move, so Shift cycles the 'item' modes and the
+  // HUD shows the item snapping chips for the drag.
+  if (scope.kind === 'handle-drag' && scope.handle === GROUP_MOVE_DRAG_LABEL) {
+    return 'item'
+  }
   switch (scope.kind) {
     case 'placing':
     case 'moving':

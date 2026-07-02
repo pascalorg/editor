@@ -3,6 +3,9 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  bboxCornerAnchors,
+  collectAlignmentAnchors,
+  resolveAlignment,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -11,9 +14,18 @@ import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrthographicCamera, Plane, Vector2, Vector3 } from 'three'
+import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import useEditor from '../../store/use-editor'
-import { useMovingNode } from '../../store/use-interaction-scope'
+import useAlignmentGuides from '../../store/use-alignment-guides'
+import useEditor, {
+  isAlignmentGuideActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
+} from '../../store/use-editor'
+import useInteractionScope, {
+  useActiveHandleDrag,
+  useMovingNode,
+} from '../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import {
   CORNER_OFFSET,
@@ -33,6 +45,10 @@ import {
   useArrowMaterial,
 } from './node-arrow-handles'
 
+// Figma-style alignment-snap threshold (meters) — same pull distance as the
+// single-node registry move.
+const ALIGNMENT_THRESHOLD_M = 0.08
+
 /**
  * Group-move gizmo — the 4-way cross sibling of `GroupRotateHandle`. When 2+
  * transformable nodes are selected, a single move cross appears at the
@@ -46,6 +62,7 @@ export function GroupMoveHandle() {
   const levelId = useViewer((s) => s.selection.levelId)
   const mode = useEditor((s) => s.mode)
   const movingNode = useMovingNode()
+  const activeHandleDrag = useActiveHandleDrag()
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
   const nodes = useScene((s) => s.nodes)
 
@@ -65,7 +82,13 @@ export function GroupMoveHandle() {
   )
 
   const shouldRender =
-    participantIds.length >= 2 && mode !== 'delete' && !movingNode && !isFloorplanHovered
+    participantIds.length >= 2 &&
+    mode !== 'delete' &&
+    !movingNode &&
+    !isFloorplanHovered &&
+    // Hide while the sibling rotate gizmo drags the group — the frozen corner
+    // this handle would sit at goes stale as the group spins under it.
+    activeHandleDrag?.label !== GROUP_ROTATE_DRAG_LABEL
 
   if (!shouldRender) return null
   return <GroupMoveHandleInner ids={fullIds} key={fullIds.join(',')} />
@@ -152,12 +175,41 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
     sfxEmitter.emit('sfx:item-pick')
     useViewer.getState().setInputDragging(true)
     useScene.temporal.getState().pause()
+    useInteractionScope.getState().begin({
+      kind: 'handle-drag',
+      nodeId: ids[0] ?? '',
+      handle: GROUP_MOVE_DRAG_LABEL,
+    })
     setIsDragging(true)
 
-    // Snap the slide to the active grid step so the group lands on the grid
-    // (Shift bypasses for free movement). Snapping the delta keeps the
-    // selection's internal layout intact — grid-aligned items stay aligned.
-    const step = useEditor.getState().gridSnapStep
+    // Alignment candidates — anchors of everything OUTSIDE the moving set
+    // (selection + welded neighbours), level-scoped, in the same level frame
+    // the deltas are computed in. Gathered once at drag start like the
+    // single-node move; the scene graph is stable during the drag.
+    const movingIds = new Set<string>([...starts.map((s) => s.id), ...links.map((l) => l.id)])
+    const staticNodes: Record<string, AnyNode> = {}
+    for (const [nid, n] of Object.entries(useScene.getState().nodes)) {
+      if (n && !movingIds.has(nid)) staticNodes[nid] = n
+    }
+    const alignmentCandidates = collectAlignmentAnchors(staticNodes, '', levelId)
+
+    // The group aligns as one rigid footprint: its bbox corners + center are
+    // the moving anchors, seeded from the rest box and shifted by the live
+    // delta each move.
+    const restBox = computeGroupBox(ids)
+    const boxMin = restBox ? restBox.min.clone().applyMatrix4(frameInv) : null
+    const boxMax = restBox ? restBox.max.clone().applyMatrix4(frameInv) : null
+    const restAnchors =
+      boxMin && boxMax
+        ? bboxCornerAnchors(
+            'group-move',
+            Math.min(boxMin.x, boxMax.x),
+            Math.min(boxMin.z, boxMax.z),
+            Math.max(boxMin.x, boxMax.x),
+            Math.max(boxMin.z, boxMax.z),
+          )
+        : []
+
     let lastSnap: Vec2 | null = null
 
     const onMove = (e: PointerEvent) => {
@@ -166,13 +218,38 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
       const moveHit = new Vector3()
       if (!raycaster.ray.intersectPlane(plane, moveHit)) return
       const moveLocal = moveHit.applyMatrix4(frameInv)
-      const snap = !e.shiftKey && step > 0
-      const dx = snap
+      // Snap the slide to the active grid step so the group lands on the grid.
+      // Mode-driven like single-item moves: the drag's `handle-drag` scope
+      // resolves to the 'item' snap context, so Shift cycles the snapping mode
+      // and Ctrl the grid step — both read live per move so a mid-drag cycle
+      // applies immediately. Snapping the delta keeps the selection's internal
+      // layout intact — grid-aligned items stay aligned.
+      const step = useEditor.getState().gridSnapStep
+      const snap = isGridSnapActive() && step > 0
+      let dx = snap
         ? Math.round((moveLocal.x - startLocal.x) / step) * step
         : moveLocal.x - startLocal.x
-      const dz = snap
+      let dz = snap
         ? Math.round((moveLocal.z - startLocal.z) / step) * step
         : moveLocal.z - startLocal.z
+
+      // Figma-style alignment layered on top, mirroring the single-node move:
+      // guides are DISPLAYED in every mode except Off; the magnetic pull
+      // toward them applies only in 'lines' mode.
+      if (isAlignmentGuideActive() && alignmentCandidates.length > 0 && restAnchors.length > 0) {
+        const result = resolveAlignment({
+          moving: restAnchors.map((a) => ({ ...a, x: a.x + dx, z: a.z + dz })),
+          candidates: alignmentCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (result.snap && isMagneticSnapActive()) {
+          dx += result.snap.dx
+          dz += result.snap.dz
+        }
+        useAlignmentGuides.getState().set(result.guides)
+      } else {
+        useAlignmentGuides.getState().clear()
+      }
 
       // Ticker on each grid-cell crossing, like single-item placement.
       if (snap && (!lastSnap || lastSnap[0] !== dx || lastSnap[1] !== dz)) {
@@ -241,8 +318,12 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
       if (document.body.style.cursor === 'grabbing') document.body.style.cursor = ''
+      useAlignmentGuides.getState().clear()
       useScene.temporal.getState().resume()
       useViewer.getState().setInputDragging(false)
+      useInteractionScope
+        .getState()
+        .endIf((s) => s.kind === 'handle-drag' && s.handle === GROUP_MOVE_DRAG_LABEL)
       setIsDragging(false)
       setLiveDelta([0, 0])
       frozenCorner.current = null
