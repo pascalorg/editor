@@ -695,10 +695,36 @@ export type FloorplanMoveTarget<N> = (args: {
 
 // ─── Plugin manifest ─────────────────────────────────────────────────
 
+/**
+ * A left-rail panel contributed by a plugin. The host adds `icon` to the
+ * sidebar icon rail; clicking it mounts `component` (lazy-loaded, behind a
+ * per-panel error boundary) in the sidebar content area. `id` is namespaced
+ * by the owning plugin id at load time, so two plugins may each declare a
+ * panel id of `'main'` without colliding. `icon` reuses {@link IconRef} so a
+ * plugin contributes a mark the same way a node's presentation does, with no
+ * React rendering in core.
+ */
+/** Host workspace a panel belongs to — `edit` (the build workspace) or
+ * `studio` (the render workspace). Manifest metadata, not core logic: the
+ * host's sidebar filters by its current workspace mode. */
+export type PanelWorkspace = 'edit' | 'studio'
+
+export type PluginPanel = {
+  id: string
+  label: string
+  icon: IconRef
+  component: LazyComponent
+  /** Workspaces that surface this panel. Default `['edit']` — a placement /
+   * authoring panel has no business in the clean render workspace; a plugin
+   * that ships studio tooling opts in explicitly. */
+  workspaces?: readonly PanelWorkspace[]
+}
+
 export type Plugin = {
   id: string
   apiVersion: 1
   nodes?: AnyNodeDefinition[]
+  panels?: PluginPanel[]
 }
 
 // ─── NodeDefinition ──────────────────────────────────────────────────
@@ -725,6 +751,19 @@ export type DistributionRole = 'run' | 'fitting' | 'terminal' | 'equipment'
  *   polygon vertex). A plain translate or a curve of a structural node has no angle.
  */
 export type SnapProfile = 'item' | 'structural'
+
+/**
+ * How a kind is treated by the GLB bake and the baked `/viewer`. See
+ * plans/editor-plugin-trees-example.md → Part D.
+ * - `'static'` (default) — baked as geometry; the viewer shows the baked mesh.
+ * - `'strip'` — excluded from the bake; the viewer rebuilds it live from
+ *   `scene_graph` via the registry renderer (heavy reference assets: scans, guides).
+ * - `'replace'` — baked as *static* geometry (a plain glTF viewer still shows it),
+ *   but our viewer removes the baked meshes for this kind and re-renders the node
+ *   live from `scene_graph` — for dynamic content whose runtime look differs from a
+ *   frozen snapshot (shader wind, interactivity), rendered through its own path.
+ */
+export type BakePolicy = 'static' | 'strip' | 'replace'
 
 export type NodeDefinition<S extends ZodObject<any>> = {
   kind: string
@@ -785,6 +824,9 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   dirtyTracking?: boolean
 
+  /** GLB bake treatment for this kind (default `'static'`). See {@link BakePolicy}. */
+  bake?: BakePolicy
+
   /**
    * Renderer for this kind. Optional under the three-checkbox composition
    * model (see `wiki/architecture/node-definitions.md`): when omitted, the
@@ -797,6 +839,17 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * already null-guard on `def.renderer` so omitting it is safe.
    */
   renderer?: RendererSource<z.infer<S>>
+  /**
+   * Collective renderer the baked `/viewer` uses to re-render this kind live when
+   * `bake === 'replace'`. It receives every node of this kind under one baked
+   * level and is portaled into that level's `Object3D`, so an instanced kind can
+   * draw them as instanced meshes in level-local space (riding level stacking for
+   * free) instead of the frozen baked meshes (which the viewer hides). Needed when
+   * the normal per-node `renderer` can't stand alone in a baked scene (e.g. an
+   * instanced kind whose `renderer` is an invisible selection proxy and whose real
+   * geometry comes from a `system`). See plans/editor-plugin-trees-example.md → Part D.
+   */
+  bakeReplaceRenderer?: BakeReplaceRenderer<z.infer<S>>
   /**
    * Pure geometry builder. When set, the framework's generic
    * `<GeometrySystem>` calls this on every dirty mark — `nodes` keyed by
@@ -1135,6 +1188,15 @@ export type RendererSource<N> =
     }
   | { kind: 'glb'; getAsset: (n: N) => AssetRef }
   | { kind: 'instanced-glb'; getAsset: (n: N) => AssetRef }
+
+/**
+ * A collective renderer for the baked `/viewer` (see `NodeDefinition.bakeReplaceRenderer`):
+ * a lazy module whose default export takes all of one level's `replace` nodes and
+ * is portaled into that baked level. Three-free indirection, same as `system`.
+ */
+export type BakeReplaceRenderer<N> = {
+  module: () => Promise<{ default: ComponentType<{ nodes: N[] }> }>
+}
 
 export type AssetRef = {
   id: string

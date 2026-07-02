@@ -1,6 +1,6 @@
 'use client'
 
-import type { AnyNode, SurfaceRole } from '@pascal-app/core'
+import { type AnyNode, bakePolicyOf, type SurfaceRole } from '@pascal-app/core'
 import { Html, useAnimations } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -8,12 +8,14 @@ import * as THREE from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
 import { color, float, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { ZONE_LAYER } from '../../lib/layers'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
 import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
 import { GlbReferenceNodes } from './glb-reference-nodes'
+import { GlbReplaceInstances } from './glb-replace-instances'
 
 /** Vertical gap added per floor in `exploded` level mode (matches LevelSystem). */
 const EXPLODED_GAP = 5
@@ -283,6 +285,7 @@ export function GlbScene({
   url,
   interactiveItems,
   referenceNodes,
+  replaceNodes,
   onLevelsChange,
   onIdentityChange,
   onHoverChange,
@@ -295,6 +298,9 @@ export function GlbScene({
   /** Scan / guide nodes from the scene graph, re-added at runtime (they're
    *  stripped from the bake). Already filtered by the privacy flags upstream. */
   referenceNodes?: AnyNode[]
+  /** `bake: 'replace'` nodes (e.g. plugin trees): baked static but re-rendered
+   *  live here via their `bakeReplaceRenderer`; the baked meshes are hidden. */
+  replaceNodes?: AnyNode[]
   onLevelsChange?: (levels: GlbLevel[]) => void
   onIdentityChange?: (identity: GlbIdentity) => void
   onHoverChange?: (hover: GlbHover) => void
@@ -333,6 +339,45 @@ export function GlbScene({
     })
   }, [gltf.scene, textures, sceneTheme])
 
+  // The baked scene isn't wrapped in <SceneBvh> (the community viewer runs with
+  // useBvh={false}), so hover/pick raycasts against the baked building were
+  // brute-force triangle tests — dozens of ms per pointer move on a dense scene,
+  // and far worse once a `replace` forest is portaled in. Give each baked mesh a
+  // BVH so those raycasts are accelerated. `replace` instances are NO_RAYCAST, so
+  // the `raycast === Mesh.prototype.raycast` guard skips them (mirrors SceneBvh).
+  useEffect(() => {
+    const accelerated = new Set<THREE.Mesh>()
+    const computed = new Set<THREE.BufferGeometry>()
+    gltf.scene.traverse((child) => {
+      const mesh = child as THREE.Mesh
+      if (!mesh.isMesh || mesh.raycast !== THREE.Mesh.prototype.raycast) return
+      mesh.raycast = acceleratedRaycast
+      accelerated.add(mesh)
+      const geometry = mesh.geometry
+      if (geometry.boundsTree || !geometry.getAttribute('position')) return
+      try {
+        // three-mesh-bvh + @types/three disagree on the helper signatures; cast
+        // through unknown like SceneBvh does — the runtime call is correct.
+        ;(geometry as { computeBoundsTree?: unknown }).computeBoundsTree =
+          computeBoundsTree as unknown as typeof geometry.computeBoundsTree
+        ;(geometry as { disposeBoundsTree?: unknown }).disposeBoundsTree =
+          disposeBoundsTree as unknown as typeof geometry.disposeBoundsTree
+        geometry.computeBoundsTree()
+        computed.add(geometry)
+      } catch (error) {
+        console.warn('[viewer] skipping BVH for baked mesh geometry', error)
+      }
+    })
+    return () => {
+      for (const geometry of computed) {
+        if (geometry.boundsTree) geometry.disposeBoundsTree()
+      }
+      for (const mesh of accelerated) {
+        if (mesh.raycast === acceleratedRaycast) mesh.raycast = THREE.Mesh.prototype.raycast
+      }
+    }
+  }, [gltf.scene])
+
   // One pass over the artifact: identity objects (id → Object3D), ordered floors,
   // and zone polygons. Levels stay out of `sceneRegistry` so the parametric
   // LevelSystem never re-stacks them.
@@ -357,6 +402,11 @@ export function GlbScene({
       }
       if (!extras.pascalId) return
       objects.set(extras.pascalId, object)
+      // `bake: 'replace'` kinds are baked as static geometry (portable), but a
+      // loaded plugin re-renders them live from the scene graph — hide the frozen
+      // baked mesh so only the live one shows. Gated on the registry, so with no
+      // plugin loaded the policy is `'static'` and the baked mesh stays.
+      if (bakePolicyOf(extras.kind ?? '') === 'replace') object.visible = false
       if (extras.kind === 'building') buildingNode = object
       else if (extras.kind === 'site') siteNode = object
       if (extras.kind === 'ceiling' || extras.kind === 'roof') occluderNodes.push(object)
@@ -1010,6 +1060,11 @@ export function GlbScene({
           anchored to their parent level's baked node. */}
       {referenceNodes?.length ? (
         <GlbReferenceNodes identity={identity} nodes={referenceNodes} />
+      ) : null}
+      {/* `bake: 'replace'` nodes (plugin trees): baked meshes hidden above, the
+          live instanced render portaled per level via each kind's bakeReplaceRenderer. */}
+      {replaceNodes?.length ? (
+        <GlbReplaceInstances identity={identity} nodes={replaceNodes} />
       ) : null}
       {/* Floating room labels. Each group's matrix is synced to its zone node
           every frame (above) so the label rides level stacking; the div fades
