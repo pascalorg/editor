@@ -94,7 +94,6 @@ export default function TreesPanel() {
 function TreesSection({ arming }: { arming: boolean }) {
   const selected = useTreesStore((s) => s.preset)
   const size = useTreesStore((s) => s.size)
-  const treeType = useTreesStore((s) => s.treeType)
   const height = useTreesStore((s) => s.height)
   const foliageDensity = useTreesStore((s) => s.foliageDensity)
   const trunkThickness = useTreesStore((s) => s.trunkThickness)
@@ -109,8 +108,8 @@ function TreesSection({ arming }: { arming: boolean }) {
   return (
     <>
       <PresetGrid items={TREE_PRESET_LIST} onPick={activate} selected={arming ? selected : null} />
-      <div className="flex flex-col gap-2">
-        {selected !== 'trellis' && (
+      {selected !== 'trellis' && (
+        <div className="flex flex-col gap-2">
           <SegmentedControl
             onChange={useTreesStore.getState().setSize}
             options={[
@@ -120,16 +119,8 @@ function TreesSection({ arming }: { arming: boolean }) {
             ]}
             value={size}
           />
-        )}
-        <SegmentedControl
-          onChange={useTreesStore.getState().setTreeType}
-          options={[
-            { label: 'Deciduous', value: 'deciduous' },
-            { label: 'Evergreen', value: 'evergreen' },
-          ]}
-          value={treeType}
-        />
-      </div>
+        </div>
+      )}
       <div className="flex flex-col gap-0.5">
         <SliderControl
           label="Height"

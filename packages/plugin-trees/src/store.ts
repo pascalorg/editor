@@ -4,7 +4,7 @@ import type { FlowerPreset } from './flower-schema'
 import { GRASS_PRESETS } from './grass-presets'
 import type { GrassPreset } from './grass-schema'
 import { defaultHeightOf, TREE_PRESETS } from './presets'
-import type { TreePreset, TreeSize, TreeType } from './schema'
+import type { TreePreset, TreeSize } from './schema'
 
 /**
  * The plugin's own module-level state — the example of "plugins self-manage
@@ -16,7 +16,6 @@ import type { TreePreset, TreeSize, TreeType } from './schema'
 type TreesStore = {
   preset: TreePreset
   size: TreeSize
-  treeType: TreeType
   /** Height (m) of the next tree — a per-instance scale, never affects placed trees. */
   height: number
   /** Leaf-count multiplier vs the preset (folded into the instancing variant). */
@@ -27,7 +26,6 @@ type TreesStore = {
   leafless: boolean
   setPreset: (preset: TreePreset) => void
   setSize: (size: TreeSize) => void
-  setTreeType: (treeType: TreeType) => void
   setHeight: (height: number) => void
   setFoliageDensity: (value: number) => void
   setTrunkThickness: (value: number) => void
@@ -47,16 +45,15 @@ type TreesStore = {
 export const useTreesStore = create<TreesStore>((set, get) => ({
   preset: 'oak',
   size: 'medium',
-  treeType: 'deciduous',
   height: TREE_PRESETS.oak.height.medium,
   foliageDensity: 1,
   trunkThickness: 1,
   leafless: false,
   // Switching preset/size re-seeds the height to that combo's natural default;
-  // the foliage/trunk/type brush settings carry over.
+  // the foliage/trunk brush settings carry over. Growth model comes from the
+  // preset (oak → deciduous, pine → evergreen); override per-tree in the inspector.
   setPreset: (preset) => set({ preset, height: defaultHeightOf(preset, get().size) }),
   setSize: (size) => set({ size, height: defaultHeightOf(get().preset, size) }),
-  setTreeType: (treeType) => set({ treeType }),
   setHeight: (height) => set({ height }),
   setFoliageDensity: (foliageDensity) => set({ foliageDensity }),
   setTrunkThickness: (trunkThickness) => set({ trunkThickness }),

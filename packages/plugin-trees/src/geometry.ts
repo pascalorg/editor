@@ -22,18 +22,19 @@ export type TreeSpec = Pick<
 >
 
 export function treeSpecOf(node: TreeNode): TreeSpec {
-  // Default every field — nodes persisted before a field existed load without
-  // it, so the renderer must tolerate partial trees (no runtime schema re-parse).
+  // Default the non-override fields (nodes persisted before a field existed load
+  // without it). The four overrides are left as-is — `undefined` means "inherit
+  // the ez-tree preset" (its own seed/type/tints), resolved in `generateTree`.
   return {
     preset: node.preset ?? 'oak',
     size: node.size ?? 'medium',
-    treeType: node.treeType ?? 'deciduous',
-    seed: node.seed ?? 1,
+    treeType: node.treeType,
+    seed: node.seed,
     foliageDensity: node.foliageDensity ?? 1,
     trunkThickness: node.trunkThickness ?? 1,
     leafless: node.leafless ?? false,
-    leafColor: node.leafColor ?? '#ffffff',
-    branchColor: node.branchColor ?? '#ffffff',
+    leafColor: node.leafColor,
+    branchColor: node.branchColor,
   }
 }
 
@@ -60,18 +61,19 @@ function hexToInt(hex: string | undefined): number {
 
 /**
  * Generate an ez-tree for a spec. ez-tree's `Tree` is a `THREE.Group`; textures
- * are inlined in the library (no asset hosting). The curated inspector params
- * map onto ez-tree options after the preset loads: size picks the preset family
- * member, `treeType` swaps the growth model, trunk thickness scales every branch
- * radius, foliage density scales the leaf count (`leafless` zeroes it), and the
- * colours drive the bark/leaf tints. Pure given its inputs — same spec ⇒ same
- * tree — which is what lets the renderer cache one generation per variant.
+ * are inlined in the library (no asset hosting). `loadPreset` owns the full look
+ * (seed, growth model, tints, branch/leaf structure); the curated params then
+ * apply *on top* — but only where the node actually set them, so an unset field
+ * keeps the preset's value (its canonical silhouette/colours). `trunkThickness`
+ * and `foliageDensity` are multipliers (1 = preset default). Pure given its
+ * inputs — same spec ⇒ same tree — which lets the renderer cache one generation
+ * per variant.
  */
 export function generateTree(spec: TreeSpec): Tree {
   const tree = new Tree()
   tree.loadPreset(ezPresetOf(spec.preset, spec.size))
-  tree.options.seed = spec.seed
-  ;(tree.options as { type: string }).type = spec.treeType
+  if (spec.seed != null) tree.options.seed = spec.seed
+  if (spec.treeType != null) (tree.options as { type: string }).type = spec.treeType
 
   const radius = tree.options.branch.radius as unknown as Record<string, number>
   for (const level of Object.keys(radius)) {
@@ -81,8 +83,9 @@ export function generateTree(spec: TreeSpec): Tree {
 
   const leaves = tree.options.leaves as { count: number; tint: number }
   leaves.count = spec.leafless ? 0 : Math.round(leaves.count * spec.foliageDensity)
-  leaves.tint = hexToInt(spec.leafColor)
-  ;(tree.options.bark as { tint: number }).tint = hexToInt(spec.branchColor)
+  if (spec.leafColor != null) leaves.tint = hexToInt(spec.leafColor)
+  if (spec.branchColor != null)
+    (tree.options.bark as { tint: number }).tint = hexToInt(spec.branchColor)
 
   tree.generate()
   return tree

@@ -32,9 +32,15 @@ export const TreeNode = BaseNode.extend({
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   preset: TreePreset.default('oak'),
   size: TreeSize.default('medium'),
-  treeType: TreeType.default('deciduous'),
+  // Overrides — all optional so an unset field inherits the ez-tree preset (its
+  // own seed/type/tints), exactly like flower `petalColor`. Placing a tree stores
+  // none of these, so a fresh tree is the pure preset; the inspector sets them.
+  /** Growth-model override. Unset ⇒ inherit the preset (oak → deciduous, pine → evergreen). */
+  treeType: TreeType.optional(),
   height: z.number().positive().default(7),
-  seed: z.number().int().default(1),
+  /** Geometry-seed override. Unset ⇒ the preset's own seed (its canonical silhouette);
+   *  set (e.g. via Randomize) to vary the tree. */
+  seed: z.number().int().optional(),
   // Curated geometry params (folded into the instancing variant key):
   /** Leaf-count multiplier vs the preset (1 = preset default). */
   foliageDensity: z.number().min(0).max(1.5).default(1),
@@ -42,10 +48,10 @@ export const TreeNode = BaseNode.extend({
   trunkThickness: z.number().min(0.3).max(2.5).default(1),
   /** Strip all leaves — a bare winter silhouette. */
   leafless: z.boolean().default(false),
-  /** Leaf tint (hex). `#ffffff` = neutral — shows the ez-tree texture as-is. */
-  leafColor: z.string().default('#ffffff'),
-  /** Bark/branch tint (hex). `#ffffff` = neutral. */
-  branchColor: z.string().default('#ffffff'),
+  /** Leaf tint override (hex). Unset ⇒ the preset's leaf tint. */
+  leafColor: z.string().optional(),
+  /** Bark/branch tint override (hex). Unset ⇒ the preset's bark tint. */
+  branchColor: z.string().optional(),
 })
 
 export type TreeNode = z.infer<typeof TreeNode>

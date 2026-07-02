@@ -5,7 +5,6 @@ import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useMemo } from 'react'
 import { usePlacement } from './placement'
-import { TREE_SEED_POOL } from './presets'
 import TreePreview from './preview'
 import { TreeNode } from './schema'
 import { useTreesStore } from './store'
@@ -25,19 +24,17 @@ export default function TreeTool() {
       TreeNode.parse({
         preset: brush.preset,
         size: brush.size,
-        treeType: brush.treeType,
         height: brush.height,
         foliageDensity: brush.foliageDensity,
         trunkThickness: brush.trunkThickness,
         leafless: brush.leafless,
-        seed: 1,
+        // seed/treeType left unset → the ghost shows the pure preset, as placed.
         position: [0, 0, 0],
         rotation: [0, 0, 0],
       }),
     [
       brush.preset,
       brush.size,
-      brush.treeType,
       brush.height,
       brush.foliageDensity,
       brush.trunkThickness,
@@ -51,14 +48,14 @@ export default function TreeTool() {
     const tree = TreeNode.parse({
       preset: s.preset,
       size: s.size,
-      treeType: s.treeType,
       height: s.height,
       foliageDensity: s.foliageDensity,
       trunkThickness: s.trunkThickness,
       leafless: s.leafless,
-      // Bounded pool so placed trees share instancing variants; random Y
-      // rotation keeps a planted row from looking cloned.
-      seed: TREE_SEED_POOL[Math.floor(Math.random() * TREE_SEED_POOL.length)] ?? 1,
+      // seed/treeType unset → the pure ez-tree preset (its canonical seed + type).
+      // All same-preset trees then share one instancing variant; a random Y
+      // rotation keeps a planted row from looking cloned. Use Randomize (inspector)
+      // to vary a tree's seed.
       position,
       rotation: [0, Math.random() * Math.PI * 2, 0],
     })
