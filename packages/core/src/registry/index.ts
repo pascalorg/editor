@@ -100,6 +100,7 @@ export type {
   PaintPatchArgs,
   PaintPreviewArgs,
   PaintResolveArgs,
+  PanelWorkspace,
   ParamAction,
   ParametricDescriptor,
   ParamField,

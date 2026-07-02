@@ -3,6 +3,7 @@
 import { Icon } from '@iconify/react'
 import { type IconRef, panelRegistry, type PluginPanel } from '@pascal-app/core'
 import { type ComponentType, lazy, type ReactNode, Suspense, useSyncExternalStore } from 'react'
+import useEditor from '../../../store/use-editor'
 import { ErrorBoundary } from '../primitives/error-boundary'
 import type { ExtraPanel } from './icon-rail'
 
@@ -69,6 +70,10 @@ function resolvePanelComponent(panel: PluginPanel): ComponentType {
  * panel-content area render. Host panels keep their leading order and win on id
  * collisions. Subscribes to the registry so a panel that registers after the
  * first render (plugin discovery is async) makes the rail re-render.
+ *
+ * Panels are filtered by the current workspace: a panel surfaces only in the
+ * workspaces it declares (`PluginPanel.workspaces`, default `['edit']`), so an
+ * authoring panel like Nature doesn't ride into the studio rail.
  */
 export function usePluginPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
   const registered = useSyncExternalStore(
@@ -76,9 +81,10 @@ export function usePluginPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
     panelRegistry.getSnapshot,
     panelRegistry.getSnapshot,
   )
+  const workspaceMode = useEditor((s) => s.workspaceMode)
   const hostIds = new Set(hostPanels?.map((p) => p.id))
   const fromRegistry = registered
-    .filter((p) => !hostIds.has(p.id))
+    .filter((p) => !hostIds.has(p.id) && (p.workspaces ?? ['edit']).includes(workspaceMode))
     .map(
       (p): ExtraPanel => ({
         id: p.id,

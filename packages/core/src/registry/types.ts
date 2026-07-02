@@ -704,11 +704,20 @@ export type FloorplanMoveTarget<N> = (args: {
  * plugin contributes a mark the same way a node's presentation does, with no
  * React rendering in core.
  */
+/** Host workspace a panel belongs to — `edit` (the build workspace) or
+ * `studio` (the render workspace). Manifest metadata, not core logic: the
+ * host's sidebar filters by its current workspace mode. */
+export type PanelWorkspace = 'edit' | 'studio'
+
 export type PluginPanel = {
   id: string
   label: string
   icon: IconRef
   component: LazyComponent
+  /** Workspaces that surface this panel. Default `['edit']` — a placement /
+   * authoring panel has no business in the clean render workspace; a plugin
+   * that ships studio tooling opts in explicitly. */
+  workspaces?: readonly PanelWorkspace[]
 }
 
 export type Plugin = {
