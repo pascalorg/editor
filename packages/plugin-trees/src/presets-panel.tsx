@@ -252,7 +252,7 @@ function PresetGrid<T extends string>({
             <img
               alt=""
               aria-hidden
-              className="h-16 w-full rounded-lg object-cover ring-1 ring-black/10 transition-transform group-hover:scale-[1.02]"
+              className="aspect-square w-full rounded-lg bg-[#f3f4f6] object-cover ring-1 ring-black/10 transition-transform group-hover:scale-[1.02]"
               src={item.thumbnail}
             />
             <span className="pl-0.5 font-medium text-xs">{item.label}</span>
