@@ -3,6 +3,7 @@
 import {
   type AnyNodeId,
   sceneRegistry,
+  useLiveNodeOverrides,
   useLiveTransforms,
   useRegistry,
   useScene,
@@ -257,11 +258,16 @@ export function KindProxy<N extends Placeable & { id: string }>({
 
   // Live drag transform — the move tool writes the same absolute position
   // imperatively to the registered group; applying it React-side too keeps the
-  // two in agreement (and moves the collider along with the drag).
+  // two in agreement (and moves the collider along with the drag). The rotate /
+  // resize gizmos publish through `useLiveNodeOverrides` instead — fold that in
+  // too (mirrors ParametricNodeRenderer) so the plant turns live mid-drag
+  // rather than snapping on commit.
   const live = useLiveTransforms((s) => s.get(node.id))
-  const basePosition = node.position ?? [0, 0, 0]
-  const baseRotation = node.rotation ?? [0, 0, 0]
-  const position = live?.position ?? basePosition
+  const liveOverride = useLiveNodeOverrides((s) => s.overrides.get(node.id))
+  const overridePosition = liveOverride?.position as [number, number, number] | undefined
+  const overrideRotation = liveOverride?.rotation as [number, number, number] | undefined
+  const position = live?.position ?? overridePosition ?? node.position ?? [0, 0, 0]
+  const baseRotation = overrideRotation ?? node.rotation ?? [0, 0, 0]
   const rotation: [number, number, number] = live
     ? [baseRotation[0], live.rotation, baseRotation[2]]
     : baseRotation
