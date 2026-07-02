@@ -210,6 +210,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       startX: number
       startY: number
     } | null = null
+    // The wall the window was grabbed from. Nulled the first time the anchor
+    // seeds on any other host: the grab offset is then forgotten for good.
+    let grabWallId: string | null = movingWindowNode.parentId
     let lastTarget: {
       wallNode: WallEvent['node']
       wallId: string
@@ -306,13 +309,17 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       const rawLocalX = event.localPosition[0]
       const rawLocalY = event.localPosition[1]
       if (!dragAnchor || dragAnchor.wallId !== event.node.id) {
+        // Grab offset survives only on the original wall and only until the
+        // window anchors on any other host — after that every wall (the
+        // original included) centers the window under the cursor.
+        const preserveGrab = event.node.id === grabWallId
+        if (!preserveGrab) grabWallId = null
         dragAnchor = {
           wallId: event.node.id,
           rawX: rawLocalX,
           rawY: rawLocalY,
-          startX: event.node.id === original.parentId ? original.position[0] : rawLocalX,
-          startY:
-            event.node.id === original.parentId ? original.position[1] : snapToHalf(rawLocalY),
+          startX: preserveGrab ? original.position[0] : rawLocalX,
+          startY: preserveGrab ? original.position[1] : snapToHalf(rawLocalY),
         }
       }
       const targetLocalX = dragAnchor.startX + (rawLocalX - dragAnchor.rawX)
