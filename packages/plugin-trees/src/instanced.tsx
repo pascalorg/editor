@@ -1,16 +1,16 @@
 'use client'
 
-import { type AnyNodeId, sceneRegistry, useRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  sceneRegistry,
+  useLiveTransforms,
+  useRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import {
-  type BufferGeometry,
-  type InstancedMesh,
-  type Material,
-  Matrix4,
-  MeshBasicMaterial,
-  Object3D,
-} from 'three'
+import { type BufferGeometry, type InstancedMesh, type Material, Matrix4, Object3D } from 'three'
+import { toStaticMaterial } from './wind-node'
 
 /**
  * Generic instanced-rendering core shared by every plant kind (trees, flowers,
@@ -33,7 +33,6 @@ export interface Placeable {
   visible?: boolean
 }
 
-const INVISIBLE = new MeshBasicMaterial({ colorWrite: false, depthWrite: false })
 const DUMMY = new Object3D()
 const INSTANCE_MATRIX = new Matrix4()
 const NO_RAYCAST = () => {}
@@ -53,10 +52,26 @@ export function InstancedKindSystem<N extends Placeable>({
   getVariant: (node: N) => VariantData
 }) {
   const scene = useScene((s) => s.nodes)
-  const nodes = useMemo(
-    () => Object.values(scene).filter((n) => (n.type as string) === kind) as unknown as N[],
-    [scene, kind],
-  )
+  const hoveredId = useViewer((s) => s.hoveredId)
+  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  // Hovered/selected plants render through their proxy instead (real geometry,
+  // static materials) so the outline matches the visible mesh and a move drag
+  // animates in realtime — skip them here to avoid a double draw. Keyed by the
+  // *relevant* ids only, so hovering unrelated kinds doesn't churn matrices.
+  const activeKey = useMemo(() => {
+    const ids: string[] = []
+    if (hoveredId && (scene[hoveredId as AnyNodeId]?.type as string) === kind) ids.push(hoveredId)
+    for (const id of selectedIds) {
+      if ((scene[id as AnyNodeId]?.type as string) === kind) ids.push(id)
+    }
+    return ids.sort().join('|')
+  }, [scene, kind, hoveredId, selectedIds])
+  const nodes = useMemo(() => {
+    const active = new Set(activeKey ? activeKey.split('|') : [])
+    return Object.values(scene).filter(
+      (n) => (n.type as string) === kind && !active.has(n.id as string),
+    ) as unknown as N[]
+  }, [scene, kind, activeKey])
   return <InstancedNodes getVariant={getVariant} nodes={nodes} variantKeyOf={variantKeyOf} />
 }
 
@@ -198,15 +213,28 @@ function InstancedSubMesh<N extends Placeable>({
 
 // ── Per-node selection proxy (a `def.renderer`) ──────────────────────────────
 
+const toStatic = (material: Material | Material[]) =>
+  Array.isArray(material) ? material.map(toStaticMaterial) : toStaticMaterial(material)
+
 /**
- * Invisible per-node proxy that keeps the host's selection machinery working
- * for an instanced kind. Outer group: a stable box collider (the raycast
- * target) + pointer handlers. Inner registered group: the real geometry —
- * invisible and mounted only while hovered/selected (so the outline pass traces
- * the true silhouette), OR **visible with real materials during a GLB export**,
- * so the exporter (which clones only the `scene-renderer` subtree, not the
- * collective InstancedMesh) captures each plant. The collider box is dropped
- * during export so it doesn't bake as a phantom solid.
+ * Per-node proxy that keeps the host's selection machinery working for an
+ * instanced kind. The registered group carries the node transform (host
+ * contract: move tools drive `sceneRegistry.nodes.get(id)` imperatively with
+ * absolute level-local positions and mirror them via `useLiveTransforms` —
+ * see `ParametricNodeRenderer`), so registering a nested child would apply
+ * drag deltas in the node's rotated frame. The box collider is a positioned
+ * sibling: the raycast target, kept out of the registered group so the
+ * outline pass (which traces the registered object) shows the true
+ * silhouette, not a box.
+ *
+ * While hovered/selected the collective system skips this node and the proxy
+ * mounts the real geometry with **static twins** of the wind materials — the
+ * outline mask renders with an override material and can't follow GPU sway,
+ * so the plant holds still while outlined and the silhouette matches exactly.
+ * During a GLB export the geometry mounts with the real materials instead, so
+ * the exporter (which clones only the `scene-renderer` subtree, not the
+ * collective InstancedMesh) captures each plant; the collider is dropped so it
+ * doesn't bake as a phantom solid.
  */
 export function KindProxy<N extends Placeable & { id: string }>({
   node,
@@ -217,15 +245,26 @@ export function KindProxy<N extends Placeable & { id: string }>({
   getVariant: (node: N) => VariantData
   colliderRadius: (node: N) => number
 }) {
-  const outlineRef = useRef<Object3D>(null!)
+  const registeredRef = useRef<Object3D>(null!)
   const handlers = useNodeEvents(node as never, node.type as never)
-  useRegistry(node.id as AnyNodeId, node.type, outlineRef)
+  useRegistry(node.id as AnyNodeId, node.type, registeredRef)
 
   const isExporting = useViewer((s) => s.isExporting)
   const active = useViewer(
     (s) => s.hoveredId === node.id || s.selection.selectedIds.includes(node.id as never),
   )
   const showGeometry = active || isExporting
+
+  // Live drag transform — the move tool writes the same absolute position
+  // imperatively to the registered group; applying it React-side too keeps the
+  // two in agreement (and moves the collider along with the drag).
+  const live = useLiveTransforms((s) => s.get(node.id))
+  const basePosition = node.position ?? [0, 0, 0]
+  const baseRotation = node.rotation ?? [0, 0, 0]
+  const position = live?.position ?? basePosition
+  const rotation: [number, number, number] = live
+    ? [baseRotation[0], live.rotation, baseRotation[2]]
+    : baseRotation
 
   const height = Math.max(0.2, node.height ?? 1)
   const radius = colliderRadius(node)
@@ -236,19 +275,14 @@ export function KindProxy<N extends Placeable & { id: string }>({
   const geometryScale = variant ? height / variant.naturalHeight : 1
 
   return (
-    <group
-      position={node.position ?? [0, 0, 0]}
-      rotation={node.rotation ?? [0, 0, 0]}
-      visible={node.visible !== false}
-      {...handlers}
-    >
+    <group visible={node.visible !== false} {...handlers}>
       {!isExporting && (
-        <mesh position={[0, height / 2, 0]}>
+        <mesh position={[position[0], position[1] + height / 2, position[2]]}>
           <boxGeometry args={[radius * 2, height, radius * 2]} />
           <meshBasicMaterial colorWrite={false} depthWrite={false} />
         </mesh>
       )}
-      <group ref={outlineRef}>
+      <group position={position} ref={registeredRef} rotation={rotation}>
         {variant && (
           <group scale={geometryScale}>
             {variant.subMeshes.map((subMesh, i) => (
@@ -256,7 +290,7 @@ export function KindProxy<N extends Placeable & { id: string }>({
                 dispose={null}
                 geometry={subMesh.geometry}
                 key={i}
-                material={isExporting ? subMesh.material : INVISIBLE}
+                material={isExporting ? subMesh.material : toStatic(subMesh.material)}
                 raycast={NO_RAYCAST}
               />
             ))}

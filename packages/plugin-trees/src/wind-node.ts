@@ -101,3 +101,32 @@ export function windStandardMaterial(
   material.positionNode = STEM_BEND
   return material
 }
+
+const staticCache = new WeakMap<Material, Material>()
+
+/** Windless twin of a wind material — same look, no `positionNode`. The outline
+ * mask pass renders outlined meshes with a shared override material, so an
+ * outline can never follow the GPU sway; the selection proxy renders this twin
+ * instead, so the outlined silhouette and the visible mesh match exactly (the
+ * plant simply holds still while hovered/selected). Built by explicit property
+ * transfer, not `.clone()` — node-material clone drops `map`/`color` (same
+ * pitfall as `toWindMaterial`). Cached per source. */
+export function toStaticMaterial(material: Material): Material {
+  const cached = staticCache.get(material)
+  if (cached) return cached
+  const src = material as MeshStandardNodeMaterial
+  const twin = new MeshStandardNodeMaterial({
+    map: src.map ?? null,
+    alphaMap: src.alphaMap ?? null,
+    color: src.color,
+    side: src.side,
+    alphaTest: src.alphaTest ?? 0,
+    transparent: src.transparent ?? false,
+    opacity: src.opacity ?? 1,
+    depthWrite: src.depthWrite ?? true,
+    roughness: src.roughness,
+    metalness: src.metalness,
+  })
+  staticCache.set(material, twin)
+  return twin
+}
