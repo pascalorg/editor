@@ -439,7 +439,7 @@ export const PlaneBoxSelectTool: React.FC = () => {
         }
 
         const ids = collectNodeIdsInPlaneBounds(bounds)
-        const shouldAppend = event.metaKey || event.ctrlKey
+        const shouldAppend = event.metaKey || event.ctrlKey || event.shiftKey
         const { phase, structureLayer } = useEditor.getState()
 
         if (phase === 'structure' && structureLayer === 'zones') {
