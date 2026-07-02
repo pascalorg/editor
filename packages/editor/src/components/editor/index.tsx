@@ -73,6 +73,7 @@ import type { ExtraPanel } from '../ui/sidebar/icon-rail'
 import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
+import { usePluginPanels } from '../ui/sidebar/use-plugin-panels'
 import { CustomCameraControls } from './custom-camera-controls'
 import { EditorLayoutV2 } from './editor-layout-v2'
 import { ExportManager } from './export-manager'
@@ -1090,6 +1091,12 @@ export default function Editor({
   const sidebarWidth = useSidebarStore((s) => s.width)
   const isSidebarCollapsed = useSidebarStore((s) => s.isCollapsed)
 
+  // Plugin-contributed rail panels (registry-only). Called unconditionally so
+  // hook order is stable across the v1 / v2 layout branches below; the v1
+  // AppSidebar path merges its own copy internally, the v2 path merges these
+  // into its tab bar.
+  const pluginRailPanels = usePluginPanels()
+
   useEffect(() => {
     const teardown = initializeEditorRuntime()
     return teardown
@@ -1225,7 +1232,17 @@ export default function Editor({
 
   // ── V2 layout ──
   if (layoutVersion === 'v2') {
-    const tabMap = new Map(sidebarTabs?.map((t) => [t.id, t]) ?? [])
+    // Plugin panels join the host's `sidebarTabs` as first-class tabs. Host
+    // tabs keep precedence (already in the map first); a plugin panel id can't
+    // collide with a host tab because it's namespaced by plugin id.
+    const tabMap = new Map<string, SidebarTab & { component: React.ComponentType }>(
+      sidebarTabs?.map((t) => [t.id, t]) ?? [],
+    )
+    for (const p of pluginRailPanels) {
+      if (!tabMap.has(p.id)) {
+        tabMap.set(p.id, { id: p.id, label: p.label, icon: p.icon, component: p.component })
+      }
+    }
 
     const renderTabContent = (tabId: string) => {
       // Built-in panels
@@ -1242,13 +1259,24 @@ export default function Editor({
       return <Component />
     }
 
-    const tabBarTabs =
-      sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon }) => ({
+    const tabBarTabs = [
+      ...(sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon, icon }) => ({
         id,
         label,
         mobileDefaultSnap,
         mobileIcon,
-      })) ?? []
+        icon,
+      })) ?? []),
+      // Plugin panels appear after the host's tabs in the rail. The icon
+      // doubles as the mobile icon; a half-height sheet is a sensible default.
+      ...pluginRailPanels.map((p) => ({
+        id: p.id,
+        label: p.label,
+        mobileDefaultSnap: 0.5,
+        mobileIcon: p.icon,
+        icon: p.icon,
+      })),
+    ]
 
     return (
       <PresetsProvider adapter={presetsAdapter}>

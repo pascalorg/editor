@@ -151,8 +151,14 @@ export type StairPlacementType = 'straight' | 'curved' | 'spiral'
 export type FloorplanSelectionTool = 'click' | 'marquee'
 export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05 | 0.01
 
-// Combined tool type
-export type Tool = SiteTool | StructureTool | FurnishTool
+// Combined tool type. Known literals keep autocomplete; the `(string & {})`
+// arm lets plugin-contributed tool ids (e.g. `'trees:tree'`) typecheck without
+// the host enumerating every plugin kind. The runtime dispatch is already
+// registry-first — `tool-manager` resolves `nodeRegistry.get(tool)?.tool` — so
+// an unknown-to-the-host tool string flows straight through to the plugin's
+// placement component.
+export type KnownTool = SiteTool | StructureTool | FurnishTool
+export type Tool = KnownTool | (string & {})
 
 export type MovingWallEndpoint = {
   wall: WallNode

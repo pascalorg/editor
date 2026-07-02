@@ -4,8 +4,10 @@ import {
   loadPlugin,
   nodeRegistry,
   registerNode,
+  setPluginDiscovery,
 } from '@pascal-app/core'
 import { builtinPlugin } from '@pascal-app/nodes'
+import { treesPlugin } from '@pascal-app/plugin-trees'
 
 // Idempotency guards: HMR can reload this module, but `registerNode`
 // throws on duplicate kinds. Flags live in the module closure so they
@@ -72,6 +74,11 @@ export async function loadExternalPlugins(): Promise<void> {
     console.info(`[pascal:registry] + ${externals.length} discovered plugin(s)`)
   }
 }
+
+// Register the first-party example plugin (trees node + presets rail panel)
+// through the same discovery hook a third-party pack would use. Must be set
+// before `loadExternalPlugins()` reads it below.
+setPluginDiscovery(async () => [treesPlugin])
 
 loadBuiltinsSync()
 void loadExternalPlugins()

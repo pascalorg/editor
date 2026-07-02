@@ -35,6 +35,7 @@
         "@pascal-app/editor": "*",
         "@pascal-app/mcp": "*",
         "@pascal-app/nodes": "*",
+        "@pascal-app/plugin-trees": "*",
         "@pascal-app/viewer": "*",
         "@radix-ui/react-tooltip": "^1.2.8",
         "@react-three/drei": "^10.7.7",
@@ -270,6 +271,38 @@
         "zustand": "^5",
       },
     },
+    "packages/plugin-trees": {
+      "name": "@pascal-app/plugin-trees",
+      "version": "0.1.0",
+      "dependencies": {
+        "@dgreenheck/ez-tree": "^1.1.0",
+      },
+      "devDependencies": {
+        "@pascal-app/core": "*",
+        "@pascal-app/editor": "*",
+        "@pascal-app/viewer": "*",
+        "@pascal/typescript-config": "*",
+        "@react-three/fiber": "^9",
+        "@types/node": "^22.19.12",
+        "@types/react": "^19.2.2",
+        "@types/three": "^0.184.0",
+        "react": "^19",
+        "three": "^0.184",
+        "typescript": "6.0.3",
+        "zod": "^4",
+        "zustand": "^5",
+      },
+      "peerDependencies": {
+        "@pascal-app/core": "*",
+        "@pascal-app/editor": "*",
+        "@pascal-app/viewer": "*",
+        "@react-three/fiber": "^9",
+        "react": "^18 || ^19",
+        "three": "^0.184",
+        "zod": "^4",
+        "zustand": "^5",
+      },
+    },
     "packages/typescript-config": {
       "name": "@repo/typescript-config",
       "version": "0.0.0",
@@ -346,6 +379,8 @@
     "@biomejs/cli-win32-arm64": ["@biomejs/cli-win32-arm64@2.4.15", "", { "os": "win32", "cpu": "arm64" }, "sha512-ouhkYdlhp/1GghEJPdWwD/Vi3gQ1nFxuSpMolWsbq3Lsq3QUR4jl6UdhhscdCugKU5vOEuMiJhvKj66O0OCq+w=="],
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.4.15", "", { "os": "win32", "cpu": "x64" }, "sha512-zBrGq5mx5wwpnow4+2BxUvleDM+GNd4sLbPaMapsSLQLD0NGRCquqPBTgN+7XkUteHvj7M+BstuI8tmnV7+HgQ=="],
+
+    "@dgreenheck/ez-tree": ["@dgreenheck/ez-tree@1.1.0", "", { "peerDependencies": { "three": ">=0.167" } }, "sha512-6pvS6hD6B6h00dm0SnkgYeT4ABU5Y1Z9M44p1tXiV5C0eKrQy2sKECXshoaUv0qAOqYVL68w/PwadUxDFDiHUg=="],
 
     "@dimforge/rapier3d-compat": ["@dimforge/rapier3d-compat@0.12.0", "", {}, "sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow=="],
 
@@ -512,6 +547,8 @@
     "@pascal-app/mcp": ["@pascal-app/mcp@workspace:packages/mcp"],
 
     "@pascal-app/nodes": ["@pascal-app/nodes@workspace:packages/nodes"],
+
+    "@pascal-app/plugin-trees": ["@pascal-app/plugin-trees@workspace:packages/plugin-trees"],
 
     "@pascal-app/viewer": ["@pascal-app/viewer@workspace:packages/viewer"],
 

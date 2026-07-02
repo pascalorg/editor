@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
     '@pascal-app/editor',
     '@pascal-app/articraft-bridge',
     '@pascal-app/nodes',
+    '@pascal-app/mcp',
+    '@pascal-app/plugin-trees',
+    '@dgreenheck/ez-tree',
   ],
   turbopack: {
     resolveAlias: {

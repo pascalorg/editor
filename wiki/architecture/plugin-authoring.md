@@ -21,6 +21,10 @@ export const myPlugin: Plugin = {
     armchairDefinition,
     // ...
   ],
+  panels: [
+    { id: 'catalog', label: 'Catalog', icon: { kind: 'iconify', name: 'lucide:sofa' },
+      component: () => import('./catalog-panel') },
+  ],
 }
 ```
 
@@ -28,7 +32,10 @@ export const myPlugin: Plugin = {
 |---|---|---|
 | `id` | yes | Globally unique. Use `vendor:pack-name` to avoid collisions. The host treats it as opaque. |
 | `apiVersion` | yes | Currently `1`. The host throws on mismatch — bumping breaks plugins, intentionally. |
-| `nodes` | optional | Array of `AnyNodeDefinition`. May be empty for a pure-resource plugin (future). |
+| `nodes` | optional | Array of `AnyNodeDefinition`. May be empty for a pure-panel plugin. |
+| `panels` | optional | Array of `PluginPanel` — left-rail panels (see [Panel contributions](#panel-contributions)). |
+
+The first-party [`@pascal-app/plugin-trees`](../../packages/plugin-trees) package is the worked example: one node kind + one panel. Copy it as a starting point.
 
 The same shape powers the built-in `pascal:core` plugin in `@pascal-app/nodes` — there's no "internal" plugin format. Whatever works for built-ins works for third parties.
 
@@ -50,6 +57,39 @@ A plugin's `nodes` array is the only meaningful contribution point in v1. Each e
 - `relations` / `computeLevelData` — sibling lookups + level-batch precompute.
 
 See [`node-definitions.md`](node-definitions.md) for the three-checkbox composition model that ties these together.
+
+## Panel contributions
+
+A plugin can add its own panel to the sidebar **icon rail** via `plugin.panels`. Each entry:
+
+```ts
+export type PluginPanel = {
+  id: string          // unique within the plugin; host namespaces it as `${plugin.id}:${id}`
+  label: string       // rail tooltip + panel header
+  icon: IconRef       // same icon union node presentation uses (iconify / url / svg / component)
+  component: LazyComponent  // () => import('./panel') — a default-exported React component
+}
+```
+
+Behaviour:
+
+- **In-process React, no iframe.** The component mounts directly in the host React tree, lazily on first open. It can use the host stores (`useScene`, `useEditor`, `useViewer`) and its own Zustand stores freely.
+- **Error-isolated.** Every plugin panel is wrapped in an error boundary with a "this plugin crashed" fallback. A throwing panel degrades to that fallback for the session instead of taking down the sidebar — other panels keep working.
+- **Namespaced.** `loadPlugin` rewrites the panel id to `${plugin.id}:${panel.id}`, so two plugins can both ship `id: 'main'`. Host-provided panels (the app's own `extraSidebarPanels`) keep precedence on an id collision.
+- **Styling.** Scope your CSS — no globals. Use the host sidebar CSS variables (`--sidebar`, `--sidebar-foreground`, `--sidebar-accent`, `--sidebar-border`, `--sidebar-ring`) so the panel reads as native in light/dark.
+
+The registry that backs this (`panelRegistry` in `@pascal-app/core`) is observable — discovery is async, so the sidebar subscribes and the rail icon appears as soon as the plugin loads.
+
+### Driving a tool from a panel
+
+A panel typically writes a choice into the plugin's own store, then arms placement:
+
+```ts
+useEditor.getState().setTool('trees:tree')  // a plugin tool id
+useEditor.getState().setMode('build')
+```
+
+`Tool` is `KnownTool | (string & {})`, so a plugin's namespaced tool id (the node `kind`) typechecks without the host enumerating it. Dispatch is registry-first — `ToolManager` resolves `nodeRegistry.get(tool)?.tool` — so an unknown-to-the-host tool string flows straight through to the plugin's `def.tool` component. The placement tool reads the plugin store for *what* to place. That round-trip — panel → store → `def.tool` → `SceneApi` → scene → reactive `useScene` read-back in the panel — is the full plugin communication path; `plugin-trees` demonstrates it end to end.
 
 ## Importing host packages
 
