@@ -251,8 +251,11 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
         useAlignmentGuides.getState().clear()
       }
 
-      // Ticker on each grid-cell crossing, like single-item placement.
-      if (snap && (!lastSnap || lastSnap[0] !== dx || lastSnap[1] !== dz)) {
+      // Ticker on each delta change — mirrors the single-node move, which
+      // emits per position change in EVERY mode (grid crossings are discrete;
+      // the lines/off stream is rate-limited into a texture by the player's
+      // minIntervalMs), so the group drag sounds the same as a single one.
+      if (!lastSnap || lastSnap[0] !== dx || lastSnap[1] !== dz) {
         sfxEmitter.emit('sfx:grid-snap')
         lastSnap = [dx, dz]
       }
