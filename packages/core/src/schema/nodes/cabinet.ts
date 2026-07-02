@@ -4,7 +4,7 @@ import { MaterialSchema } from '../material'
 
 const CabinetCompartment = z.object({
   id: z.string(),
-  type: z.enum(['shelf', 'drawer', 'door']),
+  type: z.enum(['shelf', 'drawer', 'door', 'oven', 'microwave']),
   height: z.number().positive().max(2.5).optional(),
   doorType: z.enum(['single-left', 'single-right', 'double', 'glass']).optional(),
   drawerCount: z.number().int().min(1).max(6).optional(),

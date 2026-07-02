@@ -25,8 +25,12 @@ import {
   compartmentDoorType,
   compartmentDrawerCount,
   compartmentShelfCount,
+  MICROWAVE_STANDARD_WIDTH,
+  minCabinetCarcassHeightForStack,
   newCabinetCompartment,
   normalizeCabinetStack,
+  reflowCabinetRunModules,
+  replaceCabinetCompartmentStack,
   resizeCabinetCompartmentStack,
   stackForCabinet,
 } from './stack'
@@ -35,6 +39,8 @@ const COMPARTMENT_TYPE_OPTIONS = [
   { value: 'shelf', label: 'Shelf' },
   { value: 'drawer', label: 'Drawer' },
   { value: 'door', label: 'Door' },
+  { value: 'oven', label: 'Oven' },
+  { value: 'microwave', label: 'Micro' },
 ] as const
 
 const DOOR_TYPE_OPTIONS = [
@@ -163,6 +169,24 @@ function bumpCabinetRunsLayoutRevisionOnLevel(
   }
 }
 
+function bumpCabinetRunLayoutRevision(
+  scene: ReturnType<typeof useScene.getState>,
+  run: CabinetNodeType,
+) {
+  const metadata = cabinetMetadataRecord(run.metadata)
+  const currentRevision =
+    typeof metadata.cabinetLayoutRevision === 'number' ? metadata.cabinetLayoutRevision : 0
+  scene.updateNode(run.id as AnyNodeId, {
+    metadata: {
+      ...metadata,
+      cabinetLayoutRevision: currentRevision + 1,
+    },
+  })
+  if (run.parentId) {
+    bumpCabinetRunsLayoutRevisionOnLevel(scene, run.parentId as AnyNodeId)
+  }
+}
+
 const ICON_BUTTON_CLASS =
   'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/40 bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#343437] hover:text-foreground disabled:opacity-30 disabled:hover:bg-[#2C2C2E] disabled:hover:text-muted-foreground'
 
@@ -211,6 +235,37 @@ function Stepper({
   )
 }
 
+function CompartmentTypeControl({
+  value,
+  onChange,
+}: {
+  value: CabinetCompartmentType
+  onChange: (value: CabinetCompartmentType) => void
+}) {
+  return (
+    <div className="grid w-full grid-cols-3 gap-1 rounded-lg border border-border/50 bg-[#2C2C2E] p-[3px]">
+      {COMPARTMENT_TYPE_OPTIONS.map((option) => {
+        const isSelected = value === option.value
+        return (
+          <button
+            className={[
+              'flex h-8 items-center justify-center rounded-md text-xs font-medium transition-all duration-200',
+              isSelected
+                ? 'bg-[#3e3e3e] text-foreground shadow-sm ring-1 ring-border/50'
+                : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+            ].join(' ')}
+            key={option.value}
+            onClick={() => onChange(option.value)}
+            type="button"
+          >
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function cabinetMetadataRecord(metadata: CabinetEditableNode['metadata']): Record<string, unknown> {
   return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
     ? (metadata as Record<string, unknown>)
@@ -230,18 +285,23 @@ function reflowRunModules({
   scene: ReturnType<typeof useScene.getState>
   selected: CabinetModuleNodeType
 }) {
-  const sorted = [...modules].sort((a, b) => a.position[0] - b.position[0])
-  if (!sorted.some((module) => module.id === selected.id)) return
+  const reflowed = reflowCabinetRunModules(
+    modules,
+    selected.id,
+    patch.width ?? selected.width,
+  )
+  if (reflowed.length === 0) return
 
-  let nextLeft = Math.min(...sorted.map((module) => module.position[0] - module.width / 2))
-  for (const module of sorted) {
+  const reflowById = new Map(reflowed.map((entry) => [entry.id, entry]))
+  for (const module of [...modules].sort((a, b) => a.position[0] - b.position[0])) {
+    const reflow = reflowById.get(module.id)
+    if (!reflow) continue
     const isSelected = module.id === selected.id
-    const nextWidth = isSelected ? (patch.width ?? module.width) : module.width
     const nextPatch: Partial<CabinetModuleNodeType> = isSelected ? { ...patch } : {}
-    const nextPosition: [number, number, number] = [
-      nextLeft + nextWidth / 2,
-      isSelected && patch.position ? patch.position[1] : module.position[1],
-      module.position[2],
+    const nextPosition: CabinetModuleNodeType['position'] = [
+      reflow.position[0],
+      isSelected && patch.position ? patch.position[1] : reflow.position[1],
+      reflow.position[2],
     ]
 
     if (isSelected) {
@@ -270,26 +330,13 @@ function reflowRunModules({
           wallChild.position[1],
           backAlignZ(nextPatch.depth ?? module.depth, wallChild.depth),
         ],
-        width: nextWidth,
+        width: reflow.width,
       })
       scene.dirtyNodes.add(module.id as AnyNodeId)
     }
-
-    nextLeft += nextWidth
   }
 
-  const metadata = cabinetMetadataRecord(parentRun.metadata)
-  const currentRevision =
-    typeof metadata.cabinetLayoutRevision === 'number' ? metadata.cabinetLayoutRevision : 0
-  scene.updateNode(parentRun.id as AnyNodeId, {
-    metadata: {
-      ...metadata,
-      cabinetLayoutRevision: currentRevision + 1,
-    },
-  })
-  if (parentRun.parentId) {
-    bumpCabinetRunsLayoutRevisionOnLevel(scene, parentRun.parentId as AnyNodeId)
-  }
+  bumpCabinetRunLayoutRevision(scene, parentRun)
 }
 
 function CompartmentCard({
@@ -360,17 +407,13 @@ function CompartmentCard({
         <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
           Type
         </div>
-        <SegmentedControl
+        <CompartmentTypeControl
           onChange={(value) =>
             onReplace({
-              ...newCabinetCompartment(value as CabinetCompartmentType),
+              ...newCabinetCompartment(value),
               id: compartment.id,
             })
           }
-          options={COMPARTMENT_TYPE_OPTIONS.map((option) => ({
-            value: option.value,
-            label: option.label,
-          }))}
           value={type}
         />
       </div>
@@ -450,19 +493,34 @@ function CabinetRunPanel({
   const updateRun = useCallback(
     (patch: Partial<CabinetNodeType>) => {
       const scene = useScene.getState()
-      const nextNode = { ...node, ...patch }
-      scene.updateNode(node.id, patch)
+      const nextPatch = { ...patch }
+      if (typeof nextPatch.carcassHeight === 'number') {
+        const minModuleHeight = Math.max(
+          0.4,
+          ...modules.map((module) => minCabinetCarcassHeightForStack(module)),
+        )
+        nextPatch.carcassHeight = Math.max(nextPatch.carcassHeight, minModuleHeight)
+      }
+      const nextNode = { ...node, ...nextPatch }
+      scene.updateNode(node.id, nextPatch)
 
-      const shouldSyncDepth = RUN_DEPTH_PATCH_KEY in patch
-      const shouldSyncPosition = Object.keys(patch).some((key) =>
+      const shouldSyncDepth = RUN_DEPTH_PATCH_KEY in nextPatch
+      const shouldSyncHeight = 'carcassHeight' in nextPatch
+      const shouldSyncPosition = Object.keys(nextPatch).some((key) =>
         RUN_POSITION_PATCH_KEYS.has(key as keyof CabinetNodeType),
       )
-      if (!shouldSyncDepth && !shouldSyncPosition) return
+      if (!shouldSyncDepth && !shouldSyncHeight && !shouldSyncPosition) return
 
       for (const module of modules) {
         const modulePatch: Partial<CabinetModuleNodeType> = {}
         if (shouldSyncDepth) {
           modulePatch.depth = nextNode.depth
+        }
+        if (shouldSyncHeight) {
+          modulePatch.carcassHeight = Math.max(
+            nextNode.carcassHeight,
+            minCabinetCarcassHeightForStack(module),
+          )
         }
         if (shouldSyncPosition) {
           modulePatch.position = [module.position[0], runModuleBaseY(nextNode), module.position[2]]
@@ -565,7 +623,10 @@ function CabinetRunPanel({
           <SliderControl
             label="Carcass height"
             max={node.runTier === 'tall' ? 2.4 : 1.4}
-            min={0.4}
+            min={Math.max(
+              0.4,
+              ...modules.map((module) => minCabinetCarcassHeightForStack(module)),
+            )}
             onChange={(value) => updateRun({ carcassHeight: value })}
             precision={2}
             step={0.01}
@@ -667,13 +728,55 @@ export default function CabinetPanel() {
     (patch: Partial<CabinetEditableNode>) => {
       if (!selectedId) return
       const scene = useScene.getState()
-      scene.updateNode(selectedId as AnyNodeId, patch)
+      const liveBeforeUpdate = scene.nodes[selectedId as AnyNodeId] as
+        | CabinetEditableNode
+        | undefined
+      const nextPatch = { ...patch }
+      if (
+        liveBeforeUpdate?.type === 'cabinet-module' &&
+        typeof nextPatch.carcassHeight === 'number'
+      ) {
+        nextPatch.carcassHeight = Math.max(
+          nextPatch.carcassHeight,
+          minCabinetCarcassHeightForStack(liveBeforeUpdate),
+        )
+      }
+      if (
+        liveBeforeUpdate?.type === 'cabinet-module' &&
+        liveBeforeUpdate.parentId &&
+        parentRun?.type === 'cabinet' &&
+        'width' in nextPatch &&
+        typeof nextPatch.width === 'number'
+      ) {
+        reflowRunModules({
+          modules,
+          parentRun,
+          patch: nextPatch as Partial<CabinetModuleNodeType>,
+          scene,
+          selected: liveBeforeUpdate,
+        })
+        return
+      }
+      scene.updateNode(selectedId as AnyNodeId, nextPatch)
       const liveNode = scene.nodes[selectedId as AnyNodeId] as CabinetEditableNode | undefined
       if (liveNode?.type === 'cabinet-module' && liveNode.parentId) {
         scene.dirtyNodes.add(liveNode.parentId as AnyNodeId)
+        const parent = scene.nodes[liveNode.parentId as AnyNodeId] as
+          | CabinetEditableNode
+          | undefined
+        const affectsRunLayout =
+          'stack' in nextPatch ||
+          'carcassHeight' in nextPatch ||
+          'cabinetType' in nextPatch ||
+          'position' in nextPatch ||
+          'depth' in nextPatch ||
+          'width' in nextPatch
+        if (parent?.type === 'cabinet' && affectsRunLayout) {
+          bumpCabinetRunLayoutRevision(scene, parent)
+        }
       }
       // Keep a nested wall cabinet's back flush with its base when the base depth changes.
-      if ('depth' in patch && liveNode?.type === 'cabinet-module') {
+      if ('depth' in nextPatch && liveNode?.type === 'cabinet-module') {
         const wallChild = wallChildOf(
           liveNode,
           scene.nodes as Record<string, CabinetEditableNode | undefined>,
@@ -690,7 +793,7 @@ export default function CabinetPanel() {
         }
       }
     },
-    [selectedId],
+    [modules, parentRun, selectedId],
   )
 
   const close = useCallback(() => {
@@ -767,9 +870,37 @@ export default function CabinetPanel() {
   const rowHeights = new Map(normalized.map((row) => [row.index, row.height]))
   const rows = stack.map((compartment, index) => ({ compartment, index })).reverse()
 
-  const commitStack = (next: CabinetCompartment[]) => updateNode({ stack: next })
+  const commitStack = (
+    next: CabinetCompartment[],
+    extraPatch: Partial<CabinetModuleNodeType> = {},
+  ) => {
+    const patch = { ...extraPatch, stack: next }
+    const minCarcassHeight = minCabinetCarcassHeightForStack({ ...node, stack: next })
+    if (node.carcassHeight < minCarcassHeight) patch.carcassHeight = minCarcassHeight
+    if (node.type === 'cabinet-module' && parentRun?.type === 'cabinet' && patch.width) {
+      reflowRunModules({
+        modules,
+        parentRun,
+        patch,
+        scene: useScene.getState(),
+        selected: node,
+      })
+      return
+    }
+    updateNode(patch)
+  }
   const replaceAt = (index: number, next: CabinetCompartment) =>
-    commitStack(stack.map((compartment, i) => (i === index ? next : compartment)))
+    commitStack(
+      replaceCabinetCompartmentStack(
+        node,
+        index,
+        next,
+        node.type === 'cabinet-module' && resolveCabinetType(node, parentRun) === 'base'
+          ? 'drawer'
+          : 'door',
+      ),
+      next.type === 'microwave' ? { width: MICROWAVE_STANDARD_WIDTH } : {},
+    )
   const resizeAt = (index: number, height: number) =>
     commitStack(resizeCabinetCompartmentStack(node, index, height))
   const removeAt = (index: number) => commitStack(stack.filter((_, i) => i !== index))
@@ -991,7 +1122,11 @@ export default function CabinetPanel() {
               ? 2.4
               : 1.4
           }
-          min={0.4}
+          min={
+            node.type === 'cabinet-module'
+              ? Math.max(0.4, minCabinetCarcassHeightForStack(node))
+              : 0.4
+          }
           onChange={(value) => updateNode({ carcassHeight: value })}
           precision={2}
           step={0.01}

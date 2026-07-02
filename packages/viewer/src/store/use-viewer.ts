@@ -94,6 +94,8 @@ type ViewerState = {
   resetSelection: () => void
 
   outliner: Outliner // No setter as we will manipulate directly the arrays
+  geometryRevision: number
+  bumpGeometryRevision: () => void
 
   // Export functionality
   exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
@@ -343,6 +345,9 @@ const useViewer = create<ViewerState>()(
         }),
 
       outliner: { selectedObjects: [], hoveredObjects: [] },
+      geometryRevision: 0,
+      bumpGeometryRevision: () =>
+        set((state) => ({ geometryRevision: state.geometryRevision + 1 })),
 
       exportScene: null,
       setExportScene: (fn) => set({ exportScene: fn }),

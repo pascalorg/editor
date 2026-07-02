@@ -62,6 +62,7 @@ export const GeometrySystem = () => {
   // pure geometry builders can resolve `scene:<id>` slot refs without
   // importing `useScene`.
   const sceneMaterials = useScene((s) => s.materials)
+  const bumpGeometryRevision = useViewer((s) => s.bumpGeometryRevision)
   // Per-node cache of the last-built geometry key (for kinds that declare
   // `def.geometryKey`). Lets us skip a dispose+rebuild when a node is dirty
   // but its geometry inputs are unchanged — e.g. an item reparenting onto a
@@ -160,6 +161,8 @@ export const GeometrySystem = () => {
       )
     }
 
+    let rebuiltGeometry = false
+
     // Phase 3 — per-node rebuild. Each node receives its batch's
     // precomputed `levelData` in ctx.
     for (const id of dirtyIds) {
@@ -234,6 +237,7 @@ export const GeometrySystem = () => {
         }
         group.add(child)
       }
+      rebuiltGeometry = true
       // NOTE: we intentionally do NOT reset `group.position` / `group.rotation`
       // here. The `ParametricNodeRenderer` binds them via JSX (`position={...}`
       // / `rotation={...}`) driven by `useLiveTransforms` during drag and
@@ -245,6 +249,7 @@ export const GeometrySystem = () => {
 
       clearDirty(id as AnyNodeId)
     }
+    if (rebuiltGeometry) bumpGeometryRevision()
   }, 2)
 
   return null

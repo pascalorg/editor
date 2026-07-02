@@ -1,5 +1,5 @@
 import type { CabinetModuleNode, CabinetNode } from '@pascal-app/core'
-import { newCabinetCompartment } from './stack'
+import { MICROWAVE_STANDARD_WIDTH, newCabinetCompartment } from './stack'
 
 export type CabinetPresetId =
   | 'base-door'
@@ -7,6 +7,7 @@ export type CabinetPresetId =
   | 'open-shelf'
   | 'tall-pantry'
   | 'appliance-tower'
+  | 'oven-tower'
 
 export type CabinetPreset = {
   id: CabinetPresetId
@@ -110,6 +111,32 @@ export const CABINET_PRESETS: CabinetPreset[] = [
         { ...newCabinetCompartment('drawer'), height: 0.42, drawerCount: 2 },
         { ...newCabinetCompartment('shelf'), height: 0.76, shelfCount: 0 },
         { ...newCabinetCompartment('door'), doorType: 'single-right', shelfCount: 2 },
+      ],
+    }),
+  },
+  {
+    id: 'oven-tower',
+    label: 'Oven Tower',
+    createPatch: (run) => ({
+      cabinetType: 'tall',
+      name: 'Oven Tower',
+      width: MICROWAVE_STANDARD_WIDTH,
+      depth: run?.depth ?? 0.58,
+      carcassHeight: 2.07,
+      plinthHeight: 0.1,
+      toeKickDepth: 0.075,
+      countertopThickness: 0,
+      countertopOverhang: run?.countertopOverhang ?? 0.02,
+      showPlinth: false,
+      withCountertop: false,
+      handleStyle: 'bar',
+      handlePosition: 'top',
+      frontOverlay: 'full',
+      stack: [
+        { ...newCabinetCompartment('drawer'), height: 0.42, drawerCount: 2 },
+        newCabinetCompartment('oven'),
+        newCabinetCompartment('microwave'),
+        { ...newCabinetCompartment('door'), doorType: 'double', shelfCount: 2 },
       ],
     }),
   },

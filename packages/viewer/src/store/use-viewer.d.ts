@@ -32,6 +32,8 @@ type ViewerState = {
   setSelection: (updates: Partial<SelectionPath>) => void
   resetSelection: () => void
   outliner: Outliner
+  geometryRevision: number
+  bumpGeometryRevision: () => void
   exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
   setExportScene: (fn: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null) => void
 }
