@@ -13,7 +13,14 @@ import type { TreePreset, TreeSize } from './schema'
  * The presets panel writes it; the placement tool reads it. No host lifecycle
  * slot. Colours are intentionally absent — they're edit-only (inspector).
  */
+/** Which section of the Nature panel is showing. */
+export type TreesPanelMode = 'trees' | 'flowers' | 'grass'
+
 type TreesStore = {
+  /** Active panel section — in the store (not panel-local state) so the host's
+   * "find in catalog" can land on the right section (see `find-sync.ts`). */
+  mode: TreesPanelMode
+  setMode: (mode: TreesPanelMode) => void
   preset: TreePreset
   size: TreeSize
   /** Height (m) of the next tree — a per-instance scale, never affects placed trees. */
@@ -43,6 +50,8 @@ type TreesStore = {
 }
 
 export const useTreesStore = create<TreesStore>((set, get) => ({
+  mode: 'trees',
+  setMode: (mode) => set({ mode }),
   preset: 'oak',
   size: 'medium',
   height: TREE_PRESETS.oak.height.medium,

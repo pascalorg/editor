@@ -1,4 +1,7 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+// Side-effect: subscribes the panel store to `selection:find-node` so the
+// host's "find in catalog" lands on the right Nature section (see find-sync.ts).
+import './find-sync'
 import { NATURE_ICON } from './art'
 import { treeDefinition } from './definition'
 import { flowerDefinition } from './flower-definition'

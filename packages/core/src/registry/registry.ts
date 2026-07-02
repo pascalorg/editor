@@ -100,6 +100,10 @@ class PanelRegistryImpl {
   private readonly panels = new Map<string, PluginPanel>()
   private readonly listeners = new Set<() => void>()
   private cached: PluginPanel[] = []
+  // node kind → the (namespaced) panel id of the plugin that shipped it.
+  // Populated by `loadPlugin`; lets a host's "find in catalog" open the
+  // panel that places a kind without hardcoding per-plugin knowledge.
+  private readonly kindPanels = new Map<string, string>()
 
   subscribe = (onChange: () => void): (() => void) => {
     this.listeners.add(onChange)
@@ -125,9 +129,17 @@ class PanelRegistryImpl {
     this.emit()
   }
 
+  _associateKind(kind: string, panelId: string): void {
+    this.kindPanels.set(kind, panelId)
+  }
+
+  /** The (namespaced) panel id of the plugin that registered `kind`, if any. */
+  panelForKind = (kind: string): string | undefined => this.kindPanels.get(kind)
+
   // Test-only — clears the registry. Not exported from the package barrel.
   _reset(): void {
     this.panels.clear()
+    this.kindPanels.clear()
     this.emit()
   }
 
@@ -140,7 +152,9 @@ class PanelRegistryImpl {
 export const panelRegistry: {
   subscribe: (onChange: () => void) => () => void
   getSnapshot: () => PluginPanel[]
+  panelForKind: (kind: string) => string | undefined
   _register: (panel: PluginPanel) => void
+  _associateKind: (kind: string, panelId: string) => void
   _reset: () => void
 } = new PanelRegistryImpl()
 
@@ -308,6 +322,14 @@ export async function loadPlugin(plugin: Plugin): Promise<void> {
     // ship a panel id of `'main'`. The namespaced id is what the sidebar
     // uses as `activeSidebarPanel`.
     panelRegistry._register({ ...panel, id: `${plugin.id}:${panel.id}` })
+  }
+  // Associate every node kind with the plugin's first panel — the panel a
+  // host's "find in catalog" should open to place more of that kind.
+  const firstPanel = plugin.panels?.[0]
+  if (firstPanel) {
+    for (const def of plugin.nodes ?? []) {
+      panelRegistry._associateKind(def.kind, `${plugin.id}:${firstPanel.id}`)
+    }
   }
 }
 

@@ -2,16 +2,13 @@
 
 import { useScene } from '@pascal-app/core'
 import { SegmentedControl, SliderControl, ToggleControl, useEditor } from '@pascal-app/editor'
-import { useState } from 'react'
 import { FLOWER_PRESET_LIST } from './flower-presets'
 import type { FlowerPreset } from './flower-schema'
 import { GRASS_PRESET_LIST } from './grass-presets'
 import type { GrassPreset } from './grass-schema'
 import { TREE_PRESET_LIST } from './presets'
 import type { TreePreset } from './schema'
-import { useTreesStore } from './store'
-
-type Mode = 'trees' | 'flowers' | 'grass'
+import { type TreesPanelMode as Mode, useTreesStore } from './store'
 
 const KIND: Record<Mode, string> = {
   trees: 'trees:tree',
@@ -29,7 +26,10 @@ const NOUN: Record<Mode, string> = { trees: 'tree', flowers: 'flower', grass: 'g
  * so the brush matches the right-hand inspector pixel-for-pixel.
  */
 export default function TreesPanel() {
-  const [mode, setMode] = useState<Mode>('trees')
+  // Section lives in the plugin store (not local state) so "find in catalog"
+  // can point the panel at the found node's section — see find-sync.ts.
+  const mode = useTreesStore((s) => s.mode)
+  const setMode = useTreesStore((s) => s.setMode)
   const activeTool = useEditor((s) => s.tool)
   const count = useScene(
     (s) => Object.values(s.nodes).filter((n) => (n.type as string) === KIND[mode]).length,
