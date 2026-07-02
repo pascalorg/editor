@@ -7,6 +7,7 @@ import {
   emitter,
   type GridEvent,
   type NodeEvent,
+  spatialGridManager,
   useScene,
 } from '@pascal-app/core'
 import { isGridSnapActive, isMagneticSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
@@ -25,7 +26,11 @@ import { findClosestWallInPlan } from '../shared/wall-attach-target'
 import { cabinetDefinition, cabinetModuleDefinition } from './definition'
 import { buildCabinetGeometry } from './geometry'
 import { cabinetPresetById } from './presets'
-import { resolveCabinetWallSnapPlacement } from './wall-snap'
+import {
+  type CabinetWallSnapPlacement,
+  collectCabinetWallSnapNeighbors,
+  resolveCabinetWallSnapPlacement,
+} from './wall-snap'
 
 const PREVIEW_OPACITY = 0.55
 const ROTATE_STEP_RAD = Math.PI / 4
@@ -35,6 +40,10 @@ type CabinetPlacement = {
   position: [number, number, number]
   yaw: number
   snappedToWall: boolean
+  valid: boolean
+  conflictIds: string[]
+  guide?: CabinetWallSnapPlacement['guide']
+  snapReason?: CabinetWallSnapPlacement['snapReason']
   wallLocalX?: number
 }
 
@@ -50,6 +59,38 @@ function snap(value: number, step: number): number {
 function isFreePlacementEvent(event: FloorPlacementClickTriggerEvent): boolean {
   const native = (event as { nativeEvent?: { altKey?: boolean } }).nativeEvent
   return Boolean(native?.altKey)
+}
+
+function WallSnapGuide({
+  blocked,
+  guide,
+}: {
+  blocked: boolean
+  guide: NonNullable<CabinetPlacement['guide']>
+}) {
+  const dx = guide.end[0] - guide.start[0]
+  const dz = guide.end[2] - guide.start[2]
+  const length = Math.hypot(dx, dz)
+  if (length <= 1e-4) return null
+  return (
+    <group
+      position={[
+        (guide.start[0] + guide.end[0]) / 2,
+        guide.start[1],
+        (guide.start[2] + guide.end[2]) / 2,
+      ]}
+      rotation={[0, Math.atan2(-dz, dx), 0]}
+    >
+      <mesh>
+        <boxGeometry args={[length, 0.018, 0.018]} />
+        <meshBasicMaterial
+          color={blocked ? '#ef4444' : '#f59e0b'}
+          opacity={blocked ? 0.85 : 0.7}
+          transparent
+        />
+      </mesh>
+    </group>
+  )
 }
 
 const CabinetTool = () => {
@@ -69,6 +110,16 @@ const CabinetTool = () => {
       }),
     [],
   )
+  const placementDimensions = useMemo(() => {
+    const defaults = cabinetDefinition.defaults()
+    return [
+      previewNode.width,
+      (defaults.showPlinth ? defaults.plinthHeight : 0) +
+        previewNode.carcassHeight +
+        (defaults.withCountertop ? defaults.countertopThickness : 0),
+      previewNode.depth,
+    ] as [number, number, number]
+  }, [previewNode])
   const ghost = useMemo(() => {
     const group = buildCabinetGeometry(previewNode)
     group.traverse((child) => {
@@ -102,22 +153,47 @@ const CabinetTool = () => {
       return [snap(raw[0], step), 0, snap(raw[2], step)]
     }
 
+    const withPlacementValidity = (
+      next: Omit<CabinetPlacement, 'conflictIds' | 'valid'>,
+      bypassCollision: boolean,
+    ): CabinetPlacement => {
+      if (bypassCollision) return { ...next, conflictIds: [], valid: true }
+      const result = spatialGridManager.canPlaceOnFloor(
+        activeLevelId,
+        next.position,
+        placementDimensions,
+        [0, next.yaw, 0],
+      )
+      return { ...next, conflictIds: result.conflictIds, valid: result.valid }
+    }
+
     const resolveWallPlacement = (raw: [number, number, number]): CabinetPlacement | null => {
       if (!isMagneticSnapActive()) return null
       const nodes = useScene.getState().nodes
       const hit = findClosestWallInPlan([raw[0], raw[2]], nodes, activeLevelId as AnyNodeId)
       if (!hit) return null
+      const neighbors = collectCabinetWallSnapNeighbors({
+        hit,
+        nodes,
+        parentLevelId: activeLevelId as AnyNodeId,
+        width: previewNode.width,
+      })
 
       const wallPlacement = resolveCabinetWallSnapPlacement({
         depth: previewNode.depth,
         gridStep: isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
         hit,
+        neighbors,
         width: previewNode.width,
       })
       if (!wallPlacement) return null
 
       return {
+        conflictIds: [],
+        guide: wallPlacement.guide,
         position: wallPlacement.position,
+        snapReason: wallPlacement.snapReason,
+        valid: true,
         yaw: wallPlacement.yaw,
         snappedToWall: true,
         wallLocalX: wallPlacement.localX,
@@ -128,12 +204,15 @@ const CabinetTool = () => {
       const raw = resolveRawPosition(event)
       const freePlacement = isFreePlacementEvent(event)
       const wallPlacement = freePlacement ? null : resolveWallPlacement(raw)
-      if (wallPlacement) return wallPlacement
-      return {
-        position: resolveGridPosition(raw, freePlacement),
-        yaw: yawRef.current,
-        snappedToWall: false,
-      }
+      if (wallPlacement) return withPlacementValidity(wallPlacement, freePlacement)
+      return withPlacementValidity(
+        {
+          position: resolveGridPosition(raw, freePlacement),
+          yaw: yawRef.current,
+          snappedToWall: false,
+        },
+        freePlacement,
+      )
     }
 
     const publishPlacement = (next: CabinetPlacement) => {
@@ -161,7 +240,13 @@ const CabinetTool = () => {
     }
 
     const onClick = (event: FloorPlacementClickTriggerEvent) => {
-      const next = placementRef.current ?? resolvePlacement(event)
+      const next = isFreePlacementEvent(event)
+        ? resolvePlacement(event)
+        : (placementRef.current ?? resolvePlacement(event))
+      if (!next.valid) {
+        stopPlacementCommitPropagation(event)
+        return
+      }
       const patch = DEFAULT_PLACEMENT_PRESET.createPatch()
       const cabinet = CabinetNode.parse({
         ...cabinetDefinition.defaults(),
@@ -219,17 +304,33 @@ const CabinetTool = () => {
       unsubscribePlacementClicks()
       window.removeEventListener('keydown', onKeyDown, true)
     }
-  }, [activeLevelId, previewNode])
+  }, [activeLevelId, placementDimensions, previewNode])
 
   if (!activeLevelId || !placement) return null
+  const placementLabel = !placement.valid
+    ? 'Blocked: Alt to force'
+    : placement.snappedToWall
+      ? placement.snapReason === 'cabinet-edge'
+        ? 'Edge snap'
+        : placement.snapReason === 'corner'
+          ? 'Corner snap'
+          : 'Wall snap'
+      : 'R/T rotate'
 
   return (
     <LevelOffsetGroup>
+      {placement.guide && <WallSnapGuide blocked={!placement.valid} guide={placement.guide} />}
       <group
         position={placement.position}
         rotation={[0, placement.snappedToWall ? placement.yaw : yaw, 0]}
       >
         <primitive object={ghost as Group} />
+        {!placement.valid && (
+          <mesh position={[0, placementDimensions[1] / 2, 0]}>
+            <boxGeometry args={placementDimensions} />
+            <meshBasicMaterial color="#ef4444" opacity={0.16} transparent wireframe />
+          </mesh>
+        )}
       </group>
       <Html
         center
@@ -241,10 +342,14 @@ const CabinetTool = () => {
         style={{ pointerEvents: 'none', userSelect: 'none' }}
         zIndexRange={[100, 0]}
       >
-        <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs shadow-sm backdrop-blur">
-          <span className="font-medium text-foreground">
-            {placement.snappedToWall ? 'Wall snap' : 'R/T rotate'}
-          </span>
+        <div
+          className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-1.5 text-xs shadow-sm backdrop-blur ${
+            placement.valid
+              ? 'border-border/60 bg-background/90'
+              : 'border-red-400/60 bg-red-950/85'
+          }`}
+        >
+          <span className="font-medium text-foreground">{placementLabel}</span>
         </div>
       </Html>
     </LevelOffsetGroup>
