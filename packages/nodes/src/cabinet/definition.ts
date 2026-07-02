@@ -10,6 +10,12 @@ import { cabinetModuleParametrics, cabinetParametrics } from './parametrics'
 import { CabinetModuleNode, CabinetNode } from './schema'
 import { cabinetSlots } from './slots'
 
+function cabinetLayoutRevision(metadata: CabinetNodeType['metadata']): unknown {
+  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? (metadata as Record<string, unknown>).cabinetLayoutRevision
+    : null
+}
+
 export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   kind: 'cabinet',
   schemaVersion: 1,
@@ -109,6 +115,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       JSON.stringify(n.material ?? null),
       JSON.stringify(n.materialPreset ?? null),
       JSON.stringify(n.slots ?? null),
+      JSON.stringify(cabinetLayoutRevision(n.metadata)),
       JSON.stringify(n.children ?? []),
       JSON.stringify(n.stack ?? null),
     ]),

@@ -18,6 +18,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { ArrowDown, ArrowUp, Minus, Pause, Play, Plus, Trash } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cabinetModuleDefinition } from './definition'
+import { CABINET_PRESETS, type CabinetPresetId } from './presets'
 import {
   type CabinetCompartment,
   type CabinetCompartmentType,
@@ -26,6 +27,7 @@ import {
   compartmentShelfCount,
   newCabinetCompartment,
   normalizeCabinetStack,
+  resizeCabinetCompartmentStack,
   stackForCabinet,
 } from './stack'
 
@@ -81,7 +83,12 @@ function runModuleBaseY(node: Pick<CabinetNodeType, 'showPlinth' | 'plinthHeight
   return node.showPlinth ? node.plinthHeight : 0
 }
 
-function totalCabinetHeight(node: Pick<CabinetEditableNode, 'showPlinth' | 'plinthHeight' | 'carcassHeight' | 'withCountertop' | 'countertopThickness'>) {
+function totalCabinetHeight(
+  node: Pick<
+    CabinetEditableNode,
+    'showPlinth' | 'plinthHeight' | 'carcassHeight' | 'withCountertop' | 'countertopThickness'
+  >,
+) {
   return (
     (node.showPlinth ? node.plinthHeight : 0) +
     node.carcassHeight +
@@ -90,13 +97,15 @@ function totalCabinetHeight(node: Pick<CabinetEditableNode, 'showPlinth' | 'plin
 }
 
 function wallBottomHeightForTallAlignment() {
-  return totalCabinetHeight({
-    showPlinth: true,
-    plinthHeight: TALL_PLINTH_HEIGHT,
-    carcassHeight: TALL_CARCASS_HEIGHT,
-    withCountertop: false,
-    countertopThickness: 0,
-  }) - WALL_CARCASS_HEIGHT
+  return (
+    totalCabinetHeight({
+      showPlinth: true,
+      plinthHeight: TALL_PLINTH_HEIGHT,
+      carcassHeight: TALL_CARCASS_HEIGHT,
+      withCountertop: false,
+      countertopThickness: 0,
+    }) - WALL_CARCASS_HEIGHT
+  )
 }
 
 function moduleSummary(module: CabinetModuleNodeType) {
@@ -141,6 +150,9 @@ const ICON_BUTTON_CLASS =
 const STEPPER_BUTTON_CLASS =
   'flex h-8 w-8 items-center justify-center rounded-md border border-border/40 bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#343437] hover:text-foreground'
 
+const PRESET_BUTTON_CLASS =
+  'flex h-9 items-center justify-center rounded-md border border-border/40 bg-[#252527] px-3 py-2 text-center text-xs font-medium text-foreground transition-colors hover:border-border/70 hover:bg-[#303033]'
+
 function Stepper({
   label,
   value,
@@ -180,6 +192,84 @@ function Stepper({
   )
 }
 
+function cabinetMetadataRecord(metadata: CabinetEditableNode['metadata']): Record<string, unknown> {
+  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? (metadata as Record<string, unknown>)
+    : {}
+}
+
+function reflowRunModules({
+  modules,
+  parentRun,
+  patch,
+  scene,
+  selected,
+}: {
+  modules: CabinetModuleNodeType[]
+  parentRun: CabinetNodeType
+  patch: Partial<CabinetModuleNodeType>
+  scene: ReturnType<typeof useScene.getState>
+  selected: CabinetModuleNodeType
+}) {
+  const sorted = [...modules].sort((a, b) => a.position[0] - b.position[0])
+  if (!sorted.some((module) => module.id === selected.id)) return
+
+  let nextLeft = Math.min(...sorted.map((module) => module.position[0] - module.width / 2))
+  for (const module of sorted) {
+    const isSelected = module.id === selected.id
+    const nextWidth = isSelected ? (patch.width ?? module.width) : module.width
+    const nextPatch: Partial<CabinetModuleNodeType> = isSelected ? { ...patch } : {}
+    const nextPosition: [number, number, number] = [
+      nextLeft + nextWidth / 2,
+      isSelected && patch.position ? patch.position[1] : module.position[1],
+      module.position[2],
+    ]
+
+    if (isSelected) {
+      const cabinetType = patch.cabinetType ?? module.cabinetType
+      if (cabinetType === 'base') {
+        nextPatch.depth = patch.depth ?? parentRun.depth
+        nextPatch.carcassHeight = patch.carcassHeight ?? parentRun.carcassHeight
+        nextPatch.plinthHeight = patch.plinthHeight ?? parentRun.plinthHeight
+        nextPatch.toeKickDepth = patch.toeKickDepth ?? parentRun.toeKickDepth
+        nextPatch.countertopThickness = patch.countertopThickness ?? 0
+        nextPatch.countertopOverhang = patch.countertopOverhang ?? parentRun.countertopOverhang
+      }
+    }
+
+    nextPatch.position = nextPosition
+    scene.updateNode(module.id as AnyNodeId, nextPatch)
+
+    const wallChild = wallChildOf(
+      module,
+      scene.nodes as Record<string, CabinetEditableNode | undefined>,
+    )
+    if (wallChild) {
+      scene.updateNode(wallChild.id as AnyNodeId, {
+        position: [
+          0,
+          wallChild.position[1],
+          backAlignZ(nextPatch.depth ?? module.depth, wallChild.depth),
+        ],
+        width: nextWidth,
+      })
+      scene.dirtyNodes.add(module.id as AnyNodeId)
+    }
+
+    nextLeft += nextWidth
+  }
+
+  const metadata = cabinetMetadataRecord(parentRun.metadata)
+  const currentRevision =
+    typeof metadata.cabinetLayoutRevision === 'number' ? metadata.cabinetLayoutRevision : 0
+  scene.updateNode(parentRun.id as AnyNodeId, {
+    metadata: {
+      ...metadata,
+      cabinetLayoutRevision: currentRevision + 1,
+    },
+  })
+}
+
 function CompartmentCard({
   compartment,
   index,
@@ -189,6 +279,7 @@ function CompartmentCard({
   resolvedHeight,
   width,
   onReplace,
+  onResizeHeight,
   onRemove,
   onMove,
 }: {
@@ -200,6 +291,7 @@ function CompartmentCard({
   resolvedHeight: number
   width: number
   onReplace: (next: CabinetCompartment) => void
+  onResizeHeight: (height: number) => void
   onRemove: () => void
   onMove: (delta: -1 | 1) => void
 }) {
@@ -266,7 +358,7 @@ function CompartmentCard({
           label="Height"
           max={carcassHeight}
           min={0.1}
-          onChange={(value) => onReplace({ ...compartment, height: value })}
+          onChange={onResizeHeight}
           precision={2}
           step={0.01}
           unit="m"
@@ -624,7 +716,7 @@ export default function CabinetPanel() {
 
       const step = (time: number) => {
         const t = Math.min(1, (time - startTime) / duration)
-        const eased = 1 - Math.pow(1 - t, 3)
+        const eased = 1 - (1 - t) ** 3
         const nextValue = start + (target - start) * eased
         updateNode({ operationState: nextValue })
 
@@ -656,6 +748,8 @@ export default function CabinetPanel() {
   const commitStack = (next: CabinetCompartment[]) => updateNode({ stack: next })
   const replaceAt = (index: number, next: CabinetCompartment) =>
     commitStack(stack.map((compartment, i) => (i === index ? next : compartment)))
+  const resizeAt = (index: number, height: number) =>
+    commitStack(resizeCabinetCompartmentStack(node, index, height))
   const removeAt = (index: number) => commitStack(stack.filter((_, i) => i !== index))
   const addCompartment = () => commitStack([...stack, newCabinetCompartment('shelf')])
   const moveCompartment = (index: number, delta: -1 | 1) => {
@@ -680,7 +774,11 @@ export default function CabinetPanel() {
       name: 'Wall Cabinet',
       parentId: node.id,
       // Keep the wall cabinet top aligned with the default tall cabinet top.
-      position: [0, wallBottomHeightForTallAlignment() - node.position[1], backAlignZ(node.depth, WALL_DEPTH)],
+      position: [
+        0,
+        wallBottomHeightForTallAlignment() - node.position[1],
+        backAlignZ(node.depth, WALL_DEPTH),
+      ],
       width: node.width,
       depth: WALL_DEPTH,
       carcassHeight: WALL_CARCASS_HEIGHT,
@@ -714,7 +812,10 @@ export default function CabinetPanel() {
     )
       return
     const scene = useScene.getState()
-    const wallChild = wallChildOf(node, scene.nodes as Record<string, CabinetEditableNode | undefined>)
+    const wallChild = wallChildOf(
+      node,
+      scene.nodes as Record<string, CabinetEditableNode | undefined>,
+    )
     if (wallChild) {
       scene.deleteNode(wallChild.id as AnyNodeId)
     }
@@ -767,6 +868,44 @@ export default function CabinetPanel() {
       ? Boolean(wallChildOf(node, nodes as Record<string, CabinetEditableNode | undefined>))
       : false
 
+  const applyPreset = (presetId: CabinetPresetId) => {
+    if (node?.type !== 'cabinet-module') return
+    const scene = useScene.getState()
+    const preset = CABINET_PRESETS.find((entry) => entry.id === presetId)
+    if (!preset) return
+
+    const patch = preset.createPatch(parentRun)
+    const wallChild = wallChildOf(
+      node,
+      scene.nodes as Record<string, CabinetEditableNode | undefined>,
+    )
+    if (wallChild && patch.cabinetType === 'tall') {
+      scene.deleteNode(wallChild.id as AnyNodeId)
+    }
+
+    const nextPatch: Partial<CabinetModuleNodeType> = {
+      ...patch,
+      position: [
+        node.position[0],
+        parentRun?.type === 'cabinet' ? runModuleBaseY(parentRun) : node.position[1],
+        node.position[2],
+      ],
+    }
+
+    if (parentRun?.type === 'cabinet') {
+      reflowRunModules({
+        modules,
+        parentRun,
+        patch: nextPatch,
+        scene,
+        selected: node,
+      })
+    } else {
+      scene.updateNode(node.id as AnyNodeId, nextPatch)
+    }
+    setSelection({ selectedIds: [node.id] })
+  }
+
   if (node.type === 'cabinet' && modules.length > 0) {
     return <CabinetRunPanel modules={modules} node={node} onClose={close} />
   }
@@ -779,6 +918,23 @@ export default function CabinetPanel() {
       title={node.name || 'Modular Cabinet'}
       width={320}
     >
+      {node.type === 'cabinet-module' && parentRun?.type === 'cabinet' && (
+        <PanelSection title="Presets">
+          <div className="grid grid-cols-2 gap-2 px-1 pb-2">
+            {CABINET_PRESETS.map((preset) => (
+              <button
+                className={PRESET_BUTTON_CLASS}
+                key={preset.id}
+                onClick={() => applyPreset(preset.id)}
+                type="button"
+              >
+                <span className="truncate">{preset.label}</span>
+              </button>
+            ))}
+          </div>
+        </PanelSection>
+      )}
+
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
@@ -904,6 +1060,7 @@ export default function CabinetPanel() {
               onMove={(delta) => moveCompartment(index, delta)}
               onRemove={() => removeAt(index)}
               onReplace={(next) => replaceAt(index, next)}
+              onResizeHeight={(height) => resizeAt(index, height)}
               resolvedHeight={
                 rowHeights.get(index) ?? node.carcassHeight / Math.max(stack.length, 1)
               }

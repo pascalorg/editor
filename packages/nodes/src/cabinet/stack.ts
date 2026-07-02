@@ -12,6 +12,7 @@ export type CabinetCompartment = NonNullable<CabinetStackOwner['stack']>[number]
 
 let compartmentIdCounter = 0
 const DEFAULT_SHELF_COUNT = 2
+const DEFAULT_MIN_COMPARTMENT_HEIGHT = 0.1
 
 function makeId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -41,7 +42,9 @@ export function defaultCabinetStack(node: Pick<CabinetStackOwner, 'width'>): Cab
   ]
 }
 
-export function stackForCabinet(node: Pick<CabinetStackOwner, 'width' | 'stack'>): CabinetCompartment[] {
+export function stackForCabinet(
+  node: Pick<CabinetStackOwner, 'width' | 'stack'>,
+): CabinetCompartment[] {
   if (Array.isArray(node.stack) && node.stack.length > 0) return node.stack
   return defaultCabinetStack(node)
 }
@@ -67,7 +70,13 @@ export function compartmentDoorType(
 
 export function normalizeCabinetStack(
   node: Pick<CabinetStackOwner, 'carcassHeight' | 'stack' | 'width'>,
-): Array<{ compartment: CabinetCompartment; index: number; height: number; y0: number; y1: number }> {
+): Array<{
+  compartment: CabinetCompartment
+  index: number
+  height: number
+  y0: number
+  y1: number
+}> {
   const stack = stackForCabinet(node)
   if (stack.length === 0) return []
   const fixed = stack.map((compartment) =>
@@ -87,4 +96,44 @@ export function normalizeCabinetStack(
     y0 = y1
     return row
   })
+}
+
+export function resizeCabinetCompartmentStack(
+  node: Pick<CabinetStackOwner, 'carcassHeight' | 'stack' | 'width'>,
+  index: number,
+  targetHeight: number,
+  minHeight = DEFAULT_MIN_COMPARTMENT_HEIGHT,
+): CabinetCompartment[] {
+  const stack = stackForCabinet(node)
+  if (stack.length === 0 || index < 0 || index >= stack.length) return stack
+  if (stack.length === 1) return [{ ...stack[0]!, height: node.carcassHeight }]
+
+  const otherCount = stack.length - 1
+  const maxTargetHeight = Math.max(minHeight, node.carcassHeight - otherCount * minHeight)
+  const resizedHeight = Math.min(Math.max(targetHeight, minHeight), maxTargetHeight)
+  const remainingHeight = Math.max(minHeight * otherCount, node.carcassHeight - resizedHeight)
+  const normalized = normalizeCabinetStack({ ...node, stack })
+  const otherRows = normalized.filter((row) => row.index !== index)
+  const distributableHeight = Math.max(0, remainingHeight - otherCount * minHeight)
+  const weights = otherRows.map((row) => Math.max(0, row.height - minHeight))
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0)
+
+  const otherHeights = new Map<number, number>()
+  let assignedOtherHeight = 0
+  otherRows.forEach((row, rowIndex) => {
+    const isLastOther = rowIndex === otherRows.length - 1
+    const height = isLastOther
+      ? Math.max(minHeight, remainingHeight - assignedOtherHeight)
+      : minHeight +
+        (totalWeight > 0
+          ? distributableHeight * (weights[rowIndex]! / totalWeight)
+          : distributableHeight / otherCount)
+    assignedOtherHeight += height
+    otherHeights.set(row.index, height)
+  })
+
+  return stack.map((compartment, compartmentIndex) => ({
+    ...compartment,
+    height: compartmentIndex === index ? resizedHeight : otherHeights.get(compartmentIndex),
+  }))
 }

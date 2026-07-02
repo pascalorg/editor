@@ -1,12 +1,13 @@
 import type { SlotDeclaration } from '@pascal-app/core'
 
-export type CabinetSlotId = 'front' | 'carcass' | 'countertop' | 'plinth' | 'hardware'
+export type CabinetSlotId = 'front' | 'carcass' | 'countertop' | 'plinth' | 'hardware' | 'glass'
 
 const FRONT_DEFAULT = 'library:preset-softwhite'
 const CARCASS_DEFAULT = 'library:preset-softwhite'
 const COUNTERTOP_DEFAULT = 'library:wood-finewood27'
 const PLINTH_DEFAULT = 'library:preset-softwhite'
 const HARDWARE_DEFAULT = 'library:metal-chrome'
+const GLASS_DEFAULT = 'library:preset-glass'
 
 export function cabinetSlots(): SlotDeclaration[] {
   return [
@@ -15,5 +16,6 @@ export function cabinetSlots(): SlotDeclaration[] {
     { slotId: 'countertop', label: 'Countertop', default: COUNTERTOP_DEFAULT },
     { slotId: 'plinth', label: 'Plinth', default: PLINTH_DEFAULT },
     { slotId: 'hardware', label: 'Hardware', default: HARDWARE_DEFAULT },
+    { slotId: 'glass', label: 'Glass', default: GLASS_DEFAULT },
   ]
 }
