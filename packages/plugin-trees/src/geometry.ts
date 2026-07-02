@@ -1,7 +1,13 @@
+// ez-tree loads its inlined textures at module scope (needs `document`), so
+// this module must only be imported from lazy client modules (renderers,
+// systems, tools, previews) — never from `index.ts`, a definition, or
+// `floorplan.ts`, or SSR/prerender crashes. Pure helpers shared with the
+// flower/grass builders live in `variant-utils.ts` for that reason.
 import { Tree } from '@dgreenheck/ez-tree'
-import { Box3, type BufferGeometry, type Material, type Mesh, type Object3D } from 'three'
+import type { BufferGeometry, Material, Mesh, Object3D } from 'three'
 import { ezPresetOf } from './presets'
 import type { TreeNode } from './schema'
+import { naturalHeight } from './variant-utils'
 import { toWindMaterial } from './wind-node'
 
 /** The geometry-affecting fields of a tree. Two trees with the same spec share
@@ -139,24 +145,4 @@ export function extractSubMeshes(tree: Object3D): TreeSubMesh[] {
     }
   })
   return out
-}
-
-/** Natural (unscaled) height of a generated tree, so the renderer can scale
- * each instance to the node's `height`. */
-export function naturalHeight(obj: Object3D): number {
-  const box = new Box3().setFromObject(obj)
-  return Math.max(0.001, box.max.y - box.min.y)
-}
-
-/** Deterministic 32-bit RNG (mulberry32) — same seed ⇒ same geometry. Shared by
- * the procedural flower/grass builders so a variant is stable across instances. */
-export function mulberry32(seed: number): () => number {
-  let a = seed || 1
-  return () => {
-    a |= 0
-    a = (a + 0x6d2b79f5) | 0
-    let t = Math.imul(a ^ (a >>> 15), 1 | a)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
 }

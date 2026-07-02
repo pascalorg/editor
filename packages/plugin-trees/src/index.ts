@@ -32,10 +32,12 @@ export const treesPlugin: Plugin = {
   ],
 }
 
+// NOTE: no re-export from './geometry' — it imports ez-tree, which touches
+// `document` at module scope and would crash SSR (this barrel is eagerly
+// imported by host bootstraps). Lazy client modules import it directly.
 export { treeDefinition } from './definition'
 export { flowerDefinition } from './flower-definition'
 export { FlowerNode, FlowerPreset } from './flower-schema'
-export { generateTree } from './geometry'
 export { grassDefinition } from './grass-definition'
 export { GrassNode, GrassPreset } from './grass-schema'
 export { TreeNode, TreePreset } from './schema'

@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo } from 'react'
 import type { Material } from 'three'
-import { generateTree, naturalHeight, treeSpecOf } from './geometry'
+import { generateTree, treeSpecOf } from './geometry'
 import type { TreeNode } from './schema'
+import { naturalHeight } from './variant-utils'
 
 /**
  * Translucent placement ghost — a single ez-tree (not instanced) scaled to the

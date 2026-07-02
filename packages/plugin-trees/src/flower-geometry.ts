@@ -9,8 +9,8 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { FLOWER_PRESETS } from './flower-presets'
 import type { FlowerNode, FlowerPreset } from './flower-schema'
-import { mulberry32, naturalHeight } from './geometry'
 import type { SubMesh, VariantData } from './instanced'
+import { mulberry32, naturalHeight } from './variant-utils'
 import { windStandardMaterial } from './wind-node'
 
 export function flowerVariantKey(preset: FlowerPreset, seed: number, petalColor: string): string {

@@ -1,9 +1,9 @@
 import { type BufferGeometry, ConeGeometry, DoubleSide, Group, Mesh } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { mulberry32, naturalHeight } from './geometry'
 import { GRASS_PRESETS } from './grass-presets'
 import type { GrassNode, GrassPreset } from './grass-schema'
 import type { SubMesh, VariantData } from './instanced'
+import { mulberry32, naturalHeight } from './variant-utils'
 import { windStandardMaterial } from './wind-node'
 
 export function grassVariantKey(preset: GrassPreset, seed: number, bladeColor: string): string {
