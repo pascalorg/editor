@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { GeometryContext } from '@pascal-app/core'
+import type { AnyNode, AnyNodeId, GeometryContext } from '@pascal-app/core'
 import type { BufferAttribute, Mesh, Object3D } from 'three'
 import { buildCabinetGeometry } from '../geometry'
 import { CabinetModuleNode, CabinetNode } from '../schema'
@@ -40,6 +40,38 @@ function findMeshesBySlot(root: Object3D, slotId: string): Mesh[] {
     if (mesh.isMesh && mesh.userData.slotId === slotId) meshes.push(mesh)
   })
   return meshes
+}
+
+function geometryContext({
+  children,
+  resolvables = [],
+  siblings = [],
+}: {
+  children: AnyNode[]
+  resolvables?: AnyNode[]
+  siblings?: AnyNode[]
+}): GeometryContext {
+  const nodes = new Map([...children, ...resolvables, ...siblings].map((node) => [node.id, node]))
+  return {
+    children,
+    parent: null,
+    resolve: (id) => nodes.get(id) as never,
+    siblings,
+  }
+}
+
+function countertopBounds(group: Object3D) {
+  return findMeshesBySlot(group, 'countertop')
+    .map((mesh) => {
+      mesh.geometry.computeBoundingBox()
+      const box = mesh.geometry.boundingBox
+      expect(box).toBeDefined()
+      return {
+        minX: mesh.position.x + box!.min.x,
+        maxX: mesh.position.x + box!.max.x,
+      }
+    })
+    .sort((a, b) => a.minX - b.minX)
 }
 
 describe('buildCabinetGeometry — cutout handles', () => {
@@ -130,24 +162,114 @@ describe('buildCabinetGeometry — run countertops', () => {
     ]
     const group = buildCabinetGeometry(
       run,
-      { children: modules } as GeometryContext,
+      geometryContext({ children: modules }),
       'rendered',
       false,
     )
-    const countertops = findMeshesBySlot(group, 'countertop')
-      .map((mesh) => {
-        mesh.geometry.computeBoundingBox()
-        const box = mesh.geometry.boundingBox
-        expect(box).toBeDefined()
-        return {
-          minX: mesh.position.x + box!.min.x,
-          maxX: mesh.position.x + box!.max.x,
-        }
-      })
-      .sort((a, b) => a.minX - b.minX)
+    const countertops = countertopBounds(group)
 
     expect(countertops.length).toBe(2)
     expect(countertops[0]!.maxX).toBeCloseTo(0)
     expect(countertops[1]!.minX).toBeCloseTo(0.6)
+  })
+
+  test('countertop overhang does not enter an adjacent sibling tall cabinet', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_base-run',
+      position: [0, 0, 0],
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+    })
+    const baseModule = CabinetModuleNode.parse({
+      id: 'cabinet-module_base',
+      parentId: run.id,
+      cabinetType: 'base',
+      position: [0, 0.1, 0],
+      width: 0.6,
+      carcassHeight: 0.72,
+    })
+    const tallRun = CabinetNode.parse({
+      id: 'cabinet_tall-run',
+      position: [-0.6, 0, 0],
+      children: ['cabinet-module_tall' as AnyNodeId],
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+    })
+    const tallModule = CabinetModuleNode.parse({
+      id: 'cabinet-module_tall',
+      parentId: tallRun.id,
+      cabinetType: 'tall',
+      position: [0, 0.1, 0],
+      width: 0.6,
+      carcassHeight: 2.07,
+    })
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({
+        children: [baseModule],
+        resolvables: [tallModule],
+        siblings: [tallRun],
+      }),
+      'rendered',
+      false,
+    )
+    const countertops = countertopBounds(group)
+
+    expect(countertops.length).toBe(1)
+    expect(countertops[0]!.minX).toBeCloseTo(-0.3)
+    expect(countertops[0]!.maxX).toBeCloseTo(0.32)
+  })
+
+  test('countertop overhang is trimmed between adjacent sibling base cabinets', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_left-run',
+      position: [0, 0, 0],
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+    })
+    const baseModule = CabinetModuleNode.parse({
+      id: 'cabinet-module_left',
+      parentId: run.id,
+      cabinetType: 'base',
+      position: [0, 0.1, 0],
+      width: 0.6,
+      carcassHeight: 0.72,
+    })
+    const siblingRun = CabinetNode.parse({
+      id: 'cabinet_right-run',
+      position: [0.6, 0, 0],
+      children: ['cabinet-module_right' as AnyNodeId],
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+    })
+    const siblingModule = CabinetModuleNode.parse({
+      id: 'cabinet-module_right',
+      parentId: siblingRun.id,
+      cabinetType: 'base',
+      position: [0, 0.1, 0],
+      width: 0.6,
+      carcassHeight: 0.72,
+    })
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({
+        children: [baseModule],
+        resolvables: [siblingModule],
+        siblings: [siblingRun],
+      }),
+      'rendered',
+      false,
+    )
+    const countertops = countertopBounds(group)
+
+    expect(countertops.length).toBe(1)
+    expect(countertops[0]!.minX).toBeCloseTo(-0.32)
+    expect(countertops[0]!.maxX).toBeCloseTo(0.3)
   })
 })

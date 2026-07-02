@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { WallNode } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, LevelNode, WallNode } from '@pascal-app/core'
 import type { WallHit } from '../../shared/wall-attach-target'
-import { resolveCabinetWallSnapPlacement } from '../wall-snap'
+import { resolveCabinetWallFaceOffset, resolveCabinetWallSnapPlacement } from '../wall-snap'
 
 function wallHit(overrides: Partial<WallHit> = {}): WallHit {
   const wall = WallNode.parse({
@@ -85,5 +85,51 @@ describe('resolveCabinetWallSnapPlacement', () => {
     expect(placement).not.toBeNull()
     expect(placement!.localX).toBeCloseTo(0.3)
     expect(placement!.snapReason).toBe('corner')
+  })
+
+  test('places the cabinet back against a resolved wall face offset', () => {
+    const placement = resolveCabinetWallSnapPlacement({
+      depth: 0.58,
+      faceOffset: 0.08,
+      hit: wallHit(),
+      width: 0.6,
+    })
+
+    expect(placement).not.toBeNull()
+    expect(placement!.position[2]).toBeCloseTo(0.37)
+  })
+
+  test('resolves the visible face offset from mitered wall footprint', () => {
+    const level = LevelNode.parse({
+      id: 'level_wall-snap-test',
+      children: ['wall_snap-test', 'wall_snap-cross' as AnyNodeId],
+    })
+    const wall = WallNode.parse({
+      id: 'wall_snap-test',
+      parentId: level.id,
+      start: [0, 0],
+      end: [2, 0],
+      thickness: 0.2,
+    })
+    const crossWall = WallNode.parse({
+      id: 'wall_snap-cross',
+      parentId: level.id,
+      start: [1, -1],
+      end: [1, 1],
+      thickness: 0.2,
+    })
+    const nodes = {
+      [level.id]: level,
+      [wall.id]: wall,
+      [crossWall.id]: crossWall,
+    } as Record<AnyNodeId, AnyNode>
+
+    const offset = resolveCabinetWallFaceOffset({
+      hit: wallHit({ localX: 1, wall }),
+      nodes,
+      parentLevelId: level.id,
+    })
+
+    expect(offset).toBeGreaterThan(0.09)
   })
 })

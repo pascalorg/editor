@@ -6,11 +6,21 @@ import {
   CabinetNode,
   emitter,
   type GridEvent,
-  type NodeEvent,
+  getWallThickness,
+  isCurvedWall,
   spatialGridManager,
   useScene,
+  type WallEvent,
+  type WallNode,
 } from '@pascal-app/core'
-import { isGridSnapActive, isMagneticSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  getSideFromNormal,
+  isGridSnapActive,
+  isMagneticSnapActive,
+  isValidWallSideFace,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -22,13 +32,14 @@ import {
   subscribeFloorPlacementClicks,
 } from '../shared/floor-placement'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
-import { findClosestWallInPlan } from '../shared/wall-attach-target'
+import { findClosestWallInPlan, type WallHit } from '../shared/wall-attach-target'
 import { cabinetDefinition, cabinetModuleDefinition } from './definition'
 import { buildCabinetGeometry } from './geometry'
 import { cabinetPresetById } from './presets'
 import {
   type CabinetWallSnapPlacement,
   collectCabinetWallSnapNeighbors,
+  resolveCabinetWallFaceOffset,
   resolveCabinetWallSnapPlacement,
 } from './wall-snap'
 
@@ -93,6 +104,50 @@ function WallSnapGuide({
   )
 }
 
+function cabinetMetadataRecord(metadata: unknown): Record<string, unknown> {
+  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? (metadata as Record<string, unknown>)
+    : {}
+}
+
+function bumpCabinetRunsLayoutRevisionOnLevel(levelId: AnyNodeId) {
+  const scene = useScene.getState()
+  for (const node of Object.values(scene.nodes)) {
+    if (node.type === 'cabinet' && node.parentId === levelId) {
+      const metadata = cabinetMetadataRecord(node.metadata)
+      const currentRevision =
+        typeof metadata.cabinetLayoutRevision === 'number' ? metadata.cabinetLayoutRevision : 0
+      scene.updateNode(node.id as AnyNodeId, {
+        metadata: {
+          ...metadata,
+          cabinetLayoutRevision: currentRevision + 1,
+        },
+      })
+    }
+  }
+}
+
+function wallHitFromWallEvent(event: WallEvent): WallHit | null {
+  if (!event.normal || !isValidWallSideFace(event.normal) || isCurvedWall(event.node)) return null
+  const wall = event.node as WallNode
+  const dx = wall.end[0] - wall.start[0]
+  const dy = wall.end[1] - wall.start[1]
+  const wallLength = Math.hypot(dx, dy)
+  if (wallLength <= 1e-6) return null
+  const side = getSideFromNormal(event.normal)
+
+  return {
+    wall,
+    localX: event.localPosition[0],
+    perpDistance: (side === 'front' ? 1 : -1) * (getWallThickness(wall) / 2),
+    side,
+    dirX: dx / wallLength,
+    dirY: dy / wallLength,
+    wallLength,
+    itemRotation: side === 'front' ? 0 : Math.PI,
+  }
+}
+
 const CabinetTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const [placement, setPlacement] = useState<CabinetPlacement | null>(null)
@@ -138,6 +193,7 @@ const CabinetTool = () => {
     placementRef.current = null
     previousSnapRef.current = null
     previousWasWallSnapRef.current = false
+    let lastWallEventTime = -1
 
     const resolveRawPosition = (
       event: FloorPlacementClickTriggerEvent,
@@ -167,20 +223,24 @@ const CabinetTool = () => {
       return { ...next, conflictIds: result.conflictIds, valid: result.valid }
     }
 
-    const resolveWallPlacement = (raw: [number, number, number]): CabinetPlacement | null => {
+    const resolveWallHitPlacement = (hit: WallHit): CabinetPlacement | null => {
       if (!isMagneticSnapActive()) return null
       const nodes = useScene.getState().nodes
-      const hit = findClosestWallInPlan([raw[0], raw[2]], nodes, activeLevelId as AnyNodeId)
-      if (!hit) return null
       const neighbors = collectCabinetWallSnapNeighbors({
         hit,
         nodes,
         parentLevelId: activeLevelId as AnyNodeId,
         width: previewNode.width,
       })
+      const faceOffset = resolveCabinetWallFaceOffset({
+        hit,
+        nodes,
+        parentLevelId: activeLevelId as AnyNodeId,
+      })
 
       const wallPlacement = resolveCabinetWallSnapPlacement({
         depth: previewNode.depth,
+        faceOffset,
         gridStep: isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
         hit,
         neighbors,
@@ -198,6 +258,14 @@ const CabinetTool = () => {
         snappedToWall: true,
         wallLocalX: wallPlacement.localX,
       }
+    }
+
+    const resolveWallPlacement = (raw: [number, number, number]): CabinetPlacement | null => {
+      if (!isMagneticSnapActive()) return null
+      const nodes = useScene.getState().nodes
+      const hit = findClosestWallInPlan([raw[0], raw[2]], nodes, activeLevelId as AnyNodeId)
+      if (!hit) return null
+      return resolveWallHitPlacement(hit)
     }
 
     const resolvePlacement = (event: FloorPlacementClickTriggerEvent): CabinetPlacement => {
@@ -232,10 +300,21 @@ const CabinetTool = () => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      const ts = event.nativeEvent?.timeStamp ?? -1
+      if (ts === lastWallEventTime) return
       publishPlacement(resolvePlacement(event))
     }
 
-    const onWallMove = (event: NodeEvent) => {
+    const onWallMove = (event: WallEvent) => {
+      lastWallEventTime = event.nativeEvent?.timeStamp ?? -1
+      if (event.node.parentId !== activeLevelId) return
+      const hit = wallHitFromWallEvent(event)
+      const next = hit ? resolveWallHitPlacement(hit) : null
+      if (next) {
+        publishPlacement(withPlacementValidity(next, false))
+        event.stopPropagation()
+        return
+      }
       publishPlacement(resolvePlacement(event))
     }
 
@@ -272,6 +351,7 @@ const CabinetTool = () => {
         { node: cabinet, parentId: activeLevelId },
         { node: module, parentId: cabinet.id },
       ])
+      bumpCabinetRunsLayoutRevisionOnLevel(activeLevelId as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [module.id] })
       triggerSFX('sfx:item-place')
       stopPlacementCommitPropagation(event)

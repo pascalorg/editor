@@ -144,6 +144,25 @@ function resolveCabinetType(
   return parentRun?.runTier === 'tall' ? 'tall' : 'base'
 }
 
+function bumpCabinetRunsLayoutRevisionOnLevel(
+  scene: ReturnType<typeof useScene.getState>,
+  levelId: AnyNodeId,
+) {
+  for (const candidate of Object.values(scene.nodes)) {
+    if (candidate.type === 'cabinet' && candidate.parentId === levelId) {
+      const metadata = cabinetMetadataRecord(candidate.metadata)
+      const currentRevision =
+        typeof metadata.cabinetLayoutRevision === 'number' ? metadata.cabinetLayoutRevision : 0
+      scene.updateNode(candidate.id as AnyNodeId, {
+        metadata: {
+          ...metadata,
+          cabinetLayoutRevision: currentRevision + 1,
+        },
+      })
+    }
+  }
+}
+
 const ICON_BUTTON_CLASS =
   'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/40 bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#343437] hover:text-foreground disabled:opacity-30 disabled:hover:bg-[#2C2C2E] disabled:hover:text-muted-foreground'
 
@@ -268,6 +287,9 @@ function reflowRunModules({
       cabinetLayoutRevision: currentRevision + 1,
     },
   })
+  if (parentRun.parentId) {
+    bumpCabinetRunsLayoutRevisionOnLevel(scene, parentRun.parentId as AnyNodeId)
+  }
 }
 
 function CompartmentCard({
@@ -834,6 +856,9 @@ export default function CabinetPanel() {
       stack: stackForTallModule(),
     })
     scene.dirtyNodes.add(parentRun.id as AnyNodeId)
+    if (parentRun.parentId) {
+      bumpCabinetRunsLayoutRevisionOnLevel(scene, parentRun.parentId as AnyNodeId)
+    }
     setSelection({ selectedIds: [node.id] })
   }
 
@@ -860,6 +885,9 @@ export default function CabinetPanel() {
       stack: [{ ...newCabinetCompartment('door'), shelfCount: 1 }],
     })
     scene.dirtyNodes.add(parentRun.id as AnyNodeId)
+    if (parentRun.parentId) {
+      bumpCabinetRunsLayoutRevisionOnLevel(scene, parentRun.parentId as AnyNodeId)
+    }
     setSelection({ selectedIds: [node.id] })
   }
 
