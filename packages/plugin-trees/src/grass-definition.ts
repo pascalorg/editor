@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { buildGrassFloorplan } from './floorplan'
 import { grassParametrics } from './grass-parametrics'
 import { GrassNode } from './grass-schema'
 
@@ -51,6 +52,7 @@ export const grassDefinition: NodeDefinition<typeof GrassNode> = {
   },
 
   parametrics: grassParametrics,
+  floorplan: buildGrassFloorplan,
 
   renderer: { kind: 'parametric', module: () => import('./grass-proxy-renderer') },
   system: { module: () => import('./grass-system'), priority: 3 },

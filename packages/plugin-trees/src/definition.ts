@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { buildTreeFloorplan, treeTrunkRadius } from './floorplan'
 import { treeParametrics } from './parametrics'
 import { TreeNode } from './schema'
 
@@ -49,10 +50,12 @@ export const treeDefinition: NodeDefinition<typeof TreeNode> = {
     snappable: {},
     floorPlaced: {
       // `footprint` receives the host's `AnyNode`; cast to our schema type the
-      // same way built-in kinds do (`node as ShelfNode`).
+      // same way built-in kinds do (`node as ShelfNode`). Trunk-sized, not
+      // canopy-sized — the drag/placement box should hug where the tree
+      // actually plants, not span the whole crown.
       footprint: (node) => {
         const tree = node as unknown as TreeNode
-        const radius = Math.max(0.5, tree.height * 0.28)
+        const radius = treeTrunkRadius(tree)
         return {
           dimensions: [radius * 2, tree.height, radius * 2] as [number, number, number],
           rotation: tree.rotation,
@@ -63,6 +66,8 @@ export const treeDefinition: NodeDefinition<typeof TreeNode> = {
   },
 
   parametrics: treeParametrics,
+  // 2D plan symbol: dashed canopy ring + trunk dot (see floorplan.ts).
+  floorplan: buildTreeFloorplan,
 
   // Instanced rendering: an invisible per-node proxy for selection/outline...
   renderer: { kind: 'parametric', module: () => import('./proxy-renderer') },

@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { buildFlowerFloorplan } from './floorplan'
 import { flowerParametrics } from './flower-parametrics'
 import { FlowerNode } from './flower-schema'
 
@@ -51,6 +52,7 @@ export const flowerDefinition: NodeDefinition<typeof FlowerNode> = {
   },
 
   parametrics: flowerParametrics,
+  floorplan: buildFlowerFloorplan,
 
   renderer: { kind: 'parametric', module: () => import('./flower-proxy-renderer') },
   system: { module: () => import('./flower-system'), priority: 3 },
