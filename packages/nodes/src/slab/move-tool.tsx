@@ -18,6 +18,7 @@ import {
   CursorSphere,
   consumePlacementDragRelease,
   getSegmentGridStep,
+  isAlignmentGuideActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
   projectAlignmentGuidesWorldToActiveBuildingLocal,
@@ -193,16 +194,16 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       let deltaZ = localZ - anchor[1]
 
       // Figma-style alignment snap: align the slab's translated polygon
-      // vertices to other objects' anchors; fold the snap into the delta and
-      // publish a guide. Alignment follows the global magnetic snap mode.
-      const bypass = !isMagneticSnapActive()
-      if (!bypass && alignmentCandidates.length > 0) {
+      // vertices to other objects' anchors and publish a guide. Guides are
+      // DISPLAYED in every snapping mode (isAlignmentGuideActive); the magnetic
+      // pull into the delta applies only in 'lines' mode (isMagneticSnapActive).
+      if (isAlignmentGuideActive() && alignmentCandidates.length > 0) {
         const result = resolveAlignmentForActiveBuilding({
           moving: polygonAnchors(slabId, translatePolygon(originalPolygon, deltaX, deltaZ)),
           candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,
         })
-        if (result.snap) {
+        if (result.snap && isMagneticSnapActive()) {
           deltaX += result.snap.dx
           deltaZ += result.snap.dz
         }

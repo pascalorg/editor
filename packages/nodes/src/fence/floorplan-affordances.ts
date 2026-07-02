@@ -15,6 +15,7 @@ import {
   alignFloorplanDraftPoint,
   type FencePlanPoint,
   getSegmentGridStep,
+  isAlignmentGuideActive,
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
@@ -291,12 +292,14 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
         })
         // Figma-style alignment on the dragged endpoint — snaps it onto
         // another object's edge / wall face and publishes a guide, matching
-        // the 3D fence endpoint action. It is a line snap, so gate it on the
-        // magnetic (`'lines'`) mode. The dragged fence and its linked siblings
-        // (which cascade with the endpoint) are excluded from the candidate
-        // pool. Alt is reserved for detach here, NOT bypass.
+        // the 3D fence endpoint action. The guide is DISPLAYED in every mode
+        // except Off (isAlignmentGuideActive); the magnetic pull onto it is
+        // applied only in 'lines' mode (isMagneticSnapActive). The dragged fence
+        // and its linked siblings (which cascade with the endpoint) are excluded
+        // from the candidate pool. Alt is reserved for detach here, NOT bypass.
         const aligned = alignFloorplanDraftPoint(snapped, {
-          bypass: !isMagneticSnapActive(),
+          applySnap: isMagneticSnapActive(),
+          bypass: !isAlignmentGuideActive(),
           excludeIds: [node.id, ...linkedOriginals.map((l) => l.id)],
         }) as FencePlanPoint
         const nextStart = endpoint === 'start' ? aligned : fixedPoint

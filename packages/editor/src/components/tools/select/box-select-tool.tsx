@@ -140,7 +140,7 @@ function collectNodeIdsInScreenRect(
 }
 
 function commitBoxSelection(ids: string[], event: PointerEvent) {
-  const shouldAppend = event.metaKey || event.ctrlKey
+  const shouldAppend = event.metaKey || event.ctrlKey || event.shiftKey
   const { phase, structureLayer } = useEditor.getState()
   const viewer = useViewer.getState()
 

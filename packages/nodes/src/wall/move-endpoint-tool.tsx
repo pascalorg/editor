@@ -20,6 +20,7 @@ import {
   formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
   isSegmentLongEnough,
@@ -30,6 +31,7 @@ import {
   useAlignmentGuides,
   useInteractionScope,
   useWallSnapIndicator,
+  WALL_CONNECT_SNAP_RADIUS,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -340,19 +342,36 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       // candidate, so the dot always sits on an actual point (endpoint /
       // midpoint), never an empty-space bbox corner. Layered on top of the
       // grid + corner snap above; Alt is reserved for corner-detach here.
-      // Alignment axes are the "Lines" snap, so gate them on the magnetic flag —
-      // Off / Grid / Angles must not pull the endpoint onto other elements' lines.
+      // Alignment lines are DISPLAYED in every mode except Off
+      // (isAlignmentGuideActive); the magnetic pull onto them is applied only in
+      // 'lines' mode (isMagneticSnapActive).
       let alignedPoint = snappedPoint
-      if (isMagneticSnapActive() && wallAlignmentCandidates.length > 0) {
+      if (isAlignmentGuideActive() && wallAlignmentCandidates.length > 0) {
         const ar = resolveAlignment({
           moving: [{ nodeId, kind: 'corner', x: snappedPoint[0], z: snappedPoint[1] }],
           candidates: wallAlignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,
         })
-        if (ar.snap) {
+        const magnetic = isMagneticSnapActive()
+        if (ar.snap && magnetic) {
           alignedPoint = [snappedPoint[0] + ar.snap.dx, snappedPoint[1] + ar.snap.dz]
         }
-        useAlignmentGuides.getState().set(ar.guides)
+        // Non-magnetic modes don't pull onto a guide, so only surface guides
+        // whose anchor is within connect distance — a corner shouldn't magnetise
+        // the dot from farther than any other point on the wall. See wall draft.
+        useAlignmentGuides
+          .getState()
+          .set(
+            magnetic
+              ? ar.guides
+              : ar.guides.filter(
+                  (guide) =>
+                    Math.hypot(
+                      snappedPoint[0] - guide.anchor.x,
+                      snappedPoint[1] - guide.anchor.z,
+                    ) <= WALL_CONNECT_SNAP_RADIUS,
+                ),
+          )
       } else {
         useAlignmentGuides.getState().clear()
       }

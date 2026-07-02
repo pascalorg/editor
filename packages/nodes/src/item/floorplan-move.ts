@@ -283,7 +283,8 @@ function buildFloorItemSession(
     apply({ planPoint }) {
       const gridSnapped = resolvePlanPoint(planPoint)
       // Figma-style alignment layered on the grid snap, mode-driven (matching 3D):
-      // guides only resolve/snap when magnetic (lines) mode is active.
+      // guides are DISPLAYED in every snapping mode; the magnetic pull onto them
+      // is applied only in "lines" mode (`applySnap`).
       const { point: snapped } = applyFloorplanAlignment(
         gridSnapped,
         movingFootprintAnchors(
@@ -293,7 +294,7 @@ function buildFloorItemSession(
           rotationY,
         ),
         candidates,
-        { bypass: !isMagneticSnapActive() },
+        { applySnap: isMagneticSnapActive() },
       )
 
       const sourceY = node.position[1]

@@ -7,6 +7,7 @@ import {
 import type { ContextualShortcutHint } from '../../../lib/contextual-help'
 import { hasActivePaintMaterial } from '../../../lib/material-paint'
 import { paintScopeLabel, type PaintScope } from '../../../lib/paint-scope'
+import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
   cycleSnappingModeIn,
   resolveSnapFlags,
@@ -39,13 +40,31 @@ const ROW_CLASS = 'col-span-2 grid grid-cols-subgrid'
 // `items-start` keeps it on the label's first line when the label wraps.
 const KEY_CELL_CLASS = 'flex items-center gap-1'
 
-function ShortcutSequence({ keys }: { keys: string[] }) {
+// Keys pressed together join with "+"; an entry that is itself an array is a
+// group of alternatives and joins with "/" — so [['Cmd/Ctrl', 'Shift'],
+// 'Left click'] reads "⌘ / ⇧ + click".
+function ShortcutSequence({ keys }: { keys: Array<string | string[]> }) {
   return (
     <div className={KEY_CELL_CLASS}>
-      {keys.map((key, index) => (
-        <Fragment key={`${key}-${index}`}>
-          {index > 0 ? <span className="text-[9px] text-muted-foreground/70">/</span> : null}
-          <ShortcutToken className={TOKEN_CLASS} value={key} />
+      {keys.map((entry, index) => (
+        <Fragment key={`${String(entry)}-${index}`}>
+          {index > 0 ? (
+            <span className="font-medium text-[12px] text-muted-foreground/80 leading-none">
+              +
+            </span>
+          ) : null}
+          {Array.isArray(entry) ? (
+            entry.map((alternative, altIndex) => (
+              <Fragment key={`${alternative}-${altIndex}`}>
+                {altIndex > 0 ? (
+                  <span className="text-[9px] text-muted-foreground/70">/</span>
+                ) : null}
+                <ShortcutToken className={TOKEN_CLASS} value={alternative} />
+              </Fragment>
+            ))
+          ) : (
+            <ShortcutToken className={TOKEN_CLASS} value={entry} />
+          )}
         </Fragment>
       ))}
     </div>
@@ -151,7 +170,10 @@ function SnappingChips({ context }: { context: SnapContext }) {
         ariaLabel={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
         icon={SNAPPING_MODE_ICONS[snappingMode]}
         label={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
-        onClick={() => setSnappingMode(context, cycleSnappingModeIn(context, snappingMode))}
+        onClick={() => {
+          setSnappingMode(context, cycleSnappingModeIn(context, snappingMode))
+          sfxEmitter.emit('sfx:grid-snap')
+        }}
         shortcut="Shift"
         tooltip="Snapping mode — click or press Shift to cycle"
       />
@@ -159,7 +181,10 @@ function SnappingChips({ context }: { context: SnapContext }) {
         <ChipRow
           ariaLabel={`Grid step: ${gridSnapStep.toFixed(2)} m`}
           label={`Grid: ${gridSnapStep.toFixed(2)} m`}
-          onClick={() => setGridSnapStep(nextGridSnapStep(gridSnapStep))}
+          onClick={() => {
+            setGridSnapStep(nextGridSnapStep(gridSnapStep))
+            sfxEmitter.emit('sfx:grid-snap')
+          }}
           shortcut="Ctrl"
           tooltip="Grid step — click or tap Ctrl to cycle"
         />

@@ -28,6 +28,14 @@ export type WallDraftSnapResult = {
 }
 
 export const WALL_JOIN_SNAP_RADIUS = 0.35
+// Tight capture radius for the connectivity snap that runs in NON-magnetic modes
+// (grid / off / angles). Joining an existing wall is treated as connectivity —
+// separate from the 'lines' magnetic alignment — so a room can still close in
+// those modes: within this distance of a wall the endpoint sticks onto it (and
+// the beacon shows); beyond it, positioning is left to the mode. Kept small so
+// only the last few cm near a wall stick, well above the room-detection junction
+// tolerance so a captured endpoint always registers as connected.
+export const WALL_CONNECT_SNAP_RADIUS = 0.05
 // Generous radius for snapping to an *existing* wall's endpoint while
 // drafting. Larger than `WALL_JOIN_SNAP_RADIUS` because endpoint snap
 // is the strongest user intent (closing a polygon, attaching to a

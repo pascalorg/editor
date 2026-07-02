@@ -1,6 +1,13 @@
 import type { Point2D } from '@pascal-app/core'
 import type { FloorplanLineSegment, FloorplanSelectionBounds } from './types'
 
+// Baseline rotation (deg) that orients the plan-local scene "north up" on
+// screen. The on-screen floor-plan scene `<g>` is rotated by
+// `FLOORPLAN_VIEW_ROTATION_DEG + userRotation - buildingRotation`; the PDF
+// export mirrors the aligned-to-north case (user offset 0) so an export points
+// the same way as the app's north-aligned view.
+export const FLOORPLAN_VIEW_ROTATION_DEG = 90
+
 export function clampPlanValue(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }

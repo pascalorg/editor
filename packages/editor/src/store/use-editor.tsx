@@ -1266,6 +1266,20 @@ export function isGridSnapActive(): boolean {
 }
 
 /**
+ * Whether alignment "lines" should be DISPLAYED for the active context.
+ *
+ * True whenever a snappable context is active — in EVERY snapping mode,
+ * including `'off'`. The guides are passive reference feedback; this is
+ * decoupled from the magnetic *pull*: a producer publishes guides whenever this
+ * is true, but only applies the alignment delta when `isMagneticSnapActive()`
+ * (i.e. `'lines'`). So the user always sees the same alignment lines while
+ * snapping to grid / angles / off, and only snaps to them in `'lines'` mode.
+ */
+export function isAlignmentGuideActive(): boolean {
+  return getActiveSnapContext() !== null
+}
+
+/**
  * The snapping context for what the user is currently doing (wall / item /
  * polygon), or null when nothing snappable is active. Derived from the
  * authoritative interaction scope, falling back to the armed build tool (the
@@ -1299,13 +1313,16 @@ export function getContinuation(context: ContinuationContext): ContinuationMode 
 }
 
 /**
- * The effective snapping mode for the active context. Falls back to `item`'s
- * default (free) when no snappable context is active, so a stray reader never
- * grid-quantizes outside an interaction.
+ * The effective snapping mode for the active context. Falls back to `'off'` when
+ * no snappable context is active (select / idle, no armed tool) so grid /
+ * magnetic / angle readers — including the snap-grid overlay — stay inert
+ * outside an interaction. Per-context defaults (item is `'grid'`) only take
+ * effect once a tool is armed or an interaction begins; otherwise the item
+ * default would light up the snap grid at idle.
  */
 export function getActiveSnappingMode(): SnappingMode {
   const context = getActiveSnapContext()
-  if (!context) return defaultSnappingModeFor('item')
+  if (!context) return 'off'
   return useEditor.getState().snappingModeByContext[context]
 }
 

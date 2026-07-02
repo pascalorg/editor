@@ -8861,7 +8861,7 @@ export function FloorplanPanel({
         // `grid` quantizes via `getSnappedFloorplanPoint` (step 0 in non-grid
         // modes), `lines` pulls onto alignment, `off` is free.
         const snappedPoint = alignFloorplanDraftPoint(getSnappedFloorplanPoint(planPoint), {
-          bypass: !isMagneticSnapActive(),
+          applySnap: isMagneticSnapActive(),
         })
         emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
@@ -8898,12 +8898,12 @@ export function FloorplanPanel({
         const fenceLocked =
           fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
         let snappedPoint = fenceSnapped
-        if (fenceLocked || fenceAngleSnap) useAlignmentGuides.getState().clear()
+        if (fenceLocked) useAlignmentGuides.getState().clear()
+        // Alignment lines show in every mode; the pull applies only when
+        // magnetic ('lines') and the segment isn't angle-locked.
         else
           snappedPoint = alignFloorplanDraftPoint(fenceSnapped, {
-            // Alignment is a line snap (pulls onto existing corners/edges) —
-            // suppress it whenever magnetic snap is off (`'off'` / `'angles'`).
-            bypass: !isMagneticSnapActive(),
+            applySnap: isMagneticSnapActive() && !fenceAngleSnap,
           })
 
         emitFloorplanGridEvent('move', snappedPoint, event)
@@ -8947,7 +8947,7 @@ export function FloorplanPanel({
           useAlignmentGuides.getState().clear()
         } else {
           snappedPoint = alignFloorplanDraftPoint(fallbackPoint, {
-            bypass: !isMagneticSnapActive(),
+            applySnap: isMagneticSnapActive(),
           })
         }
 
@@ -9098,11 +9098,10 @@ export function FloorplanPanel({
       if (lockedToWall) {
         useAlignmentGuides.getState().clear()
       } else {
+        // Alignment lines show in every mode; the pull applies only when
+        // magnetic ('lines') and the segment isn't angle-locked.
         snappedPoint = alignFloorplanDraftPoint(wallSnapped, {
-          applySnap: !wallAngleSnap,
-          // Alignment is a line snap (pulls onto existing corners/edges) —
-          // suppress it whenever magnetic snap is off (`'off'` / `'angles'`).
-          bypass: !isMagneticSnapActive(),
+          applySnap: isMagneticSnapActive() && !wallAngleSnap,
         })
       }
       useWallSnapIndicator

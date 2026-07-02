@@ -14,6 +14,7 @@ import {
   consumePlacementDragRelease,
   DragBoundingBox,
   EDITOR_LAYER,
+  isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
@@ -204,7 +205,7 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       // Magnetic alignment: snap the footprint box edges onto nearby geometry
       // and publish guides. Grid follows the snapping mode; lines follow
       // magnetic alignment — the two are independent.
-      if (isMagneticSnapActive()) {
+      if (isAlignmentGuideActive()) {
         const proposed: Aabb2D = {
           minX: x + ox - hx,
           maxX: x + ox + hx,
@@ -212,8 +213,10 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
           maxZ: z + oz + hz,
         }
         const { dx, dz, guides } = resolveGhostAlignment(nodeId, proposed, candidates)
-        x += dx
-        z += dz
+        if (isMagneticSnapActive()) {
+          x += dx
+          z += dz
+        }
         useAlignmentGuides.getState().set(guides)
       } else {
         useAlignmentGuides.getState().clear()

@@ -58,6 +58,8 @@ export const Grid = ({
   // ghost into plane-local XY (the cursor reveal) without re-centring the mesh.
   const invQuatRef = useRef(new Quaternion())
   const wallCursorRef = useRef(new Vector3())
+  // Scratch for deriving a moving wall-item's host normal from its mesh.
+  const wallNormalRef = useRef(new Vector3())
   // Last Y pushed to `gridY` state, so the per-frame surface follow only triggers
   // a React re-render when the height actually changes (not every frame).
   const lastGridYRef = useRef<number | null>(null)
@@ -209,7 +211,21 @@ export const Grid = ({
       surfaceNormal = published.normal
     } else if (movingForGrid) {
       const ghostMesh = sceneRegistry.nodes.get(movingForGrid.id as AnyNodeId)
-      if (ghostMesh) surfacePoint = ghostMesh.getWorldPosition(worldPosRef.current)
+      if (ghostMesh) {
+        surfacePoint = ghostMesh.getWorldPosition(worldPosRef.current)
+        // A wall-hosted item read off its mesh gets its host's orientation
+        // immediately: its local +Z faces out of the wall (same convention the
+        // placement coordinator publishes). Without this the grid flashes
+        // horizontal on move-start until the first pointer move publishes a
+        // wall surface.
+        const attachTo = movingForGrid.type === 'item' ? movingForGrid.asset?.attachTo : undefined
+        if (attachTo === 'wall' || attachTo === 'wall-side') {
+          ghostMesh.getWorldQuaternion(invQuatRef.current)
+          const fwd = wallNormalRef.current.set(0, 0, 1).applyQuaternion(invQuatRef.current)
+          fwd.y = 0
+          if (fwd.lengthSq() > 1e-6) surfaceNormal = fwd.normalize()
+        }
+      }
     }
 
     const gridMesh = gridRef.current
@@ -241,7 +257,10 @@ export const Grid = ({
       // the old lerp made the grid visibly drift up to a new floor height.
       // Cursor uniform tracks the world cursor (mirrored on Z for the flat plane).
       const targetY = surfacePoint ? surfacePoint.y : levelY
-      gridMesh.position.set(0, targetY, 0)
+      // Visual mesh rides 1mm above the surface: at exactly the surface Y the
+      // lattice is coplanar with the slab top and z-fights it. The event plane
+      // (`gridY` → useGridEvents) stays at the true surface height.
+      gridMesh.position.set(0, targetY + 0.001, 0)
       gridMesh.quaternion.copy(HORIZONTAL_QUATERNION)
       const world = lastWorldCursorRef.current
       if (world) {

@@ -25,7 +25,7 @@ describe('resolveSelectModeHelpHints', () => {
       }),
     ).toEqual([
       {
-        keys: ['Cmd/Ctrl', 'Left click'],
+        keys: [['Cmd/Ctrl', 'Shift'], 'Left click'],
         label: 'Add or remove objects from the selection',
         active: true,
       },
@@ -42,24 +42,25 @@ describe('resolveSelectModeHelpHints', () => {
     })
 
     expect(hints).toContainEqual({
-      keys: ['Cmd/Ctrl', 'Left click'],
+      keys: ['Left click'],
       label: 'Drag selected movable object',
     })
     expect(hints).toContainEqual({
       keys: ['Cmd/Ctrl', 'Right click'],
       label: 'Drag left or right to rotate selected object',
     })
-    // The Shift bypass hint is gated to the in-progress direct-move gesture
-    // (Cmd/Ctrl held); on an idle selection it must not appear (Shift there
-    // means multi-select, not bypass).
-    expect(hints).not.toContainEqual({
-      keys: ['Shift'],
-      label: 'Hold to bypass snaps and angle steps',
+    // Cmd/Ctrl and Shift click both toggle selection membership (3D selection
+    // manager and 2D floorplan alike) — advertised as a single or-group row.
+    expect(hints).toContainEqual({
+      keys: [['Cmd/Ctrl', 'Shift'], 'Left click'],
+      label: 'Add or remove objects from the selection',
       active: false,
     })
   })
 
-  test('switches direct manipulation labels while constraints are bypassed', () => {
+  test('holding a modifier keeps the same rows and only lights the selection one', () => {
+    // Guides/snapping are governed by the snapping mode (Shift toggles it),
+    // so no modifier-specific "freely / with guides / bypass" variants exist.
     const hints = resolveSelectModeHelpHints({
       selectedCount: 1,
       hasMovableSelection: true,
@@ -68,20 +69,20 @@ describe('resolveSelectModeHelpHints', () => {
       shiftPressed: true,
     })
 
-    expect(hints).toContainEqual({
-      keys: ['Cmd/Ctrl', 'Left click'],
-      label: 'Drag selected movable object freely',
-      active: true,
-    })
-    expect(hints).toContainEqual({
-      keys: ['Cmd/Ctrl', 'Right click'],
-      label: 'Drag left or right to rotate freely',
-      active: true,
-    })
-    expect(hints).toContainEqual({
-      keys: ['Shift'],
-      label: 'Guided constraints bypassed',
-      active: true,
-    })
+    expect(hints).toEqual([
+      {
+        keys: ['Left click'],
+        label: 'Drag selected movable object',
+      },
+      {
+        keys: ['Cmd/Ctrl', 'Right click'],
+        label: 'Drag left or right to rotate selected object',
+      },
+      {
+        keys: [['Cmd/Ctrl', 'Shift'], 'Left click'],
+        label: 'Add or remove objects from the selection',
+        active: true,
+      },
+    ])
   })
 })

@@ -13,9 +13,9 @@ import {
   CursorSphere,
   clearCeilingSnapFeedback,
   EDITOR_LAYER,
+  isAlignmentGuideActive,
   isAngleSnapActive,
   isGridSnapActive,
-  isMagneticSnapActive,
   markToolCancelConsumed,
   resolveCeilingPlanPointSnap,
   triggerSFX,
@@ -117,7 +117,7 @@ export const CeilingTool: React.FC = () => {
         rawPoint,
         fallbackPoint: orthoPoint,
         levelId: currentLevelId,
-        altKey: !isMagneticSnapActive(),
+        altKey: !isAlignmentGuideActive(),
       }).point
       setSnappedCursorPosition(displayPoint)
       if (
