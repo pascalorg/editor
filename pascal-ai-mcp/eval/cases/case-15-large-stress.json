@@ -1,0 +1,15 @@
+{
+  "id": "case-15-large-stress",
+  "category": "大户型压力测试",
+  "difficulty": "hard",
+  "description": "五室两厅三卫，180平米，压力测试房间数量多时的收敛性和墙体拓扑复杂度",
+  "turns": [
+    { "role": "user", "message": "五室两厅三卫，面积约180平米，需要一个家政间和一个储物间" },
+    { "action": "confirm" }
+  ],
+  "expectedFacts": {
+    "bedroom_count": 5,
+    "requiredRoomTypes": ["卧室", "客厅", "卫生间"]
+  },
+  "notes": "房间数量多、墙体拓扑复杂，是最容易触发 maxToolRounds 用尽、converged=false 的场景，也是观察 T 型墙去重在大量房间下是否稳定的重点用例"
+}

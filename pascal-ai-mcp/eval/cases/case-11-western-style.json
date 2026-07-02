@@ -1,0 +1,15 @@
+{
+  "id": "case-11-western-style",
+  "category": "欧美住宅习惯",
+  "difficulty": "standard",
+  "description": "欧美住宅习惯，三室两厅，大开间客餐厨一体",
+  "turns": [
+    { "role": "user", "message": "按欧美住宅习惯设计三室两厅，总面积约140平米，客厅厨房餐厅一体式大开间，卧室都带步入式衣帽间" },
+    { "action": "confirm" }
+  ],
+  "expectedFacts": {
+    "bedroom_count": 3,
+    "requiredRoomTypes": ["卧室", "客厅", "厨房"]
+  },
+  "notes": "大开间意味着客厅/厨房/餐厅之间可能不设隔墙，跟 case-08 一样要留意 findDoorlessRooms 是否误报；步入式衣帽间可能被建成卧室的子房间，观察是否被误判为独立卧室拉低卧室计数比对"
+}

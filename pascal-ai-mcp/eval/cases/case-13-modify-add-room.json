@@ -1,0 +1,12 @@
+{
+  "id": "case-13-modify-add-room",
+  "category": "修改已有场景：新增房间",
+  "difficulty": "modify",
+  "basedOn": "case-03-two-bed-standard",
+  "turns": [
+    { "role": "user", "message": "在客厅旁边再加一个书房" },
+    { "action": "confirm" }
+  ],
+  "expectedFacts": {},
+  "notes": "依赖 case-03 先成功生成一个场景，harness 会把 case-03 跑出的 sceneId 注入这个用例的请求里。用于验证增量修改路径（modify()）不会破坏已有结构，也用于观察这次修的 converged 检查 / retry 路径在真实链路里的行为"
+}

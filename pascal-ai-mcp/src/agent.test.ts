@@ -2,14 +2,17 @@ import { describe, expect, test } from 'bun:test'
 import {
   buildOpeningRepairData,
   evaluateBrief,
+  findIsolatedBedrooms,
   formatSummary,
   mergeBrief,
+  modifyFailureRecovery,
   publicEditorUrl,
   shouldModifyExistingScene,
+  shouldRouteAsExistingSceneRequest,
   isSceneQuestion,
   classifySceneIntentFallback,
-  buildDeterministicSingleRoomPlan,
-  normalizeConstructionPlan,
+  type WallWithOpenings,
+  type ZoneSummary,
 } from './agent'
 import type { DesignBrief, RequirementFact } from './types'
 
@@ -157,29 +160,81 @@ test('existing scene requests are routed by CRUD intent', () => {
   expect(classifySceneIntentFallback('客厅东边的窗户')).toBe('ambiguous')
 })
 
-test('builds an authoritative construction plan for an exact single room', () => {
-  const plan = buildDeterministicSingleRoomPlan(brief({
-    existingCondition: [
-      fact('room_width_m', '宽度', 4),
-      fact('room_length_m', '长度', 5),
-    ],
-    designGoals: [fact('required_rooms', '必要房间', ['卧室'])],
-  }))
-  expect(plan?.footprint).toEqual({
-    widthM: 4,
-    depthM: 5,
-    polygon: [[-2, -2.5], [2, -2.5], [2, 2.5], [-2, 2.5]],
+function zone(id: string, name: string, polygon: Array<[number, number]>): ZoneSummary {
+  return { id, name, polygon }
+}
+
+function doorWall(id: string, start: [number, number], end: [number, number]): WallWithOpenings {
+  return { id, start, end, openings: [{ type: 'door' }] }
+}
+
+describe('circulation: findIsolatedBedrooms', () => {
+  test('bedroom directly connecting to a hallway/living room passes', () => {
+    const zones = [
+      zone('bed', '卧室', [[0, 0], [4, 0], [4, 3], [0, 3]]),
+      zone('hall', '走廊', [[4, 0], [8, 0], [8, 3], [4, 3]]),
+    ]
+    const walls = [doorWall('w1', [4, 0], [4, 3])]
+    expect(findIsolatedBedrooms(zones, walls)).toEqual([])
   })
-  expect(plan?.rooms[0]?.type).toBe('bedroom')
+
+  test('bedroom whose only door leads to the kitchen is flagged', () => {
+    const zones = [
+      zone('bed', '卧室', [[0, 0], [4, 0], [4, 3], [0, 3]]),
+      zone('kit', '厨房', [[4, 0], [8, 0], [8, 3], [4, 3]]),
+    ]
+    const walls = [doorWall('w1', [4, 0], [4, 3])]
+    expect(findIsolatedBedrooms(zones, walls)).toEqual(['卧室'])
+  })
+
+  test('bedroom whose only door leads to another bedroom is flagged, even if that bedroom reaches circulation', () => {
+    const zones = [
+      zone('bedA', '卧室A', [[0, 0], [4, 0], [4, 3], [0, 3]]),
+      zone('bedB', '卧室B', [[4, 0], [8, 0], [8, 3], [4, 3]]),
+      zone('living', '客厅', [[8, 0], [12, 0], [12, 3], [8, 3]]),
+    ]
+    const walls = [doorWall('w1', [4, 0], [4, 3]), doorWall('w2', [8, 0], [8, 3])]
+    // 卧室A can only reach 客厅 by transiting *through* 卧室B, which the rule
+    // forbids — it must be flagged even though 卧室B itself is fine (it
+    // reaches 客厅 directly, one hop, no bedroom in between).
+    expect(findIsolatedBedrooms(zones, walls)).toEqual(['卧室A'])
+  })
+
+  test('bedroom reaching a walk-in closet counts as satisfied under the current rule (documented limitation)', () => {
+    // classifyCirculationRoomKind only special-cases bedroom/kitchen/
+    // bathroom; anything else (walk-in closets, dining, storage, ...) is
+    // 'passable', so reaching one at all — even a closet with no further
+    // connection onward — already satisfies the check. This locks in that
+    // known tradeoff (same class as findStrayWindows' L-shape limitation)
+    // rather than leaving it as an undocumented surprise.
+    const zones = [
+      zone('bed', '卧室', [[0, 0], [4, 0], [4, 3], [0, 3]]),
+      zone('closet', '衣帽间', [[4, 0], [6, 0], [6, 3], [4, 3]]),
+    ]
+    const walls = [doorWall('w1', [4, 0], [4, 3])]
+    expect(findIsolatedBedrooms(zones, walls)).toEqual([])
+  })
 })
 
-test('rejects overlapping rooms in a generated construction plan', () => {
-  expect(() => normalizeConstructionPlan({
-    footprint: { widthM: 6, depthM: 4, polygon: [[-3, -2], [3, -2], [3, 2], [-3, 2]] },
-    rooms: [
-      { name: 'A', type: 'bedroom', polygon: [[-3, -2], [1, -2], [1, 2], [-3, 2]], furniture: [] },
-      { name: 'B', type: 'living', polygon: [[0, -2], [3, -2], [3, 2], [0, 2]], furniture: [] },
-    ],
-    openings: [],
-  })).toThrow('overlapping rooms')
+describe('modify-failure recovery', () => {
+  test('a pending modification stays retryable via confirm', () => {
+    const recovery = modifyFailureRecovery(true, true)
+    expect(recovery).toEqual({ canRetry: true, phase: 'awaiting_modification_confirmation' })
+  })
+
+  test('no pending modification but a prior scene result falls back to completed_with_issues', () => {
+    const recovery = modifyFailureRecovery(false, true)
+    expect(recovery).toEqual({ canRetry: false, phase: 'completed_with_issues' })
+  })
+
+  test('no pending modification and no scene result is a hard failure', () => {
+    const recovery = modifyFailureRecovery(false, false)
+    expect(recovery).toEqual({ canRetry: false, phase: 'failed' })
+  })
+
+  test('a new plain message while awaiting modification confirmation replaces the stale pending request', () => {
+    expect(shouldRouteAsExistingSceneRequest('awaiting_modification_confirmation', '换个方向开门')).toBe(true)
+    expect(shouldRouteAsExistingSceneRequest('awaiting_modification_confirmation', '   ')).toBe(false)
+    expect(shouldRouteAsExistingSceneRequest('completed', '换个方向开门')).toBe(false)
+  })
 })

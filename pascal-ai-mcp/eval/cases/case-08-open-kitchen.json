@@ -1,0 +1,15 @@
+{
+  "id": "case-08-open-kitchen",
+  "category": "开放式厨房",
+  "difficulty": "standard",
+  "description": "客厅厨房开放式连通，不设隔墙",
+  "turns": [
+    { "role": "user", "message": "两室一厅，总面积约65平米，客厅和厨房要做成开放式连通，不要隔墙" },
+    { "action": "confirm" }
+  ],
+  "expectedFacts": {
+    "bedroom_count": 2,
+    "requiredRoomTypes": ["卧室", "客厅", "厨房"]
+  },
+  "notes": "厨房和客厅之间没有隔墙时，两者在 zone 层面可能仍是两个独立多边形——重点观察 findDoorlessRooms 会不会把厨房错误标记为封闭空间（没有门，因为压根没有隔墙需要开门）"
+}

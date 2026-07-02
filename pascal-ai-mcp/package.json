@@ -8,7 +8,8 @@
     "start": "bun src/server.ts",
     "chat": "bun src/cli.ts",
     "test": "bun test",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "eval": "bun run eval/run-eval.ts"
   },
   "dependencies": {
     "@langchain/core": "^1.2.1",

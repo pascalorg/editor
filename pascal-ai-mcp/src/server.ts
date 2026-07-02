@@ -1,3 +1,4 @@
+import type { Server } from 'bun'
 import { PascalAiAgent } from './agent'
 import { loadConfig } from './config'
 import { PascalMcpClient } from './mcp'
@@ -11,9 +12,9 @@ const agent = new PascalAiAgent(config, mcp)
 const server = Bun.serve({
   hostname: config.host,
   port: config.port,
-  async fetch(request) {
+  async fetch(request, bunServer: Server<undefined>): Promise<Response> {
     try {
-      return await handle(request)
+      return await handle(request, bunServer)
     } catch (error) {
       // Without this, an uncaught error (e.g. a bad sceneId, a hung MCP
       // call) falls through to Bun's default error response, which has no
@@ -25,7 +26,7 @@ const server = Bun.serve({
   },
 })
 
-async function handle(request: Request): Promise<Response> {
+async function handle(request: Request, bunServer: Server<undefined>): Promise<Response> {
   const url = new URL(request.url)
 
   if (request.method === 'OPTIONS') {
@@ -50,6 +51,18 @@ async function handle(request: Request): Promise<Response> {
   }
 
   if (request.method === 'POST' && url.pathname === '/chat') {
+    // A full generation can legitimately run for minutes (room-by-room
+    // structure phase, wall dedup, openings, furnishing, then verification
+    // with up to a few repair rounds — each its own tool-calling loop), and
+    // we only write the HTTP response once at the very end. Bun's HTTP
+    // server defaults to a 10s idle timeout and silently drops the
+    // connection if nothing is read/written on it in that window, so a slow
+    // /chat call gets its socket killed long before we're done — the
+    // request keeps running server-side and the scene still gets created,
+    // but the client sees an empty/truncated response. Disable the timeout
+    // for this endpoint specifically (0 = no timeout); the fast endpoints
+    // above keep the default.
+    bunServer.timeout(request, 0)
     const body = (await request.json()) as {
       sessionId?: string
       message?: string

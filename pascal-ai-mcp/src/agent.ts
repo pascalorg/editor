@@ -9,7 +9,6 @@ import type {
   ChatMessage,
   ChatResult,
   ConfirmationStatus,
-  ConstructionPlan,
   DesignBrief,
   InformationSource,
   RequirementFact,
@@ -70,6 +69,10 @@ export class PascalAiAgent {
   private readonly sessions: SessionStore
   private readonly graph: ReturnType<typeof createWorkflowGraph>
   private readonly sessionLocks = new Map<string, Promise<ChatResult>>()
+  // Lazily-fetched, process-lifetime cache of the MCP `pascal://agent-guide`
+  // resource. Read once; failures are swallowed so a missing/renamed
+  // resource never breaks the main generation flow.
+  private agentGuidePromise?: Promise<string | undefined>
 
   constructor(
     private readonly config: AppConfig,
@@ -206,6 +209,21 @@ export class PascalAiAgent {
         reply: '请输入户型需求，或上传一张户型图。',
         next: 'finish',
       }
+    }
+    // A prior modification attempt failed and left `phase` here so a plain
+    // {action:'confirm'} can retry the *same* pending request (see
+    // `modify()`'s catch block). But the failure reply also tells the user
+    // they can just describe a new change instead — without this branch,
+    // that new message would fall through to the generic requirement-
+    // extraction path below (treating it as if it were building up a brand
+    // new brief from scratch) rather than being routed as a fresh
+    // modification instruction against the scene that's actually still
+    // there. Clear the stale pending fields first; `routeExistingSceneRequest`
+    // classifies this message's intent and sets fresh ones.
+    if (shouldRouteAsExistingSceneRequest(session.phase, message)) {
+      delete session.pendingModification
+      delete session.pendingOperation
+      return this.routeExistingSceneRequest(session, message)
     }
     if (isCompletedPhase(session.phase)) {
       if (!message) {
@@ -399,10 +417,18 @@ export class PascalAiAgent {
 
   private async generate(state: WorkflowGraphState): Promise<Partial<WorkflowGraphState>> {
     const session = structuredClone(state.session)
+    // If this attempt goes down the fresh-build branch (no existing scene,
+    // or `session.sceneId` gets overwritten by a newly created project
+    // below) and then fails partway through construction, `session.sceneId`
+    // would otherwise be left pointing at that broken half-built scene. A
+    // retry would then see a real scene with plenty of nodes in it and
+    // mistake it for a legitimate existing project — routing into
+    // `applyConfirmedBriefToExistingScene` (incremental patch) instead of a
+    // clean rebuild. Remember what it was before this attempt so the catch
+    // block can roll it back.
+    const priorSceneId = session.sceneId
     try {
       session.executionSteps = []
-      session.constructionPlan = await this.createConstructionPlan(session)
-      session.executionSteps.push({ phase: 'planning', status: 'completed', label: '生成户型施工计划' })
       const generationArgs = buildGenerationArgs(session)
       if (session.sceneId) {
         const loaded = toolPayload(await this.mcp.callTool('load_scene', { id: session.sceneId }))
@@ -417,11 +443,10 @@ export class PascalAiAgent {
         await this.mcp.callTool('create_house_from_brief', generationArgs),
       )
       session.sceneId = nullableString(created.projectId ?? created.sceneId ?? created.id) ?? undefined
-      await this.applyConstructionPlan(
-        session,
-        nullableString(created.defaultLevelId),
-      )
-      const { diagnostics, repairRounds, toolNamesUsed } = await this.constructSceneInPhases(session)
+      const levelId = nullableString(created.defaultLevelId)
+      await this.clearLevelForRebuild(session, levelId)
+      const { diagnostics, repairRounds, toolNamesUsed, furnitureIssues } =
+        await this.constructSceneInPhases(session, levelId)
       const sceneVersion = await this.persistScene(
         session.sceneId,
         diagnostics.validation.valid,
@@ -435,6 +460,10 @@ export class PascalAiAgent {
         validation: diagnostics.validation,
         verificationIssues: diagnostics.verificationIssues,
         collisions: diagnostics.collisions,
+        doorlessRooms: diagnostics.doorlessRooms,
+        strayWindows: diagnostics.strayWindows,
+        requirementMismatches: diagnostics.requirementMismatches,
+        isolatedBedrooms: diagnostics.isolatedBedrooms,
         repairRounds,
         remainingIssueCount: countDiagnosticIssues(diagnostics),
       }
@@ -444,10 +473,24 @@ export class PascalAiAgent {
       const reply = (remaining === 0
         ? `户型已生成并通过自动检查。${sceneResult.editorUrl ? `\n打开场景：${sceneResult.editorUrl}` : ''}`
         : `户型已生成，自动修正已达上限（${repairRounds} 轮），仍有 ${remaining} 个问题需要人工确认：${describeRemainingIssues(diagnostics)}`
-      ) + furnitureCaveat(toolNamesUsed)
+      ) + furnitureCaveat(toolNamesUsed, furnitureIssues)
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
     } catch (error) {
+      // Only roll back when this attempt actually reassigned sceneId (the
+      // fresh-build branch). A failure while modifying a genuinely
+      // pre-existing scene never touches session.sceneId, so priorSceneId
+      // still matches and this is a no-op — the real project reference is
+      // never disturbed.
+      if (session.sceneId !== priorSceneId) {
+        // The half-built scene is abandoned, not deleted — record it so
+        // it's not just silently orphaned in storage with no trace.
+        if (session.sceneId) {
+          session.abandonedSceneIds = [...(session.abandonedSceneIds ?? []), session.sceneId]
+          console.warn(`[pascal-ai-mcp] abandoned half-built scene ${session.sceneId} after generate() failure:`, error)
+        }
+        session.sceneId = priorSceneId
+      }
       session.phase = 'failed'
       const reply = `户型生成失败：${errorMessage(error)}。已确认的结构化需求仍然保留，可以稍后重试。`
       session.messages.push({ role: 'assistant', content: reply })
@@ -460,9 +503,10 @@ export class PascalAiAgent {
     loaded: Record<string, unknown>,
   ): Promise<Partial<WorkflowGraphState>> {
     const sceneId = session.sceneId!
-    const { diagnostics, repairRounds, toolNamesUsed } = await this.refineAndDiagnose(
+    const { diagnostics, repairRounds, toolNamesUsed, furnitureIssues } = await this.refineAndDiagnose(
       session,
       '在当前已有户型的基础上实现已确认需求。现有墙体、房间和开口是源数据；只做满足需求所必需的增量修改，禁止用模板替换整个场景，禁止删除无关结构。',
+      { phaseLabel: '在已有户型上应用已确认需求' },
     )
     const sceneVersion = await this.persistScene(
       sceneId,
@@ -477,6 +521,10 @@ export class PascalAiAgent {
       validation: diagnostics.validation,
       verificationIssues: diagnostics.verificationIssues,
       collisions: diagnostics.collisions,
+      doorlessRooms: diagnostics.doorlessRooms,
+      strayWindows: diagnostics.strayWindows,
+      requirementMismatches: diagnostics.requirementMismatches,
+      isolatedBedrooms: diagnostics.isolatedBedrooms,
       repairRounds,
       remainingIssueCount,
     }
@@ -484,7 +532,7 @@ export class PascalAiAgent {
     const reply = (remainingIssueCount === 0
       ? '已在现有户型基础上完成修改，并通过自动检查。'
       : `已在现有户型基础上完成修改，自动修正已达上限（${repairRounds} 轮），仍有 ${remainingIssueCount} 个问题需要人工确认：${describeRemainingIssues(diagnostics)}`
-    ) + furnitureCaveat(toolNamesUsed)
+    ) + furnitureCaveat(toolNamesUsed, furnitureIssues)
     session.messages.push({ role: 'assistant', content: reply })
     return { session, reply, next: 'finish' }
   }
@@ -505,9 +553,10 @@ export class PascalAiAgent {
 
     try {
       const loaded = toolPayload(await this.mcp.callTool('load_scene', { id: sceneId }))
-      const { diagnostics, repairRounds, toolNamesUsed } = await this.refineAndDiagnose(
+      const { diagnostics, repairRounds, toolNamesUsed, furnitureIssues } = await this.refineAndDiagnose(
         session,
         `用户已确认对当前场景执行${operation}操作：${feedback}`,
+        { phaseLabel: '按用户要求修改场景' },
       )
       const sceneVersion = await this.persistScene(
         sceneId,
@@ -522,6 +571,10 @@ export class PascalAiAgent {
         validation: diagnostics.validation,
         verificationIssues: diagnostics.verificationIssues,
         collisions: diagnostics.collisions,
+        doorlessRooms: diagnostics.doorlessRooms,
+        strayWindows: diagnostics.strayWindows,
+        requirementMismatches: diagnostics.requirementMismatches,
+        isolatedBedrooms: diagnostics.isolatedBedrooms,
         repairRounds,
         remainingIssueCount,
       }
@@ -531,12 +584,23 @@ export class PascalAiAgent {
       const reply = (remainingIssueCount === 0
         ? '已按你的要求修改当前户型，并通过自动检查。'
         : `已完成修改，自动修正已达上限（${repairRounds} 轮），仍有 ${remainingIssueCount} 个问题需要人工确认：${describeRemainingIssues(diagnostics)}`
-      ) + furnitureCaveat(toolNamesUsed)
+      ) + furnitureCaveat(toolNamesUsed, furnitureIssues)
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
     } catch (error) {
-      session.phase = session.sceneResult ? 'completed_with_issues' : 'failed'
-      const reply = `场景修改失败：${errorMessage(error)}。原场景和修改要求都已保留，可以稍后重试。`
+      // `pendingModification`/`pendingOperation` are never cleared on this
+      // path, but that alone doesn't make them resumable: `ingest()` only
+      // re-triggers `modify` from an explicit `{action:'confirm'}` while
+      // `phase === 'awaiting_modification_confirmation'`. Route back to that
+      // phase here so a plain confirm actually retries the *same* pending
+      // request instead of the reply's "保留，可以稍后重试" being an empty
+      // promise the user can only fulfill by redescribing the change from
+      // scratch.
+      const recovery = modifyFailureRecovery(Boolean(session.pendingModification), Boolean(session.sceneResult))
+      session.phase = recovery.phase
+      const reply = recovery.canRetry
+        ? `场景修改失败：${errorMessage(error)}。原场景和修改要求都已保留，发送确认即可重试同一操作，或直接描述新的修改需求。`
+        : `场景修改失败：${errorMessage(error)}。原场景已保留，可以重新描述需要的修改。`
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
     }
@@ -609,8 +673,8 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
 最新文字：${message || '无附带文字'}
 输入类型：${imageDataUrl ? '单张户型图；图片是现状依据，文字是目标或指令' : '纯文字需求'}`
 
-    // Retry once on malformed JSON, same pattern as createConstructionPlan —
-    // this call is exactly the kind of strict-JSON-mode request that
+    // Retry once on malformed JSON — this call is exactly the kind of
+    // strict-JSON-mode request that
     // occasionally fails format compliance (more so with an image attached),
     // and previously a single hiccup killed the whole turn.
     let lastError: unknown
@@ -642,12 +706,59 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     throw lastError
   }
 
+  /**
+   * Fetch and cache the MCP `pascal://agent-guide` resource text for the
+   * lifetime of this process. Returns undefined (never throws) if the MCP
+   * server has no such resource or the read fails for any reason.
+   */
+  private getAgentGuide(): Promise<string | undefined> {
+    if (!this.agentGuidePromise) {
+      this.agentGuidePromise = this.mcp.readResourceText('pascal://agent-guide').catch(() => undefined)
+    }
+    return this.agentGuidePromise
+  }
+
+  /**
+   * Base system prompt for `runSceneAgent`, extended with (a) the "Scene
+   * Creation Rules" section pulled live from the MCP `pascal://agent-guide`
+   * resource when available, and (b) a couple of conventions adapted from
+   * the MCP `from_brief`/`iterate_on_feedback` prompts' shared design
+   * guidance (support-space completeness, apply_patch bundling) that our
+   * own hand-written prompt didn't previously cover.
+   */
+  private async buildSceneAgentSystemPrompt(): Promise<string> {
+    const base =
+      'You are the Pascal scene generation and repair agent. Work only on the active Pascal scene. For user feedback, make the minimum change requested and never alter unrelated geometry. Prefer semantic room tools and atomic apply_patch. Preserve confirmed requirements, avoid destructive broad changes, inspect before mutation, and validate before finishing. When calling add_door or add_window, only set `position` (0..1 along the wall); the `t` field is a legacy alias for the same value — never set both, and never set `t` alone.\n\nImportant limitation of the automated checks: `check_collisions` only compares unrotated axis-aligned bounding boxes between pairs of items — it ignores each item\'s `rotation`, and it never checks an item against walls or against its room/zone polygon. `verify_scene` and `validate_scene` do not inspect item placement at all. Passing all three does NOT mean furniture is placed sensibly. So whenever you place or move an item (place_item, furnish_room, or an apply_patch that touches an item node), you must reason about placement yourself: call get_zones and find_nodes (or get_level_summary) for the target room first to see the room polygon and existing items, account for the item\'s own rotated footprint, keep it inside the room polygon, keep clearance from doors/walkways, and avoid visually overlapping other furniture even if check_collisions would not flag it.'
+
+    const supplement =
+      'Only add support spaces (kitchen, living/dining, bathroom(s), entry/hallway, storage/laundry) that the confirmed brief itself calls for — either by naming them directly, or by describing the scope as a full home/apartment/unit. A bedroom count alone is not such a signal: if the user only asked for N bedrooms, do not add a kitchen, living room, or bathroom on your own initiative. When several placements belong to one logical change, bundle them into a single apply_patch call so they share one undo step.'
+
+    const guide = await this.getAgentGuide()
+    const sceneCreationRules = guide ? extractMarkdownSection(guide, 'Scene Creation Rules') : undefined
+
+    return [
+      base,
+      supplement,
+      sceneCreationRules
+        ? `Additional scene-creation conventions from the Pascal MCP agent guide (project/version/save mechanics in it do not apply here — ignore those):\n${sceneCreationRules}`
+        : undefined,
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join('\n\n')
+  }
+
   private async runSceneAgent(
     session: WorkflowSession,
     purpose: string,
     conversation?: ChatMessage[],
     toolNamesUsed: Set<string> = new Set(),
-  ): Promise<{ messages: ChatMessage[]; converged: boolean; toolNamesUsed: Set<string> }> {
+    furnitureIssues: string[] = [],
+  ): Promise<{
+    messages: ChatMessage[]
+    converged: boolean
+    toolNamesUsed: Set<string>
+    furnitureIssues: string[]
+  }> {
     const allowedTools = new Set([
       'load_scene',
       'get_scene',
@@ -684,8 +795,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     const messages: ChatMessage[] = conversation ?? [
       {
         role: 'system',
-        content:
-          'You are the Pascal scene generation and repair agent. Work only on the active Pascal scene. For user feedback, make the minimum change requested and never alter unrelated geometry. Prefer semantic room tools and atomic apply_patch. Preserve confirmed requirements, avoid destructive broad changes, inspect before mutation, and validate before finishing. When calling add_door or add_window, only set `position` (0..1 along the wall); the `t` field is a legacy alias for the same value — never set both, and never set `t` alone.\n\nImportant limitation of the automated checks: `check_collisions` only compares unrotated axis-aligned bounding boxes between pairs of items — it ignores each item\'s `rotation`, and it never checks an item against walls or against its room/zone polygon. `verify_scene` and `validate_scene` do not inspect item placement at all. Passing all three does NOT mean furniture is placed sensibly. So whenever you place or move an item (place_item, furnish_room, or an apply_patch that touches an item node), you must reason about placement yourself: call get_zones and find_nodes (or get_level_summary) for the target room first to see the room polygon and existing items, account for the item\'s own rotated footprint, keep it inside the room polygon, keep clearance from doors/walkways, and avoid visually overlapping other furniture even if check_collisions would not flag it.',
+        content: await this.buildSceneAgentSystemPrompt(),
       },
     ]
     // Only inject conversation history when this call starts a fresh thread
@@ -694,7 +804,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     const historyBlock = isNewThread ? recentConversationBlock(session.messages) : ''
     messages.push({
       role: 'user',
-      content: `${purpose}\n${historyBlock}Confirmed brief:\n${session.summary || formatSummary(session.brief)}\nConstruction plan (coordinates and hard dimensions are authoritative):\n${JSON.stringify(session.constructionPlan ?? null)}`,
+      content: `${purpose}\n${historyBlock}Confirmed brief (authoritative for dimensions, room list, and hard constraints):\n${session.summary || formatSummary(session.brief)}`,
     })
 
     for (let round = 0; round < this.config.maxToolRounds; round++) {
@@ -708,21 +818,60 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
         content: assistant.content ?? null,
         tool_calls: assistant.tool_calls,
       })
-      if (!assistant.tool_calls?.length) return { messages, converged: true, toolNamesUsed }
+      if (!assistant.tool_calls?.length) {
+        return { messages, converged: true, toolNamesUsed, furnitureIssues }
+      }
       for (const toolCall of assistant.tool_calls) {
         toolNamesUsed.add(toolCall.function.name)
-        messages.push(await this.executeToolCall(toolCall))
+        messages.push(await this.executeToolCall(toolCall, furnitureIssues))
       }
     }
-    return { messages, converged: false, toolNamesUsed }
+    return { messages, converged: false, toolNamesUsed, furnitureIssues }
   }
 
-  private async applyConstructionPlan(
+  // A phase that hits `maxToolRounds` without the model emitting a final
+  // (tool-call-free) message is *not* done — it just ran out of turns
+  // mid-task. Retrying with a fresh nudge, reusing the same conversation so
+  // the model can see what it already built, gives it a bounded chance to
+  // actually finish instead of silently being recorded as "completed".
+  private static readonly PHASE_CONTINUATION_ATTEMPTS = 1
+
+  private async runPhaseToConvergence(
     session: WorkflowSession,
-    levelId: string | null,
-  ): Promise<void> {
-    const plan = session.constructionPlan
-    if (!plan || !levelId) throw new Error('Construction plan or target level is missing')
+    purpose: string,
+    conversation: ChatMessage[] | undefined,
+    toolNamesUsed: Set<string>,
+    furnitureIssues: string[],
+    phaseLabel: string,
+  ): Promise<{ messages: ChatMessage[]; toolNamesUsed: Set<string>; furnitureIssues: string[] }> {
+    let result = await this.runSceneAgent(session, purpose, conversation, toolNamesUsed, furnitureIssues)
+    let attempt = 0
+    while (!result.converged && attempt < PascalAiAgent.PHASE_CONTINUATION_ATTEMPTS) {
+      attempt++
+      result = await this.runSceneAgent(
+        session,
+        `${purpose}\n上一轮已经达到工具调用轮次上限，任务还没有做完。请先用 get_zones/get_walls/get_level_summary 检查当前场景的真实状态，只继续完成尚未做完的部分，不要重复已经做好的操作。`,
+        result.messages,
+        result.toolNamesUsed,
+        result.furnitureIssues,
+      )
+    }
+    if (!result.converged) {
+      throw new Error(`${phaseLabel}在 ${PascalAiAgent.PHASE_CONTINUATION_ATTEMPTS + 1} 轮尝试后仍未收敛完成`)
+    }
+    return { messages: result.messages, toolNamesUsed: result.toolNamesUsed, furnitureIssues: result.furnitureIssues }
+  }
+
+  // `create_house_from_brief` only picks the closest of its 3 built-in
+  // templates (its own tool description says as much for 3+ bedroom
+  // requests), so it rarely matches an arbitrary room list. We use it purely
+  // for project/site/building/level scaffolding and always clear its
+  // template rooms so `constructSceneInPhases`'s structure phase can build
+  // the actual layout room-by-room through MCP's own recommended tool
+  // sequence (create_story_shell once, then create_room per room with
+  // get_zones checked in between) instead of us precomputing geometry.
+  private async clearLevelForRebuild(session: WorkflowSession, levelId: string | null): Promise<void> {
+    if (!levelId) throw new Error('Target level is missing')
     try {
       const scene = toolPayload(await this.mcp.callTool('get_scene', {}))
       const nodes = isRecord(scene.nodes) ? scene.nodes : {}
@@ -735,71 +884,194 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
           await this.mcp.callTool('delete_node', { id: childId, cascade: true })
         }
       }
-      for (const room of plan.rooms) {
-        await this.mcp.callTool('create_room', {
-          levelId,
-          name: room.name,
-          polygon: room.polygon,
-          wallHeight: 2.8,
-          wallThickness: 0.16,
-        })
-      }
-      session.executionSteps?.push({
-        phase: 'structure',
-        status: 'completed',
-        label: `按施工计划创建 ${plan.rooms.length} 个房间`,
-      })
     } catch (error) {
-      session.executionSteps?.push({ phase: 'structure', status: 'failed', label: '创建结构与房间' })
+      session.executionSteps?.push({ phase: 'structure', status: 'failed', label: '清空模板占位内容' })
       throw error
     }
   }
 
-  private async createConstructionPlan(session: WorkflowSession): Promise<ConstructionPlan> {
-    const deterministic = buildDeterministicSingleRoomPlan(session.brief)
-    if (deterministic) return deterministic
-    let lastError: unknown
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const result = await this.withModelFallback(model =>
-          model.json<ConstructionPlan>(
-            [
-              {
-                role: 'system',
-                content:
-                  'Create a buildable rectangular architectural floor-plan JSON. Return only: {footprint:{widthM,depthM,polygon:[[x,z],...]},rooms:[{name,type,polygon:[[x,z],...],furniture:[...]}],openings:[{type:"door|window",roomName,wall:"north|east|south|west|shared"}]}. Use meters, center the footprint at origin, keep every room inside it, avoid overlaps, cover the usable footprint, preserve all hard dimensions, and include realistic circulation.',
-              },
-              {
-                role: 'user',
-                content: `${session.summary || formatSummary(session.brief)}${attempt > 0 ? '\nPrevious plan was geometrically invalid. Recalculate all room polygons.' : ''}`,
-              },
-            ],
-            `${session.sessionId}:construction-plan:${attempt}`,
-          ),
-        )
-        return normalizeConstructionPlan(result)
-      } catch (error) {
-        lastError = error
+  // Safety cap on the resolve-one-overlap-and-rescan loop below. Wall counts
+  // here are small (a handful of rooms, a handful of edges each), so this is
+  // never expected to bind — it exists only to guarantee termination if some
+  // pathological input kept producing new overlapping fragments forever.
+  private static readonly MAX_DEDUPE_ITERATIONS = 500
+
+  /**
+   * Remove redundant/overlapping walls left behind by room-by-room
+   * `create_room` calls (see the comment at the call site for why these
+   * exist). Runs before the openings phase, so no wall here can host a door
+   * or window yet — deleting/splitting freely is safe because zone/slab/
+   * ceiling nodes carry their own polygon and never reference a wall by id.
+   *
+   * Two rooms built independently and sharing a full boundary produce two
+   * walls with identical endpoints — the simple case. But a T junction
+   * (one room's long edge bordering two or more smaller neighboring rooms)
+   * produces a long wall whose interval only *partially* overlaps each of
+   * several shorter walls, with no shared endpoints at all — exact endpoint
+   * matching misses this entirely. We resolve overlaps by collinear-interval
+   * comparison instead: for any two collinear walls whose intervals overlap
+   * by more than a sliver, the shorter (more specific) one is kept as-is and
+   * the longer one is clipped — split into whatever fragments of itself fall
+   * outside the overlap, with the original deleted. Repeating this against
+   * the growing/shrinking wall set until no overlaps remain correctly
+   * collapses an N-way T junction, not just a single pair.
+   *
+   * Best-effort: on any failure we skip silently rather than fail the whole
+   * generation over a cleanup pass — worst case is the pre-existing
+   * double-wall behavior, not a broken scene.
+   */
+  private async dedupeSharedWalls(levelId: string | null): Promise<void> {
+    if (!levelId) return
+    try {
+      const payload = toolPayload(await this.mcp.callTool('get_walls', { levelId }))
+      const walls = Array.isArray(payload.walls) ? payload.walls.filter(isWallSummary) : []
+
+      type WorkingWall = WallSummary & { isFragment: boolean }
+      let working: WorkingWall[] = walls.map(w => ({ ...w, isFragment: false }))
+      const deletedRealIds = new Set<string>()
+      let fragmentCounter = 0
+
+      let changed = true
+      let iterations = 0
+      while (changed && iterations < PascalAiAgent.MAX_DEDUPE_ITERATIONS) {
+        changed = false
+        iterations++
+        resolvePass: for (let i = 0; i < working.length; i++) {
+          for (let j = i + 1; j < working.length; j++) {
+            const a = working[i]!
+            const b = working[j]!
+            const overlap = collinearOverlap(a, b)
+            if (!overlap) continue
+            const oa = segmentOrientation(a)!
+            const ob = segmentOrientation(b)!
+            const lenA = oa.hi - oa.lo
+            const lenB = ob.hi - ob.lo
+            const overlapLen = overlap.hi - overlap.lo
+            const aFullyCovered = overlapLen >= lenA - MIN_MEANINGFUL_OVERLAP_M
+            const bFullyCovered = overlapLen >= lenB - MIN_MEANINGFUL_OVERLAP_M
+
+            if (aFullyCovered && bFullyCovered) {
+              // Exact duplicate within tolerance — keep a, drop b entirely.
+              if (!b.isFragment) deletedRealIds.add(b.id)
+              working.splice(j, 1)
+              changed = true
+              break resolvePass
+            }
+
+            // Keep the shorter (more specific) wall untouched; clip the
+            // longer one down to whatever remains outside the overlap.
+            const keepIsA = lenA <= lenB
+            const clip = keepIsA ? b : a
+            const clipIdx = keepIsA ? j : i
+            const clipOrientation = keepIsA ? ob : oa
+
+            const fragments: Array<[number, number]> = []
+            if (overlap.lo - clipOrientation.lo > MIN_MEANINGFUL_OVERLAP_M) {
+              fragments.push([clipOrientation.lo, overlap.lo])
+            }
+            if (clipOrientation.hi - overlap.hi > MIN_MEANINGFUL_OVERLAP_M) {
+              fragments.push([overlap.hi, clipOrientation.hi])
+            }
+
+            if (!clip.isFragment) deletedRealIds.add(clip.id)
+            working.splice(clipIdx, 1)
+            for (const [lo, hi] of fragments) {
+              fragmentCounter++
+              const seg = orientationToSegment({ axis: clipOrientation.axis, constant: clipOrientation.constant, lo, hi })
+              working.push({
+                id: `dedupe_frag_${fragmentCounter}`,
+                start: seg.start,
+                end: seg.end,
+                thickness: clip.thickness,
+                height: clip.height,
+                name: clip.name,
+                isFragment: true,
+              })
+            }
+            changed = true
+            break resolvePass
+          }
+        }
       }
+
+      const patches: Array<Record<string, unknown>> = []
+      for (const id of deletedRealIds) {
+        patches.push({ op: 'delete', id, cascade: true })
+      }
+      for (const wall of working) {
+        if (!wall.isFragment) continue
+        patches.push({
+          op: 'create',
+          node: {
+            type: 'wall',
+            start: wall.start,
+            end: wall.end,
+            ...(wall.thickness !== undefined ? { thickness: wall.thickness } : {}),
+            ...(wall.height !== undefined ? { height: wall.height } : {}),
+            ...(wall.name !== undefined ? { name: wall.name } : {}),
+            metadata: { mcpTool: 'pascal-ai-mcp:dedupeSharedWalls' },
+          },
+          parentId: levelId,
+        })
+      }
+      if (patches.length > 0) {
+        await this.mcp.callTool('apply_patch', { patches })
+      }
+    } catch {
+      // Best-effort cleanup — see doc comment above.
     }
-    throw lastError
   }
 
-  private async constructSceneInPhases(session: WorkflowSession): Promise<{
+  private async constructSceneInPhases(
+    session: WorkflowSession,
+    levelId: string | null,
+  ): Promise<{
     diagnostics: Awaited<ReturnType<PascalAiAgent['collectDiagnostics']>>
     repairRounds: number
     toolNamesUsed: Set<string>
+    furnitureIssues: string[]
   }> {
     session.executionSteps ??= []
     let conversation: ChatMessage[] | undefined
     let toolNamesUsed = new Set<string>()
+    let furnitureIssues: string[] = []
     try {
-      const opening = await this.runSceneAgent(
+      const structure = await this.runPhaseToConvergence(
         session,
-        '完成阶段：先用 get_walls/get_zones 核对房间，严格按施工计划用 add_door/add_window 完成连通和采光；然后按每个房间的 furniture 清单使用 search_assets 与 place_item，或 furnish_room。保留通行空间，不得改变硬性尺寸。',
+        '结构阶段：根据已确认需求确定整体地基尺寸和房间清单。在建任何房间之前，先在脑内规划一遍房间之间的连接关系：客厅、玄关、走廊这类空间承担公共动线枢纽的角色，每个卧室都必须能只经过公共动线到达，不能要求先穿过卫生间、厨房或另一个卧室才能到达；卫生间和厨房不能被当成通往其他房间的必经之路。按这个连接关系决定每个房间的位置——需要走公共动线到达的房间应该直接紧挨着客厅/玄关/走廊，而不是紧挨着卫生间或厨房。\n\n不要调用 create_story_shell——直接逐个创建房间覆盖整个地基，包括贴着地基外边界的房间也是直接 create_room，它自己的外侧边就是外墙，不需要预先建一个外壳。每次新建房间前先用 get_zones 查看当前楼层已经建好哪些区域、还剩多少未占用空间，再调用 create_room 划定下一个房间的边界，一间一间来，不要提前一次性算好全部房间坐标。每个房间的宽度要与其功能匹配（卧室、厨房、卫生间、客厅等实际使用空间不宜窄于约 1.8 米；走廊、玄关等纯通行空间可以更窄），长宽比不宜超过约 3:1，不要出现宽度勉强达标但过长的畸形长条房间。不要为了填满地基而制造过窄或没有实际用途的房间——地基里如果剩下无法容纳合理房间的小块空间，就并入相邻房间，不要单独建一个房间去装它。全部房间建完后用 get_level_summary 核对一遍再结束这一阶段。',
+        undefined,
+        new Set<string>(),
+        [],
+        '结构建造阶段',
+      )
+      conversation = structure.messages
+      toolNamesUsed = structure.toolNamesUsed
+      furnitureIssues = structure.furnitureIssues
+      // `create_room` builds one wall per polygon edge every time, with no
+      // awareness of neighboring rooms, so two rooms sharing a boundary end
+      // up with two coincident wall nodes there. MCP itself has no
+      // wall-merge tool for this (its own hand-authored templates avoid the
+      // problem by hand-building one shared wall per boundary instead of
+      // calling create_room per room), so we deduplicate deterministically
+      // here rather than asking the model to eyeball coordinate matches.
+      await this.dedupeSharedWalls(levelId)
+      session.executionSteps.push({ phase: 'structure', status: 'completed', label: '逐间建造房间结构' })
+    } catch (error) {
+      session.executionSteps.push({ phase: 'structure', status: 'failed', label: '结构建造阶段' })
+      throw error
+    }
+    try {
+      const opening = await this.runPhaseToConvergence(
+        session,
+        '完成阶段：先用 get_walls/get_zones 核对已建好的房间，根据已确认需求用 add_door/add_window 完成连通和采光。加窗前先确认这面墙是否贴着整栋建筑的外边界——窗户只能开在朝外的墙上，不能开在两个房间之间的室内隔墙上。加门时留意开启方向（swingDirection/hingesSide）会不会跟房间里已有的家具、或旁边另一扇门的开启范围互相冲突，选一个不会挡住通行或家具的方向。然后按每个房间的功能使用 search_assets 与 place_item，或 furnish_room 布置家具。保留通行空间，不得改变已建好的房间边界和硬性尺寸。',
+        conversation,
+        toolNamesUsed,
+        furnitureIssues,
+        '门窗与家具阶段',
       )
       conversation = opening.messages
       toolNamesUsed = opening.toolNamesUsed
+      furnitureIssues = opening.furnitureIssues
       session.executionSteps.push({ phase: 'openings', status: 'completed', label: '添加门窗与连通' })
       session.executionSteps.push({ phase: 'furnishing', status: 'completed', label: '搜索并布置家具' })
     } catch (error) {
@@ -812,7 +1084,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     const result = await this.refineAndDiagnose(
       session,
       '验证阶段：核对房间数量、硬性尺寸、门窗宿主、家具碰撞和通行性，只修复检查发现的问题。',
-      { skipInitialAgent: true, conversation, toolNamesUsed },
+      { skipInitialAgent: true, conversation, toolNamesUsed, furnitureIssues },
     )
     session.executionSteps.push({
       phase: 'verification',
@@ -829,21 +1101,38 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
       skipInitialAgent?: boolean
       conversation?: ChatMessage[]
       toolNamesUsed?: Set<string>
+      furnitureIssues?: string[]
+      phaseLabel?: string
     } = {},
   ): Promise<{
     diagnostics: Awaited<ReturnType<PascalAiAgent['collectDiagnostics']>>
     repairRounds: number
     toolNamesUsed: Set<string>
+    furnitureIssues: string[]
   }> {
     let conversation = options.conversation
     let toolNamesUsed = options.toolNamesUsed ?? new Set<string>()
+    let furnitureIssues = options.furnitureIssues ?? []
     if (!options.skipInitialAgent) {
-      const result = await this.runSceneAgent(session, purpose, conversation, toolNamesUsed)
+      // Same convergence guarantee as the fresh-generation structure/openings
+      // phases: a modify/incremental-edit call that exhausts maxToolRounds
+      // mid-task is not done, and must not be silently treated as if it
+      // were — otherwise an unfinished edit on an *existing* scene slips
+      // through the same way an unfinished fresh build used to.
+      const result = await this.runPhaseToConvergence(
+        session,
+        purpose,
+        conversation,
+        toolNamesUsed,
+        furnitureIssues,
+        options.phaseLabel ?? '场景修改',
+      )
       conversation = result.messages
       toolNamesUsed = result.toolNamesUsed
+      furnitureIssues = result.furnitureIssues
     }
-    let diagnostics = await this.collectDiagnostics()
-    diagnostics = await this.repairKnownOpeningBounds(diagnostics)
+    let diagnostics = await this.collectDiagnostics(session)
+    diagnostics = await this.repairKnownOpeningBounds(diagnostics, session)
     let repairRounds = 0
     // Each repair round reuses the same conversation, so the model can see
     // what it already tried and why the previous round's fix didn't fully
@@ -855,17 +1144,20 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
         `${purpose}\n自动修正第 ${repairRounds} 轮。必须先检查相关节点，再用工具修复以下具体问题；不要只解释，也不要推翻已确认需求：${JSON.stringify(diagnostics)}`,
         conversation,
         toolNamesUsed,
+        furnitureIssues,
       )
       conversation = result.messages
       toolNamesUsed = result.toolNamesUsed
-      diagnostics = await this.collectDiagnostics()
-      diagnostics = await this.repairKnownOpeningBounds(diagnostics)
+      furnitureIssues = result.furnitureIssues
+      diagnostics = await this.collectDiagnostics(session)
+      diagnostics = await this.repairKnownOpeningBounds(diagnostics, session)
     }
-    return { diagnostics, repairRounds, toolNamesUsed }
+    return { diagnostics, repairRounds, toolNamesUsed, furnitureIssues }
   }
 
   private async repairKnownOpeningBounds(
     diagnostics: Awaited<ReturnType<PascalAiAgent['collectDiagnostics']>>,
+    session: WorkflowSession,
   ): Promise<Awaited<ReturnType<PascalAiAgent['collectDiagnostics']>>> {
     const ids = dedupe(
       diagnostics.verificationIssues.flatMap(issue => {
@@ -890,7 +1182,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     }
     if (patches.length === 0) return diagnostics
     await this.mcp.callTool('apply_patch', { patches })
-    return this.collectDiagnostics()
+    return this.collectDiagnostics(session)
   }
 
   private async persistScene(
@@ -912,10 +1204,17 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     return nullableNumber(saved.version) ?? currentVersion
   }
 
-  private async executeToolCall(toolCall: ToolCall): Promise<ChatMessage> {
+  private async executeToolCall(
+    toolCall: ToolCall,
+    furnitureIssues?: string[],
+  ): Promise<ChatMessage> {
     try {
-      const args = parseToolArgs(toolCall.function.arguments)
+      let args = normalizeToolArgs(toolCall.function.name, parseToolArgs(toolCall.function.arguments))
+      args = await this.correctFloorItemHeight(toolCall.function.name, args)
       const result = await this.mcp.callTool(toolCall.function.name, args)
+      if (furnitureIssues) {
+        recordFurnitureIssues(toolCall.function.name, args, toolPayload(result), furnitureIssues)
+      }
       return {
         role: 'tool',
         tool_call_id: toolCall.id,
@@ -932,19 +1231,61 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     }
   }
 
-  private async collectDiagnostics(): Promise<{
+  // place_item never validates or snaps the Y coordinate for floor items
+  // (target is a level/slab/zone) — whatever height the model guesses is
+  // used verbatim. furnish_room's own deterministic placements always use
+  // Y=0 and let each catalog asset's own `offset` field handle vertical
+  // fine-tuning, so that's the correct convention; place_item just doesn't
+  // enforce it. A model-guessed non-zero Y here makes the item appear to
+  // float above or sink into the floor. This can't be fixed inside the MCP
+  // tool without editing it, so we correct it at the boundary: look up the
+  // target node's type, and zero the Y coordinate only when the target is
+  // genuinely a floor (wall/ceiling targets legitimately need non-zero Y
+  // for mounting height, so those are left untouched).
+  private async correctFloorItemHeight(
+    toolName: string,
+    args: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    if (toolName !== 'place_item') return args
+    const targetNodeId = args.targetNodeId
+    const position = args.position
+    if (typeof targetNodeId !== 'string' || !Array.isArray(position) || position.length !== 3) {
+      return args
+    }
+    if (position[1] === 0) return args
+    try {
+      const target = toolPayload(await this.mcp.callTool('get_node', { id: targetNodeId })).node
+      const targetType = isRecord(target) ? target.type : undefined
+      if (targetType !== 'level' && targetType !== 'slab' && targetType !== 'zone') return args
+    } catch {
+      // Can't verify the target type — leave the position untouched rather
+      // than guess.
+      return args
+    }
+    return { ...args, position: [position[0], 0, position[2]] }
+  }
+
+  private async collectDiagnostics(session: WorkflowSession): Promise<{
     validation: { valid: boolean; errors: string[] }
     verificationIssues: string[]
     collisions: Array<{ aId: string; bId: string; kind: string }>
+    doorlessRooms: string[]
+    strayWindows: string[]
+    requirementMismatches: string[]
+    isolatedBedrooms: string[]
   }> {
-    const [validationRaw, verificationRaw, collisionsRaw] = await Promise.all([
+    const [validationRaw, verificationRaw, collisionsRaw, zonesRaw, wallsRaw] = await Promise.all([
       this.mcp.callTool('validate_scene', {}),
       this.mcp.callTool('verify_scene', {}),
       this.mcp.callTool('check_collisions', {}),
+      this.mcp.callTool('get_zones', {}),
+      this.mcp.callTool('get_walls', {}),
     ])
     const validationPayload = toolPayload(validationRaw)
     const verificationPayload = toolPayload(verificationRaw)
     const collisionPayload = toolPayload(collisionsRaw)
+    const zonesPayload = toolPayload(zonesRaw)
+    const wallsPayload = toolPayload(wallsRaw)
     const validationErrors = Array.isArray(validationPayload.errors)
       ? validationPayload.errors.map(error =>
           typeof error === 'string' ? error : JSON.stringify(error),
@@ -958,6 +1299,8 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     const collisions = Array.isArray(collisionPayload.collisions)
       ? collisionPayload.collisions.filter(isCollision)
       : []
+    const zones = Array.isArray(zonesPayload.zones) ? zonesPayload.zones.filter(isZoneSummary) : []
+    const walls = Array.isArray(wallsPayload.walls) ? wallsPayload.walls.filter(isWallWithOpenings) : []
     return {
       validation: {
         valid: validationPayload.valid === true,
@@ -965,6 +1308,10 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
       },
       verificationIssues,
       collisions,
+      doorlessRooms: findDoorlessRooms(zones, walls),
+      strayWindows: findStrayWindows(zones, walls),
+      requirementMismatches: compareRoomsToRequirements(zones.map(z => z.name), session.brief),
+      isolatedBedrooms: findIsolatedBedrooms(zones, walls),
     }
   }
 
@@ -1027,13 +1374,47 @@ function isCompletedPhase(phase: WorkflowSession['phase']): boolean {
   return phase === 'completed' || phase === 'completed_with_issues'
 }
 
+/**
+ * Pure decision for `modify()`'s catch block: whether a failed modification
+ * attempt should be left in a retryable state. Extracted so it's unit
+ * testable without constructing a live `PascalAiAgent`.
+ */
+export function modifyFailureRecovery(
+  hasPendingModification: boolean,
+  hasSceneResult: boolean,
+): { canRetry: boolean; phase: WorkflowSession['phase'] } {
+  return {
+    canRetry: hasPendingModification,
+    phase: hasPendingModification
+      ? 'awaiting_modification_confirmation'
+      : (hasSceneResult ? 'completed_with_issues' : 'failed'),
+  }
+}
+
+/**
+ * Whether a plain (non-confirm/cancel) message arriving while `phase` is
+ * `awaiting_modification_confirmation` (left there by a failed modify
+ * attempt, see `modifyFailureRecovery`) should be treated as a brand new
+ * modification instruction against the existing scene, rather than falling
+ * through to generic requirement extraction.
+ */
+export function shouldRouteAsExistingSceneRequest(phase: WorkflowSession['phase'], message: string): boolean {
+  return phase === 'awaiting_modification_confirmation' && message.trim().length > 0
+}
+
 export function countDiagnosticIssues(diagnostics: {
   validation: { errors: string[] }
   verificationIssues: string[]
   collisions: unknown[]
+  doorlessRooms: string[]
+  strayWindows: string[]
+  requirementMismatches: string[]
+  isolatedBedrooms: string[]
 }): number {
   return diagnostics.validation.errors.length +
-    diagnostics.verificationIssues.length + diagnostics.collisions.length
+    diagnostics.verificationIssues.length + diagnostics.collisions.length +
+    diagnostics.doorlessRooms.length + diagnostics.strayWindows.length +
+    diagnostics.requirementMismatches.length + diagnostics.isolatedBedrooms.length
 }
 
 /**
@@ -1045,6 +1426,10 @@ export function describeRemainingIssues(
     validation: { errors: string[] }
     verificationIssues: string[]
     collisions: Array<{ aId: string; bId: string; kind: string }>
+    doorlessRooms: string[]
+    strayWindows: string[]
+    requirementMismatches: string[]
+    isolatedBedrooms: string[]
   },
   limit = 5,
 ): string {
@@ -1052,6 +1437,10 @@ export function describeRemainingIssues(
     ...diagnostics.validation.errors,
     ...diagnostics.verificationIssues,
     ...diagnostics.collisions.map(c => `${c.aId} 与 ${c.bId} 存在 ${c.kind} 碰撞`),
+    ...diagnostics.doorlessRooms.map(name => `房间「${name}」没有任何门，是封闭空间`),
+    ...diagnostics.strayWindows,
+    ...diagnostics.requirementMismatches,
+    ...diagnostics.isolatedBedrooms.map(name => `卧室「${name}」只能经过卫生间/厨房/其他卧室到达，动线不合规`),
   ]
   if (items.length === 0) return ''
   const shown = items.slice(0, limit).map(item => `- ${item}`).join('\n')
@@ -1084,6 +1473,22 @@ function recentConversationBlock(messages: ChatMessage[]): string {
   return `Recent conversation with the user (use this to resolve references like "that one" or "same as before"):\n${text}\n\n`
 }
 
+/**
+ * Extract the body of a markdown `## <heading>` section (text up to the next
+ * `## ` heading or end of document). Returns undefined if the heading is not
+ * present, so callers can fall back gracefully when upstream guide content
+ * is renamed or restructured.
+ */
+function extractMarkdownSection(markdown: string, heading: string): string | undefined {
+  const lines = markdown.split('\n')
+  const startIndex = lines.findIndex(line => line.trim() === `## ${heading}`)
+  if (startIndex === -1) return undefined
+  const rest = lines.slice(startIndex + 1)
+  const endIndex = rest.findIndex(line => line.startsWith('## '))
+  const body = (endIndex === -1 ? rest : rest.slice(0, endIndex)).join('\n').trim()
+  return body.length > 0 ? body : undefined
+}
+
 // Tools that create/move item (furniture) nodes. check_collisions only
 // compares unrotated bounding boxes between items and never checks items
 // against walls or room bounds, and verify_scene/validate_scene don't look
@@ -1092,10 +1497,40 @@ function recentConversationBlock(messages: ChatMessage[]): string {
 // an item node just as easily as any other node type.
 const FURNITURE_TOOLS = new Set(['place_item', 'furnish_room', 'apply_patch'])
 
-function furnitureCaveat(toolNamesUsed: Set<string>): string {
+function furnitureCaveat(toolNamesUsed: Set<string>, furnitureIssues: string[] = []): string {
   const touchedFurniture = [...toolNamesUsed].some(name => FURNITURE_TOOLS.has(name))
   if (!touchedFurniture) return ''
-  return '\n\n提示：家具的具体摆放位置未做自动检测（现有检查只覆盖结构、门窗和家具间的粗略重叠，不检查家具是否越界或贴墙贴门），建议在编辑器里确认一下位置。'
+  const limit = 5
+  const specific = furnitureIssues.length > 0
+    ? `\n以下家具没有成功放置：\n${furnitureIssues.slice(0, limit).map(issue => `- ${issue}`).join('\n')}${furnitureIssues.length > limit ? `\n……以及另外 ${furnitureIssues.length - limit} 项` : ''}`
+    : ''
+  return `\n\n提示：家具的具体摆放位置未做自动检测（现有检查只覆盖结构、门窗和家具间的粗略重叠，不检查家具是否越界或贴墙贴门），建议在编辑器里确认一下位置。${specific}`
+}
+
+/**
+ * `place_item` silently swaps in a placeholder box when its `catalogItemId`
+ * isn't in the catalog (status: 'catalog_unavailable'), and `furnish_room`
+ * silently drops placements that don't fit (status stays 'ok' but each drop
+ * is listed in `skipped`). Both were previously invisible to the user —
+ * the model could see them in the tool result but nothing surfaced them in
+ * the final reply. This captures human-readable notes for both cases.
+ */
+function recordFurnitureIssues(
+  toolName: string,
+  args: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  out: string[],
+): void {
+  if (toolName === 'place_item' && payload.status === 'catalog_unavailable') {
+    const catalogItemId = typeof args.catalogItemId === 'string' ? args.catalogItemId : '未知素材'
+    out.push(`目录中找不到 "${catalogItemId}"，已用占位方块代替`)
+    return
+  }
+  if (toolName === 'furnish_room' && Array.isArray(payload.skipped)) {
+    for (const entry of payload.skipped) {
+      if (typeof entry === 'string' && entry.trim()) out.push(entry.trim())
+    }
+  }
 }
 
 export function buildOpeningRepairData(
@@ -1133,6 +1568,342 @@ function isNumberPair(value: unknown): value is [number, number] {
 
 function isNumberTriple(value: unknown): value is [number, number, number] {
   return Array.isArray(value) && value.length === 3 && value.every(item => typeof item === 'number')
+}
+
+type WallSummary = {
+  id: string
+  start: [number, number]
+  end: [number, number]
+  thickness?: number
+  height?: number
+  name?: string
+}
+
+function isWallSummary(value: unknown): value is WallSummary {
+  return isRecord(value) && typeof value.id === 'string' &&
+    isNumberPair(value.start) && isNumberPair(value.end)
+}
+
+// Two walls built independently by separate `create_room` calls along a
+// shared boundary land on (near enough) the same line segment. 5cm covers
+// normal floating-point drift without risking merging two walls that are
+// genuinely just close together (e.g. a narrow corridor).
+const WALL_COINCIDENCE_EPSILON_M = 0.05
+
+function pointsClose(p: [number, number], q: [number, number]): boolean {
+  return Math.hypot(p[0] - q[0], p[1] - q[1]) <= WALL_COINCIDENCE_EPSILON_M
+}
+
+// Two rooms tracing a shared edge may walk it in opposite directions
+// (clockwise vs counter-clockwise polygon winding), so both same-direction
+// and reversed-direction endpoint matches count as coincident. Takes any
+// {start,end} shape so it also works for a raw zone-polygon edge, not just
+// two WallSummary objects. This only catches *exact* endpoint-pair matches —
+// see `collinearOverlap` below for the T-junction case where a long wall
+// partially overlaps one or more shorter walls without sharing endpoints.
+function wallsCoincide(
+  a: { start: [number, number]; end: [number, number] },
+  b: { start: [number, number]; end: [number, number] },
+): boolean {
+  return (pointsClose(a.start, b.start) && pointsClose(a.end, b.end)) ||
+    (pointsClose(a.start, b.end) && pointsClose(a.end, b.start))
+}
+
+// A segment's orientation as a position along a fixed axis, for rooms built
+// axis-aligned (per our own structure-phase prompt guidance). Returns null
+// for a diagonal segment — those fall back to exact endpoint matching via
+// `wallsCoincide`, since interval overlap isn't meaningful off-axis.
+type SegmentOrientation = { axis: 'x' | 'z'; constant: number; lo: number; hi: number }
+
+function segmentOrientation(seg: { start: [number, number]; end: [number, number] }): SegmentOrientation | null {
+  const [sx, sz] = seg.start
+  const [ex, ez] = seg.end
+  if (Math.abs(sx - ex) <= WALL_COINCIDENCE_EPSILON_M) {
+    // Vertical in plan (runs along z), x is constant.
+    return { axis: 'z', constant: (sx + ex) / 2, lo: Math.min(sz, ez), hi: Math.max(sz, ez) }
+  }
+  if (Math.abs(sz - ez) <= WALL_COINCIDENCE_EPSILON_M) {
+    // Horizontal in plan (runs along x), z is constant.
+    return { axis: 'x', constant: (sz + ez) / 2, lo: Math.min(sx, ex), hi: Math.max(sx, ex) }
+  }
+  return null
+}
+
+// Below this, two collinear segments are considered "touching" (e.g. at a
+// shared corner) rather than meaningfully overlapping — must stay smaller
+// than any real wall-splitting fragment we'd want to keep.
+const MIN_MEANINGFUL_OVERLAP_M = 0.03
+
+/**
+ * Two axis-aligned segments overlap collinearly if they run along the same
+ * axis at the same constant coordinate (within wall-coincidence tolerance)
+ * and their 1D intervals along that axis overlap by more than a sliver.
+ * Handles exact duplicates, one segment fully containing the other, and
+ * partial (T-junction / staggered) overlap uniformly — the caller decides
+ * what to do with the overlap interval.
+ */
+function collinearOverlap(
+  a: { start: [number, number]; end: [number, number] },
+  b: { start: [number, number]; end: [number, number] },
+): { axis: 'x' | 'z'; constant: number; lo: number; hi: number } | null {
+  const oa = segmentOrientation(a)
+  const ob = segmentOrientation(b)
+  if (!oa || !ob) return null
+  if (oa.axis !== ob.axis) return null
+  if (Math.abs(oa.constant - ob.constant) > WALL_COINCIDENCE_EPSILON_M) return null
+  const lo = Math.max(oa.lo, ob.lo)
+  const hi = Math.min(oa.hi, ob.hi)
+  if (hi - lo <= MIN_MEANINGFUL_OVERLAP_M) return null
+  return { axis: oa.axis, constant: (oa.constant + ob.constant) / 2, lo, hi }
+}
+
+// True if `a` and `b` overlap enough (exact endpoint match OR meaningful
+// collinear interval overlap) that a door/window hosted on either one
+// should count as hosted on the other's edge too.
+function segmentsCoverSameLine(
+  a: { start: [number, number]; end: [number, number] },
+  b: { start: [number, number]; end: [number, number] },
+): boolean {
+  return wallsCoincide(a, b) || collinearOverlap(a, b) !== null
+}
+
+function orientationToSegment(o: { axis: 'x' | 'z'; constant: number; lo: number; hi: number }): {
+  start: [number, number]
+  end: [number, number]
+} {
+  return o.axis === 'x'
+    ? { start: [o.lo, o.constant], end: [o.hi, o.constant] }
+    : { start: [o.constant, o.lo], end: [o.constant, o.hi] }
+}
+
+export type WallOpening = { type: string }
+export type WallWithOpenings = WallSummary & { openings: WallOpening[] }
+
+function isWallWithOpenings(value: unknown): value is WallWithOpenings {
+  if (!isWallSummary(value)) return false
+  const openings = (value as { openings?: unknown }).openings
+  return Array.isArray(openings) && openings.every(
+    o => isRecord(o) && typeof o.type === 'string',
+  )
+}
+
+export type ZoneSummary = { id: string; name: string; polygon: Array<[number, number]> }
+
+function isZoneSummary(value: unknown): value is ZoneSummary {
+  return isRecord(value) && typeof value.id === 'string' &&
+    typeof value.name === 'string' && isPolygon(value.polygon)
+}
+
+function isPolygon(value: unknown): value is Array<[number, number]> {
+  return Array.isArray(value) && value.length >= 3 && value.every(isNumberPair)
+}
+
+/**
+ * A room with no door of its own is a sealed-off space nobody can walk
+ * into. `verify_scene` only checks whether a *level* has any doors at all,
+ * not whether each individual room does, so a room that got missed during
+ * the openings phase (especially likely now that rooms are built and
+ * connected one at a time) slips through unnoticed. We match each zone's
+ * polygon edges to every wall that covers any part of that edge — a T
+ * junction can leave one long zone edge represented by several shorter wall
+ * segments after dedup, so this checks all overlapping walls rather than a
+ * single exact match — and check whether any of them hosts a door.
+ */
+function findDoorlessRooms(zones: ZoneSummary[], walls: WallWithOpenings[]): string[] {
+  const doorless: string[] = []
+  for (const zone of zones) {
+    let hasDoor = false
+    for (let i = 0; i < zone.polygon.length && !hasDoor; i++) {
+      const edgeStart = zone.polygon[i]!
+      const edgeEnd = zone.polygon[(i + 1) % zone.polygon.length]!
+      const edge = { start: edgeStart, end: edgeEnd }
+      hasDoor = walls.some(
+        w => segmentsCoverSameLine(w, edge) && w.openings.some(o => o.type === 'door'),
+      )
+    }
+    if (!hasDoor) doorless.push(zone.name || zone.id)
+  }
+  return doorless
+}
+
+// Fuzzy, name-based room classification for the circulation check below —
+// same limitation as `compareRoomsToRequirements`: `create_room` has no
+// `type` field, only a model-chosen name.
+type CirculationRoomKind = 'bedroom' | 'blocked-service' | 'passable'
+
+function classifyCirculationRoomKind(name: string): CirculationRoomKind {
+  if (/卧室|bedroom/i.test(name)) return 'bedroom'
+  if (/厨房|kitchen|卫生间|浴室|洗手间|bathroom/i.test(name)) return 'blocked-service'
+  return 'passable'
+}
+
+// Which zone(s) a wall's segment lies along the boundary of. A door on a
+// wall that hosts two zones' edges connects those two rooms; a door on a
+// wall that only hosts one zone's edge leads outside (or to an
+// as-yet-untracked space) and doesn't contribute an interior connection.
+function wallHostZoneIds(
+  wall: { start: [number, number]; end: [number, number] },
+  zones: ZoneSummary[],
+): string[] {
+  const hostIds: string[] = []
+  for (const zone of zones) {
+    for (let i = 0; i < zone.polygon.length; i++) {
+      const edgeStart = zone.polygon[i]!
+      const edgeEnd = zone.polygon[(i + 1) % zone.polygon.length]!
+      if (segmentsCoverSameLine(wall, { start: edgeStart, end: edgeEnd })) {
+        hostIds.push(zone.id)
+        break
+      }
+    }
+  }
+  return hostIds
+}
+
+/**
+ * Deterministic check for the circulation rule the structure-phase prompt
+ * asks the model to plan for ("每个卧室都必须能只经过公共动线到达，不能要求
+ * 先穿过卫生间、厨房或另一个卧室才能到达") but never verifies — the model can
+ * (and, per earlier observed generations, sometimes does) route a bedroom's
+ * only door through another bedroom or straight into the kitchen/bathroom.
+ *
+ * Builds a room-adjacency graph from doors: a door on a wall connects every
+ * zone whose boundary that wall's segment lies along (usually the two rooms
+ * either side of an interior wall). Then, for each bedroom, does a BFS that
+ * is only allowed to terminate *at* a kitchen/bathroom/other-bedroom (a dead
+ * end — not a valid path onward) but never allowed to continue *through*
+ * one, looking for any reachable room that isn't itself a bedroom, kitchen,
+ * or bathroom. A bedroom with no such reachable room is flagged.
+ *
+ * Known limitation: this treats every non-bedroom/kitchen/bathroom room
+ * (living room, hallway, entry, dining, study, storage, ...) as valid
+ * circulation, which is a looser reading than "must be a genuine public
+ * circulation hub" — deliberately so, since the prompt's actual requirement
+ * is only ever framed as the negative rule above, not a positive list of
+ * qualifying room types. An intentionally adjoining suite (e.g. a bedroom
+ * opening only into a dressing room that opens into the hallway) would also
+ * false-positive here, same class of tradeoff as `findStrayWindows`.
+ */
+export function findIsolatedBedrooms(zones: ZoneSummary[], walls: WallWithOpenings[]): string[] {
+  const kindById = new Map<string, CirculationRoomKind>()
+  for (const zone of zones) kindById.set(zone.id, classifyCirculationRoomKind(zone.name || ''))
+
+  const adjacency = new Map<string, Set<string>>()
+  for (const zone of zones) adjacency.set(zone.id, new Set())
+  for (const wall of walls) {
+    if (!wall.openings.some(o => o.type === 'door')) continue
+    const hostIds = wallHostZoneIds(wall, zones)
+    for (let i = 0; i < hostIds.length; i++) {
+      for (let j = i + 1; j < hostIds.length; j++) {
+        adjacency.get(hostIds[i]!)?.add(hostIds[j]!)
+        adjacency.get(hostIds[j]!)?.add(hostIds[i]!)
+      }
+    }
+  }
+
+  const isolated: string[] = []
+  for (const zone of zones) {
+    if (kindById.get(zone.id) !== 'bedroom') continue
+    const visited = new Set<string>([zone.id])
+    const queue: string[] = [zone.id]
+    let reachedPassable = false
+    while (queue.length > 0 && !reachedPassable) {
+      const current = queue.shift()!
+      for (const neighborId of adjacency.get(current) ?? []) {
+        if (visited.has(neighborId)) continue
+        visited.add(neighborId)
+        if (kindById.get(neighborId) === 'passable') {
+          reachedPassable = true
+          break
+        }
+        // A bedroom or kitchen/bathroom neighbor is a dead end for this
+        // check — reachable, but not allowed to be transited *through*, so
+        // it's marked visited (no revisiting) but never enqueued.
+      }
+    }
+    if (!reachedPassable) isolated.push(zone.name || zone.id)
+  }
+  return isolated
+}
+
+// Approximates "is this wall on the building's exterior?" by the overall
+// bounding box of every room (there's no stored footprint polygon to check
+// against once a wall isn't touching the outer edge of that box, it's
+// almost certainly an interior partition). Rectangular-ish footprints only
+// — an L-shaped building could false-positive on the notch, so this is a
+// best-effort signal fed into repair rounds, not a hard failure.
+const EXTERIOR_BOUNDARY_EPSILON_M = 0.15
+
+function overallZoneBounds(
+  zones: ZoneSummary[],
+): { minX: number; maxX: number; minZ: number; maxZ: number } | null {
+  if (zones.length === 0) return null
+  const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity }
+  for (const zone of zones) {
+    for (const [x, z] of zone.polygon) {
+      if (x < bounds.minX) bounds.minX = x
+      if (x > bounds.maxX) bounds.maxX = x
+      if (z < bounds.minZ) bounds.minZ = z
+      if (z > bounds.maxZ) bounds.maxZ = z
+    }
+  }
+  return bounds
+}
+
+function findStrayWindows(zones: ZoneSummary[], walls: WallWithOpenings[]): string[] {
+  const bounds = overallZoneBounds(zones)
+  if (!bounds) return []
+  const issues: string[] = []
+  for (const wall of walls) {
+    if (!wall.openings.some(o => o.type === 'window')) continue
+    const midX = (wall.start[0] + wall.end[0]) / 2
+    const midZ = (wall.start[1] + wall.end[1]) / 2
+    const onBoundary =
+      Math.abs(midX - bounds.minX) <= EXTERIOR_BOUNDARY_EPSILON_M ||
+      Math.abs(midX - bounds.maxX) <= EXTERIOR_BOUNDARY_EPSILON_M ||
+      Math.abs(midZ - bounds.minZ) <= EXTERIOR_BOUNDARY_EPSILON_M ||
+      Math.abs(midZ - bounds.maxZ) <= EXTERIOR_BOUNDARY_EPSILON_M
+    if (!onBoundary) {
+      issues.push(`墙 ${wall.id} 上的窗户不在建筑外边界附近，疑似开在了室内隔墙上`)
+    }
+  }
+  return issues
+}
+
+/**
+ * `create_room` has no `type` field, only a model-chosen `name`, so this is
+ * necessarily a fuzzy keyword match rather than an exact comparison. Scoped
+ * to the two things we can check with reasonable confidence: bedroom count
+ * (a concrete number in the brief) and presence of support spaces the brief
+ * *itself* explicitly asked for.
+ *
+ * Deliberately does NOT infer "this must be a full home" from bedroom count
+ * alone — a brief that only requested N bedrooms should not have a kitchen,
+ * bathroom, or living room forced onto it during repair rounds just because
+ * it mentioned a number of bedrooms. Only requestedRooms (the brief's own
+ * explicit room list) drives which support spaces are checked for.
+ */
+function compareRoomsToRequirements(zoneNames: string[], brief: DesignBrief): string[] {
+  const issues: string[] = []
+  const bedroomCount = numberFact(brief, ['bedroom_count', 'bedrooms'])
+  if (bedroomCount !== undefined && bedroomCount > 0) {
+    const actual = zoneNames.filter(name => /卧室|bedroom/i.test(name)).length
+    if (actual < bedroomCount) {
+      issues.push(`卧室数量不足：需求 ${bedroomCount} 间，实际建了 ${actual} 间`)
+    }
+  }
+  const requestedRooms = arrayFact(brief, ['rooms', 'required_rooms', 'function_spaces'])
+  const supportSpaces: Array<[string, RegExp]> = [
+    ['厨房', /厨房|kitchen/i],
+    ['卫生间', /卫生间|浴室|洗手间|bathroom/i],
+    ['客厅', /客厅|起居室|living/i],
+  ]
+  for (const [label, pattern] of supportSpaces) {
+    const wasRequested = requestedRooms.some(room => pattern.test(room))
+    if (wasRequested && !zoneNames.some(name => pattern.test(name))) {
+      issues.push(`缺少${label}：需求中明确要求了该空间但没有建`)
+    }
+  }
+  return issues
 }
 
 function positiveNumber(value: unknown, fallback: number): number {
@@ -1333,100 +2104,6 @@ function buildGenerationArgs(session: WorkflowSession): Record<string, unknown> 
   }
 }
 
-export function buildDeterministicSingleRoomPlan(brief: DesignBrief): ConstructionPlan | null {
-  const widthM = numberFact(brief, ['width_m', 'room_width_m', 'width'])
-  const depthM = numberFact(brief, [
-    'depth_m', 'length_m', 'room_depth_m', 'room_length_m', 'depth', 'length',
-  ])
-  if (!widthM || !depthM || widthM <= 0 || depthM <= 0) return null
-  const requestedRooms = arrayFact(brief, ['rooms', 'required_rooms', 'function_spaces'])
-  const bedroomCount = numberFact(brief, ['bedroom_count', 'bedrooms'])
-  if (requestedRooms.length > 1 || (bedroomCount ?? 1) > 1) return null
-  const name = requestedRooms[0] ?? ((bedroomCount ?? 0) === 1 ? '卧室' : '房间')
-  const halfWidth = widthM / 2
-  const halfDepth = depthM / 2
-  const polygon: Array<[number, number]> = [
-    [-halfWidth, -halfDepth],
-    [halfWidth, -halfDepth],
-    [halfWidth, halfDepth],
-    [-halfWidth, halfDepth],
-  ]
-  return {
-    footprint: { widthM, depthM, polygon },
-    rooms: [{
-      name,
-      type: /卧室|bedroom/i.test(name) ? 'bedroom' : 'room',
-      polygon,
-      furniture: /卧室|bedroom/i.test(name) ? ['bed', 'wardrobe', 'nightstand'] : [],
-    }],
-    openings: [
-      { type: 'door', roomName: name, wall: 'south' },
-      { type: 'window', roomName: name, wall: 'north' },
-    ],
-  }
-}
-
-export function normalizeConstructionPlan(value: ConstructionPlan): ConstructionPlan {
-  if (
-    !value || !value.footprint ||
-    !Number.isFinite(value.footprint.widthM) || value.footprint.widthM <= 0 ||
-    !Number.isFinite(value.footprint.depthM) || value.footprint.depthM <= 0 ||
-    !isPolygon(value.footprint.polygon) || !Array.isArray(value.rooms) || value.rooms.length === 0
-  ) throw new Error('Model returned an invalid construction plan')
-  const rooms = value.rooms.filter(room =>
-    Boolean(room) && typeof room.name === 'string' && typeof room.type === 'string' &&
-    isPolygon(room.polygon),
-  ).map(room => ({
-    name: room.name,
-    type: room.type,
-    polygon: room.polygon,
-    furniture: Array.isArray(room.furniture)
-      ? room.furniture.filter(item => typeof item === 'string')
-      : [],
-  }))
-  if (rooms.length === 0) throw new Error('Construction plan contains no valid rooms')
-  const footprintBounds = polygonBounds(value.footprint.polygon)
-  const roomBounds = rooms.map(room => polygonBounds(room.polygon))
-  for (const bounds of roomBounds) {
-    if (
-      bounds.minX < footprintBounds.minX || bounds.maxX > footprintBounds.maxX ||
-      bounds.minZ < footprintBounds.minZ || bounds.maxZ > footprintBounds.maxZ
-    ) throw new Error('Construction plan contains a room outside the footprint')
-  }
-  for (let left = 0; left < roomBounds.length; left++) {
-    for (let right = left + 1; right < roomBounds.length; right++) {
-      const a = roomBounds[left]!
-      const b = roomBounds[right]!
-      if (Math.min(a.maxX, b.maxX) > Math.max(a.minX, b.minX) &&
-        Math.min(a.maxZ, b.maxZ) > Math.max(a.minZ, b.minZ)) {
-        throw new Error('Construction plan contains overlapping rooms')
-      }
-    }
-  }
-  const openings = Array.isArray(value.openings)
-    ? value.openings.filter(opening =>
-        Boolean(opening) && (opening.type === 'door' || opening.type === 'window') &&
-        typeof opening.roomName === 'string' &&
-        ['north', 'east', 'south', 'west', 'shared'].includes(opening.wall),
-      )
-    : []
-  return { footprint: value.footprint, rooms, openings }
-}
-
-function polygonBounds(polygon: Array<[number, number]>): {
-  minX: number; maxX: number; minZ: number; maxZ: number
-} {
-  const xs = polygon.map(point => point[0])
-  const zs = polygon.map(point => point[1])
-  return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) }
-}
-
-function isPolygon(value: unknown): value is Array<[number, number]> {
-  return Array.isArray(value) && value.length >= 3 && value.every(point =>
-    Array.isArray(point) && point.length === 2 && point.every(Number.isFinite),
-  )
-}
-
 function confirmBrief(brief: DesignBrief): DesignBrief {
   const confirm = (facts: RequirementFact[]) => facts.map(fact => ({
     ...fact,
@@ -1443,7 +2120,7 @@ function confirmBrief(brief: DesignBrief): DesignBrief {
   }
 }
 
-function toolPayload(result: unknown): Record<string, unknown> {
+export function toolPayload(result: unknown): Record<string, unknown> {
   if (!result || typeof result !== 'object') return {}
   const value = result as Record<string, unknown>
   if (value.structuredContent && typeof value.structuredContent === 'object') {
@@ -1458,6 +2135,29 @@ function toolPayload(result: unknown): Record<string, unknown> {
     }
   }
   return {}
+}
+
+// place_item's `rotation` parameter is interpreted as radians by the scene
+// renderer (Three.js convention), but nothing in the tool's schema or
+// description tells the model that — so it reliably supplies degree-shaped
+// values instead (0, 90, 180, 270), which then get applied as radians and
+// spin the item into an almost-arbitrary orientation. We can't add a unit
+// hint to the MCP tool itself (out of scope here), so we correct it at the
+// boundary instead: a genuine single-axis radian value for a sane rotation
+// is always within one full turn (±2π); anything larger than that is
+// unambiguously a degree value that slipped through, so we reinterpret it
+// as degrees and convert before forwarding the call to MCP.
+const RADIAN_SANITY_BOUND = Math.PI * 2 + 0.01
+
+function normalizeToolArgs(
+  toolName: string,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  if (toolName !== 'place_item') return args
+  const rotation = args.rotation
+  if (typeof rotation !== 'number' || !Number.isFinite(rotation)) return args
+  if (Math.abs(rotation) <= RADIAN_SANITY_BOUND) return args
+  return { ...args, rotation: (rotation * Math.PI) / 180 }
 }
 
 function parseToolArgs(raw: string): Record<string, unknown> {

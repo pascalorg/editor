@@ -1,0 +1,15 @@
+{
+  "id": "case-05-tiny-extreme",
+  "category": "小面积极限户型",
+  "difficulty": "hard",
+  "description": "28平米极限小户型，容易触发畸形长条房间/最小宽度问题",
+  "turns": [
+    { "role": "user", "message": "极限小户型，总面积只有28平米，但要有卧室、卫生间、小厨房和客厅" },
+    { "action": "confirm" }
+  ],
+  "expectedFacts": {
+    "bedroom_count": 1,
+    "requiredRoomTypes": ["卧室", "卫生间", "厨房", "客厅"]
+  },
+  "notes": "重点观察长宽比违规和面积不合理的畸形房间——这类用例过去出现过问题"
+}

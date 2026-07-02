@@ -99,23 +99,12 @@ export type SceneResult = {
   validation: { valid: boolean; errors: string[] }
   verificationIssues: string[]
   collisions: Array<{ aId: string; bId: string; kind: string }>
+  doorlessRooms: string[]
+  strayWindows: string[]
+  requirementMismatches: string[]
+  isolatedBedrooms: string[]
   repairRounds: number
   remainingIssueCount: number
-}
-
-export type ConstructionPlan = {
-  footprint: { widthM: number; depthM: number; polygon: Array<[number, number]> }
-  rooms: Array<{
-    name: string
-    type: string
-    polygon: Array<[number, number]>
-    furniture: string[]
-  }>
-  openings: Array<{
-    type: 'door' | 'window'
-    roomName: string
-    wall: 'north' | 'east' | 'south' | 'west' | 'shared'
-  }>
 }
 
 export type WorkflowSession = {
@@ -134,12 +123,18 @@ export type WorkflowSession = {
   sceneResult?: SceneResult
   pendingModification?: string
   pendingOperation?: 'create' | 'update' | 'delete'
+  // Scene ids created by a fresh-build `generate()` attempt that then
+  // failed partway through construction. `session.sceneId` gets rolled
+  // back so a retry doesn't mistake the half-built wreckage for a real
+  // existing project (see `generate()`'s catch block), but the abandoned
+  // project itself is left in storage (never auto-deleted) — recorded here
+  // purely as an audit trail / for manual cleanup.
+  abandonedSceneIds?: string[]
   executionSteps?: Array<{
-    phase: 'planning' | 'structure' | 'openings' | 'furnishing' | 'verification'
+    phase: 'structure' | 'openings' | 'furnishing' | 'verification'
     status: 'completed' | 'failed'
     label: string
   }>
-  constructionPlan?: ConstructionPlan
   createdAt: string
   updatedAt: string
 }

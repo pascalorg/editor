@@ -1,0 +1,15 @@
+{
+  "id": "case-02-studio",
+  "category": "一居室",
+  "difficulty": "easy",
+  "description": "标准一居室公寓",
+  "turns": [
+    { "role": "user", "message": "设计一个约35平米的一居室公寓，要有卧室、卫生间、开放式厨房和客厅" },
+    { "action": "confirm" }
+  ],
+  "expectedFacts": {
+    "bedroom_count": 1,
+    "requiredRoomTypes": ["卧室", "卫生间", "厨房", "客厅"]
+  },
+  "notes": "开放式厨房口径下，厨房和客厅之间可能没有隔墙/门，findDoorlessRooms 对厨房的判定需要留意是否误报"
+}

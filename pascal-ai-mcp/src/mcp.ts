@@ -69,6 +69,37 @@ export class PascalMcpClient {
     return result
   }
 
+  /**
+   * Read an MCP resource (e.g. `pascal://agent-guide`) and return its text
+   * content. Returns undefined rather than throwing when the resource is
+   * missing or has no text content, so callers can treat this as an
+   * optional enrichment rather than a hard dependency.
+   */
+  async readResourceText(uri: string): Promise<string | undefined> {
+    const client = this.requireClient()
+    const result = await client.readResource({ uri })
+    const textContent = result.contents.find(
+      (content): content is typeof content & { text: string } =>
+        'text' in content && typeof content.text === 'string',
+    )
+    return textContent?.text
+  }
+
+  /**
+   * Fetch an MCP prompt (e.g. `from_brief`) and return its assembled
+   * messages. Not currently used for scene generation (we keep our own
+   * structured workflow), but available for prompts like
+   * `renovation_from_photos` if we wire that up later.
+   */
+  async getPrompt(
+    name: string,
+    args: Record<string, string>,
+  ): Promise<Array<{ role: string; content: unknown }>> {
+    const client = this.requireClient()
+    const result = await client.getPrompt({ name, arguments: args })
+    return result.messages
+  }
+
   private requireClient(): Client {
     if (!this.client) throw new Error('Pascal MCP client is not connected')
     return this.client

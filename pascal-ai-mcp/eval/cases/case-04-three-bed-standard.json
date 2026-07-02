@@ -1,0 +1,15 @@
+{
+  "id": "case-04-three-bed-standard",
+  "category": "三居室标准",
+  "difficulty": "standard",
+  "description": "标准三室两厅两卫，主卧带独卫",
+  "turns": [
+    { "role": "user", "message": "三室两厅两卫一厨，面积约110平米，主卧带独立卫生间" },
+    { "action": "confirm" }
+  ],
+  "expectedFacts": {
+    "bedroom_count": 3,
+    "requiredRoomTypes": ["卧室", "客厅", "卫生间", "厨房"]
+  },
+  "notes": "主卧独卫意味着至少一间卧室与卫生间直接相邻——注意跟 isolatedBedrooms 检查区分：直接相邻不等于必须穿过，只要这间卧室自己还有一扇通向公共动线的门就不算违规；也是 case-14 的依赖用例"
+}

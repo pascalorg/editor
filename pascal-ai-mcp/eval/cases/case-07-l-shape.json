@@ -1,0 +1,15 @@
+{
+  "id": "case-07-l-shape",
+  "category": "L型边界",
+  "difficulty": "hard",
+  "description": "L型户型边界，三室两厅一卫",
+  "turns": [
+    { "role": "user", "message": "户型整体是L形的，缺角部分大约4x4米，做三室两厅一卫" },
+    { "action": "confirm" }
+  ],
+  "expectedFacts": {
+    "bedroom_count": 3,
+    "requiredRoomTypes": ["卧室", "客厅", "卫生间"]
+  },
+  "notes": "已知 findStrayWindows 对 L 型/凹形户型的外墙判定是包围盒近似，缺角附近的窗户容易被误判成室内窗——这个用例专门用来观察这个已知限制，不代表出现误判就是新 bug"
+}

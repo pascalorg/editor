@@ -1,0 +1,14 @@
+{
+  "id": "case-01-single-room",
+  "category": "单间卧室",
+  "difficulty": "easy",
+  "description": "最小单元：单间卧室，验证基础家具摆放",
+  "turns": [
+    { "role": "user", "message": "帮我在一个约12平米的房间里布置单人卧室，要有床、衣柜和书桌" },
+    { "action": "confirm" }
+  ],
+  "expectedFacts": {
+    "requiredRoomTypes": ["卧室"]
+  },
+  "notes": "只有一个房间，动线连通性检查在这个用例上没有意义（没有其他房间可达）"
+}

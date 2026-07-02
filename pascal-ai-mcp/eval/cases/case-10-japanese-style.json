@@ -1,0 +1,15 @@
+{
+  "id": "case-10-japanese-style",
+  "category": "日式住宅习惯",
+  "difficulty": "standard",
+  "description": "日式住宅习惯，两室一厅，玄关换鞋区",
+  "turns": [
+    { "role": "user", "message": "按日式住宅习惯设计两室一厅，总面积约60平米，玄关要有换鞋区，卧室做榻榻米风格" },
+    { "action": "confirm" }
+  ],
+  "expectedFacts": {
+    "bedroom_count": 2,
+    "requiredRoomTypes": ["卧室", "客厅"]
+  },
+  "notes": "玄关是否被建成独立房间、以及是否被正确识别为可穿行空间（不应触发 isolatedBedrooms 误判），是这个用例的观察重点"
+}

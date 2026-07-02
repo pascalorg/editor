@@ -1,0 +1,15 @@
+{
+  "id": "case-06-narrow-lot",
+  "category": "狭长地块",
+  "difficulty": "hard",
+  "description": "5米x18米狭长地块，两室一厅一卫",
+  "turns": [
+    { "role": "user", "message": "地块是长条形的，宽5米长18米，做一个两室一厅一卫的户型" },
+    { "action": "confirm" }
+  ],
+  "expectedFacts": {
+    "bedroom_count": 2,
+    "requiredRoomTypes": ["卧室", "客厅", "卫生间"]
+  },
+  "notes": "狭长地块下走廊/过道类空间占比可能偏高，重点观察是否出现过窄畸形房间，以及走廊是否被正确识别为可穿行空间而不是被 isolatedBedrooms 判定阻断"
+}
