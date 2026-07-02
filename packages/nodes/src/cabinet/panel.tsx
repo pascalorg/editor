@@ -22,9 +22,15 @@ import { CABINET_PRESETS, type CabinetPresetId } from './presets'
 import {
   type CabinetCompartment,
   type CabinetCompartmentType,
+  type CabinetFridgeCompartmentType,
   compartmentDoorType,
   compartmentDrawerCount,
   compartmentShelfCount,
+  FRIDGE_COLUMN_HEIGHT,
+  FRIDGE_COLUMN_WIDTH,
+  FRIDGE_STANDARD_DEPTH,
+  FRIDGE_WIDE_WIDTH,
+  isFridgeCompartmentType,
   MICROWAVE_STANDARD_WIDTH,
   minCabinetCarcassHeightForStack,
   newCabinetCompartment,
@@ -41,6 +47,16 @@ const COMPARTMENT_TYPE_OPTIONS = [
   { value: 'door', label: 'Door' },
   { value: 'oven', label: 'Oven' },
   { value: 'microwave', label: 'Micro' },
+] as const
+
+const FRIDGE_TYPE_OPTION = { value: 'fridge', label: 'Fridge' } as const
+const COMPARTMENT_TYPE_CONTROL_OPTIONS = [...COMPARTMENT_TYPE_OPTIONS, FRIDGE_TYPE_OPTION] as const
+
+const FRIDGE_STYLE_OPTIONS = [
+  { value: 'fridge-single', label: 'Single' },
+  { value: 'fridge-double', label: 'Double' },
+  { value: 'fridge-top-freezer', label: 'Top Freezer' },
+  { value: 'fridge-bottom-freezer', label: 'Bottom Freezer' },
 ] as const
 
 const DOOR_TYPE_OPTIONS = [
@@ -79,6 +95,8 @@ const EMPTY_MODULES: CabinetModuleNodeType[] = []
 const EMPTY_MODULE_IDS: AnyNodeId[] = []
 const RUN_POSITION_PATCH_KEYS = new Set<keyof CabinetNodeType>(['showPlinth', 'plinthHeight'])
 const RUN_DEPTH_PATCH_KEY = 'depth'
+const BASE_MODULE_WIDTH = 0.6
+const BASE_CARCASS_HEIGHT = 0.72
 const WALL_CARCASS_HEIGHT = 0.72
 const WALL_DEPTH = 0.32
 const TALL_PLINTH_HEIGHT = 0.1
@@ -239,12 +257,12 @@ function CompartmentTypeControl({
   value,
   onChange,
 }: {
-  value: CabinetCompartmentType
-  onChange: (value: CabinetCompartmentType) => void
+  value: CabinetCompartmentType | 'fridge'
+  onChange: (value: CabinetCompartmentType | 'fridge') => void
 }) {
   return (
     <div className="grid w-full grid-cols-3 gap-1 rounded-lg border border-border/50 bg-[#2C2C2E] p-[3px]">
-      {COMPARTMENT_TYPE_OPTIONS.map((option) => {
+      {COMPARTMENT_TYPE_CONTROL_OPTIONS.map((option) => {
         const isSelected = value === option.value
         return (
           <button
@@ -285,11 +303,7 @@ function reflowRunModules({
   scene: ReturnType<typeof useScene.getState>
   selected: CabinetModuleNodeType
 }) {
-  const reflowed = reflowCabinetRunModules(
-    modules,
-    selected.id,
-    patch.width ?? selected.width,
-  )
+  const reflowed = reflowCabinetRunModules(modules, selected.id, patch.width ?? selected.width)
   if (reflowed.length === 0) return
 
   const reflowById = new Map(reflowed.map((entry) => [entry.id, entry]))
@@ -365,6 +379,7 @@ function CompartmentCard({
   onMove: (delta: -1 | 1) => void
 }) {
   const type = compartment.type as CabinetCompartmentType
+  const isFridge = isFridgeCompartmentType(type)
   return (
     <div className="rounded-lg border border-border/40 bg-[#252527] p-2">
       <div className="flex items-center justify-between pb-1.5">
@@ -410,11 +425,11 @@ function CompartmentCard({
         <CompartmentTypeControl
           onChange={(value) =>
             onReplace({
-              ...newCabinetCompartment(value),
+              ...newCabinetCompartment(value === 'fridge' ? 'fridge-single' : value),
               id: compartment.id,
             })
           }
-          value={type}
+          value={isFridge ? 'fridge' : type}
         />
       </div>
 
@@ -472,6 +487,28 @@ function CompartmentCard({
             min={0}
             onChange={(value) => onReplace({ ...compartment, shelfCount: value })}
             value={compartmentShelfCount(compartment)}
+          />
+        </div>
+      )}
+
+      {isFridge && (
+        <div>
+          <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+            Style
+          </div>
+          <SegmentedControl
+            onChange={(value) =>
+              onReplace({
+                ...compartment,
+                type: value as CabinetFridgeCompartmentType,
+                height: compartment.height ?? FRIDGE_COLUMN_HEIGHT,
+              })
+            }
+            options={FRIDGE_STYLE_OPTIONS.map((option) => ({
+              value: option.value,
+              label: option.label,
+            }))}
+            value={type}
           />
         </div>
       )}
@@ -623,10 +660,7 @@ function CabinetRunPanel({
           <SliderControl
             label="Carcass height"
             max={node.runTier === 'tall' ? 2.4 : 1.4}
-            min={Math.max(
-              0.4,
-              ...modules.map((module) => minCabinetCarcassHeightForStack(module)),
-            )}
+            min={Math.max(0.4, ...modules.map((module) => minCabinetCarcassHeightForStack(module)))}
             onChange={(value) => updateRun({ carcassHeight: value })}
             precision={2}
             step={0.01}
@@ -837,7 +871,10 @@ export default function CabinetPanel() {
       animationTargetRef.current = target
       setIsAnimating(true)
       const startTime = window.performance.now()
-      const duration = 320
+      const hasFridge = stackForCabinet(liveNode).some((compartment) =>
+        isFridgeCompartmentType(compartment.type),
+      )
+      const duration = hasFridge ? 450 : 320
 
       const step = (time: number) => {
         const t = Math.min(1, (time - startTime) / duration)
@@ -876,7 +913,8 @@ export default function CabinetPanel() {
   ) => {
     const patch = { ...extraPatch, stack: next }
     const minCarcassHeight = minCabinetCarcassHeightForStack({ ...node, stack: next })
-    if (node.carcassHeight < minCarcassHeight) patch.carcassHeight = minCarcassHeight
+    const targetCarcassHeight = patch.carcassHeight ?? node.carcassHeight
+    if (targetCarcassHeight < minCarcassHeight) patch.carcassHeight = minCarcassHeight
     if (node.type === 'cabinet-module' && parentRun?.type === 'cabinet' && patch.width) {
       reflowRunModules({
         modules,
@@ -889,7 +927,40 @@ export default function CabinetPanel() {
     }
     updateNode(patch)
   }
-  const replaceAt = (index: number, next: CabinetCompartment) =>
+  const replaceAt = (index: number, next: CabinetCompartment) => {
+    const current = stack[index]
+    const leavingFridge = current ? isFridgeCompartmentType(current.type) : false
+    const enteringFridge = isFridgeCompartmentType(next.type)
+    const fridgeModulePatch: Partial<CabinetModuleNodeType> = enteringFridge
+      ? {
+          cabinetType: 'tall',
+          width: next.type === 'fridge-double' ? FRIDGE_WIDE_WIDTH : FRIDGE_COLUMN_WIDTH,
+          depth: FRIDGE_STANDARD_DEPTH,
+          carcassHeight: FRIDGE_COLUMN_HEIGHT,
+          plinthHeight: 0.1,
+          toeKickDepth: 0.075,
+          countertopThickness: 0,
+          countertopOverhang: parentRun?.countertopOverhang ?? 0.02,
+          showPlinth: false,
+          withCountertop: false,
+        }
+      : {}
+    const standardModulePatch: Partial<CabinetModuleNodeType> =
+      leavingFridge && !enteringFridge
+        ? {
+            cabinetType: 'base',
+            width: next.type === 'microwave' ? MICROWAVE_STANDARD_WIDTH : BASE_MODULE_WIDTH,
+            depth: parentRun?.depth ?? 0.58,
+            carcassHeight: parentRun?.carcassHeight ?? BASE_CARCASS_HEIGHT,
+            plinthHeight: parentRun?.plinthHeight ?? 0.1,
+            toeKickDepth: parentRun?.toeKickDepth ?? 0.075,
+            countertopThickness: 0,
+            countertopOverhang: parentRun?.countertopOverhang ?? 0.02,
+            showPlinth: false,
+            withCountertop: false,
+          }
+        : {}
+
     commitStack(
       replaceCabinetCompartmentStack(
         node,
@@ -899,8 +970,17 @@ export default function CabinetPanel() {
           ? 'drawer'
           : 'door',
       ),
-      next.type === 'microwave' ? { width: MICROWAVE_STANDARD_WIDTH } : {},
+      {
+        ...fridgeModulePatch,
+        ...standardModulePatch,
+        ...(next.type === 'microwave' ? { width: MICROWAVE_STANDARD_WIDTH } : {}),
+        ...(isFridgeCompartmentType(next.type) && next.type !== 'fridge-double'
+          ? { width: FRIDGE_COLUMN_WIDTH }
+          : {}),
+        ...(next.type === 'fridge-double' ? { width: FRIDGE_WIDE_WIDTH } : {}),
+      },
     )
+  }
   const resizeAt = (index: number, height: number) =>
     commitStack(resizeCabinetCompartmentStack(node, index, height))
   const removeAt = (index: number) => commitStack(stack.filter((_, i) => i !== index))

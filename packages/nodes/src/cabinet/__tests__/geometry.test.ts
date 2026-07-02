@@ -1,11 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode, AnyNodeId, GeometryContext } from '@pascal-app/core'
-import { Box3 } from 'three'
 import type { BufferAttribute, Mesh, Object3D } from 'three'
+import { Box3 } from 'three'
 import { buildCabinetGeometry } from '../geometry'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 import { cabinetSlots } from '../slots'
-import { MICROWAVE_STANDARD_HEIGHT } from '../stack'
+import {
+  FRIDGE_COLUMN_HEIGHT,
+  FRIDGE_COLUMN_WIDTH,
+  FRIDGE_STANDARD_DEPTH,
+  FRIDGE_WIDE_WIDTH,
+  MICROWAVE_STANDARD_HEIGHT,
+} from '../stack'
 
 function findMeshByName(root: { children: unknown[] }, name: string): Mesh {
   const queue = [...root.children]
@@ -289,10 +295,9 @@ describe('buildCabinetGeometry — appliance compartments', () => {
     expect(cancel.min.y - panel.min.y).toBeGreaterThan(panelHeight * 0.14)
     expect(start.min.y - panel.min.y).toBeGreaterThan(panelHeight * 0.14)
 
-    const ventSlats = [
-      'cabinet-microwave-0-top-vent-4',
-      'cabinet-microwave-0-bottom-vent-0',
-    ].map((name) => worldBounds(findMeshByName(group, name)))
+    const ventSlats = ['cabinet-microwave-0-top-vent-4', 'cabinet-microwave-0-bottom-vent-0'].map(
+      (name) => worldBounds(findMeshByName(group, name)),
+    )
     for (const vent of ventSlats) {
       expect(vent.intersectsBox(panel)).toBe(false)
     }
@@ -320,6 +325,215 @@ describe('buildCabinetGeometry — appliance compartments', () => {
     const microwaveHinge = findObjectByName(microwaveGroup, 'cabinet-microwave-0-door-hinge')
     expect(microwaveHinge.rotation.y).toBeCloseTo(-Math.PI / 2)
     expect(microwaveHinge.rotation.x).toBeCloseTo(0)
+  })
+
+  test('single refrigerator emits steel door, shelves, bins, vents, and an opening hinge', () => {
+    const node = CabinetModuleNode.parse({
+      cabinetType: 'tall',
+      width: FRIDGE_COLUMN_WIDTH,
+      depth: FRIDGE_STANDARD_DEPTH,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      operationState: 1,
+      stack: [{ id: 'fridge', type: 'fridge-single', height: FRIDGE_COLUMN_HEIGHT }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    const panel = findMeshByName(group, 'cabinet-fridge-single-0-door-single-panel')
+    expect(panel.userData.slotId).toBe('appliance')
+    expect(findMeshByName(group, 'cabinet-fridge-single-0-appliance-side-left')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-fridge-single-0-appliance-toe-grille')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-fridge-single-0-door-single-badge')).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-single-0-door-single-water-dispenser'),
+    ).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-single-0-door-single-blue-drip-tray'),
+    ).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-fridge-single-0-single-fresh-shelf-1')).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-single-0-single-fresh-shelf-1-front-lip'),
+    ).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-fridge-single-0-single-left-liner-rib-0')).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-single-0-single-rear-diffuser-panel'),
+    ).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-single-0-single-rear-diffuser-channel-0'),
+    ).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-fridge-single-0-single-crisper-drawer-0')).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-single-0-single-crisper-drawer-0-handle'),
+    ).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-single-0-single-crisper-drawer-0-humidity-slider'),
+    ).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-fridge-single-0-single-deli-drawer')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-fridge-single-0-single-control-strip')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-fridge-single-0-vent-0')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-fridge-single-0-door-single-door-bin-0')).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-single-0-door-single-door-bin-0-retainer'),
+    ).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-single-0-door-single-door-dairy-cover'),
+    ).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-single-0-door-single-door-bin-0-retainer').position.z,
+    ).toBeLessThan(
+      findMeshByName(group, 'cabinet-fridge-single-0-door-single-door-bin-0-base').position.z,
+    )
+    expect(
+      findMeshByName(group, 'cabinet-fridge-single-0-door-single-door-dairy-cover').position.z,
+    ).toBeLessThan(
+      findMeshByName(group, 'cabinet-fridge-single-0-door-single-door-dairy-box').position.z,
+    )
+    const topCap = worldBounds(findMeshByName(group, 'cabinet-fridge-single-0-appliance-top-cap'))
+    const cavityTop = worldBounds(findMeshByName(group, 'cabinet-fridge-single-0-cavity-top'))
+    const cabinetTop = worldBounds(findMeshByName(group, 'cabinet-top'))
+    const leftShell = worldBounds(
+      findMeshByName(group, 'cabinet-fridge-single-0-appliance-side-left'),
+    )
+    const rightShell = worldBounds(
+      findMeshByName(group, 'cabinet-fridge-single-0-appliance-side-right'),
+    )
+    const leftCarcass = worldBounds(findMeshByName(group, 'cabinet-side-left'))
+    const rightCarcass = worldBounds(findMeshByName(group, 'cabinet-side-right'))
+    expect(topCap.max.y).toBeLessThan(cabinetTop.min.y - 0.01)
+    expect(leftShell.min.x).toBeGreaterThan(leftCarcass.max.x + 0.01)
+    expect(rightShell.max.x).toBeLessThan(rightCarcass.min.x - 0.01)
+    expect(leftShell.max.z).toBeLessThan(leftCarcass.max.z - 0.01)
+    expect(rightShell.max.z).toBeLessThan(rightCarcass.max.z - 0.01)
+    expect(leftShell.intersectsBox(topCap)).toBe(false)
+    expect(rightShell.intersectsBox(topCap)).toBe(false)
+    expect(cavityTop.max.y).toBeLessThan(topCap.min.y - 0.001)
+    const hinge = findObjectByName(group, 'cabinet-fridge-single-0-door-single-hinge')
+    expect(hinge.rotation.y).toBeGreaterThan(1.9)
+  })
+
+  test('double refrigerator opens opposing side-by-side leaves', () => {
+    const node = CabinetModuleNode.parse({
+      cabinetType: 'tall',
+      width: FRIDGE_WIDE_WIDTH,
+      depth: FRIDGE_STANDARD_DEPTH,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      operationState: 1,
+      stack: [{ id: 'fridge', type: 'fridge-double', height: FRIDGE_COLUMN_HEIGHT }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    const left = findObjectByName(group, 'cabinet-fridge-double-0-door-left-hinge')
+    const right = findObjectByName(group, 'cabinet-fridge-double-0-door-right-hinge')
+    expect(findMeshByName(group, 'cabinet-fridge-double-0-left-ice-maker-box')).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-double-0-left-freezer-wire-basket-bar-1'),
+    ).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-fridge-double-0-right-control-strip')).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-double-0-door-left-door-wire-bin-0-wire-1'),
+    ).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-fridge-double-0-door-right-door-dairy-box')).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-double-0-door-right-door-bottle-bin'),
+    ).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-fridge-double-0-door-left-door-wire-bin-0-top-rail').position
+        .z,
+    ).toBeLessThan(
+      findMeshByName(group, 'cabinet-fridge-double-0-door-left-door-wire-bin-0-base-rail').position
+        .z,
+    )
+    expect(
+      findMeshByName(group, 'cabinet-fridge-double-0-door-right-door-bottle-bin-retainer').position
+        .z,
+    ).toBeLessThan(
+      findMeshByName(group, 'cabinet-fridge-double-0-door-right-door-bottle-bin-base').position.z,
+    )
+    expect(left.rotation.y).toBeLessThan(-1.9)
+    expect(right.rotation.y).toBeGreaterThan(1.9)
+  })
+
+  test('top and bottom freezer refrigerators create separate upper and lower doors', () => {
+    const topFreezer = CabinetModuleNode.parse({
+      cabinetType: 'tall',
+      width: FRIDGE_COLUMN_WIDTH,
+      depth: FRIDGE_STANDARD_DEPTH,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      stack: [{ id: 'fridge', type: 'fridge-top-freezer', height: FRIDGE_COLUMN_HEIGHT }],
+    })
+    const bottomFreezer = CabinetModuleNode.parse({
+      cabinetType: 'tall',
+      width: FRIDGE_COLUMN_WIDTH,
+      depth: FRIDGE_STANDARD_DEPTH,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      stack: [{ id: 'fridge', type: 'fridge-bottom-freezer', height: FRIDGE_COLUMN_HEIGHT }],
+    })
+
+    expect(
+      findMeshByName(
+        buildCabinetGeometry(topFreezer, undefined, 'rendered', false),
+        'cabinet-fridge-top-freezer-0-door-freezer-panel',
+      ),
+    ).toBeDefined()
+    const bottomGroup = buildCabinetGeometry(bottomFreezer, undefined, 'rendered', false)
+    expect(
+      findMeshByName(bottomGroup, 'cabinet-fridge-bottom-freezer-0-door-freezer-panel'),
+    ).toBeDefined()
+    expect(
+      findMeshByName(bottomGroup, 'cabinet-fridge-bottom-freezer-0-freezer-freezer-basket'),
+    ).toBeDefined()
+    expect(
+      findMeshByName(
+        bottomGroup,
+        'cabinet-fridge-bottom-freezer-0-freezer-freezer-wire-basket-bar-1',
+      ),
+    ).toBeDefined()
+    expect(
+      findMeshByName(bottomGroup, 'cabinet-fridge-bottom-freezer-0-horizontal-divider'),
+    ).toBeDefined()
+  })
+
+  test('top and bottom freezer refrigerator doors use the same hinge direction', () => {
+    const topFreezer = buildCabinetGeometry(
+      CabinetModuleNode.parse({
+        cabinetType: 'tall',
+        width: FRIDGE_COLUMN_WIDTH,
+        depth: FRIDGE_STANDARD_DEPTH,
+        carcassHeight: FRIDGE_COLUMN_HEIGHT,
+        operationState: 1,
+        stack: [{ id: 'fridge', type: 'fridge-top-freezer', height: FRIDGE_COLUMN_HEIGHT }],
+      }),
+      undefined,
+      'rendered',
+      false,
+    )
+    const bottomFreezer = buildCabinetGeometry(
+      CabinetModuleNode.parse({
+        cabinetType: 'tall',
+        width: FRIDGE_COLUMN_WIDTH,
+        depth: FRIDGE_STANDARD_DEPTH,
+        carcassHeight: FRIDGE_COLUMN_HEIGHT,
+        operationState: 1,
+        stack: [{ id: 'fridge', type: 'fridge-bottom-freezer', height: FRIDGE_COLUMN_HEIGHT }],
+      }),
+      undefined,
+      'rendered',
+      false,
+    )
+
+    expect(
+      findObjectByName(topFreezer, 'cabinet-fridge-top-freezer-0-door-freezer-hinge').rotation.y,
+    ).toBeGreaterThan(0)
+    expect(
+      findObjectByName(topFreezer, 'cabinet-fridge-top-freezer-0-door-fresh-hinge').rotation.y,
+    ).toBeGreaterThan(0)
+    expect(
+      findObjectByName(bottomFreezer, 'cabinet-fridge-bottom-freezer-0-door-freezer-hinge').rotation
+        .y,
+    ).toBeGreaterThan(0)
+    expect(
+      findObjectByName(bottomFreezer, 'cabinet-fridge-bottom-freezer-0-door-fresh-hinge').rotation
+        .y,
+    ).toBeGreaterThan(0)
   })
 })
 

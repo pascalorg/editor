@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import {
   type CabinetCompartment,
+  FRIDGE_COLUMN_HEIGHT,
+  FRIDGE_COLUMN_WIDTH,
+  FRIDGE_STANDARD_DEPTH,
+  FRIDGE_WIDE_WIDTH,
   MICROWAVE_DEFAULT_HEIGHT,
   MICROWAVE_STANDARD_HEIGHT,
   MICROWAVE_STANDARD_WIDTH,
@@ -80,6 +84,26 @@ describe('appliance compartments', () => {
     expect(MICROWAVE_STANDARD_HEIGHT).toBeCloseTo(0.39)
   })
 
+  test('newCabinetCompartment seeds fixed refrigerator column heights', () => {
+    const single = newCabinetCompartment('fridge-single')
+    const double = newCabinetCompartment('fridge-double')
+    const topFreezer = newCabinetCompartment('fridge-top-freezer')
+    const bottomFreezer = newCabinetCompartment('fridge-bottom-freezer')
+
+    expect(single.type).toBe('fridge-single')
+    expect(double.type).toBe('fridge-double')
+    expect(topFreezer.type).toBe('fridge-top-freezer')
+    expect(bottomFreezer.type).toBe('fridge-bottom-freezer')
+    expect(single.height).toBe(FRIDGE_COLUMN_HEIGHT)
+    expect(double.height).toBe(FRIDGE_COLUMN_HEIGHT)
+    expect(topFreezer.height).toBe(FRIDGE_COLUMN_HEIGHT)
+    expect(bottomFreezer.height).toBe(FRIDGE_COLUMN_HEIGHT)
+    expect(FRIDGE_COLUMN_WIDTH).toBeCloseTo(0.76)
+    expect(FRIDGE_WIDE_WIDTH).toBeCloseTo(0.91)
+    expect(FRIDGE_STANDARD_DEPTH).toBeCloseTo(0.76)
+    expect(FRIDGE_COLUMN_HEIGHT).toBeCloseTo(1.78)
+  })
+
   test('normalizeCabinetStack keeps the oven row fixed and free rows absorb the remainder', () => {
     const applianceStack: CabinetCompartment[] = [
       { id: 'door', type: 'door', doorType: 'double' },
@@ -116,9 +140,10 @@ describe('appliance compartments', () => {
           { id: 'door', type: 'door', doorType: 'double' },
           { id: 'oven', type: 'oven', height: OVEN_DEFAULT_HEIGHT },
           { id: 'microwave', type: 'microwave', height: MICROWAVE_DEFAULT_HEIGHT },
+          { id: 'fridge', type: 'fridge-single', height: FRIDGE_COLUMN_HEIGHT },
         ],
       }),
-    ).toBeCloseTo(0.1 + OVEN_DEFAULT_HEIGHT + MICROWAVE_DEFAULT_HEIGHT)
+    ).toBeCloseTo(0.1 + OVEN_DEFAULT_HEIGHT + MICROWAVE_DEFAULT_HEIGHT + FRIDGE_COLUMN_HEIGHT)
   })
 
   test('replacing a single base compartment with microwave adds a flexible drawer filler', () => {
@@ -159,6 +184,22 @@ describe('appliance compartments', () => {
     expect(replaced).toHaveLength(2)
     expect(replaced[0]!.type).toBe('drawer')
     expect(replaced[1]!.type).toBe('microwave')
+  })
+
+  test('replacing a single compartment with a refrigerator does not add a filler row', () => {
+    const replaced = replaceCabinetCompartmentStack(
+      {
+        width: 0.76,
+        carcassHeight: FRIDGE_COLUMN_HEIGHT,
+        stack: [{ id: 'door', type: 'door', doorType: 'double' }],
+      },
+      0,
+      { id: 'door', type: 'fridge-single', height: FRIDGE_COLUMN_HEIGHT },
+      'drawer',
+    )
+
+    expect(replaced).toHaveLength(1)
+    expect(replaced[0]!.type).toBe('fridge-single')
   })
 })
 

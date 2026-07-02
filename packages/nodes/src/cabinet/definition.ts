@@ -18,7 +18,7 @@ function cabinetLayoutRevision(metadata: CabinetNodeType['metadata']): unknown {
 
 export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   kind: 'cabinet',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: CabinetNode,
   category: 'furnish',
   surfaceRole: 'joinery',
@@ -91,13 +91,18 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
 
   parametrics: cabinetParametrics,
   geometry: buildCabinetGeometry,
+  system: {
+    module: () => import('./system'),
+    priority: 2,
+  },
+  // `operationState` is deliberately absent — door/drawer poses are applied
+  // per-frame by the cabinet animation system, not by geometry rebuilds.
   geometryKey: (n) =>
     JSON.stringify([
       n.width,
       n.depth,
       n.carcassHeight,
       n.runTier,
-      n.operationState,
       n.plinthHeight,
       n.toeKickDepth,
       n.boardThickness,
@@ -143,7 +148,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
 
 export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> = {
   kind: 'cabinet-module',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: CabinetModuleNode,
   category: 'furnish',
   surfaceRole: 'joinery',
@@ -208,13 +213,13 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
 
   parametrics: cabinetModuleParametrics,
   geometry: buildCabinetGeometry,
+  // `operationState` is deliberately absent — see cabinetDefinition.geometryKey.
   geometryKey: (n) =>
     JSON.stringify([
       n.cabinetType,
       n.width,
       n.depth,
       n.carcassHeight,
-      n.operationState,
       n.plinthHeight,
       n.toeKickDepth,
       n.boardThickness,

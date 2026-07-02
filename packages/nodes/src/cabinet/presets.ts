@@ -1,5 +1,12 @@
 import type { CabinetModuleNode, CabinetNode } from '@pascal-app/core'
-import { MICROWAVE_STANDARD_WIDTH, newCabinetCompartment } from './stack'
+import {
+  FRIDGE_COLUMN_HEIGHT,
+  FRIDGE_COLUMN_WIDTH,
+  FRIDGE_STANDARD_DEPTH,
+  FRIDGE_WIDE_WIDTH,
+  MICROWAVE_STANDARD_WIDTH,
+  newCabinetCompartment,
+} from './stack'
 
 export type CabinetPresetId =
   | 'base-door'
@@ -8,6 +15,10 @@ export type CabinetPresetId =
   | 'tall-pantry'
   | 'appliance-tower'
   | 'oven-tower'
+  | 'fridge-single'
+  | 'fridge-double'
+  | 'fridge-top-freezer'
+  | 'fridge-bottom-freezer'
 
 export type CabinetPreset = {
   id: CabinetPresetId
@@ -138,6 +149,90 @@ export const CABINET_PRESETS: CabinetPreset[] = [
         newCabinetCompartment('microwave'),
         { ...newCabinetCompartment('door'), doorType: 'double', shelfCount: 2 },
       ],
+    }),
+  },
+  {
+    id: 'fridge-single',
+    label: 'Single Fridge',
+    createPatch: (run) => ({
+      cabinetType: 'tall',
+      name: 'Single Door Refrigerator',
+      width: FRIDGE_COLUMN_WIDTH,
+      depth: FRIDGE_STANDARD_DEPTH,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      plinthHeight: 0.1,
+      toeKickDepth: 0.075,
+      countertopThickness: 0,
+      countertopOverhang: run?.countertopOverhang ?? 0.02,
+      showPlinth: false,
+      withCountertop: false,
+      handleStyle: 'bar',
+      handlePosition: 'center',
+      frontOverlay: 'full',
+      stack: [newCabinetCompartment('fridge-single')],
+    }),
+  },
+  {
+    id: 'fridge-double',
+    label: 'Double Fridge',
+    createPatch: (run) => ({
+      cabinetType: 'tall',
+      name: 'Double Door Refrigerator',
+      width: FRIDGE_WIDE_WIDTH,
+      depth: FRIDGE_STANDARD_DEPTH,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      plinthHeight: 0.1,
+      toeKickDepth: 0.075,
+      countertopThickness: 0,
+      countertopOverhang: run?.countertopOverhang ?? 0.02,
+      showPlinth: false,
+      withCountertop: false,
+      handleStyle: 'bar',
+      handlePosition: 'center',
+      frontOverlay: 'full',
+      stack: [newCabinetCompartment('fridge-double')],
+    }),
+  },
+  {
+    id: 'fridge-top-freezer',
+    label: 'Top Freezer',
+    createPatch: (run) => ({
+      cabinetType: 'tall',
+      name: 'Top Freezer Refrigerator',
+      width: FRIDGE_COLUMN_WIDTH,
+      depth: FRIDGE_STANDARD_DEPTH,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      plinthHeight: 0.1,
+      toeKickDepth: 0.075,
+      countertopThickness: 0,
+      countertopOverhang: run?.countertopOverhang ?? 0.02,
+      showPlinth: false,
+      withCountertop: false,
+      handleStyle: 'bar',
+      handlePosition: 'center',
+      frontOverlay: 'full',
+      stack: [newCabinetCompartment('fridge-top-freezer')],
+    }),
+  },
+  {
+    id: 'fridge-bottom-freezer',
+    label: 'Bottom Freezer',
+    createPatch: (run) => ({
+      cabinetType: 'tall',
+      name: 'Bottom Freezer Refrigerator',
+      width: FRIDGE_COLUMN_WIDTH,
+      depth: FRIDGE_STANDARD_DEPTH,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      plinthHeight: 0.1,
+      toeKickDepth: 0.075,
+      countertopThickness: 0,
+      countertopOverhang: run?.countertopOverhang ?? 0.02,
+      showPlinth: false,
+      withCountertop: false,
+      handleStyle: 'bar',
+      handlePosition: 'center',
+      frontOverlay: 'full',
+      stack: [newCabinetCompartment('fridge-bottom-freezer')],
     }),
   },
 ]

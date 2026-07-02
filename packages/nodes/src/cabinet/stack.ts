@@ -2,8 +2,22 @@ import type { CabinetModuleNode, CabinetNode } from '@pascal-app/core'
 
 type CabinetStackOwner = CabinetNode | CabinetModuleNode
 
-export const CABINET_COMPARTMENT_TYPES = ['shelf', 'drawer', 'door', 'oven', 'microwave'] as const
+export const CABINET_COMPARTMENT_TYPES = [
+  'shelf',
+  'drawer',
+  'door',
+  'oven',
+  'microwave',
+  'fridge-single',
+  'fridge-double',
+  'fridge-top-freezer',
+  'fridge-bottom-freezer',
+] as const
 export type CabinetCompartmentType = (typeof CABINET_COMPARTMENT_TYPES)[number]
+export type CabinetFridgeCompartmentType = Extract<
+  CabinetCompartmentType,
+  'fridge-single' | 'fridge-double' | 'fridge-top-freezer' | 'fridge-bottom-freezer'
+>
 
 export const CABINET_DOOR_TYPES = ['single-left', 'single-right', 'double', 'glass'] as const
 export type CabinetDoorType = (typeof CABINET_DOOR_TYPES)[number]
@@ -18,6 +32,21 @@ export const OVEN_DEFAULT_HEIGHT = 0.595
 export const MICROWAVE_STANDARD_WIDTH = 0.61
 export const MICROWAVE_STANDARD_HEIGHT = 0.39
 export const MICROWAVE_DEFAULT_HEIGHT = MICROWAVE_STANDARD_HEIGHT
+export const FRIDGE_COLUMN_WIDTH = 0.76
+export const FRIDGE_WIDE_WIDTH = 0.91
+export const FRIDGE_STANDARD_DEPTH = 0.76
+export const FRIDGE_COLUMN_HEIGHT = 1.78
+
+export function isFridgeCompartmentType(
+  type: CabinetCompartmentType,
+): type is CabinetFridgeCompartmentType {
+  return (
+    type === 'fridge-single' ||
+    type === 'fridge-double' ||
+    type === 'fridge-top-freezer' ||
+    type === 'fridge-bottom-freezer'
+  )
+}
 
 function makeId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -36,6 +65,7 @@ export function newCabinetCompartment(type: CabinetCompartmentType): CabinetComp
   if (type === 'oven') return { id: makeId(), type: 'oven', height: OVEN_DEFAULT_HEIGHT }
   if (type === 'microwave')
     return { id: makeId(), type: 'microwave', height: MICROWAVE_DEFAULT_HEIGHT }
+  if (isFridgeCompartmentType(type)) return { id: makeId(), type, height: FRIDGE_COLUMN_HEIGHT }
   return { id: makeId(), type: 'door' }
 }
 
@@ -83,7 +113,12 @@ function explicitCompartmentHeight(compartment: CabinetCompartment): number | nu
 }
 
 function lockedApplianceHeight(compartment: CabinetCompartment): number | null {
-  if (compartment.type !== 'oven' && compartment.type !== 'microwave') return null
+  if (
+    compartment.type !== 'oven' &&
+    compartment.type !== 'microwave' &&
+    !isFridgeCompartmentType(compartment.type)
+  )
+    return null
   return explicitCompartmentHeight(compartment)
 }
 
@@ -112,6 +147,7 @@ export function replaceCabinetCompartmentStack(
     compartmentIndex === index ? next : compartment,
   )
   if (lockedApplianceHeight(next) == null) return replaced
+  if (isFridgeCompartmentType(next.type)) return replaced
 
   const hasFlexibleSibling = replaced.some(
     (compartment, compartmentIndex) =>
@@ -229,7 +265,9 @@ export function resizeCabinetCompartmentStack(
   }))
 }
 
-export function reflowCabinetRunModules<T extends Pick<CabinetModuleNode, 'id' | 'position' | 'width'>>(
+export function reflowCabinetRunModules<
+  T extends Pick<CabinetModuleNode, 'id' | 'position' | 'width'>,
+>(
   modules: T[],
   selectedId: CabinetModuleNode['id'],
   selectedWidth: number,
