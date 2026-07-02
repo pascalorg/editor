@@ -341,8 +341,8 @@ export async function loadPlugin(plugin: Plugin): Promise<void> {
  * {@link setPluginDiscovery} before the bootstrap module runs.
  *
  * Kept async so a future loader can fetch over the network without
- * changing the contract. See `wiki/editor-plugin-authoring.md` for the
- * plugin author surface this enables.
+ * changing the contract. See `wiki/architecture/plugin-authoring.md` for
+ * the plugin author surface this enables.
  */
 export type PluginDiscovery = () => Promise<Plugin[]>
 
