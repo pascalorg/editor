@@ -736,9 +736,12 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // Valid roof hit owns the pointer for the next few frames; the floor
       // free-follow stands down until the cursor genuinely leaves the roof.
       markWallOwnedPointer()
-      // Wall-frame drag anchor / live transform don't apply on a roof face.
+      // Wall-frame drag anchor / live transform don't apply on a roof face —
+      // and anchoring here counts as "elsewhere", so the original wall's grab
+      // offset is forgotten for good.
       freeFollowing = false
       dragAnchor = null
+      grabWallId = null
       lastTarget = null
       lastRoofEvent = event
       useLiveTransforms.getState().clear(movingWindowNode.id)

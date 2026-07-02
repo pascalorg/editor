@@ -528,6 +528,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // Alignment guides are floor-only; clear them when the cursor moves
       // onto a wall / ceiling / item surface (only those paths call this).
       useAlignmentGuides.getState().clear()
+      // Roof faces carry no grab anchor, but landing on one still counts as
+      // anchoring elsewhere — a later return to the grabbed wall must center
+      // under the cursor, not restore the stale grab offset.
+      if (result.stateUpdate.surface === 'roof-wall') grabForgotten = true
       Object.assign(placementState.current, result.stateUpdate)
       gridPosition.current.set(...result.gridPosition)
 
@@ -600,14 +604,16 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const preserveDragOffset = configRef.current.preserveDragOffset === true
     // The host the item was grabbed from + its pre-drag host-local position.
     // Each surface's grab anchor preserves the grab offset only on THAT host,
-    // and only until the item anchors on any other host — after that the grab
-    // is forgotten for good and every host centers the item under the cursor
-    // (see the per-surface anchor seedings + `detachItemSurfaceToFloor`).
-    let grabWallId =
+    // and only until the item anchors on ANY other host (another wall/ceiling/
+    // shelf, a roof face, or the floor after a host visit) — `grabForgotten`
+    // then latches and every host, the original included, centers the item
+    // under the cursor. Merely passing through empty space (wall/ceiling items
+    // hide between surfaces) does NOT forget the grab.
+    const grabWallId =
       placementState.current.surface === 'wall' ? placementState.current.wallId : null
-    let grabCeilingId =
+    const grabCeilingId =
       placementState.current.surface === 'ceiling' ? placementState.current.ceilingId : null
-    let grabSurfaceHostId =
+    const grabSurfaceHostId =
       placementState.current.surface === 'item-surface'
         ? placementState.current.surfaceItemId
         : placementState.current.surface === 'shelf-surface'
@@ -620,6 +626,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           draftNode.current.position[2],
         ]
       : null
+    let grabForgotten = grabStartPosition === null
+    // Anchoring on `hostId`: returns whether the grab offset still applies
+    // there, and latches `grabForgotten` the first time it doesn't.
+    const preserveGrabOn = (hostId: string | null, grabHostId: string | null): boolean => {
+      const preserve = !grabForgotten && hostId !== null && hostId === grabHostId
+      if (!preserve) grabForgotten = true
+      return preserve
+    }
     // Nulled when the item returns to the floor FROM a host (see
     // `detachItemSurfaceToFloor`): the floor grab offset only survives until
     // the item anchors elsewhere, like every other surface's grab anchor.
@@ -673,14 +687,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         // Grab offset survives only on the host the item was grabbed from and
         // only until it anchors elsewhere — any other shelf/table centers the
         // item under the cursor (same rule as the wall grab anchor).
-        const preserveGrab = hostId === grabSurfaceHostId && grabStartPosition !== null
-        if (!preserveGrab) grabSurfaceHostId = null
+        const preserveGrab = preserveGrabOn(hostId, grabSurfaceHostId)
         hostSurfaceDragAnchor = {
           hostId,
           rawX: rawLocal.x,
           rawZ: rawLocal.z,
-          startX: preserveGrab ? grabStartPosition[0] : rawLocal.x,
-          startZ: preserveGrab ? grabStartPosition[2] : rawLocal.z,
+          startX: preserveGrab && grabStartPosition ? grabStartPosition[0] : rawLocal.x,
+          startZ: preserveGrab && grabStartPosition ? grabStartPosition[2] : rawLocal.z,
         }
       }
       const correctedX = hostSurfaceDragAnchor.startX + (rawLocal.x - hostSurfaceDragAnchor.rawX)
@@ -1065,14 +1078,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           // baked an arbitrary along-wall offset into the whole stay on that
           // wall. Once anchored elsewhere the grab is forgotten for good, so
           // re-entering the original wall centers under the cursor too.
-          const preserveGrab = event.node.id === grabWallId && grabStartPosition !== null
-          if (!preserveGrab) grabWallId = null
+          const preserveGrab = preserveGrabOn(event.node.id, grabWallId)
           wallDragAnchor = {
             wallId: event.node.id,
             rawX,
             rawY,
-            startX: preserveGrab ? grabStartPosition[0] : rawX,
-            startY: preserveGrab ? grabStartPosition[1] : rawY,
+            startX: preserveGrab && grabStartPosition ? grabStartPosition[0] : rawX,
+            startY: preserveGrab && grabStartPosition ? grabStartPosition[1] : rawY,
           }
         }
         const correctedX = wallDragAnchor.startX + (rawX - wallDragAnchor.rawX)
@@ -1383,10 +1395,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // Coming back from a host: forget the floor grab too, so the item
       // centers under the cursor instead of restoring the pre-drag offset —
       // and landing on the floor is "anchoring elsewhere", so a later return
-      // to the grabbed shelf/table centers as well.
+      // to the grabbed host centers as well.
       relativeFloorStart = null
       floorDragAnchor = null
-      grabSurfaceHostId = null
+      grabForgotten = true
       const buildingLocalPoint = worldToBuildingLocal(
         event.position[0],
         event.position[1],
@@ -1732,14 +1744,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         if (!ceilingDragAnchor || ceilingDragAnchor.ceilingId !== event.node.id) {
           // Same rule as the wall grab anchor: only the grabbed ceiling
           // preserves the offset, any other ceiling centers under the cursor.
-          const preserveGrab = event.node.id === grabCeilingId && grabStartPosition !== null
-          if (!preserveGrab) grabCeilingId = null
+          const preserveGrab = preserveGrabOn(event.node.id, grabCeilingId)
           ceilingDragAnchor = {
             ceilingId: event.node.id,
             rawX,
             rawZ,
-            startX: preserveGrab ? grabStartPosition[0] : rawX,
-            startZ: preserveGrab ? grabStartPosition[2] : rawZ,
+            startX: preserveGrab && grabStartPosition ? grabStartPosition[0] : rawX,
+            startZ: preserveGrab && grabStartPosition ? grabStartPosition[2] : rawZ,
           }
         }
         ceilingMoveEvent = {
