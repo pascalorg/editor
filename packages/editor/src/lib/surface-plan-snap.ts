@@ -13,6 +13,7 @@ import {
 import {
   getSegmentGridStep,
   snapWallDraftPointDetailed,
+  WALL_CONNECT_SNAP_RADIUS,
   type WallDraftSnapKind,
   type WallPlanPoint,
   type WallSnapRadii,
@@ -213,9 +214,23 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
   }
 
   const movingId = input.movingId ?? SURFACE_SNAP_MOVING_ID
-  const candidates =
+  const allCandidates =
     input.candidates ??
     collectAlignmentAnchors(nodes, input.excludeId ?? movingId, input.levelId ?? null)
+
+  // In non-magnetic modes nothing pulls the point onto a guide, so restrict
+  // alignment to anchors already within connect distance — a corner then reads
+  // no differently from any other nearby point, and far corners stop lighting up
+  // from across the plan. Magnetic ('lines') keeps the full-range guides since
+  // its snap closes the gap. Mirrors the wall draft/endpoint tools. Filtering the
+  // candidates (both local-frame, like `basePoint`) rather than the resolved
+  // guides avoids the floor-plan view rotation baked into the guide coords.
+  const candidates = magnetic
+    ? allCandidates
+    : allCandidates.filter(
+        (candidate) =>
+          distanceSquared(basePoint, [candidate.x, candidate.z]) <= WALL_CONNECT_SNAP_RADIUS ** 2,
+      )
 
   if (candidates.length === 0) {
     useAlignmentGuides.getState().clear()
