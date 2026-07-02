@@ -1,5 +1,5 @@
+import { GRASS_ART } from './art'
 import type { GrassPreset } from './grass-schema'
-import { grassThumbnail } from './thumbnails'
 
 /** Per-grass config: blade colour, blade count per tuft, default height (metres),
  * a swatch, and a replaceable card `thumbnail` (see `thumbnails.ts`). Pure data
@@ -22,7 +22,7 @@ export const GRASS_PRESETS: Record<GrassPreset, GrassPresetSpec> = {
     blades: 10,
     defaultHeight: 0.4,
     swatch: '#5a8f3c',
-    thumbnail: grassThumbnail('#5a8f3c'),
+    thumbnail: GRASS_ART.meadow,
   },
   fescue: {
     id: 'fescue',
@@ -31,7 +31,7 @@ export const GRASS_PRESETS: Record<GrassPreset, GrassPresetSpec> = {
     blades: 8,
     defaultHeight: 0.7,
     swatch: '#7fae55',
-    thumbnail: grassThumbnail('#7fae55'),
+    thumbnail: GRASS_ART.fescue,
   },
   reed: {
     id: 'reed',
@@ -40,7 +40,7 @@ export const GRASS_PRESETS: Record<GrassPreset, GrassPresetSpec> = {
     blades: 6,
     defaultHeight: 1.1,
     swatch: '#4a7d63',
-    thumbnail: grassThumbnail('#4a7d63'),
+    thumbnail: GRASS_ART.reed,
   },
 }
 

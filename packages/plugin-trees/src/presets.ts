@@ -1,5 +1,5 @@
+import { TREE_ART } from './art'
 import type { TreePreset, TreeSize } from './schema'
-import { treeThumbnail } from './thumbnails'
 
 /**
  * Per-species config: the ez-tree preset name for each size, a default placement
@@ -35,7 +35,7 @@ export const TREE_PRESETS: Record<TreePreset, TreePresetSpec> = {
     height: { small: 5, medium: 7, large: 11 },
     sized: true,
     swatch: '#4f7942',
-    thumbnail: treeThumbnail('#4f7942'),
+    thumbnail: TREE_ART.oak,
   },
   pine: {
     id: 'pine',
@@ -44,7 +44,7 @@ export const TREE_PRESETS: Record<TreePreset, TreePresetSpec> = {
     height: { small: 6, medium: 9, large: 14 },
     sized: true,
     swatch: '#2f5d3a',
-    thumbnail: treeThumbnail('#2f5d3a'),
+    thumbnail: TREE_ART.pine,
   },
   aspen: {
     id: 'aspen',
@@ -53,7 +53,7 @@ export const TREE_PRESETS: Record<TreePreset, TreePresetSpec> = {
     height: { small: 5, medium: 8, large: 12 },
     sized: true,
     swatch: '#8fae5d',
-    thumbnail: treeThumbnail('#8fae5d'),
+    thumbnail: TREE_ART.aspen,
   },
   ash: {
     id: 'ash',
@@ -62,7 +62,7 @@ export const TREE_PRESETS: Record<TreePreset, TreePresetSpec> = {
     height: { small: 5, medium: 8, large: 12 },
     sized: true,
     swatch: '#6f9457',
-    thumbnail: treeThumbnail('#6f9457'),
+    thumbnail: TREE_ART.ash,
   },
   bush: {
     id: 'bush',
@@ -71,7 +71,7 @@ export const TREE_PRESETS: Record<TreePreset, TreePresetSpec> = {
     height: { small: 1.2, medium: 1.5, large: 1.8 },
     sized: true,
     swatch: '#5c8a4a',
-    thumbnail: treeThumbnail('#5c8a4a'),
+    thumbnail: TREE_ART.bush,
   },
   trellis: {
     id: 'trellis',
@@ -80,7 +80,7 @@ export const TREE_PRESETS: Record<TreePreset, TreePresetSpec> = {
     height: { small: 3, medium: 3, large: 3 },
     sized: false,
     swatch: '#8b6b45',
-    thumbnail: treeThumbnail('#8b6b45'),
+    thumbnail: TREE_ART.trellis,
   },
 }
 

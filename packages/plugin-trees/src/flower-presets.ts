@@ -1,5 +1,5 @@
+import { FLOWER_ART } from './art'
 import type { FlowerPreset } from './flower-schema'
-import { flowerThumbnail } from './thumbnails'
 
 /** Per-flower colours, default height (metres), and a card `thumbnail` (a
  * replaceable placeholder image — see `thumbnails.ts`). Pure data shared by the
@@ -24,7 +24,7 @@ export const FLOWER_PRESETS: Record<FlowerPreset, FlowerPresetSpec> = {
     stemColor: '#4f7942',
     defaultHeight: 0.5,
     swatch: '#f4c430',
-    thumbnail: flowerThumbnail('#fcfcf2', '#f4c430', '#4f7942'),
+    thumbnail: FLOWER_ART.daisy,
   },
   tulip: {
     id: 'tulip',
@@ -34,7 +34,7 @@ export const FLOWER_PRESETS: Record<FlowerPreset, FlowerPresetSpec> = {
     stemColor: '#3f7a3a',
     defaultHeight: 0.45,
     swatch: '#e0457b',
-    thumbnail: flowerThumbnail('#e0457b', '#c43160', '#3f7a3a'),
+    thumbnail: FLOWER_ART.tulip,
   },
   lavender: {
     id: 'lavender',
@@ -44,7 +44,7 @@ export const FLOWER_PRESETS: Record<FlowerPreset, FlowerPresetSpec> = {
     stemColor: '#5a7a4a',
     defaultHeight: 0.6,
     swatch: '#9b6fd4',
-    thumbnail: flowerThumbnail('#9b6fd4', '#7d52b8', '#5a7a4a'),
+    thumbnail: FLOWER_ART.lavender,
   },
 }
 

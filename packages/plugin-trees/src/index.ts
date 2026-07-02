@@ -1,4 +1,5 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import { NATURE_ICON } from './art'
 import { treeDefinition } from './definition'
 import { flowerDefinition } from './flower-definition'
 import { grassDefinition } from './grass-definition'
@@ -22,7 +23,7 @@ export const treesPlugin: Plugin = {
     {
       id: 'trees',
       label: 'Nature',
-      icon: { kind: 'iconify', name: 'lucide:leaf' },
+      icon: { kind: 'url', src: NATURE_ICON },
       component: () => import('./presets-panel'),
     },
   ],
