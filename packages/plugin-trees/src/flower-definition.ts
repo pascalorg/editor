@@ -32,7 +32,10 @@ export const flowerDefinition: NodeDefinition<typeof FlowerNode> = {
 
   capabilities: {
     movable: { axes: ['x', 'z'], gridSnap: true },
-    rotatable: { axes: ['y'], snapAngles: [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2] },
+    rotatable: {
+      axes: ['y'],
+      snapAngles: Array.from({ length: 8 }, (_, i) => (i * Math.PI) / 4),
+    },
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

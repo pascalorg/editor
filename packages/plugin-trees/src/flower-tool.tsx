@@ -40,7 +40,7 @@ export default function FlowerTool() {
       petalColor: FLOWER_PRESETS[s.flowerPreset].petalColor,
       seed: FLOWER_SEED_POOL[Math.floor(Math.random() * FLOWER_SEED_POOL.length)] ?? 1,
       position,
-      rotation: [0, Math.random() * Math.PI * 2, 0],
+      rotation: [0, (Math.floor(Math.random() * 8) * Math.PI) / 4, 0],
     })
     useScene.getState().createNode(flower as unknown as AnyNode, activeLevelId as AnyNodeId)
     useViewer.getState().setSelection({ selectedIds: [flower.id as AnyNodeId] })

@@ -1,7 +1,39 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import type { HandleDescriptor, NodeDefinition } from '@pascal-app/core'
 import { buildTreeFloorplan, treeTrunkRadius } from './floorplan'
 import { treeParametrics } from './parametrics'
 import { TreeNode } from './schema'
+
+const ROTATE_RING_OFFSET = 0.35
+
+/** Whole-tree Y-rotation gizmo (same rig as shelf/item): a ring around the
+ * trunk near the ground — not the canopy, which would put the handle meters
+ * from the trunk on a large oak. */
+function treeRotateHandle(): HandleDescriptor<TreeNode> {
+  const ringRadius = (n: TreeNode) => treeTrunkRadius(n) + ROTATE_RING_OFFSET
+  const ringY = (n: TreeNode) => Math.min(0.9, (n.height ?? 7) * 0.4)
+  return {
+    kind: 'arc-resize',
+    axis: 'angular',
+    shape: 'rotate',
+    apply: (initial, delta) => {
+      const r = initial.rotation ?? [0, 0, 0]
+      // Negate to match three.js Y-rotation handedness (same as shelf).
+      return { rotation: [r[0], (r[1] ?? 0) - delta, r[2]] as [number, number, number] }
+    },
+    placement: {
+      position: (n) => {
+        const r = ringRadius(n)
+        return [r * Math.SQRT1_2, ringY(n), r * Math.SQRT1_2]
+      },
+      rotationY: () => -Math.PI / 4,
+    },
+    decoration: {
+      kind: 'ring',
+      radius: ringRadius,
+      y: ringY,
+    },
+  }
+}
 
 /**
  * The tree node definition. Rendering uses the instanced path rather than the
@@ -42,12 +74,22 @@ export const treeDefinition: NodeDefinition<typeof TreeNode> = {
 
   capabilities: {
     movable: { axes: ['x', 'z'], gridSnap: true },
-    rotatable: { axes: ['y'], snapAngles: [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2] },
+    rotatable: {
+      axes: ['y'],
+      snapAngles: Array.from({ length: 8 }, (_, i) => (i * Math.PI) / 4),
+    },
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
     groupable: true,
     snappable: {},
+    // The auto-measured drag box would wrap the whole canopy (the proxy shows
+    // the real geometry while selected) — declare trunk-sized bounds instead.
+    dragBounds: (node) => {
+      const tree = node as unknown as TreeNode
+      const radius = treeTrunkRadius(tree)
+      return { size: [radius * 2, tree.height ?? 7, radius * 2] }
+    },
     floorPlaced: {
       // `footprint` receives the host's `AnyNode`; cast to our schema type the
       // same way built-in kinds do (`node as ShelfNode`). Trunk-sized, not
@@ -68,6 +110,7 @@ export const treeDefinition: NodeDefinition<typeof TreeNode> = {
   parametrics: treeParametrics,
   // 2D plan symbol: dashed canopy ring + trunk dot (see floorplan.ts).
   floorplan: buildTreeFloorplan,
+  handles: [treeRotateHandle()],
 
   // Instanced rendering: an invisible per-node proxy for selection/outline...
   renderer: { kind: 'parametric', module: () => import('./proxy-renderer') },

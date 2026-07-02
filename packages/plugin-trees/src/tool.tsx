@@ -57,7 +57,7 @@ export default function TreeTool() {
       // rotation keeps a planted row from looking cloned. Use Randomize (inspector)
       // to vary a tree's seed.
       position,
-      rotation: [0, Math.random() * Math.PI * 2, 0],
+      rotation: [0, (Math.floor(Math.random() * 8) * Math.PI) / 4, 0],
     })
     useScene.getState().createNode(tree as unknown as AnyNode, activeLevelId as AnyNodeId)
     useViewer.getState().setSelection({ selectedIds: [tree.id as AnyNodeId] })

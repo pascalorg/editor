@@ -40,7 +40,7 @@ export default function GrassTool() {
       bladeColor: GRASS_PRESETS[s.grassPreset].bladeColor,
       seed: GRASS_SEED_POOL[Math.floor(Math.random() * GRASS_SEED_POOL.length)] ?? 1,
       position,
-      rotation: [0, Math.random() * Math.PI * 2, 0],
+      rotation: [0, (Math.floor(Math.random() * 8) * Math.PI) / 4, 0],
     })
     useScene.getState().createNode(grass as unknown as AnyNode, activeLevelId as AnyNodeId)
     useViewer.getState().setSelection({ selectedIds: [grass.id as AnyNodeId] })
