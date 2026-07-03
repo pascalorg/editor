@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import type { ZodObject, z } from 'zod'
+import type { EquipmentNodeDescriptor, EquipmentPort } from '../equipment'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { SceneObjectRef } from '../types/scene-object'
 import type { HandleList } from './handles'
@@ -648,6 +649,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   capabilities: Capabilities
   relations?: Relations
   parametrics?: ParametricDescriptor<z.infer<S>>
+  equipment?: EquipmentNodeDescriptor
   materialTargets?: readonly MaterialTargetDescriptor[]
 
   /**
@@ -728,6 +730,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * the legacy `floorplan-panel.tsx` monolith.
    */
   floorplan?: (node: z.infer<S>, ctx: GeometryContext) => FloorplanGeometry | null
+  ports?: (node: z.infer<S>, ctx: GeometryContext) => EquipmentPort[]
   /**
    * 2D drag affordances keyed by the string identifier emitted on
    * `endpoint-handle` (and similar interactive floor-plan primitives) via

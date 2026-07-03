@@ -39,6 +39,7 @@ export {
   type SpatialQuery,
 } from './relations-resolver'
 export { createSceneApi, type SceneStoreLike } from './scene-api'
+export type { EquipmentNodeDescriptor, EquipmentPort } from '../equipment'
 export type {
   Affordance,
   AnyNodeDefinition,

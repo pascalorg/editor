@@ -76,6 +76,7 @@ export {
   type DynamicType,
   SEMANTIC_TYPE_LABELS,
 } from './dynamics/types'
+export * from './equipment'
 export {
   sceneRegistry,
   useRegistry,
