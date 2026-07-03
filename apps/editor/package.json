@@ -17,6 +17,7 @@
     "@pascal-app/editor": "*",
     "@pascal-app/mcp": "*",
     "@pascal-app/nodes": "*",
+    "@pascal-app/plugin-trees": "*",
     "@pascal-app/viewer": "*",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@react-three/drei": "^10.7.7",

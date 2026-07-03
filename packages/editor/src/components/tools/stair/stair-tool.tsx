@@ -22,8 +22,14 @@ import {
   resolveStairDestinationLevel,
   resolveStairPlacementLevelId,
 } from '../../../lib/stair-levels'
+
 import useAlignmentGuides from '../../../store/use-alignment-guides'
-import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
+import useEditor, {
+  isAlignmentGuideActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
+} from '../../../store/use-editor'
+
 import useFacingPose from '../../../store/use-facing-pose'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
@@ -347,14 +353,16 @@ export const StairTool: React.FC = () => {
     // The probe is the RAW cursor, not the grid-snapped point: resolving
     // against the grid point would only catch anchors that happen to sit near
     // a grid line. Matched axes use the raw probe + snap delta; unmatched axes
-    // keep the normal grid snap. Alignment runs only when the magnetic (lines)
-    // snapping mode is active.
+    // keep the normal grid snap. Guides are published in every snapping mode
+    // (including Off); the magnetic pull toward them (applySnap) applies only in
+    // 'lines' mode.
     const alignPoint = (
       gridX: number,
       gridZ: number,
       rawX: number,
       rawZ: number,
       bypass: boolean,
+      applySnap: boolean,
     ): [number, number] => {
       if (bypass || alignmentCandidates.length === 0) {
         useAlignmentGuides.getState().clear()
@@ -363,6 +371,10 @@ export const StairTool: React.FC = () => {
       const ar = resolveStairFootprintAlignment(rawX, rawZ, rotationRef.current)
       if (!ar || ar.guides.length === 0) {
         useAlignmentGuides.getState().clear()
+        return [gridX, gridZ]
+      }
+      if (!applySnap) {
+        useAlignmentGuides.getState().set(ar.guides)
         return [gridX, gridZ]
       }
       let x = gridX
@@ -389,7 +401,8 @@ export const StairTool: React.FC = () => {
           : event.localPosition[2],
         event.localPosition[0],
         event.localPosition[2],
-        !isMagneticSnapActive(),
+        !isAlignmentGuideActive(),
+        isMagneticSnapActive(),
       )
       const position: [number, number, number] = [gridX, 0, gridZ]
       lastCanonicalPositionRef.current = position
@@ -417,7 +430,8 @@ export const StairTool: React.FC = () => {
           : event.localPosition[2],
         event.localPosition[0],
         event.localPosition[2],
-        !isMagneticSnapActive(),
+        !isAlignmentGuideActive(),
+        isMagneticSnapActive(),
       )
       return [gridX, 0, gridZ]
     }

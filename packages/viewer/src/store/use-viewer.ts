@@ -41,6 +41,14 @@ type ViewerState = {
   renderContext: RenderContext
   setRenderContext: (context: RenderContext) => void
 
+  /** True during a GLB bake/export pass. Renderers that normally draw via a
+   * collective InstancedMesh (`def.system`) and mount only an invisible per-node
+   * proxy can watch this to emit real, visible geometry so the exporter — which
+   * clones only the `scene-renderer` subtree — captures them. Transient (never
+   * persisted). */
+  isExporting: boolean
+  setExporting: (value: boolean) => void
+
   shading: RenderShading
   shadingByContext: Partial<Record<RenderContext, RenderShading>>
   setShading: (shading: RenderShading) => void
@@ -223,6 +231,9 @@ const useViewer = create<ViewerState>()(
 
       renderContext: 'editor',
       setRenderContext: (context) => set({ renderContext: context }),
+
+      isExporting: false,
+      setExporting: (value) => set({ isExporting: value }),
 
       shading: 'rendered',
       shadingByContext: {},

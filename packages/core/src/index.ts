@@ -94,6 +94,7 @@ export {
   projectAutoSlabsForPlan,
   resumeSpaceDetection,
   type Space,
+  wallClosesRoom,
   wallTouchesOthers,
 } from './lib/space-detection'
 export {

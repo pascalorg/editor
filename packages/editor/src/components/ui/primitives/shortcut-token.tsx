@@ -42,18 +42,22 @@ function ShortcutToken({ className, displayValue, value, ...props }: ShortcutTok
   const mouseShortcut =
     value in MOUSE_SHORTCUTS ? MOUSE_SHORTCUTS[value as keyof typeof MOUSE_SHORTCUTS] : null
   const isCommand = COMMAND_VALUES.has(value)
+  const isShift = value === 'Shift'
   const commandDisplay = IS_MAC ? '⌘' : 'Ctrl'
   const commandLabel = IS_MAC ? 'Command' : 'Control'
 
   return (
     <kbd
-      aria-label={mouseShortcut?.label ?? (isCommand ? commandLabel : (displayValue ?? value))}
+      aria-label={
+        mouseShortcut?.label ??
+        (isCommand ? commandLabel : isShift ? 'Shift' : (displayValue ?? value))
+      }
       className={cn(
         'inline-flex h-6 items-center rounded border border-border bg-muted px-2 font-medium font-mono text-[11px] text-muted-foreground',
-        mouseShortcut && 'justify-center px-1.5',
+        (mouseShortcut || isShift) && 'justify-center px-1.5',
         className,
       )}
-      title={mouseShortcut?.label ?? (isCommand ? commandLabel : value)}
+      title={mouseShortcut?.label ?? (isCommand ? commandLabel : isShift ? 'Shift' : value)}
       {...props}
     >
       {mouseShortcut ? (
@@ -67,6 +71,20 @@ function ShortcutToken({ className, displayValue, value, ...props }: ShortcutTok
             width={14}
           />
           <span className="sr-only">{mouseShortcut.label}</span>
+        </>
+      ) : isShift ? (
+        // Icon rather than the ⇧ text glyph — the font renders the glyph's
+        // crossbar too high to read as the shift key symbol.
+        <>
+          <Icon
+            aria-hidden="true"
+            className="shrink-0"
+            color="currentColor"
+            height={13}
+            icon="ph:arrow-fat-up"
+            width={13}
+          />
+          <span className="sr-only">Shift</span>
         </>
       ) : isCommand ? (
         // The ⌘ glyph reads small next to letters at the same font size, so bump

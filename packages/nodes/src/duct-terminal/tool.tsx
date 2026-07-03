@@ -264,8 +264,8 @@ const DuctTerminalTool = () => {
       // follow the active snapping mode (the contextual HUD chip — Shift
       // cycles it); `'off'` is the no-snap bypass.
       const position = alignDrawPoint([snap(hit.x, step), y, snap(hit.z, step)], {
-        applySnap: true,
-        bypass: !isMagneticSnapActive(),
+        applySnap: isMagneticSnapActive(),
+        bypass: false,
       })
       // Magnetic port snap: if a duct run end / fitting collar is in range,
       // the port's direction picks the mount (floor / ceiling / wall) and

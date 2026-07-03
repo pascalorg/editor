@@ -187,8 +187,10 @@ const getStrategy = (): SelectionStrategy | null => {
   const computeNextIds = (node: AnyNode, selectedIds: string[], event?: any): string[] => {
     const isMeta = event?.metaKey || event?.nativeEvent?.metaKey
     const isCtrl = event?.ctrlKey || event?.nativeEvent?.ctrlKey
+    // Shift toggles like Cmd/Ctrl — same convention as the 2D floorplan layer.
+    const isShift = event?.shiftKey || event?.nativeEvent?.shiftKey
 
-    if (isMeta || isCtrl) {
+    if (isMeta || isCtrl || isShift) {
       if (selectedIds.includes(node.id)) {
         return selectedIds.filter((id) => id !== node.id)
       }

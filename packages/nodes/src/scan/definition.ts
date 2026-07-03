@@ -9,6 +9,9 @@ import { ScanNode } from './schema'
  */
 export const scanDefinition: NodeDefinition<typeof ScanNode> = {
   kind: 'scan',
+  // Heavy LiDAR asset: stripped from the bake, re-added live from scene_graph
+  // in the viewer (see plans → Part D; glb-reference-nodes.tsx).
+  bake: 'strip',
   schemaVersion: 1,
   schema: ScanNode,
   category: 'site',

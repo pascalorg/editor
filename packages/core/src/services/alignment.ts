@@ -44,6 +44,8 @@ export type AlignmentGuide = {
   coord: number
   from: { x: number; z: number }
   to: { x: number; z: number }
+  /** The matched candidate anchor — the fixed end the moving point aligns to. */
+  anchor: { x: number; z: number }
   movingAnchorKind: AnchorKind
   candidateAnchorKind: AnchorKind
   candidateNodeId: string
@@ -225,6 +227,7 @@ export function resolveAlignment(input: ResolveAlignmentInput): ResolveAlignment
       coord: bestX.c.x,
       from: { x: bestX.c.x, z: z1 },
       to: { x: bestX.c.x, z: z2 },
+      anchor: { x: bestX.c.x, z: bestX.c.z },
       movingAnchorKind: bestX.m.kind,
       candidateAnchorKind: bestX.c.kind,
       candidateNodeId: bestX.c.nodeId,
@@ -241,6 +244,7 @@ export function resolveAlignment(input: ResolveAlignmentInput): ResolveAlignment
       coord: bestZ.c.z,
       from: { x: x1, z: bestZ.c.z },
       to: { x: x2, z: bestZ.c.z },
+      anchor: { x: bestZ.c.x, z: bestZ.c.z },
       movingAnchorKind: bestZ.m.kind,
       candidateAnchorKind: bestZ.c.kind,
       candidateNodeId: bestZ.c.nodeId,

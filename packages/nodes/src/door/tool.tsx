@@ -214,18 +214,19 @@ const DoorTool: React.FC = () => {
       rawLocalX: number,
       width: number,
       height: number,
-      bypass: boolean,
+      applySnap: boolean,
       ignoreId?: string,
     ) => {
-      // `bypass` disables along-wall alignment — set when magnetic ("lines")
-      // snap is off. The grid component lives in `snapToHalf`, which is itself
+      // Along-wall alignment guides are DISPLAYED in every snapping mode; the
+      // magnetic pull onto them is applied only when `applySnap` (magnetic
+      // "lines" mode). The grid component lives in `snapToHalf`, which is itself
       // mode-aware (raw cursor when grid is off).
       const localX = resolveWallSlideAlignment({
         wallNode: wall,
         rawLocalX,
         width,
         candidates: alignmentCandidates,
-        bypass,
+        applySnap,
       })
       const { clampedX, clampedY } = clampToWall(wall, localX, width, height)
       const valid = !hasWallChildOverlap(wall.id, clampedX, clampedY, width, height, ignoreId)
@@ -242,9 +243,9 @@ const DoorTool: React.FC = () => {
       side: 'front' | 'back'
       itemRotation: number
       cursorRotationY: number
-      bypass: boolean
+      applySnap: boolean
     }) => {
-      const { wall, rawLocalX, side, itemRotation, cursorRotationY, bypass } = args
+      const { wall, rawLocalX, side, itemRotation, cursorRotationY, applySnap } = args
       const width = draftRef.current?.width ?? 0.9
       const height = draftRef.current?.height ?? 2.1
 
@@ -266,7 +267,7 @@ const DoorTool: React.FC = () => {
         rawLocalX,
         width,
         height,
-        bypass,
+        applySnap,
         draftRef.current.id,
       )
 
@@ -416,7 +417,7 @@ const DoorTool: React.FC = () => {
         side,
         itemRotation,
         cursorRotationY: cursorRotation,
-        bypass: !isMagneticSnapActive(),
+        applySnap: isMagneticSnapActive(),
       })
       event.stopPropagation()
     }
@@ -439,7 +440,7 @@ const DoorTool: React.FC = () => {
         event.localPosition[0],
         draftRef.current.width,
         draftRef.current.height,
-        !isMagneticSnapActive(),
+        isMagneticSnapActive(),
         draftRef.current.id,
       )
       // Alt force-places over a collision (the draft stays red as a warning).

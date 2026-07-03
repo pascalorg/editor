@@ -43,18 +43,21 @@ const MIN_AXIS_COMPONENT = 0.5
  * runs along and map it to the along-wall coordinate that lands the opening on
  * it. Falls back to the grid snap when nothing aligns, and clears the guide on
  * bypass / no-match. Returns the localX to use (X-clamped to the wall given
- * `width`). `bypass` disables alignment — set by the caller when magnetic
- * ("lines") snap is off; the grid component lives in `snapToHalf`, which is
- * itself mode-aware (raw cursor when grid snap is off).
+ * `width`). `bypass` disables alignment entirely (guide + pull). `applySnap`
+ * splits display from pull: the guide is always published while alignment is
+ * active, but the along-wall pull is applied only when `applySnap` (magnetic
+ * "lines" mode) — pass `false` to show the guide passively without moving the
+ * opening. The grid component lives in `snapToHalf`, itself mode-aware.
  */
 export function resolveWallSlideAlignment(args: {
   wallNode: WallNode
   rawLocalX: number
   width: number
   candidates: readonly AlignmentAnchor[]
-  bypass: boolean
+  bypass?: boolean
+  applySnap?: boolean
 }): number {
-  const { wallNode, rawLocalX, width, candidates, bypass } = args
+  const { wallNode, rawLocalX, width, candidates, bypass, applySnap } = args
   const base = snapToHalf(rawLocalX)
 
   if (bypass || candidates.length === 0) {
@@ -126,5 +129,7 @@ export function resolveWallSlideAlignment(args: {
   } else {
     useAlignmentGuides.getState().set(published.guides)
   }
-  return clampedX
+  // Guides are published above in every alignment-active mode; the along-wall
+  // pull onto them only lands in magnetic ("lines") mode.
+  return applySnap === false ? base : clampedX
 }

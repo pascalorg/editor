@@ -35,7 +35,8 @@ type FloorPlacementAlignmentArgs = {
   rawZ: number
   gridStep: number
   candidates: Parameters<typeof resolveAlignment>[0]['candidates']
-  bypassAlignment?: boolean
+  showAlignment?: boolean
+  applyAlignmentSnap?: boolean
   bypassGrid?: boolean
   rotationY?: number
 }
@@ -72,7 +73,8 @@ export function resolveAlignedFloorPlacement({
   rawZ,
   gridStep,
   candidates,
-  bypassAlignment = false,
+  showAlignment = true,
+  applyAlignmentSnap = true,
   bypassGrid = false,
   rotationY = 0,
 }: FloorPlacementAlignmentArgs) {
@@ -81,7 +83,7 @@ export function resolveAlignedFloorPlacement({
   let az = sz
 
   const result =
-    !bypassAlignment && candidates.length > 0
+    showAlignment && candidates.length > 0
       ? resolveAlignment({
           moving: movingFootprintAnchors(node, sx, sz, rotationY),
           candidates,
@@ -89,7 +91,7 @@ export function resolveAlignedFloorPlacement({
         })
       : null
 
-  if (result?.snap) {
+  if (result?.snap && applyAlignmentSnap) {
     ax += result.snap.dx
     az += result.snap.dz
   }
